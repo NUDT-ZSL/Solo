@@ -117,11 +117,22 @@ export class FlowFieldEngine {
   resetField(): void {
     this.controlPoints = [];
     this.particles = [];
+    this.nextColorIndex = 0;
     this.eventBus.emit('field:reset');
   }
 
   resetParticles(): void {
     this.particles = [];
+  }
+
+  trimParticles(targetCount: number): void {
+    if (this.particles.length > targetCount) {
+      this.particles.splice(0, this.particles.length - targetCount);
+    }
+  }
+
+  getParticleCount(): number {
+    return this.particles.length;
   }
 
   getColorForIndex(index: number): string {

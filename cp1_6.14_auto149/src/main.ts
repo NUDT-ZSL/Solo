@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { EventBus } from './EventBus';
-import { FlowFieldEngine, ControlPoint } from './FlowFieldEngine';
+import { FlowFieldEngine, ControlPoint, ParticleData } from './FlowFieldEngine';
 import { ParticleRenderer } from './ParticleRenderer';
 
 type ToolMode = 'none' | 'add' | 'delete';
@@ -28,6 +28,10 @@ class FlowFieldApp {
   private fps: number = 60;
   private fpsUpdateTime: number = 0;
   private particleCount: number = 0;
+  private currentParticles: ParticleData[] = [];
+  private suppressClick: boolean = false;
+  private mouseDownTime: number = 0;
+  private mouseDownPos: { x: number; y: number } = { x: 0, y: 0 };
 
   constructor() {
     this.container = document.getElementById('canvas-container') as HTMLDivElement;
@@ -59,7 +63,7 @@ class FlowFieldApp {
   }
 
   private setupEventBusHandlers(): void {
-    this.eventBus.on('cp:added', (cp: ControlPoint) => {
+    this.eventBus.on('cp:added', () => {
       this.renderControlPointsPanel();
     });
     this.eventBus.on('cp:removed', () => {
@@ -76,6 +80,9 @@ class FlowFieldApp {
     });
     this.eventBus.on('particles:count', (count: number) => {
       this.particleCount = count;
+    });
+    this.eventBus.on('particles:update', (data: ParticleData[]) => {
+      this.currentParticles = data;
     });
   }
 
@@ -105,23 +112,31 @@ class FlowFieldApp {
     const btnReset = document.getElementById('btn-reset')!;
     const btnPlay = document.getElementById('btn-play')!;
 
-    btnAdd.addEventListener('click', () => {
+    btnAdd.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       this.setToolMode(this.toolMode === 'add' ? 'none' : 'add');
       btnAdd.classList.toggle('active', this.toolMode === 'add');
       btnDelete.classList.remove('active');
     });
 
-    btnDelete.addEventListener('click', () => {
+    btnDelete.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       this.setToolMode(this.toolMode === 'delete' ? 'none' : 'delete');
       btnDelete.classList.toggle('active', this.toolMode === 'delete');
       btnAdd.classList.remove('active');
     });
 
-    btnReset.addEventListener('click', () => {
+    btnReset.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       this.eventBus.emit('cp:reset');
     });
 
-    btnPlay.addEventListener('click', () => {
+    btnPlay.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       this.eventBus.emit('engine:toggle-play');
       this.engine.isPlaying ? (btnPlay.textContent = '▶') : (btnPlay.textContent = '⏸');
       btnPlay.classList.toggle('active', !this.engine.isPlaying);
@@ -129,12 +144,23 @@ class FlowFieldApp {
 
     this.overlayCanvas.addEventListener('click', (e) => this.onCanvasClick(e));
     this.overlayCanvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
-    this.overlayCanvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
-    this.overlayCanvas.addEventListener('mouseup', () => this.onMouseUp());
-    this.overlayCanvas.addEventListener('mouseleave', () => this.onMouseUp());
     this.overlayCanvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
+    this.overlayCanvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
 
-    document.getElementById('modal-close')!.addEventListener('click', () => this.closeModal());
+    document.addEventListener('mousemove', (e) => this.onDocumentMouseMove(e));
+    document.addEventListener('mouseup', (e) => this.onDocumentMouseUp(e));
+    document.addEventListener('selectstart', (e) => {
+      if (this.draggingCPId) e.preventDefault();
+    });
+
+    document.getElementById('modal-close')!.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.closeModal();
+    });
     document.getElementById('settings-modal')!.addEventListener('click', (e) => {
       if (e.target === document.getElementById('settings-modal')) this.closeModal();
     });
@@ -157,13 +183,23 @@ class FlowFieldApp {
     };
   }
 
+  private isEventOnCanvas(e: MouseEvent): boolean {
+    const rect = this.overlayCanvas.getBoundingClientRect();
+    return (
+      e.clientX >= rect.left &&
+      e.clientX <= rect.right &&
+      e.clientY >= rect.top &&
+      e.clientY <= rect.bottom
+    );
+  }
+
   private findCPAt(x: number, y: number): ControlPoint | null {
     const cps = this.engine.getAllControlPoints();
     for (let i = cps.length - 1; i >= 0; i--) {
       const cp = cps[i];
       const dx = x - cp.x;
       const dy = y - cp.y;
-      if (dx * dx + dy * dy <= 64) {
+      if (dx * dx + dy * dy <= 100) {
         return cp;
       }
     }
@@ -171,6 +207,14 @@ class FlowFieldApp {
   }
 
   private onCanvasClick(e: MouseEvent): void {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (this.suppressClick) {
+      this.suppressClick = false;
+      return;
+    }
+
     const pos = this.getCanvasPos(e);
     if (this.toolMode === 'add') {
       this.eventBus.emit('cp:add', pos.x, pos.y);
@@ -187,39 +231,74 @@ class FlowFieldApp {
   }
 
   private onMouseDown(e: MouseEvent): void {
-    if (this.toolMode !== 'none') return;
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+
     const pos = this.getCanvasPos(e);
+    this.mouseDownTime = performance.now();
+    this.mouseDownPos = pos;
+
     const cp = this.findCPAt(pos.x, pos.y);
-    if (cp) {
+
+    if (this.toolMode === 'none' && cp) {
       this.draggingCPId = cp.id;
       this.selectedCPId = cp.id;
       this.dragOffset = { x: pos.x - cp.x, y: pos.y - cp.y };
       this.overlayCanvas.style.cursor = 'grabbing';
       this.renderControlPointsPanel();
+      this.suppressClick = true;
+      return;
+    }
+
+    if (this.toolMode === 'delete' && cp) {
+      this.eventBus.emit('cp:remove', cp.id);
+      this.suppressClick = true;
     }
   }
 
-  private onMouseMove(e: MouseEvent): void {
+  private onDocumentMouseMove(e: MouseEvent): void {
+    if (!this.draggingCPId) return;
+    e.preventDefault();
+
+    if (!this.isEventOnCanvas(e)) {
+      return;
+    }
+
     const pos = this.getCanvasPos(e);
-
-    if (this.draggingCPId) {
-      const newX = Math.max(8, Math.min(this.width - 8, pos.x - this.dragOffset.x));
-      const newY = Math.max(8, Math.min(this.height - 8, pos.y - this.dragOffset.y));
-      this.eventBus.emit('cp:update', this.draggingCPId, { x: newX, y: newY });
-    }
+    const newX = Math.max(8, Math.min(this.width - 8, pos.x - this.dragOffset.x));
+    const newY = Math.max(8, Math.min(this.height - 8, pos.y - this.dragOffset.y));
+    this.eventBus.emit('cp:update', this.draggingCPId, { x: newX, y: newY });
   }
 
-  private onMouseUp(): void {
-    if (this.draggingCPId) {
-      this.draggingCPId = null;
-      this.overlayCanvas.style.cursor = 'default';
+  private onDocumentMouseUp(e: MouseEvent): void {
+    if (!this.draggingCPId) return;
+
+    const now = performance.now();
+    const pos = this.isEventOnCanvas(e) ? this.getCanvasPos(e) : this.mouseDownPos;
+    const dragDist = Math.hypot(pos.x - this.mouseDownPos.x, pos.y - this.mouseDownPos.y);
+    const dragDuration = now - this.mouseDownTime;
+
+    if (dragDist < 4 && dragDuration < 300) {
+      this.suppressClick = false;
+    } else {
+      this.suppressClick = true;
     }
+
+    this.draggingCPId = null;
+    this.overlayCanvas.style.cursor =
+      this.toolMode === 'add' ? 'crosshair' : this.toolMode === 'delete' ? 'not-allowed' : 'default';
   }
 
   private onDoubleClick(e: MouseEvent): void {
+    e.preventDefault();
+    e.stopPropagation();
+    this.suppressClick = true;
+
     const pos = this.getCanvasPos(e);
     const cp = this.findCPAt(pos.x, pos.y);
     if (cp) {
+      this.selectedCPId = cp.id;
       this.openModal(cp);
     }
   }
@@ -300,13 +379,17 @@ class FlowFieldApp {
       .join('');
 
     panel.querySelectorAll('[data-delete]').forEach((btn) => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
         this.eventBus.emit('cp:remove', (btn as HTMLElement).getAttribute('data-delete')!);
       });
     });
 
     panel.querySelectorAll('input[type="range"]').forEach((input) => {
-      input.addEventListener('input', () => {
+      input.addEventListener('input', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
         const id = (input as HTMLInputElement).getAttribute('data-id')!;
         const slider = (input as HTMLInputElement).getAttribute('data-slider')!;
         const value = parseFloat((input as HTMLInputElement).value);
@@ -315,9 +398,34 @@ class FlowFieldApp {
     });
   }
 
+  private drawParticleTrails(): void {
+    const ctx = this.overlayCtx;
+
+    for (const p of this.currentParticles) {
+      if (p.trail.length < 2) continue;
+
+      for (let i = 1; i < p.trail.length; i++) {
+        const prev = p.trail[i - 1];
+        const curr = p.trail[i];
+        const t = i / p.trail.length;
+        const alpha = t * 0.3 * p.a;
+
+        ctx.beginPath();
+        ctx.moveTo(prev.x, prev.y);
+        ctx.lineTo(curr.x, curr.y);
+        ctx.strokeStyle = `rgba(${Math.floor(p.r)}, ${Math.floor(p.g)}, ${Math.floor(p.b)}, ${alpha})`;
+        ctx.lineWidth = 1.5 + t * 1.5;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+      }
+    }
+  }
+
   private drawOverlay(): void {
     const ctx = this.overlayCtx;
     ctx.clearRect(0, 0, this.width, this.height);
+
+    this.drawParticleTrails();
 
     const cps = this.engine.getAllControlPoints();
 
@@ -416,7 +524,17 @@ class FlowFieldApp {
       document.getElementById('particles')!.textContent = `粒子: ${this.particleCount}`;
 
       if (this.particleCount > 2048 && this.fps < 30) {
-        this.engine.currentParticlesPerFrame = Math.max(1, this.engine.currentParticlesPerFrame - 1);
+        this.engine.currentParticlesPerFrame = Math.max(0, this.engine.currentParticlesPerFrame - 2);
+
+        const targetCount = Math.max(2048, Math.floor(this.particleCount * 0.7));
+        if (this.particleCount > targetCount) {
+          this.engine.trimParticles(targetCount);
+        }
+      } else if (this.fps >= 35 && this.particleCount < 2500) {
+        this.engine.currentParticlesPerFrame = Math.min(
+          this.engine.particlesPerFrame,
+          this.engine.currentParticlesPerFrame + 1
+        );
       } else if (this.fps > 55 && this.engine.currentParticlesPerFrame < this.engine.particlesPerFrame) {
         this.engine.currentParticlesPerFrame = Math.min(
           this.engine.particlesPerFrame,
