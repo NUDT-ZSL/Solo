@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 interface VariablePanelProps {
   variables: Record<string, string>;
@@ -24,22 +24,64 @@ interface CopyButtonProps {
 }
 
 const CopyButton: React.FC<CopyButtonProps> = ({ text }) => {
-  const [showCopied, setShowCopied] = useState(false);
+  const [phase, setPhase] = useState<'hidden' | 'showing' | 'hiding'>('hidden');
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(() => {
+    return () => {
+      timersRef.current.forEach(clearTimeout);
+    };
+  }, []);
+
+  const clearAllTimers = () => {
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+  };
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(text);
-      setShowCopied(true);
-      setTimeout(() => setShowCopied(false), 500);
+
+      clearAllTimers();
+
+      setPhase('showing');
+
+      const t1 = setTimeout(() => {
+        setPhase('hiding');
+      }, 500);
+      timersRef.current.push(t1);
+
+      const t2 = setTimeout(() => {
+        setPhase('hidden');
+      }, 500 + 1200);
+      timersRef.current.push(t2);
     } catch (err) {
       console.error('Failed to copy:', err);
     }
   };
 
+  const isVisible = phase !== 'hidden';
+  const isFadingOut = phase === 'hiding';
+
   return (
     <button className="copy-button" onClick={handleCopy} title="复制">
       <CopyIcon />
-      <span className={`copied-tooltip ${showCopied ? 'visible' : ''}`}>
+      <span
+        className={`copied-tooltip ${isVisible ? 'visible' : ''}`}
+        style={{
+          opacity: isFadingOut ? 0 : isVisible ? 1 : 0,
+          transition: isFadingOut
+            ? 'opacity 1.2s ease, transform 1.2s ease'
+            : isVisible
+            ? 'opacity 0.2s ease, transform 0.2s ease'
+            : 'none',
+          transform: isFadingOut
+            ? 'translateX(-50%) translateY(5px)'
+            : isVisible
+            ? 'translateX(-50%) translateY(0)'
+            : 'translateX(-50%) translateY(5px)',
+        }}
+      >
         Copied!
       </span>
     </button>

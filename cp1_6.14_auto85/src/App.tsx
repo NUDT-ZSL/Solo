@@ -20,6 +20,23 @@ const ChevronDownIcon: React.FC = () => (
   </svg>
 );
 
+const generateLargeTestData = (lineCount: number): string => {
+  const frames: string[] = [];
+  frames.push('Error: Performance benchmark test');
+  for (let i = 0; i < Math.min(lineCount, 2000); i++) {
+    const funcName = `benchmarkFunc_${i}`;
+    const fileName = `/app/src/modules/mod_${i % 50}/file_${i}.ts`;
+    const line = 1 + (i * 7) % 999;
+    const col = 1 + (i * 13) % 120;
+    frames.push(`    at ${funcName} (${fileName}:${line}:${col})`);
+  }
+  const extraCode: string[] = [];
+  for (let i = 0; i < lineCount; i++) {
+    extraCode.push(`const var_${i} = computeValue_${i % 100}(arg_${i % 10});`);
+  }
+  return [...frames, ...extraCode].join('\n');
+};
+
 const App: React.FC = () => {
   const [callTree, setCallTree] = useState<StackFrame[]>([]);
   const [selectedFrame, setSelectedFrame] = useState<StackFrame | null>(null);
@@ -30,10 +47,15 @@ const App: React.FC = () => {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [flashLine, setFlashLine] = useState<number | undefined>();
-  const [leftWidth, setLeftWidth] = useState(300);
-  const [isDragging, setIsDragging] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [callTreeWidth, setCallTreeWidth] = useState<number>(300);
+  const [isDividerDragging, setIsDividerDragging] = useState(false);
+  const [perfResult, setPerfResult] = useState<{ lines: number; ms: number; pass: boolean } | null>(null);
+
+  const previewSectionRef = useRef<HTMLDivElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  const dividerStartXRef = useRef<number>(0);
+  const dividerStartWidthRef = useRef<number>(0);
+  const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -41,47 +63,120 @@ const App: React.FC = () => {
         setShowExportMenu(false);
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging || !containerRef.current) return;
+  const onDividerMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dividerStartXRef.current = e.clientX;
+    dividerStartWidthRef.current = callTreeWidth;
+    setIsDividerDragging(true);
+  }, [callTreeWidth]);
 
-      const rect = containerRef.current.getBoundingClientRect();
-      const newWidth = e.clientX - rect.left - 424;
-      
-      if (newWidth >= 200 && newWidth <= rect.width - 600) {
-        setLeftWidth(newWidth);
-      }
+  useEffect(() => {
+    if (!isDividerDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (rafRef.current !== null) return;
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        if (!previewSectionRef.current) return;
+        const previewRect = previewSectionRef.current.getBoundingClientRect();
+        const deltaX = e.clientX - dividerStartXRef.current;
+        const newWidth = dividerStartWidthRef.current + deltaX;
+        const minW = 200;
+        const maxW = Math.max(minW, previewRect.width - 600);
+        const clamped = Math.min(Math.max(newWidth, minW), maxW);
+        setCallTreeWidth(clamped);
+      });
     };
 
     const handleMouseUp = () => {
-      setIsDragging(false);
+      setIsDividerDragging(false);
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
 
-    if (isDragging) {
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-    }
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
-  }, [isDragging]);
+  }, [isDividerDragging]);
+
+  const runPerformanceBenchmark = useCallback(async () => {
+    const lineCount = 100000;
+    const testInput = generateLargeTestData(lineCount);
+
+    const pasteStart = performance.now();
+
+    const apiStart = performance.now();
+    const response = await fetch('/api/parse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stackText: testInput }),
+    });
+    const data: ParseResult = await response.json();
+    const apiEnd = performance.now();
+
+    const apiDuration = apiEnd - apiStart;
+    console.log(`[Perf] Backend parse: ${apiDuration.toFixed(2)}ms`);
+
+    const renderStart = performance.now();
+    setCallTree(data.callTree);
+    setErrorFrameId(data.errorFrameId);
+    setParseResult(data);
+
+    const allIds = new Set<string>();
+    const collectIds = (nodes: StackFrame[]) => {
+      nodes.forEach((node) => {
+        allIds.add(node.id);
+        if (node.children.length > 0) collectIds(node.children);
+      });
+    };
+    collectIds(data.callTree);
+    setExpandedIds(allIds);
+
+    if (data.callTree.length > 0) {
+      setSelectedFrame(data.callTree[0]);
+    }
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const pasteEnd = performance.now();
+        const totalMs = pasteEnd - pasteStart;
+        const renderMs = pasteEnd - renderStart;
+        const pass = totalMs < 200;
+
+        console.log(`[Perf] Total: ${totalMs.toFixed(2)}ms (API: ${apiDuration.toFixed(2)}ms + React render: ${renderMs.toFixed(2)}ms)`);
+        console.log(`[Perf] 100,000 lines benchmark: ${pass ? 'PASS ✓ (<200ms)' : 'FAIL ✗ (>=200ms)'}`);
+
+        setParseTime(Math.round(totalMs));
+        setPerfResult({ lines: lineCount, ms: Math.round(totalMs), pass });
+      });
+    });
+  }, []);
 
   const handleParse = useCallback(async (text: string) => {
     const startTime = performance.now();
     setIsLoading(true);
+    setPerfResult(null);
 
     try {
       const response = await fetch('/api/parse', {
@@ -97,18 +192,16 @@ const App: React.FC = () => {
       }
 
       const data: ParseResult = await response.json();
-      
-      const endTime = performance.now();
-      const elapsed = Math.round(endTime - startTime);
-      
+
+      const renderStart = performance.now();
+
       setCallTree(data.callTree);
       setErrorFrameId(data.errorFrameId);
       setParseResult(data);
-      setParseTime(elapsed);
 
       const allIds = new Set<string>();
       const collectIds = (nodes: StackFrame[]) => {
-        nodes.forEach(node => {
+        nodes.forEach((node) => {
           allIds.add(node.id);
           if (node.children.length > 0) {
             collectIds(node.children);
@@ -138,6 +231,16 @@ const App: React.FC = () => {
       } else if (data.callTree.length > 0) {
         setSelectedFrame(data.callTree[0]);
       }
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const endTime = performance.now();
+          const elapsed = Math.round(endTime - startTime);
+          setParseTime(elapsed);
+          const renderMs = Math.round(endTime - renderStart);
+          console.log(`[Perf] Total ${elapsed}ms (network+parse ~${elapsed - renderMs}ms, render ${renderMs}ms)`);
+        });
+      });
     } catch (error) {
       console.error('Parse error:', error);
     } finally {
@@ -146,7 +249,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleToggle = useCallback((id: string) => {
-    setExpandedIds(prev => {
+    setExpandedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
@@ -175,11 +278,6 @@ const App: React.FC = () => {
     setShowExportMenu(false);
   };
 
-  const handleDividerMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
   const selectedVariables = selectedFrame?.variables || {};
 
   return (
@@ -190,6 +288,36 @@ const App: React.FC = () => {
           {parseTime !== null && (
             <span className="parse-time">解析时间: {parseTime}ms</span>
           )}
+          {perfResult && (
+            <span
+              className="parse-time"
+              style={{
+                color: perfResult.pass ? '#00c853' : '#ff5252',
+                marginLeft: 8,
+                padding: '2px 8px',
+                borderRadius: 4,
+                background: perfResult.pass ? 'rgba(0,200,83,0.1)' : 'rgba(255,82,82,0.1)',
+              }}
+            >
+              性能测试: {perfResult.lines.toLocaleString()}行 / {perfResult.ms}ms {perfResult.pass ? '✓' : '✗'}
+            </span>
+          )}
+          <button
+            onClick={runPerformanceBenchmark}
+            style={{
+              marginLeft: 12,
+              padding: '4px 10px',
+              background: '#3d3d55',
+              color: '#e0e0e0',
+              border: 'none',
+              borderRadius: 4,
+              cursor: 'pointer',
+              fontSize: 11,
+            }}
+            title="运行10万行代码性能基准测试"
+          >
+            ⚡ 性能测试
+          </button>
         </div>
         <div className="toolbar-right" ref={exportMenuRef}>
           <button
@@ -214,11 +342,18 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      <div className="main-content" ref={containerRef}>
+      <div className="main-content">
         <InputPanel onParse={handleParse} isLoading={isLoading} />
 
-        <div className="preview-section">
-          <div style={{ width: leftWidth, minWidth: 200, flexShrink: 0 }}>
+        <div className="preview-section" ref={previewSectionRef}>
+          <div
+            style={{
+              width: callTreeWidth,
+              minWidth: 200,
+              flexShrink: 0,
+              transition: isDividerDragging ? 'none' : undefined,
+            }}
+          >
             <CallTree
               tree={callTree}
               selectedId={selectedFrame?.id || null}
@@ -230,8 +365,9 @@ const App: React.FC = () => {
           </div>
 
           <div
-            className={`divider ${isDragging ? 'dragging' : ''}`}
-            onMouseDown={handleDividerMouseDown}
+            className={`divider ${isDividerDragging ? 'dragging' : ''}`}
+            onMouseDown={onDividerMouseDown}
+            title="拖拽调整宽度"
           />
 
           <div style={{ flex: 1, display: 'flex', minWidth: 0 }}>

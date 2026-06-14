@@ -282,26 +282,43 @@ body {
   width: 16px;
   height: 16px;
   display: block;
-  transition: transform 0.15s ease;
   color: var(--text-secondary);
   flex-shrink: 0;
-  transform-origin: center center;
+  transform-origin: center;
 }
 
 .expand-icon svg {
   display: block;
   width: 100%;
   height: 100%;
-  transform-origin: center center;
+  transform-origin: center;
   transition: transform 0.15s ease;
 }
 
-.expand-icon.expanded {
-  transform: rotate(90deg);
+.expand-icon.expanded svg {
+  animation: rotateArrowExpand 0.15s ease forwards;
 }
 
-.expand-icon.expanded svg {
-  transform: rotate(90deg);
+.expand-icon:not(.expanded):not(.leaf) svg {
+  animation: rotateArrowCollapse 0.15s ease forwards;
+}
+
+@keyframes rotateArrowExpand {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(90deg);
+  }
+}
+
+@keyframes rotateArrowCollapse {
+  from {
+    transform: rotate(90deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
 }
 
 .expand-icon.leaf {
@@ -315,16 +332,15 @@ body {
   color: var(--accent-red);
   flex-shrink: 0;
   display: block;
-  animation: breathe 1.5s ease-in-out infinite;
-  transform-origin: center center;
+  transform-origin: center;
 }
 
 .error-icon svg {
   display: block;
   width: 100%;
   height: 100%;
+  transform-origin: center;
   animation: breathe 1.5s ease-in-out infinite;
-  transform-origin: center center;
 }
 
 @keyframes breathe {
@@ -376,43 +392,41 @@ body {
   flex: 1;
   display: grid;
   grid-template-columns: 50px 1fr;
+  grid-auto-rows: min-content;
   overflow: auto;
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.6;
+  align-content: start;
 }
 
-.line-numbers {
+.code-line-number-cell {
   background-color: var(--bg-input);
   color: var(--text-secondary);
   text-align: right;
-  padding: 12px 8px;
+  padding: 0 8px;
   user-select: none;
   border-right: 1px solid var(--border-color);
-}
-
-.line-number {
-  display: block;
   height: 1.6em;
+  line-height: 1.6em;
+  position: sticky;
+  left: 0;
+  z-index: 1;
 }
 
-.code-lines {
-  padding: 12px 16px;
+.code-line-cell {
+  padding: 0 16px;
   white-space: pre;
-  overflow-x: auto;
-}
-
-.code-line {
-  display: block;
   height: 1.6em;
+  line-height: 1.6em;
   transition: background-color 0.3s ease;
 }
 
-.code-line.highlight {
+.code-line-cell.highlight {
   background-color: var(--bg-highlight-opacity);
 }
 
-.code-line.flash {
+.code-line-cell.flash {
   animation: flash 0.3s ease-in-out 3;
 }
 

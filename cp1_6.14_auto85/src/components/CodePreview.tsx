@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { StackFrame } from '../types';
 
 interface CodePreviewProps {
@@ -9,83 +9,69 @@ interface CodePreviewProps {
 }
 
 const CodePreview: React.FC<CodePreviewProps> = ({ selectedFrame, sourceCode, errorFrameId, flashLine }) => {
-  const codeLinesRef = useRef<HTMLDivElement>(null);
-  const lineNumbersRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isFlashing, setIsFlashing] = useState(false);
   const [flashingLineNumber, setFlashingLineNumber] = useState<number | null>(null);
 
-  const getCodeLines = useCallback((): string[] => {
+  const codeData = useMemo(() => {
+    let lines: string[] = [];
+    let startLineNumber = 1;
+
     if (sourceCode) {
-      return sourceCode.split('\n');
-    }
+      lines = sourceCode.split('\n');
+      startLineNumber = 1;
+    } else if (selectedFrame) {
+      const lineCount = 11;
+      const centerLine = selectedFrame.lineNumber;
+      startLineNumber = Math.max(1, centerLine - 5);
 
-    if (!selectedFrame) return [];
-
-    const lineCount = 11;
-    const centerLine = selectedFrame.lineNumber;
-    const startLine = Math.max(1, centerLine - 5);
-    const lines: string[] = [];
-
-    for (let i = 0; i < lineCount; i++) {
-      const currentLine = startLine + i;
-      if (currentLine === centerLine) {
-        const funcName = selectedFrame.functionName !== '<anonymous>' ? selectedFrame.functionName : 'function';
-        const indent = '  '.repeat(Math.min(i, 5));
-        lines.push(`${indent}${funcName}(${selectedFrame.columnNumber > 10 ? 'args' : ''}) {`);
-      } else if (currentLine < centerLine) {
-        const indent = '  '.repeat(Math.max(0, 5 - (centerLine - currentLine)));
-        lines.push(`${indent}// ${selectedFrame.fileName.split('/').pop()}:${currentLine}`);
-      } else {
-        const indent = '  '.repeat(Math.max(0, 5 - (currentLine - centerLine)));
-        lines.push(`${indent}// ...`);
+      for (let i = 0; i < lineCount; i++) {
+        const currentLine = startLineNumber + i;
+        if (currentLine === centerLine) {
+          const funcName = selectedFrame.functionName !== '<anonymous>' ? selectedFrame.functionName : 'function';
+          const indent = '  '.repeat(Math.min(i, 5));
+          lines.push(`${indent}${funcName}(${selectedFrame.columnNumber > 10 ? 'args' : ''}) {`);
+        } else if (currentLine < centerLine) {
+          const indent = '  '.repeat(Math.max(0, 5 - (centerLine - currentLine)));
+          lines.push(`${indent}// ${selectedFrame.fileName.split('/').pop()}:${currentLine}`);
+        } else {
+          const indent = '  '.repeat(Math.max(0, 5 - (currentLine - centerLine)));
+          lines.push(`${indent}// ...`);
+        }
       }
     }
 
-    return lines;
+    return { lines, startLineNumber };
   }, [selectedFrame, sourceCode]);
 
-  const codeLines = getCodeLines();
-  const centerLineNumber = selectedFrame?.lineNumber || 0;
-  const startLineNumber = sourceCode ? 1 : Math.max(1, centerLineNumber - 5);
-
-  const handleScroll = useCallback(() => {
-    if (codeLinesRef.current && lineNumbersRef.current) {
-      requestAnimationFrame(() => {
-        if (lineNumbersRef.current && codeLinesRef.current) {
-          lineNumbersRef.current.scrollTop = codeLinesRef.current.scrollTop;
-          lineNumbersRef.current.scrollLeft = codeLinesRef.current.scrollLeft;
-        }
-      });
-    }
-  }, []);
+  const { lines, startLineNumber } = codeData;
+  const highlightLineNumber = selectedFrame?.lineNumber || 0;
+  const highlightIdx = sourceCode
+    ? highlightLineNumber - startLineNumber
+    : 5;
 
   useEffect(() => {
-    if (codeLinesRef.current && selectedFrame) {
-      const highlightLine = sourceCode 
-        ? selectedFrame.lineNumber - startLineNumber
-        : 5;
-
-      if (highlightLine >= 0 && highlightLine < codeLines.length) {
-        const lineElements = codeLinesRef.current.querySelectorAll('.code-line');
-        if (lineElements[highlightLine]) {
-          requestAnimationFrame(() => {
-            lineElements[highlightLine]?.scrollIntoView({
-              behavior: 'smooth',
-              block: 'center',
-            });
+    if (containerRef.current && selectedFrame && highlightIdx >= 0 && highlightIdx < lines.length) {
+      const targetCells = containerRef.current.querySelectorAll<HTMLElement>('.code-line-cell');
+      const targetCell = targetCells[highlightIdx];
+      if (targetCell) {
+        requestAnimationFrame(() => {
+          targetCell.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
           });
-        }
+        });
       }
     }
-  }, [selectedFrame, codeLines.length, sourceCode, startLineNumber]);
+  }, [selectedFrame, lines.length, highlightIdx]);
 
   useEffect(() => {
     if (flashLine !== undefined && selectedFrame && flashLine === selectedFrame.lineNumber) {
-      const highlightLine = sourceCode
+      const flashIdx = sourceCode
         ? flashLine - startLineNumber
         : 5;
 
-      setFlashingLineNumber(highlightLine);
+      setFlashingLineNumber(flashIdx);
       setIsFlashing(true);
 
       const timer = setTimeout(() => {
@@ -109,6 +95,30 @@ const CodePreview: React.FC<CodePreviewProps> = ({ selectedFrame, sourceCode, er
     );
   }
 
+  const gridItems: React.ReactNode[] = [];
+  for (let idx = 0; idx < lines.length; idx++) {
+    const actualLineNumber = startLineNumber + idx;
+    const isHighlight = actualLineNumber === highlightLineNumber;
+    const shouldFlash = isFlashing && flashingLineNumber === idx;
+
+    gridItems.push(
+      <div
+        key={`num-${idx}`}
+        className="code-line-number-cell"
+      >
+        {actualLineNumber}
+      </div>
+    );
+    gridItems.push(
+      <div
+        key={`code-${idx}`}
+        className={`code-line-cell ${isHighlight ? 'highlight' : ''} ${shouldFlash ? 'flash' : ''}`}
+      >
+        {lines[idx] || ' '}
+      </div>
+    );
+  }
+
   return (
     <div className="code-preview-panel">
       <div className="code-header">
@@ -119,30 +129,8 @@ const CodePreview: React.FC<CodePreviewProps> = ({ selectedFrame, sourceCode, er
           </span>
         )}
       </div>
-      <div className="code-content" onScroll={handleScroll}>
-        <div className="line-numbers" ref={lineNumbersRef}>
-          {codeLines.map((_, idx) => (
-            <span key={idx} className="line-number">
-              {startLineNumber + idx}
-            </span>
-          ))}
-        </div>
-        <div className="code-lines" ref={codeLinesRef}>
-          {codeLines.map((line, idx) => {
-            const actualLineNumber = startLineNumber + idx;
-            const isHighlight = actualLineNumber === selectedFrame.lineNumber;
-            const shouldFlash = isFlashing && flashingLineNumber === idx;
-
-            return (
-              <span
-                key={idx}
-                className={`code-line ${isHighlight ? 'highlight' : ''} ${shouldFlash ? 'flash' : ''}`}
-              >
-                {line || ' '}
-              </span>
-            );
-          })}
-        </div>
+      <div className="code-content" ref={containerRef}>
+        {gridItems}
       </div>
     </div>
   );
