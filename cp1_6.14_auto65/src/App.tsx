@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { io, Socket } from "socket.io-client";
 import Home from "@/pages/Home";
 import Player from "@/pages/Player";
+import Navbar from "@/components/Navbar";
 
 export default function App() {
   const socketRef = useRef<Socket | null>(null);
@@ -12,14 +13,6 @@ export default function App() {
       transports: ["websocket", "polling"],
     });
 
-    socketRef.current.on("connect", () => {
-      console.log("Socket.io connected:", socketRef.current?.id);
-    });
-
-    socketRef.current.on("disconnect", () => {
-      console.log("Socket.io disconnected");
-    });
-
     return () => {
       socketRef.current?.disconnect();
       socketRef.current = null;
@@ -27,8 +20,9 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 text-[14px] md:text-[15px]">
       <Router>
+        <Navbar />
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/podcast/:id" element={<Player socket={socketRef.current} />} />

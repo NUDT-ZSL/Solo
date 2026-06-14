@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { Socket } from "socket.io-client";
 import axios from "axios";
-import { Play, Pause, SkipBack, X, Sparkles } from "lucide-react";
+import { Play, Pause, SkipBack, X, Sparkles, Volume2, ArrowLeft } from "lucide-react";
 import Waveform from "@/components/Waveform";
 import SentimentChart from "@/components/SentimentChart";
+import { formatTime, findCurrentSegmentIndex } from "@/utils/transcriptSync";
 
 interface Podcast {
   id: string;
@@ -30,18 +31,13 @@ interface Highlight {
   createdAt: string;
 }
 
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-}
-
 interface PlayerProps {
   socket: Socket | null;
 }
 
 export default function Player({ socket }: PlayerProps) {
   const { id: podcastId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
 
   const [podcast, setPodcast] = useState<Podcast | null>(null);
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
@@ -50,13 +46,22 @@ export default function Player({ socket }: PlayerProps) {
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [selectedText, setSelectedText] = useState("");
   const [showMarkBtn, setShowMarkBtn] = useState(false);
+  const [audioReady, setAudioReady] = useState(false);
 
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const segmentRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const rafRef = useRef<number>(0);
+  const lastSegmentIndexRef = useRef<number>(-1);
+  const progressEmitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isUserSeekingRef = useRef(false);
 
   const fetchHighlights = useCallback(() => {
     if (!podcastId) return;
@@ -83,41 +88,116 @@ export default function Player({ socket }: PlayerProps) {
       .finally(() => setLoading(false));
   }, [podcastId]);
 
-  useEffect(() => {
-    if (isPlaying) {
-      progressTimerRef.current = setInterval(() => {
-        setCurrentTime((prev) => {
-          const next = prev + 0.1 * playbackRate;
-          if (podcast && next >= podcast.duration) {
-            setIsPlaying(false);
-            return podcast.duration;
-          }
-          return next;
-        });
-      }, 100);
-    } else {
-      if (progressTimerRef.current) {
-        clearInterval(progressTimerRef.current);
-        progressTimerRef.current = null;
-      }
+  const initAudioContext = useCallback(() => {
+    if (!audioRef.current || audioContextRef.current) return;
+
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const audioContext = new AudioCtx();
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.8;
+
+      const source = audioContext.createMediaElementSource(audioRef.current);
+      source.connect(analyser);
+      analyser.connect(audioContext.destination);
+
+      audioContextRef.current = audioContext;
+      analyserRef.current = analyser;
+      sourceRef.current = source;
+    } catch (err) {
+      console.warn("AudioContext initialization failed:", err);
     }
-    return () => {
-      if (progressTimerRef.current) {
-        clearInterval(progressTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration);
+      setAudioReady(true);
+    };
+
+    const handleTimeUpdate = () => {
+      if (!isUserSeekingRef.current) {
+        setCurrentTime(audio.currentTime);
       }
     };
-  }, [isPlaying, playbackRate, podcast]);
 
-  const currentSegmentIndex = segments.findIndex(
-    (seg) => currentTime >= seg.startTime && currentTime <= seg.endTime
-  );
+    const handlePlay = () => {
+      setIsPlaying(true);
+      if (audioContextRef.current?.state === "suspended") {
+        audioContextRef.current.resume();
+      }
+    };
+
+    const handlePause = () => {
+      setIsPlaying(false);
+    };
+
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    };
+
+    const handleCanPlay = () => {
+      setAudioReady(true);
+    };
+
+    audio.addEventListener("loadedmetadata", handleLoadedMetadata);
+    audio.addEventListener("timeupdate", handleTimeUpdate);
+    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("pause", handlePause);
+    audio.addEventListener("ended", handleEnded);
+    audio.addEventListener("canplay", handleCanPlay);
+
+    return () => {
+      audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      audio.removeEventListener("timeupdate", handleTimeUpdate);
+      audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("pause", handlePause);
+      audio.removeEventListener("ended", handleEnded);
+      audio.removeEventListener("canplay", handleCanPlay);
+    };
+  }, []);
 
   useEffect(() => {
-    if (currentSegmentIndex >= 0) {
+    if (!isPlaying) {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+      }
+      return;
+    }
+
+    const tick = () => {
+      if (audioRef.current && !isUserSeekingRef.current) {
+        setCurrentTime(audioRef.current.currentTime);
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, [isPlaying]);
+
+  const currentSegmentIndex = findCurrentSegmentIndex(segments, currentTime);
+
+  useEffect(() => {
+    if (currentSegmentIndex >= 0 && currentSegmentIndex !== lastSegmentIndexRef.current) {
+      lastSegmentIndexRef.current = currentSegmentIndex;
       const seg = segments[currentSegmentIndex];
-      const el = segmentRefs.current.get(seg.id);
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (seg) {
+        const el = segmentRefs.current.get(seg.id);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
       }
     }
   }, [currentSegmentIndex, segments]);
@@ -127,9 +207,11 @@ export default function Player({ socket }: PlayerProps) {
 
     socket.emit("join-podcast", podcastId);
 
-    const onProgress = (data: { podcastId: string; currentTime: number }) => {
-      if (data.podcastId === podcastId) {
-        setCurrentTime(data.currentTime);
+    const onProgress = (data: { podcastId: string; currentTime: number; socketId: string }) => {
+      if (data.podcastId === podcastId && data.socketId !== socket.id) {
+        if (audioRef.current) {
+          audioRef.current.currentTime = data.currentTime;
+        }
       }
     };
 
@@ -142,14 +224,73 @@ export default function Player({ socket }: PlayerProps) {
   }, [socket, podcastId]);
 
   useEffect(() => {
-    if (!socket || !isPlaying || !podcastId) return;
+    if (!socket || !isPlaying || !podcastId) {
+      if (progressEmitTimerRef.current) {
+        clearInterval(progressEmitTimerRef.current);
+        progressEmitTimerRef.current = null;
+      }
+      return;
+    }
 
-    const interval = setInterval(() => {
-      socket.emit("progress", { podcastId, currentTime });
+    progressEmitTimerRef.current = setInterval(() => {
+      if (audioRef.current) {
+        socket.emit("progress", {
+          podcastId,
+          currentTime: audioRef.current.currentTime,
+        });
+      }
     }, 1000);
 
-    return () => clearInterval(interval);
-  }, [socket, isPlaying, podcastId, currentTime]);
+    return () => {
+      if (progressEmitTimerRef.current) {
+        clearInterval(progressEmitTimerRef.current);
+        progressEmitTimerRef.current = null;
+      }
+    };
+  }, [socket, isPlaying, podcastId]);
+
+  const togglePlay = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    initAudioContext();
+
+    if (audio.paused) {
+      audio.play().catch((err) => console.error("Play failed:", err));
+    } else {
+      audio.pause();
+    }
+  }, [initAudioContext]);
+
+  const handleProgressChangeStart = () => {
+    isUserSeekingRef.current = true;
+  };
+
+  const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const time = Number(e.target.value);
+    setCurrentTime(time);
+  };
+
+  const handleProgressChangeEnd = () => {
+    isUserSeekingRef.current = false;
+    if (audioRef.current) {
+      audioRef.current.currentTime = currentTime;
+    }
+  };
+
+  const handleRestart = () => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      setCurrentTime(0);
+    }
+  };
+
+  const handleSpeedChange = (rate: number) => {
+    setPlaybackRate(rate);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = rate;
+    }
+  };
 
   const handleTranscriptMouseUp = () => {
     const selection = window.getSelection();
@@ -185,13 +326,11 @@ export default function Player({ socket }: PlayerProps) {
       .catch((err) => console.error("Failed to delete highlight:", err));
   };
 
-  const handleRestart = () => {
-    setCurrentTime(0);
-    setIsPlaying(false);
-  };
-
-  const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCurrentTime(Number(e.target.value));
+  const handleHighlightClick = (timestamp: number) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = timestamp;
+      setCurrentTime(timestamp);
+    }
   };
 
   if (loading || !podcast) {
@@ -203,140 +342,183 @@ export default function Player({ socket }: PlayerProps) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col md:flex-row">
-      <div className="w-full bg-primary-bg p-6 md:w-[45%] md:p-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-dark">{podcast.title}</h1>
-          <p className="mt-1 text-gray-500">{podcast.author}</p>
-        </div>
-
-        <Waveform
-          currentTime={currentTime}
-          duration={podcast.duration}
-          isPlaying={isPlaying}
-          segments={segments}
-        />
-
-        <div className="mt-4 flex items-center gap-3">
-          <span className="text-sm text-gray-500">{formatTime(currentTime)}</span>
-          <input
-            type="range"
-            min={0}
-            max={podcast.duration}
-            step={0.1}
-            value={currentTime}
-            onChange={handleProgressChange}
-            className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-gray-200 accent-primary"
-          />
-          <span className="text-sm text-gray-500">{formatTime(podcast.duration)}</span>
-        </div>
-
-        <div className="mt-5 flex items-center gap-3">
-          <button
-            onClick={handleRestart}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-gray-600 shadow transition-colors hover:bg-gray-100"
-          >
-            <SkipBack size={18} />
-          </button>
-          <button
-            onClick={() => setIsPlaying(!isPlaying)}
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white shadow-lg transition-colors hover:bg-[#6d28d9]"
-          >
-            {isPlaying ? <Pause size={22} /> : <Play size={22} className="ml-0.5" />}
-          </button>
-          <div className="ml-4 flex gap-2">
-            {[1, 1.5, 2].map((rate) => (
-              <button
-                key={rate}
-                onClick={() => setPlaybackRate(rate)}
-                className={`h-9 rounded-full px-3 text-sm font-medium transition-colors ${
-                  playbackRate === rate
-                    ? "bg-primary text-white"
-                    : "bg-white text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                {rate}x
-              </button>
-            ))}
+    <div className="min-h-screen bg-gray-50">
+      <div className="flex min-h-screen flex-col md:flex-row">
+        <div className="w-full bg-primary-bg p-4 md:w-[45%] md:p-8">
+          <div className="mb-3 flex items-center gap-3 md:hidden">
+            <button
+              onClick={() => navigate("/")}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/80 text-gray-600 shadow-sm backdrop-blur transition-colors hover:bg-white"
+              aria-label="返回"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <span className="text-sm font-medium text-gray-600">返回列表</span>
           </div>
-        </div>
-      </div>
 
-      <div className="w-full md:w-[55%]">
-        <div className="p-6 md:p-8">
-          <div
-            ref={transcriptRef}
-            onMouseUp={handleTranscriptMouseUp}
-            className="max-h-[400px] overflow-y-auto rounded-xl bg-surface p-4"
-          >
-            {segments.map((seg) => {
-              const isCurrent =
-                currentSegmentIndex >= 0 && segments[currentSegmentIndex]?.id === seg.id;
-              return (
-                <div
-                  key={seg.id}
-                  ref={(el) => {
-                    if (el) segmentRefs.current.set(seg.id, el);
-                  }}
-                  className={`rounded-lg px-3 py-2 text-sm leading-relaxed transition-colors ${
-                    isCurrent ? "bg-primary-highlight font-medium text-dark" : "text-gray-700"
+          <audio
+            ref={audioRef}
+            src={`/api/podcasts/${podcastId}/audio`}
+            preload="metadata"
+            crossOrigin="anonymous"
+          />
+
+          <div className="mb-4 md:mb-6">
+            <h1 className="text-xl font-bold text-dark md:text-2xl">{podcast.title}</h1>
+            <p className="mt-1 text-sm text-gray-500 md:text-base">{podcast.author}</p>
+          </div>
+
+          <Waveform
+            analyser={analyserRef.current}
+            isPlaying={isPlaying}
+            currentTime={currentTime}
+            duration={duration || podcast.duration}
+          />
+
+          <div className="mt-3 flex items-center gap-3 md:mt-4">
+            <span className="text-xs text-gray-500 md:text-sm">
+              {formatTime(currentTime)}
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={duration || podcast.duration}
+              step={0.1}
+              value={currentTime}
+              onMouseDown={handleProgressChangeStart}
+              onTouchStart={handleProgressChangeStart}
+              onChange={handleProgressChange}
+              onMouseUp={handleProgressChangeEnd}
+              onTouchEnd={handleProgressChangeEnd}
+              className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-gray-200 accent-primary"
+            />
+            <span className="text-xs text-gray-500 md:text-sm">
+              {formatTime(duration || podcast.duration)}
+            </span>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2 md:mt-5 md:gap-3">
+            <button
+              onClick={handleRestart}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-gray-600 shadow transition-colors hover:bg-gray-100"
+              aria-label="重新开始"
+            >
+              <SkipBack size={18} />
+            </button>
+            <button
+              onClick={togglePlay}
+              disabled={!audioReady}
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white shadow-lg transition-all hover:bg-[#6d28d9] disabled:opacity-50"
+              aria-label={isPlaying ? "暂停" : "播放"}
+            >
+              {isPlaying ? <Pause size={22} /> : <Play size={22} className="ml-0.5" />}
+            </button>
+            <div className="ml-2 flex gap-2 md:ml-4">
+              {[1, 1.5, 2].map((rate) => (
+                <button
+                  key={rate}
+                  onClick={() => handleSpeedChange(rate)}
+                  className={`h-9 rounded-full px-3 text-sm font-medium transition-colors ${
+                    playbackRate === rate
+                      ? "bg-primary text-white"
+                      : "bg-white text-gray-600 hover:bg-gray-100"
                   }`}
                 >
-                  {seg.text}
-                </div>
-              );
-            })}
-          </div>
-
-          {showMarkBtn && (
-            <div className="mt-3 flex justify-end">
-              <button
-                onClick={handleMarkHighlight}
-                className="flex h-9 w-[100px] items-center justify-center gap-1.5 rounded-full bg-primary text-white transition-colors duration-200 hover:bg-[#6d28d9]"
-              >
-                <Sparkles size={14} />
-                标记精彩
-              </button>
+                  {rate}x
+                </button>
+              ))}
             </div>
-          )}
-
-          <div className="mt-6">
-            <SentimentChart
-              segments={segments}
-              currentTime={currentTime}
-              duration={podcast.duration}
-            />
+            <div className="ml-auto flex items-center gap-2 text-gray-400">
+              <Volume2 size={16} />
+              <span className="text-xs">{audioReady ? "就绪" : "加载中..."}</span>
+            </div>
           </div>
+        </div>
 
-          <div className="mt-6">
-            <h3 className="mb-3 text-lg font-bold text-dark">精彩时刻</h3>
-            {highlights.length === 0 ? (
-              <p className="text-sm text-gray-400">暂无标记，选中转录文字后点击"标记精彩"</p>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {highlights.map((hl) => (
+        <div className="w-full md:w-[55%]">
+          <div className="p-4 md:p-8">
+            <div
+              ref={transcriptRef}
+              onMouseUp={handleTranscriptMouseUp}
+              className="max-h-[350px] overflow-y-auto rounded-xl bg-surface p-4 text-[14px] leading-relaxed md:max-h-[400px] md:text-[15px]"
+              style={{ scrollBehavior: "smooth" }}
+            >
+              {segments.map((seg) => {
+                const isCurrent =
+                  currentSegmentIndex >= 0 &&
+                  segments[currentSegmentIndex]?.id === seg.id;
+                return (
                   <div
-                    key={hl.id}
-                    className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-3"
+                    key={seg.id}
+                    ref={(el) => {
+                      if (el) segmentRefs.current.set(seg.id, el);
+                    }}
+                    className={`rounded-lg px-3 py-2 transition-colors duration-150 ${
+                      isCurrent
+                        ? "bg-primary-highlight font-medium text-dark"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }`}
                   >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-dark">
-                        {hl.text.length > 20 ? hl.text.slice(0, 20) + "..." : hl.text}
-                      </p>
-                      <span className="text-xs text-gray-400">
-                        {formatTime(hl.timestamp)}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => handleDeleteHighlight(hl.id)}
-                      className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-red-100 text-red-500 transition-transform duration-300 hover:rotate-90"
-                    >
-                      <X size={14} />
-                    </button>
+                    {seg.text}
                   </div>
-                ))}
+                );
+              })}
+            </div>
+
+            {showMarkBtn && (
+              <div className="mt-3 flex justify-end">
+                <button
+                  onClick={handleMarkHighlight}
+                  className="flex h-9 w-[100px] items-center justify-center gap-1.5 rounded-full bg-primary text-white transition-colors duration-200 hover:bg-[#6d28d9]"
+                >
+                  <Sparkles size={14} />
+                  标记精彩
+                </button>
               </div>
             )}
+
+            <div className="mt-6">
+              <SentimentChart
+                segments={segments}
+                currentTime={currentTime}
+                duration={duration || podcast.duration}
+              />
+            </div>
+
+            <div className="mt-6">
+              <h3 className="mb-3 text-base font-bold text-dark md:text-lg">精彩时刻</h3>
+              {highlights.length === 0 ? (
+                <p className="text-sm text-gray-400">暂无标记，选中转录文字后点击"标记精彩"</p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {highlights.map((hl) => (
+                    <div
+                      key={hl.id}
+                      className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-3 transition-shadow hover:shadow-md"
+                    >
+                      <button
+                        onClick={() => handleHighlightClick(hl.timestamp)}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <p className="truncate text-sm text-dark">
+                          {hl.text.length > 20 ? hl.text.slice(0, 20) + "..." : hl.text}
+                        </p>
+                        <span className="text-xs text-gray-400">
+                          {formatTime(hl.timestamp)}
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteHighlight(hl.id)}
+                        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-red-100 text-red-500 transition-all duration-300 hover:rotate-90 hover:bg-red-200"
+                        aria-label="删除"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
