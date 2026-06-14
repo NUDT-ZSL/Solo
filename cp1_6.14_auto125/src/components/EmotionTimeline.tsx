@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import {
   LineChart,
   Line,
@@ -12,26 +12,27 @@ import {
 import type { EmotionKey } from '../types';
 
 export interface TimelinePoint {
-  minute: number;
-  joy: number;
-  fear: number;
-  anger: number;
-  surprise: number;
+  readonly minute: number;
+  readonly joy: number;
+  readonly fear: number;
+  readonly anger: number;
+  readonly surprise: number;
 }
 
 interface EmotionTimelineProps {
-  timelineData: TimelinePoint[];
-  currentMinute: number;
+  readonly timelineData: readonly TimelinePoint[];
+  readonly windowStart: number;
+  readonly windowEnd: number;
 }
 
-const EMOTION_COLORS: Record<EmotionKey, string> = {
+const EMOTION_COLORS: Readonly<Record<EmotionKey, string>> = {
   joy: '#fbbf24',
   fear: '#ef4444',
   anger: '#f97316',
   surprise: '#38bdf8'
 };
 
-const EMOTION_LABELS: Record<EmotionKey, string> = {
+const EMOTION_LABELS: Readonly<Record<EmotionKey, string>> = {
   joy: '高兴',
   fear: '恐惧',
   anger: '愤怒',
@@ -40,9 +41,9 @@ const EMOTION_LABELS: Record<EmotionKey, string> = {
 
 const WINDOW_SIZE = 30;
 
-const CustomTooltip = ({ active, payload, label }: {
+const CustomTooltip = React.memo(({ active, payload, label }: {
   active?: boolean;
-  payload?: { dataKey: EmotionKey; value: number; color: string }[];
+  payload?: ReadonlyArray<{ dataKey: EmotionKey; value: number; color: string }>;
   label?: number;
 }) => {
   if (!active || !payload || payload.length === 0) return null;
@@ -80,32 +81,55 @@ const CustomTooltip = ({ active, payload, label }: {
       ))}
     </div>
   );
-};
+});
 
-const EmotionTimeline: React.FC<EmotionTimelineProps> = React.memo(({ timelineData, currentMinute }) => {
-  const windowedData = useMemo(() => {
-    const startMinute = Math.max(0, currentMinute - WINDOW_SIZE);
-    return timelineData.filter(d => d.minute >= startMinute);
-  }, [timelineData, currentMinute]);
+CustomTooltip.displayName = 'CustomTooltip';
 
+const EmotionTimeline: React.FC<EmotionTimelineProps> = React.memo(({ timelineData, windowStart, windowEnd }) => {
   const xTicks = useMemo(() => {
     const ticks: number[] = [];
-    const startMinute = Math.max(0, currentMinute - WINDOW_SIZE);
-    const endMinute = currentMinute;
-    const roundedStart = Math.ceil(startMinute / 5) * 5;
-    for (let t = roundedStart; t <= endMinute; t += 5) {
+    const start = Math.ceil(windowStart / 5) * 5;
+    const end = windowEnd;
+    for (let t = start; t <= end; t += 5) {
       ticks.push(t);
     }
-    if (ticks.length === 0) {
-      ticks.push(startMinute);
+    if (ticks.length === 0 && timelineData.length > 0) {
+      ticks.push(timelineData[0].minute);
     }
     return ticks;
-  }, [currentMinute]);
+  }, [windowStart, windowEnd, timelineData]);
 
-  const xDomain = useMemo(() => {
-    const startMinute = Math.max(0, currentMinute - WINDOW_SIZE);
-    return [startMinute, Math.max(currentMinute, WINDOW_SIZE)] as [number, number];
-  }, [currentMinute]);
+  const xDomain = useMemo<[number, number]>(() => {
+    const start = Math.max(0, windowEnd - WINDOW_SIZE);
+    const end = Math.max(windowEnd, WINDOW_SIZE);
+    return [start, end];
+  }, [windowEnd]);
+
+  const formatTick = useCallback((value: number) => `第${value}分钟`, []);
+
+  const renderLegend = useCallback((props: { payload?: { value: string; color: string }[] }) => {
+    const { payload } = props;
+    if (!payload) return null;
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', paddingTop: '8px' }}>
+        {payload.map((entry) => (
+          <div key={entry.value} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: entry.color
+              }}
+            />
+            <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+              {EMOTION_LABELS[entry.value as EmotionKey]}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }, []);
 
   return (
     <div className="chart-card">
@@ -113,7 +137,7 @@ const EmotionTimeline: React.FC<EmotionTimelineProps> = React.memo(({ timelineDa
       <div style={{ width: '100%', flex: 1, minHeight: 0 }}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
-            data={windowedData}
+            data={timelineData}
             margin={{ top: 10, right: 16, left: 0, bottom: 0 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -121,11 +145,12 @@ const EmotionTimeline: React.FC<EmotionTimelineProps> = React.memo(({ timelineDa
               dataKey="minute"
               stroke="#64748b"
               fontSize={11}
-              tickFormatter={(value: number) => `第${value}分钟`}
+              tickFormatter={formatTick}
               ticks={xTicks}
               domain={xDomain}
               interval={0}
               type="number"
+              allowDuplicatedCategory={false}
             />
             <YAxis
               domain={[-1, 1]}
@@ -134,14 +159,7 @@ const EmotionTimeline: React.FC<EmotionTimelineProps> = React.memo(({ timelineDa
               tickCount={5}
             />
             <Tooltip content={<CustomTooltip />} />
-            <Legend
-              wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
-              formatter={(value: string) => (
-                <span style={{ color: '#94a3b8' }}>
-                  {EMOTION_LABELS[value as EmotionKey]}
-                </span>
-              )}
-            />
+            <Legend content={renderLegend} />
             <Line
               type="monotone"
               dataKey="joy"
@@ -150,6 +168,7 @@ const EmotionTimeline: React.FC<EmotionTimelineProps> = React.memo(({ timelineDa
               dot={false}
               animationDuration={500}
               animationEasing="ease"
+              isAnimationActive={true}
             />
             <Line
               type="monotone"
@@ -159,6 +178,7 @@ const EmotionTimeline: React.FC<EmotionTimelineProps> = React.memo(({ timelineDa
               dot={false}
               animationDuration={500}
               animationEasing="ease"
+              isAnimationActive={true}
             />
             <Line
               type="monotone"
@@ -168,6 +188,7 @@ const EmotionTimeline: React.FC<EmotionTimelineProps> = React.memo(({ timelineDa
               dot={false}
               animationDuration={500}
               animationEasing="ease"
+              isAnimationActive={true}
             />
             <Line
               type="monotone"
@@ -177,6 +198,7 @@ const EmotionTimeline: React.FC<EmotionTimelineProps> = React.memo(({ timelineDa
               dot={false}
               animationDuration={500}
               animationEasing="ease"
+              isAnimationActive={true}
             />
           </LineChart>
         </ResponsiveContainer>

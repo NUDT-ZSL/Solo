@@ -58,8 +58,8 @@ html, body, #root {
 }
 
 .btn-pause {
-  width: 40px;
-  height: 40px;
+  width: 88px;
+  height: 36px;
   border-radius: 8px;
   background-color: #6366f1;
   color: white;
@@ -68,7 +68,9 @@ html, body, #root {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
   transition: background-color 0.2s ease, transform 0.1s ease;
 }
 
@@ -77,7 +79,20 @@ html, body, #root {
 }
 
 .btn-pause:active {
-  transform: scale(0.95);
+  transform: scale(0.97);
+}
+
+.btn-pause--paused {
+  background-color: #10b981;
+}
+
+.btn-pause--paused:hover {
+  background-color: #059669;
+}
+
+.btn-pause .btn-icon {
+  font-size: 16px;
+  line-height: 1;
 }
 
 .slider-container {

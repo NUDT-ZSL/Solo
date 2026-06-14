@@ -1,37 +1,37 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, memo } from 'react';
 import type { Emotions, EmotionKey } from '../types';
 import { getDominantEmotion } from '../utils/Simulator';
 
 export interface HeatmapCellData {
-  minute: number;
-  userId: string;
-  normalizedIntensity: number;
-  emotions: Emotions;
+  readonly minute: number;
+  readonly userId: string;
+  readonly normalizedIntensity: number;
+  readonly emotions: Emotions;
 }
 
 interface HeatmapGridProps {
-  heatmapData: HeatmapCellData[];
-  userIds: string[];
-  totalMinutes: number;
-  startMinute: number;
+  readonly heatmapData: readonly HeatmapCellData[];
+  readonly userIds: readonly string[];
+  readonly totalMinutes: number;
+  readonly startMinute: number;
 }
 
-const EMOTION_LABELS: Record<EmotionKey, string> = {
+const EMOTION_LABELS: Readonly<Record<EmotionKey, string>> = {
   joy: '高兴',
   fear: '恐惧',
   anger: '愤怒',
   surprise: '惊喜'
 };
 
-const COLOR_STOPS = [
+const COLOR_STOPS = Object.freeze([
   { pos: 0, r: 254, g: 226, b: 226 },
   { pos: 0.25, r: 252, g: 165, b: 165 },
   { pos: 0.5, r: 248, g: 113, b: 113 },
   { pos: 0.75, r: 239, g: 68, b: 68 },
   { pos: 1, r: 220, g: 38, b: 38 }
-];
+]);
 
-function interpolateColor(normalized: number): string {
+function intensityToColor(normalized: number): string {
   const clamped = Math.max(0, Math.min(1, normalized));
   let lower = COLOR_STOPS[0];
   let upper = COLOR_STOPS[COLOR_STOPS.length - 1];
@@ -52,6 +52,85 @@ function interpolateColor(normalized: number): string {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
+const HeatmapCell = memo(({
+  intensity,
+  onEnter,
+  onMove,
+  onLeave
+}: {
+  intensity: number;
+  onEnter: (e: React.MouseEvent) => void;
+  onMove: (e: React.MouseEvent) => void;
+  onLeave: () => void;
+}) => (
+  <div
+    style={{
+      flex: 1,
+      minWidth: 0,
+      height: '100%',
+      borderRadius: '4px',
+      backgroundColor: intensityToColor(intensity),
+      cursor: 'pointer',
+      transition: 'background-color 0.3s ease'
+    }}
+    onMouseEnter={onEnter}
+    onMouseMove={onMove}
+    onMouseLeave={onLeave}
+  />
+));
+
+HeatmapCell.displayName = 'HeatmapCell';
+
+const TooltipCard = memo(({ cell, x, y }: { cell: HeatmapCellData; x: number; y: number }) => {
+  const dominant = getDominantEmotion(cell.emotions);
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        left: x + 12,
+        top: y + 12,
+        backgroundColor: '#1f2937',
+        borderRadius: '8px',
+        padding: '10px 12px',
+        color: 'white',
+        fontSize: '12px',
+        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
+        zIndex: 1000,
+        pointerEvents: 'none',
+        minWidth: '160px'
+      }}
+    >
+      <div style={{ fontWeight: 600, marginBottom: '6px', color: '#f1f5f9' }}>
+        {cell.userId} · 第{cell.minute}分钟
+      </div>
+      {(Object.keys(cell.emotions) as EmotionKey[]).map(key => {
+        const isDominant = dominant.key === key;
+        return (
+          <div
+            key={key}
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: '12px',
+              marginBottom: '2px',
+              fontWeight: isDominant ? 600 : 400,
+              color: isDominant ? '#f1f5f9' : '#94a3b8'
+            }}
+          >
+            <span>{EMOTION_LABELS[key]}</span>
+            <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+              {cell.emotions[key].toFixed(2)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+});
+
+TooltipCard.displayName = 'TooltipCard';
+
 const HeatmapGrid: React.FC<HeatmapGridProps> = React.memo(({ heatmapData, userIds, totalMinutes, startMinute }) => {
   const [hoveredCell, setHoveredCell] = useState<HeatmapCellData | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
@@ -64,36 +143,37 @@ const HeatmapGrid: React.FC<HeatmapGridProps> = React.memo(({ heatmapData, userI
     return map;
   }, [heatmapData]);
 
-  const minutes = useMemo(() => {
+  const minuteList = useMemo(() => {
     const result: number[] = [];
-    for (let m = startMinute; m < startMinute + totalMinutes; m++) {
-      result.push(m);
+    for (let m = 0; m < totalMinutes; m++) {
+      result.push(startMinute + m);
     }
     return result;
   }, [startMinute, totalMinutes]);
 
-  const handleMouseEnter = useCallback((cell: HeatmapCellData, e: React.MouseEvent) => {
+  const handleCellEnter = useCallback((cell: HeatmapCellData, e: React.MouseEvent) => {
     setHoveredCell(cell);
     setMousePos({ x: e.clientX, y: e.clientY });
   }, []);
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+  const handleCellMove = useCallback((e: React.MouseEvent) => {
     setMousePos({ x: e.clientX, y: e.clientY });
   }, []);
 
-  const handleMouseLeave = useCallback(() => {
+  const handleCellLeave = useCallback(() => {
     setHoveredCell(null);
   }, []);
 
-  const minuteLabels = useMemo(() => {
-    const labels: { minute: number; index: number }[] = [];
-    minutes.forEach((m, i) => {
+  const minuteLabelPositions = useMemo(() => {
+    const labels: { minute: number; leftPct: number }[] = [];
+    minuteList.forEach((m, i) => {
       if (m % 5 === 0) {
-        labels.push({ minute: m, index: i });
+        const leftPct = totalMinutes > 1 ? (i / (totalMinutes - 1)) * 100 : 50;
+        labels.push({ minute: m, leftPct });
       }
     });
     return labels;
-  }, [minutes]);
+  }, [minuteList, totalMinutes]);
 
   return (
     <div className="chart-card" style={{ position: 'relative' }}>
@@ -108,19 +188,19 @@ const HeatmapGrid: React.FC<HeatmapGridProps> = React.memo(({ heatmapData, userI
         }}
       >
         <div style={{ position: 'relative', marginLeft: '40px', height: '16px', flexShrink: 0 }}>
-          {minuteLabels.map(label => (
+          {minuteLabelPositions.map(({ minute, leftPct }) => (
             <div
-              key={label.minute}
+              key={minute}
               style={{
                 position: 'absolute',
-                left: `${(label.index / Math.max(totalMinutes - 1, 1)) * 100}%`,
+                left: `${leftPct}%`,
                 fontSize: '10px',
                 color: '#64748b',
                 transform: 'translateX(-50%)',
                 top: 0
               }}
             >
-              第{label.minute}分
+              第{minute}分
             </div>
           ))}
         </div>
@@ -159,23 +239,29 @@ const HeatmapGrid: React.FC<HeatmapGridProps> = React.memo(({ heatmapData, userI
                 {userId}
               </div>
               <div style={{ display: 'flex', gap: '2px', flex: 1, minWidth: 0 }}>
-                {minutes.map(minute => {
+                {minuteList.map(minute => {
                   const cell = cellMap.get(`${userId}-${minute}`);
+                  if (!cell) {
+                    return (
+                      <div
+                        key={minute}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          height: '100%',
+                          borderRadius: '4px',
+                          backgroundColor: '#1e293b'
+                        }}
+                      />
+                    );
+                  }
                   return (
-                    <div
+                    <HeatmapCell
                       key={minute}
-                      style={{
-                        flex: 1,
-                        minWidth: 0,
-                        height: '100%',
-                        borderRadius: '4px',
-                        backgroundColor: cell ? interpolateColor(cell.normalizedIntensity) : '#1e293b',
-                        cursor: cell ? 'pointer' : 'default',
-                        transition: 'background-color 0.3s ease'
-                      }}
-                      onMouseEnter={cell ? (e) => handleMouseEnter(cell, e) : undefined}
-                      onMouseMove={cell ? handleMouseMove : undefined}
-                      onMouseLeave={cell ? handleMouseLeave : undefined}
+                      intensity={cell.normalizedIntensity}
+                      onEnter={(e) => handleCellEnter(cell, e)}
+                      onMove={handleCellMove}
+                      onLeave={handleCellLeave}
                     />
                   );
                 })}
@@ -203,7 +289,7 @@ const HeatmapGrid: React.FC<HeatmapGridProps> = React.memo(({ heatmapData, userI
                 key={i}
                 style={{
                   width: '20px',
-                  backgroundColor: interpolateColor(t)
+                  backgroundColor: intensityToColor(t)
                 }}
               />
             ))}
@@ -213,47 +299,7 @@ const HeatmapGrid: React.FC<HeatmapGridProps> = React.memo(({ heatmapData, userI
       </div>
 
       {hoveredCell && (
-        <div
-          style={{
-            position: 'fixed',
-            left: mousePos.x + 12,
-            top: mousePos.y + 12,
-            backgroundColor: '#1f2937',
-            borderRadius: '8px',
-            padding: '10px 12px',
-            color: 'white',
-            fontSize: '12px',
-            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
-            zIndex: 1000,
-            pointerEvents: 'none',
-            minWidth: '160px'
-          }}
-        >
-          <div style={{ fontWeight: 600, marginBottom: '6px', color: '#f1f5f9' }}>
-            {hoveredCell.userId} · 第{hoveredCell.minute}分钟
-          </div>
-          {(Object.keys(hoveredCell.emotions) as EmotionKey[]).map(key => {
-            const isDominant = getDominantEmotion(hoveredCell.emotions).key === key;
-            return (
-              <div
-                key={key}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  gap: '12px',
-                  marginBottom: '2px',
-                  fontWeight: isDominant ? 600 : 400,
-                  color: isDominant ? '#f1f5f9' : '#94a3b8'
-                }}
-              >
-                <span>{EMOTION_LABELS[key]}</span>
-                <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                  {hoveredCell.emotions[key].toFixed(2)}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        <TooltipCard cell={hoveredCell} x={mousePos.x} y={mousePos.y} />
       )}
     </div>
   );
