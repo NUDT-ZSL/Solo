@@ -208,9 +208,12 @@ export class CardEngine {
     if (!this.state) return []
 
     const player = this.state.players[playerId]
+    if (!player || player.deck.length === 0) return []
+
+    const actualCount = Math.min(count, player.deck.length)
     const drawn: Card[] = []
 
-    for (let i = 0; i < count && player.deck.length > 0; i++) {
+    for (let i = 0; i < actualCount; i++) {
       const card = player.deck.shift()!
       player.hand.push(card)
       drawn.push(card)

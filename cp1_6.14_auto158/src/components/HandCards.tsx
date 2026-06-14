@@ -29,8 +29,11 @@ export const HandCards: React.FC<HandCardsProps> = ({
   const containerRef = useRef<HTMLDivElement>(null)
   const [dragging, setDragging] = useState<DraggingCard | null>(null)
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+  const [bouncing, setBouncing] = useState(false)
+  const [bouncePos, setBouncePos] = useState<{ x: number; y: number } | null>(null)
   const dragCardIndex = useRef<number>(-1)
   const cardStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+  const bounceRafRef = useRef<number | null>(null)
 
   const getBattlefieldRect = (): DOMRect | null => {
     const battlefield = document.querySelector('.battlefield-canvas')
@@ -47,7 +50,7 @@ export const HandCards: React.FC<HandCardsProps> = ({
   }
 
   const handleMouseDown = (e: React.MouseEvent, card: Card, index: number) => {
-    if (!isCurrentPlayer) return
+    if (!isCurrentPlayer || bouncing) return
     e.preventDefault()
 
     const cardElement = e.currentTarget as HTMLElement
@@ -70,6 +73,8 @@ export const HandCards: React.FC<HandCardsProps> = ({
   }
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (bouncing) return
+
     setDragging((prev) => {
       if (!prev) return null
 
@@ -82,6 +87,35 @@ export const HandCards: React.FC<HandCardsProps> = ({
         isValidTarget: isValid,
       }
     })
+  }, [bouncing])
+
+  const startBounceAnimation = useCallback((fromX: number, fromY: number, toX: number, toY: number) => {
+    setBouncing(true)
+    setBouncePos({ x: fromX, y: fromY })
+
+    const duration = 300
+    const startTime = performance.now()
+
+    const animate = (now: number) => {
+      const elapsed = now - startTime
+      const t = Math.min(1, elapsed / duration)
+      const eased = 1 - Math.pow(1 - t, 3)
+
+      const x = fromX + (toX - fromX) * eased
+      const y = fromY + (toY - fromY) * eased
+
+      setBouncePos({ x, y })
+
+      if (t < 1) {
+        bounceRafRef.current = requestAnimationFrame(animate)
+      } else {
+        setBouncing(false)
+        setBouncePos(null)
+        dragCardIndex.current = -1
+      }
+    }
+
+    bounceRafRef.current = requestAnimationFrame(animate)
   }, [])
 
   const handleMouseUp = useCallback((e: MouseEvent) => {
@@ -93,12 +127,14 @@ export const HandCards: React.FC<HandCardsProps> = ({
         const x = e.clientX - bfRect.left
         const y = e.clientY - bfRect.top
         onCardPlay(prev.card.id, x, y)
+        dragCardIndex.current = -1
+        return null
       }
 
-      dragCardIndex.current = -1
+      startBounceAnimation(e.clientX, e.clientY, prev.startX, prev.startY)
       return null
     })
-  }, [onCardPlay])
+  }, [onCardPlay, startBounceAnimation])
 
   React.useEffect(() => {
     if (dragging) {
@@ -110,6 +146,14 @@ export const HandCards: React.FC<HandCardsProps> = ({
       window.removeEventListener('mouseup', handleMouseUp)
     }
   }, [dragging, handleMouseMove, handleMouseUp])
+
+  React.useEffect(() => {
+    return () => {
+      if (bounceRafRef.current !== null) {
+        cancelAnimationFrame(bounceRafRef.current)
+      }
+    }
+  }, [])
 
   const getDragTrailStyle = (): React.CSSProperties => {
     if (!dragging) return {}
@@ -141,6 +185,18 @@ export const HandCards: React.FC<HandCardsProps> = ({
     }
   }
 
+  const getDraggingCardPosition = () => {
+    if (bouncing && bouncePos) {
+      return { left: bouncePos.x - 60, top: bouncePos.y - 80 }
+    }
+    if (dragging) {
+      return { left: dragging.currentX - 60, top: dragging.currentY - 80 }
+    }
+    return {}
+  }
+
+  const activeCard = dragging || (bouncing ? { card: cards[dragCardIndex.current] } : null)
+
   return (
     <div
       ref={containerRef}
@@ -154,7 +210,11 @@ export const HandCards: React.FC<HandCardsProps> = ({
               hoveredIndex === index && side === 'bottom' && isCurrentPlayer
                 ? 'hovered'
                 : ''
-            } ${dragging && dragCardIndex.current === index ? 'dragging-source' : ''}`}
+            } ${
+              (dragging || bouncing) && dragCardIndex.current === index
+                ? 'dragging-source'
+                : ''
+            }`}
             style={{
               zIndex: hoveredIndex === index ? 10 : index,
             }}
@@ -174,15 +234,17 @@ export const HandCards: React.FC<HandCardsProps> = ({
 
       {dragging && <div style={getDragTrailStyle()} />}
 
-      {dragging && (
+      {(dragging || bouncing) && activeCard && (
         <div
-          className={`dragging-card ${dragging.isValidTarget ? 'valid' : 'invalid'}`}
+          className={`dragging-card ${
+            dragging?.isValidTarget ? 'valid' : 'invalid'
+          } ${bouncing ? 'bouncing' : ''}`}
           style={{
-            left: dragging.currentX - 60,
-            top: dragging.currentY - 80,
+            ...getDraggingCardPosition(),
+            transition: bouncing ? 'none' : undefined,
           }}
         >
-          <CardComponent card={dragging.card} size="normal" />
+          <CardComponent card={activeCard.card} size="normal" />
         </div>
       )}
     </div>

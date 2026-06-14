@@ -41,7 +41,7 @@ export const CardComponent: React.FC<CardComponentProps> = ({
         '--gradient-start': colors.start,
         '--gradient-end': colors.end,
         '--card-index': index,
-        transitionDelay: `${index * 0.05}s`,
+        '--card-delay': `${index * 0.05}s`,
       } as React.CSSProperties}
     >
       {showBack ? (

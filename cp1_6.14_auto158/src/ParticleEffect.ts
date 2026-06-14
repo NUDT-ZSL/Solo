@@ -128,8 +128,9 @@ export class ParticleEffect {
 
   private createFireParticles(effect: EffectInstance): void {
     const { x, y, params } = effect
-    const baseCount = 100 + params.particleCount * 0.5
-    const count = Math.floor(baseCount * params.intensity)
+    const minCount = 30
+    const maxCount = 100 + params.particleCount * 0.5
+    const count = Math.floor(minCount + params.intensity * (maxCount - minCount))
 
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2
@@ -155,8 +156,9 @@ export class ParticleEffect {
 
   private createIceParticles(effect: EffectInstance): void {
     const { x, y, params } = effect
-    const baseCount = 60 + params.particleCount * 0.3
-    const count = Math.floor(baseCount * params.intensity)
+    const minCount = 20
+    const maxCount = 60 + params.particleCount * 0.3
+    const count = Math.floor(minCount + params.intensity * (maxCount - minCount))
 
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3
@@ -184,8 +186,9 @@ export class ParticleEffect {
 
   private createThunderEffect(effect: EffectInstance): void {
     const { x, y, params } = effect
-    const baseBranches = 4 + Math.floor(params.particleCount * 0.1)
-    const branchCount = Math.floor(baseBranches * params.intensity)
+    const minBranches = 2
+    const maxBranches = 4 + Math.floor(params.particleCount * 0.1)
+    const branchCount = Math.floor(minBranches + params.intensity * (maxBranches - minBranches))
 
     for (let i = 0; i < branchCount; i++) {
       const angle = (i / branchCount) * Math.PI * 2 + Math.random() * 0.5
@@ -216,8 +219,9 @@ export class ParticleEffect {
 
   private createDarkParticles(effect: EffectInstance): void {
     const { x, y, params } = effect
-    const baseCount = 80 + params.particleCount * 0.4
-    const count = Math.floor(baseCount * params.intensity)
+    const minCount = 25
+    const maxCount = 80 + params.particleCount * 0.4
+    const count = Math.floor(minCount + params.intensity * (maxCount - minCount))
 
     effect.phase = 'shrink'
 

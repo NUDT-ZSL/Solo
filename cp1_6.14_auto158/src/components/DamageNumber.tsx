@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, useRef, useCallback } from 'react'
 
 interface DamageNumberProps {
   value: number
@@ -18,16 +18,21 @@ export const DamageNumber: React.FC<DamageNumberProps> = ({
   const [displayValue, setDisplayValue] = useState(0)
   const [visible, setVisible] = useState(true)
   const animationRef = useRef<number | null>(null)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastUpdateRef = useRef<number>(0)
   const startTimeRef = useRef<number>(0)
+  const isMountedRef = useRef<boolean>(true)
 
   useEffect(() => {
+    isMountedRef.current = true
+
     const duration = 1200
     const updatesPerSecond = 5
     const updateInterval = 1000 / updatesPerSecond
-    let lastUpdate = 0
 
     const animate = (timestamp: number) => {
+      if (!isMountedRef.current) return
+
       if (startTimeRef.current === 0) {
         startTimeRef.current = timestamp
         lastUpdateRef.current = timestamp
@@ -45,24 +50,34 @@ export const DamageNumber: React.FC<DamageNumberProps> = ({
       if (elapsed < duration) {
         animationRef.current = requestAnimationFrame(animate)
       } else {
-        setDisplayValue(value)
+        if (isMountedRef.current) {
+          setDisplayValue(value)
+        }
       }
     }
 
     animationRef.current = requestAnimationFrame(animate)
 
-    const timeout = setTimeout(() => {
+    timeoutRef.current = setTimeout(() => {
+      if (!isMountedRef.current) return
       setVisible(false)
       onComplete()
     }, duration)
 
     return () => {
+      isMountedRef.current = false
+
       if (animationRef.current !== null) {
         cancelAnimationFrame(animationRef.current)
+        animationRef.current = null
       }
-      clearTimeout(timeout)
+
+      if (timeoutRef.current !== null) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
     }
-  }, [value, onComplete])
+  }, [value])
 
   const isDecrease = type === 'damage'
   const color = isDecrease ? '#e63946' : '#2ecc71'
