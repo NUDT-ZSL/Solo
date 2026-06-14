@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { StarField, ParticleInfo } from './StarField';
-import { NetworkGenerator } from './NetworkGenerator';
+import { StarField, ParticleInfo } from '../scene/StarField';
+import { NetworkGenerator } from '../scene/NetworkGenerator';
 
 export type InteractionEvent = 'particleSelect' | 'particleHover' | 'cameraChange';
 

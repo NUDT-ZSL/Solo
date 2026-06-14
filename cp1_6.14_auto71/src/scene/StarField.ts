@@ -29,6 +29,7 @@ export class StarField {
   private positions: Float32Array | null = null;
   private colors: Float32Array | null = null;
   private sizes: Float32Array | null = null;
+  private colorSeeds: Float32Array | null = null;
   private velocities: THREE.Vector3[] = [];
   private params: StarFieldParams;
   private selectedIndex: number | null = null;
@@ -36,6 +37,7 @@ export class StarField {
   private material: THREE.PointsMaterial | null = null;
   private rotationY: number = 0;
   private group: THREE.Group = new THREE.Group();
+  private frozen: boolean = false;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -62,21 +64,26 @@ export class StarField {
       this.material?.dispose();
     }
 
-    const { count, minRadius, maxRadius } = this.params;
+    const { count, minRadius, maxRadius, colorOffset } = this.params;
     this.geometry = new THREE.BufferGeometry();
     this.positions = new Float32Array(count * 3);
     this.colors = new Float32Array(count * 3);
     this.sizes = new Float32Array(count);
+    this.colorSeeds = new Float32Array(count);
     this.velocities = [];
 
     const tempColor = new THREE.Color();
+    const minR3 = Math.pow(minRadius, 3);
+    const maxR3 = Math.pow(maxRadius, 3);
+    const rRange = maxR3 - minR3;
 
     for (let i = 0; i < count; i++) {
       const i3 = i * 3;
 
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
-      const radius = minRadius + Math.random() * (maxRadius - minRadius);
+      const u = Math.random();
+      const radius = Math.cbrt(minR3 + u * rRange);
 
       const x = radius * Math.sin(phi) * Math.cos(theta);
       const y = radius * Math.sin(phi) * Math.sin(theta);
@@ -86,7 +93,9 @@ export class StarField {
       this.positions[i3 + 1] = y;
       this.positions[i3 + 2] = z;
 
-      const t = Math.random();
+      const seed = Math.random();
+      this.colorSeeds[i] = seed;
+      const t = (seed + colorOffset) % 1;
       tempColor.copy(COLOR_BLUE).lerp(COLOR_PINK, t);
       this.colors[i3] = tempColor.r;
       this.colors[i3 + 1] = tempColor.g;
@@ -146,8 +155,10 @@ export class StarField {
   updateParticles(delta: number): void {
     if (!this.particles || !this.positions) return;
 
-    this.rotationY += this.params.rotationSpeed * delta;
-    this.group.rotation.y = this.rotationY;
+    if (!this.frozen) {
+      this.rotationY += this.params.rotationSpeed * delta;
+      this.group.rotation.y = this.rotationY;
+    }
 
     const positionAttr = this.geometry?.getAttribute('position') as THREE.BufferAttribute;
     if (positionAttr) {
@@ -160,6 +171,14 @@ export class StarField {
       highlightPos.setXYZ(0, this.positions[i3], this.positions[i3 + 1], this.positions[i3 + 2]);
       highlightPos.needsUpdate = true;
     }
+  }
+
+  setFrozen(frozen: boolean): void {
+    this.frozen = frozen;
+  }
+
+  isFrozen(): boolean {
+    return this.frozen;
   }
 
   getParticleSystem(): THREE.Points | null {
@@ -255,12 +274,12 @@ export class StarField {
       this.material.size = this.params.particleSize;
     }
 
-    if (partial.colorOffset !== undefined && this.colors && this.positions) {
+    if (partial.colorOffset !== undefined && this.colors && this.colorSeeds) {
       const tempColor = new THREE.Color();
       for (let i = 0; i < this.params.count; i++) {
         const i3 = i * 3;
-        const baseT = (i / this.params.count + partial.colorOffset) % 1;
-        tempColor.copy(COLOR_BLUE).lerp(COLOR_PINK, baseT);
+        const t = (this.colorSeeds[i] + partial.colorOffset) % 1;
+        tempColor.copy(COLOR_BLUE).lerp(COLOR_PINK, t);
         this.colors[i3] = tempColor.r;
         this.colors[i3 + 1] = tempColor.g;
         this.colors[i3 + 2] = tempColor.b;

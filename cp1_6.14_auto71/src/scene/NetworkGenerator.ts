@@ -1,6 +1,68 @@
 import * as THREE from 'three';
 import { StarField } from './StarField';
 
+class SpatialGrid {
+  private cellSize: number;
+  private grid: Map<string, number[]> = new Map();
+  private invCellSize: number;
+
+  constructor(cellSize: number) {
+    this.cellSize = cellSize;
+    this.invCellSize = 1 / cellSize;
+  }
+
+  clear(): void {
+    this.grid.clear();
+  }
+
+  private key(cx: number, cy: number, cz: number): string {
+    return `${cx},${cy},${cz}`;
+  }
+
+  insert(index: number, x: number, y: number, z: number): void {
+    const cx = Math.floor(x * this.invCellSize);
+    const cy = Math.floor(y * this.invCellSize);
+    const cz = Math.floor(z * this.invCellSize);
+    const k = this.key(cx, cy, cz);
+    let bucket = this.grid.get(k);
+    if (!bucket) {
+      bucket = [];
+      this.grid.set(k, bucket);
+    }
+    bucket.push(index);
+  }
+
+  query(x: number, y: number, z: number): number[] {
+    const cx = Math.floor(x * this.invCellSize);
+    const cy = Math.floor(y * this.invCellSize);
+    const cz = Math.floor(z * this.invCellSize);
+    const result: number[] = [];
+
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          const k = this.key(cx + dx, cy + dy, cz + dz);
+          const bucket = this.grid.get(k);
+          if (bucket) {
+            for (let i = 0; i < bucket.length; i++) {
+              result.push(bucket[i]);
+            }
+          }
+        }
+      }
+    }
+    return result;
+  }
+
+  build(positions: Float32Array, count: number): void {
+    this.clear();
+    for (let i = 0; i < count; i++) {
+      const i3 = i * 3;
+      this.insert(i, positions[i3], positions[i3 + 1], positions[i3 + 2]);
+    }
+  }
+}
+
 export class NetworkGenerator {
   private scene: THREE.Scene;
   private starField: StarField;
@@ -34,13 +96,19 @@ export class NetworkGenerator {
 
     if (!positions || !colors) return;
 
+    const tStart = performance.now();
+
     const linePositions: number[] = [];
     const lineColors: number[] = [];
     const thresholdSq = this.distanceThreshold * this.distanceThreshold;
 
+    const grid = new SpatialGrid(this.distanceThreshold);
+    grid.build(positions, count);
+
     const tempColor1 = new THREE.Color();
     const tempColor2 = new THREE.Color();
     const avgColor = new THREE.Color();
+    const processed = new Set<string>();
 
     for (let i = 0; i < count; i++) {
       const i3 = i * 3;
@@ -48,7 +116,14 @@ export class NetworkGenerator {
       const yi = positions[i3 + 1];
       const zi = positions[i3 + 2];
 
-      for (let j = i + 1; j < count; j++) {
+      const candidates = grid.query(xi, yi, zi);
+
+      for (const j of candidates) {
+        if (j <= i) continue;
+        const pairKey = `${i}-${j}`;
+        if (processed.has(pairKey)) continue;
+        processed.add(pairKey);
+
         const j3 = j * 3;
         const dx = positions[j3] - xi;
         const dy = positions[j3 + 1] - yi;
@@ -70,6 +145,9 @@ export class NetworkGenerator {
         }
       }
     }
+
+    const tEnd = performance.now();
+    console.log(`[NetworkGenerator] Built network with ${linePositions.length / 6} edges in ${(tEnd - tStart).toFixed(2)}ms (${count} particles)`);
 
     if (linePositions.length === 0) {
       this.networkActive = true;
@@ -122,7 +200,7 @@ export class NetworkGenerator {
     const positions = this.starField.getPositions();
     if (!positions || centerIndex < 0) return;
 
-    const neighbors = this.starField.getNeighbors(centerIndex, threshold);
+    const neighbors = this.getNeighborsFast(centerIndex, threshold);
     if (neighbors.length === 0) return;
 
     const ci3 = centerIndex * 3;
@@ -157,6 +235,36 @@ export class NetworkGenerator {
 
     this.localLines = new THREE.LineSegments(geometry, material);
     this.starField.getGroup().add(this.localLines);
+  }
+
+  private getNeighborsFast(centerIndex: number, threshold: number): number[] {
+    const positions = this.starField.getPositions();
+    const count = this.starField.getParticleCount();
+    if (!positions) return [];
+
+    const ci3 = centerIndex * 3;
+    const cx = positions[ci3];
+    const cy = positions[ci3 + 1];
+    const cz = positions[ci3 + 2];
+    const thresholdSq = threshold * threshold;
+
+    const grid = new SpatialGrid(threshold);
+    grid.build(positions, count);
+    const candidates = grid.query(cx, cy, cz);
+
+    const neighbors: number[] = [];
+    for (const i of candidates) {
+      if (i === centerIndex) continue;
+      const i3 = i * 3;
+      const dx = positions[i3] - cx;
+      const dy = positions[i3 + 1] - cy;
+      const dz = positions[i3 + 2] - cz;
+      const distSq = dx * dx + dy * dy + dz * dz;
+      if (distSq < thresholdSq) {
+        neighbors.push(i);
+      }
+    }
+    return neighbors;
   }
 
   clearLocalNetwork(): void {

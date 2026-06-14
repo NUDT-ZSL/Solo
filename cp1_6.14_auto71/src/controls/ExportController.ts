@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { saveAs } from 'file-saver';
+import { StarField } from '../scene/StarField';
 
 export type ExportStatus = 'idle' | 'exporting' | 'success' | 'error';
 
@@ -7,6 +8,7 @@ export interface ExportOptions {
   width?: number;
   height?: number;
   filename?: string;
+  freezeDuration?: number;
 }
 
 type StatusCallback = (status: ExportStatus) => void;
@@ -14,24 +16,28 @@ type StatusCallback = (status: ExportStatus) => void;
 const DEFAULT_OPTIONS: Required<ExportOptions> = {
   width: 1920,
   height: 1080,
-  filename: 'nebula-weaver.png'
+  filename: 'nebula-weaver.png',
+  freezeDuration: 300
 };
 
 export class ExportController {
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
   private renderer: THREE.WebGLRenderer;
+  private starField: StarField;
   private statusCallbacks: Set<StatusCallback> = new Set();
   private status: ExportStatus = 'idle';
 
   constructor(
     scene: THREE.Scene,
     camera: THREE.PerspectiveCamera,
-    renderer: THREE.WebGLRenderer
+    renderer: THREE.WebGLRenderer,
+    starField: StarField
   ) {
     this.scene = scene;
     this.camera = camera;
     this.renderer = renderer;
+    this.starField = starField;
   }
 
   private setStatus(status: ExportStatus): void {
@@ -48,6 +54,10 @@ export class ExportController {
     return () => this.statusCallbacks.delete(callback);
   }
 
+  private async sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
   async exportScreenshot(options: ExportOptions = {}): Promise<boolean> {
     const opts = { ...DEFAULT_OPTIONS, ...options };
 
@@ -58,12 +68,11 @@ export class ExportController {
     this.setStatus('exporting');
 
     try {
-      const originalSize = new THREE.Vector2();
-      this.renderer.getSize(originalSize);
-      const originalPixelRatio = this.renderer.getPixelRatio();
-      const originalClearColor = new THREE.Color();
-      this.renderer.getClearColor(originalClearColor);
-      const originalClearAlpha = this.renderer.getClearAlpha();
+      this.starField.setFrozen(true);
+
+      await this.sleep(opts.freezeDuration);
+
+      this.renderer.render(this.scene, this.camera);
 
       const offscreenCanvas = document.createElement('canvas');
       offscreenCanvas.width = opts.width;
@@ -107,17 +116,20 @@ export class ExportController {
 
       saveAs(blob, opts.filename);
 
+      this.starField.setFrozen(false);
+
       this.setStatus('success');
 
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await this.sleep(500);
 
       this.setStatus('idle');
 
       return true;
     } catch (error) {
       console.error('Export failed:', error);
+      this.starField.setFrozen(false);
       this.setStatus('error');
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await this.sleep(500);
       this.setStatus('idle');
       return false;
     }
