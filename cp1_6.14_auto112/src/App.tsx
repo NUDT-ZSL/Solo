@@ -79,18 +79,7 @@ const App: React.FC = () => {
         PixelFusion
       </h1>
 
-      <div
-        style={{
-          display: 'flex',
-          gap: '16px',
-          maxWidth: '1200px',
-          margin: '0 auto',
-          flexDirection: 'row',
-          '@media (max-width: 768px)': {
-            flexDirection: 'column-reverse'
-          }
-        } as React.CSSProperties}
-      >
+      <div className="app-container">
         <ControlPanel
           puzzleId={currentPuzzleId}
           onPuzzleChange={handlePuzzleChange}

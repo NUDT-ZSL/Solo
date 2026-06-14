@@ -132,14 +132,14 @@ export const PuzzleBoard: React.FC<PuzzleBoardProps> = ({ pieces, onPiecesChange
               height: piece.height,
               backgroundColor: piece.color,
               border: isHinted
-                ? '3px solid #f9e2af'
+                ? '2px solid yellow'
                 : '1px solid #585b70',
-              opacity: isDragging ? 0.7 : 1,
+              opacity: isDragging ? 0.5 : 1,
               transform: isDragging ? 'scale(1.05)' : 'scale(1)',
               cursor: piece.isPlaced ? 'default' : 'grab',
               transition: 'all 0.2s ease',
               zIndex,
-              boxShadow: isHinted ? '0 0 15px rgba(249, 226, 175, 0.8)' : 'none'
+              boxShadow: isHinted ? '0 0 15px rgba(255, 255, 0, 0.8)' : 'none'
             }}
           />
         )

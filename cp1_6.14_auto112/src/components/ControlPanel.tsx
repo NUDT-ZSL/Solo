@@ -54,27 +54,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ puzzleId, onPuzzleCh
   }
 
   return (
-    <div
-      style={{
-        width: '200px',
-        backgroundColor: 'rgba(30, 30, 46, 0.7)',
-        backdropFilter: 'blur(10px)',
-        borderRadius: '12px',
-        border: '1px solid #313244',
-        padding: '16px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
-        flexShrink: 0,
-        '@media (max-width: 768px)': {
-          width: '100%',
-          flexDirection: 'row',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between'
-        }
-      } as React.CSSProperties}
-    >
+    <div className="control-panel">
       <div style={{ textAlign: 'center' }}>
         <div
           style={{
