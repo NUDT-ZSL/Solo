@@ -55,20 +55,24 @@ const Stars = memo(function Stars({
   value: number;
   size?: number;
 }) {
-  const stars = [];
-  for (let i = 0; i < 5; i++) {
-    let cls = 'star';
-    if (i < Math.floor(value)) {
-      cls += ' filled';
-    } else if (i < value) {
-      cls += ' half';
+  const stars = useMemo(() => {
+    const arr = [];
+    for (let i = 0; i < 5; i++) {
+      let cls = 'star';
+      if (i < Math.floor(value)) {
+        cls += ' filled';
+      } else if (i < value) {
+        cls += ' half';
+      }
+      arr.push(
+        <span key={i} className={cls} style={{ fontSize: `${size}px` }}>
+          ★
+        </span>
+      );
     }
-    stars.push(
-      <span key={i} className={cls} style={{ fontSize: `${size}px` }}>
-        ★
-      </span>
-    );
-  }
+    return arr;
+  }, [value, size]);
+
   return <span className="stars">{stars}</span>;
 });
 
