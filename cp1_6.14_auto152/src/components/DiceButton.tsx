@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { eventBus } from '../utils/EventBus';
 
 interface DiceButtonProps {
@@ -7,21 +7,37 @@ interface DiceButtonProps {
 
 export const DiceButton: React.FC<DiceButtonProps> = ({ disabled }) => {
   const [rolling, setRolling] = useState(false);
-  const [value, setValue] = useState<number>(1);
   const [displayValue, setDisplayValue] = useState<number>(1);
+  const pendingValueRef = useRef<number | null>(null);
+  const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const offRolling = eventBus.on('dice:rolling', () => {
+      if (timerRef.current) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      pendingValueRef.current = null;
       setRolling(true);
     });
     const offResult = eventBus.on('dice:result', ({ value }) => {
-      setValue(value);
-      setDisplayValue(value);
-      window.setTimeout(() => setRolling(false), 100);
+      pendingValueRef.current = value;
+      timerRef.current = window.setTimeout(() => {
+        if (pendingValueRef.current !== null) {
+          setDisplayValue(pendingValueRef.current);
+        }
+        setRolling(false);
+        timerRef.current = null;
+        pendingValueRef.current = null;
+      }, 500);
     });
     return () => {
       offRolling();
       offResult();
+      if (timerRef.current) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
     };
   }, []);
 
@@ -36,11 +52,6 @@ export const DiceButton: React.FC<DiceButtonProps> = ({ disabled }) => {
         className={`dice-btn ${rolling ? 'rolling' : ''}`}
         onClick={handleClick}
         disabled={disabled || rolling}
-        style={{
-          width: 80,
-          height: 80,
-          borderRadius: 8,
-        }}
       >
         {rolling ? '?' : displayValue}
       </button>
