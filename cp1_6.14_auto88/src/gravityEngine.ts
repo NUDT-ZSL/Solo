@@ -28,9 +28,9 @@ export interface Particle {
 const G = 500;
 const SOFTENING = 20;
 const MAX_PARTICLES = 200;
-const TRAIL_FADE_RATE = 0.016;
-const DEAD_TRAIL_FADE_RATE = 0.033;
-const TRAIL_MAX_LENGTH = 600;
+const TRAIL_LIFETIME_SECONDS = 1.0;
+const DEAD_TRAIL_LIFETIME_SECONDS = 1.0;
+const TRAIL_MAX_LENGTH = 800;
 
 export class GravityEngine {
   private sources: GravitySource[] = [];
@@ -81,8 +81,10 @@ export class GravityEngine {
   }
 
   launchParticle(x: number, y: number, vx: number, vy: number): Particle {
-    if (this.particles.length >= MAX_PARTICLES) {
-      this.particles.shift();
+    while (this.particles.filter(p => !p.dead).length >= MAX_PARTICLES) {
+      const firstAliveIdx = this.particles.findIndex(p => !p.dead);
+      if (firstAliveIdx === -1) break;
+      this.particles.splice(firstAliveIdx, 1);
     }
 
     const particle: Particle = {
@@ -100,12 +102,12 @@ export class GravityEngine {
     return particle;
   }
 
-  getParticles(): Particle[] {
-    return [...this.particles];
+  getAliveParticleCount(): number {
+    return this.particles.filter(p => !p.dead).length;
   }
 
-  getParticleCount(): number {
-    return this.particles.length;
+  getParticles(): Particle[] {
+    return [...this.particles];
   }
 
   clearParticles(): void {
@@ -113,27 +115,33 @@ export class GravityEngine {
   }
 
   update(dt: number): void {
+    const fadeRate = dt / TRAIL_LIFETIME_SECONDS;
+    const deadFadeRate = dt / DEAD_TRAIL_LIFETIME_SECONDS;
+
     for (const particle of this.particles) {
       if (particle.dead) continue;
 
-      if (particle.trail.length === 0 ||
-          Math.hypot(particle.x - particle.trail[particle.trail.length - 1].x,
-                     particle.y - particle.trail[particle.trail.length - 1].y) > 1.5) {
-        particle.trail.push({
+      const trail = particle.trail;
+      const lastPoint = trail[trail.length - 1];
+      if (!lastPoint ||
+          Math.hypot(particle.x - lastPoint.x, particle.y - lastPoint.y) > 1.5) {
+        trail.push({
           x: particle.x,
           y: particle.y,
           alpha: 1.0
         });
       }
 
-      if (particle.trail.length > TRAIL_MAX_LENGTH) {
-        particle.trail.shift();
+      if (trail.length > TRAIL_MAX_LENGTH) {
+        trail.splice(0, trail.length - TRAIL_MAX_LENGTH);
       }
 
-      for (const point of particle.trail) {
-        point.alpha -= TRAIL_FADE_RATE;
+      for (const point of trail) {
+        point.alpha -= fadeRate;
       }
-      particle.trail = particle.trail.filter(p => p.alpha > 0);
+      while (trail.length > 0 && trail[0].alpha <= 0) {
+        trail.shift();
+      }
 
       this.rk4Step(particle, dt);
 
@@ -150,7 +158,7 @@ export class GravityEngine {
         }
       }
 
-      const bounds = 3000;
+      const bounds = 4000;
       if (collided || particle.age > 60 ||
           Math.abs(particle.x) > bounds || Math.abs(particle.y) > bounds) {
         particle.dead = true;
@@ -160,9 +168,11 @@ export class GravityEngine {
     for (const particle of this.particles) {
       if (particle.dead && particle.trail.length > 0) {
         for (const point of particle.trail) {
-          point.alpha -= DEAD_TRAIL_FADE_RATE;
+          point.alpha -= deadFadeRate;
         }
-        particle.trail = particle.trail.filter(p => p.alpha > 0);
+        while (particle.trail.length > 0 && particle.trail[0].alpha <= 0) {
+          particle.trail.shift();
+        }
       }
     }
 
@@ -232,19 +242,24 @@ export class GravityEngine {
   }
 
   private calculateRadius(mass: number): number {
-    return 15 + mass * 5;
+    if (Math.abs(mass - 1.0) < 0.001) return 20;
+    if (Math.abs(mass - 3.0) < 0.001) return 30;
+    return 14 + mass * 5.3;
   }
 
   private calculateColor(mass: number): string {
     if (mass <= 1.0) {
       return '#888888';
     }
+    if (Math.abs(mass - 3.0) < 0.001) {
+      return '#e74c3c';
+    }
 
-    const t = Math.min((mass - 1.0) / 2.0, 1.0);
+    const t = Math.min((mass - 1.0) / 9.0, 1.0);
 
     const r = Math.round(136 + t * (231 - 136));
-    const g = Math.round(136 - t * (136 - 76));
-    const b = Math.round(136 - t * (136 - 60));
+    const g = Math.round(136 - t * 76);
+    const b = Math.round(136 - t * 88);
 
     return `rgb(${r}, ${g}, ${b})`;
   }
