@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
-import { CardDetail as CardDetailType, ConsumeRecord, cardApi } from '../http';
+import { CardDetail as CardDetailType, ConsumeRecord, PointsLog, cardApi } from '../http';
 
 interface RedeemItem {
   name: string;
@@ -10,10 +10,11 @@ interface RedeemItem {
 interface CardDetailProps {
   cardId: string;
   onRecordsUpdate: (records: ConsumeRecord[]) => void;
+  onPointsLogUpdate: (pointsLog: PointsLog[]) => void;
   redeemItems: RedeemItem[];
 }
 
-const CardDetail = ({ cardId, onRecordsUpdate, redeemItems }: CardDetailProps) => {
+const CardDetail = ({ cardId, onRecordsUpdate, onPointsLogUpdate, redeemItems }: CardDetailProps) => {
   const [card, setCard] = useState<CardDetailType | null>(null);
   const [consumeAmount, setConsumeAmount] = useState('');
   const [selectedRedeemItem, setSelectedRedeemItem] = useState('');
@@ -40,10 +41,17 @@ const CardDetail = ({ cardId, onRecordsUpdate, redeemItems }: CardDetailProps) =
       const data = await cardApi.getCardDetail(cardId);
       setCard(data);
       onRecordsUpdate(data.consumeRecords);
+      onPointsLogUpdate(data.pointsLog);
     } catch (err) {
       const message = err instanceof Error ? err.message : '加载卡片详情失败';
       setStatus({ type: 'error', message });
     }
+  };
+
+  const triggerPulse = () => {
+    pulseKeyRef.current += 1;
+    setShowPulse(true);
+    setTimeout(() => setShowPulse(false), 400);
   };
 
   const handleConsume = async () => {
@@ -58,12 +66,11 @@ const CardDetail = ({ cardId, onRecordsUpdate, redeemItems }: CardDetailProps) =
     }
     try {
       const data = await cardApi.consume(cardId, amount);
-      setCard((prev) => prev ? { ...prev, balance: data.balance, points: data.points, consumeRecords: [data.record, ...prev.consumeRecords] } : null);
-      onRecordsUpdate(card ? [data.record, ...card.consumeRecords] : [data.record]);
+      const newRecords = [data.record, ...(card?.consumeRecords || [])];
+      setCard((prev) => prev ? { ...prev, balance: data.balance, points: data.points, consumeRecords: newRecords } : null);
+      onRecordsUpdate(newRecords);
       setConsumeAmount('');
-      pulseKeyRef.current += 1;
-      setShowPulse(true);
-      setTimeout(() => setShowPulse(false), 400);
+      triggerPulse();
       setStatus({ type: 'success', message: `消费成功！扣除¥${amount.toFixed(1)}，获得${data.record.pointsEarned}积分` });
       setTimeout(() => setStatus(null), 3000);
     } catch (err) {
@@ -85,8 +92,11 @@ const CardDetail = ({ cardId, onRecordsUpdate, redeemItems }: CardDetailProps) =
     }
     try {
       const data = await cardApi.redeem(cardId, item.points, item.name);
-      setCard((prev) => prev ? { ...prev, points: data.points, pointsLog: [data.log, ...prev.pointsLog] } : null);
+      const newPointsLog = [data.log, ...(card?.pointsLog || [])];
+      setCard((prev) => prev ? { ...prev, points: data.points, pointsLog: newPointsLog } : null);
+      onPointsLogUpdate(newPointsLog);
       setSelectedRedeemItem('');
+      triggerPulse();
       setStatus({ type: 'success', message: `兑换成功！扣除${item.points}积分，获得「${item.name}」` });
       setTimeout(() => setStatus(null), 3000);
     } catch (err) {

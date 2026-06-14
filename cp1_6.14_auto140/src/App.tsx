@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import CardList from './components/CardList';
 import CardDetail from './components/CardDetail';
 import ScanView from './components/ScanView';
-import { Card, ConsumeRecord, cardApi } from './http';
+import { Card, ConsumeRecord, PointsLog, cardApi } from './http';
 
 interface RedeemItem {
   name: string;
@@ -16,12 +16,16 @@ const REDEEM_ITEMS: RedeemItem[] = [
   { name: '咖啡礼盒', points: 500 },
 ];
 
+type RightTab = 'consume' | 'points';
+
 const MainPage = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id?: string }>();
   const [cards, setCards] = useState<Card[]>([]);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(id || null);
   const [records, setRecords] = useState<ConsumeRecord[]>([]);
+  const [pointsLog, setPointsLog] = useState<PointsLog[]>([]);
+  const [rightTab, setRightTab] = useState<RightTab>('consume');
   const [showModal, setShowModal] = useState(false);
   const [newCardNumber, setNewCardNumber] = useState('');
   const [initialBalance, setInitialBalance] = useState(100);
@@ -57,6 +61,10 @@ const MainPage = () => {
 
   const handleRecordsUpdate = (newRecords: ConsumeRecord[]) => {
     setRecords(newRecords);
+  };
+
+  const handlePointsLogUpdate = (newPointsLog: PointsLog[]) => {
+    setPointsLog(newPointsLog);
   };
 
   const handleCreateCard = async () => {
@@ -106,6 +114,7 @@ const MainPage = () => {
             <CardDetail
               cardId={selectedCard.id}
               onRecordsUpdate={handleRecordsUpdate}
+              onPointsLogUpdate={handlePointsLogUpdate}
               redeemItems={REDEEM_ITEMS}
             />
           ) : (
@@ -114,22 +123,56 @@ const MainPage = () => {
         </div>
 
         <div className="right-panel">
-          <div className="panel-title">消费记录日志</div>
-          {records.length > 0 ? (
-            <ul className="record-list">
-              {records.map((record) => (
-                <li key={record.id} className="record-item">
-                  <span className="record-time">{record.time}</span>
-                  <span className="record-amount">-¥{record.amount.toFixed(1)}</span>
-                  <span className="record-balance">余¥{record.remainingBalance.toFixed(1)}</span>
-                  <span className="record-points">+{record.pointsEarned}分</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="empty-state">
-              {selectedCard ? '暂无消费记录' : '请选择一张会员卡查看记录'}
+          <div className="tab-container">
+            <div
+              className={`tab-item ${rightTab === 'consume' ? 'active' : ''}`}
+              onClick={() => setRightTab('consume')}
+            >
+              消费记录
             </div>
+            <div
+              className={`tab-item ${rightTab === 'points' ? 'active' : ''}`}
+              onClick={() => setRightTab('points')}
+            >
+              积分日志
+            </div>
+          </div>
+
+          {rightTab === 'consume' && (
+            records.length > 0 ? (
+              <ul className="record-list">
+                {records.map((record) => (
+                  <li key={record.id} className="record-item">
+                    <span className="record-time">{record.time}</span>
+                    <span className="record-amount">-¥{record.amount.toFixed(1)}</span>
+                    <span className="record-balance">余¥{record.remainingBalance.toFixed(1)}</span>
+                    <span className="record-points">+{record.pointsEarned}分</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="empty-state">
+                {selectedCard ? '暂无消费记录' : '请选择一张会员卡查看记录'}
+              </div>
+            )
+          )}
+
+          {rightTab === 'points' && (
+            pointsLog.length > 0 ? (
+              <ul className="points-log-list">
+                {pointsLog.map((log) => (
+                  <li key={log.id} className="points-log-item">
+                    <span className="points-log-time">{log.time}</span>
+                    <span className="points-log-item-name">{log.item}</span>
+                    <span className="points-log-points">-{log.points}分</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="empty-state">
+                {selectedCard ? '暂无积分兑换记录' : '请选择一张会员卡查看记录'}
+              </div>
+            )
           )}
         </div>
       </div>
