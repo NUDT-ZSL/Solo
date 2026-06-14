@@ -53,6 +53,7 @@ export function useGameLoop(): UseGameLoopReturn {
   gameStateRef.current = gameState;
 
   const opponentsRef = useRef<OpponentState[]>([]);
+  const wasBrakingRef = useRef<boolean>(false);
 
   const initIfNeeded = useCallback(() => {
     if (!canvasRef.current) return false;
@@ -138,17 +139,12 @@ export function useGameLoop(): UseGameLoopReturn {
       rendererRef.current.render(latestState);
       setGameState((prev) => ({ ...prev, currentState: latestState }));
 
-      if (input.accelerate && latestState.speed > 30) {
-        if (Math.random() < 0.1) {
-          rendererRef.current.triggerEffect({ type: 'blur', duration: 300, intensity: 1 });
-        }
-      }
-
-      if (input.brake && latestState.speed > 20) {
-        if (Math.random() < 0.05) {
+      if (input.brake && latestState.speed > 25) {
+        if (!wasBrakingRef.current) {
           rendererRef.current.triggerEffect({ type: 'tilt', duration: 500, intensity: 1 });
         }
       }
+      wasBrakingRef.current = input.brake;
     }
 
     animationFrameRef.current = requestAnimationFrame(gameLoop);

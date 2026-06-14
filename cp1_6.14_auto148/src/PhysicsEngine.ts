@@ -240,33 +240,61 @@ export class PhysicsEngine extends EventEmitter {
     const dy = this.y - TRACK_CONFIG.centerY;
 
     const angle = Math.atan2(dy, dx);
-    const outerEdgeX = TRACK_CONFIG.centerX + TRACK_CONFIG.outerRadiusX * Math.cos(angle);
-    const outerEdgeY = TRACK_CONFIG.centerY + TRACK_CONFIG.outerRadiusY * Math.sin(angle);
-    const innerEdgeX = TRACK_CONFIG.centerX + TRACK_CONFIG.innerRadiusX * Math.cos(angle);
-    const innerEdgeY = TRACK_CONFIG.centerY + TRACK_CONFIG.innerRadiusY * Math.sin(angle);
 
-    const distToCenter = Math.sqrt(
-      (dx * dx) / (TRACK_CONFIG.outerRadiusX * TRACK_CONFIG.outerRadiusX) +
-      (dy * dy) / (TRACK_CONFIG.outerRadiusY * TRACK_CONFIG.outerRadiusY)
+    const outerRadiusAtAngle = this.getEllipseRadius(
+      angle,
+      TRACK_CONFIG.outerRadiusX,
+      TRACK_CONFIG.outerRadiusY
     );
-    const innerDist = Math.sqrt(
-      (dx * dx) / (TRACK_CONFIG.innerRadiusX * TRACK_CONFIG.innerRadiusX) +
-      (dy * dy) / (TRACK_CONFIG.innerRadiusY * TRACK_CONFIG.innerRadiusY)
+    const innerRadiusAtAngle = this.getEllipseRadius(
+      angle,
+      TRACK_CONFIG.innerRadiusX,
+      TRACK_CONFIG.innerRadiusY
     );
 
-    if (distToCenter > 1.02) {
-      const t = 1.02;
-      this.x = TRACK_CONFIG.centerX + TRACK_CONFIG.outerRadiusX * Math.cos(angle) * t * 0.98;
-      this.y = TRACK_CONFIG.centerY + TRACK_CONFIG.outerRadiusY * Math.sin(angle) * t * 0.98;
-      this.speed *= 0.7;
-      this.lateralSpeed *= 0.5;
-    } else if (innerDist < 0.98) {
-      const t = 0.98;
-      this.x = TRACK_CONFIG.centerX + TRACK_CONFIG.innerRadiusX * Math.cos(angle) / t * 1.02;
-      this.y = TRACK_CONFIG.centerY + TRACK_CONFIG.innerRadiusY * Math.sin(angle) / t * 1.02;
-      this.speed *= 0.7;
-      this.lateralSpeed *= 0.5;
+    const distFromCenter = Math.sqrt(dx * dx + dy * dy);
+    const normalizedOuter = distFromCenter / outerRadiusAtAngle;
+    const normalizedInner = distFromCenter / innerRadiusAtAngle;
+
+    const nx = Math.cos(angle);
+    const ny = Math.sin(angle);
+    const velocityDotNormal = this.speedX * nx + this.speedY * ny;
+
+    if (normalizedOuter > 1.0) {
+      const boundaryDist = outerRadiusAtAngle * 0.99;
+      this.x = TRACK_CONFIG.centerX + nx * boundaryDist;
+      this.y = TRACK_CONFIG.centerY + ny * boundaryDist;
+
+      if (velocityDotNormal > 0) {
+        this.speedX -= 2 * velocityDotNormal * nx * 0.6;
+        this.speedY -= 2 * velocityDotNormal * ny * 0.6;
+        this.speed = Math.sqrt(this.speedX * this.speedX + this.speedY * this.speedY) * 0.7;
+      } else {
+        this.speed *= 0.8;
+      }
+      this.lateralSpeed *= 0.3;
     }
+
+    if (normalizedInner < 1.0) {
+      const boundaryDist = innerRadiusAtAngle * 1.01;
+      this.x = TRACK_CONFIG.centerX + nx * boundaryDist;
+      this.y = TRACK_CONFIG.centerY + ny * boundaryDist;
+
+      if (velocityDotNormal < 0) {
+        this.speedX -= 2 * velocityDotNormal * nx * 0.6;
+        this.speedY -= 2 * velocityDotNormal * ny * 0.6;
+        this.speed = Math.sqrt(this.speedX * this.speedX + this.speedY * this.speedY) * 0.7;
+      } else {
+        this.speed *= 0.8;
+      }
+      this.lateralSpeed *= 0.3;
+    }
+  }
+
+  private getEllipseRadius(angle: number, radiusX: number, radiusY: number): number {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    return (radiusX * radiusY) / Math.sqrt(radiusY * radiusY * cos * cos + radiusX * radiusX * sin * sin);
   }
 
   resolveCollision(otherX: number, otherY: number): void {

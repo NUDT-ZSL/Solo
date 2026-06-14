@@ -51,7 +51,8 @@ export class GameRenderer {
   private lastSkidPosition: { x: number; y: number; angle: number } | null = null;
   private lastMinimapUpdate: number = 0;
   private particleSpawnTimer: number = 0;
-  private particlesPerSecond: number = 20;
+  private spawnsPerSecond: number = 10;
+  private totalParticlesPerSecond: number = 20;
   private fps: number = 60;
   private frameCount: number = 0;
   private fpsTimer: number = 0;
@@ -60,14 +61,25 @@ export class GameRenderer {
   private tiltOffset: number = 0;
   private flashAlpha: number = 0;
   private blurIntensity: number = 0;
+  private continuousBlurIntensity: number = 0;
   private scale: number = 1;
   private offsetX: number = 0;
   private offsetY: number = 0;
+  private isBraking: boolean = false;
+  private lastBrakeTime: number = 0;
+  private offscreenCanvas: HTMLCanvasElement;
+  private offscreenCtx: CanvasRenderingContext2D;
+  private blurCanvas: HTMLCanvasElement;
+  private blurCtx: CanvasRenderingContext2D;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     this.noiseCanvas = this.createNoiseTexture();
+    this.offscreenCanvas = document.createElement('canvas');
+    this.offscreenCtx = this.offscreenCanvas.getContext('2d')!;
+    this.blurCanvas = document.createElement('canvas');
+    this.blurCtx = this.blurCanvas.getContext('2d')!;
     this.resize();
   }
 
@@ -96,6 +108,11 @@ export class GameRenderer {
     this.canvas.style.width = `${newWidth}px`;
     this.canvas.style.height = `${newHeight}px`;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    this.offscreenCanvas.width = BASE_WIDTH;
+    this.offscreenCanvas.height = BASE_HEIGHT;
+    this.blurCanvas.width = BASE_WIDTH;
+    this.blurCanvas.height = BASE_HEIGHT;
   }
 
   private createNoiseTexture(): HTMLCanvasElement {
@@ -137,10 +154,11 @@ export class GameRenderer {
       this.fpsTimer = 0;
 
       if (this.fps < 50) {
-        this.particlesPerSecond = Math.max(10, this.particlesPerSecond - 2);
-      } else if (this.fps > 55 && this.particlesPerSecond < 20) {
-        this.particlesPerSecond = Math.min(20, this.particlesPerSecond + 2);
+        this.totalParticlesPerSecond = Math.max(10, this.totalParticlesPerSecond - 2);
+      } else if (this.fps > 55 && this.totalParticlesPerSecond < 20) {
+        this.totalParticlesPerSecond = Math.min(20, this.totalParticlesPerSecond + 2);
       }
+      this.spawnsPerSecond = this.totalParticlesPerSecond / 2;
     }
 
     this.updateParticles(deltaTime);
@@ -150,7 +168,7 @@ export class GameRenderer {
 
     if (state.isDrifting) {
       this.particleSpawnTimer += deltaTime;
-      const spawnInterval = 1000 / this.particlesPerSecond;
+      const spawnInterval = 1000 / this.spawnsPerSecond;
       while (this.particleSpawnTimer >= spawnInterval) {
         this.particleSpawnTimer -= spawnInterval;
         this.spawnDriftParticles(state);
@@ -200,28 +218,34 @@ export class GameRenderer {
     this.flashAlpha = 0;
     this.blurIntensity = 0;
 
+    const targetBlur = Math.min(1, state.speed / 80) * 8;
+    this.continuousBlurIntensity += (targetBlur - this.continuousBlurIntensity) * 0.1;
+
     for (let i = this.effects.length - 1; i >= 0; i--) {
       const e = this.effects[i];
       const elapsed = now - e.startTime;
       const t = Math.min(1, elapsed / e.duration);
-      const eased = 1 - this.cubicBezier(t);
+      const eased = this.easeOutCubic(t);
 
       switch (e.type) {
         case 'flash':
-          this.flashAlpha = 0.3 * eased;
+          if (t < 0.3) {
+            this.flashAlpha = 0.3;
+          } else {
+            this.flashAlpha = 0.3 * (1 - (t - 0.3) / 0.7);
+          }
           break;
         case 'shake':
           if (elapsed < e.duration) {
-            this.shakeOffsetX = (Math.random() - 0.5) * e.intensity * 2 * eased;
-            this.shakeOffsetY = (Math.random() - 0.5) * e.intensity * 2 * eased;
+            this.shakeOffsetX = (Math.random() - 0.5) * e.intensity * 2 * (1 - eased);
+            this.shakeOffsetY = (Math.random() - 0.5) * e.intensity * 2 * (1 - eased);
           }
           break;
         case 'tilt':
           this.tiltOffset = 20 * (1 - eased);
           break;
         case 'blur':
-          const blurFactor = Math.min(1, state.speed / 80);
-          this.blurIntensity = 8 * blurFactor * eased;
+          this.blurIntensity = e.intensity * 8 * (1 - eased);
           break;
       }
 
@@ -231,15 +255,8 @@ export class GameRenderer {
     }
   }
 
-  private cubicBezier(t: number): number {
-    const p1 = 0.25, p2 = 0.1, p3 = 0.25, p4 = 1;
-    const u = 1 - t;
-    return (
-      p1 * u * u * u +
-      3 * p2 * u * u * t +
-      3 * p3 * u * t * t +
-      p4 * t * t * t
-    );
+  private easeOutCubic(t: number): number {
+    return 1 - Math.pow(1 - t, 3);
   }
 
   private updateSkidTrail(state: PhysicsState): void {
@@ -301,28 +318,77 @@ export class GameRenderer {
 
   render(state: PhysicsState): void {
     const ctx = this.ctx;
-    ctx.save();
+    const offCtx = this.offscreenCtx;
 
-    ctx.translate(this.shakeOffsetX, this.shakeOffsetY - this.tiltOffset * 0.5);
+    offCtx.clearRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
+    offCtx.save();
+    offCtx.translate(this.shakeOffsetX, this.shakeOffsetY - this.tiltOffset * 0.5);
 
-    this.drawSky(ctx);
-    this.drawTrack(ctx);
-    this.drawSkidMarks(ctx);
-    this.drawStartLine(ctx);
-    this.drawOpponents(ctx);
-    this.drawCar(ctx, state, '#FF4444', true);
-    this.drawParticles(ctx);
-    this.drawHUD(ctx, state);
+    this.drawSky(offCtx);
+    this.drawTrack(offCtx);
+    this.drawSkidMarks(offCtx);
+    this.drawStartLine(offCtx);
+    this.drawOpponents(offCtx);
+    this.drawCar(offCtx, state, '#FF4444', true);
+    this.drawParticles(offCtx);
+    this.drawHUD(offCtx, state);
 
-    if (this.blurIntensity > 0.5) {
-      this.drawVignette(ctx, this.blurIntensity);
+    offCtx.restore();
+
+    ctx.clearRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
+    ctx.drawImage(this.offscreenCanvas, 0, 0);
+
+    const totalBlur = this.continuousBlurIntensity + this.blurIntensity;
+    if (totalBlur > 0.5) {
+      this.drawRadialBlur(ctx, totalBlur);
     }
 
     if (this.flashAlpha > 0) {
       ctx.fillStyle = `rgba(255, 255, 255, ${this.flashAlpha})`;
       ctx.fillRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
     }
+  }
 
+  private drawRadialBlur(ctx: CanvasRenderingContext2D, intensity: number): void {
+    const centerX = BASE_WIDTH / 2;
+    const centerY = BASE_HEIGHT / 2;
+    const maxRadius = Math.max(BASE_WIDTH, BASE_HEIGHT) * 0.6;
+
+    const blurCtx = this.blurCtx;
+    blurCtx.clearRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
+
+    const layers = Math.min(6, Math.max(2, Math.floor(intensity / 1.5)));
+    const stepSize = intensity / layers / 2;
+
+    for (let i = 1; i <= layers; i++) {
+      const scale = 1 + (stepSize * i) / 50;
+      const alpha = (1 - i / layers) * 0.12 * (intensity / 8);
+
+      blurCtx.save();
+      blurCtx.globalAlpha = alpha;
+      blurCtx.translate(centerX, centerY);
+      blurCtx.scale(scale, scale);
+      blurCtx.translate(-centerX, -centerY);
+      blurCtx.drawImage(this.offscreenCanvas, 0, 0);
+      blurCtx.restore();
+    }
+
+    blurCtx.save();
+    blurCtx.globalCompositeOperation = 'destination-in';
+    const gradient = blurCtx.createRadialGradient(
+      centerX, centerY, maxRadius * 0.15,
+      centerX, centerY, maxRadius
+    );
+    gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    gradient.addColorStop(0.4, 'rgba(0, 0, 0, 0.3)');
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 1)');
+    blurCtx.fillStyle = gradient;
+    blurCtx.fillRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
+    blurCtx.restore();
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.drawImage(this.blurCanvas, 0, 0);
     ctx.restore();
   }
 
