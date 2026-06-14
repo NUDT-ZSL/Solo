@@ -42,6 +42,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onDataLoaded }) => {
   const [selectedForecastIndex, setSelectedForecastIndex] = useState(0);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const aqiInstanceId = useRef(Math.random().toString(36).slice(2, 9));
 
   const fetchWeather = useCallback(async (city: string) => {
     if (!city.trim()) return;
@@ -112,7 +113,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onDataLoaded }) => {
     const circumference = 2 * Math.PI * radius;
     const progress = Math.min(aqi / 200, 1);
     const offset = circumference - progress * circumference;
-    const gradientId = `aqi-grad-${level}`;
+    const gradientId = `aqi-grad-${aqiInstanceId.current}-${level}`;
     const stops = AQI_GRADIENT_STOPS[level] || AQI_GRADIENT_STOPS['优'];
 
     return (

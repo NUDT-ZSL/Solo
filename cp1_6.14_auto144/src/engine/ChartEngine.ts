@@ -13,8 +13,12 @@ export class ChartEngine {
   }
 
   generateLineChartOption(hourlyData: HourlyData[]): EChartsOption {
-    const tempData = hourlyData.map((item) => [item.timestamp, item.temperature]);
-    const humidData = hourlyData.map((item) => [item.timestamp, item.humidity]);
+    const alignedData = hourlyData.map((item) => {
+      const alignedTs = Math.round(item.timestamp / 7200000) * 7200000;
+      return { ...item, timestamp: alignedTs };
+    });
+    const tempData = alignedData.map((item) => [item.timestamp, item.temperature]);
+    const humidData = alignedData.map((item) => [item.timestamp, item.humidity]);
 
     return {
       backgroundColor: '#f1f5f9',
