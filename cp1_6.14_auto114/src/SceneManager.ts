@@ -7,7 +7,7 @@ import type { PlanetData, PlanetPosition } from './types';
 interface PlanetObject {
   mesh: THREE.Mesh;
   orbit: THREE.Line;
-  highlight: THREE.Mesh;
+  highlight: THREE.Sprite;
   data: PlanetData;
 }
 
@@ -95,6 +95,36 @@ export class SceneManager {
     this.scene.add(glow);
   }
 
+  private createRingTexture(color: string): THREE.Texture {
+    const canvas = document.createElement('canvas');
+    const size = 256;
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d')!;
+
+    const innerRadius = size * 0.35;
+    const outerRadius = size * 0.5;
+    const gradient = ctx.createRadialGradient(
+      size / 2, size / 2, innerRadius,
+      size / 2, size / 2, outerRadius
+    );
+
+    const alphaSteps = [0, 0.6, 0.8, 0.6, 0];
+    const posSteps = [0, 0.3, 0.5, 0.7, 1];
+    for (let i = 0; i < alphaSteps.length; i++) {
+      gradient.addColorStop(posSteps[i], `rgba(255, 255, 255, ${alphaSteps[i]})`);
+    }
+
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, outerRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+  }
+
   private createPlanets(): void {
     this.planets.forEach((planet) => {
       const geometry = new THREE.SphereGeometry(planet.radius, 16, 16);
@@ -106,18 +136,17 @@ export class SceneManager {
       const mesh = new THREE.Mesh(geometry, material);
       mesh.userData = { planetName: planet.name };
 
-      const highlightGeometry = new THREE.RingGeometry(
-        planet.radius * 1.3,
-        planet.radius * 1.5,
-        32
-      );
-      const highlightMaterial = new THREE.MeshBasicMaterial({
+      const ringTexture = this.createRingTexture(planet.color);
+      const highlightMaterial = new THREE.SpriteMaterial({
+        map: ringTexture,
         color: planet.color,
         transparent: true,
         opacity: 0,
-        side: THREE.DoubleSide
+        depthWrite: false
       });
-      const highlight = new THREE.Mesh(highlightGeometry, highlightMaterial);
+      const highlight = new THREE.Sprite(highlightMaterial);
+      const highlightScale = planet.radius * 3.5;
+      highlight.scale.set(highlightScale, highlightScale, 1);
       highlight.userData = { isHighlight: true, planetName: planet.name };
 
       const orbitPoints: THREE.Vector3[] = [];
@@ -242,7 +271,6 @@ export class SceneManager {
       if (planetObj) {
         planetObj.mesh.position.copy(position);
         planetObj.highlight.position.copy(position);
-        planetObj.highlight.lookAt(this.camera.position);
 
         if (this.selectedPlanet === name) {
           this.currentTarget.copy(position);
@@ -334,8 +362,8 @@ export class SceneManager {
   private setHighlight(planetName: string, visible: boolean): void {
     const planetObj = this.planetObjects.get(planetName);
     if (planetObj) {
-      const material = planetObj.highlight.material as THREE.MeshBasicMaterial;
-      const targetOpacity = visible ? 0.6 : 0;
+      const material = planetObj.highlight.material as THREE.SpriteMaterial;
+      const targetOpacity = visible ? 0.7 : 0;
 
       new TWEEN.Tween({ opacity: material.opacity })
         .to({ opacity: targetOpacity }, 300)
@@ -378,8 +406,11 @@ export class SceneManager {
       (mesh.material as THREE.Material).dispose();
       orbit.geometry.dispose();
       (orbit.material as THREE.Material).dispose();
-      highlight.geometry.dispose();
-      (highlight.material as THREE.Material).dispose();
+      const highlightMaterial = highlight.material as THREE.SpriteMaterial;
+      if (highlightMaterial.map) {
+        highlightMaterial.map.dispose();
+      }
+      highlightMaterial.dispose();
     });
 
     this.renderer.dispose();

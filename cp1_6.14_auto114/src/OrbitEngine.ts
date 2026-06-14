@@ -119,8 +119,8 @@ export class OrbitEngine {
 
   private solveKeplerEquation(meanAnomaly: number, eccentricity: number): number {
     let eccentricAnomaly = meanAnomaly;
-    const epsilon = 1e-8;
-    const maxIterations = 50;
+    const epsilon = 1e-6;
+    const maxIterations = 100;
 
     for (let i = 0; i < maxIterations; i++) {
       const f = eccentricAnomaly - eccentricity * Math.sin(eccentricAnomaly) - meanAnomaly;

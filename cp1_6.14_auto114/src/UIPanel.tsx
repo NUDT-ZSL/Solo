@@ -11,14 +11,40 @@ interface UIPanelProps {
 
 export const UIPanel: React.FC<UIPanelProps> = ({ orbitEngine, sceneManager }) => {
   const [timeScale, setTimeScale] = useState(orbitEngine.getTimeScale());
+  const [timeScaleInput, setTimeScaleInput] = useState(orbitEngine.getTimeScale().toFixed(1));
   const [isPaused, setIsPaused] = useState(orbitEngine.isPaused());
   const [selectedPlanet, setSelectedPlanet] = useState('');
 
+  const updateTimeScale = useCallback((value: number) => {
+    const clampedValue = Math.max(0.1, Math.min(100, value));
+    setTimeScale(clampedValue);
+    setTimeScaleInput(clampedValue.toFixed(1));
+    orbitEngine.setTimeScale(clampedValue);
+  }, [orbitEngine]);
+
   const handleTimeScaleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseFloat(e.target.value);
-    setTimeScale(value);
-    orbitEngine.setTimeScale(value);
-  }, [orbitEngine]);
+    updateTimeScale(value);
+  }, [updateTimeScale]);
+
+  const handleTimeScaleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setTimeScaleInput(e.target.value);
+  }, []);
+
+  const handleTimeScaleInputBlur = useCallback(() => {
+    const value = parseFloat(timeScaleInput);
+    if (!isNaN(value)) {
+      updateTimeScale(value);
+    } else {
+      setTimeScaleInput(timeScale.toFixed(1));
+    }
+  }, [timeScaleInput, timeScale, updateTimeScale]);
+
+  const handleTimeScaleInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleTimeScaleInputBlur();
+    }
+  }, [handleTimeScaleInputBlur]);
 
   const handleTogglePause = useCallback(() => {
     const paused = orbitEngine.togglePause();
@@ -59,7 +85,20 @@ export const UIPanel: React.FC<UIPanelProps> = ({ orbitEngine, sceneManager }) =
             onChange={handleTimeScaleChange}
             className="time-slider"
           />
-          <span className="slider-value">{timeScale.toFixed(1)}x</span>
+          <div className="time-scale-input-wrapper">
+            <input
+              type="number"
+              min="0.1"
+              max="100"
+              step="0.1"
+              value={timeScaleInput}
+              onChange={handleTimeScaleInputChange}
+              onBlur={handleTimeScaleInputBlur}
+              onKeyDown={handleTimeScaleInputKeyDown}
+              className="time-scale-input"
+            />
+            <span className="time-scale-unit">x</span>
+          </div>
         </div>
         <div className="slider-labels">
           <span>0.1x</span>
