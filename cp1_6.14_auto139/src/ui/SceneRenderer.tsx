@@ -17,38 +17,50 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({ sceneData, onChoiceSelect
   const [selectedIndex, setSelectedIndex] = useState(0);
   const textRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const lastCharTimeRef = useRef<number>(0);
   const isTypingRef = useRef(true);
+  const mountedRef = useRef(true);
   const TYPING_INTERVAL = 30;
   const MAX_TYPING_DURATION = 1500;
 
   const choices = sceneData.choices as ChoiceWithAvailable[];
   const availableChoices = choices.filter((c) => c.available !== false);
 
-  const stopAnimation = useCallback(() => {
+  const cancelAnimation = useCallback(() => {
     if (animationFrameRef.current !== null) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
+    isTypingRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      isTypingRef.current = false;
+    };
   }, []);
 
   const typeText = useCallback(() => {
+    if (!mountedRef.current) return;
+
     setIsTyping(true);
     isTypingRef.current = true;
     setDisplayedText('');
-    stopAnimation();
+    cancelAnimation();
 
     const text = sceneData.text;
     let currentIndex = 0;
     const startTime = performance.now();
-    lastCharTimeRef.current = startTime;
 
     const animate = (now: number) => {
-      if (!isTypingRef.current) return;
+      if (!mountedRef.current || !isTypingRef.current) return;
 
-      const elapsedSinceLastChar = now - lastCharTimeRef.current;
       const totalElapsed = now - startTime;
-
       const charsToShow = Math.min(
         Math.floor(totalElapsed / TYPING_INTERVAL),
         text.length
@@ -57,28 +69,33 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({ sceneData, onChoiceSelect
       if (charsToShow > currentIndex || totalElapsed >= MAX_TYPING_DURATION) {
         const nextIndex = totalElapsed >= MAX_TYPING_DURATION ? text.length : charsToShow;
         if (nextIndex > currentIndex) {
-          setDisplayedText(text.slice(0, nextIndex));
           currentIndex = nextIndex;
+          if (mountedRef.current) {
+            setDisplayedText(text.slice(0, currentIndex));
+          }
         }
-        lastCharTimeRef.current = now;
       }
 
       if (currentIndex < text.length && totalElapsed < MAX_TYPING_DURATION) {
         animationFrameRef.current = requestAnimationFrame(animate);
       } else {
-        setIsTyping(false);
+        if (mountedRef.current) {
+          setIsTyping(false);
+          setDisplayedText(text);
+        }
         isTypingRef.current = false;
-        setDisplayedText(text);
       }
     };
 
     animationFrameRef.current = requestAnimationFrame(animate);
-  }, [sceneData.text, stopAnimation]);
+  }, [sceneData.text, cancelAnimation]);
 
   useEffect(() => {
     typeText();
-    return stopAnimation;
-  }, [typeText, sceneData.nodeId, stopAnimation]);
+    return () => {
+      cancelAnimation();
+    };
+  }, [typeText, sceneData.nodeId, cancelAnimation]);
 
   useEffect(() => {
     if (availableChoices.length > 0 && selectedIndex >= availableChoices.length) {
@@ -120,10 +137,11 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({ sceneData, onChoiceSelect
 
   const skipTyping = () => {
     if (isTyping) {
-      stopAnimation();
-      isTypingRef.current = false;
-      setDisplayedText(sceneData.text);
-      setIsTyping(false);
+      cancelAnimation();
+      if (mountedRef.current) {
+        setDisplayedText(sceneData.text);
+        setIsTyping(false);
+      }
     }
   };
 

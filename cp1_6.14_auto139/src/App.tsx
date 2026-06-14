@@ -70,18 +70,38 @@ const App: React.FC = () => {
   const continueGame = useCallback(async () => {
     try {
       const savedState = loadGame();
-      if (savedState) {
-        await audioManager.init();
-        audioManager.resume();
-        const scene = storyEngine.loadGame(savedState);
-        setSceneData(scene);
-        setPrevBackground(scene.background);
-        setActiveBgLayer(1);
-        if (scene.isEnding) {
-          setGamePhase('ending');
-        } else {
-          setGamePhase('playing');
+      if (!savedState) return;
+
+      if (!savedState.visitedNodes || !Array.isArray(savedState.visitedNodes) || savedState.visitedNodes.length === 0) {
+        console.warn('[App] Save has no visitedNodes, reconstructing from history');
+        savedState.visitedNodes = savedState.history
+          ? savedState.history.map((h) => h.nodeId).filter(Boolean)
+          : [savedState.currentNodeId];
+        if (!savedState.visitedNodes.includes(savedState.currentNodeId)) {
+          savedState.visitedNodes.push(savedState.currentNodeId);
         }
+      }
+
+      if (!savedState.history || !Array.isArray(savedState.history) || savedState.history.length === 0) {
+        savedState.history = [{ nodeId: savedState.currentNodeId, timestamp: Date.now() }];
+      }
+
+      await audioManager.init();
+      audioManager.resume();
+      const scene = storyEngine.loadGame(savedState);
+      const restoredState = storyEngine.getState();
+
+      if (!restoredState.visitedNodes || restoredState.visitedNodes.length === 0) {
+        console.error('[App] visitedNodes not restored after loadGame!');
+      }
+
+      setSceneData(scene);
+      setPrevBackground(scene.background);
+      setActiveBgLayer(1);
+      if (scene.isEnding) {
+        setGamePhase('ending');
+      } else {
+        setGamePhase('playing');
       }
     } catch (error) {
       console.error('Failed to continue game:', error);
