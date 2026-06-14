@@ -252,7 +252,7 @@ const detectGradient = (
   }
 
   const computeLinearFit = (samples: Array<{ pos: number; r: number; g: number; b: number }>) => {
-    if (samples.length < 4) return { r2: 0, startColor: '#000000', endColor: '#000000' };
+    if (samples.length < 4) return { r2: 0, startColor: '#000000', endColor: '#000000', totalChange: 0 };
     const n = samples.length;
     let sumX = 0, sumXR = 0, sumXG = 0, sumXB = 0;
     let sumR = 0, sumG = 0, sumB = 0;
@@ -289,7 +289,11 @@ const detectGradient = (
     const r2G = ssTotG > 0 ? 1 - ssResG / ssTotG : 0;
     const r2B = ssTotB > 0 ? 1 - ssResB / ssTotB : 0;
 
-    const r2 = (r2R + r2G + r2B) / 3;
+    const r2Parts: number[] = [];
+    if (ssTotR > 0) r2Parts.push(r2R);
+    if (ssTotG > 0) r2Parts.push(r2G);
+    if (ssTotB > 0) r2Parts.push(r2B);
+    const r2 = r2Parts.length > 0 ? r2Parts.reduce((a, b) => a + b, 0) / r2Parts.length : 0;
 
     const startR = meanR + slopeR * (0 - meanX);
     const startG = meanG + slopeG * (0 - meanX);
@@ -337,15 +341,19 @@ const detectGradient = (
     { fit: radialFit, angle: 0, type: 'radial' as const }
   ];
 
-  let bestCandidate = candidates[0];
+  let bestCandidate: typeof candidates[0] | null = null;
   for (const c of candidates) {
-    if (c.fit.totalChange > 40 && c.fit.r2 > bestCandidate.fit.r2) {
-      bestCandidate = c;
+    if (c.fit.totalChange > 40 && c.fit.r2 >= 0.5) {
+      if (!bestCandidate || c.fit.r2 > bestCandidate.fit.r2) {
+        bestCandidate = c;
+      }
     }
   }
 
-  const minChange = 50;
-  const minR2 = 0.75;
+  if (!bestCandidate) return null;
+
+  const minChange = 30;
+  const minR2 = 0.5;
 
   if (bestCandidate.fit.totalChange >= minChange && bestCandidate.fit.r2 >= minR2) {
     let refinedAngle = bestCandidate.angle;
@@ -458,7 +466,7 @@ const detectBorderRadius = (
             px2 >= 0 && px2 < W && py2 >= 0 && py2 < H) {
           const c1 = getPixel(data, px1, py1, W);
           const c2 = getPixel(data, px2, py2, W);
-          if (c1.a > 128 && c2.a <= 128) {
+          if ((c1.a > 128 && c2.a <= 128) || (c1.a <= 128 && c2.a > 128)) {
             edgePoints.push({ x: px1, y: py1 });
             foundEdge = true;
           }
@@ -520,39 +528,36 @@ const detectBorderRadius = (
       if (points.length < 3) return 0;
 
       const idealCorner = { x: corner.originX, y: corner.originY };
-      const farCorner = {
-        x: corner.originX + corner.dirX * Math.min(rw, maxCheck * 2),
-        y: corner.originY + corner.dirY * Math.min(rh, maxCheck * 2)
-      };
-
-      const cxGuess = (idealCorner.x + farCorner.x) / 2;
-      const cyGuess = (idealCorner.y + farCorner.y) / 2;
+      const maxScan = Math.min(rw, rh, maxCheck * 2);
 
       let bestR = 0;
       let bestErr = Infinity;
 
       for (let testR = 2; testR <= maxCheck; testR++) {
         let err = 0;
+        let matchCount = 0;
         const arcCX = idealCorner.x + corner.dirX * testR;
         const arcCY = idealCorner.y + corner.dirY * testR;
 
         for (const p of points) {
           const dist = Math.sqrt(Math.pow(p.x - arcCX, 2) + Math.pow(p.y - arcCY, 2));
-          err += Math.abs(dist - testR);
+          const deviation = Math.abs(dist - testR);
+          if (deviation < testR * 0.5) {
+            err += deviation;
+            matchCount++;
+          }
         }
-        err /= points.length;
 
-        if (err < bestErr) {
-          bestErr = err;
-          bestR = testR;
+        if (matchCount >= 3) {
+          err /= matchCount;
+          if (err < bestErr) {
+            bestErr = err;
+            bestR = testR;
+          }
         }
       }
 
-      return bestErr < testCircleMaxError(points, maxCheck) ? bestR : 0;
-    };
-
-    const testCircleMaxError = (points: Array<{ x: number; y: number }>, maxR: number): number => {
-      return Math.max(3, maxR * 0.15);
+      return bestR > 0 && bestErr < maxCheck * 0.3 ? bestR : 0;
     };
 
     const r = fitCircleRadius(allEdgePoints);

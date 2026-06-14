@@ -176,6 +176,14 @@ const App: React.FC = () => {
 
   const clickTimerRef = useRef<number | null>(null);
 
+  useEffect(() => {
+    return () => {
+      if (clickTimerRef.current != null) {
+        clearTimeout(clickTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleListClick = useCallback((region: StyleRegion) => {
     if (clickTimerRef.current != null) {
       clearTimeout(clickTimerRef.current);

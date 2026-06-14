@@ -133,10 +133,12 @@ const Slider: React.FC<{
   const rafIdRef = useRef<number | null>(null);
   const pendingRef = useRef(value);
   const lastCommitRef = useRef(value);
+  const [displayValue, setDisplayValue] = useState(value);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = parseFloat(e.target.value);
     pendingRef.current = v;
+    setDisplayValue(v);
     if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current);
     rafIdRef.current = requestAnimationFrame(() => {
       onChange(pendingRef.current);
@@ -149,6 +151,7 @@ const Slider: React.FC<{
       cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = null;
     }
+    onChange(pendingRef.current);
     if (onCommit && pendingRef.current !== lastCommitRef.current) {
       lastCommitRef.current = pendingRef.current;
       onCommit(pendingRef.current);
@@ -158,6 +161,7 @@ const Slider: React.FC<{
   useEffect(() => {
     lastCommitRef.current = value;
     pendingRef.current = value;
+    setDisplayValue(value);
   }, [value]);
 
   useEffect(() => {
@@ -177,7 +181,7 @@ const Slider: React.FC<{
       }}>
         <span>{label}</span>
         <span style={{ color: '#e2e8f0', fontFamily: 'monospace' }}>
-          {value}{unit}
+          {displayValue}{unit}
         </span>
       </div>
       <input
@@ -185,7 +189,7 @@ const Slider: React.FC<{
         min={min}
         max={max}
         step={step}
-        value={value}
+        value={displayValue}
         onChange={handleChange}
         onPointerUp={handlePointerUp}
         onKeyUp={handlePointerUp}
@@ -310,18 +314,13 @@ const StyleEditor: React.FC<StyleEditorProps> = ({
       setEditorState(state);
       stateRef.current = state;
       setCssText(region.cssText);
+      applyToPreviewDirect(state);
     } else {
       setEditorState(null);
       stateRef.current = null;
       setCssText('');
     }
-  }, [region]);
-
-  useEffect(() => {
-    if (editorState) {
-      applyCSSToPreview(previewRef.current, editorState);
-    }
-  }, [editorState]);
+  }, [region, applyToPreviewDirect]);
 
   useEffect(() => {
     return () => {
@@ -330,17 +329,15 @@ const StyleEditor: React.FC<StyleEditorProps> = ({
   }, []);
 
   const handleSliderChange = useCallback((updater: (prev: EditorState) => EditorState) => {
-    setEditorState(prev => {
-      if (!prev) return prev;
-      const next = updater(prev);
-      stateRef.current = next;
-      applyToPreviewDirect(next);
-      return next;
-    });
+    if (!stateRef.current) return;
+    const next = updater(stateRef.current);
+    stateRef.current = next;
+    applyToPreviewDirect(next);
   }, [applyToPreviewDirect]);
 
   const handleSliderCommit = useCallback(() => {
     if (stateRef.current) {
+      setEditorState({ ...stateRef.current });
       scheduleCommit(stateRef.current);
     }
   }, [scheduleCommit]);
