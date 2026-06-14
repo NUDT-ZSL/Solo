@@ -8,6 +8,7 @@ interface ToolPanelProps {
 const ToolPanel: React.FC<ToolPanelProps> = ({ isOpen = true }) => {
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, nodeType: NodeType) => {
     e.dataTransfer.setData('application/flowcanvas-node-type', nodeType);
+    e.dataTransfer.setData('text/plain', nodeType);
     e.dataTransfer.effectAllowed = 'copy';
   };
 
