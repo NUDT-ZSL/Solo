@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import type { TimelineEntry } from '../data-service';
 
-interface DetailPanelProps {
+export interface DetailPanelProps {
   entry: TimelineEntry | null;
   isMobile: boolean;
   onClose?: () => void;
@@ -428,23 +428,24 @@ const styles: Record<string, React.CSSProperties> = {
   },
   title: {
     fontSize: 24,
-    fontWeight: 700,
+    fontWeight: 'bold',
     color: '#0f172a',
     margin: 0,
+    marginBottom: 12,
     lineHeight: 1.3,
-    fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif'
+    fontFamily: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif'
   },
   titleInput: {
     width: '100%',
     fontSize: 24,
-    fontWeight: 700,
+    fontWeight: 'bold',
     lineHeight: 1.3,
     padding: '8px 12px',
-    margin: '2px 0',
+    marginBottom: 12,
     borderRadius: 6,
     border: '1px solid #d1d5db',
     outline: 'none',
-    fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
     color: '#0f172a',
     background: 'white',
     boxSizing: 'border-box',

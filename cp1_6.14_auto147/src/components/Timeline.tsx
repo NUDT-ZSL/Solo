@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { TimelineEntry } from '../data-service';
 
-interface TimelineProps {
+export interface TimelineProps {
   entries: TimelineEntry[];
   selectedId: number | null;
   onSelect: (entry: TimelineEntry) => void;
@@ -227,7 +227,7 @@ const styles: Record<string, React.CSSProperties> = {
   dateDay: {
     color: 'white',
     fontSize: 20,
-    fontWeight: 700,
+    fontWeight: 'bold',
     lineHeight: 1,
     fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif'
   },
