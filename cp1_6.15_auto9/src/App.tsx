@@ -83,7 +83,17 @@ const App: React.FC = () => {
       setTimeout(() => {
         setActiveCategory(category);
         setListAnimating(false);
-      }, 150);
+      }, 300);
+    }
+  };
+
+  const handleSortChange = (order: SortOrder) => {
+    if (order !== sortOrder) {
+      setListAnimating(true);
+      setTimeout(() => {
+        setSortOrder(order);
+        setListAnimating(false);
+      }, 300);
     }
   };
 
@@ -201,7 +211,7 @@ const App: React.FC = () => {
               <span className="sort-label">烹饪时长:</span>
               <button
                 className={`sort-btn ${sortOrder === 'asc' ? 'active' : ''}`}
-                onClick={() => setSortOrder(sortOrder === 'asc' ? null : 'asc')}
+                onClick={() => handleSortChange(sortOrder === 'asc' ? null : 'asc')}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <line x1="12" y1="19" x2="12" y2="5"/>
@@ -211,7 +221,7 @@ const App: React.FC = () => {
               </button>
               <button
                 className={`sort-btn ${sortOrder === 'desc' ? 'active' : ''}`}
-                onClick={() => setSortOrder(sortOrder === 'desc' ? null : 'desc')}
+                onClick={() => handleSortChange(sortOrder === 'desc' ? null : 'desc')}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <line x1="12" y1="5" x2="12" y2="19"/>

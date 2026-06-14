@@ -689,9 +689,8 @@ body {
 }
 
 @keyframes heartBeat {
-  0% { transform: scale(1); }
-  50% { transform: scale(0.9); }
-  100% { transform: scale(1); }
+  0% { transform: scale(0.9); }
+  100% { transform: scale(1.0); }
 }
 
 .empty-state {
@@ -1004,7 +1003,10 @@ body {
 .ingredient-quantity {
   font-size: 13px;
   color: var(--primary-color);
-  font-weight: 600;
+  font-weight: 700;
+  padding: 3px 10px;
+  background-color: rgba(230, 126, 34, 0.1);
+  border-radius: var(--radius-sm);
 }
 
 .steps-list {

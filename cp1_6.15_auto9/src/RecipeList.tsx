@@ -40,14 +40,12 @@ const RecipeList: React.FC<RecipeListProps> = ({
         </div>
         <h3 className="empty-title">没有找到匹配的食谱</h3>
         <p className="empty-message">试试其他食材组合吧</p>
-        {searchKeyword && (
-          <div className="suggest-keywords">
-            <span>推荐搜索：</span>
-            {suggestedKeywords.map(keyword => (
-              <span key={keyword} className="suggest-tag">{keyword}</span>
-            ))}
-          </div>
-        )}
+        <div className="suggest-keywords">
+          <span>推荐搜索：</span>
+          {suggestedKeywords.map(keyword => (
+            <span key={keyword} className="suggest-tag">{keyword}</span>
+          ))}
+        </div>
       </div>
     );
   }
