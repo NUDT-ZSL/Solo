@@ -26,6 +26,19 @@ interface FloatingNumber {
   player: 0 | 1
 }
 
+interface DrawAnimationCard {
+  id: string
+  card: Card
+  player: 0 | 1
+  startX: number
+  startY: number
+  endX: number
+  endY: number
+  startTime: number
+  duration: number
+  delay: number
+}
+
 export const BattleField: React.FC<BattleFieldProps> = ({
   player1Deck,
   player2Deck,
@@ -35,14 +48,70 @@ export const BattleField: React.FC<BattleFieldProps> = ({
 }) => {
   const [gameState, setGameState] = useState<GameState | null>(null)
   const [floatingNumbers, setFloatingNumbers] = useState<FloatingNumber[]>([])
+  const [drawAnimations, setDrawAnimations] = useState<DrawAnimationCard[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
+  const [, setAnimationTick] = useState(0)
   const floatIdRef = useRef(0)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const animationIdRef = useRef<number>(0)
+  const battlefieldRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const state = cardEngine.initGame(player1Deck, player2Deck)
     setGameState(state)
   }, [cardEngine, player1Deck, player2Deck])
+
+  const getDeckPosition = (player: 0 | 1): { x: number; y: number } => {
+    if (!battlefieldRef.current) return { x: 0, y: 0 }
+
+    const bfRect = battlefieldRef.current.getBoundingClientRect()
+    const deckPile = document.querySelector(
+      player === 0
+        ? '.deck-pile.bottom-right'
+        : '.deck-pile.top-right'
+    )
+
+    if (deckPile) {
+      const rect = deckPile.getBoundingClientRect()
+      return {
+        x: rect.left - bfRect.left + rect.width / 2,
+        y: rect.top - bfRect.top + rect.height / 2,
+      }
+    }
+
+    return {
+      x: player === 0 ? bfRect.width - 60 : bfRect.width - 60,
+      y: player === 0 ? bfRect.height - 100 : 60,
+    }
+  }
+
+  const getHandPosition = (player: 0 | 1, index: number): { x: number; y: number } => {
+    if (!battlefieldRef.current) return { x: 0, y: 0 }
+
+    const bfRect = battlefieldRef.current.getBoundingClientRect()
+    const handCards = document.querySelector(
+      player === 0
+        ? '.hand-cards.bottom .hand-cards-row'
+        : '.hand-cards.top .hand-cards-row'
+    )
+
+    if (handCards) {
+      const rect = handCards.getBoundingClientRect()
+      const cardWidth = 120
+      const totalWidth = rect.width
+      const startX = (bfRect.width - totalWidth) / 2
+      return {
+        x: startX + index * (cardWidth - 20) + cardWidth / 2,
+        y: player === 0
+          ? bfRect.height - 100
+          : 120,
+      }
+    }
+
+    return {
+      x: bfRect.width / 2 + (index - 2) * 100,
+      y: player === 0 ? bfRect.height - 100 : 120,
+    }
+  }
 
   const addFloatingNumber = (
     value: number,
@@ -58,6 +127,29 @@ export const BattleField: React.FC<BattleFieldProps> = ({
 
   const removeFloatingNumber = (id: number) => {
     setFloatingNumbers((prev) => prev.filter((n) => n.id !== id))
+  }
+
+  const triggerDrawAnimations = (player: 0 | 1, drawnCards: Card[]) => {
+    const deckPos = getDeckPosition(player)
+    const handSize = gameState?.players[player].hand.length || 0
+
+    const animations: DrawAnimationCard[] = drawnCards.map((card, index) => {
+      const endPos = getHandPosition(player, handSize + index)
+      return {
+        id: `draw_${Date.now()}_${index}`,
+        card,
+        player,
+        startX: deckPos.x,
+        startY: deckPos.y,
+        endX: endPos.x,
+        endY: endPos.y,
+        startTime: performance.now() + index * 100,
+        duration: 300,
+        delay: index * 100,
+      }
+    })
+
+    setDrawAnimations((prev) => [...prev, ...animations])
   }
 
   const handleCardPlay = (cardId: string, x: number, y: number) => {
@@ -96,12 +188,97 @@ export const BattleField: React.FC<BattleFieldProps> = ({
 
     setIsProcessing(true)
 
-    const newState = cardEngine.endTurn()
-    setGameState(newState)
-
     setTimeout(() => {
-      setIsProcessing(false)
-    }, 500)
+      const result = cardEngine.endTurn()
+
+      if (result.drawnCards.length > 0) {
+        triggerDrawAnimations(result.nextPlayerId as 0 | 1, result.drawnCards)
+      }
+
+      setGameState(result.state)
+
+      setTimeout(() => {
+        setIsProcessing(false)
+      }, 300)
+    }, 300)
+  }
+
+  useEffect(() => {
+    if (drawAnimations.length === 0) return
+
+    let rafId: number
+    let lastTime = 0
+
+    const animate = (time: number) => {
+      if (time - lastTime >= 16) {
+        setAnimationTick((t) => t + 1)
+        lastTime = time
+      }
+
+      const now = performance.now()
+      setDrawAnimations((prev) => {
+        const remaining = prev.filter(
+          (anim) => now - anim.startTime < anim.duration + anim.delay
+        )
+        return remaining
+      })
+
+      rafId = requestAnimationFrame(animate)
+    }
+
+    rafId = requestAnimationFrame(animate)
+
+    return () => cancelAnimationFrame(rafId)
+  }, [drawAnimations.length > 0])
+
+  const getDrawCardStyle = (anim: DrawAnimationCard): React.CSSProperties => {
+    const now = performance.now()
+    const elapsed = now - anim.startTime - anim.delay
+
+    if (elapsed < 0) {
+      return {
+        position: 'absolute',
+        left: anim.startX - 60,
+        top: anim.startY - 80,
+        opacity: 0,
+        pointerEvents: 'none',
+        zIndex: 100,
+      }
+    }
+
+    const progress = Math.min(1, elapsed / anim.duration)
+    const t = progress
+
+    const cp1x = anim.startX + (anim.endX - anim.startX) * 0.3
+    const cp1y = anim.startY + (anim.endY - anim.startY) * -0.5
+    const cp2x = anim.startX + (anim.endX - anim.startX) * 0.7
+    const cp2y = anim.endY + (anim.startY - anim.endY) * 0.1
+
+    const x =
+      Math.pow(1 - t, 3) * anim.startX +
+      3 * Math.pow(1 - t, 2) * t * cp1x +
+      3 * (1 - t) * Math.pow(t, 2) * cp2x +
+      Math.pow(t, 3) * anim.endX
+
+    const y =
+      Math.pow(1 - t, 3) * anim.startY +
+      3 * Math.pow(1 - t, 2) * t * cp1y +
+      3 * (1 - t) * Math.pow(t, 2) * cp2y +
+      Math.pow(t, 3) * anim.endY
+
+    const scale = 0.5 + progress * 0.5
+    const rotation = progress * 5
+
+    return {
+      position: 'absolute',
+      left: x - 60,
+      top: y - 80,
+      transform: `scale(${scale}) rotate(${rotation}deg)`,
+      opacity: Math.min(1, progress * 2),
+      pointerEvents: 'none',
+      zIndex: 100,
+      transition: 'opacity 0.1s ease-out',
+    }
   }
 
   if (!gameState) {
@@ -113,7 +290,7 @@ export const BattleField: React.FC<BattleFieldProps> = ({
   const isPlayer0Turn = gameState.currentPlayerIndex === 0
 
   return (
-    <div className="battlefield">
+    <div className="battlefield" ref={battlefieldRef}>
       <div className="battlefield-top">
         <HealthBar
           current={player1.health}
@@ -147,6 +324,22 @@ export const BattleField: React.FC<BattleFieldProps> = ({
             y={num.y}
             onComplete={() => removeFloatingNumber(num.id)}
           />
+        ))}
+
+        {drawAnimations.map((anim) => (
+          <div key={anim.id} style={getDrawCardStyle(anim)}>
+            <div
+              className="card draw-animation-card"
+              style={{
+                '--gradient-start': '#2c3e50',
+                '--gradient-end': '#1a1a3e',
+              } as React.CSSProperties}
+            >
+              <div className="card-back">
+                <div className="card-back-pattern">✦</div>
+              </div>
+            </div>
+          </div>
         ))}
       </div>
 

@@ -14,6 +14,9 @@ interface DraggingCard {
   card: Card
   currentX: number
   currentY: number
+  startX: number
+  startY: number
+  isValidTarget: boolean
 }
 
 export const HandCards: React.FC<HandCardsProps> = ({
@@ -26,52 +29,76 @@ export const HandCards: React.FC<HandCardsProps> = ({
   const containerRef = useRef<HTMLDivElement>(null)
   const [dragging, setDragging] = useState<DraggingCard | null>(null)
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
-  const dragStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
   const dragCardIndex = useRef<number>(-1)
+  const cardStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+
+  const getBattlefieldRect = (): DOMRect | null => {
+    const battlefield = document.querySelector('.battlefield-canvas')
+    if (battlefield) {
+      return battlefield.getBoundingClientRect()
+    }
+    return null
+  }
+
+  const isPointInBattlefield = (x: number, y: number): boolean => {
+    const rect = getBattlefieldRect()
+    if (!rect) return false
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+  }
 
   const handleMouseDown = (e: React.MouseEvent, card: Card, index: number) => {
     if (!isCurrentPlayer) return
     e.preventDefault()
 
+    const cardElement = e.currentTarget as HTMLElement
+    const cardRect = cardElement.getBoundingClientRect()
+
     dragCardIndex.current = index
-    dragStartPos.current = { x: e.clientX, y: e.clientY }
+    cardStartPos.current = {
+      x: cardRect.left + cardRect.width / 2,
+      y: cardRect.top + cardRect.height / 2,
+    }
 
     setDragging({
       card,
       currentX: e.clientX,
       currentY: e.clientY,
+      startX: cardRect.left + cardRect.width / 2,
+      startY: cardRect.top + cardRect.height / 2,
+      isValidTarget: false,
     })
   }
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!dragging) return
+    setDragging((prev) => {
+      if (!prev) return null
 
-    setDragging((prev) =>
-      prev ? { ...prev, currentX: e.clientX, currentY: e.clientY } : null
-    )
-  }, [dragging])
+      const isValid = isPointInBattlefield(e.clientX, e.clientY)
+
+      return {
+        ...prev,
+        currentX: e.clientX,
+        currentY: e.clientY,
+        isValidTarget: isValid,
+      }
+    })
+  }, [])
 
   const handleMouseUp = useCallback((e: MouseEvent) => {
-    if (!dragging) return
+    setDragging((prev) => {
+      if (!prev) return null
 
-    const battlefield = document.querySelector('.battlefield-canvas')
-    if (battlefield) {
-      const bfRect = battlefield.getBoundingClientRect()
-      if (
-        e.clientX >= bfRect.left &&
-        e.clientX <= bfRect.right &&
-        e.clientY >= bfRect.top &&
-        e.clientY <= bfRect.bottom
-      ) {
+      const bfRect = getBattlefieldRect()
+      if (bfRect && isPointInBattlefield(e.clientX, e.clientY)) {
         const x = e.clientX - bfRect.left
         const y = e.clientY - bfRect.top
-        onCardPlay(dragging.card.id, x, y)
+        onCardPlay(prev.card.id, x, y)
       }
-    }
 
-    setDragging(null)
-    dragCardIndex.current = -1
-  }, [dragging, onCardPlay])
+      dragCardIndex.current = -1
+      return null
+    })
+  }, [onCardPlay])
 
   React.useEffect(() => {
     if (dragging) {
@@ -83,6 +110,36 @@ export const HandCards: React.FC<HandCardsProps> = ({
       window.removeEventListener('mouseup', handleMouseUp)
     }
   }, [dragging, handleMouseMove, handleMouseUp])
+
+  const getDragTrailStyle = (): React.CSSProperties => {
+    if (!dragging) return {}
+
+    const startX = cardStartPos.current.x
+    const startY = cardStartPos.current.y
+    const endX = dragging.currentX
+    const endY = dragging.currentY
+
+    const dx = endX - startX
+    const dy = endY - startY
+    const length = Math.sqrt(dx * dx + dy * dy)
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI)
+
+    return {
+      position: 'fixed',
+      left: startX,
+      top: startY,
+      width: length,
+      height: 2,
+      background: dragging.isValidTarget
+        ? 'repeating-linear-gradient(90deg, rgba(74, 108, 247, 0.6) 0, rgba(74, 108, 247, 0.6) 8px, transparent 8px, transparent 16px)'
+        : 'repeating-linear-gradient(90deg, rgba(231, 76, 60, 0.4) 0, rgba(231, 76, 60, 0.4) 8px, transparent 8px, transparent 16px)',
+      transformOrigin: '0 50%',
+      transform: `rotate(${angle}deg)`,
+      pointerEvents: 'none',
+      zIndex: 999,
+      transition: 'background 0.15s ease-out',
+    }
+  }
 
   return (
     <div
@@ -115,9 +172,11 @@ export const HandCards: React.FC<HandCardsProps> = ({
         ))}
       </div>
 
+      {dragging && <div style={getDragTrailStyle()} />}
+
       {dragging && (
         <div
-          className="dragging-card"
+          className={`dragging-card ${dragging.isValidTarget ? 'valid' : 'invalid'}`}
           style={{
             left: dragging.currentX - 60,
             top: dragging.currentY - 80,

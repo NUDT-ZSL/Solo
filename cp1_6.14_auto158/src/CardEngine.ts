@@ -1,4 +1,4 @@
-import { Card, EffectType, ElementType } from '../data/cards'
+import { Card, EffectType, ElementType } from './data/cards'
 
 export interface PlayerState {
   id: number
@@ -159,10 +159,13 @@ export class CardEngine {
     }
   }
 
-  endTurn(): GameState | null {
-    if (!this.state || this.state.gameOver) return null
+  endTurn(): { state: GameState | null; drawnCards: Card[]; nextPlayerId: number } {
+    if (!this.state || this.state.gameOver) {
+      return { state: null, drawnCards: [], nextPlayerId: -1 }
+    }
 
     const currentPlayer = this.state.players[this.state.currentPlayerIndex]
+    const currentPlayerId = this.state.currentPlayerIndex
 
     const remainingCurses: Curse[] = []
     for (const curse of currentPlayer.curses) {
@@ -179,18 +182,26 @@ export class CardEngine {
     if (currentPlayer.health <= 0) {
       this.state.gameOver = true
       this.state.winner = this.state.currentPlayerIndex === 0 ? 1 : 0
-      return JSON.parse(JSON.stringify(this.state))
+      return {
+        state: JSON.parse(JSON.stringify(this.state)),
+        drawnCards: [],
+        nextPlayerId: -1,
+      }
     }
 
     this.state.currentPlayerIndex = this.state.currentPlayerIndex === 0 ? 1 : 0
+    const nextPlayerId = this.state.currentPlayerIndex
     if (this.state.currentPlayerIndex === 0) {
       this.state.turn++
     }
 
-    const nextPlayer = this.state.players[this.state.currentPlayerIndex]
-    this.drawCards(this.state.currentPlayerIndex, 2)
+    const drawnCards = this.drawCards(this.state.currentPlayerIndex, 2)
 
-    return JSON.parse(JSON.stringify(this.state))
+    return {
+      state: JSON.parse(JSON.stringify(this.state)),
+      drawnCards,
+      nextPlayerId,
+    }
   }
 
   drawCards(playerId: number, count: number): Card[] {

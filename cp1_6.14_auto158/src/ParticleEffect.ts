@@ -10,6 +10,7 @@ interface Particle {
   alpha: number
   life: number
   maxLife: number
+  startAlpha: number
   rotation?: number
   rotationSpeed?: number
   type?: 'circle' | 'star' | 'snowflake' | 'lightning'
@@ -127,12 +128,14 @@ export class ParticleEffect {
 
   private createFireParticles(effect: EffectInstance): void {
     const { x, y, params } = effect
-    const count = Math.floor(params.particleCount * params.intensity)
+    const baseCount = 100 + params.particleCount * 0.5
+    const count = Math.floor(baseCount * params.intensity)
 
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2
       const speed = (2 + Math.random() * 4) * params.intensity
       const size = 3 + Math.random() * 6
+      const lifeOffset = Math.random() * 200
 
       effect.particles.push({
         x,
@@ -142,8 +145,9 @@ export class ParticleEffect {
         size,
         color: Math.random() > 0.5 ? params.color : params.secondaryColor,
         alpha: 1,
-        life: params.duration,
-        maxLife: params.duration,
+        startAlpha: 1,
+        life: 1000 - lifeOffset,
+        maxLife: 1000 - lifeOffset,
         type: 'circle',
       })
     }
@@ -151,12 +155,13 @@ export class ParticleEffect {
 
   private createIceParticles(effect: EffectInstance): void {
     const { x, y, params } = effect
-    const count = Math.floor(params.particleCount * params.intensity)
+    const baseCount = 60 + params.particleCount * 0.3
+    const count = Math.floor(baseCount * params.intensity)
 
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3
       const radius = 10 + Math.random() * 10
-      const targetRadius = 80 + Math.random() * 40
+      const lifeOffset = Math.random() * 300
 
       effect.particles.push({
         x: x + Math.cos(angle) * radius,
@@ -165,9 +170,10 @@ export class ParticleEffect {
         vy: 0,
         size: 4 + Math.random() * 4,
         color: Math.random() > 0.5 ? params.color : params.secondaryColor,
-        alpha: 0.9,
-        life: params.duration,
-        maxLife: params.duration,
+        alpha: 1,
+        startAlpha: 1,
+        life: 1500 - lifeOffset,
+        maxLife: 1500 - lifeOffset,
         type: 'snowflake',
         angle,
         radius,
@@ -178,7 +184,8 @@ export class ParticleEffect {
 
   private createThunderEffect(effect: EffectInstance): void {
     const { x, y, params } = effect
-    const branchCount = Math.floor(params.particleCount * params.intensity)
+    const baseBranches = 4 + Math.floor(params.particleCount * 0.1)
+    const branchCount = Math.floor(baseBranches * params.intensity)
 
     for (let i = 0; i < branchCount; i++) {
       const angle = (i / branchCount) * Math.PI * 2 + Math.random() * 0.5
@@ -209,13 +216,15 @@ export class ParticleEffect {
 
   private createDarkParticles(effect: EffectInstance): void {
     const { x, y, params } = effect
-    const count = Math.floor(params.particleCount * params.intensity)
+    const baseCount = 80 + params.particleCount * 0.4
+    const count = Math.floor(baseCount * params.intensity)
 
     effect.phase = 'shrink'
 
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2
       const startRadius = 60 + Math.random() * 60
+      const lifeOffset = Math.random() * 200
 
       effect.particles.push({
         x: x + Math.cos(angle) * startRadius,
@@ -224,9 +233,10 @@ export class ParticleEffect {
         vy: 0,
         size: 3 + Math.random() * 5,
         color: Math.random() > 0.5 ? params.color : params.secondaryColor,
-        alpha: 0.8,
-        life: params.duration,
-        maxLife: params.duration,
+        alpha: 1,
+        startAlpha: 1,
+        life: 1300 - lifeOffset,
+        maxLife: 1300 - lifeOffset,
         type: 'circle',
         phase: 'shrink',
         shrinkTargetX: x,
@@ -272,7 +282,7 @@ export class ParticleEffect {
 
     switch (effect.element) {
       case 'fire':
-        this.updateFireParticles(effect, dt)
+        this.updateFireParticles(effect, dt, elapsed)
         break
       case 'ice':
         this.updateIceParticles(effect, elapsed, dt)
@@ -286,20 +296,26 @@ export class ParticleEffect {
     }
   }
 
-  private updateFireParticles(effect: EffectInstance, dt: number): void {
+  private updateFireParticles(effect: EffectInstance, dt: number, elapsed: number): void {
     for (const p of effect.particles) {
+      const particleElapsed = elapsed
+      const lifeProgress = Math.min(1, particleElapsed / p.maxLife)
+
       p.x += p.vx * dt
       p.y += p.vy * dt
       p.vy += 0.1 * dt
-      p.alpha = Math.max(0, p.alpha - 0.02 * dt)
-      p.size = Math.max(0, p.size - 0.05 * dt)
+      p.size = Math.max(0.5, p.size - 0.03 * dt)
+      p.alpha = Math.max(0, p.startAlpha * (1 - lifeProgress))
     }
   }
 
   private updateIceParticles(effect: EffectInstance, elapsed: number, dt: number): void {
-    const progress = elapsed / effect.duration
+    const progress = Math.min(1, elapsed / effect.duration)
 
     for (const p of effect.particles) {
+      const particleElapsed = elapsed
+      const lifeProgress = Math.min(1, particleElapsed / p.maxLife)
+
       if (p.angularSpeed !== undefined && p.angle !== undefined && p.radius !== undefined) {
         p.angle += p.angularSpeed * dt
         const targetRadius = 10 + progress * 80 * effect.params.intensity
@@ -307,13 +323,12 @@ export class ParticleEffect {
         p.x = effect.x + Math.cos(p.angle) * p.radius
         p.y = effect.y + Math.sin(p.angle) * p.radius
       }
-      p.alpha = Math.max(0, 0.9 * (1 - progress * 0.8))
+
+      p.alpha = Math.max(0, p.startAlpha * (1 - lifeProgress))
     }
   }
 
   private updateThunderEffect(effect: EffectInstance, elapsed: number): void {
-    const flickerIntensity = Math.sin(elapsed * 0.05) * 0.3 + 0.7
-
     for (const lightning of effect.lightnings) {
       for (let i = 1; i < lightning.points.length - 1; i++) {
         const point = lightning.points[i]
@@ -330,6 +345,9 @@ export class ParticleEffect {
     if (shrinkProgress < 1) {
       effect.phase = 'shrink'
       for (const p of effect.particles) {
+        const particleElapsed = elapsed
+        const lifeProgress = Math.min(1, particleElapsed / p.maxLife)
+
         if (p.angularSpeed !== undefined && p.angle !== undefined && p.radius !== undefined) {
           p.angle += p.angularSpeed * 2 * dt
           const targetRadius = 5 * (1 - shrinkProgress)
@@ -337,7 +355,8 @@ export class ParticleEffect {
           p.x = effect.x + Math.cos(p.angle) * p.radius
           p.y = effect.y + Math.sin(p.angle) * p.radius
         }
-        p.alpha = 0.5 + shrinkProgress * 0.5
+
+        p.alpha = Math.max(0, p.startAlpha * (1 - lifeProgress * 0.3))
       }
     } else {
       if (effect.phase !== 'expand') {
@@ -350,12 +369,16 @@ export class ParticleEffect {
           }
         }
       }
+
       const expandProgress = (elapsed - shrinkDuration) / (effect.duration - shrinkDuration)
       for (const p of effect.particles) {
+        const particleElapsed = elapsed - shrinkDuration
+        const lifeProgress = Math.min(1, particleElapsed / (p.maxLife * 0.62))
+
         p.x += p.vx * dt
         p.y += p.vy * dt
-        p.alpha = Math.max(0, 1 - expandProgress)
-        p.size = Math.max(0, p.size * (1 - expandProgress * 0.5))
+        p.alpha = Math.max(0, p.startAlpha * (1 - lifeProgress))
+        p.size = Math.max(0.5, p.size * (1 - expandProgress * 0.5))
       }
     }
   }
