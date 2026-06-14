@@ -20,6 +20,7 @@ export interface ForecastDay {
 
 export interface HourlyData {
   time: string;
+  timestamp: number;
   temperature: number;
   humidity: number;
 }

@@ -1,11 +1,38 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import type { WeatherData, ForecastDay } from '../types';
+import type { WeatherData, ForecastDay, AqiLevel } from '../types';
 import { weatherService } from '../services/WeatherService';
 import { eventBus, EVENTS } from '../engine/EventBus';
 
 interface DashboardProps {
   onDataLoaded: (data: WeatherData) => void;
 }
+
+const AQI_GRADIENT_STOPS: Record<AqiLevel, Array<{ offset: string; color: string }>> = {
+  '优': [
+    { offset: '0%', color: '#22c55e' },
+    { offset: '100%', color: '#4ade80' },
+  ],
+  '良': [
+    { offset: '0%', color: '#22c55e' },
+    { offset: '100%', color: '#facc15' },
+  ],
+  '轻度污染': [
+    { offset: '0%', color: '#facc15' },
+    { offset: '100%', color: '#f97316' },
+  ],
+  '中度污染': [
+    { offset: '0%', color: '#f97316' },
+    { offset: '100%', color: '#ef4444' },
+  ],
+  '重度污染': [
+    { offset: '0%', color: '#ef4444' },
+    { offset: '100%', color: '#a855f7' },
+  ],
+  '严重污染': [
+    { offset: '0%', color: '#a855f7' },
+    { offset: '100%', color: '#7c2d12' },
+  ],
+};
 
 const Dashboard: React.FC<DashboardProps> = ({ onDataLoaded }) => {
   const [searchValue, setSearchValue] = useState('');
@@ -80,20 +107,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onDataLoaded }) => {
     };
   }, []);
 
-  const renderCircularProgress = (aqi: number, color: string) => {
+  const renderCircularProgress = (aqi: number, level: AqiLevel, color: string) => {
     const radius = 36;
     const circumference = 2 * Math.PI * radius;
     const progress = Math.min(aqi / 200, 1);
     const offset = circumference - progress * circumference;
+    const gradientId = `aqi-grad-${level}`;
+    const stops = AQI_GRADIENT_STOPS[level] || AQI_GRADIENT_STOPS['优'];
 
     return (
       <div className="aqi-circle">
         <svg width="80" height="80" viewBox="0 0 80 80">
           <defs>
-            <linearGradient id="aqiGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#22c55e" />
-              <stop offset="50%" stopColor="#facc15" />
-              <stop offset="100%" stopColor="#ef4444" />
+            <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+              {stops.map((stop, i) => (
+                <stop key={i} offset={stop.offset} stopColor={stop.color} />
+              ))}
             </linearGradient>
           </defs>
           <circle
@@ -109,16 +138,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onDataLoaded }) => {
             cy="40"
             r={radius}
             fill="none"
-            stroke={color}
+            stroke={`url(#${gradientId})`}
             strokeWidth="6"
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={offset}
             transform="rotate(-90 40 40)"
-            style={{ transition: 'stroke-dashoffset 0.8s ease-out' }}
+            style={{ transition: 'stroke-dashoffset 0.8s ease-out, stroke 0.5s ease' }}
           />
         </svg>
-        <div className="aqi-value">{aqi}</div>
+        <div className="aqi-value" style={{ color }}>{aqi}</div>
       </div>
     );
   };
@@ -184,7 +213,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onDataLoaded }) => {
               {weatherData.forecast.map((day: ForecastDay, index: number) => (
                 <div
                   key={index}
-                  className={`forecast-item ${selectedForecastIndex === index ? 'selected' : ''}`}
+                  className={`forecast-item ${selectedForecastIndex === index ? 'forecast-item--selected' : ''}`}
                   onClick={() => handleForecastClick(index)}
                 >
                   <div className="forecast-day">{day.dayOfWeek}</div>
@@ -201,7 +230,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onDataLoaded }) => {
           <div className="air-quality-section">
             <h3 className="section-title">空气质量</h3>
             <div className="air-quality-card">
-              {renderCircularProgress(weatherData.airQuality.aqi, weatherData.airQuality.levelColor)}
+              {renderCircularProgress(
+                weatherData.airQuality.aqi,
+                weatherData.airQuality.level as AqiLevel,
+                weatherData.airQuality.levelColor
+              )}
               <div className="aqi-info">
                 <div
                   className="aqi-level"

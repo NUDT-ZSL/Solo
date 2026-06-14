@@ -13,9 +13,8 @@ export class ChartEngine {
   }
 
   generateLineChartOption(hourlyData: HourlyData[]): EChartsOption {
-    const times = hourlyData.map((item) => item.time);
-    const temperatures = hourlyData.map((item) => item.temperature);
-    const humidities = hourlyData.map((item) => item.humidity);
+    const tempData = hourlyData.map((item) => [item.timestamp, item.temperature]);
+    const humidData = hourlyData.map((item) => [item.timestamp, item.humidity]);
 
     return {
       backgroundColor: '#f1f5f9',
@@ -55,8 +54,8 @@ export class ChartEngine {
         },
       },
       xAxis: {
-        type: 'category',
-        data: times,
+        type: 'time',
+        interval: 7200000,
         axisLine: {
           lineStyle: {
             color: '#cbd5e1',
@@ -68,7 +67,7 @@ export class ChartEngine {
         axisLabel: {
           color: '#64748b',
           fontSize: 12,
-          interval: 1,
+          formatter: '{HH}:{mm}',
         },
         splitLine: {
           show: false,
@@ -131,7 +130,7 @@ export class ChartEngine {
         {
           name: '温度 (°C)',
           type: 'line',
-          data: temperatures,
+          data: tempData,
           yAxisIndex: 0,
           smooth: true,
           symbol: 'circle',
@@ -162,7 +161,7 @@ export class ChartEngine {
         {
           name: '湿度 (%)',
           type: 'line',
-          data: humidities,
+          data: humidData,
           yAxisIndex: 1,
           smooth: true,
           symbol: 'circle',
