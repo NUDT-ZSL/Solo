@@ -139,7 +139,9 @@ export function exportToHTML(
       (s) => `
         <div class="summary-item" data-time="${s.startTime}">
           <div class="time-badge" style="border-left: 4px solid ${speakerMap.get(s.speakerId)?.color ?? '#e94560'}">
-            <span>${formatTime(s.startTime)} - ${formatTime(s.endTime)}</span>
+            <a href="#t=${s.startTime}" class="time-link" data-time="${s.startTime}">
+              <span>${formatTime(s.startTime)} - ${formatTime(s.endTime)}</span>
+            </a>
             <span class="speaker">${speakerMap.get(s.speakerId)?.name ?? '未知'}</span>
           </div>
           <h3>${s.topic}</h3>
@@ -155,7 +157,9 @@ export function exportToHTML(
     .map(
       (b) => `
         <div class="bookmark-item" data-time="${b.timestamp}">
-          <span class="bookmark-time">[${formatTime(b.timestamp)}]</span>
+          <a href="#t=${b.timestamp}" class="bookmark-time-link" data-time="${b.timestamp}">
+            <span class="bookmark-time">[${formatTime(b.timestamp)}]</span>
+          </a>
           <span class="bookmark-text">${b.text}</span>
         </div>
       `
@@ -219,6 +223,26 @@ export function exportToHTML(
     }
     .bookmark-item:hover { background: rgba(255,255,255,0.08); }
     .bookmark-time { color: #e94560; font-weight: 600; margin-right: 10px; font-family: monospace; }
+    .time-link, .bookmark-time-link {
+      color: inherit;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+    .time-link:hover, .bookmark-time-link:hover {
+      background: rgba(233, 69, 96, 0.2);
+      color: #e94560;
+    }
+    .time-link {
+      font-family: monospace;
+      color: #ccc;
+    }
+    .time-link:hover {
+      color: #e94560;
+    }
     .tip { color: #888; font-size: 13px; margin-top: 24px; font-style: italic; }
   </style>
 </head>
@@ -236,8 +260,43 @@ export function exportToHTML(
     <h2>📝 用户备注 (${bookmarks.length})</h2>
     ${bookmarkRows || '<p style="color:#888;">暂无备注</p>'}
 
-    <p class="tip">💡 提示：请在视频摘要应用中打开此报告，点击条目可跳转至对应时间点。</p>
+    <p class="tip">💡 提示：请在视频摘要应用中打开此报告，点击时间链接可跳转至对应时间点播放。</p>
   </div>
+
+  <script>
+    (function() {
+      function notifyParent(time) {
+        try {
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: 'VIDEO_SEEK', time: time }, '*');
+          }
+          if (window.opener) {
+            window.opener.postMessage({ type: 'VIDEO_SEEK', time: time }, '*');
+          }
+        } catch (e) { }
+        sessionStorage.setItem('video_seek_time', String(time));
+      }
+      function handleClick(e) {
+        var target = e.target.closest('[data-time]');
+        if (target && target.getAttribute('data-time')) {
+          var t = parseFloat(target.getAttribute('data-time'));
+          if (!isNaN(t)) {
+            notifyParent(t);
+            if (window.location.protocol !== 'file:') {
+              history.replaceState(null, '', '#t=' + t);
+            }
+          }
+        }
+      }
+      document.addEventListener('click', handleClick);
+      function handleHash() {
+        var m = window.location.hash.match(/t=(\\d+)/);
+        if (m) { notifyParent(parseFloat(m[1])); }
+      }
+      window.addEventListener('hashchange', handleHash);
+      handleHash();
+    })();
+  </script>
 </body>
 </html>`;
 }

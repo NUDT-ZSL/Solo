@@ -43,6 +43,36 @@ const App: React.FC = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'VIDEO_SEEK' && typeof event.data.time === 'number') {
+        setCurrentTime(event.data.time);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  useEffect(() => {
+    const handleStorage = () => {
+      const stored = sessionStorage.getItem('video_seek_time');
+      if (stored) {
+        const t = parseFloat(stored);
+        if (!isNaN(t)) {
+          setCurrentTime(t);
+          sessionStorage.removeItem('video_seek_time');
+        }
+      }
+    };
+    handleStorage();
+    window.addEventListener('storage', handleStorage);
+    const interval = setInterval(handleStorage, 800);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      clearInterval(interval);
+    };
+  }, []);
+
   const handleVideoLoaded = useCallback((metadata: VideoMetadata) => {
     setVideoMetadata(metadata);
     setCurrentTime(0);
@@ -55,10 +85,6 @@ const App: React.FC = () => {
       setSummaries(generated);
       setIsLoadingSummaries(false);
     }, 800);
-  }, []);
-
-  const handleTimeUpdate = useCallback((time: number) => {
-    setCurrentTime(time);
   }, []);
 
   const handleSeek = useCallback((time: number) => {
@@ -130,29 +156,14 @@ const App: React.FC = () => {
         <main className="app-main">
           <div className="player-area" style={{ width: playerWidth }}>
             <Player
-              videoMetadata={videoMetadata}
-              summaries={summaries}
-              bookmarks={bookmarks}
-              speakers={speakers}
-              currentTime={currentTime}
               onVideoLoaded={handleVideoLoaded}
-              onTimeUpdate={handleTimeUpdate}
-              onSeek={handleSeek}
-              onAddBookmark={addBookmark}
             />
           </div>
 
           {!isMobile && (
             <div className="panel-area" style={{ width: panelWidth }}>
               <SummaryPanel
-                summaries={summaries}
-                bookmarks={bookmarks}
-                speakers={speakers}
-                videoMetadata={videoMetadata}
-                currentTime={currentTime}
                 isLoading={isLoadingSummaries}
-                onSeek={handleSeek}
-                onRemoveBookmark={removeBookmark}
                 isCollapsed={panelCollapsed}
                 onToggleCollapse={togglePanel}
                 isMobile={false}
@@ -163,14 +174,7 @@ const App: React.FC = () => {
 
         {isMobile && (
           <SummaryPanel
-            summaries={summaries}
-            bookmarks={bookmarks}
-            speakers={speakers}
-            videoMetadata={videoMetadata}
-            currentTime={currentTime}
             isLoading={isLoadingSummaries}
-            onSeek={handleSeek}
-            onRemoveBookmark={removeBookmark}
             isCollapsed={panelCollapsed}
             onToggleCollapse={togglePanel}
             isMobile={true}

@@ -1,20 +1,14 @@
 import React, { useState } from 'react';
-import type { SummaryItem, Speaker, Bookmark, VideoMetadata } from '../types';
+import type { SummaryItem, Bookmark, Speaker, VideoMetadata } from '../types';
 import {
   formatTime,
   exportToJSON,
   exportToHTML
 } from './AISummaryEngine';
+import { useAppContext } from '../App';
 
 interface SummaryPanelProps {
-  summaries: SummaryItem[];
-  bookmarks: Bookmark[];
-  speakers: Speaker[];
-  videoMetadata: VideoMetadata | null;
-  currentTime: number;
   isLoading: boolean;
-  onSeek: (time: number) => void;
-  onRemoveBookmark: (id: string) => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   isMobile: boolean;
@@ -23,18 +17,21 @@ interface SummaryPanelProps {
 type TabType = 'summaries' | 'bookmarks';
 
 const SummaryPanel: React.FC<SummaryPanelProps> = ({
-  summaries,
-  bookmarks,
-  speakers,
-  videoMetadata,
-  currentTime,
   isLoading,
-  onSeek,
-  onRemoveBookmark,
   isCollapsed,
   onToggleCollapse,
   isMobile
 }) => {
+  const {
+    summaries,
+    bookmarks,
+    speakers,
+    videoMetadata,
+    currentTime,
+    seekTo,
+    removeBookmark
+  } = useAppContext();
+
   const [activeTab, setActiveTab] = useState<TabType>('summaries');
   const [exporting, setExporting] = useState<'json' | 'html' | null>(null);
   const [exportSuccess, setExportSuccess] = useState<string | null>(null);
@@ -109,8 +106,8 @@ const SummaryPanel: React.FC<SummaryPanelProps> = ({
               speakerMap={speakerMap}
               currentTime={currentTime}
               isSummaryActive={isSummaryActive}
-              onSeek={onSeek}
-              onRemoveBookmark={onRemoveBookmark}
+              onSeek={seekTo}
+              onRemoveBookmark={removeBookmark}
               isLoading={isLoading}
               videoMetadata={videoMetadata}
               exporting={exporting}
@@ -201,7 +198,7 @@ const SummaryPanel: React.FC<SummaryPanelProps> = ({
 
   return (
     <div className={`summary-panel ${isCollapsed ? 'collapsed' : 'expanded'}`}>
-      {!isCollapsed && (
+      <div className={`panel-inner-wrapper ${isCollapsed ? 'hidden' : 'visible'}`}>
         <PanelContent
           activeTab={activeTab}
           setActiveTab={setActiveTab}
@@ -210,15 +207,15 @@ const SummaryPanel: React.FC<SummaryPanelProps> = ({
           speakerMap={speakerMap}
           currentTime={currentTime}
           isSummaryActive={isSummaryActive}
-          onSeek={onSeek}
-          onRemoveBookmark={onRemoveBookmark}
+          onSeek={seekTo}
+          onRemoveBookmark={removeBookmark}
           isLoading={isLoading}
           videoMetadata={videoMetadata}
           exporting={exporting}
           exportSuccess={exportSuccess}
           handleExport={handleExport}
         />
-      )}
+      </div>
 
       <button
         className="panel-collapse-btn"
@@ -236,16 +233,33 @@ const SummaryPanel: React.FC<SummaryPanelProps> = ({
           border-radius: 8px;
           position: relative;
           display: flex;
-          flex-direction: column;
+          flex-direction: row;
           transition: width 0.3s ease;
           overflow: hidden;
+          flex-shrink: 0;
         }
         .summary-panel.expanded {
           width: 100%;
         }
         .summary-panel.collapsed {
-          width: 32px;
+          width: 32px !important;
           min-width: 32px;
+        }
+        .panel-inner-wrapper {
+          flex: 1;
+          min-width: 0;
+          transition: opacity 0.25s ease, visibility 0.25s ease;
+          display: flex;
+          flex-direction: column;
+        }
+        .panel-inner-wrapper.visible {
+          opacity: 1;
+          visibility: visible;
+        }
+        .panel-inner-wrapper.hidden {
+          opacity: 0;
+          visibility: hidden;
+          pointer-events: none;
         }
         .panel-collapse-btn {
           position: absolute;
@@ -263,6 +277,7 @@ const SummaryPanel: React.FC<SummaryPanelProps> = ({
           font-size: 14px;
           z-index: 10;
           transition: all 0.2s ease;
+          flex-shrink: 0;
         }
         .summary-panel.expanded .panel-collapse-btn {
           left: auto;

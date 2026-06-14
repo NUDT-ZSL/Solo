@@ -50,8 +50,10 @@ const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
 
     return summaries.map((summary) => {
       const speaker = speakerMap.get(summary.speakerId);
-      const left = (summary.startTime / duration) * 100;
-      const width = Math.max(2, ((summary.endTime - summary.startTime) / duration) * 100 - 0.4);
+      const rawLeft = (summary.startTime / duration) * 100;
+      const rawWidth = Math.max(2, ((summary.endTime - summary.startTime) / duration) * 100);
+      const left = `calc(${rawLeft}% + 2px)`;
+      const width = `calc(${rawWidth}% - 4px)`;
       const isActive = currentTime >= summary.startTime && currentTime < summary.endTime;
 
       return (
@@ -59,8 +61,8 @@ const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
           key={summary.id}
           className="timeline-marker"
           style={{
-            left: `${left}%`,
-            width: `${width}%`,
+            left,
+            width,
             backgroundColor: speaker?.color ?? '#e94560',
             opacity: isActive ? 1 : 0.7,
             transform: isActive ? 'scaleY(1.3)' : 'scaleY(1)',
@@ -198,13 +200,14 @@ const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
         }
         .timeline-marker {
           position: absolute;
-          height: 12px;
-          top: 1px;
-          border-radius: 6px;
+          height: 14px;
+          top: 0;
+          border-radius: 999px;
           cursor: pointer;
           transition: all 0.2s ease;
           border: 2px solid rgba(255, 255, 255, 0.9);
           z-index: 1;
+          box-sizing: border-box;
         }
         .timeline-marker:hover {
           opacity: 1 !important;

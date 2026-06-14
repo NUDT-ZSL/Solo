@@ -1,35 +1,29 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import TimelineMarkers from './TimelineMarkers';
-import type { SummaryItem, Speaker, Bookmark, VideoMetadata } from '../types';
+import type { VideoMetadata } from '../types';
 import { formatTime } from '../summary/AISummaryEngine';
 import { v4 as uuidv4 } from 'uuid';
+import { useAppContext } from '../App';
 
 interface PlayerProps {
-  videoMetadata: VideoMetadata | null;
-  summaries: SummaryItem[];
-  bookmarks: Bookmark[];
-  speakers: Speaker[];
-  currentTime: number;
   onVideoLoaded: (metadata: VideoMetadata) => void;
-  onTimeUpdate: (time: number) => void;
-  onSeek: (time: number) => void;
-  onAddBookmark: (bookmark: Omit<Bookmark, 'id' | 'createdAt'>) => void;
 }
 
 const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const MAX_FILE_SIZE = 200 * 1024 * 1024;
 
-const Player: React.FC<PlayerProps> = ({
-  videoMetadata,
-  summaries,
-  bookmarks,
-  speakers,
-  currentTime,
-  onVideoLoaded,
-  onTimeUpdate,
-  onSeek,
-  onAddBookmark
-}) => {
+const Player: React.FC<PlayerProps> = ({ onVideoLoaded }) => {
+  const {
+    videoMetadata,
+    summaries,
+    bookmarks,
+    speakers,
+    currentTime,
+    addBookmark,
+    seekTo,
+    setCurrentTime
+  } = useAppContext();
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -96,9 +90,9 @@ const Player: React.FC<PlayerProps> = ({
 
   const handleTimeUpdate = useCallback(() => {
     if (videoRef.current && !isDragging) {
-      onTimeUpdate(videoRef.current.currentTime);
+      setCurrentTime(videoRef.current.currentTime);
     }
-  }, [isDragging, onTimeUpdate]);
+  }, [isDragging, setCurrentTime]);
 
   const togglePlay = useCallback(() => {
     if (!videoRef.current) return;
@@ -121,10 +115,10 @@ const Player: React.FC<PlayerProps> = ({
     (time: number) => {
       if (videoRef.current) {
         videoRef.current.currentTime = time;
-        onSeek(time);
+        seekTo(time);
       }
     },
-    [onSeek]
+    [seekTo]
   );
 
   const getProgressTime = useCallback(
@@ -212,14 +206,14 @@ const Player: React.FC<PlayerProps> = ({
 
   const handleBookmarkSubmit = useCallback(() => {
     if (bookmarkText.trim()) {
-      onAddBookmark({
+      addBookmark({
         timestamp: bookmarkTime,
         text: bookmarkText.trim()
       });
     }
     setShowBookmarkInput(false);
     setBookmarkText('');
-  }, [bookmarkText, bookmarkTime, onAddBookmark]);
+  }, [bookmarkText, bookmarkTime, addBookmark]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
