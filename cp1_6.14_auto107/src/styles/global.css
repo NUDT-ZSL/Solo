@@ -1,0 +1,150 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --primary-color: #d4a373;
+  --secondary-color: #8c7853;
+  --bg-color: #faf3e0;
+  --text-color: #3e2723;
+  --card-bg: #ffffff;
+  --sidebar-bg: #3e2723;
+  --sidebar-text: #f5e6d0;
+  --sidebar-active-bar: #d4a373;
+
+  --level-bronze: #e67e22;
+  --level-silver: #3498db;
+  --level-gold: #f1c40f;
+  --level-diamond: #bdc3c7;
+
+  --coupon-active: #27ae60;
+  --coupon-expired: #95a5a6;
+  --coupon-bg: #f8f9fa;
+  --coupon-border: #e9ecef;
+
+  --rank-start: #e74c3c;
+  --rank-end: #2ecc71;
+
+  --shadow-sm: 0 2px 12px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.08);
+
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+
+  --font-serif: 'Noto Serif SC', serif;
+}
+
+body {
+  font-family: var(--font-serif);
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+button {
+  font-family: var(--font-serif);
+  cursor: pointer;
+  border: none;
+  outline: none;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+input,
+select {
+  font-family: var(--font-serif);
+  outline: none;
+}
+
+.page-transition-enter {
+  opacity: 0;
+  transform: translateX(-20px);
+}
+
+.page-transition-enter-active {
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.page-transition-exit {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.page-transition-exit-active {
+  opacity: 0;
+  transform: translateX(20px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+@keyframes toastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes toastSlideOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalContentScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(62, 39, 35, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(62, 39, 35, 0.3);
+}
