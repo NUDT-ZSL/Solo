@@ -6,6 +6,12 @@ export interface SoundSource {
   frequency: string
 }
 
+export interface EQSettings {
+  low: number
+  mid: number
+  high: number
+}
+
 export interface SoundTrackItem {
   id: string
   soundId: string
@@ -14,11 +20,7 @@ export interface SoundTrackItem {
   volume: number
   muted: boolean
   solo: boolean
-  eq?: {
-    low: number
-    mid: number
-    high: number
-  }
+  eq: EQSettings
 }
 
 export interface PresetItem {
@@ -33,11 +35,19 @@ export interface PresetItem {
   trackCount?: number
 }
 
+export interface MixState {
+  tracks: SoundTrackItem[]
+  masterVolume: number
+  isPlaying: boolean
+  soloTrackId: string | null
+}
+
 export interface AppState {
   tracks: SoundTrackItem[]
   masterVolume: number
   isPlaying: boolean
   currentPreset: PresetItem | null
+  soloTrackId: string | null
 }
 
 export type AppAction =
@@ -52,4 +62,4 @@ export type AppAction =
   | { type: 'SET_PRESET'; payload: PresetItem | null }
   | { type: 'LOAD_PRESET'; payload: PresetItem }
   | { type: 'CLEAR_TRACKS' }
-  | { type: 'SET_TRACK_EQ'; payload: { id: string; eq: { low: number; mid: number; high: number } } }
+  | { type: 'SET_TRACK_EQ'; payload: { id: string; eq: EQSettings } }

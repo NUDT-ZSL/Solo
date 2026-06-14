@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios'
+import type { SoundSource, PresetItem } from './types'
 
 const http: AxiosInstance = axios.create({
   baseURL: '/api',
@@ -48,36 +49,6 @@ http.interceptors.response.use(
     return Promise.reject(error)
   }
 )
-
-export interface SoundSource {
-  id: string
-  name: string
-  emoji: string
-  category: string
-  frequency: string
-}
-
-export interface SoundTrackItem {
-  id: string
-  soundId: string
-  name: string
-  emoji: string
-  volume: number
-  muted: boolean
-  solo: boolean
-}
-
-export interface PresetItem {
-  id: string
-  name: string
-  description: string
-  tracks: SoundTrackItem[]
-  masterVolume: number
-  createdAt: string
-  updatedAt: string
-  shareToken?: string
-  trackCount?: number
-}
 
 export const soundApi = {
   getSounds: (): Promise<SoundSource[]> => http.get('/sounds'),

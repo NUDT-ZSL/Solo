@@ -1,25 +1,32 @@
 import React, { createContext, useContext, useReducer, ReactNode } from 'react'
-import { AppState, AppAction, SoundTrackItem, PresetItem } from '../types'
+import { AppState, AppAction, SoundTrackItem } from '../types'
 
 const initialState: AppState = {
   tracks: [],
   masterVolume: 80,
   isPlaying: false,
   currentPreset: null,
+  soloTrackId: null,
 }
 
 const appReducer = (state: AppState, action: AppAction): AppState => {
   switch (action.type) {
-    case 'ADD_TRACK':
+    case 'ADD_TRACK': {
+      const exists = state.tracks.some((t) => t.soundId === action.payload.soundId)
+      if (exists) return state
       return {
         ...state,
         tracks: [...state.tracks, action.payload],
       }
-    case 'REMOVE_TRACK':
+    }
+    case 'REMOVE_TRACK': {
+      const newSoloId = state.soloTrackId === action.payload ? null : state.soloTrackId
       return {
         ...state,
         tracks: state.tracks.filter((t) => t.id !== action.payload),
+        soloTrackId: newSoloId,
       }
+    }
     case 'SET_TRACK_VOLUME':
       return {
         ...state,
@@ -35,14 +42,14 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         ),
       }
     case 'TOGGLE_SOLO': {
-      const hasOtherSolo = state.tracks.some(
-        (t) => t.id !== action.payload && t.solo
-      )
+      const newSoloId = state.soloTrackId === action.payload ? null : action.payload
       return {
         ...state,
-        tracks: state.tracks.map((t) =>
-          t.id === action.payload ? { ...t, solo: !t.solo } : hasOtherSolo ? t : { ...t, solo: false }
-        ),
+        tracks: state.tracks.map((t) => ({
+          ...t,
+          solo: t.id === newSoloId,
+        })),
+        soloTrackId: newSoloId,
       }
     }
     case 'SET_MASTER_VOLUME':
@@ -74,12 +81,14 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         })),
         masterVolume: action.payload.masterVolume,
         currentPreset: action.payload,
+        soloTrackId: null,
       }
     case 'CLEAR_TRACKS':
       return {
         ...state,
         tracks: [],
         currentPreset: null,
+        soloTrackId: null,
       }
     case 'SET_TRACK_EQ':
       return {

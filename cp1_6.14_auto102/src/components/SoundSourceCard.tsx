@@ -1,9 +1,10 @@
-import React, { useRef, useState } from 'react'
-import type { SoundSource } from '../http'
+import React, { useRef, useState, useEffect } from 'react'
+import type { SoundSource } from '../types'
 
 interface SoundSourceCardProps {
   sound: SoundSource
   onDragStart?: (sound: SoundSource, e: React.DragEvent) => void
+  onDragEnd?: (sound: SoundSource) => void
   style?: React.CSSProperties
   className?: string
 }
@@ -11,11 +12,20 @@ interface SoundSourceCardProps {
 const SoundSourceCard: React.FC<SoundSourceCardProps> = ({
   sound,
   onDragStart,
+  onDragEnd,
   style,
   className = '',
 }) => {
   const [isDragging, setIsDragging] = useState(false)
+  const [justDropped, setJustDropped] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (justDropped) {
+      const timer = setTimeout(() => setJustDropped(false), 300)
+      return () => clearTimeout(timer)
+    }
+  }, [justDropped])
 
   const handleDragStart = (e: React.DragEvent) => {
     setIsDragging(true)
@@ -31,6 +41,14 @@ const SoundSourceCard: React.FC<SoundSourceCardProps> = ({
 
   const handleDragEnd = () => {
     setIsDragging(false)
+    setJustDropped(true)
+    onDragEnd?.(sound)
+  }
+
+  const getTransform = () => {
+    if (isDragging) return 'scale(1.02)'
+    if (justDropped) return 'scale(1.05)'
+    return 'scale(1)'
   }
 
   return (
@@ -52,10 +70,14 @@ const SoundSourceCard: React.FC<SoundSourceCardProps> = ({
         gap: '10px',
         cursor: 'grab',
         userSelect: 'none',
-        transition: 'all 0.2s ease',
+        transition: isDragging ? 'opacity 0.2s ease' : justDropped ? 'transform 0.15s ease-out' : 'all 0.2s ease',
         opacity: isDragging ? 0.7 : 1,
-        transform: isDragging ? 'scale(1.02)' : 'scale(1)',
-        boxShadow: isDragging ? '0 8px 24px rgba(108, 92, 231, 0.3)' : 'none',
+        transform: getTransform(),
+        boxShadow: isDragging
+          ? '0 8px 24px rgba(108, 92, 231, 0.3)'
+          : justDropped
+          ? '0 2px 8px rgba(108, 92, 231, 0.2)'
+          : 'none',
         ...style,
       }}
     >
@@ -100,6 +122,17 @@ const SoundSourceCard: React.FC<SoundSourceCardProps> = ({
           {sound.category}
         </span>
       </div>
+      <span
+        style={{
+          fontSize: '14px',
+          color: '#7c7599',
+          cursor: 'grab',
+          flexShrink: 0,
+        }}
+        title="拖拽到混音区"
+      >
+        ⠿
+      </span>
     </div>
   )
 }
