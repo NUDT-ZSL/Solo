@@ -161,7 +161,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
     [code]
   );
 
-  const positionToIndex = useCallback(
+  const _positionToIndex = useCallback(
     (pos: CursorPosition): number => {
       if (pos.line <= 1) {
         return Math.max(0, pos.column - 1);

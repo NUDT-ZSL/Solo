@@ -82,7 +82,7 @@ const outputTypeClass: Record<OutputType, string> = {
 };
 
 const App: React.FC = () => {
-  const [nickname, setNickname] = useState('');
+  const [_nickname, setNickname] = useState('');
   const [nicknameDraft, setNicknameDraft] = useState('');
   const [isJoined, setIsJoined] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);

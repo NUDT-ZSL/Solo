@@ -89,32 +89,27 @@ export class CodeExecutionEngine {
     const self = this;
 
     const originalSetTimeout = globalThis.setTimeout;
-    const wrappedSetTimeout = function (
-      callback: (...args: unknown[]) => void,
+    const wrappedSetTimeout = (
+      callback: TimerHandler,
       delay?: number,
       ...args: unknown[]
-    ): ReturnType<typeof originalSetTimeout> {
-      const wrappedCallback = function (...innerArgs: unknown[]) {
-        try {
-          return callback(...innerArgs);
-        } finally {
-          self.outputs.push(self.createOutput('log', `[setTimeout ${delay}ms 回调执行完毕]`));
-        }
-      };
-      const timerId = originalSetTimeout(wrappedCallback, delay, ...args);
-      const timerPromise = new Promise<void>(resolve => {
-        const checkTimer = () => {
-          try {
-            if (tracker.timers.has(timerId as unknown as number)) {
-              setTimeout(checkTimer, 10);
-            } else {
-              resolve();
+    ): ReturnType<typeof originalSetTimeout> => {
+      let timerId: ReturnType<typeof originalSetTimeout>;
+      const wrappedCallback: TimerHandler = typeof callback === 'string'
+        ? callback
+        : ((...innerArgs: unknown[]) => {
+            try {
+              return (callback as (...args: unknown[]) => void)(...innerArgs);
+            } finally {
+              tracker.timers.delete(timerId as unknown as number);
             }
-          } catch {
-            resolve();
-          }
-        };
-        setTimeout(checkTimer, Math.max((delay || 0) + 50, 50));
+          });
+      timerId = originalSetTimeout(wrappedCallback, delay, ...args);
+      const timerPromise = new Promise<void>(resolve => {
+        originalSetTimeout(() => {
+          tracker.timers.delete(timerId as unknown as number);
+          resolve();
+        }, Math.max((delay || 0) + 100, 100));
       });
       tracker.timers.add(timerId as unknown as number);
       tracker.pending.add(timerPromise);
@@ -130,55 +125,13 @@ export class CodeExecutionEngine {
     };
 
     const originalSetInterval = globalThis.setInterval;
-    const wrappedSetInterval = function (
-      callback: (...args: unknown[]) => void,
+    const wrappedSetInterval = (
+      callback: TimerHandler,
       delay?: number,
       ...args: unknown[]
-    ): ReturnType<typeof originalSetInterval> {
+    ): ReturnType<typeof originalSetInterval> => {
       self.outputs.push(self.createOutput('info', '[setInterval 已启动，将持续执行回调]'));
       return originalSetInterval(callback, delay, ...args);
-    };
-
-    const originalThen = Promise.prototype.then;
-    const originalCatch = Promise.prototype.catch;
-    const originalFinally = Promise.prototype.finally;
-
-    Promise.prototype.then = function <T, TResult1 = T, TResult2 = never>(
-      this: Promise<T>,
-      onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null,
-      onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | undefined | null
-    ): Promise<TResult1 | TResult2> {
-      if (self.tracker && !self.tracker.done) {
-        const trackedPromise = new Promise<T>((resolve) => {
-          originalThen.call(
-            this,
-            (v: T) => {
-              self.outputs.push(self.createOutput('log', `[Promise resolve] ${self.formatValue(v)}`));
-              resolve(v);
-            },
-            (e: unknown) => {
-              self.outputs.push(self.createOutput('error', `[Promise reject] ${self.formatValue(e)}`));
-              resolve(undefined as unknown as T);
-            }
-          );
-        });
-        tracker.pending.add(trackedPromise);
-      }
-      return originalThen.call(this, onfulfilled, onrejected);
-    };
-
-    Promise.prototype.catch = function <T, TResult = never>(
-      this: Promise<T>,
-      onrejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | undefined | null
-    ): Promise<T | TResult> {
-      return originalCatch.call(this, onrejected);
-    };
-
-    Promise.prototype.finally = function <T>(
-      this: Promise<T>,
-      onfinally?: (() => void) | undefined | null
-    ): Promise<T> {
-      return originalFinally.call(this, onfinally);
     };
 
     const originalFetch = (globalThis as unknown as { fetch?: typeof fetch }).fetch;
@@ -224,14 +177,6 @@ export class CodeExecutionEngine {
     if (originals.fetch !== undefined) {
       (globalThis as unknown as { fetch: typeof fetch }).fetch = originals.fetch;
     }
-    const P = Promise.prototype as unknown as {
-      then: typeof Promise.prototype.then;
-      catch: typeof Promise.prototype.catch;
-      finally: typeof Promise.prototype.finally;
-    };
-    delete P.then;
-    delete P.catch;
-    delete P.finally;
   }
 
   async execute(code: string, waitAsync: boolean = true): Promise<ExecutionResult> {
@@ -261,6 +206,7 @@ export class CodeExecutionEngine {
 
     let success = true;
     let returnValue: unknown = undefined;
+    let asyncPending = false;
 
     try {
       const capturedConsole = this.createConsoleCapture();
@@ -301,12 +247,40 @@ export class CodeExecutionEngine {
         const awaited = await Promise.race([
           syncResult,
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('执行超时 (5秒)')), 5000)
+            originals.setTimeout(() => reject(new Error('执行超时 (5秒)')), 5000)
           )
         ]);
         returnValue = awaited;
       } else {
         returnValue = syncResult;
+      }
+
+      this.restoreAsyncApi(originals);
+
+      asyncPending = this.tracker.pending.size > 0;
+
+      if (waitAsync && asyncPending) {
+        const waitStart = performance.now();
+        try {
+          while (this.tracker.pending.size > 0 && performance.now() - waitStart < this.maxAsyncWaitMs) {
+            const pendingArray = Array.from(this.tracker.pending);
+            this.tracker.pending.clear();
+            await Promise.allSettled(pendingArray);
+            await new Promise(r => originals.setTimeout(r, 50));
+          }
+          asyncPending = this.tracker.pending.size > 0;
+          if (asyncPending) {
+            this.outputs.push(
+              this.createOutput('warn', `[部分异步操作仍在后台执行，已等待 ${this.maxAsyncWaitMs}ms]`)
+            );
+          } else {
+            this.outputs.push(
+              this.createOutput('log', `[所有异步操作完成]`)
+            );
+          }
+        } catch {
+          asyncPending = true;
+        }
       }
     } catch (error) {
       success = false;
@@ -325,32 +299,6 @@ export class CodeExecutionEngine {
       this.outputs.push(
         this.createOutput('result', `返回值: ${this.formatValue(returnValue)}`)
       );
-    }
-
-    let asyncPending = this.tracker.pending.size > 0;
-
-    if (waitAsync && asyncPending) {
-      const waitStart = performance.now();
-      try {
-        while (this.tracker.pending.size > 0 && performance.now() - waitStart < this.maxAsyncWaitMs) {
-          const pendingArray = Array.from(this.tracker.pending);
-          this.tracker.pending.clear();
-          await Promise.allSettled(pendingArray);
-          await new Promise(r => setTimeout(r, 50));
-        }
-        asyncPending = this.tracker.pending.size > 0;
-        if (asyncPending) {
-          this.outputs.push(
-            this.createOutput('warn', `[部分异步操作仍在后台执行，已等待 ${this.maxAsyncWaitMs}ms]`)
-          );
-        } else {
-          this.outputs.push(
-            this.createOutput('log', `[所有异步操作完成]`)
-          );
-        }
-      } catch {
-        asyncPending = true;
-      }
     }
 
     this.tracker.done = true;
@@ -396,7 +344,7 @@ export class CodeExecutionEngine {
     let returnValue: unknown = undefined;
 
     try {
-      const sandboxCode = `
+      const sandboxedCode = `
         "use strict";
         return (function() {
           ${code}

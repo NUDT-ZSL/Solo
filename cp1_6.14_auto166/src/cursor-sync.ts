@@ -81,7 +81,7 @@ export class CursorSyncService {
   private mockMode = false;
   private mockUsers: User[] = [];
   private mockCursors: Record<string, CursorState> = {};
-  private mockCode = '';
+  private _mockCode = '';
   private mockIntervalId: ReturnType<typeof setInterval> | null = null;
   private serverUrl: string | null = null;
 
@@ -116,7 +116,7 @@ export class CursorSyncService {
       });
 
       this.socket.on('disconnect', () => {
-        this.emit('disconnected');
+        this.emit('disconnected', undefined as unknown as void);
       });
 
       this.socket.on('connect_error', (err) => {
@@ -186,7 +186,7 @@ export class CursorSyncService {
     this.mockMode = true;
     this.mockUsers = [user];
     this.mockCursors = {};
-    this.mockCode = '';
+    this._mockCode = '';
 
     this.emit('connected', { success: true, reconnect: false });
     this.emit('user-joined', { user, users: this.mockUsers });
@@ -310,7 +310,7 @@ export class CursorSyncService {
 
   sendCodeUpdate(code: string): void {
     if (!this.currentUser) return;
-    this.mockCode = code;
+    this._mockCode = code;
     if (this.socket && this.socket.connected) {
       this.socket.emit('code:update', {
         code,
@@ -338,7 +338,7 @@ export class CursorSyncService {
     handler: HandlerFunction<EventMap[K]>
   ): () => void {
     if (!this.handlers[event]) {
-      this.handlers[event] = new Set();
+      this.handlers[event] = new Set() as HandlerRegistry[K];
     }
     (this.handlers[event] as Set<HandlerFunction<EventMap[K]>>).add(handler);
     return () => {
