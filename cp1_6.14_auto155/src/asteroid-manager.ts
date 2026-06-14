@@ -431,4 +431,10 @@ export class AsteroidManager {
     }
     return n;
   }
+
+  public spawnMany(count: number, targetX: number, targetY: number): void {
+    for (let i = 0; i < count; i++) {
+      this.spawnSingle(targetX, targetY);
+    }
+  }
 }

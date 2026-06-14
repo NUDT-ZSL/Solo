@@ -22,6 +22,13 @@ export class SceneManager {
   private lastTs = 0;
   private running = false;
 
+  private fpsAccum = 0;
+  private fpsFrames = 0;
+  private fpsCurrent = 60;
+  private fpsLastReport = 0;
+  private showFps = true;
+  private stressTestMode = false;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     const ctx = canvas.getContext('2d');
