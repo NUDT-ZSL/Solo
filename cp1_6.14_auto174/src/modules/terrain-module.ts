@@ -21,42 +21,70 @@ function lerpColor(a: THREE.Color, b: THREE.Color, t: number): THREE.Color {
   return new THREE.Color().copy(a).lerp(b, t);
 }
 
-function heightToColor(height: number): THREE.Color {
+function heightToColor(height: number, lat: number, lon: number): THREE.Color {
   const h = Math.max(-5, Math.min(5, height));
   const t = (h + 5) / 10;
   const deep = hexToRgb("#0f172a");
   const teal = hexToRgb("#2dd4bf");
   const white = hexToRgb("#f8fafc");
-  if (t < 0.5) {
-    return lerpColor(deep, teal, t * 2);
+
+  const lonMod = ((lon + 180) % 360) / 360;
+  const latMod = ((lat + 90) % 180) / 180;
+  const spatialFactor =
+    (Math.sin(lonMod * Math.PI * 4) * 0.5 + 0.5) * 0.12 +
+    (Math.cos(latMod * Math.PI * 3) * 0.5 + 0.5) * 0.08;
+
+  let colorT = t + spatialFactor - 0.1;
+  colorT = Math.max(0, Math.min(1, colorT));
+
+  let base: THREE.Color;
+  if (colorT < 0.5) {
+    base = lerpColor(deep, teal, colorT * 2);
+  } else {
+    base = lerpColor(teal, white, (colorT - 0.5) * 2);
   }
-  return lerpColor(teal, white, (t - 0.5) * 2);
+
+  const hueShift = (Math.sin(lonMod * Math.PI * 2) + Math.cos(latMod * Math.PI * 2)) * 0.02;
+  const hsl = { h: 0, s: 0, l: 0 };
+  base.getHSL(hsl);
+  base.setHSL(hsl.h + hueShift, Math.min(1, hsl.s + 0.05), hsl.l);
+  return base;
 }
 
-function generateNormalMap(size = 256): THREE.CanvasTexture {
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
-  const img = ctx.createImageData(size, size);
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const idx = (y * size + x) * 4;
-      const nx = Math.sin(x * 0.08) * 0.5 + 0.5;
-      const ny = Math.cos(y * 0.08) * 0.5 + 0.5;
-      const nz = 0.7 + 0.3 * Math.sin((x + y) * 0.05);
-      img.data[idx] = Math.floor(nx * 255);
-      img.data[idx + 1] = Math.floor(ny * 255);
-      img.data[idx + 2] = Math.floor(nz * 255);
-      img.data[idx + 3] = 255;
+function generateNormalMap(size = 256): THREE.Texture {
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas 2D context not available");
+    const img = ctx.createImageData(size, size);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const idx = (y * size + x) * 4;
+        const nx = Math.sin(x * 0.08) * 0.5 + 0.5;
+        const ny = Math.cos(y * 0.08) * 0.5 + 0.5;
+        const nz = 0.7 + 0.3 * Math.sin((x + y) * 0.05);
+        img.data[idx] = Math.floor(nx * 255);
+        img.data[idx + 1] = Math.floor(ny * 255);
+        img.data[idx + 2] = Math.floor(nz * 255);
+        img.data[idx + 3] = 255;
+      }
     }
+    ctx.putImageData(img, 0, 0);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(2, 2);
+    return tex;
+  } catch (e) {
+    const tex = new THREE.Texture();
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(2, 2);
+    tex.needsUpdate = true;
+    return tex;
   }
-  ctx.putImageData(img, 0, 0);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(2, 2);
-  return tex;
 }
 
 export function createTerrain(container: HTMLElement): TerrainContext {
@@ -155,7 +183,12 @@ export function createTerrain(container: HTMLElement): TerrainContext {
   let hoverCb: ((s: StationData | null) => void) | null = null;
   let hovered: typeof stationMeshes[number] | null = null;
 
+  function isEventOnCanvas(e: PointerEvent): boolean {
+    return e.target === renderer.domElement || e.composedPath()[0] === renderer.domElement;
+  }
+
   function onPointerMove(e: PointerEvent) {
+    if (!isEventOnCanvas(e)) return;
     const rect = renderer.domElement.getBoundingClientRect();
     pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -181,7 +214,8 @@ export function createTerrain(container: HTMLElement): TerrainContext {
     }
   }
 
-  function onClick() {
+  function onClick(e: MouseEvent) {
+    if (!isEventOnCanvas(e as unknown as PointerEvent)) return;
     if (hovered && clickCb) clickCb(hovered.data);
   }
 
@@ -196,7 +230,7 @@ export function createTerrain(container: HTMLElement): TerrainContext {
   }
 
   renderer.domElement.addEventListener("pointermove", onPointerMove);
-  renderer.domElement.addEventListener("click", onClick);
+  renderer.domElement.addEventListener("click", onClick as EventListener);
 
   function buildStations(stations: StationData[]) {
     while (stationGroup.children.length > 0) {
@@ -236,9 +270,12 @@ export function createTerrain(container: HTMLElement): TerrainContext {
     const pos = terrainGeom.attributes.position;
     const col = terrainGeom.attributes.color as THREE.BufferAttribute;
     for (let i = 0; i < pos.count; i++) {
-      const h = data.grid[i]?.height ?? 0;
+      const point = data.grid[i];
+      const h = point?.height ?? 0;
+      const lat = point?.lat ?? 0;
+      const lon = point?.lon ?? 0;
       pos.setY(i, h);
-      const c = heightToColor(h);
+      const c = heightToColor(h, lat, lon);
       col.setXYZ(i, c.r, c.g, c.b);
     }
     pos.needsUpdate = true;

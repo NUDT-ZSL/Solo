@@ -80,28 +80,42 @@ const closeBtnStyle: React.CSSProperties = {
 };
 
 export function InfoPanel({ station, onClose }: InfoPanelProps) {
+  const [animKey, setAnimKey] = useState(0);
   const [show, setShow] = useState(false);
 
   useEffect(() => {
     if (station) {
-      const t = requestAnimationFrame(() => setShow(true));
-      return () => cancelAnimationFrame(t);
+      setAnimKey((k) => k + 1);
+      setShow(false);
+      const t1 = requestAnimationFrame(() => {
+        const t2 = requestAnimationFrame(() => setShow(true));
+        () => cancelAnimationFrame(t2);
+      });
+      return () => cancelAnimationFrame(t1);
     } else {
       setShow(false);
     }
-  }, [station]);
+  }, [station?.id]);
 
   const s: React.CSSProperties = {
     ...panelStyle,
-    ...(show && station ? visibleStyle : {})
+    transform: show ? "translateY(0)" : "translateY(20px)",
+    opacity: show ? 1 : 0,
+    pointerEvents: show ? "auto" : "none"
   };
 
   if (!station) {
-    return <div style={s} />;
+    return null;
   }
 
   return (
-    <div style={s}>
+    <div
+      key={animKey}
+      style={s}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      onPointerMove={(e) => e.stopPropagation()}
+    >
       <button style={closeBtnStyle} onClick={onClose} title="关闭">
         ×
       </button>

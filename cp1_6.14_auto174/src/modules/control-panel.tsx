@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 interface ControlPanelProps {
   date: string;
@@ -96,13 +96,32 @@ export function ControlPanel({
   lastUpdated
 }: ControlPanelProps) {
   const [fading, setFading] = useState(false);
+  const debounceTimer = useRef<number | null>(null);
 
-  const handleRefresh = () => {
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) window.clearTimeout(debounceTimer.current);
+    };
+  }, []);
+
+  const triggerRefresh = () => {
     setFading(true);
     setTimeout(() => {
       onRefresh();
       setTimeout(() => setFading(false), 300);
     }, 300);
+  };
+
+  const handleDateChange = (newDate: string) => {
+    onChange(newDate, time);
+    if (debounceTimer.current) window.clearTimeout(debounceTimer.current);
+    debounceTimer.current = window.setTimeout(() => triggerRefresh(), 600);
+  };
+
+  const handleTimeChange = (newTime: string) => {
+    onChange(date, newTime);
+    if (debounceTimer.current) window.clearTimeout(debounceTimer.current);
+    debounceTimer.current = window.setTimeout(() => triggerRefresh(), 600);
   };
 
   const contentStyle: React.CSSProperties = {
@@ -111,7 +130,7 @@ export function ControlPanel({
   };
 
   return (
-    <div style={panelStyle}>
+    <div style={panelStyle} onClick={(e) => e.stopPropagation()}>
       <div style={contentStyle}>
         <h3 style={titleStyle}>WaveAtlas 控制面板</h3>
         <p style={subtitleStyle}>全球海浪与潮汐数据可视化</p>
@@ -122,7 +141,7 @@ export function ControlPanel({
             type="date"
             style={inputStyle}
             value={date}
-            onChange={(e) => onChange(e.target.value, time)}
+            onChange={(e) => handleDateChange(e.target.value)}
           />
         </div>
 
@@ -132,13 +151,13 @@ export function ControlPanel({
             type="time"
             style={inputStyle}
             value={time}
-            onChange={(e) => onChange(date, e.target.value)}
+            onChange={(e) => handleTimeChange(e.target.value)}
           />
         </div>
 
         <button
           style={refreshing ? disabledBtnStyle : btnStyle}
-          onClick={handleRefresh}
+          onClick={triggerRefresh}
           disabled={refreshing}
           onMouseEnter={(e) => {
             if (!refreshing) {

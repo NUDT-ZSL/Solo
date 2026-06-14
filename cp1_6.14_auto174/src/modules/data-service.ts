@@ -83,6 +83,7 @@ export async function getWaveForecast(
   for (let i = 0; i < STATION_COUNT; i++) {
     const sLat = lat + (rand() - 0.5) * 36;
     const sLon = lon + (rand() - 0.5) * 54;
+    const windDirIdx = Math.floor(rand() * WIND_DIRECTIONS.length);
     stations.push({
       id: `station-${i}`,
       name: STATION_NAMES[i % STATION_NAMES.length],
@@ -91,7 +92,7 @@ export async function getWaveForecast(
       waveHeight: Math.round((rand() * 6 - 1) * 10) / 10,
       tideTime: formatTideTime(6 + Math.floor(rand() * 12), i),
       tideType: rand() > 0.5 ? "高潮" : "低潮",
-      windDirection: WIND_DIRECTIONS[Math.floor(rand() * WIND_DIRECTIONS.length)],
+      windDirection: WIND_DIRECTIONS[windDirIdx] || "东风",
       windLevel: 1 + Math.floor(rand() * 7)
     });
   }
