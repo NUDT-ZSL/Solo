@@ -18,15 +18,21 @@ function generateTimeSlots(): string[] {
   return slots
 }
 
+function toLocalDateStr(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 function getTodayStr(): string {
-  const d = new Date()
-  return d.toISOString().split('T')[0]
+  return toLocalDateStr(new Date())
 }
 
 function getMaxDateStr(): string {
   const d = new Date()
   d.setDate(d.getDate() + 14)
-  return d.toISOString().split('T')[0]
+  return toLocalDateStr(d)
 }
 
 export default function ReservationForm({ device, userId, userName, onSubmit, onClose }: ReservationFormProps) {

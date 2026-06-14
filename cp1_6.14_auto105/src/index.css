@@ -306,8 +306,10 @@ body {
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: background var(--transition), transform var(--transition);
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
   margin: 0 0 0;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .btn-reserve:hover:not(:disabled) {
@@ -319,8 +321,10 @@ body {
 }
 
 .btn-reserve:disabled {
-  background: var(--color-primary-disabled);
+  background: #a0aec0;
+  color: white;
   cursor: not-allowed;
+  opacity: 1;
 }
 
 /* ====== Admin Manage Button ====== */
