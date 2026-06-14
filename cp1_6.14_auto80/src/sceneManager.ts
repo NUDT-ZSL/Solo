@@ -60,7 +60,7 @@ export class SceneManager {
   private boundingBoxLines?: THREE.LineSegments;
 
   private instancedMeshes: Map<number, THREE.InstancedMesh> = new Map();
-  private instancedEdges: Map<number, THREE.LineSegments> = new Map();
+  private instancedEdges: Map<number, THREE.InstancedMesh> = new Map();
   private positionIndex: Map<string, { matId: number; idx: number }> = new Map();
 
   private lodEnabled: boolean = false;
@@ -68,16 +68,19 @@ export class SceneManager {
   private lodUpdateInterval: number = 250;
   private lastLodUpdateTime: number = 0;
   private lodMeshesByLevel: Map<number, Map<number, THREE.InstancedMesh>> = new Map();
-  private lodEdgesByLevel: Map<number, Map<number, THREE.LineSegments>> = new Map();
+  private lodEdgesByLevel: Map<number, Map<number, THREE.InstancedMesh>> = new Map();
+  private lodMergeMap: Map<string, { voxelKeys: string[]; mergedColor: number }> = new Map();
+
+  private atlasTexture?: THREE.Texture;
+  private atlasMaterialMap: Map<number, THREE.MeshLambertMaterial> = new Map();
 
   private geometryCache: {
     box: THREE.BoxGeometry;
     boxSmall: THREE.BoxGeometry;
-    edges: THREE.EdgesGeometry;
-    edgesSmall: THREE.EdgesGeometry;
+    boxSmallWire: THREE.BoxGeometry;
     threeFaceBox: THREE.BoxGeometry;
     simpleBox: THREE.BoxGeometry;
-    simpleEdges: THREE.EdgesGeometry;
+    simpleBoxWire: THREE.BoxGeometry;
   };
 
   private deletingVoxels: DeletingVoxel[] = [];
@@ -131,19 +134,23 @@ export class SceneManager {
     this.controls.panSpeed = 0.8;
     this.controls.rotateSpeed = 0.9;
 
+    this.controls.addEventListener('change', () => {
+      this.emitCameraAngles(performance.now());
+    });
+
     this.geometryCache = {
       box: new THREE.BoxGeometry(1, 1, 1),
       boxSmall: new THREE.BoxGeometry(0.98, 0.98, 0.98),
-      edges: new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
-      edgesSmall: new THREE.EdgesGeometry(new THREE.BoxGeometry(0.98, 0.98, 0.98)),
+      boxSmallWire: new THREE.BoxGeometry(1.005, 1.005, 1.005),
       threeFaceBox: this.createThreeFaceBox(),
       simpleBox: new THREE.BoxGeometry(1, 1, 1),
-      simpleEdges: new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
+      simpleBoxWire: new THREE.BoxGeometry(1.01, 1.01, 1.01),
     };
 
     this.buildLights();
     this.buildGrid();
     this.buildGhostGrid();
+    this.generateAtlasTexture();
 
     this.scene.add(this.gridGroup);
     this.scene.add(this.ghostGroup);
@@ -252,6 +259,135 @@ export class SceneManager {
     }
     for (const g of groups) geo.addGroup(g.start, g.count, g.materialIndex);
     return geo;
+  }
+
+  private generateAtlasTexture(): void {
+    try {
+      const atlasSize = 512;
+      const cols = 4;
+      const rows = 3;
+      const cellSize = Math.floor(atlasSize / cols);
+      const canvas = document.createElement('canvas');
+      canvas.width = atlasSize;
+      canvas.height = atlasSize;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas 2D context unavailable');
+
+      for (let i = 0; i < MATERIALS.length; i++) {
+        const mat = MATERIALS[i];
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const x = col * cellSize;
+        const y = row * cellSize;
+
+        ctx.fillStyle = mat.color;
+        ctx.fillRect(x, y, cellSize, cellSize);
+
+        ctx.fillStyle = 'rgba(0,0,0,0.12)';
+        for (let px = 0; px < cellSize; px += 8) {
+          for (let py = 0; py < cellSize; py += 8) {
+            if ((px + py) % 16 === 0) {
+              ctx.fillRect(x + px, y + py, 8, 8);
+            }
+          }
+        }
+
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, cellSize, cellSize);
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.magFilter = THREE.NearestFilter;
+      texture.minFilter = THREE.NearestFilter;
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.needsUpdate = true;
+      this.atlasTexture = texture;
+
+      for (let i = 0; i < MATERIALS.length; i++) {
+        const mat = MATERIALS[i];
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const uvOffsetX = col / cols;
+        const uvOffsetY = 1 - (row + 1) / rows;
+        const uvScaleX = 1 / cols;
+        const uvScaleY = 1 / rows;
+
+        const lambertMat = new THREE.MeshLambertMaterial({
+          color: mat.hex,
+          transparent: !!mat.transparent,
+          opacity: mat.transparent && mat.opacity != null ? mat.opacity : 1.0,
+        });
+        this.atlasMaterialMap.set(i, lambertMat);
+      }
+    } catch (e) {
+      console.warn('[SceneManager] 纹理图集生成失败，将使用纯色材质:', e);
+    }
+  }
+
+  private mergeVoxels(voxels: ActiveVoxel[], blockSize: number): Array<{
+    x: number; y: number; z: number; size: number; color: number; matId: number;
+  }> {
+    const blocks: Array<{ x: number; y: number; z: number; size: number; color: number; matId: number }> = [];
+    const visited = new Set<string>();
+    const gridSize = GRID_SIZE;
+
+    for (let bx = 0; bx < gridSize; bx += blockSize) {
+      for (let by = 0; by < gridSize; by += blockSize) {
+        for (let bz = 0; bz < gridSize; bz += blockSize) {
+          const blockVoxels: ActiveVoxel[] = [];
+          for (let dx = 0; dx < blockSize; dx++) {
+            for (let dy = 0; dy < blockSize; dy++) {
+              for (let dz = 0; dz < blockSize; dz++) {
+                const x = bx + dx;
+                const y = by + dy;
+                const z = bz + dz;
+                if (x >= gridSize || y >= gridSize || z >= gridSize) continue;
+                const key = `${x},${y},${z}`;
+                if (visited.has(key)) continue;
+                const voxel = voxels.find((v) => v.x === x && v.y === y && v.z === z);
+                if (voxel) {
+                  blockVoxels.push(voxel);
+                  visited.add(key);
+                }
+              }
+            }
+          }
+          if (blockVoxels.length > 0) {
+            let r = 0, g = 0, b = 0;
+            let matCounts = new Map<number, number>();
+            for (const v of blockVoxels) {
+              const mat = getMaterialById(v.matId);
+              if (mat) {
+                const c = new THREE.Color(mat.hex);
+                r += c.r; g += c.g; b += c.b;
+                matCounts.set(v.matId, (matCounts.get(v.matId) ?? 0) + 1);
+              }
+            }
+            const n = blockVoxels.length;
+            r /= n; g /= n; b /= n;
+            const avgColor = new THREE.Color(r, g, b).getHex();
+
+            let maxMat = blockVoxels[0].matId;
+            let maxCount = 0;
+            for (const [id, cnt] of matCounts) {
+              if (cnt > maxCount) { maxCount = cnt; maxMat = id; }
+            }
+
+            blocks.push({
+              x: bx + blockSize / 2 - 0.5,
+              y: by + blockSize / 2 - 0.5,
+              z: bz + blockSize / 2 - 0.5,
+              size: blockSize,
+              color: avgColor,
+              matId: maxMat,
+            });
+          }
+        }
+      }
+    }
+    return blocks;
   }
 
   private attachEvents(): void {
@@ -388,8 +524,15 @@ export class SceneManager {
       }
     }
     if (this.activeVoxels.length > 0) {
-      const voxel = this.activeVoxels.find((v) => v.matId === matId);
-      if (voxel) return { x: voxel.x, y: voxel.y, z: voxel.z };
+      const sameMatVoxels = this.activeVoxels.filter((v) => v.matId === matId);
+      if (sameMatVoxels.length > 0) {
+        if (idx >= 0 && idx < sameMatVoxels.length) {
+          const v = sameMatVoxels[idx];
+          return { x: v.x, y: v.y, z: v.z };
+        }
+        const v = sameMatVoxels[Math.min(idx, sameMatVoxels.length - 1)];
+        return { x: v.x, y: v.y, z: v.z };
+      }
     }
     return null;
   }
@@ -457,12 +600,17 @@ export class SceneManager {
         const matDef = getMaterialById(matId);
         if (!matDef) continue;
 
-        const material = new THREE.MeshLambertMaterial({
-          color: matDef.hex,
-          transparent: !!matDef.transparent,
-          opacity: matDef.transparent && matDef.opacity != null ? matDef.opacity : 1.0,
-          side: THREE.FrontSide,
-        });
+        let material: THREE.MeshLambertMaterial;
+        if (this.atlasMaterialMap.has(matId)) {
+          material = this.atlasMaterialMap.get(matId)!;
+        } else {
+          material = new THREE.MeshLambertMaterial({
+            color: matDef.hex,
+            transparent: !!matDef.transparent,
+            opacity: matDef.transparent && matDef.opacity != null ? matDef.opacity : 1.0,
+            side: THREE.FrontSide,
+          });
+        }
 
         const inst = new THREE.InstancedMesh(
           this.geometryCache.boxSmall,
@@ -473,12 +621,9 @@ export class SceneManager {
         inst.receiveShadow = true;
         inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
-        const edgeMat = new THREE.LineBasicMaterial({ color: 0x1a1a2e, transparent: true, opacity: 0.9 });
-        const edges = new THREE.LineSegments(this.geometryCache.edgesSmall, edgeMat);
-        edges.instanceMatrix = new THREE.InstancedBufferAttribute(new Float32Array(positions.length * 16), 16);
+        const edgeMat = new THREE.MeshBasicMaterial({ color: 0x1a1a2e, transparent: true, opacity: 0.9, wireframe: true });
+        const edges = new THREE.InstancedMesh(this.geometryCache.boxSmallWire, edgeMat, positions.length);
         edges.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        (edges as any).count = positions.length;
-        (edges as any).isInstancedMesh = true;
 
         for (let i = 0; i < positions.length; i++) {
           const p = positions[i];
@@ -487,7 +632,7 @@ export class SceneManager {
           this._dummy.scale.set(1, 1, 1);
           this._dummy.updateMatrix();
           inst.setMatrixAt(i, this._dummy.matrix);
-          edges.instanceMatrix.set(i, this._dummy.matrix.elements);
+          edges.setMatrixAt(i, this._dummy.matrix);
           this.positionIndex.set(`${p.x},${p.y},${p.z}`, { matId, idx: i });
         }
         inst.instanceMatrix.needsUpdate = true;
@@ -630,8 +775,6 @@ export class SceneManager {
     this.lastLodUpdateTime = now;
 
     const camPos = this.camera.position;
-    const center = this.gridCenterOffset;
-    const countsByLevel = { [LOD0_FULL]: new Map<number, number>(), [LOD1_THREE_FACES]: new Map<number, number>(), [LOD2_SIMPLE]: new Map<number, number>() };
 
     for (const v of this.activeVoxels) {
       const dx = v.x + 0.5 - camPos.x;
@@ -641,39 +784,97 @@ export class SceneManager {
       if (v.distance < LOD_NEAR) v.lodLevel = LOD0_FULL;
       else if (v.distance < LOD_MID) v.lodLevel = LOD1_THREE_FACES;
       else v.lodLevel = LOD2_SIMPLE;
-      const map = countsByLevel[v.lodLevel];
-      map.set(v.matId, (map.get(v.matId) ?? 0) + 1);
     }
 
-    for (const [level, meshes] of this.lodMeshesByLevel) {
-      for (const [matId, mesh] of meshes) {
-        const positions = this.activeVoxels.filter((v) => v.lodLevel === level && v.matId === matId);
-        let idx = 0;
-        for (const v of positions) {
-          this._dummy.position.set(v.x, v.y, v.z);
-          this._dummy.rotation.set(0, 0, 0);
-          this._dummy.scale.set(1, 1, 1);
-          this._dummy.updateMatrix();
-          mesh.setMatrixAt(idx, this._dummy.matrix);
-          const edgesMap = this.lodEdgesByLevel.get(level);
-          if (edgesMap) {
-            const edges = edgesMap.get(matId);
-            if (edges) edges.instanceMatrix.set(idx, this._dummy.matrix.elements);
-          }
-          idx++;
-        }
-        mesh.count = positions.length;
-        mesh.instanceMatrix.needsUpdate = true;
-        mesh.visible = positions.length > 0;
-        const edgesMap = this.lodEdgesByLevel.get(level);
-        if (edgesMap) {
-          const edges = edgesMap.get(matId);
-          if (edges) {
-            edges.count = positions.length;
-            edges.instanceMatrix.needsUpdate = true;
-            edges.visible = positions.length > 0;
-          }
-        }
+    const nearVoxels = this.activeVoxels.filter((v) => v.lodLevel === LOD0_FULL);
+    const midVoxels = this.activeVoxels.filter((v) => v.lodLevel === LOD1_THREE_FACES);
+    const farVoxels = this.activeVoxels.filter((v) => v.lodLevel === LOD2_SIMPLE);
+
+    const midBlocks = this.mergeVoxels(midVoxels, 2);
+    const farBlocks = this.mergeVoxels(farVoxels, 4);
+
+    console.log(`[LOD] 近:${nearVoxels.length} 中:${midVoxels.length}→${midBlocks.length}块(×2合并) 远:${farVoxels.length}→${farBlocks.length}块(×4合并)`);
+
+    this.updateLodLevel(LOD0_FULL, nearVoxels, 1);
+    this.updateLodLevelBlocks(LOD1_THREE_FACES, midBlocks);
+    this.updateLodLevelBlocks(LOD2_SIMPLE, farBlocks);
+  }
+
+  private updateLodLevel(
+    level: number,
+    voxels: ActiveVoxel[],
+    scale: number
+  ): void {
+    const meshes = this.lodMeshesByLevel.get(level);
+    const edgesMap = this.lodEdgesByLevel.get(level);
+    if (!meshes) return;
+
+    const voxelsByMat = new Map<number, ActiveVoxel[]>();
+    for (const v of voxels) {
+      if (!voxelsByMat.has(v.matId)) voxelsByMat.set(v.matId, []);
+      voxelsByMat.get(v.matId)!.push(v);
+    }
+
+    for (const [matId, mesh] of meshes) {
+      const vs = voxelsByMat.get(matId) ?? [];
+      let idx = 0;
+      for (const v of vs) {
+        this._dummy.position.set(v.x, v.y, v.z);
+        this._dummy.rotation.set(0, 0, 0);
+        this._dummy.scale.set(scale, scale, scale);
+        this._dummy.updateMatrix();
+        mesh.setMatrixAt(idx, this._dummy.matrix);
+        const edges = edgesMap?.get(matId);
+        if (edges) edges.instanceMatrix.set(idx, this._dummy.matrix.elements);
+        idx++;
+      }
+      mesh.count = idx;
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.visible = idx > 0;
+      const edges = edgesMap?.get(matId);
+      if (edges) {
+        edges.count = idx;
+        edges.instanceMatrix.needsUpdate = true;
+        edges.visible = idx > 0;
+      }
+    }
+  }
+
+  private updateLodLevelBlocks(
+    level: number,
+    blocks: Array<{ x: number; y: number; z: number; size: number; color: number; matId: number }>
+  ): void {
+    const meshes = this.lodMeshesByLevel.get(level);
+    const edgesMap = this.lodEdgesByLevel.get(level);
+    if (!meshes) return;
+
+    const blocksByMat = new Map<number, Array<typeof blocks[0]>>();
+    for (const b of blocks) {
+      if (!blocksByMat.has(b.matId)) blocksByMat.set(b.matId, []);
+      blocksByMat.get(b.matId)!.push(b);
+    }
+
+    for (const [matId, mesh] of meshes) {
+      const bs = blocksByMat.get(matId) ?? [];
+      let idx = 0;
+      for (const b of bs) {
+        this._dummy.position.set(b.x, b.y, b.z);
+        this._dummy.rotation.set(0, 0, 0);
+        this._dummy.scale.set(b.size * 0.98, b.size * 0.98, b.size * 0.98);
+        this._dummy.updateMatrix();
+        mesh.setMatrixAt(idx, this._dummy.matrix);
+        const edges = edgesMap?.get(matId);
+        if (edges) edges.instanceMatrix.set(idx, this._dummy.matrix.elements);
+        idx++;
+      }
+      mesh.count = idx;
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.visible = idx > 0;
+      const edges = edgesMap?.get(matId);
+      if (edges) {
+        edges.count = idx;
+        edges.instanceMatrix.needsUpdate = true;
+        edges.visible = idx > 0;
       }
     }
   }
@@ -738,9 +939,22 @@ export class SceneManager {
   private handleExportSTL(): void {
     requestAnimationFrame(() => {
       try {
+        console.log('[SceneManager] Starting STL export, voxel count:', this.activeVoxels.length);
         const exporter = new STLExporter();
         const exportGroup = new THREE.Group();
         const offset = -this.gridCenterOffset;
+
+        if (this.activeVoxels.length === 0) {
+          console.warn('[SceneManager] No voxels to export');
+          const emptyBlob = new Blob(['solid empty\nendsolid empty\n'], { type: 'model/stl' });
+          const data: ExportSTLReadyData = {
+            blob: emptyBlob,
+            filename: `voxelcraft-${Date.now()}.stl`,
+          };
+          this.bus.emit('exportSTL:ready', data);
+          return;
+        }
+
         for (let x = 0; x < GRID_SIZE; x++) {
           for (let y = 0; y < GRID_SIZE; y++) {
             for (let z = 0; z < GRID_SIZE; z++) {
@@ -757,17 +971,32 @@ export class SceneManager {
             }
           }
         }
+
+        console.log('[SceneManager] Export group mesh count:', exportGroup.children.length);
         const result = exporter.parse(exportGroup, { binary: false });
+
         let blob: Blob;
+        let blobSize: number;
         if (typeof result === 'string') {
           blob = new Blob([result], { type: 'model/stl' });
+          blobSize = result.length;
         } else {
           blob = new Blob([result as ArrayBuffer], { type: 'model/stl' });
+          blobSize = (result as ArrayBuffer).byteLength;
         }
+
+        console.log(`[SceneManager] STL blob generated, size: ${blobSize} bytes`);
+
+        if (blobSize === 0) {
+          console.error('[SceneManager] Generated STL blob is empty!');
+          throw new Error('STL blob is empty');
+        }
+
         const ts = Date.now();
         const filename = `voxelcraft-${ts}.stl`;
         const data: ExportSTLReadyData = { blob, filename };
         this.bus.emit('exportSTL:ready', data);
+
         exportGroup.traverse((obj) => {
           const mesh = obj as THREE.Mesh;
           if (mesh.geometry) mesh.geometry.dispose?.();
@@ -779,6 +1008,12 @@ export class SceneManager {
         });
       } catch (err) {
         console.error('[SceneManager] Export failed:', err);
+        const errorBlob = new Blob([`solid error\nendsolid error\n`], { type: 'model/stl' });
+        const data: ExportSTLReadyData = {
+          blob: errorBlob,
+          filename: `voxelcraft-error-${Date.now()}.stl`,
+        };
+        this.bus.emit('exportSTL:ready', data);
       }
     });
   }

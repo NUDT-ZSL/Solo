@@ -248,11 +248,21 @@ export class UIPanel {
 
   private handleExportReady(data: ExportSTLReadyData): void {
     this.showLoading(false);
+    this.downloadBlob(data.blob, data.filename);
+  }
+
+  private downloadBlob(blob: Blob, filename: string): void {
     try {
-      const url = URL.createObjectURL(data.blob);
+      if (!blob || blob.size === 0) {
+        console.error('[UIPanel] Blob is empty, download aborted.');
+        alert('导出失败：生成的文件为空。');
+        return;
+      }
+      console.log(`[UIPanel] Downloading ${filename}, size: ${blob.size} bytes`);
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = data.filename;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
