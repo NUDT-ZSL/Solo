@@ -13,8 +13,9 @@ interface CommentPanelProps {
 }
 
 const VIRTUAL_THRESHOLD = 50;
-const ITEM_HEIGHT = 120;
-const BUFFER_ITEMS = 5;
+const ESTIMATED_ITEM_HEIGHT = 128;
+const BUFFER_ABOVE = 6;
+const BUFFER_BELOW = 8;
 
 const getTagColor = (color: string): string => {
   switch (color) {
@@ -29,17 +30,20 @@ const CommentItem = ({
   comment,
   onJump,
   onResolve,
-  onDelete
+  onDelete,
+  itemRef
 }: {
   comment: Comment;
   onJump: () => void;
   onResolve: () => void;
   onDelete: () => void;
+  itemRef?: (el: HTMLDivElement | null) => void;
 }) => {
   const tagColor = getTagColor(comment.tagColor);
   
   return (
     <div
+      ref={itemRef}
       onClick={onJump}
       style={{
         padding: '12px',
@@ -50,8 +54,9 @@ const CommentItem = ({
         boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
         cursor: 'pointer',
         opacity: comment.resolved ? 0.6 : 1,
-        transition: 'all 0.3s ease-out',
-        animation: 'slideIn 0.3s ease-out'
+        transition: 'box-shadow 0.2s ease-out, transform 0.2s ease-out',
+        contain: 'layout style paint',
+        willChange: 'transform'
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.1)';
@@ -68,25 +73,27 @@ const CommentItem = ({
         alignItems: 'center',
         marginBottom: '6px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
           <div style={{
             width: '6px',
             height: '6px',
             borderRadius: '50%',
-            background: tagColor
+            background: tagColor,
+            flexShrink: 0
           }} />
-          <strong style={{ fontSize: '13px', color: '#374151' }}>{comment.author}</strong>
+          <strong style={{ fontSize: '13px', color: '#374151', flexShrink: 0 }}>{comment.author}</strong>
           {comment.resolved && (
             <span style={{
               fontSize: '10px',
               padding: '1px 6px',
               background: '#d1fae5',
               color: '#065f46',
-              borderRadius: '10px'
+              borderRadius: '10px',
+              flexShrink: 0
             }}>已解决</span>
           )}
         </div>
-        <span style={{ fontSize: '11px', color: '#9ca3af' }}>
+        <span style={{ fontSize: '11px', color: '#9ca3af', flexShrink: 0, whiteSpace: 'nowrap' }}>
           {new Date(comment.timestamp).toLocaleDateString('zh-CN', {
             month: 'short',
             day: 'numeric',
@@ -119,8 +126,15 @@ const CommentItem = ({
         color: '#6b7280'
       }}>
         <div style={{ display: 'flex', gap: '12px' }}>
-          <span>💬 {comment.replies.length} 回复</span>
-          <span>📍 行 {comment.version}</span>
+          <span>💬 {comment.replies.length}</span>
+          <span style={{
+            padding: '1px 6px',
+            background: comment.version === 'old' ? '#fef2f2' : comment.version === 'new' ? '#f0fdf4' : '#eff6ff',
+            color: comment.version === 'old' ? '#dc2626' : comment.version === 'new' ? '#16a34a' : '#3b82f6',
+            borderRadius: '4px'
+          }}>
+            {comment.version === 'old' ? '版本A' : comment.version === 'new' ? '版本B' : '对比'}
+          </span>
         </div>
         <div style={{ display: 'flex', gap: '4px' }}>
           <button
@@ -165,40 +179,155 @@ const CommentItem = ({
   );
 };
 
+interface VirtualListProps {
+  comments: Comment[];
+  onJumpToComment: (comment: Comment) => void;
+  onResolveComment: (id: string) => void;
+  onDeleteComment: (id: string) => void;
+}
+
 const VirtualList = ({
   comments,
   onJumpToComment,
   onResolveComment,
   onDeleteComment
-}: {
-  comments: Comment[];
-  onJumpToComment: (comment: Comment) => void;
-  onResolveComment: (id: string) => void;
-  onDeleteComment: (id: string) => void;
-}) => {
+}: VirtualListProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [containerHeight, setContainerHeight] = useState(400);
+  const scrollTopRef = useRef(0);
+  const rafIdRef = useRef<number | null>(null);
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 15 });
+  const [offsets, setOffsets] = useState<number[]>([]);
+  const [heights, setHeights] = useState<number[]>([]);
+  const measuredRef = useRef<Set<number>>(new Set());
+
+  const totalHeight = useMemo(() => {
+    if (heights.length === 0) {
+      return comments.length * ESTIMATED_ITEM_HEIGHT;
+    }
+    let h = 0;
+    for (let i = 0; i < comments.length; i++) {
+      h += heights[i] ?? ESTIMATED_ITEM_HEIGHT;
+    }
+    return h;
+  }, [comments.length, heights]);
+
+  const getOffsetForIndex = useCallback((index: number, heightsArr: number[]) => {
+    let offset = 0;
+    for (let i = 0; i < index; i++) {
+      offset += heightsArr[i] ?? ESTIMATED_ITEM_HEIGHT;
+    }
+    return offset;
+  }, []);
+
+  const findStartIndex = useCallback((scrollPos: number, heightsArr: number[]) => {
+    let accumulated = 0;
+    for (let i = 0; i < comments.length; i++) {
+      const h = heightsArr[i] ?? ESTIMATED_ITEM_HEIGHT;
+      if (accumulated + h > scrollPos) {
+        return Math.max(0, i - BUFFER_ABOVE);
+      }
+      accumulated += h;
+    }
+    return Math.max(0, comments.length - 1);
+  }, [comments.length]);
+
+  const findEndIndex = useCallback((startIdx: number, scrollPos: number, viewportH: number, heightsArr: number[]) => {
+    const target = scrollPos + viewportH;
+    let accumulated = 0;
+    for (let i = 0; i < startIdx; i++) {
+      accumulated += heightsArr[i] ?? ESTIMATED_ITEM_HEIGHT;
+    }
+    for (let i = startIdx; i < comments.length; i++) {
+      accumulated += heightsArr[i] ?? ESTIMATED_ITEM_HEIGHT;
+      if (accumulated > target) {
+        return Math.min(comments.length, i + BUFFER_BELOW + 1);
+      }
+    }
+    return comments.length;
+  }, [comments.length]);
+
+  const updateVisibleRange = useCallback(() => {
+    if (!containerRef.current) return;
+    const container = containerRef.current;
+    const viewportHeight = container.clientHeight;
+    const scrollPos = scrollTopRef.current;
+    const heightsArr = heights.length > 0 ? heights : new Array(comments.length).fill(ESTIMATED_ITEM_HEIGHT);
+    
+    const startIdx = findStartIndex(scrollPos, heightsArr);
+    const endIdx = findEndIndex(startIdx, scrollPos, viewportHeight, heightsArr);
+    
+    setVisibleRange({ start: startIdx, end: endIdx });
+    setOffsets(() => {
+      const newOffsets: number[] = [];
+      let acc = 0;
+      for (let i = 0; i < endIdx; i++) {
+        if (i >= startIdx) newOffsets.push(acc);
+        acc += heightsArr[i] ?? ESTIMATED_ITEM_HEIGHT;
+      }
+      return newOffsets;
+    });
+  }, [heights, comments.length, findStartIndex, findEndIndex]);
 
   useEffect(() => {
-    if (containerRef.current) {
-      setContainerHeight(containerRef.current.clientHeight);
-    }
-  }, []);
-
-  const startIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - BUFFER_ITEMS);
-  const endIndex = Math.min(
-    comments.length,
-    Math.ceil((scrollTop + containerHeight) / ITEM_HEIGHT) + BUFFER_ITEMS
-  );
-
-  const visibleComments = comments.slice(startIndex, endIndex);
-  const totalHeight = comments.length * ITEM_HEIGHT;
-  const offsetY = startIndex * ITEM_HEIGHT;
+    updateVisibleRange();
+  }, [updateVisibleRange, comments.length]);
 
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    setScrollTop(e.currentTarget.scrollTop);
+    scrollTopRef.current = e.currentTarget.scrollTop;
+    
+    if (rafIdRef.current !== null) {
+      return;
+    }
+    
+    rafIdRef.current = requestAnimationFrame(() => {
+      rafIdRef.current = null;
+      updateVisibleRange();
+    });
+  }, [updateVisibleRange]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (rafIdRef.current !== null) return;
+      rafIdRef.current = requestAnimationFrame(() => {
+        rafIdRef.current = null;
+        measuredRef.current.clear();
+        updateVisibleRange();
+      });
+    };
+    
+    const container = containerRef.current;
+    if (container) {
+      const ro = new ResizeObserver(handleResize);
+      ro.observe(container);
+      return () => ro.disconnect();
+    }
+  }, [updateVisibleRange]);
+
+  const measureItem = useCallback((index: number, el: HTMLDivElement | null) => {
+    if (!el || measuredRef.current.has(index)) return;
+    measuredRef.current.add(index);
+    
+    const measured = el.offsetHeight + 8;
+    setHeights(prev => {
+      if (prev[index] === measured) return prev;
+      const next = [...prev];
+      for (let i = 0; i < comments.length; i++) {
+        if (next[i] === undefined) next[i] = ESTIMATED_ITEM_HEIGHT;
+      }
+      next[index] = measured;
+      return next;
+    });
+  }, [comments.length]);
+
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+    };
   }, []);
+
+  const visibleComments = comments.slice(visibleRange.start, visibleRange.end);
 
   return (
     <div
@@ -206,28 +335,45 @@ const VirtualList = ({
       onScroll={handleScroll}
       style={{
         height: '100%',
-        overflow: 'auto',
-        position: 'relative'
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        position: 'relative',
+        WebkitOverflowScrolling: 'touch',
+        overscrollBehavior: 'contain'
       }}
     >
-      <div style={{ height: totalHeight, position: 'relative' }}>
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          transform: `translateY(${offsetY}px)`
-        }}>
-          {visibleComments.map((comment) => (
-            <CommentItem
+      <div
+        style={{
+          height: totalHeight,
+          position: 'relative',
+          willChange: 'transform'
+        }}
+      >
+        {visibleComments.map((comment, localIdx) => {
+          const globalIdx = visibleRange.start + localIdx;
+          const offset = offsets[localIdx] ?? getOffsetForIndex(globalIdx, heights);
+          
+          return (
+            <div
               key={comment.id}
-              comment={comment}
-              onJump={() => onJumpToComment(comment)}
-              onResolve={() => onResolveComment(comment.id)}
-              onDelete={() => onDeleteComment(comment.id)}
-            />
-          ))}
-        </div>
+              style={{
+                position: 'absolute',
+                top: offset,
+                left: 0,
+                right: 0,
+                contain: 'layout style paint'
+              }}
+            >
+              <CommentItem
+                comment={comment}
+                onJump={() => onJumpToComment(comment)}
+                onResolve={() => onResolveComment(comment.id)}
+                onDelete={() => onDeleteComment(comment.id)}
+                itemRef={(el) => measureItem(globalIdx, el)}
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -274,12 +420,14 @@ const CommentPanel = ({
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      background: '#f9fafb'
+      background: '#f9fafb',
+      minHeight: 0
     }}>
       <div style={{
         padding: '16px',
         background: 'white',
-        borderBottom: '1px solid #e5e7eb'
+        borderBottom: '1px solid #e5e7eb',
+        flexShrink: 0
       }}>
         <div style={{
           display: 'flex',
@@ -305,7 +453,8 @@ const CommentPanel = ({
                 border: 'none',
                 borderRadius: '4px',
                 cursor: 'pointer',
-                fontSize: '12px'
+                fontSize: '12px',
+                transition: 'all 0.2s ease-out'
               }}
             >
               📋 列表
@@ -319,7 +468,8 @@ const CommentPanel = ({
                 border: 'none',
                 borderRadius: '4px',
                 cursor: 'pointer',
-                fontSize: '12px'
+                fontSize: '12px',
+                transition: 'all 0.2s ease-out'
               }}
             >
               📊 统计
@@ -334,9 +484,13 @@ const CommentPanel = ({
             color: '#1e40af',
             borderRadius: '6px',
             fontSize: '12px',
-            marginBottom: '12px'
+            marginBottom: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
           }}>
-            ⚡ 已启用虚拟列表模式以优化性能
+            <span>⚡</span>
+            <span>已启用虚拟列表 · 共 {comments.length} 条批注</span>
           </div>
         )}
 
@@ -348,7 +502,7 @@ const CommentPanel = ({
                 onClick={() => onFilterStatusChange(option.value)}
                 style={{
                   flex: 1,
-                  padding: '6px 8px',
+                  padding: '6px 6px',
                   background: filterStatus === option.value ? '#3b82f6' : '#f3f4f6',
                   color: filterStatus === option.value ? 'white' : '#6b7280',
                   border: 'none',
@@ -356,7 +510,8 @@ const CommentPanel = ({
                   cursor: 'pointer',
                   fontSize: '11px',
                   whiteSpace: 'nowrap',
-                  transition: 'all 0.3s ease-out'
+                  transition: 'all 0.2s ease-out',
+                  fontWeight: filterStatus === option.value ? 600 : 400
                 }}
               >
                 {option.label}
@@ -371,7 +526,7 @@ const CommentPanel = ({
                 onClick={() => onFilterVersionChange(option.value)}
                 style={{
                   flex: 1,
-                  padding: '6px 8px',
+                  padding: '6px 6px',
                   background: filterVersion === option.value ? '#10b981' : '#f3f4f6',
                   color: filterVersion === option.value ? 'white' : '#6b7280',
                   border: 'none',
@@ -379,7 +534,8 @@ const CommentPanel = ({
                   cursor: 'pointer',
                   fontSize: '11px',
                   whiteSpace: 'nowrap',
-                  transition: 'all 0.3s ease-out'
+                  transition: 'all 0.2s ease-out',
+                  fontWeight: filterVersion === option.value ? 600 : 400
                 }}
               >
                 {option.label}
@@ -390,7 +546,7 @@ const CommentPanel = ({
       </div>
 
       {viewMode === 'stats' ? (
-        <div style={{ padding: '16px', flex: 1, overflow: 'auto' }}>
+        <div style={{ padding: '16px', flex: 1, overflow: 'auto', minHeight: 0 }}>
           <div style={{
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
@@ -456,7 +612,7 @@ const CommentPanel = ({
           </div>
 
           <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#374151', margin: '0 0 12px' }}>
-            标签分布
+            🏷️ 标签分布
           </h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{
@@ -472,10 +628,11 @@ const CommentPanel = ({
                 width: '12px',
                 height: '12px',
                 borderRadius: '50%',
-                background: '#ef4444'
+                background: '#ef4444',
+                flexShrink: 0
               }} />
-              <span style={{ fontSize: '13px', color: '#374151', flex: 1 }}>重要</span>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: '#1f2937' }}>
+              <span style={{ fontSize: '13px', color: '#374151', flex: 1 }}>🔴 重要问题</span>
+              <span style={{ fontSize: '15px', fontWeight: 700, color: '#1f2937' }}>
                 {stats.redTags}
               </span>
             </div>
@@ -492,10 +649,11 @@ const CommentPanel = ({
                 width: '12px',
                 height: '12px',
                 borderRadius: '50%',
-                background: '#3b82f6'
+                background: '#3b82f6',
+                flexShrink: 0
               }} />
-              <span style={{ fontSize: '13px', color: '#374151', flex: 1 }}>建议</span>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: '#1f2937' }}>
+              <span style={{ fontSize: '13px', color: '#374151', flex: 1 }}>🔵 建议改进</span>
+              <span style={{ fontSize: '15px', fontWeight: 700, color: '#1f2937' }}>
                 {stats.blueTags}
               </span>
             </div>
@@ -512,17 +670,57 @@ const CommentPanel = ({
                 width: '12px',
                 height: '12px',
                 borderRadius: '50%',
-                background: '#22c55e'
+                background: '#22c55e',
+                flexShrink: 0
               }} />
-              <span style={{ fontSize: '13px', color: '#374151', flex: 1 }}>已确认</span>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: '#1f2937' }}>
+              <span style={{ fontSize: '13px', color: '#374151', flex: 1 }}>🟢 已确认</span>
+              <span style={{ fontSize: '15px', fontWeight: 700, color: '#1f2937' }}>
                 {stats.greenTags}
               </span>
             </div>
           </div>
+
+          {stats.total > 0 && (
+            <div style={{
+              marginTop: '20px',
+              padding: '14px',
+              background: 'white',
+              borderRadius: '8px',
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
+            }}>
+              <div style={{ fontSize: '13px', color: '#4b5563', marginBottom: '8px', fontWeight: 600 }}>
+                📈 完成进度
+              </div>
+              <div style={{
+                height: '10px',
+                background: '#e5e7eb',
+                borderRadius: '5px',
+                overflow: 'hidden'
+              }}>
+                <div style={{
+                  height: '100%',
+                  background: `linear-gradient(90deg, #22c55e 0%, #10b981 ${stats.total > 0 ? Math.round((stats.resolved / stats.total) * 100) : 0}%, #f59e0b 100%)`,
+                  borderRadius: '5px',
+                  width: `${stats.total > 0 ? (stats.resolved / stats.total) * 100 : 0}%`,
+                  transition: 'width 0.5s ease-out'
+                }} />
+              </div>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginTop: '6px',
+                fontSize: '11px',
+                color: '#6b7280'
+              }}>
+                <span>0%</span>
+                <span>{stats.total > 0 ? Math.round((stats.resolved / stats.total) * 100) : 0}%</span>
+                <span>100%</span>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           {comments.length === 0 ? (
             <div style={{
               flex: 1,
@@ -535,8 +733,8 @@ const CommentPanel = ({
               textAlign: 'center'
             }}>
               <div style={{ fontSize: '48px', marginBottom: '16px' }}>💭</div>
-              <p style={{ fontSize: '14px', margin: '0 0 4px' }}>暂无批注</p>
-              <p style={{ fontSize: '12px', margin: 0 }}>点击差异行添加批注</p>
+              <p style={{ fontSize: '14px', margin: '0 0 4px', color: '#6b7280' }}>暂无批注</p>
+              <p style={{ fontSize: '12px', margin: 0 }}>点击差异行可添加批注</p>
             </div>
           ) : useVirtualList ? (
             <VirtualList
@@ -548,8 +746,11 @@ const CommentPanel = ({
           ) : (
             <div style={{
               flex: 1,
-              overflow: 'auto',
-              padding: '12px 16px'
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              padding: '12px 16px',
+              WebkitOverflowScrolling: 'touch',
+              overscrollBehavior: 'contain'
             }}>
               {comments.map((comment) => (
                 <CommentItem
