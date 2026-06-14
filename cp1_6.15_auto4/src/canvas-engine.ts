@@ -18,11 +18,27 @@ export interface CanvasElement {
   createdAt: number;
 }
 
+interface DirtyRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 type EventCallback = (...args: unknown[]) => void;
+
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 5;
+const ANIMATION_PAN_DURATION = 300;
+const ANIMATION_SELECTION_PULSE = 200;
+const ANIMATION_REMOVAL = 200;
+const ANIMATION_SELECTION_BOUNCE = 100;
 
 export class CanvasEngine {
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
+  private offscreenCanvas: HTMLCanvasElement | null = null;
+  private offscreenCtx: CanvasRenderingContext2D | null = null;
   private container: HTMLElement | null = null;
   private elements: CanvasElement[] = [];
   private selectedIds: Set<string> = new Set();
@@ -30,16 +46,19 @@ export class CanvasEngine {
   private offsetY = 0;
   private zoom = 1;
   private animFrameId = 0;
-  private needsRender = true;
+  private needsFullRender = true;
+  private dirtyRects: DirtyRect[] = [];
   private listeners: Map<string, EventCallback[]> = new Map();
   private panAnimating = false;
   private panAnimStart = { x: 0, y: 0 };
   private panAnimEnd = { x: 0, y: 0 };
   private panAnimStartTime = 0;
-  private panAnimDuration = 300;
-  private selectionPulse = 0;
-  private lastFrameTime = 0;
+  private selectionAnimProgress = 0;
+  private selectionAnimStartTime = 0;
+  private selectionAnimating = false;
   private dpr = 1;
+  private cachedZoom = 1;
+  private cachedElements: Map<string, { bounds: { x: number; y: number; width: number; height: number } }> = new Map();
 
   init(container: HTMLElement): void {
     this.container = container;
@@ -49,6 +68,9 @@ export class CanvasEngine {
     this.canvas.style.height = '100%';
     this.canvas.style.cursor = 'crosshair';
     container.appendChild(this.canvas);
+
+    this.offscreenCanvas = document.createElement('canvas');
+    this.offscreenCtx = this.offscreenCanvas.getContext('2d')!;
 
     this.dpr = window.devicePixelRatio || 1;
     this.ctx = this.canvas.getContext('2d')!;
@@ -61,65 +83,197 @@ export class CanvasEngine {
   }
 
   private resize(): void {
-    if (!this.canvas || !this.container) return;
+    if (!this.canvas || !this.container || !this.offscreenCanvas) return;
     const rect = this.container.getBoundingClientRect();
     this.canvas.width = rect.width * this.dpr;
     this.canvas.height = rect.height * this.dpr;
-    this.needsRender = true;
+    this.offscreenCanvas.width = rect.width * this.dpr;
+    this.offscreenCanvas.height = rect.height * this.dpr;
+    this.needsFullRender = true;
+    this.cachedElements.clear();
   }
 
   private startRenderLoop(): void {
     const loop = (timestamp: number) => {
       this.animFrameId = requestAnimationFrame(loop);
       this.updateAnimations(timestamp);
-      if (this.needsRender || this.panAnimating || this.selectedIds.size > 0) {
+      if (this.needsRender()) {
         this.render();
-        this.needsRender = false;
       }
     };
     this.animFrameId = requestAnimationFrame(loop);
   }
 
+  private needsRender(): boolean {
+    return this.needsFullRender ||
+           this.dirtyRects.length > 0 ||
+           this.panAnimating ||
+           this.selectionAnimating ||
+           this.selectedIds.size > 0;
+  }
+
   private updateAnimations(timestamp: number): void {
     if (this.panAnimating) {
       const elapsed = timestamp - this.panAnimStartTime;
-      const progress = Math.min(elapsed / this.panAnimDuration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
+      const progress = Math.min(elapsed / ANIMATION_PAN_DURATION, 1);
+      const eased = this.easeOutCubic(progress);
       this.offsetX = this.panAnimStart.x + (this.panAnimEnd.x - this.panAnimStart.x) * eased;
       this.offsetY = this.panAnimStart.y + (this.panAnimEnd.y - this.panAnimStart.y) * eased;
       if (progress >= 1) {
         this.panAnimating = false;
       }
-      this.needsRender = true;
+      this.markDirty();
     }
-    if (this.selectedIds.size > 0) {
-      this.selectionPulse = (Math.sin(timestamp / 300) + 1) / 2;
-      this.needsRender = true;
+
+    if (this.selectionAnimating) {
+      const elapsed = timestamp - this.selectionAnimStartTime;
+      const progress = Math.min(elapsed / ANIMATION_SELECTION_BOUNCE, 1);
+      if (progress < 0.5) {
+        this.selectionAnimProgress = this.easeOutBack(progress * 2);
+      } else {
+        this.selectionAnimProgress = 1 - this.easeInBack((progress - 0.5) * 2);
+      }
+      if (progress >= 1) {
+        this.selectionAnimating = false;
+        this.selectionAnimProgress = 0;
+      }
+      this.markDirty();
+    }
+
+    if (this.selectedIds.size > 0 && !this.selectionAnimating) {
+      const pulse = (Math.sin(timestamp / ANIMATION_SELECTION_PULSE) + 1) / 2;
+      this.selectionAnimProgress = pulse * 0.3;
+      this.markDirty();
     }
   }
 
+  private easeOutCubic(t: number): number {
+    return 1 - Math.pow(1 - t, 3);
+  }
+
+  private easeOutBack(t: number): number {
+    const c1 = 1.70158;
+    const c3 = c1 + 1;
+    return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+  }
+
+  private easeInBack(t: number): number {
+    const c1 = 1.70158;
+    const c3 = c1 + 1;
+    return c3 * t * t * t - c1 * t * t;
+  }
+
   render(): void {
-    if (!this.ctx || !this.canvas) return;
-    const ctx = this.ctx;
-    const w = this.canvas.width;
-    const h = this.canvas.height;
+    if (!this.ctx || !this.canvas || !this.offscreenCtx || !this.offscreenCanvas) return;
+
+    const viewW = this.canvas.width / this.dpr;
+    const viewH = this.canvas.height / this.dpr;
+
+    if (this.needsFullRender || this.cachedZoom !== this.zoom) {
+      this.renderFull(viewW, viewH);
+      this.needsFullRender = false;
+      this.cachedZoom = this.zoom;
+      this.dirtyRects = [];
+    } else if (this.dirtyRects.length > 0) {
+      this.renderDirtyRegions(viewW, viewH);
+      this.dirtyRects = [];
+    }
+
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.drawImage(this.offscreenCanvas, 0, 0);
+    this.drawSelectionBoxes(this.ctx);
+  }
+
+  private renderFull(viewW: number, viewH: number): void {
+    if (!this.offscreenCtx) return;
+    const ctx = this.offscreenCtx;
 
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    ctx.clearRect(0, 0, w / this.dpr, h / this.dpr);
+    ctx.clearRect(0, 0, viewW, viewH);
 
-    this.drawGrid(ctx, w / this.dpr, h / this.dpr);
+    this.drawGrid(ctx, viewW, viewH);
 
     ctx.save();
     ctx.translate(this.offsetX, this.offsetY);
     ctx.scale(this.zoom, this.zoom);
 
-    const visibleElements = this.getVisibleElements(w / this.dpr, h / this.dpr);
+    const visibleElements = this.getVisibleElements(viewW, viewH);
     for (const el of visibleElements) {
       this.drawElement(ctx, el);
+      this.cacheElementBounds(el);
     }
 
     ctx.restore();
-    this.drawSelectionBoxes(ctx);
+  }
+
+  private renderDirtyRegions(viewW: number, viewH: number): void {
+    if (!this.offscreenCtx) return;
+    const ctx = this.offscreenCtx;
+
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+
+    for (const rect of this.dirtyRects) {
+      ctx.clearRect(rect.x, rect.y, rect.width, rect.height);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(rect.x, rect.y, rect.width, rect.height);
+      ctx.clip();
+
+      this.drawGridInRect(ctx, rect, viewW, viewH);
+
+      ctx.save();
+      ctx.translate(this.offsetX, this.offsetY);
+      ctx.scale(this.zoom, this.zoom);
+
+      const dirtyRectCanvas = {
+        x: (rect.x - this.offsetX) / this.zoom,
+        y: (rect.y - this.offsetY) / this.zoom,
+        width: rect.width / this.zoom,
+        height: rect.height / this.zoom,
+      };
+
+      const elements = this.getElementsInRect(
+        dirtyRectCanvas.x,
+        dirtyRectCanvas.y,
+        dirtyRectCanvas.width,
+        dirtyRectCanvas.height
+      ).filter(el => el.opacity > 0).sort((a, b) => a.zIndex - b.zIndex);
+
+      for (const el of elements) {
+        this.drawElement(ctx, el);
+        this.cacheElementBounds(el);
+      }
+
+      ctx.restore();
+      ctx.restore();
+    }
+  }
+
+  private markDirtyRect(screenX: number, screenY: number, width: number, height: number): void {
+    const pad = 10;
+    this.dirtyRects.push({
+      x: Math.max(0, screenX - pad),
+      y: Math.max(0, screenY - pad),
+      width: width + pad * 2,
+      height: height + pad * 2,
+    });
+  }
+
+  private markDirty(): void {
+    this.needsFullRender = true;
+  }
+
+  private cacheElementBounds(el: CanvasElement): void {
+    const bounds = this.getElementBounds(el);
+    const screenBounds = {
+      x: bounds.x * this.zoom + this.offsetX,
+      y: bounds.y * this.zoom + this.offsetY,
+      width: bounds.width * this.zoom,
+      height: bounds.height * this.zoom,
+    };
+    this.cachedElements.set(el.id, { bounds: screenBounds });
+    this.markDirtyRect(screenBounds.x, screenBounds.y, screenBounds.width, screenBounds.height);
   }
 
   private drawGrid(ctx: CanvasRenderingContext2D, w: number, h: number): void {
@@ -139,6 +293,35 @@ export class CanvasEngine {
     for (let y = oy; y < h; y += gridSize) {
       ctx.moveTo(0, y);
       ctx.lineTo(w, y);
+    }
+    ctx.stroke();
+  }
+
+  private drawGridInRect(ctx: CanvasRenderingContext2D, rect: DirtyRect, w: number, h: number): void {
+    const gridSize = 30 * this.zoom;
+    if (gridSize < 8) return;
+
+    const ox = this.offsetX % gridSize;
+    const oy = this.offsetY % gridSize;
+
+    ctx.strokeStyle = '#E8ECF0';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+
+    const startX = Math.floor((rect.x - ox) / gridSize) * gridSize + ox;
+    for (let x = startX; x < rect.x + rect.width; x += gridSize) {
+      if (x >= 0 && x < w) {
+        ctx.moveTo(x, rect.y);
+        ctx.lineTo(x, rect.y + rect.height);
+      }
+    }
+
+    const startY = Math.floor((rect.y - oy) / gridSize) * gridSize + oy;
+    for (let y = startY; y < rect.y + rect.height; y += gridSize) {
+      if (y >= 0 && y < h) {
+        ctx.moveTo(rect.x, y);
+        ctx.lineTo(rect.x + rect.width, y);
+      }
     }
     ctx.stroke();
   }
@@ -166,7 +349,7 @@ export class CanvasEngine {
     };
   }
 
-  private getElementBounds(el: CanvasElement): { x: number; y: number; width: number; height: number } {
+  getElementBounds(el: CanvasElement): { x: number; y: number; width: number; height: number } {
     if (el.type === 'freehand' && el.points.length > 0) {
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       for (const p of el.points) {
@@ -305,17 +488,28 @@ export class CanvasEngine {
     for (const id of this.selectedIds) {
       const el = this.elements.find(e => e.id === id);
       if (!el || el.opacity <= 0) continue;
-      const bounds = this.getElementBounds(el);
-      const sx = bounds.x * this.zoom + this.offsetX;
-      const sy = bounds.y * this.zoom + this.offsetY;
-      const sw = bounds.width * this.zoom;
-      const sh = bounds.height * this.zoom;
 
-      const pulse = 1 + (this.selectionPulse * 0.02);
+      const cached = this.cachedElements.get(id);
+      let sx: number, sy: number, sw: number, sh: number;
+
+      if (cached) {
+        sx = cached.bounds.x;
+        sy = cached.bounds.y;
+        sw = cached.bounds.width;
+        sh = cached.bounds.height;
+      } else {
+        const bounds = this.getElementBounds(el);
+        sx = bounds.x * this.zoom + this.offsetX;
+        sy = bounds.y * this.zoom + this.offsetY;
+        sw = bounds.width * this.zoom;
+        sh = bounds.height * this.zoom;
+      }
+
+      const bounce = 1 + this.selectionAnimProgress * 0.05;
       const cx = sx + sw / 2;
       const cy = sy + sh / 2;
-      const pw = sw * pulse;
-      const ph = sh * pulse;
+      const pw = sw * bounce;
+      const ph = sh * bounce;
 
       ctx.strokeStyle = '#5B7FA5';
       ctx.lineWidth = 1.5;
@@ -340,32 +534,33 @@ export class CanvasEngine {
 
   addElement(element: CanvasElement): void {
     this.elements.push(element);
-    this.needsRender = true;
+    this.markDirty();
+    this.cachedElements.clear();
     this.emit('elementsChanged');
   }
 
   removeElement(id: string): void {
     const el = this.elements.find(e => e.id === id);
     if (!el) return;
-    el.opacity = 0;
     this.animateRemoval(el);
   }
 
   private animateRemoval(el: CanvasElement): void {
     const startTime = performance.now();
-    const duration = 200;
-    const startOpacity = 1;
+    const startOpacity = el.opacity;
     const animate = () => {
       const elapsed = performance.now() - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      el.opacity = startOpacity * (1 - progress);
-      this.needsRender = true;
+      const progress = Math.min(elapsed / ANIMATION_REMOVAL, 1);
+      const eased = this.easeOutCubic(progress);
+      el.opacity = startOpacity * (1 - eased);
+      this.markDirty();
       if (progress < 1) {
         requestAnimationFrame(animate);
       } else {
         this.elements = this.elements.filter(e => e.id !== el.id);
         this.selectedIds.delete(el.id);
-        this.needsRender = true;
+        this.cachedElements.delete(el.id);
+        this.markDirty();
         this.emit('elementsChanged');
       }
     };
@@ -375,8 +570,15 @@ export class CanvasEngine {
   updateElement(id: string, updates: Partial<CanvasElement>): void {
     const el = this.elements.find(e => e.id === id);
     if (!el) return;
+
+    const oldBounds = this.cachedElements.get(id)?.bounds;
+    if (oldBounds) {
+      this.markDirtyRect(oldBounds.x, oldBounds.y, oldBounds.width, oldBounds.height);
+    }
+
     Object.assign(el, updates);
-    this.needsRender = true;
+    this.cachedElements.delete(id);
+    this.markDirty();
   }
 
   getElements(): CanvasElement[] {
@@ -386,7 +588,7 @@ export class CanvasEngine {
   panBy(dx: number, dy: number): void {
     this.offsetX += dx;
     this.offsetY += dy;
-    this.needsRender = true;
+    this.markDirty();
   }
 
   panTo(x: number, y: number, animated = false): void {
@@ -394,12 +596,11 @@ export class CanvasEngine {
       this.panAnimStart = { x: this.offsetX, y: this.offsetY };
       this.panAnimEnd = { x, y };
       this.panAnimStartTime = performance.now();
-      this.panAnimDuration = 300;
       this.panAnimating = true;
     } else {
       this.offsetX = x;
       this.offsetY = y;
-      this.needsRender = true;
+      this.markDirty();
     }
   }
 
@@ -415,13 +616,14 @@ export class CanvasEngine {
   }
 
   setZoom(scale: number, centerX?: number, centerY?: number): void {
-    const clamped = Math.max(0.1, Math.min(5, scale));
+    const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, scale));
     if (centerX !== undefined && centerY !== undefined) {
       this.offsetX = centerX - (centerX - this.offsetX) * (clamped / this.zoom);
       this.offsetY = centerY - (centerY - this.offsetY) * (clamped / this.zoom);
     }
     this.zoom = clamped;
-    this.needsRender = true;
+    this.cachedElements.clear();
+    this.markDirty();
   }
 
   getZoom(): number {
@@ -484,7 +686,9 @@ export class CanvasEngine {
 
   setSelected(ids: string[]): void {
     this.selectedIds = new Set(ids);
-    this.needsRender = true;
+    this.selectionAnimStartTime = performance.now();
+    this.selectionAnimating = ids.length > 0;
+    this.markDirty();
   }
 
   getSelectedIds(): string[] {
@@ -500,7 +704,8 @@ export class CanvasEngine {
     this.elements
       .filter(e => !orderedIds.includes(e.id))
       .forEach((el, i) => { el.zIndex = maxZ + i; });
-    this.needsRender = true;
+    this.markDirty();
+    this.cachedElements.clear();
     this.emit('elementsChanged');
   }
 
