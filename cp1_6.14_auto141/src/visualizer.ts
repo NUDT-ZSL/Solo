@@ -20,6 +20,31 @@ interface Particle {
   size: number;
 }
 
+const particleVertexShader = `
+  attribute float aSize;
+  attribute float aAlpha;
+  varying vec3 vColor;
+  varying float vAlpha;
+  void main() {
+    vColor = color;
+    vAlpha = aAlpha;
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    gl_PointSize = aSize * (300.0 / -mvPosition.z);
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`;
+
+const particleFragmentShader = `
+  varying vec3 vColor;
+  varying float vAlpha;
+  void main() {
+    float dist = length(gl_PointCoord - vec2(0.5));
+    if (dist > 0.5) discard;
+    float alpha = smoothstep(0.5, 0.2, dist) * vAlpha;
+    gl_FragColor = vec4(vColor, alpha);
+  }
+`;
+
 export class Visualizer {
   private container: HTMLElement;
   private scene: THREE.Scene;
@@ -27,14 +52,14 @@ export class Visualizer {
   private renderer: THREE.WebGLRenderer;
   private controls: OrbitControls;
   private terrainMesh: THREE.Mesh;
-  private wireframe: THREE.LineSegments;
+  private gridHelper: THREE.GridHelper;
   private terrainGeometry: THREE.PlaneGeometry;
   private particles: Particle[] = [];
   private particleGeometry: THREE.BufferGeometry;
-  private particleMaterial: THREE.PointsMaterial;
+  private particleMaterial: THREE.ShaderMaterial;
   private particleSystem: THREE.Points;
-  private particlePositions: Float32Array;
-  private particleColors: Float32Array;
+  private particleSizes: Float32Array;
+  private particleAlphas: Float32Array;
   private currentParams: EarthquakeParams = { longitude: 0, latitude: 0, magnitude: 5, depth: 10 };
   private waveStartTime: number | null = null;
   private lastParticleSpawn: number = 0;
@@ -78,16 +103,16 @@ export class Visualizer {
     this.setupLights();
     this.terrainGeometry = this.createTerrainGeometry();
     this.terrainMesh = this.createTerrainMesh();
-    this.wireframe = this.createWireframe();
+    this.gridHelper = this.createGridHelper();
     this.scene.add(this.terrainMesh);
-    this.scene.add(this.wireframe);
+    this.scene.add(this.gridHelper);
 
     const particleSetup = this.createParticleSystem();
     this.particleGeometry = particleSetup.geometry;
     this.particleMaterial = particleSetup.material;
     this.particleSystem = particleSetup.system;
-    this.particlePositions = particleSetup.positions;
-    this.particleColors = particleSetup.colors;
+    this.particleSizes = particleSetup.sizes;
+    this.particleAlphas = particleSetup.alphas;
     this.scene.add(this.particleSystem);
 
     this.setCameraPosition();
@@ -133,45 +158,51 @@ export class Visualizer {
     return mesh;
   }
 
-  private createWireframe(): THREE.LineSegments {
-    const edges = new THREE.EdgesGeometry(this.terrainGeometry);
-    const material = new THREE.LineBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.15
-    });
-    return new THREE.LineSegments(edges, material);
+  private createGridHelper(): THREE.GridHelper {
+    const grid = new THREE.GridHelper(
+      TERRAIN_WIDTH,
+      GRID_SIZE,
+      0xffffff,
+      0xffffff
+    );
+    const gridMaterial = grid.material as THREE.Material;
+    gridMaterial.transparent = true;
+    gridMaterial.opacity = 0.2;
+    grid.position.y = 0.01;
+    return grid;
   }
 
   private createParticleSystem(): {
     geometry: THREE.BufferGeometry;
-    material: THREE.PointsMaterial;
+    material: THREE.ShaderMaterial;
     system: THREE.Points;
-    positions: Float32Array;
-    colors: Float32Array;
+    sizes: Float32Array;
+    alphas: Float32Array;
   } {
     const positions = new Float32Array(MAX_PARTICLES * 3);
     const colors = new Float32Array(MAX_PARTICLES * 3);
     const sizes = new Float32Array(MAX_PARTICLES);
+    const alphas = new Float32Array(MAX_PARTICLES);
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+    geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+    geometry.setAttribute('aAlpha', new THREE.BufferAttribute(alphas, 1));
     geometry.setDrawRange(0, 0);
 
-    const material = new THREE.PointsMaterial({
-      size: 0.5,
-      vertexColors: true,
+    const material = new THREE.ShaderMaterial({
+      uniforms: {},
+      vertexShader: particleVertexShader,
+      fragmentShader: particleFragmentShader,
       transparent: true,
-      opacity: 0.9,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
-      sizeAttenuation: true
+      vertexColors: true
     });
 
     const system = new THREE.Points(geometry, material);
-    return { geometry, material, system, positions, colors };
+    return { geometry, material, system, sizes, alphas };
   }
 
   private setCameraPosition(): void {
@@ -205,11 +236,22 @@ export class Visualizer {
     positions.needsUpdate = true;
     this.terrainGeometry.computeVertexNormals();
 
-    const wireframePositions = this.wireframe.geometry.attributes.position;
-    for (let i = 0; i < VERTEX_COUNT; i++) {
-      wireframePositions.setY(i, data.displacements[i]);
+    const gridPositions = this.gridHelper.geometry.attributes.position;
+    if (gridPositions) {
+      for (let i = 0; i < gridPositions.count; i++) {
+        const gx = gridPositions.getX(i);
+        const gz = gridPositions.getZ(i);
+        const gridX = Math.round((gx / TERRAIN_WIDTH + 0.5) * GRID_SIZE);
+        const gridZ = Math.round((gz / TERRAIN_HEIGHT + 0.5) * GRID_SIZE);
+        const clampedX = Math.max(0, Math.min(GRID_SIZE, gridX));
+        const clampedZ = Math.max(0, Math.min(GRID_SIZE, gridZ));
+        const idx = clampedZ * (GRID_SIZE + 1) + clampedX;
+        if (idx >= 0 && idx < VERTEX_COUNT) {
+          gridPositions.setY(i, data.displacements[idx] + 0.01);
+        }
+      }
+      gridPositions.needsUpdate = true;
     }
-    wireframePositions.needsUpdate = true;
 
     this.lastTerrainUpdate = data.timestamp;
   }
@@ -275,6 +317,8 @@ export class Visualizer {
 
     const posAttr = this.particleGeometry.attributes.position as THREE.BufferAttribute;
     const colAttr = this.particleGeometry.attributes.color as THREE.BufferAttribute;
+    const sizeAttr = this.particleGeometry.attributes.aSize as THREE.BufferAttribute;
+    const alphaAttr = this.particleGeometry.attributes.aAlpha as THREE.BufferAttribute;
 
     for (let i = 0; i < this.particles.length; i++) {
       const p = this.particles[i];
@@ -291,11 +335,15 @@ export class Visualizer {
       const color = new THREE.Color().lerpColors(COLOR_START, COLOR_END, distRatio);
       const alpha = 1.0 - 0.8 * lifeRatio;
 
-      colAttr.setXYZ(i, color.r * alpha, color.g * alpha, color.b * alpha);
+      colAttr.setXYZ(i, color.r, color.g, color.b);
+      sizeAttr.setX(i, p.size);
+      alphaAttr.setX(i, alpha);
     }
 
     posAttr.needsUpdate = true;
     colAttr.needsUpdate = true;
+    sizeAttr.needsUpdate = true;
+    alphaAttr.needsUpdate = true;
     this.particleGeometry.setDrawRange(0, this.particles.length);
 
     eventBus.emit('performance:report', {
@@ -336,8 +384,8 @@ export class Visualizer {
     window.removeEventListener('resize', this.handleResize.bind(this));
     this.terrainGeometry.dispose();
     (this.terrainMesh.material as THREE.Material).dispose();
-    this.wireframe.geometry.dispose();
-    (this.wireframe.material as THREE.Material).dispose();
+    this.gridHelper.geometry.dispose();
+    (this.gridHelper.material as THREE.Material).dispose();
     this.particleGeometry.dispose();
     this.particleMaterial.dispose();
     this.renderer.dispose();
