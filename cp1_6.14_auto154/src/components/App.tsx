@@ -14,8 +14,10 @@ function formatTime(seconds: number): string {
 export default function App() {
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const progressRef = useRef<HTMLDivElement>(null);
   const analyzerRef = useRef<AudioAnalyzer | null>(null);
   const bloomRef = useRef<ParticleBloom | null>(null);
+  const isDraggingRef = useRef<boolean>(false);
 
   const [fileName, setFileName] = useState<string>('');
   const [loadProgress, setLoadProgress] = useState<number>(100);
@@ -101,14 +103,49 @@ export default function App() {
     bloomRef.current?.setFlowerDensity(d);
   }, []);
 
-  const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (duration <= 0) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const ratio = (e.clientX - rect.left) / rect.width;
-    const time = ratio * duration;
+  const calculateTimeFromEvent = useCallback((clientX: number): number | null => {
+    if (!progressRef.current || duration <= 0) return null;
+    const rect = progressRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return ratio * duration;
+  }, [duration]);
+
+  const performSeek = useCallback((time: number) => {
+    if (!isFinite(time) || time < 0) return;
     setCurrentTime(time);
     analyzerRef.current?.seek(time);
-  }, [duration]);
+  }, []);
+
+  const handleProgressMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const time = calculateTimeFromEvent(e.clientX);
+    if (time !== null) {
+      isDraggingRef.current = true;
+      performSeek(time);
+    }
+  }, [calculateTimeFromEvent, performSeek]);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDraggingRef.current) {
+        const time = calculateTimeFromEvent(e.clientX);
+        if (time !== null) {
+          performSeek(time);
+        }
+      }
+    };
+
+    const handleMouseUp = () => {
+      isDraggingRef.current = false;
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [calculateTimeFromEvent, performSeek]);
 
   const handleUploadClick = useCallback(() => {
     fileInputRef.current?.click();
@@ -122,7 +159,11 @@ export default function App() {
 
       <div className="top-bar">
         <div className="file-name">{fileName || '请选择音频文件开始体验'}</div>
-        <div className="progress-container" onClick={handleSeek}>
+        <div
+          className="progress-container"
+          ref={progressRef}
+          onMouseDown={handleProgressMouseDown}
+        >
           <div
             className="progress-fill"
             style={{ width: `${progressPercent}%` }}

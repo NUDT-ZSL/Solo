@@ -21,6 +21,7 @@ export class AudioAnalyzer {
   private pausedAt: number = 0;
   private isPlaying: boolean = false;
   private fileName: string = '';
+  private decodeProgressTimer: number | null = null;
 
   constructor() {
     this.initAudioContext();
@@ -37,8 +38,8 @@ export class AudioAnalyzer {
       this.gainNode.connect(this.audioContext.destination);
       this.analyser.connect(this.gainNode);
       const bufferLength = this.analyser.frequencyBinCount;
-      this.frequencyData = new Uint8Array(new ArrayBuffer(bufferLength));
-      this.timeDomainData = new Uint8Array(new ArrayBuffer(bufferLength));
+      this.frequencyData = new Uint8Array(new ArrayBuffer(bufferLength)) as Uint8Array<ArrayBuffer>;
+      this.timeDomainData = new Uint8Array(new ArrayBuffer(bufferLength)) as Uint8Array<ArrayBuffer>;
     } catch (e) {
       console.error('Web Audio API not supported:', e);
     }
@@ -56,15 +57,60 @@ export class AudioAnalyzer {
     eventBus.emit('audio:fileName', file.name);
     eventBus.emit('audio:loadProgress', 0);
 
-    const arrayBuffer = await this.readFileAsArrayBuffer(file);
-    eventBus.emit('audio:loadProgress', 50);
+    let lastReportedProgress = 0;
+    const reportProgress = (percent: number) => {
+      const rounded = Math.round(percent);
+      if (rounded > lastReportedProgress) {
+        lastReportedProgress = rounded;
+        eventBus.emit('audio:loadProgress', rounded);
+      }
+    };
+
+    let readProgress = 0;
+    const readProgressInterval = setInterval(() => {
+      if (readProgress < 45) {
+        readProgress += 1;
+        reportProgress(readProgress);
+      }
+    }, 30);
+
+    const arrayBuffer = await this.readFileAsArrayBuffer(file, reportProgress);
+    clearInterval(readProgressInterval);
+    readProgress = 50;
+    reportProgress(readProgress);
 
     if (!this.audioContext) {
       this.initAudioContext();
     }
 
-    this.audioBuffer = await this.audioContext!.decodeAudioData(arrayBuffer.slice(0));
-    eventBus.emit('audio:loadProgress', 100);
+    let decodeProgress = 50;
+    const decodeStart = Date.now();
+    const expectedDecodeTime = Math.min(3000, Math.max(500, file.size / 50000));
+
+    this.decodeProgressTimer = window.setInterval(() => {
+      const elapsed = Date.now() - decodeStart;
+      const simulatedProgress = Math.min(95, 50 + (elapsed / expectedDecodeTime) * 45);
+      if (simulatedProgress > decodeProgress) {
+        decodeProgress = simulatedProgress;
+        reportProgress(decodeProgress);
+      }
+    }, 50);
+
+    try {
+      this.audioBuffer = await this.audioContext!.decodeAudioData(arrayBuffer.slice(0));
+      if (this.decodeProgressTimer !== null) {
+        clearInterval(this.decodeProgressTimer);
+        this.decodeProgressTimer = null;
+      }
+      reportProgress(100);
+    } catch (e) {
+      if (this.decodeProgressTimer !== null) {
+        clearInterval(this.decodeProgressTimer);
+        this.decodeProgressTimer = null;
+      }
+      throw e;
+    }
+
     eventBus.emit('audio:loaded', {
       duration: this.audioBuffer.duration,
       fileName: file.name
@@ -73,17 +119,27 @@ export class AudioAnalyzer {
     this.play();
   }
 
-  private readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
+  private readFileAsArrayBuffer(file: File, onProgress: (percent: number) => void): Promise<ArrayBuffer> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
+      let hasProgressEvent = false;
+
       reader.onprogress = (e) => {
         if (e.lengthComputable) {
-          const percent = Math.round((e.loaded / e.total) * 40);
-          eventBus.emit('audio:loadProgress', percent);
+          hasProgressEvent = true;
+          const percent = (e.loaded / e.total) * 50;
+          onProgress(percent);
         }
       };
-      reader.onload = () => resolve(reader.result as ArrayBuffer);
-      reader.onerror = reject;
+      reader.onload = () => {
+        if (!hasProgressEvent) {
+          onProgress(50);
+        }
+        resolve(reader.result as ArrayBuffer);
+      };
+      reader.onerror = () => {
+        reject(reader.error || new Error('文件读取失败'));
+      };
       reader.readAsArrayBuffer(file);
     });
   }
@@ -171,8 +227,8 @@ export class AudioAnalyzer {
       const bassEnergy = this.calculateBandEnergy(20, 120);
 
       const audioData: AudioData = {
-        frequencyData: new Uint8Array(this.frequencyData),
-        timeDomainData: new Uint8Array(this.timeDomainData),
+        frequencyData: new Uint8Array(this.frequencyData) as Uint8Array<ArrayBuffer>,
+        timeDomainData: new Uint8Array(this.timeDomainData) as Uint8Array<ArrayBuffer>,
         lowEnergy,
         midHighEnergy,
         bassEnergy
@@ -224,6 +280,10 @@ export class AudioAnalyzer {
   destroy(): void {
     this.stopAnalysis();
     this.stopSource();
+    if (this.decodeProgressTimer !== null) {
+      clearInterval(this.decodeProgressTimer);
+      this.decodeProgressTimer = null;
+    }
     if (this.audioContext) {
       this.audioContext.close();
       this.audioContext = null;

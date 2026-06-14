@@ -31,6 +31,8 @@ interface FallingPetal {
   size: number;
   opacity: number;
   phase: number;
+  phaseOffsetX: number;
+  phaseOffsetZ: number;
   frequency: number;
   amplitude: number;
   life: number;
@@ -65,6 +67,11 @@ export class ParticleBloom {
   private usedParticleSlots: boolean[] = [];
   private flowerParticleMap: Map<number, number[]> = new Map();
   private fallingParticleMap: Map<number, number> = new Map();
+  private smoothedLowEnergy: number = 0;
+  private smoothedMidHighEnergy: number = 0;
+  private smoothedBassEnergy: number = 0;
+  private readonly SMOOTHING_FACTOR: number = 0.92;
+  private readonly ENERGY_THRESHOLD: number = 0.08;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -284,8 +291,10 @@ export class ParticleBloom {
       size: Math.random() * 0.4 + 0.3,
       opacity: 1,
       phase: Math.random() * Math.PI * 2,
-      frequency: Math.random() * 0.02 + 0.01,
-      amplitude: Math.random() * 0.5 + 0.25,
+      phaseOffsetX: Math.random() * Math.PI * 2,
+      phaseOffsetZ: Math.random() * Math.PI * 2,
+      frequency: Math.random() * 0.015 + 0.008,
+      amplitude: Math.random() * 5 + 5,
       life: 0,
       maxLife: 8 + Math.random() * 6,
       alive: true
@@ -295,17 +304,31 @@ export class ParticleBloom {
     this.fallingParticleMap.set(petal.id, slot);
   }
 
-  private updateFlowers(delta: number, lowEnergy: number, midHighEnergy: number): void {
-    const growthSpeed = 0.15 + lowEnergy * 0.6;
-    const bloomSpeed = 0.1 + lowEnergy * 0.5;
+  private updateFlowers(delta: number, rawLowEnergy: number, rawMidHighEnergy: number): void {
+    this.smoothedLowEnergy = this.smoothedLowEnergy * this.SMOOTHING_FACTOR + rawLowEnergy * (1 - this.SMOOTHING_FACTOR);
+    this.smoothedMidHighEnergy = this.smoothedMidHighEnergy * this.SMOOTHING_FACTOR + rawMidHighEnergy * (1 - this.SMOOTHING_FACTOR);
+
+    const lowEnergy = this.smoothedLowEnergy;
+    const midHighEnergy = this.smoothedMidHighEnergy;
+
+    const baseGrowthSpeed = 0.12;
+    const baseBloomSpeed = 0.08;
+    const hasEnoughEnergy = lowEnergy > this.ENERGY_THRESHOLD;
+    const growthBoost = hasEnoughEnergy ? Math.max(0, (lowEnergy - this.ENERGY_THRESHOLD)) * 0.8 : 0;
+    const bloomBoost = hasEnoughEnergy ? Math.max(0, (lowEnergy - this.ENERGY_THRESHOLD)) * 0.6 : 0;
+
+    const growthSpeed = baseGrowthSpeed + growthBoost;
+    const bloomSpeed = baseBloomSpeed + bloomBoost;
 
     for (let i = this.flowers.length - 1; i >= 0; i--) {
       const flower = this.flowers[i];
 
       if (flower.growth < 1) {
-        flower.growth = Math.min(1, flower.growth + growthSpeed * delta);
+        const newGrowth = flower.growth + growthSpeed * delta;
+        flower.growth = Math.min(1, Math.max(flower.growth, newGrowth));
       } else if (!flower.isBloomed) {
-        flower.bloomProgress = Math.min(1, flower.bloomProgress + bloomSpeed * delta);
+        const newBloom = flower.bloomProgress + bloomSpeed * delta;
+        flower.bloomProgress = Math.min(1, Math.max(flower.bloomProgress, newBloom));
         if (flower.bloomProgress >= 1) {
           flower.isBloomed = true;
         }
@@ -473,8 +496,8 @@ export class ParticleBloom {
       petal.life += delta;
       petal.phase += petal.frequency;
 
-      const swayX = Math.sin(petal.phase) * petal.amplitude;
-      const swayZ = Math.cos(petal.phase * 0.7) * petal.amplitude * 0.8;
+      const swayX = Math.sin(petal.phase + petal.phaseOffsetX) * petal.amplitude;
+      const swayZ = Math.sin(petal.phase * 0.8 + petal.phaseOffsetZ) * petal.amplitude * 0.7;
 
       petal.velocity.y -= 0.015 * delta;
       petal.position.x += petal.velocity.x * delta + swayX * delta;
@@ -546,7 +569,30 @@ export class ParticleBloom {
   }
 
   setFlowerDensity(density: number): void {
-    this.flowerDensity = Math.max(30, Math.min(200, density));
+    const newDensity = Math.max(30, Math.min(200, density));
+    const oldDensity = this.flowerDensity;
+    this.flowerDensity = newDensity;
+
+    if (newDensity > oldDensity) {
+      const targetFlowerCount = Math.min(newDensity, MAX_FLOWERS);
+      const flowersToAdd = Math.max(0, targetFlowerCount - this.flowers.length);
+      for (let i = 0; i < flowersToAdd; i++) {
+        setTimeout(() => {
+          if (this.flowers.length < this.flowerDensity) {
+            this.spawnFlower();
+          }
+        }, i * 150);
+      }
+    } else if (newDensity < oldDensity) {
+      const flowersToRemove = Math.max(0, this.flowers.length - newDensity);
+      for (let i = 0; i < flowersToRemove; i++) {
+        const idx = this.flowers.length - 1 - i;
+        if (idx >= 0 && this.flowers[idx]) {
+          const flower = this.flowers[idx];
+          flower.bloomTimer = 999;
+        }
+      }
+    }
   }
 
   private handleResize(): void {
