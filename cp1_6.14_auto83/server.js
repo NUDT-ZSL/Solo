@@ -1,8 +1,11 @@
+import { createRequire } from 'module'
 import express from 'express'
 import cors from 'cors'
-import { Low } from 'lowdb'
-import { JSONFile } from 'lowdb/node'
 import { v4 as uuidv4 } from 'uuid'
+
+const require = createRequire(import.meta.url)
+const low = require('lowdb')
+const FileSync = require('lowdb/adapters/FileSync')
 
 const app = express()
 const PORT = 3001
@@ -356,24 +359,21 @@ const defaultData = {
   ]
 }
 
-const file = new JSONFile('db.json')
-const db = new Low(file, defaultData)
-await db.read()
-if (!db.data) {
-  db.data = defaultData
-}
-await db.write()
+const adapter = new FileSync('db.json')
+const db = low(adapter)
+db.defaults(defaultData).write()
 
 app.get('/api/artworks', (req, res) => {
   const page = parseInt(req.query.page) || 1
   const limit = parseInt(req.query.limit) || 12
   const start = (page - 1) * limit
   const end = start + limit
-  const artworks = db.data.artworks.slice(start, end).map(({ comments, ...rest }) => ({
+  const allArtworks = db.get('artworks').value()
+  const artworks = allArtworks.slice(start, end).map(({ comments, ...rest }) => ({
     ...rest,
     commentCount: comments.length
   }))
-  const total = db.data.artworks.length
+  const total = allArtworks.length
   res.json({
     data: artworks,
     pagination: {
@@ -387,14 +387,14 @@ app.get('/api/artworks', (req, res) => {
 
 app.get('/api/artworks/:id', (req, res) => {
   const { id } = req.params
-  const artwork = db.data.artworks.find(a => a.id === id)
+  const artwork = db.get('artworks').find({ id }).value()
   if (!artwork) {
     return res.status(404).json({ error: '作品不存在' })
   }
   res.json(artwork)
 })
 
-app.post('/api/artworks', async (req, res) => {
+app.post('/api/artworks', (req, res) => {
   const { title, author, year, size, material, description, image } = req.body
   if (!title || !author || !year || !size || !material || !description || !image) {
     return res.status(400).json({ error: '请填写所有字段并上传图片' })
@@ -414,18 +414,17 @@ app.post('/api/artworks', async (req, res) => {
     createdAt: new Date().toISOString(),
     comments: []
   }
-  db.data.artworks.unshift(newArtwork)
-  await db.write()
+  db.get('artworks').unshift(newArtwork).write()
   res.status(201).json(newArtwork)
 })
 
-app.post('/api/artworks/:id/comments', async (req, res) => {
+app.post('/api/artworks/:id/comments', (req, res) => {
   const { id } = req.params
   const { username, content, avatar } = req.body
   if (!username || !content) {
     return res.status(400).json({ error: '用户名和评论内容不能为空' })
   }
-  const artwork = db.data.artworks.find(a => a.id === id)
+  const artwork = db.get('artworks').find({ id }).value()
   if (!artwork) {
     return res.status(404).json({ error: '作品不存在' })
   }
@@ -436,22 +435,20 @@ app.post('/api/artworks/:id/comments', async (req, res) => {
     avatar: avatar || `https://i.pravatar.cc/80?u=${encodeURIComponent(username)}`,
     createdAt: new Date().toISOString()
   }
-  artwork.comments.push(newComment)
-  await db.write()
+  db.get('artworks').find({ id }).get('comments').push(newComment).write()
   res.status(201).json(newComment)
 })
 
-app.post('/api/artworks/:id/like', async (req, res) => {
+app.post('/api/artworks/:id/like', (req, res) => {
   const { id } = req.params
-  const artwork = db.data.artworks.find(a => a.id === id)
+  const artwork = db.get('artworks').find({ id }).value()
   if (!artwork) {
     return res.status(404).json({ error: '作品不存在' })
   }
-  artwork.liked = !artwork.liked
-  artwork.likes += artwork.liked ? 1 : -1
-  if (artwork.likes < 0) artwork.likes = 0
-  await db.write()
-  res.json({ liked: artwork.liked, likes: artwork.likes })
+  const newLiked = !artwork.liked
+  const newLikes = Math.max(0, artwork.likes + (newLiked ? 1 : -1))
+  db.get('artworks').find({ id }).assign({ liked: newLiked, likes: newLikes }).write()
+  res.json({ liked: newLiked, likes: newLikes })
 })
 
 app.listen(PORT, () => {
