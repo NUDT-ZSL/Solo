@@ -64,6 +64,7 @@ class HeatVortexApp {
     window.addEventListener('resize', this.onWindowResize.bind(this));
     eventBus.on('reset:camera', this.resetCamera.bind(this));
     eventBus.on('params:changed', this.onParamsChanged.bind(this));
+    eventBus.on('interaction:groundClicked', this.onGroundClicked.bind(this));
   }
 
   private initScene(): void {
@@ -100,14 +101,16 @@ class HeatVortexApp {
       this.interactionModule.setGroundMesh(groundMesh);
     }
 
-    this.setupInteractionListeners();
+    const initialCameraPos = new THREE.Vector3(0, 50, 50);
+    const initialLookAt = new THREE.Vector3(0, 0, 0);
+    this.interactionModule.setInitialCameraPosition(initialCameraPos, initialLookAt);
+
+    this.simulationModule.start();
   }
 
-  private setupInteractionListeners(): void {
-    eventBus.on('interaction:groundClicked', (point: THREE.Vector3) => {
-      const temperature = this.simulationModule.getTemperatureAtPosition(point.x, point.z);
-      eventBus.emit('interaction:temperatureRead', { point, temperature });
-    });
+  private onGroundClicked(point: THREE.Vector3): void {
+    const temperature = this.simulationModule.getTemperatureAtPosition(point.x, point.z);
+    eventBus.emit('interaction:temperatureRead', { point, temperature });
   }
 
   private onWindowResize(): void {
@@ -115,6 +118,7 @@ class HeatVortexApp {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.interactionModule.handleResize();
+    this.uiModule.handleResize();
   }
 
   private onParamsChanged(params: any): void {

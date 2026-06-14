@@ -7,13 +7,22 @@ export class VisualizationModule {
   private eventBus: EventBus;
 
   private groundMesh: THREE.Mesh | null = null;
+  private gridHelper: THREE.GridHelper | null = null;
   private buildingsGroup: THREE.Group | null = null;
   private heatMapMesh: THREE.Mesh | null = null;
-  private streamLinesGroup: THREE.Group | null = null;
+  private streamLinesMesh: THREE.LineSegments | null = null;
 
   private gridSize: number = 50;
   private gridResolution: number = 50;
   private heatGrid: Float32Array | null = null;
+  private heatMin: number = 0;
+  private heatMax: number = 1;
+
+  private displayMode: 'heatmap' | 'streamlines' | 'both' = 'both';
+
+  private maxStreamLines: number = 300;
+  private verticesPerLine: number = 20;
+  private streamLineGeometry: THREE.BufferGeometry | null = null;
 
   constructor(scene: THREE.Scene, eventBus: EventBus) {
     this.scene = scene;
@@ -25,7 +34,7 @@ export class VisualizationModule {
     this.createGrid();
     this.createBuildingsGroup();
     this.createHeatMap();
-    this.createStreamLinesGroup();
+    this.createStreamLines();
     this.setupEventListeners();
   }
 
@@ -44,6 +53,7 @@ export class VisualizationModule {
 
     this.eventBus.on('simulation:paramsUpdated', (params: SimulationParams) => {
       this.updateDisplayMode(params.displayMode);
+      this.updateHeatRange(params.heatSourceIntensity);
     });
   }
 
@@ -64,11 +74,11 @@ export class VisualizationModule {
   }
 
   private createGrid(): void {
-    const gridHelper = new THREE.GridHelper(this.gridSize, 50, 0x555555, 0x555555);
-    gridHelper.position.y = 0.01;
-    (gridHelper.material as THREE.Material).transparent = true;
-    (gridHelper.material as THREE.Material).opacity = 0.5;
-    this.scene.add(gridHelper);
+    this.gridHelper = new THREE.GridHelper(this.gridSize, 50, 0x555555, 0x555555);
+    this.gridHelper.position.y = 0.01;
+    (this.gridHelper.material as THREE.Material).transparent = true;
+    (this.gridHelper.material as THREE.Material).opacity = 0.5;
+    this.scene.add(this.gridHelper);
   }
 
   private createBuildingsGroup(): void {
@@ -119,11 +129,24 @@ export class VisualizationModule {
     geometry.attributes.color.needsUpdate = true;
   }
 
-  private createStreamLinesGroup(): void {
-    const group = new THREE.Group();
-    group.name = 'streamlines';
-    this.scene.add(group);
-    this.streamLinesGroup = group;
+  private createStreamLines(): void {
+    const totalVertices = this.maxStreamLines * (this.verticesPerLine - 1) * 2;
+    const positions = new Float32Array(totalVertices * 3);
+
+    this.streamLineGeometry = new THREE.BufferGeometry();
+    this.streamLineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    this.streamLineGeometry.setDrawRange(0, 0);
+
+    const material = new THREE.LineBasicMaterial({
+      color: new THREE.Color(200 / 255, 240 / 255, 255 / 255),
+      transparent: true,
+      opacity: 0.3,
+    });
+
+    const lineSegments = new THREE.LineSegments(this.streamLineGeometry, material);
+    lineSegments.name = 'streamlines';
+    this.scene.add(lineSegments);
+    this.streamLinesMesh = lineSegments;
   }
 
   public updateHeatGrid(
@@ -138,17 +161,26 @@ export class VisualizationModule {
     this.updateHeatMapColors();
   }
 
+  private updateHeatRange(heatSourceIntensity: number): void {
+    this.heatMin = 0;
+    this.heatMax = Math.max(0.1, heatSourceIntensity / 50);
+    this.updateHeatMapColors();
+  }
+
   private updateHeatMapColors(): void {
     if (!this.heatMapMesh || !this.heatGrid) return;
 
     const geometry = this.heatMapMesh.geometry as THREE.PlaneGeometry;
     const colors = geometry.attributes.color as THREE.BufferAttribute;
+    const range = this.heatMax - this.heatMin;
 
     for (let z = 0; z < this.gridResolution; z++) {
       for (let x = 0; x < this.gridResolution; x++) {
         const idx = z * this.gridResolution + x;
         const heat = this.heatGrid[idx];
-        const color = this.getHeatColor(heat);
+        const normalized = range > 0 ? (heat - this.heatMin) / range : 0;
+        const clamped = Math.max(0, Math.min(1, normalized));
+        const color = this.getHeatColor(clamped);
         const vertexIdx = z * this.gridResolution + x;
 
         colors.setXYZ(vertexIdx, color.r, color.g, color.b);
@@ -163,16 +195,16 @@ export class VisualizationModule {
 
     if (t < 0.25) {
       const f = t / 0.25;
-      color.setRGB(0, 0.5 * f, 1);
+      color.setRGB(0, 0.3 + 0.4 * f, 0.6 + 0.4 * f);
     } else if (t < 0.5) {
       const f = (t - 0.25) / 0.25;
-      color.setRGB(0, 0.5 + 0.5 * f, 1 - f);
+      color.setRGB(0, 0.7 + 0.3 * f, 1 - f);
     } else if (t < 0.75) {
       const f = (t - 0.5) / 0.25;
-      color.setRGB(f, 1, 0);
+      color.setRGB(f * 0.8 + 0.2, 1 - f * 0.3, 0);
     } else {
       const f = (t - 0.75) / 0.25;
-      color.setRGB(1, 1 - f * 0.8, 0);
+      color.setRGB(1, 0.7 - f * 0.5, 0);
     }
 
     return color;
@@ -210,48 +242,51 @@ export class VisualizationModule {
   }
 
   public updateStreamLines(streamLines: StreamLine[]): void {
-    if (!this.streamLinesGroup) return;
+    if (!this.streamLineGeometry || !this.streamLinesMesh) return;
 
-    while (this.streamLinesGroup.children.length > 0) {
-      const child = this.streamLinesGroup.children[0];
-      this.streamLinesGroup.remove(child);
-      if (child instanceof THREE.Line) {
-        child.geometry.dispose();
-        if (Array.isArray(child.material)) {
-          child.material.forEach((m) => m.dispose());
-        } else {
-          child.material.dispose();
-        }
+    const positions = this.streamLineGeometry.attributes.position.array as Float32Array;
+    let vertexIndex = 0;
+
+    const lineCount = Math.min(streamLines.length, this.maxStreamLines);
+
+    for (let lineIdx = 0; lineIdx < lineCount; lineIdx++) {
+      const line = streamLines[lineIdx];
+      const positionsCount = line.positions.length;
+
+      for (let i = 0; i < positionsCount - 1; i++) {
+        const p1 = line.positions[i];
+        const p2 = line.positions[i + 1];
+
+        const idx = vertexIndex * 3;
+        positions[idx] = p1.x;
+        positions[idx + 1] = p1.y;
+        positions[idx + 2] = p1.z;
+
+        const idx2 = (vertexIndex + 1) * 3;
+        positions[idx2] = p2.x;
+        positions[idx2 + 1] = p2.y;
+        positions[idx2 + 2] = p2.z;
+
+        vertexIndex += 2;
       }
     }
 
-    const lineColor = new THREE.Color(200 / 255, 240 / 255, 255 / 255);
-
-    for (const line of streamLines) {
-      const points: THREE.Vector3[] = [];
-      for (let i = 0; i < line.positions.length; i++) {
-        points.push(line.positions[i].clone());
-      }
-
-      const geometry = new THREE.BufferGeometry().setFromPoints(points);
-      const material = new THREE.LineBasicMaterial({
-        color: lineColor,
-        transparent: true,
-        opacity: 0.3,
-        linewidth: 1.5,
-      });
-
-      const lineMesh = new THREE.Line(geometry, material);
-      this.streamLinesGroup.add(lineMesh);
-    }
+    this.streamLineGeometry.setDrawRange(0, vertexIndex);
+    this.streamLineGeometry.attributes.position.needsUpdate = true;
+    this.streamLineGeometry.computeBoundingSphere();
   }
 
   public updateDisplayMode(mode: 'heatmap' | 'streamlines' | 'both'): void {
+    this.displayMode = mode;
+
     if (this.heatMapMesh) {
-      this.heatMapMesh.visible = mode === 'heatmap' || mode === 'both';
+      this.heatMapMesh.visible = this.displayMode === 'heatmap' || this.displayMode === 'both';
     }
-    if (this.streamLinesGroup) {
-      this.streamLinesGroup.visible = mode === 'streamlines' || mode === 'both';
+    if (this.streamLinesMesh) {
+      this.streamLinesMesh.visible = this.displayMode === 'streamlines' || this.displayMode === 'both';
+    }
+    if (this.gridHelper) {
+      this.gridHelper.visible = true;
     }
   }
 
@@ -264,6 +299,10 @@ export class VisualizationModule {
 
   public getGroundMesh(): THREE.Mesh | null {
     return this.groundMesh;
+  }
+
+  public getGridHelper(): THREE.GridHelper | null {
+    return this.gridHelper;
   }
 
   public getGridSize(): number {

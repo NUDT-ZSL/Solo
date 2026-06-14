@@ -127,6 +127,17 @@ export class UIModule {
       this.gui = null;
     }
   }
+
+  public handleResize(): void {
+    const uiPanel = document.getElementById('ui-panel');
+    const toggleBtn = document.getElementById('mobile-toggle');
+    if (!uiPanel || !toggleBtn) return;
+
+    if (window.innerWidth < 768) {
+      uiPanel.classList.remove('expanded');
+      toggleBtn.textContent = '展开面板';
+    }
+  }
 }
 
 export default UIModule;

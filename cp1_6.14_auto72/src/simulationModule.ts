@@ -53,6 +53,9 @@ export class SimulationModule {
     this.generateStreamLines();
     this.updateHeatGrid();
     this.setupEventListeners();
+  }
+
+  public start(): void {
     this.broadcastSimulationData();
   }
 
