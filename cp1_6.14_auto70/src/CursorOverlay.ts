@@ -1,9 +1,11 @@
-import { EditorCore, Position } from './EditorCore';
+import { EditorCore, UserCursor } from './EditorCore';
 
-interface CursorState {
+interface RemoteCursorState {
   userId: string;
   userName: string;
   color: string;
+  line: number;
+  column: number;
   pos: number;
   lastUpdate: number;
 }
@@ -12,20 +14,21 @@ export class CursorOverlay {
   private editorCore: EditorCore;
   private container: HTMLElement;
   private overlay: HTMLElement;
-  private cursors: Map<string, CursorState> = new Map();
+  private cursors: Map<string, RemoteCursorState> = new Map();
   private cursorElements: Map<string, HTMLElement> = new Map();
   private labelElements: Map<string, HTMLElement> = new Map();
   private isActive = false;
   private rafId: number | null = null;
   private cursorTimeoutMs = 5000;
   private cleanupInterval: number | null = null;
+  private unsubScroll: (() => void) | null = null;
 
   private handleRemoteCursor = (event: Event) => {
-    const customEvent = event as CustomEvent<Position>;
+    const customEvent = event as CustomEvent<UserCursor>;
     this.updateCursor(customEvent.detail);
   };
 
-  private handleScroll = () => {
+  private handleScroll = (_scrollTop: number, _scrollLeft: number) => {
     this.scheduleRender();
   };
 
@@ -50,11 +53,8 @@ export class CursorOverlay {
     this.container.appendChild(this.overlay);
 
     window.addEventListener('remote-cursor', this.handleRemoteCursor);
-    
-    const scrollContainer = this.editorCore.getScrollContainer();
-    if (scrollContainer) {
-      scrollContainer.addEventListener('scroll', this.handleScroll, { passive: true });
-    }
+
+    this.unsubScroll = this.editorCore.onScroll(this.handleScroll);
 
     this.isActive = true;
     this.startCursorCleanup();
@@ -63,7 +63,7 @@ export class CursorOverlay {
 
   destroy(): void {
     this.isActive = false;
-    
+
     if (this.rafId !== null) {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
@@ -74,12 +74,12 @@ export class CursorOverlay {
       this.cleanupInterval = null;
     }
 
-    window.removeEventListener('remote-cursor', this.handleRemoteCursor);
-    
-    const scrollContainer = this.editorCore.getScrollContainer();
-    if (scrollContainer) {
-      scrollContainer.removeEventListener('scroll', this.handleScroll);
+    if (this.unsubScroll) {
+      this.unsubScroll();
+      this.unsubScroll = null;
     }
+
+    window.removeEventListener('remote-cursor', this.handleRemoteCursor);
 
     this.cursorElements.forEach(el => el.remove());
     this.labelElements.forEach(el => el.remove());
@@ -92,10 +92,15 @@ export class CursorOverlay {
     }
   }
 
-  private updateCursor(position: Position): void {
+  private updateCursor(userCursor: UserCursor): void {
     const now = Date.now();
-    this.cursors.set(position.userId, {
-      ...position,
+    this.cursors.set(userCursor.userId, {
+      userId: userCursor.userId,
+      userName: userCursor.userName,
+      color: userCursor.color,
+      line: userCursor.position.line,
+      column: userCursor.position.column,
+      pos: userCursor.position.pos,
       lastUpdate: now
     });
     this.scheduleRender();
@@ -103,13 +108,13 @@ export class CursorOverlay {
 
   private removeCursor(userId: string): void {
     this.cursors.delete(userId);
-    
+
     const cursorEl = this.cursorElements.get(userId);
     if (cursorEl) {
       cursorEl.remove();
       this.cursorElements.delete(userId);
     }
-    
+
     const labelEl = this.labelElements.get(userId);
     if (labelEl) {
       labelEl.remove();
@@ -121,20 +126,20 @@ export class CursorOverlay {
     this.cleanupInterval = window.setInterval(() => {
       const now = Date.now();
       const toRemove: string[] = [];
-      
+
       this.cursors.forEach((cursor, userId) => {
         if (now - cursor.lastUpdate > this.cursorTimeoutMs) {
           toRemove.push(userId);
         }
       });
-      
+
       toRemove.forEach(userId => this.removeCursor(userId));
     }, 1000);
   }
 
   private scheduleRender(): void {
     if (!this.isActive || this.rafId !== null) return;
-    
+
     this.rafId = requestAnimationFrame(() => {
       this.rafId = null;
       this.render();
@@ -148,61 +153,79 @@ export class CursorOverlay {
     if (!scrollContainer) return;
 
     this.cursors.forEach((cursor) => {
-      const coords = this.editorCore.posToCoords(cursor.pos);
-      if (!coords) return;
-
-      let cursorEl = this.cursorElements.get(cursor.userId);
-      let labelEl = this.labelElements.get(cursor.userId);
-
-      if (!cursorEl) {
-        cursorEl = document.createElement('div');
-        cursorEl.style.cssText = `
-          position: absolute;
-          width: 2px;
-          background-color: ${cursor.color};
-          pointer-events: none;
-          transition: opacity 0.3s ease;
-        `;
-        this.overlay.appendChild(cursorEl);
-        this.cursorElements.set(cursor.userId, cursorEl);
+      const coords = this.editorCore.coordsAtLineColumn(cursor.line, cursor.column);
+      if (!coords) {
+        const fallbackCoords = this.editorCore.coordsAtPos(cursor.pos);
+        if (!fallbackCoords) return;
+        this.renderCursorElement(cursor, fallbackCoords.top, fallbackCoords.left);
+      } else {
+        this.renderCursorElement(cursor, coords.top, coords.left);
       }
-
-      if (!labelEl) {
-        labelEl = document.createElement('div');
-        labelEl.textContent = cursor.userName;
-        labelEl.style.cssText = `
-          position: absolute;
-          font-size: 11px;
-          color: #ffffff;
-          background-color: rgba(0, 0, 0, 0.7);
-          padding: 2px 6px;
-          border-radius: 4px;
-          white-space: nowrap;
-          pointer-events: none;
-          transform: translateX(-50%);
-          transition: opacity 0.3s ease;
-          z-index: 11;
-        `;
-        this.overlay.appendChild(labelEl);
-        this.labelElements.set(cursor.userId, labelEl);
-      }
-
-      const lineHeight = 21;
-      const cursorHeight = lineHeight;
-      
-      cursorEl.style.left = `${coords.left}px`;
-      cursorEl.style.top = `${coords.top}px`;
-      cursorEl.style.height = `${cursorHeight}px`;
-      cursorEl.style.backgroundColor = cursor.color;
-      cursorEl.style.opacity = '1';
-
-      labelEl.style.left = `${coords.left}px`;
-      labelEl.style.top = `${coords.top - 22}px`;
-      labelEl.style.opacity = '1';
     });
+  }
+
+  private renderCursorElement(cursor: RemoteCursorState, top: number, left: number): void {
+    let cursorEl = this.cursorElements.get(cursor.userId);
+    let labelEl = this.labelElements.get(cursor.userId);
+
+    if (!cursorEl) {
+      cursorEl = document.createElement('div');
+      cursorEl.style.cssText = `
+        position: absolute;
+        width: 2px;
+        background-color: ${cursor.color};
+        pointer-events: none;
+        transition: top 0.05s linear, left 0.05s linear, opacity 0.3s ease;
+        box-shadow: 0 0 4px ${cursor.color};
+      `;
+      this.overlay.appendChild(cursorEl);
+      this.cursorElements.set(cursor.userId, cursorEl);
+    }
+
+    if (!labelEl) {
+      labelEl = document.createElement('div');
+      labelEl.textContent = cursor.userName;
+      labelEl.style.cssText = `
+        position: absolute;
+        font-size: 11px;
+        font-weight: 500;
+        color: #ffffff;
+        background-color: ${cursor.color};
+        padding: 2px 6px;
+        border-radius: 4px;
+        white-space: nowrap;
+        pointer-events: none;
+        transform: translateX(-50%);
+        transition: top 0.05s linear, left 0.05s linear, opacity 0.3s ease;
+        z-index: 11;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        letter-spacing: 0.2px;
+      `;
+      this.overlay.appendChild(labelEl);
+      this.labelElements.set(cursor.userId, labelEl);
+    }
+
+    const lineHeight = 21;
+    const cursorHeight = lineHeight;
+
+    cursorEl.style.left = `${left}px`;
+    cursorEl.style.top = `${top}px`;
+    cursorEl.style.height = `${cursorHeight}px`;
+    cursorEl.style.backgroundColor = cursor.color;
+    cursorEl.style.boxShadow = `0 0 4px ${cursor.color}`;
+    cursorEl.style.opacity = '1';
+
+    labelEl.style.left = `${left}px`;
+    labelEl.style.top = `${top - 22}px`;
+    labelEl.style.backgroundColor = cursor.color;
+    labelEl.style.opacity = '1';
   }
 
   clearAllCursors(): void {
     this.cursors.forEach((_, userId) => this.removeCursor(userId));
+  }
+
+  getUserCount(): number {
+    return this.cursors.size;
   }
 }

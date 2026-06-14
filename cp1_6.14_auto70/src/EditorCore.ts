@@ -1,4 +1,4 @@
-import { EditorState, StateField } from '@codemirror/state';
+import { EditorState, StateField, ChangeSpec } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightSpecialChars, drawSelection, highlightActiveLine, rectangularSelection, crosshairCursor } from '@codemirror/view';
 import { markdown } from '@codemirror/lang-markdown';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
@@ -6,7 +6,7 @@ import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, indentOnInp
 import { autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { v4 as uuidv4 } from 'uuid';
 
-export interface Change {
+export interface DocChange {
   id: string;
   from: number;
   to: number;
@@ -15,26 +15,34 @@ export interface Change {
   timestamp: number;
 }
 
-export interface Position {
+export interface CursorPosition {
+  line: number;
+  column: number;
+  pos: number;
+}
+
+export interface UserCursor {
   userId: string;
   userName: string;
-  pos: number;
+  position: CursorPosition;
   color: string;
 }
 
-type ChangeListener = (change: Change) => void;
-type ContentListener = (content: string) => void;
-type PositionListener = (position: Position) => void;
+export type ContentChangeListener = (content: string) => void;
+export type LocalChangeListener = (change: DocChange) => void;
+export type PositionChangeListener = (cursor: UserCursor) => void;
+export type ScrollListener = (scrollTop: number, scrollLeft: number) => void;
 
 export class EditorCore {
   private view: EditorView | null = null;
-  private changeListeners: ChangeListener[] = [];
-  private contentListeners: ContentListener[] = [];
-  private positionListeners: PositionListener[] = [];
+  private contentChangeListeners: ContentChangeListener[] = [];
+  private localChangeListeners: LocalChangeListener[] = [];
+  private positionChangeListeners: PositionChangeListener[] = [];
+  private scrollListeners: ScrollListener[] = [];
   private userId: string;
   private userName: string;
   private userColor: string;
-  private isApplyingRemoteChange = false;
+  private isApplyingRemoteUpdate = false;
   private ignoreNextSelectionChange = false;
 
   constructor(userId: string, userName: string) {
@@ -61,14 +69,13 @@ export class EditorCore {
   }
 
   init(container: HTMLElement, initialContent: string = ''): void {
-
-    const changeHandler = StateField.define<boolean>({
+    const contentChangeHandler = StateField.define<boolean>({
       create: () => false,
       update: (_value, tr) => {
-        if (this.isApplyingRemoteChange) return false;
-        if (tr.docChanged && !this.isApplyingRemoteChange) {
+        if (this.isApplyingRemoteUpdate) return false;
+        if (tr.docChanged && !this.isApplyingRemoteUpdate) {
           tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
-            const change: Change = {
+            const change: DocChange = {
               id: uuidv4(),
               from: fromA,
               to: toA,
@@ -76,27 +83,37 @@ export class EditorCore {
               userId: this.userId,
               timestamp: Date.now()
             };
-            this.notifyChangeListeners(change);
+            this.notifyLocalChangeListeners(change);
           });
           const content = tr.state.doc.toString();
-          this.notifyContentListeners(content);
+          this.notifyContentChangeListeners(content);
         }
         return tr.docChanged;
       }
     });
 
     const positionHandler = EditorView.updateListener.of((update) => {
-      if (update.selectionSet && !this.ignoreNextSelectionChange && !this.isApplyingRemoteChange) {
+      if (update.selectionSet && !this.ignoreNextSelectionChange && !this.isApplyingRemoteUpdate) {
         const pos = update.state.selection.main.head;
-        const position: Position = {
+        const lineInfo = update.state.doc.lineAt(pos);
+        const userCursor: UserCursor = {
           userId: this.userId,
           userName: this.userName,
-          pos,
+          position: {
+            line: lineInfo.number,
+            column: pos - lineInfo.from + 1,
+            pos
+          },
           color: this.userColor
         };
-        this.notifyPositionListeners(position);
+        this.notifyPositionChangeListeners(userCursor);
       }
       this.ignoreNextSelectionChange = false;
+
+      if (update.viewportChanged) {
+        const scrollDom = update.view.scrollDOM;
+        this.notifyScrollListeners(scrollDom.scrollTop, scrollDom.scrollLeft);
+      }
     });
 
     const darkTheme = EditorView.theme({
@@ -174,7 +191,7 @@ export class EditorCore {
           ...foldKeymap,
           ...completionKeymap
         ]),
-        changeHandler,
+        contentChangeHandler,
         positionHandler,
         darkTheme,
         EditorView.lineWrapping
@@ -185,9 +202,22 @@ export class EditorCore {
       state,
       parent: container
     });
+
+    const scrollContainer = this.view.scrollDOM;
+    scrollContainer.addEventListener('scroll', this.handleScroll, { passive: true });
   }
 
+  private handleScroll = () => {
+    if (!this.view) return;
+    const scrollDom = this.view.scrollDOM;
+    this.notifyScrollListeners(scrollDom.scrollTop, scrollDom.scrollLeft);
+  };
+
   destroy(): void {
+    const scrollContainer = this.view?.scrollDOM;
+    if (scrollContainer) {
+      scrollContainer.removeEventListener('scroll', this.handleScroll);
+    }
     if (this.view) {
       this.view.destroy();
       this.view = null;
@@ -199,9 +229,63 @@ export class EditorCore {
     return this.view.state.doc.toString();
   }
 
-  setContent(content: string): void {
+  getCursorPosition(): CursorPosition | null {
+    if (!this.view) return null;
+    const pos = this.view.state.selection.main.head;
+    const lineInfo = this.view.state.doc.lineAt(pos);
+    return {
+      line: lineInfo.number,
+      column: pos - lineInfo.from + 1,
+      pos
+    };
+  }
+
+  posToLineColumn(pos: number): CursorPosition | null {
+    if (!this.view) return null;
+    if (pos < 0 || pos > this.view.state.doc.length) return null;
+    const lineInfo = this.view.state.doc.lineAt(pos);
+    return {
+      line: lineInfo.number,
+      column: pos - lineInfo.from + 1,
+      pos
+    };
+  }
+
+  lineColumnToPos(line: number, column: number): number | null {
+    if (!this.view) return null;
+    try {
+      const lineInfo = this.view.state.doc.line(line);
+      const pos = Math.min(lineInfo.from + column - 1, lineInfo.to);
+      return pos;
+    } catch {
+      return null;
+    }
+  }
+
+  updateContent(change: DocChange): void {
     if (!this.view) return;
-    this.isApplyingRemoteChange = true;
+    this.isApplyingRemoteUpdate = true;
+    this.ignoreNextSelectionChange = true;
+
+    const changeSpec: ChangeSpec = {
+      from: change.from,
+      to: change.to,
+      insert: change.insert
+    };
+
+    this.view.dispatch({
+      changes: changeSpec
+    });
+
+    this.isApplyingRemoteUpdate = false;
+    const content = this.view.state.doc.toString();
+    this.notifyContentChangeListeners(content);
+  }
+
+  setFullContent(content: string): void {
+    if (!this.view) return;
+    this.isApplyingRemoteUpdate = true;
+    this.ignoreNextSelectionChange = true;
     this.view.dispatch({
       changes: {
         from: 0,
@@ -209,46 +293,71 @@ export class EditorCore {
         insert: content
       }
     });
-    this.isApplyingRemoteChange = false;
+    this.isApplyingRemoteUpdate = false;
+    const newContent = this.view.state.doc.toString();
+    this.notifyContentChangeListeners(newContent);
   }
 
-  applyRemoteChange(change: Change): void {
+  dispatchChanges(spec: ChangeSpec | ChangeSpec[]): void {
     if (!this.view) return;
-    this.isApplyingRemoteChange = true;
-    this.ignoreNextSelectionChange = true;
-    
     this.view.dispatch({
-      changes: {
-        from: change.from,
-        to: change.to,
-        insert: change.insert
-      }
+      changes: spec
     });
-    
-    this.isApplyingRemoteChange = false;
-    const content = this.view.state.doc.toString();
-    this.notifyContentListeners(content);
+    this.view.focus();
   }
 
-  insertAtCursor(text: string, wrapSelection: boolean = false): void {
+  insertMarkdownSyntax(prefix: string, suffix: string = prefix): void {
     if (!this.view) return;
-    
     const { from, to } = this.view.state.selection.main;
     const selected = this.view.state.sliceDoc(from, to);
-    
-    if (wrapSelection && selected) {
-      const wrapped = text + selected + text;
+
+    if (selected && selected.length > 0) {
       this.view.dispatch({
-        changes: { from, to, insert: wrapped },
-        selection: { anchor: from + text.length, head: to + text.length }
+        changes: {
+          from,
+          to,
+          insert: prefix + selected + suffix
+        },
+        selection: {
+          anchor: from + prefix.length,
+          head: to + prefix.length
+        }
       });
     } else {
+      const insertText = prefix + suffix;
       this.view.dispatch({
-        changes: { from, to, insert: text },
-        selection: { anchor: from + text.length, head: from + text.length }
+        changes: {
+          from,
+          to,
+          insert: insertText
+        },
+        selection: {
+          anchor: from + prefix.length,
+          head: from + prefix.length
+        }
       });
     }
-    
+    this.view.focus();
+  }
+
+  insertMarkdownPrefix(prefix: string): void {
+    if (!this.view) return;
+    const state = this.view.state;
+    const { from } = state.selection.main;
+    const line = state.doc.lineAt(from);
+    const lineStart = line.from;
+
+    this.view.dispatch({
+      changes: {
+        from: lineStart,
+        to: lineStart,
+        insert: prefix
+      },
+      selection: {
+        anchor: from + prefix.length,
+        head: from + prefix.length
+      }
+    });
     this.view.focus();
   }
 
@@ -261,7 +370,20 @@ export class EditorCore {
     return this.view;
   }
 
-  posToCoords(pos: number): { top: number; left: number } | null {
+  coordsAtLineColumn(line: number, column: number): { top: number; left: number } | null {
+    if (!this.view) return null;
+    const pos = this.lineColumnToPos(line, column);
+    if (pos === null) return null;
+    const coords = this.view.coordsAtPos(pos);
+    if (!coords) return null;
+    const scrollRect = this.view.scrollDOM.getBoundingClientRect();
+    return {
+      top: coords.top - scrollRect.top + this.view.scrollDOM.scrollTop,
+      left: coords.left - scrollRect.left + this.view.scrollDOM.scrollLeft
+    };
+  }
+
+  coordsAtPos(pos: number): { top: number; left: number } | null {
     if (!this.view) return null;
     const coords = this.view.coordsAtPos(pos);
     if (!coords) return null;
@@ -272,36 +394,49 @@ export class EditorCore {
     };
   }
 
-  onContentChange(listener: ContentListener): () => void {
-    this.contentListeners.push(listener);
+  onContentChange(listener: ContentChangeListener): () => void {
+    this.contentChangeListeners.push(listener);
+    const currentContent = this.getContent();
+    listener(currentContent);
     return () => {
-      this.contentListeners = this.contentListeners.filter(l => l !== listener);
+      this.contentChangeListeners = this.contentChangeListeners.filter(l => l !== listener);
     };
   }
 
-  onLocalChange(listener: ChangeListener): () => void {
-    this.changeListeners.push(listener);
+  onLocalChange(listener: LocalChangeListener): () => void {
+    this.localChangeListeners.push(listener);
     return () => {
-      this.changeListeners = this.changeListeners.filter(l => l !== listener);
+      this.localChangeListeners = this.localChangeListeners.filter(l => l !== listener);
     };
   }
 
-  onPositionChange(listener: PositionListener): () => void {
-    this.positionListeners.push(listener);
+  onPositionChange(listener: PositionChangeListener): () => void {
+    this.positionChangeListeners.push(listener);
     return () => {
-      this.positionListeners = this.positionListeners.filter(l => l !== listener);
+      this.positionChangeListeners = this.positionChangeListeners.filter(l => l !== listener);
     };
   }
 
-  private notifyChangeListeners(change: Change): void {
-    this.changeListeners.forEach(listener => listener(change));
+  onScroll(listener: ScrollListener): () => void {
+    this.scrollListeners.push(listener);
+    return () => {
+      this.scrollListeners = this.scrollListeners.filter(l => l !== listener);
+    };
   }
 
-  private notifyContentListeners(content: string): void {
-    this.contentListeners.forEach(listener => listener(content));
+  private notifyContentChangeListeners(content: string): void {
+    this.contentChangeListeners.forEach(listener => listener(content));
   }
 
-  private notifyPositionListeners(position: Position): void {
-    this.positionListeners.forEach(listener => listener(position));
+  private notifyLocalChangeListeners(change: DocChange): void {
+    this.localChangeListeners.forEach(listener => listener(change));
+  }
+
+  private notifyPositionChangeListeners(cursor: UserCursor): void {
+    this.positionChangeListeners.forEach(listener => listener(cursor));
+  }
+
+  private notifyScrollListeners(scrollTop: number, scrollLeft: number): void {
+    this.scrollListeners.forEach(listener => listener(scrollTop, scrollLeft));
   }
 }

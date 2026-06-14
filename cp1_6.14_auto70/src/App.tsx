@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { EditorCore } from './EditorCore';
-import { CollabSync, UserJoinEvent, UserLeaveEvent } from './CollabSync';
+import { CollabSync, UserPresenceEvent, WsMessageType } from './CollabSync';
 import { CursorOverlay } from './CursorOverlay';
 import { MarkdownPreview } from './MarkdownPreview';
 
@@ -11,10 +11,13 @@ interface Notification {
   timestamp: number;
 }
 
-interface ToolbarButton {
-  icon: string;
+interface ToolbarAction {
+  label: string;
   title: string;
   action: () => void;
+  bold?: boolean;
+  italic?: boolean;
+  fontSize?: string;
 }
 
 const App: React.FC = () => {
@@ -70,7 +73,7 @@ const App: React.FC = () => {
 ## 功能特性
 
 - **实时协作编辑** - 多人同时编辑，即时同步
-- **光标同步** - 看到其他人的光标位置
+- **光标同步** - 看到其他人的光标位置和用户名
 - **Markdown 预览** - 实时预览渲染效果
 - **工具栏** - 快速插入 Markdown 语法
 
@@ -137,15 +140,15 @@ function hello() {
       setIsConnected(connected);
     });
 
-    const unsubVersion = collabSync.onVersionUpdate((newVersion) => {
+    const unsubVersion = collabSync.onVersionChange((newVersion) => {
       setVersion(newVersion);
     });
 
-    const unsubUserPresence = collabSync.onUserPresence((event: UserJoinEvent | UserLeaveEvent) => {
-      if (event.type === 'user-join') {
-        addNotification(`${event.userName} 加入了文档`);
-      } else {
-        addNotification(`${event.userName} 离开了文档`);
+    const unsubUserPresence = collabSync.onUserPresence((event: UserPresenceEvent) => {
+      if (event.type === WsMessageType.USER_JOIN) {
+        addNotification(`${event.payload.userName} 加入了文档`);
+      } else if (event.type === WsMessageType.USER_LEAVE) {
+        addNotification(`${event.payload.userName} 离开了文档`);
       }
     });
 
@@ -195,46 +198,55 @@ function hello() {
     }
   };
 
-  const toolbarButtons: ToolbarButton[] = [
+  const toolbarActions: ToolbarAction[] = [
     {
-      icon: 'B',
+      label: 'B',
       title: '加粗 (Ctrl+B)',
-      action: () => editorCoreRef.current?.insertAtCursor('**', true)
+      bold: true,
+      action: () => editorCoreRef.current?.insertMarkdownSyntax('**')
     },
     {
-      icon: 'I',
+      label: 'I',
       title: '斜体 (Ctrl+I)',
-      action: () => editorCoreRef.current?.insertAtCursor('*', true)
+      italic: true,
+      action: () => editorCoreRef.current?.insertMarkdownSyntax('*')
     },
     {
-      icon: 'H1',
-      title: '标题 1',
-      action: () => editorCoreRef.current?.insertAtCursor('# ')
+      label: 'H1',
+      title: '一级标题',
+      fontSize: '11px',
+      action: () => editorCoreRef.current?.insertMarkdownPrefix('# ')
     },
     {
-      icon: 'H2',
-      title: '标题 2',
-      action: () => editorCoreRef.current?.insertAtCursor('## ')
+      label: 'H2',
+      title: '二级标题',
+      fontSize: '11px',
+      action: () => editorCoreRef.current?.insertMarkdownPrefix('## ')
     },
     {
-      icon: 'H3',
-      title: '标题 3',
-      action: () => editorCoreRef.current?.insertAtCursor('### ')
+      label: 'H3',
+      title: '三级标题',
+      fontSize: '11px',
+      action: () => editorCoreRef.current?.insertMarkdownPrefix('### ')
     },
     {
-      icon: '•',
-      title: '列表',
-      action: () => editorCoreRef.current?.insertAtCursor('- ')
+      label: '•',
+      title: '无序列表',
+      action: () => editorCoreRef.current?.insertMarkdownPrefix('- ')
     },
     {
-      icon: '"',
+      label: '❝',
       title: '引用',
-      action: () => editorCoreRef.current?.insertAtCursor('> ')
+      action: () => editorCoreRef.current?.insertMarkdownPrefix('> ')
     },
     {
-      icon: '</>',
+      label: '</>',
       title: '代码块',
-      action: () => editorCoreRef.current?.insertAtCursor('\n```\n\n```\n')
+      fontSize: '11px',
+      action: () => {
+        const codeBlock = '\n```\n\n```\n';
+        editorCoreRef.current?.insertMarkdownSyntax(codeBlock, '');
+      }
     }
   ];
 
@@ -267,7 +279,7 @@ function hello() {
     cursor: 'pointer',
     padding: '2px 4px',
     borderRadius: '4px',
-    transition: 'text-decoration 0.2s'
+    margin: 0
   };
 
   const titleInputStyle: React.CSSProperties = {
@@ -289,11 +301,11 @@ function hello() {
     padding: '10px 20px',
     backgroundColor: '#2a2a3e',
     borderRadius: '8px',
-    margin: '0 20px',
+    margin: '10px 20px 0 20px',
     flexShrink: 0
   };
 
-  const toolbarButtonStyle: React.CSSProperties = {
+  const createToolbarButtonStyle = (action: ToolbarAction): React.CSSProperties => ({
     minWidth: '36px',
     height: '32px',
     padding: '0 10px',
@@ -302,24 +314,26 @@ function hello() {
     border: 'none',
     borderRadius: '4px',
     cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: 500,
+    fontSize: action.fontSize || '14px',
+    fontWeight: action.bold ? 700 : action.italic ? 400 : 500,
+    fontStyle: action.italic ? 'italic' : 'normal',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    transition: 'background-color 0.2s'
-  };
+    transition: 'background-color 0.15s ease'
+  });
 
   const mainContainerStyle: React.CSSProperties = {
     display: 'flex',
     flex: 1,
     overflow: 'hidden',
+    marginTop: '10px',
     ...(isMobile ? { flexDirection: 'column' } : {})
   };
 
   const editorWrapperStyle: React.CSSProperties = {
     position: 'relative',
-    ...(isMobile 
+    ...(isMobile
       ? { height: '60%', minHeight: '300px', width: '100%' }
       : { width: '60%', minWidth: '500px', height: '100%' }
     )
@@ -331,7 +345,7 @@ function hello() {
   };
 
   const previewContainerStyle: React.CSSProperties = {
-    ...(isMobile 
+    ...(isMobile
       ? { height: '40%', width: '100%' }
       : { width: '40%', height: '100%' }
     ),
@@ -343,7 +357,7 @@ function hello() {
   const dividerStyle: React.CSSProperties = {
     height: '1px',
     backgroundColor: '#3a3a4e',
-    margin: '10px 20px',
+    margin: '10px 20px 0 20px',
     flexShrink: 0
   };
 
@@ -353,7 +367,8 @@ function hello() {
     bottom: '10px',
     fontSize: '12px',
     color: '#888',
-    zIndex: 5
+    zIndex: 5,
+    fontFamily: 'monospace'
   };
 
   const connectionStatusStyle: React.CSSProperties = {
@@ -368,7 +383,8 @@ function hello() {
     width: '8px',
     height: '8px',
     borderRadius: '50%',
-    backgroundColor: isConnected ? '#4ade80' : '#f87171'
+    backgroundColor: isConnected ? '#4ade80' : '#f87171',
+    boxShadow: isConnected ? '0 0 8px #4ade80' : 'none'
   };
 
   const notificationsContainerStyle: React.CSSProperties = {
@@ -384,13 +400,14 @@ function hello() {
 
   const notificationStyle: React.CSSProperties = {
     padding: '12px 20px',
-    backgroundColor: 'rgba(42, 42, 62, 0.95)',
+    backgroundColor: 'rgba(42, 42, 62, 0.98)',
     color: '#d4d4d4',
     borderRadius: '8px',
     boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
     fontSize: '14px',
-    animation: 'fadeInOut 2.3s ease-out forwards',
-    border: '1px solid #3a3a4e'
+    animation: 'fadeInOut 2.3s cubic-bezier(0.4, 0, 0.2, 1) forwards',
+    border: '1px solid #3a3a4e',
+    backdropFilter: 'blur(10px)'
   };
 
   return (
@@ -399,19 +416,19 @@ function hello() {
         @keyframes fadeInOut {
           0% {
             opacity: 0;
-            transform: translateY(-10px);
+            transform: translateY(-12px) scale(0.98);
           }
           13% {
             opacity: 1;
-            transform: translateY(0);
+            transform: translateY(0) scale(1);
           }
           87% {
             opacity: 1;
-            transform: translateY(0);
+            transform: translateY(0) scale(1);
           }
           100% {
             opacity: 0;
-            transform: translateY(-10px);
+            transform: translateY(-12px) scale(0.98);
           }
         }
 
@@ -419,9 +436,15 @@ function hello() {
           background-color: #3a3a4e !important;
         }
 
+        .toolbar-btn:active {
+          background-color: #4a4a5e !important;
+          transform: scale(0.97);
+        }
+
         .doc-title:hover {
           text-decoration: underline;
           text-decoration-color: #666;
+          text-underline-offset: 3px;
         }
 
         .cm-editor {
@@ -430,6 +453,37 @@ function hello() {
 
         .cm-scroller {
           overflow: auto !important;
+          font-family: 'SF Mono', Menlo, Monaco, 'Courier New', monospace !important;
+        }
+
+        .cm-line {
+          line-height: 1.6 !important;
+        }
+
+        ::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+          background: #4a4a5e;
+          border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+          background: #5a5a6e;
+        }
+
+        .markdown-preview::-webkit-scrollbar-thumb {
+          background: #c5c5d5;
+        }
+
+        .markdown-preview::-webkit-scrollbar-thumb:hover {
+          background: #a5a5b5;
         }
       `}</style>
 
@@ -451,6 +505,7 @@ function hello() {
             onBlur={handleTitleBlur}
             onKeyDown={handleTitleKeyDown}
             style={titleInputStyle}
+            maxLength={100}
           />
         ) : (
           <h1
@@ -459,25 +514,25 @@ function hello() {
             style={titleStyle}
             title="双击编辑标题"
           >
-            {docTitle}
+            📝 {docTitle}
           </h1>
         )}
         <div style={connectionStatusStyle}>
           <span style={statusDotStyle}></span>
-          <span>{isConnected ? '已连接' : '连接中...'}</span>
+          <span>{isConnected ? '协作已连接' : '正在连接...'}</span>
         </div>
       </div>
 
       <div style={toolbarStyle}>
-        {toolbarButtons.map((btn, index) => (
+        {toolbarActions.map((action, index) => (
           <button
             key={index}
             className="toolbar-btn"
-            onClick={btn.action}
-            title={btn.title}
-            style={toolbarButtonStyle}
+            onClick={action.action}
+            title={action.title}
+            style={createToolbarButtonStyle(action)}
           >
-            {btn.icon}
+            {action.label}
           </button>
         ))}
       </div>
@@ -486,7 +541,15 @@ function hello() {
 
       <div style={mainContainerStyle}>
         <div style={editorWrapperStyle}>
-          <div ref={cursorOverlayRef} style={{ position: 'absolute', inset: 0, zIndex: 10 }}></div>
+          <div
+            ref={cursorOverlayRef}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              zIndex: 10,
+              pointerEvents: 'none'
+            }}
+          ></div>
           <div ref={editorContainerRef} style={editorContainerStyle}></div>
           <div style={versionStyle}>{version}</div>
         </div>
