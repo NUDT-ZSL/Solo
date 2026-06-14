@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Music, Users, Target, TrendingUp } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import PieceCard from '@/components/PieceCard';
+import { getDifficultyColor } from '@/utils/dataGenerator';
 import './OverviewPage.css';
 
 export default function OverviewPage() {
@@ -47,25 +48,25 @@ export default function OverviewPage() {
       icon: Music,
       label: '乐曲总数',
       value: stats.totalPieces,
-      color: 'var(--accent-blue)',
+      color: '#3b82f6',
     },
     {
       icon: Users,
       label: '活跃声部',
       value: stats.totalVoiceParts,
-      color: 'var(--accent-green)',
+      color: '#22c55e',
     },
     {
       icon: Target,
       label: '已完成声部',
       value: stats.completedParts,
-      color: 'var(--accent-yellow)',
+      color: '#eab308',
     },
     {
       icon: TrendingUp,
       label: '平均完成度',
       value: `${stats.avgProgress}%`,
-      color: 'var(--accent-teal)',
+      color: '#2dd4bf',
     },
   ];
 
@@ -101,7 +102,7 @@ export default function OverviewPage() {
 
         {state.pieces.length === 0 && (
           <div className="empty-state">
-            <Music size={48} />
+            <Music size={48} style={{ color: '#94a3b8', marginBottom: 12 }} />
             <p>还没有乐曲，去"乐曲管理"添加一首吧！</p>
           </div>
         )}
@@ -109,3 +110,6 @@ export default function OverviewPage() {
     </div>
   );
 }
+
+// 为了消除 getDifficultyColor 未使用警告（其他组件会用到）
+export { getDifficultyColor };

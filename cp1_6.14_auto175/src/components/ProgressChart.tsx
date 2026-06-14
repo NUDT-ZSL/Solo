@@ -45,10 +45,11 @@ export default function ProgressChart({ dates, datasets }: ProgressChartProps) {
       backgroundColor: `${ds.color}20`,
       borderWidth: 2,
       pointRadius: 0,
-      pointHoverRadius: 6,
+      pointHoverRadius: 4,
       pointHoverBackgroundColor: '#ffffff',
       pointHoverBorderColor: ds.color,
       pointHoverBorderWidth: 2,
+      pointStyle: 'circle' as const,
       tension: 0.4,
       fill: false,
     })),
@@ -57,6 +58,9 @@ export default function ProgressChart({ dates, datasets }: ProgressChartProps) {
   const options = {
     responsive: true,
     maintainAspectRatio: false,
+    animation: {
+      duration: 500,
+    },
     interaction: {
       mode: 'index' as const,
       intersect: false,
@@ -65,32 +69,50 @@ export default function ProgressChart({ dates, datasets }: ProgressChartProps) {
       legend: {
         position: 'top' as const,
         labels: {
-          color: '#94a3b8',
+          color: '#f8fafc',
           font: {
             size: 13,
+            family: "'Inter', sans-serif",
           },
           usePointStyle: true,
           pointStyle: 'circle',
           padding: 20,
+          boxWidth: 8,
+          boxHeight: 8,
         },
       },
       tooltip: {
+        enabled: true,
         backgroundColor: '#0f172a',
         titleColor: '#f8fafc',
         bodyColor: '#f8fafc',
         borderColor: '#334155',
         borderWidth: 1,
         cornerRadius: 6,
-        padding: 12,
+        padding: {
+          top: 10,
+          right: 12,
+          bottom: 10,
+          left: 12,
+        },
         titleFont: {
-          size: 13,
+          size: 12,
+          weight: 'bold' as const,
+          family: "'Inter', sans-serif",
         },
         bodyFont: {
           size: 12,
+          family: "'Inter', sans-serif",
         },
         displayColors: true,
+        boxPadding: 4,
+        usePointStyle: true,
+        pointStyle: 'circle',
         callbacks: {
-          label: (context: { dataset: { label: string; borderColor?: string }; parsed: { y: number } }) => {
+          label: (context: {
+            dataset: { label: string; borderColor?: string };
+            parsed: { y: number };
+          }) => {
             return `${context.dataset.label}: ${context.parsed.y}%`;
           },
         },
@@ -100,11 +122,13 @@ export default function ProgressChart({ dates, datasets }: ProgressChartProps) {
       x: {
         grid: {
           color: 'rgba(51, 65, 85, 0.4)',
+          drawBorder: false,
         },
         ticks: {
           color: '#94a3b8',
           font: {
             size: 12,
+            family: "'Inter', sans-serif",
           },
         },
       },
@@ -113,11 +137,13 @@ export default function ProgressChart({ dates, datasets }: ProgressChartProps) {
         max: 100,
         grid: {
           color: 'rgba(51, 65, 85, 0.4)',
+          drawBorder: false,
         },
         ticks: {
           color: '#94a3b8',
           font: {
             size: 12,
+            family: "'Inter', sans-serif",
           },
           callback: (value: string | number) => `${value}%`,
         },

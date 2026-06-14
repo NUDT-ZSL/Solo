@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Users } from 'lucide-react';
 import type { Piece } from '@/types';
-import { getDifficultyLabel } from '@/utils/dataGenerator';
+import { getDifficultyLabel, getDifficultyColor } from '@/utils/dataGenerator';
 import './PieceCard.css';
 
 interface PieceCardProps {
@@ -19,6 +19,12 @@ export default function PieceCard({ piece }: PieceCardProps) {
   const avgProgress = Math.round(
     piece.voiceParts.reduce((sum, p) => sum + p.progress, 0) / piece.voiceParts.length
   );
+
+  const getProgressColor = (progress: number) => {
+    if (progress >= 70) return '#22c55e';
+    if (progress >= 30) return '#eab308';
+    return '#ef4444';
+  };
 
   return (
     <div className="piece-card" onClick={handleClick}>
@@ -39,7 +45,11 @@ export default function PieceCard({ piece }: PieceCardProps) {
 
       <div className="piece-card-difficulties">
         {difficulties.map((diff) => (
-          <span key={diff} className={`difficulty-badge ${diff}`}>
+          <span
+            key={diff}
+            className="difficulty-badge"
+            style={{ backgroundColor: getDifficultyColor(diff) }}
+          >
             {getDifficultyLabel(diff)}
           </span>
         ))}
@@ -48,10 +58,22 @@ export default function PieceCard({ piece }: PieceCardProps) {
       <div className="piece-card-progress">
         <div className="piece-card-progress-header">
           <span>平均进度</span>
-          <span>{avgProgress}%</span>
+          <span style={{ color: getProgressColor(avgProgress), fontWeight: 600 }}>
+            {avgProgress}%
+          </span>
         </div>
         <div className="progress-bar">
-          <div className="progress-bar-fill" style={{ width: `${avgProgress}%` }} />
+          <div
+            className="progress-bar-fill"
+            style={{
+              width: `${avgProgress}%`,
+              background: avgProgress >= 70
+                ? '#22c55e'
+                : avgProgress >= 30
+                ? 'linear-gradient(90deg, #22c55e, #eab308)'
+                : 'linear-gradient(90deg, #eab308, #ef4444)',
+            }}
+          />
         </div>
       </div>
     </div>
