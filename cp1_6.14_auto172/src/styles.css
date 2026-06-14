@@ -57,7 +57,7 @@ body {
 }
 
 .panel-left {
-  width: 640px;
+  width: 688px;
   flex-shrink: 0;
 }
 
@@ -135,6 +135,46 @@ body {
   margin-left: 4px;
   font-size: 12px;
   color: var(--color-text-secondary);
+}
+
+.sortable-header .header-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sort-arrow {
+  display: inline-flex;
+  flex-direction: column;
+  line-height: 0.6;
+  font-size: 8px;
+}
+
+.sort-arrow .arrow-up,
+.sort-arrow .arrow-down {
+  color: #d1d5db;
+  transition: color 0.2s;
+}
+
+.sort-arrow.asc .arrow-up {
+  color: var(--color-blue);
+}
+
+.sort-arrow.desc .arrow-down {
+  color: var(--color-blue);
+}
+
+.sortable-header:hover .sort-arrow .arrow-up,
+.sortable-header:hover .sort-arrow .arrow-down {
+  color: #9ca3af;
+}
+
+.sortable-header:hover .sort-arrow.asc .arrow-up {
+  color: var(--color-blue);
+}
+
+.sortable-header:hover .sort-arrow.desc .arrow-down {
+  color: var(--color-blue);
 }
 
 .activity-table td {
@@ -261,7 +301,21 @@ body {
 }
 
 .leaderboard-item.top-1 .leaderboard-rank {
-  color: var(--color-text);
+  color: #1f2937;
+}
+
+.leaderboard-item.top-1 .leaderboard-name {
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.leaderboard-item.top-1 .leaderboard-duration {
+  color: #374151;
+}
+
+.leaderboard-item.top-1 .leaderboard-avatar {
+  color: #1f2937;
+  background-color: rgba(255, 255, 255, 0.6);
 }
 
 .leaderboard-avatar {
@@ -313,7 +367,7 @@ body {
   color: var(--color-text-secondary);
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1120px) {
   .dashboard {
     flex-direction: column;
     align-items: center;
@@ -322,10 +376,11 @@ body {
   .panel-left,
   .panel-right {
     width: 100%;
-    max-width: 640px;
+    max-width: 688px;
   }
 
   .chart-container {
     width: 100%;
+    max-width: 620px;
   }
 }

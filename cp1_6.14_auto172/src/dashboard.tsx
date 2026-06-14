@@ -118,7 +118,7 @@ export default function Dashboard() {
 
     const width = rect.width;
     const height = rect.height;
-    const padding = { top: 30, right: 50, bottom: 40, left: 50 };
+    const padding = { top: 30, right: 10, bottom: 40, left: 10 };
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
 
@@ -128,7 +128,8 @@ export default function Dashboard() {
     const maxDuration = Math.max(...monthlyStats.map((s) => s.duration), 1);
 
     const barWidth = 20;
-    const groupWidth = barWidth * 2 + 10;
+    const innerGap = 10;
+    const groupWidth = barWidth * 2 + innerGap;
     const totalGroupWidth = groupWidth * 12;
     const startX = padding.left + (chartWidth - totalGroupWidth) / 2;
 
@@ -144,18 +145,19 @@ export default function Dashboard() {
     for (let i = 0; i <= 4; i++) {
       const y = padding.top + (chartHeight / 4) * i;
       ctx.beginPath();
-      ctx.moveTo(padding.left, y);
-      ctx.lineTo(width - padding.right, y);
+      ctx.moveTo(startX - 5, y);
+      ctx.lineTo(startX + totalGroupWidth + 5, y);
       ctx.stroke();
 
       const countValue = Math.round(maxCount - (maxCount / 4) * i);
-      ctx.fillStyle = '#6b7280';
+      ctx.fillStyle = '#3b82f6';
       ctx.textAlign = 'right';
-      ctx.fillText(String(countValue), padding.left - 8, y + 4);
+      ctx.fillText(String(countValue), startX - 8, y + 4);
 
       const durationValue = Math.round(maxDuration - (maxDuration / 4) * i);
+      ctx.fillStyle = '#f59e0b';
       ctx.textAlign = 'left';
-      ctx.fillText(String(durationValue), width - padding.right + 8, y + 4);
+      ctx.fillText(String(durationValue), startX + totalGroupWidth + 8, y + 4);
     }
 
     monthlyStats.forEach((stat, index) => {
@@ -163,23 +165,30 @@ export default function Dashboard() {
       const durationHeight = (stat.duration / maxDuration) * chartHeight;
       const groupX = startX + index * groupWidth;
 
+      if (hoveredMonth === index + 1) {
+        ctx.fillStyle = 'rgba(59, 130, 246, 0.3)';
+        ctx.fillRect(groupX - 2, padding.top, groupWidth + 4, chartHeight);
+      }
+
       ctx.fillStyle = '#3b82f6';
       const countX = groupX;
       const countY = padding.top + chartHeight - countHeight;
       ctx.fillRect(countX, countY, barWidth, countHeight);
 
       ctx.fillStyle = '#f59e0b';
-      const durationX = groupX + barWidth + 10;
+      const durationX = groupX + barWidth + innerGap;
       const durationY = padding.top + chartHeight - durationHeight;
       ctx.fillRect(durationX, durationY, barWidth, durationHeight);
     });
 
-    ctx.fillStyle = '#6b7280';
-    ctx.font = 'bold 12px -apple-system, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('活动次数', padding.left - 20, padding.top - 10);
-    ctx.fillText('时长(分钟)', width - padding.right + 20, padding.top - 10);
-  }, [monthlyStats]);
+    ctx.fillStyle = '#3b82f6';
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('次数', startX - 5, padding.top - 8);
+    ctx.fillStyle = '#f59e0b';
+    ctx.textAlign = 'right';
+    ctx.fillText('时长(分)', startX + totalGroupWidth + 5, padding.top - 8);
+  }, [monthlyStats, hoveredMonth]);
 
   const handleChartMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current || !chartContainerRef.current || monthlyStats.length === 0) return;
@@ -190,17 +199,18 @@ export default function Dashboard() {
     const x = e.clientX - rect.left;
 
     const width = rect.width;
-    const padding = { top: 30, right: 50, bottom: 40, left: 50 };
+    const padding = { top: 30, right: 10, bottom: 40, left: 10 };
     const chartWidth = width - padding.left - padding.right;
     const barWidth = 20;
-    const groupWidth = barWidth * 2 + 10;
+    const innerGap = 10;
+    const groupWidth = barWidth * 2 + innerGap;
     const totalGroupWidth = groupWidth * 12;
     const startX = padding.left + (chartWidth - totalGroupWidth) / 2;
 
     let foundMonth: number | null = null;
     for (let i = 0; i < 12; i++) {
       const groupX = startX + i * groupWidth;
-      if (x >= groupX - 5 && x <= groupX + groupWidth + 5) {
+      if (x >= groupX && x <= groupX + groupWidth) {
         foundMonth = i + 1;
         break;
       }
@@ -240,7 +250,40 @@ export default function Dashboard() {
     <div className="app-container">
       <div className="dashboard">
         <div className="panel panel-left">
-          <h2 className="panel-title">活动记录</h2>
+          <h2 className="panel-title">{currentYear}年 月度统计</h2>
+          <div
+            className="chart-container"
+            ref={chartContainerRef}
+          >
+            <canvas
+              ref={canvasRef}
+              onMouseMove={handleChartMouseMove}
+              onMouseLeave={handleChartMouseLeave}
+            />
+            {hoveredMonth && (
+              <div
+                className="chart-tooltip"
+                style={{
+                  left: tooltipPos.x,
+                  top: tooltipPos.y
+                }}
+              >
+                {getTooltipContent()}
+              </div>
+            )}
+          </div>
+          <div className="chart-legend">
+            <div className="legend-item">
+              <span className="legend-color blue" />
+              <span>活动次数</span>
+            </div>
+            <div className="legend-item">
+              <span className="legend-color orange" />
+              <span>时长(分钟)</span>
+            </div>
+          </div>
+
+          <h2 className="panel-title" style={{ marginTop: '32px' }}>活动记录</h2>
 
           <div className="filter-bar">
             {typeLabels.map(({ type, label, color }) => (
@@ -257,10 +300,13 @@ export default function Dashboard() {
           <table className="activity-table">
             <thead>
               <tr>
-                <th onClick={handleSortToggle}>
-                  日期
-                  <span className="sort-icon">
-                    {sortOrder === 'desc' ? '↓' : '↑'}
+                <th onClick={handleSortToggle} className="sortable-header">
+                  <span className="header-content">
+                    日期
+                    <span className={`sort-arrow ${sortOrder}`}>
+                      <span className="arrow-up">▲</span>
+                      <span className="arrow-down">▼</span>
+                    </span>
                   </span>
                 </th>
                 <th>志愿者</th>
@@ -297,42 +343,7 @@ export default function Dashboard() {
         </div>
 
         <div className="panel panel-right">
-          <h2 className="panel-title">{currentYear}年 月度统计</h2>
-          <div
-            className="chart-container"
-            ref={chartContainerRef}
-          >
-            <canvas
-              ref={canvasRef}
-              onMouseMove={handleChartMouseMove}
-              onMouseLeave={handleChartMouseLeave}
-            />
-            {hoveredMonth && (
-              <div
-                className="chart-tooltip"
-                style={{
-                  left: tooltipPos.x,
-                  top: tooltipPos.y
-                }}
-              >
-                {getTooltipContent()}
-              </div>
-            )}
-          </div>
-          <div className="chart-legend">
-            <div className="legend-item">
-              <span className="legend-color blue" />
-              <span>活动次数</span>
-            </div>
-            <div className="legend-item">
-              <span className="legend-color orange" />
-              <span>时长(分钟)</span>
-            </div>
-          </div>
-
-          <h2 className="panel-title" style={{ marginTop: '32px' }}>
-            志愿者排行榜
-          </h2>
+          <h2 className="panel-title">志愿者排行榜</h2>
           <ul className="leaderboard-list">
             {leaderboard.length === 0 ? (
               <li>
