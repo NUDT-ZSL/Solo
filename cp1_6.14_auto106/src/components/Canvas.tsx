@@ -14,9 +14,10 @@ interface CanvasProps {
 }
 
 const CARD_WIDTH = 220;
-const CARD_HEIGHT = 140;
+const CARD_HEIGHT = 150;
 const TIMELINE_HEIGHT = 80;
-const TIMELINE_SNAP_INTERVAL = 100;
+const TIMELINE_SNAP_INTERVAL = 120;
+const SNAP_THRESHOLD_PX = 40;
 
 const Canvas: React.FC<CanvasProps> = ({
   nodes,
@@ -30,11 +31,13 @@ const Canvas: React.FC<CanvasProps> = ({
   onEdgeDelete,
 }) => {
   const canvasRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [spacePressed, setSpacePressed] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, offsetX: 0, offsetY: 0 });
+  const viewportHeightRef = useRef(0);
 
   const [draggingNode, setDraggingNode] = useState<string | null>(null);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
@@ -54,8 +57,8 @@ const Canvas: React.FC<CanvasProps> = ({
 
   const screenToCanvas = useCallback(
     (screenX: number, screenY: number) => {
-      if (!canvasRef.current) return { x: 0, y: 0 };
-      const rect = canvasRef.current.getBoundingClientRect();
+      if (!viewportRef.current) return { x: 0, y: 0 };
+      const rect = viewportRef.current.getBoundingClientRect();
       const x = (screenX - rect.left - offset.x) / scale;
       const y = (screenY - rect.top - offset.y) / scale;
       return { x, y };
@@ -97,7 +100,7 @@ const Canvas: React.FC<CanvasProps> = ({
   );
 
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
-    if (e.target !== canvasRef.current) return;
+    if (e.target !== viewportRef.current) return;
     if (spacePressed) {
       setIsPanning(true);
       panStartRef.current = {
@@ -130,22 +133,29 @@ const Canvas: React.FC<CanvasProps> = ({
       const newX = x - dragOffsetRef.current.x;
       const newY = y - dragOffsetRef.current.y;
 
-      const canvasHeight = canvasRef.current
-        ? canvasRef.current.clientHeight - TIMELINE_HEIGHT
+      const viewportHeight = viewportRef.current
+        ? viewportRef.current.clientHeight
         : 600;
-      const timelineY = canvasHeight / scale;
+      const viewportBottomY = viewportHeight / scale;
+      const snapThreshold = SNAP_THRESHOLD_PX / scale;
+      const cardBottomY = newY + CARD_HEIGHT;
+      const distanceToTimeline = viewportBottomY - cardBottomY;
 
       let timelinePosition: number | undefined = undefined;
+      let finalX = newX;
       let finalY = newY;
 
-      if (newY + CARD_HEIGHT >= timelineY - 20 && newY + CARD_HEIGHT <= timelineY + TIMELINE_HEIGHT / scale + 20) {
-        const snapPos = Math.round((newX + CARD_WIDTH / 2) / TIMELINE_SNAP_INTERVAL) * TIMELINE_SNAP_INTERVAL;
+      if (Math.abs(distanceToTimeline) <= snapThreshold) {
+        const centerX = newX + CARD_WIDTH / 2;
+        const snapPos =
+          Math.round(centerX / TIMELINE_SNAP_INTERVAL) * TIMELINE_SNAP_INTERVAL;
         timelinePosition = snapPos;
-        finalY = timelineY - CARD_HEIGHT + 10;
+        finalX = snapPos - CARD_WIDTH / 2;
+        finalY = viewportBottomY - CARD_HEIGHT;
       }
 
       onNodeUpdate(draggingNode, {
-        x: finalY !== newY ? (timelinePosition || 0) - CARD_WIDTH / 2 : newX,
+        x: finalX,
         y: finalY,
         timelinePosition,
       });
@@ -161,7 +171,7 @@ const Canvas: React.FC<CanvasProps> = ({
   };
 
   const handleDoubleClick = (e: React.MouseEvent) => {
-    if (e.target !== canvasRef.current) return;
+    if (e.target !== viewportRef.current) return;
     const { x, y } = screenToCanvas(e.clientX, e.clientY);
     onNodeCreate({
       x: x - CARD_WIDTH / 2,
@@ -276,10 +286,10 @@ const Canvas: React.FC<CanvasProps> = ({
   const timelineNodes = nodes.filter((n) => n.timelinePosition !== undefined);
 
   return (
-    <div className="canvas-container">
+    <div className="canvas-container" ref={canvasRef}>
       <div
-        ref={canvasRef}
-        className={`canvas ${spacePressed ? 'panning-cursor' : ''}`}
+        ref={viewportRef}
+        className={`canvas-viewport ${spacePressed ? 'panning-cursor' : ''}`}
         onMouseDown={handleCanvasMouseDown}
         onMouseMove={handleCanvasMouseMove}
         onMouseUp={handleCanvasMouseUp}
@@ -365,19 +375,20 @@ const Canvas: React.FC<CanvasProps> = ({
               );
             })}
 
-            {connecting && (
+            {connecting && connecting.sourceId && (
               <path
                 d={getBezierPath(
-                  nodes.find((n) => n.id === connecting.sourceId)!.x +
-                    CARD_WIDTH,
-                  nodes.find((n) => n.id === connecting.sourceId)!.y +
+                  (nodes.find((n) => n.id === connecting.sourceId)?.x ??
+                    0) + CARD_WIDTH,
+                  (nodes.find((n) => n.id === connecting.sourceId)?.y ??
+                    0) +
                     CARD_HEIGHT / 2,
                   connecting.mouseX,
                   connecting.mouseY
                 )}
                 stroke="#6c5ce7"
                 strokeWidth="2"
-                strokeDasharray="5,5"
+                strokeDasharray="6,6"
                 fill="none"
               />
             )}
@@ -397,6 +408,7 @@ const Canvas: React.FC<CanvasProps> = ({
                   left: node.x,
                   top: node.y,
                   width: CARD_WIDTH,
+                  height: CARD_HEIGHT,
                 }}
                 onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
                 onMouseUp={(e) => handleNodeMouseUp(e, node.id)}
@@ -502,23 +514,24 @@ const Canvas: React.FC<CanvasProps> = ({
             );
           })}
         </div>
+      </div>
 
-        <div className="timeline">
-          <div className="timeline-track">
-            {timelineNodes.map((node) => {
-              const pos = node.timelinePosition!;
-              return (
-                <div
-                  key={node.id}
-                  className="timeline-anchor"
-                  style={{ left: pos * scale + offset.x }}
-                  title={node.title}
-                />
-              );
-            })}
-          </div>
-          <div className="timeline-label">时间轴</div>
+      <div className="timeline">
+        <div className="timeline-track">
+          {timelineNodes.map((node) => {
+            const pos = node.timelinePosition ?? 0;
+            const screenX = pos * scale + offset.x;
+            return (
+              <div
+                key={node.id}
+                className="timeline-anchor"
+                style={{ left: screenX }}
+                title={node.title}
+              />
+            );
+          })}
         </div>
+        <div className="timeline-label">时间轴 · 拖拽卡片到此处吸附</div>
       </div>
 
       <style>{`
@@ -528,21 +541,23 @@ const Canvas: React.FC<CanvasProps> = ({
           flex-direction: column;
           position: relative;
           overflow: hidden;
+          min-width: 0;
         }
 
-        .canvas {
+        .canvas-viewport {
           flex: 1;
           background: #f5f5fa;
           position: relative;
           overflow: hidden;
           cursor: default;
+          min-height: 0;
         }
 
-        .canvas.panning-cursor {
+        .canvas-viewport.panning-cursor {
           cursor: grab;
         }
 
-        .canvas.panning-cursor:active {
+        .canvas-viewport.panning-cursor:active {
           cursor: grabbing;
         }
 

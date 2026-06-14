@@ -79,17 +79,17 @@ let characters: Character[] = [
   { id: 'char-2', name: '配角', description: '重要的配角' },
 ];
 
-app.get('/nodes', (req, res) => {
+app.get('/api/nodes', (req, res) => {
   res.json(nodes);
 });
 
-app.post('/nodes', (req, res) => {
+app.post('/api/nodes', (req, res) => {
   const newNode: Node = { id: uuidv4(), ...req.body };
   nodes.push(newNode);
   res.status(201).json(newNode);
 });
 
-app.put('/nodes/:id', (req, res) => {
+app.put('/api/nodes/:id', (req, res) => {
   const { id } = req.params;
   const index = nodes.findIndex((n) => n.id === id);
   if (index === -1) {
@@ -100,24 +100,24 @@ app.put('/nodes/:id', (req, res) => {
   res.json(nodes[index]);
 });
 
-app.delete('/nodes/:id', (req, res) => {
+app.delete('/api/nodes/:id', (req, res) => {
   const { id } = req.params;
   nodes = nodes.filter((n) => n.id !== id);
   edges = edges.filter((e) => e.source !== id && e.target !== id);
   res.json({ success: true });
 });
 
-app.get('/edges', (req, res) => {
+app.get('/api/edges', (req, res) => {
   res.json(edges);
 });
 
-app.post('/edges', (req, res) => {
+app.post('/api/edges', (req, res) => {
   const newEdge: Edge = { id: uuidv4(), ...req.body };
   edges.push(newEdge);
   res.status(201).json(newEdge);
 });
 
-app.put('/edges/:id', (req, res) => {
+app.put('/api/edges/:id', (req, res) => {
   const { id } = req.params;
   const index = edges.findIndex((e) => e.id === id);
   if (index === -1) {
@@ -128,23 +128,23 @@ app.put('/edges/:id', (req, res) => {
   res.json(edges[index]);
 });
 
-app.delete('/edges/:id', (req, res) => {
+app.delete('/api/edges/:id', (req, res) => {
   const { id } = req.params;
   edges = edges.filter((e) => e.id !== id);
   res.json({ success: true });
 });
 
-app.get('/tags', (req, res) => {
+app.get('/api/tags', (req, res) => {
   res.json(tags);
 });
 
-app.post('/tags', (req, res) => {
+app.post('/api/tags', (req, res) => {
   const newTag: Tag = { id: uuidv4(), ...req.body };
   tags.push(newTag);
   res.status(201).json(newTag);
 });
 
-app.put('/tags/:id', (req, res) => {
+app.put('/api/tags/:id', (req, res) => {
   const { id } = req.params;
   const index = tags.findIndex((t) => t.id === id);
   if (index === -1) {
@@ -155,23 +155,23 @@ app.put('/tags/:id', (req, res) => {
   res.json(tags[index]);
 });
 
-app.delete('/tags/:id', (req, res) => {
+app.delete('/api/tags/:id', (req, res) => {
   const { id } = req.params;
   tags = tags.filter((t) => t.id !== id);
   res.json({ success: true });
 });
 
-app.get('/characters', (req, res) => {
+app.get('/api/characters', (req, res) => {
   res.json(characters);
 });
 
-app.post('/characters', (req, res) => {
+app.post('/api/characters', (req, res) => {
   const newCharacter: Character = { id: uuidv4(), ...req.body };
   characters.push(newCharacter);
   res.status(201).json(newCharacter);
 });
 
-app.put('/characters/:id', (req, res) => {
+app.put('/api/characters/:id', (req, res) => {
   const { id } = req.params;
   const index = characters.findIndex((c) => c.id === id);
   if (index === -1) {
@@ -182,7 +182,7 @@ app.put('/characters/:id', (req, res) => {
   res.json(characters[index]);
 });
 
-app.delete('/characters/:id', (req, res) => {
+app.delete('/api/characters/:id', (req, res) => {
   const { id } = req.params;
   characters = characters.filter((c) => c.id !== id);
   res.json({ success: true });
