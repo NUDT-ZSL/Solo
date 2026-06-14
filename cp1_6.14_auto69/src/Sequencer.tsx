@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import type { Note, Track, InstrumentType } from './types';
 import { INSTRUMENT_COLORS, PITCH_NAMES, STEPS_PER_BAR, TOTAL_BARS, TOTAL_STEPS, GRID_WIDTH, GRID_HEIGHT } from './types';
 
@@ -18,6 +18,12 @@ interface HoveredNote {
   y: number;
 }
 
+const DEFAULT_PITCHES: Record<InstrumentType, number[]> = {
+  piano: [72, 71, 69, 67, 65, 64, 62, 60, 59, 57, 55, 53],
+  drums: [38, 37, 36, 35, 34, 33, 32, 31, 30, 29, 28, 27],
+  bass: [48, 47, 45, 43, 41, 40, 38, 36, 35, 33, 31, 29],
+};
+
 export const Sequencer: React.FC<SequencerProps> = ({
   tracks,
   notes,
@@ -28,12 +34,14 @@ export const Sequencer: React.FC<SequencerProps> = ({
   onLoopChange,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [hoveredNote, setHoveredNote] = useState<HoveredNote | null>(null);
   const [draggingLoop, setDraggingLoop] = useState<'start' | 'end' | null>(null);
-  const scrollLeftRef = useRef(0);
+  const [isDraggingNote, setIsDraggingNote] = useState(false);
+  const dragStartRef = useRef<{ step: number; trackIndex: number; x: number; y: number } | null>(null);
 
-  const pitchRange = 36;
-  const startPitch = 48;
+  const totalGridWidth = useMemo(() => TOTAL_STEPS * GRID_WIDTH, []);
+  const totalGridHeight = useMemo(() => tracks.length * GRID_HEIGHT, [tracks.length]);
 
   const getPitchName = (midiPitch: number): string => {
     const octave = Math.floor(midiPitch / 12) - 1;
@@ -41,20 +49,32 @@ export const Sequencer: React.FC<SequencerProps> = ({
     return `${noteName}${octave}`;
   };
 
-  const getInstrumentColor = (trackId: string): string => {
-    const track = tracks.find(t => t.id === trackId);
-    return track ? INSTRUMENT_COLORS[track.instrument as InstrumentType] : '#666';
+  const getDefaultPitchForTrack = (trackIndex: number): number => {
+    const track = tracks[trackIndex];
+    if (!track) return 60;
+    const pitches = DEFAULT_PITCHES[track.instrument] || DEFAULT_PITCHES.piano;
+    const idx = trackIndex % pitches.length;
+    return pitches[idx];
   };
 
-  const handleGridClick = useCallback((e: React.MouseEvent) => {
-    if (!containerRef.current) return;
+  const getInstrumentColor = (trackId: string): string => {
+    const track = tracks.find(t => t.id === trackId);
+    return track ? INSTRUMENT_COLORS[track.instrument] : '#666';
+  };
 
-    const rect = containerRef.current.getBoundingClientRect();
-    const scrollLeft = containerRef.current.scrollLeft;
-    const scrollTop = containerRef.current.scrollTop;
+  const snapToGrid = (x: number): number => {
+    return Math.round(x / GRID_WIDTH) * GRID_WIDTH;
+  };
 
-    const x = e.clientX - rect.left + scrollLeft - 60;
-    const y = e.clientY - rect.top + scrollTop - 40;
+  const handleGridMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!scrollContainerRef.current) return;
+
+    const rect = scrollContainerRef.current.getBoundingClientRect();
+    const scrollLeft = scrollContainerRef.current.scrollLeft;
+    const scrollTop = scrollContainerRef.current.scrollTop;
+
+    const x = e.clientX - rect.left + scrollLeft;
+    const y = e.clientY - rect.top + scrollTop;
 
     if (x < 0 || y < 0) return;
 
@@ -63,39 +83,64 @@ export const Sequencer: React.FC<SequencerProps> = ({
 
     if (step < 0 || step >= TOTAL_STEPS || trackIndex < 0 || trackIndex >= tracks.length) return;
 
-    const pitch = startPitch + (pitchRange - 1 - (trackIndex % pitchRange));
-    const track = tracks[trackIndex];
+    setIsDraggingNote(true);
+    dragStartRef.current = { step, trackIndex, x, y };
 
-    if (track) {
-      onNoteToggle(track.id, step, pitch);
-    }
+    const pitch = getDefaultPitchForTrack(trackIndex);
+    onNoteToggle(tracks[trackIndex].id, step, pitch);
   }, [tracks, onNoteToggle]);
 
-  const handleNoteHover = useCallback((note: Note | null, e?: React.MouseEvent) => {
-    if (note && e && containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      setHoveredNote({
-        note,
-        x: e.clientX - rect.left + 10,
-        y: e.clientY - rect.top - 30,
-      });
-    } else {
-      setHoveredNote(null);
+  const handleGridMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDraggingNote || !scrollContainerRef.current) return;
+
+    const rect = scrollContainerRef.current.getBoundingClientRect();
+    const scrollLeft = scrollContainerRef.current.scrollLeft;
+    const scrollTop = scrollContainerRef.current.scrollTop;
+
+    const x = e.clientX - rect.left + scrollLeft;
+    const y = e.clientY - rect.top + scrollTop;
+
+    const step = Math.floor(x / GRID_WIDTH);
+    const trackIndex = Math.floor(y / GRID_HEIGHT);
+
+    if (step < 0 || step >= TOTAL_STEPS || trackIndex < 0 || trackIndex >= tracks.length) return;
+
+    const start = dragStartRef.current;
+    if (start && (start.step !== step || start.trackIndex !== trackIndex)) {
+      const pitch = getDefaultPitchForTrack(trackIndex);
+      onNoteToggle(tracks[trackIndex].id, step, pitch);
+      dragStartRef.current = { step, trackIndex, x, y };
     }
+  }, [isDraggingNote, tracks, onNoteToggle]);
+
+  const handleGridMouseUp = useCallback(() => {
+    setIsDraggingNote(false);
+    dragStartRef.current = null;
   }, []);
 
-  const handleLoopDragStart = (type: 'start' | 'end', e: React.MouseEvent) => {
+  useEffect(() => {
+    if (isDraggingNote) {
+      const handleUp = () => {
+        setIsDraggingNote(false);
+        dragStartRef.current = null;
+      };
+      window.addEventListener('mouseup', handleUp);
+      return () => window.removeEventListener('mouseup', handleUp);
+    }
+  }, [isDraggingNote]);
+
+  const handleLoopDragStart = useCallback((type: 'start' | 'end', e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     setDraggingLoop(type);
-  };
+  }, []);
 
   const handleLoopDrag = useCallback((e: MouseEvent) => {
-    if (!draggingLoop || !containerRef.current) return;
+    if (!draggingLoop || !scrollContainerRef.current) return;
 
-    const rect = containerRef.current.getBoundingClientRect();
-    const scrollLeft = containerRef.current.scrollLeft;
-    const x = e.clientX - rect.left + scrollLeft - 60;
+    const rect = scrollContainerRef.current.getBoundingClientRect();
+    const scrollLeft = scrollContainerRef.current.scrollLeft;
+    const x = e.clientX - rect.left + scrollLeft;
 
     let step = Math.round(x / GRID_WIDTH);
     step = Math.max(0, Math.min(TOTAL_STEPS - 1, step));
@@ -130,35 +175,94 @@ export const Sequencer: React.FC<SequencerProps> = ({
         <div
           key={bar}
           style={{
-            ...styles.timelineMarker,
-            left: `${60 + step * GRID_WIDTH}px`,
+            position: 'absolute',
+            left: `${step * GRID_WIDTH}px`,
+            top: 0,
+            height: '40px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-start',
+            pointerEvents: 'none',
           }}
         >
-          <div style={styles.timelineBarLine} />
-          <span style={styles.timelineLabel}>{bar + 1}</span>
+          <div style={{ width: '1px', height: '10px', backgroundColor: '#3a3a5e' }} />
+          <span style={{ color: '#888899', fontSize: '10px', padding: '2px 6px', fontWeight: 600 }}>
+            {bar + 1}
+          </span>
         </div>
       );
     }
+    for (let beat = 0; beat < TOTAL_STEPS; beat += 4) {
+      if (beat % STEPS_PER_BAR !== 0) {
+        markers.push(
+          <div
+            key={`beat-${beat}`}
+            style={{
+              position: 'absolute',
+              left: `${beat * GRID_WIDTH}px`,
+              top: 0,
+              width: '1px',
+              height: '6px',
+              backgroundColor: '#2a2a3e',
+              pointerEvents: 'none',
+            }}
+          />
+        );
+      }
+    }
     return markers;
+  };
+
+  const renderTrackLabels = () => {
+    return tracks.map((track, idx) => (
+      <div
+        key={track.id}
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: `${idx * GRID_HEIGHT}px`,
+          height: `${GRID_HEIGHT}px`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          paddingRight: '8px',
+          color: '#666677',
+          fontSize: '10px',
+          pointerEvents: 'none',
+        }}
+      >
+        <span style={{
+          width: '3px',
+          height: '60%',
+          backgroundColor: INSTRUMENT_COLORS[track.instrument],
+          marginRight: '6px',
+          borderRadius: '2px',
+        }} />
+        <span style={{ maxWidth: '50px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {track.name}
+        </span>
+      </div>
+    ));
   };
 
   const renderGrid = () => {
     const cells = [];
     for (let step = 0; step < TOTAL_STEPS; step++) {
+      const isBarLine = step % STEPS_PER_BAR === 0;
+      const isBeatLine = step % 4 === 0;
       for (let trackIndex = 0; trackIndex < tracks.length; trackIndex++) {
-        const isBarLine = step % STEPS_PER_BAR === 0;
-        const isBeatLine = step % 4 === 0;
         cells.push(
           <div
-            key={`${step}-${trackIndex}`}
+            key={`cell-${step}-${trackIndex}`}
             style={{
-              ...styles.gridCell,
-              left: `${60 + step * GRID_WIDTH}px`,
-              top: `${40 + trackIndex * GRID_HEIGHT}px`,
+              position: 'absolute',
+              left: `${step * GRID_WIDTH}px`,
+              top: `${trackIndex * GRID_HEIGHT}px`,
               width: `${GRID_WIDTH}px`,
               height: `${GRID_HEIGHT}px`,
-              borderLeft: isBarLine ? '1px solid #3a3a5e' : isBeatLine ? '1px solid #2a2a3e' : '1px solid #1e1e2e',
-              borderTop: '1px solid #2a2a3e',
+              boxSizing: 'border-box',
+              borderLeft: isBarLine ? '1px solid #3a3a5e' : isBeatLine ? '1px solid #2a2a3e' : '1px solid #1a1a2a',
+              borderTop: '1px solid #1e1e2e',
             }}
           />
         );
@@ -168,27 +272,44 @@ export const Sequencer: React.FC<SequencerProps> = ({
   };
 
   const renderNotes = () => {
+    const notesByStep: Record<string, Note> = {};
+    notes.forEach(note => {
+      notesByStep[`${note.trackId}-${note.step}`] = note;
+    });
+
     return notes.map((note) => {
       const trackIndex = tracks.findIndex(t => t.id === note.trackId);
       if (trackIndex === -1) return null;
 
-      const pitchOffset = pitchRange - 1 - (note.pitch - startPitch);
-      const displayTrackIndex = trackIndex;
+      const color = getInstrumentColor(note.trackId);
 
       return (
         <div
           key={note.id}
-          style={{
-            ...styles.noteBlock,
-            left: `${60 + note.step * GRID_WIDTH + 1}px`,
-            top: `${40 + displayTrackIndex * GRID_HEIGHT + 1}px`,
-            width: `${GRID_WIDTH - 2}px`,
-            height: `${GRID_HEIGHT - 2}px`,
-            backgroundColor: getInstrumentColor(note.trackId),
-          }}
           className="note-block"
-          onMouseEnter={(e) => handleNoteHover(note, e)}
-          onMouseLeave={() => handleNoteHover(null)}
+          style={{
+            position: 'absolute',
+            left: `${note.step * GRID_WIDTH + 2}px`,
+            top: `${trackIndex * GRID_HEIGHT + 2}px`,
+            width: `${GRID_WIDTH - 4}px`,
+            height: `${GRID_HEIGHT - 4}px`,
+            backgroundColor: color,
+            borderRadius: '4px',
+            cursor: 'pointer',
+            zIndex: 10,
+            boxShadow: `inset 0 -2px 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.2)`,
+          }}
+          onMouseEnter={(e) => {
+            const rect = containerRef.current?.getBoundingClientRect();
+            if (rect) {
+              setHoveredNote({
+                note,
+                x: e.clientX - rect.left + 12,
+                y: e.clientY - rect.top - 32,
+              });
+            }
+          }}
+          onMouseLeave={() => setHoveredNote(null)}
           onClick={(e) => {
             e.stopPropagation();
             onNoteToggle(note.trackId, note.step, note.pitch);
@@ -199,144 +320,231 @@ export const Sequencer: React.FC<SequencerProps> = ({
   };
 
   const renderPlayhead = () => {
-    const playheadX = 60 + currentStep * GRID_WIDTH + GRID_WIDTH / 2;
+    const playheadX = currentStep * GRID_WIDTH + GRID_WIDTH / 2;
     return (
       <div
+        className="playhead-line"
         style={{
-          ...styles.playhead,
+          position: 'absolute',
           left: `${playheadX}px`,
-          height: `${40 + tracks.length * GRID_HEIGHT}px`,
+          top: 0,
+          width: '2px',
+          height: `40px + ${totalGridHeight}px`,
+          backgroundColor: '#ffffff',
+          pointerEvents: 'none',
+          zIndex: 30,
         }}
-        className="playhead"
-      />
+      >
+        <div style={{
+          position: 'absolute',
+          top: '-6px',
+          left: '-5px',
+          width: 0,
+          height: 0,
+          borderLeft: '6px solid transparent',
+          borderRight: '6px solid transparent',
+          borderTop: '8px solid #ffffff',
+        }} />
+      </div>
     );
   };
 
   const renderLoopMarkers = () => {
-    const startX = 60 + loopStart * GRID_WIDTH;
-    const endX = 60 + loopEnd * GRID_WIDTH;
+    const startX = loopStart * GRID_WIDTH;
+    const endX = loopEnd * GRID_WIDTH;
+    const height = `calc(40px + ${totalGridHeight}px)`;
 
     return (
       <>
         <div
           style={{
-            ...styles.loopRange,
+            position: 'absolute',
             left: `${startX}px`,
+            top: 0,
             width: `${endX - startX}px`,
-            height: `${40 + tracks.length * GRID_HEIGHT}px`,
+            height,
+            backgroundColor: 'rgba(102, 126, 234, 0.08)',
+            borderLeft: '2px solid rgba(102, 126, 234, 0.5)',
+            borderRight: '2px solid rgba(102, 126, 234, 0.5)',
+            pointerEvents: 'none',
+            zIndex: 5,
           }}
         />
         <div
           style={{
-            ...styles.loopMarker,
-            left: `${startX - 8}px`,
+            position: 'absolute',
+            left: `${startX - 10}px`,
+            top: '2px',
+            width: '20px',
+            height: '22px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 25,
             cursor: draggingLoop === 'start' ? 'grabbing' : 'grab',
+            backgroundColor: 'rgba(102, 126, 234, 0.9)',
+            borderRadius: '4px 4px 0 0',
+            userSelect: 'none',
           }}
           onMouseDown={(e) => handleLoopDragStart('start', e)}
-          title="循环起始"
+          title="循环起始 - 拖拽调整"
         >
-          <div style={styles.loopTriangle} />
+          <div style={{
+            width: 0,
+            height: 0,
+            borderLeft: '5px solid transparent',
+            borderRight: '5px solid transparent',
+            borderTop: '7px solid #ffffff',
+          }} />
         </div>
         <div
           style={{
-            ...styles.loopMarker,
-            left: `${endX - 8}px`,
+            position: 'absolute',
+            left: `${endX - 10}px`,
+            top: '2px',
+            width: '20px',
+            height: '22px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 25,
             cursor: draggingLoop === 'end' ? 'grabbing' : 'grab',
+            backgroundColor: 'rgba(102, 126, 234, 0.9)',
+            borderRadius: '4px 4px 0 0',
+            userSelect: 'none',
           }}
           onMouseDown={(e) => handleLoopDragStart('end', e)}
-          title="循环结束"
+          title="循环结束 - 拖拽调整"
         >
-          <div style={{ ...styles.loopTriangle, transform: 'rotate(180deg)' }} />
+          <div style={{
+            width: 0,
+            height: 0,
+            borderLeft: '5px solid transparent',
+            borderRight: '5px solid transparent',
+            borderBottom: '7px solid #ffffff',
+          }} />
         </div>
       </>
     );
   };
 
-  const renderPitchLabels = () => {
-    const labels = [];
-    for (let i = 0; i < pitchRange && i < tracks.length; i++) {
-      const pitch = startPitch + (pitchRange - 1 - i);
-      if (pitch % 12 === 0) {
-        labels.push(
-          <div
-            key={i}
-            style={{
-              ...styles.pitchLabel,
-              top: `${40 + i * GRID_HEIGHT}px`,
-              height: `${GRID_HEIGHT}px`,
-            }}
-          >
-            {getPitchName(pitch)}
-          </div>
-        );
-      }
-    }
-    return labels;
-  };
-
   return (
-    <div style={styles.sequencerContainer}>
+    <div
+      ref={containerRef}
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: '#12122a',
+        overflow: 'hidden',
+        position: 'relative',
+      }}
+    >
       <div
-        ref={containerRef}
-        style={styles.gridContainer}
-        onClick={handleGridClick}
-        onScroll={(e) => {
-          scrollLeftRef.current = e.currentTarget.scrollLeft;
+        ref={scrollContainerRef}
+        style={{
+          flex: 1,
+          overflow: 'auto',
+          position: 'relative',
+          cursor: isDraggingNote ? 'crosshair' : 'default',
         }}
+        onMouseDown={handleGridMouseDown}
+        onMouseMove={handleGridMouseMove}
+        onMouseUp={handleGridMouseUp}
       >
         <div
           style={{
-            ...styles.gridInner,
-            width: `${60 + TOTAL_STEPS * GRID_WIDTH}px`,
-            height: `${40 + tracks.length * GRID_HEIGHT}px`,
+            position: 'relative',
+            width: `${totalGridWidth}px`,
+            height: `calc(40px + ${totalGridHeight}px)`,
+            minWidth: '100%',
+            paddingLeft: '60px',
           }}
         >
           {renderTimeline()}
-          {renderPitchLabels()}
-          {renderGrid()}
           {renderLoopMarkers()}
+          {renderGrid()}
           {renderNotes()}
           {renderPlayhead()}
+        </div>
 
-          {hoveredNote && (
-            <div
-              style={{
-                ...styles.noteTooltip,
-                left: `${hoveredNote.x}px`,
-                top: `${hoveredNote.y}px`,
-              }}
-            >
-              <div style={styles.tooltipText}>
-                {getPitchName(hoveredNote.note.pitch)}
-              </div>
-              <div style={styles.tooltipSubtext}>
-                力度: {hoveredNote.note.velocity}
-              </div>
-            </div>
-          )}
+        <div style={{
+          position: 'sticky',
+          left: 0,
+          top: 0,
+          width: '60px',
+          zIndex: 40,
+          pointerEvents: 'none',
+          marginTop: `-${40 + totalGridHeight}px`,
+        }}>
+          <div style={{ position: 'absolute', left: 0, top: 0, width: '60px' }}>
+            <div style={{ height: '40px', backgroundColor: '#12122a', borderBottom: '1px solid #2a2a3e' }} />
+            {renderTrackLabels()}
+          </div>
         </div>
       </div>
 
+      {hoveredNote && (
+        <div
+          style={{
+            position: 'fixed',
+            left: `${hoveredNote.x}px`,
+            top: `${hoveredNote.y}px`,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            color: '#e0e0e0',
+            borderRadius: '4px',
+            padding: '6px 10px',
+            zIndex: 1000,
+            pointerEvents: 'none',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+            border: '1px solid #2a2a45',
+          }}
+        >
+          <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '2px' }}>
+            🎵 {getPitchName(hoveredNote.note.pitch)}
+          </div>
+          <div style={{ fontSize: '10px', color: '#888899' }}>
+            力度: {hoveredNote.note.velocity} · 步长: {hoveredNote.note.step}
+          </div>
+        </div>
+      )}
+
       <style>{`
         .note-block {
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
-          z-index: 10;
+          transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), 
+                      box-shadow 0.2s ease;
+          animation: breathe 2s ease-in-out infinite;
         }
         .note-block:hover {
-          transform: scale(1.1);
-          box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+          transform: scale(1.15);
+          box-shadow: inset 0 -2px 0 rgba(0,0,0,0.25), 
+                      0 0 16px rgba(255, 255, 255, 0.25),
+                      0 4px 8px rgba(0,0,0,0.3);
           z-index: 20;
+          animation: none;
         }
-        .playhead {
+        @keyframes breathe {
+          0%, 100% { 
+            transform: scale(1); 
+            opacity: 1;
+          }
+          50% { 
+            transform: scale(1.04); 
+            opacity: 0.92;
+          }
+        }
+        .playhead-line {
           animation: playhead-glow 0.3s ease-in-out infinite alternate;
-          z-index: 30;
         }
         @keyframes playhead-glow {
           from {
-            box-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
+            box-shadow: 0 0 3px rgba(255, 255, 255, 0.4),
+                        0 0 6px rgba(255, 255, 255, 0.2);
           }
           to {
-            box-shadow: 0 0 12px rgba(255, 255, 255, 0.9);
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.9),
+                        0 0 16px rgba(255, 255, 255, 0.5),
+                        0 0 24px rgba(102, 126, 234, 0.3);
           }
         }
         input[type="range"]::-webkit-slider-thumb {
@@ -350,130 +558,9 @@ export const Sequencer: React.FC<SequencerProps> = ({
           transition: transform 0.2s ease;
         }
         input[type="range"]::-webkit-slider-thumb:hover {
-          transform: scale(1.2);
-        }
-        select:hover {
-          border-color: #667eea !important;
-        }
-        button:hover {
-          opacity: 0.85;
-          transform: scale(1.05);
+          transform: scale(1.25);
         }
       `}</style>
     </div>
   );
-};
-
-const styles: Record<string, React.CSSProperties> = {
-  sequencerContainer: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    backgroundColor: '#12122a',
-    overflow: 'hidden',
-  },
-  gridContainer: {
-    flex: 1,
-    overflow: 'auto',
-    position: 'relative',
-  },
-  gridInner: {
-    position: 'relative',
-    minWidth: '100%',
-  },
-  timelineMarker: {
-    position: 'absolute',
-    top: 0,
-    height: '40px',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    pointerEvents: 'none',
-  },
-  timelineBarLine: {
-    width: '1px',
-    height: '8px',
-    backgroundColor: '#3a3a5e',
-  },
-  timelineLabel: {
-    color: '#888899',
-    fontSize: '10px',
-    padding: '2px 4px',
-  },
-  pitchLabel: {
-    position: 'absolute',
-    left: 0,
-    width: '60px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingRight: '8px',
-    color: '#666677',
-    fontSize: '10px',
-    borderRight: '1px solid #2a2a3e',
-    boxSizing: 'border-box',
-    pointerEvents: 'none',
-  },
-  gridCell: {
-    position: 'absolute',
-    boxSizing: 'border-box',
-    cursor: 'crosshair',
-  },
-  noteBlock: {
-    position: 'absolute',
-    borderRadius: '3px',
-    cursor: 'pointer',
-    boxSizing: 'border-box',
-  },
-  playhead: {
-    position: 'absolute',
-    top: 0,
-    width: '2px',
-    backgroundColor: '#ffffff',
-    pointerEvents: 'none',
-  },
-  loopRange: {
-    position: 'absolute',
-    top: 0,
-    backgroundColor: 'rgba(102, 126, 234, 0.1)',
-    borderLeft: '1px solid rgba(102, 126, 234, 0.5)',
-    borderRight: '1px solid rgba(102, 126, 234, 0.5)',
-    pointerEvents: 'none',
-    zIndex: 5,
-  },
-  loopMarker: {
-    position: 'absolute',
-    top: '2px',
-    width: '16px',
-    height: '16px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 25,
-  },
-  loopTriangle: {
-    width: 0,
-    height: 0,
-    borderLeft: '6px solid transparent',
-    borderRight: '6px solid transparent',
-    borderTop: '8px solid #667eea',
-  },
-  noteTooltip: {
-    position: 'fixed',
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    borderRadius: '4px',
-    padding: '6px 10px',
-    zIndex: 100,
-    pointerEvents: 'none',
-  },
-  tooltipText: {
-    color: '#e0e0e0',
-    fontSize: '12px',
-    fontWeight: 600,
-  },
-  tooltipSubtext: {
-    color: '#888899',
-    fontSize: '10px',
-    marginTop: '2px',
-  },
 };
