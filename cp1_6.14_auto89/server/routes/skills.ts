@@ -42,53 +42,78 @@ const collectAncestors = (nodeId: string): Set<string> => {
   return ancestors;
 };
 
-const detectCycle = (): CycleDetectionResult => {
+const findCyclePathDFS = (): string[] | null => {
   const nodes = getNodesArray();
   const nodeMap = new Map(nodes.map(n => [n.id, n]));
-  const inDegree = new Map<string, number>();
-  const adjacency = new Map<string, string[]>();
+  const WHITE = 0, GRAY = 1, BLACK = 2;
+  const color = new Map<string, number>();
+  const parent = new Map<string, string | null>();
 
   for (const n of nodes) {
-    inDegree.set(n.id, 0);
-    adjacency.set(n.id, []);
+    color.set(n.id, WHITE);
+    parent.set(n.id, null);
   }
 
-  for (const n of nodes) {
-    for (const pre of n.prerequisites) {
-      if (nodeMap.has(pre)) {
-        inDegree.set(n.id, (inDegree.get(n.id) || 0) + 1);
-        adjacency.get(pre)!.push(n.id);
+  let cycleStart: string | null = null;
+  let cycleEnd: string | null = null;
+
+  const dfs = (u: string): boolean => {
+    color.set(u, GRAY);
+    const node = nodeMap.get(u);
+    if (!node) return false;
+
+    for (const v of node.prerequisites) {
+      if (!nodeMap.has(v)) continue;
+      const c = color.get(v) || WHITE;
+      if (c === GRAY) {
+        cycleStart = v;
+        cycleEnd = u;
+        return true;
+      }
+      if (c === WHITE) {
+        parent.set(v, u);
+        if (dfs(v)) return true;
       }
     }
-  }
 
-  const queue: string[] = [];
+    color.set(u, BLACK);
+    return false;
+  };
+
   for (const n of nodes) {
-    if (inDegree.get(n.id) === 0) queue.push(n.id);
-  }
-
-  let processed = 0;
-  const visited = new Set<string>();
-  while (queue.length > 0) {
-    const id = queue.shift()!;
-    visited.add(id);
-    processed++;
-    for (const next of adjacency.get(id) || []) {
-      const deg = (inDegree.get(next) || 0) - 1;
-      inDegree.set(next, deg);
-      if (deg === 0) queue.push(next);
+    if ((color.get(n.id) || WHITE) === WHITE) {
+      if (dfs(n.id)) break;
     }
   }
 
-  if (processed < nodes.length) {
-    const cycleNodes = nodes.filter(n => !visited.has(n.id)).map(n => n.id);
-    return { hasCycle: true, cycleNodes };
-  }
+  if (!cycleStart || !cycleEnd) return null;
 
+  const path: string[] = [cycleStart];
+  let current: string | null = cycleEnd;
+  while (current !== null && current !== cycleStart) {
+    path.unshift(current);
+    current = parent.get(current) || null;
+  }
+  path.unshift(cycleStart);
+
+  return path;
+};
+
+const detectCycle = (): CycleDetectionResult => {
+  const cyclePath = findCyclePathDFS();
+  if (cyclePath) {
+    const cycleNodes = Array.from(new Set(cyclePath));
+    return { hasCycle: true, cycleNodes, cyclePath };
+  }
   return { hasCycle: false, cycleNodes: [] };
 };
 
-const kahnTopologicalSort = (nodes: SkillNode[]): { sorted: string[]; cycleNodes: string[] } => {
+const kahnTopologicalSort = (nodes: SkillNode[]): { sorted: string[]; cycleNodes: string[]; cyclePath?: string[] } => {
+  const cyclePath = findCyclePathDFS();
+  if (cyclePath) {
+    return { sorted: [], cycleNodes: Array.from(new Set(cyclePath)), cyclePath };
+  }
+
   const nodeMap = new Map(nodes.map(n => [n.id, n]));
   const inDegree = new Map<string, number>();
   const adjacency = new Map<string, string[]>();
@@ -129,6 +154,28 @@ const kahnTopologicalSort = (nodes: SkillNode[]): { sorted: string[]; cycleNodes
   return { sorted, cycleNodes };
 };
 
+const addDependencyEdges = (fromId: string, toId: string) => {
+  const fromNode = store.nodes.get(fromId);
+  const toNode = store.nodes.get(toId);
+  if (fromNode && !fromNode.dependencies.includes(toId)) {
+    fromNode.dependencies.push(toId);
+  }
+  if (toNode && !toNode.prerequisites.includes(fromId)) {
+    toNode.prerequisites.push(fromId);
+  }
+};
+
+const removeDependencyEdges = (fromId: string, toId: string) => {
+  const fromNode = store.nodes.get(fromId);
+  const toNode = store.nodes.get(toId);
+  if (fromNode) {
+    fromNode.dependencies = fromNode.dependencies.filter(d => d !== toId);
+  }
+  if (toNode) {
+    toNode.prerequisites = toNode.prerequisites.filter(p => p !== fromId);
+  }
+};
+
 const validateDependencyAddition = (
   nodeId: string,
   newPrerequisiteId: string
@@ -147,6 +194,7 @@ const validateDependencyAddition = (
       valid: false,
       reason: '不能将后代节点设为前置依赖，会形成间接循环',
       cycleNodes: [nodeId, newPrerequisiteId],
+      cyclePath: [newPrerequisiteId, nodeId, newPrerequisiteId],
     };
   }
 
@@ -156,23 +204,33 @@ const validateDependencyAddition = (
       valid: false,
       reason: '不能将祖先节点设为前置依赖，会形成间接循环',
       cycleNodes: [nodeId, newPrerequisiteId],
+      cyclePath: [nodeId, newPrerequisiteId, nodeId],
     };
   }
 
   const node = store.nodes.get(nodeId)!;
-  const tempPrereqs = [...node.prerequisites, newPrerequisiteId];
-  const originalPrereqs = node.prerequisites;
-  node.prerequisites = tempPrereqs;
+  const originalPrereqs = [...node.prerequisites];
+  addDependencyEdges(newPrerequisiteId, nodeId);
 
   const cycleResult = detectCycle();
-  node.prerequisites = originalPrereqs;
-
   if (cycleResult.hasCycle) {
+    node.prerequisites = originalPrereqs;
+    const preNode = store.nodes.get(newPrerequisiteId);
+    if (preNode) {
+      preNode.dependencies = preNode.dependencies.filter(d => d !== nodeId);
+    }
     return {
       valid: false,
       reason: '添加此前置依赖会形成循环依赖',
       cycleNodes: cycleResult.cycleNodes,
+      cyclePath: cycleResult.cyclePath,
     };
+  }
+
+  node.prerequisites = originalPrereqs;
+  const preNode = store.nodes.get(newPrerequisiteId);
+  if (preNode) {
+    preNode.dependencies = preNode.dependencies.filter(d => d !== nodeId);
   }
 
   return { valid: true };
@@ -182,6 +240,7 @@ const cleanupDeletedDependencies = (deletedIds: string[]) => {
   const deletedSet = new Set(deletedIds);
   for (const n of store.nodes.values()) {
     n.prerequisites = n.prerequisites.filter(pre => !deletedSet.has(pre));
+    n.dependencies = n.dependencies.filter(dep => !deletedSet.has(dep));
     n.childrenIds = n.childrenIds.filter(cid => !deletedSet.has(cid));
   }
 };
@@ -201,6 +260,10 @@ router.post('/', (req: Request, res: Response) => {
   } = req.body || {};
 
   const id = uuidv4();
+  const validPrereqs = Array.isArray(prerequisites)
+    ? prerequisites.filter((p: string) => store.nodes.has(p))
+    : [];
+
   const node: SkillNode = {
     id,
     name,
@@ -209,7 +272,8 @@ router.post('/', (req: Request, res: Response) => {
     estimatedHours: Number(estimatedHours) || 0,
     parentId: parentId || null,
     childrenIds: [],
-    prerequisites: Array.isArray(prerequisites) ? prerequisites : [],
+    prerequisites: validPrereqs,
+    dependencies: [],
   };
 
   store.nodes.set(id, node);
@@ -218,6 +282,13 @@ router.post('/', (req: Request, res: Response) => {
     const parent = store.nodes.get(node.parentId);
     if (parent && !parent.childrenIds.includes(id)) {
       parent.childrenIds.push(id);
+    }
+  }
+
+  for (const preId of validPrereqs) {
+    const preNode = store.nodes.get(preId);
+    if (preNode && !preNode.dependencies.includes(id)) {
+      preNode.dependencies.push(id);
     }
   }
 
@@ -238,10 +309,6 @@ router.put('/:id', (req: Request, res: Response) => {
     if (body[key] !== undefined) {
       (node as any)[key] = key === 'estimatedHours' ? Number(body[key]) : body[key];
     }
-  }
-
-  if (body.prerequisites !== undefined && Array.isArray(body.prerequisites)) {
-    node.prerequisites = body.prerequisites;
   }
 
   if (body.parentId !== undefined) {
@@ -274,6 +341,15 @@ router.delete('/:id', (req: Request, res: Response) => {
   const node = store.nodes.get(id)!;
   const toDelete = [id, ...collectDescendants(id)];
 
+  for (const delId of toDelete) {
+    const delNode = store.nodes.get(delId);
+    if (delNode) {
+      for (const preId of delNode.prerequisites) {
+        removeDependencyEdges(preId, delId);
+      }
+    }
+  }
+
   if (node.parentId) {
     const parent = store.nodes.get(node.parentId);
     if (parent) {
@@ -301,12 +377,23 @@ router.put('/:id/prerequisites', (req: Request, res: Response) => {
   const prereqs = (req.body && req.body.prerequisites) || [];
   const validPrereqs = Array.isArray(prereqs) ? prereqs.filter((p: string) => store.nodes.has(p)) : [];
 
-  const originalPrereqs = node.prerequisites;
-  node.prerequisites = validPrereqs;
+  const originalPrereqs = [...node.prerequisites];
+  for (const preId of originalPrereqs) {
+    removeDependencyEdges(preId, id);
+  }
+
+  for (const preId of validPrereqs) {
+    addDependencyEdges(preId, id);
+  }
 
   const cycleResult = detectCycle();
   if (cycleResult.hasCycle) {
-    node.prerequisites = originalPrereqs;
+    for (const preId of validPrereqs) {
+      removeDependencyEdges(preId, id);
+    }
+    for (const preId of originalPrereqs) {
+      addDependencyEdges(preId, id);
+    }
     const cycleNames = cycleResult.cycleNodes
       .map(cid => store.nodes.get(cid)?.name)
       .filter(Boolean);
@@ -314,6 +401,7 @@ router.put('/:id/prerequisites', (req: Request, res: Response) => {
       error: '检测到循环依赖',
       cycleNodes: cycleResult.cycleNodes,
       cycleNames,
+      cyclePath: cycleResult.cyclePath,
     });
     return;
   }
@@ -345,7 +433,7 @@ router.post('/reset', (_req: Request, res: Response) => {
 
 router.get('/path', (_req: Request, res: Response) => {
   const nodes = getNodesArray();
-  const { sorted, cycleNodes } = kahnTopologicalSort(nodes);
+  const { sorted, cycleNodes, cyclePath } = kahnTopologicalSort(nodes);
 
   if (cycleNodes.length > 0) {
     const cycleNames = cycleNodes
@@ -355,6 +443,7 @@ router.get('/path', (_req: Request, res: Response) => {
       error: '存在循环依赖，无法生成学习路径',
       cycleNodes,
       cycleNames,
+      cyclePath,
     });
     return;
   }

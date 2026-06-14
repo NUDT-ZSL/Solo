@@ -9,6 +9,7 @@ export interface SkillNode {
   parentId: string | null;
   childrenIds: string[];
   prerequisites: string[];
+  dependencies: string[];
 }
 
 export interface Dependency {
@@ -34,10 +35,12 @@ export interface LearningPath {
 export interface CycleDetectionResult {
   hasCycle: boolean;
   cycleNodes: string[];
+  cyclePath?: string[];
 }
 
 export interface DependencyValidationResult {
   valid: boolean;
   reason?: string;
   cycleNodes?: string[];
+  cyclePath?: string[];
 }

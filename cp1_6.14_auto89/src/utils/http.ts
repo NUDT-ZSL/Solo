@@ -7,7 +7,7 @@ const RETRY_DELAY_MS = 800;
 const shouldRetry = (error: AxiosError): boolean => {
   if (!error.response) return true;
   const status = error.response.status;
-  return status >= 500 || status === 408 || status === 429;
+  return status >= 500;
 };
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
