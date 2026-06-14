@@ -40,6 +40,21 @@ export class UIModule {
     this.createControls();
     this.setupResetButton();
     this.setupMobileToggle();
+    this.applyResponsiveState();
+  }
+
+  private applyResponsiveState(): void {
+    const uiPanel = document.getElementById('ui-panel');
+    const toggleBtn = document.getElementById('mobile-toggle');
+    if (!uiPanel || !toggleBtn) return;
+
+    if (window.innerWidth < 768) {
+      uiPanel.classList.remove('expanded');
+      toggleBtn.textContent = '展开面板';
+    } else {
+      uiPanel.classList.remove('expanded');
+      toggleBtn.textContent = '展开面板';
+    }
   }
 
   private createControls(): void {

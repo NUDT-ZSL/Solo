@@ -211,6 +211,13 @@ export class InteractionModule {
 
     this.endSpherical.copy(this.initialSpherical);
     this.endTarget.copy(this.initialTarget);
+
+    const thetaDiff = this.endSpherical.theta - this.startSpherical.theta;
+    if (thetaDiff > Math.PI) {
+      this.startSpherical.theta += Math.PI * 2;
+    } else if (thetaDiff < -Math.PI) {
+      this.startSpherical.theta -= Math.PI * 2;
+    }
   }
 
   private easeInOut(t: number): number {

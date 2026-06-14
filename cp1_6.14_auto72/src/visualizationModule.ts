@@ -78,6 +78,7 @@ export class VisualizationModule {
     this.gridHelper.position.y = 0.01;
     (this.gridHelper.material as THREE.Material).transparent = true;
     (this.gridHelper.material as THREE.Material).opacity = 0.5;
+    this.gridHelper.name = 'gridHelper';
     this.scene.add(this.gridHelper);
   }
 
@@ -96,11 +97,46 @@ export class VisualizationModule {
       this.gridResolution - 1
     );
 
-    const material = new THREE.MeshBasicMaterial({
-      vertexColors: true,
+    const vertexCount = geometry.attributes.position.count;
+    const colors = new Float32Array(vertexCount * 3);
+    const alphas = new Float32Array(vertexCount);
+
+    for (let i = 0; i < vertexCount; i++) {
+      colors[i * 3] = 0;
+      colors[i * 3 + 1] = 0.5;
+      colors[i * 3 + 2] = 1;
+      alphas[i] = 0;
+    }
+
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1));
+
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        uOpacity: { value: 0.6 },
+      },
+      vertexShader: `
+        attribute vec3 color;
+        attribute float alpha;
+        varying vec3 vColor;
+        varying float vAlpha;
+        void main() {
+          vColor = color;
+          vAlpha = alpha;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vColor;
+        varying float vAlpha;
+        uniform float uOpacity;
+        void main() {
+          gl_FragColor = vec4(vColor, vAlpha * uOpacity);
+        }
+      `,
       transparent: true,
-      opacity: 0.6,
       side: THREE.DoubleSide,
+      depthWrite: false,
     });
 
     const heatMap = new THREE.Mesh(geometry, material);
@@ -109,29 +145,11 @@ export class VisualizationModule {
     heatMap.name = 'heatmap';
     this.scene.add(heatMap);
     this.heatMapMesh = heatMap;
-
-    this.initHeatMapColors();
-  }
-
-  private initHeatMapColors(): void {
-    if (!this.heatMapMesh) return;
-
-    const geometry = this.heatMapMesh.geometry as THREE.PlaneGeometry;
-    const colors = new Float32Array(geometry.attributes.position.count * 3);
-
-    for (let i = 0; i < colors.length; i += 3) {
-      colors[i] = 0;
-      colors[i + 1] = 0.5;
-      colors[i + 2] = 1;
-    }
-
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    geometry.attributes.color.needsUpdate = true;
   }
 
   private createStreamLines(): void {
-    const totalVertices = this.maxStreamLines * (this.verticesPerLine - 1) * 2;
-    const positions = new Float32Array(totalVertices * 3);
+    const totalSegments = this.maxStreamLines * (this.verticesPerLine - 1);
+    const positions = new Float32Array(totalSegments * 2 * 3);
 
     this.streamLineGeometry = new THREE.BufferGeometry();
     this.streamLineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -141,6 +159,7 @@ export class VisualizationModule {
       color: new THREE.Color(200 / 255, 240 / 255, 255 / 255),
       transparent: true,
       opacity: 0.3,
+      depthWrite: false,
     });
 
     const lineSegments = new THREE.LineSegments(this.streamLineGeometry, material);
@@ -163,7 +182,7 @@ export class VisualizationModule {
 
   private updateHeatRange(heatSourceIntensity: number): void {
     this.heatMin = 0;
-    this.heatMax = Math.max(0.1, heatSourceIntensity / 50);
+    this.heatMax = Math.max(0.05, heatSourceIntensity / 50);
     this.updateHeatMapColors();
   }
 
@@ -172,39 +191,51 @@ export class VisualizationModule {
 
     const geometry = this.heatMapMesh.geometry as THREE.PlaneGeometry;
     const colors = geometry.attributes.color as THREE.BufferAttribute;
+    const alphas = geometry.attributes.alpha as THREE.BufferAttribute;
     const range = this.heatMax - this.heatMin;
 
     for (let z = 0; z < this.gridResolution; z++) {
       for (let x = 0; x < this.gridResolution; x++) {
         const idx = z * this.gridResolution + x;
-        const heat = this.heatGrid[idx];
-        const normalized = range > 0 ? (heat - this.heatMin) / range : 0;
+        const rawHeat = this.heatGrid[idx];
+        const normalized = range > 0 ? (rawHeat - this.heatMin) / range : 0;
         const clamped = Math.max(0, Math.min(1, normalized));
-        const color = this.getHeatColor(clamped);
-        const vertexIdx = z * this.gridResolution + x;
 
-        colors.setXYZ(vertexIdx, color.r, color.g, color.b);
+        const color = this.getHeatColor(clamped);
+        colors.setXYZ(idx, color.r, color.g, color.b);
+
+        const threshold = 0.05;
+        let alpha = 0;
+        if (clamped > threshold) {
+          alpha = Math.min(1, (clamped - threshold) / (1 - threshold) * 1.2);
+          alpha = Math.pow(alpha, 0.7);
+        }
+        alphas.setX(idx, alpha);
       }
     }
 
     colors.needsUpdate = true;
+    alphas.needsUpdate = true;
   }
 
   private getHeatColor(t: number): THREE.Color {
     const color = new THREE.Color();
 
-    if (t < 0.25) {
-      const f = t / 0.25;
-      color.setRGB(0, 0.3 + 0.4 * f, 0.6 + 0.4 * f);
-    } else if (t < 0.5) {
-      const f = (t - 0.25) / 0.25;
-      color.setRGB(0, 0.7 + 0.3 * f, 1 - f);
-    } else if (t < 0.75) {
-      const f = (t - 0.5) / 0.25;
-      color.setRGB(f * 0.8 + 0.2, 1 - f * 0.3, 0);
+    if (t < 0.2) {
+      const f = t / 0.2;
+      color.setRGB(0, 0.2 + 0.3 * f, 0.5 + 0.3 * f);
+    } else if (t < 0.4) {
+      const f = (t - 0.2) / 0.2;
+      color.setRGB(0, 0.5 + 0.4 * f, 0.8 - 0.5 * f);
+    } else if (t < 0.6) {
+      const f = (t - 0.4) / 0.2;
+      color.setRGB(f * 0.6, 0.9 - 0.2 * f, 0.3 - 0.3 * f);
+    } else if (t < 0.8) {
+      const f = (t - 0.6) / 0.2;
+      color.setRGB(0.6 + 0.3 * f, 0.7 - 0.4 * f, 0);
     } else {
-      const f = (t - 0.75) / 0.25;
-      color.setRGB(1, 0.7 - f * 0.5, 0);
+      const f = (t - 0.8) / 0.2;
+      color.setRGB(0.9 + 0.1 * f, 0.3 - 0.2 * f, 0);
     }
 
     return color;
@@ -273,7 +304,6 @@ export class VisualizationModule {
 
     this.streamLineGeometry.setDrawRange(0, vertexIndex);
     this.streamLineGeometry.attributes.position.needsUpdate = true;
-    this.streamLineGeometry.computeBoundingSphere();
   }
 
   public updateDisplayMode(mode: 'heatmap' | 'streamlines' | 'both'): void {
