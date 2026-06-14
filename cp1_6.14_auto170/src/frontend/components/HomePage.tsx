@@ -150,10 +150,15 @@ const HomePage: React.FC<HomePageProps> = ({
       <aside
         className="sidebar"
         style={{
-          width: '300px',
+          width: 300,
+          minWidth: 300,
+          maxWidth: 300,
           flexShrink: 0,
           background: '#f8fafc',
-          borderRadius: '0 12px 12px 0',
+          borderTopLeftRadius: 0,
+          borderTopRightRadius: 12,
+          borderBottomRightRadius: 12,
+          borderBottomLeftRadius: 0,
           boxShadow: '4px 0 12px rgba(0,0,0,0.06)',
           padding: '32px 24px',
           display: 'flex',
@@ -163,6 +168,7 @@ const HomePage: React.FC<HomePageProps> = ({
           top: 0,
           height: '100vh',
           overflowY: 'auto',
+          zIndex: 50,
         }}
       >
         <h1
@@ -351,7 +357,7 @@ const HomePage: React.FC<HomePageProps> = ({
                   style={{
                     width: '320px',
                     borderRadius: '16px',
-                    background: 'linear-gradient(135deg, #2563eb, #7c3aed)',
+                    background: 'linear-gradient(#2563eb, #7c3aed)',
                     boxShadow: '0 8px 24px rgba(37,99,235,0.3)',
                     padding: '24px',
                     cursor: 'pointer',

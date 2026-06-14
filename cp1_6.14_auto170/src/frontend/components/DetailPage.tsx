@@ -183,8 +183,16 @@ const DetailPage: React.FC<DetailPageProps> = ({ trip, onBack, onUpdate }) => {
     }
   }
 
-  async function handleDragStart(id: string) {
+  function handleDragStart(e: React.DragEvent, id: string) {
     setDraggedId(id)
+    const target = e.currentTarget as HTMLElement
+    target.style.transform = 'scale(1.05)'
+    target.style.boxShadow = '0 16px 32px rgba(0,0,0,0.2)'
+    target.style.zIndex = '1000'
+    target.style.opacity = '0.9'
+    try {
+      e.dataTransfer.effectAllowed = 'move'
+    } catch (_err) {}
   }
 
   async function handleDragOver(e: React.DragEvent, targetId: string) {
@@ -208,8 +216,13 @@ const DetailPage: React.FC<DetailPageProps> = ({ trip, onBack, onUpdate }) => {
     }
   }
 
-  function handleDragEnd() {
+  function handleDragEnd(e: React.DragEvent) {
     setDraggedId(null)
+    const target = e.currentTarget as HTMLElement
+    target.style.transform = 'translateY(0)'
+    target.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)'
+    target.style.zIndex = 'auto'
+    target.style.opacity = '1'
   }
 
   const groupedItinerary = trip.itinerary.reduce((acc, item) => {
@@ -448,21 +461,17 @@ const DetailPage: React.FC<DetailPageProps> = ({ trip, onBack, onUpdate }) => {
                       <div
                         key={item.id}
                         draggable
-                        onDragStart={() => handleDragStart(item.id)}
+                        onDragStart={e => handleDragStart(e, item.id)}
                         onDragOver={e => handleDragOver(e, item.id)}
-                        onDragEnd={handleDragEnd}
+                        onDragEnd={e => handleDragEnd(e)}
                         style={{
                           background: 'white',
                           borderRadius: '12px',
                           padding: '16px',
                           boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
                           cursor: draggedId === item.id ? 'grabbing' : 'grab',
-                          transform: draggedId === item.id ? 'scale(1.05)' : 'scale(1)',
-                          boxShadow:
-                            draggedId === item.id
-                              ? '0 8px 24px rgba(0,0,0,0.15)'
-                              : '0 2px 8px rgba(0,0,0,0.04)',
                           transition: 'all 0.2s ease',
+                          position: 'relative',
                         }}
                         onMouseEnter={e => {
                           if (draggedId !== item.id) {
@@ -769,42 +778,47 @@ const DetailPage: React.FC<DetailPageProps> = ({ trip, onBack, onUpdate }) => {
                   <div
                     style={{
                       display: 'flex',
-                      alignItems: 'flex-end',
+                      flexDirection: 'column',
                       gap: '8px',
-                      height: '56px',
                     }}
                   >
                     {Object.entries(CATEGORY_INFO).map(([cat, info]) => {
                       const amount = expensesByCategory[cat] || 0
-                      const heightPercent = totalExpenses > 0 ? (amount / totalExpenses) * 100 : 0
+                      const widthPercent = totalExpenses > 0 ? (amount / totalExpenses) * 100 : 0
                       return (
-                        <div
-                          key={cat}
-                          style={{
-                            flex: 1,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: '4px',
-                          }}
-                        >
+                        <div key={cat}>
                           <div
                             style={{
-                              width: '100%',
-                              height: `${Math.max(heightPercent * 0.4, 2)}px`,
-                              minHeight: '2px',
-                              background: info.color,
-                              borderRadius: '4px 4px 0 0',
-                              transition: 'height 0.3s ease-out',
-                            }}
-                          />
-                          <div
-                            style={{
-                              fontSize: '10px',
-                              color: '#94a3b8',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              marginBottom: '4px',
+                              fontSize: '11px',
+                              color: '#64748b',
                             }}
                           >
-                            {info.label}
+                            <span>
+                              {info.icon} {info.label}
+                            </span>
+                            <span>¥{amount.toLocaleString()} ({widthPercent.toFixed(0)}%)</span>
+                          </div>
+                          <div
+                            style={{
+                              height: '40px',
+                              background: '#f1f5f9',
+                              borderRadius: '6px',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <div
+                              style={{
+                                height: '100%',
+                                width: `${Math.max(widthPercent, 2)}%`,
+                                background: info.color,
+                                borderRadius: '6px',
+                                transition: 'width 0.3s ease-out',
+                              }}
+                            />
                           </div>
                         </div>
                       )

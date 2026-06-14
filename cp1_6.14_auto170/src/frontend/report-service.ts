@@ -35,11 +35,11 @@ function generatePhotoHtml(photos: string[]): string {
   const photoHtml = displayPhotos
     .map(
       photo =>
-        `<img src="${photo}" style="width:120px;height:120px;object-fit:cover;border-radius:8px;margin:4px;" alt="旅行照片" />`
+        `<img src="${photo}" style="width:120px;height:120px;min-width:120px;min-height:120px;max-width:120px;max-height:120px;object-fit:cover;border-radius:8px;display:block;" alt="旅行照片" />`
     )
     .join('')
 
-  return `<div style="display:flex;flex-wrap:wrap;margin-top:12px;">${photoHtml}</div>`
+  return `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;">${photoHtml}</div>`
 }
 
 export function generateReportHtml(trip: Trip): string {
