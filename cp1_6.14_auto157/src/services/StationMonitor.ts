@@ -8,9 +8,16 @@ export interface StationStatus extends Station {
   history: number[];
 }
 
+export interface CrowdLevelChangeEvent {
+  stationId: string;
+  stationName: string;
+  oldLevel: CrowdLevel | null;
+  newLevel: CrowdLevel;
+}
+
 const HISTORY_LENGTH = 10;
 
-function getCrowdLevel(flowRate: number): CrowdLevel {
+export function getCrowdLevel(flowRate: number): CrowdLevel {
   if (flowRate <= 250) return 'green';
   if (flowRate <= 500) return 'yellow';
   if (flowRate <= 750) return 'orange';
@@ -34,6 +41,7 @@ function sortByCrowdLevel(stations: StationStatus[]): StationStatus[] {
 
 class StationMonitor {
   private stationMap: Map<string, StationStatus> = new Map();
+  private previousLevels: Map<string, CrowdLevel> = new Map();
   private unsubscribe: (() => void) | null = null;
 
   start(): void {
@@ -51,6 +59,7 @@ class StationMonitor {
       this.unsubscribe = null;
     }
     this.stationMap.clear();
+    this.previousLevels.clear();
   }
 
   getStationStatuses(): StationStatus[] {
@@ -64,6 +73,8 @@ class StationMonitor {
   }
 
   private processData(stations: Station[]): void {
+    const levelChanges: CrowdLevelChangeEvent[] = [];
+
     stations.forEach((station) => {
       const existing = this.stationMap.get(station.id);
       const history = existing ? [...existing.history, station.flowRate] : [station.flowRate];
@@ -71,19 +82,41 @@ class StationMonitor {
         history.shift();
       }
 
+      const newCrowdLevel = getCrowdLevel(station.flowRate);
+      const prevLevel = this.previousLevels.get(station.id);
+
+      if (prevLevel && prevLevel !== newCrowdLevel) {
+        levelChanges.push({
+          stationId: station.id,
+          stationName: station.name,
+          oldLevel: prevLevel,
+          newLevel: newCrowdLevel
+        });
+      }
+
+      this.previousLevels.set(station.id, newCrowdLevel);
+
       this.stationMap.set(station.id, {
         ...station,
-        crowdLevel: getCrowdLevel(station.flowRate),
+        crowdLevel: newCrowdLevel,
         history
       });
     });
 
     this.emitStatusUpdate();
+
+    if (levelChanges.length > 0) {
+      this.emitLevelChanges(levelChanges);
+    }
   }
 
   private emitStatusUpdate(): void {
     const statuses = this.getStationStatuses();
     eventBus.emit('status:update', statuses);
+  }
+
+  private emitLevelChanges(changes: CrowdLevelChangeEvent[]) {
+    eventBus.emit('crowd-level:change', changes);
   }
 }
 

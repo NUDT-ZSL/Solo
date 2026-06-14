@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet.heat';
 import { eventBus } from '../event-bus';
+import { stationMonitor } from '../services/StationMonitor';
 import type { StationStatus, CrowdLevel } from '../services/StationMonitor';
 
 const CROWD_COLORS: Record<CrowdLevel, string> = {
@@ -92,7 +93,7 @@ function createPopupContent(station: StationStatus): HTMLElement {
 
 function createStationDotIcon(color: string): L.DivIcon {
   return L.divIcon({
-    className: 'station-dot',
+    className: 'metroflow-station-dot',
     html: `<div style="width: 10px; height: 10px; border-radius: 50%; background: ${color}; border: 2px solid white; box-shadow: 0 0 6px rgba(0,0,0,0.5);"></div>`,
     iconSize: [14, 14],
     iconAnchor: [7, 7]
@@ -101,8 +102,8 @@ function createStationDotIcon(color: string): L.DivIcon {
 
 function createFaultIcon(): L.DivIcon {
   return L.divIcon({
-    className: 'fault-icon-wrapper',
-    html: '<div class="fault-blink">⚠</div>',
+    className: 'metroflow-fault-icon',
+    html: '<div class="metroflow-fault-blink">⚠</div>',
     iconSize: [24, 24],
     iconAnchor: [12, 12]
   });
@@ -130,15 +131,15 @@ function ensureGlobalStyles() {
     .leaflet-popup-close-button {
       color: white !important;
     }
-    .station-dot {
+    .metroflow-station-dot {
       background: transparent !important;
       border: none !important;
     }
-    .fault-icon-wrapper {
+    .metroflow-fault-icon {
       background: transparent !important;
       border: none !important;
     }
-    .fault-blink {
+    .metroflow-fault-blink {
       width: 24px;
       height: 24px;
       display: flex;
@@ -146,11 +147,12 @@ function ensureGlobalStyles() {
       justify-content: center;
       font-size: 20px;
       color: #ef4444;
-      animation: faultBlink 1s ease-in-out infinite;
+      animation: metroflowFaultBlink 1s ease-in-out infinite;
+      text-shadow: 0 0 8px rgba(239, 68, 68, 0.8);
     }
-    @keyframes faultBlink {
+    @keyframes metroflowFaultBlink {
       0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(1.2); }
+      50% { opacity: 0.4; transform: scale(1.3); }
     }
   `;
   document.head.appendChild(style);
@@ -162,8 +164,7 @@ export default function MapView() {
   const heatLayerRef = useRef<L.HeatLayer | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
   const popupsRef = useRef<Map<string, L.Popup>>(new Map());
-  const pendingHeatUpdateRef = useRef<StationStatus[] | null>(null);
-  const pendingMarkersUpdateRef = useRef<StationStatus[] | null>(null);
+  const pendingDataRef = useRef<StationStatus[] | null>(null);
   const animationFrameIdRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -208,48 +209,48 @@ export default function MapView() {
       }
     });
 
+    const handleStatusUpdate = eventBus.on('status:update', (data) => {
+      const stations = data as StationStatus[];
+      pendingDataRef.current = stations;
+      scheduleRender();
+    });
+
+    const initialData = stationMonitor.getStationStatuses();
+    if (initialData.length > 0) {
+      pendingDataRef.current = initialData;
+      scheduleRender();
+    }
+
     return () => {
       handleStationClick();
+      handleStatusUpdate();
       if (animationFrameIdRef.current !== null) {
         cancelAnimationFrame(animationFrameIdRef.current);
+        animationFrameIdRef.current = null;
       }
+      pendingDataRef.current = null;
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current.clear();
+      popupsRef.current.clear();
       map.remove();
       mapInstanceRef.current = null;
     };
   }, []);
 
-  useEffect(() => {
-    const unsubscribe = eventBus.on('status:update', (data) => {
-      const stations = data as StationStatus[];
-      pendingHeatUpdateRef.current = stations;
-      pendingMarkersUpdateRef.current = stations;
-      scheduleUpdate();
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, []);
-
-  const scheduleUpdate = () => {
+  const scheduleRender = () => {
     if (animationFrameIdRef.current !== null) return;
 
     animationFrameIdRef.current = requestAnimationFrame(() => {
-      if (pendingHeatUpdateRef.current && heatLayerRef.current) {
-        updateHeatmap(pendingHeatUpdateRef.current);
-        pendingHeatUpdateRef.current = null;
+      if (pendingDataRef.current) {
+        renderHeatmap(pendingDataRef.current);
+        renderMarkers(pendingDataRef.current);
+        pendingDataRef.current = null;
       }
-
-      if (pendingMarkersUpdateRef.current && mapInstanceRef.current) {
-        updateMarkers(pendingMarkersUpdateRef.current);
-        pendingMarkersUpdateRef.current = null;
-      }
-
       animationFrameIdRef.current = null;
     });
   };
 
-  const updateHeatmap = (stations: StationStatus[]) => {
+  const renderHeatmap = (stations: StationStatus[]) => {
     if (!heatLayerRef.current) return;
 
     const heatPoints: [number, number, number][] = stations.map((s) => {
@@ -260,23 +261,24 @@ export default function MapView() {
     heatLayerRef.current.setLatLngs(heatPoints as L.HeatLatLngTuple[]);
   };
 
-  const updateMarkers = (stations: StationStatus[]) => {
+  const renderMarkers = (stations: StationStatus[]) => {
     if (!mapInstanceRef.current) return;
 
     const currentIds = new Set(stations.map((s) => s.id));
 
-    stations.forEach((station) => {
+    for (const station of stations) {
       let marker = markersRef.current.get(station.id);
       const color = CROWD_COLORS[station.crowdLevel];
+      const isFault = station.status === 'fault';
 
       if (!marker) {
-        marker = L.marker([station.lat, station.lng], {
-          icon: station.status === 'fault' ? createFaultIcon() : createStationDotIcon(color)
-        }).addTo(mapInstanceRef.current!);
+        const icon = isFault ? createFaultIcon() : createStationDotIcon(color);
+        marker = L.marker([station.lat, station.lng], { icon }).addTo(mapInstanceRef.current!);
 
         const popup = L.popup({
           closeButton: true,
-          className: 'custom-popup'
+          className: 'metroflow-popup',
+          maxWidth: 280
         }).setContent(createPopupContent(station));
 
         marker.bindPopup(popup);
@@ -288,13 +290,10 @@ export default function MapView() {
           popup.setContent(createPopupContent(station));
         }
 
-        if (station.status === 'fault') {
-          marker.setIcon(createFaultIcon());
-        } else {
-          marker.setIcon(createStationDotIcon(color));
-        }
+        const newIcon = isFault ? createFaultIcon() : createStationDotIcon(color);
+        marker.setIcon(newIcon);
       }
-    });
+    }
 
     markersRef.current.forEach((marker, id) => {
       if (!currentIds.has(id)) {

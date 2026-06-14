@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { eventBus } from '../event-bus';
+import { stationMonitor } from '../services/StationMonitor';
 import type { StationStatus, CrowdLevel } from '../services/StationMonitor';
 
 const CROWD_COLORS: Record<CrowdLevel, string> = {
@@ -18,7 +19,8 @@ const CROWD_LABELS: Record<CrowdLevel, string> = {
 
 const ROW_HEIGHT = 52;
 const VISIBLE_ROWS = 12;
-const BUFFER_ROWS = 2;
+const MIN_BUFFER_ROWS = 1;
+const MAX_BUFFER_ROWS = 5;
 const PANEL_PADDING = 16;
 
 interface StationPanelProps {
@@ -27,10 +29,22 @@ interface StationPanelProps {
   onClose?: () => void;
 }
 
+function calculateOverscan(scrollVelocity: number): number {
+  const absVelocity = Math.abs(scrollVelocity);
+  if (absVelocity < 5) return MIN_BUFFER_ROWS;
+  if (absVelocity < 20) return 2;
+  if (absVelocity < 50) return 3;
+  if (absVelocity < 100) return 4;
+  return MAX_BUFFER_ROWS;
+}
+
 export default function StationPanel({ isMobile, isOpen, onClose }: StationPanelProps) {
   const [stations, setStations] = useState<StationStatus[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
+  const [overscan, setOverscan] = useState(MIN_BUFFER_ROWS);
+  const lastScrollTopRef = useRef(0);
+  const lastScrollTimeRef = useRef(Date.now());
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,13 +55,32 @@ export default function StationPanel({ isMobile, isOpen, onClose }: StationPanel
       });
     });
 
+    const initialStatuses = stationMonitor.getStationStatuses();
+    if (initialStatuses.length > 0) {
+      requestAnimationFrame(() => {
+        setStations(initialStatuses);
+      });
+    }
+
     return () => {
       unsubscribe();
     };
   }, []);
 
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    setScrollTop(e.currentTarget.scrollTop);
+    const currentScrollTop = e.currentTarget.scrollTop;
+    const now = Date.now();
+    const dt = now - lastScrollTimeRef.current;
+
+    if (dt > 0) {
+      const velocity = (currentScrollTop - lastScrollTopRef.current) / dt * 16;
+      const newOverscan = calculateOverscan(velocity);
+      setOverscan((prev) => (prev !== newOverscan ? newOverscan : prev));
+    }
+
+    lastScrollTopRef.current = currentScrollTop;
+    lastScrollTimeRef.current = now;
+    setScrollTop(currentScrollTop);
   }, []);
 
   const handleStationClick = useCallback((stationId: string) => {
@@ -60,17 +93,15 @@ export default function StationPanel({ isMobile, isOpen, onClose }: StationPanel
 
   const totalHeight = stations.length * ROW_HEIGHT;
   const scrollOffset = Math.max(0, scrollTop - PANEL_PADDING);
-  const startIndex = Math.max(0, Math.floor(scrollOffset / ROW_HEIGHT) - BUFFER_ROWS);
+  const startIndex = Math.max(0, Math.floor(scrollOffset / ROW_HEIGHT) - overscan);
   const endIndex = Math.min(
     stations.length,
-    startIndex + VISIBLE_ROWS + BUFFER_ROWS * 2
+    startIndex + VISIBLE_ROWS + overscan * 2
   );
 
   const visibleStations = useMemo(() => {
     return stations.slice(startIndex, endIndex);
   }, [stations, startIndex, endIndex]);
-
-  const renderCount = endIndex - startIndex;
 
   const offsetY = startIndex * ROW_HEIGHT;
 
@@ -159,6 +190,16 @@ export default function StationPanel({ isMobile, isOpen, onClose }: StationPanel
                     backgroundColor: bgColor,
                     boxSizing: 'border-box'
                   }}
+                  onMouseEnter={(e) => {
+                    if (!isFault && !isSelected) {
+                      e.currentTarget.style.backgroundColor = '#1e293b';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isFault && !isSelected) {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }
+                  }}
                 >
                   <div
                     style={{
@@ -166,7 +207,8 @@ export default function StationPanel({ isMobile, isOpen, onClose }: StationPanel
                       height: 12,
                       borderRadius: '50%',
                       backgroundColor: isFault ? '#ef4444' : CROWD_COLORS[station.crowdLevel],
-                      flexShrink: 0
+                      flexShrink: 0,
+                      boxShadow: isFault ? '0 0 8px rgba(239, 68, 68, 0.6)' : 'none'
                     }}
                   />
 
