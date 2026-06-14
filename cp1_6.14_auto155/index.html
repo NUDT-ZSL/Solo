@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>太空舰队战术模拟</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0a0a2e;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      color: #e0e0ff;
+      user-select: none;
+    }
+
+    #app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #gameCanvas {
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 220px;
+      width: calc(100vw - 220px);
+      height: 100vh;
+      cursor: crosshair;
+    }
+
+    #uiPanel {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 220px;
+      height: 100vh;
+      padding: 16px;
+      background: rgba(10, 10, 30, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-right: 1px solid rgba(0, 212, 255, 0.2);
+      border-radius: 0 12px 12px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      z-index: 10;
+      transition: transform 0.3s ease;
+    }
+
+    #panelToggle {
+      display: none;
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: rgba(10, 10, 30, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      color: #00d4ff;
+      font-size: 20px;
+      cursor: pointer;
+      z-index: 11;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    #panelToggle:hover {
+      background: rgba(0, 212, 255, 0.15);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 212, 255, 0.3);
+    }
+
+    #panelToggle.active {
+      background: rgba(0, 212, 255, 0.2);
+    }
+
+    .panel-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .panel-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #00d4ff;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding-bottom: 6px;
+      border-bottom: 1px solid rgba(0, 212, 255, 0.15);
+    }
+
+    .ship-icons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .ship-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: 1px solid;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    .ship-icon.frigate { border-color: #4a9eff; color: #4a9eff; background: rgba(74, 158, 255, 0.1); }
+    .ship-icon.destroyer { border-color: #ff8c42; color: #ff8c42; background: rgba(255, 140, 66, 0.1); }
+    .ship-icon.carrier { border-color: #a855f7; color: #a855f7; background: rgba(168, 85, 247, 0.1); }
+
+    .ship-icon .count-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      border-radius: 8px;
+      background: #00d4ff;
+      color: #0a0a1e;
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+    }
+
+    .stat-label {
+      color: #a0a0c0;
+    }
+
+    .stat-value {
+      color: #00d4ff;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .shield-bar {
+      width: 100%;
+      height: 8px;
+      background: rgba(74, 74, 106, 0.4);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+
+    .shield-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #00ff88, #00d4ff);
+      border-radius: 4px;
+      transition: width 0.2s ease;
+      box-shadow: 0 0 8px rgba(0, 212, 255, 0.5);
+    }
+
+    .formation-buttons {
+      display: flex;
+      gap: 6px;
+    }
+
+    .formation-btn {
+      flex: 1;
+      padding: 8px 6px;
+      border: none;
+      border-radius: 8px;
+      background: #4a4a6a;
+      color: #e0e0ff;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+
+    .formation-btn:hover {
+      background: #5a5a8a;
+      transform: translateY(-2px);
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .formation-btn.active {
+      background: #00d4ff;
+      color: #0a0a1e;
+      box-shadow: 0 0 12px rgba(0, 212, 255, 0.6), 0 3px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .tip-box {
+      margin-top: auto;
+      padding: 10px;
+      background: rgba(0, 212, 255, 0.06);
+      border: 1px solid rgba(0, 212, 255, 0.15);
+      border-radius: 8px;
+      font-size: 11px;
+      color: #8080a0;
+      line-height: 1.6;
+    }
+
+    .tip-box strong {
+      color: #00d4ff;
+    }
+
+    @media (max-width: 768px) {
+      #gameCanvas {
+        left: 0;
+        width: 100vw;
+      }
+
+      #uiPanel {
+        transform: translateX(-100%);
+        width: 220px;
+      }
+
+      #uiPanel.open {
+        transform: translateX(0);
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+      }
+
+      #panelToggle {
+        display: flex;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <button id="panelToggle" aria-label="切换面板">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+      </svg>
+    </button>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <aside id="uiPanel">
+      <div class="panel-section">
+        <div class="panel-title">舰队总览</div>
+        <div class="ship-icons" id="shipIcons">
+          <div class="ship-icon frigate" data-type="frigate">
+            F<span class="count-badge" id="countFrigate">0</span>
+          </div>
+          <div class="ship-icon destroyer" data-type="destroyer">
+            D<span class="count-badge" id="countDestroyer">0</span>
+          </div>
+          <div class="ship-icon carrier" data-type="carrier">
+            C<span class="count-badge" id="countCarrier">0</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-title">当前状态</div>
+        <div class="stat-row">
+          <span class="stat-label">选中战舰</span>
+          <span class="stat-value" id="selectedCount">0 艘</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">总护盾值</span>
+          <span class="stat-value" id="totalShield">0 / 0</span>
+        </div>
+        <div class="shield-bar">
+          <div class="shield-fill" id="shieldFill" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-title">阵型选择</div>
+        <div class="formation-buttons">
+          <button class="formation-btn active" data-formation="triangle">三角</button>
+          <button class="formation-btn" data-formation="square">方形</button>
+          <button class="formation-btn" data-formation="line">直线</button>
+        </div>
+      </div>
+
+      <div class="tip-box">
+        <strong>操作提示：</strong><br/>
+        • 鼠标拖拽框选战舰<br/>
+        • 右键点击移动目标点<br/>
+        • 移动中自动锁定开火
+      </div>
+    </aside>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
