@@ -1,0 +1,77 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: linear-gradient(180deg, #f0f4f8 0%, #e2e8f0 100%);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.mood-emoji-container {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scrollbar-width: none;
+}
+
+.mood-emoji-container::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 480px) {
+  .mood-emoji-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    overflow-x: visible;
+  }
+}
+
+.mood-textarea:focus,
+.mood-input:focus {
+  border-color: #6c5ce7 !important;
+}
+
+.mood-card:hover,
+.mood-chart-wrapper:hover,
+.mood-entry-container:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12) !important;
+}
+
+.mood-submit-button:hover {
+  background-color: #5a4cd1 !important;
+  box-shadow: 0 4px 12px rgba(108, 92, 231, 0.3) !important;
+}
+
+.mood-trend-button:hover {
+  background-color: #a29bfe !important;
+}
+
+.mood-period-button:hover {
+  border-color: #6c5ce7 !important;
+  color: #6c5ce7 !important;
+}
+
+.mood-period-button.active:hover {
+  background-color: #5a4cd1 !important;
+  color: #ffffff !important;
+}
+
+.mood-delete-button:hover {
+  background-color: #fee2e2 !important;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2) !important;
+}
+
+.mood-emoji-button:hover {
+  transform: scale(1.1);
+}
