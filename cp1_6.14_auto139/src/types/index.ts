@@ -14,15 +14,25 @@ export interface Choice {
   id: string;
   text: string;
   nextNodeId: string;
-  condition?: Condition;
+  condition?: ConditionNode | string;
   effects?: Effect[];
+  available?: boolean;
 }
 
-export interface Condition {
+export interface SimpleCondition {
   variable: string;
   operator: '==' | '!=' | '>=' | '<=' | '>' | '<';
   value: number | string | boolean;
 }
+
+export type LogicalOperator = 'and' | 'or';
+
+export interface CompositeCondition {
+  logical: LogicalOperator;
+  conditions: (ConditionNode | string)[];
+}
+
+export type ConditionNode = SimpleCondition | CompositeCondition;
 
 export interface Effect {
   type: 'set' | 'add' | 'subtract';

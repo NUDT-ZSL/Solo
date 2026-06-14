@@ -1,5 +1,6 @@
-import { StoryNode, GameState, SceneData, Condition, Effect, Choice, GameEvent } from '../types';
+import { StoryNode, GameState, SceneData, ConditionNode, Effect, Choice, GameEvent } from '../types';
 import { eventBus } from './EventBus';
+import { ConditionParser } from './ConditionParser';
 
 class StoryEngine {
   private nodes: Map<string, StoryNode> = new Map();
@@ -10,6 +11,11 @@ class StoryEngine {
     history: [],
   };
   private isLoaded: boolean = false;
+  private conditionParser: ConditionParser;
+
+  constructor() {
+    this.conditionParser = new ConditionParser(this.state.variables);
+  }
 
   async loadStory(storyUrl: string = '/story.json'): Promise<void> {
     try {
@@ -46,6 +52,7 @@ class StoryEngine {
       visitedNodes: [startNode.id],
       history: [{ nodeId: startNode.id, timestamp: Date.now() }],
     };
+    this.conditionParser.setVariables(this.state.variables);
 
     eventBus.emit(GameEvent.GAME_START, this.state);
 
@@ -53,7 +60,13 @@ class StoryEngine {
   }
 
   loadGame(savedState: GameState): SceneData {
-    this.state = { ...savedState };
+    this.state = {
+      currentNodeId: savedState.currentNodeId,
+      variables: { ...savedState.variables },
+      visitedNodes: [...savedState.visitedNodes],
+      history: [...savedState.history],
+    };
+    this.conditionParser.setVariables(this.state.variables);
     this.isLoaded = true;
     eventBus.emit(GameEvent.LOAD_GAME, this.state);
     return this.getCurrentSceneData();
@@ -123,6 +136,8 @@ class StoryEngine {
       timestamp: Date.now(),
     });
 
+    this.conditionParser.setVariables(this.state.variables);
+
     const sceneData = this.getCurrentSceneData();
     eventBus.emit(GameEvent.SCENE_CHANGE, sceneData);
     eventBus.emit(GameEvent.SAVE_GAME, this.state);
@@ -134,27 +149,8 @@ class StoryEngine {
     return sceneData;
   }
 
-  private checkCondition(condition?: Condition): boolean {
-    if (!condition) return true;
-
-    const value = this.state.variables[condition.variable];
-
-    switch (condition.operator) {
-      case '==':
-        return value == condition.value;
-      case '!=':
-        return value != condition.value;
-      case '>=':
-        return (value as number) >= (condition.value as number);
-      case '<=':
-        return (value as number) <= (condition.value as number);
-      case '>':
-        return (value as number) > (condition.value as number);
-      case '<':
-        return (value as number) < (condition.value as number);
-      default:
-        return true;
-    }
+  private checkCondition(condition?: ConditionNode | string): boolean {
+    return this.conditionParser.evaluate(condition);
   }
 
   private applyEffect(effect: Effect): void {
@@ -163,22 +159,47 @@ class StoryEngine {
         this.state.variables[effect.variable] = effect.value;
         break;
       case 'add':
-        const currentAdd = this.state.variables[effect.variable] as number | undefined;
-        this.state.variables[effect.variable] = (currentAdd || 0) + (effect.value as number);
+        const currentAdd = this.state.variables[effect.variable];
+        if (typeof currentAdd === 'number' && typeof effect.value === 'number') {
+          this.state.variables[effect.variable] = currentAdd + effect.value;
+        } else {
+          const addValue = typeof effect.value === 'number' ? effect.value : 0;
+          const addCurrent = typeof currentAdd === 'number' ? currentAdd : 0;
+          this.state.variables[effect.variable] = addCurrent + addValue;
+        }
         break;
       case 'subtract':
-        const currentSub = this.state.variables[effect.variable] as number | undefined;
-        this.state.variables[effect.variable] = (currentSub || 0) - (effect.value as number);
+        const currentSub = this.state.variables[effect.variable];
+        if (typeof currentSub === 'number' && typeof effect.value === 'number') {
+          this.state.variables[effect.variable] = currentSub - effect.value;
+        } else {
+          const subValue = typeof effect.value === 'number' ? effect.value : 0;
+          const subCurrent = typeof currentSub === 'number' ? currentSub : 0;
+          this.state.variables[effect.variable] = subCurrent - subValue;
+        }
         break;
     }
   }
 
   getState(): GameState {
-    return { ...this.state };
+    return {
+      currentNodeId: this.state.currentNodeId,
+      variables: { ...this.state.variables },
+      visitedNodes: [...this.state.visitedNodes],
+      history: [...this.state.history],
+    };
   }
 
   getVariable(name: string): number | string | boolean | undefined {
     return this.state.variables[name];
+  }
+
+  getVisitedNodes(): string[] {
+    return [...this.state.visitedNodes];
+  }
+
+  hasVisited(nodeId: string): boolean {
+    return this.state.visitedNodes.includes(nodeId);
   }
 
   isStoryLoaded(): boolean {

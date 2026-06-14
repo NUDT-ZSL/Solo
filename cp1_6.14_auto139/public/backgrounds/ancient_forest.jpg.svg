@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <radialGradient id="skyGlow" cx="50%" cy="20%" r="70%">
+      <stop offset="0%" style="stop-color:#5a6b3c"/>
+      <stop offset="50%" style="stop-color:#2d4a2b"/>
+      <stop offset="100%" style="stop-color:#1a2f1a"/>
+    </radialGradient>
+    <linearGradient id="trunkGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#3d2817"/>
+      <stop offset="30%" style="stop-color:#5c3d2e"/>
+      <stop offset="70%" style="stop-color:#4a2f1f"/>
+      <stop offset="100%" style="stop-color:#2d1810"/>
+    </linearGradient>
+    <radialGradient id="canopy1" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#3d5a2a;stop-opacity:0.9"/>
+      <stop offset="100%" style="stop-color:#1f3318;stop-opacity:0.95"/>
+    </radialGradient>
+    <radialGradient id="lightRay" cx="50%" cy="0%" r="100%">
+      <stop offset="0%" style="stop-color:#d4c5a0;stop-opacity:0.4"/>
+      <stop offset="100%" style="stop-color:#d4c5a0;stop-opacity:0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#skyGlow)"/>
+  <rect x="700" y="100" width="60" height="980" fill="url(#trunkGrad)"/>
+  <ellipse cx="730" cy="250" rx="280" ry="200" fill="url(#canopy1)"/>
+  <ellipse cx="650" cy="180" rx="180" ry="130" fill="#2d4a23" opacity="0.8"/>
+  <ellipse cx="820" cy="160" rx="200" ry="140" fill="#3a5528" opacity="0.8"/>
+  <rect x="200" y="50" width="80" height="1030" fill="url(#trunkGrad)"/>
+  <ellipse cx="240" cy="220" rx="320" ry="240" fill="url(#canopy1)"/>
+  <ellipse cx="140" cy="150" rx="180" ry="150" fill="#263d1d" opacity="0.75"/>
+  <ellipse cx="340" cy="130" rx="200" ry="140" fill="#335024" opacity="0.8"/>
+  <rect x="1600" y="60" width="90" height="1020" fill="url(#trunkGrad)"/>
+  <ellipse cx="1645" cy="240" rx="340" ry="250" fill="url(#canopy1)"/>
+  <ellipse cx="1540" cy="160" rx="200" ry="160" fill="#28401e" opacity="0.75"/>
+  <ellipse cx="1750" cy="150" rx="220" ry="150" fill="#355325" opacity="0.8"/>
+  <rect x="1150" y="30" width="70" height="1050" fill="url(#trunkGrad)"/>
+  <ellipse cx="1185" cy="200" rx="260" ry="190" fill="url(#canopy1)"/>
+  <rect x="450" y="120" width="55" height="960" fill="url(#trunkGrad)"/>
+  <ellipse cx="477" cy="280" rx="200" ry="150" fill="#2c4721" opacity="0.7"/>
+  <rect x="1350" y="100" width="65" height="980" fill="url(#trunkGrad)"/>
+  <ellipse cx="1382" cy="260" rx="220" ry="170" fill="#2e4a22" opacity="0.7"/>
+  <polygon points="0,850 100,720 180,800 320,680 500,780 700,650 900,760 1100,640 1300,750 1500,660 1700,770 1920,680 1920,1080 0,1080" fill="#1a1208" opacity="0.85"/>
+  <g opacity="0.25">
+    <polygon points="680,0 780,0 850,1080 610,1080" fill="url(#lightRay)"/>
+    <polygon points="180,0 280,0 320,1080 140,1080" fill="url(#lightRay)"/>
+    <polygon points="1580,0 1680,0 1730,1080 1530,1080" fill="url(#lightRay)"/>
+  </g>
+  <g fill="#5a4030" opacity="0.5">
+    <circle cx="240" cy="600" r="15"/>
+    <circle cx="225" cy="620" r="12"/>
+    <circle cx="720" cy="500" r="18"/>
+    <circle cx="745" cy="530" r="14"/>
+    <circle cx="1640" cy="550" r="16"/>
+    <circle cx="1665" cy="580" r="13"/>
+    <circle cx="1175" cy="480" r="17"/>
+  </g>
+  <g fill="#7a6040" opacity="0.35">
+    <path d="M240,400 Q250,450 240,500 Q230,550 240,600"/>
+    <path d="M725,350 Q735,420 725,500 Q715,570 725,650"/>
+    <path d="M1640,380 Q1650,460 1640,540 Q1630,620 1640,700"/>
+  </g>
+  <ellipse cx="960" cy="540" rx="900" ry="400" fill="#2a1f10" opacity="0.4"/>
+</svg>
