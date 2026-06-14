@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Card, CardType } from './types';
+import { Card, CARD_TYPE_CONFIG } from './types';
 import './CardItem.css';
 
 interface CardItemProps {
@@ -14,18 +14,6 @@ interface CardItemProps {
   isGallery?: boolean;
 }
 
-const typeColors: Record<CardType, string> = {
-  [CardType.LINK]: '#3498db',
-  [CardType.IMAGE]: '#e67e22',
-  [CardType.TEXT]: '#2ecc71',
-};
-
-const typeIcons: Record<CardType, string> = {
-  [CardType.LINK]: '🔗',
-  [CardType.IMAGE]: '🖼️',
-  [CardType.TEXT]: '📝',
-};
-
 const CardItem: React.FC<CardItemProps> = ({
   card,
   onLike,
@@ -37,6 +25,7 @@ const CardItem: React.FC<CardItemProps> = ({
   isGallery = false,
 }) => {
   const [likeAnimating, setLikeAnimating] = useState(false);
+  const typeConfig = CARD_TYPE_CONFIG[card.type];
 
   const handleLike = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -55,7 +44,7 @@ const CardItem: React.FC<CardItemProps> = ({
 
   const renderCardContent = () => {
     switch (card.type) {
-      case CardType.LINK:
+      case 'link':
         return (
           <div className="card-link-content">
             {card.title && <h3 className="card-title">{card.title}</h3>}
@@ -73,7 +62,7 @@ const CardItem: React.FC<CardItemProps> = ({
             )}
           </div>
         );
-      case CardType.IMAGE:
+      case 'image':
         return (
           <div className="card-image-content">
             {card.imageUrl && (
@@ -82,7 +71,7 @@ const CardItem: React.FC<CardItemProps> = ({
             {card.title && <p className="card-image-title">{card.title}</p>}
           </div>
         );
-      case CardType.TEXT:
+      case 'text':
         return (
           <div className="card-text-content">
             {card.content && (
@@ -106,8 +95,8 @@ const CardItem: React.FC<CardItemProps> = ({
       onDragOver={onDragOver}
       onDrop={(e) => onDrop && onDrop(e, card.id)}
     >
-      <div className="card-type-icon" style={{ backgroundColor: typeColors[card.type] }}>
-        {typeIcons[card.type]}
+      <div className="card-type-icon" style={{ backgroundColor: typeConfig.color }}>
+        {typeConfig.icon}
       </div>
       <div className="card-body">{renderCardContent()}</div>
       <div className="card-footer">

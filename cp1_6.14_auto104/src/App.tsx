@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import CardBoard from './CardBoard';
 import FolderPanel from './FolderPanel';
-import { Card, Folder, CardType } from './types';
+import { Card, Folder, CardType, CARD_TYPE_CONFIG } from './types';
 import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
 import axios from 'axios';
@@ -72,6 +72,57 @@ const initialCards: Card[] = [
   },
 ];
 
+const loadImageAsBlob = (url: string): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Canvas context not available'));
+          return;
+        }
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error('Failed to convert canvas to blob'));
+            }
+          },
+          'image/jpeg',
+          0.92
+        );
+      } catch (canvasError) {
+        reject(canvasError);
+      }
+    };
+    img.onerror = () => {
+      reject(new Error(`Failed to load image: ${url}`));
+    };
+    img.src = url;
+  });
+};
+
+const fetchImageWithProxyFallback = async (url: string): Promise<Blob> => {
+  try {
+    return await loadImageAsBlob(url);
+  } catch (_imgError) {
+    try {
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+      const response = await axios.get(proxyUrl, { responseType: 'blob' });
+      return response.data;
+    } catch (proxyError) {
+      throw proxyError;
+    }
+  }
+};
+
 type CreateCardModalProps = {
   isOpen: boolean;
   onClose: () => void;
@@ -86,10 +137,10 @@ const CreateCardModal: React.FC<CreateCardModalProps> = ({ isOpen, onClose, onCr
   const [title, setTitle] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleTypeLabels: Record<CardType, string> = {
-    [CardType.LINK: '🔗 链接',
-    [CardType.IMAGE]: '🖼️ 图片',
-    [CardType.TEXT]: '📝 文本',
+  const typeLabels: Record<CardType, string> = {
+    [CardType.LINK]: `${CARD_TYPE_CONFIG[CardType.LINK].icon} ${CARD_TYPE_CONFIG[CardType.LINK].label}`,
+    [CardType.IMAGE]: `${CARD_TYPE_CONFIG[CardType.IMAGE].icon} ${CARD_TYPE_CONFIG[CardType.IMAGE].label}`,
+    [CardType.TEXT]: `${CARD_TYPE_CONFIG[CardType.TEXT].icon} ${CARD_TYPE_CONFIG[CardType.TEXT].label}`,
   };
 
   const handleFetchLink = async () => {
@@ -143,112 +194,105 @@ const CreateCardModal: React.FC<CreateCardModalProps> = ({ isOpen, onClose, onCr
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-      <div className="modal-header">
-        <h3>创建灵感卡片</h3>
-        <button className="modal-close" onClick={onClose}>✕</button>
-      </div>
-
-      <div className="modal-body">
-        <div className="type-selector">
-          {Object.values(CardType).map((type) => (
-            <button
-              key={type}
-              className={`type-btn ${cardType === type ? 'active' : ''}`}
-              onClick={() => setCardType(type)}
-              style={{
-                borderColor: cardType === type
-                  ? type === CardType.LINK
-                    ? '#3498db'
-                    : type === CardType.IMAGE
-                    ? '#e67e22'
-                    : '#2ecc71'
-                  : '#dee2e6',
-                background: cardType === type
-                  ? type === CardType.LINK
-                    ? 'rgba(52, 152, 219, 0.1)'
-                    : type === CardType.IMAGE
-                    ? 'rgba(230, 126, 34, 0.1)'
-                    : 'rgba(46, 204, 113, 0.1)'
-                  : 'white',
-              }}
-            >
-              {handleTypeLabels[type]}
-            </button>
-          ))}
+        <div className="modal-header">
+          <h3>创建灵感卡片</h3>
+          <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
-        {cardType === CardType.LINK && (
-          <div className="form-group">
-            <label>链接地址</label>
-            <input
-              type="url"
-              value={linkUrl}
-              onChange={(e) => setLinkUrl(e.target.value)}
-              placeholder="https://example.com"
-              onBlur={handleFetchLink}
-            />
-            {isLoading && <span className="loading-text">正在抓取页面信息...</span>}
+        <div className="modal-body">
+          <div className="type-selector">
+            {Object.values(CardType).map((type) => {
+              const config = CARD_TYPE_CONFIG[type];
+              const isActive = cardType === type;
+              return (
+                <button
+                  key={type}
+                  className={`type-btn ${isActive ? 'active' : ''}`}
+                  onClick={() => setCardType(type)}
+                  style={{
+                    borderColor: isActive ? config.color : '#dee2e6',
+                    background: isActive ? `${config.color}1A` : 'white',
+                    color: isActive ? config.color : '#495057',
+                  }}
+                >
+                  {typeLabels[type]}
+                </button>
+              );
+            })}
           </div>
-        )}
 
-        {cardType === CardType.IMAGE && (
+          {cardType === CardType.LINK && (
+            <div className="form-group">
+              <label>链接地址</label>
+              <input
+                type="url"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                placeholder="https://example.com"
+                onBlur={handleFetchLink}
+              />
+              {isLoading && <span className="loading-text">正在抓取页面信息...</span>}
+            </div>
+          )}
+
+          {cardType === CardType.IMAGE && (
+            <div className="form-group">
+              <label>图片 URL</label>
+              <input
+                type="url"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder="https://example.com/image.jpg"
+              />
+              {imageUrl && (
+                <div className="image-preview">
+                  <img src={imageUrl} alt="预览" />
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="form-group">
-            <label>图片 URL</label>
-            <input
-              type="url"
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              placeholder="https://example.com/image.jpg"
-            />
-            {imageUrl && (
-              <div className="image-preview">
-                <img src={imageUrl} alt="预览" />
-              </div>
+            <label>{cardType === CardType.TEXT ? '内容 (支持 Markdown)' : '标题'}</label>
+            {cardType === CardType.TEXT ? (
+              <textarea
+                value={textContent}
+                onChange={(e) => setTextContent(e.target.value)}
+                placeholder="输入你的灵感..."
+                rows={6}
+              />
+            ) : (
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="卡片标题"
+              />
             )}
           </div>
-        )}
 
-        <div className="form-group">
-          <label>{cardType === CardType.TEXT ? '内容 (支持 Markdown)' : '标题'}</label>
-          {cardType === CardType.TEXT ? (
-            <textarea
-              value={textContent}
-              onChange={(e) => setTextContent(e.target.value)}
-              placeholder="输入你的灵感..."
-              rows={6}
-            />
-          ) : (
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="卡片标题"
-            />
+          {cardType !== CardType.TEXT && (
+            <div className="form-group">
+              <label>描述</label>
+              <textarea
+                value={textContent}
+                onChange={(e) => setTextContent(e.target.value)}
+                placeholder="简短描述..."
+                rows={3}
+              />
+            </div>
           )}
         </div>
 
-        {cardType !== CardType.TEXT && (
-          <div className="form-group">
-            <label>描述</label>
-            <textarea
-              value={textContent}
-              onChange={(e) => setTextContent(e.target.value)}
-              placeholder="简短描述..."
-              rows={3}
-            />
-          </div>
-        )}
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onClose}>
+            取消
+          </button>
+          <button className="btn btn-primary" onClick={handleSubmit}>
+            创建
+          </button>
+        </div>
       </div>
-
-      <div className="modal-footer">
-        <button className="btn btn-secondary" onClick={onClose}>
-          取消
-        </button>
-        <button className="btn btn-primary" onClick={handleSubmit}>
-          创建
-        </button>
-      </div>
-    </div>
     </div>
   );
 };
@@ -374,11 +418,17 @@ const App: React.FC = () => {
 
     for (const card of imageCards) {
       try {
-        const response = await axios.get(card.imageUrl!, { responseType: 'blob' });
+        const blob = await fetchImageWithProxyFallback(card.imageUrl!);
         const fileName = `card-${card.id}.jpg`;
-        imgFolder?.file(fileName, response.data);
+        imgFolder?.file(fileName, blob);
       } catch (error) {
         console.error(`Failed to download image for card ${card.id}:`, error);
+        const fallbackData = {
+          cardId: card.id,
+          originalUrl: card.imageUrl,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+        imgFolder?.file(`card-${card.id}-failed.json`, JSON.stringify(fallbackData, null, 2));
       }
     }
 

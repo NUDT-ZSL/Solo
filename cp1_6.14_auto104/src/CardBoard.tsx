@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import CardItem from './CardItem';
 import { Card } from './types';
 import './CardBoard.css';
@@ -23,21 +23,46 @@ const CardBoard: React.FC<CardBoardProps> = ({
   const [draggedCard, setDraggedCard] = useState<Card | null>(null);
   const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
   const [galleryIndex, setGalleryIndex] = useState(0);
-  const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right');
+
+  const rafIdRef = useRef<number | null>(null);
+  const pendingDragOverRef = useRef<string | null>(null);
 
   const sortedCards = useMemo(() => {
     return [...cards].sort((a, b) => a.order - b.order);
   }, [cards]);
 
+  const throttledSetDragOver = useCallback((cardId: string | null) => {
+    pendingDragOverRef.current = cardId;
+    if (rafIdRef.current === null) {
+      rafIdRef.current = requestAnimationFrame(() => {
+        setDragOverCardId(pendingDragOverRef.current);
+        rafIdRef.current = null;
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    };
+  }, []);
+
   const handleDragStart = useCallback((e: React.DragEvent, card: Card) => {
     setDraggedCard(card);
     e.dataTransfer.effectAllowed = 'move';
+    if (e.dataTransfer.setDragImage && (e.currentTarget as HTMLElement).parentElement) {
+      const target = e.currentTarget as HTMLElement;
+      e.dataTransfer.setDragImage(target, target.offsetWidth / 2, target.offsetHeight / 2);
+    }
   }, []);
 
   const handleDragEnd = useCallback(() => {
     setDraggedCard(null);
-    setDragOverCardId(null);
-  }, []);
+    throttledSetDragOver(null);
+  }, [throttledSetDragOver]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -48,10 +73,10 @@ const CardBoard: React.FC<CardBoardProps> = ({
     (e: React.DragEvent, cardId: string) => {
       e.preventDefault();
       if (draggedCard && draggedCard.id !== cardId) {
-        setDragOverCardId(cardId);
+        throttledSetDragOver(cardId);
       }
     },
-    [draggedCard]
+    [draggedCard, throttledSetDragOver]
   );
 
   const handleDropOnCard = useCallback(
@@ -75,24 +100,18 @@ const CardBoard: React.FC<CardBoardProps> = ({
 
       onSort(reorderedCards);
       setDraggedCard(null);
-      setDragOverCardId(null);
+      throttledSetDragOver(null);
     },
-    [draggedCard, sortedCards, onSort]
+    [draggedCard, sortedCards, onSort, throttledSetDragOver]
   );
 
   const handlePrevCard = useCallback(() => {
-    if (galleryIndex > 0) {
-      setSlideDirection('left');
-      setGalleryIndex(galleryIndex - 1);
-    }
-  }, [galleryIndex]);
+    setGalleryIndex((prev) => Math.max(0, prev - 1));
+  }, []);
 
   const handleNextCard = useCallback(() => {
-    if (galleryIndex < sortedCards.length - 1) {
-      setSlideDirection('right');
-      setGalleryIndex(galleryIndex + 1);
-    }
-  }, [galleryIndex, sortedCards.length]);
+    setGalleryIndex((prev) => Math.min(sortedCards.length - 1, prev + 1));
+  }, [sortedCards.length]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -104,29 +123,51 @@ const CardBoard: React.FC<CardBoardProps> = ({
     [isGalleryMode, handlePrevCard, handleNextCard, onGalleryModeChange]
   );
 
-  const getVisibleCards = () => {
-    if (sortedCards.length === 0) return [];
-    const visible: Card[] = [];
-    const startIdx = Math.max(0, galleryIndex - 1);
-    const endIdx = Math.min(sortedCards.length, galleryIndex + 2);
-    for (let i = startIdx; i < endIdx; i++) {
-      if (i >= 0 && i < sortedCards.length) {
-        visible.push(sortedCards[i]);
-      }
-    }
-    return visible;
-  };
+  const getGalleryCardStyle = (cardId: string): React.CSSProperties => {
+    const idx = sortedCards.findIndex((c) => c.id === cardId);
+    const offset = idx - galleryIndex;
 
-  const getCardPositionClass = (index: number) => {
-    const offset = index - galleryIndex;
-    if (offset === -1) return 'gallery-left';
-    if (offset === 0) return 'gallery-center';
-    if (offset === 1) return 'gallery-right';
-    return 'gallery-hidden';
+    let translateX = 0;
+    let scale = 1;
+    let opacity = 1;
+    let zIndex = 3;
+
+    if (offset === 0) {
+      translateX = 0;
+      scale = 1;
+      opacity = 1;
+      zIndex = 3;
+    } else if (offset === -1) {
+      translateX = -380;
+      scale = 0.85;
+      opacity = 0.6;
+      zIndex = 2;
+    } else if (offset === 1) {
+      translateX = 380;
+      scale = 0.85;
+      opacity = 0.6;
+      zIndex = 2;
+    } else if (offset < -1) {
+      translateX = -700;
+      scale = 0.7;
+      opacity = 0;
+      zIndex = 1;
+    } else {
+      translateX = 700;
+      scale = 0.7;
+      opacity = 0;
+      zIndex = 1;
+    }
+
+    return {
+      transform: `translate3d(${translateX}px, 0, 0) scale(${scale})`,
+      opacity,
+      zIndex,
+      willChange: 'transform, opacity',
+    };
   };
 
   if (isGalleryMode) {
-    const visibleCards = getVisibleCards();
     return (
       <div
         className="gallery-overlay"
@@ -154,22 +195,20 @@ const CardBoard: React.FC<CardBoardProps> = ({
         )}
 
         <div className="gallery-cards" onClick={(e) => e.stopPropagation()}>
-          {visibleCards.map((card, idx) => {
-            const actualIndex = sortedCards.findIndex((c) => c.id === card.id);
-            return (
-              <div
-                key={card.id}
-                className={`gallery-card-wrapper ${getCardPositionClass(actualIndex)} ${slideDirection === 'right' ? 'slide-right' : 'slide-left'}`}
-              >
-                <CardItem
-                  card={card}
-                  onLike={onLike}
-                  draggable={false}
-                  isGallery={true}
-                />
-              </div>
-            );
-          })}
+          {sortedCards.map((card) => (
+            <div
+              key={card.id}
+              className="gallery-card-wrapper"
+              style={getGalleryCardStyle(card.id)}
+            >
+              <CardItem
+                card={card}
+                onLike={onLike}
+                draggable={false}
+                isGallery={true}
+              />
+            </div>
+          ))}
         </div>
 
         {sortedCards.length > 0 && galleryIndex < sortedCards.length - 1 && (
@@ -208,7 +247,7 @@ const CardBoard: React.FC<CardBoardProps> = ({
               key={card.id}
               className={`card-grid-item ${dragOverCardId === card.id ? 'drag-over' : ''} ${draggedCard?.id === card.id ? 'dragging' : ''}`}
               onDragOver={(e) => handleDragOverCard(e, card.id)}
-              onDragLeave={() => setDragOverCardId(null)}
+              onDragLeave={() => throttledSetDragOver(null)}
               onDrop={(e) => handleDropOnCard(e, card.id)}
             >
               <CardItem
