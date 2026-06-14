@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useMemo, useEffect, useState, useCallback } from 'react';
 import type { Emotions, EmotionKey } from '../types';
 import { getDominantEmotion } from '../utils/Simulator';
 
@@ -34,7 +34,7 @@ const STEPS = 6;
 const LiveMeter: React.FC<LiveMeterProps> = React.memo(({ averageEmotions }) => {
   const [displayValue, setDisplayValue] = useState(0);
 
-  const { dominantKey, dominantValue, percentage } = useMemo(() => {
+  const { dominantKey, percentage } = useMemo(() => {
     const dominant = getDominantEmotion(averageEmotions);
     const total = Math.abs(averageEmotions.joy) + Math.abs(averageEmotions.fear) +
       Math.abs(averageEmotions.anger) + Math.abs(averageEmotions.surprise);
@@ -42,19 +42,16 @@ const LiveMeter: React.FC<LiveMeterProps> = React.memo(({ averageEmotions }) => 
     const steppedPct = Math.round(pct / (100 / STEPS)) * (100 / STEPS);
     return {
       dominantKey: dominant.key,
-      dominantValue: dominant.value,
       percentage: Math.min(steppedPct, 100)
     };
   }, [averageEmotions]);
 
-  useEffect(() => {
-    let rafId: number;
+  const animateTo = useCallback((endValue: number) => {
     const startValue = displayValue;
-    const endValue = percentage;
     const startTime = performance.now();
     const duration = 500;
 
-    const animate = (currentTime: number) => {
+    const step = (currentTime: number) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
@@ -62,18 +59,28 @@ const LiveMeter: React.FC<LiveMeterProps> = React.memo(({ averageEmotions }) => 
       setDisplayValue(current);
 
       if (progress < 1) {
-        rafId = requestAnimationFrame(animate);
+        requestAnimationFrame(step);
       }
     };
 
-    rafId = requestAnimationFrame(animate);
+    requestAnimationFrame(step);
+  }, [displayValue]);
 
-    return () => cancelAnimationFrame(rafId);
+  useEffect(() => {
+    animateTo(percentage);
   }, [percentage]);
 
-  const radius = (SIZE - ARC_WIDTH) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const progress = (displayValue / 100) * circumference;
+  const radius = useMemo(() => (SIZE - ARC_WIDTH) / 2, []);
+  const circumference = useMemo(() => 2 * Math.PI * radius, [radius]);
+  const progress = useMemo(() => (displayValue / 100) * circumference, [displayValue, circumference]);
+
+  const emotionBars = useMemo(() => {
+    return (Object.keys(EMOTION_EMOJIS) as EmotionKey[]).map(key => {
+      const val = averageEmotions[key];
+      const pct = ((val + 1) / 2) * 100;
+      return { key, val, pct };
+    });
+  }, [averageEmotions]);
 
   return (
     <div className="chart-card">
@@ -84,11 +91,12 @@ const LiveMeter: React.FC<LiveMeterProps> = React.memo(({ averageEmotions }) => 
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          height: 'calc(100% - 32px)',
-          gap: '16px'
+          flex: 1,
+          gap: '16px',
+          minHeight: 0
         }}
       >
-        <div style={{ position: 'relative', width: SIZE, height: SIZE }}>
+        <div style={{ position: 'relative', width: SIZE, height: SIZE, flexShrink: 0 }}>
           <svg width={SIZE} height={SIZE} style={{ transform: 'rotate(-90deg)' }}>
             <circle
               cx={SIZE / 2}
@@ -97,6 +105,7 @@ const LiveMeter: React.FC<LiveMeterProps> = React.memo(({ averageEmotions }) => 
               fill="none"
               stroke="#e5e7eb"
               strokeWidth={ARC_WIDTH}
+              strokeLinecap="round"
             />
             <circle
               cx={SIZE / 2}
@@ -139,53 +148,49 @@ const LiveMeter: React.FC<LiveMeterProps> = React.memo(({ averageEmotions }) => 
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}>
-          {(Object.keys(EMOTION_EMOJIS) as EmotionKey[]).map(key => {
-            const val = averageEmotions[key];
-            const pct = ((val + 1) / 2) * 100;
-            return (
+          {emotionBars.map(({ key, val, pct }) => (
+            <div
+              key={key}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '12px'
+              }}
+            >
+              <span style={{ fontSize: '16px' }}>{EMOTION_EMOJIS[key]}</span>
+              <span style={{ color: '#94a3b8', width: '32px' }}>{EMOTION_LABELS[key]}</span>
               <div
-                key={key}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  fontSize: '12px'
+                  flex: 1,
+                  height: '6px',
+                  backgroundColor: '#334155',
+                  borderRadius: '3px',
+                  overflow: 'hidden'
                 }}
               >
-                <span style={{ fontSize: '16px' }}>{EMOTION_EMOJIS[key]}</span>
-                <span style={{ color: '#94a3b8', width: '32px' }}>{EMOTION_LABELS[key]}</span>
                 <div
                   style={{
-                    flex: 1,
-                    height: '6px',
-                    backgroundColor: '#334155',
-                    borderRadius: '3px',
-                    overflow: 'hidden'
+                    height: '100%',
+                    backgroundColor: EMOTION_COLORS[key],
+                    width: `${pct}%`,
+                    transition: 'width 0.5s ease',
+                    borderRadius: '3px'
                   }}
-                >
-                  <div
-                    style={{
-                      height: '100%',
-                      backgroundColor: EMOTION_COLORS[key],
-                      width: `${pct}%`,
-                      transition: 'width 0.5s ease',
-                      borderRadius: '3px'
-                    }}
-                  />
-                </div>
-                <span
-                  style={{
-                    color: '#64748b',
-                    width: '36px',
-                    textAlign: 'right',
-                    fontVariantNumeric: 'tabular-nums'
-                  }}
-                >
-                  {val.toFixed(2)}
-                </span>
+                />
               </div>
-            );
-          })}
+              <span
+                style={{
+                  color: '#64748b',
+                  width: '36px',
+                  textAlign: 'right',
+                  fontVariantNumeric: 'tabular-nums'
+                }}
+              >
+                {val.toFixed(2)}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
     </div>

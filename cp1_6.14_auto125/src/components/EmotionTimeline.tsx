@@ -9,10 +9,9 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
-import type { Emotions, EmotionKey } from '../types';
-import { averageEmotions } from '../utils/Simulator';
+import type { EmotionKey } from '../types';
 
-interface TimelineDataPoint {
+export interface TimelinePoint {
   minute: number;
   joy: number;
   fear: number;
@@ -21,7 +20,8 @@ interface TimelineDataPoint {
 }
 
 interface EmotionTimelineProps {
-  dataByMinute: { minute: number; data: { timestamp: number; emotions: Emotions }[] }[];
+  timelineData: TimelinePoint[];
+  currentMinute: number;
 }
 
 const EMOTION_COLORS: Record<EmotionKey, string> = {
@@ -38,10 +38,12 @@ const EMOTION_LABELS: Record<EmotionKey, string> = {
   surprise: '惊喜'
 };
 
+const WINDOW_SIZE = 30;
+
 const CustomTooltip = ({ active, payload, label }: {
   active?: boolean;
   payload?: { dataKey: EmotionKey; value: number; color: string }[];
-  label?: string;
+  label?: number;
 }) => {
   if (!active || !payload || payload.length === 0) return null;
 
@@ -80,40 +82,38 @@ const CustomTooltip = ({ active, payload, label }: {
   );
 };
 
-const EmotionTimeline: React.FC<EmotionTimelineProps> = React.memo(({ dataByMinute }) => {
-  const chartData = useMemo<TimelineDataPoint[]>(() => {
-    return dataByMinute.map(item => {
-      const avg = averageEmotions(item.data.map(d => ({
-        timestamp: d.timestamp,
-        userId: '',
-        emotions: d.emotions
-      })));
-      return {
-        minute: item.minute,
-        joy: Number(avg.joy.toFixed(3)),
-        fear: Number(avg.fear.toFixed(3)),
-        anger: Number(avg.anger.toFixed(3)),
-        surprise: Number(avg.surprise.toFixed(3))
-      };
-    });
-  }, [dataByMinute]);
+const EmotionTimeline: React.FC<EmotionTimelineProps> = React.memo(({ timelineData, currentMinute }) => {
+  const windowedData = useMemo(() => {
+    const startMinute = Math.max(0, currentMinute - WINDOW_SIZE);
+    return timelineData.filter(d => d.minute >= startMinute);
+  }, [timelineData, currentMinute]);
 
   const xTicks = useMemo(() => {
     const ticks: number[] = [];
-    const maxMinute = Math.max(...dataByMinute.map(d => d.minute), 30);
-    for (let i = 0; i <= maxMinute; i += 5) {
-      ticks.push(i);
+    const startMinute = Math.max(0, currentMinute - WINDOW_SIZE);
+    const endMinute = currentMinute;
+    const roundedStart = Math.ceil(startMinute / 5) * 5;
+    for (let t = roundedStart; t <= endMinute; t += 5) {
+      ticks.push(t);
+    }
+    if (ticks.length === 0) {
+      ticks.push(startMinute);
     }
     return ticks;
-  }, [dataByMinute]);
+  }, [currentMinute]);
+
+  const xDomain = useMemo(() => {
+    const startMinute = Math.max(0, currentMinute - WINDOW_SIZE);
+    return [startMinute, Math.max(currentMinute, WINDOW_SIZE)] as [number, number];
+  }, [currentMinute]);
 
   return (
     <div className="chart-card">
       <h3 className="chart-title">情绪时间轴</h3>
-      <div style={{ width: '100%', height: 'calc(100% - 32px)' }}>
+      <div style={{ width: '100%', flex: 1, minHeight: 0 }}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
-            data={chartData}
+            data={windowedData}
             margin={{ top: 10, right: 16, left: 0, bottom: 0 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -121,9 +121,11 @@ const EmotionTimeline: React.FC<EmotionTimelineProps> = React.memo(({ dataByMinu
               dataKey="minute"
               stroke="#64748b"
               fontSize={11}
-              tickFormatter={(value) => `第${value}分钟`}
+              tickFormatter={(value: number) => `第${value}分钟`}
               ticks={xTicks}
+              domain={xDomain}
               interval={0}
+              type="number"
             />
             <YAxis
               domain={[-1, 1]}
@@ -134,7 +136,7 @@ const EmotionTimeline: React.FC<EmotionTimelineProps> = React.memo(({ dataByMinu
             <Tooltip content={<CustomTooltip />} />
             <Legend
               wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
-              formatter={(value) => (
+              formatter={(value: string) => (
                 <span style={{ color: '#94a3b8' }}>
                   {EMOTION_LABELS[value as EmotionKey]}
                 </span>
