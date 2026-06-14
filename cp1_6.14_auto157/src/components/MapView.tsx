@@ -2,16 +2,16 @@ import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet.heat';
 import { eventBus } from '../event-bus';
-import type { StationStatus } from '../services/StationMonitor';
+import type { StationStatus, CrowdLevel } from '../services/StationMonitor';
 
-const CROWD_COLORS: Record<string, string> = {
+const CROWD_COLORS: Record<CrowdLevel, string> = {
   green: '#22c55e',
   yellow: '#eab308',
   orange: '#f97316',
   red: '#ef4444'
 };
 
-const CROWD_LABELS: Record<string, string> = {
+const CROWD_LABELS: Record<CrowdLevel, string> = {
   green: '宽松',
   yellow: '适中',
   orange: '拥挤',
@@ -90,13 +90,70 @@ function createPopupContent(station: StationStatus): HTMLElement {
   return container;
 }
 
+function createStationDotIcon(color: string): L.DivIcon {
+  return L.divIcon({
+    className: 'station-dot',
+    html: `<div style="width: 10px; height: 10px; border-radius: 50%; background: ${color}; border: 2px solid white; box-shadow: 0 0 6px rgba(0,0,0,0.5);"></div>`,
+    iconSize: [14, 14],
+    iconAnchor: [7, 7]
+  });
+}
+
 function createFaultIcon(): L.DivIcon {
   return L.divIcon({
-    className: 'fault-icon',
+    className: 'fault-icon-wrapper',
     html: '<div class="fault-blink">⚠</div>',
     iconSize: [24, 24],
     iconAnchor: [12, 12]
   });
+}
+
+function ensureGlobalStyles() {
+  const existingStyle = document.getElementById('metroflow-map-styles');
+  if (existingStyle) return;
+
+  const style = document.createElement('style');
+  style.id = 'metroflow-map-styles';
+  style.textContent = `
+    .leaflet-popup-content-wrapper {
+      background: #1e293b !important;
+      border-radius: 8px !important;
+      padding: 0 !important;
+    }
+    .leaflet-popup-content {
+      margin: 0 !important;
+      width: 280px !important;
+    }
+    .leaflet-popup-tip {
+      background: #1e293b !important;
+    }
+    .leaflet-popup-close-button {
+      color: white !important;
+    }
+    .station-dot {
+      background: transparent !important;
+      border: none !important;
+    }
+    .fault-icon-wrapper {
+      background: transparent !important;
+      border: none !important;
+    }
+    .fault-blink {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: #ef4444;
+      animation: faultBlink 1s ease-in-out infinite;
+    }
+    @keyframes faultBlink {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.2); }
+    }
+  `;
+  document.head.appendChild(style);
 }
 
 export default function MapView() {
@@ -105,9 +162,14 @@ export default function MapView() {
   const heatLayerRef = useRef<L.HeatLayer | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
   const popupsRef = useRef<Map<string, L.Popup>>(new Map());
+  const pendingHeatUpdateRef = useRef<StationStatus[] | null>(null);
+  const pendingMarkersUpdateRef = useRef<StationStatus[] | null>(null);
+  const animationFrameIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
+
+    ensureGlobalStyles();
 
     const map = L.map(mapRef.current, {
       center: SHANGHAI_CENTER,
@@ -137,39 +199,6 @@ export default function MapView() {
     mapInstanceRef.current = map;
     heatLayerRef.current = heatLayer;
 
-    const style = document.createElement('style');
-    style.textContent = `
-      .leaflet-popup-content-wrapper {
-        background: #1e293b !important;
-        border-radius: 8px !important;
-        padding: 0 !important;
-      }
-      .leaflet-popup-content {
-        margin: 0 !important;
-        width: 280px !important;
-      }
-      .leaflet-popup-tip {
-        background: #1e293b !important;
-      }
-      .leaflet-popup-close-button {
-        color: white !important;
-      }
-      .fault-blink {
-        width: 24px;
-        height: 24px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 20px;
-        animation: faultBlink 1s ease-in-out infinite;
-      }
-      @keyframes faultBlink {
-        0%, 100% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.4; transform: scale(1.2); }
-      }
-    `;
-    document.head.appendChild(style);
-
     const handleStationClick = eventBus.on('station:click', (data) => {
       const stationId = data as string;
       const marker = markersRef.current.get(stationId);
@@ -180,8 +209,10 @@ export default function MapView() {
     });
 
     return () => {
-      style.remove();
       handleStationClick();
+      if (animationFrameIdRef.current !== null) {
+        cancelAnimationFrame(animationFrameIdRef.current);
+      }
       map.remove();
       mapInstanceRef.current = null;
     };
@@ -190,8 +221,9 @@ export default function MapView() {
   useEffect(() => {
     const unsubscribe = eventBus.on('status:update', (data) => {
       const stations = data as StationStatus[];
-      updateHeatmap(stations);
-      updateMarkers(stations);
+      pendingHeatUpdateRef.current = stations;
+      pendingMarkersUpdateRef.current = stations;
+      scheduleUpdate();
     });
 
     return () => {
@@ -199,15 +231,33 @@ export default function MapView() {
     };
   }, []);
 
+  const scheduleUpdate = () => {
+    if (animationFrameIdRef.current !== null) return;
+
+    animationFrameIdRef.current = requestAnimationFrame(() => {
+      if (pendingHeatUpdateRef.current && heatLayerRef.current) {
+        updateHeatmap(pendingHeatUpdateRef.current);
+        pendingHeatUpdateRef.current = null;
+      }
+
+      if (pendingMarkersUpdateRef.current && mapInstanceRef.current) {
+        updateMarkers(pendingMarkersUpdateRef.current);
+        pendingMarkersUpdateRef.current = null;
+      }
+
+      animationFrameIdRef.current = null;
+    });
+  };
+
   const updateHeatmap = (stations: StationStatus[]) => {
     if (!heatLayerRef.current) return;
 
-    const heatPoints: L.LatLngTuple[] = stations.map((s) => {
-      const intensity = (s.flowRate - 50) / 950; // normalize 50-1000 -> 0-1
+    const heatPoints: [number, number, number][] = stations.map((s) => {
+      const intensity = (s.flowRate - 50) / 950;
       return [s.lat, s.lng, intensity];
     });
 
-    heatLayerRef.current.setLatLngs(heatPoints);
+    heatLayerRef.current.setLatLngs(heatPoints as L.HeatLatLngTuple[]);
   };
 
   const updateMarkers = (stations: StationStatus[]) => {
@@ -217,15 +267,11 @@ export default function MapView() {
 
     stations.forEach((station) => {
       let marker = markersRef.current.get(station.id);
+      const color = CROWD_COLORS[station.crowdLevel];
 
       if (!marker) {
         marker = L.marker([station.lat, station.lng], {
-          icon: station.status === 'fault' ? createFaultIcon() : L.divIcon({
-            className: 'station-dot',
-            html: `<div style="width: 10px; height: 10px; border-radius: 50%; background: ${CROWD_COLORS[station.crowdLevel]}; border: 2px solid white; box-shadow: 0 0 6px rgba(0,0,0,0.5);"></div>`,
-            iconSize: [14, 14],
-            iconAnchor: [7, 7]
-          }))
+          icon: station.status === 'fault' ? createFaultIcon() : createStationDotIcon(color)
         }).addTo(mapInstanceRef.current!);
 
         const popup = L.popup({
@@ -245,12 +291,7 @@ export default function MapView() {
         if (station.status === 'fault') {
           marker.setIcon(createFaultIcon());
         } else {
-          marker.setIcon(L.divIcon({
-            className: 'station-dot',
-            html: `<div style="width: 10px; height: 10px; border-radius: 50%; background: ${CROWD_COLORS[station.crowdLevel]}; border: 2px solid white; box-shadow: 0 0 6px rgba(0,0,0,0.5);"></div>`,
-            iconSize: [14, 14],
-            iconAnchor: [7, 7]
-          }));
+          marker.setIcon(createStationDotIcon(color));
         }
       }
     });

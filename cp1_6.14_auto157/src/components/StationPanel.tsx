@@ -18,6 +18,7 @@ const CROWD_LABELS: Record<CrowdLevel, string> = {
 
 const ROW_HEIGHT = 52;
 const VISIBLE_ROWS = 12;
+const BUFFER_ROWS = 2;
 const PANEL_PADDING = 16;
 
 interface StationPanelProps {
@@ -58,18 +59,18 @@ export default function StationPanel({ isMobile, isOpen, onClose }: StationPanel
   }, [isMobile, onClose]);
 
   const totalHeight = stations.length * ROW_HEIGHT;
-  const startIndex = Math.max(0, Math.floor((scrollTop - PANEL_PADDING) / ROW_HEIGHT) - 2);
+  const scrollOffset = Math.max(0, scrollTop - PANEL_PADDING);
+  const startIndex = Math.max(0, Math.floor(scrollOffset / ROW_HEIGHT) - BUFFER_ROWS);
   const endIndex = Math.min(
     stations.length,
-    startIndex + VISIBLE_ROWS + 4
+    startIndex + VISIBLE_ROWS + BUFFER_ROWS * 2
   );
 
   const visibleStations = useMemo(() => {
-    return stations.slice(startIndex, endIndex).map((station, index) => ({
-      ...station,
-      index: startIndex + index
-    }));
+    return stations.slice(startIndex, endIndex);
   }, [stations, startIndex, endIndex]);
+
+  const renderCount = endIndex - startIndex;
 
   const offsetY = startIndex * ROW_HEIGHT;
 
