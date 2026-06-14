@@ -80,40 +80,45 @@ export default function App() {
       const startIdx = segIdx * pointsPerSegment;
       const endIdx = Math.min(startIdx + pointsPerSegment, trackPoints.length);
       
-      const curveIntensity = Math.abs(segIdx % 2 === 0 ? 1 : 0.5);
-      const baseWidth = 4 + curveIntensity * 4;
-      const baseColor = curveIntensity > 0.7 ? '#c084fc' : '#a855f7';
+      const prevIdx = (segIdx - 1 + segments.length) % segments.length;
+      const nextIdx = (segIdx + 1) % segments.length;
+      
+      const p0 = segments[prevIdx].end;
+      const p1 = segments[segIdx].start;
+      const p2 = segments[segIdx].end;
+      const p3 = segments[nextIdx].end;
+      
+      const angle1 = Math.atan2(p1.y - p0.y, p1.x - p0.x);
+      const angle2 = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+      const angle3 = Math.atan2(p3.y - p2.y, p3.x - p2.x);
+      
+      let turnAngle1 = Math.abs(angle2 - angle1);
+      let turnAngle2 = Math.abs(angle3 - angle2);
+      if (turnAngle1 > Math.PI) turnAngle1 = Math.PI * 2 - turnAngle1;
+      if (turnAngle2 > Math.PI) turnAngle2 = Math.PI * 2 - turnAngle2;
+      
+      const curveFactor = Math.max(turnAngle1, turnAngle2) / Math.PI;
 
       for (let i = startIdx; i < endIdx; i++) {
         const t = (i - startIdx) / pointsPerSegment;
         
         const widthFactor = Math.sin(t * Math.PI);
-        const lineWidth = baseWidth + widthFactor * 4;
-        const color = baseColor;
+        const lineWidth = 4 + widthFactor * 4 * curveFactor;
+        const color = curveFactor > 0.5 ? '#c084fc' : '#a855f7';
 
-        const p1 = trackPoints[i];
-        const p2 = trackPoints[(i + 1) % trackPoints.length];
+        const p1p = trackPoints[i];
+        const p2p = trackPoints[(i + 1) % trackPoints.length];
 
         ctx.strokeStyle = color;
         ctx.lineWidth = lineWidth;
         ctx.lineCap = 'round';
         ctx.shadowColor = color;
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 3;
 
         ctx.beginPath();
-        ctx.moveTo(p1.x, p1.y);
-        ctx.lineTo(p2.x, p2.y);
+        ctx.moveTo(p1p.x, p1p.y);
+        ctx.lineTo(p2p.x, p2p.y);
         ctx.stroke();
-
-        if (widthFactor > 0.3) {
-          ctx.strokeStyle = 'rgba(168, 85, 247, 0.3)';
-          ctx.lineWidth = lineWidth + 6;
-          ctx.shadowBlur = 15;
-          ctx.beginPath();
-          ctx.moveTo(p1.x, p1.y);
-          ctx.lineTo(p2.x, p2.y);
-          ctx.stroke();
-        }
       }
     }
     
@@ -172,29 +177,28 @@ export default function App() {
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;
 
+    const shipSize = 10;
     ctx.beginPath();
-    ctx.moveTo(20, 0);
-    ctx.lineTo(-12, -12);
-    ctx.lineTo(-6, 0);
-    ctx.lineTo(-12, 12);
+    ctx.moveTo(shipSize * 1.2, 0);
+    ctx.lineTo(-shipSize * 0.7, -shipSize);
+    ctx.lineTo(-shipSize * 0.7, shipSize);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
     const speedFactor = Math.min(ship.speed / 200, 1);
-    const flameLength = 15 + speedFactor * 15 + Math.sin(time * 30) * 3;
+    const flameLength = (10 + speedFactor * 15 + Math.sin(time * 30) * 2) * shipSize / 10;
     
-    const gradient = ctx.createLinearGradient(-6, 0, -6 - flameLength, 0);
-    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
-    gradient.addColorStop(0.3, 'rgba(251, 191, 36, 0.7)');
-    gradient.addColorStop(0.6, 'rgba(249, 115, 22, 0.5)');
-    gradient.addColorStop(1, 'rgba(239, 68, 68, 0)');
+    const gradient = ctx.createLinearGradient(-shipSize * 0.7, 0, -shipSize * 0.7 - flameLength, 0);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    gradient.addColorStop(0.4, 'rgba(255, 255, 255, 0.6)');
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
     ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.moveTo(-6, -5);
-    ctx.lineTo(-6 - flameLength, 0);
-    ctx.lineTo(-6, 5);
+    ctx.moveTo(-shipSize * 0.7, -shipSize * 0.4);
+    ctx.lineTo(-shipSize * 0.7 - flameLength, 0);
+    ctx.lineTo(-shipSize * 0.7, shipSize * 0.4);
     ctx.closePath();
     ctx.fill();
 
@@ -536,28 +540,29 @@ export default function App() {
         transform: 'translateX(-50%)',
         zIndex: 10,
         display: 'flex',
-        gap: '20px',
+        gap: '24px',
         alignItems: 'center',
-        padding: '8px 16px',
+        padding: '10px 20px',
         background: 'rgba(0, 0, 0, 0.4)',
         borderRadius: '8px',
         color: 'white',
         fontFamily: 'Arial, sans-serif',
-        fontSize: '16px'
+        fontSize: '16px',
+        whiteSpace: 'nowrap'
       }}>
-        <div>
-          <span style={{ opacity: 0.7, marginRight: '8px' }}>时间:</span>
-          <span style={{ fontWeight: 'bold' }}>{hudData.time}</span>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <span style={{ opacity: 0.7, marginRight: '6px' }}>⏱ 时间</span>
+          <span style={{ fontWeight: 'bold', minWidth: '70px', textAlign: 'right' }}>{hudData.time}</span>
         </div>
-        <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.3)' }} />
-        <div>
-          <span style={{ opacity: 0.7, marginRight: '8px' }}>能量球:</span>
-          <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>{hudData.orbsPercent}%</span>
+        <div style={{ width: '1px', height: '22px', background: 'rgba(255,255,255,0.3)' }} />
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <span style={{ opacity: 0.7, marginRight: '6px' }}>⚡ 能量球</span>
+          <span style={{ fontWeight: 'bold', color: '#fbbf24', minWidth: '45px', textAlign: 'right' }}>{hudData.orbsPercent}%</span>
         </div>
-        <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.3)' }} />
-        <div>
-          <span style={{ opacity: 0.7, marginRight: '8px' }}>圈数:</span>
-          <span style={{ fontWeight: 'bold', color: '#a855f7' }}>{hudData.lap}/{TOTAL_LAPS}</span>
+        <div style={{ width: '1px', height: '22px', background: 'rgba(255,255,255,0.3)' }} />
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <span style={{ opacity: 0.7, marginRight: '6px' }}>🏁 圈数</span>
+          <span style={{ fontWeight: 'bold', color: '#a855f7', minWidth: '35px', textAlign: 'right' }}>{hudData.lap}/{TOTAL_LAPS}</span>
         </div>
       </div>
 

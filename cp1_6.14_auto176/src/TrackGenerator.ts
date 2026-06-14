@@ -62,10 +62,12 @@ export class TrackGenerator {
     const startTime = performance.now();
     
     const difficultyFactor = Math.max(0.5, Math.min(2, this._difficulty));
-    const numCurves = Math.floor(this.random.nextRange(6, 11) * difficultyFactor);
+    const minCurves = Math.max(6, Math.floor(6 * difficultyFactor));
+    const maxCurves = Math.min(10, Math.floor(10 * difficultyFactor)) + 1;
+    const numCurves = Math.floor(this.random.nextRange(minCurves, maxCurves));
     const centerX = 1000;
     const centerY = 1000;
-    const baseRadius = 300;
+    const baseRadius = 320;
     
     const controlPoints: Point[] = [];
     for (let i = 0; i < numCurves; i++) {

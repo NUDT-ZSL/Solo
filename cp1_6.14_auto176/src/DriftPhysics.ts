@@ -109,7 +109,7 @@ export class DriftPhysics {
       lap: 1,
       raceTime: 0,
       isFinished: false,
-      crossedFinishLine: false,
+      crossedFinishLine: true,
       lastFinishCrossTime: 0
     };
   }
