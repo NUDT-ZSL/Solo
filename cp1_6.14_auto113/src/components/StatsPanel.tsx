@@ -80,30 +80,15 @@ export default function StatsPanel() {
         </div>
 
         <div className="mt-4">
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={barData} margin={{ left: 10, right: 20, top: 10, bottom: 10 }}>
-              <XAxis
-                type="category"
-                dataKey="name"
-                tick={{ fontSize: 11, fill: '#6b7280' }}
-                axisLine={false}
-                tickLine={false}
-                interval={0}
-                width={80}
-              />
-              <YAxis
-                type="number"
-                domain={[0, 100]}
-                tick={{ fontSize: 11, fill: '#9ca3af' }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v: number) => `${v}%`}
-              />
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={barData} layout="vertical" margin={{ left: 10, right: 30, top: 10, bottom: 10 }}>
+              <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} />
+              <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 12, fill: '#374151' }} axisLine={false} tickLine={false} />
               <Tooltip
                 formatter={(value: number) => [`${value}%`, '完成率']}
                 contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', fontSize: 12 }}
               />
-              <Bar dataKey="completionRate" radius={[4, 4, 0, 0]} barSize={100 / Math.max(barData.length, 1)}>
+              <Bar dataKey="completionRate" barSize={32} radius={[0, 4, 4, 0]}>
                 {barData.map((entry, index) => (
                   <rect key={index} fill={entry.fill} rx={4} ry={4} />
                 ))}

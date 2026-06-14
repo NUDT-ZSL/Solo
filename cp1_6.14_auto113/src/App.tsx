@@ -2,7 +2,7 @@ import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-do
 import Home from '@/pages/Home'
 import Habits from '@/pages/Habits'
 import Stats from '@/pages/Stats'
-import { Flame, ListChecks, BarChart3, Settings } from 'lucide-react'
+import { Flame, ListChecks, BarChart3 } from 'lucide-react'
 
 const navItems = [
   { to: '/', label: '首页', icon: Flame },

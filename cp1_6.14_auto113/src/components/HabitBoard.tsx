@@ -1,5 +1,5 @@
 import { useStore, type Habit } from '@/store'
-import { useEffect, useCallback, useRef } from 'react'
+import { useEffect, useCallback } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -28,7 +28,6 @@ function SortableCard({ habit, onToggle }: { habit: Habit; onToggle: (h: Habit) 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: habit.id,
   })
-  const cardRef = useRef<HTMLDivElement>(null)
 
   const cardStyle: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -42,7 +41,6 @@ function SortableCard({ habit, onToggle }: { habit: Habit; onToggle: (h: Habit) 
   return (
     <div ref={setNodeRef} style={cardStyle} className="flex items-center gap-3">
       <div
-        ref={cardRef}
         className="flex items-center gap-3 cursor-default"
         style={{
           width: 280,

@@ -1,4 +1,4 @@
-import { useStore, type UserProfile } from '@/store'
+import { useStore } from '@/store'
 import { useEffect, useState } from 'react'
 import { Shield, Swords, Crown, Flame, Star } from 'lucide-react'
 
