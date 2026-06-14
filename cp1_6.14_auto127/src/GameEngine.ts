@@ -355,12 +355,12 @@ class GameEngine {
   }
 
   private checkCollisions(currentTime: number): void {
+    const shipVertices = this.getShipVertices()
+
     if (!this.gameState.invincible) {
       for (const obstacle of this.obstacles) {
-        if (this.checkAABB(
-          { x: this.ship.x, y: this.ship.y, width: this.ship.width, height: this.ship.height },
-          { x: obstacle.x, y: obstacle.y, width: obstacle.width, height: obstacle.height }
-        )) {
+        const obstacleVertices = this.getObstacleVertices(obstacle)
+        if (this.checkSATCollision(shipVertices, obstacleVertices)) {
           this.onCollision(currentTime)
           break
         }
@@ -371,31 +371,116 @@ class GameEngine {
       const orb = this.energyOrbs[i]
       if (orb.collected) continue
 
-      const orbBox = {
-        x: orb.x - orb.radius,
-        y: orb.y - orb.radius,
-        width: orb.radius * 2,
-        height: orb.radius * 2
-      }
-
-      if (this.checkAABB(
-        { x: this.ship.x, y: this.ship.y, width: this.ship.width, height: this.ship.height },
-        orbBox
-      )) {
+      if (this.checkCirclePolygonCollision(orb.x, orb.y, orb.radius, shipVertices)) {
         this.onCollect(orb)
         this.energyOrbs.splice(i, 1)
       }
     }
   }
 
-  private checkAABB(
-    a: { x: number; y: number; width: number; height: number },
-    b: { x: number; y: number; width: number; height: number }
+  private getShipVertices(): { x: number; y: number }[] {
+    const cx = this.ship.x + this.ship.width / 2
+    const cy = this.ship.y + this.ship.height / 2
+    return [
+      { x: cx, y: this.ship.y },
+      { x: this.ship.x, y: this.ship.y + this.ship.height },
+      { x: this.ship.x + this.ship.width, y: this.ship.y + this.ship.height }
+    ]
+  }
+
+  private getObstacleVertices(obstacle: Obstacle): { x: number; y: number }[] {
+    const vertices: { x: number; y: number }[] = []
+    const cx = obstacle.x + obstacle.width / 2
+    const cy = obstacle.y + obstacle.height / 2
+    for (let i = 0; i < obstacle.vertices.length; i += 2) {
+      vertices.push({
+        x: cx + obstacle.vertices[i],
+        y: cy + obstacle.vertices[i + 1]
+      })
+    }
+    return vertices
+  }
+
+  private getAxes(vertices: { x: number; y: number }[]): { x: number; y: number }[] {
+    const axes: { x: number; y: number }[] = []
+    for (let i = 0; i < vertices.length; i++) {
+      const p1 = vertices[i]
+      const p2 = vertices[(i + 1) % vertices.length]
+      const edge = { x: p2.x - p1.x, y: p2.y - p1.y }
+      axes.push({ x: -edge.y, y: edge.x })
+    }
+    return axes
+  }
+
+  private normalize(v: { x: number; y: number }): { x: number; y: number } {
+    const len = Math.sqrt(v.x * v.x + v.y * v.y)
+    return len === 0 ? { x: 0, y: 0 } : { x: v.x / len, y: v.y / len }
+  }
+
+  private project(vertices: { x: number; y: number }[], axis: { x: number; y: number }): { min: number; max: number } {
+    let min = Infinity
+    let max = -Infinity
+    for (const v of vertices) {
+      const proj = v.x * axis.x + v.y * axis.y
+      min = Math.min(min, proj)
+      max = Math.max(max, proj)
+    }
+    return { min, max }
+  }
+
+  private overlap(proj1: { min: number; max: number }, proj2: { min: number; max: number }): boolean {
+    return proj1.max >= proj2.min && proj2.max >= proj1.min
+  }
+
+  private checkSATCollision(
+    vertices1: { x: number; y: number }[],
+    vertices2: { x: number; y: number }[]
   ): boolean {
-    return a.x < b.x + b.width &&
-           a.x + a.width > b.x &&
-           a.y < b.y + b.height &&
-           a.y + a.height > b.y
+    const axes1 = this.getAxes(vertices1).map(a => this.normalize(a))
+    const axes2 = this.getAxes(vertices2).map(a => this.normalize(a))
+    const allAxes = [...axes1, ...axes2]
+
+    for (const axis of allAxes) {
+      if (axis.x === 0 && axis.y === 0) continue
+      const proj1 = this.project(vertices1, axis)
+      const proj2 = this.project(vertices2, axis)
+      if (!this.overlap(proj1, proj2)) {
+        return false
+      }
+    }
+    return true
+  }
+
+  private checkCirclePolygonCollision(
+    cx: number,
+    cy: number,
+    radius: number,
+    polygon: { x: number; y: number }[]
+  ): boolean {
+    for (let i = 0; i < polygon.length; i++) {
+      const v1 = polygon[i]
+      const v2 = polygon[(i + 1) % polygon.length]
+      const dx = v2.x - v1.x
+      const dy = v2.y - v1.y
+      const lenSq = dx * dx + dy * dy
+      let t = ((cx - v1.x) * dx + (cy - v1.y) * dy) / (lenSq || 1)
+      t = Math.max(0, Math.min(1, t))
+      const px = v1.x + t * dx
+      const py = v1.y + t * dy
+      const distSq = (cx - px) * (cx - px) + (cy - py) * (cy - py)
+      if (distSq <= radius * radius) {
+        return true
+      }
+    }
+
+    for (const v of polygon) {
+      const distSq = (cx - v.x) * (cx - v.x) + (cy - v.y) * (cy - v.y)
+      if (distSq <= radius * radius) {
+        return true
+      }
+    }
+
+    return false
   }
 
   private onCollision(currentTime: number): void {

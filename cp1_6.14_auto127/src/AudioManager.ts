@@ -112,20 +112,23 @@ class AudioManager {
       return
     }
 
+    const now = this.audioContext.currentTime
+
     switch (type) {
       case 'collect':
-        this.playTone(800, 0.15, 'sine', 0.3, 1200)
+        this.playTone(800, 0.15, 'sine', 0.3, now, 1200)
         break
 
       case 'collision':
-        this.playTone(200, 0.3, 'sawtooth', 0.4, 50)
+        this.playTone(200, 0.3, 'sawtooth', 0.4, now, 50)
         break
 
       case 'boost': {
         const notes = [600, 900, 1200]
-        const noteDuration = 0.2 / notes.length
+        const noteDuration = 0.06
         notes.forEach((freq, i) => {
-          this.playTone(freq, noteDuration, 'square', 0.25, undefined, i * noteDuration)
+          const noteStart = now + i * noteDuration
+          this.playTone(freq, noteDuration, 'square', 0.25, noteStart)
         })
         break
       }
@@ -136,9 +139,9 @@ class AudioManager {
     frequency: number,
     duration: number,
     type: OscillatorType,
-    startVolume: number = 0.3,
-    endFrequency?: number,
-    startTimeOffset: number = 0
+    startVolume: number,
+    startTime: number,
+    endFrequency?: number
   ): void {
     if (!this.audioContext || !this.sfxGain) {
       return
@@ -146,22 +149,24 @@ class AudioManager {
 
     const oscillator = this.audioContext.createOscillator()
     const gainNode = this.audioContext.createGain()
-    const startTime = this.audioContext.currentTime + startTimeOffset
+    const endTime = startTime + duration
 
     oscillator.type = type
     oscillator.frequency.setValueAtTime(frequency, startTime)
     if (endFrequency !== undefined) {
-      oscillator.frequency.exponentialRampToValueAtTime(endFrequency, startTime + duration)
+      oscillator.frequency.exponentialRampToValueAtTime(Math.max(endFrequency, 1), endTime)
     }
 
-    gainNode.gain.setValueAtTime(startVolume, startTime)
-    gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration)
+    gainNode.gain.setValueAtTime(0, startTime)
+    gainNode.gain.linearRampToValueAtTime(startVolume, startTime + 0.01)
+    gainNode.gain.setValueAtTime(startVolume, endTime - 0.02)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, endTime)
 
     oscillator.connect(gainNode)
     gainNode.connect(this.sfxGain)
 
     oscillator.start(startTime)
-    oscillator.stop(startTime + duration)
+    oscillator.stop(endTime + 0.02)
   }
 }
 
