@@ -109,11 +109,17 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         {tools.map(({ id, label }) => (
           <button
             key={id}
-            className={`tool-btn ${currentTool === id ? 'active' : ''}`}
+            className={`tool-btn ${currentTool === id ? 'active' : ''} ${id === 'sticky-note' ? 'sticky-note-btn' : ''}`}
             onClick={() => setTool(id)}
             title={label}
           >
-            <ToolIcon tool={id} />
+            {id === 'sticky-note' ? (
+              <div className="sticky-note-icon">
+                <div className="sticky-note-icon-inner" />
+              </div>
+            ) : (
+              <ToolIcon tool={id} />
+            )}
           </button>
         ))}
       </div>

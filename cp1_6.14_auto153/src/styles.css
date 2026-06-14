@@ -73,6 +73,53 @@ body {
   transform: scale(1.05);
 }
 
+.tool-btn.sticky-note-btn {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto;
+  border-radius: 8px;
+  background: #fff3cd;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.tool-btn.sticky-note-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: #fff3cd;
+}
+
+.tool-btn.sticky-note-btn.active {
+  border-left: 4px solid #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  transform: scale(1.05);
+}
+
+.sticky-note-icon {
+  width: 28px;
+  height: 28px;
+  position: relative;
+  background: #fff3cd;
+  border-radius: 3px;
+  box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.15);
+  transform: rotate(-3deg);
+}
+
+.sticky-note-icon-inner {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  background: repeating-linear-gradient(
+    transparent,
+    transparent 3px,
+    rgba(0, 0, 0, 0.06) 3px,
+    rgba(0, 0, 0, 0.06) 4px
+  );
+  border-radius: 1px;
+}
+
 .toolbar-divider {
   width: 48px;
   height: 1px;
