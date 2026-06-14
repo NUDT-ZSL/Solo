@@ -14,12 +14,12 @@ interface ArtCardProps {
 }
 
 export default function ArtCard({ artwork, artist, isFavorited, onToggleFavorite, onClick, showActions, onEdit, onDelete }: ArtCardProps) {
-  const [heartScale, setHeartScale] = useState(1)
+  const [heartAnimating, setHeartAnimating] = useState(false)
 
   const handleFavoriteClick = (e: React.MouseEvent) => {
     e.stopPropagation()
-    setHeartScale(1.1)
-    setTimeout(() => setHeartScale(1), 200)
+    setHeartAnimating(true)
+    setTimeout(() => setHeartAnimating(false), 400)
     onToggleFavorite(artwork.id)
   }
 
@@ -44,6 +44,21 @@ export default function ArtCard({ artwork, artist, isFavorited, onToggleFavorite
         ;(e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)'
       }}
     >
+      <style>{`
+        @keyframes heartBounce {
+          0% { transform: scale(1); }
+          30% { transform: scale(1.2); }
+          50% { transform: scale(0.95); }
+          70% { transform: scale(1.1); }
+          100% { transform: scale(1); }
+        }
+        .heart-btn.animating {
+          animation: heartBounce 0.4s ease;
+        }
+        .heart-svg {
+          transition: all 0.2s ease;
+        }
+      `}</style>
       <div style={{ position: 'relative' }}>
         <LazyImage
           src={artwork.image}
@@ -52,16 +67,16 @@ export default function ArtCard({ artwork, artist, isFavorited, onToggleFavorite
         />
         <div
           onClick={handleFavoriteClick}
+          className={`heart-btn ${heartAnimating ? 'animating' : ''}`}
           style={{
             position: 'absolute', top: 8, right: 8,
             width: 36, height: 36, borderRadius: '50%',
             background: 'rgba(0,0,0,0.5)', display: 'flex',
             alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', transition: 'transform 0.2s ease',
-            transform: `scale(${heartScale})`,
+            cursor: 'pointer',
           }}
         >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill={isFavorited ? '#ef4444' : 'none'} stroke={isFavorited ? '#ef4444' : '#9ca3af'} strokeWidth="2">
+          <svg className="heart-svg" width="24" height="24" viewBox="0 0 24 24" fill={isFavorited ? '#ef4444' : 'none'} stroke={isFavorited ? '#ef4444' : '#9ca3af'} strokeWidth="2">
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
           </svg>
         </div>

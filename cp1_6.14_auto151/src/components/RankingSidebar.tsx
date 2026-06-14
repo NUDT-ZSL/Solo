@@ -39,27 +39,39 @@ export default function RankingSidebar({ artists, onArtistClick, onArtworkClick 
   }, [visible])
 
   return (
-    <div
-      ref={sidebarRef}
-      style={{
-        width: 260, position: 'sticky', top: 80,
-        background: '#111827', borderRadius: 12, padding: 16,
-        alignSelf: 'flex-start', maxHeight: 'calc(100vh - 96px)', overflowY: 'auto',
-      }}
-    >
-      <h3 style={{ fontSize: 16, color: '#fff', marginBottom: 16, fontWeight: 700 }}>
-        🔥 热门艺术家
-      </h3>
-      {artistRankings.slice(0, 5).map((artist, i) => (
-        <div
-          key={artist.id}
-          onClick={() => onArtistClick(artist.id)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0',
-            cursor: 'pointer', opacity: 0,
-            animation: `fadeIn 0.3s ease ${i * 0.1}s forwards`,
-          }}
-        >
+    <>
+      <style>{`
+        @keyframes rankingFadeIn {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .ranking-item {
+          opacity: 0;
+          animation: rankingFadeIn 0.3s ease forwards;
+        }
+      `}</style>
+      <div
+        ref={sidebarRef}
+        style={{
+          width: 260, position: 'sticky', top: 80,
+          background: '#111827', borderRadius: 12, padding: 16,
+          alignSelf: 'flex-start', maxHeight: 'calc(100vh - 96px)', overflowY: 'auto',
+        }}
+      >
+        <h3 style={{ fontSize: 16, color: '#fff', marginBottom: 16, fontWeight: 700 }}>
+          🔥 热门艺术家
+        </h3>
+        {artistRankings.slice(0, 5).map((artist, i) => (
+          <div
+            key={artist.id}
+            onClick={() => onArtistClick(artist.id)}
+            className="ranking-item"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0',
+              cursor: 'pointer',
+              animationDelay: `${i * 0.1}s`,
+            }}
+          >
           <span style={{ fontSize: 14, color: '#f59e0b', fontWeight: 700, width: 20 }}>{i + 1}</span>
           <img
             src={artist.avatar}
@@ -82,10 +94,11 @@ export default function RankingSidebar({ artists, onArtistClick, onArtworkClick 
         <div
           key={artwork.id}
           onClick={() => onArtworkClick(artwork.id)}
+          className="ranking-item"
           style={{
             display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0',
-            cursor: 'pointer', opacity: 0,
-            animation: `fadeIn 0.3s ease ${i * 0.1}s forwards`,
+            cursor: 'pointer',
+            animationDelay: `${(i + 5) * 0.1}s`,
           }}
         >
           <span style={{ fontSize: 14, color: '#f59e0b', fontWeight: 700, width: 20 }}>{i + 1}</span>
@@ -103,5 +116,6 @@ export default function RankingSidebar({ artists, onArtistClick, onArtworkClick 
         </div>
       ))}
     </div>
+    </>
   )
 }

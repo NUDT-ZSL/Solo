@@ -8,23 +8,28 @@ interface StatsPanelProps {
 
 function AnimatedNumber({ target, duration = 1500 }: { target: number; duration?: number }) {
   const [current, setCurrent] = useState(0)
-  const startRef = useRef(0)
-  const frameRef = useRef(0)
+  const hasAnimated = useRef(false)
 
   useEffect(() => {
-    const start = performance.now()
+    if (hasAnimated.current) return
+    hasAnimated.current = true
+
+    const startTime = performance.now()
+    const startValue = 0
+    const endValue = target
+
     const animate = (now: number) => {
-      const elapsed = now - start
+      const elapsed = now - startTime
       const progress = Math.min(elapsed / duration, 1)
       const eased = 1 - Math.pow(1 - progress, 3)
-      setCurrent(Math.round(startRef.current + (target - startRef.current) * eased))
+      const value = Math.round(startValue + (endValue - startValue) * eased)
+      setCurrent(value)
       if (progress < 1) {
-        frameRef.current = requestAnimationFrame(animate)
+        requestAnimationFrame(animate)
       }
     }
-    startRef.current = current
-    frameRef.current = requestAnimationFrame(animate)
-    return () => cancelAnimationFrame(frameRef.current)
+
+    requestAnimationFrame(animate)
   }, [target, duration])
 
   return <span>{current.toLocaleString()}</span>

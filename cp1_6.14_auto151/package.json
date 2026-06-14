@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "frontend": "vite",
-    "backend": "npx tsx backend/server.ts",
-    "dev": "npx concurrently \"npm run frontend\" \"npm run backend\""
+    "backend": "tsx backend/server.ts",
+    "dev": "concurrently \"npm run frontend\" \"npm run backend\""
   },
   "dependencies": {
     "react": "^18.2.0",

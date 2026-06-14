@@ -59,23 +59,32 @@ export default function GalleryPage({ artworks, artists, favorites, onToggleFavo
           <CategoryFilter categories={categories} selected={category} onChange={setCategory} />
         </div>
 
-        <div style={{
-          columns: 4,
-          columnGap: 16,
-          '@media (max-width: 1200px)': { columns: 3 },
-        }}>
+        <div>
           <style>{`
             .gallery-grid {
-              columns: 4;
+              column-width: 280px;
               column-gap: 16px;
             }
-            @media (max-width: 1200px) { .gallery-grid { columns: 3; } }
-            @media (max-width: 768px) { .gallery-grid { columns: 2; } }
-            @media (max-width: 480px) { .gallery-grid { columns: 1; } }
+            @media (min-width: 1201px) {
+              .gallery-grid { column-count: 4; column-gap: 16px; }
+            }
+            @media (min-width: 768px) and (max-width: 1200px) {
+              .gallery-grid { column-count: 3; column-gap: 16px; }
+            }
+            @media (min-width: 481px) and (max-width: 767px) {
+              .gallery-grid { column-count: 2; column-gap: 16px; }
+            }
+            @media (max-width: 480px) {
+              .gallery-grid { column-count: 1; column-gap: 16px; }
+            }
+            .gallery-item {
+              break-inside: avoid;
+              margin-bottom: 16px;
+            }
           `}</style>
           <div className="gallery-grid">
             {filtered.map(artwork => (
-              <div key={artwork.id} style={{ breakInside: 'avoid', marginBottom: 16 }}>
+              <div key={artwork.id} className="gallery-item">
                 <ArtCard
                   artwork={artwork}
                   artist={artistMap[artwork.artistId]}
