@@ -1,12 +1,25 @@
-import { GameState, LightSource, Platform, Reflector, Prism, Receiver, RaySegment, Particle, Portal } from './types';
+import { GameState, LightSource, Platform, Reflector, Prism, Receiver, RaySegment, Particle, Portal, Vec2 } from './types';
 
 const GRID_SIZE = 50;
+const CANVAS_W = 1000;
+const CANVAS_H = 600;
+
+const RAY_START = { r: 255, g: 235, b: 59 };
+const RAY_END = { r: 255, g: 152, b: 0 };
+const RAY_ALPHA_START = 0.8;
+const RAY_ALPHA_END = 0.2;
+
+interface BlendedCell {
+  r: number; g: number; b: number; alpha: number;
+}
 
 export class RenderManager {
   private ctx: CanvasRenderingContext2D | null = null;
-  private width: number = 1000;
-  private height: number = 600;
+  private width: number = CANVAS_W;
+  private height: number = CANVAS_H;
   private frameTime: number = 0;
+  private blendGrid: Map<string, BlendedCell> = new Map();
+  private gridCellSize: number = 3;
 
   public attach(canvas: HTMLCanvasElement): void {
     this.ctx = canvas.getContext('2d');
@@ -19,7 +32,7 @@ export class RenderManager {
   }
 
   public render(state: GameState): void {
-    const start = performance.now();
+    const t0 = performance.now();
     if (!this.ctx) return;
     const ctx = this.ctx;
 
@@ -31,18 +44,12 @@ export class RenderManager {
     this.drawMirrors(ctx, state.reflectors);
     this.drawReceivers(ctx, state.receivers);
     this.drawPortal(ctx, state.portal);
-
-    if (state.composedRaySegments && state.composedRaySegments.length > 0) {
-      this.drawComposedRays(ctx, state.composedRaySegments);
-    } else {
-      this.drawAllRays(ctx, state.raySegments);
-    }
-
+    this.drawRaysWithBlending(ctx, state);
     this.drawBlockedFlash(ctx, state);
     this.drawLightSources(ctx, state.lightSources);
     this.drawParticles(ctx, state.particles);
 
-    if (state.letterParticles) {
+    if (state.letterParticles && state.letterParticles.length > 0) {
       this.drawLetterParticles(ctx, state.letterParticles);
     }
 
@@ -51,11 +58,11 @@ export class RenderManager {
     }
 
     if (state.perfStats) {
-      this.drawPerfStats(ctx, state.perfStats);
+      this.drawPerfOverlay(ctx, state.perfStats);
     }
 
     ctx.restore();
-    this.frameTime = performance.now() - start;
+    this.frameTime = performance.now() - t0;
   }
 
   public getLastFrameTime(): number {
@@ -63,70 +70,59 @@ export class RenderManager {
   }
 
   private drawBackground(ctx: CanvasRenderingContext2D): void {
-    const gradient = ctx.createRadialGradient(
+    const g = ctx.createRadialGradient(
       this.width / 2, this.height / 2, 50,
       this.width / 2, this.height / 2, this.width * 0.7
     );
-    gradient.addColorStop(0, '#15152a');
-    gradient.addColorStop(1, '#0a0a14');
-    ctx.fillStyle = gradient;
+    g.addColorStop(0, '#15152a');
+    g.addColorStop(1, '#0a0a14');
+    ctx.fillStyle = g;
     ctx.fillRect(0, 0, this.width, this.height);
   }
 
   private drawGrid(ctx: CanvasRenderingContext2D): void {
-    ctx.strokeStyle = 'rgba(74, 20, 140, 0.15)';
+    ctx.strokeStyle = 'rgba(74, 20, 140, 0.12)';
     ctx.lineWidth = 1;
-
+    ctx.beginPath();
     for (let x = 0; x <= this.width; x += GRID_SIZE) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, this.height);
-      ctx.stroke();
+      ctx.moveTo(x, 0); ctx.lineTo(x, this.height);
     }
     for (let y = 0; y <= this.height; y += GRID_SIZE) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(this.width, y);
-      ctx.stroke();
+      ctx.moveTo(0, y); ctx.lineTo(this.width, y);
     }
+    ctx.stroke();
   }
 
   private drawPlatforms(ctx: CanvasRenderingContext2D, platforms: Platform[]): void {
-    for (const platform of platforms) {
+    for (const p of platforms) {
       ctx.save();
-      ctx.translate(platform.position.x, platform.position.y);
-      ctx.rotate(platform.angle);
+      ctx.translate(p.position.x, p.position.y);
+      ctx.rotate(p.angle);
 
-      const w = platform.length;
-      const h = platform.width;
-      const r = 4;
+      const w = p.length, h = p.width, r = 4;
 
-      ctx.fillStyle = platform.color;
-      ctx.strokeStyle = platform.movable && platform.isMoving
+      ctx.fillStyle = p.color;
+      ctx.strokeStyle = p.movable && p.isMoving
         ? '#ffeb3b'
-        : this.adjustColor(platform.color, -40);
+        : this.shiftColor(p.color, -40);
       ctx.lineWidth = 2;
 
-      this.drawRoundedRect(ctx, -w / 2, -h / 2, w, h, r);
+      this.roundRect(ctx, -w / 2, -h / 2, w, h, r);
       ctx.fill();
       ctx.stroke();
 
-      if (platform.movable) {
-        const progress = (platform.currentOffset || 0) / (platform.moveDistance || 150);
-        ctx.fillStyle = platform.isMoving ? '#ffeb3b' : 'rgba(255, 235, 59, 0.5)';
-        const barW = Math.min(w - 8, (w - 8) * progress);
-        this.drawRoundedRect(ctx, -w / 2 + 4, -h / 2 - 6, barW, 2, 1);
+      if (p.movable) {
+        const progress = (p.currentOffset || 0) / (p.moveDistance || 150);
+        ctx.fillStyle = p.isMoving ? '#ffeb3b' : 'rgba(255, 235, 59, 0.5)';
+        const barW = Math.max(0, Math.min(w - 8, (w - 8) * progress));
+        this.roundRect(ctx, -w / 2 + 4, -h / 2 - 6, barW, 2, 1);
         ctx.fill();
       }
-
       ctx.restore();
     }
   }
 
-  private drawRoundedRect(
-    ctx: CanvasRenderingContext2D,
-    x: number, y: number, w: number, h: number, r: number
-  ): void {
+  private roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
     r = Math.min(r, w / 2, h / 2);
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -142,27 +138,24 @@ export class RenderManager {
   }
 
   private drawMirrors(ctx: CanvasRenderingContext2D, reflectors: Reflector[]): void {
-    for (const reflector of reflectors) {
-      if (reflector.type !== 'mirror') continue;
-
+    for (const r of reflectors) {
+      if (r.type !== 'mirror') continue;
       ctx.save();
-      ctx.translate(reflector.position.x, reflector.position.y);
-      ctx.rotate(reflector.rotation);
+      ctx.translate(r.position.x, r.position.y);
+      ctx.rotate(r.rotation);
 
       const len = 100;
-
       ctx.shadowColor = '#e0e0ff';
       ctx.shadowBlur = 8;
 
-      const gradient = ctx.createLinearGradient(0, -4, 0, 4);
-      gradient.addColorStop(0, '#f5f5f5');
-      gradient.addColorStop(0.5, '#bdbdbd');
-      gradient.addColorStop(1, '#9e9e9e');
+      const g = ctx.createLinearGradient(0, -4, 0, 4);
+      g.addColorStop(0, '#f5f5f5');
+      g.addColorStop(0.5, '#bdbdbd');
+      g.addColorStop(1, '#9e9e9e');
 
-      ctx.strokeStyle = gradient;
+      ctx.strokeStyle = g;
       ctx.lineWidth = 4;
       ctx.lineCap = 'round';
-
       ctx.beginPath();
       ctx.moveTo(-len / 2, 0);
       ctx.lineTo(len / 2, 0);
@@ -171,11 +164,7 @@ export class RenderManager {
       ctx.shadowBlur = 0;
       ctx.strokeStyle = '#7c4dff';
       ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(-len / 2, 0);
-      ctx.lineTo(len / 2, 0);
       ctx.stroke();
-
       ctx.restore();
     }
   }
@@ -185,23 +174,21 @@ export class RenderManager {
       ctx.save();
       ctx.translate(prism.position.x, prism.position.y);
       ctx.rotate(prism.rotation);
-
       const s = prism.sideLength;
       const h = (s * Math.sqrt(3)) / 2;
 
       ctx.shadowColor = '#e1bee7';
-      ctx.shadowBlur = 12;
+      ctx.shadowBlur = 14;
 
-      const gradient = ctx.createLinearGradient(0, -h, 0, h);
-      gradient.addColorStop(0, 'rgba(224, 64, 251, 0.4)');
-      gradient.addColorStop(0.33, 'rgba(33, 150, 243, 0.4)');
-      gradient.addColorStop(0.66, 'rgba(76, 175, 80, 0.4)');
-      gradient.addColorStop(1, 'rgba(255, 193, 7, 0.4)');
+      const g = ctx.createLinearGradient(0, -h, 0, h);
+      g.addColorStop(0, 'rgba(224, 64, 251, 0.45)');
+      g.addColorStop(0.33, 'rgba(33, 150, 243, 0.45)');
+      g.addColorStop(0.66, 'rgba(76, 175, 80, 0.45)');
+      g.addColorStop(1, 'rgba(255, 193, 7, 0.45)');
 
-      ctx.fillStyle = gradient;
-      ctx.strokeStyle = 'rgba(225, 190, 231, 0.8)';
+      ctx.fillStyle = g;
+      ctx.strokeStyle = 'rgba(225, 190, 231, 0.85)';
       ctx.lineWidth = 2;
-
       ctx.beginPath();
       ctx.moveTo(0, -2 * h / 3);
       ctx.lineTo(-s / 2, h / 3);
@@ -209,7 +196,6 @@ export class RenderManager {
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
-
       ctx.shadowBlur = 0;
       ctx.restore();
     }
@@ -217,89 +203,76 @@ export class RenderManager {
 
   private drawReceivers(ctx: CanvasRenderingContext2D, receivers: Receiver[]): void {
     const time = performance.now() / 1000;
-
-    for (const receiver of receivers) {
+    for (const recv of receivers) {
       ctx.save();
-      ctx.translate(receiver.position.x, receiver.position.y);
+      ctx.translate(recv.position.x, recv.position.y);
+      const phase = (time % 1);
+      const pulse = 1 + 0.15 * Math.sin(phase * Math.PI * 2);
 
-      const pulsePhase = (time % 1) / 1;
-      const pulseScale = 1 + 0.15 * Math.sin(pulsePhase * Math.PI * 2);
+      const glowAlpha = recv.activated
+        ? 0.8 + 0.2 * Math.sin(phase * Math.PI * 2)
+        : 0.3 + 0.1 * Math.sin(phase * Math.PI * 2);
 
-      const glowColor = receiver.activated
-        ? receiver.color
-        : this.adjustColor(receiver.color, -30);
-      const glowAlpha = receiver.activated
-        ? 0.8 + 0.2 * Math.sin(pulsePhase * Math.PI * 2)
-        : 0.3 + 0.1 * Math.sin(pulsePhase * Math.PI * 2);
+      ctx.shadowColor = recv.activated ? recv.color : this.shiftColor(recv.color, -30);
+      ctx.shadowBlur = recv.activated ? 26 : 12;
 
-      ctx.shadowColor = glowColor;
-      ctx.shadowBlur = receiver.activated ? 25 : 12;
-
-      const outerR = receiver.radius * pulseScale;
       ctx.beginPath();
-      ctx.arc(0, 0, outerR + 4, 0, Math.PI * 2);
+      ctx.arc(0, 0, recv.radius * pulse + 4, 0, Math.PI * 2);
       ctx.strokeStyle = `rgba(255,255,255,${glowAlpha * 0.5})`;
       ctx.lineWidth = 2;
       ctx.stroke();
 
       ctx.beginPath();
-      ctx.arc(0, 0, receiver.radius, 0, Math.PI * 2);
-      ctx.fillStyle = receiver.color;
-      ctx.globalAlpha = receiver.activated ? 1 : 0.7;
+      ctx.arc(0, 0, recv.radius, 0, Math.PI * 2);
+      ctx.fillStyle = recv.color;
+      ctx.globalAlpha = recv.activated ? 1 : 0.7;
       ctx.fill();
-
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
 
-      if (!receiver.activated && receiver.requiredDuration > 0) {
-        const progress = receiver.activationProgress / receiver.requiredDuration;
+      if (!recv.activated && recv.requiredDuration > 0) {
+        const p = recv.activationProgress / recv.requiredDuration;
         ctx.beginPath();
-        ctx.arc(0, 0, receiver.radius + 6, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
-        ctx.strokeStyle = receiver.color;
+        ctx.arc(0, 0, recv.radius + 6, -Math.PI / 2, -Math.PI / 2 + p * Math.PI * 2);
+        ctx.strokeStyle = recv.color;
         ctx.lineWidth = 2;
         ctx.stroke();
       }
 
-      if (receiver.activated) {
+      if (recv.activated) {
         ctx.beginPath();
-        ctx.arc(0, 0, receiver.radius * 0.5, 0, Math.PI * 2);
+        ctx.arc(0, 0, recv.radius * 0.5, 0, Math.PI * 2);
         ctx.fillStyle = '#ffffff';
         ctx.fill();
       }
-
       ctx.restore();
     }
   }
 
   private drawPortal(ctx: CanvasRenderingContext2D, portal: Portal): void {
     const time = performance.now() / 1000;
-
     ctx.save();
     ctx.translate(portal.position.x, portal.position.y);
 
     if (portal.active) {
       for (let i = 0; i < 3; i++) {
         const phase = (time + i * 0.33) % 1;
-        const r = portal.radius * (1 + phase * 0.5);
-        const alpha = (1 - phase) * 0.5;
         ctx.beginPath();
-        ctx.arc(0, 0, r, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(224, 64, 251, ${alpha})`;
+        ctx.arc(0, 0, portal.radius * (1 + phase * 0.5), 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(224, 64, 251, ${(1 - phase) * 0.5})`;
         ctx.lineWidth = 3;
         ctx.stroke();
       }
-
       ctx.shadowColor = '#e040fb';
       ctx.shadowBlur = 30;
 
-      const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, portal.radius);
-      gradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
-      gradient.addColorStop(0.4, 'rgba(224, 64, 251, 0.8)');
-      gradient.addColorStop(1, 'rgba(103, 58, 183, 0.5)');
-
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, portal.radius);
+      g.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+      g.addColorStop(0.4, 'rgba(224, 64, 251, 0.8)');
+      g.addColorStop(1, 'rgba(103, 58, 183, 0.5)');
       ctx.beginPath();
       ctx.arc(0, 0, portal.radius, 0, Math.PI * 2);
-      ctx.fillStyle = gradient;
+      ctx.fillStyle = g;
       ctx.fill();
 
       ctx.shadowBlur = 0;
@@ -321,193 +294,314 @@ export class RenderManager {
       ctx.lineWidth = 2;
       ctx.stroke();
       ctx.setLineDash([]);
-
       ctx.beginPath();
       ctx.arc(0, 0, portal.radius * 0.6, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(60, 60, 90, 0.3)';
       ctx.fill();
     }
-
     ctx.restore();
   }
 
-  private drawComposedRays(ctx: CanvasRenderingContext2D, segments: RaySegment[]): void {
-    for (const segment of segments) {
-      this.drawRaySegmentGradient(ctx, segment);
+  private drawRaysWithBlending(ctx: CanvasRenderingContext2D, state: GameState): void {
+    const composed = (state as any).composedRaySegments;
+    if (composed && composed.length > 0) {
+      this.buildBlendGrid(composed);
+      this.renderBlendedRays(ctx);
+      return;
     }
-  }
 
-  private drawAllRays(ctx: CanvasRenderingContext2D, allSegments: RaySegment[][]): void {
-    for (const segments of allSegments) {
-      for (const segment of segments) {
-        this.drawRaySegmentGradient(ctx, segment);
+    for (const list of state.raySegments) {
+      for (const seg of list) {
+        this.drawGradientRay(ctx, seg, RAY_START, RAY_END, RAY_ALPHA_START, RAY_ALPHA_END);
       }
     }
   }
 
-  private drawRaySegmentGradient(ctx: CanvasRenderingContext2D, segment: RaySegment): void {
-    const dx = segment.end.x - segment.start.x;
-    const dy = segment.end.y - segment.start.y;
-    const len = Math.hypot(dx, dy);
-    if (len < 1) return;
+  private buildBlendGrid(segments: any[]): void {
+    this.blendGrid.clear();
+    const cs = this.gridCellSize;
 
-    const intensity = segment.intensity;
+    for (const seg of segments) {
+      const sc = seg.startColor || RAY_START;
+      const ec = seg.endColor || RAY_END;
+      const sa = seg.startAlpha !== undefined ? seg.startAlpha : RAY_ALPHA_START;
+      const ea = seg.endAlpha !== undefined ? seg.endAlpha : RAY_ALPHA_END;
+
+      const dx = seg.end.x - seg.start.x;
+      const dy = seg.end.y - seg.start.y;
+      const len = Math.hypot(dx, dy);
+      if (len < 1) continue;
+      const steps = Math.ceil(len / cs);
+
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const px = seg.start.x + dx * t;
+        const py = seg.start.y + dy * t;
+        const gx = Math.floor(px / cs);
+        const gy = Math.floor(py / cs);
+        const key = `${gx},${gy}`;
+
+        const ir = Math.round(sc.r + (ec.r - sc.r) * t);
+        const ig = Math.round(sc.g + (ec.g - sc.g) * t);
+        const ib = Math.round(sc.b + (ec.b - sc.b) * t);
+        const ialpha = sa + (ea - sa) * t;
+
+        const existing = this.blendGrid.get(key);
+        if (existing) {
+          existing.r = Math.max(existing.r, ir);
+          existing.g = Math.max(existing.g, ig);
+          existing.b = Math.max(existing.b, ib);
+          existing.alpha = Math.min(1, existing.alpha + ialpha);
+        } else {
+          this.blendGrid.set(key, { r: ir, g: ig, b: ib, alpha: ialpha });
+        }
+      }
+    }
+  }
+
+  private renderBlendedRays(ctx: CanvasRenderingContext2D): void {
+    const cs = this.gridCellSize;
+
+    let lastKey = '';
+    let startX = 0, startY = 0;
+    let lastColor: BlendedCell | null = null;
+
+    const sortedKeys = Array.from(this.blendGrid.keys()).sort();
 
     ctx.save();
+    ctx.lineCap = 'butt';
+    for (const key of sortedKeys) {
+      const val = this.blendGrid.get(key)!;
+      const [gxS, gyS] = key.split(',');
+      const gx = parseInt(gxS);
+      const gy = parseInt(gyS);
+      const cx = gx * cs + cs / 2;
+      const cy = gy * cs + cs / 2;
 
-    const gradient = ctx.createLinearGradient(
-      segment.start.x, segment.start.y,
-      segment.end.x, segment.end.y
-    );
+      ctx.shadowColor = `rgba(${val.r}, ${val.g}, ${val.b}, 0.4)`;
+      ctx.shadowBlur = 6;
 
-    const startR = 255;
-    const startG = 235;
-    const startB = 59;
-    const endR = 255;
-    const endG = 152;
-    const endB = 0;
+      ctx.fillStyle = `rgba(${val.r}, ${val.g}, ${val.b}, ${val.alpha})`;
+      ctx.fillRect(gx * cs, gy * cs, cs, cs);
+    }
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
 
-    const r = Math.round(startR + (endR - startR) * intensity);
-    const g = Math.round(startG + (endG - startG) * intensity);
-    const b = Math.round(startB + (endB - startB) * intensity);
+  private drawGradientRay(
+    ctx: CanvasRenderingContext2D,
+    seg: RaySegment,
+    startC: { r: number; g: number; b: number },
+    endC: { r: number; g: number; b: number },
+    startA: number,
+    endA: number
+  ): void {
+    const dx = seg.end.x - seg.start.x;
+    const dy = seg.end.y - seg.start.y;
+    if (dx * dx + dy * dy < 1) return;
 
-    gradient.addColorStop(0, `rgba(${startR}, ${startG}, ${startB}, ${0.8 * intensity})`);
-    gradient.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${0.5 * intensity})`);
-    gradient.addColorStop(1, `rgba(${endR}, ${endG}, ${endB}, ${0.2 * intensity})`);
+    const intensity = seg.intensity;
 
-    ctx.shadowColor = '#ff9800';
+    ctx.save();
+    const g = ctx.createLinearGradient(seg.start.x, seg.start.y, seg.end.x, seg.end.y);
+
+    const sr = startC.r, sg = startC.g, sb = startC.b;
+    const er = endC.r, eg = endC.g, eb = endC.b;
+
+    const mr = Math.round(sr + (er - sr) * 0.5);
+    const mg = Math.round(sg + (eg - sg) * 0.5);
+    const mb = Math.round(sb + (eb - sb) * 0.5);
+    const mAlpha = startA + (endA - startA) * 0.5;
+
+    g.addColorStop(0, `rgba(${sr}, ${sg}, ${sb}, ${startA * intensity})`);
+    g.addColorStop(0.5, `rgba(${mr}, ${mg}, ${mb}, ${mAlpha * intensity})`);
+    g.addColorStop(1, `rgba(${er}, ${eg}, ${eb}, ${endA * intensity})`);
+
+    ctx.shadowColor = `rgba(${er}, ${eg}, ${eb}, 0.6)`;
     ctx.shadowBlur = 8 * intensity;
-
-    ctx.strokeStyle = gradient;
+    ctx.strokeStyle = g;
     ctx.lineWidth = Math.max(1.5, 3 * intensity);
     ctx.lineCap = 'round';
 
     ctx.beginPath();
-    ctx.moveTo(segment.start.x, segment.start.y);
-    ctx.lineTo(segment.end.x, segment.end.y);
+    ctx.moveTo(seg.start.x, seg.start.y);
+    ctx.lineTo(seg.end.x, seg.end.y);
     ctx.stroke();
 
     ctx.shadowBlur = 0;
     ctx.strokeStyle = `rgba(255, 255, 255, ${0.3 * intensity})`;
     ctx.lineWidth = Math.max(0.5, 1 * intensity);
     ctx.stroke();
-
     ctx.restore();
   }
 
   private drawBlockedFlash(ctx: CanvasRenderingContext2D, state: GameState): void {
     if (state.blockedFlashTime <= 0 || !state.blockedPosition) return;
     const alpha = state.blockedFlashTime / 0.5;
-    const pulse = 1 + 0.3 * Math.sin(performance.now() / 50);
+    const pulse = 1 + 0.35 * Math.sin(performance.now() / 40);
 
     ctx.save();
     ctx.translate(state.blockedPosition.x, state.blockedPosition.y);
-
     ctx.shadowColor = '#ff1744';
-    ctx.shadowBlur = 20;
+    ctx.shadowBlur = 25;
+
     ctx.fillStyle = `rgba(255, 23, 68, ${alpha})`;
     ctx.beginPath();
-    ctx.arc(0, 0, 10 * pulse, 0, Math.PI * 2);
+    ctx.arc(0, 0, 12 * pulse, 0, Math.PI * 2);
     ctx.fill();
 
+    ctx.strokeStyle = `rgba(255, 77, 109, ${alpha * 0.8})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 18 * pulse, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
     ctx.restore();
   }
 
   private drawLightSources(ctx: CanvasRenderingContext2D, sources: LightSource[]): void {
     const time = performance.now() / 1000;
-
-    for (const source of sources) {
+    for (const src of sources) {
       ctx.save();
-      ctx.translate(source.position.x, source.position.y);
+      ctx.translate(src.position.x, src.position.y);
 
       for (let i = 3; i >= 1; i--) {
         const r = 12 + i * 6 + Math.sin(time * 3 + i) * 2;
-        const alpha = 0.15 / i;
+        const a = 0.15 / i;
         ctx.beginPath();
         ctx.arc(0, 0, r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 235, 59, ${alpha})`;
+        ctx.fillStyle = `rgba(255, 235, 59, ${a})`;
         ctx.fill();
       }
 
       ctx.shadowColor = '#ffeb3b';
-      ctx.shadowBlur = 20;
-
-      const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, 14);
-      gradient.addColorStop(0, '#ffffff');
-      gradient.addColorStop(0.5, '#ffeb3b');
-      gradient.addColorStop(1, '#ff9800');
+      ctx.shadowBlur = 22;
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 14);
+      g.addColorStop(0, '#ffffff');
+      g.addColorStop(0.5, '#ffeb3b');
+      g.addColorStop(1, '#ff9800');
 
       ctx.beginPath();
       ctx.arc(0, 0, 14, 0, Math.PI * 2);
-      ctx.fillStyle = gradient;
+      ctx.fillStyle = g;
       ctx.fill();
-
       ctx.shadowBlur = 0;
 
-      ctx.rotate(source.angle);
-      const indicatorLen = 28;
-      ctx.strokeStyle = source.dragging ? '#ffffff' : 'rgba(255,255,255,0.6)';
-      ctx.lineWidth = source.dragging ? 3 : 2;
+      ctx.rotate(src.angle);
+      const indLen = 28;
+      ctx.strokeStyle = src.dragging ? '#ffffff' : 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = src.dragging ? 3 : 2;
       ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(14, 0);
-      ctx.lineTo(indicatorLen, 0);
+      ctx.lineTo(indLen, 0);
       ctx.stroke();
 
       ctx.beginPath();
-      ctx.moveTo(indicatorLen, 0);
-      ctx.lineTo(indicatorLen - 5, -3);
-      ctx.moveTo(indicatorLen, 0);
-      ctx.lineTo(indicatorLen - 5, 3);
+      ctx.moveTo(indLen, 0);
+      ctx.lineTo(indLen - 5, -3);
+      ctx.moveTo(indLen, 0);
+      ctx.lineTo(indLen - 5, 3);
       ctx.stroke();
-
       ctx.restore();
     }
   }
 
   private drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[]): void {
-    for (const particle of particles) {
-      const alpha = particle.life / particle.maxLife;
-      const size = particle.size * (0.5 + alpha * 0.5);
-
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.shadowColor = particle.color;
-      ctx.shadowBlur = size * 2;
-      ctx.fillStyle = particle.color;
-      ctx.beginPath();
-      ctx.arc(particle.position.x, particle.position.y, size, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-  }
-
-  private drawLetterParticles(ctx: CanvasRenderingContext2D, particles: NonNullable<GameState['letterParticles']>): void {
     for (const p of particles) {
-      const alpha = Math.min(1, p.life / p.maxLife * 1.5);
-      const size = p.size * (p.phase === 'gather' ? 1 : 0.8 + alpha * 0.4);
-
+      const a = p.life / p.maxLife;
+      const sz = p.size * (0.5 + a * 0.5);
       ctx.save();
-      ctx.globalAlpha = alpha;
+      ctx.globalAlpha = a;
       ctx.shadowColor = p.color;
-      ctx.shadowBlur = size * 3;
+      ctx.shadowBlur = sz * 2;
       ctx.fillStyle = p.color;
       ctx.beginPath();
-      ctx.arc(p.position.x, p.position.y, size, 0, Math.PI * 2);
+      ctx.arc(p.position.x, p.position.y, sz, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
   }
 
-  private drawPerfStats(
+  private drawLetterParticles(
+    ctx: CanvasRenderingContext2D,
+    particles: NonNullable<GameState['letterParticles']>
+  ): void {
+    for (const p of particles) {
+      const a = Math.min(1, (p.life / p.maxLife) * 1.5);
+      const sz = p.size * (p.phase === 'gather' ? 1.1 : 0.9 + a * 0.3);
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = sz * 3.5;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.position.x, p.position.y, sz, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  private drawLevelComplete(ctx: CanvasRenderingContext2D, time: number): void {
+    const duration = 3;
+    const t = Math.min(time / duration, 1);
+
+    ctx.save();
+    let alpha = 0;
+    if (t < 0.3) alpha = t / 0.3;
+    else if (t < 0.7) alpha = 1;
+    else alpha = 1 - (t - 0.7) / 0.3;
+
+    const g = ctx.createRadialGradient(
+      this.width / 2, this.height / 2, 0,
+      this.width / 2, this.height / 2, this.width
+    );
+    g.addColorStop(0, `rgba(103, 58, 183, ${0.4 * alpha})`);
+    g.addColorStop(1, `rgba(10, 10, 20, ${0.8 * alpha})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    if (t >= 2.0 / duration) {
+      const textT = Math.min(1, (t - 2.0 / duration) / (1 - 2.0 / duration));
+      const scale = textT < 0.5
+        ? 0.82 + (textT / 0.5) * 0.18
+        : 1 + 0.05 * Math.sin(time * Math.PI * 4);
+
+      ctx.translate(this.width / 2, this.height / 2);
+      ctx.scale(scale, scale);
+      ctx.translate(-this.width / 2, -this.height / 2);
+
+      ctx.shadowColor = '#ffeb3b';
+      ctx.shadowBlur = 32 * textT;
+      ctx.font = 'bold 64px "Courier New", monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      const text = 'Level Complete';
+      const colors = ['#ffeb3b', '#ffc107', '#ff9800', '#ffeb3b'];
+      const chars = text.split('');
+      const charW = 42;
+      const totalW = chars.length * charW;
+      const startX = this.width / 2 - totalW / 2 + charW / 2;
+
+      for (let i = 0; i < chars.length; i++) {
+        const ct = textT * 3 - i * 0.05;
+        const bounce = Math.max(0, Math.sin(Math.max(0, ct) * Math.PI)) * 15;
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.globalAlpha = textT;
+        ctx.fillText(chars[i], startX + i * charW, this.height / 2 - bounce);
+      }
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+
+  private drawPerfOverlay(
     ctx: CanvasRenderingContext2D,
     stats: NonNullable<GameState['perfStats']>
   ): void {
-    const padding = 10;
-    const lineHeight = 16;
-    const x = padding;
-    let y = padding + lineHeight;
-
+    const px = 10, py = 10, lh = 16;
     ctx.save();
     ctx.font = '12px "Courier New", monospace';
     ctx.textAlign = 'left';
@@ -516,113 +610,29 @@ export class RenderManager {
     const frameColor = stats.frameTime <= 25 ? '#00e676' : stats.frameTime <= 35 ? '#ff9800' : '#ff1744';
     const rayColor = stats.rayComputeTime <= 1 ? '#00e676' : stats.rayComputeTime <= 3 ? '#ff9800' : '#ff1744';
 
+    let y = py + lh;
     ctx.fillStyle = fpsColor;
-    ctx.fillText(`FPS: ${stats.fps}`, x, y);
-    y += lineHeight;
-
+    ctx.fillText(`FPS: ${stats.fps}`, px, y); y += lh;
     ctx.fillStyle = frameColor;
-    ctx.fillText(`Frame: ${stats.frameTime.toFixed(1)}ms`, x, y);
-    y += lineHeight;
-
+    ctx.fillText(`Frame: ${stats.frameTime.toFixed(1)}ms`, px, y); y += lh;
     ctx.fillStyle = rayColor;
-    ctx.fillText(`Ray: ${stats.rayComputeTime.toFixed(2)}ms`, x, y);
-
+    ctx.fillText(`Ray: ${stats.rayComputeTime.toFixed(2)}ms`, px, y);
     ctx.restore();
   }
 
-  private drawLevelComplete(ctx: CanvasRenderingContext2D, time: number): void {
-    const duration = 3;
-    const t = Math.min(time / duration, 1);
-    const showTextTime = 2.0;
-
-    ctx.save();
-
-    let alpha = 0;
-    if (t < 0.3) {
-      alpha = t / 0.3;
-    } else if (t < 0.7) {
-      alpha = 1;
-    } else {
-      alpha = 1 - (t - 0.7) / 0.3;
-    }
-
-    const overlayGradient = ctx.createRadialGradient(
-      this.width / 2, this.height / 2, 0,
-      this.width / 2, this.height / 2, this.width
-    );
-    overlayGradient.addColorStop(0, `rgba(103, 58, 183, ${0.4 * alpha})`);
-    overlayGradient.addColorStop(1, `rgba(10, 10, 20, ${0.8 * alpha})`);
-    ctx.fillStyle = overlayGradient;
-    ctx.fillRect(0, 0, this.width, this.height);
-
-    if (t >= showTextTime / duration) {
-      const textT = Math.min(1, (t - showTextTime / duration) / (1 - showTextTime / duration));
-      const textAlpha = textT;
-
-      const textScale = textT < 0.5
-        ? 0.8 + (textT / 0.5) * 0.2
-        : 1 + 0.05 * Math.sin(time * Math.PI * 4);
-
-      ctx.translate(this.width / 2, this.height / 2);
-      ctx.scale(textScale, textScale);
-      ctx.translate(-this.width / 2, -this.height / 2);
-
-      ctx.shadowColor = '#ffeb3b';
-      ctx.shadowBlur = 30 * textAlpha;
-
-      ctx.font = 'bold 64px "Courier New", monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-
-      const text = 'Level Complete';
-      const colors = ['#ffeb3b', '#ffc107', '#ff9800', '#ffeb3b'];
-      const chars = text.split('');
-      const charWidth = 42;
-      const totalWidth = chars.length * charWidth;
-      const startX = this.width / 2 - totalWidth / 2 + charWidth / 2;
-
-      for (let i = 0; i < chars.length; i++) {
-        const charT = textT * 3 - i * 0.05;
-        const bounce = Math.max(0, Math.sin(Math.max(0, charT) * Math.PI)) * 15;
-        const color = colors[i % colors.length];
-        ctx.fillStyle = color;
-        ctx.globalAlpha = textAlpha;
-        ctx.fillText(chars[i], startX + i * charWidth, this.height / 2 - bounce);
-      }
-
-      ctx.globalAlpha = 1;
-    }
-
-    ctx.restore();
-  }
-
-  private lerpColor(hex1: string, hex2: string, t: number): string {
-    const c1 = this.hexToRgb(hex1);
-    const c2 = this.hexToRgb(hex2);
-    const r = Math.round(c1.r + (c2.r - c1.r) * t);
-    const g = Math.round(c1.g + (c2.g - c1.g) * t);
-    const b = Math.round(c1.b + (c2.b - c1.b) * t);
+  private shiftColor(hex: string, amount: number): string {
+    const c = this.parseHex(hex);
+    const r = Math.max(0, Math.min(255, c.r + amount));
+    const g = Math.max(0, Math.min(255, c.g + amount));
+    const b = Math.max(0, Math.min(255, c.b + amount));
     return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
   }
 
-  private hexToRgb(hex: string): { r: number; g: number; b: number } {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result
-      ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) }
+  private parseHex(hex: string): { r: number; g: number; b: number } {
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return m
+      ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) }
       : { r: 255, g: 255, b: 255 };
-  }
-
-  private hexToRgba(hex: string, alpha: number): string {
-    const { r, g, b } = this.hexToRgb(hex);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  }
-
-  private adjustColor(hex: string, amount: number): string {
-    const { r, g, b } = this.hexToRgb(hex);
-    const nr = Math.max(0, Math.min(255, r + amount));
-    const ng = Math.max(0, Math.min(255, g + amount));
-    const nb = Math.max(0, Math.min(255, b + amount));
-    return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`;
   }
 }
 
