@@ -1,10 +1,11 @@
 import * as THREE from 'three'
-import type { ParticleData } from './ParticleEngine'
-
-const CONNECTION_DISTANCE = 25
-const LINE_OPACITY = 0.3
-const LINE_WIDTH = 1
-const HIGH_PARTICLE_THRESHOLD = 20000
+import {
+  ParticleData,
+  CONNECTION_DISTANCE,
+  LINE_OPACITY,
+  LINE_WIDTH,
+  HIGH_PARTICLE_THRESHOLD
+} from './ParticleData'
 
 export class LineRenderer {
   private lineGeometry: THREE.BufferGeometry
@@ -24,13 +25,16 @@ export class LineRenderer {
     this.lineMesh.frustumCulled = false
   }
 
-  update(particles: ParticleData[]): void {
+  update(particles: ParticleData[], detectionInterval: number = 1): void {
     const particleCount = particles.length
     
-    const detectionInterval = particleCount > HIGH_PARTICLE_THRESHOLD ? 3 : 1
+    const interval = particleCount > HIGH_PARTICLE_THRESHOLD 
+      ? Math.max(detectionInterval, 3) 
+      : detectionInterval
+    
     this.frameCount++
     
-    if (this.frameCount % detectionInterval !== 0) {
+    if (this.frameCount % interval !== 0) {
       return
     }
 
@@ -43,7 +47,10 @@ export class LineRenderer {
       for (let j = i + 1; j < particles.length; j++) {
         const p2 = particles[j]
         
-        const distance = p1.position.distanceTo(p2.position)
+        const dx = p1.position.x - p2.position.x
+        const dy = p1.position.y - p2.position.y
+        const dz = p1.position.z - p2.position.z
+        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz)
         
         if (distance < CONNECTION_DISTANCE) {
           positions.push(

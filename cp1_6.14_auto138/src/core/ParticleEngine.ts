@@ -1,35 +1,19 @@
 import * as THREE from 'three'
-
-export interface ParticleData {
-  id: number
-  position: THREE.Vector3
-  velocity: THREE.Vector3
-  color: THREE.Color
-  startColor: THREE.Color
-  life: number
-  maxLife: number
-  size: number
-  startSize: number
-  speedFactor: number
-  active: boolean
-}
-
-export type BrushType = 'spray' | 'vortex' | 'trail'
-
-export interface BrushParams {
-  density?: number
-  radius?: number
-  length?: number
-}
+import {
+  ParticleData,
+  BrushType,
+  BrushParams,
+  COLOR_PALETTE,
+  MAX_PARTICLES,
+  HIGH_PARTICLE_THRESHOLD,
+  PERFORMANCE_THRESHOLD
+} from './ParticleData'
 
 type EventType = 'particleCountChange' | 'needsRender'
 
 interface EventCallback {
   (data?: number): void
 }
-
-const COLOR_PALETTE = ['#f472b6', '#60a5fa', '#34d399', '#fbbf24']
-const MAX_PARTICLES = 50000
 
 export class ParticleEngine {
   private particles: ParticleData[] = []
@@ -44,6 +28,7 @@ export class ParticleEngine {
   private eventListeners: Map<EventType, Set<EventCallback>> = new Map()
   private history: ParticleData[][] = []
   private maxHistory = 20
+  private connectionDetectionInterval = 1
 
   constructor() {
     this.initParticlePool()
@@ -59,8 +44,8 @@ export class ParticleEngine {
         startColor: new THREE.Color(),
         life: 0,
         maxLife: 0,
-        size: 0,
-        startSize: 0,
+        radius: 0,
+        startRadius: 0,
         speedFactor: 0,
         active: false
       })
@@ -88,14 +73,28 @@ export class ParticleEngine {
     poolParticle.startColor.copy(startColor)
     poolParticle.life = maxLife
     poolParticle.maxLife = maxLife
-    poolParticle.size = 3
-    poolParticle.startSize = 3
+    poolParticle.radius = 3
+    poolParticle.startRadius = 3
     poolParticle.speedFactor = 1
     poolParticle.active = true
 
     this.particles.push(poolParticle)
+    this.updatePerformanceSettings()
     this.emit('particleCountChange', this.particles.length)
     this.emit('needsRender')
+  }
+
+  private updatePerformanceSettings(): void {
+    const count = this.particles.length
+    if (count > HIGH_PARTICLE_THRESHOLD) {
+      this.connectionDetectionInterval = 3
+    } else {
+      this.connectionDetectionInterval = 1
+    }
+  }
+
+  getConnectionDetectionInterval(): number {
+    return this.connectionDetectionInterval
   }
 
   private emitSpray(worldPos: THREE.Vector3, deltaTime: number): void {
@@ -176,7 +175,10 @@ export class ParticleEngine {
   }
 
   update(deltaTime: number): void {
-    for (let i = this.particles.length - 1; i >= 0; i--) {
+    const particleCount = this.particles.length
+    const step = particleCount > PERFORMANCE_THRESHOLD ? 2 : 1
+
+    for (let i = this.particles.length - 1; i >= 0; i -= step) {
       const p = this.particles[i]
       
       p.life -= deltaTime
@@ -184,6 +186,7 @@ export class ParticleEngine {
       if (p.life <= 0) {
         p.active = false
         this.particles.splice(i, 1)
+        this.updatePerformanceSettings()
         this.emit('particleCountChange', this.particles.length)
         this.emit('needsRender')
         continue
@@ -196,11 +199,10 @@ export class ParticleEngine {
       const velocity = p.velocity.clone().multiplyScalar(p.speedFactor * deltaTime * 60)
       p.position.add(velocity)
       
-      p.size = 0.5 + (p.startSize - 0.5) * lifeRatio
+      p.radius = 0.5 + (p.startRadius - 0.5) * lifeRatio
       
       p.color.copy(p.startColor)
-      const alpha = lifeRatio
-      ;(p.color as any).a = alpha
+      ;(p.color as any).a = lifeRatio
     }
 
     if (this.isDrawing && this.lastMousePos) {
@@ -287,8 +289,8 @@ export class ParticleEngine {
         poolParticle.startColor.copy(state.startColor)
         poolParticle.life = state.life
         poolParticle.maxLife = state.maxLife
-        poolParticle.size = state.size
-        poolParticle.startSize = state.startSize
+        poolParticle.radius = state.radius
+        poolParticle.startRadius = state.startRadius
         poolParticle.speedFactor = state.speedFactor
         poolParticle.active = true
         this.particles.push(poolParticle)
@@ -299,6 +301,7 @@ export class ParticleEngine {
       ? Math.max(...this.particles.map(p => p.id)) + 1 
       : 0
 
+    this.updatePerformanceSettings()
     this.emit('particleCountChange', this.particles.length)
     this.emit('needsRender')
     return true
@@ -310,6 +313,7 @@ export class ParticleEngine {
     this.particles = []
     this.nextId = 0
     this.trailPositions = []
+    this.connectionDetectionInterval = 1
     this.emit('particleCountChange', 0)
     this.emit('needsRender')
   }
@@ -340,7 +344,7 @@ export class ParticleEngine {
       color: `#${p.startColor.getHexString()}`,
       life: p.life,
       maxLife: p.maxLife,
-      size: p.size
+      radius: p.radius
     }))
     return JSON.stringify(data)
   }

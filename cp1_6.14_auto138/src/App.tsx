@@ -2,9 +2,9 @@ import React, { useEffect, useRef, useState, useCallback } from 'react'
 import * as THREE from 'three'
 import { Toolbar } from './components/Toolbar'
 import { RadarView } from './components/RadarView'
-import { ParticleEngine, type BrushType, type BrushParams } from './core/ParticleEngine'
+import { ParticleEngine } from './core/ParticleEngine'
 import { LineRenderer } from './core/LineRenderer'
-import type { ParticleData } from './core/ParticleEngine'
+import type { BrushType, BrushParams, ParticleData } from './core/ParticleData'
 
 const App: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -41,26 +41,6 @@ const App: React.FC = () => {
   const frameCountRef = useRef(0)
   const lastFpsUpdateRef = useRef(performance.now())
   const animationIdRef = useRef<number>(0)
-
-  const updateCameraPosition = useCallback(() => {
-    const camera = cameraRef.current
-    if (!camera) return
-
-    const theta = targetThetaRef.current
-    const phi = targetPhiRef.current
-    const distance = targetDistanceRef.current
-
-    const x = distance * Math.sin(phi) * Math.sin(theta)
-    const y = distance * Math.cos(phi)
-    const z = distance * Math.sin(phi) * Math.cos(theta)
-
-    camera.position.set(x, y, z)
-    camera.lookAt(0, 0, 0)
-
-    const direction = new THREE.Vector3()
-    camera.getWorldDirection(direction)
-    setCameraDirection(direction)
-  }, [])
 
   const lerpCamera = useCallback(() => {
     const lerpFactor = 0.1
@@ -152,7 +132,7 @@ const App: React.FC = () => {
       particles: particles.map((p: ParticleData) => ({
         position: [p.position.x, p.position.y, p.position.z],
         color: `#${p.startColor.getHexString()}`,
-        size: p.size,
+        radius: p.radius,
         life: p.life,
         maxLife: p.maxLife
       })),
@@ -198,7 +178,7 @@ const App: React.FC = () => {
       positions.push(...p.position);
       const color = new THREE.Color(p.color);
       colors.push(color.r, color.g, color.b);
-      sizes.push(p.size);
+      sizes.push(p.radius);
     });
     
     const geometry = new THREE.BufferGeometry();
@@ -296,7 +276,6 @@ const App: React.FC = () => {
       10000
     )
     cameraRef.current = camera
-    updateCameraPosition()
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
     rendererRef.current = renderer
@@ -375,7 +354,9 @@ const App: React.FC = () => {
       e.preventDefault()
       const zoomSpeed = 0.001
       const newDistance = targetDistanceRef.current + e.deltaY * zoomSpeed * targetDistanceRef.current
-      targetDistanceRef.current = Math.max(50, Math.min(900, newDistance))
+      const minDistance = 300 * 0.5
+      const maxDistance = 300 * 3
+      targetDistanceRef.current = Math.max(minDistance, Math.min(maxDistance, newDistance))
     }
 
     const handleContextMenu = (e: Event) => {
@@ -425,7 +406,7 @@ const App: React.FC = () => {
           p.startColor.g * lifeRatio,
           p.startColor.b * lifeRatio
         )
-        sizes.push(p.size)
+        sizes.push(p.radius)
       })
 
       particleGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
@@ -434,7 +415,8 @@ const App: React.FC = () => {
       particleGeometry.attributes.color.needsUpdate = true
       particleGeometry.computeBoundingSphere()
 
-      lineRenderer.update(particles)
+      const detectionInterval = particleEngine.getConnectionDetectionInterval()
+      lineRenderer.update(particles, detectionInterval)
 
       renderer.render(scene, camera)
     }
@@ -460,7 +442,7 @@ const App: React.FC = () => {
         containerRef.current.removeChild(renderer.domElement)
       }
     }
-  }, [getWorldPosition, lerpCamera, updateCameraPosition])
+  }, [getWorldPosition, lerpCamera])
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>

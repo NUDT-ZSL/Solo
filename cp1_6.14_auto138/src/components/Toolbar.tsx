@@ -1,5 +1,5 @@
 import React from 'react'
-import type { BrushType, BrushParams } from '../core/ParticleEngine'
+import type { BrushType, BrushParams } from '../core/ParticleData'
 
 interface ToolbarProps {
   currentBrush: BrushType
