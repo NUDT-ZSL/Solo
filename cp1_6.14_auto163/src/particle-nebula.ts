@@ -10,9 +10,29 @@ import {
   GestureType
 } from './types';
 
-const PARTICLE_COUNT = 20000;
-const SHAPE_TRANSITION_DURATION = 1500;
-const BURST_DURATION = 300;
+export interface NebulaConfig {
+  particleCount?: number;
+  shapeTransitionDuration?: number;
+  burstDuration?: number;
+  sizeScaleRange?: [number, number];
+  speedScaleRange?: [number, number];
+  burstThreshold?: number;
+  minDistance?: number;
+  maxDistance?: number;
+}
+
+const DEFAULT_CONFIG: Required<NebulaConfig> = {
+  particleCount: 20000,
+  shapeTransitionDuration: 1500,
+  burstDuration: 300,
+  sizeScaleRange: [0.5, 2.0],
+  speedScaleRange: [0.3, 2.0],
+  burstThreshold: 0.65,
+  minDistance: 5,
+  maxDistance: 50
+};
+
+const PARTICLE_COUNT = DEFAULT_CONFIG.particleCount;
 const COLOR_GRADIENT: [number, number, number][] = [
   [0.48627, 0.22745, 0.92941],
   [0.02353, 0.71373, 0.83137],
@@ -23,12 +43,13 @@ type BezierControlPoints = [THREE.Vector3, THREE.Vector3, THREE.Vector3, THREE.V
 
 enum BurstState {
   IDLE = 'idle',
-  EXPANDING = 'expanding',
-  CONTRACTING = 'contracting'
+  BURST = 'burst',
+  RECOVER = 'recover'
 }
 
 export class ParticleNebula {
   private container: HTMLElement;
+  private config: Required<NebulaConfig>;
   private renderer: THREE.WebGLRenderer;
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
@@ -65,8 +86,9 @@ export class ParticleNebula {
   private onTogglePlay: EventCallback;
   private onSwitchShape: EventCallback;
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, config: NebulaConfig = {}) {
     this.container = container;
+    this.config = { ...DEFAULT_CONFIG, ...config };
     this.clock = new THREE.Clock();
 
     this.particleData = this.initParticleData();
@@ -188,8 +210,8 @@ export class ParticleNebula {
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.minDistance = 5;
-    controls.maxDistance = 50;
+    controls.minDistance = this.config.minDistance;
+    controls.maxDistance = this.config.maxDistance;
     controls.minPolarAngle = Math.PI / 6;
     controls.maxPolarAngle = (2 * Math.PI) / 3;
     controls.enablePan = false;
@@ -350,8 +372,11 @@ export class ParticleNebula {
 
     this.lowEnergy = data.lowFreq;
     this.highEnergy = data.highFreq;
-    this.sizeScale = 0.5 + this.lowEnergy * 1.5;
-    this.speedScale = 0.3 + this.highEnergy * 1.7;
+
+    const [sizeMin, sizeMax] = this.config.sizeScaleRange;
+    const [speedMin, speedMax] = this.config.speedScaleRange;
+    this.sizeScale = sizeMin + this.lowEnergy * (sizeMax - sizeMin);
+    this.speedScale = speedMin + this.highEnergy * (speedMax - speedMin);
 
     if (data.isBurst && this.burstState === BurstState.IDLE) {
       this.triggerBurst();
@@ -370,7 +395,7 @@ export class ParticleNebula {
       this.burstDirections[i3 + 2] = z / len;
     }
 
-    this.burstState = BurstState.EXPANDING;
+    this.burstState = BurstState.BURST;
     this.burstProgress = 0;
     this.burstStart = performance.now();
   }
@@ -438,11 +463,11 @@ export class ParticleNebula {
     if (this.burstState === BurstState.IDLE) return 0;
 
     const elapsed = now - this.burstStart;
-    const halfDuration = BURST_DURATION / 2;
+    const halfDuration = this.config.burstDuration / 2;
 
-    if (this.burstState === BurstState.EXPANDING) {
+    if (this.burstState === BurstState.BURST) {
       if (elapsed >= halfDuration) {
-        this.burstState = BurstState.CONTRACTING;
+        this.burstState = BurstState.RECOVER;
         this.burstStart = now - halfDuration;
         this.burstProgress = 1;
       } else {
@@ -450,10 +475,9 @@ export class ParticleNebula {
       }
     }
 
-    if (this.burstState === BurstState.CONTRACTING) {
-      const cElapsed = now - (this.burstStart + (now - this.burstStart > halfDuration ? halfDuration : 0));
+    if (this.burstState === BurstState.RECOVER) {
       const adjusted = now - this.burstStart;
-      if (adjusted >= BURST_DURATION) {
+      if (adjusted >= this.config.burstDuration) {
         this.burstState = BurstState.IDLE;
         this.burstProgress = 0;
         return 0;
@@ -496,7 +520,7 @@ export class ParticleNebula {
     const now = performance.now();
 
     if (this.transitionProgress < 1) {
-      const rawT = Math.min(1, (now - this.transitionStart) / SHAPE_TRANSITION_DURATION);
+      const rawT = Math.min(1, (now - this.transitionStart) / this.config.shapeTransitionDuration);
       this.transitionProgress = this.easeInOutCubic(rawT);
       if (rawT >= 1) {
         this.currentShape = this.targetShape;
