@@ -35,15 +35,15 @@ const formatTime = (iso: string) => {
   return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-const EditIcon = ({ size = 24 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#3498db" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+const EditIcon = () => (
+  <svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#3498db" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
   </svg>
 )
 
-const DeleteIcon = ({ size = 24 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#e74c3c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+const DeleteIcon = () => (
+  <svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#e74c3c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="3 6 5 6 21 6" />
     <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />
     <path d="M10 11v6" />
@@ -57,6 +57,7 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onEdit, onDelete, onCli
 
   return (
     <div
+      className="course-card"
       onClick={() => onClick?.(course)}
       style={{
         width: 240,
@@ -71,17 +72,16 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onEdit, onDelete, onCli
         display: 'flex',
         flexDirection: 'column',
         gap: 10,
-        boxSizing: 'border-box'
+        boxSizing: 'border-box',
+        overflow: 'hidden'
       }}
       onMouseEnter={(e) => {
-        if (onClick) {
-          e.currentTarget.style.transform = 'translateY(-2px)'
-          e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)'
-        }
+        e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)'
+        if (onClick) e.currentTarget.style.transform = 'translateY(-2px)'
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.transform = 'translateY(0)'
         e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.04)'
+        e.currentTarget.style.transform = 'translateY(0)'
       }}
     >
       <div
@@ -92,8 +92,9 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onEdit, onDelete, onCli
           backgroundColor: config.color,
           color: '#ffffff',
           fontSize: 12,
-          padding: '4px 10px',
-          borderRadius: 8
+          padding: '3px 10px',
+          borderRadius: 8,
+          lineHeight: 1.4
         }}
       >
         {config.label}
@@ -140,10 +141,7 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onEdit, onDelete, onCli
         >
           {onEdit && (
             <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onEdit(course)
-              }}
+              onClick={(e) => { e.stopPropagation(); onEdit(course) }}
               style={{
                 flex: 1,
                 fontSize: 13,
@@ -159,25 +157,16 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onEdit, onDelete, onCli
                 cursor: 'pointer',
                 transition: 'all 0.2s ease'
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#3498db'
-                e.currentTarget.style.color = '#ffffff'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent'
-                e.currentTarget.style.color = '#3498db'
-              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#3498db'; e.currentTarget.style.color = '#ffffff' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#3498db' }}
             >
-              <EditIcon size={24} />
+              <EditIcon />
               <span>编辑</span>
             </button>
           )}
           {onDelete && (
             <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onDelete(course)
-              }}
+              onClick={(e) => { e.stopPropagation(); onDelete(course) }}
               style={{
                 flex: 1,
                 fontSize: 13,
@@ -193,16 +182,10 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onEdit, onDelete, onCli
                 cursor: 'pointer',
                 transition: 'all 0.2s ease'
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#e74c3c'
-                e.currentTarget.style.color = '#ffffff'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent'
-                e.currentTarget.style.color = '#e74c3c'
-              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#e74c3c'; e.currentTarget.style.color = '#ffffff' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#e74c3c' }}
             >
-              <DeleteIcon size={24} />
+              <DeleteIcon />
               <span>删除</span>
             </button>
           )}

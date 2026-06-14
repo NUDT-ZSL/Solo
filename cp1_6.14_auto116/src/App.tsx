@@ -119,13 +119,16 @@ const App: React.FC = () => {
         @media (max-width: 1024px) and (min-width: 768px) {
           .sidebar { display: none !important; }
           .top-bar-mobile { display: flex !important; }
+          .desktop-header { display: none !important; }
+          .course-card { width: 100% !important; }
         }
         @media (max-width: 767px) {
           .sidebar { display: none !important; }
           .top-bar-mobile { display: flex !important; }
+          .desktop-header { display: none !important; }
           .course-card { width: 100% !important; }
           .metric-card { width: 100% !important; }
-          .calendar-cell { width: 32px !important; height: 32px !important; }
+          .calendar-cell { width: 32px !important; height: 32px !important; font-size: 8px !important; }
         }
       `}</style>
 
@@ -296,7 +299,7 @@ const App: React.FC = () => {
             </div>
           )}
 
-          <header style={{
+          <header className="desktop-header" style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',

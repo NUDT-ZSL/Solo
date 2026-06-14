@@ -175,11 +175,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onNotify }) => {
           metrics.map((m, i) => (
             <div
               key={i}
+              className="metric-card"
               style={{
                 width: 200,
                 height: 100,
-                background: 'rgba(255,255,255,0.95)',
-                backdropFilter: 'blur(10px)',
+                background: 'rgba(255,255,255,0.18)',
+                backdropFilter: 'blur(12px)',
                 borderRadius: 12,
                 boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
                 padding: 16,
@@ -195,10 +196,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNotify }) => {
             >
               <div style={{ position: 'absolute', top: 12, right: 12 }}>{m.icon}</div>
               <div>
-                <span style={{ fontSize: 36, fontWeight: 700, color: '#2c3e50' }}>{m.value}</span>
-                <span style={{ fontSize: 16, color: '#7f8c8d', marginLeft: 4 }}>{m.suffix}</span>
+                <span style={{ fontSize: 36, fontWeight: 700, color: '#ffffff' }}>{m.value}</span>
+                <span style={{ fontSize: 16, color: 'rgba(255,255,255,0.7)', marginLeft: 4 }}>{m.suffix}</span>
               </div>
-              <div style={{ fontSize: 13, color: '#95a5a6', fontWeight: 500 }}>{m.label}</div>
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', fontWeight: 500 }}>{m.label}</div>
             </div>
           ))
         )}
