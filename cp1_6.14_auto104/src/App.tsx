@@ -92,14 +92,14 @@ const loadImageAsBlob = (url: string): Promise<Blob> => {
             if (blob) {
               resolve(blob);
             } else {
-              reject(new Error('Failed to convert canvas to blob'));
+              reject(new Error('Canvas toBlob returned null'));
             }
           },
           'image/jpeg',
           0.92
         );
-      } catch (canvasError) {
-        reject(canvasError);
+      } catch (e) {
+        reject(new Error(`Canvas tainted or CORS blocked: ${e instanceof Error ? e.message : String(e)}`));
       }
     };
     img.onerror = () => {
@@ -109,16 +109,25 @@ const loadImageAsBlob = (url: string): Promise<Blob> => {
   });
 };
 
+const fetchImageBlobViaProxy = async (url: string): Promise<Blob> => {
+  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+  const response = await axios.get(proxyUrl, { responseType: 'blob' });
+  if (response.data && response.data.size > 0) {
+    return response.data;
+  }
+  throw new Error('Proxy returned empty blob');
+};
+
 const fetchImageWithProxyFallback = async (url: string): Promise<Blob> => {
   try {
-    return await loadImageAsBlob(url);
-  } catch (_imgError) {
+    const blob = await fetchImageBlobViaProxy(url);
+    return blob;
+  } catch (_proxyError) {
     try {
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-      const response = await axios.get(proxyUrl, { responseType: 'blob' });
-      return response.data;
-    } catch (proxyError) {
-      throw proxyError;
+      const blob = await loadImageAsBlob(url);
+      return blob;
+    } catch (imgError) {
+      throw new Error(`All image fetch methods failed for ${url}`);
     }
   }
 };

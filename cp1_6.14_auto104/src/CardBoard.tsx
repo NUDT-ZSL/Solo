@@ -3,6 +3,8 @@ import CardItem from './CardItem';
 import { Card } from './types';
 import './CardBoard.css';
 
+const THROTTLE_MS = 16;
+
 interface CardBoardProps {
   cards: Card[];
   onLike: (cardId: string) => void;
@@ -24,6 +26,7 @@ const CardBoard: React.FC<CardBoardProps> = ({
   const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
   const [galleryIndex, setGalleryIndex] = useState(0);
 
+  const lastDragOverTimeRef = useRef<number>(0);
   const rafIdRef = useRef<number | null>(null);
   const pendingDragOverRef = useRef<string | null>(null);
 
@@ -32,9 +35,15 @@ const CardBoard: React.FC<CardBoardProps> = ({
   }, [cards]);
 
   const throttledSetDragOver = useCallback((cardId: string | null) => {
+    const now = performance.now();
     pendingDragOverRef.current = cardId;
-    if (rafIdRef.current === null) {
+
+    if (now - lastDragOverTimeRef.current >= THROTTLE_MS) {
+      lastDragOverTimeRef.current = now;
+      setDragOverCardId(cardId);
+    } else if (rafIdRef.current === null) {
       rafIdRef.current = requestAnimationFrame(() => {
+        lastDragOverTimeRef.current = performance.now();
         setDragOverCardId(pendingDragOverRef.current);
         rafIdRef.current = null;
       });
@@ -53,16 +62,19 @@ const CardBoard: React.FC<CardBoardProps> = ({
   const handleDragStart = useCallback((e: React.DragEvent, card: Card) => {
     setDraggedCard(card);
     e.dataTransfer.effectAllowed = 'move';
-    if (e.dataTransfer.setDragImage && (e.currentTarget as HTMLElement).parentElement) {
+    try {
       const target = e.currentTarget as HTMLElement;
       e.dataTransfer.setDragImage(target, target.offsetWidth / 2, target.offsetHeight / 2);
+    } catch (_e) {
+      // setDragImage not supported
     }
   }, []);
 
   const handleDragEnd = useCallback(() => {
     setDraggedCard(null);
-    throttledSetDragOver(null);
-  }, [throttledSetDragOver]);
+    setDragOverCardId(null);
+    lastDragOverTimeRef.current = 0;
+  }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -100,9 +112,10 @@ const CardBoard: React.FC<CardBoardProps> = ({
 
       onSort(reorderedCards);
       setDraggedCard(null);
-      throttledSetDragOver(null);
+      setDragOverCardId(null);
+      lastDragOverTimeRef.current = 0;
     },
-    [draggedCard, sortedCards, onSort, throttledSetDragOver]
+    [draggedCard, sortedCards, onSort]
   );
 
   const handlePrevCard = useCallback(() => {
@@ -247,7 +260,7 @@ const CardBoard: React.FC<CardBoardProps> = ({
               key={card.id}
               className={`card-grid-item ${dragOverCardId === card.id ? 'drag-over' : ''} ${draggedCard?.id === card.id ? 'dragging' : ''}`}
               onDragOver={(e) => handleDragOverCard(e, card.id)}
-              onDragLeave={() => throttledSetDragOver(null)}
+              onDragLeave={() => setDragOverCardId(null)}
               onDrop={(e) => handleDropOnCard(e, card.id)}
             >
               <CardItem

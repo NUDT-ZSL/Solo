@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Card, CARD_TYPE_CONFIG } from './types';
 import './CardItem.css';
 
@@ -76,7 +77,7 @@ const CardItem: React.FC<CardItemProps> = ({
           <div className="card-text-content">
             {card.content && (
               <div className="card-markdown">
-                <ReactMarkdown>{card.content}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{card.content}</ReactMarkdown>
               </div>
             )}
           </div>

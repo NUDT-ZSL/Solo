@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { Folder, Card } from './types';
 import './FolderPanel.css';
+
+const ALL_FOLDER_KEY = '__all__';
+const THROTTLE_MS = 16;
 
 interface FolderPanelProps {
   folders: Folder[];
@@ -25,7 +28,9 @@ const FolderPanel: React.FC<FolderPanelProps> = ({
 }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
-  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+
+  const lastDragOverTimeRef = useRef<number>(0);
 
   const allFolderCount = cards.length;
 
@@ -50,24 +55,29 @@ const FolderPanel: React.FC<FolderPanelProps> = ({
     }
   };
 
-  const handleDragOver = (e: React.DragEvent, folderId: string | null) => {
+  const handleDragOver = useCallback((e: React.DragEvent, folderKey: string) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    setDragOverFolderId(folderId);
-  };
+    const now = performance.now();
+    if (now - lastDragOverTimeRef.current >= THROTTLE_MS) {
+      lastDragOverTimeRef.current = now;
+      setDragOverKey(folderKey);
+    }
+  }, []);
 
-  const handleDragLeave = () => {
-    setDragOverFolderId(null);
-  };
+  const handleDragLeave = useCallback(() => {
+    setDragOverKey(null);
+  }, []);
 
-  const handleDrop = (e: React.DragEvent, folderId: string | null) => {
+  const handleDrop = useCallback((e: React.DragEvent, folderId: string | null) => {
     e.preventDefault();
     const cardId = e.dataTransfer.getData('text/plain');
     if (cardId) {
       onCardDrop(cardId, folderId);
     }
-    setDragOverFolderId(null);
-  };
+    setDragOverKey(null);
+    lastDragOverTimeRef.current = 0;
+  }, [onCardDrop]);
 
   return (
     <div className="folder-panel">
@@ -109,9 +119,9 @@ const FolderPanel: React.FC<FolderPanelProps> = ({
       )}
 
       <div
-        className={`folder-item all-folder ${selectedFolderId === null ? 'selected' : ''} ${dragOverFolderId === null && dragOverFolderId !== undefined ? 'drag-over' : ''}`}
+        className={`folder-item all-folder ${selectedFolderId === null ? 'selected' : ''} ${dragOverKey === ALL_FOLDER_KEY ? 'drag-over' : ''}`}
         onClick={() => onSelectFolder(null)}
-        onDragOver={(e) => handleDragOver(e, null)}
+        onDragOver={(e) => handleDragOver(e, ALL_FOLDER_KEY)}
         onDragLeave={handleDragLeave}
         onDrop={(e) => handleDrop(e, null)}
       >
@@ -126,7 +136,7 @@ const FolderPanel: React.FC<FolderPanelProps> = ({
         {folders.map((folder) => (
           <div
             key={folder.id}
-            className={`folder-item ${selectedFolderId === folder.id ? 'selected' : ''} ${dragOverFolderId === folder.id ? 'drag-over' : ''}`}
+            className={`folder-item ${selectedFolderId === folder.id ? 'selected' : ''} ${dragOverKey === folder.id ? 'drag-over' : ''}`}
             onClick={() => onSelectFolder(folder.id)}
             onDragOver={(e) => handleDragOver(e, folder.id)}
             onDragLeave={handleDragLeave}
