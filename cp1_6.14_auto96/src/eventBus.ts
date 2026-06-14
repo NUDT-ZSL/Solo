@@ -1,35 +1,61 @@
+export const EVENT_AUDIO_FILE_LOADED       = 'audio:fileLoaded'
+export const EVENT_AUDIO_DECODING_START    = 'audio:decodingStart'
+export const EVENT_AUDIO_DECODING_PROGRESS = 'audio:decodingProgress'
+export const EVENT_AUDIO_DECODING_COMPLETE = 'audio:decodingComplete'
+export const EVENT_AUDIO_DECODING_ERROR    = 'audio:decodingError'
+export const EVENT_AUDIO_PLAYBACK_START    = 'audio:playbackStart'
+export const EVENT_AUDIO_PLAYBACK_STOP     = 'audio:playbackStop'
+export const EVENT_AUDIO_PLAYBACK_TOGGLE   = 'audio:playbackToggle'
+export const EVENT_AUDIO_LOOP_POSITION     = 'audio:loopPosition'
+
+export const EVENT_WAVEFORM_BUFFER_READY    = 'waveform:bufferReady'
+export const EVENT_WAVEFORM_RENDER_COMPLETE = 'waveform:renderComplete'
+export const EVENT_WAVEFORM_VIEW_CHANGE     = 'waveform:viewChange'
+export const EVENT_WAVEFORM_ZOOM_RESET      = 'waveform:zoomReset'
+export const EVENT_WAVEFORM_SCROLL_CHANGE   = 'waveform:scrollChange'
+export const EVENT_WAVEFORM_VERTICAL_ZOOM_CHANGE = 'waveform:verticalZoomChange'
+
+export const EVENT_SELECTION_START  = 'selection:start'
+export const EVENT_SELECTION_UPDATE = 'selection:update'
+export const EVENT_SELECTION_END    = 'selection:end'
+export const EVENT_SELECTION_CLEAR  = 'selection:clear'
+
+export const EVENT_UI_FILE_DROP     = 'ui:fileDrop'
+export const EVENT_UI_FILE_SELECT   = 'ui:fileSelect'
+export const EVENT_UI_ERROR_MESSAGE = 'ui:errorMessage'
+
 export const AudioEvents = {
-  FILE_LOADED: 'audio:fileLoaded',
-  DECODING_START: 'audio:decodingStart',
-  DECODING_PROGRESS: 'audio:decodingProgress',
-  DECODING_COMPLETE: 'audio:decodingComplete',
-  DECODING_ERROR: 'audio:decodingError',
-  PLAYBACK_START: 'audio:playbackStart',
-  PLAYBACK_STOP: 'audio:playbackStop',
-  PLAYBACK_TOGGLE: 'audio:playbackToggle',
-  LOOP_POSITION: 'audio:loopPosition',
+  FILE_LOADED: EVENT_AUDIO_FILE_LOADED,
+  DECODING_START: EVENT_AUDIO_DECODING_START,
+  DECODING_PROGRESS: EVENT_AUDIO_DECODING_PROGRESS,
+  DECODING_COMPLETE: EVENT_AUDIO_DECODING_COMPLETE,
+  DECODING_ERROR: EVENT_AUDIO_DECODING_ERROR,
+  PLAYBACK_START: EVENT_AUDIO_PLAYBACK_START,
+  PLAYBACK_STOP: EVENT_AUDIO_PLAYBACK_STOP,
+  PLAYBACK_TOGGLE: EVENT_AUDIO_PLAYBACK_TOGGLE,
+  LOOP_POSITION: EVENT_AUDIO_LOOP_POSITION,
 } as const
 
 export const WaveformEvents = {
-  BUFFER_READY: 'waveform:bufferReady',
-  RENDER_COMPLETE: 'waveform:renderComplete',
-  VIEW_CHANGE: 'waveform:viewChange',
-  ZOOM_RESET: 'waveform:zoomReset',
-  SCROLL_CHANGE: 'waveform:scrollChange',
-  VERTICAL_ZOOM_CHANGE: 'waveform:verticalZoomChange',
+  BUFFER_READY: EVENT_WAVEFORM_BUFFER_READY,
+  RENDER_COMPLETE: EVENT_WAVEFORM_RENDER_COMPLETE,
+  VIEW_CHANGE: EVENT_WAVEFORM_VIEW_CHANGE,
+  ZOOM_RESET: EVENT_WAVEFORM_ZOOM_RESET,
+  SCROLL_CHANGE: EVENT_WAVEFORM_SCROLL_CHANGE,
+  VERTICAL_ZOOM_CHANGE: EVENT_WAVEFORM_VERTICAL_ZOOM_CHANGE,
 } as const
 
 export const SelectionEvents = {
-  SELECTION_START: 'selection:start',
-  SELECTION_UPDATE: 'selection:update',
-  SELECTION_END: 'selection:end',
-  SELECTION_CLEAR: 'selection:clear',
+  SELECTION_START: EVENT_SELECTION_START,
+  SELECTION_UPDATE: EVENT_SELECTION_UPDATE,
+  SELECTION_END: EVENT_SELECTION_END,
+  SELECTION_CLEAR: EVENT_SELECTION_CLEAR,
 } as const
 
 export const UIEvents = {
-  FILE_DROP: 'ui:fileDrop',
-  FILE_SELECT: 'ui:fileSelect',
-  ERROR_MESSAGE: 'ui:errorMessage',
+  FILE_DROP: EVENT_UI_FILE_DROP,
+  FILE_SELECT: EVENT_UI_FILE_SELECT,
+  ERROR_MESSAGE: EVENT_UI_ERROR_MESSAGE,
 } as const
 
 export const AllEvents = {

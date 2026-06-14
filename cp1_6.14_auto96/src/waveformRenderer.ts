@@ -1,4 +1,17 @@
-import { eventBus, AudioEvents, WaveformEvents, SelectionEvents } from './eventBus'
+import {
+  eventBus,
+  EVENT_AUDIO_DECODING_COMPLETE,
+  EVENT_AUDIO_PLAYBACK_START,
+  EVENT_AUDIO_PLAYBACK_STOP,
+  EVENT_AUDIO_LOOP_POSITION,
+  EVENT_WAVEFORM_ZOOM_RESET,
+  EVENT_WAVEFORM_VIEW_CHANGE,
+  EVENT_WAVEFORM_RENDER_COMPLETE,
+  EVENT_SELECTION_START,
+  EVENT_SELECTION_UPDATE,
+  EVENT_SELECTION_END,
+  EVENT_SELECTION_CLEAR,
+} from './eventBus'
 
 export interface WaveformView {
   scrollX: number
@@ -11,6 +24,7 @@ export interface WaveformColors {
   waveform: string
   waveformFill: string
   waveformHighlightFill: string
+  waveformHighlightLine: string
   selectionBackground: string
   selectionBorder: string
   playhead: string
@@ -21,6 +35,7 @@ const DEFAULT_COLORS: WaveformColors = {
   waveform: '#4fc3f7',
   waveformFill: 'rgba(79, 195, 247, 0.125)',
   waveformHighlightFill: 'rgba(0, 230, 118, 0.31)',
+  waveformHighlightLine: '#00e676',
   selectionBackground: 'rgba(255, 112, 67, 0.188)',
   selectionBorder: '#ff7043',
   playhead: '#00e676',
@@ -55,34 +70,34 @@ export class WaveformRenderer {
   }
 
   private bindEvents(): void {
-    eventBus.on(AudioEvents.DECODING_COMPLETE, ({ buffer }) => {
+    eventBus.on(EVENT_AUDIO_DECODING_COMPLETE, ({ buffer }) => {
       this.setAudioBuffer(buffer)
     })
 
-    eventBus.on(SelectionEvents.SELECTION_START, ({ startTime, endTime }) => {
+    eventBus.on(EVENT_SELECTION_START, ({ startTime, endTime }) => {
       this.setSelection(startTime, endTime)
     })
-    eventBus.on(SelectionEvents.SELECTION_UPDATE, ({ startTime, endTime }) => {
+    eventBus.on(EVENT_SELECTION_UPDATE, ({ startTime, endTime }) => {
       this.setSelection(startTime, endTime)
     })
-    eventBus.on(SelectionEvents.SELECTION_END, ({ startTime, endTime }) => {
+    eventBus.on(EVENT_SELECTION_END, ({ startTime, endTime }) => {
       this.setSelection(startTime, endTime)
     })
-    eventBus.on(SelectionEvents.SELECTION_CLEAR, () => {
+    eventBus.on(EVENT_SELECTION_CLEAR, () => {
       this.clearSelection()
     })
 
-    eventBus.on(AudioEvents.PLAYBACK_START, () => {
+    eventBus.on(EVENT_AUDIO_PLAYBACK_START, () => {
       this.setPlaying(true)
     })
-    eventBus.on(AudioEvents.PLAYBACK_STOP, () => {
+    eventBus.on(EVENT_AUDIO_PLAYBACK_STOP, () => {
       this.setPlaying(false)
     })
-    eventBus.on(AudioEvents.LOOP_POSITION, ({ currentTime }) => {
+    eventBus.on(EVENT_AUDIO_LOOP_POSITION, ({ currentTime }) => {
       this.setPlayheadTime(currentTime)
     })
 
-    eventBus.on(WaveformEvents.ZOOM_RESET, () => {
+    eventBus.on(EVENT_WAVEFORM_ZOOM_RESET, () => {
       this.resetView()
     })
   }
@@ -111,7 +126,7 @@ export class WaveformRenderer {
     this.view.zoom = 1
     this.view.verticalZoom = 1
     this.render()
-    eventBus.emit(WaveformEvents.VIEW_CHANGE, { ...this.view })
+    eventBus.emit(EVENT_WAVEFORM_VIEW_CHANGE, { ...this.view })
   }
 
   private computePeaks(): void {
@@ -141,13 +156,13 @@ export class WaveformRenderer {
 
     this.cachedPeaks = peaks
     const renderTime = performance.now() - startTime
-    eventBus.emit(WaveformEvents.RENDER_COMPLETE, { renderTime })
+    eventBus.emit(EVENT_WAVEFORM_RENDER_COMPLETE, { renderTime })
   }
 
   public setView(view: Partial<WaveformView>): void {
     Object.assign(this.view, view)
     this.clampView()
-    eventBus.emit(WaveformEvents.VIEW_CHANGE, { ...this.view })
+    eventBus.emit(EVENT_WAVEFORM_VIEW_CHANGE, { ...this.view })
     this.render()
   }
 
@@ -155,7 +170,7 @@ export class WaveformRenderer {
     this.view.scrollX = 0
     this.view.zoom = 1
     this.view.verticalZoom = 1
-    eventBus.emit(WaveformEvents.VIEW_CHANGE, { ...this.view })
+    eventBus.emit(EVENT_WAVEFORM_VIEW_CHANGE, { ...this.view })
     this.render()
   }
 
@@ -339,6 +354,38 @@ export class WaveformRenderer {
     }
 
     this.ctx.stroke()
+
+    if (this.selection && this.isPlaying) {
+      const selStartX = this.timeToX(this.selection.startTime)
+      const selEndX = this.timeToX(this.selection.endTime)
+      const selWidth = selEndX - selStartX
+
+      if (selWidth > 0) {
+        this.ctx.save()
+        this.ctx.beginPath()
+        this.ctx.rect(selStartX, 0, selWidth, height)
+        this.ctx.clip()
+
+        this.ctx.strokeStyle = this.colors.waveformHighlightLine
+        this.ctx.lineWidth = 1.5
+        this.ctx.beginPath()
+
+        for (let i = 0; i < samplesVisible; i++) {
+          const peakIndex = startSample + i
+          if (peakIndex < 0 || peakIndex >= this.cachedPeaks.length) continue
+
+          const peak = this.cachedPeaks[peakIndex]
+          const x = i * pixelsPerSample
+          const y = peak * halfHeight
+
+          this.ctx.moveTo(x, centerY - y)
+          this.ctx.lineTo(x, centerY + y)
+        }
+
+        this.ctx.stroke()
+        this.ctx.restore()
+      }
+    }
 
     if (this.selection) {
       const selStartX = this.timeToX(this.selection.startTime)
