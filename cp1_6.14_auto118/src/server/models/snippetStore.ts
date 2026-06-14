@@ -252,7 +252,7 @@ export class SnippetStore {
     
     if (filters?.tags && filters.tags.length > 0) {
       items = items.filter(snippet => 
-        filters.tags!.every(tag => snippet.tags.includes(tag))
+        filters.tags!.some(tag => snippet.tags.includes(tag))
       );
     }
     

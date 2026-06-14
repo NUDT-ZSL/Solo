@@ -10,7 +10,11 @@ router.get('/snippets', (req, res) => {
   const filters: { tags?: string[]; language?: string } = {};
   
   if (tags) {
-    filters.tags = Array.isArray(tags) ? tags : [tags];
+    if (typeof tags === 'string') {
+      filters.tags = tags.split(',').map((t: string) => t.trim()).filter(Boolean);
+    } else if (Array.isArray(tags)) {
+      filters.tags = tags as string[];
+    }
   }
   
   if (language && typeof language === 'string') {
