@@ -1,0 +1,34 @@
+:root {
+  --bg-primary: #121220;
+  --bg-secondary: #1e1e2e;
+  --bg-card: #2a2a3e;
+  --text-primary: #e0e0e0;
+  --text-secondary: #a0a0b0;
+  --accent-primary: #6c5ce7;
+  --accent-secondary: #00cec9;
+  --border-color: #3a3a4e;
+  --shadow-color: rgba(0, 0, 0, 0.3);
+  --progress-bg: #3a3a4e;
+  --progress-fill: #6c5ce7;
+  --btn-primary: #6c5ce7;
+  --btn-hover: #5a4bcf;
+  --table-row-alt: #252538;
+}
+
+*,
+*::before,
+*::after {
+  transition: background-color 0.4s ease-in-out,
+              color 0.4s ease-in-out,
+              border-color 0.4s ease-in-out,
+              box-shadow 0.4s ease-in-out,
+              fill 0.4s ease-in-out;
+}
+
+.drag-transition * {
+  transition: background-color 0.3s ease-in-out,
+              color 0.3s ease-in-out,
+              border-color 0.3s ease-in-out,
+              box-shadow 0.3s ease-in-out,
+              fill 0.3s ease-in-out !important;
+}
