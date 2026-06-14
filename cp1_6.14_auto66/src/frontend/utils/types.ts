@@ -5,7 +5,7 @@ export interface PlanRequest {
   budget: string;
 }
 
-export interface Attraction {
+export interface Spot {
   id: string;
   name: string;
   description: string;
@@ -24,9 +24,9 @@ export interface Restaurant {
 
 export interface DayPlan {
   id: string;
-  day: number;
+  date: number;
   summary: string[];
-  attractions: Attraction[];
+  spots: Spot[];
   restaurants: Restaurant[];
 }
 

@@ -28,7 +28,7 @@ export const TravelProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       const newPlans = [...prev.dailyPlans];
       const [removed] = newPlans.splice(fromIndex, 1);
       newPlans.splice(toIndex, 0, removed);
-      const reorderedPlans = newPlans.map((day, idx) => ({ ...day, day: idx + 1 }));
+      const reorderedPlans = newPlans.map((day, idx) => ({ ...day, date: idx + 1 }));
       return { ...prev, dailyPlans: reorderedPlans };
     });
   }, []);
@@ -37,7 +37,7 @@ export const TravelProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setPlan(prev => {
       if (!prev) return null;
       const filtered = prev.dailyPlans.filter(d => d.id !== dayId);
-      const renumbered = filtered.map((day, idx) => ({ ...day, day: idx + 1 }));
+      const renumbered = filtered.map((day, idx) => ({ ...day, date: idx + 1 }));
       return { ...prev, dailyPlans: renumbered, days: renumbered.length };
     });
   }, []);

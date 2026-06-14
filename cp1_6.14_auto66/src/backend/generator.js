@@ -145,12 +145,12 @@ function shuffleArray(arr) {
   return shuffled;
 }
 
-function generateDayPlan(dayNum, data, preferences) {
-  const attractionsCount = Math.min(3 + Math.floor(Math.random() * 2), 5);
+function generateDayPlan(dateNum, data, preferences) {
+  const spotsCount = Math.min(3 + Math.floor(Math.random() * 2), 5);
   const shuffledAttractions = shuffleArray(data.attractions);
-  const selectedAttractions = shuffledAttractions.slice(0, attractionsCount);
+  const selectedAttractions = shuffledAttractions.slice(0, spotsCount);
   
-  const attractions = selectedAttractions.map((attraction, idx) => ({
+  const spots = selectedAttractions.map((attraction, idx) => ({
     id: uuidv4(),
     name: attraction.name,
     description: attraction.description,
@@ -171,13 +171,13 @@ function generateDayPlan(dayNum, data, preferences) {
     price: r.price
   }));
 
-  const summary = attractions.map(a => a.name);
+  const summary = spots.map(a => a.name);
 
   return {
     id: uuidv4(),
-    day: dayNum,
+    date: dateNum,
     summary,
-    attractions,
+    spots,
     restaurants
   };
 }

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, ChevronUp, ChevronDown, Trash2, Edit3 } from 'lucide-react';
-import type { DayPlan, Attraction } from '../utils/types';
+import type { DayPlan } from '../utils/types';
 
 interface PlanCardProps {
   dayPlan: DayPlan;
@@ -15,6 +15,7 @@ interface PlanCardProps {
   onDrop: (e: React.DragEvent, index: number) => void;
   onDragEnd: () => void;
   isDragging: boolean;
+  isDragOver: boolean;
 }
 
 const PlanCard: React.FC<PlanCardProps> = ({
@@ -30,9 +31,10 @@ const PlanCard: React.FC<PlanCardProps> = ({
   onDrop,
   onDragEnd,
   isDragging,
+  isDragOver,
 }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
-  const imagePrompt = dayPlan.attractions[0]?.imagePrompt || 'travel';
+  const imagePrompt = dayPlan.spots[0]?.imagePrompt || 'travel';
   const imageUrl = `https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=${encodeURIComponent(imagePrompt)}&image_size=landscape_16_9`;
 
   const handleDeleteClick = (e: React.MouseEvent) => {
@@ -50,14 +52,34 @@ const PlanCard: React.FC<PlanCardProps> = ({
     onMoveDown();
   };
 
+  const handleDragStart = (e: React.DragEvent) => {
+    if (isEditMode) return;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+    onDragStart(e, index);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    onDragOver(e);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onDrop(e, index);
+  };
+
   return (
     <div
-      className={`plan-card ${isDragging ? 'dragging' : ''} ${isEditMode ? 'edit-mode' : ''}`}
+      className={`plan-card ${isDragging ? 'dragging' : ''} ${isEditMode ? 'edit-mode' : ''} ${isDragOver ? 'drag-over' : ''}`}
       style={{ animationDelay: `${index * 0.1}s` }}
       draggable={!isEditMode}
-      onDragStart={(e) => onDragStart(e, index)}
-      onDragOver={onDragOver}
-      onDrop={(e) => onDrop(e, index)}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
       onDragEnd={onDragEnd}
       onClick={onCardClick}
     >
@@ -84,7 +106,7 @@ const PlanCard: React.FC<PlanCardProps> = ({
           <button
             className="edit-control-btn down"
             onClick={handleMoveDown}
-            disabled={index === dayPlan.day - 1 && index === dayPlan.day - 1}
+            disabled={index === dayPlan.date - 1}
             title="下移"
           >
             <ChevronDown size={16} />
@@ -103,7 +125,7 @@ const PlanCard: React.FC<PlanCardProps> = ({
         {!imageLoaded && <div className="image-skeleton" />}
         <img
           src={imageUrl}
-          alt={dayPlan.attractions[0]?.name || `第${dayPlan.day}天`}
+          alt={dayPlan.spots[0]?.name || `第${dayPlan.date}天`}
           className={`card-image ${imageLoaded ? 'loaded' : ''}`}
           onLoad={() => setImageLoaded(true)}
           onError={() => setImageLoaded(true)}
@@ -111,7 +133,7 @@ const PlanCard: React.FC<PlanCardProps> = ({
       </div>
 
       <div className="card-content">
-        <h2 className="card-title">第 {dayPlan.day} 天</h2>
+        <h2 className="card-title">第 {dayPlan.date} 天</h2>
 
         <ul className="summary-list">
           {dayPlan.summary.slice(0, 3).map((item, idx) => (

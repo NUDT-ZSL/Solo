@@ -13,7 +13,7 @@ const PlanFeed: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const handleCardClick = useCallback((dayPlan: DayPlan) => {
     if (!isEditMode) {
@@ -27,24 +27,26 @@ const PlanFeed: React.FC = () => {
     setTimeout(() => setSelectedDay(null), 300);
   }, []);
 
-  const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
+  const handleDragStart = useCallback((_e: React.DragEvent, index: number) => {
     setDraggedIndex(index);
-    e.dataTransfer.effectAllowed = 'move';
+    setDragOverIndex(null);
   }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  }, []);
+  const handleDragOver = useCallback((_e: React.DragEvent, index: number) => {
+    if (draggedIndex === null || draggedIndex === index) return;
+    setDragOverIndex(index);
+  }, [draggedIndex]);
 
-  const handleDrop = useCallback((e: React.DragEvent, dropIndex: number) => {
-    e.preventDefault();
-    if (draggedIndex === null || draggedIndex === dropIndex) return;
+  const handleDrop = useCallback((_e: React.DragEvent, dropIndex: number) => {
+    if (draggedIndex === null) return;
     reorderDays(draggedIndex, dropIndex);
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   }, [draggedIndex, reorderDays]);
 
   const handleDragEnd = useCallback(() => {
     setDraggedIndex(null);
+    setDragOverIndex(null);
   }, []);
 
   const handleMoveUp = useCallback((index: number) => {
@@ -73,36 +75,42 @@ const PlanFeed: React.FC = () => {
 
   if (isLoading) {
     return (
-      <main className="plan-feed">
-        <LoadingSpinner />
-      </main>
+      <div className="feed-container">
+        <main className="plan-feed">
+          <LoadingSpinner />
+        </main>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <main className="plan-feed">
-        <div className="error-state">
-          <p className="error-message">{error}</p>
-        </div>
-      </main>
+      <div className="feed-container">
+        <main className="plan-feed">
+          <div className="error-state">
+            <p className="error-message">{error}</p>
+          </div>
+        </main>
+      </div>
     );
   }
 
   if (!plan) {
     return (
-      <main className="plan-feed">
-        <div className="empty-state">
-          <MapPin size={64} className="empty-icon" />
-          <h2 className="empty-title">开始规划您的旅行</h2>
-          <p className="empty-desc">在左侧输入目的地、天数和偏好，点击"生成计划"按钮</p>
-        </div>
-      </main>
+      <div className="feed-container">
+        <main className="plan-feed">
+          <div className="empty-state">
+            <MapPin size={64} className="empty-icon" />
+            <h2 className="empty-title">开始规划您的旅行</h2>
+            <p className="empty-desc">在左侧输入目的地、天数和偏好，点击"生成计划"按钮</p>
+          </div>
+        </main>
+      </div>
     );
   }
 
   return (
-    <>
+    <div className="feed-container">
       <header className="feed-header">
         <div className="feed-header-content">
           <div>
@@ -124,19 +132,11 @@ const PlanFeed: React.FC = () => {
             >
               {isEditMode ? <><X size={18} /> 完成</> : <><Edit3 size={18} /> 编辑</>}
             </button>
-            <button
-              className="mobile-menu-toggle"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            >
-              <span></span>
-              <span></span>
-              <span></span>
-            </button>
           </div>
         </div>
       </header>
 
-      <main className={`plan-feed ${isMobileMenuOpen ? 'mobile-menu-open' : ''}`}>
+      <main className="plan-feed">
         <div className="cards-grid">
           {plan.dailyPlans.map((dayPlan, index) => (
             <PlanCard
@@ -149,10 +149,11 @@ const PlanFeed: React.FC = () => {
               onMoveUp={() => handleMoveUp(index)}
               onMoveDown={() => handleMoveDown(index)}
               onDragStart={handleDragStart}
-              onDragOver={handleDragOver}
+              onDragOver={(e) => handleDragOver(e, index)}
               onDrop={handleDrop}
               onDragEnd={handleDragEnd}
               isDragging={draggedIndex === index}
+              isDragOver={dragOverIndex === index && draggedIndex !== index}
             />
           ))}
         </div>
@@ -175,7 +176,7 @@ const PlanFeed: React.FC = () => {
           onClose={handleCloseModal}
         />
       )}
-    </>
+    </div>
   );
 };
 
