@@ -51,8 +51,10 @@ export class GameRenderer {
   private lastSkidPosition: { x: number; y: number; angle: number } | null = null;
   private lastMinimapUpdate: number = 0;
   private particleSpawnTimer: number = 0;
-  private spawnsPerSecond: number = 10;
   private totalParticlesPerSecond: number = 20;
+  private targetParticlesPerSecond: number = 20;
+  private particleWheel: number = 0;
+  private fpsSmooth: number = 60;
   private fps: number = 60;
   private frameCount: number = 0;
   private fpsTimer: number = 0;
@@ -153,13 +155,16 @@ export class GameRenderer {
       this.frameCount = 0;
       this.fpsTimer = 0;
 
-      if (this.fps < 50) {
-        this.totalParticlesPerSecond = Math.max(10, this.totalParticlesPerSecond - 2);
-      } else if (this.fps > 55 && this.totalParticlesPerSecond < 20) {
-        this.totalParticlesPerSecond = Math.min(20, this.totalParticlesPerSecond + 2);
+      this.fpsSmooth += (this.fps - this.fpsSmooth) * 0.3;
+
+      if (this.fpsSmooth < 50) {
+        this.targetParticlesPerSecond = 10;
+      } else if (this.fpsSmooth >= 55) {
+        this.targetParticlesPerSecond = 20;
       }
-      this.spawnsPerSecond = this.totalParticlesPerSecond / 2;
     }
+
+    this.totalParticlesPerSecond += (this.targetParticlesPerSecond - this.totalParticlesPerSecond) * 0.05;
 
     this.updateParticles(deltaTime);
     this.updateSkidMarks(deltaTime);
@@ -168,7 +173,7 @@ export class GameRenderer {
 
     if (state.isDrifting) {
       this.particleSpawnTimer += deltaTime;
-      const spawnInterval = 1000 / this.spawnsPerSecond;
+      const spawnInterval = 1000 / this.totalParticlesPerSecond;
       while (this.particleSpawnTimer >= spawnInterval) {
         this.particleSpawnTimer -= spawnInterval;
         this.spawnDriftParticles(state);
@@ -228,13 +233,17 @@ export class GameRenderer {
       const eased = this.easeOutCubic(t);
 
       switch (e.type) {
-        case 'flash':
-          if (t < 0.3) {
+        case 'flash': {
+          const holdDuration = 300;
+          const fadeDuration = 300;
+          if (elapsed < holdDuration) {
             this.flashAlpha = 0.3;
-          } else {
-            this.flashAlpha = 0.3 * (1 - (t - 0.3) / 0.7);
+          } else if (elapsed < holdDuration + fadeDuration) {
+            const fadeT = (elapsed - holdDuration) / fadeDuration;
+            this.flashAlpha = 0.3 * (1 - this.easeOutCubic(fadeT));
           }
           break;
+        }
         case 'shake':
           if (elapsed < e.duration) {
             this.shakeOffsetX = (Math.random() - 0.5) * e.intensity * 2 * (1 - eased);
@@ -296,24 +305,25 @@ export class GameRenderer {
     const baseX = state.x - Math.cos(state.angle) * rearOffset;
     const baseY = state.y - Math.sin(state.angle) * rearOffset;
 
-    for (let side = -1; side <= 1; side += 2) {
-      const px = baseX + Math.sin(state.angle) * spread * side;
-      const py = baseY - Math.cos(state.angle) * spread * side;
+    this.particleWheel = 1 - this.particleWheel;
+    const side = this.particleWheel === 0 ? -1 : 1;
 
-      const backwardAngle = state.angle + Math.PI + (Math.random() - 0.5) * 0.5;
-      const speed = 5 + Math.random() * 10;
+    const px = baseX + Math.sin(state.angle) * spread * side;
+    const py = baseY - Math.cos(state.angle) * spread * side;
 
-      this.particles.push({
-        x: px,
-        y: py,
-        vx: Math.cos(backwardAngle) * speed - state.speedX * 0.2,
-        vy: Math.sin(backwardAngle) * speed - state.speedY * 0.2,
-        life: 500,
-        maxLife: 500,
-        size: 2 + Math.random() * 2,
-        alpha: 1,
-      });
-    }
+    const backwardAngle = state.angle + Math.PI + (Math.random() - 0.5) * 0.5;
+    const speed = 5 + Math.random() * 10;
+
+    this.particles.push({
+      x: px,
+      y: py,
+      vx: Math.cos(backwardAngle) * speed - state.speedX * 0.2,
+      vy: Math.sin(backwardAngle) * speed - state.speedY * 0.2,
+      life: 500,
+      maxLife: 500,
+      size: 2 + Math.random() * 2,
+      alpha: 1,
+    });
   }
 
   render(state: PhysicsState): void {
@@ -352,44 +362,43 @@ export class GameRenderer {
   private drawRadialBlur(ctx: CanvasRenderingContext2D, intensity: number): void {
     const centerX = BASE_WIDTH / 2;
     const centerY = BASE_HEIGHT / 2;
-    const maxRadius = Math.max(BASE_WIDTH, BASE_HEIGHT) * 0.6;
+    const maxRadius = Math.max(BASE_WIDTH, BASE_HEIGHT) * 0.65;
 
-    const blurCtx = this.blurCtx;
-    blurCtx.clearRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
-
-    const layers = Math.min(6, Math.max(2, Math.floor(intensity / 1.5)));
-    const stepSize = intensity / layers / 2;
+    const layers = Math.min(5, Math.max(2, Math.floor(intensity / 1.8)));
+    const totalStep = intensity * 0.04;
 
     for (let i = 1; i <= layers; i++) {
-      const scale = 1 + (stepSize * i) / 50;
-      const alpha = (1 - i / layers) * 0.12 * (intensity / 8);
+      const layerProgress = i / layers;
+      const scale = 1 + totalStep * layerProgress;
+      const blurStrength = (intensity / 8) * 0.2 * (1 - layerProgress * 0.4);
 
-      blurCtx.save();
-      blurCtx.globalAlpha = alpha;
-      blurCtx.translate(centerX, centerY);
-      blurCtx.scale(scale, scale);
-      blurCtx.translate(-centerX, -centerY);
-      blurCtx.drawImage(this.offscreenCanvas, 0, 0);
-      blurCtx.restore();
+      this.blurCtx.clearRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
+      const maskGradient = this.blurCtx.createRadialGradient(
+        centerX, centerY, maxRadius * 0.1,
+        centerX, centerY, maxRadius
+      );
+      maskGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      maskGradient.addColorStop(0.3, 'rgba(0, 0, 0, 0.4)');
+      maskGradient.addColorStop(0.6, 'rgba(0, 0, 0, 0.85)');
+      maskGradient.addColorStop(1, 'rgba(0, 0, 0, 1)');
+      this.blurCtx.fillStyle = maskGradient;
+      this.blurCtx.fillRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
+
+      this.blurCtx.save();
+      this.blurCtx.globalCompositeOperation = 'source-atop';
+      this.blurCtx.save();
+      this.blurCtx.translate(centerX, centerY);
+      this.blurCtx.scale(scale, scale);
+      this.blurCtx.translate(-centerX, -centerY);
+      this.blurCtx.drawImage(this.offscreenCanvas, 0, 0);
+      this.blurCtx.restore();
+      this.blurCtx.restore();
+
+      ctx.save();
+      ctx.globalAlpha = blurStrength;
+      ctx.drawImage(this.blurCanvas, 0, 0);
+      ctx.restore();
     }
-
-    blurCtx.save();
-    blurCtx.globalCompositeOperation = 'destination-in';
-    const gradient = blurCtx.createRadialGradient(
-      centerX, centerY, maxRadius * 0.15,
-      centerX, centerY, maxRadius
-    );
-    gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    gradient.addColorStop(0.4, 'rgba(0, 0, 0, 0.3)');
-    gradient.addColorStop(1, 'rgba(0, 0, 0, 1)');
-    blurCtx.fillStyle = gradient;
-    blurCtx.fillRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
-    blurCtx.restore();
-
-    ctx.save();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.drawImage(this.blurCanvas, 0, 0);
-    ctx.restore();
   }
 
   private drawSky(ctx: CanvasRenderingContext2D): void {

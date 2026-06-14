@@ -239,62 +239,129 @@ export class PhysicsEngine extends EventEmitter {
     const dx = this.x - TRACK_CONFIG.centerX;
     const dy = this.y - TRACK_CONFIG.centerY;
 
-    const angle = Math.atan2(dy, dx);
-
-    const outerRadiusAtAngle = this.getEllipseRadius(
-      angle,
+    const rawAngle = Math.atan2(dy, dx);
+    let theta = this.findNearestEllipsePoint(
+      dx, dy,
       TRACK_CONFIG.outerRadiusX,
       TRACK_CONFIG.outerRadiusY
     );
-    const innerRadiusAtAngle = this.getEllipseRadius(
-      angle,
+
+    const { nx: outerNx, ny: outerNy, dist: signedOuterDist } = this.getEllipseSignedDistance(
+      dx, dy, theta,
+      TRACK_CONFIG.outerRadiusX,
+      TRACK_CONFIG.outerRadiusY
+    );
+
+    if (signedOuterDist > 0) {
+      this.x = TRACK_CONFIG.centerX + TRACK_CONFIG.outerRadiusX * Math.cos(theta) - outerNx * 0.5;
+      this.y = TRACK_CONFIG.centerY + TRACK_CONFIG.outerRadiusY * Math.sin(theta) - outerNy * 0.5;
+      this.reflectVelocity(outerNx, outerNy, 0.4, 0.9);
+      this.lateralSpeed *= 0.2;
+      return;
+    }
+
+    const innerTheta = this.findNearestEllipsePoint(
+      dx, dy,
       TRACK_CONFIG.innerRadiusX,
       TRACK_CONFIG.innerRadiusY
     );
 
-    const distFromCenter = Math.sqrt(dx * dx + dy * dy);
-    const normalizedOuter = distFromCenter / outerRadiusAtAngle;
-    const normalizedInner = distFromCenter / innerRadiusAtAngle;
+    const { nx: innerNx, ny: innerNy, dist: signedInnerDist } = this.getEllipseSignedDistance(
+      dx, dy, innerTheta,
+      TRACK_CONFIG.innerRadiusX,
+      TRACK_CONFIG.innerRadiusY
+    );
 
-    const nx = Math.cos(angle);
-    const ny = Math.sin(angle);
-    const velocityDotNormal = this.speedX * nx + this.speedY * ny;
-
-    if (normalizedOuter > 1.0) {
-      const boundaryDist = outerRadiusAtAngle * 0.99;
-      this.x = TRACK_CONFIG.centerX + nx * boundaryDist;
-      this.y = TRACK_CONFIG.centerY + ny * boundaryDist;
-
-      if (velocityDotNormal > 0) {
-        this.speedX -= 2 * velocityDotNormal * nx * 0.6;
-        this.speedY -= 2 * velocityDotNormal * ny * 0.6;
-        this.speed = Math.sqrt(this.speedX * this.speedX + this.speedY * this.speedY) * 0.7;
-      } else {
-        this.speed *= 0.8;
-      }
-      this.lateralSpeed *= 0.3;
-    }
-
-    if (normalizedInner < 1.0) {
-      const boundaryDist = innerRadiusAtAngle * 1.01;
-      this.x = TRACK_CONFIG.centerX + nx * boundaryDist;
-      this.y = TRACK_CONFIG.centerY + ny * boundaryDist;
-
-      if (velocityDotNormal < 0) {
-        this.speedX -= 2 * velocityDotNormal * nx * 0.6;
-        this.speedY -= 2 * velocityDotNormal * ny * 0.6;
-        this.speed = Math.sqrt(this.speedX * this.speedX + this.speedY * this.speedY) * 0.7;
-      } else {
-        this.speed *= 0.8;
-      }
-      this.lateralSpeed *= 0.3;
+    if (signedInnerDist < 0) {
+      const outwardNx = -innerNx;
+      const outwardNy = -innerNy;
+      this.x = TRACK_CONFIG.centerX + TRACK_CONFIG.innerRadiusX * Math.cos(innerTheta) + outwardNx * 0.5;
+      this.y = TRACK_CONFIG.centerY + TRACK_CONFIG.innerRadiusY * Math.sin(innerTheta) + outwardNy * 0.5;
+      this.reflectVelocity(outwardNx, outwardNy, 0.4, 0.9);
+      this.lateralSpeed *= 0.2;
     }
   }
 
-  private getEllipseRadius(angle: number, radiusX: number, radiusY: number): number {
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    return (radiusX * radiusY) / Math.sqrt(radiusY * radiusY * cos * cos + radiusX * radiusX * sin * sin);
+  private findNearestEllipsePoint(
+    dx: number,
+    dy: number,
+    a: number,
+    b: number
+  ): number {
+    let theta = Math.atan2(dy / b, dx / a);
+
+    for (let i = 0; i < 6; i++) {
+      const cosT = Math.cos(theta);
+      const sinT = Math.sin(theta);
+      const ex = a * cosT;
+      const ey = b * sinT;
+
+      const rx = ex - dx;
+      const ry = ey - dy;
+
+      const dExdTheta = -a * sinT;
+      const dEydTheta = b * cosT;
+
+      const d2ExdTheta2 = -a * cosT;
+      const d2EydTheta2 = -b * sinT;
+
+      const numerator = rx * dExdTheta + ry * dEydTheta;
+      const denominator = dExdTheta * dExdTheta + dEydTheta * dEydTheta + rx * d2ExdTheta2 + ry * d2EydTheta2;
+
+      if (Math.abs(denominator) < 1e-10) break;
+
+      const deltaTheta = numerator / denominator;
+      theta -= deltaTheta;
+
+      if (Math.abs(deltaTheta) < 1e-6) break;
+    }
+
+    return theta;
+  }
+
+  private getEllipseSignedDistance(
+    dx: number,
+    dy: number,
+    theta: number,
+    a: number,
+    b: number
+  ): { nx: number; ny: number; dist: number } {
+    const cosT = Math.cos(theta);
+    const sinT = Math.sin(theta);
+    const ex = a * cosT;
+    const ey = b * sinT;
+
+    let nx = b * cosT;
+    let ny = a * sinT;
+    const len = Math.sqrt(nx * nx + ny * ny);
+    nx /= len;
+    ny /= len;
+
+    const px = dx - ex;
+    const py = dy - ey;
+    const signedDist = px * nx + py * ny;
+
+    return { nx, ny, dist: signedDist };
+  }
+
+  private reflectVelocity(nx: number, ny: number, bounciness: number, friction: number): void {
+    const dot = this.speedX * nx + this.speedY * ny;
+
+    if (dot < 0) {
+      this.speedX -= (1 + bounciness) * dot * nx;
+      this.speedY -= (1 + bounciness) * dot * ny;
+    }
+
+    const tx = -ny;
+    const ty = nx;
+    const tangentialDot = this.speedX * tx + this.speedY * ty;
+    const normalDotAfter = this.speedX * nx + this.speedY * ny;
+
+    this.speedX = tangentialDot * friction * tx + normalDotAfter * nx;
+    this.speedY = tangentialDot * friction * ty + normalDotAfter * ny;
+
+    const rawSpeed = Math.sqrt(this.speedX * this.speedX + this.speedY * this.speedY);
+    this.speed = Math.min(this.MAX_SPEED, rawSpeed);
   }
 
   resolveCollision(otherX: number, otherY: number): void {

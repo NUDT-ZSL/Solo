@@ -53,7 +53,8 @@ export function useGameLoop(): UseGameLoopReturn {
   gameStateRef.current = gameState;
 
   const opponentsRef = useRef<OpponentState[]>([]);
-  const wasBrakingRef = useRef<boolean>(false);
+  const lastSpeedRef = useRef<number>(0);
+  const lastTiltTriggerRef = useRef<number>(0);
 
   const initIfNeeded = useCallback(() => {
     if (!canvasRef.current) return false;
@@ -119,7 +120,7 @@ export function useGameLoop(): UseGameLoopReturn {
 
       rendererRef.current.checkCollisions(latestState, (otherX, otherY) => {
         physicsRef.current?.resolveCollision(otherX, otherY);
-        rendererRef.current?.triggerEffect({ type: 'flash', duration: 300, intensity: 1 });
+        rendererRef.current?.triggerEffect({ type: 'flash', duration: 600, intensity: 1 });
         rendererRef.current?.triggerEffect({ type: 'shake', duration: 200, intensity: 2 });
       });
 
@@ -139,12 +140,21 @@ export function useGameLoop(): UseGameLoopReturn {
       rendererRef.current.render(latestState);
       setGameState((prev) => ({ ...prev, currentState: latestState }));
 
-      if (input.brake && latestState.speed > 25) {
-        if (!wasBrakingRef.current) {
-          rendererRef.current.triggerEffect({ type: 'tilt', duration: 500, intensity: 1 });
-        }
+      const currentSpeed = latestState.speed;
+      const speedDrop = lastSpeedRef.current - currentSpeed;
+      const now = performance.now();
+
+      if (
+        input.brake &&
+        currentSpeed > 20 &&
+        speedDrop > 1.5 &&
+        now - lastTiltTriggerRef.current > 800
+      ) {
+        lastTiltTriggerRef.current = now;
+        rendererRef.current.triggerEffect({ type: 'tilt', duration: 500, intensity: 1 });
       }
-      wasBrakingRef.current = input.brake;
+
+      lastSpeedRef.current = currentSpeed;
     }
 
     animationFrameRef.current = requestAnimationFrame(gameLoop);
