@@ -1,0 +1,392 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #0f0f1a;
+  color: #e0e0e0;
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.main-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.legend-panel {
+  width: 220px;
+  background: linear-gradient(180deg, #12121e 0%, #1a1a2e 100%);
+  border: 1px solid #2d2d44;
+  border-radius: 8px;
+  margin: 10px;
+  padding: 16px;
+  overflow-y: auto;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.legend-panel h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #e0e0e0;
+}
+
+.legend-item {
+  width: 100%;
+  height: 40px;
+  background: #1a1a2e;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.legend-item.highlighted {
+  background: #2d2d44;
+}
+
+.legend-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.legend-label {
+  font-size: 13px;
+  color: #e0e0e0;
+  flex: 1;
+}
+
+.legend-value {
+  font-size: 13px;
+  color: #a0a0a0;
+  font-weight: 500;
+}
+
+.legend-section {
+  margin-bottom: 20px;
+}
+
+.legend-section-title {
+  font-size: 12px;
+  color: #a0a0a0;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.scene-container {
+  flex: 1;
+  position: relative;
+  background-color: #0a0a15;
+}
+
+.scene-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.info-panel {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 240px;
+  background: #1a1a2e;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  padding: 16px;
+  z-index: 10;
+  border: 1px solid #2d2d44;
+}
+
+.info-panel h4 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #e0e0e0;
+}
+
+.info-panel .station-coord {
+  font-size: 12px;
+  color: #a0a0a0;
+  margin-bottom: 12px;
+}
+
+.info-panel .pollutant-list {
+  list-style: none;
+}
+
+.info-panel .pollutant-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 14px;
+}
+
+.info-panel .pollutant-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 10px;
+}
+
+.info-panel .pollutant-name {
+  flex: 1;
+  color: #e0e0e0;
+}
+
+.info-panel .pollutant-value {
+  color: #a0a0a0;
+  font-weight: 500;
+}
+
+.info-panel .health-advice {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.info-panel .health-advice.warning {
+  background: rgba(231, 76, 60, 0.15);
+  color: #e74c3c;
+  border: 1px solid rgba(231, 76, 60, 0.3);
+}
+
+.info-panel .health-advice.caution {
+  background: rgba(230, 126, 34, 0.15);
+  color: #e67e22;
+  border: 1px solid rgba(230, 126, 34, 0.3);
+}
+
+.info-panel .close-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: #a0a0a0;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.info-panel .close-btn:hover {
+  background: #2d2d44;
+  color: #e0e0e0;
+}
+
+.timeline-container {
+  height: 80px;
+  background: #1a1a2e;
+  border-top: 1px solid #2d2d44;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 20px;
+  flex-shrink: 0;
+}
+
+.timeline-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.play-btn {
+  width: 60px;
+  height: 30px;
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.play-btn:hover {
+  background: #2980b9;
+}
+
+.play-btn:active {
+  background: #1f6fa0;
+}
+
+.speed-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.speed-btn {
+  padding: 4px 10px;
+  background: #2d2d44;
+  color: #a0a0a0;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.speed-btn:hover {
+  background: #3d3d5c;
+  color: #e0e0e0;
+}
+
+.speed-btn.active {
+  background: #3498db;
+  color: white;
+}
+
+.slider-wrapper {
+  flex: 1;
+  width: 100%;
+  max-width: 800px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.time-label {
+  font-size: 16px;
+  color: #a0a0a0;
+  font-variant-numeric: tabular-nums;
+  min-width: 50px;
+  text-align: center;
+}
+
+.time-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: #2d2d44;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+
+.time-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #3498db;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 8px rgba(52, 152, 219, 0.5);
+}
+
+.time-slider::-webkit-slider-thumb:hover {
+  background: #2980b9;
+  transform: scale(1.1);
+}
+
+.time-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: #3498db;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 8px rgba(52, 152, 219, 0.5);
+}
+
+.legend-panel.mobile {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 50px;
+  margin: 0;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  z-index: 20;
+  overflow: hidden;
+}
+
+.legend-panel.mobile.expanded {
+  height: auto;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.legend-toggle-btn {
+  display: none;
+  width: 100%;
+  height: 50px;
+  background: linear-gradient(180deg, #12121e 0%, #1a1a2e 100%);
+  border: none;
+  border-bottom: 1px solid #2d2d44;
+  color: #e0e0e0;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    padding-top: 50px;
+  }
+
+  .legend-panel {
+    display: none;
+  }
+
+  .legend-panel.mobile {
+    display: block;
+  }
+
+  .timeline-container {
+    height: 48px;
+  }
+
+  .play-btn {
+    width: 50px;
+    height: 26px;
+    font-size: 12px;
+  }
+
+  .info-panel {
+    width: 200px;
+    top: 60px;
+  }
+}
