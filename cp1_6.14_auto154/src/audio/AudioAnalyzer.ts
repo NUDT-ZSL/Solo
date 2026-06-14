@@ -66,18 +66,55 @@ export class AudioAnalyzer {
       }
     };
 
-    let readProgress = 0;
-    const readProgressInterval = setInterval(() => {
-      if (readProgress < 45) {
-        readProgress += 1;
-        reportProgress(readProgress);
-      }
-    }, 30);
+    const fileSizeKB = file.size / 1024;
+    const totalSteps = Math.max(10, Math.min(50, Math.round(fileSizeKB / 100)));
+    const stepPercent = 45 / totalSteps;
+    const stepInterval = Math.max(20, Math.min(100, 500 / totalSteps));
 
-    const arrayBuffer = await this.readFileAsArrayBuffer(file, reportProgress);
-    clearInterval(readProgressInterval);
-    readProgress = 50;
-    reportProgress(readProgress);
+    let simulatedReadProgress = 0;
+    let hasRealProgress = false;
+    let readProgressInterval: number | null = null;
+
+    const startSimulatedProgress = () => {
+      if (hasRealProgress || readProgressInterval !== null) return;
+      let currentStep = 0;
+      readProgressInterval = window.setInterval(() => {
+        if (hasRealProgress) {
+          if (readProgressInterval !== null) {
+            clearInterval(readProgressInterval);
+            readProgressInterval = null;
+          }
+          return;
+        }
+        currentStep++;
+        simulatedReadProgress = Math.min(45, currentStep * stepPercent);
+        reportProgress(simulatedReadProgress);
+        if (currentStep >= totalSteps && readProgressInterval !== null) {
+          clearInterval(readProgressInterval);
+          readProgressInterval = null;
+        }
+      }, stepInterval);
+    };
+
+    startSimulatedProgress();
+
+    const onReadProgress = (percent: number, isReal: boolean) => {
+      if (isReal) {
+        hasRealProgress = true;
+        if (readProgressInterval !== null) {
+          clearInterval(readProgressInterval);
+          readProgressInterval = null;
+        }
+      }
+      reportProgress(Math.max(simulatedReadProgress, percent));
+    };
+
+    const arrayBuffer = await this.readFileAsArrayBuffer(file, onReadProgress);
+    if (readProgressInterval !== null) {
+      clearInterval(readProgressInterval);
+      readProgressInterval = null;
+    }
+    reportProgress(50);
 
     if (!this.audioContext) {
       this.initAudioContext();
@@ -86,6 +123,8 @@ export class AudioAnalyzer {
     let decodeProgress = 50;
     const decodeStart = Date.now();
     const expectedDecodeTime = Math.min(3000, Math.max(500, file.size / 50000));
+    const decodeSteps = Math.max(10, Math.min(30, Math.round(fileSizeKB / 200)));
+    const decodeInterval = expectedDecodeTime / decodeSteps;
 
     this.decodeProgressTimer = window.setInterval(() => {
       const elapsed = Date.now() - decodeStart;
@@ -94,7 +133,7 @@ export class AudioAnalyzer {
         decodeProgress = simulatedProgress;
         reportProgress(decodeProgress);
       }
-    }, 50);
+    }, Math.max(30, decodeInterval));
 
     try {
       this.audioBuffer = await this.audioContext!.decodeAudioData(arrayBuffer.slice(0));
@@ -119,22 +158,18 @@ export class AudioAnalyzer {
     this.play();
   }
 
-  private readFileAsArrayBuffer(file: File, onProgress: (percent: number) => void): Promise<ArrayBuffer> {
+  private readFileAsArrayBuffer(file: File, onProgress: (percent: number, isReal: boolean) => void): Promise<ArrayBuffer> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      let hasProgressEvent = false;
 
       reader.onprogress = (e) => {
         if (e.lengthComputable) {
-          hasProgressEvent = true;
           const percent = (e.loaded / e.total) * 50;
-          onProgress(percent);
+          onProgress(percent, true);
         }
       };
       reader.onload = () => {
-        if (!hasProgressEvent) {
-          onProgress(50);
-        }
+        onProgress(50, true);
         resolve(reader.result as ArrayBuffer);
       };
       reader.onerror = () => {

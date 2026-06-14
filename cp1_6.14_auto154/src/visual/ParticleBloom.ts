@@ -21,6 +21,8 @@ interface Flower {
   bloomTimer: number;
   petalCount: number;
   hueOffset: number;
+  isFadingOut: boolean;
+  fadeOutProgress: number;
 }
 
 interface FallingPetal {
@@ -69,9 +71,15 @@ export class ParticleBloom {
   private fallingParticleMap: Map<number, number> = new Map();
   private smoothedLowEnergy: number = 0;
   private smoothedMidHighEnergy: number = 0;
-  private smoothedBassEnergy: number = 0;
-  private readonly SMOOTHING_FACTOR: number = 0.92;
-  private readonly ENERGY_THRESHOLD: number = 0.08;
+  private minLowEnergy: number = 1;
+  private maxLowEnergy: number = 0;
+  private adaptiveThreshold: number = 0.1;
+  private energyHistory: number[] = [];
+  private readonly ENERGY_HISTORY_SIZE: number = 300;
+  private readonly ADAPTIVE_SPEED: number = 0.02;
+  private readonly BASE_GROWTH_SPEED: number = 0.1;
+  private readonly FADE_OUT_DURATION: number = 0.5;
+  private densitySpawnTimers: number[] = [];
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -253,7 +261,9 @@ export class ParticleBloom {
       isBloomed: false,
       bloomTimer: 0,
       petalCount,
-      hueOffset: (Math.random() - 0.5) * 0.08
+      hueOffset: (Math.random() - 0.5) * 0.08,
+      isFadingOut: false,
+      fadeOutProgress: 0
     };
 
     const particleSlots: number[] = [];
@@ -305,23 +315,53 @@ export class ParticleBloom {
   }
 
   private updateFlowers(delta: number, rawLowEnergy: number, rawMidHighEnergy: number): void {
-    this.smoothedLowEnergy = this.smoothedLowEnergy * this.SMOOTHING_FACTOR + rawLowEnergy * (1 - this.SMOOTHING_FACTOR);
-    this.smoothedMidHighEnergy = this.smoothedMidHighEnergy * this.SMOOTHING_FACTOR + rawMidHighEnergy * (1 - this.SMOOTHING_FACTOR);
+    const smoothingFactor = 0.85 + Math.min(0.1, rawLowEnergy * 0.2);
+    this.smoothedLowEnergy = this.smoothedLowEnergy * smoothingFactor + rawLowEnergy * (1 - smoothingFactor);
+    this.smoothedMidHighEnergy = this.smoothedMidHighEnergy * smoothingFactor + rawMidHighEnergy * (1 - smoothingFactor);
+
+    if (rawLowEnergy > 0) {
+      this.energyHistory.push(rawLowEnergy);
+      if (this.energyHistory.length > this.ENERGY_HISTORY_SIZE) {
+        this.energyHistory.shift();
+      }
+      this.minLowEnergy = Math.min(this.minLowEnergy, rawLowEnergy);
+      this.maxLowEnergy = Math.max(this.maxLowEnergy, rawLowEnergy);
+
+      const range = this.maxLowEnergy - this.minLowEnergy;
+      if (range > 0.05) {
+        this.adaptiveThreshold = this.minLowEnergy + range * 0.3;
+      }
+    }
+
+    const range = Math.max(0.1, this.maxLowEnergy - this.minLowEnergy);
+    const normalizedEnergy = Math.max(0, Math.min(1, (this.smoothedLowEnergy - this.minLowEnergy) / range));
 
     const lowEnergy = this.smoothedLowEnergy;
     const midHighEnergy = this.smoothedMidHighEnergy;
 
-    const baseGrowthSpeed = 0.12;
-    const baseBloomSpeed = 0.08;
-    const hasEnoughEnergy = lowEnergy > this.ENERGY_THRESHOLD;
-    const growthBoost = hasEnoughEnergy ? Math.max(0, (lowEnergy - this.ENERGY_THRESHOLD)) * 0.8 : 0;
-    const bloomBoost = hasEnoughEnergy ? Math.max(0, (lowEnergy - this.ENERGY_THRESHOLD)) * 0.6 : 0;
+    const hasEnoughEnergy = normalizedEnergy > 0.2 || lowEnergy > 0.05;
+    const dynamicGrowthBoost = hasEnoughEnergy ? normalizedEnergy * 0.5 : 0;
+    const dynamicBloomBoost = hasEnoughEnergy ? normalizedEnergy * 0.4 : 0;
 
-    const growthSpeed = baseGrowthSpeed + growthBoost;
-    const bloomSpeed = baseBloomSpeed + bloomBoost;
+    const adaptiveSmoothing = 0.9;
+    this.minLowEnergy = this.minLowEnergy * adaptiveSmoothing + lowEnergy * (1 - adaptiveSmoothing);
+    this.maxLowEnergy = this.maxLowEnergy * adaptiveSmoothing + Math.max(this.maxLowEnergy, lowEnergy) * (1 - adaptiveSmoothing);
+
+    const growthSpeed = this.BASE_GROWTH_SPEED + dynamicGrowthBoost;
+    const bloomSpeed = 0.08 + dynamicBloomBoost;
 
     for (let i = this.flowers.length - 1; i >= 0; i--) {
       const flower = this.flowers[i];
+
+      if (flower.isFadingOut) {
+        flower.fadeOutProgress += delta / this.FADE_OUT_DURATION;
+        if (flower.fadeOutProgress >= 1) {
+          this.removeFlower(i);
+          continue;
+        }
+        this.renderFlower(flower, lowEnergy, midHighEnergy);
+        continue;
+      }
 
       if (flower.growth < 1) {
         const newGrowth = flower.growth + growthSpeed * delta;
@@ -350,7 +390,7 @@ export class ParticleBloom {
         }
 
         if (flower.bloomTimer > 10 + Math.random() * 8) {
-          this.removeFlower(i);
+          this.startFadeOut(i);
           continue;
         }
       }
@@ -371,6 +411,7 @@ export class ParticleBloom {
     const slots = this.flowerParticleMap.get(flower.id);
     if (!slots || slots.length === 0) return;
 
+    const fadeFactor = flower.isFadingOut ? Math.max(0, 1 - flower.fadeOutProgress) : 1;
     const stemHeight = flower.growth * 15;
     const centerY = flower.position.y + stemHeight;
     const scale = 0.5 + midHighEnergy;
@@ -391,7 +432,7 @@ export class ParticleBloom {
       this.particleColors[centerSlot * 3 + 1] = color.g;
       this.particleColors[centerSlot * 3 + 2] = color.b;
       this.particleSizes[centerSlot] = (0.8 + lowEnergy * 0.5) * scale;
-      this.particleOpacities[centerSlot] = 0.9 * flickerOpacity;
+      this.particleOpacities[centerSlot] = 0.9 * flickerOpacity * fadeFactor;
 
       const stemSegments = 6;
       for (let s = 1; s <= stemSegments && s < slots.length; s++) {
@@ -406,7 +447,7 @@ export class ParticleBloom {
           this.particleColors[stemSlot * 3 + 1] = 0.5 + color.g * 0.3;
           this.particleColors[stemSlot * 3 + 2] = 0.2 + color.b * 0.3;
           this.particleSizes[stemSlot] = 0.35;
-          this.particleOpacities[stemSlot] = 0.85;
+          this.particleOpacities[stemSlot] = 0.85 * fadeFactor;
         }
       }
 
@@ -436,7 +477,7 @@ export class ParticleBloom {
         this.particleColors[petalSlot * 3 + 1] = petalColor.g;
         this.particleColors[petalSlot * 3 + 2] = petalColor.b;
         this.particleSizes[petalSlot] = (0.6 + flower.petals[p] * 0.4) * scale;
-        this.particleOpacities[petalSlot] = flickerOpacity;
+        this.particleOpacities[petalSlot] = flickerOpacity * fadeFactor;
       }
 
       for (let p = 0; p < flower.petalCount; p++) {
@@ -463,8 +504,16 @@ export class ParticleBloom {
         this.particleColors[outerSlot * 3 + 1] = outerColor.g;
         this.particleColors[outerSlot * 3 + 2] = outerColor.b;
         this.particleSizes[outerSlot] = (0.4 + flower.petals[p] * 0.3) * scale;
-        this.particleOpacities[outerSlot] = 0.7 * flickerOpacity;
+        this.particleOpacities[outerSlot] = 0.7 * flickerOpacity * fadeFactor;
       }
+    }
+  }
+
+  private startFadeOut(index: number): void {
+    const flower = this.flowers[index];
+    if (flower && !flower.isFadingOut) {
+      flower.isFadingOut = true;
+      flower.fadeOutProgress = 0;
     }
   }
 
@@ -573,23 +622,54 @@ export class ParticleBloom {
     const oldDensity = this.flowerDensity;
     this.flowerDensity = newDensity;
 
+    for (const timerId of this.densitySpawnTimers) {
+      clearTimeout(timerId);
+    }
+    this.densitySpawnTimers = [];
+
     if (newDensity > oldDensity) {
       const targetFlowerCount = Math.min(newDensity, MAX_FLOWERS);
       const flowersToAdd = Math.max(0, targetFlowerCount - this.flowers.length);
-      for (let i = 0; i < flowersToAdd; i++) {
-        setTimeout(() => {
-          if (this.flowers.length < this.flowerDensity) {
-            this.spawnFlower();
-          }
-        }, i * 150);
+      const diff = newDensity - oldDensity;
+      const interval = diff > 50 ? 50 : diff > 20 ? 80 : 120;
+
+      if (flowersToAdd > 0 && diff > 50) {
+        const batchCount = Math.floor(flowersToAdd / 3);
+        for (let i = 0; i < batchCount; i++) {
+          const timerId = window.setTimeout(() => {
+            for (let j = 0; j < 3 && this.flowers.length < this.flowerDensity; j++) {
+              this.spawnFlower();
+            }
+          }, i * interval);
+          this.densitySpawnTimers.push(timerId);
+        }
+        const remaining = flowersToAdd % 3;
+        for (let i = 0; i < remaining; i++) {
+          const timerId = window.setTimeout(() => {
+            if (this.flowers.length < this.flowerDensity) {
+              this.spawnFlower();
+            }
+          }, batchCount * interval + i * interval);
+          this.densitySpawnTimers.push(timerId);
+        }
+      } else {
+        for (let i = 0; i < flowersToAdd; i++) {
+          const timerId = window.setTimeout(() => {
+            if (this.flowers.length < this.flowerDensity) {
+              this.spawnFlower();
+            }
+          }, i * interval);
+          this.densitySpawnTimers.push(timerId);
+        }
       }
     } else if (newDensity < oldDensity) {
       const flowersToRemove = Math.max(0, this.flowers.length - newDensity);
-      for (let i = 0; i < flowersToRemove; i++) {
-        const idx = this.flowers.length - 1 - i;
-        if (idx >= 0 && this.flowers[idx]) {
-          const flower = this.flowers[idx];
-          flower.bloomTimer = 999;
+      let removedCount = 0;
+      for (let i = this.flowers.length - 1; i >= 0 && removedCount < flowersToRemove; i--) {
+        const flower = this.flowers[i];
+        if (flower && !flower.isFadingOut) {
+          this.startFadeOut(i);
+          removedCount++;
         }
       }
     }
@@ -608,6 +688,10 @@ export class ParticleBloom {
     if (this.animationId) {
       cancelAnimationFrame(this.animationId);
     }
+    for (const timerId of this.densitySpawnTimers) {
+      clearTimeout(timerId);
+    }
+    this.densitySpawnTimers = [];
     if (this.particleGeometry) this.particleGeometry.dispose();
     if (this.particleMaterial) this.particleMaterial.dispose();
     if (this.renderer) {

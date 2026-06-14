@@ -103,7 +103,7 @@ export default function App() {
     bloomRef.current?.setFlowerDensity(d);
   }, []);
 
-  const calculateTimeFromEvent = useCallback((clientX: number): number | null => {
+  const calculateTimeFromClientX = useCallback((clientX: number): number | null => {
     if (!progressRef.current || duration <= 0) return null;
     const rect = progressRef.current.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
@@ -111,41 +111,38 @@ export default function App() {
   }, [duration]);
 
   const performSeek = useCallback((time: number) => {
-    if (!isFinite(time) || time < 0) return;
+    if (!isFinite(time) || time < 0 || time > duration) return;
     setCurrentTime(time);
     analyzerRef.current?.seek(time);
-  }, []);
+  }, [duration]);
 
   const handleProgressMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const time = calculateTimeFromEvent(e.clientX);
+    e.preventDefault();
+    e.stopPropagation();
+    isDraggingRef.current = true;
+
+    const time = calculateTimeFromClientX(e.clientX);
     if (time !== null) {
-      isDraggingRef.current = true;
       performSeek(time);
     }
-  }, [calculateTimeFromEvent, performSeek]);
 
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (isDraggingRef.current) {
-        const time = calculateTimeFromEvent(e.clientX);
-        if (time !== null) {
-          performSeek(time);
-        }
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      const moveTime = calculateTimeFromClientX(moveEvent.clientX);
+      if (moveTime !== null) {
+        performSeek(moveTime);
       }
     };
 
     const handleMouseUp = () => {
       isDraggingRef.current = false;
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
     };
 
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [calculateTimeFromEvent, performSeek]);
+  }, [calculateTimeFromClientX, performSeek]);
 
   const handleUploadClick = useCallback(() => {
     fileInputRef.current?.click();
