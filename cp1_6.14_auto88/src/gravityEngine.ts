@@ -28,8 +28,9 @@ export interface Particle {
 const G = 500;
 const SOFTENING = 20;
 const MAX_PARTICLES = 200;
-const TRAIL_FADE_RATE = 0.002;
-const TRAIL_MAX_LENGTH = 500;
+const TRAIL_FADE_RATE = 0.016;
+const DEAD_TRAIL_FADE_RATE = 0.033;
+const TRAIL_MAX_LENGTH = 600;
 
 export class GravityEngine {
   private sources: GravitySource[] = [];
@@ -103,6 +104,10 @@ export class GravityEngine {
     return [...this.particles];
   }
 
+  getParticleCount(): number {
+    return this.particles.length;
+  }
+
   clearParticles(): void {
     this.particles = [];
   }
@@ -111,9 +116,9 @@ export class GravityEngine {
     for (const particle of this.particles) {
       if (particle.dead) continue;
 
-      if (particle.trail.length === 0 || 
+      if (particle.trail.length === 0 ||
           Math.hypot(particle.x - particle.trail[particle.trail.length - 1].x,
-                     particle.y - particle.trail[particle.trail.length - 1].y) > 1) {
+                     particle.y - particle.trail[particle.trail.length - 1].y) > 1.5) {
         particle.trail.push({
           x: particle.x,
           y: particle.y,
@@ -139,34 +144,29 @@ export class GravityEngine {
         const dx = particle.x - source.x;
         const dy = particle.y - source.y;
         const dist = Math.hypot(dx, dy);
-        if (dist < source.radius + 3) {
+        if (dist < source.radius * 0.6) {
           collided = true;
           break;
         }
       }
 
-      if (collided || particle.age > 30) {
+      const bounds = 3000;
+      if (collided || particle.age > 60 ||
+          Math.abs(particle.x) > bounds || Math.abs(particle.y) > bounds) {
         particle.dead = true;
-        this.fadeTrail(particle);
       }
     }
 
-    this.particles = this.particles.filter(p => !p.dead || p.trail.length > 0);
-    
     for (const particle of this.particles) {
       if (particle.dead && particle.trail.length > 0) {
         for (const point of particle.trail) {
-          point.alpha -= 0.016;
+          point.alpha -= DEAD_TRAIL_FADE_RATE;
         }
         particle.trail = particle.trail.filter(p => p.alpha > 0);
       }
     }
-  }
 
-  private fadeTrail(particle: Particle): void {
-    for (const point of particle.trail) {
-      point.alpha = Math.min(point.alpha, 1.0);
-    }
+    this.particles = this.particles.filter(p => !p.dead || p.trail.length > 0);
   }
 
   private rk4Step(particle: Particle, dt: number): void {
@@ -232,20 +232,20 @@ export class GravityEngine {
   }
 
   private calculateRadius(mass: number): number {
-    return 12 + mass * 6;
+    return 15 + mass * 5;
   }
 
   private calculateColor(mass: number): string {
     if (mass <= 1.0) {
       return '#888888';
     }
-    
-    const t = Math.min((mass - 1.0) / 9.0, 1.0);
-    
+
+    const t = Math.min((mass - 1.0) / 2.0, 1.0);
+
     const r = Math.round(136 + t * (231 - 136));
-    const g = Math.round(136 - t * 76);
-    const b = Math.round(136 - t * 80);
-    
+    const g = Math.round(136 - t * (136 - 76));
+    const b = Math.round(136 - t * (136 - 60));
+
     return `rgb(${r}, ${g}, ${b})`;
   }
 

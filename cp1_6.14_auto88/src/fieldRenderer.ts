@@ -1,5 +1,7 @@
-import * as THREE from 'three';
-import { GravityEngine, GravitySource, Particle, TrailPoint } from './gravityEngine';
+import { GravityEngine, GravitySource, Particle } from './gravityEngine';
+
+export type SourceDoubleClickCallback = (x: number, y: number) => void;
+export type SourceChangeCallback = () => void;
 
 interface ViewState {
   zoom: number;
@@ -7,176 +9,136 @@ interface ViewState {
   offsetY: number;
 }
 
-interface HoverState {
-  sourceId: string | null;
-}
-
-export type SourceDoubleClickCallback = (x: number, y: number) => void;
-export type SourceListChangeCallback = () => void;
-
 export class FieldRenderer {
   private container: HTMLElement;
   private engine: GravityEngine;
-  private scene: THREE.Scene;
-  private camera: THREE.OrthographicCamera;
-  private renderer: THREE.WebGLRenderer;
-  
+  private canvas: HTMLCanvasElement;
+  private ctx: CanvasRenderingContext2D;
+
   private view: ViewState = {
     zoom: 1,
     offsetX: 0,
     offsetY: 0
   };
 
-  private sourceMeshes: Map<string, { mesh: THREE.Mesh; label: THREE.Sprite | null }> = new Map();
-  private particleMeshes: Map<string, THREE.Mesh> = new Map();
-  private trailLines: Map<string, THREE.Line> = new Map();
-  
   private isDragging = false;
   private isPanning = false;
   private dragSourceId: string | null = null;
   private lastMouseX = 0;
   private lastMouseY = 0;
-  private mouseDownTime = 0;
   private mouseDownPos = { x: 0, y: 0 };
 
-  private hoverState: HoverState = { sourceId: null };
+  private hoveredSourceId: string | null = null;
 
   private onSourceDoubleClick: SourceDoubleClickCallback | null = null;
-  private onSourceChanged: SourceListChangeCallback | null = null;
-
-  private gridHelper: THREE.GridHelper | null = null;
-  private backgroundPlane: THREE.Mesh | null = null;
+  private onSourceChange: SourceChangeCallback | null = null;
 
   private width = 0;
   private height = 0;
+  private dpr = 1;
 
   constructor(container: HTMLElement, engine: GravityEngine) {
     this.container = container;
     this.engine = engine;
 
-    this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x0a0a14);
+    this.canvas = document.createElement('canvas');
+    this.canvas.style.display = 'block';
+    this.canvas.style.width = '100%';
+    this.canvas.style.height = '100%';
+    this.ctx = this.canvas.getContext('2d')!;
 
+    this.dpr = window.devicePixelRatio || 1;
     const rect = container.getBoundingClientRect();
     this.width = rect.width;
     this.height = rect.height;
+    this.canvas.width = this.width * this.dpr;
+    this.canvas.height = this.height * this.dpr;
 
-    this.camera = new THREE.OrthographicCamera(
-      -this.width / 2,
-      this.width / 2,
-      this.height / 2,
-      -this.height / 2,
-      0.1,
-      1000
-    );
-    this.camera.position.z = 100;
-
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setPixelRatio(window.devicePixelRatio);
-    this.renderer.setSize(this.width, this.height);
-    this.renderer.setClearColor(0x0a0a14);
-
-    container.appendChild(this.renderer.domElement);
-
-    this.createBackground();
-    this.createGrid();
+    container.appendChild(this.canvas);
     this.bindEvents();
-    this.updateCamera();
-  }
-
-  private createBackground(): void {
-    const geometry = new THREE.PlaneGeometry(5000, 5000);
-    const material = new THREE.MeshBasicMaterial({ color: 0x0a0a14 });
-    this.backgroundPlane = new THREE.Mesh(geometry, material);
-    this.backgroundPlane.position.z = -10;
-    this.scene.add(this.backgroundPlane);
-  }
-
-  private createGrid(): void {
-    const gridSize = 2000;
-    const gridDivisions = 40;
-    this.gridHelper = new THREE.GridHelper(gridSize, gridDivisions, 0x1a1a2e, 0x151525);
-    this.gridHelper.rotation.x = Math.PI / 2;
-    this.gridHelper.position.z = -5;
-    this.scene.add(this.gridHelper);
   }
 
   private bindEvents(): void {
-    const canvas = this.renderer.domElement;
-
-    canvas.addEventListener('mousedown', this.onMouseDown.bind(this));
-    canvas.addEventListener('mousemove', this.onMouseMove.bind(this));
-    canvas.addEventListener('mouseup', this.onMouseUp.bind(this));
-    canvas.addEventListener('mouseleave', this.onMouseLeave.bind(this));
-    canvas.addEventListener('dblclick', this.onDoubleClick.bind(this));
-    canvas.addEventListener('wheel', this.onWheel.bind(this), { passive: false });
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-
+    this.canvas.addEventListener('mousedown', this.onMouseDown.bind(this));
+    this.canvas.addEventListener('mousemove', this.onMouseMove.bind(this));
+    this.canvas.addEventListener('mouseup', this.onMouseUp.bind(this));
+    this.canvas.addEventListener('mouseleave', this.onMouseLeave.bind(this));
+    this.canvas.addEventListener('dblclick', this.onDoubleClick.bind(this));
+    this.canvas.addEventListener('wheel', this.onWheel.bind(this), { passive: false });
+    this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     window.addEventListener('resize', this.onResize.bind(this));
   }
 
-  private onMouseDown(e: MouseEvent): void {
-    const rect = this.renderer.domElement.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
+  private screenToWorld(screenX: number, screenY: number): { x: number; y: number } {
+    const x = (screenX - this.width / 2) / this.view.zoom + this.view.offsetX;
+    const y = (screenY - this.height / 2) / this.view.zoom + this.view.offsetY;
+    return { x, y };
+  }
 
+  private hitTestSource(wx: number, wy: number): string | null {
+    const sources = this.engine.getSources();
+    for (let i = sources.length - 1; i >= 0; i--) {
+      const s = sources[i];
+      const dist = Math.hypot(wx - s.x, wy - s.y);
+      const scale = this.hoveredSourceId === s.id ? 1.2 : 1.0;
+      if (dist < s.radius * scale + 4) {
+        return s.id;
+      }
+    }
+    return null;
+  }
+
+  private onMouseDown(e: MouseEvent): void {
+    const rect = this.canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
     this.lastMouseX = e.clientX;
     this.lastMouseY = e.clientY;
-    this.mouseDownTime = Date.now();
     this.mouseDownPos = { x: e.clientX, y: e.clientY };
 
-    const worldPos = this.screenToWorld(screenX, screenY);
-    const hitSource = this.hitTestSource(worldPos.x, worldPos.y);
+    const world = this.screenToWorld(sx, sy);
+    const hit = this.hitTestSource(world.x, world.y);
 
-    if (hitSource) {
+    if (hit) {
       this.isDragging = true;
-      this.dragSourceId = hitSource;
-      this.renderer.domElement.style.cursor = 'grab';
+      this.dragSourceId = hit;
+      this.canvas.style.cursor = 'grab';
     } else {
       this.isPanning = true;
-      this.renderer.domElement.style.cursor = 'grabbing';
+      this.canvas.style.cursor = 'grabbing';
     }
   }
 
   private onMouseMove(e: MouseEvent): void {
-    const rect = this.renderer.domElement.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
+    const rect = this.canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
 
     if (this.isDragging && this.dragSourceId) {
-      const worldPos = this.screenToWorld(screenX, screenY);
-      this.engine.updateSourcePosition(this.dragSourceId, worldPos.x, worldPos.y);
-      this.updateSourceMesh(this.dragSourceId);
-      if (this.onSourceChanged) {
-        this.onSourceChanged();
+      const world = this.screenToWorld(sx, sy);
+      this.engine.updateSourcePosition(this.dragSourceId, world.x, world.y);
+      if (this.onSourceChange) {
+        this.onSourceChange();
       }
+      this.canvas.style.cursor = 'grab';
     } else if (this.isPanning) {
       const dx = (e.clientX - this.lastMouseX) / this.view.zoom;
-      const dy = -(e.clientY - this.lastMouseY) / this.view.zoom;
-      this.view.offsetX += dx;
-      this.view.offsetY += dy;
+      const dy = (e.clientY - this.lastMouseY) / this.view.zoom;
+      this.view.offsetX -= dx;
+      this.view.offsetY -= dy;
       this.lastMouseX = e.clientX;
       this.lastMouseY = e.clientY;
-      this.updateCamera();
     } else {
-      const worldPos = this.screenToWorld(screenX, screenY);
-      const hitSource = this.hitTestSource(worldPos.x, worldPos.y);
-
-      if (hitSource !== this.hoverState.sourceId) {
-        if (this.hoverState.sourceId) {
-          this.setSourceHover(this.hoverState.sourceId, false);
-        }
-        if (hitSource) {
-          this.setSourceHover(hitSource, true);
-        }
-        this.hoverState.sourceId = hitSource;
+      const world = this.screenToWorld(sx, sy);
+      const hit = this.hitTestSource(world.x, world.y);
+      if (hit !== this.hoveredSourceId) {
+        this.hoveredSourceId = hit;
       }
-
-      this.renderer.domElement.style.cursor = hitSource ? 'grab' : 'default';
+      this.canvas.style.cursor = hit ? 'grab' : 'default';
     }
   }
 
-  private onMouseUp(e: MouseEvent): void {
+  private onMouseUp(_e: MouseEvent): void {
     if (this.isDragging) {
       this.isDragging = false;
       this.dragSourceId = null;
@@ -184,344 +146,197 @@ export class FieldRenderer {
     if (this.isPanning) {
       this.isPanning = false;
     }
-
-    const moveDist = Math.hypot(e.clientX - this.mouseDownPos.x, e.clientY - this.mouseDownPos.y);
-    
-    if (moveDist < 5) {
-      this.renderer.domElement.style.cursor = this.hoverState.sourceId ? 'grab' : 'default';
-    } else {
-      this.renderer.domElement.style.cursor = 'default';
-    }
+    this.canvas.style.cursor = 'default';
   }
 
   private onMouseLeave(): void {
-    if (this.isDragging) {
-      this.isDragging = false;
-      this.dragSourceId = null;
-    }
-    if (this.isPanning) {
-      this.isPanning = false;
-    }
-    if (this.hoverState.sourceId) {
-      this.setSourceHover(this.hoverState.sourceId, false);
-      this.hoverState.sourceId = null;
-    }
-    this.renderer.domElement.style.cursor = 'default';
+    this.isDragging = false;
+    this.dragSourceId = null;
+    this.isPanning = false;
+    this.hoveredSourceId = null;
+    this.canvas.style.cursor = 'default';
   }
 
   private onDoubleClick(e: MouseEvent): void {
-    const rect = this.renderer.domElement.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-    const worldPos = this.screenToWorld(screenX, screenY);
-
-    const hitSource = this.hitTestSource(worldPos.x, worldPos.y);
-    if (!hitSource && this.onSourceDoubleClick) {
-      this.onSourceDoubleClick(worldPos.x, worldPos.y);
+    const rect = this.canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
+    const world = this.screenToWorld(sx, sy);
+    const hit = this.hitTestSource(world.x, world.y);
+    if (!hit && this.onSourceDoubleClick) {
+      this.onSourceDoubleClick(world.x, world.y);
     }
   }
 
   private onWheel(e: WheelEvent): void {
     e.preventDefault();
-    
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newZoom = Math.max(0.5, Math.min(2.0, this.view.zoom * delta));
-    
-    if (newZoom !== this.view.zoom) {
-      const rect = this.renderer.domElement.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left - this.width / 2;
-      const mouseY = -(e.clientY - rect.top - this.height / 2);
+    const rect = this.canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
 
-      const worldX = mouseX / this.view.zoom + this.view.offsetX;
-      const worldY = mouseY / this.view.zoom + this.view.offsetY;
+    const worldBefore = this.screenToWorld(sx, sy);
 
-      this.view.zoom = newZoom;
+    const factor = e.deltaY > 0 ? 0.92 : 1.08;
+    this.view.zoom = Math.max(0.5, Math.min(2.0, this.view.zoom * factor));
 
-      const newScreenX = (worldX - this.view.offsetX) * this.view.zoom;
-      const newScreenY = (worldY - this.view.offsetY) * this.view.zoom;
-
-      this.view.offsetX += (mouseX - newScreenX) / this.view.zoom;
-      this.view.offsetY += (mouseY - newScreenY) / this.view.zoom;
-
-      this.updateCamera();
-    }
+    const worldAfter = this.screenToWorld(sx, sy);
+    this.view.offsetX += worldBefore.x - worldAfter.x;
+    this.view.offsetY += worldBefore.y - worldAfter.y;
   }
 
   private onResize(): void {
     const rect = this.container.getBoundingClientRect();
     this.width = rect.width;
     this.height = rect.height;
-
-    this.camera.left = -this.width / 2;
-    this.camera.right = this.width / 2;
-    this.camera.top = this.height / 2;
-    this.camera.bottom = -this.height / 2;
-    this.camera.updateProjectionMatrix();
-
-    this.renderer.setSize(this.width, this.height);
+    this.dpr = window.devicePixelRatio || 1;
+    this.canvas.width = this.width * this.dpr;
+    this.canvas.height = this.height * this.dpr;
   }
 
-  private screenToWorld(screenX: number, screenY: number): { x: number; y: number } {
-    const x = (screenX - this.width / 2) / this.view.zoom + this.view.offsetX;
-    const y = -(screenY - this.height / 2) / this.view.zoom + this.view.offsetY;
-    return { x, y };
+  public setOnSourceDoubleClick(cb: SourceDoubleClickCallback): void {
+    this.onSourceDoubleClick = cb;
   }
 
-  private hitTestSource(x: number, y: number): string | null {
-    const sources = this.engine.getSources();
-    for (let i = sources.length - 1; i >= 0; i--) {
-      const source = sources[i];
-      const dx = x - source.x;
-      const dy = y - source.y;
-      const dist = Math.hypot(dx, dy);
-      const hoverScale = this.hoverState.sourceId === source.id ? 1.2 : 1.0;
-      if (dist < source.radius * hoverScale) {
-        return source.id;
-      }
-    }
-    return null;
-  }
-
-  private setSourceHover(sourceId: string, isHovered: boolean): void {
-    const entry = this.sourceMeshes.get(sourceId);
-    if (entry) {
-      const scale = isHovered ? 1.2 : 1.0;
-      entry.mesh.scale.set(scale, scale, 1);
-      if (entry.label) {
-        entry.label.visible = isHovered;
-        entry.label.scale.set(isHovered ? 1.2 : 1.0, isHovered ? 1.2 : 1.0, 1);
-      }
-    }
-  }
-
-  private updateCamera(): void {
-    this.camera.position.x = this.view.offsetX;
-    this.camera.position.y = this.view.offsetY;
-    this.camera.zoom = this.view.zoom;
-    this.camera.updateProjectionMatrix();
-  }
-
-  public setOnSourceDoubleClick(callback: SourceDoubleClickCallback): void {
-    this.onSourceDoubleClick = callback;
-  }
-
-  public setOnSourceChanged(callback: SourceListChangeCallback): void {
-    this.onSourceChanged = callback;
-  }
-
-  public updateSources(): void {
-    const sources = this.engine.getSources();
-    const currentIds = new Set(sources.map(s => s.id));
-
-    for (const [id, entry] of this.sourceMeshes) {
-      if (!currentIds.has(id)) {
-        this.scene.remove(entry.mesh);
-        if (entry.label) {
-          this.scene.remove(entry.label);
-        }
-        entry.mesh.geometry.dispose();
-        (entry.mesh.material as THREE.Material).dispose();
-        this.sourceMeshes.delete(id);
-      }
-    }
-
-    for (const source of sources) {
-      if (!this.sourceMeshes.has(source.id)) {
-        this.createSourceMesh(source);
-      } else {
-        this.updateSourceMesh(source.id);
-      }
-    }
-  }
-
-  private createSourceMesh(source: GravitySource): void {
-    const geometry = new THREE.CircleGeometry(source.radius, 32);
-    const material = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(source.color),
-      transparent: true,
-      opacity: 0.9
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(source.x, source.y, 0);
-    this.scene.add(mesh);
-
-    const labelCanvas = document.createElement('canvas');
-    const ctx = labelCanvas.getContext('2d')!;
-    labelCanvas.width = 128;
-    labelCanvas.height = 64;
-    ctx.font = 'bold 20px Arial';
-    ctx.fillStyle = '#ffffff';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(`质量: ${source.mass.toFixed(1)}`, 64, 32);
-
-    const texture = new THREE.CanvasTexture(labelCanvas);
-    const labelMaterial = new THREE.SpriteMaterial({
-      map: texture,
-      transparent: true,
-      opacity: 0.9
-    });
-    const label = new THREE.Sprite(labelMaterial);
-    label.position.set(source.x, source.y + source.radius + 15, 1);
-    label.scale.set(80, 40, 1);
-    label.visible = false;
-    this.scene.add(label);
-
-    this.sourceMeshes.set(source.id, { mesh, label });
-  }
-
-  private updateSourceMesh(sourceId: string): void {
-    const source = this.engine.getSourceById(sourceId);
-    const entry = this.sourceMeshes.get(sourceId);
-
-    if (source && entry) {
-      entry.mesh.position.set(source.x, source.y, 0);
-
-      const oldGeom = entry.mesh.geometry;
-      if (oldGeom.parameters.radius !== source.radius) {
-        entry.mesh.geometry.dispose();
-        entry.mesh.geometry = new THREE.CircleGeometry(source.radius, 32);
-      }
-
-      (entry.mesh.material as THREE.MeshBasicMaterial).color.set(source.color);
-
-      if (entry.label) {
-        entry.label.position.set(source.x, source.y + source.radius + 15, 1);
-        
-        const labelCanvas = document.createElement('canvas');
-        const ctx = labelCanvas.getContext('2d')!;
-        labelCanvas.width = 128;
-        labelCanvas.height = 64;
-        ctx.font = 'bold 20px Arial';
-        ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(`质量: ${source.mass.toFixed(1)}`, 64, 32);
-        
-        const texture = new THREE.CanvasTexture(labelCanvas);
-        (entry.label.material as THREE.SpriteMaterial).map = texture;
-        (entry.label.material as THREE.SpriteMaterial).needsUpdate = true;
-      }
-    }
-  }
-
-  public updateParticles(): void {
-    const particles = this.engine.getParticles();
-    const currentIds = new Set(particles.map(p => p.id));
-
-    for (const [id, mesh] of this.particleMeshes) {
-      if (!currentIds.has(id)) {
-        this.scene.remove(mesh);
-        mesh.geometry.dispose();
-        (mesh.material as THREE.Material).dispose();
-        this.particleMeshes.delete(id);
-      }
-    }
-
-    for (const [id, line] of this.trailLines) {
-      if (!currentIds.has(id)) {
-        this.scene.remove(line);
-        line.geometry.dispose();
-        (line.material as THREE.Material).dispose();
-        this.trailLines.delete(id);
-      }
-    }
-
-    for (const particle of particles) {
-      if (!this.particleMeshes.has(particle.id)) {
-        this.createParticleMesh(particle);
-      } else {
-        this.updateParticleMesh(particle);
-      }
-      this.updateTrailLine(particle);
-    }
-  }
-
-  private createParticleMesh(particle: Particle): void {
-    const geometry = new THREE.CircleGeometry(3, 16);
-    const material = new THREE.MeshBasicMaterial({
-      color: 0x00d2ff,
-      transparent: true,
-      opacity: 0.9
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(particle.x, particle.y, 2);
-    this.scene.add(mesh);
-    this.particleMeshes.set(particle.id, mesh);
-  }
-
-  private updateParticleMesh(particle: Particle): void {
-    const mesh = this.particleMeshes.get(particle.id);
-    if (mesh) {
-      mesh.position.set(particle.x, particle.y, 2);
-    }
-  }
-
-  private updateTrailLine(particle: Particle): void {
-    let line = this.trailLines.get(particle.id);
-    
-    if (particle.trail.length < 2) {
-      if (line) {
-        this.scene.remove(line);
-        line.geometry.dispose();
-        (line.material as THREE.Material).dispose();
-        this.trailLines.delete(particle.id);
-      }
-      return;
-    }
-
-    const positions: number[] = [];
-    const colors: number[] = [];
-
-    for (let i = 0; i < particle.trail.length; i++) {
-      const point = particle.trail[i];
-      positions.push(point.x, point.y, 1);
-
-      const t = i / (particle.trail.length - 1);
-      const r = (1 - t) * 0 + t * 1;
-      const g = (1 - t) * 0.82 + t * 0.42;
-      const b = (1 - t) * 1 + t * 0.42;
-      colors.push(r, g, b);
-    }
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-
-    if (!line) {
-      const material = new THREE.LineBasicMaterial({
-        vertexColors: true,
-        transparent: true,
-        opacity: 0.8
-      });
-      line = new THREE.Line(geometry, material);
-      this.scene.add(line);
-      this.trailLines.set(particle.id, line);
-    } else {
-      line.geometry.dispose();
-      line.geometry = geometry;
-    }
-  }
-
-  public render(): void {
-    this.renderer.render(this.scene, this.camera);
-  }
-
-  public getView(): ViewState {
-    return { ...this.view };
+  public setOnSourceChange(cb: SourceChangeCallback): void {
+    this.onSourceChange = cb;
   }
 
   public resetView(): void {
-    this.view = {
-      zoom: 1,
-      offsetX: 0,
-      offsetY: 0
-    };
-    this.updateCamera();
+    this.view = { zoom: 1, offsetX: 0, offsetY: 0 };
   }
 
-  public dispose(): void {
-    this.renderer.dispose();
-    window.removeEventListener('resize', this.onResize.bind(this));
+  public render(): void {
+    const ctx = this.ctx;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.clearRect(0, 0, this.width, this.height);
+
+    ctx.fillStyle = '#0a0a14';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    ctx.save();
+    ctx.translate(this.width / 2, this.height / 2);
+    ctx.scale(this.view.zoom, this.view.zoom);
+    ctx.translate(-this.view.offsetX, -this.view.offsetY);
+
+    this.drawGrid(ctx);
+    this.drawTrails(ctx);
+    this.drawSources(ctx);
+    this.drawParticles(ctx);
+
+    ctx.restore();
+  }
+
+  private drawGrid(ctx: CanvasRenderingContext2D): void {
+    const step = 80;
+    const vw = this.width / this.view.zoom;
+    const vh = this.height / this.view.zoom;
+    const left = this.view.offsetX - vw / 2 - step;
+    const right = this.view.offsetX + vw / 2 + step;
+    const top = this.view.offsetY - vh / 2 - step;
+    const bottom = this.view.offsetY + vh / 2 + step;
+
+    const startX = Math.floor(left / step) * step;
+    const startY = Math.floor(top / step) * step;
+
+    ctx.strokeStyle = '#151525';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    for (let x = startX; x <= right; x += step) {
+      ctx.moveTo(x, top);
+      ctx.lineTo(x, bottom);
+    }
+    for (let y = startY; y <= bottom; y += step) {
+      ctx.moveTo(left, y);
+      ctx.lineTo(right, y);
+    }
+    ctx.stroke();
+
+    ctx.strokeStyle = '#1a1a2e';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, 0);
+    ctx.lineTo(right, 0);
+    ctx.moveTo(0, top);
+    ctx.lineTo(0, bottom);
+    ctx.stroke();
+  }
+
+  private drawSources(ctx: CanvasRenderingContext2D): void {
+    const sources = this.engine.getSources();
+    for (const source of sources) {
+      const isHovered = this.hoveredSourceId === source.id;
+      const scale = isHovered ? 1.2 : 1.0;
+      const r = source.radius * scale;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(source.x, source.y, r, 0, Math.PI * 2);
+
+      const grad = ctx.createRadialGradient(source.x, source.y, 0, source.x, source.y, r);
+      grad.addColorStop(0, source.color);
+      grad.addColorStop(0.7, source.color);
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(source.x, source.y, r * 0.85, 0, Math.PI * 2);
+      ctx.fillStyle = source.color;
+      ctx.globalAlpha = 0.9;
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+
+      if (isHovered) {
+        ctx.font = `bold ${14 / this.view.zoom}px -apple-system, BlinkMacSystemFont, sans-serif`;
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(`质量: ${source.mass.toFixed(1)}`, source.x, source.y - r - 6);
+      }
+
+      ctx.restore();
+    }
+  }
+
+  private drawTrails(ctx: CanvasRenderingContext2D): void {
+    const particles = this.engine.getParticles();
+    for (const particle of particles) {
+      const trail = particle.trail;
+      if (trail.length < 2) continue;
+
+      for (let i = 1; i < trail.length; i++) {
+        const p0 = trail[i - 1];
+        const p1 = trail[i];
+
+        const t = i / (trail.length - 1);
+        const r = Math.round(0 + t * 255);
+        const g = Math.round(210 - t * 103);
+        const b = Math.round(255 - t * 148);
+
+        const alpha = Math.max(0, p1.alpha) * 0.85;
+
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        ctx.strokeStyle = `rgba(${r},${g},${b},${alpha})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+  }
+
+  private drawParticles(ctx: CanvasRenderingContext2D): void {
+    const particles = this.engine.getParticles();
+    for (const particle of particles) {
+      if (particle.dead) continue;
+
+      ctx.beginPath();
+      ctx.arc(particle.x, particle.y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#00d2ff';
+      ctx.shadowColor = '#00d2ff';
+      ctx.shadowBlur = 8;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
   }
 }
