@@ -30,20 +30,27 @@ body {
 
 @media (max-width: 480px) {
   .mood-emoji-container {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-    overflow-x: visible;
-    justify-items: center;
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 10px 8px !important;
+    overflow-x: visible !important;
+    justify-items: center !important;
+    align-items: center !important;
+    padding: 4px 0 !important;
+    width: 100% !important;
   }
 
   .mood-emoji-container .mood-emoji-button {
-    width: 56px;
-    height: 56px;
+    width: 52px !important;
+    height: 52px !important;
+    margin: 0 auto !important;
+    max-width: 100% !important;
   }
 
   .mood-emoji-container .mood-emoji-button .mood-emoji-text {
-    font-size: 32px;
+    font-size: 30px !important;
+    display: block !important;
+    text-align: center !important;
   }
 }
 

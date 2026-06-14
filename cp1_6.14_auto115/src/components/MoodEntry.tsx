@@ -211,29 +211,32 @@ const styles: Record<string, React.CSSProperties> = {
   tag: {
     display: 'flex',
     alignItems: 'center',
-    gap: '4px',
-    padding: '4px 12px',
+    gap: '6px',
+    padding: '5px 12px 5px 14px',
     backgroundColor: '#e0e0e0',
-    borderRadius: '12px',
+    borderRadius: '14px',
     fontSize: '13px',
-    color: '#4a5568'
+    color: '#4a5568',
+    minHeight: '28px'
   },
   tagRemove: {
     background: '#d1d5db',
     border: 'none',
     cursor: 'pointer',
-    fontSize: '14px',
+    fontSize: '16px',
     fontWeight: 700,
     color: '#4a5568',
-    width: '18px',
-    height: '18px',
+    width: '24px',
+    height: '24px',
     padding: 0,
-    lineHeight: '18px',
+    lineHeight: '24px',
     borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    transition: 'all 0.15s ease'
+    transition: 'all 0.15s ease',
+    flexShrink: 0,
+    boxSizing: 'border-box'
   },
   submitButton: {
     width: '100%',

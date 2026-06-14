@@ -85,7 +85,11 @@ function TrendChart() {
                   axisLine={{ stroke: '#e2e8f0' }}
                   tickFormatter={(value) => {
                     const labels: Record<number, string> = {
-                      1: '�', 2: '�', 3: '�', 4: '�', 5: '�'
+                      1: '开心',
+                      2: '平静',
+                      3: '悲伤',
+                      4: '愤怒',
+                      5: '负面'
                     };
                     return labels[value] || '';
                   }}

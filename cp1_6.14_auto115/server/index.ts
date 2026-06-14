@@ -107,6 +107,11 @@ app.get('/api/moods/trend', (req: Request, res: Response) => {
 
 app.delete('/api/moods/:id', (req: Request, res: Response) => {
   const { id } = req.params;
+  
+  if (!/^\d+$/.test(id)) {
+    return res.status(400).json({ error: '无效的ID格式' });
+  }
+  
   const index = moods.findIndex(m => m.id === id);
   
   if (index === -1) {
