@@ -115,12 +115,50 @@ type UserPresenceListener = (event: UserPresenceEvent) => void;
 type SyncListener = (content: string) => void;
 type ConnectionListener = (connected: boolean) => void;
 
+interface PendingOperation {
+  changeId: string;
+  message: WsEditOperation;
+  sentAt: number;
+  retryCount: number;
+}
+
+const MAX_RETRIES = 3;
+const ACK_TIMEOUT_MS = 5000;
+const VERSION_REGEX = /^v(\d+)\.(\d+)\.(\d+)$/;
+
+function parseVersion(v: string): [number, number, number] | null {
+  const m = v.match(VERSION_REGEX);
+  if (!m) return null;
+  return [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)];
+}
+
+function compareVersions(a: string, b: string): number {
+  const pa = parseVersion(a);
+  const pb = parseVersion(b);
+  if (!pa || !pb) return 0;
+  for (let i = 0; i < 3; i++) {
+    if (pa[i] !== pb[i]) return pa[i] - pb[i];
+  }
+  return 0;
+}
+
+function incrementVersion(v: string): string {
+  const p = parseVersion(v);
+  if (!p) return v;
+  let [major, minor, patch] = p;
+  patch++;
+  if (patch >= 100) { patch = 0; minor++; }
+  if (minor >= 10) { minor = 0; major++; }
+  return `v${major}.${minor}.${patch}`;
+}
+
 export class CollabSync {
   private ws: WebSocket | null = null;
   private editorCore: EditorCore;
   private docId: string;
   private serverUrl: string;
   private currentVersion: string = 'v1.0.0';
+  private confirmedVersion: string = 'v1.0.0';
 
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
@@ -130,6 +168,9 @@ export class CollabSync {
   private pendingEditOperations: WsEditOperation[] = [];
   private pendingCursorUpdates: WsCursorUpdate[] = [];
   private flushInterval: number | null = null;
+
+  private unacknowledgedOps: Map<string, PendingOperation> = new Map();
+  private ackCheckInterval: number | null = null;
 
   private lastSentPosition: number = -1;
   private positionThrottleMs = 50;
@@ -167,6 +208,7 @@ export class CollabSync {
         this.sendSyncRequest();
         this.flushPending();
         this.startPositionFlush();
+        this.startAckCheck();
       };
 
       this.ws.onmessage = (event) => {
@@ -187,6 +229,7 @@ export class CollabSync {
         this.isConnected = false;
         this.notifyConnectionListeners(false);
         this.stopPositionFlush();
+        this.stopAckCheck();
         this.scheduleReconnect();
       };
 
@@ -236,7 +279,15 @@ export class CollabSync {
     }
 
     if (message.version) {
-      this.updateVersion(message.version);
+      const cmp = compareVersions(message.version, this.currentVersion);
+      if (cmp > 0) {
+        this.updateVersion(message.version);
+      } else if (cmp < 0) {
+        console.warn(
+          `[CollabSync] 收到旧版本操作: ${message.version}, 当前: ${this.currentVersion}, 忽略`
+        );
+        return;
+      }
     }
 
     this.editorCore.updateContent(message.payload);
@@ -260,13 +311,23 @@ export class CollabSync {
 
   private handleUserPresence(event: UserPresenceEvent): void {
     if (event.type === WsMessageType.USER_JOIN && event.version) {
-      this.updateVersion(event.version);
+      const cmp = compareVersions(event.version, this.currentVersion);
+      if (cmp > 0) {
+        this.updateVersion(event.version);
+      }
     }
     this.notifyUserPresenceListeners(event);
   }
 
   private handleVersionUpdate(message: WsVersionUpdate): void {
-    this.updateVersion(message.version);
+    const cmp = compareVersions(message.version, this.currentVersion);
+    if (cmp > 0) {
+      this.updateVersion(message.version);
+    } else if (cmp < 0) {
+      console.warn(
+        `[CollabSync] 收到旧版本更新: ${message.version}, 当前: ${this.currentVersion}`
+      );
+    }
   }
 
   private handleSyncResponse(message: WsSyncResponse): void {
@@ -276,7 +337,9 @@ export class CollabSync {
     }
     if (message.version) {
       this.updateVersion(message.version);
+      this.confirmedVersion = message.version;
     }
+    this.unacknowledgedOps.clear();
 
     message.payload.users.forEach(user => {
       if (user.userId !== this.editorCore.getUserId() && user.position) {
@@ -293,8 +356,60 @@ export class CollabSync {
   }
 
   private handleAcknowledgment(message: WsAcknowledgment): void {
+    const changeId = message.payload.changeId;
+    const pending = this.unacknowledgedOps.get(changeId);
+
+    if (pending) {
+      this.unacknowledgedOps.delete(changeId);
+    }
+
     if (message.version) {
+      const cmp = compareVersions(message.version, this.confirmedVersion);
+      if (cmp > 0) {
+        this.confirmedVersion = message.version;
+      }
       this.updateVersion(message.version);
+    }
+  }
+
+  private startAckCheck(): void {
+    this.ackCheckInterval = window.setInterval(() => {
+      const now = Date.now();
+      const toRetry: PendingOperation[] = [];
+
+      this.unacknowledgedOps.forEach((op, changeId) => {
+        if (now - op.sentAt > ACK_TIMEOUT_MS) {
+          if (op.retryCount < MAX_RETRIES) {
+            toRetry.push(op);
+          } else {
+            console.error(
+              `[CollabSync] 操作 ${changeId} 超过最大重试次数, 丢弃`
+            );
+            this.unacknowledgedOps.delete(changeId);
+          }
+        }
+      });
+
+      toRetry.forEach(op => {
+        this.unacknowledgedOps.delete(op.changeId);
+        op.retryCount++;
+        op.sentAt = Date.now();
+        this.unacknowledgedOps.set(op.changeId, op);
+
+        if (this.ws?.readyState === WebSocket.OPEN) {
+          this.ws.send(JSON.stringify(op.message));
+          console.log(
+            `[CollabSync] 重试操作 ${op.changeId}, 第 ${op.retryCount} 次`
+          );
+        }
+      });
+    }, 2000);
+  }
+
+  private stopAckCheck(): void {
+    if (this.ackCheckInterval !== null) {
+      clearInterval(this.ackCheckInterval);
+      this.ackCheckInterval = null;
     }
   }
 
@@ -305,7 +420,7 @@ export class CollabSync {
       type: WsMessageType.SYNC_REQUEST,
       payload: {
         userId: this.editorCore.getUserId(),
-        lastVersion: this.currentVersion
+        lastVersion: this.confirmedVersion
       },
       docId: this.docId
     };
@@ -323,6 +438,16 @@ export class CollabSync {
 
     if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
+
+      this.unacknowledgedOps.set(change.id, {
+        changeId: change.id,
+        message,
+        sentAt: Date.now(),
+        retryCount: 0
+      });
+
+      this.currentVersion = incrementVersion(this.currentVersion);
+      this.notifyVersionChangeListeners(this.currentVersion);
     } else {
       this.pendingEditOperations.push(message);
     }
@@ -392,6 +517,12 @@ export class CollabSync {
       const op = this.pendingEditOperations.shift();
       if (op) {
         this.ws.send(JSON.stringify(op));
+        this.unacknowledgedOps.set(op.payload.id, {
+          changeId: op.payload.id,
+          message: op,
+          sentAt: Date.now(),
+          retryCount: 0
+        });
       }
     }
   }
@@ -413,6 +544,7 @@ export class CollabSync {
 
   disconnect(): void {
     this.stopPositionFlush();
+    this.stopAckCheck();
 
     if (this.unsubLocalChange) {
       this.unsubLocalChange();
@@ -430,38 +562,29 @@ export class CollabSync {
     this.isConnected = false;
     this.pendingEditOperations = [];
     this.pendingCursorUpdates = [];
-  }
-
-  private incrementVersion(): void {
-    const match = this.currentVersion.match(/^v(\d+)\.(\d+)\.(\d+)$/);
-    if (match) {
-      let major = parseInt(match[1], 10);
-      let minor = parseInt(match[2], 10);
-      let patch = parseInt(match[3], 10);
-
-      patch++;
-      if (patch >= 100) {
-        patch = 0;
-        minor++;
-      }
-      if (minor >= 10) {
-        minor = 0;
-        major++;
-      }
-
-      this.currentVersion = `v${major}.${minor}.${patch}`;
-    }
+    this.unacknowledgedOps.clear();
   }
 
   private updateVersion(newVersion: string): void {
     if (newVersion !== this.currentVersion) {
-      this.currentVersion = newVersion;
-      this.notifyVersionChangeListeners(this.currentVersion);
+      const cmp = compareVersions(newVersion, this.currentVersion);
+      if (cmp > 0) {
+        this.currentVersion = newVersion;
+        this.notifyVersionChangeListeners(this.currentVersion);
+      }
     }
   }
 
   getVersion(): string {
     return this.currentVersion;
+  }
+
+  getConfirmedVersion(): string {
+    return this.confirmedVersion;
+  }
+
+  getPendingOpCount(): number {
+    return this.unacknowledgedOps.size;
   }
 
   getWebSocket(): WebSocket | null {

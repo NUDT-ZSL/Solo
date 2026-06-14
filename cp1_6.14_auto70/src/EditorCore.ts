@@ -1,9 +1,10 @@
-import { EditorState, StateField, ChangeSpec } from '@codemirror/state';
+import { EditorState, StateField, ChangeSpec, TransactionSpec } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightSpecialChars, drawSelection, highlightActiveLine, rectangularSelection, crosshairCursor } from '@codemirror/view';
 import { markdown } from '@codemirror/lang-markdown';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, indentOnInput, foldGutter, foldKeymap } from '@codemirror/language';
 import { autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
+import { isolateHistory } from '@codemirror/commands';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface DocChange {
@@ -13,6 +14,7 @@ export interface DocChange {
   insert: string;
   userId: string;
   timestamp: number;
+  baseVersion?: number;
 }
 
 export interface CursorPosition {
@@ -267,15 +269,33 @@ export class EditorCore {
     this.isApplyingRemoteUpdate = true;
     this.ignoreNextSelectionChange = true;
 
+    const lenDiff = change.insert.length - (change.to - change.from);
+
+    const currentHead = this.view.state.selection.main.head;
+    let newHead = currentHead;
+
+    if (change.to <= currentHead) {
+      newHead = currentHead + lenDiff;
+    } else if (change.from < currentHead) {
+      newHead = change.from + change.insert.length;
+    }
+
     const changeSpec: ChangeSpec = {
       from: change.from,
       to: change.to,
       insert: change.insert
     };
 
-    this.view.dispatch({
-      changes: changeSpec
-    });
+    const dispatchSpec: TransactionSpec = {
+      changes: changeSpec,
+      selection: {
+        anchor: newHead,
+        head: newHead
+      },
+      annotations: isolateHistory.of('before')
+    };
+
+    this.view.dispatch(dispatchSpec);
 
     this.isApplyingRemoteUpdate = false;
     const content = this.view.state.doc.toString();
@@ -291,7 +311,8 @@ export class EditorCore {
         from: 0,
         to: this.view.state.doc.length,
         insert: content
-      }
+      },
+      annotations: isolateHistory.of('full')
     });
     this.isApplyingRemoteUpdate = false;
     const newContent = this.view.state.doc.toString();
@@ -374,24 +395,31 @@ export class EditorCore {
     if (!this.view) return null;
     const pos = this.lineColumnToPos(line, column);
     if (pos === null) return null;
-    const coords = this.view.coordsAtPos(pos);
-    if (!coords) return null;
-    const scrollRect = this.view.scrollDOM.getBoundingClientRect();
-    return {
-      top: coords.top - scrollRect.top + this.view.scrollDOM.scrollTop,
-      left: coords.left - scrollRect.left + this.view.scrollDOM.scrollLeft
-    };
+    return this.coordsAtPos(pos);
   }
 
   coordsAtPos(pos: number): { top: number; left: number } | null {
     if (!this.view) return null;
     const coords = this.view.coordsAtPos(pos);
     if (!coords) return null;
-    const scrollRect = this.view.scrollDOM.getBoundingClientRect();
+    const editorRect = this.view.dom.getBoundingClientRect();
     return {
-      top: coords.top - scrollRect.top + this.view.scrollDOM.scrollTop,
-      left: coords.left - scrollRect.left + this.view.scrollDOM.scrollLeft
+      top: coords.top - editorRect.top,
+      left: coords.left - editorRect.left
     };
+  }
+
+  getLineHeightAtPos(pos: number): number {
+    if (!this.view) return 21;
+    try {
+      const line = this.view.state.doc.lineAt(pos);
+      const topCoords = this.view.coordsAtPos(line.from);
+      const bottomCoords = this.view.coordsAtPos(line.to);
+      if (topCoords && bottomCoords) {
+        return Math.max(bottomCoords.bottom - topCoords.top, 16);
+      }
+    } catch {}
+    return 21;
   }
 
   onContentChange(listener: ContentChangeListener): () => void {

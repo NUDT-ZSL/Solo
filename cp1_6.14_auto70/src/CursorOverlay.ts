@@ -4,8 +4,6 @@ interface RemoteCursorState {
   userId: string;
   userName: string;
   color: string;
-  line: number;
-  column: number;
   pos: number;
   lastUpdate: number;
 }
@@ -98,8 +96,6 @@ export class CursorOverlay {
       userId: userCursor.userId,
       userName: userCursor.userName,
       color: userCursor.color,
-      line: userCursor.position.line,
-      column: userCursor.position.column,
       pos: userCursor.position.pos,
       lastUpdate: now
     });
@@ -149,22 +145,19 @@ export class CursorOverlay {
   private render(): void {
     if (!this.isActive) return;
 
-    const scrollContainer = this.editorCore.getScrollContainer();
-    if (!scrollContainer) return;
+    const view = this.editorCore.getEditorView();
+    if (!view) return;
 
     this.cursors.forEach((cursor) => {
-      const coords = this.editorCore.coordsAtLineColumn(cursor.line, cursor.column);
-      if (!coords) {
-        const fallbackCoords = this.editorCore.coordsAtPos(cursor.pos);
-        if (!fallbackCoords) return;
-        this.renderCursorElement(cursor, fallbackCoords.top, fallbackCoords.left);
-      } else {
-        this.renderCursorElement(cursor, coords.top, coords.left);
-      }
+      const coords = this.editorCore.coordsAtPos(cursor.pos);
+      if (!coords) return;
+
+      const lineHeight = this.editorCore.getLineHeightAtPos(cursor.pos);
+      this.renderCursorElement(cursor, coords.top, coords.left, lineHeight);
     });
   }
 
-  private renderCursorElement(cursor: RemoteCursorState, top: number, left: number): void {
+  private renderCursorElement(cursor: RemoteCursorState, top: number, left: number, lineHeight: number): void {
     let cursorEl = this.cursorElements.get(cursor.userId);
     let labelEl = this.labelElements.get(cursor.userId);
 
@@ -173,10 +166,8 @@ export class CursorOverlay {
       cursorEl.style.cssText = `
         position: absolute;
         width: 2px;
-        background-color: ${cursor.color};
         pointer-events: none;
         transition: top 0.05s linear, left 0.05s linear, opacity 0.3s ease;
-        box-shadow: 0 0 4px ${cursor.color};
       `;
       this.overlay.appendChild(cursorEl);
       this.cursorElements.set(cursor.userId, cursorEl);
@@ -184,13 +175,12 @@ export class CursorOverlay {
 
     if (!labelEl) {
       labelEl = document.createElement('div');
-      labelEl.textContent = cursor.userName;
       labelEl.style.cssText = `
         position: absolute;
         font-size: 11px;
         font-weight: 500;
         color: #ffffff;
-        background-color: ${cursor.color};
+        background-color: rgba(0, 0, 0, 0.7);
         padding: 2px 6px;
         border-radius: 4px;
         white-space: nowrap;
@@ -198,26 +188,22 @@ export class CursorOverlay {
         transform: translateX(-50%);
         transition: top 0.05s linear, left 0.05s linear, opacity 0.3s ease;
         z-index: 11;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         letter-spacing: 0.2px;
       `;
       this.overlay.appendChild(labelEl);
       this.labelElements.set(cursor.userId, labelEl);
     }
 
-    const lineHeight = 21;
-    const cursorHeight = lineHeight;
-
     cursorEl.style.left = `${left}px`;
     cursorEl.style.top = `${top}px`;
-    cursorEl.style.height = `${cursorHeight}px`;
+    cursorEl.style.height = `${lineHeight}px`;
     cursorEl.style.backgroundColor = cursor.color;
     cursorEl.style.boxShadow = `0 0 4px ${cursor.color}`;
     cursorEl.style.opacity = '1';
 
+    labelEl.textContent = cursor.userName;
     labelEl.style.left = `${left}px`;
     labelEl.style.top = `${top - 22}px`;
-    labelEl.style.backgroundColor = cursor.color;
     labelEl.style.opacity = '1';
   }
 
