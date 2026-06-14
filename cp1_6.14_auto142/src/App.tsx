@@ -1,170 +1,178 @@
-import { useRef, useEffect, useCallback, useState } from 'react';
-import { generateDungeon, DungeonMap } from './MapGenerator';
-import { CombatEngine, EventBus, GameSnapshot } from './CombatEngine';
-import { render, getGridOffset } from './Renderer';
+import { useEffect, useRef, useState } from 'react';
+import {
+  CombatEngine,
+  EventBus,
+  EVENTS,
+  GameSnapshot,
+  setupMapGenerationBridge,
+} from './CombatEngine';
+import { render, triggerFloorBanner } from './Renderer';
 
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
-const TARGET_FPS = 60;
-const FRAME_TIME = 1000 / TARGET_FPS;
-
-const initialSnapshot: GameSnapshot = {
-  playerPos: { x: 0, y: 0 },
-  playerHp: 100,
-  playerMaxHp: 100,
-  playerStatusEffects: [],
-  enemies: [],
-  projectiles: [],
-  particles: [],
-  currentFloor: 1,
-  playerDamageFlash: 0,
-  playerFreezeFlash: 0,
-  portalPos: { x: 0, y: 0 },
-  grid: [],
-  gameover: false,
-  hitEnemyId: null,
-};
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const engineRef = useRef<CombatEngine | null>(null);
   const eventBusRef = useRef<EventBus>(new EventBus());
-  const snapshotRef = useRef<GameSnapshot>(initialSnapshot);
-  const keysRef = useRef<Set<string>>(new Set());
-  const mouseRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const lastTimeRef = useRef<number>(0);
+  const engineRef = useRef<CombatEngine | null>(null);
+  const snapshotRef = useRef<GameSnapshot | null>(null);
   const animFrameRef = useRef<number>(0);
-  const [, forceUpdate] = useState(0);
-
-  const initDungeon = useCallback((engine: CombatEngine) => {
-    const dungeon: DungeonMap = generateDungeon();
-    engine.loadDungeon(dungeon);
-  }, []);
+  const lastTimeRef = useRef<number>(0);
+  const keysDownRef = useRef<Set<string>>(new Set());
+  const lastMoveProcessedRef = useRef<number>(0);
+  const cleanupRef = useRef<Array<() => void>>([]);
+  const [, tickRender] = useState(0);
 
   useEffect(() => {
     const eventBus = eventBusRef.current;
+    const cleanup: Array<() => void> = [];
+
+    const mapBridgeOff = setupMapGenerationBridge(eventBus);
+    cleanup.push(mapBridgeOff);
+
     const engine = new CombatEngine(eventBus);
     engineRef.current = engine;
+    cleanup.push(() => engine.destroy());
 
-    eventBus.on('stateUpdate', (data: GameSnapshot) => {
-      snapshotRef.current = data;
+    const stateUpdateOff = eventBus.on(EVENTS.STATE_UPDATE, (data) => {
+      snapshotRef.current = data as GameSnapshot;
     });
+    cleanup.push(stateUpdateOff);
 
-    eventBus.on('generateNewFloor', () => {
-      initDungeon(engine);
+    const floorDescendOff = eventBus.on(EVENTS.FLOOR_DESCEND, (data) => {
+      const info = data as { floor: number; difficulty: number };
+      triggerFloorBanner(info.floor, performance.now());
     });
-
-    initDungeon(engine);
+    cleanup.push(floorDescendOff);
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      keysRef.current.add(e.key.toLowerCase());
+      const key = e.key.toLowerCase();
+      keysDownRef.current.add(key);
 
-      if (e.key === 'r' && snapshotRef.current.gameover) {
-        engine.resetGame();
+      if (key === 'r' && snapshotRef.current?.gameover) {
+        eventBus.emit(EVENTS.RESET_GAME);
         return;
       }
 
-      e.preventDefault();
+      if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
+        e.preventDefault();
+      }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      keysRef.current.delete(e.key.toLowerCase());
+      keysDownRef.current.delete(e.key.toLowerCase());
     };
 
     const handleMouseMove = (e: MouseEvent) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
-      mouseRef.current = {
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
-      };
+      (window as unknown as { __drMouseX?: number; __drMouseY?: number }).__drMouseX =
+        (e.clientX - rect.left) * (canvas.width / rect.width);
+      (window as unknown as { __drMouseX?: number; __drMouseY?: number }).__drMouseY =
+        (e.clientY - rect.top) * (canvas.height / rect.height);
     };
 
     const handleMouseDown = (e: MouseEvent) => {
-      if (e.button === 0) {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const rect = canvas.getBoundingClientRect();
-        const offset = getGridOffset();
-        engine.fireProjectile(
-          e.clientX - rect.left,
-          e.clientY - rect.top,
-          offset.x,
-          offset.y,
-        );
+      if (e.button !== 0) return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+      eventBus.emit(EVENTS.INPUT_FIRE, { mouseX, mouseY });
+    };
+
+    const handleKeyDownSpace = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        const mouseX =
+          (window as unknown as { __drMouseX?: number; __drMouseY?: number }).__drMouseX ?? 0;
+        const mouseY =
+          (window as unknown as { __drMouseX?: number; __drMouseY?: number }).__drMouseY ?? 0;
+        if (mouseX || mouseY) {
+          eventBus.emit(EVENTS.INPUT_FIRE, { mouseX, mouseY });
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDownSpace);
     window.addEventListener('keyup', handleKeyUp);
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mousedown', handleMouseDown);
-
-    return () => {
+    cleanup.push(() => {
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDownSpace);
       window.removeEventListener('keyup', handleKeyUp);
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mousedown', handleMouseDown);
+    });
+
+    const canvasEl = canvasRef.current;
+    if (canvasEl) {
+      canvasEl.addEventListener('mousemove', handleMouseMove);
+      canvasEl.addEventListener('mousedown', handleMouseDown);
+      cleanup.push(() => {
+        canvasEl.removeEventListener('mousemove', handleMouseMove);
+        canvasEl.removeEventListener('mousedown', handleMouseDown);
+      });
+    }
+
+    cleanupRef.current = cleanup;
+    return () => {
+      for (const off of cleanupRef.current) {
+        try {
+          off();
+        } catch {
+          /* ignore */
+        }
+      }
+      cleanupRef.current = [];
+      cancelAnimationFrame(animFrameRef.current);
     };
-  }, [initDungeon]);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    const eventBus = eventBusRef.current;
 
-    let lastKeyProcess = 0;
-
-    const gameLoop = (timestamp: number) => {
-      if (lastTimeRef.current === 0) {
-        lastTimeRef.current = timestamp;
-      }
-
+    const loop = (timestamp: number) => {
+      if (lastTimeRef.current === 0) lastTimeRef.current = timestamp;
       const elapsed = timestamp - lastTimeRef.current;
-      const dt = Math.min(elapsed / 1000, 0.05);
+      const dt = Math.min(0.05, elapsed / 1000);
       lastTimeRef.current = timestamp;
+
+      const keys = keysDownRef.current;
+      if (timestamp - lastMoveProcessedRef.current >= 150) {
+        let dx = 0;
+        let dy = 0;
+        if (keys.has('w') || keys.has('arrowup')) dy = -1;
+        else if (keys.has('s') || keys.has('arrowdown')) dy = 1;
+        else if (keys.has('a') || keys.has('arrowleft')) dx = -1;
+        else if (keys.has('d') || keys.has('arrowright')) dx = 1;
+
+        if (dx !== 0 || dy !== 0) {
+          eventBus.emit(EVENTS.INPUT_MOVE, { dx, dy });
+          lastMoveProcessedRef.current = timestamp;
+        }
+      }
 
       const engine = engineRef.current;
       if (engine) {
-        if (timestamp - lastKeyProcess > 150) {
-          const keys = keysRef.current;
-          if (keys.has('w') || keys.has('arrowup')) {
-            engine.handleMove(0, -1);
-            lastKeyProcess = timestamp;
-          } else if (keys.has('s') || keys.has('arrowdown')) {
-            engine.handleMove(0, 1);
-            lastKeyProcess = timestamp;
-          } else if (keys.has('a') || keys.has('arrowleft')) {
-            engine.handleMove(-1, 0);
-            lastKeyProcess = timestamp;
-          } else if (keys.has('d') || keys.has('arrowright')) {
-            engine.handleMove(1, 0);
-            lastKeyProcess = timestamp;
-          }
-        }
-
         engine.update(dt);
       }
 
-      render(ctx, snapshotRef.current, timestamp);
+      const snap = snapshotRef.current;
+      if (snap) {
+        render(ctx, snap, timestamp);
+      }
 
-      animFrameRef.current = requestAnimationFrame(gameLoop);
+      tickRender((n) => (n + 1) & 0xffff);
+      animFrameRef.current = requestAnimationFrame(loop);
     };
 
-    animFrameRef.current = requestAnimationFrame(gameLoop);
-
-    return () => {
-      cancelAnimationFrame(animFrameRef.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      forceUpdate((n) => n + 1);
-    }, 500);
-    return () => clearInterval(interval);
+    animFrameRef.current = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animFrameRef.current);
   }, []);
 
   return (
@@ -175,35 +183,97 @@ export default function App() {
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: '100vh',
-        background: '#0f172a',
+        background:
+          'radial-gradient(ellipse at center, #172036 0%, #0f172a 70%, #0a0f1e 100%)',
         fontFamily: 'monospace',
         userSelect: 'none',
+        padding: '16px',
       }}
     >
+      <h1
+        style={{
+          color: '#f6e05e',
+          fontSize: '28px',
+          letterSpacing: '6px',
+          marginBottom: '10px',
+          textShadow: '0 0 8px rgba(246,224,94,0.35)',
+          fontWeight: 800,
+        }}
+      >
+        DUNGEON  REACH
+      </h1>
+
       <canvas
         ref={canvasRef}
         width={CANVAS_WIDTH}
         height={CANVAS_HEIGHT}
         style={{
           border: '2px solid #334155',
-          borderRadius: '4px',
+          borderRadius: '6px',
           cursor: 'crosshair',
+          boxShadow:
+            '0 0 0 1px rgba(15,23,42,0.9), 0 20px 60px -15px rgba(0,0,0,0.6)',
+          maxWidth: '100%',
         }}
       />
+
       <div
         style={{
-          marginTop: '12px',
+          marginTop: '14px',
           color: '#64748b',
           fontSize: '13px',
           textAlign: 'center',
-          lineHeight: 1.6,
+          lineHeight: 1.8,
+          display: 'flex',
+          gap: '20px',
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+          maxWidth: CANVAS_WIDTH,
         }}
       >
-        <span style={{ color: '#93c5fd' }}>WASD</span> 移动 ·{' '}
-        <span style={{ color: '#93c5fd' }}>左键</span> 释放魔法 ·{' '}
-        <span style={{ color: '#f6e05e' }}>传送门</span> 进入下一层 ·{' '}
-        <span style={{ color: '#ef4444' }}>R</span> 重新开始
+        <LegendRow color="#93c5fd" label="WASD / 方向键" desc="移动" />
+        <LegendRow color="#f6e05e" label="左键 / 空格" desc="释放魔法" />
+        <LegendRow color="#facc15" label="金色传送门" desc="进入下一层" />
+        <LegendRow color="#ef4444" label="R" desc="死亡后重新开始" />
       </div>
+
+      <div
+        style={{
+          marginTop: '6px',
+          color: '#475569',
+          fontSize: '11px',
+        }}
+      >
+        Tip: 命中带冻结状态的敌人会造成双倍伤害！燃烧每秒损失 5% 生命 · 30% 触发率
+      </div>
+    </div>
+  );
+}
+
+function LegendRow({
+  color,
+  label,
+  desc,
+}: {
+  color: string;
+  label: string;
+  desc: string;
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+      <span
+        style={{
+          color,
+          padding: '2px 8px',
+          background: 'rgba(15,23,42,0.6)',
+          border: `1px solid ${color}33`,
+          borderRadius: '4px',
+          fontSize: '12px',
+        }}
+      >
+        {label}
+      </span>
+      <span style={{ color: '#94a3b8' }}>{desc}</span>
     </div>
   );
 }
