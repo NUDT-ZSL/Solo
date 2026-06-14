@@ -1,10 +1,12 @@
 import { useCallback } from 'react'
-import type { ThemeVariable } from '../hooks/useTheme'
+import type { ThemeVariable, ThemeColors } from '../hooks/useTheme'
+import './DashboardPreview.css'
 
 interface DashboardPreviewProps {
   onDrop: (variable: ThemeVariable, color: string) => void
-  style?: React.CSSProperties
-  className?: string
+  scopeId?: string
+  customColors?: Partial<ThemeColors>
+  title?: string
 }
 
 const STATS = [
@@ -28,95 +30,62 @@ const TABLE_ROWS = [
   { name: '赵六', role: '产品经理', status: '忙碌', task: '6' },
 ]
 
-function handleDragOver(e: React.DragEvent) {
-  e.preventDefault()
-  e.dataTransfer.dropEffect = 'copy'
-  ;(e.currentTarget as HTMLElement).style.outline = '2px dashed var(--accent-primary)'
-  ;(e.currentTarget as HTMLElement).style.outlineOffset = '2px'
-}
-
-function handleDragLeave(e: React.DragEvent) {
-  ;(e.currentTarget as HTMLElement).style.outline = 'none'
-}
-
-export default function DashboardPreview({ onDrop, style, className }: DashboardPreviewProps) {
+export default function DashboardPreview({ onDrop, scopeId, customColors, title }: DashboardPreviewProps) {
   const handleDrop = useCallback((e: React.DragEvent, variable: ThemeVariable) => {
     e.preventDefault()
     const color = e.dataTransfer.getData('text/plain')
     if (color) {
       onDrop(variable, color)
     }
-    ;(e.currentTarget as HTMLElement).style.outline = 'none'
+    ;(e.currentTarget as HTMLElement).classList.remove('drop-target-active')
   }, [onDrop])
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    ;(e.currentTarget as HTMLElement).classList.add('drop-target-active')
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    ;(e.currentTarget as HTMLElement).classList.remove('drop-target-active')
+  }, [])
+
+  const styleVars = customColors ? Object.entries(customColors).reduce((acc, [key, val]) => {
+    acc[key] = val
+    return acc
+  }, {} as Record<string, string>) : undefined
 
   return (
     <div
-      className={className}
-      style={{
-        padding: '28px',
-        height: '100%',
-        overflowY: 'auto',
-        backgroundColor: 'var(--bg-primary)',
-        ...style,
-      }}
+      className="dashboard-preview"
+      id={scopeId}
+      style={styleVars as React.CSSProperties}
     >
+      {title && <div className="dashboard-preview-label">{title}</div>}
+
       <h1
+        className="dashboard-title drop-target"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={(e) => handleDrop(e, '--text-primary')}
-        style={{
-          fontSize: '24px',
-          fontWeight: 700,
-          color: 'var(--text-primary)',
-          marginBottom: '24px',
-          cursor: 'default',
-          borderRadius: '8px',
-        }}
+        data-css-var="--text-primary"
       >
         数据仪表盘
       </h1>
 
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-        gap: '16px',
-        marginBottom: '24px',
-      }}>
+      <div className="stats-grid">
         {STATS.map((stat) => (
           <div
             key={stat.label}
+            className="stat-card drop-target"
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, '--bg-card')}
-            style={{
-              backgroundColor: 'var(--bg-card)',
-              borderRadius: '12px',
-              padding: '20px',
-              boxShadow: '0 4px 20px var(--shadow-color)',
-              border: '1px solid var(--border-color)',
-              cursor: 'default',
-            }}
+            data-css-var="--bg-card"
           >
-            <div style={{
-              fontSize: '13px',
-              color: 'var(--text-secondary)',
-              marginBottom: '8px',
-            }}>
-              {stat.label}
-            </div>
-            <div style={{
-              fontSize: '28px',
-              fontWeight: 700,
-              color: 'var(--text-primary)',
-              marginBottom: '4px',
-            }}>
-              {stat.value}
-            </div>
-            <div style={{
-              fontSize: '13px',
-              color: stat.up ? 'var(--accent-secondary)' : '#e74c3c',
-              fontWeight: 500,
-            }}>
+            <div className="stat-label">{stat.label}</div>
+            <div className="stat-value">{stat.value}</div>
+            <div className={`stat-change ${stat.up ? 'up' : 'down'}`}>
               {stat.change}
             </div>
           </div>
@@ -124,248 +93,82 @@ export default function DashboardPreview({ onDrop, style, className }: Dashboard
       </div>
 
       <div
+        className="progress-card drop-target"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={(e) => handleDrop(e, '--progress-fill')}
-        style={{
-          backgroundColor: 'var(--bg-card)',
-          borderRadius: '12px',
-          padding: '20px',
-          marginBottom: '24px',
-          boxShadow: '0 4px 20px var(--shadow-color)',
-          border: '1px solid var(--border-color)',
-        }}
+        data-css-var="--progress-fill"
       >
-        <h3 style={{
-          fontSize: '16px',
-          fontWeight: 600,
-          color: 'var(--text-primary)',
-          marginBottom: '16px',
-        }}>
-          项目进度
-        </h3>
+        <h3 className="card-title">项目进度</h3>
         {PROGRESS_ITEMS.map((item) => (
-          <div key={item.label} style={{ marginBottom: '14px' }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              marginBottom: '6px',
-            }}>
-              <span style={{
-                fontSize: '13px',
-                color: 'var(--text-secondary)',
-              }}>
-                {item.label}
-              </span>
-              <span style={{
-                fontSize: '13px',
-                color: 'var(--text-primary)',
-                fontWeight: 500,
-              }}>
-                {item.value}%
-              </span>
+          <div key={item.label} className="progress-item">
+            <div className="progress-header">
+              <span className="progress-label">{item.label}</span>
+              <span className="progress-percent">{item.value}%</span>
             </div>
-            <div style={{
-              width: '100%',
-              height: '8px',
-              backgroundColor: 'var(--progress-bg)',
-              borderRadius: '4px',
-              overflow: 'hidden',
-            }}>
-              <div style={{
-                width: `${item.value}%`,
-                height: '100%',
-                backgroundColor: 'var(--progress-fill)',
-                borderRadius: '4px',
-                transition: 'width 0.6s ease-in-out, background-color 0.4s ease-in-out',
-              }} />
+            <div className="progress-bar">
+              <div
+                className="progress-fill"
+                style={{ width: `${item.value}%` }}
+              />
             </div>
           </div>
         ))}
       </div>
 
-      <div style={{
-        display: 'flex',
-        gap: '12px',
-        marginBottom: '24px',
-        flexWrap: 'wrap',
-      }}>
+      <div className="button-group">
         <button
+          className="btn btn-primary drop-target"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={(e) => handleDrop(e, '--btn-primary')}
-          style={{
-            padding: '10px 24px',
-            borderRadius: '8px',
-            border: 'none',
-            backgroundColor: 'var(--btn-primary)',
-            color: '#ffffff',
-            fontSize: '14px',
-            fontWeight: 500,
-            cursor: 'pointer',
-            transition: 'transform 0.2s ease, box-shadow 0.2s ease, background-color 0.3s ease',
-          }}
-          onMouseOver={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--btn-hover)'
-            ;(e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)'
-            ;(e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 12px var(--shadow-color)'
-          }}
-          onMouseOut={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--btn-primary)'
-            ;(e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)'
-            ;(e.currentTarget as HTMLButtonElement).style.boxShadow = 'none'
-          }}
+          data-css-var="--btn-primary"
         >
           主操作按钮
         </button>
-        <button
-          style={{
-            padding: '10px 24px',
-            borderRadius: '8px',
-            border: '1px solid var(--border-color)',
-            backgroundColor: 'transparent',
-            color: 'var(--text-primary)',
-            fontSize: '14px',
-            fontWeight: 500,
-            cursor: 'pointer',
-            transition: 'transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease',
-          }}
-          onMouseOver={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)'
-            ;(e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 12px var(--shadow-color)'
-            ;(e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--bg-card)'
-          }}
-          onMouseOut={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)'
-            ;(e.currentTarget as HTMLButtonElement).style.boxShadow = 'none'
-            ;(e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent'
-          }}
-        >
+        <button className="btn btn-secondary">
           次操作按钮
         </button>
         <button
+          className="btn btn-accent drop-target"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={(e) => handleDrop(e, '--accent-secondary')}
-          style={{
-            padding: '10px 24px',
-            borderRadius: '8px',
-            border: 'none',
-            backgroundColor: 'var(--accent-secondary)',
-            color: '#ffffff',
-            fontSize: '14px',
-            fontWeight: 500,
-            cursor: 'pointer',
-            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-          }}
-          onMouseOver={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)'
-            ;(e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 12px var(--shadow-color)'
-          }}
-          onMouseOut={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)'
-            ;(e.currentTarget as HTMLButtonElement).style.boxShadow = 'none'
-          }}
+          data-css-var="--accent-secondary"
         >
           强调按钮
         </button>
       </div>
 
       <div
+        className="table-card drop-target"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={(e) => handleDrop(e, '--table-row-alt')}
-        style={{
-          backgroundColor: 'var(--bg-card)',
-          borderRadius: '12px',
-          overflow: 'hidden',
-          boxShadow: '0 4px 20px var(--shadow-color)',
-          border: '1px solid var(--border-color)',
-        }}
+        data-css-var="--table-row-alt"
       >
-        <div style={{
-          padding: '16px 20px',
-          borderBottom: '1px solid var(--border-color)',
-        }}>
-          <h3 style={{
-            fontSize: '16px',
-            fontWeight: 600,
-            color: 'var(--text-primary)',
-          }}>
-            团队成员
-          </h3>
+        <div className="table-header">
+          <h3 className="card-title">团队成员</h3>
         </div>
-        <table style={{
-          width: '100%',
-          borderCollapse: 'collapse',
-        }}>
+        <table className="data-table">
           <thead>
-            <tr style={{
-              borderBottom: '1px solid var(--border-color)',
-            }}>
+            <tr>
               {['姓名', '角色', '状态', '任务'].map((h) => (
-                <th key={h} style={{
-                  padding: '12px 20px',
-                  textAlign: 'left',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: 'var(--text-secondary)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                }}>
-                  {h}
-                </th>
+                <th key={h}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {TABLE_ROWS.map((row, i) => (
-              <tr
-                key={row.name}
-                style={{
-                  backgroundColor: i % 2 === 1 ? 'var(--table-row-alt)' : 'transparent',
-                  borderBottom: i < TABLE_ROWS.length - 1 ? '1px solid var(--border-color)' : 'none',
-                }}
-              >
-                <td style={{
-                  padding: '12px 20px',
-                  fontSize: '14px',
-                  color: 'var(--text-primary)',
-                  fontWeight: 500,
-                }}>
-                  {row.name}
-                </td>
-                <td style={{
-                  padding: '12px 20px',
-                  fontSize: '14px',
-                  color: 'var(--text-secondary)',
-                }}>
-                  {row.role}
-                </td>
-                <td style={{ padding: '12px 20px' }}>
-                  <span style={{
-                    display: 'inline-block',
-                    padding: '3px 10px',
-                    borderRadius: '12px',
-                    fontSize: '12px',
-                    fontWeight: 500,
-                    backgroundColor:
-                      row.status === '在线' ? 'var(--accent-secondary)' :
-                      row.status === '忙碌' ? '#e67e22' : '#636e72',
-                    color: '#ffffff',
-                    opacity: row.status === '离线' ? 0.7 : 1,
-                  }}>
+              <tr key={row.name} className={i % 2 === 1 ? 'alt-row' : ''}>
+                <td className="cell-name">{row.name}</td>
+                <td className="cell-role">{row.role}</td>
+                <td>
+                  <span className={`status-badge status-${row.status}`}>
                     {row.status}
                   </span>
                 </td>
-                <td style={{
-                  padding: '12px 20px',
-                  fontSize: '14px',
-                  color: 'var(--text-primary)',
-                  fontFamily: "'Cascadia Code', monospace",
-                }}>
-                  {row.task}
-                </td>
+                <td className="cell-task">{row.task}</td>
               </tr>
             ))}
           </tbody>
