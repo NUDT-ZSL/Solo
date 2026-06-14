@@ -56,14 +56,14 @@ function highlightCSS(code: string): React.ReactNode {
     return (
       <div key={lineIdx} style={{ whiteSpace: 'pre' }}>
         {tokens.map((t, i) => {
-          let color = '#f1f5f9';
+          let color = 'var(--color-text-primary)';
           switch (t.type) {
-            case 'comment': color = '#9ca3af'; break;
-            case 'property': color = '#60a5fa'; break;
-            case 'value': color = '#34d399'; break;
-            case 'selector': color = '#fbbf24'; break;
-            case 'punctuation': color = '#f1f5f9'; break;
-            default: color = '#f1f5f9';
+            case 'comment': color = 'var(--color-text-muted)'; break;
+            case 'property': color = 'var(--color-accent-blue-light)'; break;
+            case 'value': color = 'var(--color-accent-green-light)'; break;
+            case 'selector': color = 'var(--color-accent-yellow-light)'; break;
+            case 'punctuation': color = 'var(--color-text-primary)'; break;
+            default: color = 'var(--color-text-primary)';
           }
           return <span key={i} style={{ color }}>{t.text}</span>;
         })}
@@ -100,7 +100,7 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ regions, selectedRegion, onSe
       <div className="result-panel" style={panelStyle}>
         <div style={headerStyle}>
           <span style={headerTitleStyle}>提取结果</span>
-          <span style={{ fontSize: 12, color: '#94a3b8' }}>0 个区域</span>
+          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>0 个区域</span>
         </div>
         <div
           style={{
@@ -108,7 +108,7 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ regions, selectedRegion, onSe
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#94a3b8',
+            color: 'var(--color-text-secondary)',
             fontSize: 13,
             textAlign: 'center',
             padding: 24,
@@ -127,7 +127,7 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ regions, selectedRegion, onSe
     <div className="result-panel" style={panelStyle}>
       <div style={headerStyle}>
         <span style={headerTitleStyle}>提取结果</span>
-        <span style={{ fontSize: 12, color: '#94a3b8' }}>{regions.length} 个区域</span>
+        <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{regions.length} 个区域</span>
       </div>
 
       <div
@@ -149,8 +149,8 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ regions, selectedRegion, onSe
               alignItems: 'center',
               gap: 12,
               padding: 8,
-              borderRadius: 8,
-              background: selectedRegion?.id === region.id ? '#334155' : 'transparent',
+              borderRadius: 'var(--radius-sm)',
+              background: selectedRegion?.id === region.id ? 'var(--color-bg-tertiary)' : 'transparent',
               cursor: 'pointer',
               transition: 'all 0.2s ease-out',
             }}
@@ -160,17 +160,17 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ regions, selectedRegion, onSe
               style={{
                 width: 36,
                 height: 36,
-                borderRadius: region.properties.borderRadius || 8,
-                background: region.properties.primaryColor || '#334155',
+                borderRadius: region.properties.borderRadius || 'var(--radius-sm)',
+                background: region.properties.primaryColor || 'var(--color-bg-tertiary)',
                 flexShrink: 0,
                 boxShadow: region.properties.boxShadow ? region.properties.boxShadow : 'none',
               }}
             />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, color: '#f1f5f9', fontWeight: 500 }}>
+              <div style={{ fontSize: 13, color: 'var(--color-text-primary)', fontWeight: 500 }}>
                 {typeLabels[region.type]}区域
               </div>
-              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+              <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>
                 {Math.round(region.width)} × {Math.round(region.height)}px
               </div>
             </div>
@@ -181,11 +181,11 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ regions, selectedRegion, onSe
       <div
         style={{
           padding: '12px 16px 0 16px',
-          borderTop: '1px solid #334155',
+          borderTop: '1px solid var(--color-border)',
           marginTop: 8,
         }}
       >
-        <div style={{ fontSize: 13, color: '#f1f5f9', fontWeight: 500, marginBottom: 8 }}>
+        <div style={{ fontSize: 13, color: 'var(--color-text-primary)', fontWeight: 500, marginBottom: 8 }}>
           CSS 代码
         </div>
       </div>
@@ -265,9 +265,9 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
         }
       }}
       style={{
-        background: '#0f172a',
-        borderRadius: 12,
-        border: `2px solid ${isEditing ? '#eab308' : '#334155'}`,
+        background: 'var(--color-bg-primary)',
+        borderRadius: 'var(--radius-md)',
+        border: `2px solid ${isEditing ? 'var(--color-accent-yellow)' : 'var(--color-border)'}`,
         overflow: 'hidden',
         transition: 'all 0.2s ease-out',
         cursor: isEditing ? 'text' : 'pointer',
@@ -279,11 +279,11 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
           justifyContent: 'space-between',
           alignItems: 'center',
           padding: '8px 12px',
-          background: '#1e293b',
-          borderBottom: '1px solid #334155',
+          background: 'var(--color-bg-secondary)',
+          borderBottom: '1px solid var(--color-border)',
         }}
       >
-        <span style={{ fontSize: 11, color: '#94a3b8' }}>
+        <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
           {typeLabels[region.type]}
         </span>
         <button
@@ -295,7 +295,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
             padding: '4px 12px',
             borderRadius: 6,
             border: 'none',
-            background: copiedId === region.id ? '#22c55e' : '#3b82f6',
+            background: copiedId === region.id ? 'var(--color-accent-green)' : 'var(--color-accent-blue)',
             color: '#fff',
             fontSize: 12,
             cursor: 'pointer',
@@ -319,8 +319,8 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
             style={{
               width: '100%',
               minHeight: 100,
-              background: '#0f172a',
-              color: '#f1f5f9',
+              background: 'var(--color-bg-primary)',
+              color: 'var(--color-text-primary)',
               border: 'none',
               outline: 'none',
               resize: 'vertical',
@@ -351,17 +351,17 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
 const panelStyle: React.CSSProperties = {
   width: 280,
   height: '100%',
-  background: '#1e293b',
+  background: 'var(--color-bg-secondary)',
   display: 'flex',
   flexDirection: 'column',
   flexShrink: 0,
-  boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+  boxShadow: 'var(--shadow-md)',
   overflow: 'hidden',
 };
 
 const headerStyle: React.CSSProperties = {
   padding: '16px',
-  borderBottom: '1px solid #334155',
+  borderBottom: '1px solid var(--color-border)',
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
@@ -371,7 +371,7 @@ const headerStyle: React.CSSProperties = {
 const headerTitleStyle: React.CSSProperties = {
   fontSize: 15,
   fontWeight: 600,
-  color: '#f1f5f9',
+  color: 'var(--color-text-primary)',
 };
 
 export default ResultPanel;

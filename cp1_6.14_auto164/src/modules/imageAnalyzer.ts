@@ -489,19 +489,51 @@ interface Edge {
   dirY: number;
 }
 
-function computeSobelEdges(imageData: ImageData, targetX: number, targetY: number, targetW: number, targetH: number): Edge[][] {
-  const { data, width } = imageData;
-  const gray: number[][] = [];
+function gaussianBlur(gray: number[][], sigma: number = 1.4): number[][] {
+  const h = gray.length;
+  const w = gray[0]?.length || 0;
+  const size = Math.max(3, Math.ceil(sigma * 3) * 2 + 1);
+  const half = Math.floor(size / 2);
+  const kernel: number[][] = [];
+  let sum = 0;
 
-  for (let y = targetY; y < targetY + targetH; y++) {
+  for (let y = -half; y <= half; y++) {
     const row: number[] = [];
-    for (let x = targetX; x < targetX + targetW; x++) {
-      const c = getPixel(data, width, x, y);
-      row.push((c.r * 0.299 + c.g * 0.587 + c.b * 0.114) * (c.a / 255));
+    for (let x = -half; x <= half; x++) {
+      const v = Math.exp(-(x * x + y * y) / (2 * sigma * sigma));
+      row.push(v);
+      sum += v;
     }
-    gray.push(row);
+    kernel.push(row);
   }
 
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      kernel[y][x] /= sum;
+    }
+  }
+
+  const result: number[][] = [];
+  for (let y = 0; y < h; y++) {
+    const row: number[] = [];
+    for (let x = 0; x < w; x++) {
+      let v = 0;
+      for (let ky = -half; ky <= half; ky++) {
+        for (let kx = -half; kx <= half; kx++) {
+          const py = Math.max(0, Math.min(h - 1, y + ky));
+          const px = Math.max(0, Math.min(w - 1, x + kx));
+          v += gray[py][px] * kernel[ky + half][kx + half];
+        }
+      }
+      row.push(v);
+    }
+    result.push(row);
+  }
+
+  return result;
+}
+
+function computeSobelGradients(gray: number[][]): Edge[][] {
   const h = gray.length;
   const w = gray[0]?.length || 0;
   const edges: Edge[][] = [];
@@ -528,9 +560,161 @@ function computeSobelEdges(imageData: ImageData, targetX: number, targetY: numbe
   return edges;
 }
 
-function findConnectedRegionsFromEdges(
-  edges: Edge[][],
-  threshold: number,
+function nonMaximumSuppression(edges: Edge[][]): number[][] {
+  const h = edges.length;
+  const w = edges[0]?.length || 0;
+  const result: number[][] = [];
+
+  for (let y = 0; y < h; y++) {
+    const row: number[] = [];
+    for (let x = 0; x < w; x++) {
+      if (x === 0 || y === 0 || x === w - 1 || y === h - 1) {
+        row.push(0);
+        continue;
+      }
+
+      const edge = edges[y][x];
+      const mag = edge.magnitude;
+
+      let angle = Math.atan2(edge.dirY, edge.dirX) * 180 / Math.PI;
+      if (angle < 0) angle += 180;
+
+      let q = 255;
+      let r = 255;
+
+      if ((angle >= 0 && angle < 22.5) || (angle >= 157.5 && angle <= 180) {
+        q = edges[y][x + 1].magnitude;
+        r = edges[y][x - 1].magnitude;
+      } else if (angle >= 22.5 && angle < 67.5) {
+        q = edges[y + 1][x - 1].magnitude;
+        r = edges[y - 1][x + 1].magnitude;
+      } else if (angle >= 67.5 && angle < 112.5) {
+        q = edges[y + 1][x].magnitude;
+        r = edges[y - 1][x].magnitude;
+      } else if (angle >= 112.5 && angle < 157.5) {
+        q = edges[y - 1][x - 1].magnitude;
+        r = edges[y + 1][x + 1].magnitude;
+      }
+
+      if (mag >= q && mag >= r) {
+        row.push(mag);
+      } else {
+        row.push(0);
+      }
+    }
+    result.push(row);
+  }
+
+  return result;
+}
+
+function doubleThreshold(
+  suppressed: number[][], lowThreshold: number, highThreshold: number): number[][] {
+  const h = suppressed.length;
+  const w = suppressed[0]?.length || 0;
+  const result: number[][] = [];
+  const STRONG = 255;
+  const WEAK = 50;
+
+  for (let y = 0; y < h; y++) {
+    const row: number[] = [];
+    for (let x = 0; x < w; x++) {
+      const mag = suppressed[y][x];
+      if (mag >= highThreshold) {
+        row.push(STRONG);
+      } else if (mag >= lowThreshold) {
+        row.push(WEAK);
+      } else {
+        row.push(0);
+      }
+    }
+    result.push(row);
+  }
+
+  return result;
+}
+
+function hysteresisEdgeTracking(thresholded: number[][]): number[][] {
+  const h = thresholded.length;
+  const w = thresholded[0]?.length || 0;
+  const result = thresholded.map(row => [...row]);
+  const STRONG = 255;
+  const WEAK = 50;
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        if (result[y][x] === WEAK) {
+          if (
+            result[y - 1][x - 1] === STRONG || result[y - 1][x] === STRONG ||
+            result[y - 1][x + 1] === STRONG ||
+            result[y][x - 1] === STRONG || result[y][x + 1] === STRONG ||
+            result[y + 1][x - 1] === STRONG || result[y + 1][x] === STRONG ||
+            result[y + 1][x + 1] === STRONG
+          ) {
+            result[y][x] = STRONG;
+            changed = true;
+          }
+        }
+      }
+    }
+  }
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (result[y][x] === WEAK) {
+        result[y][x] = 0;
+      }
+    }
+  }
+
+  return result;
+}
+
+function computeCannyEdges(
+  imageData: ImageData,
+  targetX: number, targetY: number, targetW: number, targetH: number
+): { magnitude: number; isEdge: boolean }[][] {
+  const { data, width } = imageData;
+  const gray: number[][] = [];
+
+  for (let y = targetY; y < targetY + targetH; y++) {
+    const row: number[] = [];
+    for (let x = targetX; x < targetX + targetW; x++) {
+      const c = getPixel(data, width, x, y);
+      row.push((c.r * 0.299 + c.g * 0.587 + c.b * 0.114) * (c.a / 255);
+    }
+    gray.push(row);
+  }
+
+  const blurred = gaussianBlur(gray, 1.2);
+  const sobelEdges = computeSobelGradients(blurred);
+  const suppressed = nonMaximumSuppression(sobelEdges);
+  const thresholded = doubleThreshold(suppressed, 12, 30);
+  const finalEdges = hysteresisEdgeTracking(thresholded);
+
+  const h = finalEdges.length;
+  const w = finalEdges[0]?.length || 0;
+  const result: { magnitude: number; isEdge: boolean }[][] = [];
+
+  for (let y = 0; y < h; y++) {
+    const row: { magnitude: number; isEdge: boolean }[] = [];
+    for (let x = 0; x < w; x++) {
+      row.push({
+        magnitude: suppressed[y][x],
+        isEdge: finalEdges[y][x] > 0,
+      });
+    }
+    result.push(row);
+  }
+
+  return result;
+}
+
+function findConnectedRegionsFromCannyEdges(
+  edges: { magnitude: number; isEdge: boolean }[][],
   originX: number,
   originY: number,
   minArea: number
@@ -543,7 +727,7 @@ function findConnectedRegionsFromEdges(
   for (let sy = 0; sy < h; sy += 2) {
     for (let sx = 0; sx < w; sx += 2) {
       if (visited[sy][sx]) continue;
-      if (edges[sy][sx].magnitude < threshold) continue;
+      if (!edges[sy][sx].isEdge) continue;
 
       let minX = sx, maxX = sx, minY = sy, maxY = sy;
       let pixelCount = 0;
@@ -563,7 +747,7 @@ function findConnectedRegionsFromEdges(
 
         for (const [nx, ny] of neighbors) {
           if (nx >= 0 && ny >= 0 && nx < w && ny < h
-              && !visited[ny][nx] && edges[ny][nx].magnitude >= threshold) {
+              && !visited[ny][nx] && edges[ny][nx].isEdge) {
             visited[ny][nx] = true;
             stack.push([nx, ny]);
           }
@@ -704,9 +888,8 @@ export function detectRegions(imageData: ImageData): CSSRegion[] {
   const { width, height } = imageData;
   const minArea = Math.max(600, (width * height) / 600);
 
-  const edges = computeSobelEdges(imageData, 0, 0, width, height);
-  const edgeThreshold = 25;
-  const edgeRegions = findConnectedRegionsFromEdges(edges, edgeThreshold, 0, 0, minArea);
+  const cannyEdges = computeCannyEdges(imageData, 0, 0, width, height);
+  const edgeRegions = findConnectedRegionsFromCannyEdges(cannyEdges, 0, 0, minArea);
   const alphaRegions = findAlphaRegions(imageData, minArea);
 
   let allRegions = [...edgeRegions, ...alphaRegions];

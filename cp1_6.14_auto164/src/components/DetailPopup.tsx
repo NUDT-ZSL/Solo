@@ -56,14 +56,14 @@ function highlightCSS(code: string): React.ReactNode {
     return (
       <div key={lineIdx} style={{ whiteSpace: 'pre' }}>
         {tokens.map((t, i) => {
-          let color = '#f1f5f9';
+          let color = 'var(--color-text-primary)';
           switch (t.type) {
-            case 'comment': color = '#9ca3af'; break;
-            case 'property': color = '#60a5fa'; break;
-            case 'value': color = '#34d399'; break;
-            case 'selector': color = '#fbbf24'; break;
-            case 'punctuation': color = '#f1f5f9'; break;
-            default: color = '#f1f5f9';
+            case 'comment': color = 'var(--color-text-muted)'; break;
+            case 'property': color = 'var(--color-accent-blue-light)'; break;
+            case 'value': color = 'var(--color-accent-green-light)'; break;
+            case 'selector': color = 'var(--color-accent-yellow-light)'; break;
+            case 'punctuation': color = 'var(--color-text-primary)'; break;
+            default: color = 'var(--color-text-primary)';
           }
           return <span key={i} style={{ color }}>{t.text}</span>;
         })}
@@ -170,12 +170,12 @@ const DetailPopup: React.FC<DetailPopupProps> = ({ region, position, onClose }) 
           left,
           top,
           width: popupWidth,
-          background: '#1e293b',
-          borderRadius: 16,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+          background: 'var(--color-bg-secondary)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-lg)',
           zIndex: 999,
           overflow: 'hidden',
-          animation: 'popupIn 0.3s ease-out',
+          animation: 'popupIn var(--transition-slow)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -185,10 +185,10 @@ const DetailPopup: React.FC<DetailPopupProps> = ({ region, position, onClose }) 
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            borderBottom: '1px solid #334155',
+            borderBottom: '1px solid var(--color-border)',
           }}
         >
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9' }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)' }}>
             {typeLabels[region.type]}
           </span>
           <button
@@ -196,7 +196,7 @@ const DetailPopup: React.FC<DetailPopupProps> = ({ region, position, onClose }) 
             style={{
               background: 'transparent',
               border: 'none',
-              color: '#94a3b8',
+              color: 'var(--color-text-secondary)',
               fontSize: 20,
               cursor: 'pointer',
               padding: 0,
@@ -206,7 +206,7 @@ const DetailPopup: React.FC<DetailPopupProps> = ({ region, position, onClose }) 
               alignItems: 'center',
               justifyContent: 'center',
               borderRadius: 6,
-              transition: 'all 0.2s ease-in-out',
+              transition: 'all var(--transition-base)',
               lineHeight: 1,
             }}
             className="action-btn"
@@ -224,24 +224,24 @@ const DetailPopup: React.FC<DetailPopupProps> = ({ region, position, onClose }) 
                 borderRadius: region.properties.borderRadius
                   ? parseInt(region.properties.borderRadius) || 8
                   : 8,
-                background: region.properties.primaryColor || '#334155',
+                background: region.properties.primaryColor || 'var(--color-bg-tertiary)',
                 boxShadow: region.properties.boxShadow || 'none',
                 flexShrink: 0,
               }}
             />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>
+              <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
                 尺寸
               </div>
-              <div style={{ fontSize: 13, color: '#f1f5f9', fontFamily: 'Consolas, Monaco, monospace' }}>
+              <div style={{ fontSize: 13, color: 'var(--color-text-primary)', fontFamily: 'Consolas, Monaco, monospace' }}>
                 {Math.round(region.width)} × {Math.round(region.height)} px
               </div>
               {region.properties.primaryColor && (
                 <>
-                  <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6, marginBottom: 2 }}>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 6, marginBottom: 2 }}>
                     主色
                   </div>
-                  <div style={{ fontSize: 13, color: '#f1f5f9', fontFamily: 'Consolas, Monaco, monospace' }}>
+                  <div style={{ fontSize: 13, color: 'var(--color-text-primary)', fontFamily: 'Consolas, Monaco, monospace' }}>
                     {region.properties.primaryColor}
                   </div>
                 </>
@@ -252,15 +252,15 @@ const DetailPopup: React.FC<DetailPopupProps> = ({ region, position, onClose }) 
           <div
             onClick={handleCodeClick}
             style={{
-              background: '#0f172a',
-              borderRadius: 8,
+              background: 'var(--color-bg-primary)',
+              borderRadius: 'var(--radius-sm)',
               padding: 12,
               marginBottom: 12,
               maxHeight: 180,
               overflowY: 'auto',
-              border: `2px solid ${isEditing ? '#eab308' : 'transparent'}`,
+              border: `2px solid ${isEditing ? 'var(--color-accent-yellow)' : 'transparent'}`,
               cursor: isEditing ? 'text' : 'pointer',
-              transition: 'border-color 0.2s ease-in-out',
+              transition: 'border-color var(--transition-base)',
             }}
           >
             {isEditing ? (
@@ -274,7 +274,7 @@ const DetailPopup: React.FC<DetailPopupProps> = ({ region, position, onClose }) 
                   width: '100%',
                   minHeight: 100,
                   background: 'transparent',
-                  color: '#f1f5f9',
+                  color: 'var(--color-text-primary)',
                   border: 'none',
                   outline: 'none',
                   resize: 'vertical',
@@ -305,14 +305,14 @@ const DetailPopup: React.FC<DetailPopupProps> = ({ region, position, onClose }) 
             style={{
               width: '100%',
               padding: '10px 16px',
-              borderRadius: 8,
+              borderRadius: 'var(--radius-sm)',
               border: 'none',
-              background: copied ? '#22c55e' : '#3b82f6',
+              background: copied ? 'var(--color-accent-green)' : 'var(--color-accent-blue)',
               color: '#fff',
               fontSize: 14,
               fontWeight: 500,
               cursor: 'pointer',
-              transition: 'all 0.2s ease-in-out',
+              transition: 'all var(--transition-base)',
             }}
           >
             {copied ? '✓ 已复制' : '一键复制 CSS 代码'}

@@ -225,32 +225,32 @@ const appStyle: React.CSSProperties = {
   height: '100%',
   display: 'flex',
   flexDirection: 'column',
-  background: '#0f172a',
+  background: 'var(--color-bg-primary)',
 };
 
 const navStyle: React.CSSProperties = {
-  height: 64,
+  height: 'var(--nav-height)',
   flexShrink: 0,
-  background: '#1e293b',
+  background: 'var(--color-bg-secondary)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
   padding: '0 24px',
-  boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+  boxShadow: 'var(--shadow-md)',
   zIndex: 100,
-  borderBottom: '1px solid #334155',
+  borderBottom: '1px solid var(--color-border)',
 };
 
 const logoStyle: React.CSSProperties = {
   fontSize: 20,
   fontWeight: 600,
-  color: '#f1f5f9',
+  color: 'var(--color-text-primary)',
   letterSpacing: 0.5,
 };
 
 const btnBase: React.CSSProperties = {
   padding: '10px 20px',
-  borderRadius: 8,
+  borderRadius: 'var(--radius-sm)',
   border: 'none',
   fontSize: 14,
   fontWeight: 500,
@@ -262,16 +262,16 @@ const btnBase: React.CSSProperties = {
 
 const primaryBtnStyle: React.CSSProperties = {
   ...btnBase,
-  background: '#3b82f6',
+  background: 'var(--color-accent-blue)',
   color: '#fff',
-  transition: 'all 0.2s ease-in-out',
+  transition: 'all var(--transition-base)',
 };
 
 const secondaryBtnStyle: React.CSSProperties = {
   ...btnBase,
-  background: '#334155',
-  color: '#f1f5f9',
-  transition: 'all 0.2s ease-in-out',
+  background: 'var(--color-bg-tertiary)',
+  color: 'var(--color-text-primary)',
+  transition: 'all var(--transition-base)',
 };
 
 const mainStyle: React.CSSProperties = {
@@ -286,25 +286,25 @@ const canvasWrapStyle: React.CSSProperties = {
   flex: 1,
   minWidth: 0,
   minHeight: 0,
-  background: '#0f172a',
-  borderRadius: 16,
+  background: 'var(--color-bg-primary)',
+  borderRadius: 'var(--radius-lg)',
   overflow: 'hidden',
-  boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+  boxShadow: 'var(--shadow-md)',
 };
 
 const panelGapStyle: React.CSSProperties = {
-  width: 12,
+  width: 'var(--panel-gap)',
   flexShrink: 0,
 };
 
 const panelContainerStyle: React.CSSProperties = {
-  width: 280,
+  width: 'var(--panel-width)',
   height: '100%',
-  marginRight: 12,
-  borderRadius: 16,
+  marginRight: 'var(--panel-gap)',
+  borderRadius: 'var(--radius-lg)',
   overflow: 'hidden',
   flexShrink: 0,
-  boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+  boxShadow: 'var(--shadow-md)',
 };
 
 const errorStyle: React.CSSProperties = {
@@ -312,14 +312,14 @@ const errorStyle: React.CSSProperties = {
   top: 84,
   left: '50%',
   transform: 'translateX(-50%)',
-  background: '#dc2626',
+  background: 'var(--color-accent-red)',
   color: '#fff',
   padding: '10px 20px',
-  borderRadius: 8,
+  borderRadius: 'var(--radius-sm)',
   fontSize: 14,
-  boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+  boxShadow: 'var(--shadow-md)',
   zIndex: 2000,
-  animation: 'popupIn 0.3s ease-out',
+  animation: 'popupIn var(--transition-slow)',
 };
 
 export default App;

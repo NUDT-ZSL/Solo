@@ -509,7 +509,7 @@ const CanvasView: React.FC<CanvasViewProps> = ({
         width: '100%',
         height: '100%',
         overflow: 'hidden',
-        background: '#0f172a',
+        background: 'var(--color-bg-primary)',
         cursor: imgRef.current ? (isPanning ? 'grabbing' : (isSelecting ? 'crosshair' : 'default')) : 'default',
       }}
       onWheel={handleWheel}
@@ -534,14 +534,14 @@ const CanvasView: React.FC<CanvasViewProps> = ({
             top: 20,
             left: '50%',
             transform: 'translateX(-50%)',
-            background: '#1e293b',
-            color: '#f1f5f9',
+            background: 'var(--color-bg-secondary)',
+            color: 'var(--color-text-primary)',
             padding: '8px 16px',
-            borderRadius: 8,
+            borderRadius: 'var(--radius-sm)',
             fontSize: 14,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            boxShadow: 'var(--shadow-md)',
             zIndex: 10,
-            animation: 'popupIn 0.3s ease-out',
+            animation: 'popupIn var(--transition-slow)',
           }}
         >
           正在分析图像...
@@ -557,7 +557,7 @@ const CanvasView: React.FC<CanvasViewProps> = ({
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#94a3b8',
+            color: 'var(--color-text-secondary)',
             pointerEvents: 'none',
           }}
         >
@@ -578,34 +578,34 @@ const CanvasView: React.FC<CanvasViewProps> = ({
             display: 'flex',
             gap: 8,
             alignItems: 'center',
-            background: '#1e293b',
+            background: 'var(--color-bg-secondary)',
             padding: '6px 12px',
-            borderRadius: 16,
+            borderRadius: 'var(--radius-lg)',
             fontSize: 13,
-            color: '#f1f5f9',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            animation: 'popupIn 0.3s ease-out',
+            color: 'var(--color-text-primary)',
+            boxShadow: 'var(--shadow-md)',
+            animation: 'popupIn var(--transition-slow)',
           }}
         >
           <span>缩放: {Math.round(transform.scale * 100)}%</span>
-          <span style={{ color: '#475569' }}>|</span>
+          <span style={{ color: 'var(--color-bg-hover)' }}>|</span>
           <button
             onClick={handleReset}
             style={{
               background: 'transparent',
               border: 'none',
-              color: '#60a5fa',
+              color: 'var(--color-accent-blue-light)',
               cursor: 'pointer',
               fontSize: 13,
               padding: 0,
-              transition: 'all 0.2s ease-in-out',
+              transition: 'all var(--transition-base)',
             }}
             className="action-btn"
           >
             重置
           </button>
-          <span style={{ color: '#475569' }}>|</span>
-          <span style={{ color: '#94a3b8' }}>滚轮缩放 · Shift/中键拖动平移 · 拖拽框选</span>
+          <span style={{ color: 'var(--color-bg-hover)' }}>|</span>
+          <span style={{ color: 'var(--color-text-secondary)' }}>滚轮缩放 · Shift/中键拖动平移 · 拖拽框选</span>
         </div>
       )}
     </div>

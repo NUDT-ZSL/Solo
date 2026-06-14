@@ -83,27 +83,27 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ visible, onClose, onRestore
           top: 76,
           bottom: 12,
           width: 360,
-          background: '#1e293b',
-          borderRadius: 16,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          background: 'var(--color-bg-secondary)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-md)',
           zIndex: 1001,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          animation: 'slideInRight 0.3s ease-out',
+          animation: 'slideInRight var(--transition-slow)',
         }}
       >
         <div
           style={{
             padding: '16px 20px',
-            borderBottom: '1px solid #334155',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <span style={{ fontSize: 16, fontWeight: 600, color: '#f1f5f9' }}>
+            borderBottom: '1px solid var(--color-border)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-text-primary)' }}>
             历史记录
           </span>
           <button
@@ -111,7 +111,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ visible, onClose, onRestore
             style={{
               background: 'transparent',
               border: 'none',
-              color: '#94a3b8',
+              color: 'var(--color-text-secondary)',
               fontSize: 20,
               cursor: 'pointer',
               padding: 0,
@@ -140,7 +140,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ visible, onClose, onRestore
               style={{
                 textAlign: 'center',
                 padding: 40,
-                color: '#94a3b8',
+                color: 'var(--color-text-secondary)',
                 fontSize: 14,
               }}
             >
@@ -151,7 +151,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ visible, onClose, onRestore
               style={{
                 textAlign: 'center',
                 padding: 40,
-                color: '#94a3b8',
+                color: 'var(--color-text-secondary)',
                 fontSize: 14,
               }}
             >
@@ -173,8 +173,8 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ visible, onClose, onRestore
                   className="history-item"
                   style={{
                     height: 60,
-                    background: '#334155',
-                    borderRadius: 8,
+                    background: 'var(--color-bg-tertiary)',
+                    borderRadius: 'var(--radius-sm)',
                     padding: 8,
                     display: 'flex',
                     alignItems: 'center',
@@ -186,43 +186,43 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ visible, onClose, onRestore
                   <div
                     style={{
                       width: 44,
-                      height: 44,
-                      borderRadius: 6,
-                      background: '#475569',
-                      overflow: 'hidden',
-                      flexShrink: 0,
+                    height: 44,
+                    borderRadius: 6,
+                    background: 'var(--color-bg-hover)',
+                    overflow: 'hidden',
+                    flexShrink: 0,
+                  }}
+                >
+                  {record.thumbnail && (
+                    <img
+                      src={record.thumbnail}
+                      alt=""
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                      }}
+                    />
+                  )}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: 'var(--color-text-primary)',
+                      fontWeight: 500,
+                      marginBottom: 4,
                     }}
                   >
-                    {record.thumbnail && (
-                      <img
-                        src={record.thumbnail}
-                        alt=""
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover',
-                        }}
-                      />
-                    )}
+                    提取记录
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: 13,
-                        color: '#f1f5f9',
-                        fontWeight: 500,
-                        marginBottom: 4,
-                      }}
-                    >
-                      提取记录
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 11,
-                        color: '#94a3b8',
-                        display: 'flex',
-                        gap: 12,
-                      }}
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--color-text-secondary)',
+                      display: 'flex',
+                      gap: 12,
+                    }}
                     >
                       <span>{formatDate(record.timestamp)}</span>
                       <span>{record.regionCount} 个区域</span>
@@ -233,7 +233,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ visible, onClose, onRestore
                     style={{
                       background: 'transparent',
                       border: 'none',
-                      color: '#64748b',
+                      color: 'var(--color-bg-active)',
                       fontSize: 16,
                       cursor: 'pointer',
                       padding: '4px 8px',
