@@ -1,3 +1,30 @@
+/**
+ * ThreeViewer - 3D 模型查看器模块（Three.js 渲染）
+ *
+ * 数据流向：
+ * 1. 接收 'model:loaded' 事件（来自 FileUploader），加载模型到场景
+ *    设置环境光、方向光，模型居中，相机自动适配距离
+ *
+ * 2. 监听 canvas 点击事件，通过 Raycaster 检测点击的三角形面片
+ *    获取点击点的世界坐标、UV 坐标（通过 barycentric 插值）和 faceIndex
+ *    发射 'annotation:create' 事件（给 AnnotationEngine）
+ *
+ * 3. 接收 'annotation:created' 事件（来自 AnnotationEngine）
+ *    根据批注的 worldPosition 在模型表面添加彩色标记球
+ *    标记球颜色 #f72585，半径 0.03，始终在最上层渲染
+ *
+ * 4. 接收 'annotation:deleted' 事件，移除对应 ID 的标记球
+ *
+ * 5. 接收 'viewer:request-snapshot' 事件（来自 ReportExporter）
+ *    调用 getCanvasSnapshot() 截取当前 3D 视图
+ *    发射 'viewer:snapshot-ready' 事件返回 base64 图片
+ *
+ * 与 ReportExporter 的通信：
+ * - ReportExporter 通过事件总线请求截图，不直接持有 canvas 引用
+ * - ThreeViewer 完成截图后通过事件总线返回 base64 数据
+ * - 这种松耦合设计避免了模块间的直接依赖
+ */
+
 import React, { useRef, useEffect, useState, useCallback } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
@@ -7,6 +34,8 @@ import FileDropZone from '@/modules/upload/FileDropZone'
 
 const MARKER_COLOR = 0xf72585
 const MARKER_RADIUS = 0.03
+const DEFAULT_SNAPSHOT_WIDTH = 1200
+const DEFAULT_SNAPSHOT_HEIGHT = 800
 
 interface ThreeViewerProps {
   className?: string
@@ -264,7 +293,7 @@ const ThreeViewer: React.FC<ThreeViewerProps> = ({ className }) => {
   )
 
   const getCanvasSnapshot = useCallback(
-    (width: number, height: number): string => {
+    (targetWidth: number = DEFAULT_SNAPSHOT_WIDTH, targetHeight: number = DEFAULT_SNAPSHOT_HEIGHT): string => {
       if (!rendererRef.current || !cameraRef.current || !sceneRef.current) {
         return ''
       }
@@ -272,22 +301,51 @@ const ThreeViewer: React.FC<ThreeViewerProps> = ({ className }) => {
       const renderer = rendererRef.current
       const camera = cameraRef.current
       const scene = sceneRef.current
+      const dpr = Math.max(window.devicePixelRatio || 1, 1)
 
       const originalSize = new THREE.Vector2()
       renderer.getSize(originalSize)
       const originalPixelRatio = renderer.getPixelRatio()
 
-      renderer.setSize(width, height)
-      renderer.setPixelRatio(1)
-      renderer.render(scene, camera)
+      try {
+        const scaledWidth = targetWidth * dpr
+        const scaledHeight = targetHeight * dpr
 
-      const dataUrl = renderer.domElement.toDataURL('image/png')
+        renderer.setSize(targetWidth, targetHeight, false)
+        renderer.setPixelRatio(dpr)
+        renderer.render(scene, camera)
 
-      renderer.setSize(originalSize.x, originalSize.y)
-      renderer.setPixelRatio(originalPixelRatio)
-      renderer.render(scene, camera)
+        const sourceCanvas = renderer.domElement
+        const outputCanvas = document.createElement('canvas')
+        outputCanvas.width = targetWidth
+        outputCanvas.height = targetHeight
 
-      return dataUrl
+        const ctx = outputCanvas.getContext('2d')
+        if (!ctx) {
+          return sourceCanvas.toDataURL('image/png')
+        }
+
+        ctx.scale(dpr, dpr)
+        ctx.drawImage(
+          sourceCanvas,
+          0,
+          0,
+          scaledWidth,
+          scaledHeight,
+          0,
+          0,
+          targetWidth,
+          targetHeight
+        )
+
+        const dataUrl = outputCanvas.toDataURL('image/png')
+
+        return dataUrl
+      } finally {
+        renderer.setSize(originalSize.x, originalSize.y, false)
+        renderer.setPixelRatio(originalPixelRatio)
+        renderer.render(scene, camera)
+      }
     },
     []
   )

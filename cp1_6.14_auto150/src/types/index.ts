@@ -49,6 +49,7 @@ export interface EventBusEventMap {
   'report:exported': { success: boolean; message?: string }
   'viewer:request-snapshot': { width: number; height: number }
   'viewer:snapshot-ready': string
+  'error': { source: string; message: string; details?: any }
 }
 
 export type EventBusCallback<T = any> = (data: T) => void

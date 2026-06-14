@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react'
+import React, { useRef, useState, useCallback, useEffect } from 'react'
 import { fileUploader } from './FileUploader'
 
 interface FileDropZoneProps {
@@ -9,7 +9,9 @@ const FileDropZone: React.FC<FileDropZoneProps> = ({ className }) => {
   const [isDragging, setIsDragging] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const dragCounterRef = useRef(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const handleFile = useCallback(async (file: File) => {
     setError(null)
@@ -26,22 +28,35 @@ const FileDropZone: React.FC<FileDropZoneProps> = ({ className }) => {
     setIsLoading(false)
   }, [])
 
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounterRef.current++
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true)
+    }
+  }, [])
+
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    setIsDragging(true)
+    e.dataTransfer.dropEffect = 'copy'
   }, [])
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    setIsDragging(false)
+    dragCounterRef.current--
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false)
+    }
   }, [])
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault()
       e.stopPropagation()
+      dragCounterRef.current = 0
       setIsDragging(false)
 
       const files = e.dataTransfer.files
@@ -51,6 +66,29 @@ const FileDropZone: React.FC<FileDropZoneProps> = ({ className }) => {
     },
     [handleFile]
   )
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const handleWindowDragOver = (e: DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+
+    const handleWindowDrop = (e: DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+
+    window.addEventListener('dragover', handleWindowDragOver)
+    window.addEventListener('drop', handleWindowDrop)
+
+    return () => {
+      window.removeEventListener('dragover', handleWindowDragOver)
+      window.removeEventListener('drop', handleWindowDrop)
+    }
+  }, [])
 
   const handleClick = useCallback(() => {
     fileInputRef.current?.click()
@@ -71,6 +109,7 @@ const FileDropZone: React.FC<FileDropZoneProps> = ({ className }) => {
 
   return (
     <div
+      ref={containerRef}
       className={`file-drop-zone ${className || ''}`}
       style={{
         display: 'flex',
@@ -88,6 +127,7 @@ const FileDropZone: React.FC<FileDropZoneProps> = ({ className }) => {
         textAlign: 'center',
         padding: '24px',
       }}
+      onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}

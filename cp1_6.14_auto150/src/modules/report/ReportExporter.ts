@@ -1,5 +1,36 @@
+/**
+ * ReportExporter - PDF 报告导出模块
+ *
+ * 数据流向：
+ * 1. 订阅 'annotation:changed' 事件（来自 AnnotationEngine）
+ *    实时获取最新的批注列表用于导出
+ *
+ * 2. 订阅 'model:loaded' 事件（来自 FileUploader）
+ *    记录当前模型名称，用于 PDF 页眉和文件名
+ *
+ * 3. 接收 'report:export' 事件（来自 UI 层 ExportButton）
+ *    调用 exportAsPDF() 开始导出流程
+ *
+ * 4. 发射 'viewer:request-snapshot' 事件（给 ThreeViewer）
+ *    请求当前 3D 视图截图，包含所需尺寸参数
+ *
+ * 5. 监听 'viewer:snapshot-ready' 事件（来自 ThreeViewer）
+ *    获取截图的 base64 数据，用于 PDF 排版
+ *
+ * 与 ThreeViewer 的通信：
+ * - ReportExporter 不直接引用 ThreeViewer 或持有 canvas 引用
+ * - 完全通过事件总线进行松耦合通信
+ * - 请求-响应模式：request-snapshot -> snapshot-ready
+ *
+ * 6. 使用 jsPDF 排版生成 A4 分页 PDF
+ *    - 封面页：模型名称、批注数量、导出时间
+ *    - 批注页：每条批注一页，包含圆形局部截图、文字、作者、时间、UV坐标
+ *    - 页眉：模型名称 + 导出时间
+ *    - 页脚：页码信息
+ */
+
 import jsPDF from 'jspdf'
-import type { Annotation } from '@/types'
+import type { Annotation, Vector3 } from '@/types'
 import { eventBus } from '@/utils/EventBus'
 import { annotationEngine } from '@/modules/annotation/AnnotationEngine'
 
@@ -8,11 +39,13 @@ const SNAPSHOT_HEIGHT = 800
 const A4_WIDTH = 210
 const A4_HEIGHT = 297
 const MARGIN = 15
-const CIRCLE_IMAGE_SIZE = 30
+const CIRCLE_IMAGE_SIZE_MM = 30
+const CIRCLE_IMAGE_SIZE_PX = 160
 
 class ReportExporter {
   private currentModelName: string = '未命名模型'
   private isExporting: boolean = false
+  private annotations: Annotation[] = []
 
   constructor() {
     this.setupEventListeners()
@@ -23,14 +56,28 @@ class ReportExporter {
       this.currentModelName = modelData.name
     })
 
-    eventBus.on('report:export', () => {
-      this.exportAsPDF()
+    eventBus.on('annotation:changed', (annotations) => {
+      this.annotations = annotations
+    })
+
+    eventBus.on('report:export', async () => {
+      try {
+        await this.exportAsPDF()
+      } catch (error) {
+        eventBus.emit('error', {
+          source: 'ReportExporter',
+          message: error instanceof Error ? error.message : '导出PDF失败',
+          details: error,
+        })
+      }
     })
   }
 
   async exportAsPDF(): Promise<boolean> {
     if (this.isExporting) {
-      console.warn('[ReportExporter] 已有导出任务正在进行中')
+      const msg = '已有导出任务正在进行中'
+      console.warn('[ReportExporter]', msg)
+      eventBus.emit('report:exported', { success: false, message: msg })
       return false
     }
 
@@ -54,6 +101,12 @@ class ReportExporter {
 
       const snapshotDataUrl = await this.waitForSnapshot()
 
+      const circleImages = await Promise.all(
+        annotations.map((annotation) =>
+          this.createCircleImage(snapshotDataUrl, annotation)
+        )
+      )
+
       const doc = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
@@ -63,7 +116,14 @@ class ReportExporter {
       this.addCoverPage(doc, annotations.length)
 
       annotations.forEach((annotation, index) => {
-        this.addAnnotationPage(doc, annotation, index + 1, snapshotDataUrl)
+        doc.addPage()
+        this.addAnnotationPage(
+          doc,
+          annotation,
+          index + 1,
+          snapshotDataUrl,
+          circleImages[index]
+        )
       })
 
       const fileName = `${this.currentModelName.replace(/\.[^/.]+$/, '')}_审阅报告_${this.formatDate(new Date())}.pdf`
@@ -77,9 +137,15 @@ class ReportExporter {
       return true
     } catch (error) {
       console.error('[ReportExporter] 导出 PDF 失败:', error)
+      const errorMsg = error instanceof Error ? error.message : '导出失败'
       eventBus.emit('report:exported', {
         success: false,
-        message: error instanceof Error ? error.message : '导出失败',
+        message: errorMsg,
+      })
+      eventBus.emit('error', {
+        source: 'ReportExporter',
+        message: errorMsg,
+        details: error,
       })
       return false
     } finally {
@@ -151,7 +217,8 @@ class ReportExporter {
     doc: jsPDF,
     annotation: Annotation,
     pageNum: number,
-    snapshotDataUrl: string
+    snapshotDataUrl: string,
+    circleImg: string | null
   ): void {
     const pageWidth = A4_WIDTH
     const pageHeight = A4_HEIGHT
@@ -160,12 +227,11 @@ class ReportExporter {
 
     this.addHeader(doc, pageNum)
 
-    const imgWidth = CIRCLE_IMAGE_SIZE
-    const imgHeight = CIRCLE_IMAGE_SIZE
+    const imgWidth = CIRCLE_IMAGE_SIZE_MM
+    const imgHeight = CIRCLE_IMAGE_SIZE_MM
     const imgX = MARGIN
     const imgY = contentTop
 
-    const circleImg = this.createCircleImage(snapshotDataUrl, annotation)
     if (circleImg) {
       doc.addImage(circleImg, 'PNG', imgX, imgY, imgWidth, imgHeight)
     } else {
@@ -276,10 +342,66 @@ class ReportExporter {
   }
 
   private createCircleImage(
-    _snapshotDataUrl: string,
-    _annotation: Annotation
-  ): string | null {
-    return null
+    snapshotDataUrl: string,
+    annotation: Annotation
+  ): Promise<string | null> {
+    return new Promise((resolve) => {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas')
+          const size = CIRCLE_IMAGE_SIZE_PX
+          canvas.width = size
+          canvas.height = size
+
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            resolve(null)
+            return
+          }
+
+          const centerX = size / 2
+          const centerY = size / 2
+          const radius = size / 2
+
+          ctx.beginPath()
+          ctx.arc(centerX, centerY, radius, 0, Math.PI * 2)
+          ctx.closePath()
+          ctx.clip()
+
+          const cropSize = Math.min(img.width, img.height) * 0.3
+          const sourceX = (img.width - cropSize) * annotation.uvCoord.u
+          const sourceY = img.height * (1 - annotation.uvCoord.v) - cropSize / 2
+
+          ctx.drawImage(
+            img,
+            Math.max(0, sourceX),
+            Math.max(0, sourceY),
+            cropSize,
+            cropSize,
+            0,
+            0,
+            size,
+            size
+          )
+
+          const result = canvas.toDataURL('image/png')
+          resolve(result)
+        } catch (error) {
+          console.warn('[ReportExporter] 创建圆形截图失败:', error)
+          resolve(null)
+        }
+      }
+
+      img.onerror = () => {
+        console.warn('[ReportExporter] 加载截图失败')
+        resolve(null)
+      }
+
+      img.src = snapshotDataUrl
+    })
   }
 
   private formatDate(date: Date): string {
