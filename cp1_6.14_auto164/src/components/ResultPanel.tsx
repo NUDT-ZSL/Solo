@@ -7,47 +7,68 @@ interface ResultPanelProps {
   onSelectRegion?: (region: CSSRegion) => void;
 }
 
-function highlightCSS(code: string): React.ReactNode[] {
+type TokenType = 'comment' | 'selector' | 'property' | 'value' | 'punctuation' | 'default';
+
+function tokenizeLine(line: string): { text: string; type: TokenType }[] {
+  const tokens: { text: string; type: TokenType }[] = [];
+  const trimmed = line.trim();
+
+  if (trimmed.startsWith('/*') && trimmed.endsWith('*/')) {
+    const indent = line.match(/^(\s*)/)?.[1] || '';
+    tokens.push({ text: indent, type: 'default' });
+    tokens.push({ text: trimmed, type: 'comment' });
+    return tokens;
+  }
+
+  if (trimmed === '}' || trimmed === '{') {
+    const indent = line.match(/^(\s*)/)?.[1] || '';
+    tokens.push({ text: indent, type: 'default' });
+    tokens.push({ text: trimmed, type: 'punctuation' });
+    return tokens;
+  }
+
+  const selectorMatch = line.match(/^(\s*)(\.[\w-]+|#[\w-]+|[\w-]+)(\s*\{)$/);
+  if (selectorMatch) {
+    tokens.push({ text: selectorMatch[1], type: 'default' });
+    tokens.push({ text: selectorMatch[2], type: 'selector' });
+    tokens.push({ text: selectorMatch[3], type: 'punctuation' });
+    return tokens;
+  }
+
+  const propMatch = line.match(/^(\s*)([\w-]+)(:\s*)(.*?)(;?)$/);
+  if (propMatch) {
+    tokens.push({ text: propMatch[1], type: 'default' });
+    tokens.push({ text: propMatch[2], type: 'property' });
+    tokens.push({ text: propMatch[3], type: 'punctuation' });
+    tokens.push({ text: propMatch[4], type: 'value' });
+    if (propMatch[5]) tokens.push({ text: propMatch[5], type: 'punctuation' });
+    return tokens;
+  }
+
+  tokens.push({ text: line, type: 'default' });
+  return tokens;
+}
+
+function highlightCSS(code: string): React.ReactNode {
   const lines = code.split('\n');
-  return lines.map((line, i) => {
-    const commentMatch = line.match(/^(\s*)\/\*(.*)\*\/$/);
-    if (commentMatch) {
-      return (
-        <div key={i} style={{ color: '#9ca3af' }}>
-          {commentMatch[1]}/*{commentMatch[2]}*/
-        </div>
-      );
-    }
-
-    const selectorMatch = line.match(/^(\s*)(\.[\w-]+|[\w-]+)(\s*\{)$/);
-    if (selectorMatch) {
-      return (
-        <div key={i}>
-          <span style={{ color: '#f1f5f9' }}>{selectorMatch[1]}</span>
-          <span style={{ color: '#fbbf24' }}>{selectorMatch[2]}</span>
-          <span style={{ color: '#f1f5f9' }}>{selectorMatch[3]}</span>
-        </div>
-      );
-    }
-
-    if (line.trim() === '}') {
-      return <div key={i} style={{ color: '#f1f5f9' }}>{line}</div>;
-    }
-
-    const propMatch = line.match(/^(\s*)([\w-]+)(:\s*)(.*)(;)$/);
-    if (propMatch) {
-      return (
-        <div key={i}>
-          <span style={{ color: '#f1f5f9' }}>{propMatch[1]}</span>
-          <span style={{ color: '#60a5fa' }}>{propMatch[2]}</span>
-          <span style={{ color: '#f1f5f9' }}>{propMatch[3]}</span>
-          <span style={{ color: '#34d399' }}>{propMatch[4]}</span>
-          <span style={{ color: '#f1f5f9' }}>{propMatch[5]}</span>
-        </div>
-      );
-    }
-
-    return <div key={i} style={{ color: '#f1f5f9' }}>{line}</div>;
+  return lines.map((line, lineIdx) => {
+    const tokens = tokenizeLine(line);
+    return (
+      <div key={lineIdx} style={{ whiteSpace: 'pre' }}>
+        {tokens.map((t, i) => {
+          let color = '#f1f5f9';
+          switch (t.type) {
+            case 'comment': color = '#9ca3af'; break;
+            case 'property': color = '#60a5fa'; break;
+            case 'value': color = '#34d399'; break;
+            case 'selector': color = '#fbbf24'; break;
+            case 'punctuation': color = '#f1f5f9'; break;
+            default: color = '#f1f5f9';
+          }
+          return <span key={i} style={{ color }}>{t.text}</span>;
+        })}
+      </div>
+    );
   });
 }
 
@@ -139,11 +160,10 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ regions, selectedRegion, onSe
               style={{
                 width: 36,
                 height: 36,
-                borderRadius: 8,
+                borderRadius: region.properties.borderRadius || 8,
                 background: region.properties.primaryColor || '#334155',
                 flexShrink: 0,
                 boxShadow: region.properties.boxShadow ? region.properties.boxShadow : 'none',
-                borderRadius: region.properties.borderRadius || 8,
               }}
             />
             <div style={{ flex: 1, minWidth: 0 }}>

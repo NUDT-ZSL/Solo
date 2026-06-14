@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { type CSSRegion, generateCSSCode } from '../modules/imageAnalyzer';
 
 interface DetailPopupProps {
@@ -7,47 +7,68 @@ interface DetailPopupProps {
   onClose: () => void;
 }
 
-function highlightCSS(code: string): React.ReactNode[] {
+type TokenType = 'comment' | 'selector' | 'property' | 'value' | 'punctuation' | 'default';
+
+function tokenizeLine(line: string): { text: string; type: TokenType }[] {
+  const tokens: { text: string; type: TokenType }[] = [];
+  const trimmed = line.trim();
+
+  if (trimmed.startsWith('/*') && trimmed.endsWith('*/')) {
+    const indent = line.match(/^(\s*)/)?.[1] || '';
+    tokens.push({ text: indent, type: 'default' });
+    tokens.push({ text: trimmed, type: 'comment' });
+    return tokens;
+  }
+
+  if (trimmed === '}' || trimmed === '{') {
+    const indent = line.match(/^(\s*)/)?.[1] || '';
+    tokens.push({ text: indent, type: 'default' });
+    tokens.push({ text: trimmed, type: 'punctuation' });
+    return tokens;
+  }
+
+  const selectorMatch = line.match(/^(\s*)(\.[\w-]+|#[\w-]+|[\w-]+)(\s*\{)$/);
+  if (selectorMatch) {
+    tokens.push({ text: selectorMatch[1], type: 'default' });
+    tokens.push({ text: selectorMatch[2], type: 'selector' });
+    tokens.push({ text: selectorMatch[3], type: 'punctuation' });
+    return tokens;
+  }
+
+  const propMatch = line.match(/^(\s*)([\w-]+)(:\s*)(.*?)(;?)$/);
+  if (propMatch) {
+    tokens.push({ text: propMatch[1], type: 'default' });
+    tokens.push({ text: propMatch[2], type: 'property' });
+    tokens.push({ text: propMatch[3], type: 'punctuation' });
+    tokens.push({ text: propMatch[4], type: 'value' });
+    if (propMatch[5]) tokens.push({ text: propMatch[5], type: 'punctuation' });
+    return tokens;
+  }
+
+  tokens.push({ text: line, type: 'default' });
+  return tokens;
+}
+
+function highlightCSS(code: string): React.ReactNode {
   const lines = code.split('\n');
-  return lines.map((line, i) => {
-    const commentMatch = line.match(/^(\s*)\/\*(.*)\*\/$/);
-    if (commentMatch) {
-      return (
-        <div key={i} style={{ color: '#9ca3af' }}>
-          {commentMatch[1]}/*{commentMatch[2]}*/
-        </div>
-      );
-    }
-
-    const selectorMatch = line.match(/^(\s*)(\.[\w-]+|[\w-]+)(\s*\{)$/);
-    if (selectorMatch) {
-      return (
-        <div key={i}>
-          <span style={{ color: '#f1f5f9' }}>{selectorMatch[1]}</span>
-          <span style={{ color: '#fbbf24' }}>{selectorMatch[2]}</span>
-          <span style={{ color: '#f1f5f9' }}>{selectorMatch[3]}</span>
-        </div>
-      );
-    }
-
-    if (line.trim() === '}') {
-      return <div key={i} style={{ color: '#f1f5f9' }}>{line}</div>;
-    }
-
-    const propMatch = line.match(/^(\s*)([\w-]+)(:\s*)(.*)(;)$/);
-    if (propMatch) {
-      return (
-        <div key={i}>
-          <span style={{ color: '#f1f5f9' }}>{propMatch[1]}</span>
-          <span style={{ color: '#60a5fa' }}>{propMatch[2]}</span>
-          <span style={{ color: '#f1f5f9' }}>{propMatch[3]}</span>
-          <span style={{ color: '#34d399' }}>{propMatch[4]}</span>
-          <span style={{ color: '#f1f5f9' }}>{propMatch[5]}</span>
-        </div>
-      );
-    }
-
-    return <div key={i} style={{ color: '#f1f5f9' }}>{line}</div>;
+  return lines.map((line, lineIdx) => {
+    const tokens = tokenizeLine(line);
+    return (
+      <div key={lineIdx} style={{ whiteSpace: 'pre' }}>
+        {tokens.map((t, i) => {
+          let color = '#f1f5f9';
+          switch (t.type) {
+            case 'comment': color = '#9ca3af'; break;
+            case 'property': color = '#60a5fa'; break;
+            case 'value': color = '#34d399'; break;
+            case 'selector': color = '#fbbf24'; break;
+            case 'punctuation': color = '#f1f5f9'; break;
+            default: color = '#f1f5f9';
+          }
+          return <span key={i} style={{ color }}>{t.text}</span>;
+        })}
+      </div>
+    );
   });
 }
 
@@ -60,37 +81,75 @@ const typeLabels: Record<CSSRegion['type'], string> = {
 
 const DetailPopup: React.FC<DetailPopupProps> = ({ region, position, onClose }) => {
   const [copied, setCopied] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedCode, setEditedCode] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const copyTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (region) {
+      setEditedCode(generateCSSCode(region));
+      setIsEditing(false);
+    }
+  }, [region]);
+
+  useEffect(() => {
+    if (isEditing && textareaRef.current) {
+      textareaRef.current.focus();
+      textareaRef.current.select();
+    }
+  }, [isEditing]);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
 
   if (!region || !position) return null;
 
-  const code = generateCSSCode(region);
+  const displayCode = isEditing ? editedCode : generateCSSCode(region);
 
-  const handleCopy = async () => {
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     try {
-      await navigator.clipboard.writeText(code);
+      await navigator.clipboard.writeText(displayCode);
       setCopied(true);
-      setTimeout(() => setCopied(false), 300);
-    } catch (e) {
-      console.error('Copy failed:', e);
+      if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = window.setTimeout(() => setCopied(false), 300);
+    } catch (err) {
+      console.error('Copy failed:', err);
     }
   };
 
-  const popupWidth = 320;
-  const popupHeight = 280;
+  const handleCodeClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isEditing) {
+      setIsEditing(true);
+    }
+  };
 
+  const handleTextareaBlur = () => {
+    setIsEditing(false);
+  };
+
+  const popupWidth = 320;
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
 
   let left = position.x + 20;
   let top = position.y + 20;
+  const estimatedHeight = 300;
 
-  if (left + popupWidth > viewportWidth) {
+  if (left + popupWidth > viewportWidth - 20) {
     left = position.x - popupWidth - 20;
   }
-  if (top + popupHeight > viewportHeight) {
-    top = viewportHeight - popupHeight - 20;
+  if (top + estimatedHeight > viewportHeight - 20) {
+    top = Math.max(84, viewportHeight - estimatedHeight - 20);
   }
-  left = Math.max(20, left);
+  left = Math.max(20, Math.min(viewportWidth - popupWidth - 20, left));
   top = Math.max(84, top);
 
   return (
@@ -118,6 +177,7 @@ const DetailPopup: React.FC<DetailPopupProps> = ({ region, position, onClose }) 
           overflow: 'hidden',
           animation: 'popupIn 0.3s ease-out',
         }}
+        onClick={(e) => e.stopPropagation()}
       >
         <div
           style={{
@@ -137,15 +197,17 @@ const DetailPopup: React.FC<DetailPopupProps> = ({ region, position, onClose }) 
               background: 'transparent',
               border: 'none',
               color: '#94a3b8',
-              fontSize: 18,
+              fontSize: 20,
               cursor: 'pointer',
               padding: 0,
-              width: 24,
-              height: 24,
+              width: 28,
+              height: 28,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              borderRadius: 4,
+              borderRadius: 6,
+              transition: 'all 0.2s ease-in-out',
+              lineHeight: 1,
             }}
             className="action-btn"
           >
@@ -154,29 +216,24 @@ const DetailPopup: React.FC<DetailPopupProps> = ({ region, position, onClose }) 
         </div>
 
         <div style={{ padding: 12 }}>
-          <div
-            style={{
-              display: 'flex',
-              gap: 12,
-              marginBottom: 12,
-            }}
-          >
+          <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
             <div
               style={{
                 width: 48,
                 height: 48,
-                borderRadius: 8,
+                borderRadius: region.properties.borderRadius
+                  ? parseInt(region.properties.borderRadius) || 8
+                  : 8,
                 background: region.properties.primaryColor || '#334155',
                 boxShadow: region.properties.boxShadow || 'none',
-                borderRadius: region.properties.borderRadius || 8,
                 flexShrink: 0,
               }}
             />
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>
                 尺寸
               </div>
-              <div style={{ fontSize: 13, color: '#f1f5f9', fontFamily: 'Consolas, monospace' }}>
+              <div style={{ fontSize: 13, color: '#f1f5f9', fontFamily: 'Consolas, Monaco, monospace' }}>
                 {Math.round(region.width)} × {Math.round(region.height)} px
               </div>
               {region.properties.primaryColor && (
@@ -184,7 +241,7 @@ const DetailPopup: React.FC<DetailPopupProps> = ({ region, position, onClose }) 
                   <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6, marginBottom: 2 }}>
                     主色
                   </div>
-                  <div style={{ fontSize: 13, color: '#f1f5f9', fontFamily: 'Consolas, monospace' }}>
+                  <div style={{ fontSize: 13, color: '#f1f5f9', fontFamily: 'Consolas, Monaco, monospace' }}>
                     {region.properties.primaryColor}
                   </div>
                 </>
@@ -193,27 +250,53 @@ const DetailPopup: React.FC<DetailPopupProps> = ({ region, position, onClose }) 
           </div>
 
           <div
+            onClick={handleCodeClick}
             style={{
               background: '#0f172a',
               borderRadius: 8,
               padding: 12,
               marginBottom: 12,
-              maxHeight: 160,
+              maxHeight: 180,
               overflowY: 'auto',
+              border: `2px solid ${isEditing ? '#eab308' : 'transparent'}`,
+              cursor: isEditing ? 'text' : 'pointer',
+              transition: 'border-color 0.2s ease-in-out',
             }}
           >
-            <pre
-              style={{
-                margin: 0,
-                fontFamily: 'Consolas, Monaco, monospace',
-                fontSize: 14,
-                lineHeight: 1.6,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-all',
-              }}
-            >
-              {highlightCSS(code)}
-            </pre>
+            {isEditing ? (
+              <textarea
+                ref={textareaRef}
+                value={editedCode}
+                onChange={(e) => setEditedCode(e.target.value)}
+                onBlur={handleTextareaBlur}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  width: '100%',
+                  minHeight: 100,
+                  background: 'transparent',
+                  color: '#f1f5f9',
+                  border: 'none',
+                  outline: 'none',
+                  resize: 'vertical',
+                  fontFamily: 'Consolas, Monaco, monospace',
+                  fontSize: 14,
+                  lineHeight: 1.6,
+                }}
+              />
+            ) : (
+              <pre
+                style={{
+                  margin: 0,
+                  fontFamily: 'Consolas, Monaco, monospace',
+                  fontSize: 14,
+                  lineHeight: 1.6,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all',
+                }}
+              >
+                {highlightCSS(displayCode)}
+              </pre>
+            )}
           </div>
 
           <button
@@ -229,7 +312,7 @@ const DetailPopup: React.FC<DetailPopupProps> = ({ region, position, onClose }) 
               fontSize: 14,
               fontWeight: 500,
               cursor: 'pointer',
-              transition: 'all 0.2s ease-out',
+              transition: 'all 0.2s ease-in-out',
             }}
           >
             {copied ? '✓ 已复制' : '一键复制 CSS 代码'}
