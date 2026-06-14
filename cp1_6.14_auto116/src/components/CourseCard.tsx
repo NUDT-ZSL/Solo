@@ -92,9 +92,9 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onEdit, onDelete, onCli
           backgroundColor: config.color,
           color: '#ffffff',
           fontSize: 12,
-          padding: '3px 10px',
+          padding: '4px 10px',
           borderRadius: 8,
-          lineHeight: 1.4
+          lineHeight: 1
         }}
       >
         {config.label}
