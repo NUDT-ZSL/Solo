@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GravField - 二维引力场模拟器</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html, body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background-color: #0a0a14;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        color: #ffffff;
+      }
+
+      #app {
+        width: 100%;
+        height: 100%;
+        position: relative;
+        overflow: hidden;
+      }
+
+      #canvas-container {
+        position: absolute;
+        top: 10%;
+        left: 10%;
+        width: 80%;
+        height: 80%;
+      }
+
+      #canvas-container canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      .hint-text {
+        position: absolute;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 14px;
+        opacity: 0.6;
+        color: #ffffff;
+        pointer-events: none;
+        user-select: none;
+      }
+
+      .control-panel {
+        position: absolute;
+        right: 24px;
+        bottom: 24px;
+        width: 240px;
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 12px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      }
+
+      .panel-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 4px;
+        color: #e6edf3;
+      }
+
+      .btn {
+        width: 100%;
+        height: 44px;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        color: #ffffff;
+      }
+
+      .btn-primary {
+        background-color: #238636;
+      }
+
+      .btn-primary:hover {
+        background-color: #2ea043;
+      }
+
+      .btn-danger {
+        background-color: #da3633;
+      }
+
+      .btn-danger:hover {
+        background-color: #f85149;
+      }
+
+      .source-list {
+        max-height: 200px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .source-list::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .source-list::-webkit-scrollbar-track {
+        background: #0d1117;
+        border-radius: 3px;
+      }
+
+      .source-list::-webkit-scrollbar-thumb {
+        background: #30363d;
+        border-radius: 3px;
+      }
+
+      .source-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 36px;
+        padding: 0 8px;
+        background-color: #0d1117;
+        border-radius: 6px;
+        transition: background-color 0.2s ease;
+      }
+
+      .source-item:hover {
+        background-color: #161b22;
+      }
+
+      .source-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .source-mass {
+        font-size: 12px;
+        font-weight: 500;
+        color: #e6edf3;
+      }
+
+      .source-coord {
+        font-size: 10px;
+        color: #7d8590;
+      }
+
+      .delete-btn {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        border: none;
+        background-color: #da3633;
+        color: #ffffff;
+        font-size: 14px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        line-height: 1;
+      }
+
+      .delete-btn:hover {
+        background-color: #f85149;
+        transform: scale(1.1);
+      }
+
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.6);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      }
+
+      .modal-overlay.active {
+        display: flex;
+      }
+
+      .modal {
+        background-color: #1e1e2e;
+        border: 1px solid #333;
+        border-radius: 12px;
+        padding: 24px;
+        width: 320px;
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+      }
+
+      .modal-title {
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 16px;
+        color: #e6edf3;
+      }
+
+      .modal-input {
+        width: 100%;
+        height: 40px;
+        padding: 0 12px;
+        background-color: #0d1117;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        color: #e6edf3;
+        font-size: 14px;
+        margin-bottom: 16px;
+        transition: border-color 0.2s ease;
+      }
+
+      .modal-input:focus {
+        outline: none;
+        border-color: #58a6ff;
+      }
+
+      .modal-buttons {
+        display: flex;
+        gap: 12px;
+      }
+
+      .modal-btn {
+        flex: 1;
+        height: 36px;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        color: #ffffff;
+      }
+
+      .modal-btn-cancel {
+        background-color: #30363d;
+      }
+
+      .modal-btn-cancel:hover {
+        background-color: #484f58;
+      }
+
+      .modal-btn-confirm {
+        background-color: #238636;
+      }
+
+      .modal-btn-confirm:hover {
+        background-color: #2ea043;
+      }
+
+      .list-label {
+        font-size: 12px;
+        color: #7d8590;
+        margin-top: 4px;
+        margin-bottom: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="canvas-container"></div>
+      <div class="hint-text">双击添加引力源 · 滚轮缩放 · 拖拽平移</div>
+      <div class="control-panel" id="control-panel">
+        <div class="panel-title">控制面板</div>
+        <button class="btn btn-primary" id="launch-btn">发射粒子</button>
+        <button class="btn btn-danger" id="reset-btn">重置模拟</button>
+        <div class="list-label">引力源列表</div>
+        <div class="source-list" id="source-list"></div>
+      </div>
+      <div class="modal-overlay" id="modal-overlay">
+        <div class="modal">
+          <div class="modal-title">添加引力源</div>
+          <input type="number" class="modal-input" id="mass-input" min="0.1" max="10.0" step="0.1" value="1.0" />
+          <div class="modal-buttons">
+            <button class="modal-btn modal-btn-cancel" id="modal-cancel">取消</button>
+            <button class="modal-btn modal-btn-confirm" id="modal-confirm">确定</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
