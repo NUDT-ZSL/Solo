@@ -17,11 +17,11 @@ function easeInOutCubicElastic(t: number): number {
   } else {
     r = 1 - Math.pow(-2 * t + 2, 3) / 2;
   }
-  if (t > 0.75) {
-    const lt = (t - 0.75) / 0.25;
-    r += 0.04 * Math.sin(lt * Math.PI * 2.5) * (1 - lt);
+  if (t > 0.7) {
+    const lt = (t - 0.7) / 0.3;
+    r += 0.05 * Math.sin(lt * Math.PI * 2) * (1 - lt);
   }
-  return r;
+  return Math.min(1, Math.max(0, r));
 }
 
 export class AtriumBuilder {
@@ -60,13 +60,13 @@ export class AtriumBuilder {
     this.buildAtrium(params, this.mainGroup, true);
 
     this.animateOut(oldGroup);
-    this.animateIn(this.mainGroup, params);
+    this.animateIn(this.mainGroup);
 
-    const totalDuration = 400 + params.floors * 80 + 700;
+    const totalDuration = 300 + params.floors * 100 + 900;
     setTimeout(() => {
       this.disposeGroup(oldGroup);
       this.isTransitioning = false;
-    }, totalDuration + 200);
+    }, totalDuration + 300);
 
     this.currentParams = { ...params };
   }
@@ -89,7 +89,11 @@ export class AtriumBuilder {
 
       const colGeo = new THREE.CylinderGeometry(COLUMN_RADIUS, COLUMN_RADIUS, floorHeight, 8);
       colGeo.translate(0, floorHeight / 2, 0);
-      const colMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8 });
+      const colMat = new THREE.MeshStandardMaterial({
+        color: 0x94a3b8,
+        transparent: true,
+        opacity: 1,
+      });
 
       for (let ix = 0; ix <= BAYS_X; ix++) {
         for (let iz = 0; iz <= BAYS_Z; iz++) {
@@ -97,16 +101,21 @@ export class AtriumBuilder {
           col.position.set(offsetX + ix * columnSpacing, baseY, offsetZ + iz * columnSpacing);
           col.userData.type = 'column';
           col.userData.floor = f;
+          col.userData.targetScaleY = 1;
+          col.userData.targetOpacity = 1;
           floorGroup.add(col);
         }
       }
 
-      const beamMat = new THREE.MeshStandardMaterial({ color: 0x64748b });
+      const beamMat = new THREE.MeshStandardMaterial({
+        color: 0x64748b,
+        transparent: true,
+        opacity: 1,
+      });
 
       for (let ix = 0; ix <= BAYS_X; ix++) {
         for (let iz = 0; iz < BAYS_Z; iz++) {
           const beamGeo = new THREE.BoxGeometry(BEAM_SIZE, BEAM_SIZE, columnSpacing);
-          beamGeo.translate(0, 0, 0);
           const beam = new THREE.Mesh(beamGeo, beamMat);
           beam.position.set(
             offsetX + ix * columnSpacing,
@@ -115,6 +124,8 @@ export class AtriumBuilder {
           );
           beam.userData.type = 'beam';
           beam.userData.floor = f;
+          beam.userData.targetScaleY = 1;
+          beam.userData.targetOpacity = 1;
           floorGroup.add(beam);
         }
       }
@@ -130,6 +141,8 @@ export class AtriumBuilder {
           );
           beam.userData.type = 'beam';
           beam.userData.floor = f;
+          beam.userData.targetScaleY = 1;
+          beam.userData.targetOpacity = 1;
           floorGroup.add(beam);
         }
       }
@@ -144,30 +157,71 @@ export class AtriumBuilder {
       slab.position.set(0, baseY + SLAB_THICKNESS / 2, 0);
       slab.userData.type = 'slab';
       slab.userData.floor = f;
+      slab.userData.targetScaleY = 1;
+      slab.userData.targetOpacity = 0.85;
       floorGroup.add(slab);
 
-      this.addGlassWalls(floorGroup, f, baseY, floorHeight, columnSpacing, windowRatio, offsetX, offsetZ, totalW, totalD, startInvisible);
+      this.addGlassWalls(floorGroup, f, baseY, floorHeight, columnSpacing, windowRatio, offsetX, offsetZ, totalW, totalD);
 
       group.add(floorGroup);
     }
 
     for (let f = 2; f <= floors; f += 2) {
-      this.addBridge(group, f, floorHeight, columnSpacing, offsetX, offsetZ, totalD, startInvisible);
+      this.addBridge(group, f, floorHeight, columnSpacing, offsetX, offsetZ, totalD);
     }
 
     if (startInvisible) {
-      group.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          const mat = child.material as THREE.MeshStandardMaterial;
-          if (mat.transparent) {
-            child.userData.targetOpacity = mat.opacity;
-            mat.opacity = 0;
-          }
-          child.userData.targetScaleY = child.scale.y;
-          child.scale.y = 0.01;
-        }
-      });
+      this.applyInvisibleState(group);
     }
+  }
+
+  private applyInvisibleState(group: THREE.Group): void {
+    group.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+
+      const type = child.userData.type;
+      const mat = child.material as THREE.MeshStandardMaterial;
+
+      if (type === 'glass') {
+        const scatter = 3 + Math.random() * 2;
+        const finalPos = child.position.clone();
+        const offset = new THREE.Vector3(
+          (Math.random() - 0.5) * scatter,
+          (Math.random() - 0.5) * scatter,
+          (Math.random() - 0.5) * scatter
+        );
+        child.userData.finalPos = finalPos;
+        child.userData.startPos = finalPos.clone().add(offset);
+        child.position.copy(child.userData.startPos);
+
+        const rotOffset = new THREE.Euler(
+          (Math.random() - 0.5) * 0.8,
+          (Math.random() - 0.5) * 0.8,
+          (Math.random() - 0.5) * 0.4
+        );
+        child.userData.finalRot = child.rotation.clone();
+        child.userData.startRot = rotOffset;
+        child.rotation.copy(rotOffset);
+
+        child.scale.set(0.15, 0.15, 0.15);
+        child.userData.targetScale = 1;
+
+        mat.opacity = 0;
+        child.userData.targetOpacity = child.userData.targetOpacity ?? 0.3;
+      } else if (type === 'bridge') {
+        mat.transparent = true;
+        mat.opacity = 0;
+        child.userData.targetOpacity = 1;
+        child.userData.targetScaleY = 1;
+        child.scale.y = 0.01;
+      } else {
+        mat.transparent = true;
+        mat.opacity = 0;
+        child.userData.targetOpacity = child.userData.targetOpacity ?? 1;
+        child.userData.targetScaleY = child.userData.targetScaleY ?? 1;
+        child.scale.y = 0.01;
+      }
+    });
   }
 
   private addGlassWalls(
@@ -180,38 +234,30 @@ export class AtriumBuilder {
     offsetX: number,
     offsetZ: number,
     totalW: number,
-    totalD: number,
-    startInvisible: boolean
+    totalD: number
   ): void {
     const glassH = (floorHeight - SLAB_THICKNESS) * windowRatio;
     const glassY = baseY + SLAB_THICKNESS + glassH / 2;
-    const glassMat = new THREE.MeshPhysicalMaterial({
-      color: 0x60a5fa,
-      transparent: true,
-      opacity: 0.3,
-      roughness: 0.1,
-      metalness: 0.0,
-      side: THREE.DoubleSide,
-    });
 
     const addGlassPanel = (w: number, px: number, py: number, pz: number, ry: number) => {
       const geo = new THREE.PlaneGeometry(w, glassH);
-      const panel = new THREE.Mesh(geo, glassMat.clone());
+      const glassMat = new THREE.MeshPhysicalMaterial({
+        color: 0x60a5fa,
+        transparent: true,
+        opacity: 0.3,
+        roughness: 0.1,
+        metalness: 0.0,
+        side: THREE.DoubleSide,
+        reflectivity: 0.8,
+        clearcoat: 0.3,
+        clearcoatRoughness: 0.1,
+      });
+      const panel = new THREE.Mesh(geo, glassMat);
       panel.position.set(px, py, pz);
       panel.rotation.y = ry;
       panel.userData.type = 'glass';
       panel.userData.floor = floorIndex;
-      if (startInvisible) {
-        const scatter = 2.5;
-        panel.userData.finalPos = panel.position.clone();
-        panel.position.x += (Math.random() - 0.5) * scatter;
-        panel.position.y += (Math.random() - 0.5) * scatter;
-        panel.position.z += (Math.random() - 0.5) * scatter;
-        panel.userData.startPos = panel.position.clone();
-        panel.scale.set(0.3, 0.3, 0.3);
-        (panel.material as THREE.MeshPhysicalMaterial).opacity = 0;
-        panel.userData.targetOpacity = 0.3;
-      }
+      panel.userData.targetOpacity = 0.3;
       floorGroup.add(panel);
     };
 
@@ -237,64 +283,81 @@ export class AtriumBuilder {
     columnSpacing: number,
     offsetX: number,
     offsetZ: number,
-    totalD: number,
-    startInvisible: boolean
+    totalD: number
   ): void {
     const y = floorNum * floorHeight;
-    const totalW = BAYS_X * columnSpacing;
-    const bridgeMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8 });
+    const bridgeMat = new THREE.MeshStandardMaterial({
+      color: 0x94a3b8,
+      transparent: true,
+      opacity: 1,
+    });
+
+    const bridgeGroup = new THREE.Group();
+    bridgeGroup.userData.type = 'bridge-group';
+    bridgeGroup.userData.floor = floorNum;
 
     const deckGeo = new THREE.BoxGeometry(BRIDGE_WIDTH, 0.1, totalD - columnSpacing);
     const deck = new THREE.Mesh(deckGeo, bridgeMat);
-    deck.position.set(0, y, offsetZ + totalD / 2);
+    deck.position.set(0, y + 0.05, offsetZ + totalD / 2);
     deck.userData.type = 'bridge';
-    group.add(deck);
+    deck.userData.floor = floorNum;
+    bridgeGroup.add(deck);
 
-    const railGeo = new THREE.CylinderGeometry(0.03, 0.03, totalD - columnSpacing, 6);
+    const railRadius = 0.03;
+    const railGeo = new THREE.CylinderGeometry(railRadius, railRadius, totalD - columnSpacing, 8);
     railGeo.rotateX(Math.PI / 2);
 
-    const rail1 = new THREE.Mesh(railGeo, bridgeMat);
-    rail1.position.set(-BRIDGE_WIDTH / 2, y + RAILING_HEIGHT, offsetZ + totalD / 2);
-    rail1.userData.type = 'bridge';
-    group.add(rail1);
+    const railTop1 = new THREE.Mesh(railGeo, bridgeMat);
+    railTop1.position.set(-BRIDGE_WIDTH / 2, y + RAILING_HEIGHT, offsetZ + totalD / 2);
+    railTop1.userData.type = 'bridge';
+    railTop1.userData.floor = floorNum;
+    bridgeGroup.add(railTop1);
 
-    const rail2 = new THREE.Mesh(railGeo, bridgeMat);
-    rail2.position.set(BRIDGE_WIDTH / 2, y + RAILING_HEIGHT, offsetZ + totalD / 2);
-    rail2.userData.type = 'bridge';
-    group.add(rail2);
+    const railTop2 = new THREE.Mesh(railGeo, bridgeMat);
+    railTop2.position.set(BRIDGE_WIDTH / 2, y + RAILING_HEIGHT, offsetZ + totalD / 2);
+    railTop2.userData.type = 'bridge';
+    railTop2.userData.floor = floorNum;
+    bridgeGroup.add(railTop2);
 
-    const postGeo = new THREE.CylinderGeometry(0.025, 0.025, RAILING_HEIGHT, 6);
+    const railMidGeo = new THREE.CylinderGeometry(railRadius * 0.8, railRadius * 0.8, totalD - columnSpacing, 6);
+    railMidGeo.rotateX(Math.PI / 2);
+
+    const railMid1 = new THREE.Mesh(railMidGeo, bridgeMat);
+    railMid1.position.set(-BRIDGE_WIDTH / 2, y + RAILING_HEIGHT * 0.45, offsetZ + totalD / 2);
+    railMid1.userData.type = 'bridge';
+    railMid1.userData.floor = floorNum;
+    bridgeGroup.add(railMid1);
+
+    const railMid2 = new THREE.Mesh(railMidGeo, bridgeMat);
+    railMid2.position.set(BRIDGE_WIDTH / 2, y + RAILING_HEIGHT * 0.45, offsetZ + totalD / 2);
+    railMid2.userData.type = 'bridge';
+    railMid2.userData.floor = floorNum;
+    bridgeGroup.add(railMid2);
+
+    const postRadius = 0.025;
+    const postGeo = new THREE.CylinderGeometry(postRadius, postRadius, RAILING_HEIGHT, 8);
     postGeo.translate(0, RAILING_HEIGHT / 2, 0);
 
-    const numPosts = Math.max(2, Math.floor((totalD - columnSpacing) / columnSpacing) + 1);
+    const numPosts = Math.max(3, Math.floor((totalD - columnSpacing) / columnSpacing) + 1);
     const spanLength = (totalD - columnSpacing) / (numPosts - 1);
 
     for (let i = 0; i < numPosts; i++) {
       const pz = offsetZ + columnSpacing / 2 + i * spanLength;
 
       const p1 = new THREE.Mesh(postGeo, bridgeMat);
-      p1.position.set(-BRIDGE_WIDTH / 2, y, pz);
+      p1.position.set(-BRIDGE_WIDTH / 2, y + 0.1, pz);
       p1.userData.type = 'bridge';
-      group.add(p1);
+      p1.userData.floor = floorNum;
+      bridgeGroup.add(p1);
 
       const p2 = new THREE.Mesh(postGeo, bridgeMat);
-      p2.position.set(BRIDGE_WIDTH / 2, y, pz);
+      p2.position.set(BRIDGE_WIDTH / 2, y + 0.1, pz);
       p2.userData.type = 'bridge';
-      group.add(p2);
+      p2.userData.floor = floorNum;
+      bridgeGroup.add(p2);
     }
 
-    if (startInvisible) {
-      group.children.forEach((child) => {
-        if (child instanceof THREE.Mesh && child.userData.type === 'bridge') {
-          const mat = child.material as THREE.MeshStandardMaterial;
-          mat.transparent = true;
-          child.userData.targetOpacity = 1;
-          mat.opacity = 0;
-          child.userData.targetScaleY = child.scale.y;
-          child.scale.y = 0.01;
-        }
-      });
-    }
+    group.add(bridgeGroup);
   }
 
   private animateOut(group: THREE.Group): void {
@@ -303,83 +366,131 @@ export class AtriumBuilder {
       if (child instanceof THREE.Mesh) meshes.push(child);
     });
 
-    const maxFloor = Math.max(...meshes.map((m) => m.userData.floor || 0));
+    const maxFloor = meshes.reduce((max, m) => Math.max(max, m.userData.floor ?? 0), 0);
 
     for (const mesh of meshes) {
-      const floor = mesh.userData.floor || 0;
-      const delay = floor * 60;
+      const floor = mesh.userData.floor ?? 0;
+      const type = mesh.userData.type;
       const mat = mesh.material as THREE.MeshStandardMaterial;
 
-      const state = { opacity: mat.opacity, scaleY: mesh.scale.y };
-      new Tween(state, this.tweenGroup)
-        .to({ opacity: 0, scaleY: 0.01 }, 500)
-        .delay(delay)
-        .easing(Easing.Cubic.In)
-        .onUpdate(() => {
-          mat.opacity = state.opacity;
-          mat.transparent = true;
-          mesh.scale.y = state.scaleY;
-        })
-        .start();
+      const delay = floor * 60;
+
+      if (type === 'glass') {
+        const state = {
+          opacity: mat.opacity,
+          sx: mesh.scale.x,
+          sy: mesh.scale.y,
+          sz: mesh.scale.z,
+        };
+
+        new Tween(state, this.tweenGroup)
+          .to({ opacity: 0, sx: 0.15, sy: 0.15, sz: 0.15 }, 400)
+          .delay(delay)
+          .easing(Easing.Cubic.In)
+          .onUpdate(() => {
+            mat.opacity = state.opacity;
+            mesh.scale.set(state.sx, state.sy, state.sz);
+          })
+          .start();
+      } else {
+        const state = { opacity: mat.opacity, scaleY: mesh.scale.y };
+
+        new Tween(state, this.tweenGroup)
+          .to({ opacity: 0, scaleY: 0.01 }, 450)
+          .delay(delay)
+          .easing(Easing.Cubic.In)
+          .onUpdate(() => {
+            mat.opacity = state.opacity;
+            mesh.scale.y = state.scaleY;
+          })
+          .start();
+      }
     }
 
     new Tween({ v: 0 }, this.tweenGroup)
-      .to({ v: 1 }, maxFloor * 60 + 600)
+      .to({ v: 1 }, maxFloor * 60 + 500)
       .start();
   }
 
-  private animateIn(group: THREE.Group, params: AtriumParams): void {
+  private animateIn(group: THREE.Group): void {
     const meshes: THREE.Mesh[] = [];
     group.traverse((child) => {
       if (child instanceof THREE.Mesh) meshes.push(child);
     });
 
+    const maxFloor = meshes.reduce((max, m) => Math.max(max, m.userData.floor ?? 0), 0);
+
     for (const mesh of meshes) {
-      const floor = mesh.userData.floor || 0;
+      const floor = mesh.userData.floor ?? 0;
       const type = mesh.userData.type;
       const mat = mesh.material as THREE.MeshStandardMaterial;
-      const baseDelay = 200 + floor * 80;
 
-      if (type === 'glass' && mesh.userData.finalPos) {
+      const baseDelay = 150 + floor * 90;
+
+      if (type === 'glass') {
         const startPos = mesh.userData.startPos as THREE.Vector3;
         const finalPos = mesh.userData.finalPos as THREE.Vector3;
+        const startRot = mesh.userData.startRot as THREE.Euler;
+        const finalRot = mesh.userData.finalRot as THREE.Euler;
+        const targetOpacity = mesh.userData.targetOpacity ?? 0.3;
+
         const state = {
           x: startPos.x, y: startPos.y, z: startPos.z,
-          sx: 0.3, sy: 0.3, sz: 0.3,
+          rx: startRot.x, ry: startRot.y, rz: startRot.z,
+          sx: 0.15, sy: 0.15, sz: 0.15,
           opacity: 0,
         };
 
         new Tween(state, this.tweenGroup)
           .to({
             x: finalPos.x, y: finalPos.y, z: finalPos.z,
+            rx: finalRot.x, ry: finalRot.y, rz: finalRot.z,
             sx: 1, sy: 1, sz: 1,
-            opacity: mesh.userData.targetOpacity ?? 0.3,
-          }, 700)
-          .delay(baseDelay + 200)
+            opacity: targetOpacity,
+          }, 850)
+          .delay(baseDelay + 250)
           .easing(easeInOutCubicElastic)
           .onUpdate(() => {
             mesh.position.set(state.x, state.y, state.z);
+            mesh.rotation.set(state.rx, state.ry, state.rz);
             mesh.scale.set(state.sx, state.sy, state.sz);
             mat.opacity = state.opacity;
           })
           .start();
-      } else {
-        const targetOpacity = mesh.userData.targetOpacity ?? mat.opacity;
-        const targetScaleY = mesh.userData.targetScaleY ?? 1;
-        const state = { opacity: mat.opacity, scaleY: mesh.scale.y };
+      } else if (type === 'slab') {
+        const targetOpacity = mesh.userData.targetOpacity ?? 0.85;
+        const state = { opacity: 0, scaleY: 0.01, scaleXZ: 0.85 };
 
         new Tween(state, this.tweenGroup)
-          .to({ opacity: targetOpacity, scaleY: targetScaleY }, 600)
+          .to({ opacity: targetOpacity, scaleY: 1, scaleXZ: 1 }, 550)
           .delay(baseDelay)
           .easing(easeInOutCubicElastic)
           .onUpdate(() => {
             mat.opacity = state.opacity;
-            mat.transparent = true;
+            mesh.scale.y = state.scaleY;
+            mesh.scale.x = state.scaleXZ;
+            mesh.scale.z = state.scaleXZ;
+          })
+          .start();
+      } else {
+        const targetOpacity = mesh.userData.targetOpacity ?? 1;
+        const state = { opacity: 0, scaleY: 0.01 };
+
+        new Tween(state, this.tweenGroup)
+          .to({ opacity: targetOpacity, scaleY: 1 }, 600)
+          .delay(baseDelay)
+          .easing(easeInOutCubicElastic)
+          .onUpdate(() => {
+            mat.opacity = state.opacity;
             mesh.scale.y = Math.max(0.01, state.scaleY);
           })
           .start();
       }
     }
+
+    new Tween({ v: 0 }, this.tweenGroup)
+      .to({ v: 1 }, 150 + maxFloor * 90 + 900)
+      .start();
   }
 
   private buildEnvironment(): void {
@@ -392,14 +503,15 @@ export class AtriumBuilder {
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.01;
+    ground.receiveShadow = true;
     this.environmentGroup.add(ground);
 
     const buildingCount = 10 + Math.floor(Math.random() * 6);
     const buildingMat = new THREE.MeshStandardMaterial({ color: 0x334155 });
 
     for (let i = 0; i < buildingCount; i++) {
-      const angle = (i / buildingCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
-      const dist = 22 + Math.random() * 12;
+      const angle = (i / buildingCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.25;
+      const dist = 20 + Math.random() * 14;
       const w = 2 + Math.random() * 5;
       const d = 2 + Math.random() * 5;
       const h = 5 + Math.random() * 15;
@@ -415,15 +527,26 @@ export class AtriumBuilder {
   private clearGroup(group: THREE.Group): void {
     while (group.children.length > 0) {
       const child = group.children[0];
-      if (child instanceof THREE.Mesh) {
-        child.geometry.dispose();
-        if (Array.isArray(child.material)) {
-          child.material.forEach((m) => m.dispose());
-        } else {
-          child.material.dispose();
-        }
-      }
+      this.disposeChild(child);
       group.remove(child);
+    }
+  }
+
+  private disposeChild(child: THREE.Object3D): void {
+    if (child instanceof THREE.Mesh) {
+      child.geometry.dispose();
+      if (Array.isArray(child.material)) {
+        child.material.forEach((m) => m.dispose());
+      } else {
+        child.material.dispose();
+      }
+    }
+    if (child instanceof THREE.Group) {
+      while (child.children.length > 0) {
+        const c = child.children[0];
+        this.disposeChild(c);
+        child.remove(c);
+      }
     }
   }
 
