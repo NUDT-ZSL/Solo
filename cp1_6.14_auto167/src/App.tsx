@@ -104,26 +104,35 @@ const App: React.FC = () => {
   const handleRegionClick = useCallback((region: StyleRegion, e: React.MouseEvent) => {
     e.stopPropagation();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const panelW = 320;
-    const panelH = 600;
-    let posX = rect.right + 16;
+    const panelW = 320 + 40;
+    const panelH = Math.min(window.innerHeight - 32, 700);
+    const margin = 16;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    let posX = rect.right + margin;
     let posY = rect.top;
-    if (posX + panelW > window.innerWidth - 16) {
-      posX = Math.max(16, rect.left - panelW - 16);
+
+    if (posX + panelW > vw - margin) {
+      posX = rect.left - panelW - margin + 40;
     }
-    if (posY + panelH > window.innerHeight - 16) {
-      posY = Math.max(16, window.innerHeight - panelH - 16);
+    if (posX < margin) {
+      posX = margin;
     }
+    if (posY + panelH > vh - margin) {
+      posY = vh - panelH - margin;
+    }
+    if (posY < margin) {
+      posY = margin;
+    }
+
+    posX = Math.max(margin, Math.min(posX, vw - panelW - margin));
+    posY = Math.max(margin, Math.min(posY, vh - panelH - margin));
+
     setPanelPosition({ x: posX, y: posY });
     setSelectedRegion(region);
     setHighlightedId(region.id);
   }, []);
-
-  const handleListClick = useCallback((region: StyleRegion) => {
-    setHighlightedId(region.id);
-    setSelectedRegion(null);
-    if (isNarrow) setShowDrawer(true);
-  }, [isNarrow]);
 
   const applyStyleToPreview = useCallback((region: StyleRegion) => {
     const style: AppliedStyle = {
@@ -164,6 +173,29 @@ const App: React.FC = () => {
 
     setAppliedStyle(style);
   }, []);
+
+  const clickTimerRef = useRef<number | null>(null);
+
+  const handleListClick = useCallback((region: StyleRegion) => {
+    if (clickTimerRef.current != null) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+    clickTimerRef.current = window.setTimeout(() => {
+      clickTimerRef.current = null;
+      setHighlightedId(region.id);
+      setSelectedRegion(null);
+    }, 250);
+  }, []);
+
+  const handleListDoubleClick = useCallback((region: StyleRegion) => {
+    if (clickTimerRef.current != null) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+    setHighlightedId(region.id);
+    applyStyleToPreview(region);
+  }, [applyStyleToPreview]);
 
   const handleRegionUpdate = useCallback((updated: StyleRegion) => {
     setRegions(prev => prev.map(r => r.id === updated.id ? updated : r));
@@ -416,7 +448,7 @@ const App: React.FC = () => {
               <div
                 key={region.id}
                 onClick={() => handleListClick(region)}
-                onDoubleClick={() => applyStyleToPreview(region)}
+                onDoubleClick={() => handleListDoubleClick(region)}
                 style={{
                   display: 'flex',
                   gap: '12px',

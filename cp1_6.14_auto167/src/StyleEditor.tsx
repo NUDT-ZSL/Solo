@@ -21,6 +21,61 @@ interface EditorState {
   backgroundColor: string;
 }
 
+const CSS_VAR_MAP = {
+  gradientAngle: '--se-gradient-angle',
+  gradientStartColor: '--se-gradient-start-color',
+  gradientEndColor: '--se-gradient-end-color',
+  gradientType: '--se-gradient-type',
+  shadowOffsetX: '--se-shadow-offset-x',
+  shadowOffsetY: '--se-shadow-offset-y',
+  shadowBlur: '--se-shadow-blur',
+  borderRadius: '--se-border-radius',
+  backgroundColor: '--se-bg-color',
+  innerShadowOffsetX: '--se-inner-shadow-offset-x',
+  innerShadowOffsetY: '--se-inner-shadow-offset-y',
+  innerShadowBlur: '--se-inner-shadow-blur',
+  innerShadowColor: '--se-inner-shadow-color',
+  shadowColor: '--se-shadow-color',
+} as const;
+
+const applyCSSToPreview = (
+  previewEl: HTMLElement | null,
+  state: EditorState
+) => {
+  if (!previewEl) return;
+  const s = previewEl.style;
+
+  if (state.gradient) {
+    const stopsStr = state.gradient.stops
+      .map(st => `${st.color} ${(st.position * 100).toFixed(1)}%`)
+      .join(', ');
+    const gradFunc = state.gradient.type === 'linear'
+      ? `linear-gradient(${state.gradient.angle}deg, ${stopsStr})`
+      : `radial-gradient(circle, ${stopsStr})`;
+    s.background = gradFunc;
+  } else {
+    s.background = 'none';
+    s.backgroundColor = state.backgroundColor || '#334155';
+  }
+
+  const shadowParts: string[] = [];
+  if (state.boxShadow) {
+    shadowParts.push(
+      `${state.boxShadow.offsetX}px ${state.boxShadow.offsetY}px ` +
+      `${state.boxShadow.blur}px ${state.boxShadow.spread}px ${state.boxShadow.color}`
+    );
+  }
+  if (state.innerShadow) {
+    shadowParts.push(
+      `inset ${state.innerShadow.offsetX}px ${state.innerShadow.offsetY}px ` +
+      `${state.innerShadow.blur}px ${state.innerShadow.spread}px ${state.innerShadow.color}`
+    );
+  }
+  s.boxShadow = shadowParts.length > 0 ? shadowParts.join(', ') : 'none';
+
+  s.borderRadius = `${state.borderRadius}px`;
+};
+
 const generateCSSText = (state: EditorState): string => {
   const lines: string[] = [];
 
@@ -65,48 +120,6 @@ const generateCSSText = (state: EditorState): string => {
   return lines.join('\n');
 };
 
-const getPreviewStyle = (state: EditorState): React.CSSProperties => {
-  const style: React.CSSProperties = {
-    width: '320px',
-    height: '180px',
-    backgroundColor: state.backgroundColor || '#334155',
-    borderRadius: `${state.borderRadius}px`,
-    WebkitBorderRadius: `${state.borderRadius}px`,
-  };
-
-  if (state.gradient) {
-    const stopsStr = state.gradient.stops
-      .map(s => `${s.color} ${(s.position * 100).toFixed(1)}%`)
-      .join(', ');
-    const gradFunc = state.gradient.type === 'linear'
-      ? `linear-gradient(${state.gradient.angle}deg, ${stopsStr})`
-      : `radial-gradient(circle, ${stopsStr})`;
-    style.background = gradFunc;
-    (style as any)['WebkitBackground'] = gradFunc;
-  }
-
-  const shadowParts: string[] = [];
-  if (state.boxShadow) {
-    shadowParts.push(
-      `${state.boxShadow.offsetX}px ${state.boxShadow.offsetY}px ` +
-      `${state.boxShadow.blur}px ${state.boxShadow.spread}px ${state.boxShadow.color}`
-    );
-  }
-  if (state.innerShadow) {
-    shadowParts.push(
-      `inset ${state.innerShadow.offsetX}px ${state.innerShadow.offsetY}px ` +
-      `${state.innerShadow.blur}px ${state.innerShadow.spread}px ${state.innerShadow.color}`
-    );
-  }
-  if (shadowParts.length > 0) {
-    const shadowStr = shadowParts.join(', ');
-    style.boxShadow = shadowStr;
-    (style as any)['WebkitBoxShadow'] = shadowStr;
-  }
-
-  return style;
-};
-
 const Slider: React.FC<{
   label: string;
   value: number;
@@ -115,23 +128,41 @@ const Slider: React.FC<{
   step?: number;
   unit?: string;
   onChange: (v: number) => void;
-}> = ({ label, value, min, max, step = 1, unit = '', onChange }) => {
-  const rafRef = useRef<number | null>(null);
-  const pendingValue = useRef(value);
+  onCommit?: (v: number) => void;
+}> = ({ label, value, min, max, step = 1, unit = '', onChange, onCommit }) => {
+  const rafIdRef = useRef<number | null>(null);
+  const pendingRef = useRef(value);
+  const lastCommitRef = useRef(value);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = parseFloat(e.target.value);
-    pendingValue.current = v;
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    rafRef.current = requestAnimationFrame(() => {
-      onChange(pendingValue.current);
-      rafRef.current = null;
+    pendingRef.current = v;
+    if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current);
+    rafIdRef.current = requestAnimationFrame(() => {
+      onChange(pendingRef.current);
+      rafIdRef.current = null;
     });
   };
 
+  const handlePointerUp = () => {
+    if (rafIdRef.current != null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+    if (onCommit && pendingRef.current !== lastCommitRef.current) {
+      lastCommitRef.current = pendingRef.current;
+      onCommit(pendingRef.current);
+    }
+  };
+
+  useEffect(() => {
+    lastCommitRef.current = value;
+    pendingRef.current = value;
+  }, [value]);
+
   useEffect(() => {
     return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current);
     };
   }, []);
 
@@ -156,6 +187,8 @@ const Slider: React.FC<{
         step={step}
         value={value}
         onChange={handleChange}
+        onPointerUp={handlePointerUp}
+        onKeyUp={handlePointerUp}
         style={{
           width: '100%',
           height: '6px',
@@ -237,29 +270,89 @@ const StyleEditor: React.FC<StyleEditorProps> = ({
   const [editorState, setEditorState] = useState<EditorState | null>(null);
   const [copied, setCopied] = useState(false);
   const [cssText, setCssText] = useState('');
+  const previewRef = useRef<HTMLDivElement>(null);
+  const stateRef = useRef<EditorState | null>(null);
+  const commitTimerRef = useRef<number | null>(null);
+
+  const applyToPreviewDirect = useCallback((state: EditorState) => {
+    applyCSSToPreview(previewRef.current, state);
+  }, []);
+
+  const scheduleCommit = useCallback((state: EditorState) => {
+    if (commitTimerRef.current != null) clearTimeout(commitTimerRef.current);
+    commitTimerRef.current = window.setTimeout(() => {
+      const newCss = generateCSSText(state);
+      setCssText(newCss);
+      if (onUpdate && region) {
+        onUpdate({
+          ...region,
+          gradient: state.gradient || undefined,
+          boxShadow: state.boxShadow ? [state.boxShadow] : undefined,
+          innerShadow: state.innerShadow ? [state.innerShadow] : undefined,
+          borderRadius: state.borderRadius,
+          backgroundColor: state.backgroundColor || undefined,
+          cssText: newCss
+        });
+      }
+      commitTimerRef.current = null;
+    }, 80);
+  }, [region, onUpdate]);
 
   useEffect(() => {
     if (region) {
-      setEditorState({
+      const state: EditorState = {
         gradient: region.gradient ? { ...region.gradient, stops: region.gradient.stops.map(s => ({ ...s })) } : null,
         innerShadow: region.innerShadow && region.innerShadow.length > 0 ? { ...region.innerShadow[0] } : null,
         boxShadow: region.boxShadow && region.boxShadow.length > 0 ? { ...region.boxShadow[0] } : null,
         borderRadius: region.borderRadius,
         backgroundColor: region.backgroundColor || ''
-      });
+      };
+      setEditorState(state);
+      stateRef.current = state;
       setCssText(region.cssText);
     } else {
       setEditorState(null);
+      stateRef.current = null;
       setCssText('');
     }
   }, [region]);
 
-  const updateState = useCallback((updater: (prev: EditorState) => EditorState) => {
+  useEffect(() => {
+    if (editorState) {
+      applyCSSToPreview(previewRef.current, editorState);
+    }
+  }, [editorState]);
+
+  useEffect(() => {
+    return () => {
+      if (commitTimerRef.current != null) clearTimeout(commitTimerRef.current);
+    };
+  }, []);
+
+  const handleSliderChange = useCallback((updater: (prev: EditorState) => EditorState) => {
     setEditorState(prev => {
       if (!prev) return prev;
       const next = updater(prev);
+      stateRef.current = next;
+      applyToPreviewDirect(next);
+      return next;
+    });
+  }, [applyToPreviewDirect]);
+
+  const handleSliderCommit = useCallback(() => {
+    if (stateRef.current) {
+      scheduleCommit(stateRef.current);
+    }
+  }, [scheduleCommit]);
+
+  const handleColorChange = useCallback((updater: (prev: EditorState) => EditorState) => {
+    setEditorState(prev => {
+      if (!prev) return prev;
+      const next = updater(prev);
+      stateRef.current = next;
       const newCss = generateCSSText(next);
       setCssText(newCss);
+      applyToPreviewDirect(next);
       if (onUpdate && region) {
         onUpdate({
           ...region,
@@ -273,7 +366,7 @@ const StyleEditor: React.FC<StyleEditorProps> = ({
       }
       return next;
     });
-  }, [region, onUpdate]);
+  }, [region, onUpdate, applyToPreviewDirect]);
 
   const handleCopy = async () => {
     if (!cssText) return;
@@ -379,7 +472,16 @@ const StyleEditor: React.FC<StyleEditorProps> = ({
           display: 'flex',
           justifyContent: 'center'
         }}>
-          <div style={getPreviewStyle(editorState)} />
+          <div
+            ref={previewRef}
+            style={{
+              width: '320px',
+              height: '180px',
+              backgroundColor: editorState.backgroundColor || '#334155',
+              borderRadius: `${editorState.borderRadius}px`,
+              transition: 'none'
+            }}
+          />
         </div>
 
         {editorState.gradient && (
@@ -400,17 +502,18 @@ const StyleEditor: React.FC<StyleEditorProps> = ({
               min={0}
               max={360}
               unit="°"
-              onChange={(v) => updateState(prev => ({
+              onChange={(v) => handleSliderChange(prev => ({
                 ...prev,
                 gradient: prev.gradient ? { ...prev.gradient, angle: v } : prev.gradient
               }))}
+              onCommit={handleSliderCommit}
             />
             {editorState.gradient.stops.slice(0, 2).map((stop, idx) => (
               <ColorPicker
                 key={idx}
                 label={idx === 0 ? '起始色' : '结束色'}
                 value={stop.color}
-                onChange={(c) => updateState(prev => {
+                onChange={(c) => handleColorChange(prev => {
                   if (!prev.gradient) return prev;
                   const newStops = prev.gradient.stops.map((s, i) =>
                     i === idx ? { ...s, color: c } : s
@@ -432,7 +535,7 @@ const StyleEditor: React.FC<StyleEditorProps> = ({
               <ColorPicker
                 label="结束色"
                 value="#eab308"
-                onChange={(c) => updateState(prev => {
+                onChange={(c) => handleColorChange(prev => {
                   if (!prev.gradient) return prev;
                   return {
                     ...prev,
@@ -465,10 +568,11 @@ const StyleEditor: React.FC<StyleEditorProps> = ({
               min={-20}
               max={20}
               unit="px"
-              onChange={(v) => updateState(prev => ({
+              onChange={(v) => handleSliderChange(prev => ({
                 ...prev,
                 innerShadow: prev.innerShadow ? { ...prev.innerShadow, offsetX: v } : prev.innerShadow
               }))}
+              onCommit={handleSliderCommit}
             />
             <Slider
               label="偏移 Y"
@@ -476,10 +580,11 @@ const StyleEditor: React.FC<StyleEditorProps> = ({
               min={-20}
               max={20}
               unit="px"
-              onChange={(v) => updateState(prev => ({
+              onChange={(v) => handleSliderChange(prev => ({
                 ...prev,
                 innerShadow: prev.innerShadow ? { ...prev.innerShadow, offsetY: v } : prev.innerShadow
               }))}
+              onCommit={handleSliderCommit}
             />
             <Slider
               label="模糊半径"
@@ -487,10 +592,11 @@ const StyleEditor: React.FC<StyleEditorProps> = ({
               min={0}
               max={30}
               unit="px"
-              onChange={(v) => updateState(prev => ({
+              onChange={(v) => handleSliderChange(prev => ({
                 ...prev,
                 innerShadow: prev.innerShadow ? { ...prev.innerShadow, blur: v } : prev.innerShadow
               }))}
+              onCommit={handleSliderCommit}
             />
           </div>
         )}
@@ -513,10 +619,11 @@ const StyleEditor: React.FC<StyleEditorProps> = ({
               min={-20}
               max={20}
               unit="px"
-              onChange={(v) => updateState(prev => ({
+              onChange={(v) => handleSliderChange(prev => ({
                 ...prev,
                 boxShadow: prev.boxShadow ? { ...prev.boxShadow, offsetX: v } : prev.boxShadow
               }))}
+              onCommit={handleSliderCommit}
             />
             <Slider
               label="偏移 Y"
@@ -524,10 +631,11 @@ const StyleEditor: React.FC<StyleEditorProps> = ({
               min={-20}
               max={20}
               unit="px"
-              onChange={(v) => updateState(prev => ({
+              onChange={(v) => handleSliderChange(prev => ({
                 ...prev,
                 boxShadow: prev.boxShadow ? { ...prev.boxShadow, offsetY: v } : prev.boxShadow
               }))}
+              onCommit={handleSliderCommit}
             />
             <Slider
               label="模糊半径"
@@ -535,10 +643,11 @@ const StyleEditor: React.FC<StyleEditorProps> = ({
               min={0}
               max={30}
               unit="px"
-              onChange={(v) => updateState(prev => ({
+              onChange={(v) => handleSliderChange(prev => ({
                 ...prev,
                 boxShadow: prev.boxShadow ? { ...prev.boxShadow, blur: v } : prev.boxShadow
               }))}
+              onCommit={handleSliderCommit}
             />
           </div>
         )}
@@ -549,10 +658,11 @@ const StyleEditor: React.FC<StyleEditorProps> = ({
           min={0}
           max={60}
           unit="px"
-          onChange={(v) => updateState(prev => ({
+          onChange={(v) => handleSliderChange(prev => ({
             ...prev,
             borderRadius: v
           }))}
+          onCommit={handleSliderCommit}
         />
 
         <div style={{
@@ -608,3 +718,5 @@ const StyleEditor: React.FC<StyleEditorProps> = ({
 };
 
 export default StyleEditor;
+
+export { applyCSSToPreview, generateCSSText };
