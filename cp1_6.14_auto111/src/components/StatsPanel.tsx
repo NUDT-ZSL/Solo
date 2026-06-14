@@ -14,6 +14,7 @@ import {
 import { Stats, TAG_COLORS, Tag } from '../types';
 
 const FALLBACK_COLORS = [
+  '#8884d8',
   '#4C51BF',
   '#9F7AEA',
   '#ED64A6',
@@ -22,11 +23,17 @@ const FALLBACK_COLORS = [
   '#DD6B20',
 ];
 
+const DEFAULT_COLOR = '#8884d8';
+
 function getTagColor(tagName: string, index: number): string {
-  if (tagName in TAG_COLORS) {
-    return TAG_COLORS[tagName as Tag];
+  if (tagName && tagName in TAG_COLORS) {
+    return TAG_COLORS[tagName as Tag] || DEFAULT_COLOR;
   }
-  return FALLBACK_COLORS[index % FALLBACK_COLORS.length];
+  if (FALLBACK_COLORS && FALLBACK_COLORS.length > 0) {
+    const safeIndex = Math.max(0, index) % FALLBACK_COLORS.length;
+    return FALLBACK_COLORS[safeIndex] || DEFAULT_COLOR;
+  }
+  return DEFAULT_COLOR;
 }
 
 interface StatsPanelProps {

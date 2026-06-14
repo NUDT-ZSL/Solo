@@ -47,11 +47,15 @@
   color: #2d3748;
   font-size: 14px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.1s ease;
 }
 
 .tag-btn:hover {
   background-color: #e2e8f0;
+}
+
+.tag-btn:active {
+  transform: scale(0.97);
 }
 
 .tag-btn.active {
@@ -98,18 +102,18 @@
 .mobile-drawer {
   display: none;
   background-color: #f7fafc;
-  padding: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   overflow: hidden;
   max-height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-  transition: max-height 0.35s ease, padding 0.35s ease;
+  padding: 0 20px;
+  opacity: 0;
+  transition: max-height 0.35s ease, padding 0.35s ease, opacity 0.25s ease;
 }
 
 .mobile-drawer.open {
   max-height: 2000px;
-  padding: 20px;
+  padding: 16px 20px 24px;
+  opacity: 1;
 }
 
 .mobile-drawer .stats-panel {
@@ -118,9 +122,45 @@
   border-radius: 0;
 }
 
+.mobile-drawer .stats-title {
+  display: none;
+}
+
 .drawer-toggle.active {
   background-color: #3182ce;
   color: #ffffff;
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.drawer-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #2d3748;
+}
+
+.drawer-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background-color: #edf2f7;
+  color: #4a5568;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.drawer-close-btn:hover {
+  background-color: #e2e8f0;
+  color: #2d3748;
 }
 
 .main-content {
@@ -176,46 +216,42 @@
   user-select: none;
 }
 
+.article-card.card-click-anim {
+  animation: cardTap 0.28s ease-out;
+  animation-fill-mode: both;
+}
+
+@keyframes cardTap {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  }
+  40% {
+    transform: scale(1.02);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.09);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  }
+}
+
 .article-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10);
 }
 
-.article-card:active {
-  transform: translateY(-4px) scale(1.02);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10);
-  transition: transform 0.08s ease, box-shadow 0.25s ease;
+.article-card.card-click-anim:hover {
+  animation: cardTapHover 0.28s ease-out;
+  animation-fill-mode: both;
 }
 
-.article-card.tap-feedback {
-  animation: tapScale 0.25s ease-out;
-}
-
-@keyframes tapScale {
-  0% {
-    transform: translateY(0) scale(1);
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  }
-  35% {
-    transform: translateY(0) scale(1.02);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.09);
-  }
-  100% {
-    transform: translateY(0) scale(1);
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  }
-}
-
-.article-card.tap-feedback:hover {
-  animation: tapScaleHover 0.25s ease-out;
-}
-
-@keyframes tapScaleHover {
+@keyframes cardTapHover {
   0% {
     transform: translateY(-4px) scale(1);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10);
   }
-  35% {
+  40% {
     transform: translateY(-4px) scale(1.02);
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
   }
@@ -223,6 +259,12 @@
     transform: translateY(-4px) scale(1);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10);
   }
+}
+
+.article-card:active {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10);
+  transition: transform 0.08s ease, box-shadow 0.25s ease;
 }
 
 .article-title {

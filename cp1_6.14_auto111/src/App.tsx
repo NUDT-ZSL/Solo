@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useArticles } from './hooks/useArticles';
 import { useStats } from './hooks/useStats';
 import { ArticleCard } from './components/ArticleCard';
@@ -14,6 +14,8 @@ function App() {
   const [sortDesc, setSortDesc] = useState(true);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [animateKey, setAnimateKey] = useState(0);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const drawerToggleRef = useRef<HTMLButtonElement>(null);
 
   const filteredArticles = useMemo(() => {
     let result = [...articles];
@@ -36,6 +38,44 @@ function App() {
   useEffect(() => {
     setAnimateKey((prev) => prev + 1);
   }, [selectedTag, sortDesc]);
+
+  const handleDrawerToggle = useCallback(() => {
+    setIsDrawerOpen((prev) => !prev);
+  }, []);
+
+  const handleDrawerClose = useCallback(() => {
+    setIsDrawerOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!isDrawerOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        drawerRef.current &&
+        !drawerRef.current.contains(target) &&
+        drawerToggleRef.current &&
+        !drawerToggleRef.current.contains(target)
+      ) {
+        handleDrawerClose();
+      }
+    };
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleDrawerClose();
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isDrawerOpen, handleDrawerClose]);
 
   const handleTagClick = (tag: Tag | 'All') => {
     setSelectedTag(tag);
@@ -82,8 +122,10 @@ function App() {
               )}
             </button>
             <button
-              className="drawer-toggle"
-              onClick={() => setIsDrawerOpen(!isDrawerOpen)}
+              ref={drawerToggleRef}
+              className={`drawer-toggle ${isDrawerOpen ? 'active' : ''}`}
+              onClick={handleDrawerToggle}
+              aria-label="展开统计面板"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -95,7 +137,26 @@ function App() {
         </div>
       </header>
 
-      <div className={`mobile-drawer ${isDrawerOpen ? 'open' : ''}`}>
+      <div
+        ref={drawerRef}
+        className={`mobile-drawer ${isDrawerOpen ? 'open' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-hidden={!isDrawerOpen}
+      >
+        <div className="drawer-header">
+          <span className="drawer-title">阅读统计</span>
+          <button
+            className="drawer-close-btn"
+            onClick={handleDrawerClose}
+            aria-label="关闭统计面板"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
         <StatsPanel stats={stats} />
       </div>
 
