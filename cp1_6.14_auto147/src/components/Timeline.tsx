@@ -15,6 +15,10 @@ const Timeline: React.FC<TimelineProps> = ({ entries, selectedId, onSelect }) =>
   const [animateIds, setAnimateIds] = useState<Set<number>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const visibleCountRef = useRef(visibleCount);
+
+  visibleCountRef.current = visibleCount;
 
   const visibleEntries = entries.slice(0, visibleCount);
 
@@ -29,10 +33,10 @@ const Timeline: React.FC<TimelineProps> = ({ entries, selectedId, onSelect }) =>
 
   useEffect(() => {
     const observer = new IntersectionObserver(
-      (observerEntries) => {
-        if (observerEntries[0]?.isIntersecting && visibleCount < entries.length) {
-          const nextCount = Math.min(visibleCount + BATCH_SIZE, entries.length);
-          const newIds = entries.slice(visibleCount, nextCount).map(e => e.id!);
+      (ioEntries) => {
+        if (ioEntries[0]?.isIntersecting && visibleCountRef.current < entries.length) {
+          const nextCount = Math.min(visibleCountRef.current + BATCH_SIZE, entries.length);
+          const newIds = entries.slice(visibleCountRef.current, nextCount).map(e => e.id!);
           setVisibleCount(nextCount);
           requestAnimationFrame(() => {
             setAnimateIds(prev => {
@@ -46,12 +50,17 @@ const Timeline: React.FC<TimelineProps> = ({ entries, selectedId, onSelect }) =>
       { root: containerRef.current, rootMargin: '100px' }
     );
 
+    observerRef.current = observer;
+
     if (sentinelRef.current) {
       observer.observe(sentinelRef.current);
     }
 
-    return () => observer.disconnect();
-  }, [visibleCount, entries]);
+    return () => {
+      observer.disconnect();
+      observerRef.current = null;
+    };
+  }, [entries]);
 
   if (entries.length === 0) {
     return (
@@ -192,7 +201,8 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer'
   },
   card: {
-    width: 500,
+    width: '100%',
+    maxWidth: 500,
     background: '#ffffff',
     borderRadius: 12,
     boxShadow: '0 2px 10px rgba(0,0,0,0.06)',

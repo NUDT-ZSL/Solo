@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
-interface FilterToolbarProps {
+export interface FilterToolbarProps {
   startYear: number;
   endYear: number;
+  minYear?: number;
+  maxYear?: number;
   onYearChange: (start: number, end: number) => void;
   onReset: () => void;
   onExport: () => void;
@@ -10,42 +12,73 @@ interface FilterToolbarProps {
   exportProgress: number | null;
 }
 
-const MIN_YEAR = 2020;
-const MAX_YEAR = 2025;
+const DEFAULT_MIN_YEAR = 2020;
+const DEFAULT_MAX_YEAR = 2025;
 
 const FilterToolbar: React.FC<FilterToolbarProps> = ({
   startYear,
   endYear,
+  minYear = DEFAULT_MIN_YEAR,
+  maxYear = DEFAULT_MAX_YEAR,
   onYearChange,
   onReset,
   onExport,
   resultCount,
   exportProgress
 }) => {
-  const [startSelect, setStartSelect] = useState(startYear);
-  const [endSelect, setEndSelect] = useState(endYear);
+  const [startSelect, setStartSelect] = useState<number>(startYear);
+  const [endSelect, setEndSelect] = useState<number>(endYear);
 
-  const years = Array.from({ length: MAX_YEAR - MIN_YEAR + 1 }, (_, i) => MIN_YEAR + i);
+  useEffect(() => {
+    const validStart = Math.min(Math.max(startYear, minYear), maxYear);
+    const validEnd = Math.min(Math.max(endYear, minYear), maxYear);
+    if (validStart <= validEnd) {
+      setStartSelect(validStart);
+      setEndSelect(validEnd);
+    } else {
+      setStartSelect(validEnd);
+      setEndSelect(validStart);
+      onYearChange(validEnd, validStart);
+    }
+  }, [startYear, endYear, minYear, maxYear]);
+
+  const years = Array.from({ length: maxYear - minYear + 1 }, (_, i) => minYear + i);
 
   const handleStartChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newStart = parseInt(e.target.value);
-    setStartSelect(newStart);
-    const newEnd = newStart > endSelect ? newStart : endSelect;
-    if (newStart > endSelect) {
-      setEndSelect(newStart);
+    const newStart = parseInt(e.target.value, 10);
+    if (isNaN(newStart)) return;
+
+    let finalStart = Math.max(minYear, Math.min(newStart, maxYear));
+    let finalEnd = endSelect;
+
+    if (finalStart > finalEnd) {
+      finalEnd = finalStart;
+      setEndSelect(finalEnd);
     }
-    onYearChange(newStart, newEnd);
+
+    setStartSelect(finalStart);
+    onYearChange(finalStart, finalEnd);
   };
 
   const handleEndChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newEnd = parseInt(e.target.value);
-    setEndSelect(newEnd);
-    onYearChange(startSelect, newEnd);
+    const newEnd = parseInt(e.target.value, 10);
+    if (isNaN(newEnd)) return;
+
+    let finalEnd = Math.max(minYear, Math.min(newEnd, maxYear));
+    let finalStart = startSelect;
+
+    if (finalEnd < finalStart) {
+      finalStart = finalEnd;
+      setStartSelect(finalStart);
+    }
+
+    setEndSelect(finalEnd);
+    onYearChange(finalStart, finalEnd);
   };
 
   const handleReset = () => {
-    setStartSelect(MIN_YEAR);
-    setEndSelect(MAX_YEAR);
+    setStartSelect(minYear);
+    setEndSelect(maxYear);
     onReset();
   };
 
