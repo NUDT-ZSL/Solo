@@ -301,7 +301,7 @@ export class SnapshotRenderer {
               if (w > max) max = w;
             }
             if (idx < LENGTH) {
-              (window.requestIdleCallback || ((fn) => setTimeout(fn, 0)))(step);
+              schedule(step);
             } else {
               res(max);
             }

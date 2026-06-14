@@ -52,20 +52,56 @@ function renderTokenSpan(token: Token, theme: ThemeConfig, key: string): React.R
   );
 }
 
+interface ToastProps {
+  message: string;
+  visible: boolean;
+  type?: 'success' | 'info' | 'error';
+}
+
+function Toast({ message, visible, type = 'success' }: ToastProps) {
+  if (!visible) return null;
+  const bg =
+    type === 'success' ? '#a6e3a1' : type === 'error' ? '#f38ba8' : '#89b4fa';
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: '24px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        background: bg,
+        color: '#1e1e2e',
+        padding: '10px 20px',
+        borderRadius: '8px',
+        fontSize: '13px',
+        fontWeight: 600,
+        zIndex: 2000,
+        boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+        animation: 'pp-toast-in 0.25s ease',
+      }}
+      className="pp-toast"
+    >
+      {message}
+    </div>
+  );
+}
+
 interface ShareModalProps {
   url: string;
   onClose: () => void;
+  onToast: (msg: string) => void;
 }
 
-function ShareModal({ url, onClose }: ShareModalProps) {
+function ShareModal({ url, onClose, onToast }: ShareModalProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true);
+      onToast('Link copied to clipboard!');
       setTimeout(() => setCopied(false), 2000);
     });
-  }, [url]);
+  }, [url, onToast]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -94,7 +130,7 @@ function ShareModal({ url, onClose }: ShareModalProps) {
             {copied ? '✓ Copied!' : 'Copy Link'}
           </button>
           <button
-            style={{ ...styles.modalButton, background: '#45475a' }}
+            style={{ ...styles.modalButton, background: '#45475a', color: '#cdd6f4' }}
             onClick={onClose}
             className="pp-btn"
           >
@@ -115,11 +151,19 @@ export default function App() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
   const [showHeader, setShowHeader] = useState(false);
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' as const });
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const currentTheme = themes[themeIndex];
+  const totalThemes = themes.length;
+  const themeLabel = `${themeIndex + 1}/${totalThemes} ${currentTheme.name}`;
+
+  const showToast = useCallback((message: string, type: 'success' | 'info' | 'error' = 'success') => {
+    setToast({ visible: true, message, type });
+    setTimeout(() => setToast((t) => ({ ...t, visible: false })), 2000);
+  }, []);
 
   const processCode = useCallback(
     async (text: string, lang: Language) => {
@@ -162,11 +206,12 @@ export default function App() {
       } catch (err) {
         console.error('Render error:', err);
         eventBus.emit('render:error', err);
+        showToast('Render failed', 'error');
       } finally {
         setLoading(false);
       }
     },
-    [themeIndex, showHeader]
+    [themeIndex, showHeader, showToast]
   );
 
   useEffect(() => {
@@ -182,16 +227,22 @@ export default function App() {
   const handleDownloadPng = useCallback(() => {
     if (canvasRef.current) {
       SnapshotRenderer.downloadAsPng(canvasRef.current);
+      showToast('PNG downloaded!');
       eventBus.emit('action:download');
     }
-  }, []);
+  }, [showToast]);
 
   const handleCopyClipboard = useCallback(async () => {
     if (canvasRef.current) {
       const success = await SnapshotRenderer.copyToClipboard(canvasRef.current);
+      if (success) {
+        showToast('Image copied to clipboard!');
+      } else {
+        showToast('Failed to copy image', 'error');
+      }
       eventBus.emit('action:clipboard', success);
     }
-  }, []);
+  }, [showToast]);
 
   const handleThemeSwitch = useCallback(() => {
     setThemeIndex((prev) => (prev + 1) % themes.length);
@@ -227,7 +278,9 @@ export default function App() {
   const lineCount = code.split('\n').length;
 
   return (
-    <div style={styles.app}>
+    <div style={styles.app} className="pp-app">
+      <Toast message={toast.message} visible={toast.visible} type={toast.type} />
+
       <header style={styles.header}>
         <div style={styles.logo}>
           <span style={{ fontSize: '24px', marginRight: '8px' }}>📸</span>
@@ -263,11 +316,13 @@ export default function App() {
               </select>
             </div>
             <div style={styles.editorWrapper}>
-              {code.split('\n').map((_, i) => (
-                <div key={i} style={styles.lineNumber}>
-                  {i + 1}
-                </div>
-              ))}
+              <div style={styles.lineNumbers}>
+                {code.split('\n').map((_, i) => (
+                  <div key={i} style={styles.lineNumber}>
+                    {i + 1}
+                  </div>
+                ))}
+              </div>
               <textarea
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
@@ -283,14 +338,14 @@ export default function App() {
               ⬇ Download PNG
             </button>
             <button style={styles.actionBtn} onClick={handleCopyClipboard} className="pp-btn">
-              📋 Copy to Clipboard
+              📋 Copy Image
             </button>
             <button
               style={styles.actionBtn}
               onClick={handleThemeSwitch}
               className="pp-btn pp-theme-btn"
             >
-              🎨 {currentTheme.name}
+              🎨 {themeLabel}
             </button>
             <button style={styles.actionBtn} onClick={handleShare} className="pp-btn">
               🔗 Share
@@ -363,7 +418,11 @@ export default function App() {
       </div>
 
       {showShareModal && (
-        <ShareModal url={shareUrl} onClose={() => setShowShareModal(false)} />
+        <ShareModal
+          url={shareUrl}
+          onClose={() => setShowShareModal(false)}
+          onToast={showToast}
+        />
       )}
 
       <style>{cssStyles}</style>
@@ -378,6 +437,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#cdd6f4',
     fontFamily: "'Fira Code', monospace",
     padding: '0',
+    overflowX: 'hidden',
   },
   header: {
     display: 'flex',
@@ -385,6 +445,8 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'space-between',
     padding: '16px 32px',
     borderBottom: '1px solid #1e1e2e',
+    flexWrap: 'wrap',
+    gap: '8px',
   },
   logo: {
     display: 'flex',
@@ -397,24 +459,29 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '24px',
     maxWidth: '1600px',
     margin: '0 auto',
+    boxSizing: 'border-box',
   },
   leftPanel: {
     minWidth: 0,
     display: 'flex',
     flexDirection: 'column',
     gap: '16px',
+    boxSizing: 'border-box',
   },
   rightPanel: {
     minWidth: 0,
     display: 'flex',
     flexDirection: 'column',
     gap: '8px',
+    boxSizing: 'border-box',
   },
   editorContainer: {
     background: '#1e1e2e',
     borderRadius: '12px',
     overflow: 'hidden',
     border: '1px solid #313244',
+    width: '100%',
+    boxSizing: 'border-box',
   },
   editorHeader: {
     display: 'flex',
@@ -423,10 +490,13 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '10px 16px',
     borderBottom: '1px solid #313244',
     background: '#181825',
+    flexWrap: 'wrap',
+    gap: '8px',
   },
   windowDots: {
     display: 'flex',
     gap: '6px',
+    flexShrink: 0,
   },
   dot: {
     width: '12px',
@@ -439,15 +509,22 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#cdd6f4',
     border: 'none',
     borderRadius: '6px',
-    padding: '4px 12px',
+    padding: '6px 28px 6px 12px',
     fontSize: '13px',
     fontFamily: "'Fira Code', monospace",
     cursor: 'pointer',
     outline: 'none',
+    flexShrink: 0,
   },
   editorWrapper: {
     display: 'flex',
     position: 'relative',
+    width: '100%',
+    boxSizing: 'border-box',
+  },
+  lineNumbers: {
+    flexShrink: 0,
+    background: '#181825',
   },
   lineNumber: {
     width: '40px',
@@ -460,13 +537,10 @@ const styles: Record<string, React.CSSProperties> = {
     paddingTop: '16px',
     paddingBottom: '16px',
     userSelect: 'none',
-    flexShrink: 0,
-    background: '#181825',
   },
   textarea: {
     width: '100%',
     height: '240px',
-    maxWidth: '600px',
     background: '#1e1e2e',
     color: '#cdd6f4',
     border: 'none',
@@ -477,6 +551,8 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: '1.6',
     padding: '16px',
     flex: 1,
+    minWidth: 0,
+    boxSizing: 'border-box',
   },
   toolbar: {
     display: 'flex',
@@ -496,6 +572,7 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     transition: 'transform 0.2s ease',
     whiteSpace: 'nowrap',
+    flexShrink: 0,
   },
   options: {
     display: 'flex',
@@ -503,11 +580,14 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'space-between',
     fontSize: '12px',
     color: '#6c7086',
+    flexWrap: 'wrap',
+    gap: '8px',
   },
   optionLabel: {
     display: 'flex',
     alignItems: 'center',
     cursor: 'pointer',
+    flexShrink: 0,
   },
   lineCount: {
     fontSize: '12px',
@@ -526,13 +606,16 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid #313244',
     overflow: 'auto',
     padding: '16px',
+    boxSizing: 'border-box',
   },
   previewCard: {
     borderRadius: '16px',
     padding: '32px',
     boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
     overflow: 'auto',
+    width: '100%',
     maxWidth: '100%',
+    boxSizing: 'border-box',
   },
   previewHeader: {
     marginBottom: '16px',
@@ -543,6 +626,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '14px',
     lineHeight: '1.6',
     overflowX: 'auto',
+    width: '100%',
   },
   codeLine: {
     display: 'flex',
@@ -586,14 +670,18 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1000,
+    padding: '16px',
+    boxSizing: 'border-box',
   },
   modalContent: {
     width: '400px',
+    maxWidth: '100%',
     borderRadius: '16px',
     background: '#1e1e2e',
     boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
     color: '#fff',
     padding: '20px',
+    boxSizing: 'border-box',
   },
   urlBox: {
     background: '#11111b',
@@ -601,6 +689,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '12px',
     border: '1px solid #313244',
     overflow: 'hidden',
+    wordBreak: 'break-all',
   },
   modalButton: {
     flex: 1,
@@ -614,6 +703,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: "'Fira Code', monospace",
     cursor: 'pointer',
     transition: 'transform 0.2s ease',
+    minWidth: 0,
   },
 };
 
@@ -642,9 +732,11 @@ const cssStyles = `
   }
   .panelLeft {
     width: 45%;
+    box-sizing: border-box;
   }
   .panelRight {
     width: 55%;
+    box-sizing: border-box;
   }
 
   @media (max-width: 900px) {
@@ -654,13 +746,19 @@ const cssStyles = `
     .panelLeft,
     .panelRight {
       width: 100% !important;
+      flex: none !important;
     }
-    .layout-horizontal .panel-left,
-    .layout-horizontal .panel-right {
-      width: 100% !important;
+    .pp-app header {
+      padding: 16px;
     }
-    .layout-horizontal {
-      flex-direction: column !important;
+    .layoutHorizontal {
+      padding: 16px !important;
+      gap: 16px !important;
+    }
+    .pp-toast {
+      width: calc(100% - 32px);
+      max-width: 360px;
+      text-align: center;
     }
   }
 
@@ -695,6 +793,7 @@ const cssStyles = `
   /* ============ 主题按钮激活态 ============ */
   .pp-theme-btn {
     box-shadow: 0 0 0 2px rgba(203, 166, 247, 0.4) !important;
+    position: relative;
   }
 
   /* ============ 分享弹窗进入动画 ============ */
@@ -713,6 +812,12 @@ const cssStyles = `
     animation: pp-fade-in 0.18s ease;
   }
 
+  /* ============ Toast 动画 ============ */
+  @keyframes pp-toast-in {
+    from { opacity: 0; transform: translate(-50%, -12px); }
+    to   { opacity: 1; transform: translate(-50%, 0);     }
+  }
+
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -726,5 +831,17 @@ const cssStyles = `
   }
   ::-webkit-scrollbar-thumb:hover {
     background: #585b70;
+  }
+
+  @media (max-width: 600px) {
+    .pp-btn {
+      width: auto !important;
+      min-width: 100px;
+      flex: 1 1 calc(50% - 8px);
+      font-size: 11px !important;
+    }
+    .pp-lang-select {
+      font-size: 12px !important;
+    }
   }
 `;
