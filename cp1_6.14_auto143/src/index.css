@@ -42,21 +42,9 @@ body {
 @layer components {
   .card-fade-in {
     opacity: 0;
-    transform: translateY(16px);
-    animation: cardFadeIn 0.5s ease-out forwards;
+    transform: translateY(20px);
+    animation: cardFadeIn 0.4s ease-out forwards;
   }
-
-  .card-fade-in:nth-child(1) { animation-delay: 0ms; }
-  .card-fade-in:nth-child(2) { animation-delay: 80ms; }
-  .card-fade-in:nth-child(3) { animation-delay: 160ms; }
-  .card-fade-in:nth-child(4) { animation-delay: 240ms; }
-  .card-fade-in:nth-child(5) { animation-delay: 320ms; }
-  .card-fade-in:nth-child(6) { animation-delay: 400ms; }
-  .card-fade-in:nth-child(7) { animation-delay: 480ms; }
-  .card-fade-in:nth-child(8) { animation-delay: 560ms; }
-  .card-fade-in:nth-child(9) { animation-delay: 640ms; }
-  .card-fade-in:nth-child(10) { animation-delay: 720ms; }
-  .card-fade-in:nth-child(n+11) { animation-delay: 800ms; }
 
   .star-bounce {
     display: inline-block;
@@ -87,8 +75,14 @@ body {
   0% {
     transform: scale(1);
   }
+  30% {
+    transform: scale(1.2);
+  }
   50% {
-    transform: scale(1.4);
+    transform: scale(0.9);
+  }
+  70% {
+    transform: scale(1.05);
   }
   100% {
     transform: scale(1);

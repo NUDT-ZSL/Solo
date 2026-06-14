@@ -390,9 +390,10 @@ app.delete('/api/recipes/:id', (req: Request, res: Response): void => {
     return
   }
   recipes.splice(idx, 1)
-  const commentIdx = comments.findIndex((c) => c.recipeId === req.params.id)
-  if (commentIdx !== -1) {
-    comments.splice(commentIdx, 1)
+  for (let i = comments.length - 1; i >= 0; i--) {
+    if (comments[i].recipeId === req.params.id) {
+      comments.splice(i, 1)
+    }
   }
   favorites.delete(req.params.id)
   res.status(200).json({ success: true })
@@ -473,9 +474,20 @@ app.get('/api/ingredients/search', (req: Request, res: Response): void => {
     res.status(200).json([])
     return
   }
-  const results = Array.from(ingredientsSet).filter((name) =>
+  const matchedNames = Array.from(ingredientsSet).filter((name) =>
     name.toLowerCase().includes(q),
   )
+  const results = matchedNames.map((name) => {
+    let isMain = false
+    for (const r of recipes) {
+      const found = r.ingredients.find((i) => i.name === name)
+      if (found) {
+        isMain = found.isMain
+        break
+      }
+    }
+    return { name, isMain }
+  })
   res.status(200).json(results)
 })
 

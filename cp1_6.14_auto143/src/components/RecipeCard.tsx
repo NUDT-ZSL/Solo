@@ -22,10 +22,10 @@ const cuisineMap: Record<CuisineType, string> = {
   korean: '韩餐',
 }
 
-const matchLevelConfig: Record<MatchLevel, { label: string; bg: string; text: string }> = {
-  perfect: { label: '完美匹配', bg: 'bg-green-100', text: 'text-green-700' },
-  partial: { label: '部分匹配', bg: 'bg-yellow-100', text: 'text-yellow-700' },
-  little: { label: '少量匹配', bg: 'bg-red-100', text: 'text-red-700' },
+const matchLevelConfig: Record<MatchLevel, { label: string; color: string; textColor: string; borderColor: string }> = {
+  perfect: { label: '完美匹配', color: '#22c55e', textColor: '#ffffff', borderColor: '#22c55e' },
+  partial: { label: '部分匹配', color: '#eab308', textColor: '#ffffff', borderColor: '#eab308' },
+  little: { label: '少量匹配', color: '#ef4444', textColor: '#ffffff', borderColor: '#ef4444' },
 }
 
 export default function RecipeCard({
@@ -84,11 +84,11 @@ export default function RecipeCard({
         </button>
         {showMatch && matchLevel && (
           <div
-            className={cn(
-              'absolute top-3 left-3 px-3 py-1 rounded-full text-xs font-medium',
-              matchLevelConfig[matchLevel].bg,
-              matchLevelConfig[matchLevel].text
-            )}
+            className="absolute top-3 left-3 px-3 py-1 rounded-full text-xs font-medium"
+            style={{
+              backgroundColor: matchLevelConfig[matchLevel].color,
+              color: matchLevelConfig[matchLevel].textColor,
+            }}
           >
             {matchLevelConfig[matchLevel].label}
           </div>
@@ -116,14 +116,20 @@ export default function RecipeCard({
           <div className="mt-3 pt-3 border-t border-gray-100">
             <p className="text-xs text-gray-500 mb-1.5">匹配食材：</p>
             <div className="flex flex-wrap gap-1">
-              {matchedIngredients.map((ing) => (
-                <span
-                  key={ing}
-                  className="px-2 py-0.5 rounded-md bg-green-50 text-green-700 text-xs"
-                >
-                  {ing}
-                </span>
-              ))}
+              {matchedIngredients.map((ing) => {
+                const matchColor = matchLevel
+                  ? matchLevelConfig[matchLevel].color
+                  : '#22c55e'
+                return (
+                  <span
+                    key={ing}
+                    className="px-2 py-0.5 rounded-md text-xs text-white"
+                    style={{ backgroundColor: matchColor + '20', color: matchColor }}
+                  >
+                    {ing}
+                  </span>
+                )
+              })}
             </div>
           </div>
         )}

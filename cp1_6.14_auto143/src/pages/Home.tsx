@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Navbar from '@/components/Navbar'
 import RecipeCard from '@/components/RecipeCard'
 import type { Recipe } from '@/types'
-import { getRecipes } from '@/http'
+import { getRecipes, rateRecipe, toggleFavorite } from '@/http'
 import { Loader2 } from 'lucide-react'
 
 const PAGE_SIZE = 8
@@ -20,6 +21,13 @@ function SkeletonCard() {
   )
 }
 
+interface PaginatedResponse {
+  data: Recipe[]
+  total: number
+  page: number
+  limit: number
+}
+
 export default function Home() {
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [page, setPage] = useState<number>(1)
@@ -27,18 +35,21 @@ export default function Home() {
   const [hasMore, setHasMore] = useState<boolean>(true)
   const [initialLoading, setInitialLoading] = useState<boolean>(true)
   const observerRef = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
 
   const loadRecipes = useCallback(async (pageNum: number) => {
     if (loading) return
     setLoading(true)
     try {
-      const data = await getRecipes(pageNum, PAGE_SIZE)
+      const res = await getRecipes(pageNum, PAGE_SIZE) as unknown as PaginatedResponse
+      const newRecipes = res.data || []
       if (pageNum === 1) {
-        setRecipes(data)
+        setRecipes(newRecipes)
       } else {
-        setRecipes((prev) => [...prev, ...data])
+        setRecipes((prev) => [...prev, ...newRecipes])
       }
-      if (data.length < PAGE_SIZE) {
+      const totalLoaded = (pageNum - 1) * PAGE_SIZE + newRecipes.length
+      if (totalLoaded >= res.total || newRecipes.length < PAGE_SIZE) {
         setHasMore(false)
       }
     } catch (err) {
@@ -54,6 +65,7 @@ export default function Home() {
   }, [])
 
   useEffect(() => {
+    if (!observerRef.current) return
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasMore && !loading && !initialLoading) {
@@ -66,13 +78,37 @@ export default function Home() {
       },
       { threshold: 0.1 }
     )
-
-    if (observerRef.current) {
-      observer.observe(observerRef.current)
-    }
-
+    observer.observe(observerRef.current)
     return () => observer.disconnect()
   }, [hasMore, loading, initialLoading, loadRecipes])
+
+  const handleRate = async (id: string, rating: number) => {
+    try {
+      await rateRecipe(id, rating)
+      setRecipes((prev) =>
+        prev.map((r) => {
+          if (r.id !== id) return r
+          const total = r.rating * r.ratingCount + rating
+          const newCount = r.ratingCount + 1
+          return { ...r, rating: Number((total / newCount).toFixed(1)), ratingCount: newCount }
+        })
+      )
+    } catch (err) {
+      console.error('评分失败:', err)
+    }
+  }
+
+  const handleFavorite = async (id: string) => {
+    try {
+      await toggleFavorite(id)
+    } catch (err) {
+      console.error('收藏失败:', err)
+    }
+  }
+
+  const handleCardClick = (id: string) => {
+    navigate(`/recipe/${id}`)
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -87,8 +123,15 @@ export default function Home() {
         <div className="columns-1 md:columns-2 lg:columns-3 gap-4">
           {initialLoading
             ? Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)
-            : recipes.map((recipe) => (
-                <RecipeCard key={recipe.id} recipe={recipe} />
+            : recipes.map((recipe, index) => (
+                <RecipeCard
+                  key={recipe.id}
+                  recipe={recipe}
+                  index={index}
+                  onRate={handleRate}
+                  onFavorite={handleFavorite}
+                  onCardClick={handleCardClick}
+                />
               ))}
         </div>
 

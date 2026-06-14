@@ -81,7 +81,7 @@ export const getUserFavorites = () => {
 }
 
 export const toggleFavorite = (recipeId: string) => {
-  return request.post<unknown, { isFavorite: boolean }>('/user/favorites/toggle', { recipeId })
+  return request.post<unknown, { favorited: boolean }>(`/recipes/${recipeId}/favorite`)
 }
 
 export const uploadImage = (file: File) => {

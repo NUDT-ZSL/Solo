@@ -17,7 +17,7 @@ export default function Navbar() {
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2 text-primary font-bold text-xl">
           <ChefHat size={28} className="text-primary" />
-          <span>家庭厨房</span>
+          <span>RecipeSwap</span>
         </Link>
 
         <div className="flex items-center gap-1">
