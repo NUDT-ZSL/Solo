@@ -4,7 +4,7 @@ import { Sequencer } from './Sequencer';
 import { MixerPanel } from './MixerPanel';
 import { audioEngine } from './AudioEngine';
 import type { Track, Note, TimeSignature, LevelData, EffectType, Effect } from './types';
-import { STEPS_PER_BAR, TOTAL_BARS, TOTAL_STEPS, INSTRUMENT_COLORS } from './types';
+import { STEPS_PER_BAR } from './types';
 
 const DEFAULT_TRACKS: Track[] = [
   {
@@ -228,7 +228,7 @@ export default function App() {
   const playLoop = useCallback(() => {
     const tick = () => {
       const now = audioEngine['audioContext']?.currentTime || performance.now() / 1000;
-      const { currentLoopStep, absoluteStep } = scheduleLoopNotes(now);
+      scheduleLoopNotes(now);
 
       const loopProgress = ((now - playStartTimeRef.current) / stepDuration) % loopLength;
       const displayStep = loopStart + loopProgress;

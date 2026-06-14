@@ -193,7 +193,8 @@ class AudioEngine {
   }
 
   private setupTrackEffects(track: Track, nodes: TrackAudioNodes): void {
-    if (!this.audioContext) return;
+    const ctx = this.audioContext;
+    if (!ctx) return;
 
     track.effects.forEach((effect) => {
       if (!effect.enabled) return;
@@ -203,21 +204,21 @@ class AudioEngine {
       } else if (effect.type === 'delay') {
         nodes.delaySend.gain.value = effect.params.wet || 0.3;
       } else if (effect.type === 'chorus') {
-        const chorusDelay = this.audioContext.createDelay(0.05);
+        const chorusDelay = ctx.createDelay(0.05);
         chorusDelay.delayTime.value = effect.params.delay || 0.015;
 
-        const chorusLFO = this.audioContext.createOscillator();
+        const chorusLFO = ctx.createOscillator();
         chorusLFO.type = 'sine';
         chorusLFO.frequency.value = 0.5;
 
-        const chorusLFOGain = this.audioContext.createGain();
+        const chorusLFOGain = ctx.createGain();
         chorusLFOGain.gain.value = 0.003;
 
         chorusLFO.connect(chorusLFOGain);
         chorusLFOGain.connect(chorusDelay.delayTime);
         chorusLFO.start();
 
-        const chorusWet = this.audioContext.createGain();
+        const chorusWet = ctx.createGain();
         chorusWet.gain.value = effect.params.wet || 0.3;
 
         nodes.analyser.connect(chorusDelay);
@@ -336,7 +337,6 @@ class AudioEngine {
     output: AudioNode
   ): void {
     if (!this.audioContext) return;
-    const ctx = this.audioContext;
     const duration = endTime - startTime;
 
     switch (instrument) {
