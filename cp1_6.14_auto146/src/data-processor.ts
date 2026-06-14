@@ -70,8 +70,9 @@ function generateSeries(
 
 function pickRandomPartners(allCodes: string[], ownCode: string, count: number): string[] {
   const available = allCodes.filter((c) => c !== ownCode);
-  if (available.length === 0) return [];
-  const actualCount = Math.min(count, available.length);
+  const safeCount = Math.floor(count || 0);
+  const actualCount = Math.min(Math.max(1, safeCount), available.length);
+  if (actualCount <= 0 || available.length === 0) return [];
   const shuffled = [...available].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, actualCount);
 }

@@ -39,131 +39,119 @@ export function DetailPanel({ allCountries }: DetailPanelProps) {
   }, []);
 
   useEffect(() => {
-    if (lineChartRef.current) {
-      lineChartInstance.current = echarts.init(lineChartRef.current);
-    }
-    if (barChartRef.current) {
-      barChartInstance.current = echarts.init(barChartRef.current);
-    }
+    if (!lineChartRef.current || !barChartRef.current) return;
+
+    const lineChart = echarts.init(lineChartRef.current);
+    const barChart = echarts.init(barChartRef.current);
+    lineChartInstance.current = lineChart;
+    barChartInstance.current = barChart;
+
     const resizeHandler = () => {
-      lineChartInstance.current?.resize();
-      barChartInstance.current?.resize();
+      lineChart.resize();
+      barChart.resize();
     };
     window.addEventListener('resize', resizeHandler);
-    return () => {
-      if (lineChartInstance.current) {
-        lineChartInstance.current.dispose();
-        lineChartInstance.current = null;
-      }
-      if (barChartInstance.current) {
-        barChartInstance.current.dispose();
-        barChartInstance.current = null;
-      }
-      window.removeEventListener('resize', resizeHandler);
-    };
-  }, []);
 
-  useEffect(() => {
-    if (!selectedCountry) {
-      if (lineChartInstance.current) {
-        lineChartInstance.current.clear();
-      }
-      if (barChartInstance.current) {
-        barChartInstance.current.clear();
-      }
-      return;
+    if (selectedCountry) {
+      const years = selectedCountry.emissions.map((e) => e.year);
+      const emissions = selectedCountry.emissions.map((e) => e.value);
+      const gdpValues = selectedCountry.gdpPerCapita.map((g) => g.value);
+
+      lineChart.setOption({
+        grid: { left: 48, right: 12, top: 24, bottom: 28 },
+        tooltip: {
+          trigger: 'axis',
+          backgroundColor: 'rgba(30,30,46,0.95)',
+          borderColor: '#3b82f6',
+          textStyle: { color: '#ffffff', fontSize: 12 },
+          formatter: (params: unknown) => {
+            const p = params as Array<{ axisValue: string | number; data: number }>;
+            if (!p || p.length === 0) return '';
+            return `${p[0].axisValue}年<br/>排放量: <b style="color:#f43f5e">${formatNumber(p[0].data)} 万吨</b>`;
+          },
+        },
+        xAxis: {
+          type: 'category',
+          data: years,
+          axisLine: { lineStyle: { color: '#475569' } },
+          axisLabel: { color: '#94a3b8', fontSize: 10, interval: 3 },
+          axisTick: { show: false },
+        },
+        yAxis: {
+          type: 'value',
+          axisLine: { show: false },
+          axisLabel: { color: '#94a3b8', fontSize: 10 },
+          splitLine: { lineStyle: { color: '#1e293b', type: 'dashed' } },
+        },
+        series: [
+          {
+            type: 'line',
+            data: emissions,
+            smooth: true,
+            symbol: 'circle',
+            symbolSize: 4,
+            lineStyle: { color: '#f43f5e', width: 2 },
+            itemStyle: { color: '#f43f5e' },
+            areaStyle: {
+              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: 'rgba(244,63,94,0.25)' },
+                { offset: 1, color: 'rgba(244,63,94,0.02)' },
+              ]),
+            },
+          },
+        ],
+      });
+
+      barChart.setOption({
+        grid: { left: 48, right: 12, top: 24, bottom: 28 },
+        tooltip: {
+          trigger: 'axis',
+          backgroundColor: 'rgba(30,30,46,0.95)',
+          borderColor: '#3b82f6',
+          textStyle: { color: '#ffffff', fontSize: 12 },
+          formatter: (params: unknown) => {
+            const p = params as Array<{ axisValue: string | number; data: number }>;
+            if (!p || p.length === 0) return '';
+            return `${p[0].axisValue}年<br/>人均GDP: <b style="color:#3b82f6">$${formatNumber(p[0].data)}</b>`;
+          },
+        },
+        xAxis: {
+          type: 'category',
+          data: years,
+          axisLine: { lineStyle: { color: '#475569' } },
+          axisLabel: { color: '#94a3b8', fontSize: 10, interval: 3 },
+          axisTick: { show: false },
+        },
+        yAxis: {
+          type: 'value',
+          axisLine: { show: false },
+          axisLabel: { color: '#94a3b8', fontSize: 10 },
+          splitLine: { lineStyle: { color: '#1e293b', type: 'dashed' } },
+        },
+        series: [
+          {
+            type: 'bar',
+            data: gdpValues,
+            barWidth: 12,
+            itemStyle: {
+              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: 'rgba(59,130,246,0.9)' },
+                { offset: 1, color: 'rgba(59,130,246,0.35)' },
+              ]),
+              borderRadius: [4, 4, 0, 0],
+            },
+          },
+        ],
+      });
     }
 
-    const years = selectedCountry.emissions.map((e) => e.year);
-    const emissions = selectedCountry.emissions.map((e) => e.value);
-    const gdpValues = selectedCountry.gdpPerCapita.map((g) => g.value);
-
-    lineChartInstance.current?.setOption({
-      grid: { left: 48, right: 12, top: 24, bottom: 28 },
-      tooltip: {
-        trigger: 'axis',
-        backgroundColor: 'rgba(30,30,46,0.95)',
-        borderColor: '#3b82f6',
-        textStyle: { color: '#ffffff', fontSize: 12 },
-        formatter: (params: unknown) => {
-          const p = params as Array<{ axisValue: string | number; data: number }>;
-          if (!p || p.length === 0) return '';
-          return `${p[0].axisValue}年<br/>排放量: <b style="color:#f43f5e">${formatNumber(p[0].data)} 万吨</b>`;
-        },
-      },
-      xAxis: {
-        type: 'category',
-        data: years,
-        axisLine: { lineStyle: { color: '#475569' } },
-        axisLabel: { color: '#94a3b8', fontSize: 10, interval: 3 },
-        axisTick: { show: false },
-      },
-      yAxis: {
-        type: 'value',
-        axisLine: { show: false },
-        axisLabel: { color: '#94a3b8', fontSize: 10 },
-        splitLine: { lineStyle: { color: '#1e293b', type: 'dashed' } },
-      },
-      series: [
-        {
-          type: 'line',
-          data: emissions,
-          smooth: true,
-          symbol: 'circle',
-          symbolSize: 4,
-          lineStyle: { color: '#f43f5e', width: 2 },
-          itemStyle: { color: '#f43f5e' },
-          areaStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: 'rgba(244,63,94,0.25)' },
-              { offset: 1, color: 'rgba(244,63,94,0.02)' },
-            ]),
-          },
-        },
-      ],
-    });
-
-    barChartInstance.current?.setOption({
-      grid: { left: 48, right: 12, top: 24, bottom: 28 },
-      tooltip: {
-        trigger: 'axis',
-        backgroundColor: 'rgba(30,30,46,0.95)',
-        borderColor: '#3b82f6',
-        textStyle: { color: '#ffffff', fontSize: 12 },
-        formatter: (params: unknown) => {
-          const p = params as Array<{ axisValue: string | number; data: number }>;
-          if (!p || p.length === 0) return '';
-          return `${p[0].axisValue}年<br/>人均GDP: <b style="color:#3b82f6">$${formatNumber(p[0].data)}</b>`;
-        },
-      },
-      xAxis: {
-        type: 'category',
-        data: years,
-        axisLine: { lineStyle: { color: '#475569' } },
-        axisLabel: { color: '#94a3b8', fontSize: 10, interval: 3 },
-        axisTick: { show: false },
-      },
-      yAxis: {
-        type: 'value',
-        axisLine: { show: false },
-        axisLabel: { color: '#94a3b8', fontSize: 10 },
-        splitLine: { lineStyle: { color: '#1e293b', type: 'dashed' } },
-      },
-      series: [
-        {
-          type: 'bar',
-          data: gdpValues,
-          barWidth: 12,
-          itemStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: 'rgba(59,130,246,0.9)' },
-              { offset: 1, color: 'rgba(59,130,246,0.35)' },
-            ]),
-            borderRadius: [4, 4, 0, 0],
-          },
-        },
-      ],
-    });
+    return () => {
+      lineChart.dispose();
+      barChart.dispose();
+      lineChartInstance.current = null;
+      barChartInstance.current = null;
+      window.removeEventListener('resize', resizeHandler);
+    };
   }, [selectedCountry]);
 
   return (

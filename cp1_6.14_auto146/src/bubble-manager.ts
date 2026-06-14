@@ -62,6 +62,7 @@ export class BubbleManager {
 
   private defaultCameraPosition: THREE.Vector3;
   private defaultTarget: THREE.Vector3;
+  private baseLineMaterial: THREE.LineBasicMaterial;
 
   constructor(container: HTMLElement, statusCallback?: (info: BubbleStatusInfo | null) => void) {
     this.containerElement = container;
@@ -110,6 +111,12 @@ export class BubbleManager {
 
     this.defaultCameraPosition = this.camera.position.clone();
     this.defaultTarget = new THREE.Vector3(0, 0, 0);
+
+    this.baseLineMaterial = new THREE.LineBasicMaterial({
+      color: DEFAULT_LINE_COLOR,
+      transparent: true,
+      opacity: DEFAULT_LINE_OPACITY,
+    });
 
     this.setupLights();
     this.addEventListeners();
@@ -270,11 +277,7 @@ export class BubbleManager {
         ];
 
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        const material = new THREE.LineBasicMaterial({
-          color: DEFAULT_LINE_COLOR,
-          transparent: true,
-          opacity: DEFAULT_LINE_OPACITY,
-        });
+        const material = this.baseLineMaterial.clone();
         const line = new THREE.Line(geometry, material);
         (line.userData as TradeLineUserData).fromCode = country.code;
         (line.userData as TradeLineUserData).toCode = partnerCode;
@@ -535,11 +538,7 @@ export class BubbleManager {
           toBubble.mesh.position.clone(),
         ];
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        const material = new THREE.LineBasicMaterial({
-          color: DEFAULT_LINE_COLOR,
-          transparent: true,
-          opacity: DEFAULT_LINE_OPACITY,
-        });
+        const material = this.baseLineMaterial.clone();
         const line = new THREE.Line(geometry, material);
         (line.userData as TradeLineUserData).fromCode = country.code;
         (line.userData as TradeLineUserData).toCode = partnerCode;

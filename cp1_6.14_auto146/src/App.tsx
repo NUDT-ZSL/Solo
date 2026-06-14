@@ -9,7 +9,9 @@ export function App() {
   const canvasRef = useRef<HTMLDivElement>(null);
   const bubbleManagerRef = useRef<BubbleManager | null>(null);
   const allDataRef = useRef<ProcessedCountry[]>([]);
-  const rafRef = useRef<number>(0);
+  const throttleTimerRef = useRef<number | null>(null);
+  const throttleLastTimeRef = useRef<number>(0);
+  const throttlePendingRef = useRef<FilterConfig | null>(null);
 
   const [statusInfo, setStatusInfo] = useState<{
     name: string;
@@ -42,16 +44,41 @@ export function App() {
     return () => {
       manager.dispose();
       bubbleManagerRef.current = null;
+      if (throttleTimerRef.current !== null) {
+        clearTimeout(throttleTimerRef.current);
+        throttleTimerRef.current = null;
+      }
     };
   }, []);
+
+  const THROTTLE_DELAY = 100;
+
+  const applyFiltersThrottled = (nextFilters: FilterConfig) => {
+    const now = Date.now();
+    const elapsed = now - throttleLastTimeRef.current;
+    throttlePendingRef.current = nextFilters;
+
+    const execute = () => {
+      if (throttlePendingRef.current) {
+        bubbleManagerRef.current?.applyFilters(throttlePendingRef.current);
+        throttleLastTimeRef.current = Date.now();
+        throttlePendingRef.current = null;
+      }
+      throttleTimerRef.current = null;
+    };
+
+    if (elapsed >= THROTTLE_DELAY) {
+      execute();
+    } else if (!throttleTimerRef.current) {
+      const remaining = THROTTLE_DELAY - elapsed;
+      throttleTimerRef.current = window.setTimeout(execute, remaining);
+    }
+  };
 
   const handleFilterChange = <K extends keyof FilterConfig>(key: K, value: FilterConfig[K]) => {
     setFilters((prev) => {
       const next = { ...prev, [key]: value };
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(() => {
-        bubbleManagerRef.current?.applyFilters(next);
-      });
+      applyFiltersThrottled(next);
       return next;
     });
   };
