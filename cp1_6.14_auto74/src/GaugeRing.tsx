@@ -29,6 +29,7 @@ export default function GaugeRing({
   const radius = (size - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
   const offset = circumference - (displayValue / maxValue) * circumference;
+  const center = size / 2;
 
   useEffect(() => {
     targetValueRef.current = value;
@@ -68,16 +69,16 @@ export default function GaugeRing({
     }}>
       <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
         <circle
-          cx={size / 2}
-          cy={size / 2}
+          cx={center}
+          cy={center}
           r={radius}
           fill="none"
           stroke={bgColor}
           strokeWidth={strokeWidth}
         />
         <circle
-          cx={size / 2}
-          cy={size / 2}
+          cx={center}
+          cy={center}
           r={radius}
           fill="none"
           stroke={color}
@@ -88,22 +89,30 @@ export default function GaugeRing({
           style={{ transition: 'stroke-dashoffset 0.1s linear' }}
         />
       </svg>
-      <div
-        style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          fontSize: 24,
-          fontWeight: 'bold',
-          color: textColor,
-          fontFamily: "'Courier New', monospace",
-          textAlign: 'center'
+      <svg 
+        width={size} 
+        height={size} 
+        style={{ 
+          position: 'absolute', 
+          top: 0, 
+          left: 0,
+          pointerEvents: 'none'
         }}
       >
-        {Math.round(displayValue)}
-        <span style={{ fontSize: 14, color: '#8b949e' }}>{unit}</span>
-      </div>
+        <text
+          x={center}
+          y={center}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill={textColor}
+          fontSize="24"
+          fontWeight="bold"
+          fontFamily="'Courier New', monospace"
+        >
+          {Math.round(displayValue)}
+          <tspan fill="#8b949e" fontSize="14" dx="4" dy="0">{unit}</tspan>
+        </text>
+      </svg>
     </div>
   );
 }

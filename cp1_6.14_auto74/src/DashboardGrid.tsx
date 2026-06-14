@@ -130,20 +130,22 @@ const MiniChart = memo(function MiniChart({
 
 interface DataCardProps {
   dataSource: DataSource;
-  index: number;
+  originalIndex: number;
   isDragging: boolean;
   isNew: boolean;
-  onDragStart: (index: number) => void;
+  animateIn: boolean;
+  onDragStart: (e: React.DragEvent, index: number) => void;
   onDragEnd: () => void;
   onDragOver: (e: React.DragEvent, index: number) => void;
-  onDrop: (index: number) => void;
+  onDrop: (e: React.DragEvent, index: number) => void;
 }
 
 const DataCard = memo(function DataCard({ 
   dataSource, 
-  index, 
+  originalIndex, 
   isDragging,
   isNew,
+  animateIn,
   onDragStart,
   onDragEnd,
   onDragOver,
@@ -183,19 +185,24 @@ const DataCard = memo(function DataCard({
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', String(index));
-    onDragStart(index);
+    e.dataTransfer.setData('text/plain', String(originalIndex));
+    onDragStart(e, originalIndex);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    onDragOver(e, index);
+    onDragOver(e, originalIndex);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    onDrop(index);
+    e.stopPropagation();
+    onDrop(e, originalIndex);
+  };
+
+  const handleDragEnd = () => {
+    onDragEnd();
   };
 
   const formatValue = (val: number): string => {
@@ -207,11 +214,25 @@ const DataCard = memo(function DataCard({
 
   const isRingChart = dataSource.chartType === 'ring' || dataSource.type === 'progress';
 
+  const getAnimationStyle = (): React.CSSProperties => {
+    if (isNew) {
+      return {
+        animation: 'scaleIn 0.3s ease-out forwards'
+      };
+    }
+    if (animateIn) {
+      return {
+        animation: `fadeInUp 0.3s ease-out ${originalIndex * 0.1}s both`
+      };
+    }
+    return {};
+  };
+
   return (
     <div
       draggable
       onDragStart={handleDragStart}
-      onDragEnd={onDragEnd}
+      onDragEnd={handleDragEnd}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
       style={{
@@ -221,18 +242,11 @@ const DataCard = memo(function DataCard({
         border: '1px solid #30363d',
         padding: 20,
         boxSizing: 'border-box',
-        cursor: 'grab',
+        cursor: isDragging ? 'grabbing' : 'grab',
         opacity: isDragging ? 0.6 : 1,
-        transform: isNew ? 'scale(1)' : 'scale(1)',
-        animation: isNew ? 'scaleIn 0.3s ease-out' : `fadeInUp 0.3s ease-out ${index * 0.1}s both`,
-        transition: 'opacity 0.2s, box-shadow 0.2s',
-        userSelect: 'none'
-      }}
-      onMouseDown={(e) => {
-        (e.currentTarget as HTMLDivElement).style.cursor = 'grabbing';
-      }}
-      onMouseUp={(e) => {
-        (e.currentTarget as HTMLDivElement).style.cursor = 'grab';
+        transition: 'opacity 0.2s, box-shadow 0.2s, transform 0.2s',
+        userSelect: 'none',
+        ...getAnimationStyle()
       }}
     >
       <div style={{
@@ -305,9 +319,25 @@ interface DashboardGridProps {
 export default function DashboardGrid({ dataSources, onReorder, newItemId }: DashboardGridProps) {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [animateIn, setAnimateIn] = useState(false);
 
-  const handleDragStart = useCallback((index: number) => {
+  useEffect(() => {
+    if (dataSources.length > 0) {
+      const timer = setTimeout(() => {
+        setAnimateIn(true);
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [dataSources.length]);
+
+  const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
     setDraggedIndex(index);
+    setDragOverIndex(index);
+    try {
+      e.dataTransfer.setDragImage(e.currentTarget as HTMLElement, 20, 20);
+    } catch {
+      // setDragImage may not be supported in some browsers
+    }
   }, []);
 
   const handleDragEnd = useCallback(() => {
@@ -318,75 +348,127 @@ export default function DashboardGrid({ dataSources, onReorder, newItemId }: Das
     setDragOverIndex(null);
   }, [draggedIndex, dragOverIndex, onReorder]);
 
-  const handleDragOver = useCallback((_e: React.DragEvent, index: number) => {
-    if (index !== draggedIndex) {
+  const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex === null) return;
+    
+    if (draggedIndex === index) {
       setDragOverIndex(index);
+      return;
     }
-  }, [draggedIndex]);
 
-  const handleDrop = useCallback((index: number) => {
-    setDragOverIndex(index);
+    const target = e.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    const midX = rect.left + rect.width / 2;
+    
+    let newIndex = index;
+    if (e.clientX < midX) {
+      newIndex = draggedIndex < index ? index - 1 : index;
+    } else {
+      newIndex = draggedIndex < index ? index : index + 1;
+    }
+    newIndex = Math.max(0, Math.min(newIndex, dataSources.length - 1));
+    
+    setDragOverIndex(newIndex);
+  }, [draggedIndex, dataSources.length]);
+
+  const handleDrop = useCallback((_e: React.DragEvent, _index: number) => {
+    if (draggedIndex !== null && dragOverIndex !== null && draggedIndex !== dragOverIndex) {
+      onReorder(draggedIndex, dragOverIndex);
+    }
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  }, [draggedIndex, dragOverIndex, onReorder]);
+
+  const handleContainerDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
   }, []);
+
+  const handleContainerDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    if (draggedIndex !== null && dragOverIndex !== null && draggedIndex !== dragOverIndex) {
+      onReorder(draggedIndex, dragOverIndex);
+    }
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  }, [draggedIndex, dragOverIndex, onReorder]);
 
   const renderItems = () => {
     const items: React.ReactNode[] = [];
-    
-    for (let i = 0; i < dataSources.length; i++) {
-      const ds = dataSources[i];
-      const isNew = ds.id === newItemId;
 
-      if (dragOverIndex === i && draggedIndex !== null && draggedIndex !== i) {
-        if (draggedIndex > i) {
+    for (let displayIdx = 0; displayIdx < dataSources.length; displayIdx++) {
+      let sourceIdx = displayIdx;
+      
+      if (draggedIndex !== null && dragOverIndex !== null) {
+        if (draggedIndex < dragOverIndex) {
+          if (displayIdx === dragOverIndex || (displayIdx > draggedIndex && displayIdx < dragOverIndex)) {
+            sourceIdx = displayIdx - 1;
+          } else if (displayIdx === draggedIndex) {
+            sourceIdx = dragOverIndex;
+          }
+        } else if (draggedIndex > dragOverIndex) {
+          if (displayIdx === dragOverIndex) {
+            sourceIdx = draggedIndex;
+          } else if (displayIdx > dragOverIndex && displayIdx <= draggedIndex) {
+            sourceIdx = displayIdx + 1;
+          }
+        }
+      }
+
+      if (draggedIndex !== null && dragOverIndex !== null && draggedIndex !== dragOverIndex) {
+        if (displayIdx === dragOverIndex) {
           items.push(
             <div
-              key={`placeholder-${i}`}
+              key={`placeholder-${displayIdx}`}
               style={{
                 width: '48%',
                 borderRadius: 12,
                 border: '2px dashed #30363d',
-                backgroundColor: 'rgba(48, 54, 61, 0.1)',
+                backgroundColor: 'rgba(48, 54, 61, 0.15)',
                 boxSizing: 'border-box',
-                height: 180,
-                order: items.length
+                minHeight: 180
               }}
             />
           );
+          if (dragOverIndex > draggedIndex) {
+            items.push(
+              <DataCard
+                key={dataSources[sourceIdx].id}
+                dataSource={dataSources[sourceIdx]}
+                originalIndex={sourceIdx}
+                isDragging={draggedIndex === sourceIdx}
+                isNew={dataSources[sourceIdx].id === newItemId}
+                animateIn={animateIn && dataSources[sourceIdx].id !== newItemId}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+              />
+            );
+          }
+          continue;
         }
       }
 
-      if (draggedIndex !== i) {
-        items.push(
-          <DataCard
-            key={ds.id}
-            dataSource={ds}
-            index={i}
-            isDragging={draggedIndex === i}
-            isNew={isNew}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-          />
-        );
+      if (draggedIndex !== null && sourceIdx === draggedIndex && dragOverIndex !== draggedIndex) {
+        continue;
       }
 
-      if (dragOverIndex === i && draggedIndex !== null && draggedIndex !== i) {
-        if (draggedIndex < i) {
-          items.push(
-            <div
-              key={`placeholder-${i}`}
-              style={{
-                width: '48%',
-                borderRadius: 12,
-                border: '2px dashed #30363d',
-                backgroundColor: 'rgba(48, 54, 61, 0.1)',
-                boxSizing: 'border-box',
-                height: 180
-              }}
-            />
-          );
-        }
-      }
+      items.push(
+        <DataCard
+          key={dataSources[sourceIdx].id}
+          dataSource={dataSources[sourceIdx]}
+          originalIndex={sourceIdx}
+          isDragging={draggedIndex === sourceIdx}
+          isNew={dataSources[sourceIdx].id === newItemId}
+          animateIn={animateIn && dataSources[sourceIdx].id !== newItemId}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        />
+      );
     }
 
     return items;
@@ -394,6 +476,8 @@ export default function DashboardGrid({ dataSources, onReorder, newItemId }: Das
 
   return (
     <div
+      onDragOver={handleContainerDragOver}
+      onDrop={handleContainerDrop}
       style={{
         display: 'flex',
         flexWrap: 'wrap',
@@ -413,11 +497,15 @@ export default function DashboardGrid({ dataSources, onReorder, newItemId }: Das
           }
         }
         @keyframes scaleIn {
-          from {
+          0% {
             opacity: 0;
             transform: scale(0);
           }
-          to {
+          60% {
+            opacity: 1;
+            transform: scale(1.03);
+          }
+          100% {
             opacity: 1;
             transform: scale(1);
           }

@@ -18,10 +18,37 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newItemId, setNewItemId] = useState<string | null>(null);
   const intervalRefs = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
+  const pendingUpdates = useRef<Map<string, { value: number; history: number[] }>>(new Map());
+  const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
     const ordered = loadOrderFromStorage(defaultDataSources);
     setDataSources(ordered);
+  }, []);
+
+  const flushPendingUpdates = useCallback(() => {
+    if (pendingUpdates.current.size === 0) {
+      rafRef.current = null;
+      return;
+    }
+
+    const updates = new Map(pendingUpdates.current);
+    pendingUpdates.current.clear();
+
+    setDataSources(prev => {
+      let changed = false;
+      const next = prev.map(ds => {
+        const update = updates.get(ds.id);
+        if (update && (update.value !== ds.value || update.history.length !== ds.history.length)) {
+          changed = true;
+          return { ...ds, value: update.value, history: update.history };
+        }
+        return ds;
+      });
+      return changed ? next : prev;
+    });
+
+    rafRef.current = requestAnimationFrame(flushPendingUpdates);
   }, []);
 
   const refreshDataSource = useCallback(async (id: string) => {
@@ -30,20 +57,24 @@ export default function App() {
       if (!ds) return prev;
 
       fetchDataSource(ds.id, ds.name, ds.type, ds.value).then(newValue => {
-        setDataSources(current => {
-          return current.map(d => {
-            if (d.id === id) {
-              const newHistory = [...d.history.slice(1), newValue];
-              return { ...d, value: newValue, history: newHistory };
-            }
-            return d;
-          });
-        });
+        const newHistory = [...ds.history.slice(1), newValue];
+        
+        const existing = pendingUpdates.current.get(id);
+        if (existing) {
+          existing.value = newValue;
+          existing.history = newHistory;
+        } else {
+          pendingUpdates.current.set(id, { value: newValue, history: newHistory });
+        }
+
+        if (rafRef.current === null) {
+          rafRef.current = requestAnimationFrame(flushPendingUpdates);
+        }
       });
 
       return prev;
     });
-  }, []);
+  }, [flushPendingUpdates]);
 
   useEffect(() => {
     dataSources.forEach(ds => {
@@ -64,9 +95,19 @@ export default function App() {
     });
 
     return () => {
-      // 组件卸载时清理所有定时器
+      // 组件卸载时清理
     };
   }, [dataSources, refreshDataSource]);
+
+  useEffect(() => {
+    return () => {
+      intervalRefs.current.forEach(interval => clearInterval(interval));
+      intervalRefs.current.clear();
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, []);
 
   const handleReorder = useCallback((fromIndex: number, toIndex: number) => {
     setDataSources(prev => {
