@@ -104,6 +104,7 @@ export interface GameState {
   levelName: string;
   lightSources: LightSource[];
   raySegments: RaySegment[][];
+  composedRaySegments?: RaySegment[];
   platforms: Platform[];
   reflectors: Reflector[];
   prisms: Prism[];
@@ -115,6 +116,21 @@ export interface GameState {
   completeAnimationTime: number;
   blockedFlashTime: number;
   blockedPosition?: Vec2;
+  perfStats?: {
+    fps: number;
+    frameTime: number;
+    rayComputeTime: number;
+  };
+  letterParticles?: Array<{
+    position: Vec2;
+    targetPosition: Vec2;
+    velocity: Vec2;
+    color: string;
+    size: number;
+    life: number;
+    maxLife: number;
+    phase: 'expand' | 'gather';
+  }>;
 }
 
 export type EventType =

@@ -18,6 +18,19 @@ const MAX_RAY_LENGTH = 3000;
 const EPSILON = 0.001;
 const REFLECTOR_HALF_LENGTH = 50;
 const MOVE_SPEED = 50;
+const PRISM_REFRACTIVE_INDEX = 1.5;
+const PRISM_DEFLECT_ANGLE = Math.PI / 6;
+
+interface PerfStats {
+  rayComputeTime: number;
+  frameTime: number;
+  fps: number;
+}
+
+interface RaySegmentWithColor extends RaySegment {
+  color: { r: number; g: number; b: number };
+  alpha: number;
+}
 
 interface RayCollision {
   point: Vec2;
@@ -35,6 +48,12 @@ export class GameEngine {
   private lastAngleRecord: Map<string, number> = new Map();
   private dragStartAngle: Map<string, number> = new Map();
   private onChangeCallback?: (state: GameState) => void;
+  private perfStats: PerfStats = { rayComputeTime: 0, frameTime: 0, fps: 0 };
+  private frameCount: number = 0;
+  private fpsTimer: number = 0;
+  private composedRaySegments: RaySegmentWithColor[] = [];
+  private dirty: boolean = true;
+  private lastLightSourceAngles: Map<string, number> = new Map();
 
   constructor() {
     this.state = this.createInitialState();
@@ -180,7 +199,25 @@ export class GameEngine {
     const dt = Math.min((now - this.lastTime) / 1000, 0.05);
     this.lastTime = now;
 
+    const frameStart = now;
+
     this.update(dt);
+
+    const frameTime = performance.now() - frameStart;
+    this.perfStats.frameTime = frameTime;
+    this.frameCount++;
+    this.fpsTimer += dt;
+    if (this.fpsTimer >= 0.5) {
+      this.perfStats.fps = Math.round(this.frameCount / this.fpsTimer);
+      this.frameCount = 0;
+      this.fpsTimer = 0;
+    }
+
+    this.state.perfStats = {
+      fps: this.perfStats.fps,
+      frameTime: this.perfStats.frameTime,
+      rayComputeTime: this.perfStats.rayComputeTime
+    };
 
     if (this.onChangeCallback) {
       this.onChangeCallback(this.state);
@@ -193,15 +230,32 @@ export class GameEngine {
     if (this.state.levelComplete) {
       this.state.completeAnimationTime += dt;
       this.updateParticles(dt);
+      this.updateLetterParticles(dt);
       return;
     }
 
+    this.checkDirty();
     this.updateMovingPlatforms(dt);
     this.computeAllRays();
     this.updateReceivers(dt);
     this.checkPortalActivation();
     this.updateBlockedFlash(dt);
     this.updateParticles(dt);
+  }
+
+  private checkDirty(): void {
+    let changed = false;
+    for (const source of this.state.lightSources) {
+      const lastAngle = this.lastLightSourceAngles.get(source.id);
+      if (lastAngle === undefined || Math.abs(lastAngle - source.angle) > 0.001) {
+        changed = true;
+        this.lastLightSourceAngles.set(source.id, source.angle);
+      }
+    }
+    if (this.state.platforms.some(p => p.isMoving)) {
+      changed = true;
+    }
+    this.dirty = this.dirty || changed;
   }
 
   private updateMovingPlatforms(dt: number): void {
@@ -238,20 +292,92 @@ export class GameEngine {
   }
 
   private computeAllRays(): void {
+    if (!this.dirty && this.state.raySegments.length > 0) {
+      return;
+    }
+
+    const startTime = performance.now();
+
     this.state.raySegments = [];
+    this.composedRaySegments = [];
+
+    const allSegments: RaySegmentWithColor[] = [];
 
     for (const source of this.state.lightSources) {
       const segments: RaySegment[] = [];
+      const sourceColor = { r: 255, g: 235, b: 59 };
+
       this.traceRay(
         source.position,
         { x: Math.cos(source.angle), y: Math.sin(source.angle) },
         1.0,
         segments,
         0,
-        null
+        null,
+        sourceColor,
+        0.8,
+        allSegments
       );
       this.state.raySegments.push(segments);
     }
+
+    this.composedRaySegments = this.composeRays(allSegments);
+    this.state.composedRaySegments = this.composedRaySegments.map(s => ({
+      start: s.start,
+      end: s.end,
+      intensity: s.intensity,
+      blocked: s.blocked
+    }));
+
+    this.dirty = false;
+    this.perfStats.rayComputeTime = performance.now() - startTime;
+  }
+
+  private composeRays(segments: RaySegmentWithColor[]): RaySegmentWithColor[] {
+    if (segments.length === 0) return [];
+
+    const grid: Map<string, { r: number; g: number; b: number; alpha: number }> = new Map();
+    const CELL_SIZE = 4;
+
+    for (const seg of segments) {
+      const steps = Math.ceil(Math.hypot(seg.end.x - seg.start.x, seg.end.y - seg.start.y) / CELL_SIZE);
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const x = Math.floor((seg.start.x + (seg.end.x - seg.start.x) * t) / CELL_SIZE);
+        const y = Math.floor((seg.start.y + (seg.end.y - seg.start.y) * t) / CELL_SIZE);
+        const key = `${x},${y}`;
+
+        const existing = grid.get(key);
+        if (existing) {
+          existing.r = Math.max(existing.r, seg.color.r);
+          existing.g = Math.max(existing.g, seg.color.g);
+          existing.b = Math.max(existing.b, seg.color.b);
+          existing.alpha = Math.min(1, existing.alpha + seg.alpha);
+        } else {
+          grid.set(key, {
+            r: seg.color.r,
+            g: seg.color.g,
+            b: seg.color.b,
+            alpha: seg.alpha
+          });
+        }
+      }
+    }
+
+    return segments.map(seg => {
+      const midX = (seg.start.x + seg.end.x) / 2;
+      const midY = (seg.start.y + seg.end.y) / 2;
+      const key = `${Math.floor(midX / CELL_SIZE)},${Math.floor(midY / CELL_SIZE)}`;
+      const composed = grid.get(key);
+      if (composed) {
+        return {
+          ...seg,
+          color: { r: composed.r, g: composed.g, b: composed.b },
+          alpha: composed.alpha
+        };
+      }
+      return seg;
+    });
   }
 
   private traceRay(
@@ -260,11 +386,21 @@ export class GameEngine {
     intensity: number,
     outSegments: RaySegment[],
     bounceCount: number,
-    ignoreObjId: string | null
+    ignoreObjId: string | null,
+    inColor: { r: number; g: number; b: number },
+    inAlpha: number,
+    outColoredSegments: RaySegmentWithColor[]
   ): void {
     if (bounceCount >= MAX_BOUNCES || intensity < 0.05) return;
 
     const collision = this.findClosestCollision(origin, dir, ignoreObjId);
+
+    const endColor = {
+      r: Math.max(100, Math.min(255, inColor.r * (0.3 + 0.7 * intensity))),
+      g: Math.max(50, Math.min(255, inColor.g * (0.2 + 0.8 * intensity))),
+      b: Math.max(0, Math.min(255, inColor.b * intensity))
+    };
+    const endAlpha = Math.max(0.2, inAlpha * intensity);
 
     if (!collision) {
       const endPoint: Vec2 = {
@@ -272,6 +408,13 @@ export class GameEngine {
         y: origin.y + dir.y * MAX_RAY_LENGTH
       };
       outSegments.push({ start: { ...origin }, end: endPoint, intensity });
+      outColoredSegments.push({
+        start: { ...origin },
+        end: endPoint,
+        intensity,
+        color: endColor,
+        alpha: endAlpha
+      });
       return;
     }
 
@@ -280,6 +423,14 @@ export class GameEngine {
       end: { ...collision.point },
       intensity,
       blocked: collision.type === 'platform'
+    });
+    outColoredSegments.push({
+      start: { ...origin },
+      end: { ...collision.point },
+      intensity,
+      blocked: collision.type === 'platform',
+      color: endColor,
+      alpha: endAlpha
     });
 
     if (collision.type === 'platform') {
@@ -302,13 +453,23 @@ export class GameEngine {
       const reflector = this.state.reflectors.find((r) => r.id === collision.objId);
       const efficiency = reflector?.efficiency ?? 0.95;
       const reflected = this.reflectVector(dir, collision.normal);
+
+      const newColor = {
+        r: Math.min(255, inColor.r * 0.95),
+        g: Math.min(255, inColor.g * 0.98),
+        b: Math.min(255, inColor.b + 10)
+      };
+
       this.traceRay(
         collision.point,
         reflected,
         intensity * efficiency,
         outSegments,
         bounceCount + 1,
-        collision.objId ?? null
+        collision.objId ?? null,
+        newColor,
+        inAlpha * efficiency,
+        outColoredSegments
       );
       return;
     }
@@ -317,30 +478,46 @@ export class GameEngine {
       const prism = this.state.prisms.find((p) => p.id === collision.objId);
       if (!prism) return;
 
-      const refractAngle = (30 * Math.PI) / 180;
-      const cosR = Math.cos(refractAngle);
-      const sinR = Math.sin(refractAngle);
-      const dir1: Vec2 = { x: dir.x, y: dir.y };
-      const dir2: Vec2 = {
-        x: dir.x * cosR - dir.y * sinR,
-        y: dir.x * sinR + dir.y * cosR
+      const n1 = 1.0;
+      const n2 = prism.refractiveIndex || PRISM_REFRACTIVE_INDEX;
+
+      const transmittedDir = this.refractVector(dir, collision.normal, n1, n2);
+      const deflectedDir = this.rotateVector(dir, PRISM_DEFLECT_ANGLE);
+
+      const transmittedColor = {
+        r: Math.min(255, inColor.r),
+        g: Math.min(255, Math.floor(inColor.g * 0.9)),
+        b: Math.min(255, Math.floor(inColor.b * 0.7))
+      };
+
+      const deflectedColor = {
+        r: Math.min(255, Math.floor(inColor.r * 0.7)),
+        g: Math.min(255, Math.floor(inColor.g * 0.9)),
+        b: Math.min(255, inColor.b)
       };
 
       this.traceRay(
         collision.point,
-        dir1,
+        transmittedDir,
         intensity * 0.7,
         outSegments,
         bounceCount + 1,
-        collision.objId ?? null
+        collision.objId ?? null,
+        transmittedColor,
+        inAlpha * 0.7,
+        outColoredSegments
       );
+
       this.traceRay(
         collision.point,
-        dir2,
+        deflectedDir,
         intensity * 0.5,
         outSegments,
         bounceCount + 1,
-        collision.objId ?? null
+        collision.objId ?? null,
+        deflectedColor,
+        inAlpha * 0.5,
+        outColoredSegments
       );
       return;
     }
@@ -348,6 +525,31 @@ export class GameEngine {
     if (collision.type === 'bounds') {
       return;
     }
+  }
+
+  private refractVector(v: Vec2, n: Vec2, n1: number, n2: number): Vec2 {
+    const nr = n1 / n2;
+    const dot = v.x * n.x + v.y * n.y;
+    const k = 1 - nr * nr * (1 - dot * dot);
+
+    if (k < 0) {
+      return this.reflectVector(v, n);
+    }
+
+    const sqrtK = Math.sqrt(k);
+    return {
+      x: nr * v.x - (nr * dot + sqrtK) * n.x,
+      y: nr * v.y - (nr * dot + sqrtK) * n.y
+    };
+  }
+
+  private rotateVector(v: Vec2, angle: number): Vec2 {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    return {
+      x: v.x * cos - v.y * sin,
+      y: v.x * sin + v.y * cos
+    };
   }
 
   private isPlatformMovableBlocking(platformId?: string): boolean {
@@ -658,6 +860,7 @@ export class GameEngine {
     levelManager.completeLevel(this.state.levelId);
     eventBus.emit('levelComplete', { levelId: this.state.levelId, steps: this.state.stepCount });
     this.spawnCompletionParticles();
+    this.spawnLetterParticles();
   }
 
   private spawnActivationParticles(pos: Vec2, color: string): void {
@@ -702,6 +905,77 @@ export class GameEngine {
       p.position.y += p.velocity.y * dt;
       p.velocity.x *= 0.98;
       p.velocity.y *= 0.98;
+      return true;
+    });
+  }
+
+  private spawnLetterParticles(): void {
+    const text = 'Level Complete';
+    const canvasWidth = 1000;
+    const canvasHeight = 600;
+    const centerX = canvasWidth / 2;
+    const centerY = canvasHeight / 2;
+    const fontSize = 64;
+    const charWidth = 42;
+    const totalWidth = text.length * charWidth;
+    const startX = centerX - totalWidth / 2 + charWidth / 2;
+
+    const letterTargets: Array<{ char: string; x: number; y: number }> = [];
+    for (let i = 0; i < text.length; i++) {
+      letterTargets.push({
+        char: text[i],
+        x: startX + i * charWidth,
+        y: centerY
+      });
+    }
+
+    const colors = ['#ffeb3b', '#ffc107', '#ff9800', '#ffeb3b'];
+    this.state.letterParticles = [];
+
+    for (const source of this.state.lightSources) {
+      for (const target of letterTargets) {
+        for (let i = 0; i < 8; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 80 + Math.random() * 120;
+          this.state.letterParticles.push({
+            position: { ...source.position },
+            targetPosition: { x: target.x + (Math.random() - 0.5) * 20, y: target.y + (Math.random() - 0.5) * 20 },
+            velocity: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
+            color: colors[Math.floor(Math.random() * colors.length)],
+            size: 3 + Math.random() * 4,
+            life: 3,
+            maxLife: 3,
+            phase: 'expand'
+          });
+        }
+      }
+    }
+  }
+
+  private updateLetterParticles(dt: number): void {
+    if (!this.state.letterParticles) return;
+
+    const t = this.state.completeAnimationTime;
+    const gatherStartTime = 1.0;
+
+    this.state.letterParticles = this.state.letterParticles.filter(p => {
+      p.life -= dt;
+      if (p.life <= 0) return false;
+
+      if (t < gatherStartTime) {
+        p.position.x += p.velocity.x * dt;
+        p.position.y += p.velocity.y * dt;
+        p.velocity.x *= 0.96;
+        p.velocity.y *= 0.96;
+      } else {
+        p.phase = 'gather';
+        const gatherProgress = Math.min(1, (t - gatherStartTime) / 1.5);
+        const ease = gatherProgress * gatherProgress * (3 - 2 * gatherProgress);
+
+        p.position.x += (p.targetPosition.x - p.position.x) * ease * 0.15;
+        p.position.y += (p.targetPosition.y - p.position.y) * ease * 0.15;
+      }
+
       return true;
     });
   }

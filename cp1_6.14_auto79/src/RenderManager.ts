@@ -31,13 +31,27 @@ export class RenderManager {
     this.drawMirrors(ctx, state.reflectors);
     this.drawReceivers(ctx, state.receivers);
     this.drawPortal(ctx, state.portal);
-    this.drawAllRays(ctx, state.raySegments);
+
+    if (state.composedRaySegments && state.composedRaySegments.length > 0) {
+      this.drawComposedRays(ctx, state.composedRaySegments);
+    } else {
+      this.drawAllRays(ctx, state.raySegments);
+    }
+
     this.drawBlockedFlash(ctx, state);
     this.drawLightSources(ctx, state.lightSources);
     this.drawParticles(ctx, state.particles);
 
+    if (state.letterParticles) {
+      this.drawLetterParticles(ctx, state.letterParticles);
+    }
+
     if (state.levelComplete) {
       this.drawLevelComplete(ctx, state.completeAnimationTime);
+    }
+
+    if (state.perfStats) {
+      this.drawPerfStats(ctx, state.perfStats);
     }
 
     ctx.restore();
@@ -317,22 +331,27 @@ export class RenderManager {
     ctx.restore();
   }
 
+  private drawComposedRays(ctx: CanvasRenderingContext2D, segments: RaySegment[]): void {
+    for (const segment of segments) {
+      this.drawRaySegmentGradient(ctx, segment);
+    }
+  }
+
   private drawAllRays(ctx: CanvasRenderingContext2D, allSegments: RaySegment[][]): void {
     for (const segments of allSegments) {
       for (const segment of segments) {
-        this.drawRaySegment(ctx, segment);
+        this.drawRaySegmentGradient(ctx, segment);
       }
     }
   }
 
-  private drawRaySegment(ctx: CanvasRenderingContext2D, segment: RaySegment): void {
+  private drawRaySegmentGradient(ctx: CanvasRenderingContext2D, segment: RaySegment): void {
     const dx = segment.end.x - segment.start.x;
     const dy = segment.end.y - segment.start.y;
     const len = Math.hypot(dx, dy);
     if (len < 1) return;
 
     const intensity = segment.intensity;
-    const baseAlpha = Math.min(1, 0.2 + intensity * 0.6);
 
     ctx.save();
 
@@ -341,11 +360,20 @@ export class RenderManager {
       segment.end.x, segment.end.y
     );
 
-    const startColor = this.lerpColor('#ffeb3b', '#fff9c4', intensity * 0.3);
-    const endColor = this.lerpColor('#ff9800', '#f44336', 1 - intensity);
+    const startR = 255;
+    const startG = 235;
+    const startB = 59;
+    const endR = 255;
+    const endG = 152;
+    const endB = 0;
 
-    gradient.addColorStop(0, this.hexToRgba(startColor, baseAlpha * 0.9));
-    gradient.addColorStop(1, this.hexToRgba(endColor, baseAlpha * 0.2));
+    const r = Math.round(startR + (endR - startR) * intensity);
+    const g = Math.round(startG + (endG - startG) * intensity);
+    const b = Math.round(startB + (endB - startB) * intensity);
+
+    gradient.addColorStop(0, `rgba(${startR}, ${startG}, ${startB}, ${0.8 * intensity})`);
+    gradient.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${0.5 * intensity})`);
+    gradient.addColorStop(1, `rgba(${endR}, ${endG}, ${endB}, ${0.2 * intensity})`);
 
     ctx.shadowColor = '#ff9800';
     ctx.shadowBlur = 8 * intensity;
@@ -360,7 +388,7 @@ export class RenderManager {
     ctx.stroke();
 
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = this.hexToRgba('#ffffff', baseAlpha * 0.3);
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.3 * intensity})`;
     ctx.lineWidth = Math.max(0.5, 1 * intensity);
     ctx.stroke();
 
@@ -454,9 +482,58 @@ export class RenderManager {
     }
   }
 
+  private drawLetterParticles(ctx: CanvasRenderingContext2D, particles: NonNullable<GameState['letterParticles']>): void {
+    for (const p of particles) {
+      const alpha = Math.min(1, p.life / p.maxLife * 1.5);
+      const size = p.size * (p.phase === 'gather' ? 1 : 0.8 + alpha * 0.4);
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = size * 3;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.position.x, p.position.y, size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  private drawPerfStats(
+    ctx: CanvasRenderingContext2D,
+    stats: NonNullable<GameState['perfStats']>
+  ): void {
+    const padding = 10;
+    const lineHeight = 16;
+    const x = padding;
+    let y = padding + lineHeight;
+
+    ctx.save();
+    ctx.font = '12px "Courier New", monospace';
+    ctx.textAlign = 'left';
+
+    const fpsColor = stats.fps >= 30 ? '#00e676' : stats.fps >= 20 ? '#ff9800' : '#ff1744';
+    const frameColor = stats.frameTime <= 25 ? '#00e676' : stats.frameTime <= 35 ? '#ff9800' : '#ff1744';
+    const rayColor = stats.rayComputeTime <= 1 ? '#00e676' : stats.rayComputeTime <= 3 ? '#ff9800' : '#ff1744';
+
+    ctx.fillStyle = fpsColor;
+    ctx.fillText(`FPS: ${stats.fps}`, x, y);
+    y += lineHeight;
+
+    ctx.fillStyle = frameColor;
+    ctx.fillText(`Frame: ${stats.frameTime.toFixed(1)}ms`, x, y);
+    y += lineHeight;
+
+    ctx.fillStyle = rayColor;
+    ctx.fillText(`Ray: ${stats.rayComputeTime.toFixed(2)}ms`, x, y);
+
+    ctx.restore();
+  }
+
   private drawLevelComplete(ctx: CanvasRenderingContext2D, time: number): void {
     const duration = 3;
     const t = Math.min(time / duration, 1);
+    const showTextTime = 2.0;
 
     ctx.save();
 
@@ -473,45 +550,49 @@ export class RenderManager {
       this.width / 2, this.height / 2, 0,
       this.width / 2, this.height / 2, this.width
     );
-    overlayGradient.addColorStop(0, `rgba(103, 58, 183, ${0.3 * alpha})`);
-    overlayGradient.addColorStop(1, `rgba(10, 10, 20, ${0.7 * alpha})`);
+    overlayGradient.addColorStop(0, `rgba(103, 58, 183, ${0.4 * alpha})`);
+    overlayGradient.addColorStop(1, `rgba(10, 10, 20, ${0.8 * alpha})`);
     ctx.fillStyle = overlayGradient;
     ctx.fillRect(0, 0, this.width, this.height);
 
-    const textScale = t < 0.4
-      ? 0.5 + (t / 0.4) * 0.5
-      : t > 0.8
-        ? 1 + ((t - 0.8) / 0.2) * 0.2
+    if (t >= showTextTime / duration) {
+      const textT = Math.min(1, (t - showTextTime / duration) / (1 - showTextTime / duration));
+      const textAlpha = textT;
+
+      const textScale = textT < 0.5
+        ? 0.8 + (textT / 0.5) * 0.2
         : 1 + 0.05 * Math.sin(time * Math.PI * 4);
 
-    ctx.translate(this.width / 2, this.height / 2);
-    ctx.scale(textScale, textScale);
-    ctx.translate(-this.width / 2, -this.height / 2);
+      ctx.translate(this.width / 2, this.height / 2);
+      ctx.scale(textScale, textScale);
+      ctx.translate(-this.width / 2, -this.height / 2);
 
-    ctx.shadowColor = '#ffeb3b';
-    ctx.shadowBlur = 30 * alpha;
+      ctx.shadowColor = '#ffeb3b';
+      ctx.shadowBlur = 30 * textAlpha;
 
-    ctx.font = 'bold 64px "Courier New", monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+      ctx.font = 'bold 64px "Courier New", monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
 
-    const text = 'Level Complete';
-    const colors = ['#ffeb3b', '#ffc107', '#ff9800', '#ffeb3b'];
-    const chars = text.split('');
-    const charWidth = 42;
-    const totalWidth = chars.length * charWidth;
-    const startX = this.width / 2 - totalWidth / 2 + charWidth / 2;
+      const text = 'Level Complete';
+      const colors = ['#ffeb3b', '#ffc107', '#ff9800', '#ffeb3b'];
+      const chars = text.split('');
+      const charWidth = 42;
+      const totalWidth = chars.length * charWidth;
+      const startX = this.width / 2 - totalWidth / 2 + charWidth / 2;
 
-    for (let i = 0; i < chars.length; i++) {
-      const charT = t * 3 - i * 0.05;
-      const bounce = Math.max(0, Math.sin(Math.max(0, charT) * Math.PI)) * 20;
-      const color = colors[i % colors.length];
-      ctx.fillStyle = color;
-      ctx.globalAlpha = alpha;
-      ctx.fillText(chars[i], startX + i * charWidth, this.height / 2 - bounce);
+      for (let i = 0; i < chars.length; i++) {
+        const charT = textT * 3 - i * 0.05;
+        const bounce = Math.max(0, Math.sin(Math.max(0, charT) * Math.PI)) * 15;
+        const color = colors[i % colors.length];
+        ctx.fillStyle = color;
+        ctx.globalAlpha = textAlpha;
+        ctx.fillText(chars[i], startX + i * charWidth, this.height / 2 - bounce);
+      }
+
+      ctx.globalAlpha = 1;
     }
 
-    ctx.globalAlpha = 1;
     ctx.restore();
   }
 
