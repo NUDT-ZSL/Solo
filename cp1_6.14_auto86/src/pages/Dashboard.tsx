@@ -28,7 +28,7 @@ const Dashboard = () => {
 
   const loadCourses = async () => {
     try {
-      const data = await http.get('/courses');
+      const data = await http.get('/notes/courses');
       setCourses(data);
     } catch (error) {
       console.error('Failed to load courses:', error);
@@ -44,7 +44,7 @@ const Dashboard = () => {
   const handleCreateCourse = async () => {
     if (!newCourseName.trim() || !newTeacherName.trim()) return;
     try {
-      await http.post('/courses', {
+      await http.post('/notes/courses', {
         name: newCourseName,
         teacher: newTeacherName,
       });

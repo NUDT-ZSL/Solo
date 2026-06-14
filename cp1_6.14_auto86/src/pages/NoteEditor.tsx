@@ -98,7 +98,7 @@ const NoteEditor = () => {
 
   const loadChapters = async () => {
     try {
-      const data = await http.get(`/courses/${courseId}/chapters`);
+      const data = await http.get(`/notes/courses/${courseId}/chapters`);
       setChapters(data);
       if (data.length > 0) {
         setCurrentChapterId(data[0].id);
@@ -224,7 +224,7 @@ const NoteEditor = () => {
     setNewComment('');
 
     try {
-      const savedComment = await http.post('/comments', {
+      const savedComment = await http.post('/notes/comments', {
         noteId: note.id,
         userId: 'user-demo',
         userName,
