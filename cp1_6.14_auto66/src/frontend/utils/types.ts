@@ -11,6 +11,8 @@ export interface Spot {
   description: string;
   time: string;
   duration: string;
+  lat: number;
+  lng: number;
   coordinates: [number, number];
   imagePrompt: string;
 }

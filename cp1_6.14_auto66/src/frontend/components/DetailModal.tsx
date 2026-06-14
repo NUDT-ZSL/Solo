@@ -73,9 +73,9 @@ const DetailModal: React.FC<DetailModalProps> = ({ dayPlan, destination, onClose
             ">${idx + 1}</span>
           </div>
         `,
-        iconSize: [24, 24],
-        iconAnchor: [12, 24],
-        popupAnchor: [0, -24],
+        iconSize: [30, 30],
+        iconAnchor: [15, 30],
+        popupAnchor: [0, -30],
       });
 
       const marker = L.marker(spot.coordinates, { icon: customIcon })

@@ -150,18 +150,21 @@ function generateDayPlan(dateNum, data, preferences) {
   const shuffledAttractions = shuffleArray(data.attractions);
   const selectedAttractions = shuffledAttractions.slice(0, spotsCount);
   
-  const spots = selectedAttractions.map((attraction, idx) => ({
-    id: uuidv4(),
-    name: attraction.name,
-    description: attraction.description,
-    time: timeSlots[idx * 2] || timeSlots[timeSlots.length - 1],
-    duration: attraction.duration,
-    coordinates: [
-      data.baseCoords[0] + attraction.offset[0] + (Math.random() - 0.5) * 0.01,
-      data.baseCoords[1] + attraction.offset[1] + (Math.random() - 0.5) * 0.01
-    ],
-    imagePrompt: getRandomItem(data.imagePrompts)
-  }));
+  const spots = selectedAttractions.map((attraction, idx) => {
+    const lat = data.baseCoords[0] + attraction.offset[0] + (Math.random() - 0.5) * 0.01;
+    const lng = data.baseCoords[1] + attraction.offset[1] + (Math.random() - 0.5) * 0.01;
+    return {
+      id: uuidv4(),
+      name: attraction.name,
+      description: attraction.description,
+      time: timeSlots[idx * 2] || timeSlots[timeSlots.length - 1],
+      duration: attraction.duration,
+      lat,
+      lng,
+      coordinates: [lat, lng],
+      imagePrompt: getRandomItem(data.imagePrompts)
+    };
+  });
 
   const shuffledRestaurants = shuffleArray(data.restaurants);
   const restaurants = shuffledRestaurants.slice(0, 2).map(r => ({

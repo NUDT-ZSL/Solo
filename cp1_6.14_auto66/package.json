@@ -43,7 +43,7 @@
     "autoprefixer": "^10.4.21",
     "babel-plugin-react-dev-locator": "^1.0.0",
     "concurrently": "^8.2.2",
-    "postcss": "^85.3",
+    "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "eslint": "^9.25.0",
     "eslint-plugin-react-hooks": "^5.2.0",

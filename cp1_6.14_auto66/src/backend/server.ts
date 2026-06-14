@@ -4,6 +4,7 @@ import { Low } from 'lowdb';
 import { JSONFile } from 'lowdb/node';
 import path from 'path';
 import { fileURLToPath } from 'url';
+// @ts-expect-error JS module without type declarations
 import { generateTravelPlan } from './generator.js';
 
 const __filename = fileURLToPath(import.meta.url);

@@ -32,7 +32,8 @@ const PlanFeed: React.FC = () => {
     setDragOverIndex(null);
   }, []);
 
-  const handleDragOver = useCallback((_e: React.DragEvent, index: number) => {
+  const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault();
     if (draggedIndex === null || draggedIndex === index) return;
     setDragOverIndex(index);
   }, [draggedIndex]);
@@ -66,6 +67,21 @@ const PlanFeed: React.FC = () => {
       removeDay(dayId);
     }
   }, [removeDay]);
+
+  const getDisplayOrder = useCallback(() => {
+    if (!plan) return [];
+    const items = plan.dailyPlans.map((dp, idx) => ({ dayPlan: dp, originalIndex: idx }));
+    if (draggedIndex === null || dragOverIndex === null) return items;
+    const draggedItem = items.find(it => it.originalIndex === draggedIndex);
+    if (!draggedItem) return items;
+    const filtered = items.filter(it => it.originalIndex !== draggedIndex);
+    const insertAt = filtered.findIndex(it => it.originalIndex === dragOverIndex);
+    if (insertAt === -1) return items;
+    filtered.splice(insertAt, 0, draggedItem);
+    return filtered;
+  }, [plan, draggedIndex, dragOverIndex]);
+
+  const displayOrder = getDisplayOrder();
 
   const handleExportPDF = useCallback(() => {
     if (plan) {
@@ -138,22 +154,22 @@ const PlanFeed: React.FC = () => {
 
       <main className="plan-feed">
         <div className="cards-grid">
-          {plan.dailyPlans.map((dayPlan, index) => (
+          {displayOrder.map(({ dayPlan, originalIndex }, displayIdx) => (
             <PlanCard
               key={dayPlan.id}
               dayPlan={dayPlan}
-              index={index}
+              index={originalIndex}
               isEditMode={isEditMode}
               onCardClick={() => handleCardClick(dayPlan)}
               onDelete={() => handleDelete(dayPlan.id)}
-              onMoveUp={() => handleMoveUp(index)}
-              onMoveDown={() => handleMoveDown(index)}
+              onMoveUp={() => handleMoveUp(originalIndex)}
+              onMoveDown={() => handleMoveDown(originalIndex)}
               onDragStart={handleDragStart}
-              onDragOver={(e) => handleDragOver(e, index)}
+              onDragOver={(e) => handleDragOver(e, originalIndex)}
               onDrop={handleDrop}
               onDragEnd={handleDragEnd}
-              isDragging={draggedIndex === index}
-              isDragOver={dragOverIndex === index && draggedIndex !== index}
+              isDragging={draggedIndex === originalIndex}
+              isDragOver={dragOverIndex === originalIndex && draggedIndex !== originalIndex}
             />
           ))}
         </div>
