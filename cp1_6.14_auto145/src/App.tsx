@@ -18,6 +18,120 @@ const defaultAvatar = 'data:image/svg+xml;utf8,' + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="%23d4a373"/><text x="32" y="40" font-size="24" text-anchor="middle" fill="white" font-family="sans-serif">🐾</text></svg>'
 );
 
+const demoDogAvatar = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="%23e8a87c"/><text x="32" y="42" font-size="28" text-anchor="middle">🐕</text></svg>'
+);
+
+const demoCatAvatar = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="%23c65b3e"/><text x="32" y="42" font-size="28" text-anchor="middle">🐱</text></svg>'
+);
+
+function initDemoData() {
+  const pets = PetService.getAllPets();
+  if (pets.length > 0) return;
+
+  const now = Date.now();
+  const day = 24 * 60 * 60 * 1000;
+
+  const dogId = 'demo-dog-1';
+  const catId = 'demo-cat-1';
+
+  localStorage.setItem('pet_health_pets', JSON.stringify([
+    {
+      id: dogId,
+      name: '豆豆',
+      avatar: demoDogAvatar,
+      breed: '金毛犬',
+      birthday: '2022-03-15',
+      weight: 25.5,
+      createdAt: now - 365 * day,
+    },
+    {
+      id: catId,
+      name: '咪咪',
+      avatar: demoCatAvatar,
+      breed: '英国短毛猫',
+      birthday: '2023-06-20',
+      weight: 4.2,
+      createdAt: now - 200 * day,
+    },
+  ]));
+
+  const records: Record[] = [];
+
+  for (let i = 0; i < 30; i++) {
+    const date = now - i * day;
+    records.push({
+      id: `rec-feed-dog-${i}`,
+      petId: dogId,
+      type: 'feeding',
+      note: `早餐狗粮 ${150 + Math.floor(Math.random() * 50)}g`,
+      timestamp: date + 8 * 60 * 60 * 1000,
+      value: 150 + Math.floor(Math.random() * 50),
+    });
+    records.push({
+      id: `rec-walk-dog-${i}`,
+      petId: dogId,
+      type: 'walk',
+      note: i % 2 === 0 ? '公园散步' : '小区遛弯',
+      timestamp: date + 18 * 60 * 60 * 1000,
+      value: 30 + Math.floor(Math.random() * 40),
+    });
+    if (i % 3 === 0) {
+      records.push({
+        id: `rec-weight-dog-${i}`,
+        petId: dogId,
+        type: 'weight',
+        note: '每周称重',
+        timestamp: date + 12 * 60 * 60 * 1000,
+        value: Number((25 + Math.random() * 1.5).toFixed(1)),
+      });
+    }
+    if (i % 7 === 0) {
+      records.push({
+        id: `rec-bath-dog-${i}`,
+        petId: dogId,
+        type: 'bath',
+        note: '洗香香',
+        timestamp: date + 16 * 60 * 60 * 1000,
+      });
+    }
+    if (i % 14 === 0) {
+      records.push({
+        id: `rec-med-dog-${i}`,
+        petId: dogId,
+        type: 'medication',
+        note: '驱虫药',
+        timestamp: date + 10 * 60 * 60 * 1000,
+      });
+    }
+  }
+
+  for (let i = 0; i < 15; i++) {
+    const date = now - i * day;
+    records.push({
+      id: `rec-feed-cat-${i}`,
+      petId: catId,
+      type: 'feeding',
+      note: '猫粮',
+      timestamp: date + 9 * 60 * 60 * 1000,
+      value: 40 + Math.floor(Math.random() * 20),
+    });
+    if (i % 5 === 0) {
+      records.push({
+        id: `rec-weight-cat-${i}`,
+        petId: catId,
+        type: 'weight',
+        note: '称重记录',
+        timestamp: date + 14 * 60 * 60 * 1000,
+        value: Number((4 + Math.random() * 0.8).toFixed(1)),
+      });
+    }
+  }
+
+  localStorage.setItem('pet_health_records', JSON.stringify(records));
+}
+
 function App() {
   return (
     <Router>
@@ -39,6 +153,7 @@ function HomePage() {
   const [editingPet, setEditingPet] = useState<Pet | null>(null);
 
   useEffect(() => {
+    initDemoData();
     setPets(PetService.getAllPets());
     const unsubscribe = PetService.subscribe((newPets) => {
       setPets(newPets as Pet[]);
