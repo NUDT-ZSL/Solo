@@ -8,10 +8,11 @@ import type {
   Listener,
   UICommand,
 } from './types';
+import { RESOURCE_TYPES } from './types';
 
 const BUILDING_CONFIGS: Record<BuildingType, BuildingConfig> = {
   solarPanel: {
-    type: 'solarPanel',
+    type: 'solarPanel' as BuildingType,
     name: '太阳能板',
     icon: '☀️',
     color: '#ffd54f',
@@ -22,7 +23,7 @@ const BUILDING_CONFIGS: Record<BuildingType, BuildingConfig> = {
     efficiencyMultiplier: 1.6,
   },
   miner: {
-    type: 'miner',
+    type: 'miner' as BuildingType,
     name: '采矿机',
     icon: '⛏️',
     color: '#b0bec5',
@@ -33,7 +34,7 @@ const BUILDING_CONFIGS: Record<BuildingType, BuildingConfig> = {
     efficiencyMultiplier: 1.5,
   },
   greenhouse: {
-    type: 'greenhouse',
+    type: 'greenhouse' as BuildingType,
     name: '温室',
     icon: '🌱',
     color: '#81c784',
@@ -47,7 +48,7 @@ const BUILDING_CONFIGS: Record<BuildingType, BuildingConfig> = {
 
 const INITIAL_RESOURCES: Record<ResourceType, ResourceState> = {
   energy: {
-    type: 'energy',
+    type: 'energy' as ResourceType,
     amount: 100,
     production: 0,
     consumption: 0,
@@ -56,7 +57,7 @@ const INITIAL_RESOURCES: Record<ResourceType, ResourceState> = {
     icon: '⚡',
   },
   ore: {
-    type: 'ore',
+    type: 'ore' as ResourceType,
     amount: 80,
     production: 0,
     consumption: 0,
@@ -65,7 +66,7 @@ const INITIAL_RESOURCES: Record<ResourceType, ResourceState> = {
     icon: '💎',
   },
   food: {
-    type: 'food',
+    type: 'food' as ResourceType,
     amount: 50,
     production: 0,
     consumption: 0,
@@ -75,6 +76,8 @@ const INITIAL_RESOURCES: Record<ResourceType, ResourceState> = {
   },
 };
 
+const CANVAS_RENDER_THRESHOLD = 100;
+
 export class GameEngine {
   private tickCount = 0;
   private isPaused = false;
@@ -83,7 +86,10 @@ export class GameEngine {
   private gridSize = 20;
   private selectedBuildingType: BuildingType | null = null;
   private selectedBuildingId: string | null = null;
-  private tickInterval: ReturnType<typeof setInterval> | null = null;
+  private rafId: number | null = null;
+  private lastTickTime = 0;
+  private accumulatedTime = 0;
+  private readonly TICK_INTERVAL = 1000;
   private listeners: Set<Listener<GameSnapshot>> = new Set();
   private buildingIdCounter = 0;
 
@@ -92,16 +98,37 @@ export class GameEngine {
   }
 
   start(): void {
-    if (this.tickInterval) return;
-    this.tickInterval = setInterval(() => this.tick(), 1000);
+    if (this.rafId !== null) return;
+    this.lastTickTime = performance.now();
+    this.accumulatedTime = 0;
+    this.loop();
   }
 
   stop(): void {
-    if (this.tickInterval) {
-      clearInterval(this.tickInterval);
-      this.tickInterval = null;
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
     }
   }
+
+  private loop = (): void => {
+    const now = performance.now();
+    const delta = now - this.lastTickTime;
+    this.lastTickTime = now;
+
+    if (!this.isPaused) {
+      this.accumulatedTime += delta;
+
+      while (this.accumulatedTime >= this.TICK_INTERVAL) {
+        this.accumulatedTime -= this.TICK_INTERVAL;
+        this.tick();
+      }
+    } else {
+      this.lastTickTime = now;
+    }
+
+    this.rafId = requestAnimationFrame(this.loop);
+  };
 
   subscribe(listener: Listener<GameSnapshot>): () => void {
     this.listeners.add(listener);
@@ -128,6 +155,10 @@ export class GameEngine {
 
   getBuildingConfigs(): Record<BuildingType, BuildingConfig> {
     return BUILDING_CONFIGS;
+  }
+
+  getCanvasRenderThreshold(): number {
+    return CANVAS_RENDER_THRESHOLD;
   }
 
   executeCommand(command: UICommand): void {
@@ -158,13 +189,11 @@ export class GameEngine {
   }
 
   private tick(): void {
-    if (this.isPaused) return;
-
     this.tickCount++;
 
     this.recalculateRates();
 
-    (Object.keys(this.resources) as ResourceType[]).forEach((type) => {
+    RESOURCE_TYPES.forEach((type) => {
       const res = this.resources[type];
       const net = res.production - res.consumption;
       res.amount = Math.max(0, res.amount + net);
@@ -184,18 +213,19 @@ export class GameEngine {
       const config = BUILDING_CONFIGS[building.type];
       const levelMultiplier = Math.pow(config.efficiencyMultiplier, building.level - 1);
 
-      (Object.keys(config.baseProduction) as ResourceType[]).forEach((type) => {
+      RESOURCE_TYPES.forEach((type) => {
         const prod = config.baseProduction[type] || 0;
-        totals[type].production += prod * levelMultiplier;
-      });
-
-      (Object.keys(config.baseConsumption) as ResourceType[]).forEach((type) => {
+        if (prod > 0) {
+          totals[type].production += prod * levelMultiplier;
+        }
         const cons = config.baseConsumption[type] || 0;
-        totals[type].consumption += cons * levelMultiplier;
+        if (cons > 0) {
+          totals[type].consumption += cons * levelMultiplier;
+        }
       });
     });
 
-    (Object.keys(this.resources) as ResourceType[]).forEach((type) => {
+    RESOURCE_TYPES.forEach((type) => {
       this.resources[type].production = totals[type].production;
       this.resources[type].consumption = totals[type].consumption;
     });
@@ -233,7 +263,6 @@ export class GameEngine {
     const building = this.buildings.find((b) => b.id === buildingId);
     if (!building) return;
 
-    const config = BUILDING_CONFIGS[building.type];
     const upgradeCost = this.getUpgradeCost(building);
 
     if (!this.canAfford(upgradeCost)) return;
@@ -249,9 +278,11 @@ export class GameEngine {
     const multiplier = Math.pow(config.upgradeCostMultiplier, building.level);
     const cost: Partial<Record<ResourceType, number>> = {};
 
-    (Object.keys(config.baseCost) as ResourceType[]).forEach((type) => {
+    RESOURCE_TYPES.forEach((type) => {
       const base = config.baseCost[type] || 0;
-      cost[type] = Math.ceil(base * multiplier);
+      if (base > 0) {
+        cost[type] = Math.ceil(base * multiplier);
+      }
     });
 
     return cost;
@@ -264,13 +295,15 @@ export class GameEngine {
     const building = this.buildings[index];
     const config = BUILDING_CONFIGS[building.type];
 
-    (Object.keys(config.baseCost) as ResourceType[]).forEach((type) => {
+    RESOURCE_TYPES.forEach((type) => {
       const baseCost = config.baseCost[type] || 0;
-      let totalSpent = baseCost;
-      for (let i = 1; i < building.level; i++) {
-        totalSpent += Math.ceil(baseCost * Math.pow(config.upgradeCostMultiplier, i));
+      if (baseCost > 0) {
+        let totalSpent = baseCost;
+        for (let i = 1; i < building.level; i++) {
+          totalSpent += Math.ceil(baseCost * Math.pow(config.upgradeCostMultiplier, i));
+        }
+        this.resources[type].amount += Math.floor(totalSpent * 0.5);
       }
-      this.resources[type].amount += Math.floor(totalSpent * 0.5);
     });
 
     this.buildings.splice(index, 1);
@@ -285,18 +318,25 @@ export class GameEngine {
 
   private togglePause(): void {
     this.isPaused = !this.isPaused;
+    if (!this.isPaused) {
+      this.lastTickTime = performance.now();
+    }
     this.notify();
   }
 
   private canAfford(cost: Partial<Record<ResourceType, number>>): boolean {
-    return (Object.keys(cost) as ResourceType[]).every((type) => {
-      return this.resources[type].amount >= (cost[type] || 0);
+    return RESOURCE_TYPES.every((type) => {
+      const required = cost[type] || 0;
+      return required === 0 || this.resources[type].amount >= required;
     });
   }
 
   private spendResources(cost: Partial<Record<ResourceType, number>>): void {
-    (Object.keys(cost) as ResourceType[]).forEach((type) => {
-      this.resources[type].amount -= cost[type] || 0;
+    RESOURCE_TYPES.forEach((type) => {
+      const amount = cost[type] || 0;
+      if (amount > 0) {
+        this.resources[type].amount -= amount;
+      }
     });
   }
 

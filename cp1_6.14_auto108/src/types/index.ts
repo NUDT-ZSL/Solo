@@ -1,4 +1,26 @@
-export type ResourceType = 'energy' | 'ore' | 'food';
+export enum ResourceType {
+  ENERGY = 'energy',
+  ORE = 'ore',
+  FOOD = 'food',
+}
+
+export const RESOURCE_TYPES: ResourceType[] = [
+  ResourceType.ENERGY,
+  ResourceType.ORE,
+  ResourceType.FOOD,
+];
+
+export enum BuildingType {
+  SOLAR_PANEL = 'solarPanel',
+  MINER = 'miner',
+  GREENHOUSE = 'greenhouse',
+}
+
+export const BUILDING_TYPES: BuildingType[] = [
+  BuildingType.SOLAR_PANEL,
+  BuildingType.MINER,
+  BuildingType.GREENHOUSE,
+];
 
 export interface ResourceState {
   type: ResourceType;
@@ -10,7 +32,11 @@ export interface ResourceState {
   icon: string;
 }
 
-export type BuildingType = 'solarPanel' | 'miner' | 'greenhouse';
+export interface UIResourceState extends ResourceState {
+  netRate: number;
+  rateText: string;
+  rateClass: 'positive' | 'negative' | 'neutral';
+}
 
 export interface BuildingConfig {
   type: BuildingType;
@@ -54,13 +80,15 @@ export type UICommand =
 export interface UIState {
   tick: number;
   isPaused: boolean;
-  resources: Record<ResourceType, ResourceState>;
+  resources: Record<ResourceType, UIResourceState>;
   buildings: Building[];
   gridSize: number;
   cellSize: number;
   selectedBuildingType: BuildingType | null;
   selectedBuildingId: string | null;
   buildingConfigs: Record<BuildingType, BuildingConfig>;
+  buildingCount: number;
+  useCanvasRender: boolean;
 }
 
 export type Listener<T> = (state: T) => void;

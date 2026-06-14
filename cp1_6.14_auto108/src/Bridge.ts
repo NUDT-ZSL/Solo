@@ -2,11 +2,14 @@ import { GameEngine } from './GameEngine';
 import type {
   GameSnapshot,
   UIState,
-  UICommand,
+  UIResourceState,
+  ResourceState,
+  ResourceType,
   BuildingType,
   Listener,
   Building,
 } from './types';
+import { RESOURCE_TYPES } from './types';
 
 export class Bridge {
   private engine: GameEngine;
@@ -15,11 +18,13 @@ export class Bridge {
   private cellSize: number = 30;
   private gridSize: number = 20;
   private unsubscribeEngine: () => void;
+  private previousAmounts: Record<ResourceType, number>;
 
   constructor(engine: GameEngine) {
     this.engine = engine;
     this.currentSnapshot = engine.getSnapshot();
     this.gridSize = this.currentSnapshot.gridSize;
+    this.previousAmounts = this.initPreviousAmounts();
 
     this.unsubscribeEngine = engine.subscribe((snapshot) => {
       this.currentSnapshot = snapshot;
@@ -31,6 +36,14 @@ export class Bridge {
     if (typeof window !== 'undefined') {
       window.addEventListener('resize', this.handleResize);
     }
+  }
+
+  private initPreviousAmounts(): Record<ResourceType, number> {
+    const amounts: Record<string, number> = {};
+    RESOURCE_TYPES.forEach((type) => {
+      amounts[type] = this.currentSnapshot.resources[type].amount;
+    });
+    return amounts as Record<ResourceType, number>;
   }
 
   private handleResize = (): void => {
@@ -67,17 +80,41 @@ export class Bridge {
     this.listeners.forEach((listener) => listener(state));
   }
 
+  private transformResource(resource: ResourceState): UIResourceState {
+    const netRate = resource.production - resource.consumption;
+    const rateClass: 'positive' | 'negative' | 'neutral' =
+      netRate > 0 ? 'positive' : netRate < 0 ? 'negative' : 'neutral';
+    const rateText = netRate >= 0 ? `+${netRate.toFixed(1)}/s` : `${netRate.toFixed(1)}/s`;
+
+    return {
+      ...resource,
+      netRate,
+      rateText,
+      rateClass,
+    };
+  }
+
   getUIState(): UIState {
+    const resources: Record<string, UIResourceState> = {};
+    RESOURCE_TYPES.forEach((type) => {
+      resources[type] = this.transformResource(this.currentSnapshot.resources[type]);
+    });
+
+    const buildingCount = this.currentSnapshot.buildings.length;
+    const useCanvasRender = buildingCount >= this.engine.getCanvasRenderThreshold();
+
     return {
       tick: this.currentSnapshot.tick,
       isPaused: this.currentSnapshot.isPaused,
-      resources: this.currentSnapshot.resources,
+      resources: resources as Record<ResourceType, UIResourceState>,
       buildings: this.currentSnapshot.buildings,
       gridSize: this.gridSize,
       cellSize: this.cellSize,
       selectedBuildingType: this.currentSnapshot.selectedBuildingType,
       selectedBuildingId: this.currentSnapshot.selectedBuildingId,
       buildingConfigs: this.engine.getBuildingConfigs(),
+      buildingCount,
+      useCanvasRender,
     };
   }
 
@@ -115,7 +152,7 @@ export class Bridge {
     return this.engine.getBuildingAt(x, y);
   }
 
-  getUpgradeCost(building: Building): Partial<Record<string, number>> {
+  getUpgradeCost(building: Building): Partial<Record<ResourceType, number>> {
     return this.engine.getUpgradeCost(building);
   }
 
