@@ -103,14 +103,14 @@ export default function GaugeRing({
           x={center}
           y={center}
           textAnchor="middle"
-          dominantBaseline="middle"
+          dominantBaseline="central"
           fill={textColor}
-          fontSize="24"
           fontWeight="bold"
           fontFamily="'Courier New', monospace"
+          style={{ fontSize: '24px' }}
         >
           {Math.round(displayValue)}
-          <tspan fill="#8b949e" fontSize="14" dx="4" dy="0">{unit}</tspan>
+          <tspan fill="#8b949e" dx="4" style={{ fontSize: '14px', fontWeight: 'normal' }}>{unit}</tspan>
         </text>
       </svg>
     </div>

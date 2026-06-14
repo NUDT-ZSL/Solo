@@ -13,6 +13,14 @@ const defaultDataSources: DataSource[] = [
   createInitialDataSource('ds_users_1', '在线用户数', 'users', 2)
 ];
 
+function arraysEqual(a: number[], b: number[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 export default function App() {
   const [dataSources, setDataSources] = useState<DataSource[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -20,6 +28,13 @@ export default function App() {
   const intervalRefs = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
   const pendingUpdates = useRef<Map<string, { value: number; history: number[] }>>(new Map());
   const rafRef = useRef<number | null>(null);
+  const dataSourceRefs = useRef<Map<string, DataSource>>(new Map());
+
+  useEffect(() => {
+    dataSources.forEach(ds => {
+      dataSourceRefs.current.set(ds.id, ds);
+    });
+  }, [dataSources]);
 
   useEffect(() => {
     const ordered = loadOrderFromStorage(defaultDataSources);
@@ -36,44 +51,79 @@ export default function App() {
     pendingUpdates.current.clear();
 
     setDataSources(prev => {
-      let changed = false;
-      const next = prev.map(ds => {
+      let hasChanges = false;
+      const next: DataSource[] = new Array(prev.length);
+      
+      for (let i = 0; i < prev.length; i++) {
+        const ds = prev[i];
         const update = updates.get(ds.id);
-        if (update && (update.value !== ds.value || update.history.length !== ds.history.length)) {
-          changed = true;
-          return { ...ds, value: update.value, history: update.history };
+        
+        if (!update) {
+          next[i] = ds;
+          continue;
         }
-        return ds;
-      });
-      return changed ? next : prev;
+
+        const valueChanged = update.value !== ds.value;
+        let historyChanged = false;
+        
+        if (update.history.length === ds.history.length) {
+          for (let j = 0; j < update.history.length; j++) {
+            if (update.history[j] !== ds.history[j]) {
+              historyChanged = true;
+              break;
+            }
+          }
+        } else {
+          historyChanged = true;
+        }
+
+        if (valueChanged || historyChanged) {
+          hasChanges = true;
+          next[i] = {
+            ...ds,
+            value: valueChanged ? update.value : ds.value,
+            history: historyChanged ? update.history : ds.history
+          };
+        } else {
+          next[i] = ds;
+        }
+      }
+
+      return hasChanges ? next : prev;
     });
 
     rafRef.current = requestAnimationFrame(flushPendingUpdates);
   }, []);
 
   const refreshDataSource = useCallback(async (id: string) => {
-    setDataSources(prev => {
-      const ds = prev.find(d => d.id === id);
-      if (!ds) return prev;
+    const currentDs = dataSourceRefs.current.get(id);
+    if (!currentDs) return;
 
-      fetchDataSource(ds.id, ds.name, ds.type, ds.value).then(newValue => {
-        const newHistory = [...ds.history.slice(1), newValue];
-        
-        const existing = pendingUpdates.current.get(id);
-        if (existing) {
-          existing.value = newValue;
-          existing.history = newHistory;
-        } else {
-          pendingUpdates.current.set(id, { value: newValue, history: newHistory });
-        }
+    try {
+      const newValue = await fetchDataSource(currentDs.id, currentDs.name, currentDs.type, currentDs.value);
+      
+      const newHistory = currentDs.history.slice();
+      newHistory.shift();
+      newHistory.push(newValue);
 
-        if (rafRef.current === null) {
-          rafRef.current = requestAnimationFrame(flushPendingUpdates);
-        }
-      });
+      if (newValue === currentDs.value && arraysEqual(newHistory, currentDs.history)) {
+        return;
+      }
 
-      return prev;
-    });
+      const existing = pendingUpdates.current.get(id);
+      if (existing) {
+        existing.value = newValue;
+        existing.history = newHistory;
+      } else {
+        pendingUpdates.current.set(id, { value: newValue, history: newHistory });
+      }
+
+      if (rafRef.current === null) {
+        rafRef.current = requestAnimationFrame(flushPendingUpdates);
+      }
+    } catch {
+      // ignore fetch errors
+    }
   }, [flushPendingUpdates]);
 
   useEffect(() => {
@@ -95,7 +145,7 @@ export default function App() {
     });
 
     return () => {
-      // 组件卸载时清理
+      // cleanup handled in separate effect
     };
   }, [dataSources, refreshDataSource]);
 
@@ -123,6 +173,7 @@ export default function App() {
       saveOrderToStorage(updated);
       return updated;
     });
+    dataSourceRefs.current.set(newDataSource.id, newDataSource);
     setNewItemId(newDataSource.id);
     setTimeout(() => setNewItemId(null), 500);
   }, []);

@@ -155,6 +155,22 @@ const DataCard = memo(function DataCard({
   const animationRef = useRef<number | null>(null);
   const startValueRef = useRef(dataSource.value);
   const targetValueRef = useRef(dataSource.value);
+  const isNewCardRef = useRef(isNew);
+  const animateStyleRef = useRef<React.CSSProperties | null>(null);
+
+  if (animateStyleRef.current === null) {
+    if (isNew || isNewCardRef.current) {
+      animateStyleRef.current = {
+        animation: 'scaleIn 0.3s ease-out forwards'
+      };
+    } else if (animateIn) {
+      animateStyleRef.current = {
+        animation: `fadeInUp 0.3s ease-out ${originalIndex * 0.1}s both`
+      };
+    } else {
+      animateStyleRef.current = {};
+    }
+  }
 
   useEffect(() => {
     targetValueRef.current = dataSource.value;
@@ -214,18 +230,18 @@ const DataCard = memo(function DataCard({
 
   const isRingChart = dataSource.chartType === 'ring' || dataSource.type === 'progress';
 
-  const getAnimationStyle = (): React.CSSProperties => {
-    if (isNew) {
-      return {
-        animation: 'scaleIn 0.3s ease-out forwards'
-      };
-    }
-    if (animateIn) {
-      return {
-        animation: `fadeInUp 0.3s ease-out ${originalIndex * 0.1}s both`
-      };
-    }
-    return {};
+  const cardStyle: React.CSSProperties = {
+    width: '48%',
+    borderRadius: 12,
+    backgroundColor: '#161b22',
+    border: '1px solid #30363d',
+    padding: 20,
+    boxSizing: 'border-box',
+    cursor: isDragging ? 'grabbing' : 'grab',
+    userSelect: 'none',
+    opacity: isDragging ? 0.6 : 1,
+    transition: isDragging ? 'opacity 0.15s' : 'opacity 0.2s, box-shadow 0.2s',
+    ...animateStyleRef.current
   };
 
   return (
@@ -235,19 +251,7 @@ const DataCard = memo(function DataCard({
       onDragEnd={handleDragEnd}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
-      style={{
-        width: '48%',
-        borderRadius: 12,
-        backgroundColor: '#161b22',
-        border: '1px solid #30363d',
-        padding: 20,
-        boxSizing: 'border-box',
-        cursor: isDragging ? 'grabbing' : 'grab',
-        opacity: isDragging ? 0.6 : 1,
-        transition: 'opacity 0.2s, box-shadow 0.2s, transform 0.2s',
-        userSelect: 'none',
-        ...getAnimationStyle()
-      }}
+      style={cardStyle}
     >
       <div style={{
         fontSize: 14,
@@ -316,6 +320,19 @@ interface DashboardGridProps {
   newItemId: string | null;
 }
 
+const Placeholder = () => (
+  <div
+    style={{
+      width: '48%',
+      borderRadius: 12,
+      border: '2px dashed #30363d',
+      backgroundColor: 'rgba(48, 54, 61, 0.15)',
+      boxSizing: 'border-box',
+      minHeight: 180
+    }}
+  />
+);
+
 export default function DashboardGrid({ dataSources, onReorder, newItemId }: DashboardGridProps) {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -336,7 +353,7 @@ export default function DashboardGrid({ dataSources, onReorder, newItemId }: Das
     try {
       e.dataTransfer.setDragImage(e.currentTarget as HTMLElement, 20, 20);
     } catch {
-      // setDragImage may not be supported in some browsers
+      // setDragImage may not be supported
     }
   }, []);
 
@@ -396,79 +413,32 @@ export default function DashboardGrid({ dataSources, onReorder, newItemId }: Das
 
   const renderItems = () => {
     const items: React.ReactNode[] = [];
+    const isDragging = draggedIndex !== null && dragOverIndex !== null;
 
-    for (let displayIdx = 0; displayIdx < dataSources.length; displayIdx++) {
-      let sourceIdx = displayIdx;
-      
-      if (draggedIndex !== null && dragOverIndex !== null) {
-        if (draggedIndex < dragOverIndex) {
-          if (displayIdx === dragOverIndex || (displayIdx > draggedIndex && displayIdx < dragOverIndex)) {
-            sourceIdx = displayIdx - 1;
-          } else if (displayIdx === draggedIndex) {
-            sourceIdx = dragOverIndex;
-          }
-        } else if (draggedIndex > dragOverIndex) {
-          if (displayIdx === dragOverIndex) {
-            sourceIdx = draggedIndex;
-          } else if (displayIdx > dragOverIndex && displayIdx <= draggedIndex) {
-            sourceIdx = displayIdx + 1;
-          }
-        }
+    for (let i = 0; i < dataSources.length; i++) {
+      if (isDragging && i === dragOverIndex && draggedIndex !== dragOverIndex) {
+        items.push(<Placeholder key={`ph-before-${i}`} />);
       }
 
-      if (draggedIndex !== null && dragOverIndex !== null && draggedIndex !== dragOverIndex) {
-        if (displayIdx === dragOverIndex) {
-          items.push(
-            <div
-              key={`placeholder-${displayIdx}`}
-              style={{
-                width: '48%',
-                borderRadius: 12,
-                border: '2px dashed #30363d',
-                backgroundColor: 'rgba(48, 54, 61, 0.15)',
-                boxSizing: 'border-box',
-                minHeight: 180
-              }}
-            />
-          );
-          if (dragOverIndex > draggedIndex) {
-            items.push(
-              <DataCard
-                key={dataSources[sourceIdx].id}
-                dataSource={dataSources[sourceIdx]}
-                originalIndex={sourceIdx}
-                isDragging={draggedIndex === sourceIdx}
-                isNew={dataSources[sourceIdx].id === newItemId}
-                animateIn={animateIn && dataSources[sourceIdx].id !== newItemId}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-                onDragOver={handleDragOver}
-                onDrop={handleDrop}
-              />
-            );
-          }
-          continue;
-        }
-      }
-
-      if (draggedIndex !== null && sourceIdx === draggedIndex && dragOverIndex !== draggedIndex) {
-        continue;
-      }
-
+      const ds = dataSources[i];
       items.push(
         <DataCard
-          key={dataSources[sourceIdx].id}
-          dataSource={dataSources[sourceIdx]}
-          originalIndex={sourceIdx}
-          isDragging={draggedIndex === sourceIdx}
-          isNew={dataSources[sourceIdx].id === newItemId}
-          animateIn={animateIn && dataSources[sourceIdx].id !== newItemId}
+          key={ds.id}
+          dataSource={ds}
+          originalIndex={i}
+          isDragging={draggedIndex === i}
+          isNew={ds.id === newItemId}
+          animateIn={animateIn && ds.id !== newItemId}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
         />
       );
+    }
+
+    if (isDragging && dragOverIndex === dataSources.length && draggedIndex !== dataSources.length - 1) {
+      items.push(<Placeholder key="ph-end" />);
     }
 
     return items;
@@ -500,10 +470,6 @@ export default function DashboardGrid({ dataSources, onReorder, newItemId }: Das
           0% {
             opacity: 0;
             transform: scale(0);
-          }
-          60% {
-            opacity: 1;
-            transform: scale(1.03);
           }
           100% {
             opacity: 1;
