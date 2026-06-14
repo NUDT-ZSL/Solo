@@ -143,7 +143,7 @@
 .time-slot {
   height: 20px;
   border-radius: 3px;
-  cursor: pointer;
+  cursor: default;
   transition: opacity 0.2s;
 }
 
@@ -153,10 +153,6 @@
 
 .time-slot.unavailable {
   background: #6b7280;
-}
-
-.time-slot.available:hover {
-  opacity: 0.8;
 }
 
 .time-slot-legend {
@@ -241,19 +237,29 @@
   color: #64748b;
 }
 
+.char-count.limit {
+  color: #ef4444;
+}
+
 .reviews-container {
   height: 300px;
   overflow-y: auto;
+  overflow-x: hidden;
   background: #0f172a;
   border-radius: 8px;
-  padding: 12px;
+  padding: 0;
+  scroll-behavior: smooth;
+}
+
+.reviews-scroll-area {
+  padding: 4px 0;
 }
 
 .reviews-empty {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100%;
+  height: 300px;
   color: #64748b;
   font-size: 14px;
 }
@@ -261,7 +267,7 @@
 .review-item {
   display: flex;
   gap: 12px;
-  padding: 12px 0;
+  padding: 14px 16px;
   border-bottom: 1px solid #1e293b;
 }
 
@@ -270,27 +276,35 @@
 }
 
 .review-avatar {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: #334155;
   flex-shrink: 0;
+  object-fit: cover;
 }
 
 .review-content {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.review-header {
+.review-top-row {
+  width: 100%;
+}
+
+.review-user-block {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
+  gap: 12px;
 }
 
 .review-username {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: #f8fafc;
 }
@@ -298,14 +312,20 @@
 .review-date {
   font-size: 11px;
   color: #64748b;
+  white-space: nowrap;
 }
 
-.review-text {
+.review-rating-row {
+  display: flex;
+  align-items: center;
+}
+
+.review-comment {
   font-size: 13px;
   color: #94a3b8;
-  line-height: 1.5;
-  margin-top: 6px;
+  line-height: 1.6;
   word-break: break-word;
+  margin: 0;
 }
 
 .detail-footer {
@@ -322,10 +342,26 @@
 @media (max-width: 768px) {
   .skill-detail-modal {
     width: 100%;
-    max-height: 90vh;
+    max-height: 92vh;
   }
 
   .skill-detail-body {
     max-height: none;
+  }
+
+  .skill-detail-header {
+    flex-direction: column;
+    text-align: center;
+    gap: 12px;
+  }
+
+  .detail-user-info {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .detail-rating {
+    justify-content: center;
   }
 }

@@ -24,6 +24,7 @@
   overflow: hidden;
   margin-bottom: 12px;
   background: #334155;
+  flex-shrink: 0;
 }
 
 .skill-card-avatar img {
@@ -85,4 +86,89 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  margin-bottom: 14px;
+}
+
+.skill-card-timeslots-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f8fafc;
+  margin-bottom: 8px;
+  align-self: flex-start;
+}
+
+.card-time-slot-grid {
+  width: 100%;
+  border-radius: 6px;
+  background: #0f172a;
+  padding: 6px;
+  margin-bottom: 8px;
+}
+
+.card-time-slot-header {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.card-time-slot-day {
+  font-size: 10px;
+  color: #64748b;
+  text-align: center;
+  line-height: 14px;
+}
+
+.card-time-slot-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.card-time-slot-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.card-time-slot-cell {
+  height: 8px;
+  border-radius: 2px;
+}
+
+.card-time-slot-cell.free {
+  background: #22c55e;
+}
+
+.card-time-slot-cell.booked {
+  background: #6b7280;
+}
+
+.skill-card-timeslot-legend {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  width: 100%;
+}
+
+.skill-card-timeslot-legend .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.legend-dot.free {
+  background: #22c55e;
+}
+
+.legend-dot.booked {
+  background: #6b7280;
 }

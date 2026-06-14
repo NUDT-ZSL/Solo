@@ -47,8 +47,9 @@ const StarRating: React.FC<{
             fill={filled ? '#f59e0b' : '#475569'}
             style={{
               cursor: interactive ? 'pointer' : 'default',
-              transition: 'transform 0.15s',
+              transition: 'transform 0.15s, filter 0.15s',
               transform: interactive && hoverRating === star ? 'scale(1.2)' : 'scale(1)',
+              filter: interactive && hoverRating >= star && !filled ? 'brightness(1.3)' : 'none',
             }}
             onMouseEnter={() => interactive && setHoverRating(star)}
             onMouseLeave={() => interactive && setHoverRating(0)}
@@ -92,31 +93,51 @@ const TimeSlotGrid: React.FC<{ availableSlots: boolean[][] }> = ({ availableSlot
   );
 };
 
+const ReviewItem: React.FC<{ review: ReviewWithUser }> = ({ review }) => {
+  return (
+    <div className="review-item">
+      <img 
+        src={review.fromUser?.avatar} 
+        alt={review.fromUser?.nickname} 
+        className="review-avatar" 
+      />
+      <div className="review-content">
+        <div className="review-top-row">
+          <div className="review-user-block">
+            <span className="review-username">{review.fromUser?.nickname}</span>
+            <span className="review-date">
+              {new Date(review.createdAt).toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </span>
+          </div>
+        </div>
+        <div className="review-rating-row">
+          <StarRating rating={review.rating} size={20} />
+        </div>
+        <p className="review-comment">{review.comment}</p>
+      </div>
+    </div>
+  );
+};
+
 const ReviewList: React.FC<{ reviews: ReviewWithUser[] }> = ({ reviews }) => {
   if (reviews.length === 0) {
     return (
       <div className="reviews-empty">
-        暂无评价
+        <p>暂无评价，成为第一个评价的人吧！</p>
       </div>
     );
   }
 
   return (
-    <div className="reviews-list">
+    <div className="reviews-scroll-area">
       {reviews.map((review) => (
-        <div key={review.id} className="review-item">
-          <img src={review.fromUser?.avatar} alt="" className="review-avatar" />
-          <div className="review-content">
-            <div className="review-header">
-              <span className="review-username">{review.fromUser?.nickname}</span>
-              <span className="review-date">
-                {new Date(review.createdAt).toLocaleDateString('zh-CN')}
-              </span>
-            </div>
-            <StarRating rating={review.rating} size={16} />
-            <p className="review-text">{review.comment}</p>
-          </div>
-        </div>
+        <ReviewItem key={review.id} review={review} />
       ))}
     </div>
   );
@@ -133,7 +154,7 @@ const SkillDetail: React.FC<SkillDetailProps> = ({
   const [newRating, setNewRating] = useState(5);
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const reviewsRef = useRef<HTMLDivElement>(null);
+  const reviewScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     apiService.getReviews(skill.id).then(setReviews);
@@ -176,7 +197,7 @@ const SkillDetail: React.FC<SkillDetailProps> = ({
       <div className="modal skill-detail-modal">
         <div className="modal-header">
           <h3>技能详情</h3>
-          <button className="close-btn" onClick={onClose}>
+          <button className="close-btn" onClick={onClose} aria-label="关闭">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
@@ -226,7 +247,7 @@ const SkillDetail: React.FC<SkillDetailProps> = ({
 
           <div className="detail-section">
             <h4 className="section-title">
-              用户评价
+              用户评价 ({reviews.length})
               {!isOwnSkill && (
                 <button
                   className="add-review-btn"
@@ -252,17 +273,19 @@ const SkillDetail: React.FC<SkillDetailProps> = ({
                 <textarea
                   className="form-textarea"
                   value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  placeholder="分享你的学习体验..."
+                  onChange={(e) => setNewComment(e.target.value.slice(0, 100))}
+                  placeholder="分享你的学习体验（100字以内）..."
                   maxLength={100}
                   rows={3}
                 />
                 <div className="review-form-footer">
-                  <span className="char-count">{newComment.length}/100</span>
+                  <span className={`char-count ${newComment.length >= 100 ? 'limit' : ''}`}>
+                    {newComment.length}/100
+                  </span>
                   <button
                     className="btn btn-submit"
                     onClick={handleSubmitReview}
-                    disabled={submitting || !newComment.trim()}
+                    disabled={submitting || !newComment.trim() || newComment.length === 0}
                   >
                     {submitting ? '提交中...' : '提交评价'}
                   </button>
@@ -270,7 +293,7 @@ const SkillDetail: React.FC<SkillDetailProps> = ({
               </div>
             )}
 
-            <div className="reviews-container" ref={reviewsRef}>
+            <div className="reviews-container" ref={reviewScrollRef} style={{ height: '300px' }}>
               <ReviewList reviews={reviews} />
             </div>
           </div>

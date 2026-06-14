@@ -8,6 +8,34 @@ interface SkillCardProps {
   onClick?: () => void;
 }
 
+const dayShortNames = ['一', '二', '三', '四', '五', '六', '日'];
+
+const CardTimeSlotGrid: React.FC<{ availableSlots: boolean[][] }> = ({ availableSlots }) => {
+  const displayHours = [8, 10, 12, 14, 16, 18, 20];
+  
+  return (
+    <div className="card-time-slot-grid">
+      <div className="card-time-slot-header">
+        {dayShortNames.map((d) => (
+          <div key={d} className="card-time-slot-day">{d}</div>
+        ))}
+      </div>
+      <div className="card-time-slot-body">
+        {displayHours.map((hour) => (
+          <div key={hour} className="card-time-slot-row">
+            {[0, 1, 2, 3, 4, 5, 6].map((day) => (
+              <div
+                key={`${day}-${hour}`}
+                className={`card-time-slot-cell ${availableSlots[day]?.[hour] ? 'free' : 'booked'}`}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const StarRating: React.FC<{ rating: number; size?: number }> = ({ rating, size = 16 }) => {
   return (
     <div className="star-rating">
@@ -42,6 +70,16 @@ const SkillCard: React.FC<SkillCardProps> = ({ skill, user, onClick }) => {
         <span className="rating-text">{skill.avgRating} ({skill.reviewCount}条评价)</span>
       </div>
       <div className="skill-card-desc">{skill.description}</div>
+      <div className="skill-card-timeslots-title">可教学时间</div>
+      <CardTimeSlotGrid availableSlots={skill.availableSlots} />
+      <div className="skill-card-timeslot-legend">
+        <span className="legend-item">
+          <span className="legend-dot free"></span>空闲
+        </span>
+        <span className="legend-item">
+          <span className="legend-dot booked"></span>已约
+        </span>
+      </div>
     </div>
   );
 };

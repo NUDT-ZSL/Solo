@@ -17,7 +17,8 @@ interface MessageCenterProps {
 }
 
 const ITEM_HEIGHT = 120;
-const BUFFER = 20;
+const BUFFER_PX = 20;
+const OVERSCAN = 5;
 
 const statusMap: Record<string, { text: string; color: string }> = {
   pending: { text: '待处理', color: '#f59e0b' },
@@ -153,20 +154,27 @@ const MessageCenter: React.FC<MessageCenterProps> = ({ requests, currentUserId, 
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [containerHeight, setContainerHeight] = useState(600);
+  const [tab, setTab] = useState<'all' | 'received' | 'sent'>('all');
 
   useEffect(() => {
+    const updateHeight = () => {
+      if (containerRef.current) {
+        setContainerHeight(containerRef.current.clientHeight);
+      }
+    };
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
     if (containerRef.current) {
-      setContainerHeight(containerRef.current.clientHeight);
+      observer.observe(containerRef.current);
     }
+    return () => observer.disconnect();
   }, []);
 
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     setScrollTop(e.currentTarget.scrollTop);
   }, []);
 
-  const [tab, setTab] = useState<'all' | 'received' | 'sent'>('all');
-
-  const filteredRequests = useMemo(() => {
+  const filteredMessages = useMemo(() => {
     switch (tab) {
       case 'received':
         return requests.filter(r => r.toUserId === currentUserId);
@@ -178,19 +186,19 @@ const MessageCenter: React.FC<MessageCenterProps> = ({ requests, currentUserId, 
   }, [requests, tab, currentUserId]);
 
   const visibleRange = useMemo(() => {
-    const startIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - BUFFER);
+    const startIndex = Math.max(0, Math.floor((scrollTop - BUFFER_PX) / ITEM_HEIGHT) - OVERSCAN);
     const endIndex = Math.min(
-      filteredRequests.length,
-      Math.ceil((scrollTop + containerHeight) / ITEM_HEIGHT) + BUFFER
+      filteredMessages.length,
+      Math.ceil((scrollTop + containerHeight + BUFFER_PX) / ITEM_HEIGHT) + OVERSCAN
     );
     return { startIndex, endIndex };
-  }, [scrollTop, containerHeight, filteredRequests.length]);
+  }, [scrollTop, containerHeight, filteredMessages.length]);
 
-  const visibleRequests = useMemo(() => {
-    return filteredRequests.slice(visibleRange.startIndex, visibleRange.endIndex);
-  }, [filteredRequests, visibleRange]);
+  const visibleMessages = useMemo(() => {
+    return filteredMessages.slice(visibleRange.startIndex, visibleRange.endIndex);
+  }, [filteredMessages, visibleRange]);
 
-  const totalHeight = filteredRequests.length * ITEM_HEIGHT;
+  const totalHeight = filteredMessages.length * ITEM_HEIGHT;
   const offsetY = visibleRange.startIndex * ITEM_HEIGHT;
 
   return (
@@ -198,13 +206,13 @@ const MessageCenter: React.FC<MessageCenterProps> = ({ requests, currentUserId, 
       <h2 className="page-title">消息中心</h2>
       
       <div className="tabs">
-        <button className={`tab ${tab === 'all' ? 'active' : ''}`} onClick={() => setTab('all')}>
+        <button className={`tab ${tab === 'all' ? 'active' : ''}`} onClick={() => { setTab('all'); setScrollTop(0); }}>
           全部 ({requests.length})
         </button>
-        <button className={`tab ${tab === 'received' ? 'active' : ''}`} onClick={() => setTab('received')}>
+        <button className={`tab ${tab === 'received' ? 'active' : ''}`} onClick={() => { setTab('received'); setScrollTop(0); }}>
           收到的
         </button>
-        <button className={`tab ${tab === 'sent' ? 'active' : ''}`} onClick={() => setTab('sent')}>
+        <button className={`tab ${tab === 'sent' ? 'active' : ''}`} onClick={() => { setTab('sent'); setScrollTop(0); }}>
           发出的
         </button>
       </div>
@@ -216,10 +224,10 @@ const MessageCenter: React.FC<MessageCenterProps> = ({ requests, currentUserId, 
       >
         <div style={{ height: totalHeight, position: 'relative' }}>
           <div style={{ transform: `translateY(${offsetY}px)` }}>
-            {visibleRequests.map((request) => (
-              <div key={request.id} style={{ height: ITEM_HEIGHT, paddingBottom: 12 }}>
+            {visibleMessages.map((message) => (
+              <div key={message.id} style={{ height: ITEM_HEIGHT, paddingBottom: 12, boxSizing: 'border-box' }}>
                 <MessageItem
-                  request={request}
+                  request={message}
                   currentUserId={currentUserId}
                   onUpdate={onUpdate}
                 />
@@ -228,7 +236,7 @@ const MessageCenter: React.FC<MessageCenterProps> = ({ requests, currentUserId, 
           </div>
         </div>
         
-        {filteredRequests.length === 0 && (
+        {filteredMessages.length === 0 && (
           <div className="empty-state">
             <p>暂无消息</p>
           </div>

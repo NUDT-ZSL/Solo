@@ -39,6 +39,7 @@
   position: relative;
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .search-icon {
@@ -71,6 +72,7 @@
 .nav {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .nav-btn {
@@ -162,34 +164,131 @@
   font-size: 14px;
 }
 
+.message-center {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
 @media (max-width: 768px) {
   .header-content {
     flex-wrap: wrap;
     height: auto;
-    padding: 12px 20px;
+    padding: 12px 16px;
     gap: 12px;
   }
 
   .logo {
     order: 1;
     margin-right: 0;
+    font-size: 20px;
   }
 
   .nav {
     order: 2;
     margin-left: auto;
+    width: auto;
+  }
+
+  .nav-btn {
+    padding: 6px 12px;
+    font-size: 13px;
   }
 
   .search-box {
     order: 3;
     width: 100%;
+    max-width: 100%;
+    flex-shrink: 1;
+  }
+
+  .app-main {
+    padding: 16px 16px 24px;
   }
 
   .skills-grid {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
 
   .skill-card {
     width: 100% !important;
+    max-width: 100%;
+  }
+
+  .message-center {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .message-list-container {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .page-title {
+    font-size: 20px;
+  }
+
+  .tabs {
+    gap: 4px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    flex-wrap: nowrap;
+  }
+
+  .tab {
+    padding: 8px 14px;
+    font-size: 13px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .profile-page {
+    padding-top: 12px;
+  }
+
+  .profile-header {
+    margin-bottom: 24px;
+  }
+
+  .profile-avatar {
+    width: 80px;
+    height: 80px;
+  }
+
+  .profile-header h2 {
+    font-size: 20px;
+  }
+
+  .message-card {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+}
+
+@media (max-width: 480px) {
+  .nav-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .badge {
+    top: 0;
+    right: 0;
+    min-width: 16px;
+    height: 16px;
+    font-size: 10px;
+    padding: 0 4px;
+  }
+
+  .logo {
+    font-size: 18px;
+  }
+
+  .search-box input {
+    height: 38px;
+    font-size: 13px;
   }
 }
