@@ -81,24 +81,24 @@ export class ParticleSystem {
   }
 
   emitThrust(x: number, y: number, angle: number, color: string, intensity: number = 1): void {
-    const count = Math.ceil(2 * intensity);
+    const count = Math.ceil(3 * intensity);
     for (let i = 0; i < count; i++) {
       const p = this.alloc();
       if (!p) return;
-      const spread = 0.3;
+      const spread = 0.4;
       const dir = angle + Math.PI + (Math.random() - 0.5) * spread;
-      const speed = 30 + Math.random() * 60 * intensity;
+      const speed = 50 + Math.random() * 80 * intensity;
       p.active = true;
-      p.x = x + (Math.random() - 0.5) * 3;
-      p.y = y + (Math.random() - 0.5) * 3;
+      p.x = x + (Math.random() - 0.5) * 4;
+      p.y = y + (Math.random() - 0.5) * 4;
       p.vx = Math.cos(dir) * speed;
       p.vy = Math.sin(dir) * speed;
-      p.life = 300 + Math.random() * 200;
+      p.life = 350 + Math.random() * 250;
       p.age = 0;
-      p.startSize = 2 + Math.random() * 3 * intensity;
+      p.startSize = 2.5 + Math.random() * 3.5 * intensity;
       p.size = p.startSize;
       p.color = color;
-      p.startAlpha = 0.8;
+      p.startAlpha = 0.9;
       p.alpha = p.startAlpha;
       p.type = 'thrust';
     }
@@ -111,15 +111,15 @@ export class ParticleSystem {
       const p = this.alloc();
       if (!p) return;
       const dir = (Math.PI * 2 * i) / count + Math.random() * 0.3;
-      const speed = 20 + Math.random() * 100;
+      const speed = 30 + Math.random() * 80;
       p.active = true;
       p.x = x;
       p.y = y;
       p.vx = Math.cos(dir) * speed;
       p.vy = Math.sin(dir) * speed;
-      p.life = 300;
+      p.life = 400;
       p.age = 0;
-      p.startSize = 2 + Math.random() * 4;
+      p.startSize = 2 + Math.random() * 3;
       p.size = p.startSize;
       p.color = palette[Math.floor(Math.random() * palette.length)];
       p.startAlpha = 1;
@@ -182,10 +182,10 @@ export class ParticleSystem {
         p.size = p.startSize * (1 - t * 0.7);
         p.alpha = p.startAlpha * (1 - t);
       } else if (p.type === 'explosion') {
-        p.vx *= 0.93;
-        p.vy *= 0.93;
-        p.size = p.startSize + t * 15;
+        p.vx *= 0.92;
+        p.vy *= 0.92;
         const easeOut = 1 - Math.pow(1 - t, 3);
+        p.size = p.startSize + easeOut * 15;
         p.alpha = p.startAlpha * (1 - easeOut);
       } else if (p.type === 'debris') {
         p.vx *= 0.99;
@@ -230,9 +230,10 @@ export class ParticleSystem {
         continue;
       }
       ctx.globalAlpha = Math.max(0, p.alpha);
-      if (p.type === 'explosion') {
+      if (p.type === 'explosion' || p.type === 'thrust') {
         const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
         grad.addColorStop(0, p.color);
+        grad.addColorStop(0.4, p.color);
         grad.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = grad;
       } else {

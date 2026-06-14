@@ -179,6 +179,58 @@ export class FleetManager {
     return null;
   }
 
+  public getActiveCount(): number {
+    let n = 0;
+    for (let i = 0; i < this.ships.length; i++) {
+      if (this.ships[i].id !== 0) n++;
+    }
+    return n;
+  }
+
+  public getBulletCount(): number {
+    let n = 0;
+    for (let i = 0; i < this.bullets.length; i++) {
+      if (this.bullets[i].active) n++;
+    }
+    return n;
+  }
+
+  public spawnMany(cx: number, cy: number, count: number): void {
+    const cols = Math.ceil(Math.sqrt(count));
+    const spacing = 50;
+    let placed = 0;
+    for (let row = 0; row < cols && placed < count; row++) {
+      for (let col = 0; col < cols && placed < count; col++) {
+        const s = this.allocShip();
+        if (!s) return;
+        const typeRoll = Math.random();
+        if (typeRoll < 0.5) s.type = ShipType.FRIGATE;
+        else if (typeRoll < 0.8) s.type = ShipType.DESTROYER;
+        else s.type = ShipType.CARRIER;
+
+        s.x = cx + (col - cols / 2) * spacing + (Math.random() - 0.5) * 10;
+        s.y = cy + (row - cols / 2) * spacing + (Math.random() - 0.5) * 10;
+        s.angle = -Math.PI / 2;
+        s.targetX = s.x;
+        s.targetY = s.y;
+        s.hasTarget = false;
+
+        if (s.type === ShipType.FRIGATE) {
+          s.maxSpeed = 160; s.maxShield = 50; s.shield = 50;
+          s.fireRate = 400; s.damage = 1; s.attackRange = 280;
+        } else if (s.type === ShipType.DESTROYER) {
+          s.maxSpeed = 110; s.maxShield = 120; s.shield = 120;
+          s.fireRate = 700; s.damage = 3; s.attackRange = 340;
+        } else {
+          s.maxSpeed = 80; s.maxShield = 220; s.shield = 220;
+          s.fireRate = 1000; s.damage = 5; s.attackRange = 400;
+        }
+        s.fireCooldown = Math.random() * s.fireRate;
+        placed++;
+      }
+    }
+  }
+
   public recalcFormationOffsets(): void {
     const selected: Ship[] = [];
     for (let i = 0; i < this.ships.length; i++) {
@@ -479,7 +531,7 @@ export class FleetManager {
       const width = s.size * 0.55;
 
       if (s.selected) {
-        const pulse = 0.6 + 0.4 * Math.sin(time / 750);
+        const pulse = 0.6 + 0.4 * Math.sin((time / 1500) * Math.PI * 2);
         ctx.save();
         ctx.shadowColor = '#00ff66';
         ctx.shadowBlur = 10 * pulse;

@@ -47,15 +47,14 @@ export class UIPanel {
       });
     });
 
-    this.toggleBtn.addEventListener('click', () => {
-      const isOpen = this.panelEl.classList.toggle('open');
-      this.toggleBtn.classList.toggle('active', isOpen);
+    this.toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.togglePanel();
     });
 
     const closeOnMobile = (): void => {
       if (window.innerWidth < 768) {
-        this.panelEl.classList.remove('open');
-        this.toggleBtn.classList.remove('active');
+        this.closePanel();
       }
     };
     document.addEventListener('click', (e) => {
@@ -65,11 +64,39 @@ export class UIPanel {
       }
     });
 
+    window.addEventListener('resize', () => {
+      if (window.innerWidth >= 768) {
+        this.panelEl.classList.remove('open');
+        this.toggleBtn.classList.remove('active');
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeOnMobile();
+      }
+    });
+
     this.fleet.onSelectChange = () => this.update();
     this.fleet.onFormationChange = () => this.updateFormationUI();
 
     this.update();
     this.updateFormationUI();
+  }
+
+  private togglePanel(): void {
+    const isOpen = this.panelEl.classList.toggle('open');
+    this.toggleBtn.classList.toggle('active', isOpen);
+  }
+
+  private closePanel(): void {
+    this.panelEl.classList.remove('open');
+    this.toggleBtn.classList.remove('active');
+  }
+
+  public openPanel(): void {
+    this.panelEl.classList.add('open');
+    this.toggleBtn.classList.add('active');
   }
 
   private updateFormationUI(): void {

@@ -1,5 +1,12 @@
 import { ParticleSystem } from './particle-system';
 
+export interface Crater {
+  angle: number;
+  distRatio: number;
+  radius: number;
+  type: 'dark' | 'light';
+}
+
 export interface Asteroid {
   id: number;
   x: number;
@@ -15,6 +22,7 @@ export interface Asteroid {
   maxHp: number;
   vertices: number[];
   noise: number[];
+  craters: Crater[];
   isFragment: boolean;
   fragmentLife: number;
   fragmentAge: number;
@@ -62,6 +70,7 @@ export class AsteroidManager {
       maxHp: 0,
       vertices: [],
       noise: [],
+      craters: [],
       isFragment: false,
       fragmentLife: 0,
       fragmentAge: 0,
@@ -141,6 +150,8 @@ export class AsteroidManager {
       a.noise[i] = Math.random();
     }
 
+    a.craters = this.generateCraters(a.radius, false);
+
     a.isFragment = false;
     a.fragmentLife = 0;
     a.fragmentAge = 0;
@@ -173,10 +184,30 @@ export class AsteroidManager {
         a.vertices[k] = 0.6 + Math.random() * 0.6;
         a.noise[k] = Math.random();
       }
+      a.craters = this.generateCraters(a.radius, true);
       a.isFragment = true;
       a.fragmentLife = 1200 + Math.random() * 800;
       a.fragmentAge = 0;
     }
+  }
+
+  private generateCraters(radius: number, isFragment: boolean): Crater[] {
+    const count = isFragment
+      ? 2 + Math.floor(Math.random() * 3)
+      : 5 + Math.floor(Math.random() * 8);
+    const craters: Crater[] = [];
+    for (let i = 0; i < count; i++) {
+      const craterRadius = isFragment
+        ? 1 + Math.random() * 2.5
+        : 1.5 + Math.random() * radius * 0.18;
+      craters.push({
+        angle: Math.random() * Math.PI * 2,
+        distRatio: 0.1 + Math.random() * 0.65,
+        radius: craterRadius,
+        type: Math.random() < 0.75 ? 'dark' : 'light',
+      });
+    }
+    return craters;
   }
 
   damage(a: Asteroid, amount: number): boolean {
@@ -281,16 +312,46 @@ export class AsteroidManager {
       ctx.lineWidth = 1;
       ctx.stroke();
 
-      for (let k = 0; k < n; k++) {
-        if (a.noise[k] > 0.55) {
-          const angle = (Math.PI * 2 * k) / n;
-          const r = a.radius * a.vertices[k] * (0.3 + a.noise[k] * 0.3);
-          const cx = Math.cos(angle) * r;
-          const cy = Math.sin(angle) * r;
-          const cr = a.radius * 0.06 * a.noise[k];
+      for (let k = 0; k < a.craters.length; k++) {
+        const c = a.craters[k];
+        const cx = Math.cos(c.angle) * a.radius * c.distRatio;
+        const cy = Math.sin(c.angle) * a.radius * c.distRatio;
+        if (c.type === 'dark') {
+          const g = ctx.createRadialGradient(cx - c.radius * 0.25, cy - c.radius * 0.25, c.radius * 0.1, cx, cy, c.radius);
+          g.addColorStop(0, 'rgba(0,0,0,0.5)');
+          g.addColorStop(0.6, 'rgba(0,0,0,0.25)');
+          g.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = g;
           ctx.beginPath();
-          ctx.arc(cx, cy, cr, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(0,0,0,0.35)';
+          ctx.arc(cx, cy, c.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+          ctx.lineWidth = 0.8;
+          ctx.beginPath();
+          ctx.arc(cx, cy, c.radius * 0.95, 0, Math.PI * 2);
+          ctx.stroke();
+        } else {
+          const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, c.radius);
+          g.addColorStop(0, 'rgba(255,240,220,0.5)');
+          g.addColorStop(0.5, 'rgba(255,220,180,0.2)');
+          g.addColorStop(1, 'rgba(255,255,255,0)');
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(cx, cy, c.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      if (!a.isFragment) {
+        for (let k = 0; k < 4; k++) {
+          const angle = (k / 4) * Math.PI * 2 + a.id * 0.7;
+          const dist = 0.25 + (k % 2) * 0.35;
+          const sx = Math.cos(angle) * a.radius * dist;
+          const sy = Math.sin(angle) * a.radius * dist;
+          const sr = 0.6 + (k % 3) * 0.4;
+          ctx.fillStyle = 'rgba(0,0,0,0.25)';
+          ctx.beginPath();
+          ctx.arc(sx, sy, sr, 0, Math.PI * 2);
           ctx.fill();
         }
       }
