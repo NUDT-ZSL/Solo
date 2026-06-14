@@ -13,11 +13,11 @@ import {
   deleteHighlight,
 } from "./database.js";
 import {
-  getTotalAudioSize,
-  generateWavChunk,
-  getAudioDurationSamples,
+  getTotalWavSize,
   parseRangeHeader,
   getSeedFromPodcastId,
+  createWavReadableStream,
+  createFullWavStream,
 } from "./audio.js";
 
 const PORT = 3001;
@@ -55,46 +55,27 @@ app.get("/api/podcasts/:id/audio", (req, res) => {
     return;
   }
 
-  const totalSize = getTotalAudioSize(podcast.duration);
+  const totalSize = getTotalWavSize(podcast.duration);
   const range = parseRangeHeader(req.headers.range, totalSize);
   const seed = getSeedFromPodcastId(podcast.id);
 
+  res.setHeader("Content-Type", "audio/wav");
+  res.setHeader("Accept-Ranges", "bytes");
+  res.setHeader("Cache-Control", "public, max-age=3600");
+
   if (!range) {
     res.status(200);
-    res.setHeader("Content-Type", "audio/wav");
     res.setHeader("Content-Length", totalSize.toString());
-    res.setHeader("Accept-Ranges", "bytes");
-    res.setHeader("Cache-Control", "public, max-age=3600");
-
-    const headerSize = 44;
-    const totalSamples = getAudioDurationSamples(podcast.duration);
-    const headerChunk = Buffer.alloc(headerSize);
-    headerChunk.write("RIFF", 0);
-    headerChunk.writeUInt32LE(36 + totalSamples * 2, 4);
-    headerChunk.write("WAVE", 8);
-    headerChunk.write("fmt ", 12);
-    headerChunk.writeUInt32LE(16, 16);
-    headerChunk.writeUInt16LE(1, 20);
-    headerChunk.writeUInt16LE(1, 22);
-    headerChunk.writeUInt32LE(22050, 24);
-    headerChunk.writeUInt32LE(44100, 28);
-    headerChunk.writeUInt16LE(2, 32);
-    headerChunk.writeUInt16LE(16, 34);
-    headerChunk.write("data", 36);
-    headerChunk.writeUInt32LE(totalSamples * 2, 40);
-
-    res.write(headerChunk);
-
-    const chunkSize = 22050 * 2;
-    for (let offset = 0; offset < totalSamples; offset += chunkSize) {
-      const end = Math.min(offset + chunkSize, totalSamples);
-      const chunk = generateWavChunk(podcast.duration, offset, end, seed);
-      if (!res.write(chunk)) {
-        // Backpressure handling would need async iteration;
-        // for demo purposes we flush synchronously
+    const stream = createFullWavStream(podcast.duration, seed);
+    stream.on("error", (err) => {
+      console.error("Stream error:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ message: "Streaming error" });
+      } else {
+        res.end();
       }
-    }
-    res.end();
+    });
+    stream.pipe(res);
     return;
   }
 
@@ -102,59 +83,19 @@ app.get("/api/podcasts/:id/audio", (req, res) => {
   const contentLength = end - start + 1;
 
   res.status(206);
-  res.setHeader("Content-Type", "audio/wav");
   res.setHeader("Content-Length", contentLength.toString());
   res.setHeader("Content-Range", `bytes ${start}-${end}/${totalSize}`);
-  res.setHeader("Accept-Ranges", "bytes");
-  res.setHeader("Cache-Control", "public, max-age=3600");
 
-  const headerSize = 44;
-  const totalSamples = getAudioDurationSamples(podcast.duration);
-
-  if (start < headerSize) {
-    const headerChunk = Buffer.alloc(headerSize);
-    headerChunk.write("RIFF", 0);
-    headerChunk.writeUInt32LE(36 + totalSamples * 2, 4);
-    headerChunk.write("WAVE", 8);
-    headerChunk.write("fmt ", 12);
-    headerChunk.writeUInt32LE(16, 16);
-    headerChunk.writeUInt16LE(1, 20);
-    headerChunk.writeUInt16LE(1, 22);
-    headerChunk.writeUInt32LE(22050, 24);
-    headerChunk.writeUInt32LE(44100, 28);
-    headerChunk.writeUInt16LE(2, 32);
-    headerChunk.writeUInt16LE(16, 34);
-    headerChunk.write("data", 36);
-    headerChunk.writeUInt32LE(totalSamples * 2, 40);
-
-    const startInHeader = start;
-    const endInHeader = Math.min(end, headerSize - 1);
-    const slice = headerChunk.slice(startInHeader, endInHeader + 1);
-    res.write(slice);
-
-    if (end < headerSize) {
+  const stream = createWavReadableStream(podcast.duration, start, end, seed);
+  stream.on("error", (err) => {
+    console.error("Stream error:", err);
+    if (!res.headersSent) {
+      res.status(500).json({ message: "Streaming error" });
+    } else {
       res.end();
-      return;
     }
-
-    const dataStartSample = 0;
-    const dataEndByte = end;
-    const dataEndSample = Math.floor((dataEndByte - headerSize) / 2);
-    const chunk = generateWavChunk(podcast.duration, dataStartSample, dataEndSample + 1, seed);
-    res.write(chunk);
-    res.end();
-    return;
-  }
-
-  const dataStartByte = start - headerSize;
-  const dataEndByte = end - headerSize;
-  const dataStartSample = Math.floor(dataStartByte / 2);
-  const dataEndSample = Math.floor(dataEndByte / 2);
-
-  const chunk = generateWavChunk(podcast.duration, dataStartSample, dataEndSample + 1, seed);
-  const byteOffset = dataStartByte % 2;
-  const responseChunk = chunk.slice(byteOffset, byteOffset + contentLength);
-  res.end(responseChunk);
+  });
+  stream.pipe(res);
 });
 
 app.get("/api/podcasts/:id/transcript", (req, res) => {

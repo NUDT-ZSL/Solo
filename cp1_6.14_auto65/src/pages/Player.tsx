@@ -35,6 +35,9 @@ interface PlayerProps {
   socket: Socket | null;
 }
 
+const CLOCK_SYNC_INTERVAL = 5000;
+const OFFSET_CALIBRATION_THRESHOLD = 0.05;
+
 export default function Player({ socket }: PlayerProps) {
   const { id: podcastId } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -62,6 +65,10 @@ export default function Player({ socket }: PlayerProps) {
   const lastSegmentIndexRef = useRef<number>(-1);
   const progressEmitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isUserSeekingRef = useRef(false);
+  const clockOffsetRef = useRef(0);
+  const lastSyncTimeRef = useRef(0);
+  const audioStartTimeRef = useRef(0);
+  const audioContextStartTimeRef = useRef(0);
 
   const fetchHighlights = useCallback(() => {
     if (!podcastId) return;
@@ -95,7 +102,7 @@ export default function Player({ socket }: PlayerProps) {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       const audioContext = new AudioCtx();
       const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256;
+      analyser.fftSize = 2048;
       analyser.smoothingTimeConstant = 0.8;
 
       const source = audioContext.createMediaElementSource(audioRef.current);
@@ -110,6 +117,49 @@ export default function Player({ socket }: PlayerProps) {
     }
   }, []);
 
+  const ensureAudioContextRunning = useCallback(async () => {
+    if (!audioContextRef.current) return;
+    if (audioContextRef.current.state === "suspended") {
+      try {
+        await audioContextRef.current.resume();
+      } catch (err) {
+        console.warn("AudioContext resume failed:", err);
+      }
+    }
+  }, []);
+
+  const getPreciseCurrentTime = useCallback((): number => {
+    const audio = audioRef.current;
+    const audioContext = audioContextRef.current;
+
+    if (!audio) return 0;
+
+    if (audioContext && audioContext.state === "running" && !audio.paused) {
+      const contextElapsed = audioContext.currentTime - audioContextStartTimeRef.current;
+      const estimated = audioStartTimeRef.current + contextElapsed * audio.playbackRate + clockOffsetRef.current;
+      return Math.max(0, Math.min(estimated, audio.duration || 0));
+    }
+
+    return audio.currentTime + clockOffsetRef.current;
+  }, []);
+
+  const calibrateClockOffset = useCallback(() => {
+    const audio = audioRef.current;
+    const audioContext = audioContextRef.current;
+    if (!audio || !audioContext || audioContext.state !== "running") return;
+
+    const audioTime = audio.currentTime;
+    const contextElapsed = audioContext.currentTime - audioContextStartTimeRef.current;
+    const estimatedFromContext = audioStartTimeRef.current + contextElapsed * audio.playbackRate;
+
+    const offset = audioTime - estimatedFromContext;
+    if (Math.abs(offset) > OFFSET_CALIBRATION_THRESHOLD) {
+      clockOffsetRef.current += offset * 0.3;
+      audioStartTimeRef.current = audioTime;
+      audioContextStartTimeRef.current = audioContext.currentTime;
+    }
+  }, []);
+
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -119,17 +169,16 @@ export default function Player({ socket }: PlayerProps) {
       setAudioReady(true);
     };
 
-    const handleTimeUpdate = () => {
-      if (!isUserSeekingRef.current) {
-        setCurrentTime(audio.currentTime);
-      }
-    };
-
     const handlePlay = () => {
       setIsPlaying(true);
-      if (audioContextRef.current?.state === "suspended") {
-        audioContextRef.current.resume();
-      }
+      initAudioContext();
+      ensureAudioContextRunning().then(() => {
+        if (audioContextRef.current) {
+          audioStartTimeRef.current = audio.currentTime;
+          audioContextStartTimeRef.current = audioContextRef.current.currentTime;
+          lastSyncTimeRef.current = Date.now();
+        }
+      });
     };
 
     const handlePause = () => {
@@ -138,29 +187,35 @@ export default function Player({ socket }: PlayerProps) {
 
     const handleEnded = () => {
       setIsPlaying(false);
-      setCurrentTime(0);
     };
 
     const handleCanPlay = () => {
       setAudioReady(true);
     };
 
+    const handleSeeked = () => {
+      if (audioContextRef.current && audioContextRef.current.state === "running") {
+        audioStartTimeRef.current = audio.currentTime;
+        audioContextStartTimeRef.current = audioContextRef.current.currentTime;
+      }
+    };
+
     audio.addEventListener("loadedmetadata", handleLoadedMetadata);
-    audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("play", handlePlay);
     audio.addEventListener("pause", handlePause);
     audio.addEventListener("ended", handleEnded);
     audio.addEventListener("canplay", handleCanPlay);
+    audio.addEventListener("seeked", handleSeeked);
 
     return () => {
       audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
-      audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.removeEventListener("play", handlePlay);
       audio.removeEventListener("pause", handlePause);
       audio.removeEventListener("ended", handleEnded);
       audio.removeEventListener("canplay", handleCanPlay);
+      audio.removeEventListener("seeked", handleSeeked);
     };
-  }, []);
+  }, [initAudioContext, ensureAudioContextRunning]);
 
   useEffect(() => {
     if (!isPlaying) {
@@ -171,9 +226,18 @@ export default function Player({ socket }: PlayerProps) {
       return;
     }
 
+    let lastCalibration = 0;
+
     const tick = () => {
-      if (audioRef.current && !isUserSeekingRef.current) {
-        setCurrentTime(audioRef.current.currentTime);
+      if (!isUserSeekingRef.current) {
+        const preciseTime = getPreciseCurrentTime();
+        setCurrentTime(preciseTime);
+
+        const now = performance.now();
+        if (now - lastCalibration > CLOCK_SYNC_INTERVAL) {
+          calibrateClockOffset();
+          lastCalibration = now;
+        }
       }
       rafRef.current = requestAnimationFrame(tick);
     };
@@ -185,7 +249,7 @@ export default function Player({ socket }: PlayerProps) {
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [isPlaying]);
+  }, [isPlaying, getPreciseCurrentTime, calibrateClockOffset]);
 
   const currentSegmentIndex = findCurrentSegmentIndex(segments, currentTime);
 
@@ -211,6 +275,7 @@ export default function Player({ socket }: PlayerProps) {
       if (data.podcastId === podcastId && data.socketId !== socket.id) {
         if (audioRef.current) {
           audioRef.current.currentTime = data.currentTime;
+          setCurrentTime(data.currentTime);
         }
       }
     };
@@ -249,18 +314,23 @@ export default function Player({ socket }: PlayerProps) {
     };
   }, [socket, isPlaying, podcastId]);
 
-  const togglePlay = useCallback(() => {
+  const togglePlay = useCallback(async () => {
     const audio = audioRef.current;
     if (!audio) return;
 
     initAudioContext();
+    await ensureAudioContextRunning();
 
     if (audio.paused) {
-      audio.play().catch((err) => console.error("Play failed:", err));
+      try {
+        await audio.play();
+      } catch (err) {
+        console.error("Play failed:", err);
+      }
     } else {
       audio.pause();
     }
-  }, [initAudioContext]);
+  }, [initAudioContext, ensureAudioContextRunning]);
 
   const handleProgressChangeStart = () => {
     isUserSeekingRef.current = true;
@@ -275,6 +345,10 @@ export default function Player({ socket }: PlayerProps) {
     isUserSeekingRef.current = false;
     if (audioRef.current) {
       audioRef.current.currentTime = currentTime;
+      if (audioContextRef.current && audioContextRef.current.state === "running") {
+        audioStartTimeRef.current = currentTime;
+        audioContextStartTimeRef.current = audioContextRef.current.currentTime;
+      }
     }
   };
 
@@ -289,6 +363,10 @@ export default function Player({ socket }: PlayerProps) {
     setPlaybackRate(rate);
     if (audioRef.current) {
       audioRef.current.playbackRate = rate;
+    }
+    if (audioRef.current && audioContextRef.current?.state === "running") {
+      audioStartTimeRef.current = audioRef.current.currentTime;
+      audioContextStartTimeRef.current = audioContextRef.current.currentTime;
     }
   };
 
@@ -344,16 +422,16 @@ export default function Player({ socket }: PlayerProps) {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="flex min-h-screen flex-col md:flex-row">
-        <div className="w-full bg-primary-bg p-4 md:w-[45%] md:p-8">
+        <div className="w-full min-w-0 bg-primary-bg p-4 md:w-[45%] md:p-8">
           <div className="mb-3 flex items-center gap-3 md:hidden">
             <button
               onClick={() => navigate("/")}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/80 text-gray-600 shadow-sm backdrop-blur transition-colors hover:bg-white"
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-white/80 text-gray-600 shadow-sm backdrop-blur transition-colors hover:bg-white"
               aria-label="返回"
             >
               <ArrowLeft size={18} />
             </button>
-            <span className="text-sm font-medium text-gray-600">返回列表</span>
+            <span className="truncate text-sm font-medium text-gray-600">返回列表</span>
           </div>
 
           <audio
@@ -364,8 +442,8 @@ export default function Player({ socket }: PlayerProps) {
           />
 
           <div className="mb-4 md:mb-6">
-            <h1 className="text-xl font-bold text-dark md:text-2xl">{podcast.title}</h1>
-            <p className="mt-1 text-sm text-gray-500 md:text-base">{podcast.author}</p>
+            <h1 className="truncate text-xl font-bold text-dark md:text-2xl">{podcast.title}</h1>
+            <p className="mt-1 truncate text-sm text-gray-500 md:text-base">{podcast.author}</p>
           </div>
 
           <Waveform
@@ -376,7 +454,7 @@ export default function Player({ socket }: PlayerProps) {
           />
 
           <div className="mt-3 flex items-center gap-3 md:mt-4">
-            <span className="text-xs text-gray-500 md:text-sm">
+            <span className="flex-shrink-0 text-xs text-gray-500 md:text-sm">
               {formatTime(currentTime)}
             </span>
             <input
@@ -390,9 +468,9 @@ export default function Player({ socket }: PlayerProps) {
               onChange={handleProgressChange}
               onMouseUp={handleProgressChangeEnd}
               onTouchEnd={handleProgressChangeEnd}
-              className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-gray-200 accent-primary"
+              className="h-1.5 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-gray-200 accent-primary"
             />
-            <span className="text-xs text-gray-500 md:text-sm">
+            <span className="flex-shrink-0 text-xs text-gray-500 md:text-sm">
               {formatTime(duration || podcast.duration)}
             </span>
           </div>
@@ -400,7 +478,7 @@ export default function Player({ socket }: PlayerProps) {
           <div className="mt-4 flex flex-wrap items-center gap-2 md:mt-5 md:gap-3">
             <button
               onClick={handleRestart}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-gray-600 shadow transition-colors hover:bg-gray-100"
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-white text-gray-600 shadow transition-colors hover:bg-gray-100"
               aria-label="重新开始"
             >
               <SkipBack size={18} />
@@ -408,12 +486,12 @@ export default function Player({ socket }: PlayerProps) {
             <button
               onClick={togglePlay}
               disabled={!audioReady}
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white shadow-lg transition-all hover:bg-[#6d28d9] disabled:opacity-50"
+              className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-lg transition-all hover:bg-[#6d28d9] disabled:opacity-50"
               aria-label={isPlaying ? "暂停" : "播放"}
             >
               {isPlaying ? <Pause size={22} /> : <Play size={22} className="ml-0.5" />}
             </button>
-            <div className="ml-2 flex gap-2 md:ml-4">
+            <div className="ml-2 flex flex-wrap gap-2 md:ml-4">
               {[1, 1.5, 2].map((rate) => (
                 <button
                   key={rate}
@@ -435,7 +513,7 @@ export default function Player({ socket }: PlayerProps) {
           </div>
         </div>
 
-        <div className="w-full md:w-[55%]">
+        <div className="w-full min-w-0 md:w-[55%]">
           <div className="p-4 md:p-8">
             <div
               ref={transcriptRef}

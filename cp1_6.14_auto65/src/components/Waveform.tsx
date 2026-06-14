@@ -12,16 +12,21 @@ export default function Waveform({ analyser, isPlaying, currentTime, duration }:
   const animationRef = useRef<number>(0);
   const staticBarsRef = useRef<number[]>([]);
   const phaseRef = useRef(0);
+  const barCountRef = useRef(60);
 
   const generateStaticBars = useCallback((count: number) => {
     const bars: number[] = [];
     for (let i = 0; i < count; i++) {
-      const seed = Math.sin(i * 12.9898 + 78.233) * 43758.5453;
-      const normalized = seed - Math.floor(seed);
+      const x = Math.sin(i * 12.9898 + 78.233) * 43758.5453;
+      const normalized = x - Math.floor(x);
       bars.push(10 + normalized * 50);
     }
     staticBarsRef.current = bars;
   }, []);
+
+  useEffect(() => {
+    generateStaticBars(barCountRef.current);
+  }, [generateStaticBars]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -31,18 +36,18 @@ export default function Waveform({ analyser, isPlaying, currentTime, duration }:
     if (!ctx) return;
 
     const dpr = window.devicePixelRatio || 1;
+
     const resize = () => {
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
       canvas.width = w * dpr;
       canvas.height = h * dpr;
-      ctx.scale(dpr, dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     resize();
     window.addEventListener("resize", resize);
 
-    const barCount = 60;
-    generateStaticBars(barCount);
+    const barCount = barCountRef.current;
 
     const draw = () => {
       const w = canvas.clientWidth;
@@ -50,23 +55,27 @@ export default function Waveform({ analyser, isPlaying, currentTime, duration }:
 
       ctx.clearRect(0, 0, w, h);
 
-      const barWidth = (w - 4) / barCount - 2;
       const gap = 2;
+      const barWidth = (w - 4) / barCount - gap;
       const progressRatio = duration > 0 ? currentTime / duration : 0;
 
-      let barHeights: number[];
+      let barHeights: number[] = [];
 
       if (analyser && isPlaying) {
         const bufferLength = analyser.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
         analyser.getByteFrequencyData(dataArray);
 
-        barHeights = [];
+        const sampleRatio = Math.max(1, Math.floor(bufferLength * 0.7 / barCount));
         for (let i = 0; i < barCount; i++) {
-          const dataIndex = Math.floor((i / barCount) * (bufferLength * 0.6));
-          const value = dataArray[dataIndex] || 0;
-          const normalized = value / 255;
-          const minHeight = 10;
+          let sum = 0;
+          const startIdx = i * sampleRatio;
+          for (let j = 0; j < sampleRatio; j++) {
+            sum += dataArray[startIdx + j] || 0;
+          }
+          const avg = sum / sampleRatio;
+          const normalized = avg / 255;
+          const minHeight = 8;
           const maxHeight = h - 10;
           barHeights.push(minHeight + normalized * (maxHeight - minHeight));
         }
@@ -74,7 +83,7 @@ export default function Waveform({ analyser, isPlaying, currentTime, duration }:
         phaseRef.current += 0.02;
         barHeights = staticBarsRef.current.map((baseHeight, i) => {
           const wave = Math.sin(phaseRef.current + i * 0.3) * 3;
-          return baseHeight + wave;
+          return Math.max(6, baseHeight + wave);
         });
       }
 
@@ -98,16 +107,16 @@ export default function Waveform({ analyser, isPlaying, currentTime, duration }:
         ctx.fillStyle = gradient;
 
         const radius = Math.min(barWidth / 2, barHeight / 2);
-        ctx.beginPath();
-        ctx.roundRect(x, y, barWidth, barHeight, radius);
-        ctx.fill();
+        if (radius > 0) {
+          ctx.beginPath();
+          ctx.roundRect(x, y, barWidth, barHeight, radius);
+          ctx.fill();
+        } else {
+          ctx.fillRect(x, y, barWidth, barHeight);
+        }
       }
 
-      if (analyser && isPlaying) {
-        animationRef.current = requestAnimationFrame(draw);
-      } else if (!isPlaying) {
-        animationRef.current = requestAnimationFrame(draw);
-      }
+      animationRef.current = requestAnimationFrame(draw);
     };
 
     draw();
@@ -118,7 +127,7 @@ export default function Waveform({ analyser, isPlaying, currentTime, duration }:
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [analyser, isPlaying, currentTime, duration, generateStaticBars]);
+  }, [analyser, isPlaying, currentTime, duration]);
 
   return (
     <div className="h-[100px] w-full">

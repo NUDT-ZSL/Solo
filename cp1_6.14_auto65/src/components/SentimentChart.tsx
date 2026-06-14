@@ -15,39 +15,30 @@ interface SentimentChartProps {
 }
 
 interface TooltipData {
-  x: number;
-  y: number;
+  clientX: number;
+  clientY: number;
   text: string;
   sentiment: number;
 }
 
-function getControlPoints(
-  x0: number, y0: number,
-  x1: number, y1: number,
-  x2: number, y2: number,
-  tension: number
+function catmullRomToBezier(
+  p0x: number, p0y: number,
+  p1x: number, p1y: number,
+  p2x: number, p2y: number,
+  p3x: number, p3y: number,
+  tension: number = 0.5
 ): { cp1x: number; cp1y: number; cp2x: number; cp2y: number } {
-  const d01 = Math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2);
-  const d12 = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
-
-  const d = d01 + d12;
-  if (d === 0) {
-    return { cp1x: x1, cp1y: y1, cp2x: x1, cp2y: y1 };
-  }
-
-  const fa = (tension * d01) / d;
-  const fb = (tension * d12) / d;
-
-  const p1x = x1 - fa * (x2 - x0);
-  const p1y = y1 - fa * (y2 - y0);
-  const p2x = x1 + fb * (x2 - x0);
-  const p2y = y1 + fb * (y2 - y0);
-
-  return { cp1x: p1x, cp1y: p1y, cp2x: p2x, cp2y: p2y };
+  const t = tension;
+  const cp1x = p1x + (p2x - p0x) * t / 6;
+  const cp1y = p1y + (p2y - p0y) * t / 6;
+  const cp2x = p2x - (p3x - p1x) * t / 6;
+  const cp2y = p2y - (p3y - p1y) * t / 6;
+  return { cp1x, cp1y, cp2x, cp2y };
 }
 
 export default function SentimentChart({ segments, currentTime, duration }: SentimentChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
   const paddingRef = useRef({ top: 10, right: 10, bottom: 10, left: 10 });
 
@@ -89,113 +80,105 @@ export default function SentimentChart({ segments, currentTime, duration }: Sent
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    const gradient = ctx.createLinearGradient(0, padding.top, 0, h - padding.bottom);
-    gradient.addColorStop(0, "rgba(52, 211, 153, 0.2)");
-    gradient.addColorStop(0.5, "rgba(167, 139, 250, 0.2)");
-    gradient.addColorStop(1, "rgba(248, 113, 113, 0.2)");
+    const fillGradient = ctx.createLinearGradient(0, padding.top, 0, h - padding.bottom);
+    fillGradient.addColorStop(0, "rgba(52, 211, 153, 0.25)");
+    fillGradient.addColorStop(0.5, "rgba(167, 139, 250, 0.2)");
+    fillGradient.addColorStop(1, "rgba(248, 113, 113, 0.25)");
 
     const lineGradient = ctx.createLinearGradient(0, padding.top, 0, h - padding.bottom);
     lineGradient.addColorStop(0, "#34d399");
     lineGradient.addColorStop(0.5, "#a78bfa");
     lineGradient.addColorStop(1, "#f87171");
 
-    const tension = 0.4;
+    const tension = 1.0;
+
+    const drawPoints = points.map(p => ({
+      x: toX(p.x),
+      y: toY(p.y),
+    }));
 
     ctx.beginPath();
-    ctx.moveTo(toX(points[0].x), toY(points[0].y));
 
-    if (points.length === 2) {
-      const midX = (toX(points[0].x) + toX(points[1].x)) / 2;
-      const midY = (toY(points[0].y) + toY(points[1].y)) / 2;
-      ctx.quadraticCurveTo(midX, midY, toX(points[1].x), toY(points[1].y));
-    } else if (points.length > 2) {
-      for (let i = 0; i < points.length - 1; i++) {
-        const p0 = points[i === 0 ? 0 : i - 1];
-        const p1 = points[i];
-        const p2 = points[i + 1];
-        const p3 = points[i + 2 < points.length ? i + 2 : i + 1];
+    if (drawPoints.length === 1) {
+      const p = drawPoints[0];
+      ctx.moveTo(p.x - 2, p.y);
+      ctx.lineTo(p.x + 2, p.y);
+    } else if (drawPoints.length === 2) {
+      ctx.moveTo(drawPoints[0].x, drawPoints[0].y);
+      const midX = (drawPoints[0].x + drawPoints[1].x) / 2;
+      const midY = (drawPoints[0].y + drawPoints[1].y) / 2;
+      ctx.quadraticCurveTo(midX, midY, drawPoints[1].x, drawPoints[1].y);
+    } else {
+      ctx.moveTo(drawPoints[0].x, drawPoints[0].y);
 
-        const { cp2x } = getControlPoints(
-          toX(p0.x), toY(p0.y),
-          toX(p1.x), toY(p1.y),
-          toX(p2.x), toY(p2.y),
+      for (let i = 0; i < drawPoints.length - 1; i++) {
+        const p0 = drawPoints[i === 0 ? 0 : i - 1];
+        const p1 = drawPoints[i];
+        const p2 = drawPoints[i + 1];
+        const p3 = drawPoints[i + 2 < drawPoints.length ? i + 2 : i + 1];
+
+        const { cp1x, cp1y, cp2x, cp2y } = catmullRomToBezier(
+          p0.x, p0.y,
+          p1.x, p1.y,
+          p2.x, p2.y,
+          p3.x, p3.y,
           tension
         );
-        const { cp1x, cp1y } = getControlPoints(
-          toX(p1.x), toY(p1.y),
-          toX(p2.x), toY(p2.y),
-          toX(p3.x), toY(p3.y),
-          tension
-        );
 
-        if (i === 0) {
-          ctx.moveTo(toX(p1.x), toY(p1.y));
-        }
-
-        ctx.bezierCurveTo(
-          cp2x, toY(p1.y),
-          cp1x, cp1y,
-          toX(p2.x), toY(p2.y)
-        );
+        ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
       }
     }
 
-    const strokePath = new Path2D();
-    strokePath.moveTo(toX(points[0].x), toY(points[0].y));
-    if (points.length === 2) {
-      const midX = (toX(points[0].x) + toX(points[1].x)) / 2;
-      const midY = (toY(points[0].y) + toY(points[1].y)) / 2;
-      strokePath.quadraticCurveTo(midX, midY, toX(points[1].x), toY(points[1].y));
-    } else if (points.length > 2) {
-      for (let i = 0; i < points.length - 1; i++) {
-        const p0 = points[i === 0 ? 0 : i - 1];
-        const p1 = points[i];
-        const p2 = points[i + 1];
-        const p3 = points[i + 2 < points.length ? i + 2 : i + 1];
+    const linePath = new Path2D();
+    if (drawPoints.length === 1) {
+      const p = drawPoints[0];
+      linePath.moveTo(p.x - 2, p.y);
+      linePath.lineTo(p.x + 2, p.y);
+    } else if (drawPoints.length === 2) {
+      linePath.moveTo(drawPoints[0].x, drawPoints[0].y);
+      const midX = (drawPoints[0].x + drawPoints[1].x) / 2;
+      const midY = (drawPoints[0].y + drawPoints[1].y) / 2;
+      linePath.quadraticCurveTo(midX, midY, drawPoints[1].x, drawPoints[1].y);
+    } else {
+      linePath.moveTo(drawPoints[0].x, drawPoints[0].y);
+      for (let i = 0; i < drawPoints.length - 1; i++) {
+        const p0 = drawPoints[i === 0 ? 0 : i - 1];
+        const p1 = drawPoints[i];
+        const p2 = drawPoints[i + 1];
+        const p3 = drawPoints[i + 2 < drawPoints.length ? i + 2 : i + 1];
 
-        const { cp2x } = getControlPoints(
-          toX(p0.x), toY(p0.y),
-          toX(p1.x), toY(p1.y),
-          toX(p2.x), toY(p2.y),
+        const { cp1x, cp1y, cp2x, cp2y } = catmullRomToBezier(
+          p0.x, p0.y,
+          p1.x, p1.y,
+          p2.x, p2.y,
+          p3.x, p3.y,
           tension
         );
-        const { cp1x, cp1y } = getControlPoints(
-          toX(p1.x), toY(p1.y),
-          toX(p2.x), toY(p2.y),
-          toX(p3.x), toY(p3.y),
-          tension
-        );
 
-        if (i === 0) {
-          strokePath.moveTo(toX(p1.x), toY(p1.y));
-        }
-
-        strokePath.bezierCurveTo(
-          cp2x, toY(p1.y),
-          cp1x, cp1y,
-          toX(p2.x), toY(p2.y)
-        );
+        linePath.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
       }
     }
 
-    const fillPath = new Path2D(strokePath);
-    fillPath.lineTo(toX(points[points.length - 1].x), h - padding.bottom);
-    fillPath.lineTo(toX(points[0].x), h - padding.bottom);
+    const fillPath = new Path2D(linePath);
+    fillPath.lineTo(drawPoints[drawPoints.length - 1].x, h - padding.bottom);
+    fillPath.lineTo(drawPoints[0].x, h - padding.bottom);
     fillPath.closePath();
 
-    ctx.fillStyle = gradient;
+    ctx.fillStyle = fillGradient;
     ctx.fill(fillPath);
 
     ctx.strokeStyle = lineGradient;
     ctx.lineWidth = 2;
-    ctx.stroke(strokePath);
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke(linePath);
 
     if (duration > 0) {
       const indicatorX = toX(currentTime);
       ctx.beginPath();
       ctx.moveTo(indicatorX, padding.top);
       ctx.lineTo(indicatorX, h - padding.bottom);
-      ctx.strokeStyle = "rgba(167, 139, 250, 0.7)";
+      ctx.strokeStyle = "rgba(167, 139, 250, 0.75)";
       ctx.lineWidth = 2;
       ctx.stroke();
     }
@@ -216,11 +199,14 @@ export default function SentimentChart({ segments, currentTime, duration }: Sent
     if (!canvas || points.length === 0) return;
 
     const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
+    const scaleX = (canvas.width / window.devicePixelRatio) / rect.width;
+    const scaleY = (canvas.height / window.devicePixelRatio) / rect.height;
+
+    const mouseX = (e.clientX - rect.left) * scaleX;
+    const mouseY = (e.clientY - rect.top) * scaleY;
 
     const padding = paddingRef.current;
-    const chartW = rect.width - padding.left - padding.right;
+    const chartW = (canvas.width / window.devicePixelRatio) - padding.left - padding.right;
 
     const time = ((mouseX - padding.left) / chartW) * duration;
 
@@ -234,15 +220,17 @@ export default function SentimentChart({ segments, currentTime, duration }: Sent
       }
     }
 
-    const chartH = rect.height - padding.top - padding.bottom;
+    const chartH = (canvas.height / window.devicePixelRatio) - padding.top - padding.bottom;
     const pointX = padding.left + (points[nearestIndex].x / duration) * chartW;
     const pointY = padding.top + ((1 - points[nearestIndex].y) / 2) * chartH;
 
     const distance = Math.sqrt((mouseX - pointX) ** 2 + (mouseY - pointY) ** 2);
-    if (distance < 40) {
+    const threshold = Math.max(40, chartW / points.length * 1.5);
+
+    if (distance < threshold) {
       setTooltip({
-        x: mouseX,
-        y: mouseY,
+        clientX: e.clientX,
+        clientY: e.clientY,
         text: points[nearestIndex].text,
         sentiment: points[nearestIndex].y,
       });
@@ -264,7 +252,7 @@ export default function SentimentChart({ segments, currentTime, duration }: Sent
   }
 
   return (
-    <div className="relative">
+    <div ref={containerRef} className="relative">
       <h4 className="mb-2 text-sm font-semibold text-gray-600">情感曲线</h4>
       <div className="relative">
         <canvas
@@ -276,15 +264,14 @@ export default function SentimentChart({ segments, currentTime, duration }: Sent
         />
         {tooltip && (
           <div
-            className="pointer-events-none absolute z-10 rounded-lg bg-dark px-3 py-2 text-xs text-white shadow-lg"
+            className="pointer-events-none fixed z-[9999] rounded-lg bg-dark px-3 py-2 text-xs text-white shadow-xl"
             style={{
-              left: `${Math.min(tooltip.x + 12, window.innerWidth - 200)}px`,
-              top: `${tooltip.y + 12}px`,
-              maxWidth: "220px",
-              transform: tooltip.x > window.innerWidth - 220 ? "translateX(-100%)" : "none",
+              left: `${tooltip.clientX + 14}px`,
+              top: `${tooltip.clientY + 14}px`,
+              maxWidth: "240px",
             }}
           >
-            <div className="mb-1 line-clamp-2">{tooltip.text}</div>
+            <div className="mb-1 line-clamp-2 leading-snug">{tooltip.text}</div>
             <div className="text-[11px] text-gray-300">
               情感值: {tooltip.sentiment >= 0 ? "+" : ""}
               {tooltip.sentiment.toFixed(2)}
