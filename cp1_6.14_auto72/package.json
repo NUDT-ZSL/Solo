@@ -1,0 +1,21 @@
+{
+  "name": "heatvortex",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.160.0",
+    "lil-gui": "^0.19.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10",
+    "@types/three": "^0.160.0",
+    "@vitejs/plugin-legacy": "^5.2.0"
+  }
+}
