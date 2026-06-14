@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { eventBus } from './event-bus';
 import { parseEngine } from './parse-engine';
-import { worldState, initializeGame, GameState, Item } from './world-state';
+import { worldState, initializeGame, GameState } from './world-state';
 
 interface LogEntry {
   text: string;
@@ -17,6 +17,7 @@ function App() {
   const inputRef = useRef<HTMLInputElement>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const logIdRef = useRef(0);
+  const initializedRef = useRef(false);
 
   const addLog = useCallback((text: string, type: LogEntry['type']) => {
     logIdRef.current += 1;
@@ -24,7 +25,16 @@ function App() {
     setGameLog(prev => [...prev, entry]);
   }, []);
 
+  const focusInput = useCallback(() => {
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 0);
+  }, []);
+
   useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
     const intro = initializeGame();
     addLog(intro, 'system');
     setGameState(worldState.getState());
@@ -37,6 +47,7 @@ function App() {
 
     return () => {
       eventBus.off('state:change', handleStateChange);
+      initializedRef.current = false;
     };
   }, [addLog]);
 
@@ -47,10 +58,26 @@ function App() {
   }, [gameLog]);
 
   useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [panelOpen]);
+    focusInput();
+
+    const handleWindowClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('button')) return;
+      focusInput();
+    };
+
+    const handleWindowBlur = () => {
+      setTimeout(() => focusInput(), 100);
+    };
+
+    window.addEventListener('click', handleWindowClick);
+    window.addEventListener('blur', handleWindowBlur);
+
+    return () => {
+      window.removeEventListener('click', handleWindowClick);
+      window.removeEventListener('blur', handleWindowBlur);
+    };
+  }, [panelOpen, focusInput]);
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -152,6 +179,7 @@ function App() {
           backgroundColor: '#161b22',
           borderRadius: '8px',
           padding: '24px',
+          paddingBottom: '0',
           boxSizing: 'border-box',
           display: 'flex',
           flexDirection: 'column',
@@ -166,7 +194,7 @@ function App() {
           style={{
             flex: 1,
             overflowY: 'auto',
-            paddingBottom: '16px',
+            paddingBottom: '8px',
             scrollbarWidth: 'thin',
             scrollbarColor: '#30363d #161b22'
           }}
@@ -193,7 +221,16 @@ function App() {
           ))}
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', alignItems: 'center' }}>
+        <form
+          onSubmit={handleSubmit}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            paddingTop: '8px',
+            paddingBottom: '24px',
+            flexShrink: 0
+          }}
+        >
           <span style={{ color: '#3fb950', marginRight: '8px' }}>&gt;</span>
           <input
             ref={inputRef}
@@ -209,7 +246,8 @@ function App() {
               fontFamily: "'Courier New', monospace",
               fontSize: '16px',
               lineHeight: '1.6',
-              caretColor: '#3fb950'
+              caretColor: '#3fb950',
+              padding: '0'
             }}
             autoFocus
             spellCheck={false}
@@ -217,125 +255,127 @@ function App() {
         </form>
       </div>
 
-      {panelOpen && (
-        <div
-          style={{
-            position: 'absolute',
-            right: '24px',
-            top: '50%',
-            transform: 'translateY(-50%)',
-            width: '240px',
-            backgroundColor: '#21262d',
-            borderRadius: '8px',
-            padding: '16px',
-            boxSizing: 'border-box',
-            fontFamily: "'Courier New', monospace",
-            fontSize: '14px',
-            lineHeight: '1.5'
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '16px'
-            }}
-          >
-            <span style={{ color: '#8b949e', fontWeight: 'bold' }}>STATUS</span>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setPanelOpen(false);
-              }}
+      <div
+        style={{
+          position: 'absolute',
+          right: '24px',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          width: panelOpen ? '240px' : '24px',
+          backgroundColor: '#21262d',
+          borderRadius: panelOpen ? '8px' : '4px 0 0 4px',
+          padding: panelOpen ? '16px' : '0',
+          boxSizing: 'border-box',
+          fontFamily: "'Courier New', monospace",
+          fontSize: '14px',
+          lineHeight: '1.5',
+          transition: 'width 0.3s ease, padding 0.3s ease, border-radius 0.3s ease',
+          overflow: 'hidden',
+          minHeight: panelOpen ? 'auto' : '80px',
+          display: 'flex',
+          flexDirection: 'column'
+        }}
+      >
+        {panelOpen ? (
+          <>
+            <div
               style={{
-                background: 'none',
-                border: 'none',
-                color: '#8b949e',
-                cursor: 'pointer',
-                fontSize: '18px',
-                padding: '0',
-                lineHeight: '1'
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '16px',
+                flexShrink: 0
               }}
             >
-              ×
-            </button>
-          </div>
-
-          <div style={{ marginBottom: '16px' }}>
-            <div style={{ color: '#8b949e', marginBottom: '4px' }}>Location</div>
-            <div style={{ color: '#ffffff', fontWeight: 'bold' }}>
-              {currentRoom?.name || '---'}
+              <span style={{ color: '#8b949e', fontWeight: 'bold' }}>STATUS</span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPanelOpen(false);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#8b949e',
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                  padding: '0',
+                  lineHeight: '1'
+                }}
+              >
+                ×
+              </button>
             </div>
-          </div>
 
-          <div style={{ marginBottom: '16px' }}>
-            <div style={{ color: '#8b949e', marginBottom: '4px' }}>Items Here</div>
-            <div style={{ color: '#d29922' }}>
-              {roomItems.length > 0 ? (
-                roomItems.map((itemId) => (
-                  <div key={itemId} style={{ marginBottom: '2px' }}>
-                    • {getItemName(itemId)}
-                  </div>
-                ))
-              ) : (
-                <div style={{ opacity: 0.6 }}>None</div>
-              )}
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ color: '#8b949e', marginBottom: '4px' }}>Location</div>
+              <div style={{ color: '#ffffff', fontWeight: 'bold' }}>
+                {currentRoom?.name || '---'}
+              </div>
             </div>
-          </div>
 
-          <div style={{ marginBottom: '16px' }}>
-            <div style={{ color: '#8b949e', marginBottom: '4px' }}>Inventory</div>
-            <div style={{ color: '#3fb950' }}>
-              {gameState && gameState.inventory.length > 0 ? (
-                gameState.inventory.map((itemId) => (
-                  <div key={itemId} style={{ marginBottom: '2px' }}>
-                    • {getItemName(itemId)}
-                  </div>
-                ))
-              ) : (
-                <div style={{ opacity: 0.6 }}>Empty</div>
-              )}
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ color: '#8b949e', marginBottom: '4px' }}>Items Here</div>
+              <div style={{ color: '#d29922' }}>
+                {roomItems.length > 0 ? (
+                  roomItems.map((itemId) => (
+                    <div key={itemId} style={{ marginBottom: '2px' }}>
+                      • {getItemName(itemId)}
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ opacity: 0.6 }}>None</div>
+                )}
+              </div>
             </div>
-          </div>
 
-          <div>
-            <div style={{ color: '#8b949e', marginBottom: '4px' }}>Exploration</div>
-            <div style={{ color: '#8b949e' }}>
-              {visitedCount} / {totalRooms} rooms visited
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ color: '#8b949e', marginBottom: '4px' }}>Inventory</div>
+              <div style={{ color: '#3fb950' }}>
+                {gameState && gameState.inventory.length > 0 ? (
+                  gameState.inventory.map((itemId) => (
+                    <div key={itemId} style={{ marginBottom: '2px' }}>
+                      • {getItemName(itemId)}
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ opacity: 0.6 }}>Empty</div>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
-      )}
 
-      {!panelOpen && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setPanelOpen(true);
-          }}
-          style={{
-            position: 'absolute',
-            right: '24px',
-            top: '50%',
-            transform: 'translateY(-50%)',
-            width: '24px',
-            height: '80px',
-            backgroundColor: '#21262d',
-            borderRadius: '4px 0 0 4px',
-            border: 'none',
-            color: '#8b949e',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontFamily: "'Courier New', monospace",
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-        >
-          ◀
-        </button>
-      )}
+            <div>
+              <div style={{ color: '#8b949e', marginBottom: '4px' }}>Exploration</div>
+              <div style={{ color: '#8b949e' }}>
+                {visitedCount} / {totalRooms} rooms visited
+              </div>
+            </div>
+          </>
+        ) : (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setPanelOpen(true);
+            }}
+            style={{
+              width: '100%',
+              height: '80px',
+              backgroundColor: 'transparent',
+              border: 'none',
+              color: '#8b949e',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontFamily: "'Courier New', monospace",
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '0'
+            }}
+          >
+            ◀
+          </button>
+        )}
+      </div>
     </div>
   );
 }

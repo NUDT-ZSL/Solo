@@ -114,7 +114,8 @@ class WorldState {
 
     const exitObj = typeof exit === 'string' ? { room: exit, locked: false } : exit;
     const lockStates = this.exitStates.get(this.currentRoomId);
-    const isLocked = lockStates?.has(normalizedDir) ? lockStates.get(normalizedDir)! : (exitObj.locked || false);
+    const runtimeLocked = lockStates?.get(normalizedDir);
+    const isLocked = runtimeLocked !== undefined ? runtimeLocked : !!exitObj.locked;
 
     if (isLocked) {
       return `The way to the ${normalizedDir} is locked.`;
@@ -246,11 +247,25 @@ class WorldState {
       const room = this.getCurrentRoom();
       const exits = Object.entries(room.exits);
 
+      const directionKeywords = ['north', 'south', 'east', 'west', 'n', 's', 'e', 'w'];
+      let matchedDirection: string | null = null;
+      for (const kw of directionKeywords) {
+        if (targetName.toLowerCase().includes(kw)) {
+          matchedDirection = DIRECTIONS[kw] || kw;
+          break;
+        }
+      }
+
       for (const [direction, exit] of exits) {
         const exitObj = typeof exit === 'string' ? { room: exit, key: undefined } : exit;
         if (exitObj.key && exitObj.key === foundItemId) {
+          if (matchedDirection && matchedDirection !== direction) {
+            continue;
+          }
           const lockStates = this.exitStates.get(this.currentRoomId)!;
-          if (lockStates.get(direction)) {
+          const currentLockState = lockStates.get(direction);
+          const isLocked = currentLockState !== undefined ? currentLockState : !!exitObj.locked;
+          if (isLocked) {
             lockStates.set(direction, false);
             eventBus.emit('state:change', this.getState());
             return `You use the ${item.name} on the ${direction} door. It unlocks with a satisfying click.`;

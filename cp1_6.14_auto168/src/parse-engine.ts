@@ -5,27 +5,37 @@ export interface ParsedCommand {
   error?: string;
 }
 
-const VERBS: Record<string, string[]> = {
-  north: ['north', 'n', 'go north', 'walk north'],
-  south: ['south', 's', 'go south', 'walk south'],
-  east: ['east', 'e', 'go east', 'walk east'],
-  west: ['west', 'w', 'go west', 'walk west'],
-  look: ['look', 'l', 'look around', 'examine room'],
-  take: ['take', 'pick up', 'grab', 'get', 'pick'],
-  use: ['use', 'utilize', 'apply'],
-  inventory: ['inventory', 'i', 'inv', 'check inventory', 'items'],
-  help: ['help', 'h', '?', 'commands'],
-  examine: ['examine', 'x', 'look at', 'inspect', 'check'],
-  go: ['go', 'walk', 'move', 'travel'],
-  open: ['open', 'unlock'],
-  close: ['close', 'shut'],
-  drop: ['drop', 'put down', 'leave'],
-  talk: ['talk', 'speak', 'say']
+type VerbAliasEntry = {
+  canonical: string;
+  aliases: string[];
 };
+
+const VERB_ALIASES: VerbAliasEntry[] = [
+  { canonical: 'north', aliases: ['north', 'n', 'go north', 'walk north', 'head north'] },
+  { canonical: 'south', aliases: ['south', 's', 'go south', 'walk south', 'head south'] },
+  { canonical: 'east', aliases: ['east', 'e', 'go east', 'walk east', 'head east'] },
+  { canonical: 'west', aliases: ['west', 'w', 'go west', 'walk west', 'head west'] },
+  { canonical: 'look', aliases: ['look', 'l', 'look around', 'examine room'] },
+  { canonical: 'take', aliases: ['take', 'pick up', 'grab', 'get', 'pick'] },
+  { canonical: 'drop', aliases: ['drop', 'put down', 'leave', 'discard'] },
+  { canonical: 'inventory', aliases: ['inventory', 'i', 'inv', 'check inventory', 'items', 'show inventory'] },
+  { canonical: 'help', aliases: ['help', 'h', '?', 'commands', 'list commands'] },
+  { canonical: 'examine', aliases: ['examine', 'x', 'look at', 'inspect', 'check', 'read'] },
+  { canonical: 'go', aliases: ['go', 'walk', 'move', 'travel', 'head'] },
+  { canonical: 'use', aliases: ['use', 'utilize', 'apply', 'activate'] },
+  { canonical: 'open', aliases: ['open', 'unlock'] },
+  { canonical: 'close', aliases: ['close', 'shut', 'lock'] },
+  { canonical: 'talk', aliases: ['talk', 'speak', 'say', 'ask'] }
+];
 
 const STOP_WORDS = new Set([
   'the', 'a', 'an', 'to', 'on', 'in', 'at', 'with', 'and',
-  'is', 'are', 'of', 'for', 'from', 'up', 'down'
+  'is', 'are', 'of', 'for', 'from', 'up', 'down', 'into',
+  'onto', 'toward', 'towards', 'through', 'door', 'gate', 'passage'
+]);
+
+const DIRECTION_WORDS = new Set([
+  'north', 'south', 'east', 'west', 'n', 's', 'e', 'w'
 ]);
 
 export class ParseEngine {
@@ -36,11 +46,23 @@ export class ParseEngine {
       return { verb: '', noun: '', target: '', error: 'Please enter a command.' };
     }
 
-    for (const [canonicalVerb, aliases] of Object.entries(VERBS)) {
-      for (const alias of aliases) {
-        if (trimmed === alias || trimmed.startsWith(alias + ' ')) {
+    for (const entry of VERB_ALIASES) {
+      for (const alias of entry.aliases) {
+        if (trimmed === alias) {
+          if (['north', 'south', 'east', 'west'].includes(entry.canonical)) {
+            return { verb: entry.canonical, noun: '', target: '' };
+          }
+          return this.parseRest(entry.canonical, '');
+        }
+        if (trimmed.startsWith(alias + ' ')) {
           const rest = trimmed.substring(alias.length).trim();
-          return this.parseRest(canonicalVerb, rest);
+          if (entry.canonical === 'go' && DIRECTION_WORDS.has(rest)) {
+            const normalizedDir = rest.length === 1
+              ? { n: 'north', s: 'south', e: 'east', w: 'west' }[rest as 'n' | 's' | 'e' | 'w']
+              : rest;
+            return { verb: normalizedDir!, noun: '', target: '' };
+          }
+          return this.parseRest(entry.canonical, rest);
         }
       }
     }
@@ -48,10 +70,17 @@ export class ParseEngine {
     const words = trimmed.split(/\s+/);
     const firstWord = words[0];
 
-    for (const [canonicalVerb, aliases] of Object.entries(VERBS)) {
-      if (aliases.some(a => a === firstWord || a.split(' ')[0] === firstWord)) {
-        const rest = words.slice(1).join(' ');
-        return this.parseRest(canonicalVerb, rest);
+    for (const entry of VERB_ALIASES) {
+      const firstWordsOfAliases = entry.aliases.map(a => a.split(' ')[0]);
+      if (firstWordsOfAliases.includes(firstWord)) {
+        const rest = words.slice(1).join(' ').trim();
+        if (entry.canonical === 'go' && DIRECTION_WORDS.has(rest)) {
+          const normalizedDir = rest.length === 1
+            ? { n: 'north', s: 'south', e: 'east', w: 'west' }[rest as 'n' | 's' | 'e' | 'w']
+            : rest;
+          return { verb: normalizedDir!, noun: '', target: '' };
+        }
+        return this.parseRest(entry.canonical, rest);
       }
     }
 
@@ -68,31 +97,55 @@ export class ParseEngine {
       return { verb, noun: '', target: '' };
     }
 
-    const onMatch = rest.match(/\s+(?:on|with|to)\s+(.+)/);
-    if (onMatch && (verb === 'use' || verb === 'open' || verb === 'talk')) {
-      const nounPart = rest.substring(0, rest.indexOf(onMatch[0])).trim();
-      const targetPart = onMatch[1].trim();
+    if (verb === 'use' || verb === 'open' || verb === 'talk') {
+      const separatorMatch = rest.match(/\s+(?:on|with|to)\s+(.+)/);
+      if (separatorMatch) {
+        const nounPart = rest.substring(0, rest.indexOf(separatorMatch[0])).trim();
+        const targetPart = separatorMatch[1].trim();
+        return {
+          verb,
+          noun: this.filterStopWords(nounPart),
+          target: this.filterStopWords(targetPart)
+        };
+      }
+
       return {
         verb,
-        noun: this.filterStopWords(nounPart),
-        target: this.filterStopWords(targetPart)
+        noun: this.filterStopWords(rest),
+        target: ''
       };
+    }
+
+    if (verb === 'go') {
+      const noun = this.filterStopWords(rest);
+      if (DIRECTION_WORDS.has(noun)) {
+        const normalizedDir = noun.length === 1
+          ? { n: 'north', s: 'south', e: 'east', w: 'west' }[noun as 'n' | 's' | 'e' | 'w']
+          : noun;
+        return { verb: normalizedDir!, noun: '', target: '' };
+      }
+      return { verb, noun, target: '' };
     }
 
     const noun = this.filterStopWords(rest);
 
-    if (['north', 'south', 'east', 'west'].includes(noun) && verb === 'go') {
-      return { verb: noun, noun: '', target: '' };
+    if (DIRECTION_WORDS.has(noun) && verb === 'go') {
+      const normalizedDir = noun.length === 1
+        ? { n: 'north', s: 'south', e: 'east', w: 'west' }[noun as 'n' | 's' | 'e' | 'w']
+        : noun;
+      return { verb: normalizedDir!, noun: '', target: '' };
     }
 
     return { verb, noun, target: '' };
   }
 
   private filterStopWords(phrase: string): string {
+    if (!phrase) return '';
     return phrase
       .split(/\s+/)
       .filter(word => !STOP_WORDS.has(word))
-      .join(' ');
+      .join(' ')
+      .trim();
   }
 }
 
