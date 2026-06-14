@@ -19,7 +19,7 @@ export default function ArtCard({ artwork, artist, isFavorited, onToggleFavorite
   const handleFavoriteClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     setHeartAnimating(true)
-    setTimeout(() => setHeartAnimating(false), 400)
+    setTimeout(() => setHeartAnimating(false), 200)
     onToggleFavorite(artwork.id)
   }
 
@@ -45,15 +45,13 @@ export default function ArtCard({ artwork, artist, isFavorited, onToggleFavorite
       }}
     >
       <style>{`
-        @keyframes heartBounce {
+        @keyframes heartPop {
           0% { transform: scale(1); }
-          30% { transform: scale(1.2); }
-          50% { transform: scale(0.95); }
-          70% { transform: scale(1.1); }
+          50% { transform: scale(1.1); }
           100% { transform: scale(1); }
         }
         .heart-btn.animating {
-          animation: heartBounce 0.4s ease;
+          animation: heartPop 0.2s ease;
         }
         .heart-svg {
           transition: all 0.2s ease;

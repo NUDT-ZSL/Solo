@@ -117,16 +117,16 @@ export default function ArtworkDetailPage({ artworkId, artworks, artists, favori
                   flex: 1, height: 48, borderRadius: 8, border: 'none',
                   background: 'linear-gradient(135deg, #f59e0b, #eab308)',
                   color: '#fff', fontSize: 16, fontWeight: 700, cursor: 'pointer',
-                  boxShadow: '0 4px 14px rgba(245,158,11,0.4)',
+                  boxShadow: '0 6px 16px 2px rgba(245,158,11,0.35)',
                   transition: 'filter 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease',
                 }}
                 onMouseEnter={e => {
                   (e.currentTarget as HTMLButtonElement).style.filter = 'brightness(1.1)'
-                  ;(e.currentTarget as HTMLButtonElement).style.boxShadow = '0 2px 8px rgba(245,158,11,0.3)'
+                  ;(e.currentTarget as HTMLButtonElement).style.boxShadow = '0 2px 6px -1px rgba(245,158,11,0.25)'
                 }}
                 onMouseLeave={e => {
                   (e.currentTarget as HTMLButtonElement).style.filter = 'brightness(1)'
-                  ;(e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 14px rgba(245,158,11,0.4)'
+                  ;(e.currentTarget as HTMLButtonElement).style.boxShadow = '0 6px 16px 2px rgba(245,158,11,0.35)'
                 }}
               >
                 立即购买

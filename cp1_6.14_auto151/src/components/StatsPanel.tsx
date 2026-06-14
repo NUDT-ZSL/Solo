@@ -8,6 +8,7 @@ interface StatsPanelProps {
 
 function AnimatedNumber({ target, duration = 1500 }: { target: number; duration?: number }) {
   const [current, setCurrent] = useState(0)
+  const frameRef = useRef<number | null>(null)
   const hasAnimated = useRef(false)
 
   useEffect(() => {
@@ -25,11 +26,18 @@ function AnimatedNumber({ target, duration = 1500 }: { target: number; duration?
       const value = Math.round(startValue + (endValue - startValue) * eased)
       setCurrent(value)
       if (progress < 1) {
-        requestAnimationFrame(animate)
+        frameRef.current = requestAnimationFrame(animate)
       }
     }
 
-    requestAnimationFrame(animate)
+    frameRef.current = requestAnimationFrame(animate)
+
+    return () => {
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current)
+        frameRef.current = null
+      }
+    }
   }, [target, duration])
 
   return <span>{current.toLocaleString()}</span>

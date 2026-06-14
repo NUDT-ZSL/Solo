@@ -75,11 +75,14 @@ export default function GalleryPage({ artworks, artists, favorites, onToggleFavo
               .gallery-grid { column-count: 2; column-gap: 16px; }
             }
             @media (max-width: 480px) {
-              .gallery-grid { column-count: 1; column-gap: 16px; }
+              .gallery-grid { column-count: 1; column-gap: 0; }
             }
             .gallery-item {
               break-inside: avoid;
               margin-bottom: 16px;
+            }
+            @media (max-width: 480px) {
+              .gallery-item { margin-bottom: 12px; }
             }
           `}</style>
           <div className="gallery-grid">

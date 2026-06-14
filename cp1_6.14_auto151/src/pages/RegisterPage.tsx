@@ -18,18 +18,29 @@ export default function RegisterPage({ onRegistered }: RegisterPageProps) {
   }
 
   return (
-    <div style={{
-      display: 'flex', justifyContent: 'center', alignItems: 'center',
-      minHeight: 'calc(100vh - 64px)', padding: 32,
-    }}>
+    <>
+      <style>{`
+        .register-card {
+          width: 480px;
+          background: rgba(17,24,39,0.75);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          border-radius: 16px;
+          padding: 32px;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+          border: 1px solid rgba(255,255,255,0.08);
+        }
+        @supports not (backdrop-filter: blur(12px)) {
+          .register-card {
+            background: rgba(17,24,39,0.92);
+          }
+        }
+      `}</style>
       <div style={{
-        width: 480, background: 'rgba(17,24,39,0.75)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        borderRadius: 16,
-        padding: 32, boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-        border: '1px solid rgba(255,255,255,0.08)',
+        display: 'flex', justifyContent: 'center', alignItems: 'center',
+        minHeight: 'calc(100vh - 64px)', padding: 32,
       }}>
+        <div className="register-card">
         <h2 style={{ fontSize: 24, color: '#fff', marginBottom: 8, textAlign: 'center' }}>艺术家注册</h2>
         <p style={{ fontSize: 14, color: '#9ca3af', marginBottom: 32, textAlign: 'center' }}>创建您的艺术家账户，开始展示作品</p>
 
@@ -106,6 +117,7 @@ export default function RegisterPage({ onRegistered }: RegisterPageProps) {
           </button>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   )
 }

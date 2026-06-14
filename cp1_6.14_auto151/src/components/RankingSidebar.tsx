@@ -47,7 +47,10 @@ export default function RankingSidebar({ artists, onArtistClick, onArtworkClick 
         }
         .ranking-item {
           opacity: 0;
-          animation: rankingFadeIn 0.3s ease forwards;
+          animation-name: rankingFadeIn;
+          animation-duration: 0.3s;
+          animation-timing-function: ease;
+          animation-fill-mode: forwards;
         }
       `}</style>
       <div
