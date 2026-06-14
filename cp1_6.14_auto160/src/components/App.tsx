@@ -76,8 +76,8 @@ function ShareModal({ url, onClose }: ShareModalProps) {
   }, [onClose]);
 
   return (
-    <div style={styles.modalOverlay} onClick={onClose}>
-      <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+    <div style={styles.modalOverlay} onClick={onClose} className="pp-modal-overlay">
+      <div style={styles.modalContent} onClick={(e) => e.stopPropagation()} className="pp-modal-content">
         <h3 style={{ margin: '0 0 12px 0', fontSize: '18px', fontWeight: 600 }}>
           Share Link Generated
         </h3>
@@ -240,8 +240,8 @@ export default function App() {
         </span>
       </header>
 
-      <div style={styles.main} className="pp-main-flex">
-        <div style={styles.leftPanel} className="pp-left-panel">
+      <div style={styles.main} className="layoutHorizontal">
+        <div style={styles.leftPanel} className="panelLeft">
           <div style={styles.editorContainer}>
             <div style={styles.editorHeader}>
               <div style={styles.windowDots}>
@@ -253,6 +253,7 @@ export default function App() {
                 value={language}
                 onChange={(e) => setLanguage(e.target.value as Language)}
                 style={styles.langSelect}
+                className="pp-lang-select"
               >
                 {LANGUAGES.map((l) => (
                   <option key={l.value} value={l.value}>
@@ -284,7 +285,11 @@ export default function App() {
             <button style={styles.actionBtn} onClick={handleCopyClipboard} className="pp-btn">
               📋 Copy to Clipboard
             </button>
-            <button style={styles.actionBtn} onClick={handleThemeSwitch} className="pp-btn">
+            <button
+              style={styles.actionBtn}
+              onClick={handleThemeSwitch}
+              className="pp-btn pp-theme-btn"
+            >
               🎨 {currentTheme.name}
             </button>
             <button style={styles.actionBtn} onClick={handleShare} className="pp-btn">
@@ -306,7 +311,7 @@ export default function App() {
           </div>
         </div>
 
-        <div style={styles.rightPanel} className="pp-right-panel">
+        <div style={styles.rightPanel} className="panelRight">
           <div style={styles.previewLabel}>Preview</div>
           <div ref={previewRef} style={styles.previewArea}>
             {loading && (
@@ -394,14 +399,12 @@ const styles: Record<string, React.CSSProperties> = {
     margin: '0 auto',
   },
   leftPanel: {
-    width: '45%',
     minWidth: 0,
     display: 'flex',
     flexDirection: 'column',
     gap: '16px',
   },
   rightPanel: {
-    width: '55%',
     minWidth: 0,
     display: 'flex',
     flexDirection: 'column',
@@ -615,6 +618,9 @@ const styles: Record<string, React.CSSProperties> = {
 };
 
 const cssStyles = `
+  .pp-btn {
+    transition: transform 0.2s ease;
+  }
   .pp-btn:hover {
     transform: scale(1.05);
   }
@@ -624,14 +630,89 @@ const cssStyles = `
   @keyframes pp-spin {
     to { transform: rotate(360deg); }
   }
+
+  /* ============ 响应式布局 ============ */
+  .layoutHorizontal {
+    display: flex;
+    flex-direction: row;
+  }
+  .layoutVertical {
+    display: flex;
+    flex-direction: column;
+  }
+  .panelLeft {
+    width: 45%;
+  }
+  .panelRight {
+    width: 55%;
+  }
+
   @media (max-width: 900px) {
-    .pp-main-flex {
+    .layoutHorizontal {
       flex-direction: column !important;
     }
-    .pp-left-panel, .pp-right-panel {
+    .panelLeft,
+    .panelRight {
       width: 100% !important;
     }
+    .layout-horizontal .panel-left,
+    .layout-horizontal .panel-right {
+      width: 100% !important;
+    }
+    .layout-horizontal {
+      flex-direction: column !important;
+    }
   }
+
+  /* ============ 语言选择下拉框样式 ============ */
+  .pp-lang-select {
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+    background-color: #313244 !important;
+    color: #cdd6f4 !important;
+    border: none !important;
+    border-radius: 6px !important;
+    padding: 6px 28px 6px 12px !important;
+    font-size: 13px !important;
+    font-family: 'Fira Code', monospace !important;
+    cursor: pointer !important;
+    outline: none !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23cdd6f4' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 10px center !important;
+    background-size: 10px !important;
+  }
+  .pp-lang-select option {
+    background-color: #1e1e2e !important;
+    color: #cdd6f4 !important;
+    padding: 6px !important;
+  }
+  .pp-lang-select:focus {
+    box-shadow: 0 0 0 2px #cba6f7 !important;
+  }
+
+  /* ============ 主题按钮激活态 ============ */
+  .pp-theme-btn {
+    box-shadow: 0 0 0 2px rgba(203, 166, 247, 0.4) !important;
+  }
+
+  /* ============ 分享弹窗进入动画 ============ */
+  @keyframes pp-modal-in {
+    from { opacity: 0; transform: scale(0.92) translateY(10px); }
+    to   { opacity: 1; transform: scale(1)   translateY(0);    }
+  }
+  .pp-modal-content {
+    animation: pp-modal-in 0.22s cubic-bezier(.2,.8,.2,1);
+  }
+  @keyframes pp-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  .pp-modal-overlay {
+    animation: pp-fade-in 0.18s ease;
+  }
+
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;

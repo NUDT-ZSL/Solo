@@ -265,9 +265,9 @@ export class SnapshotRenderer {
   static renderAsync(
     tokenLines: Token[][],
     config: Partial<RenderConfig> = {},
-    chunkSize: number = 300
+    chunkSize: number = 50
   ): Promise<HTMLCanvasElement> {
-    if (tokenLines.length <= chunkSize) {
+    if (tokenLines.length <= chunkSize * 2) {
       return Promise.resolve(SnapshotRenderer.render(tokenLines, config));
     }
 
@@ -284,74 +284,103 @@ export class SnapshotRenderer {
         : 0;
 
       const headerHeight = cfg.showHeader ? 40 : 0;
-      const maxLineWidth = Math.max(
-        ...tokenLines.map((line) =>
-          line.reduce((w, t) => w + measureTextWidth(ctx, t.value, cfg), 0)
-        ),
-        200
-      );
 
-      const contentWidth = lineNumWidth + maxLineWidth + cfg.padding * 2;
-      const contentHeight =
-        tokenLines.length * cfg.fontSize * cfg.lineHeight +
-        cfg.padding * 2 +
-        headerHeight;
+      const computeMaxWidthAsync = (): Promise<number> => {
+        const LENGTH = tokenLines.length;
+        const WIDTH_CHUNK = 200;
+        let max = 200;
+        let idx = 0;
+        return new Promise((res) => {
+          const step = () => {
+            const stop = Math.min(idx + WIDTH_CHUNK, LENGTH);
+            for (; idx < stop; idx++) {
+              const w = tokenLines[idx].reduce(
+                (acc, t) => acc + measureTextWidth(ctx, t.value, cfg),
+                0
+              );
+              if (w > max) max = w;
+            }
+            if (idx < LENGTH) {
+              (window.requestIdleCallback || ((fn) => setTimeout(fn, 0)))(step);
+            } else {
+              res(max);
+            }
+          };
+          step();
+        });
+      };
 
-      canvas.width = (contentWidth + 16) * dpr;
-      canvas.height = (contentHeight + 16) * dpr;
-      canvas.style.width = `${contentWidth + 16}px`;
-      canvas.style.height = `${contentHeight + 16}px`;
-
-      ctx.scale(dpr, dpr);
-
-      SnapshotRenderer.drawBackground(ctx, cfg, contentWidth + 16, contentHeight + 16);
-
-      const lineHeightPx = cfg.fontSize * cfg.lineHeight;
-      const codeStartX = cfg.padding + lineNumWidth;
-      const codeStartY = cfg.padding + headerHeight;
-
-      let processed = 0;
-
-      const renderChunk = () => {
-        const end = Math.min(processed + chunkSize, tokenLines.length);
-
-        for (let i = processed; i < end; i++) {
-          const y = codeStartY + i * lineHeightPx;
-
-          if (cfg.showLineNumbers) {
-            ctx.font = `${cfg.fontSize}px ${cfg.fontFamily}`;
-            ctx.fillStyle = cfg.theme.lineNumberColor;
-            ctx.textAlign = 'right';
-            ctx.fillText(String(i + 1), cfg.padding + lineNumWidth - 12, y);
-            ctx.textAlign = 'left';
-          }
-
-          let x = codeStartX;
-          for (const token of tokenLines[i]) {
-            ctx.fillStyle = getTokenColor(token.type, cfg.theme);
-            ctx.fillText(token.value, x, y);
-            x += ctx.measureText(token.value).width;
-          }
-        }
-
-        processed = end;
-
-        if (processed < tokenLines.length) {
-          setTimeout(renderChunk, 0);
+      const schedule = (fn: () => void) => {
+        if (typeof window !== 'undefined' && window.requestAnimationFrame) {
+          window.requestAnimationFrame(() => window.requestAnimationFrame(fn));
         } else {
-          resolve(canvas);
+          setTimeout(fn, 0);
         }
       };
 
-      if (cfg.showHeader) {
-        const langLabel = cfg.language.charAt(0).toUpperCase() + cfg.language.slice(1);
-        ctx.fillStyle = cfg.theme.keywordColor;
-        ctx.font = `600 ${cfg.fontSize}px ${cfg.fontFamily}`;
-        ctx.fillText(`● ${langLabel}`, cfg.padding, cfg.padding);
-        ctx.font = `${cfg.fontSize}px ${cfg.fontFamily}`;
-      }
+      computeMaxWidthAsync().then((maxLineWidth) => {
+        const contentWidth = lineNumWidth + maxLineWidth + cfg.padding * 2;
+        const contentHeight =
+          tokenLines.length * cfg.fontSize * cfg.lineHeight +
+          cfg.padding * 2 +
+          headerHeight;
 
-      renderChunk();
+        canvas.width = (contentWidth + 16) * dpr;
+        canvas.height = (contentHeight + 16) * dpr;
+        canvas.style.width = `${contentWidth + 16}px`;
+        canvas.style.height = `${contentHeight + 16}px`;
+
+        ctx.scale(dpr, dpr);
+
+        SnapshotRenderer.drawBackground(ctx, cfg, contentWidth + 16, contentHeight + 16);
+
+        if (cfg.showHeader) {
+          const langLabel = cfg.language.charAt(0).toUpperCase() + cfg.language.slice(1);
+          ctx.fillStyle = cfg.theme.keywordColor;
+          ctx.font = `600 ${cfg.fontSize}px ${cfg.fontFamily}`;
+          ctx.fillText(`● ${langLabel}`, cfg.padding, cfg.padding);
+          ctx.font = `${cfg.fontSize}px ${cfg.fontFamily}`;
+        }
+
+        const lineHeightPx = cfg.fontSize * cfg.lineHeight;
+        const codeStartX = cfg.padding + lineNumWidth;
+        const codeStartY = cfg.padding + headerHeight;
+
+        let processed = 0;
+
+        const renderChunk = () => {
+          const end = Math.min(processed + chunkSize, tokenLines.length);
+
+          for (let i = processed; i < end; i++) {
+            const y = codeStartY + i * lineHeightPx;
+
+            if (cfg.showLineNumbers) {
+              ctx.font = `${cfg.fontSize}px ${cfg.fontFamily}`;
+              ctx.fillStyle = cfg.theme.lineNumberColor;
+              ctx.textAlign = 'right';
+              ctx.fillText(String(i + 1), cfg.padding + lineNumWidth - 12, y);
+              ctx.textAlign = 'left';
+            }
+
+            let x = codeStartX;
+            for (const token of tokenLines[i]) {
+              ctx.fillStyle = getTokenColor(token.type, cfg.theme);
+              ctx.fillText(token.value, x, y);
+              x += ctx.measureText(token.value).width;
+            }
+          }
+
+          processed = end;
+
+          if (processed < tokenLines.length) {
+            schedule(renderChunk);
+          } else {
+            resolve(canvas);
+          }
+        };
+
+        renderChunk();
+      });
     });
   }
 
