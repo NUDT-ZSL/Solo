@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import copy from 'copy-to-clipboard'
 import ColorPanel from './components/ColorPanel'
 import DashboardPreview from './components/DashboardPreview'
 import {
@@ -6,13 +7,15 @@ import {
   getTheme,
   getCurrentColors,
   hexToHsl,
-  applyTheme,
   themeNames,
   themeLabels,
   themeIcons,
 } from './hooks/useTheme'
 import type { ThemeVariable, ThemeColors, ThemeName } from './hooks/useTheme'
 import './App.css'
+
+const MIN_DIVIDER_PERCENT = 10
+const MAX_DIVIDER_PERCENT = 90
 
 function useFps(): number {
   const [fps, setFps] = useState(60)
@@ -26,7 +29,7 @@ function useFps(): number {
       const now = performance.now()
       const delta = now - lastTimeRef.current
       if (delta >= 1000) {
-        setFps(Math.round((frameCountRef.current * 1000) / delta))
+        setFps(Math.max(0, Math.round((frameCountRef.current * 1000) / delta)))
         frameCountRef.current = 0
         lastTimeRef.current = now
       }
@@ -41,6 +44,10 @@ function useFps(): number {
   return fps
 }
 
+function clampPercent(value: number): number {
+  return Math.max(MIN_DIVIDER_PERCENT, Math.min(MAX_DIVIDER_PERCENT, value))
+}
+
 export default function App() {
   const theme = useTheme()
   const fps = useFps()
@@ -53,6 +60,13 @@ export default function App() {
   const [isDraggingDivider, setIsDraggingDivider] = useState(false)
 
   const compareContainerRef = useRef<HTMLDivElement>(null)
+  const isMobile = useRef<boolean>(false)
+
+  useEffect(() => {
+    isMobile.current = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent,
+    )
+  }, [])
 
   useEffect(() => {
     theme.applyThemeByName('dark')
@@ -64,7 +78,11 @@ export default function App() {
   }, [theme])
 
   const handleColorDrop = useCallback((variable: ThemeVariable, color: string) => {
-    theme.updateVariable(variable, color)
+    try {
+      theme.updateVariable(variable, color)
+    } catch (err) {
+      console.error('[App] 更新 CSS 变量失败:', err)
+    }
   }, [theme])
 
   const handleReferenceColorDrop = useCallback((variable: ThemeVariable, color: string) => {
@@ -74,7 +92,7 @@ export default function App() {
     }))
   }, [])
 
-  const handleCustomColor = useCallback((color: string) => {
+  const handleCustomColor = useCallback((_color: string) => {
     // 自定义颜色选择器选择后可以直接拖拽使用，不需要做任何操作
   }, [])
 
@@ -83,9 +101,36 @@ export default function App() {
       const next = !prev
       if (next) {
         setReferenceColors(getTheme('light'))
+        setDividerPosition(50)
       }
       return next
     })
+  }, [])
+
+  const updateDividerFromPosition = useCallback((clientX: number, clientY: number) => {
+    if (!compareContainerRef.current) return false
+
+    const rect = compareContainerRef.current.getBoundingClientRect()
+
+    // 检查鼠标/触摸位置是否在对比容器范围内（垂直方向）
+    if (clientY < rect.top || clientY > rect.bottom) {
+      // 超出垂直范围，停止更新
+      return false
+    }
+
+    // 水平方向超出容器边界时，直接钳位到边界值
+    let x: number
+    if (clientX < rect.left) {
+      x = 0
+    } else if (clientX > rect.right) {
+      x = rect.width
+    } else {
+      x = clientX - rect.left
+    }
+
+    const percent = clampPercent((x / rect.width) * 100)
+    setDividerPosition(percent)
+    return true
   }, [])
 
   const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
@@ -93,36 +138,61 @@ export default function App() {
     setIsDraggingDivider(true)
   }, [])
 
+  const handleDividerTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 0) return
+    e.preventDefault()
+    setIsDraggingDivider(true)
+    const touch = e.touches[0]
+    updateDividerFromPosition(touch.clientX, touch.clientY)
+  }, [updateDividerFromPosition])
+
   useEffect(() => {
     if (!isDraggingDivider) return
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (!compareContainerRef.current) return
-      const rect = compareContainerRef.current.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const percent = Math.max(10, Math.min(90, (x / rect.width) * 100))
-      setDividerPosition(percent)
+      updateDividerFromPosition(e.clientX, e.clientY)
+    }
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 0) return
+      e.preventDefault()
+      const touch = e.touches[0]
+      updateDividerFromPosition(touch.clientX, touch.clientY)
     }
 
     const handleMouseUp = () => {
       setIsDraggingDivider(false)
     }
 
+    const handleTouchEnd = () => {
+      setIsDraggingDivider(false)
+    }
+
+    const handleTouchCancel = () => {
+      setIsDraggingDivider(false)
+    }
+
     window.addEventListener('mousemove', handleMouseMove)
     window.addEventListener('mouseup', handleMouseUp)
+    window.addEventListener('touchmove', handleTouchMove, { passive: false })
+    window.addEventListener('touchend', handleTouchEnd)
+    window.addEventListener('touchcancel', handleTouchCancel)
 
     return () => {
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
+      window.removeEventListener('touchmove', handleTouchMove)
+      window.removeEventListener('touchend', handleTouchEnd)
+      window.removeEventListener('touchcancel', handleTouchCancel)
     }
-  }, [isDraggingDivider])
+  }, [isDraggingDivider, updateDividerFromPosition])
 
   const generateExportCSS = useCallback(() => {
     const colors = getCurrentColors()
     const entries = Object.entries(colors) as [ThemeVariable, string][]
     const hexLines = entries.map(([key, val]) => `  ${key}: ${val};`).join('\n')
     const hslLines = entries
-      .filter(([, val]) => !val.startsWith('rgba') && !val.startsWith('rgb'))
+      .filter(([, val]) => !val.startsWith('rgba') && !val.startsWith('rgb') && !val.startsWith('hsl'))
       .map(([key, val]) => `  ${key}: ${hexToHsl(val)};`)
       .join('\n')
 
@@ -137,20 +207,13 @@ ${hslLines}
 }`
   }, [])
 
-  const handleCopy = useCallback(async () => {
+  const handleCopy = useCallback(() => {
     const css = generateExportCSS()
-    try {
-      await navigator.clipboard.writeText(css)
-    } catch {
-      const textarea = document.createElement('textarea')
-      textarea.value = css
-      document.body.appendChild(textarea)
-      textarea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textarea)
+    const succeeded = copy(css)
+    if (succeeded) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 300)
     }
-    setCopied(true)
-    setTimeout(() => setCopied(false), 300)
   }, [generateExportCSS])
 
   const handleExportClick = useCallback(() => {
@@ -201,7 +264,7 @@ ${hslLines}
         <div
           ref={compareContainerRef}
           className={`preview-area ${compareMode ? 'compare-mode' : ''}`}
-          style={{ cursor: isDraggingDivider ? 'col-resize' : 'default' }}
+          style={{ cursor: isDraggingDivider ? (isMobile.current ? 'default' : 'col-resize') : 'default' }}
         >
           {compareMode ? (
             <>
@@ -220,6 +283,7 @@ ${hslLines}
               <div
                 className="compare-divider"
                 onMouseDown={handleDividerMouseDown}
+                onTouchStart={handleDividerTouchStart}
                 style={{ left: `${dividerPosition}%` }}
               >
                 <div className="divider-handle" />
@@ -242,7 +306,10 @@ ${hslLines}
         </div>
 
         <div className="fps-counter">
-          <span className="fps-dot" />
+          <span className="fps-dot" style={{
+            backgroundColor: fps >= 45 ? '#2ecc71' : fps >= 30 ? '#f39c12' : '#e74c3c',
+            boxShadow: `0 0 6px ${fps >= 45 ? '#2ecc71' : fps >= 30 ? '#f39c12' : '#e74c3c'}`,
+          }} />
           <span className="fps-value">{fps}</span>
           <span className="fps-label"> FPS</span>
         </div>

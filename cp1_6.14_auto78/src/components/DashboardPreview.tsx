@@ -30,19 +30,61 @@ const TABLE_ROWS = [
   { name: '赵六', role: '产品经理', status: '忙碌', task: '6' },
 ]
 
+const HEX_COLOR_REGEX = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i
+const RGB_COLOR_REGEX = /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(,\s*[\d.]+\s*)?\)$/i
+
+function isValidColor(color: unknown): color is string {
+  if (typeof color !== 'string') return false
+  const trimmed = color.trim()
+  if (!trimmed) return false
+  if (HEX_COLOR_REGEX.test(trimmed)) return true
+  if (RGB_COLOR_REGEX.test(trimmed)) return true
+  if (/^hsl/i.test(trimmed)) return true
+  return false
+}
+
 export default function DashboardPreview({ onDrop, scopeId, customColors, title }: DashboardPreviewProps) {
   const handleDrop = useCallback((e: React.DragEvent, variable: ThemeVariable) => {
     e.preventDefault()
-    const color = e.dataTransfer.getData('text/plain')
-    if (color) {
-      onDrop(variable, color)
+    e.stopPropagation()
+
+    let color: string | null = null
+
+    try {
+      color = e.dataTransfer.getData('text/plain')
+      if (!color) {
+        color = e.dataTransfer.getData('text')
+      }
+    } catch (err) {
+      console.warn('[DashboardPreview] 读取拖拽数据失败:', err)
     }
+
     ;(e.currentTarget as HTMLElement).classList.remove('drop-target-active')
+
+    if (!color) {
+      console.warn('[DashboardPreview] 拖拽数据为空，已忽略')
+      return
+    }
+
+    if (!isValidColor(color)) {
+      console.warn('[DashboardPreview] 非法颜色格式:', JSON.stringify(color))
+      return
+    }
+
+    try {
+      onDrop(variable, color)
+    } catch (err) {
+      console.error('[DashboardPreview] 调用 onDrop 失败:', err)
+    }
   }, [onDrop])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
-    e.dataTransfer.dropEffect = 'copy'
+    try {
+      e.dataTransfer.dropEffect = 'copy'
+    } catch {
+      // 忽略
+    }
     ;(e.currentTarget as HTMLElement).classList.add('drop-target-active')
   }, [])
 

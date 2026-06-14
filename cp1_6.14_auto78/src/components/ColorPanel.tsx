@@ -18,10 +18,30 @@ export default function ColorPanel({ onColorDrop, onCustomColor }: ColorPanelPro
   const [tooltip, setTooltip] = useState<{ color: string; x: number; y: number } | null>(null)
   const [customColor, setCustomColor] = useState('#6c5ce7')
   const colorInputRef = useRef<HTMLInputElement>(null)
+  const dragPreviewRef = useRef<HTMLDivElement | null>(null)
+  const cleanupTimerRef = useRef<number | null>(null)
+
+  const cleanupDragPreview = useCallback(() => {
+    if (cleanupTimerRef.current) {
+      window.clearTimeout(cleanupTimerRef.current)
+      cleanupTimerRef.current = null
+    }
+    if (dragPreviewRef.current && dragPreviewRef.current.parentNode) {
+      dragPreviewRef.current.parentNode.removeChild(dragPreviewRef.current)
+    }
+    dragPreviewRef.current = null
+  }, [])
 
   const handleDragStart = useCallback((e: React.DragEvent, color: string) => {
-    e.dataTransfer.setData('text/plain', color)
-    e.dataTransfer.effectAllowed = 'copy'
+    cleanupDragPreview()
+
+    try {
+      e.dataTransfer.setData('text/plain', color)
+      e.dataTransfer.effectAllowed = 'copy'
+    } catch {
+      // IE fallback
+      e.dataTransfer.setData('text', color)
+    }
 
     const preview = document.createElement('div')
     preview.className = 'drag-preview'
@@ -32,16 +52,27 @@ export default function ColorPanel({ onColorDrop, onCustomColor }: ColorPanelPro
     preview.style.opacity = '0.7'
     preview.style.position = 'absolute'
     preview.style.top = '-1000px'
+    preview.style.left = '-1000px'
     preview.style.pointerEvents = 'none'
+    preview.style.zIndex = '9999'
     document.body.appendChild(preview)
-    e.dataTransfer.setDragImage(preview, 24, 24)
+    dragPreviewRef.current = preview
 
-    setTimeout(() => {
-      if (preview.parentNode) {
-        preview.parentNode.removeChild(preview)
-      }
-    }, 100)
-  }, [])
+    try {
+      e.dataTransfer.setDragImage(preview, 24, 24)
+    } catch {
+      // 某些浏览器不支持 setDragImage，忽略即可
+    }
+
+    cleanupTimerRef.current = window.setTimeout(() => {
+      cleanupDragPreview()
+    }, 200)
+  }, [cleanupDragPreview])
+
+  const handleDragEnd = useCallback(() => {
+    cleanupDragPreview()
+    setTooltip(null)
+  }, [cleanupDragPreview])
 
   const handleCustomColorChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const color = e.target.value
@@ -66,6 +97,7 @@ export default function ColorPanel({ onColorDrop, onCustomColor }: ColorPanelPro
             className="color-swatch"
             draggable
             onDragStart={(e) => handleDragStart(e, color)}
+            onDragEnd={handleDragEnd}
             onMouseEnter={(e) => setTooltip({ color, x: e.clientX, y: e.clientY })}
             onMouseLeave={() => setTooltip(null)}
             onMouseMove={(e) => {
@@ -97,6 +129,7 @@ export default function ColorPanel({ onColorDrop, onCustomColor }: ColorPanelPro
             className="custom-picker-swatch"
             draggable
             onDragStart={(e) => handleDragStart(e, customColor)}
+            onDragEnd={handleDragEnd}
             style={{ backgroundColor: customColor }}
           />
           <input
