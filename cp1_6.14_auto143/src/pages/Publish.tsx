@@ -103,11 +103,38 @@ export default function Publish() {
     }
   }
 
+  const coverPreviewStyle: React.CSSProperties = coverImage
+    ? {
+        width: '400px',
+        height: '250px',
+        borderRadius: '12px',
+        border: 'none',
+        background: 'transparent',
+        maxWidth: '100%',
+      }
+    : {
+        width: '400px',
+        height: '250px',
+        borderRadius: '12px',
+        borderWidth: '2px',
+        borderStyle: 'dashed',
+        borderColor: dragOver ? '#f59e0b' : '#64748b',
+        background: dragOver ? 'rgba(245, 158, 11, 0.05)' : '#1e293b',
+        maxWidth: '100%',
+      }
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      <div className="w-full max-w-[800px] mx-auto px-6 py-8" style={{ padding: '24px' }}>
+      <div
+        style={{
+          width: '100%',
+          maxWidth: '800px',
+          margin: '0 auto',
+          padding: '24px',
+        }}
+      >
         <h1 className="text-3xl font-bold text-textMain mb-8">发布菜谱</h1>
 
         <div className="space-y-6">
@@ -149,25 +176,30 @@ export default function Publish() {
             </label>
             <div
               className={cn(
-                'relative w-[400px] h-[250px] rounded-xl border-2 border-dashed cursor-pointer overflow-hidden transition-colors',
-                dragOver ? 'border-[#f59e0b] bg-[#f59e0b]/5' : 'border-[#64748b] bg-[#1e293b]',
-                'max-w-full'
+                'relative cursor-pointer overflow-hidden transition-colors',
+                dragOver && 'bg-[#f59e0b]/5',
+                !coverImage && 'flex flex-col items-center justify-center'
               )}
-              style={{ borderRadius: '12px', borderWidth: '2px', borderStyle: 'dashed', borderColor: coverImage ? 'transparent' : '#64748b', background: coverImage ? 'transparent' : '#1e293b' }}
+              style={coverPreviewStyle}
               onDrop={handleDrop}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onClick={() => fileInputRef.current?.click()}
             >
               {coverImage ? (
-                <img src={coverImage} alt="封面预览" className="w-full h-full object-cover" style={{ borderRadius: '12px' }} />
+                <img
+                  src={coverImage}
+                  alt="封面预览"
+                  className="w-full h-full object-cover"
+                  style={{ borderRadius: '12px' }}
+                />
               ) : uploading ? (
-                <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                <div className="flex flex-col items-center justify-center text-gray-400 h-full">
                   <Upload size={32} className="animate-pulse mb-2" />
                   <span className="text-sm">上传中...</span>
                 </div>
               ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                <div className="flex flex-col items-center justify-center text-gray-400 h-full">
                   <ImagePlus size={36} className="mb-2" />
                   <span className="text-sm">拖拽或点击上传封面</span>
                   <span className="text-xs mt-1 text-gray-500">建议尺寸 800x500</span>
@@ -206,7 +238,7 @@ export default function Publish() {
                   type="button"
                   onClick={() => setCuisine(cuisine === opt.value ? '' : opt.value)}
                   className={cn(
-                    'px-5 py-2.5 rounded-lg text-sm font-medium transition-all btn-hover',
+                    'px-5 py-2.5 text-sm font-medium transition-all btn-hover',
                     cuisine === opt.value
                       ? 'bg-[#f59e0b] text-white shadow-md'
                       : 'bg-[#334155] text-white hover:bg-[#475569]'
@@ -282,7 +314,7 @@ export default function Publish() {
               onClick={handleSubmit}
               disabled={submitting}
               className={cn(
-                'w-full py-3 rounded-xl text-white font-semibold text-base transition-all btn-hover',
+                'w-full py-3 text-white font-semibold text-base transition-all btn-hover',
                 submitting
                   ? 'bg-gray-400 cursor-not-allowed'
                   : 'bg-[#f59e0b] hover:bg-[#d97706]'

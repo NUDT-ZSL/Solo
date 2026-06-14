@@ -30,16 +30,21 @@ interface PaginatedResponse {
 
 export default function Home() {
   const [recipes, setRecipes] = useState<Recipe[]>([])
-  const [page, setPage] = useState<number>(1)
-  const [loading, setLoading] = useState<boolean>(false)
   const [hasMore, setHasMore] = useState<boolean>(true)
   const [initialLoading, setInitialLoading] = useState<boolean>(true)
+  const [loading, setLoading] = useState<boolean>(false)
   const observerRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
+  const currentPageRef = useRef<number>(1)
+  const isLoadingRef = useRef<boolean>(false)
+  const loadedPageSet = useRef<Set<number>>(new Set())
+
   const loadRecipes = useCallback(async (pageNum: number) => {
-    if (loading) return
+    if (isLoadingRef.current || loadedPageSet.current.has(pageNum)) return
+    isLoadingRef.current = true
     setLoading(true)
+    loadedPageSet.current.add(pageNum)
     try {
       const res = await getRecipes(pageNum, PAGE_SIZE) as unknown as PaginatedResponse
       const newRecipes = res.data || []
@@ -54,33 +59,40 @@ export default function Home() {
       }
     } catch (err) {
       console.error('加载菜谱失败:', err)
+      loadedPageSet.current.delete(pageNum)
     } finally {
+      isLoadingRef.current = false
       setLoading(false)
       setInitialLoading(false)
     }
-  }, [loading])
-
-  useEffect(() => {
-    loadRecipes(1)
   }, [])
 
   useEffect(() => {
+    loadRecipes(1)
+  }, [loadRecipes])
+
+  useEffect(() => {
     if (!observerRef.current) return
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loading && !initialLoading) {
-          setPage((prev) => {
-            const next = prev + 1
-            loadRecipes(next)
-            return next
-          })
+        if (entries[0].isIntersecting && hasMore && !isLoadingRef.current && !initialLoading) {
+          if (debounceTimer) clearTimeout(debounceTimer)
+          debounceTimer = setTimeout(() => {
+            const nextPage = currentPageRef.current + 1
+            currentPageRef.current = nextPage
+            loadRecipes(nextPage)
+          }, 150)
         }
       },
       { threshold: 0.1 }
     )
     observer.observe(observerRef.current)
-    return () => observer.disconnect()
-  }, [hasMore, loading, initialLoading, loadRecipes])
+    return () => {
+      observer.disconnect()
+      if (debounceTimer) clearTimeout(debounceTimer)
+    }
+  }, [hasMore, initialLoading, loadRecipes])
 
   const handleRate = async (id: string, rating: number) => {
     try {
