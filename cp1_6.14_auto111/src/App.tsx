@@ -95,11 +95,9 @@ function App() {
         </div>
       </header>
 
-      {isDrawerOpen && (
-        <div className="mobile-drawer">
-          <StatsPanel stats={stats} />
-        </div>
-      )}
+      <div className={`mobile-drawer ${isDrawerOpen ? 'open' : ''}`}>
+        <StatsPanel stats={stats} />
+      </div>
 
       <main className="main-content">
         <section className="articles-section">

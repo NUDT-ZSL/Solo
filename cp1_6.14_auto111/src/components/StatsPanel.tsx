@@ -11,7 +11,23 @@ import {
   Cell,
   Legend,
 } from 'recharts';
-import { Stats, TAG_COLORS } from '../types';
+import { Stats, TAG_COLORS, Tag } from '../types';
+
+const FALLBACK_COLORS = [
+  '#4C51BF',
+  '#9F7AEA',
+  '#ED64A6',
+  '#667EEA',
+  '#38A169',
+  '#DD6B20',
+];
+
+function getTagColor(tagName: string, index: number): string {
+  if (tagName in TAG_COLORS) {
+    return TAG_COLORS[tagName as Tag];
+  }
+  return FALLBACK_COLORS[index % FALLBACK_COLORS.length];
+}
 
 interface StatsPanelProps {
   stats: Stats;
@@ -109,8 +125,8 @@ export function StatsPanel({ stats }: StatsPanelProps) {
                 outerRadius={70}
                 dataKey="value"
               >
-                {stats.tagDistribution.map((entry) => (
-                  <Cell key={entry.name} fill={TAG_COLORS[entry.name]} />
+                {stats.tagDistribution.map((entry, index) => (
+                  <Cell key={entry.name} fill={getTagColor(entry.name, index)} />
                 ))}
               </Pie>
               <Tooltip

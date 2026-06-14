@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Article, TAG_COLORS } from '../types';
 
 interface ArticleCardProps {
@@ -7,18 +7,25 @@ interface ArticleCardProps {
 }
 
 export function ArticleCard({ article, onClick }: ArticleCardProps) {
-  const [isClicked, setIsClicked] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackKey, setFeedbackKey] = useState(0);
 
-  const handleClick = () => {
-    setIsClicked(true);
-    setTimeout(() => setIsClicked(false), 200);
+  const handleClick = useCallback(() => {
+    setFeedbackKey((k) => k + 1);
+    setShowFeedback(true);
     onClick(article);
-  };
+  }, [article, onClick]);
+
+  const handleAnimEnd = useCallback(() => {
+    setShowFeedback(false);
+  }, []);
 
   return (
     <div
-      className={`article-card ${isClicked ? 'clicked' : ''}`}
+      key={feedbackKey}
+      className={`article-card ${showFeedback ? 'tap-feedback' : ''}`}
       onClick={handleClick}
+      onAnimationEnd={handleAnimEnd}
     >
       <h3 className="article-title">{article.title}</h3>
       <p className="article-date">{article.date}</p>

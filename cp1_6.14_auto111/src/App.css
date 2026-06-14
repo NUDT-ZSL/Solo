@@ -100,6 +100,27 @@
   background-color: #f7fafc;
   padding: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  transition: max-height 0.35s ease, padding 0.35s ease;
+}
+
+.mobile-drawer.open {
+  max-height: 2000px;
+  padding: 20px;
+}
+
+.mobile-drawer .stats-panel {
+  background-color: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+.drawer-toggle.active {
+  background-color: #3182ce;
+  color: #ffffff;
 }
 
 .main-content {
@@ -146,10 +167,13 @@
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  transform: translateZ(0);
+  will-change: transform;
+  user-select: none;
 }
 
 .article-card:hover {
@@ -157,19 +181,47 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10);
 }
 
-.article-card.clicked {
-  animation: clickPulse 0.2s ease;
+.article-card:active {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10);
+  transition: transform 0.08s ease, box-shadow 0.25s ease;
 }
 
-@keyframes clickPulse {
+.article-card.tap-feedback {
+  animation: tapScale 0.25s ease-out;
+}
+
+@keyframes tapScale {
   0% {
-    transform: scale(1);
+    transform: translateY(0) scale(1);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   }
-  50% {
-    transform: scale(1.02);
+  35% {
+    transform: translateY(0) scale(1.02);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.09);
   }
   100% {
-    transform: scale(1);
+    transform: translateY(0) scale(1);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  }
+}
+
+.article-card.tap-feedback:hover {
+  animation: tapScaleHover 0.25s ease-out;
+}
+
+@keyframes tapScaleHover {
+  0% {
+    transform: translateY(-4px) scale(1);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10);
+  }
+  35% {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+  }
+  100% {
+    transform: translateY(-4px) scale(1);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10);
   }
 }
 
