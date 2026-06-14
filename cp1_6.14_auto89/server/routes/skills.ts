@@ -1,33 +1,13 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-
-export type MasteryLevel = 'unlearned' | 'learning' | 'mastered';
-
-export interface SkillNode {
-  id: string;
-  name: string;
-  description: string;
-  level: MasteryLevel;
-  estimatedHours: number;
-  parentId: string | null;
-  childrenIds: string[];
-  prerequisites: string[];
-}
-
-export interface LearningStep {
-  nodeId: string;
-  name: string;
-  description: string;
-  estimatedHours: number;
-  prerequisites: string[];
-  prerequisiteNames: string[];
-}
-
-export interface LearningPath {
-  steps: LearningStep[];
-  totalHours: number;
-  remainingHours: number;
-}
+import type {
+  MasteryLevel,
+  SkillNode,
+  LearningStep,
+  LearningPath,
+  CycleDetectionResult,
+  DependencyValidationResult,
+} from '../../src/types.js';
 
 interface Store {
   nodes: Map<string, SkillNode>;
@@ -49,7 +29,66 @@ const collectDescendants = (nodeId: string): string[] => {
   return result;
 };
 
-const topologicalSort = (nodes: SkillNode[]): string[] => {
+const collectAncestors = (nodeId: string): Set<string> => {
+  const ancestors = new Set<string>();
+  const node = store.nodes.get(nodeId);
+  if (!node || !node.parentId) return ancestors;
+  let current = node.parentId;
+  while (current) {
+    ancestors.add(current);
+    const parent = store.nodes.get(current);
+    current = parent?.parentId || null;
+  }
+  return ancestors;
+};
+
+const detectCycle = (): CycleDetectionResult => {
+  const nodes = getNodesArray();
+  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+  const inDegree = new Map<string, number>();
+  const adjacency = new Map<string, string[]>();
+
+  for (const n of nodes) {
+    inDegree.set(n.id, 0);
+    adjacency.set(n.id, []);
+  }
+
+  for (const n of nodes) {
+    for (const pre of n.prerequisites) {
+      if (nodeMap.has(pre)) {
+        inDegree.set(n.id, (inDegree.get(n.id) || 0) + 1);
+        adjacency.get(pre)!.push(n.id);
+      }
+    }
+  }
+
+  const queue: string[] = [];
+  for (const n of nodes) {
+    if (inDegree.get(n.id) === 0) queue.push(n.id);
+  }
+
+  let processed = 0;
+  const visited = new Set<string>();
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    visited.add(id);
+    processed++;
+    for (const next of adjacency.get(id) || []) {
+      const deg = (inDegree.get(next) || 0) - 1;
+      inDegree.set(next, deg);
+      if (deg === 0) queue.push(next);
+    }
+  }
+
+  if (processed < nodes.length) {
+    const cycleNodes = nodes.filter(n => !visited.has(n.id)).map(n => n.id);
+    return { hasCycle: true, cycleNodes };
+  }
+
+  return { hasCycle: false, cycleNodes: [] };
+};
+
+const kahnTopologicalSort = (nodes: SkillNode[]): { sorted: string[]; cycleNodes: string[] } => {
   const nodeMap = new Map(nodes.map(n => [n.id, n]));
   const inDegree = new Map<string, number>();
   const adjacency = new Map<string, string[]>();
@@ -84,7 +123,67 @@ const topologicalSort = (nodes: SkillNode[]): string[] => {
     }
   }
 
-  return sorted;
+  const sortedSet = new Set(sorted);
+  const cycleNodes = nodes.filter(n => !sortedSet.has(n.id)).map(n => n.id);
+
+  return { sorted, cycleNodes };
+};
+
+const validateDependencyAddition = (
+  nodeId: string,
+  newPrerequisiteId: string
+): DependencyValidationResult => {
+  if (nodeId === newPrerequisiteId) {
+    return { valid: false, reason: '不能将自己设为前置依赖' };
+  }
+
+  if (!store.nodes.has(newPrerequisiteId)) {
+    return { valid: false, reason: '前置依赖节点不存在' };
+  }
+
+  const descendants = new Set(collectDescendants(nodeId));
+  if (descendants.has(newPrerequisiteId)) {
+    return {
+      valid: false,
+      reason: '不能将后代节点设为前置依赖，会形成间接循环',
+      cycleNodes: [nodeId, newPrerequisiteId],
+    };
+  }
+
+  const ancestors = collectAncestors(newPrerequisiteId);
+  if (ancestors.has(nodeId)) {
+    return {
+      valid: false,
+      reason: '不能将祖先节点设为前置依赖，会形成间接循环',
+      cycleNodes: [nodeId, newPrerequisiteId],
+    };
+  }
+
+  const node = store.nodes.get(nodeId)!;
+  const tempPrereqs = [...node.prerequisites, newPrerequisiteId];
+  const originalPrereqs = node.prerequisites;
+  node.prerequisites = tempPrereqs;
+
+  const cycleResult = detectCycle();
+  node.prerequisites = originalPrereqs;
+
+  if (cycleResult.hasCycle) {
+    return {
+      valid: false,
+      reason: '添加此前置依赖会形成循环依赖',
+      cycleNodes: cycleResult.cycleNodes,
+    };
+  }
+
+  return { valid: true };
+};
+
+const cleanupDeletedDependencies = (deletedIds: string[]) => {
+  const deletedSet = new Set(deletedIds);
+  for (const n of store.nodes.values()) {
+    n.prerequisites = n.prerequisites.filter(pre => !deletedSet.has(pre));
+    n.childrenIds = n.childrenIds.filter(cid => !deletedSet.has(cid));
+  }
 };
 
 router.get('/', (_req: Request, res: Response) => {
@@ -186,9 +285,7 @@ router.delete('/:id', (req: Request, res: Response) => {
     store.nodes.delete(delId);
   }
 
-  for (const n of store.nodes.values()) {
-    n.prerequisites = n.prerequisites.filter(pre => !toDelete.includes(pre));
-  }
+  cleanupDeletedDependencies(toDelete);
 
   res.json({ deleted: toDelete });
 });
@@ -202,9 +299,43 @@ router.put('/:id/prerequisites', (req: Request, res: Response) => {
   }
 
   const prereqs = (req.body && req.body.prerequisites) || [];
-  node.prerequisites = Array.isArray(prereqs) ? prereqs.filter((p: string) => store.nodes.has(p)) : [];
+  const validPrereqs = Array.isArray(prereqs) ? prereqs.filter((p: string) => store.nodes.has(p)) : [];
+
+  const originalPrereqs = node.prerequisites;
+  node.prerequisites = validPrereqs;
+
+  const cycleResult = detectCycle();
+  if (cycleResult.hasCycle) {
+    node.prerequisites = originalPrereqs;
+    const cycleNames = cycleResult.cycleNodes
+      .map(cid => store.nodes.get(cid)?.name)
+      .filter(Boolean);
+    res.status(400).json({
+      error: '检测到循环依赖',
+      cycleNodes: cycleResult.cycleNodes,
+      cycleNames,
+    });
+    return;
+  }
 
   res.json(node);
+});
+
+router.post('/validate-dependency', (req: Request, res: Response) => {
+  const { nodeId, prerequisiteId } = req.body || {};
+  if (!nodeId || !prerequisiteId) {
+    res.status(400).json({ valid: false, reason: '缺少nodeId或prerequisiteId参数' });
+    return;
+  }
+
+  const node = store.nodes.get(nodeId);
+  if (!node) {
+    res.status(404).json({ valid: false, reason: '目标节点不存在' });
+    return;
+  }
+
+  const result = validateDependencyAddition(nodeId, prerequisiteId);
+  res.json(result);
 });
 
 router.post('/reset', (_req: Request, res: Response) => {
@@ -214,12 +345,23 @@ router.post('/reset', (_req: Request, res: Response) => {
 
 router.get('/path', (_req: Request, res: Response) => {
   const nodes = getNodesArray();
-  const sortedIds = topologicalSort(nodes);
-  const idSet = new Set(sortedIds);
-  const nonCycled = nodes.filter(n => idSet.has(n.id));
-  const idToNode = new Map(nonCycled.map(n => [n.id, n]));
+  const { sorted, cycleNodes } = kahnTopologicalSort(nodes);
 
-  const steps: LearningStep[] = sortedIds
+  if (cycleNodes.length > 0) {
+    const cycleNames = cycleNodes
+      .map(cid => store.nodes.get(cid)?.name)
+      .filter(Boolean);
+    res.status(400).json({
+      error: '存在循环依赖，无法生成学习路径',
+      cycleNodes,
+      cycleNames,
+    });
+    return;
+  }
+
+  const idToNode = new Map(nodes.map(n => [n.id, n]));
+
+  const steps: LearningStep[] = sorted
     .map(nid => idToNode.get(nid))
     .filter((n): n is SkillNode => !!n && n.level !== 'mastered')
     .map(n => ({
@@ -236,7 +378,7 @@ router.get('/path', (_req: Request, res: Response) => {
         .filter((pn): pn is string => !!pn),
     }));
 
-  const totalHours = nonCycled.reduce((s, n) => s + n.estimatedHours, 0);
+  const totalHours = nodes.reduce((s, n) => s + n.estimatedHours, 0);
   const remainingHours = steps.reduce((s, st) => s + st.estimatedHours, 0);
 
   const path: LearningPath = { steps, totalHours, remainingHours };

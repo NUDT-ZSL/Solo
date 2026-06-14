@@ -1,36 +1,20 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig, AxiosError } from 'axios';
+import type { SkillNode, LearningPath, DependencyValidationResult } from '../types';
 
-export type MasteryLevel = 'unlearned' | 'learning' | 'mastered';
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 800;
 
-export interface SkillNode {
-  id: string;
-  name: string;
-  description: string;
-  level: MasteryLevel;
-  estimatedHours: number;
-  parentId: string | null;
-  childrenIds: string[];
-  prerequisites: string[];
-}
+const shouldRetry = (error: AxiosError): boolean => {
+  if (!error.response) return true;
+  const status = error.response.status;
+  return status >= 500 || status === 408 || status === 429;
+};
 
-export interface LearningStep {
-  nodeId: string;
-  name: string;
-  description: string;
-  estimatedHours: number;
-  prerequisites: string[];
-  prerequisiteNames: string[];
-}
-
-export interface LearningPath {
-  steps: LearningStep[];
-  totalHours: number;
-  remainingHours: number;
-}
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const http: AxiosInstance = axios.create({
   baseURL: '/api',
-  timeout: 10000,
+  timeout: 5000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -38,6 +22,10 @@ const http: AxiosInstance = axios.create({
 
 http.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    const retryCount = config.headers?.['X-Retry-Count'] as number | undefined;
+    if (retryCount === undefined) {
+      config.headers.set('X-Retry-Count', '0');
+    }
     return config;
   },
   (error) => Promise.reject(error)
@@ -45,7 +33,21 @@ http.interceptors.request.use(
 
 http.interceptors.response.use(
   (response: AxiosResponse) => response,
-  (error) => {
+  async (error: AxiosError) => {
+    const config = error.config as InternalAxiosRequestConfig & { __retryCount?: number };
+    if (!config) return Promise.reject(error);
+
+    const retryCount = parseInt(config.headers?.['X-Retry-Count'] as string || '0', 10);
+
+    if (retryCount < MAX_RETRIES && shouldRetry(error)) {
+      config.headers.set('X-Retry-Count', String(retryCount + 1));
+      console.warn(
+        `[HTTP Retry] ${config.method?.toUpperCase()} ${config.url} attempt ${retryCount + 1}/${MAX_RETRIES}`
+      );
+      await delay(RETRY_DELAY_MS * (retryCount + 1));
+      return http(config);
+    }
+
     console.error('[HTTP Error]', error?.response?.status, error?.message);
     return Promise.reject(error);
   }
@@ -58,6 +60,8 @@ export const skillsApi = {
   remove: (id: string) => http.delete<{ deleted: string[] }>(`/skills/${id}`).then(r => r.data),
   setPrerequisites: (id: string, prerequisites: string[]) =>
     http.put<SkillNode>(`/skills/${id}/prerequisites`, { prerequisites }).then(r => r.data),
+  validateDependency: (nodeId: string, prerequisiteId: string) =>
+    http.post<DependencyValidationResult>('/skills/validate-dependency', { nodeId, prerequisiteId }).then(r => r.data),
   reset: () => http.post<{ reset: boolean }>('/skills/reset').then(r => r.data),
   getPath: () => http.get<LearningPath>('/skills/path').then(r => r.data),
 };
