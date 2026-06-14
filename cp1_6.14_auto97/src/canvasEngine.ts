@@ -1,5 +1,7 @@
 export type ToolType = 'square' | 'circle' | 'slope' | 'player' | 'enemy-red' | 'enemy-purple' | 'eraser';
 export type BrushSize = 8 | 16 | 32;
+export type TerrainType = 'square' | 'circle' | 'slope';
+export type EntityType = 'player' | 'enemy-red' | 'enemy-purple';
 
 export interface Vec2 {
   x: number;
@@ -8,34 +10,39 @@ export interface Vec2 {
 
 export interface TerrainBlock {
   id: string;
-  type: 'square' | 'circle' | 'slope';
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+  type: TerrainType;
+  position: Vec2;
+  size: Vec2;
   slopeDirection?: 'left' | 'right';
   flashTime?: number;
 }
 
-export interface Entity {
+export interface EntityBase {
   id: string;
-  type: 'player' | 'enemy-red' | 'enemy-purple';
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  vx: number;
-  vy: number;
+  type: EntityType;
+  position: Vec2;
+  size: Vec2;
+  velocity: Vec2;
   onGround: boolean;
   collisionNormal: Vec2 | null;
-  patrolDirection?: number;
 }
+
+export interface Player extends EntityBase {
+  type: 'player';
+}
+
+export interface Enemy extends EntityBase {
+  type: 'enemy-red' | 'enemy-purple';
+  patrolDirection: number;
+}
+
+export type GameEntity = Player | Enemy;
 
 export interface GameState {
   terrains: TerrainBlock[];
-  entities: Entity[];
+  entities: GameEntity[];
   isSimulating: boolean;
-  player: Entity | null;
+  player: Player | null;
 }
 
 export interface InfoData {
@@ -43,58 +50,142 @@ export interface InfoData {
   playerVel: Vec2 | null;
   onGround: boolean;
   collisionNormal: Vec2 | null;
+  terrainCount: number;
+  entityCount: number;
 }
 
 const GRAVITY = 980;
 const PLAYER_SPEED = 300;
-const JUMP_VELOCITY = 500;
+const JUMP_IMPULSE = 500;
 const ENEMY_SPEED = 80;
 const FLASH_DURATION = 0.1;
+const GRID_SIZE = 32;
 
 function generateId(): string {
   return Math.random().toString(36).substring(2, 11);
 }
 
-function rectsOverlap(a: { x: number; y: number; width: number; height: number },
-                      b: { x: number; y: number; width: number; height: number }): boolean {
-  return a.x < b.x + b.width &&
-         a.x + a.width > b.x &&
-         a.y < b.y + b.height &&
-         a.y + a.height > b.y;
+function vec(x: number, y: number): Vec2 {
+  return { x, y };
 }
 
-function getAxes(rect: { x: number; y: number; width: number; height: number }): Vec2[] {
+function dot(a: Vec2, b: Vec2): number {
+  return a.x * b.x + a.y * b.y;
+}
+
+function normalize(v: Vec2): Vec2 {
+  const len = Math.sqrt(v.x * v.x + v.y * v.y);
+  if (len === 0) return { x: 0, y: 0 };
+  return { x: v.x / len, y: v.y / len };
+}
+
+function getAABB(position: Vec2, size: Vec2) {
+  return {
+    minX: position.x,
+    minY: position.y,
+    maxX: position.x + size.x,
+    maxY: position.y + size.y
+  };
+}
+
+function aabbOverlap(aMinX: number, aMinY: number, aMaxX: number, aMaxY: number,
+                     bMinX: number, bMinY: number, bMaxX: number, bMaxY: number): boolean {
+  return aMinX < bMaxX && aMaxX > bMinX && aMinY < bMaxY && aMaxY > bMinY;
+}
+
+function getRectCorners(position: Vec2, size: Vec2): Vec2[] {
+  return [
+    { x: position.x, y: position.y },
+    { x: position.x + size.x, y: position.y },
+    { x: position.x + size.x, y: position.y + size.y },
+    { x: position.x, y: position.y + size.y }
+  ];
+}
+
+function getSlopeCorners(terrain: TerrainBlock): Vec2[] {
+  const { position, size, slopeDirection } = terrain;
+  if (slopeDirection === 'right') {
+    return [
+      { x: position.x, y: position.y + size.y },
+      { x: position.x + size.x, y: position.y },
+      { x: position.x + size.x, y: position.y + size.y }
+    ];
+  }
+  return [
+    { x: position.x, y: position.y },
+    { x: position.x + size.x, y: position.y + size.y },
+    { x: position.x, y: position.y + size.y }
+  ];
+}
+
+function getAxesForRect(): Vec2[] {
   return [
     { x: 1, y: 0 },
     { x: 0, y: 1 }
   ];
 }
 
-function projectOntoAxis(rect: { x: number; y: number; width: number; height: number }, axis: Vec2): { min: number; max: number } {
-  const corners = [
-    { x: rect.x, y: rect.y },
-    { x: rect.x + rect.width, y: rect.y },
-    { x: rect.x + rect.width, y: rect.y + rect.height },
-    { x: rect.x, y: rect.y + rect.height }
-  ];
+function getAxesForPolygon(corners: Vec2[]): Vec2[] {
+  const axes: Vec2[] = [];
+  for (let i = 0; i < corners.length; i++) {
+    const p1 = corners[i];
+    const p2 = corners[(i + 1) % corners.length];
+    const edge = { x: p2.x - p1.x, y: p2.y - p1.y };
+    const normal = normalize({ x: -edge.y, y: edge.x });
+    axes.push(normal);
+  }
+  return axes;
+}
+
+function projectPointsOntoAxis(points: Vec2[], axis: Vec2): { min: number; max: number } {
   let min = Infinity, max = -Infinity;
-  for (const c of corners) {
-    const dot = c.x * axis.x + c.y * axis.y;
-    if (dot < min) min = dot;
-    if (dot > max) max = dot;
+  for (const p of points) {
+    const d = dot(p, axis);
+    if (d < min) min = d;
+    if (d > max) max = d;
   }
   return { min, max };
 }
 
-function satCollide(a: { x: number; y: number; width: number; height: number },
-                    b: { x: number; y: number; width: number; height: number }): { overlap: number; normal: Vec2 } | null {
-  const axes = [...getAxes(a), ...getAxes(b)];
+function projectCircleOntoAxis(center: Vec2, radius: number, axis: Vec2): { min: number; max: number } {
+  const centerProj = dot(center, axis);
+  return { min: centerProj - radius, max: centerProj + radius };
+}
+
+function findClosestPointOnPolygon(point: Vec2, polygon: Vec2[]): Vec2 {
+  let closest = polygon[0];
+  let minDistSq = Infinity;
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i];
+    const b = polygon[(i + 1) % polygon.length];
+    const ab = { x: b.x - a.x, y: b.y - a.y };
+    const ap = { x: point.x - a.x, y: point.y - a.y };
+    const lenSq = ab.x * ab.x + ab.y * ab.y;
+    let t = lenSq > 0 ? dot(ap, ab) / lenSq : 0;
+    t = Math.max(0, Math.min(1, t));
+    const cp = { x: a.x + t * ab.x, y: a.y + t * ab.y };
+    const distSq = (point.x - cp.x) ** 2 + (point.y - cp.y) ** 2;
+    if (distSq < minDistSq) {
+      minDistSq = distSq;
+      closest = cp;
+    }
+  }
+  return closest;
+}
+
+function collideRectVsRect(
+  rectPos: Vec2, rectSize: Vec2,
+  otherPos: Vec2, otherSize: Vec2
+): { overlap: number; normal: Vec2 } | null {
+  const axes = getAxesForRect();
   let minOverlap = Infinity;
   let minNormal: Vec2 = { x: 0, y: 0 };
+  const cornersA = getRectCorners(rectPos, rectSize);
+  const cornersB = getRectCorners(otherPos, otherSize);
 
   for (const axis of axes) {
-    const projA = projectOntoAxis(a, axis);
-    const projB = projectOntoAxis(b, axis);
+    const projA = projectPointsOntoAxis(cornersA, axis);
+    const projB = projectPointsOntoAxis(cornersB, axis);
     const overlap = Math.min(projA.max, projB.max) - Math.max(projA.min, projB.min);
     if (overlap <= 0) return null;
     if (overlap < minOverlap) {
@@ -103,9 +194,74 @@ function satCollide(a: { x: number; y: number; width: number; height: number },
     }
   }
 
-  const dirX = (a.x + a.width / 2) - (b.x + b.width / 2);
-  const dirY = (a.y + a.height / 2) - (b.y + b.height / 2);
-  if (dirX * minNormal.x + dirY * minNormal.y < 0) {
+  const centerA = { x: rectPos.x + rectSize.x / 2, y: rectPos.y + rectSize.y / 2 };
+  const centerB = { x: otherPos.x + otherSize.x / 2, y: otherPos.y + otherSize.y / 2 };
+  const dir = { x: centerA.x - centerB.x, y: centerA.y - centerB.y };
+  if (dot(dir, minNormal) < 0) {
+    minNormal = { x: -minNormal.x, y: -minNormal.y };
+  }
+
+  return { overlap: minOverlap, normal: minNormal };
+}
+
+function collideRectVsCircle(
+  rectPos: Vec2, rectSize: Vec2,
+  circleCenter: Vec2, circleRadius: number
+): { overlap: number; normal: Vec2 } | null {
+  const closest = findClosestPointOnPolygon(circleCenter, getRectCorners(rectPos, rectSize));
+  const diff = { x: circleCenter.x - closest.x, y: circleCenter.y - closest.y };
+  const distSq = diff.x * diff.x + diff.y * diff.y;
+
+  if (distSq > circleRadius * circleRadius) {
+    return null;
+  }
+
+  const dist = Math.sqrt(distSq);
+  let normal: Vec2;
+  if (dist === 0) {
+    const center = { x: rectPos.x + rectSize.x / 2, y: rectPos.y + rectSize.y / 2 };
+    const toCenter = { x: circleCenter.x - center.x, y: circleCenter.y - center.y };
+    normal = normalize(toCenter);
+    if (normal.x === 0 && normal.y === 0) normal = { x: 0, y: -1 };
+  } else {
+    normal = { x: diff.x / dist, y: diff.y / dist };
+  }
+
+  return { overlap: circleRadius - dist, normal };
+}
+
+function collideRectVsSlope(
+  rectPos: Vec2, rectSize: Vec2,
+  terrain: TerrainBlock
+): { overlap: number; normal: Vec2 } | null {
+  const slopeCorners = getSlopeCorners(terrain);
+  const rectCorners = getRectCorners(rectPos, rectSize);
+
+  const axes = [...getAxesForRect(), ...getAxesForPolygon(slopeCorners)];
+  let minOverlap = Infinity;
+  let minNormal: Vec2 = { x: 0, y: 0 };
+
+  for (const axis of axes) {
+    const projA = projectPointsOntoAxis(rectCorners, axis);
+    const projB = projectPointsOntoAxis(slopeCorners, axis);
+    const overlap = Math.min(projA.max, projB.max) - Math.max(projA.min, projB.min);
+    if (overlap <= 0) return null;
+    if (overlap < minOverlap) {
+      minOverlap = overlap;
+      minNormal = axis;
+    }
+  }
+
+  const centerA = { x: rectPos.x + rectSize.x / 2, y: rectPos.y + rectSize.y / 2 };
+  let slopeCenterX = 0, slopeCenterY = 0;
+  for (const c of slopeCorners) {
+    slopeCenterX += c.x;
+    slopeCenterY += c.y;
+  }
+  slopeCenterX /= slopeCorners.length;
+  slopeCenterY /= slopeCorners.length;
+  const dir = { x: centerA.x - slopeCenterX, y: centerA.y - slopeCenterY };
+  if (dot(dir, minNormal) < 0) {
     minNormal = { x: -minNormal.x, y: -minNormal.y };
   }
 
@@ -116,19 +272,20 @@ export class CanvasEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private terrains: TerrainBlock[] = [];
-  private entities: Entity[] = [];
+  private entities: GameEntity[] = [];
   private isSimulating = false;
   private animationId: number | null = null;
   private lastTime = 0;
   private keys: Record<string, boolean> = {};
   private onInfoUpdate: ((data: InfoData) => void) | null = null;
-  private history: TerrainBlock[][] = [];
+  private onStateChange: (() => void) | null = null;
+  private history: { terrains: TerrainBlock[]; entities: GameEntity[] }[] = [];
   private historyIndex = -1;
   private isDrawing = false;
   private currentTool: ToolType = 'square';
   private brushSize: BrushSize = 32;
   private mousePos: Vec2 = { x: 0, y: 0 };
-  private gridSize = 32;
+  private gridSize = GRID_SIZE;
   private canvasWidth = 0;
   private canvasHeight = 0;
 
@@ -143,12 +300,18 @@ export class CanvasEngine {
     this.onInfoUpdate = callback;
   }
 
+  setOnStateChange(callback: () => void) {
+    this.onStateChange = callback;
+  }
+
   setTool(tool: ToolType) {
     this.currentTool = tool;
+    this.onStateChange?.();
   }
 
   setBrushSize(size: BrushSize) {
     this.brushSize = size;
+    this.onStateChange?.();
   }
 
   getTool(): ToolType {
@@ -189,6 +352,16 @@ export class CanvasEngine {
   }
 
   private handleKeyDown = (e: KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') {
+      e.preventDefault();
+      if (!this.isSimulating) this.undo();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.code === 'KeyY') {
+      e.preventDefault();
+      if (!this.isSimulating) this.redo();
+      return;
+    }
     this.keys[e.code] = true;
   };
 
@@ -249,32 +422,32 @@ export class CanvasEngine {
     const gx = this.getGridAligned(x);
     const gy = this.getGridAligned(y);
     const size = this.brushSize;
+    const brushAABB = { position: { x: gx, y: gy }, size: { x: size, y: size } };
 
     if (this.currentTool === 'eraser') {
       this.terrains = this.terrains.filter(t => {
-        return !rectsOverlap(
-          { x: gx, y: gy, width: size, height: size },
-          t
+        return !aabbOverlap(
+          gx, gy, gx + size, gy + size,
+          t.position.x, t.position.y, t.position.x + t.size.x, t.position.y + t.size.y
         );
       });
       this.entities = this.entities.filter(e => {
-        return !rectsOverlap(
-          { x: gx, y: gy, width: size, height: size },
-          e
+        return !aabbOverlap(
+          gx, gy, gx + size, gy + size,
+          e.position.x, e.position.y, e.position.x + e.size.x, e.position.y + e.size.y
         );
       });
     } else if (this.currentTool === 'square' || this.currentTool === 'circle' || this.currentTool === 'slope') {
       const exists = this.terrains.some(t =>
-        t.x === gx && t.y === gy && t.width === size && t.height === size && t.type === this.currentTool
+        t.position.x === gx && t.position.y === gy &&
+        t.size.x === size && t.size.y === size && t.type === this.currentTool
       );
       if (!exists) {
         this.terrains.push({
           id: generateId(),
           type: this.currentTool,
-          x: gx,
-          y: gy,
-          width: size,
-          height: size,
+          position: { x: gx, y: gy },
+          size: { x: size, y: size },
           slopeDirection: this.currentTool === 'slope' ? 'left' : undefined
         });
       }
@@ -325,16 +498,13 @@ export class CanvasEngine {
   private placePlayer(x: number, y: number) {
     const gx = this.getGridAligned(x);
     const gy = this.getGridAligned(y);
-    this.entities = this.entities.filter(e => e.type !== 'player');
+    this.entities = this.entities.filter(e => e.type !== 'player') as GameEntity[];
     this.entities.push({
       id: generateId(),
       type: 'player',
-      x: gx,
-      y: gy,
-      width: 32,
-      height: 32,
-      vx: 0,
-      vy: 0,
+      position: { x: gx, y: gy },
+      size: { x: 32, y: 32 },
+      velocity: { x: 0, y: 0 },
       onGround: false,
       collisionNormal: null
     });
@@ -346,12 +516,9 @@ export class CanvasEngine {
     this.entities.push({
       id: generateId(),
       type,
-      x: gx,
-      y: gy,
-      width: 32,
-      height: 32,
-      vx: 0,
-      vy: 0,
+      position: { x: gx, y: gy },
+      size: { x: 32, y: 32 },
+      velocity: { x: 0, y: 0 },
       onGround: false,
       collisionNormal: null,
       patrolDirection: 1
@@ -360,7 +527,10 @@ export class CanvasEngine {
 
   private saveState() {
     this.history = this.history.slice(0, this.historyIndex + 1);
-    this.history.push(JSON.parse(JSON.stringify(this.terrains)));
+    this.history.push({
+      terrains: JSON.parse(JSON.stringify(this.terrains)),
+      entities: JSON.parse(JSON.stringify(this.entities))
+    });
     this.historyIndex++;
     if (this.history.length > 50) {
       this.history.shift();
@@ -371,16 +541,22 @@ export class CanvasEngine {
   undo() {
     if (this.historyIndex > 0) {
       this.historyIndex--;
-      this.terrains = JSON.parse(JSON.stringify(this.history[this.historyIndex]));
+      const state = JSON.parse(JSON.stringify(this.history[this.historyIndex]));
+      this.terrains = state.terrains;
+      this.entities = state.entities;
       this.render();
+      this.onStateChange?.();
     }
   }
 
   redo() {
     if (this.historyIndex < this.history.length - 1) {
       this.historyIndex++;
-      this.terrains = JSON.parse(JSON.stringify(this.history[this.historyIndex]));
+      const state = JSON.parse(JSON.stringify(this.history[this.historyIndex]));
+      this.terrains = state.terrains;
+      this.entities = state.entities;
       this.render();
+      this.onStateChange?.();
     }
   }
 
@@ -389,6 +565,7 @@ export class CanvasEngine {
     this.entities = [];
     this.saveState();
     this.render();
+    this.onStateChange?.();
   }
 
   toggleSimulation(): boolean {
@@ -401,8 +578,13 @@ export class CanvasEngine {
         cancelAnimationFrame(this.animationId);
         this.animationId = null;
       }
+      for (const entity of this.entities) {
+        entity.velocity = { x: 0, y: 0 };
+        entity.collisionNormal = null;
+      }
     }
     this.render();
+    this.onStateChange?.();
     return this.isSimulating;
   }
 
@@ -439,71 +621,87 @@ export class CanvasEngine {
         let moveX = 0;
         if (this.keys['KeyA'] || this.keys['ArrowLeft']) moveX -= 1;
         if (this.keys['KeyD'] || this.keys['ArrowRight']) moveX += 1;
-        entity.vx = moveX * PLAYER_SPEED;
+        entity.velocity.x = moveX * PLAYER_SPEED;
 
         if ((this.keys['Space'] || this.keys['KeyW'] || this.keys['ArrowUp']) && entity.onGround) {
-          entity.vy = -JUMP_VELOCITY;
+          entity.velocity.y = -JUMP_IMPULSE;
           entity.onGround = false;
         }
       } else {
-        if (entity.patrolDirection === undefined) entity.patrolDirection = 1;
-        entity.vx = entity.patrolDirection * ENEMY_SPEED;
+        entity.velocity.x = entity.patrolDirection * ENEMY_SPEED;
       }
 
-      entity.vy += GRAVITY * dt;
+      entity.velocity.y += GRAVITY * dt;
 
-      entity.x += entity.vx * dt;
+      entity.position.x += entity.velocity.x * dt;
       this.resolveCollisions(entity, 'x');
 
-      entity.y += entity.vy * dt;
+      entity.position.y += entity.velocity.y * dt;
       this.resolveCollisions(entity, 'y');
 
       if (entity.type !== 'player') {
-        this.checkEnemyPatrol(entity);
+        this.checkEnemyPatrol(entity as Enemy);
       }
 
-      if (entity.y > this.canvasHeight + 200) {
-        entity.y = 100;
-        entity.x = 100;
-        entity.vy = 0;
+      if (entity.position.y > this.canvasHeight + 200) {
+        entity.position.y = 100;
+        entity.position.x = 100;
+        entity.velocity.y = 0;
       }
-      if (entity.x < 0) {
-        entity.x = 0;
-        entity.vx = Math.abs(entity.vx);
-        if (entity.type !== 'player') entity.patrolDirection = 1;
+      if (entity.position.x < 0) {
+        entity.position.x = 0;
+        entity.velocity.x = Math.abs(entity.velocity.x);
+        if (entity.type !== 'player') (entity as Enemy).patrolDirection = 1;
       }
-      if (entity.x + entity.width > this.canvasWidth) {
-        entity.x = this.canvasWidth - entity.width;
-        entity.vx = -Math.abs(entity.vx);
-        if (entity.type !== 'player') entity.patrolDirection = -1;
+      if (entity.position.x + entity.size.x > this.canvasWidth) {
+        entity.position.x = this.canvasWidth - entity.size.x;
+        entity.velocity.x = -Math.abs(entity.velocity.x);
+        if (entity.type !== 'player') (entity as Enemy).patrolDirection = -1;
       }
     }
   }
 
-  private resolveCollisions(entity: Entity, axis: 'x' | 'y') {
+  private checkCollisionWithTerrain(entity: GameEntity, terrain: TerrainBlock):
+    { overlap: number; normal: Vec2 } | null {
+    if (terrain.type === 'square') {
+      return collideRectVsRect(entity.position, entity.size, terrain.position, terrain.size);
+    } else if (terrain.type === 'circle') {
+      const center = {
+        x: terrain.position.x + terrain.size.x / 2,
+        y: terrain.position.y + terrain.size.y / 2
+      };
+      const radius = terrain.size.x / 2;
+      return collideRectVsCircle(entity.position, entity.size, center, radius);
+    } else if (terrain.type === 'slope') {
+      return collideRectVsSlope(entity.position, entity.size, terrain);
+    }
+    return null;
+  }
+
+  private resolveCollisions(entity: GameEntity, axis: 'x' | 'y') {
     for (const terrain of this.terrains) {
-      const collision = satCollide(entity, terrain);
+      const collision = this.checkCollisionWithTerrain(entity, terrain);
       if (collision) {
         terrain.flashTime = FLASH_DURATION;
 
         if (collision.normal.y < -0.5 && axis === 'y') {
-          entity.y -= collision.overlap;
-          entity.vy = 0;
+          entity.position.y -= collision.overlap;
+          entity.velocity.y = 0;
           entity.onGround = true;
           entity.collisionNormal = { x: 0, y: -1 };
         } else if (collision.normal.y > 0.5 && axis === 'y') {
-          entity.y += collision.overlap;
-          entity.vy = 0;
+          entity.position.y += collision.overlap;
+          entity.velocity.y = 0;
           entity.collisionNormal = { x: 0, y: 1 };
         }
 
         if (Math.abs(collision.normal.x) > 0.5 && axis === 'x') {
-          entity.x += collision.normal.x * collision.overlap;
+          entity.position.x += collision.normal.x * collision.overlap;
           if (entity.type === 'player') {
-            entity.vx = 0;
+            entity.velocity.x = 0;
           } else {
-            entity.patrolDirection = -(entity.patrolDirection || 1);
-            entity.vx = entity.patrolDirection * ENEMY_SPEED;
+            (entity as Enemy).patrolDirection = -(entity as Enemy).patrolDirection;
+            entity.velocity.x = (entity as Enemy).patrolDirection * ENEMY_SPEED;
           }
           entity.collisionNormal = { x: collision.normal.x, y: 0 };
         }
@@ -512,13 +710,13 @@ export class CanvasEngine {
 
     for (const other of this.entities) {
       if (other.id === entity.id) continue;
-      const collision = satCollide(entity, other);
+      const collision = collideRectVsRect(entity.position, entity.size, other.position, other.size);
       if (collision) {
         if (Math.abs(collision.normal.x) > 0.5 && axis === 'x') {
-          entity.x += collision.normal.x * collision.overlap;
+          entity.position.x += collision.normal.x * collision.overlap;
           if (entity.type !== 'player') {
-            entity.patrolDirection = -(entity.patrolDirection || 1);
-            entity.vx = entity.patrolDirection * ENEMY_SPEED;
+            (entity as Enemy).patrolDirection = -(entity as Enemy).patrolDirection;
+            entity.velocity.x = (entity as Enemy).patrolDirection * ENEMY_SPEED;
           }
           entity.collisionNormal = { x: collision.normal.x, y: 0 };
         }
@@ -526,15 +724,15 @@ export class CanvasEngine {
     }
   }
 
-  private checkEnemyPatrol(enemy: Entity) {
+  private checkEnemyPatrol(enemy: Enemy) {
     const aheadX = enemy.patrolDirection === 1
-      ? enemy.x + enemy.width + 2
-      : enemy.x - 2;
+      ? enemy.position.x + enemy.size.x + 2
+      : enemy.position.x - 2;
 
     let hasGroundAhead = false;
     for (const terrain of this.terrains) {
-      if (aheadX >= terrain.x && aheadX <= terrain.x + terrain.width) {
-        if (Math.abs((enemy.y + enemy.height) - terrain.y) < 4) {
+      if (aheadX >= terrain.position.x && aheadX <= terrain.position.x + terrain.size.x) {
+        if (Math.abs((enemy.position.y + enemy.size.y) - terrain.position.y) < 6) {
           hasGroundAhead = true;
           break;
         }
@@ -542,34 +740,39 @@ export class CanvasEngine {
     }
 
     const probe = {
-      x: aheadX - 4,
-      y: enemy.y,
-      width: 8,
-      height: enemy.height + 4
+      position: { x: aheadX - 4, y: enemy.position.y },
+      size: { x: 8, y: enemy.size.y + 4 }
     };
 
     let blocked = false;
     for (const terrain of this.terrains) {
-      if (rectsOverlap(probe, terrain)) {
+      if (aabbOverlap(
+        probe.position.x, probe.position.y,
+        probe.position.x + probe.size.x, probe.position.y + probe.size.y,
+        terrain.position.x, terrain.position.y,
+        terrain.position.x + terrain.size.x, terrain.position.y + terrain.size.y
+      )) {
         blocked = true;
         break;
       }
     }
 
     if ((!hasGroundAhead && enemy.onGround) || blocked) {
-      enemy.patrolDirection = -(enemy.patrolDirection || 1);
-      enemy.vx = enemy.patrolDirection * ENEMY_SPEED;
+      enemy.patrolDirection = -enemy.patrolDirection;
+      enemy.velocity.x = enemy.patrolDirection * ENEMY_SPEED;
     }
   }
 
   private emitInfo() {
     if (!this.onInfoUpdate) return;
-    const player = this.entities.find(e => e.type === 'player');
+    const player = this.entities.find(e => e.type === 'player') as Player | undefined;
     this.onInfoUpdate({
-      playerPos: player ? { x: Math.round(player.x), y: Math.round(player.y) } : null,
-      playerVel: player ? { x: Math.round(player.vx), y: Math.round(player.vy) } : null,
+      playerPos: player ? { x: Math.round(player.position.x), y: Math.round(player.position.y) } : null,
+      playerVel: player ? { x: Math.round(player.velocity.x), y: Math.round(player.velocity.y) } : null,
       onGround: player ? player.onGround : false,
-      collisionNormal: player ? player.collisionNormal : null
+      collisionNormal: player ? player.collisionNormal : null,
+      terrainCount: this.terrains.length,
+      entityCount: this.entities.length
     });
   }
 
@@ -615,19 +818,24 @@ export class CanvasEngine {
     ctx.strokeStyle = strokeColor;
     ctx.lineWidth = 2;
 
+    const x = terrain.position.x;
+    const y = terrain.position.y;
+    const w = terrain.size.x;
+    const h = terrain.size.y;
+
     if (terrain.type === 'square') {
-      ctx.fillRect(terrain.x, terrain.y, terrain.width, terrain.height);
-      ctx.strokeRect(terrain.x, terrain.y, terrain.width, terrain.height);
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeRect(x, y, w, h);
     } else if (terrain.type === 'circle') {
       ctx.beginPath();
-      ctx.arc(terrain.x + terrain.width / 2, terrain.y + terrain.height / 2, terrain.width / 2, 0, Math.PI * 2);
+      ctx.arc(x + w / 2, y + h / 2, w / 2, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
     } else if (terrain.type === 'slope') {
       ctx.beginPath();
-      ctx.moveTo(terrain.x, terrain.y + terrain.height);
-      ctx.lineTo(terrain.x + terrain.width, terrain.y);
-      ctx.lineTo(terrain.x + terrain.width, terrain.y + terrain.height);
+      ctx.moveTo(x, y + h);
+      ctx.lineTo(x + w, y);
+      ctx.lineTo(x + w, y + h);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
@@ -636,7 +844,7 @@ export class CanvasEngine {
     ctx.restore();
   }
 
-  private drawEntity(entity: Entity) {
+  private drawEntity(entity: GameEntity) {
     const { ctx } = this;
     ctx.save();
 
@@ -645,25 +853,29 @@ export class CanvasEngine {
     if (entity.type === 'enemy-purple') color = '#9b59b6';
 
     ctx.fillStyle = color;
-    ctx.fillRect(entity.x, entity.y, entity.width, entity.height);
+    ctx.fillRect(entity.position.x, entity.position.y, entity.size.x, entity.size.y);
 
     ctx.strokeStyle = 'rgba(255, 68, 68, 0.5)';
     ctx.lineWidth = 2;
-    ctx.strokeRect(entity.x - 2, entity.y - 2, entity.width + 4, entity.height + 4);
+    ctx.strokeRect(
+      entity.position.x - 2,
+      entity.position.y - 2,
+      entity.size.x + 4,
+      entity.size.y + 4
+    );
 
-    ctx.fillStyle = '#ffffff';
-    const eyeY = entity.y + 10;
-    const eyeSize = 4;
+    const eyeY = entity.position.y + 10;
     if (entity.type === 'player') {
-      ctx.fillRect(entity.x + 8, eyeY, eyeSize, eyeSize);
-      ctx.fillRect(entity.x + 20, eyeY, eyeSize, eyeSize);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(entity.position.x + 8, eyeY, 4, 4);
+      ctx.fillRect(entity.position.x + 20, eyeY, 4, 4);
     } else {
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(entity.x + 6, eyeY, 5, 5);
-      ctx.fillRect(entity.x + 21, eyeY, 5, 5);
+      ctx.fillRect(entity.position.x + 6, eyeY, 5, 5);
+      ctx.fillRect(entity.position.x + 21, eyeY, 5, 5);
       ctx.fillStyle = '#000000';
-      ctx.fillRect(entity.x + 7, eyeY + 1, 3, 3);
-      ctx.fillRect(entity.x + 22, eyeY + 1, 3, 3);
+      ctx.fillRect(entity.position.x + 7, eyeY + 1, 3, 3);
+      ctx.fillRect(entity.position.x + 22, eyeY + 1, 3, 3);
     }
 
     ctx.restore();
@@ -679,7 +891,7 @@ export class CanvasEngine {
     this.render();
   }
 
-  addEntity(entity: Entity) {
+  addEntity(entity: GameEntity) {
     this.entities.push(entity);
     this.render();
   }
@@ -694,7 +906,7 @@ export class CanvasEngine {
       terrains: [...this.terrains],
       entities: [...this.entities],
       isSimulating: this.isSimulating,
-      player: this.entities.find(e => e.type === 'player') || null
+      player: (this.entities.find(e => e.type === 'player') as Player) || null
     };
   }
 }
