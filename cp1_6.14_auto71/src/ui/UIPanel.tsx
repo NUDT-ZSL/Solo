@@ -309,7 +309,8 @@ const InfoCard: React.FC<{ info: ParticleInfo | null }> = ({ info }) => {
       minWidth: 240,
       zIndex: 100,
       border: '1px solid rgba(255,255,255,0.1)',
-      backdropFilter: 'blur(8px)'
+      backdropFilter: 'blur(8px)',
+      pointerEvents: 'none'
     }}>
       <div style={{
         fontSize: 14,
@@ -437,7 +438,8 @@ export const UIPanel: React.FC<UIPanelProps> = ({
         gap: 24,
         boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
         border: '1px solid rgba(255, 255, 255, 0.08)',
-        zIndex: 100
+        zIndex: 100,
+        pointerEvents: 'auto'
       }}>
         <div style={{
           display: 'flex',

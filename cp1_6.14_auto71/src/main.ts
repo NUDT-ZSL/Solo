@@ -72,8 +72,6 @@ class App {
     this.bindEvents();
     this.mountUI();
     this.startAnimationLoop();
-
-    this.logDistributionStats();
   }
 
   private setupLights(): void {
@@ -93,51 +91,6 @@ class App {
     this.renderer.setSize(width, height);
   };
 
-  private logDistributionStats(): void {
-    setTimeout(() => {
-      const positions = this.starField.getPositions();
-      const count = this.starField.getParticleCount();
-      if (!positions) return;
-
-      const shellCounts = new Array(8).fill(0);
-      const minR = 5, maxR = 12;
-      const shellSize = (maxR - minR) / shellCounts.length;
-
-      for (let i = 0; i < count; i++) {
-        const i3 = i * 3;
-        const r = Math.sqrt(
-          positions[i3] ** 2 +
-          positions[i3 + 1] ** 2 +
-          positions[i3 + 2] ** 2
-        );
-        const shellIdx = Math.min(
-          shellCounts.length - 1,
-          Math.max(0, Math.floor((r - minR) / shellSize))
-        );
-        shellCounts[shellIdx]++;
-      }
-
-      const shellVolumes = shellCounts.map((_, i) => {
-        const r1 = minR + i * shellSize;
-        const r2 = r1 + shellSize;
-        return (4 / 3) * Math.PI * (r2 ** 3 - r1 ** 3);
-      });
-
-      const densities = shellCounts.map((c, i) => c / shellVolumes[i]);
-      const avgDensity = densities.reduce((a, b) => a + b, 0) / densities.length;
-      const maxDeviation = Math.max(...densities.map(d => Math.abs(d - avgDensity) / avgDensity));
-
-      console.log('[StarField] Distribution validation:');
-      console.log(`  Shell counts: [${shellCounts.join(', ')}]`);
-      console.log(`  Density max deviation: ${(maxDeviation * 100).toFixed(1)}% (should be < 20% for uniform)`);
-      if (maxDeviation > 0.3) {
-        console.warn('  ⚠ Distribution may not be perfectly uniform');
-      } else {
-        console.log('  ✓ Distribution is uniform ✓');
-      }
-    }, 100);
-  }
-
   private mountUI(): void {
     const uiContainer = document.createElement('div');
     uiContainer.style.position = 'fixed';
@@ -145,11 +98,6 @@ class App {
     uiContainer.style.pointerEvents = 'none';
     uiContainer.style.zIndex = '9999';
     this.container.appendChild(uiContainer);
-
-    const children = uiContainer.querySelectorAll('*');
-    children.forEach(el => {
-      (el as HTMLElement).style.pointerEvents = 'auto';
-    });
 
     const handleDensityChange = (value: number) => {
       this.starField.updateParams({ count: Math.round(value) });
@@ -225,7 +173,7 @@ class App {
 
       this.fpsFrames++;
       const now = performance.now();
-      if (now - this.fpsLastTime >= 2000) {
+      if (now - this.fpsLastTime >= 3000) {
         const fps = (this.fpsFrames * 1000) / (now - this.fpsLastTime);
         console.log(`[FPS] ${fps.toFixed(1)} (${this.starField.getParticleCount()} particles)`);
         this.fpsFrames = 0;
