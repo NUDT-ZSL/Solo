@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Annotation } from './App';
 
 interface MarksListProps {
@@ -13,6 +13,32 @@ function truncate(str: string, maxLen: number): string {
 }
 
 export default function MarksList({ annotations, onDelete, onMarkClick }: MarksListProps) {
+  const clickLockRef = useRef(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const handleMarkClick = useCallback(
+    (id: string) => {
+      if (clickLockRef.current) return;
+      clickLockRef.current = true;
+      setActiveId(id);
+      onMarkClick(id);
+      setTimeout(() => {
+        clickLockRef.current = false;
+        setActiveId(null);
+      }, 500);
+    },
+    [onMarkClick]
+  );
+
+  const handleDelete = useCallback(
+    (e: React.MouseEvent, id: string) => {
+      e.stopPropagation();
+      e.preventDefault();
+      onDelete(id);
+    },
+    [onDelete]
+  );
+
   return (
     <div className="sidebar">
       <div className="sidebar-header">
@@ -26,8 +52,8 @@ export default function MarksList({ annotations, onDelete, onMarkClick }: MarksL
           annotations.map((annotation) => (
             <div
               key={annotation.id}
-              className="mark-item"
-              onClick={() => onMarkClick(annotation.id)}
+              className={`mark-item${activeId === annotation.id ? ' active' : ''}`}
+              onClick={() => handleMarkClick(annotation.id)}
             >
               <div className="mark-item-text">
                 <div className="mark-excerpt">
@@ -41,11 +67,9 @@ export default function MarksList({ annotations, onDelete, onMarkClick }: MarksL
               </div>
               <button
                 className="mark-delete"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(annotation.id);
-                }}
+                onClick={(e) => handleDelete(e, annotation.id)}
                 title="删除批注"
+                type="button"
               >
                 ×
               </button>
