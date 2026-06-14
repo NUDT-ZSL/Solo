@@ -6,7 +6,7 @@
 .page-title {
   font-size: 24px;
   font-weight: 700;
-  color: #f8fafc;
+  color: var(--color-text-primary);
   margin-bottom: 20px;
 }
 
@@ -14,14 +14,14 @@
   display: flex;
   gap: 8px;
   margin-bottom: 20px;
-  border-bottom: 1px solid #1e293b;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .tab {
   padding: 10px 20px;
   background: transparent;
   border: none;
-  color: #94a3b8;
+  color: var(--color-text-secondary);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -31,12 +31,12 @@
 }
 
 .tab:hover {
-  color: #f8fafc;
+  color: var(--color-text-primary);
 }
 
 .tab.active {
-  color: #3b82f6;
-  border-bottom-color: #3b82f6;
+  color: var(--color-accent-blue);
+  border-bottom-color: var(--color-accent-blue);
 }
 
 .message-list-container {
@@ -48,16 +48,16 @@
 .message-card {
   width: 100%;
   min-height: 108px;
-  background: #0f172a;
-  border-radius: 8px;
+  background: var(--color-bg-primary);
+  border-radius: var(--radius-md);
   padding: 12px;
-  border: 1px solid #1e293b;
+  border: 1px solid var(--color-border);
   transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
 }
 
 .message-card:hover {
   transform: scale(1.02);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-card);
 }
 
 .message-header {
@@ -72,7 +72,7 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #334155;
+  background: var(--color-bg-tertiary);
 }
 
 .message-user-info {
@@ -84,7 +84,7 @@
 .message-username {
   font-size: 14px;
   font-weight: 600;
-  color: #f8fafc;
+  color: var(--color-text-primary);
 }
 
 .message-status {
@@ -97,7 +97,7 @@
   right: 0;
   bottom: 0;
   font-size: 12px;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .message-content {
@@ -114,36 +114,36 @@
 
 .skill-badge {
   display: inline-block;
-  background: #1e293b;
-  color: #94a3b8;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: 500;
 }
 
 .skill-badge.my {
-  background: #3b82f6;
+  background: var(--color-accent-blue);
   color: white;
 }
 
 .exchange-arrow {
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: 14px;
 }
 
 .hours-badge {
-  background: #22c55e;
+  background: var(--color-accent-green);
   color: white;
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: 500;
 }
 
 .message-text {
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--color-text-secondary);
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -160,7 +160,7 @@
 .btn {
   padding: 6px 16px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -168,40 +168,40 @@
 }
 
 .btn-accept {
-  background: #22c55e;
+  background: var(--color-accent-green);
   color: white;
 }
 
 .btn-accept:hover {
-  background: #16a34a;
+  background: var(--color-accent-green-hover);
 }
 
 .btn-reject {
-  background: #334155;
-  color: #94a3b8;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
 }
 
 .btn-reject:hover {
-  background: #475569;
-  color: #f8fafc;
+  background: var(--color-scroll-thumb);
+  color: var(--color-text-primary);
 }
 
 .btn-modify {
-  background: #3b82f6;
+  background: var(--color-accent-blue);
   color: white;
 }
 
 .btn-modify:hover {
-  background: #2563eb;
+  background: var(--color-accent-blue-hover);
 }
 
 .btn-confirm {
-  background: #22c55e;
+  background: var(--color-accent-green);
   color: white;
 }
 
 .btn-confirm:hover {
-  background: #16a34a;
+  background: var(--color-accent-green-hover);
 }
 
 .modify-section {
@@ -209,26 +209,26 @@
   align-items: center;
   gap: 12px;
   padding: 10px;
-  background: #1e293b;
-  border-radius: 6px;
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-sm);
   margin-bottom: 10px;
 }
 
 .modify-section label {
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--color-text-secondary);
   white-space: nowrap;
 }
 
 .modify-section input[type="range"] {
   flex: 1;
-  accent-color: #3b82f6;
+  accent-color: var(--color-accent-blue);
 }
 
 .hours-display {
   font-size: 14px;
   font-weight: 600;
-  color: #22c55e;
+  color: var(--color-accent-green);
   min-width: 50px;
   text-align: right;
 }
@@ -238,16 +238,109 @@
   align-items: center;
   justify-content: center;
   height: 300px;
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: 14px;
 }
 
 @media (max-width: 768px) {
+  .page-title {
+    font-size: 20px;
+    margin-bottom: 16px;
+  }
+
+  .tabs {
+    gap: 4px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    flex-wrap: nowrap;
+  }
+
+  .tab {
+    padding: 8px 14px;
+    font-size: 13px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
   .message-list-container {
     width: 100%;
+    max-width: 100%;
+    height: calc(100vh - 220px);
   }
 
   .message-card {
     width: 100%;
+    box-sizing: border-box;
+    padding: 10px;
+  }
+
+  .message-avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .message-username {
+    font-size: 13px;
+  }
+
+  .message-time {
+    font-size: 11px;
+  }
+
+  .message-text {
+    font-size: 12px;
+  }
+
+  .skill-badge {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  .hours-badge {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  .btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    min-height: 36px;
+  }
+
+  .modify-section {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .modify-section label {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-title {
+    font-size: 18px;
+  }
+
+  .tab {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .message-list-container {
+    height: calc(100vh - 200px);
+  }
+
+  .message-header {
+    gap: 8px;
+  }
+
+  .message-avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .exchange-info {
+    gap: 6px;
   }
 }

@@ -101,6 +101,47 @@ for (let i = 0; i < 50; i++) {
   });
 }
 
+for (let i = 0; i < 80; i++) {
+  const fromUser = users[Math.floor(Math.random() * users.length)];
+  let toUser = users[Math.floor(Math.random() * users.length)];
+  while (toUser.id === fromUser.id) {
+    toUser = users[Math.floor(Math.random() * users.length)];
+  }
+  
+  const toSkill = toUser.skills[Math.floor(Math.random() * toUser.skills.length)];
+  
+  const commentTemplates = [
+    '老师讲得很清楚，学到了很多，推荐！',
+    '非常专业的技能分享，收获满满，期待下次交流。',
+    '人很nice，教学耐心，推荐给想学的朋友。',
+    '体验很棒，讲解细致，值得学习！',
+    '超级赞，学到了真东西，太感谢了！',
+    '很好的一次技能交换，互相学习共同进步。',
+    '老师很厉害，思路清晰，很有启发。',
+    '交流愉快，干货满满，强烈推荐！',
+  ];
+  
+  reviews.push({
+    id: generateId(),
+    fromUserId: fromUser.id,
+    toUserId: toUser.id,
+    skillId: toSkill.id,
+    rating: Math.floor(Math.random() * 3) + 3,
+    comment: commentTemplates[Math.floor(Math.random() * commentTemplates.length)],
+    createdAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
+  });
+}
+
+for (const user of users) {
+  for (const skill of user.skills) {
+    const skillReviews = reviews.filter(r => r.skillId === skill.id);
+    if (skillReviews.length > 0) {
+      skill.reviewCount = skillReviews.length;
+      skill.avgRating = +(skillReviews.reduce((sum, r) => sum + r.rating, 0) / skillReviews.length).toFixed(1);
+    }
+  }
+}
+
 const currentUserId = users[0].id;
 
 app.get('/api/user/current', (req: Request, res: Response) => {
