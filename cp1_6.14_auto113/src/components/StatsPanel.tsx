@@ -80,17 +80,32 @@ export default function StatsPanel() {
         </div>
 
         <div className="mt-4">
-          <ResponsiveContainer width="100%" height={barData.length * 40 + 40}>
-            <BarChart data={barData} layout="vertical" margin={{ left: 10, right: 20, top: 10, bottom: 10 }}>
-              <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 12, fill: '#374151' }} axisLine={false} tickLine={false} />
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={barData} margin={{ left: 10, right: 20, top: 10, bottom: 10 }}>
+              <XAxis
+                type="category"
+                dataKey="name"
+                tick={{ fontSize: 11, fill: '#6b7280' }}
+                axisLine={false}
+                tickLine={false}
+                interval={0}
+                width={80}
+              />
+              <YAxis
+                type="number"
+                domain={[0, 100]}
+                tick={{ fontSize: 11, fill: '#9ca3af' }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v: number) => `${v}%`}
+              />
               <Tooltip
                 formatter={(value: number) => [`${value}%`, '完成率']}
                 contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', fontSize: 12 }}
               />
-              <Bar dataKey="completionRate" radius={[0, 4, 4, 0]} maxBarSize={20}>
+              <Bar dataKey="completionRate" radius={[4, 4, 0, 0]} barSize={100 / Math.max(barData.length, 1)}>
                 {barData.map((entry, index) => (
-                  <rect key={index} fill={entry.fill} />
+                  <rect key={index} fill={entry.fill} rx={4} ry={4} />
                 ))}
               </Bar>
             </BarChart>
@@ -106,9 +121,9 @@ export default function StatsPanel() {
 
         <ResponsiveContainer width="100%" height={300}>
           <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
-            <PolarGrid stroke="#e5e7eb" strokeOpacity={0.6} />
+            <PolarGrid stroke="#9ca3af" strokeOpacity={0.3} />
             <PolarAngleAxis dataKey="dimension" tick={{ fontSize: 12, fill: '#6b7280' }} />
-            <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 10, fill: '#9ca3af' }} />
+            <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} />
             <Radar
               name="能力值"
               dataKey="value"

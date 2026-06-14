@@ -1,5 +1,5 @@
 import { useStore, type Habit } from '@/store'
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useRef } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -15,7 +15,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Check, X } from 'lucide-react'
+import { GripVertical, Check } from 'lucide-react'
 
 const tagConfig: Record<string, { label: string; color: string; bg: string }> = {
   health: { label: '健康', color: '#00b894', bg: '#00b89422' },
@@ -28,32 +28,29 @@ function SortableCard({ habit, onToggle }: { habit: Habit; onToggle: (h: Habit) 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: habit.id,
   })
+  const cardRef = useRef<HTMLDivElement>(null)
 
-  const style = {
+  const cardStyle: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.6 : 1,
   }
 
   const tag = tagConfig[habit.tag] || tagConfig.life
+  const bgColor = habit.completed ? '#e8f5e9' : '#ffcdd2'
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="group flex items-center gap-3 rounded-2xl transition-all duration-[250ms] ease cursor-default"
-      className-skip="placeholder"
-    >
+    <div ref={setNodeRef} style={cardStyle} className="flex items-center gap-3">
       <div
-        className="flex items-center gap-3 rounded-2xl transition-all duration-[250ms] ease cursor-default"
+        ref={cardRef}
+        className="flex items-center gap-3 cursor-default"
         style={{
           width: 280,
           height: 120,
-          background: habit.completed ? '#e8f5e9' : habit.completedCount > 0 ? '#fff8e1' : '#ffffff',
-          boxShadow: isDragging
-            ? '0 8px 25px rgba(0,0,0,0.2)'
-            : '0 4px 15px rgba(0,0,0,0.1)',
+          background: bgColor,
           borderRadius: 16,
+          boxShadow: isDragging ? '0 8px 25px rgba(0,0,0,0.2)' : '0 4px 15px rgba(0,0,0,0.1)',
+          transition: 'box-shadow 0.25s ease, background 0.25s ease',
         }}
         onMouseEnter={(e) => {
           if (!isDragging) {
@@ -65,7 +62,7 @@ function SortableCard({ habit, onToggle }: { habit: Habit; onToggle: (h: Habit) 
         }}
       >
         <button
-          className="flex-shrink-0 p-1 cursor-grab active:cursor-grabbing"
+          className="flex-shrink-0 p-1 cursor-grab active:cursor-grabbing ml-2"
           {...attributes}
           {...listeners}
         >
@@ -76,17 +73,14 @@ function SortableCard({ habit, onToggle }: { habit: Habit; onToggle: (h: Habit) 
           onClick={() => onToggle(habit)}
           className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200"
           style={{
-            background: habit.completed ? '#4caf50' : '#ffcdd2',
+            background: habit.completed ? '#4caf50' : 'transparent',
+            border: habit.completed ? 'none' : '2px solid #e57373',
           }}
         >
-          {habit.completed ? (
-            <Check size={16} className="text-white" />
-          ) : (
-            <X size={16} className="text-white" />
-          )}
+          {habit.completed && <Check size={16} style={{ color: '#ffffff' }} />}
         </button>
 
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 pr-3">
           <div className="font-semibold text-gray-800 text-sm truncate">{habit.name}</div>
           <div className="flex items-center gap-2 mt-1.5">
             <span
@@ -95,11 +89,11 @@ function SortableCard({ habit, onToggle }: { habit: Habit; onToggle: (h: Habit) 
             >
               {tag.label}
             </span>
-            <span className="text-xs text-gray-400">
+            <span className="text-xs text-gray-500">
               {habit.completedCount}/{habit.dailyGoal}
             </span>
           </div>
-          <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div className="mt-2 h-1.5 bg-white/40 rounded-full overflow-hidden">
             <div
               className="h-full rounded-full transition-all duration-500"
               style={{
