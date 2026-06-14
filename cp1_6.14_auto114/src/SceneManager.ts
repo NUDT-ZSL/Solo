@@ -27,9 +27,10 @@ export class SceneManager {
   private isAnimatingCamera: boolean = false;
   private currentTarget: THREE.Vector3 = new THREE.Vector3();
 
-  constructor(container: HTMLElement, planets: PlanetData[]) {
+  constructor(container: HTMLElement, planets: PlanetData[], css2DRenderer: CSS2DRenderer) {
     this.container = container;
     this.planets = planets;
+    this.css2DRenderer = css2DRenderer;
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0a0a1a);
@@ -48,7 +49,6 @@ export class SceneManager {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(this.renderer.domElement);
 
-    this.css2DRenderer = new CSS2DRenderer();
     this.css2DRenderer.setSize(container.clientWidth, container.clientHeight);
     this.css2DRenderer.domElement.style.position = 'absolute';
     this.css2DRenderer.domElement.style.top = '0';
@@ -118,8 +118,7 @@ export class SceneManager {
         side: THREE.DoubleSide
       });
       const highlight = new THREE.Mesh(highlightGeometry, highlightMaterial);
-      highlight.rotation.x = -Math.PI / 2;
-      highlight.userData = { isHighlight: true };
+      highlight.userData = { isHighlight: true, planetName: planet.name };
 
       const orbitPoints: THREE.Vector3[] = [];
       const { semiMajorAxis, eccentricity } = planet.orbitParams;
@@ -180,15 +179,15 @@ export class SceneManager {
       border-radius: 6px;
       pointer-events: none;
       user-select: none;
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      margin: 0;
     `;
 
     const label = new CSS2DObject(div);
     label.position.set(0, 0, 0);
-
-    const labelContainer = new THREE.Object3D();
-    labelContainer.add(label);
-    labelContainer.position.set(8, 6, 0);
-    this.scene.add(labelContainer);
+    this.scene.add(label);
 
     return label;
   }
@@ -243,6 +242,7 @@ export class SceneManager {
       if (planetObj) {
         planetObj.mesh.position.copy(position);
         planetObj.highlight.position.copy(position);
+        planetObj.highlight.lookAt(this.camera.position);
 
         if (this.selectedPlanet === name) {
           this.currentTarget.copy(position);
@@ -253,12 +253,6 @@ export class SceneManager {
     if (this.selectedPlanet && !this.isAnimatingCamera) {
       this.camera.lookAt(this.currentTarget);
     }
-
-    this.timeLabel.position.set(
-      this.camera.position.x * 0.6,
-      this.camera.position.y * 0.6,
-      this.camera.position.z * 0.6
-    );
   };
 
   private onTimeUpdate = (payload: { formatted: string }): void => {
