@@ -52,17 +52,21 @@ class Game {
   private update(deltaTime: number): void {
     this.nebulaEngine.update(deltaTime);
     this.ship.update(deltaTime);
-    this.particleField.perturb(this.ship.getState());
-    this.particleField.update(deltaTime);
 
     const shipState = this.ship.getState();
-    const nebulaDensity = this.particleField.getLocalDensity(shipState.x, shipState.y);
+    const engineParticleCount = this.ship.getParticleCount();
+    this.particleField.perturb(shipState, engineParticleCount);
+    this.particleField.update(deltaTime);
+
+    const fieldDensity = this.particleField.getLocalDensity(shipState.x, shipState.y);
+    const nebulaDensity = this.nebulaEngine.getLocalDensity(shipState.x, shipState.y);
+    const combinedDensity = (fieldDensity * 0.6 + nebulaDensity * 0.4);
 
     this.uiPanel.update({
       x: shipState.x,
       y: shipState.y,
       speed: this.ship.getMappedSpeed(),
-      density: nebulaDensity
+      density: combinedDensity
     });
   }
 

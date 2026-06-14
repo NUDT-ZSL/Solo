@@ -14,7 +14,10 @@ export interface EngineParticle {
   life: number;
   maxLife: number;
   size: number;
+  initialSize: number;
 }
+
+const MAX_ENGINE_PARTICLES = 800;
 
 export class ShipController {
   public x: number;
@@ -84,9 +87,9 @@ export class ShipController {
 
     this.particleSpawnTimer += deltaTime;
     const targetParticleCount = Math.floor(5 + (this.speed / this.maxSpeed) * 25);
-    const spawnInterval = this.speed > 0 ? 1 / (targetParticleCount * 4) : 0;
+    const spawnInterval = this.speed > 0.2 ? 1 / (targetParticleCount * 4) : 0;
 
-    if (this.speed > 0.2 && this.particleSpawnTimer >= spawnInterval) {
+    if (this.speed > 0.2 && this.particleSpawnTimer >= spawnInterval && this.engineParticles.length < MAX_ENGINE_PARTICLES) {
       this.particleSpawnTimer = 0;
       this.spawnEngineParticle();
     }
@@ -103,6 +106,7 @@ export class ShipController {
     const spread = 0.35;
     const particleAngle = backAngle + (Math.random() - 0.5) * spread;
     const particleSpeed = 1.5 + Math.random() * 2 + this.speed * 0.3;
+    const initialSize = 2 + Math.random() * 3;
 
     this.engineParticles.push({
       x: spawnX,
@@ -110,8 +114,9 @@ export class ShipController {
       vx: Math.cos(particleAngle) * particleSpeed,
       vy: Math.sin(particleAngle) * particleSpeed,
       life: 1,
-      maxLife: 0.4 + Math.random() * 0.5,
-      size: 2 + Math.random() * 3
+      maxLife: 0.6 + Math.random() * 0.6,
+      size: initialSize,
+      initialSize: initialSize
     });
   }
 
@@ -123,6 +128,8 @@ export class ShipController {
       p.vx *= 0.96;
       p.vy *= 0.96;
       p.life -= deltaTime / p.maxLife;
+      p.size = p.initialSize * p.life;
+
       if (p.life <= 0) {
         this.engineParticles.splice(i, 1);
       }
@@ -143,21 +150,27 @@ export class ShipController {
     return Math.floor((this.speed / this.maxSpeed) * 100);
   }
 
+  public getParticleCount(): number {
+    return this.engineParticles.length;
+  }
+
   public render(ctx: CanvasRenderingContext2D): void {
     for (const p of this.engineParticles) {
       const alpha = Math.max(0, p.life);
-      const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 2);
+      const displaySize = Math.max(0.5, p.size);
+
+      const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, displaySize * 2.5);
       gradient.addColorStop(0, `rgba(249, 115, 22, ${alpha})`);
-      gradient.addColorStop(0.5, `rgba(249, 115, 22, ${alpha * 0.5})`);
+      gradient.addColorStop(0.4, `rgba(249, 115, 22, ${alpha * 0.6})`);
       gradient.addColorStop(1, `rgba(249, 115, 22, 0)`);
       ctx.fillStyle = gradient;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * 2, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, displaySize * 2.5, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.fillStyle = `rgba(251, 191, 36, ${alpha})`;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * 0.6, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, displaySize * 0.7, 0, Math.PI * 2);
       ctx.fill();
     }
 

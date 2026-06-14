@@ -9,7 +9,8 @@ export interface NebulaParticle {
   layerIndex: number;
   driftX: number;
   driftY: number;
-  noiseOffset: number;
+  noiseOffsetX: number;
+  noiseOffsetY: number;
   size: number;
 }
 
@@ -33,6 +34,95 @@ const LAYER_COUNT = 4;
 const PARTICLES_PER_LAYER = 80;
 const STAR_COUNT = 180;
 
+class PerlinNoise {
+  private permutation: number[];
+
+  constructor(seed: number = Math.random() * 10000) {
+    this.permutation = this.generatePermutation(seed);
+  }
+
+  private generatePermutation(seed: number): number[] {
+    const p: number[] = [];
+    for (let i = 0; i < 256; i++) {
+      p[i] = i;
+    }
+
+    let n: number;
+    let q: number;
+    for (let i = 255; i > 0; i--) {
+      seed = (seed * 16807) % 2147483647;
+      n = seed % (i + 1);
+      q = p[i];
+      p[i] = p[n];
+      p[n] = q;
+    }
+
+    for (let i = 0; i < 256; i++) {
+      p[256 + i] = p[i];
+    }
+
+    return p;
+  }
+
+  private fade(t: number): number {
+    return t * t * t * (t * (t * 6 - 15) + 10);
+  }
+
+  private lerp(a: number, b: number, t: number): number {
+    return a + t * (b - a);
+  }
+
+  private grad(hash: number, x: number, y: number): number {
+    const h = hash & 3;
+    const u = h < 2 ? x : y;
+    const v = h < 2 ? y : x;
+    return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+  }
+
+  public noise2D(x: number, y: number): number {
+    const X = Math.floor(x) & 255;
+    const Y = Math.floor(y) & 255;
+
+    x -= Math.floor(x);
+    y -= Math.floor(y);
+
+    const u = this.fade(x);
+    const v = this.fade(y);
+
+    const A = this.permutation[X] + Y;
+    const B = this.permutation[X + 1] + Y;
+
+    const x1 = this.lerp(
+      this.grad(this.permutation[A], x, y),
+      this.grad(this.permutation[B], x - 1, y),
+      u
+    );
+    const x2 = this.lerp(
+      this.grad(this.permutation[A + 1], x, y - 1),
+      this.grad(this.permutation[B + 1], x - 1, y - 1),
+      u
+    );
+
+    return (this.lerp(x1, x2, v) + 1) / 2;
+  }
+
+  public octaveNoise2D(x: number, y: number, octaves: number, persistence: number): number {
+    let total = 0;
+    let frequency = 1;
+    let amplitude = 1;
+    let maxValue = 0;
+
+    for (let i = 0; i < octaves; i++) {
+      total += this.noise2D(x * frequency, y * frequency) * amplitude;
+      maxValue += amplitude;
+      amplitude *= persistence;
+      frequency *= 2;
+    }
+
+    return total / maxValue;
+  }
+}
+
 export class NebulaEngine {
   private width: number;
   private height: number;
@@ -40,10 +130,12 @@ export class NebulaEngine {
   public starParticles: StarParticle[] = [];
   private time: number = 0;
   private colorPhase: number = 0;
+  private perlin: PerlinNoise;
 
   constructor(width: number, height: number) {
     this.width = width;
     this.height = height;
+    this.perlin = new PerlinNoise(Date.now());
     this.initNebulaParticles();
     this.initStarParticles();
   }
@@ -65,9 +157,10 @@ export class NebulaEngine {
           color: { r: color.r, g: color.g, b: color.b },
           alpha: 0.1 + Math.random() * 0.2,
           layerIndex: layer,
-          driftX: (Math.random() - 0.5) * 0.15,
-          driftY: (Math.random() - 0.5) * 0.15,
-          noiseOffset: Math.random() * 1000,
+          driftX: (Math.random() - 0.5) * 0.08,
+          driftY: (Math.random() - 0.5) * 0.08,
+          noiseOffsetX: Math.random() * 100,
+          noiseOffsetY: Math.random() * 100,
           size: 0.8 + Math.random() * 0.6
         });
       }
@@ -108,18 +201,28 @@ export class NebulaEngine {
     this.time += deltaTime;
     this.colorPhase += deltaTime * 0.08;
 
+    const timeScale = 0.0008;
+
     for (const p of this.nebulaParticles) {
-      const noiseVal = this.perlinNoise(
-        p.baseX * 0.0015 + this.time * 0.00008 + p.noiseOffset,
-        p.baseY * 0.0015 + p.noiseOffset * 0.5
-      );
-      const noiseVal2 = this.perlinNoise(
-        p.baseY * 0.0015 + this.time * 0.0001 + p.noiseOffset * 0.3,
-        p.baseX * 0.0015 + p.noiseOffset * 0.7
+      const noiseX = this.perlin.octaveNoise2D(
+        p.noiseOffsetX + p.baseX * 0.0018 + this.time * timeScale,
+        p.noiseOffsetY + p.baseY * 0.0018,
+        3,
+        0.5
       );
 
-      p.x = p.baseX + Math.cos(noiseVal * Math.PI * 2) * 40 + this.time * p.driftX * 60;
-      p.y = p.baseY + Math.sin(noiseVal2 * Math.PI * 2) * 40 + this.time * p.driftY * 60;
+      const noiseY = this.perlin.octaveNoise2D(
+        p.noiseOffsetY + p.baseY * 0.0018 + this.time * timeScale * 0.7,
+        p.noiseOffsetX + p.baseX * 0.0018,
+        3,
+        0.5
+      );
+
+      p.x = p.baseX + (noiseX - 0.5) * 120 + Math.sin(this.time * 0.2 + p.noiseOffsetX) * 8;
+      p.y = p.baseY + (noiseY - 0.5) * 120 + Math.cos(this.time * 0.15 + p.noiseOffsetY) * 8;
+
+      p.x += this.time * p.driftX * 60;
+      p.y += this.time * p.driftY * 60;
 
       p.x = ((p.x % this.width) + this.width) % this.width;
       p.y = ((p.y % this.height) + this.height) % this.height;
@@ -141,7 +244,6 @@ export class NebulaEngine {
   }
 
   public getLocalDensity(x: number, y: number, radius: number = 120): number {
-    let count = 0;
     let totalAlpha = 0;
     for (const p of this.nebulaParticles) {
       const dx = p.x - x;
@@ -150,45 +252,9 @@ export class NebulaEngine {
       if (dist < radius + p.radius * 0.5) {
         const influence = 1 - Math.min(1, dist / (radius + p.radius * 0.5));
         totalAlpha += p.alpha * influence;
-        count++;
       }
     }
     return Math.min(1, totalAlpha / 8);
-  }
-
-  private perlinNoise(x: number, y: number): number {
-    const xi = Math.floor(x);
-    const yi = Math.floor(y);
-    const xf = x - xi;
-    const yf = y - yi;
-
-    const u = this.fade(xf);
-    const v = this.fade(yf);
-
-    const aa = this.hash(xi, yi);
-    const ab = this.hash(xi, yi + 1);
-    const ba = this.hash(xi + 1, yi);
-    const bb = this.hash(xi + 1, yi + 1);
-
-    const x1 = this.lerp(aa, ba, u);
-    const x2 = this.lerp(ab, bb, u);
-
-    return this.lerp(x1, x2, v);
-  }
-
-  private fade(t: number): number {
-    return t * t * t * (t * (t * 6 - 15) + 10);
-  }
-
-  private lerp(a: number, b: number, t: number): number {
-    return a + t * (b - a);
-  }
-
-  private hash(x: number, y: number): number {
-    let h = x * 374761393 + y * 668265263;
-    h = (h ^ (h >>> 13)) * 1274126177;
-    h = h ^ (h >>> 16);
-    return ((h & 0xffffffff) / 0xffffffff + 1) / 2;
   }
 
   public render(ctx: CanvasRenderingContext2D): void {

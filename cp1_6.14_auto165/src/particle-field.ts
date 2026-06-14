@@ -16,6 +16,7 @@ export interface FieldParticle {
 const FIELD_PARTICLE_COUNT = 1200;
 const PERTURB_RADIUS = 120;
 const PERTURB_STRENGTH = 0.15;
+const TOTAL_PARTICLE_LIMIT = 2000;
 
 export class ParticleField {
   private width: number;
@@ -72,7 +73,10 @@ export class ParticleField {
     }
   }
 
-  public perturb(ship: ShipState): void {
+  public perturb(ship: ShipState, engineParticleCount: number = 0): void {
+    const totalParticles = this.particles.length + engineParticleCount;
+    if (totalParticles > TOTAL_PARTICLE_LIMIT) return;
+
     const shipX = ship.x;
     const shipY = ship.y;
     const shipAngle = ship.angle;
@@ -82,8 +86,14 @@ export class ParticleField {
 
     const dirX = Math.cos(shipAngle);
     const dirY = Math.sin(shipAngle);
-    const frontX = shipX + dirX * 20;
-    const frontY = shipY + dirY * 20;
+    const rightX = -dirY;
+    const rightY = dirX;
+
+    const frontOffset = 25;
+    const frontX = shipX + dirX * frontOffset;
+    const frontY = shipY + dirY * frontOffset;
+
+    const speedFactor = shipSpeed / ship.maxSpeed;
 
     for (const p of this.particles) {
       const dx = p.x - frontX;
@@ -94,16 +104,38 @@ export class ParticleField {
       if (distSq < radiusSq) {
         const dist = Math.sqrt(distSq);
         const falloff = 1 - dist / PERTURB_RADIUS;
-        const strength = PERTURB_STRENGTH * falloff * (shipSpeed / ship.maxSpeed);
+        const falloffSq = falloff * falloff;
 
         const nx = dist > 0 ? dx / dist : 0;
         const ny = dist > 0 ? dy / dist : 0;
 
-        const pushX = nx * strength * 12;
-        const pushY = ny * strength * 12;
+        const sideDot = nx * rightX + ny * rightY;
+        const forwardDot = nx * dirX + ny * dirY;
 
-        p.vx += pushX;
-        p.vy += pushY;
+        let pushSideX: number;
+        let pushSideY: number;
+
+        if (sideDot >= 0) {
+          pushSideX = rightX;
+          pushSideY = rightY;
+        } else {
+          pushSideX = -rightX;
+          pushSideY = -rightY;
+        }
+
+        const sideBias = Math.abs(sideDot) * 0.5 + 0.5;
+        const forwardPush = Math.max(0, -forwardDot) * 0.3;
+
+        const strength = PERTURB_STRENGTH * falloffSq * speedFactor * sideBias;
+
+        const sidePushX = pushSideX * strength * 60;
+        const sidePushY = pushSideY * strength * 60;
+
+        const forwardPushX = dirX * forwardPush * strength * 30;
+        const forwardPushY = dirY * forwardPush * strength * 30;
+
+        p.vx += sidePushX + forwardPushX;
+        p.vy += sidePushY + forwardPushY;
       }
     }
   }
@@ -123,25 +155,28 @@ export class ParticleField {
       if (p.x < -50) {
         p.x = this.width + 50;
         p.baseX = p.x;
+        p.vx = 0;
       }
       if (p.x > this.width + 50) {
         p.x = -50;
         p.baseX = p.x;
+        p.vx = 0;
       }
       if (p.y < -50) {
         p.y = this.height + 50;
         p.baseY = p.y;
+        p.vy = 0;
       }
       if (p.y > this.height + 50) {
         p.y = -50;
         p.baseY = p.y;
+        p.vy = 0;
       }
     }
   }
 
   public getLocalDensity(x: number, y: number, radius: number = 100): number {
     let weightSum = 0;
-    let count = 0;
     const radiusSq = radius * radius;
 
     for (const p of this.particles) {
@@ -152,7 +187,6 @@ export class ParticleField {
         const dist = Math.sqrt(distSq);
         const falloff = 1 - dist / radius;
         weightSum += p.alpha * p.densityWeight * falloff;
-        count++;
       }
     }
 
@@ -174,5 +208,13 @@ export class ParticleField {
 
   public getTotalCount(): number {
     return this.particles.length;
+  }
+
+  public getMaxParticleLimit(): number {
+    return TOTAL_PARTICLE_LIMIT;
+  }
+
+  public getFieldParticleCount(): number {
+    return FIELD_PARTICLE_COUNT;
   }
 }
