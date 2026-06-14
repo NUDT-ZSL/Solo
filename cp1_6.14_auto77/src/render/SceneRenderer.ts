@@ -146,18 +146,40 @@ export class SceneRenderer {
   }
 
   private updateFractal(data: FractalData): void {
+    const cleanData = this.sanitizeData(data);
+
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(data.colors, 3));
-    geometry.setIndex(new THREE.BufferAttribute(data.indices, 1));
+    geometry.setAttribute('position', new THREE.BufferAttribute(cleanData.positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(cleanData.colors, 3));
+    geometry.setIndex(new THREE.BufferAttribute(cleanData.indices, 1));
     geometry.computeVertexNormals();
 
     const wireGeometry = new THREE.BufferGeometry();
-    wireGeometry.setAttribute('position', new THREE.BufferAttribute(data.wireframePositions, 3));
+    wireGeometry.setAttribute('position', new THREE.BufferAttribute(cleanData.wireframePositions, 3));
 
     this.pendingGeometry = geometry;
     this.pendingWireframeGeometry = wireGeometry;
     this.transitionProgress = 0;
+  }
+
+  private sanitizeData(data: FractalData): FractalData {
+    const sanitizeArray = (arr: Float32Array | Uint32Array, clamp?: [number, number]) => {
+      const result = new (arr.constructor as typeof Float32Array | typeof Uint32Array)(arr.length);
+      for (let i = 0; i < arr.length; i++) {
+        let v = arr[i];
+        if (!isFinite(v) || isNaN(v)) v = 0;
+        if (clamp) v = Math.max(clamp[0], Math.min(clamp[1], v)) as typeof v;
+        result[i] = v;
+      }
+      return result as typeof arr;
+    };
+
+    return {
+      positions: sanitizeArray(data.positions, [-10, 10]) as Float32Array,
+      colors: sanitizeArray(data.colors, [0, 1]) as Float32Array,
+      indices: data.indices,
+      wireframePositions: sanitizeArray(data.wireframePositions, [-10, 10]) as Float32Array,
+    };
   }
 
   private applyNewGeometry(): void {

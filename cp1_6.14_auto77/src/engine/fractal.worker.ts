@@ -10,9 +10,8 @@ interface ColorStop {
 const COLOR_MAPS: Record<ColorMapKey, ColorStop[]> = {
   flame: [
     { pos: 0.0, r: 0.102, g: 0.137, b: 0.494 },
-    { pos: 0.35, r: 0.700, g: 0.150, b: 0.300 },
-    { pos: 0.65, r: 1.000, g: 0.435, b: 0.000 },
-    { pos: 1.0, r: 1.000, g: 0.800, b: 0.300 },
+    { pos: 0.5, r: 0.550, g: 0.250, b: 0.200 },
+    { pos: 1.0, r: 1.000, g: 0.435, b: 0.000 },
   ],
   ocean: [
     { pos: 0.0, r: 0.020, g: 0.027, b: 0.122 },

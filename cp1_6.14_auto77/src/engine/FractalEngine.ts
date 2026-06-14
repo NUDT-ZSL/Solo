@@ -1,6 +1,58 @@
 import { eventBus, Events, FractalParams, FractalData } from '../ui/EventBus';
 import FractalWorker from './fractal.worker?worker';
 
+function isValidTypedArray(arr: unknown): arr is Float32Array | Uint32Array {
+  return (
+    arr instanceof Float32Array ||
+    arr instanceof Uint32Array
+  );
+}
+
+function validateFractalData(data: unknown): data is FractalData {
+  if (!data || typeof data !== 'object') return false;
+
+  const d = data as Record<string, unknown>;
+
+  if (!isValidTypedArray(d.positions) || d.positions.length % 3 !== 0) return false;
+  if (!isValidTypedArray(d.colors) || d.colors.length % 3 !== 0) return false;
+  if (!isValidTypedArray(d.indices) || d.indices.length % 3 !== 0) return false;
+  if (!isValidTypedArray(d.wireframePositions) || d.wireframePositions.length % 3 !== 0) return false;
+
+  if (d.positions.length !== d.colors.length) return false;
+
+  const expectedVertices = d.positions.length / 3;
+  const expectedQuads = (Math.sqrt(expectedVertices) - 1);
+  if (Math.abs(expectedQuads - Math.round(expectedQuads)) > 0.01) return false;
+
+  for (let i = 0; i < Math.min(d.positions.length, 100); i++) {
+    const v = d.positions[i];
+    if (!isFinite(v) || isNaN(v)) return false;
+  }
+
+  return true;
+}
+
+function sanitizeFractalData(data: FractalData): FractalData {
+  const positions = new Float32Array(data.positions.length);
+  for (let i = 0; i < data.positions.length; i++) {
+    const v = data.positions[i];
+    positions[i] = isFinite(v) && !isNaN(v) ? v : 0;
+  }
+
+  const colors = new Float32Array(data.colors.length);
+  for (let i = 0; i < data.colors.length; i++) {
+    const v = data.colors[i];
+    colors[i] = isFinite(v) && !isNaN(v) ? Math.max(0, Math.min(1, v)) : 0;
+  }
+
+  return {
+    positions,
+    colors,
+    indices: data.indices,
+    wireframePositions: data.wireframePositions,
+  };
+}
+
 export class FractalEngine {
   private worker: Worker | null = null;
   private currentParams: FractalParams = {
@@ -22,13 +74,30 @@ export class FractalEngine {
 
   private initWorker(): void {
     this.worker = new FractalWorker();
-    this.worker.onmessage = (e: MessageEvent<FractalData>) => {
-      this.onCalculationComplete(e.data);
+
+    this.worker.onmessage = (e: MessageEvent<unknown>) => {
+      const rawData = e.data;
+
+      if (!validateFractalData(rawData)) {
+        console.error('FractalEngine: received invalid data from worker', rawData);
+        this.calculating = false;
+        eventBus.emit(Events.FRACTAL_CALCULATING, false);
+        this.tryNextPending();
+        return;
+      }
+
+      const validData = sanitizeFractalData(rawData);
+      this.onCalculationComplete(validData);
     };
+
     this.worker.onerror = (err) => {
-      console.error('Fractal worker error:', err);
+      console.error('FractalEngine: worker error:', err);
       this.calculating = false;
       eventBus.emit(Events.FRACTAL_CALCULATING, false);
+      eventBus.emit<{ message: string; type: 'error' }>(Events.SHOW_TOAST, {
+        message: '分形计算出错，请重试',
+        type: 'error',
+      });
       this.tryNextPending();
     };
   }
