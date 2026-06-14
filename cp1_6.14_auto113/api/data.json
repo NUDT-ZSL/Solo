@@ -1,0 +1,48 @@
+{
+  "user": {
+    "id": "1",
+    "name": "锻造师",
+    "exp": 0,
+    "level": 1,
+    "createdAt": "2024-01-01"
+  },
+  "habits": [
+    {
+      "id": "1",
+      "name": "晨跑30分钟",
+      "tag": "health",
+      "dailyGoal": 1,
+      "completedCount": 0,
+      "completed": false,
+      "order": 0
+    },
+    {
+      "id": "2",
+      "name": "阅读30分钟",
+      "tag": "study",
+      "dailyGoal": 1,
+      "completedCount": 0,
+      "completed": false,
+      "order": 1
+    },
+    {
+      "id": "3",
+      "name": "写日记",
+      "tag": "creative",
+      "dailyGoal": 1,
+      "completedCount": 0,
+      "completed": false,
+      "order": 2
+    },
+    {
+      "id": "4",
+      "name": "整理房间",
+      "tag": "life",
+      "dailyGoal": 1,
+      "completedCount": 0,
+      "completed": false,
+      "order": 3
+    }
+  ],
+  "dailyRecords": []
+}
