@@ -146,53 +146,81 @@ const UserPanel: React.FC<UserPanelProps> = ({
 
   if (!currentUser) {
     return (
-      <div className="login-container">
-        <div className="login-panel">
-          <h2 className="login-title">加入 LingoLoop</h2>
-          <p className="login-subtitle">开始你的语言交换之旅</p>
-          
-          <form onSubmit={handleRegister} className="login-form">
-            <div className="form-group">
-              <label>昵称</label>
-              <input
-                type="text"
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                placeholder="输入你的昵称"
-                className="form-input"
-              />
+      <div className="home-page">
+        <div className="home-left">
+          <div className="hero-section">
+            <h1 className="hero-title">
+              <span className="hero-gradient">LingoLoop</span>
+            </h1>
+            <p className="hero-subtitle">与全世界的语言学习者一起练习</p>
+            <div className="hero-features">
+              <div className="feature-item">
+                <span className="feature-icon">💬</span>
+                <span>实时文字对话</span>
+              </div>
+              <div className="feature-item">
+                <span className="feature-icon">🎯</span>
+                <span>智能语伴匹配</span>
+              </div>
+              <div className="feature-item">
+                <span className="feature-icon">📝</span>
+                <span>发音纠正笔记</span>
+              </div>
+              <div className="feature-item">
+                <span className="feature-icon">🃏</span>
+                <span>话题卡片引导</span>
+              </div>
             </div>
+          </div>
+        </div>
+        <div className="home-right">
+          <div className="login-panel">
+            <h2 className="login-title">加入 LingoLoop</h2>
+            <p className="login-subtitle">开始你的语言交换之旅</p>
             
-            <div className="form-group">
-              <label>母语</label>
-              <select
-                value={nativeLanguage}
-                onChange={(e) => setNativeLanguage(e.target.value)}
-                className="form-select"
-              >
-                {languages.map((lang) => (
-                  <option key={lang} value={lang}>{lang}</option>
-                ))}
-              </select>
-            </div>
-            
-            <div className="form-group">
-              <label>想学习的语言</label>
-              <select
-                value={targetLanguage}
-                onChange={(e) => setTargetLanguage(e.target.value)}
-                className="form-select"
-              >
-                {languages.map((lang) => (
-                  <option key={lang} value={lang}>{lang}</option>
-                ))}
-              </select>
-            </div>
-            
-            <button type="submit" className="join-btn" disabled={loading}>
-              {loading ? '加入中...' : '立即加入'}
-            </button>
-          </form>
+            <form onSubmit={handleRegister} className="login-form">
+              <div className="form-group">
+                <label>昵称</label>
+                <input
+                  type="text"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  placeholder="输入你的昵称"
+                  className="form-input"
+                />
+              </div>
+              
+              <div className="form-group">
+                <label>母语</label>
+                <select
+                  value={nativeLanguage}
+                  onChange={(e) => setNativeLanguage(e.target.value)}
+                  className="form-select"
+                >
+                  {languages.map((lang) => (
+                    <option key={lang} value={lang}>{lang}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="form-group">
+                <label>想学习的语言</label>
+                <select
+                  value={targetLanguage}
+                  onChange={(e) => setTargetLanguage(e.target.value)}
+                  className="form-select"
+                >
+                  {languages.map((lang) => (
+                    <option key={lang} value={lang}>{lang}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <button type="submit" className="join-btn" disabled={loading}>
+                {loading ? '加入中...' : '立即加入'}
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     );

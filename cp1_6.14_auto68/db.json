@@ -16,7 +16,16 @@
       "targetLanguage": "中文",
       "avatarColor": "#52BE80",
       "createdAt": 1781395285746,
-      "isOnline": true
+      "isOnline": false
+    },
+    {
+      "id": "dea26295-8146-4bbe-a8f6-fa7a61130f22",
+      "nickname": "小红",
+      "nativeLanguage": "中文",
+      "targetLanguage": "英语",
+      "avatarColor": "#45B7D1",
+      "createdAt": 1781396524586,
+      "isOnline": false
     }
   ],
   "sessions": [
@@ -39,6 +48,28 @@
       "corrections": [],
       "notes": [],
       "createdAt": 1781395329564,
+      "endedAt": null,
+      "duration": 0
+    },
+    {
+      "id": "868526ea-1c03-4e39-9669-12ac32b54839",
+      "participants": [
+        "dea26295-8146-4bbe-a8f6-fa7a61130f22",
+        "aa63f5cb-a443-481e-aa8a-673c82b6004a"
+      ],
+      "messages": [
+        {
+          "id": "3e24c675-4dc4-4563-bd5a-1fa1a1b9a32d",
+          "sessionId": "868526ea-1c03-4e39-9669-12ac32b54839",
+          "senderId": "dea26295-8146-4bbe-a8f6-fa7a61130f22",
+          "content": "你好，我是小红！",
+          "timestamp": 1781396597800,
+          "type": "text"
+        }
+      ],
+      "corrections": [],
+      "notes": [],
+      "createdAt": 1781396556972,
       "endedAt": null,
       "duration": 0
     }

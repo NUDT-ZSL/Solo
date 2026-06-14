@@ -172,31 +172,63 @@ const SessionRoom: React.FC<SessionRoomProps> = ({
     setInputText(topic.content);
   };
 
-  const handleMessageMouseDown = (e: React.MouseEvent, message: Message) => {
+  const clearLongPressTimer = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const startLongPress = (clientX: number, clientY: number, message: Message) => {
     if (isReadOnly || message.senderId === currentUser.id) return;
     
+    clearLongPressTimer();
     longPressTimer.current = setTimeout(() => {
       setContextMenu({
         visible: true,
-        x: e.clientX,
-        y: e.clientY,
+        x: clientX,
+        y: clientY,
         message,
       });
     }, 1000);
   };
 
+  const handleMessageMouseDown = (e: React.MouseEvent, message: Message) => {
+    if (e.button !== 0) return;
+    startLongPress(e.clientX, e.clientY, message);
+  };
+
   const handleMessageMouseUp = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
+    clearLongPressTimer();
   };
 
   const handleMessageMouseLeave = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
+    clearLongPressTimer();
+  };
+
+  const handleMessageContextMenu = (e: React.MouseEvent, message: Message) => {
+    if (isReadOnly || message.senderId === currentUser.id) return;
+    e.preventDefault();
+    setContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      message,
+    });
+  };
+
+  const handleTouchStart = (e: React.TouchEvent, message: Message) => {
+    if (isReadOnly || message.senderId === currentUser.id) return;
+    const touch = e.touches[0];
+    startLongPress(touch.clientX, touch.clientY, message);
+  };
+
+  const handleTouchEnd = () => {
+    clearLongPressTimer();
+  };
+
+  const handleTouchMove = () => {
+    clearLongPressTimer();
   };
 
   const handleCloseContextMenu = () => {
@@ -360,6 +392,10 @@ const SessionRoom: React.FC<SessionRoomProps> = ({
                   onMouseDown={(e) => handleMessageMouseDown(e, message)}
                   onMouseUp={handleMessageMouseUp}
                   onMouseLeave={handleMessageMouseLeave}
+                  onContextMenu={(e) => handleMessageContextMenu(e, message)}
+                  onTouchStart={(e) => handleTouchStart(e, message)}
+                  onTouchEnd={handleTouchEnd}
+                  onTouchMove={handleTouchMove}
                 >
                   {!isOwn && (
                     <div
