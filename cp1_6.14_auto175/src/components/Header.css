@@ -1,0 +1,134 @@
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background-color: var(--bg-primary);
+  box-shadow: var(--shadow-nav);
+  z-index: 50;
+}
+
+.header-inner {
+  max-width: 1280px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: color 0.2s ease-out;
+}
+
+.logo:hover {
+  color: var(--accent-teal);
+}
+
+.nav-desktop {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.nav-link {
+  position: relative;
+  font-size: 14px;
+  color: var(--text-primary);
+  text-decoration: none;
+  padding: 6px 0;
+  transition: color 0.2s ease-out;
+}
+
+.nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background-color: var(--accent-teal);
+  transform: translateX(-50%);
+  transition: width 0.3s ease-out;
+}
+
+.nav-link:hover {
+  color: var(--accent-teal);
+}
+
+.nav-link:hover::after,
+.nav-link.active::after {
+  width: 100%;
+}
+
+.nav-link.active {
+  color: var(--accent-teal);
+}
+
+.menu-btn {
+  display: none;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background-color 0.2s ease-out;
+}
+
+.menu-btn:hover {
+  background-color: var(--bg-secondary);
+}
+
+.nav-mobile {
+  display: none;
+  flex-direction: column;
+  background-color: var(--bg-primary);
+  border-top: 1px solid var(--border-color);
+  padding: 8px 0;
+}
+
+.nav-link-mobile {
+  display: block;
+  padding: 12px 24px;
+  font-size: 14px;
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: all 0.2s ease-out;
+}
+
+.nav-link-mobile:hover,
+.nav-link-mobile.active {
+  color: var(--accent-teal);
+  background-color: var(--bg-secondary);
+}
+
+@media (max-width: 768px) {
+  .nav-desktop {
+    display: none;
+  }
+
+  .menu-btn {
+    display: flex;
+  }
+
+  .nav-mobile {
+    display: flex;
+  }
+
+  .header-inner {
+    padding: 0 16px;
+  }
+}
