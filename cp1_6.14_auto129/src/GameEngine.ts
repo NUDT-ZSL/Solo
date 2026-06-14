@@ -10,6 +10,7 @@ export interface Ball {
   radius: number;
   speedMultiplier: number;
   initialSpeed: number;
+  currentSpeed: number;
 }
 
 export interface Paddle {
@@ -30,6 +31,7 @@ export interface ChargeState {
   maxMultiplier: number;
   glowProgress: number;
   canCharge: boolean;
+  triggerTime: number;
 }
 
 export interface ScorePopup {
@@ -38,12 +40,15 @@ export interface ScorePopup {
   scale: number;
   opacity: number;
   timer: number;
+  duration: number;
 }
 
 export interface ScreenFlash {
   active: boolean;
   opacity: number;
   timer: number;
+  duration: number;
+  maxOpacity: number;
 }
 
 export interface GameStateData {
@@ -59,6 +64,7 @@ export interface GameStateData {
   scorePopup: ScorePopup;
   screenFlash: ScreenFlash;
   winner: PlayerSide | null;
+  lastHitSide: PlayerSide | null;
 }
 
 const CANVAS_WIDTH = 800;
@@ -71,8 +77,10 @@ const PADDLE_Y_BOTTOM = CANVAS_HEIGHT - 30 - PADDLE_HEIGHT;
 const BALL_RADIUS = 6;
 const WIN_SCORE = 11;
 const CHARGE_TRIGGER_TIME = 0.5;
-const CHARGE_MAX_TIME = 1.5;
+const CHARGE_MAX_TIME = 2.0;
 const GLOW_TRANSITION_TIME = 0.3;
+const SPEED_INCREASE_RATE = 0.005;
+const MAX_SPEED_MULTIPLIER = 3;
 
 export class GameEngine {
   private state: GameState = 'menu';
@@ -87,8 +95,7 @@ export class GameEngine {
   private scorePopup: ScorePopup;
   private screenFlash: ScreenFlash;
   private winner: PlayerSide | null = null;
-  private ballHitTopPaddle = false;
-  private ballHitBottomPaddle = false;
+  private lastHitSide: PlayerSide | null = null;
 
   constructor() {
     this.ball = this.createBall();
@@ -96,22 +103,50 @@ export class GameEngine {
     this.bottomPaddle = this.createPaddle('bottom');
     this.topCharge = this.createChargeState();
     this.bottomCharge = this.createChargeState();
-    this.scorePopup = { show: false, text: '', scale: 0.5, opacity: 0, timer: 0 };
-    this.screenFlash = { active: false, opacity: 0, timer: 0 };
+    this.scorePopup = {
+      show: false,
+      text: '',
+      scale: 0.5,
+      opacity: 0,
+      timer: 0,
+      duration: 1.0,
+    };
+    this.screenFlash = {
+      active: false,
+      opacity: 0,
+      timer: 0,
+      duration: 0.15,
+      maxOpacity: 0.3,
+    };
+  }
+
+  private easeOutCubic(t: number): number {
+    return 1 - Math.pow(1 - t, 3);
+  }
+
+  private easeOutElastic(t: number): number {
+    const c4 = (2 * Math.PI) / 3;
+    return t === 0
+      ? 0
+      : t === 1
+      ? 1
+      : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1;
   }
 
   private createBall(): Ball {
     const baseSpeed = this.getBaseSpeed();
     const angle = (Math.random() * Math.PI) / 3 + Math.PI / 3;
     const direction = Math.random() > 0.5 ? 1 : -1;
+    const vyDir = Math.random() > 0.5 ? 1 : -1;
     return {
       x: CANVAS_WIDTH / 2,
       y: CANVAS_HEIGHT / 2,
       vx: Math.cos(angle) * baseSpeed * direction,
-      vy: Math.sin(angle) * baseSpeed * (Math.random() > 0.5 ? 1 : -1),
+      vy: Math.sin(angle) * baseSpeed * vyDir,
       radius: BALL_RADIUS,
       speedMultiplier: 1,
       initialSpeed: baseSpeed,
+      currentSpeed: baseSpeed,
     };
   }
 
@@ -161,6 +196,7 @@ export class GameEngine {
       maxMultiplier,
       glowProgress: 0,
       canCharge,
+      triggerTime: CHARGE_TRIGGER_TIME,
     };
   }
 
@@ -169,16 +205,14 @@ export class GameEngine {
     this.topCharge = this.createChargeState();
     this.bottomCharge = this.createChargeState();
     this.ball.initialSpeed = this.getBaseSpeed();
-    const currentSpeed = Math.sqrt(this.ball.vx ** 2 + this.ball.vy ** 2);
-    if (currentSpeed > 0) {
-      const ratio = this.getBaseSpeed() / currentSpeed;
-      this.ball.vx *= ratio;
-      this.ball.vy *= ratio;
-    }
   }
 
   getDifficulty(): Difficulty {
     return this.difficulty;
+  }
+
+  getState(): GameState {
+    return this.state;
   }
 
   startGame(): void {
@@ -187,8 +221,11 @@ export class GameEngine {
     this.topScore = 0;
     this.bottomScore = 0;
     this.winner = null;
+    this.lastHitSide = null;
     this.topCharge = this.createChargeState();
     this.bottomCharge = this.createChargeState();
+    this.scorePopup.show = false;
+    this.screenFlash.active = false;
   }
 
   resetGame(): void {
@@ -197,20 +234,17 @@ export class GameEngine {
     this.topScore = 0;
     this.bottomScore = 0;
     this.winner = null;
+    this.lastHitSide = null;
     this.topCharge = this.createChargeState();
     this.bottomCharge = this.createChargeState();
+    this.scorePopup.show = false;
+    this.screenFlash.active = false;
   }
 
   private resetBall(): void {
     this.ball = this.createBall();
-    this.ballHitTopPaddle = false;
-    this.ballHitBottomPaddle = false;
+    this.lastHitSide = null;
   }
 
   setPaddlePosition(side: PlayerSide, x: number): void {
-    const paddle = side === 'top' ? this.topPaddle : this.bottomPaddle;
-    paddle.x = Math.max(0, Math.min(CANVAS_WIDTH - paddle.width, x - paddle.width / 2));
-  }
-
-  startCharge(side: PlayerSide): void {
-    const charge = side === 'top' ? this.topCharge : this.bottomCharge;
+    const paddle = side === 'top
