@@ -184,7 +184,7 @@ body {
 }
 
 .toolbar-btn:hover {
-  background-color: #e9ecef;
+  background-color: #d0d5dd;
 }
 
 .toolbar-divider {
@@ -580,7 +580,7 @@ body {
   flex: 1;
 }
 
--version-title {
+.version-title {
   font-size: 13px;
   color: #495057;
   margin-bottom: 2px;
@@ -613,39 +613,230 @@ body {
 }
 
 .diff-viewer {
-  background-color: #f8f9fa;
+  background-color: #ffffff;
+  border: 1px solid #e9ecef;
   border-radius: 6px;
-  padding: 12px;
-  font-family: 'SFMono-Regular', Consolas, monospace;
+  overflow: hidden;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
   font-size: 12px;
   line-height: 1.6;
+}
+
+.diff-line {
+  display: flex;
+  padding: 0 12px;
+  min-height: 20px;
+}
+
+.diff-line-prefix {
+  width: 20px;
+  flex-shrink: 0;
+  user-select: none;
+  text-align: center;
+  color: #adb5bd;
+  font-weight: 600;
+}
+
+.diff-line-content {
+  flex: 1;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .diff-added {
-  background-color: #d1e7dd;
-  color: #0f5132;
+  background-color: #e6ffed;
+  color: #22863a;
+}
+
+.diff-added .diff-line-prefix {
+  background-color: #abf2bc;
+  color: #22863a;
 }
 
 .diff-removed {
-  background-color: #f8d7da;
-  color: #842029;
-  text-decoration: line-through;
+  background-color: #ffeef0;
+  color: #b31d28;
+}
+
+.diff-removed .diff-line-prefix {
+  background-color: #f8c8cc;
+  color: #b31d28;
+}
+
+.diff-line:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.diff-added:hover {
+  background-color: #d4f5de;
+}
+
+.diff-removed:hover {
+  background-color: #fde2e5;
+}
+
+.version-diff-section {
+  background-color: #f8f9fa;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.diff-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.diff-meta {
+  font-size: 12px;
+  color: #6c757d;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.diff-block {
+  margin-bottom: 16px;
+}
+
+.diff-block:last-child {
+  margin-bottom: 0;
+}
+
+.diff-block-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #495057;
+  margin-bottom: 8px;
+  padding-left: 4px;
 }
 
 .version-compare {
   display: flex;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 12px;
+  align-items: center;
 }
 
 .version-compare select {
   flex: 1;
-  padding: 6px 10px;
+  padding: 8px 10px;
   border: 1px solid #dee2e6;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 13px;
+  background-color: #ffffff;
+  outline: none;
+  cursor: pointer;
+}
+
+.version-compare select:focus {
+  border-color: #0d6efd;
+}
+
+.markdown-preview {
+  background-color: #ffffff;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 20px;
+  font-size: 14px;
+  line-height: 1.8;
+  color: #212529;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.markdown-preview h1,
+.markdown-preview h2,
+.markdown-preview h3,
+.markdown-preview h4 {
+  margin-top: 20px;
+  margin-bottom: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #212529;
+}
+
+.markdown-preview h1 { font-size: 22px; }
+.markdown-preview h2 { font-size: 18px; }
+.markdown-preview h3 { font-size: 16px; }
+.markdown-preview h4 { font-size: 15px; }
+
+.markdown-preview p {
+  margin-bottom: 12px;
+}
+
+.markdown-preview ul,
+.markdown-preview ol {
+  margin-bottom: 12px;
+  padding-left: 28px;
+}
+
+.markdown-preview li {
+  margin-bottom: 4px;
+}
+
+.markdown-preview blockquote {
+  margin: 12px 0;
+  padding: 10px 16px;
+  border-left: 4px solid #dee2e6;
+  background-color: #f8f9fa;
+  color: #6c757d;
+}
+
+.markdown-preview code {
+  background-color: #f1f3f5;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 13px;
+  color: #d63384;
+}
+
+.markdown-preview pre {
+  background-color: #212529;
+  color: #f8f9fa;
+  padding: 14px 16px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+
+.markdown-preview pre code {
+  background: none;
+  color: inherit;
+  padding: 0;
+  font-size: 13px;
+}
+
+.markdown-preview a {
+  color: #0d6efd;
+  text-decoration: none;
+}
+
+.markdown-preview a:hover {
+  text-decoration: underline;
+}
+
+.markdown-preview img {
+  max-width: 100%;
+  border-radius: 6px;
+  margin: 8px 0;
+}
+
+.markdown-preview hr {
+  border: none;
+  border-top: 1px solid #e9ecef;
+  margin: 20px 0;
+}
+
+.markdown-preview strong {
+  font-weight: 600;
+  color: #212529;
+}
+
+.markdown-preview em {
+  font-style: italic;
 }
 
 .mobile-header {

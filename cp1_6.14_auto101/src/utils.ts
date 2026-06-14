@@ -1,3 +1,5 @@
+import { diffLines, Change } from 'diff';
+
 export function formatTime(timestamp: number): string {
   const date = new Date(timestamp);
   const now = new Date();
@@ -38,58 +40,19 @@ export function formatFullTime(timestamp: number): string {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
-export interface DiffSegment {
-  type: 'added' | 'removed' | 'unchanged';
-  content: string;
+export interface DiffResult {
+  added: boolean;
+  removed: boolean;
+  value: string;
 }
 
-export function computeLineDiff(oldText: string, newText: string): DiffSegment[] {
-  const oldLines = oldText.split('\n');
-  const newLines = newText.split('\n');
-  const result: DiffSegment[] = [];
-  
-  const dp: number[][] = Array(oldLines.length + 1)
-    .fill(null)
-    .map(() => Array(newLines.length + 1).fill(0));
-  
-  for (let i = oldLines.length - 1; i >= 0; i--) {
-    for (let j = newLines.length - 1; j >= 0; j--) {
-      if (oldLines[i] === newLines[j]) {
-        dp[i][j] = dp[i + 1][j + 1] + 1;
-      } else {
-        dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
-      }
-    }
-  }
-  
-  let i = 0;
-  let j = 0;
-  
-  while (i < oldLines.length && j < newLines.length) {
-    if (oldLines[i] === newLines[j]) {
-      result.push({ type: 'unchanged', content: oldLines[i] });
-      i++;
-      j++;
-    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
-      result.push({ type: 'removed', content: oldLines[i] });
-      i++;
-    } else {
-      result.push({ type: 'added', content: newLines[j] });
-      j++;
-    }
-  }
-  
-  while (i < oldLines.length) {
-    result.push({ type: 'removed', content: oldLines[i] });
-    i++;
-  }
-  
-  while (j < newLines.length) {
-    result.push({ type: 'added', content: newLines[j] });
-    j++;
-  }
-  
-  return result;
+export function computeLineDiff(oldText: string, newText: string): DiffResult[] {
+  const changes = diffLines(oldText || '', newText || '');
+  return changes.map(change => ({
+    added: change.added || false,
+    removed: change.removed || false,
+    value: change.value
+  }));
 }
 
 export function getStatusLabel(status: string): string {
@@ -100,4 +63,9 @@ export function getStatusLabel(status: string): string {
     case 'draft': return '草稿';
     default: return status;
   }
+}
+
+export function truncateText(text: string, maxLength: number): string {
+  if (!text || text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
 }
