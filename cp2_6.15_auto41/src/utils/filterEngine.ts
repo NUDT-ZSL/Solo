@@ -24,6 +24,8 @@ export interface AppliedFilter {
 
 let offscreenCanvas: OffscreenCanvas | null = null;
 let offscreenCtx: OffscreenCanvasRenderingContext2D | null = null;
+let mosaicCanvas: OffscreenCanvas | null = null;
+let mosaicCtx: OffscreenCanvasRenderingContext2D | null = null;
 
 function getOffscreenContext(width: number, height: number): OffscreenCanvasRenderingContext2D {
   if (!offscreenCanvas || offscreenCanvas.width !== width || offscreenCanvas.height !== height) {
@@ -33,38 +35,36 @@ function getOffscreenContext(width: number, height: number): OffscreenCanvasRend
   return offscreenCtx!;
 }
 
+function getMosaicContext(width: number, height: number): OffscreenCanvasRenderingContext2D {
+  if (!mosaicCanvas || mosaicCanvas.width !== width || mosaicCanvas.height !== height) {
+    mosaicCanvas = new OffscreenCanvas(width, height);
+    mosaicCtx = mosaicCanvas.getContext('2d', { willReadFrequently: true });
+  }
+  return mosaicCtx!;
+}
+
 export function applyOilPaint(imageData: ImageData, blockSize: number): ImageData {
   const startTime = performance.now();
-  const { width, height, data } = imageData;
-  const result = new ImageData(width, height);
-  const resultData = result.data;
-  const radius = Math.floor(blockSize / 2);
+  const { width, height } = imageData;
 
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      let rSum = 0, gSum = 0, bSum = 0, count = 0;
+  const ctx = getOffscreenContext(width, height);
+  ctx.clearRect(0, 0, width, height);
+  ctx.putImageData(imageData, 0, 0);
 
-      for (let dy = -radius; dy <= radius; dy++) {
-        for (let dx = -radius; dx <= radius; dx++) {
-          const px = x + dx;
-          const py = y + dy;
-          if (px >= 0 && px < width && py >= 0 && py < height) {
-            const idx = (py * width + px) * 4;
-            rSum += data[idx];
-            gSum += data[idx + 1];
-            bSum += data[idx + 2];
-            count++;
-          }
-        }
-      }
+  const smallWidth = Math.ceil(width / blockSize);
+  const smallHeight = Math.ceil(height / blockSize);
+  const smallCanvas = new OffscreenCanvas(smallWidth, smallHeight);
+  const smallCtx = smallCanvas.getContext('2d')!;
+  smallCtx.imageSmoothingEnabled = true;
+  (smallCtx as unknown as { imageSmoothingQuality: string }).imageSmoothingQuality = 'low';
+  smallCtx.drawImage(offscreenCanvas!, 0, 0, smallWidth, smallHeight);
 
-      const idx = (y * width + x) * 4;
-      resultData[idx] = Math.round(rSum / count);
-      resultData[idx + 1] = Math.round(gSum / count);
-      resultData[idx + 2] = Math.round(bSum / count);
-      resultData[idx + 3] = data[idx + 3];
-    }
-  }
+  const tempCanvas = new OffscreenCanvas(width, height);
+  const tempCtx = tempCanvas.getContext('2d')!;
+  tempCtx.imageSmoothingEnabled = false;
+  tempCtx.drawImage(smallCanvas, 0, 0, width, height);
+
+  const result = tempCtx.getImageData(0, 0, width, height);
 
   console.debug(`油画滤镜处理时间: ${(performance.now() - startTime).toFixed(2)}ms`);
   return result;
@@ -146,39 +146,26 @@ export function applySketch(imageData: ImageData, edgeStrength: number): ImageDa
 
 export function applyMosaic(imageData: ImageData, cellSize: number): ImageData {
   const startTime = performance.now();
-  const { width, height, data } = imageData;
-  const result = new ImageData(width, height);
-  const resultData = result.data;
+  const { width, height } = imageData;
 
-  for (let y = 0; y < height; y += cellSize) {
-    for (let x = 0; x < width; x += cellSize) {
-      let rSum = 0, gSum = 0, bSum = 0, count = 0;
+  const ctx = getMosaicContext(width, height);
+  ctx.clearRect(0, 0, width, height);
+  ctx.putImageData(imageData, 0, 0);
 
-      for (let dy = 0; dy < cellSize && y + dy < height; dy++) {
-        for (let dx = 0; dx < cellSize && x + dx < width; dx++) {
-          const idx = ((y + dy) * width + (x + dx)) * 4;
-          rSum += data[idx];
-          gSum += data[idx + 1];
-          bSum += data[idx + 2];
-          count++;
-        }
-      }
+  const smallWidth = Math.max(1, Math.ceil(width / cellSize));
+  const smallHeight = Math.max(1, Math.ceil(height / cellSize));
+  const smallCanvas = new OffscreenCanvas(smallWidth, smallHeight);
+  const smallCtx = smallCanvas.getContext('2d')!;
+  smallCtx.imageSmoothingEnabled = true;
+  (smallCtx as unknown as { imageSmoothingQuality: string }).imageSmoothingQuality = 'low';
+  smallCtx.drawImage(mosaicCanvas!, 0, 0, smallWidth, smallHeight);
 
-      const rAvg = Math.round(rSum / count);
-      const gAvg = Math.round(gSum / count);
-      const bAvg = Math.round(bSum / count);
+  const resultCanvas = new OffscreenCanvas(width, height);
+  const resultCtx = resultCanvas.getContext('2d')!;
+  resultCtx.imageSmoothingEnabled = false;
+  resultCtx.drawImage(smallCanvas, 0, 0, width, height);
 
-      for (let dy = 0; dy < cellSize && y + dy < height; dy++) {
-        for (let dx = 0; dx < cellSize && x + dx < width; dx++) {
-          const idx = ((y + dy) * width + (x + dx)) * 4;
-          resultData[idx] = rAvg;
-          resultData[idx + 1] = gAvg;
-          resultData[idx + 2] = bAvg;
-          resultData[idx + 3] = data[idx + 3];
-        }
-      }
-    }
-  }
+  const result = resultCtx.getImageData(0, 0, width, height);
 
   console.debug(`马赛克滤镜处理时间: ${(performance.now() - startTime).toFixed(2)}ms`);
   return result;

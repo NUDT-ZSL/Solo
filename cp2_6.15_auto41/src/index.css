@@ -206,9 +206,15 @@ body {
   width: 100%;
   height: 6px;
   border-radius: 3px;
-  background: linear-gradient(to right, #ddd, #666);
+  background: linear-gradient(to right, #dddddd, #666666);
   outline: none;
   cursor: pointer;
+  border: none;
+  padding: 0;
+}
+
+.filter-slider:focus {
+  outline: none;
 }
 
 .filter-slider::-webkit-slider-thumb {
@@ -217,21 +223,46 @@ body {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #333;
+  background: #333333;
   cursor: pointer;
-  transition: transform 0.2s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .filter-slider::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
+  transform: scale(1.15);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.filter-slider::-webkit-slider-thumb:active {
+  transform: scale(1.1);
 }
 
 .filter-slider::-moz-range-thumb {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #333;
+  background: #333333;
   cursor: pointer;
+  border: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.filter-slider::-moz-range-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.filter-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, #dddddd, #666666);
+  border: none;
+}
+
+.filter-slider::-moz-focus-outer {
   border: none;
 }
 
@@ -295,14 +326,20 @@ body {
 
 .filter-tooltip {
   position: absolute;
-  background-color: rgba(0, 0, 0, 0.67);
-  color: white;
+  background-color: #000000aa;
+  color: #ffffff;
   padding: 8px 12px;
   border-radius: 6px;
   font-size: 14px;
+  line-height: 1.4;
   pointer-events: none;
   z-index: 10;
   white-space: nowrap;
+  font-weight: 400;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transform: translate3d(0, 0, 0);
+  transition: opacity 0.2s ease;
+  opacity: 1;
 }
 
 .bottom-actions {
