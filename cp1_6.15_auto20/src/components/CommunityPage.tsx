@@ -1,7 +1,14 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Heart, Play, Square, X } from 'lucide-react';
 import * as Tone from 'tone';
-import { Score, PITCH_NAMES, pitchToNoteName, DURATION_BEATS, DURATION_MAP, OCTAVE_LABELS } from '../types';
+import {
+  Score,
+  PITCH_NAMES,
+  pitchToNoteName,
+  DURATION_BEATS,
+  DURATION_MAP,
+  OCTAVE_LABELS,
+} from '../types';
 import { mockScores } from '../mockData';
 
 function ScoreThumbnail({ notes }: { notes: Score['notes'] }) {
@@ -58,16 +65,20 @@ export default function CommunityPage() {
   const [playingCell, setPlayingCell] = useState<string | null>(null);
   const [heartAnim, setHeartAnim] = useState<string | null>(null);
   const synthRef = useRef<Tone.Synth | null>(null);
-  const playbackRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const partRef = useRef<Tone.Part | null>(null);
 
   useEffect(() => {
     synthRef.current = new Tone.Synth({
       oscillator: { type: 'triangle' },
-      envelope: { attack: 0.02, decay: 0.1, sustain: 0.3, release: 0.2 },
+      envelope: { attack: 0.02, decay: 0.1, sustain: 0.3, release: 0.3 },
     }).toDestination();
     return () => {
       synthRef.current?.dispose();
-      playbackRef.current.forEach(clearTimeout);
+      if (partRef.current) {
+        partRef.current.dispose();
+      }
+      Tone.Transport.stop();
+      Tone.Transport.cancel();
     };
   }, []);
 
@@ -92,8 +103,12 @@ export default function CommunityPage() {
   }, []);
 
   const stopPlayback = useCallback(() => {
-    playbackRef.current.forEach(clearTimeout);
-    playbackRef.current = [];
+    Tone.Transport.stop();
+    Tone.Transport.cancel();
+    if (partRef.current) {
+      partRef.current.dispose();
+      partRef.current = null;
+    }
     setIsPlaying(false);
     setPlayingCell(null);
   }, []);
@@ -108,48 +123,63 @@ export default function CommunityPage() {
       if (!synthRef.current) return;
       setIsPlaying(true);
 
-      const seq: { note: Score['notes'][0][0]; measure: number; beat: number }[] = [];
+      const events: { time: number; note: Score['notes'][0][0]; measure: number; beat: number }[] = [];
+      let currentTime = 0;
+      const bpm = 120;
+      const beatSeconds = 60 / bpm;
+
       for (let m = 0; m < score.notes.length; m++) {
         for (let b = 0; b < score.notes[m].length; b++) {
-          const n = score.notes[m][b];
-          if (n) seq.push({ note: n, measure: m, beat: b });
+          const note = score.notes[m][b];
+          if (note) {
+            const durBeats = DURATION_BEATS[note.duration];
+            events.push({
+              time: currentTime,
+              note,
+              measure: m,
+              beat: b,
+            });
+            currentTime += durBeats * beatSeconds;
+          }
         }
       }
 
-      if (seq.length === 0) {
+      if (events.length === 0) {
         stopPlayback();
         return;
       }
 
-      const bpm = 120;
-      const beatDuration = 60 / bpm;
-      let offset = 0;
-      const timers: ReturnType<typeof setTimeout>[] = [];
+      Tone.Transport.bpm.value = bpm;
 
-      seq.forEach(item => {
-        if (!item.note) return;
-        const startOffset = offset * 1000;
-        const dur = DURATION_BEATS[item.note.duration] * beatDuration;
+      const partEvents = events.map(ev => ({
+        time: ev.time,
+        note: ev.note,
+        measure: ev.measure,
+        beat: ev.beat,
+      }));
 
-        const playTimer = setTimeout(() => {
-          const noteName = pitchToNoteName(item.note!.pitch, item.note!.octave, item.note!.sharp);
-          try {
-            synthRef.current?.triggerAttackRelease(noteName, dur * 0.9);
-          } catch { /* ignore */ }
-          setPlayingCell(`${item.measure}-${item.beat}`);
-        }, startOffset);
+      partRef.current = new Tone.Part((time, value) => {
+        if (!value.note) return;
+        const noteName = pitchToNoteName(value.note.pitch, value.note.octave, value.note.sharp);
+        const durBeats = DURATION_BEATS[value.note.duration];
+        Tone.Draw.schedule(() => {
+          setPlayingCell(`${value.measure}-${value.beat}`);
+        }, time);
+        Tone.Draw.schedule(() => {
+          setPlayingCell(prev => (prev === `${value.measure}-${value.beat}` ? null : prev));
+        }, time + durBeats * beatSeconds * 0.95);
+        try {
+          synthRef.current?.triggerAttackRelease(noteName, durBeats * beatSeconds * 0.9, time);
+        } catch { /* ignore */ }
+      }, partEvents);
 
-        const clearTimer = setTimeout(() => {
-          setPlayingCell(prev => (prev === `${item.measure}-${item.beat}` ? null : prev));
-        }, startOffset + dur * 1000);
+      partRef.current.start(0);
+      Tone.Transport.start();
 
-        timers.push(playTimer, clearTimer);
-        offset += DURATION_BEATS[item.note.duration];
-      });
-
-      const endTimer = setTimeout(() => stopPlayback(), offset * beatDuration * 1000 + 200);
-      timers.push(endTimer);
-      playbackRef.current = timers;
+      const totalDuration = currentTime + 0.5;
+      Tone.Transport.schedule(() => {
+        stopPlayback();
+      }, totalDuration);
     },
     [isPlaying, stopPlayback]
   );
@@ -163,6 +193,25 @@ export default function CommunityPage() {
     if (note.octave === 2) octaveStr = '̣';
     return `${sharpStr}${base}${octaveStr}`;
   };
+
+  const getNoteAtCell = useCallback(
+    (octave: number, pitch: number, measure: number, beat: number, notes: Score['notes']) => {
+      const n = notes[measure]?.[beat];
+      if (n && n.octave === octave && n.pitch === pitch) return n;
+      return null;
+    },
+    []
+  );
+
+  const gridRows = useMemo(() => {
+    const rows: { octave: number; pitch: number; octaveLabel: string }[] = [];
+    for (let o = 2; o >= 0; o--) {
+      for (let p = 7; p >= 1; p--) {
+        rows.push({ octave: o, pitch: p, octaveLabel: OCTAVE_LABELS[o] });
+      }
+    }
+    return rows;
+  }, []);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -223,12 +272,13 @@ export default function CommunityPage() {
                   border: 'none',
                   cursor: 'pointer',
                   padding: 4,
-                  color: favorites.has(score.id) ? '#e94560' : '#8888aa',
-                  transition: 'color 0.2s',
+                  color: 'transparent',
+                  transition: 'transform 0.2s',
                 }}
               >
                 <Heart
                   size={18}
+                  color={favorites.has(score.id) ? '#e94560' : '#8888aa'}
                   fill={favorites.has(score.id) ? '#e94560' : 'none'}
                 />
               </button>
@@ -301,12 +351,13 @@ export default function CommunityPage() {
                     border: 'none',
                     cursor: 'pointer',
                     padding: 4,
-                    color: favorites.has(previewScore.id) ? '#e94560' : '#8888aa',
-                    transition: 'color 0.2s',
+                    color: 'transparent',
+                    transition: 'transform 0.2s',
                   }}
                 >
                   <Heart
                     size={22}
+                    color={favorites.has(previewScore.id) ? '#e94560' : '#8888aa'}
                     fill={favorites.has(previewScore.id) ? '#e94560' : 'none'}
                   />
                 </button>
@@ -341,9 +392,9 @@ export default function CommunityPage() {
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: `40px repeat(${previewScore.notes.length}, 1fr)`,
+                  gridTemplateColumns: `70px repeat(${previewScore.notes.length * 4}, 1fr)`,
                   gap: 0,
-                  minWidth: previewScore.notes.length * 56 + 40,
+                  minWidth: previewScore.notes.length * 4 * 24 + 70,
                 }}
               >
                 <div
@@ -352,93 +403,144 @@ export default function CommunityPage() {
                     fontSize: 10,
                     color: '#8888aa',
                     textAlign: 'center',
+                    borderRight: '1px solid #2a2a4e',
+                    borderBottom: '1px solid #2a2a4e',
+                    background: '#16213e',
+                    position: 'sticky',
+                    left: 0,
+                    zIndex: 2,
                   }}
                 >
-                  拍
+                  音高
                 </div>
-                {previewScore.notes.map((_, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      padding: '6px 2px',
-                      fontSize: 10,
-                      color: '#8888aa',
-                      textAlign: 'center',
-                      borderBottom: '1px dashed #2a2a4e',
-                    }}
-                  >
-                    {i + 1}
-                  </div>
-                ))}
+                {previewScore.notes.map((_, mi) =>
+                  [0, 1, 2, 3].map(bi => (
+                    <div
+                      key={`h-${mi}-${bi}`}
+                      style={{
+                        padding: '4px 2px',
+                        fontSize: 9,
+                        color: '#8888aa',
+                        textAlign: 'center',
+                        borderBottom: '1px solid #2a2a4e',
+                        borderRight:
+                          bi === 3 && mi < previewScore.notes.length - 1
+                            ? '2px solid #2a2a4e'
+                            : '1px dashed #2a2a4e',
+                        background: bi === 0 ? 'rgba(15,52,96,0.3)' : 'transparent',
+                      }}
+                    >
+                      {bi === 0 ? mi + 1 : ''}
+                    </div>
+                  ))
+                )}
 
-                {previewScore.notes[0].map((_, beatIdx) => [
-                  <div
-                    key={`bl-${beatIdx}`}
-                    style={{
-                      padding: '6px 4px',
-                      fontSize: 11,
-                      color: '#8888aa',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderRight: '1px dashed #2a2a4e',
-                    }}
-                  >
-                    {beatIdx + 1}
-                  </div>,
-                  ...previewScore.notes.map((measure, measureIdx) => {
-                    const note = measure[beatIdx];
-                    const cellKey = `${measureIdx}-${beatIdx}`;
-                    const isHighlighted = playingCell === cellKey;
-                    return (
-                      <div
-                        key={cellKey}
-                        className={isHighlighted ? 'note-highlight' : undefined}
+                {gridRows.map(row => {
+                  const isFirstOfOctave = row.pitch === 7;
+                  return [
+                    <div
+                      key={`label-${row.octave}-${row.pitch}`}
+                      style={{
+                        padding: '2px 4px',
+                        fontSize: 11,
+                        color: '#8888aa',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        borderRight: '1px solid #2a2a4e',
+                        borderBottom:
+                          row.octave > 0 && row.pitch === 1
+                            ? '2px solid #2a2a4e'
+                            : '1px dashed #2a2a4e',
+                        background: isFirstOfOctave ? 'rgba(15,52,96,0.4)' : '#16213e',
+                        position: 'sticky',
+                        left: 0,
+                        zIndex: 2,
+                        fontWeight: row.pitch === 1 ? 600 : 400,
+                      }}
+                    >
+                      <span style={{ fontSize: 9, opacity: 0.7 }}>
+                        {row.pitch === 7 ? row.octaveLabel : ''}
+                      </span>
+                      <span
                         style={{
-                          height: 44,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          borderBottom:
-                            beatIdx < (previewScore.notes[0]?.length || 4) - 1
-                              ? '1px dashed #2a2a4e'
-                              : 'none',
-                          borderRight:
-                            (measureIdx + 1) % 4 === 0 &&
-                            measureIdx < previewScore.notes.length - 1
-                              ? '2px solid #2a2a4e'
-                              : measureIdx < previewScore.notes.length - 1
-                              ? '1px dashed #2a2a4e'
-                              : 'none',
-                          position: 'relative',
+                          fontWeight: 700,
+                          color:
+                            row.octave === 2
+                              ? '#e94560'
+                              : row.octave === 1
+                              ? '#e0e0e0'
+                              : '#00bcd4',
                         }}
                       >
-                        {note && (
+                        {PITCH_NAMES[row.pitch - 1]}
+                        {row.octave === 0 ? '̇' : row.octave === 2 ? '̣' : ''}
+                      </span>
+                    </div>,
+                    ...previewScore.notes.map((measure, mi) =>
+                      [0, 1, 2, 3].map(bi => {
+                        const note = getNoteAtCell(row.octave, row.pitch, mi, bi, previewScore.notes);
+                        const cellKey = `${mi}-${bi}`;
+                        const isHighlighted = playingCell === cellKey && note !== null;
+                        const cellId = `${row.octave}-${row.pitch}-${mi}-${bi}`;
+                        return (
                           <div
+                            key={cellId}
+                            className={isHighlighted ? 'note-highlight' : undefined}
                             style={{
-                              background: isHighlighted
-                                ? '#e94560'
-                                : 'rgba(255,255,255,0.12)',
-                              border: `2px solid ${
-                                isHighlighted ? '#e94560' : 'rgba(255,255,255,0.2)'
-                              }`,
-                              borderRadius: 6,
-                              padding: '2px 6px',
-                              fontSize: 13,
-                              fontWeight: 600,
-                              color: '#fff',
-                              minWidth: 28,
-                              textAlign: 'center',
-                              userSelect: 'none',
+                              height: 22,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderBottom:
+                                row.octave > 0 && row.pitch === 1
+                                  ? '2px solid #2a2a4e'
+                                  : '1px dashed #2a2a4e',
+                              borderRight:
+                                bi === 3 && mi < previewScore.notes.length - 1
+                                  ? '2px solid #2a2a4e'
+                                  : '1px dashed #2a2a4e',
+                              background:
+                                bi === 0
+                                  ? 'rgba(15,52,96,0.15)'
+                                  : isFirstOfOctave
+                                  ? 'rgba(22,33,62,0.5)'
+                                  : 'transparent',
                             }}
                           >
-                            {renderNoteLabel(note)}
+                            {note && (
+                              <div
+                                style={{
+                                  background: isHighlighted
+                                    ? '#ff9500'
+                                    : 'rgba(255,255,255,0.15)',
+                                  border: `2px solid ${
+                                    isHighlighted
+                                      ? '#ff9500'
+                                      : note
+                                      ? 'rgba(233,69,96,0.8)'
+                                      : 'transparent'
+                                  }`,
+                                  borderRadius: 4,
+                                  padding: '0 2px',
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  color: '#fff',
+                                  minWidth: 14,
+                                  lineHeight: '14px',
+                                  textAlign: 'center',
+                                  userSelect: 'none',
+                                }}
+                              >
+                                {renderNoteLabel(note)}
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    );
-                  }),
-                ])}
+                        );
+                      })
+                    ).flat(),
+                  ];
+                })}
               </div>
             </div>
 
