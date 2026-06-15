@@ -1,7 +1,7 @@
 import { useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from 'react';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers, highlightActiveLine } from '@codemirror/view';
-import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
+import { markdown } from '@codemirror/lang-markdown';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
@@ -10,6 +10,7 @@ import './Editor.css';
 interface EditorProps {
   value: string;
   onChange: (value: string) => void;
+  visible?: boolean;
 }
 
 export interface EditorRef {
@@ -19,29 +20,107 @@ export interface EditorRef {
   focus: () => void;
 }
 
-const Editor = forwardRef<EditorRef, EditorProps>(({ value, onChange }, ref) => {
+const STORAGE_KEY_START = 'markdown-editor-selection-start';
+const STORAGE_KEY_END = 'markdown-editor-selection-end';
+
+const Editor = forwardRef<EditorRef, EditorProps>(({ value, onChange, visible = true }, ref) => {
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
   const isInternalUpdateRef = useRef(false);
   const externalValueRef = useRef(value);
+  const savedSelectionRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
+  const lastVisibleRef = useRef(visible);
+  const wasFocusedRef = useRef(false);
+  const observerRef = useRef<MutationObserver | null>(null);
 
   useEffect(() => {
     externalValueRef.current = value;
   }, [value]);
+
+  const saveSelection = useCallback(() => {
+    const view = editorViewRef.current;
+    if (!view) return;
+    try {
+      const main = view.state.selection.main;
+      savedSelectionRef.current = { start: main.from, end: main.to };
+      try {
+        sessionStorage.setItem(STORAGE_KEY_START, String(main.from));
+        sessionStorage.setItem(STORAGE_KEY_END, String(main.to));
+      } catch {
+      }
+    } catch {
+    }
+  }, []);
+
+  const restoreSelection = useCallback(() => {
+    const view = editorViewRef.current;
+    if (!view) return;
+
+    let start = savedSelectionRef.current.start;
+    let end = savedSelectionRef.current.end;
+
+    try {
+      const storedStart = sessionStorage.getItem(STORAGE_KEY_START);
+      const storedEnd = sessionStorage.getItem(STORAGE_KEY_END);
+      if (storedStart !== null) {
+        const parsedStart = parseInt(storedStart, 10);
+        const parsedEnd = storedEnd !== null ? parseInt(storedEnd, 10) : parsedStart;
+        if (!isNaN(parsedStart)) {
+          start = parsedStart;
+          end = isNaN(parsedEnd) ? parsedStart : parsedEnd;
+        }
+      }
+    } catch {
+    }
+
+    const docLength = view.state.doc.length;
+    start = Math.min(Math.max(0, start), docLength);
+    end = Math.min(Math.max(0, end), docLength);
+
+    try {
+      view.dispatch({
+        selection: { anchor: start, head: end },
+        scrollIntoView: true,
+      });
+
+      if (wasFocusedRef.current) {
+        view.focus();
+      }
+    } catch (restoreErr) {
+      console.warn('Failed to restore selection:', restoreErr);
+    }
+  }, []);
 
   useEffect(() => {
     if (!editorContainerRef.current) return;
 
     const updateListener = EditorView.updateListener.of((update) => {
       if (update.docChanged) {
-        isInternalUpdateRef.current = true;
-        const newValue = update.state.doc.toString();
-        externalValueRef.current = newValue;
-        onChange(newValue);
-        setTimeout(() => {
-          isInternalUpdateRef.current = false;
-        }, 0);
+      if (!update.selectionSet) {
+        saveSelection();
       }
+      isInternalUpdateRef.current = true;
+      const newValue = update.state.doc.toString();
+      externalValueRef.current = newValue;
+      onChange(newValue);
+      setTimeout(() => {
+        isInternalUpdateRef.current = false;
+      }, 0);
+    }
+    if (update.selectionSet) {
+      saveSelection();
+    }
+    });
+
+    const focusListener = EditorView.domEventHandlers({
+      focus() {
+        wasFocusedRef.current = true;
+        saveSelection();
+      },
+      blur() {
+        wasFocusedRef.current = false;
+        saveSelection();
+      },
     });
 
     const state = EditorState.create({
@@ -55,6 +134,7 @@ const Editor = forwardRef<EditorRef, EditorProps>(({ value, onChange }, ref) => 
         syntaxHighlighting(defaultHighlightStyle),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         updateListener,
+        focusListener,
         EditorView.theme({
           '&': {
             height: '100%',
@@ -90,11 +170,70 @@ const Editor = forwardRef<EditorRef, EditorProps>(({ value, onChange }, ref) => 
 
     editorViewRef.current = view;
 
+    restoreSelection();
+
+    const container = editorContainerRef.current;
+    try {
+      observerRef.current = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          if (mutation.type === 'attributes') {
+            if (
+              mutation.attributeName === 'style' ||
+              mutation.attributeName === 'class'
+            ) {
+              if (container) {
+                const display = window.getComputedStyle(container).display;
+                if (display !== 'none') {
+                  if (view.requestMeasure) {
+                    view.requestMeasure();
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+      observerRef.current.observe(container, {
+        attributes: true,
+        attributeFilter: ['style', 'class'],
+      });
+    } catch (obsErr) {
+      console.warn('Failed to setup MutationObserver:', obsErr);
+    }
+
     return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+        observerRef.current = null;
+      }
+      saveSelection();
       view.destroy();
       editorViewRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const wasVisible = lastVisibleRef.current;
+    lastVisibleRef.current = visible;
+
+    if (!wasVisible && visible) {
+      const view = editorViewRef.current;
+      if (view) {
+        const timer = setTimeout(() => {
+          try {
+            if (view.requestMeasure) {
+              view.requestMeasure();
+            }
+          } catch {
+          }
+          restoreSelection();
+        }, 50);
+        return () => clearTimeout(timer);
+      }
+    } else if (!visible && wasVisible) {
+      saveSelection();
+    }
+  }, [visible, restoreSelection, saveSelection]);
 
   useEffect(() => {
     const view = editorViewRef.current;
@@ -116,32 +255,56 @@ const Editor = forwardRef<EditorRef, EditorProps>(({ value, onChange }, ref) => 
     ref,
     () => ({
       getSelection: () => {
-        const view = editorViewRef.current;
-        if (!view) return { start: 0, end: 0 };
-        return {
-          start: view.state.selection.main.from,
-          end: view.state.selection.main.to,
-        };
-      },
-      setSelection: (start: number, end: number) => {
-        const view = editorViewRef.current;
-        if (!view) return;
+      const view = editorViewRef.current;
+      if (!view) return savedSelectionRef.current;
+      try {
+        const main = view.state.selection.main;
+        return { start: main.from, end: main.to };
+      } catch {
+        return savedSelectionRef.current;
+      }
+    },
+    setSelection: (start: number, end: number) => {
+      savedSelectionRef.current = { start, end };
+      const view = editorViewRef.current;
+      if (!view) return;
+      try {
+        const docLength = view.state.doc.length;
+        const safeStart = Math.min(Math.max(0, start), docLength);
+        const safeEnd = Math.min(Math.max(0, end), docLength);
         view.dispatch({
-          selection: { anchor: start, head: end },
+          selection: { anchor: safeStart, head: safeEnd },
           scrollIntoView: true,
         });
-      },
-      getValue: () => {
-        const view = editorViewRef.current;
-        if (!view) return '';
-        return view.state.doc.toString();
-      },
-      focus: () => {
-        const view = editorViewRef.current;
-        if (view) {
-          view.focus();
+        try {
+          sessionStorage.setItem(STORAGE_KEY_START, String(safeStart));
+          sessionStorage.setItem(STORAGE_KEY_END, String(safeEnd));
+        } catch {
         }
-      },
+      } catch (setErr) {
+        console.warn('Failed to set selection:', setErr);
+      }
+    },
+    getValue: () => {
+      const view = editorViewRef.current;
+      if (!view) return externalValueRef.current;
+      try {
+        return view.state.doc.toString();
+      } catch {
+        return externalValueRef.current;
+      }
+    },
+    focus: () => {
+      wasFocusedRef.current = true;
+      const view = editorViewRef.current;
+      if (view) {
+        try {
+          view.focus();
+        } catch (focusErr) {
+          console.warn('Failed to focus editor:', focusErr);
+        }
+      }
+    },
     }),
     []
   );

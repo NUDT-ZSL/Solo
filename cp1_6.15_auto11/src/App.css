@@ -11,6 +11,52 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+.load-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: rgba(243, 108, 108, 0.15);
+  border-bottom: 1px solid rgba(243, 108, 108, 0.3);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.load-error-text {
+  color: #f38ba8;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.load-error-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(243, 108, 108, 0.2);
+  color: #f38ba8;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.load-error-close:hover {
+  background: rgba(243, 108, 108, 0.3);
+}
+
 .app {
   min-height: 100vh;
   display: flex;

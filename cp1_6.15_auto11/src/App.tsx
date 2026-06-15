@@ -112,6 +112,7 @@ export default function App() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [shareError, setShareError] = useState('');
+  const [loadError, setLoadError] = useState('');
   const editorRef = useRef<EditorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -166,25 +167,62 @@ export default function App() {
   }, [isFullscreen, slides.length]);
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const shared = urlParams.get('s');
-    const sharedV2 = urlParams.get('s2');
-    if (sharedV2) {
-      try {
-        const decompressed = LZString.decompressFromEncodedURIComponent(sharedV2);
-        if (decompressed) {
-          setMarkdown(decompressed);
+    let loaded = false;
+    let errorMessage = '';
+
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const shared = urlParams.get('s');
+      const sharedV2 = urlParams.get('s2');
+
+      if (sharedV2) {
+        try {
+          const decompressed = LZString.decompressFromEncodedURIComponent(sharedV2);
+          if (decompressed && typeof decompressed === 'string' && decompressed.trim().length > 0) {
+            setMarkdown(decompressed);
+            loaded = true;
+          } else {
+            errorMessage = '分享内容为空或已损坏，请检查链接是否完整。';
+          }
+        } catch (decompressErr) {
+          console.error('Failed to decompress shared content v2:', decompressErr);
+          errorMessage = '分享链接内容解析失败，可能链接已损坏或被修改。';
         }
-      } catch {
-        console.error('Failed to decode shared content v2');
+      } else if (shared) {
+        try {
+          try {
+            const decoded = decodeURIComponent(escape(atob(shared)));
+            if (decoded && typeof decoded === 'string' && decoded.trim().length > 0) {
+              setMarkdown(decoded);
+              loaded = true;
+            } else {
+              errorMessage = '分享内容为空，可能链接不完整。';
+            }
+          } catch (decodeErr) {
+            try {
+              const decoded = atob(shared);
+              if (decoded && typeof decoded === 'string' && decoded.trim().length > 0) {
+                setMarkdown(decoded);
+                loaded = true;
+              }
+            } catch (simpleDecodeErr) {
+              console.error('All decode methods failed:', simpleDecodeErr);
+              errorMessage = '分享链接内容解码失败，可能链接已被修改或格式错误。';
+            }
+          }
+        } catch (globalErr) {
+          console.error('Failed to decode shared content v1:', globalErr);
+          errorMessage = '分享链接解析过程中发生未知错误。';
+        }
       }
-    } else if (shared) {
-      try {
-        const decoded = atob(shared);
-        setMarkdown(decoded);
-      } catch {
-        console.error('Failed to decode shared content');
-      }
+    } catch (urlParseErr) {
+      console.error('Failed to parse URL parameters:', urlParseErr);
+      errorMessage = '无法解析URL参数。';
+    }
+
+    if (!loaded && errorMessage) {
+      setLoadError(errorMessage);
+      setTimeout(() => setLoadError(''), 8000);
     }
   }, []);
 
@@ -277,27 +315,63 @@ export default function App() {
   const collectStyles = useCallback((): string => {
     const styles: string[] = [];
 
-    for (let i = 0; i < document.styleSheets.length; i++) {
-      const styleSheet = document.styleSheets[i];
-      try {
-        const rules = styleSheet.cssRules || styleSheet.rules;
-        if (!rules) continue;
+    try {
+      const sheetsCount = document.styleSheets.length;
+      for (let i = 0; i < sheetsCount; i++) {
+        const styleSheet = document.styleSheets[i];
+        try {
+          let sheetHref = '';
+          try {
+            sheetHref = styleSheet?.href || '';
+          } catch {
+            sheetHref = 'unknown';
+          }
 
-        let sheetCss = '';
-        for (let j = 0; j < rules.length; j++) {
-          const rule = rules[j];
-          sheetCss += rule.cssText + '\n';
+          try {
+            const rules = styleSheet?.cssRules || styleSheet?.rules;
+            if (!rules || rules.length === 0) continue;
+
+            let sheetCss = '';
+            const rulesCount = rules.length;
+            for (let j = 0; j < rulesCount; j++) {
+              try {
+                const rule = rules[j];
+                if (rule && rule.cssText) {
+                  sheetCss += rule.cssText + '\n';
+                }
+              } catch (ruleErr) {
+                console.warn('Cannot access CSS rule at index', j, ruleErr);
+              }
+            }
+            if (sheetCss) {
+              styles.push(sheetCss);
+            }
+          } catch (rulesErr) {
+            console.warn('Cannot access rules for stylesheet:', sheetHref, rulesErr);
+          }
+        } catch (sheetErr) {
+          console.warn('Cannot access stylesheet at index', i, sheetErr);
         }
-        styles.push(sheetCss);
-      } catch (e) {
-        console.warn('Cannot access stylesheet:', styleSheet.href);
       }
+    } catch (globalErr) {
+      console.error('Failed to collect stylesheets:', globalErr);
     }
 
-    const styleElements = document.querySelectorAll('style');
-    styleElements.forEach((styleEl) => {
-      styles.push(styleEl.textContent || '');
-    });
+    try {
+      const styleElements = document.querySelectorAll('style');
+      styleElements.forEach((styleEl) => {
+        try {
+          const content = styleEl.textContent || '';
+          if (content) {
+            styles.push(content);
+          }
+        } catch (styleErr) {
+          console.warn('Cannot read style element content:', styleErr);
+        }
+      });
+    } catch (queryErr) {
+      console.error('Failed to query style elements:', queryErr);
+    }
 
     return styles.join('\n');
   }, []);
@@ -522,6 +596,14 @@ export default function App() {
 
   return (
     <div className={`app theme-${theme}`}>
+      {loadError && (
+        <div className="load-error-banner">
+          <span className="load-error-text">⚠️ {loadError}</span>
+          <button className="load-error-close" onClick={() => setLoadError('')}>
+            ✕
+          </button>
+        </div>
+      )}
       <header className="app-header">
         <div className="header-left">
           <h1 className="app-title">📝 Markdown Slides</h1>
@@ -575,7 +657,12 @@ export default function App() {
           </div>
           <div className="mobile-content">
             <div className={`mobile-panel ${activeTab === 'editor' ? 'active' : ''}`}>
-              <Editor ref={editorRef} value={markdown} onChange={handleMarkdownChange} />
+              <Editor
+                ref={editorRef}
+                value={markdown}
+                onChange={handleMarkdownChange}
+                visible={activeTab === 'editor'}
+              />
             </div>
             <div className={`mobile-panel ${activeTab === 'preview' ? 'active' : ''}`}>
               <div className="mobile-preview-wrapper">
@@ -611,7 +698,12 @@ export default function App() {
       ) : (
         <div className="main-content" ref={containerRef}>
           <div className="panel editor-panel" style={{ width: `${splitRatio * 100}%` }}>
-            <Editor ref={editorRef} value={markdown} onChange={handleMarkdownChange} />
+            <Editor
+              ref={editorRef}
+              value={markdown}
+              onChange={handleMarkdownChange}
+              visible={true}
+            />
           </div>
           <div
             className={`splitter ${isDragging ? 'dragging' : ''}`}

@@ -34,36 +34,15 @@ export interface Slide {
 
 const SPLIT_MARKER = ':split';
 
-function tokenContainsSplit(token: Tokens.Generic): boolean {
-  if (token.type === 'paragraph' || token.type === 'text') {
-    const text = 'text' in token ? token.text : token.raw;
-    return typeof text === 'string' && text.includes(SPLIT_MARKER);
-  }
-
-  if ('tokens' in token && Array.isArray(token.tokens)) {
-    for (const child of token.tokens as Tokens.Generic[]) {
-      if (tokenContainsSplit(child)) {
-        return true;
-      }
-    }
-  }
-
-  if ('items' in token && Array.isArray(token.items)) {
-    for (const item of token.items as Tokens.Generic[]) {
-      if (tokenContainsSplit(item)) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
 function splitTokensAtMarker(
   tokens: Tokens.Generic[]
 ): { left: Tokens.Generic[]; right: Tokens.Generic[] } | null {
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
+
+    if (token.type === 'code' || token.type === 'codespan') {
+      continue;
+    }
 
     if (token.type === 'paragraph') {
       const paraToken = token as Tokens.Paragraph;
@@ -108,6 +87,14 @@ function splitTokensAtMarker(
     }
 
     if ('tokens' in token && Array.isArray(token.tokens) && token.tokens.length > 0) {
+      const hasCodeBlock = token.tokens.some(
+        (t: Tokens.Generic) => t.type === 'code' || t.type === 'codespan'
+      );
+
+      if (hasCodeBlock) {
+        continue;
+      }
+
       const childResult = splitTokensAtMarker(token.tokens as Tokens.Generic[]);
       if (childResult) {
         const leftTokens: Tokens.Generic[] = [];
@@ -156,7 +143,7 @@ export function parseMarkdown(markdown: string): Slide[] {
 
   const slideContents = markdown.split(/^---\s*$/m);
 
-  const slides: Slide[] = slideContents
+  const slides: (Slide | null)[] = slideContents
     .map((content, index) => {
       const trimmedContent = content.trim();
       if (!trimmedContent) {
@@ -175,7 +162,7 @@ export function parseMarkdown(markdown: string): Slide[] {
         const leftHtml = renderTokens(splitResult.left);
         const rightHtml = renderTokens(splitResult.right);
 
-        return {
+        const slide: Slide = {
           id: index,
           content: marked.parse(trimmedContent.replace(new RegExp(SPLIT_MARKER, 'g'), '')) as string,
           hasSplit: true,
@@ -185,18 +172,19 @@ export function parseMarkdown(markdown: string): Slide[] {
           leftTokens: splitResult.left,
           rightTokens: splitResult.right,
         };
+        return slide;
       }
 
-      return {
+      const slide: Slide = {
         id: index,
         content: marked.parse(trimmedContent) as string,
         hasSplit: false,
         rawContent: trimmedContent,
       };
-    })
-    .filter((slide): slide is Slide => slide !== null);
+      return slide;
+    });
 
-  return slides;
+  return slides.filter((slide): slide is Slide => slide !== null);
 }
 
 export function parseSplitContent(markdown: string): { left: string; right: string } {
