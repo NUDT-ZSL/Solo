@@ -1,0 +1,219 @@
+.events-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px;
+  animation: fadeIn 0.3s ease;
+}
+
+.events-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.events-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #333;
+  margin: 0;
+}
+
+.create-event-btn {
+  background: #556B2F;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.create-event-btn:hover {
+  background: #4a5d29;
+  transform: scale(1.05);
+}
+
+.create-event-btn:active {
+  transform: scale(0.95);
+}
+
+.create-form-card {
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.create-form-card h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 20px 0;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #555;
+}
+
+.form-group input,
+.form-group textarea {
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  border-color: #556B2F;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.create-form-card .submit-btn {
+  width: 100%;
+  background: #556B2F;
+  color: white;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  margin-top: 16px;
+  transition: background 0.2s ease;
+}
+
+.create-form-card .submit-btn:hover {
+  background: #4a5d29;
+}
+
+.tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 24px;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 14px;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 500;
+  color: #666;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+  color: #556B2F;
+  background: #f8f8f8;
+}
+
+.tab-btn.active {
+  color: #556B2F;
+  background: #F5F5DC;
+}
+
+.tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #556B2F;
+}
+
+.events-content {
+  transition: opacity 0.3s ease;
+}
+
+.events-content.fade-out {
+  opacity: 0;
+}
+
+.events-content.fade-in {
+  opacity: 1;
+}
+
+.month-group {
+  margin-bottom: 32px;
+}
+
+.month-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #556B2F;
+  margin: 0 0 16px 0;
+  padding-left: 120px;
+}
+
+.timeline-container {
+  position: relative;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.empty-icon {
+  font-size: 64px;
+  margin: 0 0 16px 0;
+}
+
+.empty-state p:last-child {
+  font-size: 16px;
+  color: #999;
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .events-page {
+    padding: 16px;
+  }
+
+  .events-title {
+    font-size: 22px;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .month-title {
+    padding-left: 0;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
