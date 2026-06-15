@@ -1,13 +1,13 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: './',
+  base: '/',
   server: {
     port: 5173,
     open: true
   },
   build: {
     outDir: 'dist',
-    sourcemap: false
+    sourcemap: true
   }
 });
