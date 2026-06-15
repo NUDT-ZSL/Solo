@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>城市共享单车调度模拟系统</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #fff;
+      color: #202124;
+    }
+
+    #map {
+      width: 100%;
+      height: 100vh;
+      z-index: 1;
+    }
+
+    .leaflet-control-zoom {
+      border: none !important;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08) !important;
+      border-radius: 8px !important;
+      overflow: hidden;
+    }
+
+    .bike-marker {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      color: #fff;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3), 0 0 12px rgba(26,115,232,0.3);
+      cursor: pointer;
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  box-shadow 0.3s ease;
+      user-select: none;
+      border: 2px solid #fff;
+    }
+
+    .bike-marker:hover {
+      transform: scale(1.15);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4), 0 0 20px rgba(26,115,232,0.5);
+      z-index: 1000 !important;
+    }
+
+    .bike-marker.selected {
+      transform: scale(1.2);
+      box-shadow: 0 4px 20px rgba(26,115,232,0.6), 0 0 30px rgba(26,115,232,0.4);
+      border-color: #1a73e8;
+    }
+
+    .bike-marker.dispatch-start {
+      animation: pulse-start 1s infinite;
+    }
+
+    .bike-marker.dispatch-end {
+      animation: pulse-end 1s infinite;
+    }
+
+    @keyframes pulse-start {
+      0%, 100% { box-shadow: 0 2px 8px rgba(0,0,0,0.3), 0 0 12px rgba(52,168,83,0.4); }
+      50% { box-shadow: 0 4px 16px rgba(0,0,0,0.4), 0 0 30px rgba(52,168,83,0.8); }
+    }
+
+    @keyframes pulse-end {
+      0%, 100% { box-shadow: 0 2px 8px rgba(0,0,0,0.3), 0 0 12px rgba(234,67,53,0.4); }
+      50% { box-shadow: 0 4px 16px rgba(0,0,0,0.4), 0 0 30px rgba(234,67,53,0.8); }
+    }
+
+    .ripple {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 0;
+      border: 2px solid currentColor;
+      pointer-events: none;
+      animation: ripple-effect 0.8s ease-out;
+    }
+
+    @keyframes ripple-effect {
+      0% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 0.8;
+      }
+      100% {
+        transform: translate(-50%, -50%) scale(2.5);
+        opacity: 0;
+      }
+    }
+
+    .stats-panel {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 260px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08);
+      padding: 16px;
+      z-index: 1000;
+    }
+
+    .stats-panel h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #202124;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stats-panel h3::before {
+      content: '';
+      width: 4px;
+      height: 16px;
+      background: #1a73e8;
+      border-radius: 2px;
+    }
+
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #f1f3f4;
+    }
+
+    .stat-item:last-of-type {
+      border-bottom: none;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: #5f6368;
+    }
+
+    .stat-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1a73e8;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .heatmap-toggle {
+      margin-top: 12px;
+      width: 100%;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      background: #f1f3f4;
+      color: #5f6368;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .heatmap-toggle:hover {
+      background: #e8eaed;
+    }
+
+    .heatmap-toggle.active {
+      background: #1a73e8;
+      color: #fff;
+    }
+
+    .dispatch-mode-btn {
+      margin-top: 8px;
+      width: 100%;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      background: #34a853;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .dispatch-mode-btn:hover {
+      background: #2e8b47;
+    }
+
+    .dispatch-mode-btn.active {
+      background: #ea4335;
+    }
+
+    .dispatch-hint {
+      margin-top: 8px;
+      padding: 8px 10px;
+      background: #e8f0fe;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #1a73e8;
+      line-height: 1.4;
+    }
+
+    .detail-popup {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.9);
+      width: 90%;
+      max-width: 420px;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+      z-index: 2000;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .detail-popup.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+      pointer-events: auto;
+    }
+
+    .detail-popup-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #f1f3f4;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .detail-popup-header h2 {
+      font-size: 17px;
+      font-weight: 600;
+      color: #202124;
+    }
+
+    .detail-popup-close {
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: #f1f3f4;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 18px;
+      color: #5f6368;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .detail-popup-close:hover {
+      background: #e8eaed;
+    }
+
+    .detail-popup-body {
+      padding: 16px 20px 20px;
+    }
+
+    .detail-info {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .detail-info-item {
+      flex: 1;
+      text-align: center;
+      padding: 12px;
+      background: #f8f9fa;
+      border-radius: 8px;
+    }
+
+    .detail-info-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1a73e8;
+    }
+
+    .detail-info-label {
+      font-size: 12px;
+      color: #5f6368;
+      margin-top: 4px;
+    }
+
+    .chart-container {
+      width: 100%;
+      height: 160px;
+    }
+
+    .chart-container canvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    .chart-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: #5f6368;
+      margin-bottom: 8px;
+    }
+
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.3);
+      z-index: 1999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .heatmap-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+      z-index: 500;
+    }
+
+    .heatmap-layer.show {
+      opacity: 1;
+    }
+
+    .truck-marker {
+      font-size: 28px;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+      transition: none;
+    }
+
+    .mobile-drawer-handle {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 24px;
+      background: #fff;
+      border-top-left-radius: 16px;
+      border-top-right-radius: 16px;
+      box-shadow: 0 -2px 12px rgba(0,0,0,0.1);
+      z-index: 999;
+      cursor: grab;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .mobile-drawer-handle::after {
+      content: '';
+      width: 40px;
+      height: 4px;
+      background: #dadce0;
+      border-radius: 2px;
+    }
+
+    @media (max-width: 768px) {
+      .stats-panel {
+        position: fixed;
+        top: auto;
+        bottom: -280px;
+        left: 0;
+        right: 0;
+        width: 100%;
+        border-radius: 16px 16px 0 0;
+        padding: 20px;
+        transition: bottom 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+        z-index: 1001;
+      }
+
+      .stats-panel.open {
+        bottom: 0;
+      }
+
+      .mobile-drawer-handle {
+        display: flex;
+        bottom: 0;
+        transition: bottom 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+
+      .mobile-drawer-handle.open {
+        bottom: 280px;
+      }
+
+      .detail-popup {
+        width: 95%;
+        max-width: none;
+      }
+
+      .bike-marker {
+        width: 36px;
+        height: 36px;
+        font-size: 13px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="mobile-drawer-handle" id="drawerHandle"></div>
+
+  <div class="stats-panel" id="statsPanel">
+    <h3>实时统计</h3>
+    <div class="stat-item">
+      <span class="stat-label">总车辆数</span>
+      <span class="stat-value" id="totalBikes">0</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">平均满载率</span>
+      <span class="stat-value" id="avgOccupancy">0%</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">活跃调度</span>
+      <span class="stat-value" id="activeDispatches">0</span>
+    </div>
+    <button class="dispatch-mode-btn" id="dispatchModeBtn">调度模式</button>
+    <div class="dispatch-hint" id="dispatchHint" style="display:none;">
+      请依次点击<span style="color:#34a853;font-weight:600;">起点（富余）</span>和<span style="color:#ea4335;font-weight:600;">终点（不足）</span>
+    </div>
+    <button class="heatmap-toggle" id="heatmapToggle">热力图</button>
+  </div>
+
+  <div class="overlay" id="overlay"></div>
+  <div class="detail-popup" id="detailPopup">
+    <div class="detail-popup-header">
+      <h2 id="popupTitle">停车点详情</h2>
+      <button class="detail-popup-close" id="popupClose">&times;</button>
+    </div>
+    <div class="detail-popup-body">
+      <div class="detail-info">
+        <div class="detail-info-item">
+          <div class="detail-info-value" id="popupBikes">0</div>
+          <div class="detail-info-label">当前车辆</div>
+        </div>
+        <div class="detail-info-item">
+          <div class="detail-info-value" id="popupCapacity">15</div>
+          <div class="detail-info-label">总容量</div>
+        </div>
+        <div class="detail-info-item">
+          <div class="detail-info-value" id="popupRate">0%</div>
+          <div class="detail-info-label">满载率</div>
+        </div>
+      </div>
+      <div class="chart-title">过去 12 小时占用率</div>
+      <div class="chart-container">
+        <canvas id="historyChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
