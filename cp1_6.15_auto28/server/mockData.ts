@@ -103,15 +103,19 @@ function generateRecords(
       }
     }
 
-    const hourOfDay = (startTime + Math.random() * totalDuration) % (24 * 3600 * 1000);
-    const hour = new Date(hourOfDay).getHours();
-    const activityMultiplier =
-      hour >= 9 && hour <= 12 ? 1.5 :
-      hour >= 19 && hour <= 22 ? 1.8 :
-      hour >= 0 && hour <= 6 ? 0.3 : 1.0;
-
-    const biasedOffset = Math.random() / activityMultiplier;
-    const timestamp = startTime + Math.floor((biasedOffset * totalDuration + Math.random() * totalDuration) / 2);
+    let timestamp: number;
+    let attempts = 0;
+    do {
+      const randomOffset = Math.random() * totalDuration;
+      timestamp = startTime + Math.floor(randomOffset);
+      const hour = new Date(timestamp).getHours();
+      const activityMultiplier =
+        hour >= 9 && hour <= 12 ? 1.5 :
+        hour >= 19 && hour <= 22 ? 1.8 :
+        hour >= 0 && hour <= 6 ? 0.3 : 1.0;
+      if (Math.random() < activityMultiplier / 1.8 || attempts > 20) break;
+      attempts++;
+    } while (true);
 
     records.push({
       id: uuidv4(),
