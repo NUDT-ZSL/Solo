@@ -11,12 +11,14 @@ export interface Segment {
 type WaveformCallback = (timeData: Float32Array, freqData: Uint8Array) => void;
 type SegmentsCallback = (segments: Segment[]) => void;
 type PlaybackProgressCallback = (currentTime: number) => void;
+type PlaybackEndCallback = () => void;
 
 const SILENCE_THRESHOLD = 0.03;
 const SILENCE_DURATION_MS = 1000;
 const ANALYSER_FFT_SIZE = 1024;
 const SAMPLE_RATE = 44100;
 const WAVEFORM_DOWNSAMPLE_TARGET = 240;
+const MIN_SEGMENT_DURATION = 0.2;
 
 export class AudioProcessor {
   private audioContext: AudioContext | null = null;
@@ -24,10 +26,10 @@ export class AudioProcessor {
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private analyserNode: AnalyserNode | null = null;
   private gainNode: GainNode | null = null;
-  private scriptProcessor: ScriptProcessorNode | null = null;
+  private workletNode: AudioWorkletNode | null = null;
+  private playbackGain: GainNode | null = null;
 
   private _isRecording = false;
-  private recordingStartTimestamp = 0;
 
   private recordedBuffers: Float32Array[] = [];
   private totalSampleCount = 0;
@@ -41,6 +43,7 @@ export class AudioProcessor {
   private waveformCallback: WaveformCallback | null = null;
   private segmentsCallback: SegmentsCallback | null = null;
   private playbackProgressCallback: PlaybackProgressCallback | null = null;
+  private playbackEndCallback: PlaybackEndCallback | null = null;
 
   private animFrameId: number | null = null;
 
@@ -48,9 +51,11 @@ export class AudioProcessor {
   private playbackSource: AudioBufferSourceNode | null = null;
   private playbackStartTime = 0;
   private playbackOffset = 0;
+  private playbackDuration = 0;
   private isPlaying = false;
   private playbackAnimFrameId: number | null = null;
   private currentPlaybackSegmentId: string | null = null;
+  private playbackEndTimer: number | null = null;
 
   constructor() {
     this.silenceSampleThreshold = (SAMPLE_RATE * SILENCE_DURATION_MS) / 1000;
@@ -68,6 +73,15 @@ export class AudioProcessor {
     return this.currentPlaybackSegmentId;
   }
 
+  get hasAudioBuffer(): boolean {
+    return this.audioBuffer !== null;
+  }
+
+  get totalDuration(): number {
+    if (!this.audioBuffer) return 0;
+    return this.audioBuffer.duration;
+  }
+
   onWaveformUpdate(cb: WaveformCallback) {
     this.waveformCallback = cb;
   }
@@ -80,6 +94,10 @@ export class AudioProcessor {
     this.playbackProgressCallback = cb;
   }
 
+  onPlaybackEnd(cb: PlaybackEndCallback) {
+    this.playbackEndCallback = cb;
+  }
+
   async startRecording(): Promise<void> {
     try {
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -90,15 +108,25 @@ export class AudioProcessor {
         },
       });
     } catch (err) {
+      console.error('Microphone error:', err);
       throw new Error('无法获取麦克风权限，请检查浏览器设置');
     }
 
-    this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
-      sampleRate: SAMPLE_RATE,
-    });
+    const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!Ctx) {
+      throw new Error('当前浏览器不支持 Web Audio API');
+    }
+    this.audioContext = new Ctx({ sampleRate: SAMPLE_RATE });
 
     if (this.audioContext.state === 'suspended') {
       await this.audioContext.resume();
+    }
+
+    try {
+      await this.audioContext.audioWorklet.addModule('/recording-processor.js');
+    } catch (err) {
+      console.warn('AudioWorklet addModule failed, fallback:', err);
+      // Fallback: create worklet node anyway, browser may have it cached
     }
 
     this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
@@ -110,10 +138,54 @@ export class AudioProcessor {
     this.gainNode = this.audioContext.createGain();
     this.gainNode.gain.value = 1.0;
 
-    const bufferSize = 4096;
-    this.scriptProcessor = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
+    try {
+      this.workletNode = new AudioWorkletNode(this.audioContext, 'recording-processor', {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+      });
 
-    this.scriptProcessor.onaudioprocess = (event) => {
+      this.workletNode.port.onmessage = (event) => {
+        if (!this._isRecording) return;
+        if (event.data && event.data.type === 'chunk') {
+          const samples = new Float32Array(event.data.samples);
+          this.recordedBuffers.push(samples);
+          this.totalSampleCount += samples.length;
+          this.detectSilence(samples);
+        }
+      };
+
+      this.workletNode.onprocessorerror = (err) => {
+        console.error('AudioWorklet processor error:', err);
+      };
+
+      this.sourceNode.connect(this.analyserNode);
+      this.analyserNode.connect(this.gainNode);
+      this.gainNode.connect(this.workletNode);
+      this.workletNode.connect(this.audioContext.destination);
+    } catch (err) {
+      console.warn('AudioWorkletNode init failed, trying ScriptProcessorNode fallback:', err);
+      await this.fallbackInitLegacyScriptProcessor();
+    }
+
+    this._isRecording = true;
+    this.recordedBuffers = [];
+    this.totalSampleCount = 0;
+    this.currentSegmentStartSample = 0;
+    this.silenceStartSample = -1;
+    this._segments = [];
+
+    this.startWaveformAnimation();
+    this.segmentsCallback?.(this._segments);
+  }
+
+  private async fallbackInitLegacyScriptProcessor(): Promise<void> {
+    if (!this.audioContext || !this.sourceNode || !this.analyserNode || !this.gainNode) return;
+
+    const bufferSize = 4096;
+    const scriptProcessor = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
+    (scriptProcessor as any)._isLegacy = true;
+
+    scriptProcessor.onaudioprocess = (event) => {
       if (!this._isRecording) return;
       const inputData = event.inputBuffer.getChannelData(0);
       const copy = new Float32Array(inputData);
@@ -124,29 +196,17 @@ export class AudioProcessor {
 
     this.sourceNode.connect(this.analyserNode);
     this.analyserNode.connect(this.gainNode);
-    this.gainNode.connect(this.scriptProcessor);
-    this.scriptProcessor.connect(this.audioContext.destination);
+    this.gainNode.connect(scriptProcessor);
+    scriptProcessor.connect(this.audioContext.destination);
 
-    this._isRecording = true;
-    this.recordingStartTimestamp = this.audioContext.currentTime;
-    this.recordedBuffers = [];
-    this.totalSampleCount = 0;
-    this.currentSegmentStartSample = 0;
-    this.silenceStartSample = -1;
-    this._segments = [];
-
-    this.startWaveformAnimation();
-
-    this.segmentsCallback?.(this._segments);
+    this.workletNode = scriptProcessor as unknown as AudioWorkletNode;
   }
 
   stopRecording(): void {
     if (!this._isRecording) return;
 
     this._isRecording = false;
-
     this.finalizeLastSegment();
-
     this.buildFullAudioBuffer();
 
     if (this.animFrameId !== null) {
@@ -154,77 +214,118 @@ export class AudioProcessor {
       this.animFrameId = null;
     }
 
-    if (this.scriptProcessor) {
-      this.scriptProcessor.onaudioprocess = null;
-      this.scriptProcessor.disconnect();
-      this.scriptProcessor = null;
-    }
-    if (this.gainNode) {
-      this.gainNode.disconnect();
-      this.gainNode = null;
-    }
-    if (this.analyserNode) {
-      this.analyserNode.disconnect();
-      this.analyserNode = null;
-    }
-    if (this.sourceNode) {
-      this.sourceNode.disconnect();
-      this.sourceNode = null;
-    }
-    if (this.mediaStream) {
-      this.mediaStream.getTracks().forEach((track) => track.stop());
-      this.mediaStream = null;
-    }
+    try {
+      if (this.workletNode) {
+        if ('port' in this.workletNode && this.workletNode.port) {
+          (this.workletNode.port as any).onmessage = null;
+        }
+        if ('onaudioprocess' in (this.workletNode as any)) {
+          (this.workletNode as any).onaudioprocess = null;
+        }
+        try { this.workletNode.disconnect(); } catch { /* ignore */ }
+        this.workletNode = null;
+      }
+    } catch (e) { /* ignore */ }
+
+    try {
+      if (this.gainNode) { this.gainNode.disconnect(); this.gainNode = null; }
+      if (this.analyserNode) { this.analyserNode.disconnect(); this.analyserNode = null; }
+      if (this.sourceNode) { this.sourceNode.disconnect(); this.sourceNode = null; }
+      if (this.mediaStream) {
+        this.mediaStream.getTracks().forEach((track) => track.stop());
+        this.mediaStream = null;
+      }
+    } catch (e) { /* ignore */ }
 
     this.segmentsCallback?.([...this._segments]);
   }
 
   playSegment(segmentId: string): void {
     const seg = this._segments.find((s) => s.id === segmentId);
-    if (!seg || !this.audioContext || !this.audioBuffer) return;
+    if (!seg) return;
+    this.seekAndPlay(seg.startTime, seg.endTime - seg.startTime, segmentId);
+  }
+
+  seekToPosition(seconds: number): void {
+    if (!this.audioBuffer || !this.audioContext) return;
+    const clampedTime = Math.max(0, Math.min(seconds, this.audioBuffer.duration));
+    const remaining = this.audioBuffer.duration - clampedTime;
+    let activeSegmentId = this.currentPlaybackSegmentId;
+    for (const seg of this._segments) {
+      if (clampedTime >= seg.startTime && clampedTime < seg.endTime) {
+        activeSegmentId = seg.id;
+        break;
+      }
+    }
+    this.seekAndPlay(clampedTime, remaining, activeSegmentId);
+  }
+
+  private seekAndPlay(offset: number, duration: number, segmentId: string | null): void {
+    if (!this.audioContext || !this.audioBuffer) return;
 
     this.stopPlayback();
 
     this.playbackSource = this.audioContext.createBufferSource();
     this.playbackSource.buffer = this.audioBuffer;
 
-    const playbackGain = this.audioContext.createGain();
-    playbackGain.gain.value = 1.0;
-    this.playbackSource.connect(playbackGain);
-    playbackGain.connect(this.audioContext.destination);
+    this.playbackGain = this.audioContext.createGain();
+    this.playbackGain.gain.value = 1.0;
+    this.playbackSource.connect(this.playbackGain);
+    this.playbackGain.connect(this.audioContext.destination);
 
-    const duration = seg.endTime - seg.startTime;
-    this.playbackOffset = seg.startTime;
+    const finalDuration = Math.min(duration, this.audioBuffer.duration - offset);
+    this.playbackOffset = offset;
+    this.playbackDuration = finalDuration;
     this.playbackStartTime = this.audioContext.currentTime;
     this.currentPlaybackSegmentId = segmentId;
     this.isPlaying = true;
 
-    this.playbackSource.start(0, seg.startTime, duration);
     this.playbackSource.onended = () => {
-      this.isPlaying = false;
-      this.playbackSource = null;
-      this.currentPlaybackSegmentId = null;
-      if (this.playbackAnimFrameId !== null) {
-        cancelAnimationFrame(this.playbackAnimFrameId);
-        this.playbackAnimFrameId = null;
+      const wasPlaying = this.isPlaying;
+      this.cleanupPlaybackState();
+      if (wasPlaying) {
+        this.playbackProgressCallback?.(this.playbackOffset + this.playbackDuration);
+        this.playbackEndCallback?.();
       }
-      this.playbackProgressCallback?.(seg.endTime);
     };
 
+    try {
+      this.playbackSource.start(0, offset, finalDuration);
+    } catch (err) {
+      console.error('playback start failed:', err);
+      this.cleanupPlaybackState();
+      return;
+    }
+
     this.startPlaybackProgressTracking();
+
+    if (this.playbackEndTimer !== null) {
+      window.clearTimeout(this.playbackEndTimer);
+    }
+    this.playbackEndTimer = window.setTimeout(() => {
+      this.playbackEndTimer = null;
+    }, finalDuration * 1000 + 100);
   }
 
   stopPlayback(): void {
-    if (this.playbackSource) {
-      try {
-        this.playbackSource.stop();
-      } catch {
-        // already stopped
-      }
-      this.playbackSource = null;
+    if (this.playbackEndTimer !== null) {
+      window.clearTimeout(this.playbackEndTimer);
+      this.playbackEndTimer = null;
     }
+    if (this.playbackSource) {
+      try { this.playbackSource.stop(); } catch { /* already stopped */ }
+    }
+    this.cleanupPlaybackState();
+  }
+
+  private cleanupPlaybackState(): void {
+    try {
+      if (this.playbackSource) { this.playbackSource.disconnect(); }
+      if (this.playbackGain) { this.playbackGain.disconnect(); }
+    } catch { /* ignore */ }
+    this.playbackSource = null;
+    this.playbackGain = null;
     this.isPlaying = false;
-    this.currentPlaybackSegmentId = null;
     if (this.playbackAnimFrameId !== null) {
       cancelAnimationFrame(this.playbackAnimFrameId);
       this.playbackAnimFrameId = null;
@@ -233,23 +334,37 @@ export class AudioProcessor {
 
   updateSegmentNotes(segmentId: string, notes: string): void {
     const seg = this._segments.find((s) => s.id === segmentId);
-    if (seg) {
-      seg.notes = notes;
-    }
+    if (seg) seg.notes = notes;
   }
 
   getCurrentPlaybackTime(): number {
     if (!this.isPlaying || !this.audioContext) return 0;
     const elapsed = this.audioContext.currentTime - this.playbackStartTime;
-    return this.playbackOffset + elapsed;
+    return Math.min(this.playbackOffset + elapsed, this.playbackOffset + this.playbackDuration);
+  }
+
+  findSegmentAtTime(time: number): Segment | null {
+    for (const seg of this._segments) {
+      if (time >= seg.startTime && time < seg.endTime) return seg;
+    }
+    return null;
   }
 
   generateMarkdown(): string {
     const sorted = [...this._segments].sort((a, b) => a.startTime - b.startTime);
     let md = '# 会议纪要\n\n';
+    md += `> 自动生成时间：${new Date().toLocaleString('zh-CN')}\n\n`;
+    md += `> 总分段数：${sorted.length}\n\n`;
+    md += '---\n\n';
     for (const seg of sorted) {
-      md += `${formatTime(seg.startTime)} - ${formatTime(seg.endTime)}\n\n`;
-      md += seg.notes ? `${seg.notes}\n\n` : '（未填写纪要）\n\n';
+      const timeStr = `${formatTime(seg.startTime)} - ${formatTime(seg.endTime)}`;
+      const duration = (seg.endTime - seg.startTime).toFixed(1);
+      md += `## ${timeStr}（时长：${duration}秒）\n\n`;
+      if (seg.notes && seg.notes.trim().length > 0) {
+        md += `${seg.notes.trim()}\n\n`;
+      } else {
+        md += `_（该分段未填写纪要）_\n\n`;
+      }
     }
     return md;
   }
@@ -274,10 +389,7 @@ export class AudioProcessor {
         } else {
           const silenceDurationSamples = absoluteSampleIndex - this.silenceStartSample;
           if (silenceDurationSamples >= this.silenceSampleThreshold) {
-            this.createSegmentFromSamples(
-              this.currentSegmentStartSample,
-              this.silenceStartSample,
-            );
+            this.createSegmentFromSamples(this.currentSegmentStartSample, this.silenceStartSample);
             this.currentSegmentStartSample = absoluteSampleIndex;
             this.silenceStartSample = -1;
           }
@@ -292,11 +404,10 @@ export class AudioProcessor {
     if (endSample <= startSample) return;
 
     const durationSamples = endSample - startSample;
-    if (durationSamples < SAMPLE_RATE * 0.2) return;
+    if (durationSamples < SAMPLE_RATE * MIN_SEGMENT_DURATION) return;
 
     const startTime = startSample / SAMPLE_RATE;
     const endTime = endSample / SAMPLE_RATE;
-
     const waveform = this.extractWaveformForSegment(startSample, endSample);
 
     const segment: Segment = {
@@ -318,19 +429,15 @@ export class AudioProcessor {
     for (const buffer of this.recordedBuffers) {
       const bufStart = currentPos;
       const bufEnd = currentPos + buffer.length;
-
       if (bufEnd <= startSample || bufStart >= endSample) {
         currentPos = bufEnd;
         continue;
       }
-
       const overlapStart = Math.max(startSample - bufStart, 0);
       const overlapEnd = Math.min(endSample - bufStart, buffer.length);
-
       for (let i = overlapStart; i < overlapEnd; i++) {
         samples.push(buffer[i]);
       }
-
       currentPos = bufEnd;
       if (currentPos >= endSample) break;
     }
@@ -346,11 +453,14 @@ export class AudioProcessor {
   }
 
   private downsampleWaveform(data: Float32Array, targetLength: number): Float32Array {
+    if (data.length === 0) return new Float32Array(targetLength);
     if (data.length <= targetLength) {
       const result = new Float32Array(targetLength);
       const maxVal = Math.max(...Array.from(data).map((v) => Math.abs(v)), 0.01);
-      for (let i = 0; i < data.length; i++) {
-        result[i] = Math.abs(data[i]) / maxVal;
+      const ratio = data.length / targetLength;
+      for (let i = 0; i < targetLength; i++) {
+        const idx = Math.min(Math.floor(i * ratio), data.length - 1);
+        result[i] = Math.abs(data[idx]) / maxVal;
       }
       return result;
     }
@@ -378,7 +488,6 @@ export class AudioProcessor {
     const totalLength = this.recordedBuffers.reduce((acc, buf) => acc + buf.length, 0);
     const merged = new Float32Array(totalLength);
     let offset = 0;
-
     for (const buf of this.recordedBuffers) {
       merged.set(buf, offset);
       offset += buf.length;
@@ -396,12 +505,9 @@ export class AudioProcessor {
 
     const animate = () => {
       if (!this._isRecording || !this.analyserNode) return;
-
       this.analyserNode.getFloatTimeDomainData(timeData);
       this.analyserNode.getByteFrequencyData(freqData);
-
       this.waveformCallback?.(timeData, freqData);
-
       this.animFrameId = requestAnimationFrame(animate);
     };
 
@@ -411,10 +517,8 @@ export class AudioProcessor {
   private startPlaybackProgressTracking(): void {
     const track = () => {
       if (!this.isPlaying) return;
-
       const currentTime = this.getCurrentPlaybackTime();
       this.playbackProgressCallback?.(currentTime);
-
       this.playbackAnimFrameId = requestAnimationFrame(track);
     };
     this.playbackAnimFrameId = requestAnimationFrame(track);

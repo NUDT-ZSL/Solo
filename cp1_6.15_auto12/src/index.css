@@ -267,6 +267,12 @@ button:active {
   font-weight: 500;
 }
 
+.waveform-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .recording-indicator {
   display: flex;
   align-items: center;
@@ -292,6 +298,79 @@ button:active {
   50% {
     opacity: 0.3;
   }
+}
+
+.fps-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--accent-green);
+  background: rgba(46, 139, 87, 0.1);
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.fps-indicator.degraded {
+  color: #D69E2E;
+  background: rgba(214, 158, 46, 0.12);
+}
+
+.seek-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 800px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 14px;
+}
+
+.seek-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  margin-right: 4px;
+}
+
+.btn-seek {
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--secondary);
+  border: 1px solid var(--border);
+  color: var(--primary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.btn-seek:hover:not(:disabled) {
+  background: var(--accent-light-blue);
+  border-color: var(--accent-blue);
+}
+
+.btn-seek:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.btn-seek:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.seek-total {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  padding: 4px 8px;
+  background: var(--secondary);
+  border-radius: var(--radius-sm);
 }
 
 .waveform-canvas {
@@ -688,6 +767,26 @@ button:active {
 
   .waveform-canvas {
     height: 100px;
+  }
+
+  .seek-control {
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .seek-label {
+    width: 100%;
+    margin-bottom: 4px;
+  }
+
+  .seek-total {
+    width: 100%;
+    margin-left: 0;
+    text-align: center;
+  }
+
+  .btn-seek {
+    flex: 1;
   }
 
   .timeline-track {
