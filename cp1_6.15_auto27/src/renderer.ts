@@ -1,4 +1,4 @@
-import { Card, CardData, Rarity, EffectType } from './card';
+import { Card, EffectType } from './card';
 import { Player } from './player';
 
 export interface Layout {
@@ -56,7 +56,6 @@ export class Renderer {
   private offscreen: HTMLCanvasElement;
   private offCtx: CanvasRenderingContext2D;
   private bgCacheValid: boolean;
-  private gridCacheValid: boolean;
   private gameOver: boolean;
   private winner: number;
   private winnerRotation: number;
@@ -68,6 +67,10 @@ export class Renderer {
   private transitionState: TurnTransitionState;
   private transitionTime: number;
   private transitionNextPlayer: number;
+  private dirtyRects: { x: number; y: number; width: number; height: number }[];
+  private frameCount: number;
+  private fps: number;
+  private fpsUpdateTime: number;
   private static readonly FLIP_DURATION = 0.25;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -81,7 +84,6 @@ export class Renderer {
     this.offCtx = offCtx;
     this.layout = this.calculateLayout();
     this.bgCacheValid = false;
-    this.gridCacheValid = false;
     this.gameOver = false;
     this.winner = -1;
     this.winnerRotation = 0;
@@ -93,11 +95,14 @@ export class Renderer {
     this.transitionState = 'idle';
     this.transitionTime = 0;
     this.transitionNextPlayer = 0;
+    this.dirtyRects = [];
+    this.frameCount = 0;
+    this.fps = 60;
+    this.fpsUpdateTime = 0;
     this.resize();
     window.addEventListener('resize', () => {
       this.resize();
       this.bgCacheValid = false;
-      this.gridCacheValid = false;
     });
   }
 
@@ -108,7 +113,6 @@ export class Renderer {
     this.offscreen.height = this.canvas.height;
     this.layout = this.calculateLayout();
     this.bgCacheValid = false;
-    this.gridCacheValid = false;
   }
 
   private calculateLayout(): Layout {
@@ -206,6 +210,13 @@ export class Renderer {
 
   update(deltaTime: number): void {
     this.pulsePhase += deltaTime * Math.PI * 2;
+    this.frameCount++;
+    this.fpsUpdateTime += deltaTime;
+    if (this.fpsUpdateTime >= 1) {
+      this.fps = this.frameCount / this.fpsUpdateTime;
+      this.frameCount = 0;
+      this.fpsUpdateTime = 0;
+    }
 
     for (let i = this.attackAnims.length - 1; i >= 0; i--) {
       const anim = this.attackAnims[i];
@@ -275,38 +286,83 @@ export class Renderer {
     dragState: { card: Card; offsetX: number; offsetY: number; mouseX: number; mouseY: number } | null
   ): void {
     const ctx = this.ctx;
-    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    const layout = this.layout;
 
-    this.drawBackground();
-    this.drawBattlefieldGrid();
-    this.drawPlayerArea(players[0], 0);
-    this.drawPlayerArea(players[1], 1);
-    this.drawPlayerHand(players[0], 0, dragState);
-    this.drawPlayerHand(players[1], 1, dragState);
-    this.drawBattlefieldCards(players[0]);
-    this.drawBattlefieldCards(players[1]);
+    const hasActiveAnimations = this.needsFullRedraw();
 
-    if (selectedCard) {
-      this.drawSelectionHighlight(selectedCard);
+    if (hasActiveAnimations || this.dirtyRects.length === 0) {
+      ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      this.drawBackground();
+      this.drawBattlefieldGrid();
+      this.drawPlayerArea(players[0], 0);
+      this.drawPlayerArea(players[1], 1);
+      this.drawPlayerHand(players[0], 0, dragState);
+      this.drawPlayerHand(players[1], 1, dragState);
+      this.drawBattlefieldCards(players[0]);
+      this.drawBattlefieldCards(players[1]);
+
+      if (selectedCard) {
+        this.drawSelectionHighlight(selectedCard);
+      }
+
+      if (dragState) {
+        this.drawDraggingCard(dragState);
+      }
+
+      this.drawTurnButton(currentTurn, turnNumber, players[currentTurn].turnTimer);
+      this.drawTurnIndicator(currentTurn);
+
+      if (this.transitionState !== 'idle') {
+        this.drawTurnTransition();
+      }
+
+      if (this.gameOver) {
+        this.drawGameOver(players);
+      }
+    } else {
+      ctx.save();
+      for (const rect of this.dirtyRects) {
+        ctx.beginPath();
+        ctx.rect(rect.x, rect.y, rect.width, rect.height);
+        ctx.clip();
+
+        ctx.clearRect(rect.x, rect.y, rect.width, rect.height);
+        this.drawBackground();
+        this.drawBattlefieldGrid();
+        
+        if (this.intersectsRect(rect, layout.player1Area)) {
+          this.drawPlayerArea(players[0], 0);
+          this.drawPlayerHand(players[0], 0, dragState);
+        }
+        if (this.intersectsRect(rect, layout.player2Area)) {
+          this.drawPlayerArea(players[1], 1);
+          this.drawPlayerHand(players[1], 1, dragState);
+        }
+        if (this.intersectsRect(rect, layout.battlefieldArea)) {
+          this.drawBattlefieldCards(players[0]);
+          this.drawBattlefieldCards(players[1]);
+          if (selectedCard && this.intersectsRect(rect, selectedCard.position)) {
+            this.drawSelectionHighlight(selectedCard);
+          }
+        }
+        if (this.intersectsRect(rect, { x: layout.turnButtonPos.x - layout.turnButtonPos.radius, y: layout.turnButtonPos.y - layout.turnButtonPos.radius, width: layout.turnButtonPos.radius * 2, height: layout.turnButtonPos.radius * 2 })) {
+          this.drawTurnButton(currentTurn, turnNumber, players[currentTurn].turnTimer);
+        }
+      }
+      ctx.restore();
+
+      if (dragState) {
+        this.drawDraggingCard(dragState);
+      }
     }
 
-    if (dragState) {
-      this.drawDraggingCard(dragState);
-    }
-
-    this.drawTurnButton(currentTurn, turnNumber, players[currentTurn].turnTimer);
-    this.drawTurnIndicator(currentTurn);
-
-    if (this.transitionState !== 'idle') {
-      this.drawTurnTransition();
-    }
-
-    if (this.gameOver) {
-      this.drawGameOver(players);
-    }
+    this.drawFPSCounter();
+    this.clearDirtyRects();
   }
 
   private drawBackground(): void {
+    if (this.offscreen.width <= 0 || this.offscreen.height <= 0) return;
+    
     if (!this.bgCacheValid) {
       const ctx = this.offCtx;
       const gradient = ctx.createLinearGradient(0, 0, 0, this.offscreen.height);
@@ -438,15 +494,23 @@ export class Renderer {
   }
 
   private healthColorGradient(percent: number): string {
-    const r = Math.floor(255 * (1 - percent));
-    const g = Math.floor(255 * percent);
-    return `rgb(${r}, ${g}, 0)`;
+    const hue = percent * 120;
+    return `hsl(${hue}, 80%, 50%)`;
   }
 
-  private darkenColor(rgb: string, factor: number): string {
-    const match = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-    if (!match) return rgb;
-    return `rgb(${Math.floor(parseInt(match[1]) * factor)}, ${Math.floor(parseInt(match[2]) * factor)}, ${Math.floor(parseInt(match[3]) * factor)})`;
+  private darkenColor(color: string, factor: number): string {
+    const rgbMatch = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+    if (rgbMatch) {
+      return `rgb(${Math.floor(parseInt(rgbMatch[1]) * factor)}, ${Math.floor(parseInt(rgbMatch[2]) * factor)}, ${Math.floor(parseInt(rgbMatch[3]) * factor)})`;
+    }
+    const hslMatch = color.match(/hsl\(([.\d]+),\s*([.\d]+)%,\s*([.\d]+)%\)/);
+    if (hslMatch) {
+      const h = parseFloat(hslMatch[1]);
+      const s = parseFloat(hslMatch[2]);
+      const l = parseFloat(hslMatch[3]) * factor;
+      return `hsl(${h}, ${s}%, ${l}%)`;
+    }
+    return color;
   }
 
   private drawPlayerHand(player: Player, playerIndex: number, dragState: { card: Card; offsetX: number; offsetY: number; mouseX: number; mouseY: number } | null): void {
@@ -864,5 +928,65 @@ export class Renderer {
 
   getCanvasRect(): DOMRect {
     return this.canvas.getBoundingClientRect();
+  }
+
+  markDirtyRect(x: number, y: number, width: number, height: number): void {
+    const margin = 10;
+    this.dirtyRects.push({
+      x: Math.max(0, x - margin),
+      y: Math.max(0, y - margin),
+      width: width + margin * 2,
+      height: height + margin * 2,
+    });
+  }
+
+  markAllDirty(): void {
+    this.dirtyRects.push({
+      x: 0,
+      y: 0,
+      width: this.canvas.width,
+      height: this.canvas.height,
+    });
+  }
+
+  private clearDirtyRects(): void {
+    this.dirtyRects = [];
+  }
+
+  private needsFullRedraw(): boolean {
+    return (
+      this.transitionState !== 'idle' ||
+      this.gameOver ||
+      this.attackAnims.length > 0 ||
+      this.pulseAnims.length > 0 ||
+      this.shakeAnims.length > 0 ||
+      this.flashAnims.length > 0 ||
+      this.dirtyRects.length === 0
+    );
+  }
+
+  private intersectsRect(
+    a: { x: number; y: number; width: number; height: number },
+    b: { x: number; y: number; width: number; height: number }
+  ): boolean {
+    return (
+      a.x < b.x + b.width &&
+      a.x + a.width > b.x &&
+      a.y < b.y + b.height &&
+      a.y + a.height > b.y
+    );
+  }
+
+  private drawFPSCounter(): void {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(10, 10, 80, 30);
+    ctx.fillStyle = this.fps >= 45 ? '#22c55e' : '#ef4444';
+    ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${this.fps.toFixed(0)} FPS`, 50, 25);
+    ctx.restore();
   }
 }

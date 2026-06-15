@@ -46,15 +46,20 @@ class GameLoop {
       if (this.inputHandler.isInBattlefield(pos)) {
         const slot = this.inputHandler.findBattlefieldSlot(pos, this.currentTurn);
         if (slot) {
+          const oldPos = { ...card.position };
           const success = player.playCardToBattlefield(card, slot.row, slot.col);
-          if (success && card.data.attack >= 5) {
-            this.renderer.startPulseAnimation(card);
+          if (success) {
+            if (card.data.attack >= 5) {
+              this.renderer.startPulseAnimation(card);
+            }
+            this.renderer.markDirtyRect(oldPos.x, oldPos.y, oldPos.width, oldPos.height);
+            this.renderer.markDirtyRect(card.position.x, card.position.y, card.position.width, card.position.height);
           }
         }
       }
     };
 
-    this.inputHandler.onClickCard = (card, pos) => {
+    this.inputHandler.onClickCard = (card, _pos) => {
       if (this.isGameOver || this.gameState !== 'playing') return;
       if (card.owner === this.currentTurn) {
         if (card.state === 'inBattle' && !card.hasAttacked && !this.attackAnimating) {
@@ -277,4 +282,48 @@ class GameLoop {
   }
 }
 
-new GameLoop();
+const gameLoop = new GameLoop();
+
+(window as any).testAPI = {
+  getGameLoop: () => gameLoop,
+  getPlayers: () => (gameLoop as any).players,
+  getRenderer: () => (gameLoop as any).renderer,
+  
+  testHealthAnimation: (playerId: number, damage: number = 20) => {
+    const players = (gameLoop as any).players;
+    players[playerId].takeDamage(damage);
+    console.log('玩家' + (playerId + 1) + '受到' + damage + '点伤害，测试血条动画');
+  },
+  
+  testTurnTransition: () => {
+    const renderer = (gameLoop as any).renderer;
+    renderer.startTurnTransition(1);
+    console.log('测试回合切换翻牌动画');
+  },
+  
+  testPulseAnimation: () => {
+    const players = (gameLoop as any).players;
+    const card = players[0].hand[0];
+    if (card) {
+      const renderer = (gameLoop as any).renderer;
+      renderer.startPulseAnimation(card);
+      console.log('测试卡牌入场脉冲动画');
+    }
+  },
+  
+  testShakeAnimation: () => {
+    const players = (gameLoop as any).players;
+    const card = players[0].hand[0];
+    if (card) {
+      const renderer = (gameLoop as any).renderer;
+      renderer.startShakeAnimation(card);
+      renderer.startFlashAnimation(card);
+      console.log('测试卡牌抖动和闪烁动画');
+    }
+  },
+  
+  getFPS: () => {
+    const loop = gameLoop as any;
+    return { lastDelta: loop.lastFrameTime, gameState: loop.gameState };
+  }
+};
