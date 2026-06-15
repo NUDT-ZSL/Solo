@@ -9,28 +9,28 @@ export interface ColorScheme {
 export const COLOR_SCHEMES: ColorScheme[] = [
   {
     name: '银河蓝',
-    innerColor: new THREE.Color(0xffd68a),
-    outerColor: new THREE.Color(0x4a7bff)
+    innerColor: new THREE.Color(0xffe4a3),
+    outerColor: new THREE.Color(0x5588ff)
   },
   {
     name: '星云紫',
-    innerColor: new THREE.Color(0xffa1c4),
-    outerColor: new THREE.Color(0x7b4aff)
+    innerColor: new THREE.Color(0xffc4e0),
+    outerColor: new THREE.Color(0x8855ff)
   },
   {
     name: '烈焰橙',
     innerColor: new THREE.Color(0xffffff),
-    outerColor: new THREE.Color(0xff4a1a)
+    outerColor: new THREE.Color(0xff5522)
   },
   {
     name: '极光绿',
-    innerColor: new THREE.Color(0xe0ffd6),
-    outerColor: new THREE.Color(0x1aff8a)
+    innerColor: new THREE.Color(0xe8ffd6),
+    outerColor: new THREE.Color(0x22ff99)
   },
   {
     name: '霓虹粉',
-    innerColor: new THREE.Color(0xfff0ff),
-    outerColor: new THREE.Color(0xff1a9e)
+    innerColor: new THREE.Color(0xfff0fa),
+    outerColor: new THREE.Color(0xff33aa)
   }
 ]
 
@@ -39,13 +39,15 @@ const GALAXY_THICKNESS = 20
 const PARTICLE_COUNT = 10000
 const STAR_COUNT = 2000
 const ARMS_COUNT = 4
-const TWIST_FACTOR = 3.5
+const TWIST_FACTOR = 3.8
+const COLOR_TRANSITION_DURATION = 0.5
 
 const vertexShader = /* glsl */ `
   attribute float aSize;
   attribute float aTwinklePhase;
   attribute float aTwinkleFreq;
   attribute float aBaseAlpha;
+  attribute float aRadiusFactor;
 
   uniform float uTime;
   uniform float uSizeMultiplier;
@@ -53,13 +55,16 @@ const vertexShader = /* glsl */ `
 
   varying vec3 vColor;
   varying float vAlpha;
+  varying float vTwinkle;
 
   void main() {
     vColor = color;
 
     float twinkle = 0.5 + 0.5 * sin(uTime * aTwinkleFreq + aTwinklePhase);
-    float sizeMod = 0.75 + 0.35 * twinkle;
-    vAlpha = aBaseAlpha * (0.6 + 0.4 * twinkle);
+    vTwinkle = twinkle;
+
+    float sizeMod = 0.6 + 0.6 * twinkle;
+    vAlpha = aBaseAlpha * (0.35 + 0.65 * twinkle);
 
     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
     gl_PointSize = aSize * sizeMod * uSizeMultiplier * uPixelRatio * (200.0 / -mvPosition.z);
@@ -70,6 +75,7 @@ const vertexShader = /* glsl */ `
 const fragmentShader = /* glsl */ `
   varying vec3 vColor;
   varying float vAlpha;
+  varying float vTwinkle;
 
   void main() {
     vec2 uv = gl_PointCoord - 0.5;
@@ -77,11 +83,15 @@ const fragmentShader = /* glsl */ `
 
     if (dist > 0.5) discard;
 
-    float glow = smoothstep(0.5, 0.0, dist);
-    float core = smoothstep(0.3, 0.0, dist) * 0.8;
-    float alpha = (glow * 0.6 + core) * vAlpha;
+    float softGlow = pow(1.0 - dist * 2.0, 1.8);
+    float midGlow = smoothstep(0.5, 0.15, dist) * 0.7;
+    float core = smoothstep(0.15, 0.0, dist) * 1.5;
 
-    vec3 finalColor = vColor * (1.0 + core * 0.8);
+    float glow = softGlow * 0.5 + midGlow * 0.5 + core;
+
+    float alpha = glow * vAlpha;
+
+    vec3 finalColor = vColor * (1.0 + core * 1.2 + midGlow * 0.4);
 
     gl_FragColor = vec4(finalColor, alpha);
   }
@@ -89,22 +99,32 @@ const fragmentShader = /* glsl */ `
 
 const starVertexShader = /* glsl */ `
   attribute float aSize;
+  attribute float aTwinklePhase;
+
+  uniform float uTime;
   uniform float uPixelRatio;
 
+  varying float vAlpha;
+
   void main() {
+    float twinkle = 0.7 + 0.3 * sin(uTime * 0.3 + aTwinklePhase);
+    vAlpha = 0.7 * twinkle;
+
     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = aSize * uPixelRatio * (800.0 / -mvPosition.z);
+    gl_PointSize = aSize * uPixelRatio * (600.0 / -mvPosition.z);
     gl_Position = projectionMatrix * mvPosition;
   }
 `
 
 const starFragmentShader = /* glsl */ `
+  varying float vAlpha;
+
   void main() {
     vec2 uv = gl_PointCoord - 0.5;
     float dist = length(uv);
     if (dist > 0.5) discard;
-    float alpha = smoothstep(0.5, 0.0, dist);
-    gl_FragColor = vec4(1.0, 1.0, 1.0, alpha * 0.85);
+    float alpha = pow(1.0 - dist * 2.0, 1.5) * vAlpha;
+    gl_FragColor = vec4(1.0, 1.0, 1.0, alpha);
   }
 `
 
@@ -118,32 +138,35 @@ export class Galaxy {
   private starMaterial: THREE.ShaderMaterial
 
   private basePositions: Float32Array
-  private baseColors: Float32Array
-  private targetColors: Float32Array
-  private currentColors: Float32Array
+  private radiusFactors: Float32Array
+  private brightnessFactors: Float32Array
+  private startColors: Float32Array
+  private endColors: Float32Array
   private sizes: Float32Array
   private twinklePhases: Float32Array
   private twinkleFreqs: Float32Array
   private baseAlphas: Float32Array
 
   private currentSchemeIndex: number = 0
-  private colorTransitionProgress: number = 1.0
-  private colorTransitionDuration: number = 0.5
+  private transitionProgress: number = 1.0
   private isTransitioning: boolean = false
 
   public rotationSpeed: number = 0.5
   public sizeMultiplier: number = 1.0
 
   private clock: THREE.Clock
+  private tmpColor: THREE.Color
 
   constructor() {
     this.clock = new THREE.Clock()
+    this.tmpColor = new THREE.Color()
     this.group = new THREE.Group()
 
     this.basePositions = new Float32Array(PARTICLE_COUNT * 3)
-    this.baseColors = new Float32Array(PARTICLE_COUNT * 3)
-    this.targetColors = new Float32Array(PARTICLE_COUNT * 3)
-    this.currentColors = new Float32Array(PARTICLE_COUNT * 3)
+    this.radiusFactors = new Float32Array(PARTICLE_COUNT)
+    this.brightnessFactors = new Float32Array(PARTICLE_COUNT)
+    this.startColors = new Float32Array(PARTICLE_COUNT * 3)
+    this.endColors = new Float32Array(PARTICLE_COUNT * 3)
     this.sizes = new Float32Array(PARTICLE_COUNT)
     this.twinklePhases = new Float32Array(PARTICLE_COUNT)
     this.twinkleFreqs = new Float32Array(PARTICLE_COUNT)
@@ -164,66 +187,64 @@ export class Galaxy {
   }
 
   private generateParticles(): void {
-    const scheme = COLOR_SCHEMES[0]
-
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const i3 = i * 3
 
-      const t = Math.pow(Math.random(), 0.6)
+      const rawT = Math.random()
+      const t = Math.pow(rawT, 0.35)
       const radius = t * GALAXY_RADIUS
+
+      this.radiusFactors[i] = t
 
       const arm = Math.floor(Math.random() * ARMS_COUNT)
       const armAngle = (arm / ARMS_COUNT) * Math.PI * 2
       const spiralAngle = radius * 0.01 * TWIST_FACTOR
-      const randomSpread = (Math.random() - 0.5) * 0.6 * (1 - t * 0.5)
+      const spreadAmount = 0.45 + (1.0 - t) * 0.25
+      const randomSpread = (Math.random() - 0.5) * spreadAmount
       const angle = armAngle + spiralAngle + randomSpread
 
       const flatY = (Math.random() - 0.5) * GALAXY_THICKNESS
-      const thicknessFalloff = Math.exp(-radius * 0.008)
-      const y = flatY * thicknessFalloff * (0.4 + Math.random() * 0.6)
+      const thicknessFalloff = Math.exp(-radius * 0.012)
+      const y = flatY * thicknessFalloff * (0.3 + Math.random() * 0.7)
 
-      const x = Math.cos(angle) * radius + (Math.random() - 0.5) * 8 * (1 - t * 0.5)
-      const z = Math.sin(angle) * radius + (Math.random() - 0.5) * 8 * (1 - t * 0.5)
+      const radialJitter = (Math.random() - 0.5) * 6 * (1 - t * 0.6)
+      const finalRadius = radius + radialJitter
+
+      const x = Math.cos(angle) * finalRadius
+      const z = Math.sin(angle) * finalRadius
 
       this.basePositions[i3] = x
       this.basePositions[i3 + 1] = y
       this.basePositions[i3 + 2] = z
 
-      const colorT = Math.min(radius / GALAXY_RADIUS, 1.0)
-      const easedT = colorT * colorT * (3 - 2 * colorT)
+      this.brightnessFactors[i] = 0.8 + Math.random() * 0.4
 
-      const r = scheme.innerColor.r + (scheme.outerColor.r - scheme.innerColor.r) * easedT
-      const g = scheme.innerColor.g + (scheme.outerColor.g - scheme.innerColor.g) * easedT
-      const b = scheme.innerColor.b + (scheme.outerColor.b - scheme.innerColor.b) * easedT
-
-      const brightnessVar = 0.85 + Math.random() * 0.3
-      this.baseColors[i3] = r * brightnessVar
-      this.baseColors[i3 + 1] = g * brightnessVar
-      this.baseColors[i3 + 2] = b * brightnessVar
-
-      this.currentColors[i3] = this.baseColors[i3]
-      this.currentColors[i3 + 1] = this.baseColors[i3 + 1]
-      this.currentColors[i3 + 2] = this.baseColors[i3 + 2]
-
-      this.sizes[i] = 0.5 + Math.random() * 1.5
+      this.sizes[i] = 0.5 + Math.random() * 1.5 + (1 - t) * 0.8
 
       this.twinklePhases[i] = Math.random() * Math.PI * 2
       this.twinkleFreqs[i] = 0.5 + Math.random() * 1.5
 
-      const coreBoost = Math.exp(-radius * 0.02) * 0.5
-      this.baseAlphas[i] = 0.55 + coreBoost + Math.random() * 0.25
+      const coreBoost = Math.exp(-radius * 0.025) * 0.45
+      this.baseAlphas[i] = 0.45 + coreBoost + Math.random() * 0.25
     }
   }
 
   private createParticleGeometry(): THREE.BufferGeometry {
     const geometry = new THREE.BufferGeometry()
 
-    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.basePositions), 3))
-    geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(this.currentColors), 3))
+    const posAttr = new THREE.BufferAttribute(new Float32Array(this.basePositions), 3)
+    posAttr.setUsage(THREE.StaticDrawUsage)
+
+    const colorAttr = new THREE.BufferAttribute(new Float32Array(PARTICLE_COUNT * 3), 3)
+    colorAttr.setUsage(THREE.DynamicDrawUsage)
+
+    geometry.setAttribute('position', posAttr)
+    geometry.setAttribute('color', colorAttr)
     geometry.setAttribute('aSize', new THREE.BufferAttribute(this.sizes, 1))
     geometry.setAttribute('aTwinklePhase', new THREE.BufferAttribute(this.twinklePhases, 1))
     geometry.setAttribute('aTwinkleFreq', new THREE.BufferAttribute(this.twinkleFreqs, 1))
     geometry.setAttribute('aBaseAlpha', new THREE.BufferAttribute(this.baseAlphas, 1))
+    geometry.setAttribute('aRadiusFactor', new THREE.BufferAttribute(this.radiusFactors, 1))
 
     return geometry
   }
@@ -247,23 +268,28 @@ export class Galaxy {
   private createStarGeometry(): THREE.BufferGeometry {
     const positions = new Float32Array(STAR_COUNT * 3)
     const sizes = new Float32Array(STAR_COUNT)
+    const phases = new Float32Array(STAR_COUNT)
 
     for (let i = 0; i < STAR_COUNT; i++) {
       const i3 = i * 3
       const theta = Math.random() * Math.PI * 2
       const phi = Math.acos(2 * Math.random() - 1)
-      const r = 800 + Math.random() * 400
+      const r = 700 + Math.random() * 500
 
       positions[i3] = r * Math.sin(phi) * Math.cos(theta)
       positions[i3 + 1] = r * Math.sin(phi) * Math.sin(theta)
       positions[i3 + 2] = r * Math.cos(phi)
 
-      sizes[i] = 0.6 + Math.random() * 1.4
+      sizes[i] = 0.8 + Math.random() * 2.2
+      phases[i] = Math.random() * Math.PI * 2
     }
 
     const geometry = new THREE.BufferGeometry()
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    const posAttr = new THREE.BufferAttribute(positions, 3)
+    posAttr.setUsage(THREE.StaticDrawUsage)
+    geometry.setAttribute('position', posAttr)
     geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1))
+    geometry.setAttribute('aTwinklePhase', new THREE.BufferAttribute(phases, 1))
     return geometry
   }
 
@@ -272,6 +298,7 @@ export class Galaxy {
       vertexShader: starVertexShader,
       fragmentShader: starFragmentShader,
       uniforms: {
+        uTime: { value: 0 },
         uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) }
       },
       transparent: true,
@@ -280,47 +307,52 @@ export class Galaxy {
     })
   }
 
-  public applyColorScheme(index: number, animate: boolean = true): void {
-    if (index < 0 || index >= COLOR_SCHEMES.length) return
-    if (index === this.currentSchemeIndex && !this.isTransitioning) return
-
-    const scheme = COLOR_SCHEMES[index]
-
+  private computeSchemeColors(scheme: ColorScheme, outArray: Float32Array): void {
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const i3 = i * 3
-      const radius = Math.sqrt(
-        this.basePositions[i3] * this.basePositions[i3] +
-        this.basePositions[i3 + 2] * this.basePositions[i3 + 2]
-      )
-      const colorT = Math.min(radius / GALAXY_RADIUS, 1.0)
-      const easedT = colorT * colorT * (3 - 2 * colorT)
-
-      const brightnessVar = (this.baseColors[i3] / (COLOR_SCHEMES[this.currentSchemeIndex].innerColor.r +
-        (COLOR_SCHEMES[this.currentSchemeIndex].outerColor.r - COLOR_SCHEMES[this.currentSchemeIndex].innerColor.r) * easedT)) || 1.0
+      const t = this.radiusFactors[i]
+      const easedT = t * t * (3 - 2 * t)
 
       const r = scheme.innerColor.r + (scheme.outerColor.r - scheme.innerColor.r) * easedT
       const g = scheme.innerColor.g + (scheme.outerColor.g - scheme.innerColor.g) * easedT
       const b = scheme.innerColor.b + (scheme.outerColor.b - scheme.innerColor.b) * easedT
 
-      const avgBrightness = brightnessVar * 0.3 + 1.0 * 0.7
-
-      this.targetColors[i3] = r * avgBrightness
-      this.targetColors[i3 + 1] = g * avgBrightness
-      this.targetColors[i3 + 2] = b * avgBrightness
+      const brightness = this.brightnessFactors[i]
+      outArray[i3] = r * brightness
+      outArray[i3 + 1] = g * brightness
+      outArray[i3 + 2] = b * brightness
     }
+  }
+
+  public applyColorScheme(index: number, animate: boolean = true): void {
+    if (index < 0 || index >= COLOR_SCHEMES.length) return
+
+    const colorAttr = this.geometry.getAttribute('color') as THREE.BufferAttribute
+    const colorArray = colorAttr.array as Float32Array
+
+    if (this.isTransitioning) {
+      for (let i = 0; i < this.startColors.length; i++) {
+        this.startColors[i] = colorArray[i]
+      }
+    } else {
+      for (let i = 0; i < this.startColors.length; i++) {
+        this.startColors[i] = colorArray[i]
+      }
+    }
+
+    this.computeSchemeColors(COLOR_SCHEMES[index], this.endColors)
 
     this.currentSchemeIndex = index
 
     if (animate) {
       this.isTransitioning = true
-      this.colorTransitionProgress = 0.0
+      this.transitionProgress = 0.0
     } else {
-      for (let i = 0; i < this.currentColors.length; i++) {
-        this.currentColors[i] = this.targetColors[i]
+      for (let i = 0; i < colorArray.length; i++) {
+        colorArray[i] = this.endColors[i]
       }
-      const colorAttr = this.geometry.getAttribute('color') as THREE.BufferAttribute
       colorAttr.needsUpdate = true
-      this.colorTransitionProgress = 1.0
+      this.transitionProgress = 1.0
       this.isTransitioning = false
     }
   }
@@ -345,26 +377,24 @@ export class Galaxy {
     this.group.rotation.y += this.rotationSpeed * dt
 
     this.material.uniforms.uTime.value = elapsed
+    this.starMaterial.uniforms.uTime.value = elapsed
 
     if (this.isTransitioning) {
-      this.colorTransitionProgress = Math.min(
-        this.colorTransitionProgress + dt / this.colorTransitionDuration,
+      this.transitionProgress = Math.min(
+        this.transitionProgress + dt / COLOR_TRANSITION_DURATION,
         1.0
       )
 
-      const t = this.colorTransitionProgress
+      const t = this.transitionProgress
       const colorAttr = this.geometry.getAttribute('color') as THREE.BufferAttribute
       const colorArray = colorAttr.array as Float32Array
 
-      for (let i = 0; i < this.currentColors.length; i++) {
-        colorArray[i] = this.currentColors[i] + (this.targetColors[i] - this.currentColors[i]) * t
+      for (let i = 0; i < colorArray.length; i++) {
+        colorArray[i] = this.startColors[i] + (this.endColors[i] - this.startColors[i]) * t
       }
       colorAttr.needsUpdate = true
 
-      if (this.colorTransitionProgress >= 1.0) {
-        for (let i = 0; i < this.currentColors.length; i++) {
-          this.currentColors[i] = this.targetColors[i]
-        }
+      if (this.transitionProgress >= 1.0) {
         this.isTransitioning = false
       }
     }
