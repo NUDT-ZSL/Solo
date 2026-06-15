@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Pencil, MessageCircle, Volume2, Trash2, Download, X, Star } from 'lucide-react';
-import type { Project, Frame, DialogBubble, Comment } from '../types';
+import type { Project, Frame, DialogBubble } from '../types';
 import { getProjects, getProject, getFrameDialogs } from '../api';
 import { CommentWebSocket } from '../websocket';
 
@@ -44,8 +44,12 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const [editingDialogId, setEditingDialogId] = useState<string | null>(null);
+  const [visibleRowRange, setVisibleRowRange] = useState<[number, number]>([0, 999]);
 
   const wsRef = useRef<CommentWebSocket | null>(null);
+  const draggingImageRef = useRef<string | null>(null);
+  const dragOverFrameIdRef = useRef<string | null>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
   const dragStateRef = useRef<{
     dialogId: string;
     frameId: string;
@@ -133,15 +137,15 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
     return result.sort((a, b) => a.order - b.order);
   }, [frames, selectedProject]);
 
-  const useContain = allFrames.length > 50;
-
   const handleDrop = useCallback(
     (e: React.DragEvent, frameId: string) => {
       e.preventDefault();
       setDragOverFrameId(null);
+      dragOverFrameIdRef.current = null;
       const files = e.dataTransfer.files;
       if (files && files.length > 0) {
         const file = files[0];
+        if (!file.type.startsWith('image/')) return;
         const reader = new FileReader();
         reader.onload = (ev) => {
           const url = ev.target?.result as string;
@@ -152,7 +156,7 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
         reader.readAsDataURL(file);
         return;
       }
-      const imageUrl = e.dataTransfer.getData('imageUrl');
+      const imageUrl = e.dataTransfer.getData('text/plain');
       if (imageUrl) {
         setFrames((prev) =>
           prev.map((f) => (f.id === frameId ? { ...f, imageUrl } : f))
@@ -162,13 +166,28 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
     []
   );
 
-  const handleResourceImageClick = (url: string) => {
+  const handleResourceMouseDown = useCallback((e: React.MouseEvent, url: string) => {
+    e.preventDefault();
     setDraggingImage(url);
-  };
+    draggingImageRef.current = url;
+    setMousePos({ x: e.clientX, y: e.clientY });
+  }, []);
 
   useEffect(() => {
     const handleMove = (e: MouseEvent) => {
-      setMousePos({ x: e.clientX, y: e.clientY });
+      if (draggingImageRef.current) {
+        setMousePos({ x: e.clientX, y: e.clientY });
+        const elements = document.elementsFromPoint(e.clientX, e.clientY);
+        const frameEl = elements.find((el) => el.getAttribute('data-frame-id'));
+        if (frameEl) {
+          const fid = frameEl.getAttribute('data-frame-id')!;
+          setDragOverFrameId(fid);
+          dragOverFrameIdRef.current = fid;
+        } else {
+          setDragOverFrameId(null);
+          dragOverFrameIdRef.current = null;
+        }
+      }
       if (dragStateRef.current) {
         const s = dragStateRef.current;
         const dx = e.clientX - s.startX;
@@ -193,8 +212,25 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
         });
       }
     };
-    const handleUp = () => {
-      dragStateRef.current = null;
+    const handleUp = (e: MouseEvent) => {
+      if (draggingImageRef.current) {
+        const url = draggingImageRef.current;
+        const elements = document.elementsFromPoint(e.clientX, e.clientY);
+        const frameEl = elements.find((el) => el.getAttribute('data-frame-id'));
+        if (frameEl) {
+          const fid = frameEl.getAttribute('data-frame-id')!;
+          setFrames((prev) =>
+            prev.map((f) => (f.id === fid ? { ...f, imageUrl: url } : f))
+          );
+        }
+        setDraggingImage(null);
+        draggingImageRef.current = null;
+        setDragOverFrameId(null);
+        dragOverFrameIdRef.current = null;
+      }
+      if (dragStateRef.current) {
+        dragStateRef.current = null;
+      }
     };
     window.addEventListener('mousemove', handleMove);
     window.addEventListener('mouseup', handleUp);
@@ -204,31 +240,27 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
     };
   }, []);
 
-  useEffect(() => {
-    if (!draggingImage) return;
-    const handleClick = () => setDraggingImage(null);
-    window.addEventListener('click', handleClick);
-    return () => window.removeEventListener('click', handleClick);
-  }, [draggingImage]);
-
-  const handleFrameClickForImage = (frameId: string) => {
-    if (draggingImage) {
+  const handleFrameClick = useCallback((frameId: string) => {
+    if (draggingImageRef.current) {
       setFrames((prev) =>
-        prev.map((f) => (f.id === frameId ? { ...f, imageUrl: draggingImage } : f))
+        prev.map((f) => (f.id === frameId ? { ...f, imageUrl: draggingImageRef.current! } : f))
       );
       setDraggingImage(null);
-    } else {
-      const frame = frames.find((f) => f.id === frameId);
-      const order = frame ? frame.order : null;
-      if (selectedFrameId === frameId) {
-        onFrameSelect(null, null);
-      } else {
-        onFrameSelect(frameId, order);
-      }
+      draggingImageRef.current = null;
+      setDragOverFrameId(null);
+      dragOverFrameIdRef.current = null;
+      return;
     }
-  };
+    const frame = frames.find((f) => f.id === frameId);
+    const order = frame ? frame.order : null;
+    if (selectedFrameId === frameId) {
+      onFrameSelect(null, null);
+    } else {
+      onFrameSelect(frameId, order);
+    }
+  }, [frames, selectedFrameId, onFrameSelect]);
 
-  const addDialog = (frameId: string, type: 'dialog' | 'sound') => {
+  const addDialog = useCallback((frameId: string, type: 'dialog' | 'sound') => {
     const newDialog: DialogBubble = {
       id: `dialog-${Date.now()}-${Math.random()}`,
       frameId,
@@ -246,9 +278,9 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
       next.set(frameId, [...list, newDialog]);
       return next;
     });
-  };
+  }, []);
 
-  const deleteFrame = (frameId: string) => {
+  const deleteFrame = useCallback((frameId: string) => {
     setFrames((prev) =>
       prev.map((f) => (f.id === frameId ? { ...f, imageUrl: undefined } : f))
     );
@@ -257,18 +289,18 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
       next.delete(frameId);
       return next;
     });
-  };
+  }, []);
 
-  const deleteDialog = (frameId: string, dialogId: string) => {
+  const deleteDialog = useCallback((frameId: string, dialogId: string) => {
     setDialogs((prev) => {
       const next = new Map(prev);
       const list = (next.get(frameId) || []).filter((d) => d.id !== dialogId);
       next.set(frameId, list);
       return next;
     });
-  };
+  }, []);
 
-  const startDialogDrag = (
+  const startDialogDrag = useCallback((
     e: React.MouseEvent,
     dialog: DialogBubble,
     type: 'move' | 'resize'
@@ -286,54 +318,118 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
       origW: dialog.width,
       origH: dialog.height,
     };
-  };
+  }, []);
 
   const calcFontSize = (width: number) => {
     const ratio = (width - 60) / 60;
     return Math.max(12, Math.min(18, 12 + ratio * 6));
   };
 
-  const handleExport = () => {
+  const handleExport = useCallback(() => {
     setIsExporting(true);
     setExportProgress(0);
-    const interval = setInterval(() => {
-      setExportProgress((p) => {
-        const next = p + Math.random() * 15 + 5;
-        if (next >= 100) {
-          clearInterval(interval);
-          setTimeout(() => {
-            const canvas = document.createElement('canvas');
-            canvas.width = 100;
-            canvas.height = 100;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.fillStyle = '#f0f0f0';
-              ctx.fillRect(0, 0, 100, 100);
-              ctx.fillStyle = '#3c6382';
-              ctx.font = 'bold 14px sans-serif';
-              ctx.textAlign = 'center';
-              ctx.fillText('Storyboard', 50, 55);
-            }
-            canvas.toBlob((blob) => {
-              if (blob) {
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `${selectedProject?.name || 'storyboard'}.png`;
-                a.click();
-                URL.revokeObjectURL(url);
-              }
-              setIsExporting(false);
-              setShowExportModal(false);
-              setExportProgress(0);
-            }, 'image/png');
-          }, 500);
-          return 100;
+
+    const colsPerRow = exportConfig.colsPerRow;
+    const imageWidth = exportConfig.imageWidth;
+    const frameW = Math.floor(imageWidth / colsPerRow);
+    const frameH = Math.floor(frameW * CELL_HEIGHT / CELL_WIDTH);
+    const rows = Math.ceil(allFrames.length / colsPerRow);
+    const imageHeight = rows * frameH;
+    const totalFrames = allFrames.length;
+    let completed = 0;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = imageWidth;
+    canvas.height = imageHeight;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#f0f0f0';
+    ctx.fillRect(0, 0, imageWidth, imageHeight);
+
+    const loadFrameImage = (frame: Frame, col: number, row: number): Promise<void> => {
+      return new Promise((resolve) => {
+        const x = col * frameW;
+        const y = row * frameH;
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x, y, frameW, frameH);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(x + 1, y + 1, frameW - 2, frameH - 2);
+
+        if (frame.imageUrl) {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            ctx.drawImage(img, x + 1, y + 1, frameW - 2, frameH - 2);
+            completed++;
+            setExportProgress(Math.round((completed / totalFrames) * 100));
+            resolve();
+          };
+          img.onerror = () => {
+            completed++;
+            setExportProgress(Math.round((completed / totalFrames) * 100));
+            resolve();
+          };
+          img.src = frame.imageUrl;
+        } else {
+          ctx.fillStyle = '#aaa';
+          ctx.font = `${Math.max(12, frameW / 10)}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(`${frame.order + 1}`, x + frameW / 2, y + frameH / 2);
+          completed++;
+          setExportProgress(Math.round((completed / totalFrames) * 100));
+          resolve();
         }
-        return next;
       });
-    }, 300);
-  };
+    };
+
+    const tasks = allFrames.map((frame, i) => {
+      const col = i % colsPerRow;
+      const row = Math.floor(i / colsPerRow);
+      return loadFrameImage(frame, col, row);
+    });
+
+    Promise.all(tasks).then(() => {
+      setExportProgress(100);
+      setTimeout(() => {
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${selectedProject?.name || 'storyboard'}.png`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }
+          setIsExporting(false);
+          setShowExportModal(false);
+          setExportProgress(0);
+        }, 'image/png');
+      }, 300);
+    });
+  }, [exportConfig, allFrames, selectedProject]);
+
+  const handleBoardScroll = useCallback(() => {
+    if (!boardRef.current || allFrames.length <= 50) return;
+    const el = boardRef.current;
+    const scrollTop = el.scrollTop;
+    const viewHeight = el.clientHeight;
+    const rowHeight = CELL_HEIGHT + 20;
+    const gridEl = el.querySelector('[data-grid-area]');
+    const gridOffset = gridEl ? gridEl.getBoundingClientRect().top - el.getBoundingClientRect().top + scrollTop : scrollTop;
+    const relScroll = scrollTop - gridOffset + 24;
+    const startRow = Math.max(0, Math.floor(relScroll / rowHeight) - 1);
+    const endRow = Math.ceil((relScroll + viewHeight) / rowHeight) + 1;
+    setVisibleRowRange([startRow, endRow]);
+  }, [allFrames.length]);
+
+  useEffect(() => {
+    if (allFrames.length <= 50) {
+      setVisibleRowRange([0, 999]);
+      return;
+    }
+    handleBoardScroll();
+  }, [allFrames.length, handleBoardScroll]);
 
   const keyframesStyle = `
     @keyframes fadeIn {
@@ -359,16 +455,18 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
           alt="dragging"
           style={{
             position: 'fixed',
-            left: mousePos.x + 10,
-            top: mousePos.y + 10,
+            left: mousePos.x - 40,
+            top: mousePos.y - 50,
             width: 80,
             height: 100,
             objectFit: 'cover',
             borderRadius: 8,
-            opacity: 0.7,
+            opacity: 0.6,
             pointerEvents: 'none',
             zIndex: 2000,
             border: '2px dashed #ff6b6b',
+            transform: 'rotate(-3deg)',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
           }}
         />
       )}
@@ -494,12 +592,16 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
           ))}
         </div>
 
-        <div style={{
-          flex: 1,
-          background: '#f0f0f0',
-          overflow: 'auto',
-          padding: 24,
-        }}>
+        <div
+          ref={boardRef}
+          onScroll={handleBoardScroll}
+          style={{
+            flex: 1,
+            background: '#f0f0f0',
+            overflow: 'auto',
+            padding: 24,
+          }}
+        >
           {selectedProject ? (
             <>
               <div style={{
@@ -513,7 +615,7 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
                   fontWeight: 700,
                   marginBottom: 8,
                   color: '#1a1a2e',
-                }}>素材资源</div>
+                }}>素材资源 <span style={{ fontWeight: 400, fontSize: 12, color: '#999' }}>拖拽图片到画格中</span></div>
                 <div style={{
                   display: 'flex',
                   gap: 12,
@@ -525,9 +627,7 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
                       key={i}
                       src={url}
                       alt={`资源 ${i + 1}`}
-                      draggable
-                      onDragStart={(e) => e.dataTransfer.setData('imageUrl', url)}
-                      onClick={() => handleResourceImageClick(url)}
+                      onMouseDown={(e) => handleResourceMouseDown(e, url)}
                       style={{
                         width: 80,
                         height: 100,
@@ -536,7 +636,9 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
                         cursor: draggingImage === url ? 'grabbing' : 'grab',
                         flexShrink: 0,
                         border: `2px solid ${draggingImage === url ? '#ff6b6b' : 'transparent'}`,
-                        transition: 'transform 0.15s',
+                        transition: 'transform 0.15s, border-color 0.15s',
+                        userSelect: 'none',
+                        WebkitUserDrag: 'none',
                       }}
                       onMouseEnter={(e) => {
                         (e.currentTarget as HTMLImageElement).style.transform = 'scale(1.05)';
@@ -549,26 +651,31 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
                 </div>
               </div>
 
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: `repeat(${GRID_COLS}, ${CELL_WIDTH}px)`,
-                gridAutoRows: `${CELL_HEIGHT}px`,
-                gap: 20,
-                justifyContent: 'flex-start',
-              }}>
-                {(() => {
-                  const selectedFrameIdLocal = selectedFrameId;
-                  return allFrames.map((frame) => {
-                  const frameDialogs = dialogs.get(frame.id) || [];
-                  const commentCount = commentCounts.get(frame.id) || 0;
-                  const isBouncing = bouncingFrames.has(frame.id);
+              <div
+                data-grid-area
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${GRID_COLS}, ${CELL_WIDTH}px)`,
+                  gridAutoRows: `${CELL_HEIGHT}px`,
+                  gap: 20,
+                  justifyContent: 'flex-start',
+                }}
+              >
+                {allFrames.map((frame) => {
+                  const frameRow = Math.floor(frame.order / GRID_COLS);
+                  const isVirtualized = allFrames.length > 50;
+                  const isVisible = !isVirtualized || (frameRow >= visibleRowRange[0] && frameRow <= visibleRowRange[1]);
+                  const frameDialogs = isVisible ? (dialogs.get(frame.id) || []) : [];
+                  const commentCount = isVisible ? (commentCounts.get(frame.id) || 0) : 0;
+                  const isBouncing = isVisible && bouncingFrames.has(frame.id);
                   const isHovered = hoveredFrameId === frame.id;
                   const isDragOver = dragOverFrameId === frame.id;
-                  const isSelected = frame.id === selectedFrameIdLocal;
+                  const isSelected = frame.id === selectedFrameId;
 
                   return (
                     <div
                       key={frame.id}
+                      data-frame-id={frame.id}
                       style={{
                         width: CELL_WIDTH,
                         height: CELL_HEIGHT,
@@ -579,26 +686,33 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
                           : '1px solid #ccc',
                         boxShadow: isSelected
                           ? '0 0 0 4px rgba(255,107,107,0.2)'
+                          : isDragOver
+                          ? '0 0 12px rgba(255,107,107,0.3)'
                           : 'none',
                         borderRadius: 10,
-                        background: '#fff',
+                        background: isDragOver ? '#fff5f5' : '#fff',
                         overflow: 'hidden',
                         position: 'relative',
                         cursor: draggingImage ? 'copy' : 'default',
                         boxSizing: 'border-box',
-                        ...(useContain ? { contain: 'layout paint' } : {}),
+                        transition: 'border 0.15s, box-shadow 0.15s, background 0.15s',
+                        ...(isVirtualized ? { contain: 'layout paint style', contentVisibility: 'auto', containIntrinsicSize: `${CELL_WIDTH}px ${CELL_HEIGHT}px` } : {}),
                       }}
                       onMouseEnter={() => setHoveredFrameId(frame.id)}
                       onMouseLeave={() => setHoveredFrameId(null)}
                       onDragOver={(e) => {
                         e.preventDefault();
-                        setDragOverFrameId(frame.id);
+                        if (e.dataTransfer.types.includes('Files') || e.dataTransfer.types.includes('text/plain')) {
+                          setDragOverFrameId(frame.id);
+                        }
                       }}
-                      onDragLeave={() => setDragOverFrameId(null)}
+                      onDragLeave={() => {
+                        if (dragOverFrameId === frame.id) setDragOverFrameId(null);
+                      }}
                       onDrop={(e) => handleDrop(e, frame.id)}
-                      onClick={() => handleFrameClickForImage(frame.id)}
+                      onClick={() => handleFrameClick(frame.id)}
                     >
-                      {frame.imageUrl && (
+                      {isVisible && frame.imageUrl && (
                         <img
                           src={frame.imageUrl}
                           alt={`格子 ${frame.order + 1}`}
@@ -613,7 +727,7 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
                         />
                       )}
 
-                      {frameDialogs.map((d) => (
+                      {isVisible && frameDialogs.map((d) => (
                         <div
                           key={d.id}
                           style={{
@@ -718,7 +832,7 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
                         </div>
                       ))}
 
-                      {commentCount > 0 && (
+                      {isVisible && commentCount > 0 && (
                         <div
                           style={{
                             position: 'absolute',
@@ -743,7 +857,7 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
                         </div>
                       )}
 
-                      {isHovered && (
+                      {isVisible && isHovered && !draggingImage && (
                         <div
                           style={{
                             position: 'absolute',
@@ -804,9 +918,24 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
                           ))}
                         </div>
                       )}
+
+                      {isVisible && !frame.imageUrl && !draggingImage && (
+                        <div style={{
+                          position: 'absolute',
+                          inset: 0,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#ccc',
+                          fontSize: 13,
+                          pointerEvents: 'none',
+                        }}>
+                          {frame.order + 1}
+                        </div>
+                      )}
                     </div>
                   );
-                })})()}
+                })}
               </div>
             </>
           ) : (
@@ -930,6 +1059,9 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
                     onBlur={(e) => { (e.currentTarget as HTMLInputElement).style.borderColor = '#ddd'; }}
                   />
                 </div>
+                <div style={{ fontSize: 12, color: '#999', marginBottom: 16 }}>
+                  预计输出：{exportConfig.imageWidth}×{Math.ceil(allFrames.length / exportConfig.colsPerRow) * Math.floor(exportConfig.imageWidth / exportConfig.colsPerRow * CELL_HEIGHT / CELL_WIDTH)}px，{Math.ceil(allFrames.length / exportConfig.colsPerRow)}行
+                </div>
                 <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
                   <button
                     onClick={() => setShowExportModal(false)}
@@ -987,7 +1119,7 @@ export default function Editor({ selectedFrameId, onFrameSelect }: EditorProps) 
                     height: '100%',
                     background: '#2ed573',
                     width: `${exportProgress}%`,
-                    transition: 'width 0.5s ease',
+                    transition: 'width 0.3s ease',
                     borderRadius: 4,
                   }} />
                 </div>

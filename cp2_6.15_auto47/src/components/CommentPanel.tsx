@@ -216,7 +216,6 @@ export default function CommentPanel({
           flex: 1,
           overflowY: 'auto',
           padding: '16px 12px',
-          background: '#f5f5f5',
         }}
       >
         {!selectedFrameId ? null : comments.length === 0 && !loading ? (
@@ -252,8 +251,8 @@ export default function CommentPanel({
                   borderRadius: 10,
                   padding: 12,
                   marginBottom: 10,
-                  background: index % 2 === 0 ? '#f9f9f9' : '#ffffff',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                  background: index % 2 === 1 ? '#f9f9f9' : '#ffffff',
+                  border: '1px solid #f0f0f0',
                 }}
               >
                 <div
