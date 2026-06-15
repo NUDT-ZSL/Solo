@@ -4,56 +4,68 @@ import {
 } from 'recharts';
 import {
   createRecordManager,
-  calculateTasteVector,
-  getCategoryStats,
+  createEmptyForm,
+  searchTeaLibrary,
+  fetchTeaLibrary,
+  fetchTastingRecords,
+  saveRecord,
+  updateRecordApi,
+  createDeleteHandler,
+  getTemperatureColor,
+  getCardAnimationDelay,
+  formToRecord,
+  recordToForm,
   TEA_CATEGORIES,
   CATEGORY_COLORS,
   CATEGORY_GRADIENTS,
   type TeaCategory,
-  type TastingRecord
+  type TastingRecord,
+  type TeaItem,
+  type FormState
 } from './teaRecordModule';
 import {
   calculateRecommendations,
   createQuickFill,
-  type TeaItem,
+  measurePerformance,
+  analyzeUserPreferences,
   type RecommendedTea
 } from './teaRecommendModule';
 
 const recordManager = createRecordManager();
 
-interface FormState {
-  teaName: string;
-  category: TeaCategory;
-  origin: string;
-  temperature: number;
-  tastingDate: string;
-  notes: string;
-  rating: number;
-}
-
-const emptyForm: FormState = {
-  teaName: '',
-  category: '绿茶',
-  origin: '',
-  temperature: 85,
-  tastingDate: new Date().toISOString().split('T')[0],
-  notes: '',
-  rating: 4
-};
-
 const App: React.FC = () => {
-  const [form, setForm] = useState<FormState>(emptyForm);
+  const [form, setForm] = useState<FormState>(createEmptyForm());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [records, setRecords] = useState<TastingRecord[]>([]);
   const [teaLibrary, setTeaLibrary] = useState<TeaItem[]>([]);
-  const [suggestions, setSuggestions] = useState<Array<{ id: string; name: string; category: TeaCategory; origin: string; temp: number }>>([]);
+  const [suggestions, setSuggestions] = useState<ReturnType<typeof searchTeaLibrary>>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [formCollapsed, setFormCollapsed] = useState(false);
   const [isLargeScreen, setIsLargeScreen] = useState(true);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [perfMetrics, setPerfMetrics] = useState<{ render: number; recommend: number } | null>(null);
+
   const searchRef = useRef<HTMLInputElement>(null);
   const suggestRef = useRef<HTMLDivElement>(null);
+
+  const deleteHandler = useMemo(() =>
+    createDeleteHandler(
+      (id) => {
+        setDeletingIds(prev => new Set(prev).add(id));
+      },
+      (id) => {
+        setDeletingIds(prev => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        recordManager.deleteRecord(id);
+        setRecords(recordManager.getRecords());
+      },
+      300
+    )
+  , []);
 
   useEffect(() => {
     const checkScreen = () => setIsLargeScreen(window.innerWidth > 768);
@@ -79,50 +91,55 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const loadData = async () => {
-      try {
-        const [teasRes, recordsRes] = await Promise.all([
-          fetch('/api/teas'),
-          fetch('/api/records')
-        ]);
-        if (teasRes.ok) {
-          const teas = await teasRes.json();
-          setTeaLibrary(teas);
-        }
-        if (recordsRes.ok) {
-          const recs = await recordsRes.json();
-          setRecords(recs);
-        }
-      } catch {
-        setTeaLibrary(requireFallbackTeas());
-      }
+      const [teas, recs] = await Promise.all([
+        fetchTeaLibrary(),
+        fetchTastingRecords()
+      ]);
+      setTeaLibrary(teas);
+      setRecords(recs);
+      recordManager.initialize(recs);
       setDataLoaded(true);
     };
     loadData();
   }, []);
 
-  const tasteVector = useMemo(() => calculateTasteVector(records), [records]);
-  const stats = useMemo(() => getCategoryStats(records), [records]);
-  const recommendations = useMemo(
-    () => calculateRecommendations(teaLibrary, tasteVector, records, 5),
-    [teaLibrary, tasteVector, records]
-  );
+  const tasteVector = useMemo(() => {
+    const perf = measurePerformance(
+      () => recordManager.getTasteVector(),
+      'getTasteVector'
+    );
+    return perf.result;
+  }, [records]);
+
+  const stats = useMemo(() => recordManager.getStats(), [records]);
+
+  const recommendations = useMemo(() => {
+    const perf = measurePerformance(
+      () => calculateRecommendations(teaLibrary, tasteVector, records, 5),
+      'calculateRecommendations'
+    );
+    setPerfMetrics(m => ({
+      render: m ? m.render : 0,
+      recommend: perf.durationMs
+    }));
+    if (perf.durationMs > 200) {
+      console.warn(`[Performance Warning] 推荐计算耗时 ${perf.durationMs.toFixed(2)}ms，超过200ms阈值`);
+    }
+    return perf.result;
+  }, [teaLibrary, tasteVector, records]);
+
+  const userProfile = useMemo(() =>
+    analyzeUserPreferences(records, tasteVector)
+  , [records, tasteVector]);
 
   const handleSearchChange = useCallback((value: string) => {
     setForm(f => ({ ...f, teaName: value }));
-    if (value.length > 0) {
-      const matches = teaLibrary
-        .filter(t => t.name.toLowerCase().includes(value.toLowerCase()))
-        .slice(0, 8)
-        .map(t => ({ id: t.id, name: t.name, category: t.category, origin: t.origin, temp: t.temp }));
-      setSuggestions(matches);
-      setShowSuggestions(true);
-    } else {
-      setSuggestions([]);
-      setShowSuggestions(false);
-    }
+    const matches = searchTeaLibrary(teaLibrary, value);
+    setSuggestions(matches);
+    setShowSuggestions(value.length > 0 && matches.length > 0);
   }, [teaLibrary]);
 
-  const selectSuggestion = (s: { name: string; category: TeaCategory; origin: string; temp: number }) => {
+  const selectSuggestion = useCallback((s: { name: string; category: TeaCategory; origin: string; temp: number }) => {
     setForm(f => ({
       ...f,
       teaName: s.name,
@@ -131,91 +148,66 @@ const App: React.FC = () => {
       temperature: s.temp
     }));
     setShowSuggestions(false);
-  };
+  }, []);
 
-  const applyRecommendation = (tea: RecommendedTea) => {
+  const applyRecommendation = useCallback((tea: RecommendedTea) => {
     const fill = createQuickFill(tea);
-    setForm(f => ({
-      ...f,
+    setForm({
+      ...createEmptyForm(),
       teaName: fill.teaName,
       category: fill.category,
       origin: fill.origin,
-      temperature: fill.temperature,
-      tastingDate: new Date().toISOString().split('T')[0]
-    }));
+      temperature: fill.temperature
+    });
     if (!isLargeScreen) setFormCollapsed(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  }, [isLargeScreen]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.teaName.trim() || !form.origin.trim()) return;
 
+    const startRender = performance.now();
+
     if (editingId) {
-      try {
-        await fetch(`/api/records/${editingId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(form)
-        });
-      } catch {}
+      await updateRecordApi(editingId, form);
       recordManager.updateRecord(editingId, form);
-      setRecords(recordManager.getRecords());
       setEditingId(null);
     } else {
-      try {
-        const res = await fetch('/api/records', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(form)
-        });
-        if (res.ok) await res.json();
-      } catch {}
-      recordManager.addRecord(form);
-      setRecords(recordManager.getRecords());
+      await saveRecord(form);
+      recordManager.addRecord(formToRecord(form));
     }
-    setForm(emptyForm);
-  };
 
-  const startEdit = (record: TastingRecord) => {
+    setRecords(recordManager.getRecords());
+    setForm(createEmptyForm());
+
+    const renderDuration = performance.now() - startRender;
+    setPerfMetrics(m => ({ render: renderDuration, recommend: m ? m.recommend : 0 }));
+
+    if (renderDuration > 150) {
+      console.warn(`[Performance Warning] 列表渲染耗时 ${renderDuration.toFixed(2)}ms，超过150ms阈值`);
+    }
+  }, [form, editingId]);
+
+  const startEdit = useCallback((record: TastingRecord) => {
     if (!record.id) return;
-    setForm({
-      teaName: record.teaName,
-      category: record.category,
-      origin: record.origin,
-      temperature: record.temperature,
-      tastingDate: record.tastingDate,
-      notes: record.notes,
-      rating: record.rating
-    });
+    setForm(recordToForm(record));
     setEditingId(record.id);
     if (!isLargeScreen) setFormCollapsed(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  }, [isLargeScreen]);
 
-  const handleDelete = async (recordId: string) => {
-    setDeletingIds(prev => new Set(prev).add(recordId));
-    setTimeout(async () => {
-      try {
-        await fetch(`/api/records/${recordId}`, { method: 'DELETE' });
-      } catch {}
-      recordManager.deleteRecord(recordId);
-      setRecords(recordManager.getRecords());
-      setDeletingIds(prev => {
-        const next = new Set(prev);
-        next.delete(recordId);
-        return next;
-      });
-    }, 300);
-  };
+  const handleDelete = useCallback(async (recordId: string) => {
+    await deleteHandler.triggerDelete(recordId);
+  }, [deleteHandler]);
 
-  const tempColor = useMemo(() => {
-    const ratio = (form.temperature - 60) / 40;
-    const r = Math.round(135 + ratio * (255 - 135));
-    const g = Math.round(206 + ratio * (99 - 206));
-    const b = Math.round(235 + ratio * (71 - 235));
-    return `rgb(${r}, ${g}, ${b})`;
-  }, [form.temperature]);
+  const isDeleting = useCallback((id: string) =>
+    deleteHandler.isDeleting(id) || deletingIds.has(id)
+  , [deleteHandler, deletingIds]);
+
+  const tempColor = useMemo(() =>
+    getTemperatureColor(form.temperature)
+  , [form.temperature]);
 
   const renderForm = () => (
     <div style={styles.formPanel}>
@@ -250,18 +242,13 @@ const App: React.FC = () => {
                 {suggestions.map(s => (
                   <div
                     key={s.id}
-                    className="suggestion-item-hover"
                     style={{
                       ...styles.suggestionItem,
                       borderLeft: `3px solid ${CATEGORY_COLORS[s.category]}`
                     }}
                     onClick={() => selectSuggestion(s)}
-                    onMouseEnter={e => {
-                      (e.currentTarget as HTMLDivElement).style.backgroundColor = '#FFFBF5';
-                    }}
-                    onMouseLeave={e => {
-                      (e.currentTarget as HTMLDivElement).style.backgroundColor = '';
-                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = '#FFFBF5'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = ''; }}
                   >
                     <div style={{ fontWeight: 500 }}>{s.name}</div>
                     <div style={{ fontSize: 12, color: '#8B7355', marginTop: 2 }}>
@@ -287,12 +274,8 @@ const App: React.FC = () => {
                     color: form.category === cat ? '#fff' : '#4A3728',
                     borderColor: form.category === cat ? CATEGORY_COLORS[cat] : '#C4A882'
                   }}
-                  onMouseEnter={e => {
-                    (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.05)';
-                  }}
-                  onMouseLeave={e => {
-                    (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)';
-                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.08)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)'; }}
                 >
                   {cat}
                 </button>
@@ -385,7 +368,7 @@ const App: React.FC = () => {
                 type="button"
                 onClick={() => {
                   setEditingId(null);
-                  setForm(emptyForm);
+                  setForm(createEmptyForm());
                 }}
                 style={styles.cancelBtn}
               >
@@ -399,17 +382,17 @@ const App: React.FC = () => {
   );
 
   const renderRecordCard = (record: TastingRecord, idx: number) => {
-    const isDeleting = record.id ? deletingIds.has(record.id) : false;
+    const isDeletingCard = record.id ? isDeleting(record.id) : false;
     return (
       <div
         key={record.id || idx}
         style={{
           ...styles.recordCard,
-          animation: isDeleting
+          animation: isDeletingCard
             ? 'slideOutLeft 0.3s ease forwards'
             : `slideUp 0.3s ease forwards`,
-          animationDelay: isDeleting ? '0s' : `${Math.min(idx * 0.1, 1)}s`,
-          opacity: isDeleting ? undefined : 0
+          animationDelay: isDeletingCard ? '0s' : getCardAnimationDelay(idx, 100),
+          opacity: isDeletingCard ? undefined : 0
         }}
       >
         <div
@@ -431,12 +414,13 @@ const App: React.FC = () => {
 
         <div style={styles.cardBody}>
           <div style={styles.metaRow}>
-            <span style={{
-              ...styles.smallCategory,
-              backgroundColor: CATEGORY_COLORS[record.category]
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLSpanElement).style.transform = 'scale(1.1)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLSpanElement).style.transform = 'scale(1)'; }}
+            <span
+              style={{
+                ...styles.smallCategory,
+                backgroundColor: CATEGORY_COLORS[record.category]
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLSpanElement).style.transform = 'scale(1.1)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLSpanElement).style.transform = 'scale(1)'; }}
             >
               {record.category}
             </span>
@@ -479,7 +463,7 @@ const App: React.FC = () => {
       style={{
         ...styles.recommendCard,
         animation: `fadeIn 0.3s ease forwards`,
-        animationDelay: `${idx * 0.08}s`,
+        animationDelay: `${idx * 80}ms`,
         opacity: 0,
         cursor: 'pointer'
       }}
@@ -500,16 +484,17 @@ const App: React.FC = () => {
         }}
       >
         <div style={{ fontWeight: 600 }}>{tea.name}</div>
-        <div style={{ fontSize: 11, marginTop: 2 }}>匹配度 {(tea.score / 10 * 10).toFixed(0)}%</div>
+        <div style={{ fontSize: 11, marginTop: 2 }}>匹配度 {Math.min(Math.round((tea.score / 10) * 100), 99)}%</div>
       </div>
       <div style={styles.recommendBody}>
         <div style={{ marginBottom: 8 }}>
-          <span style={{
-            ...styles.smallCategory,
-            backgroundColor: CATEGORY_COLORS[tea.category]
-          }}
-          onMouseEnter={e => { (e.currentTarget as HTMLSpanElement).style.transform = 'scale(1.1)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLSpanElement).style.transform = 'scale(1)'; }}
+          <span
+            style={{
+              ...styles.smallCategory,
+              backgroundColor: CATEGORY_COLORS[tea.category]
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLSpanElement).style.transform = 'scale(1.1)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLSpanElement).style.transform = 'scale(1)'; }}
           >
             {tea.category}
           </span>
@@ -519,6 +504,46 @@ const App: React.FC = () => {
         <div style={styles.clickHint}>点击快速创建记录 →</div>
       </div>
     </div>
+  );
+
+  const renderBarChart = () => (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={stats} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#E8DCCB" />
+        <XAxis
+          dataKey="category"
+          tick={{ fill: '#4A3728', fontSize: 12 }}
+          axisLine={{ stroke: '#C4A882' }}
+        />
+        <YAxis
+          tick={{ fill: '#4A3728', fontSize: 11 }}
+          axisLine={{ stroke: '#C4A882' }}
+          allowDecimals={false}
+        />
+        <Tooltip
+          contentStyle={{
+            backgroundColor: '#FFF8F0',
+            border: '1px solid #C4A882',
+            borderRadius: 8,
+            color: '#4A3728'
+          }}
+          formatter={(value: number) => [`${value} 次`, '品鉴次数']}
+        />
+        <Bar dataKey="count" name="品鉴次数" radius={[6, 6, 0, 0]}>
+          {stats.map((entry, index) => (
+            <Cell
+              key={`cell-${index}`}
+              fill={entry.fill}
+              style={{
+                transition: 'transform 0.2s ease, opacity 0.2s ease',
+                transformOrigin: 'bottom',
+                cursor: 'pointer'
+              }}
+            />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
   );
 
   return (
@@ -544,8 +569,29 @@ const App: React.FC = () => {
             <div style={styles.badgeNum}>{tasteVector.preferredCategories.length}</div>
             <div style={styles.badgeLabel}>偏好品种</div>
           </div>
+          {perfMetrics && (
+            <div style={{ ...styles.badge, borderColor: '#7CCD7C' }}>
+              <div style={{ ...styles.badgeNum, color: '#3CB371', fontSize: 14 }}>
+                {perfMetrics.recommend.toFixed(0)}ms
+              </div>
+              <div style={styles.badgeLabel}>推荐耗时</div>
+            </div>
+          )}
         </div>
       </header>
+
+      {userProfile.topCategory && records.length >= 2 && (
+        <div style={styles.profileBanner}>
+          <span style={{ marginRight: 8 }}>🎯 品鉴标签：</span>
+          <strong>{userProfile.tastingHabit}</strong>
+          {userProfile.topOrigin && (
+            <span style={{ margin: '0 12px' }}>· 偏爱 {userProfile.topOrigin} 产区</span>
+          )}
+          {userProfile.preferredFlavors.length > 0 && (
+            <span>· 喜好 {userProfile.preferredFlavors.slice(0, 3).join('、')} 风味</span>
+          )}
+        </div>
+      )}
 
       <main style={isLargeScreen ? styles.mainGrid : styles.mainStack}>
         {!isLargeScreen && renderForm()}
@@ -598,46 +644,7 @@ const App: React.FC = () => {
                 <h2 style={styles.sectionTitle}>📊 品种统计</h2>
               </div>
               <div style={styles.chartContainer}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E8DCCB" />
-                    <XAxis
-                      dataKey="category"
-                      tick={{ fill: '#4A3728', fontSize: 12 }}
-                      axisLine={{ stroke: '#C4A882' }}
-                    />
-                    <YAxis
-                      tick={{ fill: '#4A3728', fontSize: 11 }}
-                      axisLine={{ stroke: '#C4A882' }}
-                      allowDecimals={false}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#FFF8F0',
-                        border: '1px solid #C4A882',
-                        borderRadius: 8,
-                        color: '#4A3728'
-                      }}
-                      formatter={(value: number) => [`${value} 次`, '品鉴次数']}
-                    />
-                    <Bar dataKey="count" name="品鉴次数" radius={[6, 6, 0, 0]}>
-                      {stats.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={entry.fill}
-                          onMouseEnter={e => {
-                            (e as unknown as HTMLElement).style.transform = 'scaleY(1.1)';
-                            (e as unknown as HTMLElement).style.transformOrigin = 'bottom';
-                            (e as unknown as HTMLElement).style.transition = 'transform 0.2s';
-                          }}
-                          onMouseLeave={e => {
-                            (e as unknown as HTMLElement).style.transform = '';
-                          }}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                {renderBarChart()}
               </div>
             </section>
           </div>
@@ -647,22 +654,24 @@ const App: React.FC = () => {
   );
 };
 
-function requireFallbackTeas(): TeaItem[] {
-  return [
-    { id: 't1', name: '西湖龙井', category: '绿茶', origin: '浙江杭州', temp: 80, flavor: ['鲜爽', '豆香'], description: '扁平光滑，色泽嫩绿' },
-    { id: 't6', name: '正山小种', category: '红茶', origin: '福建武夷山', temp: 90, flavor: ['松烟香'], description: '条索肥实，色泽乌润' },
-    { id: 't11', name: '铁观音', category: '乌龙', origin: '福建安溪', temp: 95, flavor: ['兰花香'], description: '螺旋紧结，色泽砂绿' },
-    { id: 't16', name: '生普饼茶', category: '普洱', origin: '云南西双版纳', temp: 100, flavor: ['兰香'], description: '紧压成饼，色泽青绿' },
-    { id: 't21', name: '福鼎白毫银针', category: '白茶', origin: '福建福鼎', temp: 85, flavor: ['毫香'], description: '芽头肥壮，满披白毫' }
-  ];
-}
-
 const styles: Record<string, React.CSSProperties> = {
   app: {
     minHeight: '100vh',
     padding: '20px 24px 40px',
     maxWidth: 1440,
     margin: '0 auto'
+  },
+  profileBanner: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    padding: '12px 20px',
+    background: 'linear-gradient(135deg, #FFFBF5 0%, #FFF0E0 100%)',
+    borderRadius: 10,
+    border: '1px dashed #C4A882',
+    marginBottom: 16,
+    fontSize: 13,
+    color: '#6B4226'
   },
   appHeader: {
     display: 'flex',
@@ -672,14 +681,14 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'linear-gradient(135deg, #FFF8F0 0%, #F5E6D3 100%)',
     borderRadius: 12,
     border: '1px solid #C4A882',
-    marginBottom: 20,
+    marginBottom: 16,
     flexWrap: 'wrap',
     gap: 16
   },
   logoArea: { display: 'flex', alignItems: 'center', gap: 12 },
   appTitle: { fontSize: 22, fontWeight: 700, color: '#4A3728', margin: 0 },
   appSubtitle: { fontSize: 12, color: '#8B7355', margin: '2px 0 0' },
-  statsBadges: { display: 'flex', gap: 12 },
+  statsBadges: { display: 'flex', gap: 12, flexWrap: 'wrap' },
   badge: {
     textAlign: 'center',
     padding: '8px 16px',
@@ -698,9 +707,8 @@ const styles: Record<string, React.CSSProperties> = {
 
   bottomRow: {
     display: 'grid',
-    gridTemplateColumns: '1.5fr 1fr',
     gap: 20
-  } as React.CSSProperties,
+  },
 
   formPanel: {
     background: '#FFF8F0',
@@ -846,8 +854,8 @@ const styles: Record<string, React.CSSProperties> = {
     scrollbarGutter: 'stable'
   },
   recommendCard: {
-    minWidth: 220,
-    maxWidth: 220,
+    minWidth: 240,
+    maxWidth: 240,
     background: '#fff',
     borderRadius: 10,
     border: '1px solid #E8DCCB',
