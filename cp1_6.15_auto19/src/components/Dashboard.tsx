@@ -157,18 +157,19 @@ export default function Dashboard() {
   const records = useFocusStore(s => s.records);
   const labels = useFocusStore(s => s.labels);
   const exportCSV = useFocusStore(s => s.exportCSV);
+  const lastNewRecordId = useFocusStore(s => s.lastNewRecordId);
 
   const ringCanvasRef = useRef<HTMLCanvasElement>(null);
   const trendCanvasRef = useRef<HTMLCanvasElement>(null);
   const pieCanvasRef = useRef<HTMLCanvasElement>(null);
   const prevScoreRef = useRef<number | null>(null);
   const isFirstRenderRef = useRef(true);
-  const prevRecordsCountRef = useRef(records.length);
+  const prevLastRecordIdRef = useRef<string | null>(null);
   const animFrameRef = useRef(0);
+  const dprRef = useRef(window.devicePixelRatio || 1);
 
   const [selectedDay, setSelectedDay] = useState<DayScore | null>(null);
   const [trendPoints, setTrendPoints] = useState<{ x: number; y: number }[]>([]);
-  const trendCanvasSizeRef = useRef<{ width: number; height: number }>({ width: 400, height: 200 });
 
   const todayKey = getDateKey(Date.now());
 
@@ -185,20 +186,22 @@ export default function Dashboard() {
   useEffect(() => {
     const canvas = ringCanvasRef.current;
     if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    dprRef.current = dpr;
     const ctx = setupCanvas(canvas, 180, 180);
     const targetScore = todayScore.score;
-    const recordsCountChanged = records.length !== prevRecordsCountRef.current;
+    const hasNewRecord = lastNewRecordId !== null && prevLastRecordIdRef.current !== lastNewRecordId;
 
     if (isFirstRenderRef.current) {
       drawRing(ctx, targetScore, 180, 12);
       prevScoreRef.current = targetScore;
       isFirstRenderRef.current = false;
-      prevRecordsCountRef.current = records.length;
+      prevLastRecordIdRef.current = lastNewRecordId;
       return;
     }
 
-    if (!recordsCountChanged && prevScoreRef.current === targetScore) {
-      prevRecordsCountRef.current = records.length;
+    if (!hasNewRecord && prevScoreRef.current === targetScore) {
+      prevLastRecordIdRef.current = lastNewRecordId;
       return;
     }
 
@@ -222,20 +225,21 @@ export default function Dashboard() {
     };
     animFrameRef.current = requestAnimationFrame(animate);
 
-    prevRecordsCountRef.current = records.length;
+    prevLastRecordIdRef.current = lastNewRecordId;
 
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [todayScore.score, records.length]);
+  }, [todayScore.score, lastNewRecordId]);
 
   useEffect(() => {
     const canvas = trendCanvasRef.current;
     if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    dprRef.current = dpr;
     const container = canvas.parentElement;
     const width = container ? container.clientWidth : 400;
     const height = 200;
-    trendCanvasSizeRef.current = { width, height };
     const ctx = setupCanvas(canvas, width, height);
 
     const result = drawTrend(ctx, width, height, dayScores);
@@ -250,9 +254,10 @@ export default function Dashboard() {
       if (!canvas || trendPoints.length === 0) return;
 
       const rect = canvas.getBoundingClientRect();
-      const { width, height } = trendCanvasSizeRef.current;
-      const scaleX = width / rect.width;
-      const scaleY = height / rect.height;
+      const logicWidth = canvas.width / dprRef.current;
+      const logicHeight = canvas.height / dprRef.current;
+      const scaleX = logicWidth / rect.width;
+      const scaleY = logicHeight / rect.height;
       const mx = (e.clientX - rect.left) * scaleX;
       const my = (e.clientY - rect.top) * scaleY;
 

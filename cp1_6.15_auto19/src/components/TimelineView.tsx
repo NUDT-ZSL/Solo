@@ -6,6 +6,7 @@ import { ZoomIn, ZoomOut } from 'lucide-react';
 const BASE_WIDTH = 720;
 const DAY_MS = 86400000;
 const HOUR_MARKS = [0, 3, 6, 9, 12, 15, 18, 21];
+const ZOOM_DURATION = 300;
 
 function fmtDuration(ms: number): string {
   const totalMinutes = Math.floor(ms / 60000);
@@ -16,12 +17,14 @@ function fmtDuration(ms: number): string {
 }
 
 export default function TimelineView() {
-  const [zoom, setZoom] = useState(1);
+  const [targetZoom, setTargetZoom] = useState(1);
+  const [displayZoom, setDisplayZoom] = useState(1);
   const records = useFocusStore(s => s.records);
   const labels = useFocusStore(s => s.labels);
   const activeTimer = useFocusStore(s => s.activeTimer);
   const [, forceUpdate] = useState(0);
   const tickRef = useRef<number | null>(null);
+  const animRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!activeTimer) return;
@@ -32,6 +35,40 @@ export default function TimelineView() {
       if (tickRef.current) window.clearInterval(tickRef.current);
     };
   }, [activeTimer]);
+
+  useEffect(() => {
+    if (targetZoom === displayZoom) return;
+
+    if (animRef.current) {
+      cancelAnimationFrame(animRef.current);
+    }
+
+    const fromZoom = displayZoom;
+    const toZoom = targetZoom;
+    const startTime = performance.now();
+
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / ZOOM_DURATION, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const current = fromZoom + (toZoom - fromZoom) * eased;
+      setDisplayZoom(current);
+
+      if (progress < 1) {
+        animRef.current = requestAnimationFrame(animate);
+      } else {
+        animRef.current = null;
+      }
+    };
+
+    animRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animRef.current) {
+        cancelAnimationFrame(animRef.current);
+      }
+    };
+  }, [targetZoom]);
 
   const todayKey = getDateKey(Date.now());
   const todayRecords = useMemo(
@@ -97,18 +134,18 @@ export default function TimelineView() {
     return items;
   }, [todayRecords, activeTimer]);
 
-  const timelineWidth = BASE_WIDTH;
+  const timelineWidth = BASE_WIDTH * displayZoom;
   const maxRow = bars.reduce((max, b) => Math.max(max, b.row), -1);
   const contentHeight = bars.length > 0 ? (maxRow + 1) * 32 + 20 : 60;
 
   const handleZoomIn = () => {
-    if (zoom === 1) setZoom(2);
-    else if (zoom === 2) setZoom(4);
+    if (targetZoom === 1) setTargetZoom(2);
+    else if (targetZoom === 2) setTargetZoom(4);
   };
 
   const handleZoomOut = () => {
-    if (zoom === 4) setZoom(2);
-    else if (zoom === 2) setZoom(1);
+    if (targetZoom === 4) setTargetZoom(2);
+    else if (targetZoom === 2) setTargetZoom(1);
   };
 
   return (
@@ -122,9 +159,9 @@ export default function TimelineView() {
           {[1, 2, 4].map(z => (
             <button
               key={z}
-              onClick={() => setZoom(z)}
+              onClick={() => setTargetZoom(z)}
               className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${
-                zoom === z
+                targetZoom === z
                   ? 'bg-teal text-teal'
                   : 'bg-surface text-textSub'
               }`}
@@ -143,23 +180,15 @@ export default function TimelineView() {
       ) : (
         <div className="overflow-x-auto px-4 pb-4">
           <div
-            className="relative transition-transform duration-300"
-            style={{
-              width: timelineWidth,
-              height: contentHeight,
-              transform: `scaleX(${zoom})`,
-              transformOrigin: 'left center',
-            }}
+            className="relative"
+            style={{ width: timelineWidth, height: contentHeight }}
           >
             {HOUR_MARKS.map(hour => {
               const left = (hour / 24) * timelineWidth;
               return (
-                <div key={hour} className="absolute top-0 h-full" style={{ left }}>
+                <div key={hour} className="absolute top-0 h-full pointer-events-none" style={{ left }}>
                   <div className="h-full border-l border-dashed border-border" />
-                  <span
-                    className="absolute -translate-x-1/2 text-[6px] text-textSub md:text-[10px]"
-                    style={{ transform: `translateX(-50%) scaleX(${1 / zoom})`, transformOrigin: 'center top' }}
-                  >
+                  <span className="absolute -translate-x-1/2 text-[6px] text-textSub md:text-[10px]">
                     {String(hour).padStart(2, '0')}:00
                   </span>
                 </div>
@@ -188,8 +217,6 @@ export default function TimelineView() {
                     top,
                     height: 28,
                     backgroundColor: color + '99',
-                    transform: `scaleX(${1 / zoom})`,
-                    transformOrigin: 'left center',
                   }}
                 >
                   <span className="truncate">{bar.label}</span>

@@ -25,6 +25,7 @@ interface FocusStore {
   records: ActivityRecord[];
   labels: ActivityLabel[];
   activeTimer: ActiveTimer | null;
+  lastNewRecordId: string | null;
 
   startTimer: (label: string) => void;
   stopTimer: () => void;
@@ -40,6 +41,7 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
   records: loadFromStorage<ActivityRecord[]>(STORAGE_KEYS.records, []),
   labels: loadFromStorage<ActivityLabel[]>(STORAGE_KEYS.labels, DEFAULT_LABELS),
   activeTimer: loadFromStorage<ActiveTimer | null>(STORAGE_KEYS.timer, null),
+  lastNewRecordId: null,
 
   startTimer: (label: string) => {
     const timer: ActiveTimer = { label, startTime: Date.now() };
@@ -62,14 +64,14 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     const updatedRecords = [...records, newRecord];
     saveToStorage(STORAGE_KEYS.records, updatedRecords);
     saveToStorage(STORAGE_KEYS.timer, null);
-    set({ records: updatedRecords, activeTimer: null });
+    set({ records: updatedRecords, activeTimer: null, lastNewRecordId: newRecord.id });
   },
 
   addRecord: (record) => {
     const newRecord: ActivityRecord = { ...record, id: uuidv4() };
     const updatedRecords = [...get().records, newRecord];
     saveToStorage(STORAGE_KEYS.records, updatedRecords);
-    set({ records: updatedRecords });
+    set({ records: updatedRecords, lastNewRecordId: newRecord.id });
   },
 
   deleteRecord: (id: string) => {
