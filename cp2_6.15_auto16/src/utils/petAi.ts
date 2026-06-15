@@ -85,7 +85,7 @@ function generateEatParticles(cx: number, cy: number): ParticleConfig[] {
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
       radius: rand(4, 6),
-      color: ['#ffa500', '#ffcc00', '#ff8c00'][randInt(0, 2)],
+      color: ['#ff8c00', '#ffa500', '#ff6600'][randInt(0, 2)],
       maxLife: 0.5,
       type: 'star',
     });

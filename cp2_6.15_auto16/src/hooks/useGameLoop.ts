@@ -45,6 +45,8 @@ export interface GameLoopSnapshot {
   currentAnimationDuration: number;
   endangeredFlash: number;
   weakAlertPending: boolean;
+  transitionProgress: number;
+  prevAnimation: AnimationType;
 }
 
 export type ActionTrigger = (action: ActionType) => void;
@@ -55,16 +57,17 @@ interface UseGameLoopOptions {
   onWeakAlert: () => void;
 }
 
-const DECAY_PER_SECOND = {
-  mood: 5 / 3600,
-  hunger: 10 / 3600,
-  health: 3 / 3600,
+const DECAY_PER_GAME_HOUR = {
+  mood: 5,
+  hunger: 10,
+  health: 3,
 };
 
-const STAGE_DURATION_SECONDS = 18 * 60;
-const ENDANGERED_TRIGGER_HOURS = 6;
-const ENDANGERED_END_HOURS = 6;
+const STAGE_DURATION_GAME_HOURS = 72;
+const ENDANGERED_TRIGGER_SECONDS = 6;
+const ENDANGERED_END_SECONDS = 6;
 const WEAK_ALERT_INTERVAL = 60;
+const TRANSITION_DURATION = 0.2;
 
 function clamp(n: number, a: number, b: number): number {
   return Math.max(a, Math.min(b, n));
@@ -80,8 +83,7 @@ export function useGameLoop({ onStateChange, onWeakAlert }: UseGameLoopOptions) 
   const rafRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
   const accumSecRef = useRef<number>(0);
-  const totalSecRef = useRef<number>(0);
-  const gameMinuteRef = useRef<number>(0);
+  const totalGameHoursRef = useRef<number>(0);
 
   const stateRef = useRef<PetFullState>({
     mood: 80,
@@ -101,7 +103,7 @@ export function useGameLoop({ onStateChange, onWeakAlert }: UseGameLoopOptions) 
   const weakAlertTimerRef = useRef(0);
   const lowStateTimerRef = useRef(0);
   const noActionTimerRef = useRef(0);
-  const lastStageCheckSec = useRef(0);
+  const lastStageCheckGameHours = useRef(0);
   const endStateRef = useRef<GameEndState>({ ended: false, timeLeft: 0 });
   const endCountdownRef = useRef(0);
   const weakAlertPendingRef = useRef(false);
@@ -109,10 +111,14 @@ export function useGameLoop({ onStateChange, onWeakAlert }: UseGameLoopOptions) 
 
   const petCenterRef = useRef({ x: 400, y: 300 });
 
+  const transitionTimerRef = useRef(0);
+  const prevAnimationRef = useRef<AnimationType>('idle');
+  const isTransitioningRef = useRef(false);
+
   const emitSnapshot = useCallback(() => {
     onStateChange({
       pet: { ...stateRef.current },
-      gameTime: computeGameTime(totalSecRef.current),
+      gameTime: computeGameTime(totalGameHoursRef.current),
       particles: particlesRef.current.slice(),
       endState: { ...endStateRef.current },
       animationProgress: animDurationRef.current > 0
@@ -122,6 +128,10 @@ export function useGameLoop({ onStateChange, onWeakAlert }: UseGameLoopOptions) 
       currentAnimationDuration: animDurationRef.current,
       endangeredFlash: endangeredFlashRef.current,
       weakAlertPending: weakAlertPendingRef.current,
+      transitionProgress: isTransitioningRef.current
+        ? clamp(transitionTimerRef.current / TRANSITION_DURATION, 0, 1)
+        : 1,
+      prevAnimation: prevAnimationRef.current,
     });
     if (weakAlertPendingRef.current) {
       weakAlertPendingRef.current = false;
@@ -129,6 +139,11 @@ export function useGameLoop({ onStateChange, onWeakAlert }: UseGameLoopOptions) 
   }, [onStateChange]);
 
   function applyAiCommand(cmd: AiCommand) {
+    if (stateRef.current.animation !== cmd.animation) {
+      prevAnimationRef.current = stateRef.current.animation;
+      transitionTimerRef.current = 0;
+      isTransitioningRef.current = true;
+    }
     stateRef.current.animation = cmd.animation;
     stateRef.current.emoji = cmd.emoji;
     animTimerRef.current = 0;
@@ -161,7 +176,14 @@ export function useGameLoop({ onStateChange, onWeakAlert }: UseGameLoopOptions) 
         break;
     }
     noActionTimerRef.current = 0;
-    pendingActionRef.current = action;
+
+    const cmd = getPetAiCommand(
+      stateRef.current,
+      action,
+      petCenterRef.current,
+    );
+    applyAiCommand(cmd);
+    pendingActionRef.current = null;
   }
 
   const onFrame = useCallback((now: number) => {
@@ -184,6 +206,14 @@ export function useGameLoop({ onStateChange, onWeakAlert }: UseGameLoopOptions) 
     animTimerRef.current += dt;
     endangeredFlashRef.current = (endangeredFlashRef.current + dt) % 0.5;
 
+    if (isTransitioningRef.current) {
+      transitionTimerRef.current += dt;
+      if (transitionTimerRef.current >= TRANSITION_DURATION) {
+        isTransitioningRef.current = false;
+        transitionTimerRef.current = TRANSITION_DURATION;
+      }
+    }
+
     accumSecRef.current += dt;
     while (accumSecRef.current >= 1) {
       accumSecRef.current -= 1;
@@ -205,13 +235,12 @@ export function useGameLoop({ onStateChange, onWeakAlert }: UseGameLoopOptions) 
   }, [emitSnapshot]);
 
   function tickSecond() {
-    totalSecRef.current += 1;
-    gameMinuteRef.current += 1;
+    totalGameHoursRef.current += 1;
 
     const pet = stateRef.current;
-    pet.mood = clamp(pet.mood - DECAY_PER_SECOND.mood * 1, 0, 100);
-    pet.hunger = clamp(pet.hunger - DECAY_PER_SECOND.hunger * 1, 0, 100);
-    pet.health = clamp(pet.health - DECAY_PER_SECOND.health * 1, 0, 100);
+    pet.mood = clamp(pet.mood - DECAY_PER_GAME_HOUR.mood, 0, 100);
+    pet.hunger = clamp(pet.hunger - DECAY_PER_GAME_HOUR.hunger, 0, 100);
+    pet.health = clamp(pet.health - DECAY_PER_GAME_HOUR.health, 0, 100);
 
     pet.isWeak = pet.mood <= 0 || pet.health <= 0 || pet.hunger <= 0;
     if (pet.isWeak) {
@@ -235,17 +264,17 @@ export function useGameLoop({ onStateChange, onWeakAlert }: UseGameLoopOptions) 
       pet.isEndangered = false;
     }
 
-    if (lowStateTimerRef.current >= ENDANGERED_TRIGGER_HOURS * 3600) {
+    if (lowStateTimerRef.current >= ENDANGERED_TRIGGER_SECONDS) {
       pet.isEndangered = true;
     }
 
-    if (pet.isEndangered && noActionTimerRef.current >= ENDANGERED_END_HOURS * 3600) {
+    if (pet.isEndangered && noActionTimerRef.current >= ENDANGERED_END_SECONDS) {
       triggerEnd();
     }
 
-    const elapsed = totalSecRef.current;
-    if (pet.stage !== 'adult' && elapsed - lastStageCheckSec.current >= STAGE_DURATION_SECONDS) {
-      lastStageCheckSec.current = elapsed;
+    const elapsedHours = totalGameHoursRef.current;
+    if (pet.stage !== 'adult' && elapsedHours - lastStageCheckGameHours.current >= STAGE_DURATION_GAME_HOURS) {
+      lastStageCheckGameHours.current = elapsedHours;
       pet.stage = upgradeStage(pet.stage);
     }
   }
@@ -258,7 +287,7 @@ export function useGameLoop({ onStateChange, onWeakAlert }: UseGameLoopOptions) 
       p.x += p.vx;
       p.y += p.vy;
       if (p.type === 'drop') {
-        p.vy += 0.02;
+        p.vy += 0.05;
       }
       if (p.life <= 0) arr.splice(i, 1);
     }
@@ -282,17 +311,19 @@ export function useGameLoop({ onStateChange, onWeakAlert }: UseGameLoopOptions) 
       emoji: '😊',
     };
     particlesRef.current = [];
-    totalSecRef.current = 0;
-    gameMinuteRef.current = 0;
+    totalGameHoursRef.current = 0;
     lowStateTimerRef.current = 0;
     noActionTimerRef.current = 0;
-    lastStageCheckSec.current = 0;
+    lastStageCheckGameHours.current = 0;
     endStateRef.current = { ended: false, timeLeft: 0 };
     endCountdownRef.current = 0;
     animTimerRef.current = 0;
     animDurationRef.current = 2;
     accumSecRef.current = 0;
     weakAlertTimerRef.current = 0;
+    transitionTimerRef.current = 0;
+    prevAnimationRef.current = 'idle';
+    isTransitioningRef.current = false;
   }
 
   useEffect(() => {
@@ -318,10 +349,9 @@ export function useGameLoop({ onStateChange, onWeakAlert }: UseGameLoopOptions) 
   return { trigger, reset, setPetCenter };
 }
 
-function computeGameTime(totalSeconds: number): GameTime {
-  const gameHours = totalSeconds;
-  const day = Math.floor(gameHours / 24) + 1;
-  const hour = Math.floor(gameHours % 24);
-  const minute = Math.floor((totalSeconds % 1) * 60);
+function computeGameTime(totalGameHours: number): GameTime {
+  const day = Math.floor(totalGameHours / 24) + 1;
+  const hour = Math.floor(totalGameHours % 24);
+  const minute = 0;
   return { day, hour, minute };
 }

@@ -50,6 +50,8 @@ const App: React.FC = () => {
   const animProgress = snapshot?.animationProgress ?? 0;
   const animElapsed = snapshot?.animationElapsed ?? 0;
   const endangeredFlash = snapshot?.endangeredFlash ?? 0;
+  const transitionProgress = snapshot?.transitionProgress ?? 1;
+  const prevAnimation = snapshot?.prevAnimation ?? 'idle';
 
   return (
     <div
@@ -81,6 +83,8 @@ const App: React.FC = () => {
           animationElapsed={animElapsed}
           endangeredFlash={endangeredFlash}
           endState={endState}
+          transitionProgress={transitionProgress}
+          prevAnimation={prevAnimation}
           onPetCenter={setPetCenter}
         />
       </div>

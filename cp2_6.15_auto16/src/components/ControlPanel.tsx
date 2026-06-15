@@ -48,15 +48,15 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   const prevHunger = useRef(hunger);
 
   useEffect(() => {
-    if (mood < prevMood.current) setFlashMood((n) => n + 1);
+    if (mood < prevMood.current - 0.5) setFlashMood((n) => n + 1);
     prevMood.current = mood;
   }, [mood]);
   useEffect(() => {
-    if (health < prevHealth.current) setFlashHealth((n) => n + 1);
+    if (health < prevHealth.current - 0.5) setFlashHealth((n) => n + 1);
     prevHealth.current = health;
   }, [health]);
   useEffect(() => {
-    if (hunger < prevHunger.current) setFlashHunger((n) => n + 1);
+    if (hunger < prevHunger.current - 0.5) setFlashHunger((n) => n + 1);
     prevHunger.current = hunger;
   }, [hunger]);
 
@@ -188,7 +188,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
       >
         点击按钮互动，照顾好小乖吧～
         <br />
-        每 18 分钟成长一个阶段
+        每 72 秒成长一个阶段
       </div>
 
       <style>{`
@@ -200,12 +200,13 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         }
         @keyframes redFlash {
           0% { box-shadow: 0 0 0 0 rgba(255,60,60,0); }
-          30% { box-shadow: 0 0 0 3px rgba(255,60,60,0.7); }
+          25% { box-shadow: 0 0 8px 3px rgba(255,60,60,0.8); }
           100% { box-shadow: 0 0 0 0 rgba(255,60,60,0); }
         }
-        @keyframes fillSpring {
-          0% { }
-          100% { }
+        @keyframes redBgPulse {
+          0% { background-color: #e0d0c0; }
+          30% { background-color: #ff9999; }
+          100% { background-color: #e0d0c0; }
         }
       `}</style>
     </div>
@@ -213,13 +214,23 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 };
 
 const StatBar: React.FC<StatBarProps> = ({ label, value, colorA, colorB, flashKey }) => {
-  const ref = useRef<HTMLDivElement>(null);
+  const outerRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    if (!ref.current) return;
-    ref.current.style.animation = 'none';
+    if (!outerRef.current) return;
+    outerRef.current.style.animation = 'none';
     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-    ref.current.offsetHeight;
-    ref.current.style.animation = 'redFlash 0.3s ease';
+    outerRef.current.offsetHeight;
+    outerRef.current.style.animation = 'redFlash 0.3s ease';
+  }, [flashKey]);
+
+  useEffect(() => {
+    if (!innerRef.current) return;
+    innerRef.current.style.animation = 'none';
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    innerRef.current.offsetHeight;
+    innerRef.current.style.animation = 'redBgPulse 0.3s ease';
   }, [flashKey]);
 
   const pct = Math.max(0, Math.min(100, value));
@@ -240,7 +251,7 @@ const StatBar: React.FC<StatBarProps> = ({ label, value, colorA, colorB, flashKe
         <span>{Math.round(pct)}/100</span>
       </div>
       <div
-        ref={ref}
+        ref={outerRef}
         style={{
           width: '100%',
           height: 16,
@@ -251,6 +262,7 @@ const StatBar: React.FC<StatBarProps> = ({ label, value, colorA, colorB, flashKe
         }}
       >
         <div
+          ref={innerRef}
           style={{
             height: '100%',
             width: `${pct}%`,

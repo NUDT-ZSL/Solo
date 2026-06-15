@@ -1,9 +1,7 @@
 import React, { useEffect, useRef, useMemo } from 'react';
 import {
   AnimationType,
-  GrowthStage,
   getStageSize,
-  ParticleShape,
 } from '../utils/petAi';
 import type { Particle, PetFullState, GameTime, GameEndState } from '../hooks/useGameLoop';
 
@@ -15,6 +13,8 @@ export interface PetCanvasProps {
   animationElapsed: number;
   endangeredFlash: number;
   endState: GameEndState;
+  transitionProgress: number;
+  prevAnimation: AnimationType;
   onPetCenter: (x: number, y: number) => void;
 }
 
@@ -40,6 +40,8 @@ const PetCanvas: React.FC<PetCanvasProps> = ({
   animationElapsed,
   endangeredFlash,
   endState,
+  transitionProgress,
+  prevAnimation,
   onPetCenter,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -49,7 +51,6 @@ const PetCanvas: React.FC<PetCanvasProps> = ({
   const cloudsRef = useRef<Cloud[]>([]);
   const flowersRef = useRef<FlowerPos[]>([]);
   const seedRef = useRef(false);
-  const frameRef = useRef(0);
 
   const flowerColors = useMemo(() => ['#ff6b6b', '#ffd93d', '#6bc5ff'], []);
 
@@ -142,12 +143,10 @@ const PetCanvas: React.FC<PetCanvasProps> = ({
 
     const { w, h } = sizeRef.current;
 
-    // 背景
     if (bgCacheRef.current) {
       ctx.drawImage(bgCacheRef.current, 0, 0, w, h);
     }
 
-    // 濒危闪烁覆盖
     if (pet.isEndangered) {
       const phase = Math.floor(endangeredFlash * 2) % 2;
       if (phase === 0) {
@@ -156,35 +155,28 @@ const PetCanvas: React.FC<PetCanvasProps> = ({
       }
     }
 
-    // 花朵
     for (const f of flowersRef.current) {
       drawPixelFlower(ctx, f.x, f.y, f.color);
     }
 
-    // 云朵
     for (const cloud of cloudsRef.current) {
       cloud.x += cloud.speed;
       if (cloud.x - cloud.w > w) cloud.x = -cloud.w;
       drawCloud(ctx, cloud.x, cloud.y, cloud.w, cloud.h);
     }
 
-    // 宠物
     const cx = w / 2;
     const cy = h * 0.55;
-    drawPet(ctx, cx, cy, pet, animationElapsed, animationProgress);
+    drawPet(ctx, cx, cy, pet, animationElapsed, animationProgress, transitionProgress, prevAnimation);
 
-    // 粒子
     for (const p of particles) {
       drawParticle(ctx, p);
     }
 
-    // 游戏时间（右上角）
     drawGameTime(ctx, w, gameTime);
 
-    // 宠物表情图标
     drawEmoji(ctx, cx, cy - getStageSize(pet.stage) * 0.9 - 10, pet.emoji, animationElapsed);
 
-    // 结束画面
     if (endState.ended) {
       const alpha = clamp01(1 - endState.timeLeft / 3);
       ctx.fillStyle = `rgba(0,0,0,${alpha})`;
@@ -198,8 +190,6 @@ const PetCanvas: React.FC<PetCanvasProps> = ({
         ctx.fillText('小乖永远睡着了 💫', w / 2, h / 2);
       }
     }
-
-    frameRef.current++;
   });
 
   return (
@@ -214,6 +204,7 @@ export default PetCanvas;
 function clamp01(v: number) { return Math.max(0, Math.min(1, v)); }
 function easeOutCubic(t: number) { return 1 - Math.pow(1 - t, 3); }
 function easeInOutQuad(t: number) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
 
 function drawGameTime(ctx: CanvasRenderingContext2D, w: number, t: { day: number; hour: number; minute: number }) {
   const text = `第${t.day}天 ${String(t.hour).padStart(2, '0')}:${String(t.minute).padStart(2, '0')}`;
@@ -264,32 +255,15 @@ function drawEmoji(ctx: CanvasRenderingContext2D, x: number, y: number, emoji: s
   ctx.restore();
 }
 
-// -------- 宠物渲染 --------
-function drawPet(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  pet: PetFullState,
+function computeAnimParams(
+  anim: AnimationType,
   t: number,
-  progress: number,
-) {
-  const size = getStageSize(pet.stage);
-  const scale = size / 32;
-
+  p: number,
+  scale: number,
+): { bobY: number; rot: number; sadFactor: number } {
   let bobY = 0;
   let rot = 0;
   let sadFactor = 0;
-  let layAngle = 0;
-  let blink = false;
-
-  if (pet.isEndangered) {
-    const f = Math.floor(t / 0.3) % 2;
-    if (f === 1) blink = true;
-    layAngle = easeOutCubic(clamp01(progress)) * (Math.PI / 2.2);
-  }
-
-  const anim = pet.animation;
-  const p = easeInOutQuad(clamp01(progress));
 
   switch (anim) {
     case 'idle':
@@ -298,7 +272,7 @@ function drawPet(
     case 'happy': {
       const jumpT = Math.sin(p * Math.PI);
       bobY = -jumpT * 14 * scale;
-      rot = (p * Math.PI * 2);
+      rot = p * Math.PI * 2;
       break;
     }
     case 'sad':
@@ -318,6 +292,42 @@ function drawPet(
     }
   }
 
+  return { bobY, rot, sadFactor };
+}
+
+function drawPet(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  pet: PetFullState,
+  t: number,
+  progress: number,
+  transitionProgress: number,
+  prevAnimation: AnimationType,
+) {
+  const size = getStageSize(pet.stage);
+  const scale = size / 32;
+
+  let layAngle = 0;
+  let blink = false;
+
+  if (pet.isEndangered) {
+    const f = Math.floor(t / 0.3) % 2;
+    if (f === 1) blink = true;
+    layAngle = easeOutCubic(clamp01(progress)) * (Math.PI / 2.2);
+  }
+
+  const anim = pet.animation;
+  const p = easeInOutQuad(clamp01(progress));
+
+  const newParams = computeAnimParams(anim, t, p, scale);
+  const oldParams = computeAnimParams(prevAnimation, t, p, scale);
+
+  const ease = easeOutCubic(clamp01(transitionProgress));
+  let bobY = lerp(oldParams.bobY, newParams.bobY, ease);
+  let rot = lerp(oldParams.rot, newParams.rot, ease);
+  let sadFactor = lerp(oldParams.sadFactor, newParams.sadFactor, ease);
+
   if (pet.isWeak) sadFactor = Math.max(sadFactor, 0.7);
 
   ctx.save();
@@ -327,14 +337,16 @@ function drawPet(
 
   if (blink) ctx.globalAlpha = 0.4;
 
-  // 虚弱灰化滤镜
+  if (rot !== 0) {
+    ctx.rotate(rot);
+  }
+
   const grayTint = pet.isWeak ? 0.4 : 0;
   drawPixelPetBody(ctx, pet.animation, t, p, sadFactor, grayTint);
 
   ctx.restore();
 }
 
-// 以32x32为基准单位绘制像素宠物
 function drawPixelPetBody(
   ctx: CanvasRenderingContext2D,
   anim: AnimationType,
@@ -346,7 +358,6 @@ function drawPixelPetBody(
   const bodyBase = '#ffb36b';
   const bodyLight = '#ffd39b';
   const bodyDark = '#e89054';
-  const cheek = '#ff7a7a';
   const darkOutline = '#5a3a20';
 
   const body = mixColor(bodyBase, '#c9c9c9', grayTint);
@@ -356,20 +367,16 @@ function drawPixelPetBody(
   const mouthOpen = anim === 'eating';
   const closeEyes = anim === 'sleeping';
 
-  // 身体 (椭圆 20x14，居中在0,-4下方)
   const bodyW = 20, bodyH = 14;
   fillRoundedRect(ctx, -bodyW / 2, -4, bodyW, bodyH, 5, body);
-  // 身体阴影底部
   ctx.fillStyle = dark;
   fillRoundedRect(ctx, -bodyW / 2, 4, bodyW, 4, 2, dark);
 
-  // 脚
   const footOffset = anim === 'played' ? Math.sin(t * 14) * 2 : (anim === 'idle' ? Math.sin(t * 4) * 0.5 : 0);
   ctx.fillStyle = dark;
   ctx.fillRect(-8, 9, 5, 3 + footOffset);
   ctx.fillRect(3, 9, 5, 3 - footOffset);
 
-  // 尾巴
   const tailWag = Math.sin(t * 6) * 0.4 + (sad ? -0.4 : 0.2);
   ctx.save();
   ctx.translate(bodyW / 2 - 1, 2);
@@ -380,7 +387,6 @@ function drawPixelPetBody(
   ctx.fillRect(4, -2, 2, 4);
   ctx.restore();
 
-  // 头 (圆 22x20，在 y=-16 中心)
   const headR = 11;
   const headCY = -18;
   ctx.fillStyle = body;
@@ -388,7 +394,6 @@ function drawPixelPetBody(
   ctx.arc(0, headCY, headR, 0, Math.PI * 2);
   ctx.fill();
 
-  // 耳朵
   const earDroop = sad * 0.9;
   ctx.save();
   ctx.translate(-headR + 2, headCY - headR + 2);
@@ -408,13 +413,11 @@ function drawPixelPetBody(
   ctx.fillRect(-3, -6, 6, 3);
   ctx.restore();
 
-  // 头部高光
   ctx.fillStyle = light;
   ctx.beginPath();
   ctx.ellipse(-4, headCY - 5, 3, 2, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // 眼睛
   const eyeY = headCY - 1;
   if (closeEyes) {
     ctx.strokeStyle = darkOutline;
@@ -453,13 +456,10 @@ function drawPixelPetBody(
     }
   }
 
-  // 腮红
   ctx.fillStyle = `rgba(255,122,122,${0.6 - sad * 0.4})`;
   ctx.fillRect(-8, headCY + 4, 3, 2);
   ctx.fillRect(5, headCY + 4, 3, 2);
-  void cheek;
 
-  // 嘴
   ctx.strokeStyle = darkOutline;
   ctx.lineWidth = 1.2;
   if (mouthOpen) {
@@ -468,7 +468,6 @@ function drawPixelPetBody(
     ctx.beginPath();
     ctx.ellipse(0, headCY + 6, 2.5, 1.5 + chew * 1.5, 0, 0, Math.PI * 2);
     ctx.fill();
-    // 食物粒
     for (let i = 0; i < 3; i++) {
       const ft = (t * 2 + i * 0.3) % 1;
       const fy = headCY + 6 - ft * 16;
@@ -489,7 +488,6 @@ function drawPixelPetBody(
     ctx.stroke();
   }
 
-  // 睡觉呼噜气泡
   if (anim === 'sleeping') {
     const bubbleT = (t % 2) / 2;
     const bx = 10 + Math.sin(bubbleT * 4) * 2;
@@ -506,7 +504,6 @@ function drawPixelPetBody(
     }
   }
 
-  // played星星闪烁
   if (anim === 'played') {
     for (let i = 0; i < 5; i++) {
       const ang = (i / 5) * Math.PI * 2 + t * 4;
@@ -564,7 +561,6 @@ function mixColor(hex1: string, hex2: string, t: number): string {
   return `rgb(${r},${g},${b})`;
 }
 
-// -------- 粒子 --------
 function drawParticle(ctx: CanvasRenderingContext2D, p: Particle) {
   const t = p.life / p.maxLife;
   const alpha = clamp01(t);
@@ -620,4 +616,5 @@ function drawParticle(ctx: CanvasRenderingContext2D, p: Particle) {
   }
   ctx.restore();
 }
+
 
