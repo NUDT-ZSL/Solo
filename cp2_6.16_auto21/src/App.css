@@ -1,0 +1,268 @@
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #f3f0e6;
+  position: relative;
+}
+
+.app-header {
+  padding: 24px 24px 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.app-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #2c2c2c;
+  margin: 0 0 4px 0;
+  letter-spacing: -0.5px;
+}
+
+.app-subtitle {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-bottom: 24px;
+}
+
+.add-btn {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background-color: #3a3a3a;
+  color: #faf8f0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  z-index: 100;
+}
+
+.add-btn:hover {
+  background-color: #555;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.add-btn:active {
+  transform: scale(0.95);
+  background-color: #333;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal {
+  width: 480px;
+  height: 320px;
+  background-color: #faf8f0;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.2s ease;
+  overflow: hidden;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #d4cfc3;
+  flex-shrink: 0;
+}
+
+.modal-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2c2c2c;
+  margin: 0;
+}
+
+.modal-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background-color: transparent;
+  color: #666;
+  cursor: pointer;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  padding: 0;
+}
+
+.modal-close:hover {
+  background-color: #e8e4d9;
+  color: #3a3a3a;
+}
+
+.modal-form {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 24px 20px;
+  gap: 16px;
+  min-height: 0;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group:last-of-type {
+  flex: 1;
+  min-height: 0;
+}
+
+.form-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #3a3a3a;
+}
+
+.form-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d4cfc3;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #2c2c2c;
+  background-color: #faf8f0;
+  font-family: 'Inter', sans-serif;
+  transition: border-color 0.2s ease;
+  outline: none;
+}
+
+.form-input:focus {
+  border-color: #3a3a3a;
+}
+
+.form-input::placeholder {
+  color: #999;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn-secondary {
+  background-color: #e8e4d9;
+  color: #3a3a3a;
+}
+
+.btn-secondary:hover {
+  background-color: #d4cfc3;
+}
+
+.btn-secondary:active {
+  background-color: #c9c4b8;
+}
+
+.btn-primary {
+  background-color: #3a3a3a;
+  color: #faf8f0;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: #555;
+}
+
+.btn-primary:active:not(:disabled) {
+  background-color: #333;
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .app-header {
+    padding: 20px 16px 12px;
+  }
+
+  .app-title {
+    font-size: 24px;
+  }
+
+  .modal {
+    width: calc(100% - 32px);
+    height: auto;
+    min-height: 320px;
+    max-height: calc(100vh - 64px);
+  }
+
+  .add-btn {
+    bottom: 16px;
+    left: 16px;
+  }
+}
