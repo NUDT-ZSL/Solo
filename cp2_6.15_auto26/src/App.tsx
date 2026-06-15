@@ -39,19 +39,24 @@ const App: React.FC = () => {
     const objectUrl = URL.createObjectURL(file);
     setThumbnailSrc(objectUrl);
 
+    const totalSteps = 20;
+    let step = 0;
+    const progressInterval = setInterval(() => {
+      step++;
+      const percent = Math.round((step / totalSteps) * 90);
+      setUploadProgress(percent);
+      if (step >= totalSteps) {
+        clearInterval(progressInterval);
+      }
+    }, 30);
+
     const reader = new FileReader();
 
-    reader.onprogress = (e) => {
-      if (e.lengthComputable) {
-        const percent = Math.round((e.loaded / e.total) * 100);
-        setUploadProgress(percent);
-      }
-    };
-
     reader.onload = (e) => {
+      clearInterval(progressInterval);
       const result = e.target?.result as string;
-      setImageSrc(result);
       setUploadProgress(100);
+      setImageSrc(result);
       setUploadComplete(true);
       setCelebrationTriggered(false);
       setShowResult(false);

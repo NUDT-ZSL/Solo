@@ -116,18 +116,25 @@ const CoverCanvas = forwardRef<CoverCanvasHandle, CoverCanvasProps>(
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+
+      ctx.shadowColor = 'rgba(0, 0, 0, 1)';
+      ctx.shadowBlur = brushRadius * 0.4;
+
       const gradient = ctx.createRadialGradient(x, y, 0, x, y, brushRadius);
       gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
-      gradient.addColorStop(0.4, 'rgba(0, 0, 0, 0.9)');
-      gradient.addColorStop(0.7, 'rgba(0, 0, 0, 0.5)');
-      gradient.addColorStop(0.85, 'rgba(0, 0, 0, 0.2)');
+      gradient.addColorStop(0.35, 'rgba(0, 0, 0, 0.95)');
+      gradient.addColorStop(0.55, 'rgba(0, 0, 0, 0.7)');
+      gradient.addColorStop(0.75, 'rgba(0, 0, 0, 0.35)');
+      gradient.addColorStop(0.9, 'rgba(0, 0, 0, 0.1)');
       gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
-      ctx.globalCompositeOperation = 'destination-out';
       ctx.fillStyle = gradient;
       ctx.beginPath();
       ctx.arc(x, y, brushRadius, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
     }, [brushRadius]);
 
     const eraseLine = useCallback((fromX: number, fromY: number, toX: number, toY: number) => {

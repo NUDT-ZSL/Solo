@@ -65,10 +65,10 @@ const Celebration: React.FC<CelebrationProps> = ({ active, duration = 2000 }) =>
 
       const isCircle = Math.random() > 0.5;
       const size = Math.random() * 6 + 6;
-      const colorRatio = Math.random();
-      const r = Math.round(255);
-      const g = Math.round(215 + (140 - 215) * colorRatio);
-      const b = Math.round(0 + (0 - 0) * colorRatio);
+      const t = Math.random();
+      const r = 255;
+      const g = Math.round(215 + (140 - 215) * t);
+      const b = 0;
       const color = `rgb(${r}, ${g}, ${b})`;
 
       particles.push({
@@ -153,7 +153,7 @@ const Celebration: React.FC<CelebrationProps> = ({ active, duration = 2000 }) =>
 
         const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, p.size);
         gradient.addColorStop(0, p.color);
-        gradient.addColorStop(1, 'rgba(255, 140, 0, 0.3)');
+        gradient.addColorStop(1, 'rgba(255, 140, 0, 0.15)');
 
         ctx.fillStyle = gradient;
 
