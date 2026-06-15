@@ -18,6 +18,7 @@ export interface Caregiver {
   servedCount: number;
   reviewTags: ReviewTag[];
   bookedDates: string[];
+  nearestAvailableDate?: string;
 }
 
 export interface Order {

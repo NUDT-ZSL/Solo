@@ -58,6 +58,7 @@ const StarInput: React.FC<{
 const StatusBadge: React.FC<{ status: OrderStatus }> = ({ status }) => {
   return (
     <span
+      className="status-badge-transition"
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -69,7 +70,8 @@ const StatusBadge: React.FC<{ status: OrderStatus }> = ({ status }) => {
         backgroundColor: ORDER_STATUS_COLORS[status] + '20',
         color: ORDER_STATUS_COLORS[status],
         border: `1px solid ${ORDER_STATUS_COLORS[status]}50`,
-        transition: 'all 0.3s ease'
+        transition: 'background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease',
+        boxShadow: `0 0 0 0 ${ORDER_STATUS_COLORS[status]}00`
       }}
     >
       {statusEmoji[status]} {ORDER_STATUS_LABELS[status]}
@@ -88,6 +90,16 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ order, onClose, onSubmitted }
   const [review, setReview] = useState(order.review || '');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(!!order.rating);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    requestAnimationFrame(() => setVisible(true));
+  }, []);
+
+  const handleClose = () => {
+    setVisible(false);
+    setTimeout(onClose, 250);
+  };
 
   const handleSubmit = async () => {
     if (rating === 0) return;
@@ -97,7 +109,7 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ order, onClose, onSubmitted }
       setSubmitted(true);
       setTimeout(() => {
         onSubmitted();
-        onClose();
+        handleClose();
       }, 1000);
     } catch (e) {
       console.error(e);
@@ -112,8 +124,11 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ order, onClose, onSubmitted }
         display: 'flex', alignItems: 'center', justifyContent: 'center'
       }}
     >
-      <div onClick={onClose} style={{
-        position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)'
+      <div onClick={handleClose} style={{
+        position: 'absolute', inset: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        opacity: visible ? 1 : 0,
+        transition: 'opacity 0.25s ease'
       }} />
       <div style={{
         position: 'relative',
@@ -121,26 +136,52 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ order, onClose, onSubmitted }
         backgroundColor: '#FFFEF7',
         borderRadius: '16px',
         padding: '28px',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+        transform: visible ? 'translateY(0)' : 'translateY(30px)',
+        opacity: visible ? 1 : 0,
+        transition: 'all 0.25s ease'
       }}>
-        <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#5C4A32', marginBottom: '20px' }}>
+        <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#5C4A32', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
           {submitted ? '🎉 评价已提交' : '💬 写评价'}
         </h3>
 
+        <div style={{
+          padding: '12px 16px', borderRadius: '10px',
+          backgroundColor: '#F5DEB340', border: '1px solid #DEB88760',
+          marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px'
+        }}>
+          <span style={{ fontSize: '28px' }}>
+            {petIcons[order.petType]}
+          </span>
+          <div>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: '#5C4A32' }}>
+              {order.petName} · {order.caregiverName}
+            </div>
+            <div style={{ fontSize: '12px', color: '#8B7355' }}>
+              {SERVICE_TYPE_LABELS[order.serviceType]} · {order.startDate} ~ {order.endDate}
+            </div>
+          </div>
+        </div>
+
         <div style={{ marginBottom: '20px' }}>
-          <div style={{ fontSize: '14px', color: '#8B7355', marginBottom: '10px', fontWeight: 600 }}>
-            您的评分
+          <div style={{ fontSize: '14px', color: '#8B7355', marginBottom: '12px', fontWeight: 600 }}>
+            您的评分 <span style={{ color: '#FFD700', fontSize: '12px', fontWeight: 400 }}>(点击星星评分)</span>
           </div>
           <StarInput
             rating={rating}
             onRatingChange={setRating}
             disabled={submitted || submitting}
           />
+          {rating > 0 && (
+            <div style={{ marginTop: '6px', fontSize: '13px', color: '#FFD700', fontWeight: 600 }}>
+              {rating}.0 分
+            </div>
+          )}
         </div>
 
         <div style={{ marginBottom: '24px' }}>
           <div style={{ fontSize: '14px', color: '#8B7355', marginBottom: '10px', fontWeight: 600 }}>
-            文字评价
+            文字评价 <span style={{ color: '#A08870', fontSize: '12px', fontWeight: 400 }}>(可选)</span>
           </div>
           <textarea
             value={review}
@@ -158,15 +199,19 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ order, onClose, onSubmitted }
               color: '#5C4A32',
               resize: 'vertical',
               boxSizing: 'border-box',
-              fontFamily: 'inherit'
+              fontFamily: 'inherit',
+              outline: 'none',
+              transition: 'border-color 0.2s ease'
             }}
+            onFocus={(e) => (e.currentTarget.style.borderColor = '#DEB887')}
+            onBlur={(e) => (e.currentTarget.style.borderColor = '#E8DCC8')}
           />
         </div>
 
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
           {!submitted && (
             <button
-              onClick={onClose}
+              onClick={handleClose}
               style={{
                 padding: '10px 20px',
                 borderRadius: '8px',
@@ -192,7 +237,8 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ order, onClose, onSubmitted }
               color: '#FFFFFF',
               cursor: rating === 0 || submitted || submitting ? 'not-allowed' : 'pointer',
               fontSize: '14px',
-              fontWeight: 600
+              fontWeight: 600,
+              transition: 'background-color 0.3s ease'
             }}
           >
             {submitting ? '提交中...' : submitted ? '已评价' : '提交评价'}
@@ -296,9 +342,10 @@ const MyBookings: React.FC = () => {
           left: '15px',
           top: '10px',
           bottom: '10px',
-          width: '3px',
+          width: '4px',
           backgroundColor: '#87CEEB',
-          borderRadius: '2px'
+          borderRadius: '2px',
+          boxShadow: '0 0 6px rgba(135,206,235,0.5)'
         }} />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>

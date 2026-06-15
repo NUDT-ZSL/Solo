@@ -223,9 +223,11 @@ const HomePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchExpanded, setSearchExpanded] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [filterKey, setFilterKey] = useState(0);
 
   const runMatch = async () => {
     setLoading(true);
+    setFilterKey(k => k + 1);
     try {
       const data = await matchCaregivers(filters);
       setResults(data);
@@ -350,7 +352,7 @@ const HomePage: React.FC = () => {
           </div>
         ) : (
           <div
-            key={`results-${refreshKey}`}
+            key={`results-${filterKey}`}
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
@@ -393,6 +395,10 @@ const App: React.FC = () => {
           from { opacity: 0; transform: translateY(12px); }
           to { opacity: 1; transform: translateY(0); }
         }
+        @keyframes cardStaggerIn {
+          from { opacity: 0; transform: translateY(16px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
         @keyframes fadeInLeft {
           from { opacity: 0; transform: translateX(-12px); }
           to { opacity: 1; transform: translateX(0); }
@@ -400,6 +406,17 @@ const App: React.FC = () => {
         @keyframes pulse {
           0%, 100% { opacity: 0.5; }
           50% { opacity: 0.8; }
+        }
+        @keyframes statusPulse {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+          100% { transform: scale(1); }
+        }
+        .status-badge-transition {
+          transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .status-badge-transition.changed {
+          animation: statusPulse 0.3s ease;
         }
         @media (max-width: 1024px) {
           .search-sidebar { display: none !important; }

@@ -295,9 +295,27 @@ const mockOrders: Order[] = [
 
 let orders: Order[] = [...mockOrders];
 
+function findNearestAvailableDate(bookedDates: string[]): string {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  for (let i = 0; i < 60; i++) {
+    const checkDate = new Date(today);
+    checkDate.setDate(checkDate.getDate() + i);
+    const dateStr = checkDate.toISOString().split('T')[0];
+    if (!bookedDates.includes(dateStr)) {
+      return dateStr;
+    }
+  }
+  return '';
+}
+
 app.get('/api/caregivers', (req: Request, res: Response) => {
   setTimeout(() => {
-    res.json(mockCaregivers);
+    const enriched = mockCaregivers.map(c => ({
+      ...c,
+      nearestAvailableDate: findNearestAvailableDate(c.bookedDates)
+    }));
+    res.json(enriched);
   }, 100);
 });
 
@@ -306,7 +324,10 @@ app.get('/api/caregivers/:id', (req: Request, res: Response) => {
   if (!caregiver) {
     return res.status(404).json({ error: '寄养人不存在' });
   }
-  res.json(caregiver);
+  res.json({
+    ...caregiver,
+    nearestAvailableDate: findNearestAvailableDate(caregiver.bookedDates)
+  });
 });
 
 app.get('/api/orders', (req: Request, res: Response) => {

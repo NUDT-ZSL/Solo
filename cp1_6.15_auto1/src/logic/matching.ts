@@ -106,7 +106,7 @@ export async function matchCaregivers(criteria: FilterCriteria): Promise<MatchRe
       results.push({
         caregiver,
         score,
-        nearestAvailableDate: findNearestAvailableDate(caregiver, criteria.startDate),
+        nearestAvailableDate: caregiver.nearestAvailableDate || findNearestAvailableDate(caregiver, criteria.startDate),
         matchedServices
       });
     }

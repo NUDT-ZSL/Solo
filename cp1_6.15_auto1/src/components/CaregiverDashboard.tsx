@@ -35,8 +35,17 @@ const RevenueCard: React.FC<{ total: number; trend: number; dailyData: { date: s
       borderRadius: '16px',
       padding: '28px',
       boxShadow: '0 4px 16px rgba(139, 115, 85, 0.12)',
-      border: '1px solid #DEB88780'
+      border: '2px solid #DEB88780',
+      position: 'relative',
+      overflow: 'hidden'
     }}>
+      <div style={{
+        position: 'absolute', top: 0, right: 0,
+        width: '120px', height: '120px',
+        backgroundColor: '#DEB88740',
+        borderRadius: '0 0 0 120px',
+        pointerEvents: 'none'
+      }} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}
         className="revenue-header-row"
       >
@@ -283,7 +292,7 @@ const WeekSchedule: React.FC<{
           const isOverflow = dayOrders.length > 5;
           const count = dayOrders.length;
 
-          let countBg = count === 0 ? '#F8F4EF' : count <= 2 ? '#98FB9840' : count <= 5 ? '#FFD70040' : '#FF450040';
+          let countBg = count === 0 ? '#F8F4EF' : count <= 2 ? '#98FB9840' : count <= 5 ? '#FFD70040' : '#FF450025';
           let countColor = count === 0 ? '#A08870' : count <= 2 ? '#228B22' : count <= 5 ? '#B8860B' : '#FF4500';
 
           return (
@@ -293,8 +302,8 @@ const WeekSchedule: React.FC<{
               style={{
                 padding: '16px 12px',
                 borderRadius: '10px',
-                border: `2px solid ${isToday ? '#B22222' : '#E8DCC8'}`,
-                backgroundColor: isToday ? '#FFF5F5' : '#FFFEF7',
+                border: `2px solid ${isToday ? '#B22222' : isOverflow ? '#FF450080' : '#E8DCC8'}`,
+                backgroundColor: isToday ? '#FFF5F5' : isOverflow ? '#FF450015' : '#FFFEF7',
                 cursor: count > 0 ? 'pointer' : 'default',
                 display: 'flex',
                 flexDirection: 'column',
@@ -352,9 +361,10 @@ const WeekSchedule: React.FC<{
                 backgroundColor: isOverflow ? '#FF450025' : countBg,
                 color: isOverflow ? '#FF4500' : countColor,
                 fontSize: '12px', fontWeight: 700,
-                border: `1px solid ${isOverflow ? '#FF450040' : 'transparent'}`
+                border: `1px solid ${isOverflow ? '#FF450060' : 'transparent'}`,
+                transition: 'all 0.3s ease'
               }}>
-                {count} 个预约
+                {isOverflow ? '🔥 ' : ''}{count} 个预约
               </div>
             </div>
           );

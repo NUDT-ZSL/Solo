@@ -22,20 +22,40 @@ const PetIcon: React.FC<{ type: PetType; selected: boolean; onClick: () => void 
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: '6px',
-        padding: '8px 14px',
-        borderRadius: '20px',
-        border: `2px solid ${selected ? PET_TYPE_COLORS[type] : '#E8DCC8'}`,
-        backgroundColor: selected ? PET_TYPE_COLORS[type] + '20' : '#FFFFFF',
+        gap: '8px',
+        padding: '10px 16px',
+        borderRadius: '24px',
+        border: `2.5px solid ${selected ? PET_TYPE_COLORS[type] : '#E8DCC8'}`,
+        backgroundColor: selected ? PET_TYPE_COLORS[type] + '25' : '#FFFFFF',
         cursor: 'pointer',
-        transition: 'all 0.2s ease',
-        fontWeight: selected ? 600 : 400,
+        transition: 'all 0.25s ease',
+        fontWeight: selected ? 700 : 400,
         fontSize: '14px',
-        transform: selected ? 'scale(1.02)' : 'scale(1)'
+        transform: selected ? 'scale(1.05)' : 'scale(1)',
+        boxShadow: selected ? `0 4px 12px ${PET_TYPE_COLORS[type]}40` : '0 1px 3px rgba(0,0,0,0.06)'
       }}
     >
-      <span style={{ fontSize: '18px' }}>{icons[type]}</span>
-      <span style={{ color: selected ? PET_TYPE_COLORS[type] : '#5C4A32' }}>{PET_TYPE_LABELS[type]}</span>
+      <span style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '32px',
+        height: '32px',
+        borderRadius: '50%',
+        backgroundColor: PET_TYPE_COLORS[type] + (selected ? '50' : '20'),
+        fontSize: '20px',
+        transition: 'all 0.25s ease',
+        transform: selected ? 'scale(1.1)' : 'scale(1)'
+      }}>
+        {icons[type]}
+      </span>
+      <span style={{
+        color: selected ? PET_TYPE_COLORS[type] : '#5C4A32',
+        fontWeight: selected ? 700 : 500,
+        transition: 'color 0.25s ease'
+      }}>
+        {PET_TYPE_LABELS[type]}
+      </span>
     </button>
   );
 };

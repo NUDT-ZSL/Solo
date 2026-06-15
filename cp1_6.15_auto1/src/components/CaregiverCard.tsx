@@ -53,20 +53,28 @@ const StarRating: React.FC<{ rating: number; size?: number }> = ({ rating, size 
   );
 };
 
-const PawAvatar: React.FC = () => (
+const PawAvatar: React.FC<{ size?: number }> = ({ size = 56 }) => (
   <div
     style={{
-      width: '100%',
-      height: '100%',
+      width: size,
+      height: size,
       backgroundColor: '#F0E68C',
       borderRadius: '50%',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      fontSize: '36px'
+      border: '2px solid #DEB887',
+      boxShadow: '0 2px 6px rgba(139,115,85,0.15)',
+      flexShrink: 0
     }}
   >
-    🐾
+    <svg width={size * 0.5} height={size * 0.5} viewBox="0 0 24 24" fill="#8B7355">
+      <ellipse cx="12" cy="16" rx="4" ry="3.5" />
+      <ellipse cx="6" cy="9" rx="2.2" ry="2.8" />
+      <ellipse cx="18" cy="9" rx="2.2" ry="2.8" />
+      <ellipse cx="9" cy="4.5" rx="1.8" ry="2.3" />
+      <ellipse cx="15" cy="4.5" rx="1.8" ry="2.3" />
+    </svg>
   </div>
 );
 
@@ -113,10 +121,11 @@ const CaregiverCard: React.FC<CaregiverCardProps> = ({ result, index, filters, o
           padding: '16px',
           cursor: 'pointer',
           boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-          transition: 'all 0.2s ease, opacity 0.3s ease, transform 0.3s ease',
+          transition: 'box-shadow 0.2s ease, transform 0.2s ease',
           border: '1px solid #E8DCC8',
           opacity: 0,
-          animation: `fadeInUp 0.3s ease ${index * 0.05}s forwards`,
+          transform: 'translateY(16px)',
+          animation: `cardStaggerIn 0.3s ease ${index * 0.08}s forwards`,
           display: 'flex',
           flexDirection: 'column',
           gap: '12px'
@@ -131,9 +140,7 @@ const CaregiverCard: React.FC<CaregiverCardProps> = ({ result, index, filters, o
         }}
       >
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <div style={{ width: '56px', height: '56px', flexShrink: 0 }}>
-            <PawAvatar />
-          </div>
+          <PawAvatar size={56} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#5C4A32' }}>
               {caregiver.name}
@@ -175,10 +182,14 @@ const CaregiverCard: React.FC<CaregiverCardProps> = ({ result, index, filters, o
             backgroundColor: nearestAvailableDate ? '#98FB9830' : '#FF634730',
             border: `1px solid ${nearestAvailableDate ? '#98FB98' : '#FF6347'}50`,
             fontSize: '12px',
-            color: '#5C4A32'
+            color: nearestAvailableDate ? '#228B22' : '#B22222',
+            fontWeight: 600,
+            transition: 'all 0.3s ease'
           }}
         >
-          {nearestAvailableDate ? `📅 最近可预约: ${nearestAvailableDate}` : '⚠️ 近期无空余'}
+          {nearestAvailableDate
+            ? <span>📅 最近可预约: <span style={{ color: '#228B22', fontWeight: 700 }}>{nearestAvailableDate}</span></span>
+            : '⚠️ 近期无空余日期'}
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#A08870' }}>
@@ -284,8 +295,10 @@ const CaregiverDetailModal: React.FC<DetailModalProps> = ({ caregiver, filters, 
       setSubmitState('success');
       setTimeout(() => {
         onBooked();
+      }, 2000);
+      setTimeout(() => {
         onClose();
-      }, 1500);
+      }, 2500);
     } catch (e) {
       setErrorMsg('提交失败，请重试');
       setSubmitState('idle');
@@ -348,9 +361,7 @@ const CaregiverDetailModal: React.FC<DetailModalProps> = ({ caregiver, filters, 
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '52px', height: '52px' }}>
-              <PawAvatar />
-            </div>
+            <PawAvatar size={52} />
             <div>
               <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#5C4A32' }}>{caregiver.name}</h2>
               <div style={{ marginTop: '4px' }}>
@@ -564,16 +575,28 @@ const CaregiverDetailModal: React.FC<DetailModalProps> = ({ caregiver, filters, 
                     let bg = 'transparent';
                     let color = isCurrentMonth ? '#5C4A32' : '#D3D3D3';
                     let cursor = 'pointer';
+                    let border = '1px solid transparent';
 
-                    if (isBooked || isPast) {
-                      bg = isBooked ? '#FF634730' : '#F8F4EF';
-                      color = isBooked ? '#FF6347' : '#D3D3D3';
+                    if (isBooked) {
+                      bg = '#FF6347';
+                      color = '#FFFFFF';
+                      cursor = 'not-allowed';
+                      border = '1px solid #FF6347';
+                    } else if (isPast) {
+                      bg = '#F0E8DC';
+                      color = '#C8B8A0';
                       cursor = 'not-allowed';
                     } else if (isSelected) {
                       bg = '#B22222';
                       color = '#FFFFFF';
+                      border = '1px solid #B22222';
                     } else if (inRange) {
-                      bg = '#DEB88750';
+                      bg = '#DEB88760';
+                      color = '#5C4A32';
+                    } else if (isCurrentMonth) {
+                      bg = '#98FB98';
+                      color = '#2E7D32';
+                      border = '1px solid #98FB9880';
                     }
 
                     return (
@@ -587,20 +610,22 @@ const CaregiverDetailModal: React.FC<DetailModalProps> = ({ caregiver, filters, 
                           justifyContent: 'center',
                           borderRadius: '8px',
                           fontSize: '13px',
-                          fontWeight: 500,
+                          fontWeight: isBooked || isSelected ? 700 : 500,
                           backgroundColor: bg,
                           color,
                           cursor,
+                          border,
                           transition: 'all 0.2s ease',
                           userSelect: 'none',
                           position: 'relative'
                         }}
                       >
                         {new Date(dateStr).getDate()}
-                        {!isBooked && !isPast && isCurrentMonth && !isSelected && !inRange && (
+                        {isBooked && (
                           <div style={{
-                            position: 'absolute', bottom: '3px', width: '4px', height: '4px',
-                            borderRadius: '50%', backgroundColor: '#98FB98'
+                            position: 'absolute', bottom: '2px',
+                            width: '6px', height: '2px',
+                            borderRadius: '1px', backgroundColor: '#FFFFFF'
                           }} />
                         )}
                       </div>
@@ -613,7 +638,7 @@ const CaregiverDetailModal: React.FC<DetailModalProps> = ({ caregiver, filters, 
                   borderTop: '1px solid #F0E8DC', fontSize: '12px', flexWrap: 'wrap'
                 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <span style={{ width: '12px', height: '12px', borderRadius: '3px', backgroundColor: '#FF634730', border: '1px solid #FF634780' }} />
+                    <span style={{ width: '12px', height: '12px', borderRadius: '3px', backgroundColor: '#FF6347', border: '1px solid #FF6347' }} />
                     已预约
                   </span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
