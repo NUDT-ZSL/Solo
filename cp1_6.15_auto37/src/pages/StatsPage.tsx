@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   RadarChart,
   PolarGrid,
@@ -17,15 +17,15 @@ import {
 import type { StatsResponse, NutritionSummary, DailyNutrition } from '../api/types';
 import { NUTRIENT_NAMES, NUTRIENT_UNITS } from '../api/types';
 import { formatDisplayDate } from '../utils/timeHelpers';
+import AnimatedNumber from '../components/AnimatedNumber';
+import AnimatedTooltip from '../components/AnimatedTooltip';
 
 const StatsPage: React.FC = () => {
   const [weekOffset, setWeekOffset] = useState(0);
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [expandedNutrient, setExpandedNutrient] = useState<keyof NutritionSummary | null>(null);
-  const [displayScore, setDisplayScore] = useState(0);
   const [cardsVisible, setCardsVisible] = useState<string[]>([]);
-  const scoreAnimationRef = useRef<number | null>(null);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -60,38 +60,7 @@ const StatsPage: React.FC = () => {
     fetchStats();
   }, [weekOffset]);
 
-  useEffect(() => {
-    if (stats) {
-      if (scoreAnimationRef.current) {
-        cancelAnimationFrame(scoreAnimationRef.current);
-      }
 
-      const targetScore = stats.balanceScore;
-      const startScore = displayScore;
-      const duration = 500;
-      const startTime = performance.now();
-
-      const animate = (currentTime: number) => {
-        const elapsed = currentTime - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        const easeProgress = 1 - Math.pow(1 - progress, 3);
-        const current = Math.round(startScore + (targetScore - startScore) * easeProgress);
-        setDisplayScore(current);
-
-        if (progress < 1) {
-          scoreAnimationRef.current = requestAnimationFrame(animate);
-        }
-      };
-
-      scoreAnimationRef.current = requestAnimationFrame(animate);
-    }
-
-    return () => {
-      if (scoreAnimationRef.current) {
-        cancelAnimationFrame(scoreAnimationRef.current);
-      }
-    };
-  }, [stats]);
 
   const getRadarData = () => {
     if (!stats) return [];
@@ -154,9 +123,11 @@ const StatsPage: React.FC = () => {
         <div className="loading">加载中...</div>
       ) : stats ? (
         <>
-          <div className="score-card" style={{ backgroundColor: getScoreColor(displayScore) }}>
+          <div className="score-card" style={{ backgroundColor: getScoreColor(stats.balanceScore) }}>
             <div className="score-label">本周营养均衡评分</div>
-            <div className="score-value">{displayScore}</div>
+            <div className="score-value">
+              <AnimatedNumber value={stats.balanceScore} duration={500} />
+            </div>
             <div className="score-max">/ 100</div>
           </div>
 
@@ -263,9 +234,8 @@ const StatsPage: React.FC = () => {
                           />
                           <YAxis tick={{ fill: '#718096', fontSize: 10 }} />
                           <Tooltip
-                            formatter={(value: number) => [`${value.toFixed(1)} ${unit}`, '摄入量']}
-                            labelFormatter={(label) => label}
-                            animationDuration={200}
+                            content={<AnimatedTooltip unit={unit} />}
+                            animationDuration={0}
                           />
                           <Area
                             type="monotone"
@@ -408,15 +378,13 @@ const StatsPage: React.FC = () => {
           padding: 1.25rem;
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
           cursor: pointer;
-          transition: all 0.3s ease;
+          transition: box-shadow 0.3s ease;
           opacity: 0;
-          transform: translateY(20px);
-          animation: fadeInUp 0.4s ease-out forwards;
+          transform: translateY(30px);
         }
 
         .nutrient-card.visible {
-          opacity: 1;
-          transform: translateY(0);
+          animation: fadeInUp 0.5s ease-out forwards;
         }
 
         .nutrient-card.expanded {
@@ -426,7 +394,7 @@ const StatsPage: React.FC = () => {
         @keyframes fadeInUp {
           from {
             opacity: 0;
-            transform: translateY(20px);
+            transform: translateY(30px);
           }
           to {
             opacity: 1;

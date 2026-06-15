@@ -89,6 +89,7 @@ const DailyLogPage: React.FC = () => {
   };
 
   const groupRecordsByDate = () => {
+    if (!weekStart) return [];
     const days = getDaysInWeek(weekStart);
     return days.map((date) => ({
       date,
@@ -213,7 +214,7 @@ const DailyLogPage: React.FC = () => {
         </div>
       )}
 
-      {loading ? (
+      {loading || !weekStart ? (
         <div className="loading">加载中...</div>
       ) : (
         <div
@@ -225,7 +226,7 @@ const DailyLogPage: React.FC = () => {
             const hasRecords = dayRecords.length > 0;
             return (
               <div
-                className="day-card"
+                className={`day-card ${hasRecords ? 'has-records' : ''}`}
                 key={date}
                 style={{ animationDelay: `${index * 0.1}s` }}
               >
@@ -237,9 +238,6 @@ const DailyLogPage: React.FC = () => {
                       <span className="day-weekday">{dateInfo.weekday}</span>
                     </div>
                   </div>
-                  {hasRecords && (
-                    <div className="day-checkmark">✓</div>
-                  )}
                 </div>
 
                 <div className="day-records">
@@ -289,6 +287,10 @@ const DailyLogPage: React.FC = () => {
                     ))
                   )}
                 </div>
+
+                {hasRecords && (
+                  <div className="day-completion-check">✓</div>
+                )}
               </div>
             );
           })}
@@ -348,17 +350,24 @@ const DailyLogPage: React.FC = () => {
         }
 
         .timeline-container.slide-left {
-          animation: slideInFromLeft 0.4s ease-out;
+          animation: slideInFromLeft 0.4s ease-out both;
         }
 
         .timeline-container.slide-right {
-          animation: slideInFromRight 0.4s ease-out;
+          animation: slideInFromRight 0.4s ease-out both;
+        }
+
+        .timeline-container.slide-left .day-card,
+        .timeline-container.slide-right .day-card {
+          animation: none !important;
+          opacity: 1 !important;
+          transform: none !important;
         }
 
         @keyframes slideInFromLeft {
           from {
             opacity: 0;
-            transform: translateX(30px);
+            transform: translateX(50px);
           }
           to {
             opacity: 1;
@@ -369,7 +378,7 @@ const DailyLogPage: React.FC = () => {
         @keyframes slideInFromRight {
           from {
             opacity: 0;
-            transform: translateX(-30px);
+            transform: translateX(-50px);
           }
           to {
             opacity: 1;
@@ -384,6 +393,7 @@ const DailyLogPage: React.FC = () => {
           overflow: hidden;
           animation: fadeInUp 0.4s ease-out backwards;
           position: relative;
+          padding-bottom: 32px;
         }
 
         @keyframes fadeInUp {
@@ -433,17 +443,34 @@ const DailyLogPage: React.FC = () => {
           font-weight: 500;
         }
 
-        .day-checkmark {
-          width: 28px;
-          height: 28px;
-          border-radius: 50%;
+        .day-completion-check {
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          height: 32px;
           background: rgba(72, 187, 120, 0.3);
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 1rem;
+          font-size: 1.25rem;
           font-weight: 700;
           color: #fff;
+          border-radius: 0 0 12px 12px;
+          opacity: 0;
+          animation: fadeInCheck 0.3s ease forwards;
+          animation-delay: 0.5s;
+        }
+
+        @keyframes fadeInCheck {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
 
         .day-records {

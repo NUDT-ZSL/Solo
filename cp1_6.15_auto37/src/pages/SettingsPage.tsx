@@ -329,12 +329,14 @@ const SettingsPage: React.FC = () => {
           align-items: center;
           justify-content: center;
           z-index: 100;
-          animation: fadeIn 0.2s ease;
+          animation: fadeInOverlay 0.6s ease forwards;
         }
 
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
+        @keyframes fadeInOverlay {
+          0% { opacity: 0; }
+          20% { opacity: 1; }
+          80% { opacity: 1; }
+          100% { opacity: 0; }
         }
 
         .success-checkmark {
@@ -345,23 +347,29 @@ const SettingsPage: React.FC = () => {
           display: flex;
           align-items: center;
           justify-content: center;
-          animation: scaleIn 0.6s ease forwards;
+          animation: scaleInOut 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+          box-shadow: 0 4px 20px rgba(72, 187, 120, 0.4);
         }
 
-        @keyframes scaleIn {
+        @keyframes scaleInOut {
           0% {
             transform: scale(0);
             opacity: 0;
           }
+          30% {
+            transform: scale(1.1);
+            opacity: 1;
+          }
           50% {
-            transform: scale(1.2);
+            transform: scale(1);
             opacity: 1;
           }
           70% {
-            transform: scale(1);
+            transform: scale(1.2);
+            opacity: 1;
           }
           100% {
-            transform: scale(1.5);
+            transform: scale(2);
             opacity: 0;
           }
         }
@@ -374,13 +382,13 @@ const SettingsPage: React.FC = () => {
         .checkmark-circle {
           stroke-dasharray: 166;
           stroke-dashoffset: 166;
-          animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+          animation: stroke 0.4s cubic-bezier(0.65, 0, 0.45, 1) 0.1s forwards;
         }
 
         .checkmark-check {
           stroke-dasharray: 48;
           stroke-dashoffset: 48;
-          animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.2s forwards;
+          animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.25s forwards;
         }
 
         @keyframes stroke {

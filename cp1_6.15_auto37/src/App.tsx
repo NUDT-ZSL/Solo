@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   BrowserRouter as Router,
   Routes,
@@ -13,32 +13,44 @@ import SettingsPage from './pages/SettingsPage';
 const AnimatedRoutes: React.FC = () => {
   const location = useLocation();
   const [displayLocation, setDisplayLocation] = useState(location);
-  const [transitionStage, setTransitionStage] = useState('fadeIn');
+  const [transitionStage, setTransitionStage] = useState<'enter' | 'exit'>('enter');
+  const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('left');
+  const prevPathRef = useRef(location.pathname);
 
   useEffect(() => {
-    if (location.pathname !== displayLocation.pathname) {
-      setTransitionStage('fadeOut');
+    if (location.pathname !== prevPathRef.current) {
+      const navOrder = ['/', '/stats', '/settings'];
+      const prevIndex = navOrder.indexOf(prevPathRef.current);
+      const nextIndex = navOrder.indexOf(location.pathname);
+      setSlideDirection(nextIndex > prevIndex ? 'left' : 'right');
+
+      setTransitionStage('exit');
       const timer = setTimeout(() => {
         setDisplayLocation(location);
-        setTransitionStage('slideIn');
+        setTransitionStage('enter');
       }, 150);
+
+      prevPathRef.current = location.pathname;
       return () => clearTimeout(timer);
     }
-  }, [location, displayLocation]);
+  }, [location]);
 
   const getTransitionClass = () => {
-    if (transitionStage === 'fadeOut') return 'fade-out';
-    if (transitionStage === 'slideIn') return 'slide-in';
-    return 'fade-in';
+    if (transitionStage === 'exit') {
+      return `page-exit page-exit-${slideDirection}`;
+    }
+    return `page-enter page-enter-${slideDirection}`;
   };
 
   return (
-    <div className={`routes-container ${getTransitionClass()}`}>
-      <Routes location={displayLocation}>
-        <Route path="/" element={<DailyLogPage />} />
-        <Route path="/stats" element={<StatsPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-      </Routes>
+    <div className="routes-wrapper">
+      <div className={`routes-container ${getTransitionClass()}`}>
+        <Routes location={displayLocation}>
+          <Route path="/" element={<DailyLogPage />} />
+          <Route path="/stats" element={<StatsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+        </Routes>
+      </div>
     </div>
   );
 };
@@ -170,48 +182,87 @@ const App: React.FC = () => {
           font-weight: 500;
         }
 
+        .routes-wrapper {
+          position: relative;
+          width: 100%;
+          overflow: hidden;
+        }
+
         .routes-container {
           position: relative;
+          width: 100%;
+          min-height: calc(100vh - 120px);
         }
 
-        .fade-in {
-          animation: fadeIn 0.3s ease;
+        .page-enter {
+          animation-duration: 0.3s;
+          animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+          animation-fill-mode: both;
         }
 
-        .fade-out {
-          animation: fadeOut 0.15s ease forwards;
+        .page-exit {
+          animation-duration: 0.15s;
+          animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+          animation-fill-mode: both;
         }
 
-        .slide-in {
-          animation: slideInFromRight 0.3s ease;
+        .page-enter-left {
+          animation-name: slideInFromRight;
         }
 
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
+        .page-enter-right {
+          animation-name: slideInFromLeft;
         }
 
-        @keyframes fadeOut {
-          from {
-            opacity: 1;
-          }
-          to {
-            opacity: 0;
-          }
+        .page-exit-left {
+          animation-name: slideOutToLeft;
+        }
+
+        .page-exit-right {
+          animation-name: slideOutToRight;
         }
 
         @keyframes slideInFromRight {
           from {
             opacity: 0;
-            transform: translateX(20px);
+            transform: translateX(30px);
           }
           to {
             opacity: 1;
             transform: translateX(0);
+          }
+        }
+
+        @keyframes slideInFromLeft {
+          from {
+            opacity: 0;
+            transform: translateX(-30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        @keyframes slideOutToLeft {
+          from {
+            opacity: 1;
+            transform: translateX(0);
+          }
+          to {
+            opacity: 0;
+            transform: translateX(-30px);
+          }
+        }
+
+        @keyframes slideOutToRight {
+          from {
+            opacity: 1;
+            transform: translateX(0);
+          }
+          to {
+            opacity: 0;
+            transform: translateX(30px);
           }
         }
 
@@ -253,19 +304,6 @@ const App: React.FC = () => {
 
         .btn-secondary:hover {
           background: #e2e8f0;
-        }
-
-        .page {
-          animation: pageFadeIn 0.3s ease;
-        }
-
-        @keyframes pageFadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
         }
 
         @media (max-width: 768px) {
