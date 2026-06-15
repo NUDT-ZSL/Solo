@@ -8,7 +8,7 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
-app.post('/api/scores', (req, res) => {
+app.post('/api/scores', async (req, res) => {
   try {
     const { nickname, score, difficulty } = req.body;
 
@@ -24,7 +24,7 @@ app.post('/api/scores', (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid difficulty' });
     }
 
-    const result = db.insertScore(nickname.trim(), score, difficulty);
+    const result = await db.insertScore(nickname.trim(), score, difficulty);
 
     if (result) {
       return res.json({ success: true });
@@ -37,12 +37,12 @@ app.post('/api/scores', (req, res) => {
   }
 });
 
-app.get('/api/leaderboard', (req, res) => {
+app.get('/api/leaderboard', async (req, res) => {
   try {
     const { difficulty } = req.query;
     const difficultyParam = difficulty ? String(difficulty) : undefined;
 
-    const leaderboard = db.getTopScores(difficultyParam, 20);
+    const leaderboard = await db.getTopScores(difficultyParam, 20);
     return res.json(leaderboard);
   } catch (error) {
     console.error('Error in GET /api/leaderboard:', error);

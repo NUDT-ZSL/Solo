@@ -333,11 +333,11 @@ body {
 }
 
 .leaderboard-item:nth-child(odd) {
-  background-color: rgba(255, 255, 255, 0.4);
+  background-color: #f0f0f0;
 }
 
 .leaderboard-item:nth-child(even) {
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: #ffffff;
 }
 
 .leaderboard-rank {
@@ -346,8 +346,13 @@ body {
 }
 
 .leaderboard-item.rank-1 {
-  color: #ffd700;
+  background-color: #ffd700;
+  color: #0a0a0a;
   font-weight: bold;
+}
+
+.leaderboard-item.rank-1 .leaderboard-score {
+  color: #0a0a0a;
 }
 
 .leaderboard-name {

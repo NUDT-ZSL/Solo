@@ -148,12 +148,13 @@ export class GameEngine {
   private setupCanvas(): void {
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
       || window.innerWidth < 768;
+    const isPortrait = window.innerHeight > window.innerWidth;
 
     let targetWidth: number;
     let targetHeight: number;
 
-    if (isMobile) {
-      targetWidth = Math.min(window.innerWidth * 0.9, this.BASE_WIDTH);
+    if (isMobile && isPortrait) {
+      targetWidth = window.innerWidth * 0.9;
       const aspectRatio = this.BASE_HEIGHT / this.BASE_WIDTH;
       targetHeight = targetWidth * aspectRatio;
     } else {
@@ -194,7 +195,7 @@ export class GameEngine {
     }
   }
 
-  private handleBeat(info: { bpm: number; energy: number; time: number }): void {
+  private handleBeat(info: { bpm: number; energy: number; time: number; phase: number }): void {
     if (info.time - this.lastBeatTime < 0.2) return;
     this.lastBeatTime = info.time;
     this.beatIndex++;
@@ -325,23 +326,90 @@ export class GameEngine {
 
   private generateBreakParticles(x: number, y: number, color: string): Fragment[] {
     const fragments: Fragment[] = [];
-    for (let i = 0; i < 12; i++) {
-      const angle = (i / 12) * Math.PI * 2 + Math.random() * 0.3;
-      const speed = 80 + Math.random() * 120;
+    const fragmentCount = 18;
+    for (let i = 0; i < fragmentCount; i++) {
+      const baseAngle = (i / fragmentCount) * Math.PI * 2;
+      const randomAngle = baseAngle + (Math.random() - 0.5) * 0.8;
+      const speed = 100 + Math.random() * 200;
       fragments.push({
-        x: x,
-        y: y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 50,
-        size: 4 + Math.random() * 8,
+        x: x + (Math.random() - 0.5) * 10,
+        y: y + (Math.random() - 0.5) * 10,
+        vx: Math.cos(randomAngle) * speed * (0.6 + Math.random() * 0.8),
+        vy: Math.sin(randomAngle) * speed * (0.6 + Math.random() * 0.8) - 80,
+        size: 3 + Math.random() * 10,
         rotation: Math.random() * Math.PI * 2,
-        rotationSpeed: (Math.random() - 0.5) * 10,
-        life: 0.6,
-        maxLife: 0.6,
+        rotationSpeed: (Math.random() - 0.5) * 15,
+        life: 0.8 + Math.random() * 0.4,
+        maxLife: 1.2,
         color: color
       });
     }
     return fragments;
+  }
+
+  private getPolygonVertices(obs: Obstacle): { x: number; y: number }[] {
+    const vertices: { x: number; y: number }[] = [];
+    for (let i = 0; i < obs.sides; i++) {
+      const angle = (i / obs.sides) * Math.PI * 2 - Math.PI / 2 + obs.rotation;
+      vertices.push({
+        x: obs.x + Math.cos(angle) * obs.radius,
+        y: obs.y + Math.sin(angle) * obs.radius
+      });
+    }
+    return vertices;
+  }
+
+  private circlePolygonCollision(
+    circleX: number, circleY: number, circleRadius: number,
+    vertices: { x: number; y: number }[]
+  ): boolean {
+    const axes: { x: number; y: number }[] = [];
+
+    for (let i = 0; i < vertices.length; i++) {
+      const v1 = vertices[i];
+      const v2 = vertices[(i + 1) % vertices.length];
+      const edge = { x: v2.x - v1.x, y: v2.y - v1.y };
+      const len = Math.sqrt(edge.x * edge.x + edge.y * edge.y);
+      if (len > 0) {
+        axes.push({ x: -edge.y / len, y: edge.x / len });
+      }
+    }
+
+    let minDist = Infinity;
+    let closestVertex = vertices[0];
+    for (const v of vertices) {
+      const dx = v.x - circleX;
+      const dy = v.y - circleY;
+      const dist = dx * dx + dy * dy;
+      if (dist < minDist) {
+        minDist = dist;
+        closestVertex = v;
+      }
+    }
+    const axis = {
+      x: (closestVertex.x - circleX) / Math.sqrt(minDist || 1),
+      y: (closestVertex.y - circleY) / Math.sqrt(minDist || 1)
+    };
+    axes.push(axis);
+
+    for (const ax of axes) {
+      let minPoly = Infinity, maxPoly = -Infinity;
+      for (const v of vertices) {
+        const proj = v.x * ax.x + v.y * ax.y;
+        minPoly = Math.min(minPoly, proj);
+        maxPoly = Math.max(maxPoly, proj);
+      }
+
+      const circleProj = circleX * ax.x + circleY * ax.y;
+      const minCircle = circleProj - circleRadius;
+      const maxCircle = circleProj + circleRadius;
+
+      if (maxCircle < minPoly || minCircle > maxPoly) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   private generateCollectParticles(x: number, y: number, color: string): void {
@@ -392,7 +460,8 @@ export class GameEngine {
       this.handleBeat({
         bpm: this.autoBpm,
         energy: 0.8,
-        time: beatCount * (60 / this.autoBpm)
+        time: beatCount * (60 / this.autoBpm),
+        phase: 0
       });
       this.autoBeatTimer = window.setTimeout(tick, beatInterval);
     };
@@ -534,13 +603,15 @@ export class GameEngine {
       obs.x = obs.baseX + waveOffset;
 
       if (obs.broken) {
-        obs.breakProgress += dt * 2;
+        obs.breakProgress += dt * 1.5;
 
         for (let j = obs.fragments.length - 1; j >= 0; j--) {
           const f = obs.fragments[j];
           f.x += f.vx * dt;
           f.y += f.vy * dt;
-          f.vy += 300 * dt;
+          f.vy += 400 * dt;
+          f.vx *= 0.985;
+          f.vy *= 0.99;
           f.rotation += f.rotationSpeed * dt;
           f.life -= dt;
 
@@ -619,11 +690,8 @@ export class GameEngine {
 
       if (this.ballJumping) continue;
 
-      const dx = obs.x - this.ballX;
-      const dy = obs.y - this.ballY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist < ballEffectiveRadius + obs.radius) {
+      const vertices = this.getPolygonVertices(obs);
+      if (this.circlePolygonCollision(this.ballX, this.ballY, ballEffectiveRadius, vertices)) {
         obs.broken = true;
         obs.breakProgress = 0;
         obs.fragments = this.generateBreakParticles(obs.x, obs.y, '#ff3333');

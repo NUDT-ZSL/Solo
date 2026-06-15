@@ -1,12 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { Difficulty } from './DifficultySelect';
-
-interface LeaderboardEntry {
-  nickname: string;
-  score: number;
-  difficulty: Difficulty;
-  date: string;
-}
+import PlayerManager from '../player/PlayerManager';
+import Leaderboard, { LeaderboardEntry } from '../player/Leaderboard';
 
 interface GameOverPanelProps {
   score: number;
@@ -15,21 +10,6 @@ interface GameOverPanelProps {
   onBack: () => void;
   onReplay: () => void;
 }
-
-const LEADERBOARD_KEY = 'rhythm_runner_leaderboard';
-
-const getLeaderboard = (): LeaderboardEntry[] => {
-  try {
-    const data = localStorage.getItem(LEADERBOARD_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
-  }
-};
-
-const saveLeaderboard = (entries: LeaderboardEntry[]) => {
-  localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(entries));
-};
 
 const difficultyLabel: Record<Difficulty, string> = {
   easy: '简单',
@@ -46,44 +26,48 @@ const GameOverPanel: React.FC<GameOverPanelProps> = ({
 }) => {
   const [displayScore, setDisplayScore] = useState(0);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const entry: LeaderboardEntry = {
-      nickname,
-      score,
-      difficulty,
-      date: new Date().toISOString().split('T')[0],
+    const uploadAndFetch = async () => {
+      try {
+        await PlayerManager.getInstance().saveScore(nickname, score, difficulty);
+      } catch (e) {
+        console.error('Failed to save score:', e);
+      }
+
+      try {
+        const data = await Leaderboard.getInstance().fetchLeaderboard(difficulty);
+        setLeaderboard(data.slice(0, 20));
+      } catch (e) {
+        console.error('Failed to fetch leaderboard:', e);
+        setLeaderboard([]);
+      }
+      setLoading(false);
     };
 
-    const current = getLeaderboard();
-    current.push(entry);
-    current.sort((a, b) => b.score - a.score);
-    const top10 = current.slice(0, 10);
-    saveLeaderboard(top10);
-    setLeaderboard(top10);
+    uploadAndFetch();
   }, [score, nickname, difficulty]);
 
   useEffect(() => {
-    let current = 0;
-    const target = score;
-    const duration = 1500;
-    const startTime = Date.now();
+    const scoreStr = score.toString();
+    let displayedChars = 0;
+    setDisplayScore(0);
 
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      current = Math.floor(target * eased);
-      setDisplayScore(current);
-
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        setDisplayScore(target);
+    const typeNextChar = () => {
+      displayedChars++;
+      if (displayedChars <= scoreStr.length) {
+        const currentStr = scoreStr.substring(0, displayedChars);
+        setDisplayScore(parseInt(currentStr, 10));
+        setTimeout(typeNextChar, 100);
       }
     };
 
-    animate();
+    const initialDelay = setTimeout(typeNextChar, 200);
+
+    return () => {
+      clearTimeout(initialDelay);
+    };
   }, [score]);
 
   return (
@@ -94,9 +78,13 @@ const GameOverPanel: React.FC<GameOverPanelProps> = ({
           <div className="score-label">本局得分</div>
           <div className="score-value">{displayScore.toLocaleString()}</div>
         </div>
-        <div className="leaderboard-title">排行榜 TOP 10</div>
+        <div className="leaderboard-title">排行榜 TOP 20</div>
         <div className="leaderboard-list">
-          {leaderboard.length === 0 ? (
+          {loading ? (
+            <div className="leaderboard-item" style={{ justifyContent: 'center', color: '#666' }}>
+              加载中...
+            </div>
+          ) : leaderboard.length === 0 ? (
             <div className="leaderboard-item" style={{ justifyContent: 'center', color: '#666' }}>
               暂无记录
             </div>
@@ -106,7 +94,7 @@ const GameOverPanel: React.FC<GameOverPanelProps> = ({
                 key={`${entry.nickname}-${entry.score}-${index}`}
                 className={`leaderboard-item rank-${index + 1}`}
               >
-                <div className="leaderboard-rank">#{index + 1}</div>
+                <div className="leaderboard-rank">#{entry.rank}</div>
                 <div className="leaderboard-name">{entry.nickname}</div>
                 <div className="leaderboard-score">{entry.score.toLocaleString()}</div>
               </div>

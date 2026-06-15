@@ -1,4 +1,5 @@
-import Database from 'better-sqlite3';
+import initSqlJs, { Database } from 'sql.js';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -24,15 +25,22 @@ export interface TopScoreEntry {
 }
 
 class DatabaseManager {
-  private db: Database.Database;
+  private db: Database | null = null;
+  private SQL: any = null;
 
-  constructor() {
-    this.db = new Database(dbPath);
-    this.init();
-  }
+  async init(): Promise<void> {
+    if (this.db) return;
 
-  private init(): void {
-    this.db.exec(`
+    this.SQL = await initSqlJs();
+
+    if (fs.existsSync(dbPath)) {
+      const fileBuffer = fs.readFileSync(dbPath);
+      this.db = new this.SQL.Database(fileBuffer);
+    } else {
+      this.db = new this.SQL.Database();
+    }
+
+    this.db!.run(`
       CREATE TABLE IF NOT EXISTS scores (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nickname TEXT NOT NULL,
@@ -40,27 +48,44 @@ class DatabaseManager {
         difficulty TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
+    `);
 
+    this.db!.run(`
       CREATE INDEX IF NOT EXISTS idx_scores_difficulty_score ON scores(difficulty, score DESC);
+    `);
+    this.db!.run(`
       CREATE INDEX IF NOT EXISTS idx_scores_score ON scores(score DESC);
     `);
+
+    this.save();
   }
 
-  insertScore(nickname: string, score: number, difficulty: string): boolean {
+  private save(): void {
+    if (!this.db) return;
+    const data = this.db.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(dbPath, buffer);
+  }
+
+  async insertScore(nickname: string, score: number, difficulty: string): Promise<boolean> {
+    if (!this.db) await this.init();
+    
     try {
-      const stmt = this.db.prepare(`
-        INSERT INTO scores (nickname, score, difficulty)
-        VALUES (?, ?, ?)
-      `);
-      const result = stmt.run(nickname, score, difficulty);
-      return result.changes > 0;
+      this.db!.run(
+        `INSERT INTO scores (nickname, score, difficulty) VALUES (?, ?, ?)`,
+        [nickname, score, difficulty]
+      );
+      this.save();
+      return true;
     } catch (error) {
       console.error('Failed to insert score:', error);
       return false;
     }
   }
 
-  getTopScores(difficulty?: string, limit: number = 20): TopScoreEntry[] {
+  async getTopScores(difficulty?: string, limit: number = 20): Promise<TopScoreEntry[]> {
+    if (!this.db) await this.init();
+    
     let query = `
       SELECT nickname, score, difficulty, created_at
       FROM scores
@@ -75,20 +100,14 @@ class DatabaseManager {
     query += ` ORDER BY score DESC, created_at ASC LIMIT ?`;
     params.push(limit);
 
-    const stmt = this.db.prepare(query);
-    const rows = stmt.all(...params) as {
-      nickname: string;
-      score: number;
-      difficulty: string;
-      created_at: string;
-    }[];
+    const rows = this.db!.exec(query, params)[0]?.values || [];
 
-    return rows.map((row, index) => ({
+    return rows.map((row: any, index: number) => ({
       rank: index + 1,
-      nickname: row.nickname,
-      score: row.score,
-      difficulty: row.difficulty,
-      date: row.created_at,
+      nickname: row[0],
+      score: row[1],
+      difficulty: row[2],
+      date: row[3],
     }));
   }
 }
