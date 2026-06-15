@@ -43,6 +43,18 @@ function App() {
 
   const appRef = useRef<HTMLDivElement>(null);
   const canvasInnerRef = useRef<HTMLDivElement | null>(null);
+  const rafIdRef = useRef<number | null>(null);
+  const pendingMouseMoveRef = useRef<{ x: number; y: number } | null>(null);
+
+  const rafThrottle = useCallback((fn: () => void) => {
+    if (rafIdRef.current !== null) {
+      return;
+    }
+    rafIdRef.current = requestAnimationFrame(() => {
+      fn();
+      rafIdRef.current = null;
+    });
+  }, []);
 
   const setCanvasInnerRef = useCallback((ref: HTMLDivElement | null) => {
     canvasInnerRef.current = ref;
@@ -58,14 +70,19 @@ function App() {
   }, []);
 
   const handleExternalMouseMove = useCallback((e: MouseEvent) => {
-    if (externalDragState.isDragging) {
-      setExternalDragState((prev) => ({
-        ...prev,
-        mouseX: e.clientX,
-        mouseY: e.clientY,
-      }));
-    }
-  }, [externalDragState.isDragging]);
+    if (!externalDragState.isDragging) return;
+    pendingMouseMoveRef.current = { x: e.clientX, y: e.clientY };
+    rafThrottle(() => {
+      if (pendingMouseMoveRef.current) {
+        setExternalDragState((prev) => ({
+          ...prev,
+          mouseX: pendingMouseMoveRef.current!.x,
+          mouseY: pendingMouseMoveRef.current!.y,
+        }));
+        pendingMouseMoveRef.current = null;
+      }
+    });
+  }, [externalDragState.isDragging, rafThrottle]);
 
   const handleExternalDragEnd = useCallback((e: MouseEvent) => {
     if (!externalDragState.isDragging || !externalDragState.type || !canvasInnerRef.current) {
@@ -256,28 +273,35 @@ function App() {
   }, [connections]);
 
   const deleteBlock = useCallback((blockId: string) => {
+    const block = blocks.get(blockId);
+    if (!block) return;
+
+    const idsToDelete = new Set<string>();
+    const collectIds = (id: string) => {
+      const b = blocks.get(id);
+      if (!b) return;
+      idsToDelete.add(id);
+      for (const childId of b.children) {
+        collectIds(childId);
+      }
+    };
+    collectIds(blockId);
+
     setDeletingBlockIds((prev) => {
       const updated = new Set(prev);
-      updated.add(blockId);
+      for (const id of idsToDelete) {
+        updated.add(id);
+      }
       return updated;
     });
+
+    if (selectedBlockId === blockId) {
+      setSelectedBlockId(null);
+    }
 
     setTimeout(() => {
       setBlocks((prev) => {
         const updated = new Map(prev);
-        const block = updated.get(blockId);
-        if (!block) return prev;
-
-        const idsToDelete = new Set<string>();
-
-        const deleteRecursive = (id: string) => {
-          const b = updated.get(id);
-          if (!b) return;
-          idsToDelete.add(id);
-          for (const childId of b.children) {
-            deleteRecursive(childId);
-          }
-        };
 
         if (block.parentId) {
           const parent = updated.get(block.parentId);
@@ -289,29 +313,9 @@ function App() {
           }
         }
 
-        deleteRecursive(blockId);
-
         for (const id of idsToDelete) {
           updated.delete(id);
         }
-
-        setDeletingBlockIds((prevSet) => {
-          const newSet = new Set(prevSet);
-          for (const id of idsToDelete) {
-            newSet.add(id);
-          }
-          return newSet;
-        });
-
-        setTimeout(() => {
-          setDeletingBlockIds((prevSet) => {
-            const newSet = new Set(prevSet);
-            for (const id of idsToDelete) {
-              newSet.delete(id);
-            }
-            return newSet;
-          });
-        }, 200);
 
         return updated;
       });
@@ -319,12 +323,16 @@ function App() {
       setConnections((prev) =>
         prev.filter((c) => c.fromId !== blockId && c.toId !== blockId)
       );
-    }, 50);
 
-    if (selectedBlockId === blockId) {
-      setSelectedBlockId(null);
-    }
-  }, [selectedBlockId]);
+      setDeletingBlockIds((prev) => {
+        const updated = new Set(prev);
+        for (const id of idsToDelete) {
+          updated.delete(id);
+        }
+        return updated;
+      });
+    }, 200);
+  }, [blocks, selectedBlockId]);
 
   const deleteConnection = useCallback((connectionId: string) => {
     const conn = connections.find((c) => c.id === connectionId);
