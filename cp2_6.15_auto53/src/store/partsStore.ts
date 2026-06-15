@@ -59,6 +59,7 @@ interface PartsState {
   resetCamera: () => void;
   disassembleAll: () => void;
   disassemblePart: (partId: string) => void;
+  getDisassemblyOrder: (startPartId: string) => string[];
   resetAll: () => void;
 }
 
@@ -317,6 +318,45 @@ export const usePartsStore = create<PartsState>((set, get) => ({
 
   disassemblePart: (partId) => {
     get().removeConnectionsForPart(partId);
+  },
+
+  getDisassemblyOrder: (startPartId) => {
+    const state = get();
+    const startPart = state.parts.find(p => p.id === startPartId);
+    if (!startPart || startPart.connectedTo.length === 0) return [startPartId].filter(Boolean);
+
+    const visited = new Set<string>();
+    const order: string[] = [];
+    const queue: { id: string; level: number }[] = [{ id: startPartId, level: 0 }];
+    const levels = new Map<string, number>();
+    levels.set(startPartId, 0);
+    visited.add(startPartId);
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const part = state.parts.find(p => p.id === current.id);
+      if (!part) continue;
+
+      for (const neighborId of part.connectedTo) {
+        if (!visited.has(neighborId)) {
+          visited.add(neighborId);
+          levels.set(neighborId, current.level + 1);
+          queue.push({ id: neighborId, level: current.level + 1 });
+        }
+      }
+    }
+
+    const allConnected = Array.from(visited);
+    allConnected.sort((a, b) => {
+      const levelA = levels.get(a) || 0;
+      const levelB = levels.get(b) || 0;
+      if (levelB !== levelA) return levelB - levelA;
+      const partA = state.parts.find(p => p.id === a);
+      const partB = state.parts.find(p => p.id === b);
+      return (partB?.connectionOrder || 0) - (partA?.connectionOrder || 0);
+    });
+
+    return allConnected;
   },
 
   resetAll: () => {

@@ -358,40 +358,65 @@ function SceneContent({ onContextMenu, closeContextMenu, contextMenuOpen }: Scen
 }
 
 function ConnectionHighlight({ mid }: { mid: THREE.Vector3 }) {
-  const boxRef = useRef<THREE.LineSegments>(null);
+  const outerRef = useRef<THREE.LineSegments>(null);
+  const innerRef = useRef<THREE.LineSegments>(null);
   const timeRef = useRef(0);
-  const baseSize = 0.55;
+  const baseSize = 0.7;
+  const innerSize = 0.55;
 
-  const geometry = useMemo(() => {
-    const boxGeo = new THREE.BoxGeometry(baseSize, baseSize, baseSize);
-    const edges = new THREE.EdgesGeometry(boxGeo);
-    return edges;
+  const { outerGeo, innerGeo } = useMemo(() => {
+    const outerBox = new THREE.BoxGeometry(baseSize, baseSize, baseSize);
+    const outerEdges = new THREE.EdgesGeometry(outerBox);
+    const innerBox = new THREE.BoxGeometry(innerSize, innerSize, innerSize);
+    const innerEdges = new THREE.EdgesGeometry(innerBox);
+    return { outerGeo: outerEdges, innerGeo: innerEdges };
   }, []);
 
-  const material = useMemo(() => {
+  const dashedMat = useMemo(() => {
     return new THREE.LineDashedMaterial({
       color: '#ffdd44',
-      dashSize: 0.08,
-      gapSize: 0.05,
+      dashSize: 0.12,
+      gapSize: 0.06,
       linewidth: 2,
       transparent: true,
       opacity: 1,
     });
   }, []);
 
+  const solidMat = useMemo(() => {
+    return new THREE.LineBasicMaterial({
+      color: '#ffee88',
+      transparent: true,
+      opacity: 0.6,
+    });
+  }, []);
+
   useFrame((_, delta) => {
     timeRef.current += delta;
-    if (boxRef.current) {
-      const pulse = 1 + Math.sin(timeRef.current * Math.PI * 2) * 0.18;
-      boxRef.current.scale.setScalar(pulse);
-      (boxRef.current.material as THREE.LineDashedMaterial).opacity = 0.6 + Math.sin(timeRef.current * Math.PI * 2) * 0.4;
-      boxRef.current.computeLineDistances();
+    const period = 1.0;
+    const phase = (timeRef.current % period) / period;
+    const pulseScale = 1 + Math.sin(phase * Math.PI * 2) * 0.25;
+    const pulseOpacity = 0.5 + Math.sin(phase * Math.PI * 2) * 0.5;
+    const dashOffset = phase * 0.36;
+
+    if (outerRef.current) {
+      outerRef.current.scale.setScalar(pulseScale);
+      const mat = outerRef.current.material as THREE.LineDashedMaterial;
+      mat.opacity = pulseOpacity * 0.9;
+      mat.dashSize = 0.1 + Math.sin(phase * Math.PI * 2) * 0.03;
+      outerRef.current.computeLineDistances();
+    }
+    if (innerRef.current) {
+      innerRef.current.scale.setScalar(1 + (1 - pulseScale) * 0.3);
+      const mat = innerRef.current.material as THREE.LineBasicMaterial;
+      mat.opacity = 0.3 + pulseOpacity * 0.3;
     }
   });
 
   return (
     <group position={mid.toArray()}>
-      <lineSegments ref={boxRef} geometry={geometry} material={material} />
+      <lineSegments ref={outerRef} geometry={outerGeo} material={dashedMat} />
+      <lineSegments ref={innerRef} geometry={innerGeo} material={solidMat} />
     </group>
   );
 }
@@ -419,7 +444,7 @@ export function SceneManager() {
     if (!contextMenu.partId) return;
     const partId = contextMenu.partId;
     closeContextMenu();
-    animationController.animateDisassemblePart(partId, 0);
+    animationController.animateDisassembleChain(partId, 0.3);
   }, [contextMenu.partId, closeContextMenu]);
 
   const handleDuplicate = useCallback(() => {

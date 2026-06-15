@@ -1,10 +1,88 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect, Component, ReactNode } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { PartType, MATERIAL_COLORS, PART_DEFINITIONS } from '../store/partsStore';
 
 interface Props {
   type: PartType;
+}
+
+class ErrorBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { hasError: boolean; error?: Error }> {
+  constructor(props: { children: ReactNode; fallback: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.warn('3D thumbnail error:', error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}
+
+function FallbackThumbnail({ type }: { type: PartType }) {
+  const def = PART_DEFINITIONS[type];
+  const isTenon = type.includes('tenon');
+  return (
+    <div style={{
+      width: '100%',
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'linear-gradient(135deg, #3a3a3a 0%, #2c2c2c 100%)',
+      borderRadius: '4px',
+      gap: '4px',
+    }}>
+      <div style={{ fontSize: '24px' }}>{isTenon ? '🧩' : '📦'}</div>
+      <div style={{ fontSize: '10px', color: '#888' }}>{def.name}</div>
+      <div style={{ fontSize: '9px', color: '#666' }}>预览加载失败</div>
+    </div>
+  );
+}
+
+function LoadingThumbnail() {
+  return (
+    <div style={{
+      width: '100%',
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'linear-gradient(135deg, #3a3a3a 0%, #2c2c2c 100%)',
+      borderRadius: '4px',
+      gap: '6px',
+    }}>
+      <div
+        style={{
+          width: '20px',
+          height: '20px',
+          border: '2px solid #555',
+          borderTopColor: '#d4a76a',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite',
+        }}
+      />
+      <div style={{ fontSize: '9px', color: '#777' }}>加载中...</div>
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
+  );
 }
 
 function createMiniMaterial() {
@@ -32,12 +110,6 @@ function MiniPartGeometry({ type }: { type: PartType }) {
     color: '#d4a76a',
     roughness: 0.7,
     metalness: 0.05,
-    side: THREE.DoubleSide,
-  });
-  const holeMat = new THREE.MeshStandardMaterial({
-    color: '#2c1a0e',
-    roughness: 0.9,
-    metalness: 0,
     side: THREE.DoubleSide,
   });
 
@@ -176,7 +248,12 @@ function MiniPartGeometry({ type }: { type: PartType }) {
         );
       }
       default:
-        return null;
+        return (
+          <mesh castShadow receiveShadow>
+            <boxGeometry args={[width * 0.7, height, depth * 0.7]} />
+            <primitive object={mat} attach="material" />
+          </mesh>
+        );
     }
   };
 
@@ -187,18 +264,53 @@ function MiniPartGeometry({ type }: { type: PartType }) {
   );
 }
 
+function ThumbnailCanvas({ type }: { type: PartType }) {
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoaded(true), 50);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (error) {
+    return <FallbackThumbnail type={type} />;
+  }
+
+  if (!loaded) {
+    return <LoadingThumbnail />;
+  }
+
+  const handleError = () => {
+    setError(true);
+  };
+
+  try {
+    return (
+      <Canvas
+        camera={{ position: [3.5, 2.8, 3.5], fov: 35, near: 0.1, far: 50 }}
+        dpr={[1, 1.5]}
+        gl={{ antialias: true, alpha: true, powerPreference: 'default' }}
+        style={{ width: '100%', height: '100%' }}
+        onCreated={({ gl, scene }) => {
+          gl.setClearColor(0x000000, 0);
+        }}
+      >
+        <ambientLight intensity={0.6} />
+        <directionalLight position={[4, 6, 4]} intensity={1.1} />
+        <directionalLight position={[-3, 3, -3]} intensity={0.4} />
+        <MiniPartGeometry type={type} />
+      </Canvas>
+    );
+  } catch (e) {
+    return <FallbackThumbnail type={type} />;
+  }
+}
+
 export function PartThumbnail3D({ type }: Props) {
   return (
-    <Canvas
-      camera={{ position: [3.5, 2.8, 3.5], fov: 35, near: 0.1, far: 50 }}
-      dpr={[1, 2]}
-      gl={{ antialias: true, alpha: true }}
-      style={{ width: '100%', height: '100%' }}
-    >
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[4, 6, 4]} intensity={1.1} />
-      <directionalLight position={[-3, 3, -3]} intensity={0.4} />
-      <MiniPartGeometry type={type} />
-    </Canvas>
+    <ErrorBoundary fallback={<FallbackThumbnail type={type} />}>
+      <ThumbnailCanvas type={type} />
+    </ErrorBoundary>
   );
 }

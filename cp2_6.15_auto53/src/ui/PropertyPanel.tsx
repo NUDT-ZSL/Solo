@@ -62,7 +62,25 @@ function RotationSlider({
   );
 }
 
-function DimensionRow({ label, value, unit = 'cm' }: { label: string; value: number; unit?: string }) {
+function DimensionRow({ 
+  label, 
+  value, 
+  unit = 'cm',
+  onChange,
+  min = 0.5,
+  max = 10,
+  step = 0.5,
+}: { 
+  label: string; 
+  value: number; 
+  unit?: string;
+  onChange?: (v: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+}) {
+  const editable = onChange !== undefined;
+
   return (
     <div style={{
       display: 'flex',
@@ -72,18 +90,48 @@ function DimensionRow({ label, value, unit = 'cm' }: { label: string; value: num
       borderRadius: '5px',
       background: '#2a2a2a',
       marginBottom: '5px',
-      transition: 'background 0.3s ease',
+      transition: 'all 0.3s ease',
     }}>
       <span style={{ fontSize: '12px', color: '#999' }}>{label}</span>
-      <span style={{
-        fontSize: '13px',
-        color: '#ddd',
-        fontWeight: 600,
-        fontVariantNumeric: 'tabular-nums',
-        transition: 'color 0.3s ease',
-      }}>
-        {value.toFixed(1)} <span style={{ color: '#777', fontSize: '11px', fontWeight: 400 }}>{unit}</span>
-      </span>
+      {editable ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <input
+            type="range"
+            min={min}
+            max={max}
+            step={step}
+            value={value}
+            onChange={(e) => onChange(parseFloat(e.target.value))}
+            style={{
+              width: '70px',
+              height: '3px',
+              accentColor: '#d4a76a',
+              cursor: 'pointer',
+            }}
+          />
+          <span style={{
+            fontSize: '13px',
+            color: '#ddd',
+            fontWeight: 600,
+            fontVariantNumeric: 'tabular-nums',
+            transition: 'color 0.3s ease',
+            minWidth: '42px',
+            textAlign: 'right',
+          }}>
+            {value.toFixed(1)} <span style={{ color: '#777', fontSize: '11px', fontWeight: 400 }}>{unit}</span>
+          </span>
+        </div>
+      ) : (
+        <span style={{
+          fontSize: '13px',
+          color: '#ddd',
+          fontWeight: 600,
+          fontVariantNumeric: 'tabular-nums',
+          transition: 'color 0.3s ease',
+        }}>
+          {value.toFixed(1)} <span style={{ color: '#777', fontSize: '11px', fontWeight: 400 }}>{unit}</span>
+        </span>
+      )}
     </div>
   );
 }
@@ -303,9 +351,39 @@ export function PropertyPanel() {
                 }} />
                 尺寸标注
               </div>
-              <DimensionRow label="宽度 (X)" value={selectedPart.dimensions.width * 10} />
-              <DimensionRow label="高度 (Y)" value={selectedPart.dimensions.height * 10} />
-              <DimensionRow label="深度 (Z)" value={selectedPart.dimensions.depth * 10} />
+              <DimensionRow 
+                label="宽度 (X)" 
+                value={selectedPart.dimensions.width * 10}
+                min={5}
+                max={40}
+                step={1}
+                onChange={(v) => {
+                  const newDims = { ...selectedPart.dimensions, width: v / 10 };
+                  store.updatePart(selectedPart.id, { dimensions: newDims });
+                }}
+              />
+              <DimensionRow 
+                label="高度 (Y)" 
+                value={selectedPart.dimensions.height * 10}
+                min={3}
+                max={20}
+                step={0.5}
+                onChange={(v) => {
+                  const newDims = { ...selectedPart.dimensions, height: v / 10 };
+                  store.updatePart(selectedPart.id, { dimensions: newDims });
+                }}
+              />
+              <DimensionRow 
+                label="深度 (Z)" 
+                value={selectedPart.dimensions.depth * 10}
+                min={5}
+                max={40}
+                step={1}
+                onChange={(v) => {
+                  const newDims = { ...selectedPart.dimensions, depth: v / 10 };
+                  store.updatePart(selectedPart.id, { dimensions: newDims });
+                }}
+              />
             </div>
 
             <div style={{ marginBottom: '16px', transition: 'all 0.3s ease' }}>

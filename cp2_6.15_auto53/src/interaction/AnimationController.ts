@@ -243,6 +243,35 @@ export class AnimationController {
     );
   }
 
+  async animateDisassembleChain(
+    startPartId: string,
+    interval: number = 0.3
+  ): Promise<void> {
+    const store = usePartsStore.getState();
+    const order = store.getDisassemblyOrder(startPartId);
+
+    if (order.length === 0) return;
+    if (order.length === 1 && store.parts.find(p => p.id === order[0])?.connectedTo.length === 0) return;
+
+    store.setIsAnimating(true);
+
+    const promises: Promise<void>[] = [];
+    for (let i = 0; i < order.length; i++) {
+      const partId = order[i];
+      const part = store.parts.find(p => p.id === partId);
+      if (!part) continue;
+      
+      const hasConnections = part.connectedTo.length > 0;
+      if (!hasConnections && i === 0) continue;
+      
+      const promise = this.animateDisassemblePart(partId, i * interval);
+      promises.push(promise);
+    }
+
+    await Promise.all(promises);
+    store.setIsAnimating(false);
+  }
+
   async animateDisassembleAll(): Promise<void> {
     const store = usePartsStore.getState();
     const connectedParts = store.parts
