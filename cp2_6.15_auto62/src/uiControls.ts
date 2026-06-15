@@ -4,6 +4,7 @@ export interface SliderConfig {
   max: number;
   step: number;
   defaultValue: number;
+  unit?: string;
   onChange: (value: number) => void;
 }
 
@@ -18,6 +19,7 @@ export class SliderControl {
   private config: SliderConfig;
   private state: SliderState;
 
+  private wrapper!: HTMLDivElement;
   private sliderTrack!: HTMLDivElement;
   private sliderFill!: HTMLDivElement;
   private sliderThumb!: HTMLDivElement;
@@ -27,6 +29,8 @@ export class SliderControl {
   private isDragging: boolean = false;
   private transitionDuration: number = 200;
   private smoothTransitionTime: number = 100;
+
+  private trackWidth: number = 0;
 
   constructor(container: HTMLElement, config: SliderConfig) {
     this.container = container;
@@ -38,12 +42,12 @@ export class SliderControl {
     };
     this.createSlider();
     this.setupEventListeners();
-    this.updateSliderUI();
+    this.updateSliderUI(false);
   }
 
   private createSlider(): void {
-    const wrapper = document.createElement('div');
-    wrapper.style.cssText = 'margin-bottom: 16px;';
+    this.wrapper = document.createElement('div');
+    this.wrapper.style.cssText = 'margin-bottom: 16px;';
 
     this.labelElement = document.createElement('label');
     this.labelElement.textContent = this.config.label;
@@ -53,10 +57,11 @@ export class SliderControl {
       color: #e0e0e0;
       margin-bottom: 8px;
       font-weight: 500;
+      user-select: none;
     `;
 
     const sliderContainer = document.createElement('div');
-    sliderContainer.style.cssText = 'position: relative; height: 24px;';
+    sliderContainer.style.cssText = 'position: relative; height: 28px;';
 
     this.sliderTrack = document.createElement('div');
     this.sliderTrack.style.cssText = `
@@ -80,7 +85,7 @@ export class SliderControl {
       transform: translateY(-50%);
       background: linear-gradient(90deg, #ff6b6b, #ff8787);
       border-radius: 3px;
-      transition: width ${this.transitionDuration}ms ease;
+      width: 0%;
       pointer-events: none;
     `;
 
@@ -88,15 +93,18 @@ export class SliderControl {
     this.sliderThumb.style.cssText = `
       position: absolute;
       top: 50%;
+      left: 0%;
       width: 24px;
       height: 24px;
-      transform: translate(-50%, -50%);
+      margin-left: -12px;
+      transform: translateY(-50%);
       background: #ff6b6b;
       border-radius: 50%;
       cursor: grab;
-      box-shadow: 0 2px 8px rgba(255, 107, 107, 0.4);
-      transition: left ${this.transitionDuration}ms ease, transform 0.1s ease;
+      box-shadow: 0 2px 8px rgba(255, 107, 107, 0.5), 0 0 0 0 rgba(255, 107, 107, 0.3);
+      transition: box-shadow 0.2s ease, transform 0.1s ease;
       z-index: 10;
+      user-select: none;
     `;
 
     this.valueDisplay = document.createElement('div');
@@ -104,17 +112,19 @@ export class SliderControl {
       position: absolute;
       top: 50%;
       transform: translateY(-50%);
+      left: calc(0% + 20px);
       padding: 4px 10px;
       background: #1e1e1e;
       color: #ffffff;
       font-size: 12px;
       font-weight: 600;
       border-radius: 6px;
-      font-family: 'Consolas', 'Monaco', monospace;
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
       pointer-events: none;
       white-space: nowrap;
-      transition: left ${this.transitionDuration}ms ease;
       z-index: 5;
+      border: 1px solid rgba(255, 107, 107, 0.3);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
     `;
 
     sliderContainer.appendChild(this.sliderTrack);
@@ -122,9 +132,9 @@ export class SliderControl {
     sliderContainer.appendChild(this.sliderThumb);
     sliderContainer.appendChild(this.valueDisplay);
 
-    wrapper.appendChild(this.labelElement);
-    wrapper.appendChild(sliderContainer);
-    this.container.appendChild(wrapper);
+    this.wrapper.appendChild(this.labelElement);
+    this.wrapper.appendChild(sliderContainer);
+    this.container.appendChild(this.wrapper);
   }
 
   private setupEventListeners(): void {
@@ -132,6 +142,8 @@ export class SliderControl {
       e.preventDefault();
       this.isDragging = true;
       this.sliderThumb.style.cursor = 'grabbing';
+      this.sliderThumb.style.transform = 'translateY(-50%) scale(1.1)';
+      this.disableTransition();
       this.updateFromEvent(e);
     };
 
@@ -142,12 +154,17 @@ export class SliderControl {
     };
 
     const handleEnd = () => {
-      this.isDragging = false;
-      this.sliderThumb.style.cursor = 'grab';
+      if (this.isDragging) {
+        this.isDragging = false;
+        this.sliderThumb.style.cursor = 'grab';
+        this.sliderThumb.style.transform = 'translateY(-50%) scale(1)';
+        this.enableTransition();
+      }
     };
 
     this.sliderTrack.addEventListener('mousedown', handleStart);
     this.sliderThumb.addEventListener('mousedown', handleStart);
+    this.sliderFill.addEventListener('mousedown', handleStart);
     document.addEventListener('mousemove', handleMove);
     document.addEventListener('mouseup', handleEnd);
 
@@ -155,6 +172,19 @@ export class SliderControl {
     this.sliderThumb.addEventListener('touchstart', handleStart, { passive: false });
     document.addEventListener('touchmove', handleMove, { passive: false });
     document.addEventListener('touchend', handleEnd);
+    document.addEventListener('touchcancel', handleEnd);
+  }
+
+  private disableTransition(): void {
+    this.sliderFill.style.transition = 'none';
+    this.sliderThumb.style.transition = 'none';
+    this.valueDisplay.style.transition = 'none';
+  }
+
+  private enableTransition(): void {
+    this.sliderFill.style.transition = `width ${this.transitionDuration}ms ease`;
+    this.sliderThumb.style.transition = `left ${this.transitionDuration}ms ease, transform 0.1s ease`;
+    this.valueDisplay.style.transition = `left ${this.transitionDuration}ms ease`;
   }
 
   private updateFromEvent(e: MouseEvent | TouchEvent): void {
@@ -167,13 +197,19 @@ export class SliderControl {
       clientX = e.clientX;
     }
 
+    this.trackWidth = rect.width;
     const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     const range = this.config.max - this.config.min;
     const rawValue = this.config.min + x * range;
     const steppedValue = Math.round(rawValue / this.config.step) * this.config.step;
     const clampedValue = Math.max(this.config.min, Math.min(this.config.max, steppedValue));
 
-    this.setTargetValue(clampedValue);
+    this.state.targetValue = clampedValue;
+    this.state.displayValue = clampedValue;
+    this.state.currentValue = clampedValue;
+
+    this.updateSliderUI(false);
+    this.config.onChange(clampedValue);
   }
 
   private valueToPosition(value: number): number {
@@ -182,31 +218,51 @@ export class SliderControl {
   }
 
   private formatValue(value: number): string {
+    let formatted: string;
     if (this.config.step >= 1) {
-      return value.toFixed(0);
+      formatted = value.toFixed(0);
     } else if (this.config.step >= 0.1) {
-      return value.toFixed(1);
+      formatted = value.toFixed(1);
     } else {
-      return value.toFixed(2);
+      formatted = value.toFixed(2);
     }
+    if (this.config.unit) {
+      return `${formatted}${this.config.unit}`;
+    }
+    return formatted;
   }
 
-  private updateSliderUI(): void {
+  private updateSliderUI(animated: boolean = true): void {
     const position = this.valueToPosition(this.state.displayValue);
+
     this.sliderFill.style.width = `${position}%`;
     this.sliderThumb.style.left = `${position}%`;
 
-    const thumbRightOffset = 36;
-    this.valueDisplay.style.left = `calc(${position}% + ${thumbRightOffset}px)`;
+    const thumbOffset = 12;
+    const gap = 8;
+    const valueLeft = position + (thumbOffset + gap) / this.getTrackWidth() * 100;
+    this.valueDisplay.style.left = `${valueLeft}%`;
     this.valueDisplay.textContent = this.formatValue(this.state.displayValue);
+  }
+
+  private getTrackWidth(): number {
+    if (this.trackWidth <= 0) {
+      const rect = this.sliderTrack.getBoundingClientRect();
+      this.trackWidth = rect.width;
+    }
+    return this.trackWidth || 200;
   }
 
   public setTargetValue(value: number): void {
     this.state.targetValue = Math.max(this.config.min, Math.min(this.config.max, value));
+    this.enableTransition();
   }
 
   public update(deltaTime: number): void {
+    if (this.isDragging) return;
+
     const smoothingFactor = Math.min(1, deltaTime / this.smoothTransitionTime);
+    let needsUpdate = false;
 
     if (Math.abs(this.state.displayValue - this.state.targetValue) > 0.0001) {
       this.state.displayValue = this.lerp(
@@ -214,7 +270,7 @@ export class SliderControl {
         this.state.targetValue,
         smoothingFactor
       );
-      this.updateSliderUI();
+      needsUpdate = true;
     }
 
     if (Math.abs(this.state.currentValue - this.state.targetValue) > 0.0001) {
@@ -224,6 +280,10 @@ export class SliderControl {
         smoothingFactor
       );
       this.config.onChange(this.state.currentValue);
+    }
+
+    if (needsUpdate) {
+      this.updateSliderUI(true);
     }
   }
 
@@ -235,11 +295,17 @@ export class SliderControl {
     return this.state.currentValue;
   }
 
+  public getTargetValue(): number {
+    return this.state.targetValue;
+  }
+
   public setValueImmediate(value: number): void {
     this.state.currentValue = value;
     this.state.targetValue = value;
     this.state.displayValue = value;
-    this.updateSliderUI();
+    this.disableTransition();
+    this.updateSliderUI(false);
+    requestAnimationFrame(() => this.enableTransition());
   }
 }
 
