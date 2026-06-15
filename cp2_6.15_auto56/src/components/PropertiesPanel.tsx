@@ -1,4 +1,4 @@
-import { ChangeEvent } from 'react'
+import { ChangeEvent, useState, useEffect } from 'react'
 import { useEditorStore } from '../store/editorStore'
 import { ShapeType } from '../utils/geometry'
 
@@ -12,6 +12,14 @@ export default function PropertiesPanel() {
   const { shapes, selectedId, updateShape } = useEditorStore()
   const shape = shapes.find((s) => s.id === selectedId) || null
 
+  const [hexInput, setHexInput] = useState('')
+
+  useEffect(() => {
+    if (shape) {
+      setHexInput(shape.fill)
+    }
+  }, [shape?.fill, shape?.id])
+
   const handleNumberChange = (
     key: 'x' | 'y' | 'width' | 'height' | 'rotation',
     e: ChangeEvent<HTMLInputElement>
@@ -22,23 +30,28 @@ export default function PropertiesPanel() {
     updateShape(shape.id, { [key]: value })
   }
 
-  const handleColorChange = (value: string) => {
-    if (!shape) return
-    let hex = value.trim()
-    if (!hex.startsWith('#')) {
-      hex = '#' + hex
-    }
-    if (/^#[0-9A-Fa-f]{6}$/.test(hex)) {
-      updateShape(shape.id, { fill: hex.toUpperCase() })
-    }
-  }
-
   const handleColorInputChange = (e: ChangeEvent<HTMLInputElement>) => {
-    handleColorChange(e.target.value)
+    if (!shape) return
+    const value = e.target.value
+    setHexInput(value.toUpperCase())
+    updateShape(shape.id, { fill: value.toUpperCase() })
   }
 
   const handleHexInputChange = (e: ChangeEvent<HTMLInputElement>) => {
-    handleColorChange(e.target.value)
+    if (!shape) return
+    let value = e.target.value.trim()
+    setHexInput(value)
+    if (!value.startsWith('#')) {
+      value = '#' + value
+    }
+    if (/^#[0-9A-Fa-f]{6}$/.test(value)) {
+      updateShape(shape.id, { fill: value.toUpperCase() })
+    }
+  }
+
+  const handleHexInputBlur = () => {
+    if (!shape) return
+    setHexInput(shape.fill)
   }
 
   return (
@@ -113,9 +126,11 @@ export default function PropertiesPanel() {
               <input
                 type="text"
                 className="color-hex-input"
-                value={shape.fill}
+                value={hexInput}
                 maxLength={7}
                 onChange={handleHexInputChange}
+                onBlur={handleHexInputBlur}
+                placeholder="#RRGGBB"
               />
             </div>
           </div>

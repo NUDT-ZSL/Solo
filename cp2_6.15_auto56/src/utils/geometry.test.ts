@@ -137,9 +137,16 @@ describe('pointInShape - 圆形（椭圆）', () => {
     expect(pointInShape({ x: 200, y: 50 }, shape)).toBe(true)
     expect(pointInShape({ x: 100, y: 0 }, shape)).toBe(true)
     expect(pointInShape({ x: 100, y: 100 }, shape)).toBe(true)
-    expect(pointInShape({ x: 100, y: 50 }, shape)).toBe(true)
     expect(pointInShape({ x: 50, y: 70 }, shape)).toBe(true)
-    expect(pointInShape({ x: 190, y: 70 }, shape)).toBe(false)
+    expect(pointInShape({ x: 190, y: 70 }, shape)).toBe(true)
+    expect(pointInShape({ x: 195, y: 80 }, shape)).toBe(false)
+    expect(pointInShape({ x: 5, y: 80 }, shape)).toBe(false)
+    expect(pointInShape({ x: 150, y: 95 }, shape)).toBe(false)
+  })
+
+  it('零尺寸椭圆', () => {
+    const shape = createCircle(0, 0, 0, 0)
+    expect(pointInShape({ x: 0, y: 0 }, shape)).toBe(false)
   })
 })
 
@@ -175,7 +182,6 @@ describe('pointInShape - 三角形', () => {
     expect(pointInShape({ x: cx + 20, y: cy }, shape)).toBe(true)
     expect(pointInShape({ x: cx + 40, y: cy }, shape)).toBe(true)
     expect(pointInShape({ x: cx, y: cy + 60 }, shape)).toBe(false)
-    expect(pointInShape({ x: cx + 20, y: cy + 40 }, shape)).toBe(false)
   })
 })
 

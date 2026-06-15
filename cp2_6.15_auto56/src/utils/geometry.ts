@@ -48,10 +48,10 @@ export function getShapeBounds(shape: Shape): Bounds {
   const cx = shape.x + shape.width / 2
   const cy = shape.y + shape.height / 2
   const angle = (shape.rotation * Math.PI) / 180
-  const cos = Math.abs(Math.cos(angle))
-  const sin = Math.abs(Math.sin(angle))
-  const w = shape.width * cos + shape.height * sin
-  const h = shape.width * sin + shape.height * cos
+  const cosA = Math.abs(Math.cos(angle))
+  const sinA = Math.abs(Math.sin(angle))
+  const w = shape.width * cosA + shape.height * sinA
+  const h = shape.width * sinA + shape.height * cosA
   return {
     minX: cx - w / 2,
     minY: cy - h / 2,
@@ -61,26 +61,27 @@ export function getShapeBounds(shape: Shape): Bounds {
 }
 
 export function getHandlePoint(shape: Shape, handle: HandlePosition): Point {
-  const bounds = getShapeBounds(shape)
-  const cx = (bounds.minX + bounds.maxX) / 2
-  const cy = (bounds.minY + bounds.maxY) / 2
+  const cx = shape.x + shape.width / 2
+  const cy = shape.y + shape.height / 2
+  const halfW = shape.width / 2
+  const halfH = shape.height / 2
   switch (handle) {
     case 'top-left':
-      return { x: bounds.minX, y: bounds.minY }
+      return { x: cx - halfW, y: cy - halfH }
     case 'top-center':
-      return { x: cx, y: bounds.minY }
+      return { x: cx, y: cy - halfH }
     case 'top-right':
-      return { x: bounds.maxX, y: bounds.minY }
+      return { x: cx + halfW, y: cy - halfH }
     case 'middle-left':
-      return { x: bounds.minX, y: cy }
+      return { x: cx - halfW, y: cy }
     case 'middle-right':
-      return { x: bounds.maxX, y: cy }
+      return { x: cx + halfW, y: cy }
     case 'bottom-left':
-      return { x: bounds.minX, y: bounds.maxY }
+      return { x: cx - halfW, y: cy + halfH }
     case 'bottom-center':
-      return { x: cx, y: bounds.maxY }
+      return { x: cx, y: cy + halfH }
     case 'bottom-right':
-      return { x: bounds.maxX, y: bounds.maxY }
+      return { x: cx + halfW, y: cy + halfH }
   }
 }
 
@@ -88,12 +89,12 @@ export function pointInShape(point: Point, shape: Shape): boolean {
   const cx = shape.x + shape.width / 2
   const cy = shape.y + shape.height / 2
   const angle = (-shape.rotation * Math.PI) / 180
-  const cos = Math.cos(angle)
-  const sin = Math.sin(angle)
+  const cosA = Math.cos(angle)
+  const sinA = Math.sin(angle)
   const dx = point.x - cx
   const dy = point.y - cy
-  const localX = dx * cos - dy * sin
-  const localY = dx * sin + dy * cos
+  const localX = dx * cosA - dy * sinA
+  const localY = dx * sinA + dy * cosA
   const halfW = shape.width / 2
   const halfH = shape.height / 2
 
@@ -102,28 +103,45 @@ export function pointInShape(point: Point, shape: Shape): boolean {
   }
 
   if (shape.type === 'circle') {
-    const rx = halfW
-    const ry = halfH
-    return (localX * localX) / (rx * rx) + (localY * localY) / (ry * ry) <= 1
+    if (halfW === 0 || halfH === 0) return false
+    return (localX * localX) / (halfW * halfW) + (localY * localY) / (halfH * halfH) <= 1
   }
 
   if (shape.type === 'triangle') {
-    const p1 = { x: 0, y: -halfH }
-    const p2 = { x: -halfW, y: halfH }
-    const p3 = { x: halfW, y: halfH }
-    const d1 = sign({ x: localX, y: localY }, p1, p2)
-    const d2 = sign({ x: localX, y: localY }, p2, p3)
-    const d3 = sign({ x: localX, y: localY }, p3, p1)
-    const hasNeg = d1 < 0 || d2 < 0 || d3 < 0
-    const hasPos = d1 > 0 || d2 > 0 || d3 > 0
-    return !(hasNeg && hasPos)
+    const v0 = { x: 0, y: -halfH }
+    const v1 = { x: -halfW, y: halfH }
+    const v2 = { x: halfW, y: halfH }
+    return pointInTriangle(localX, localY, v0, v1, v2)
   }
 
   return false
 }
 
-function sign(p1: Point, p2: Point, p3: Point): number {
-  return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y)
+function pointInTriangle(
+  px: number,
+  py: number,
+  v0: Point,
+  v1: Point,
+  v2: Point
+): boolean {
+  const d00 = v1.x - v0.x
+  const d01 = v1.y - v0.y
+  const d10 = v2.x - v0.x
+  const d11 = v2.y - v0.y
+  const d20 = px - v0.x
+  const d21 = py - v0.y
+
+  const dot00 = d00 * d00 + d01 * d01
+  const dot01 = d00 * d10 + d01 * d11
+  const dot02 = d00 * d20 + d01 * d21
+  const dot11 = d10 * d10 + d11 * d11
+  const dot12 = d10 * d20 + d11 * d21
+
+  const inv = 1 / (dot00 * dot11 - dot01 * dot01)
+  const u = (dot11 * dot02 - dot01 * dot12) * inv
+  const v = (dot00 * dot12 - dot01 * dot02) * inv
+
+  return u >= 0 && v >= 0 && u + v <= 1
 }
 
 export function pointNearHandle(point: Point, shape: Shape, handle: HandlePosition, threshold = 10): boolean {

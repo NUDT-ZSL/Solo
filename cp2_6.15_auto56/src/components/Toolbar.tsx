@@ -3,44 +3,49 @@ import { useEditorStore, Tool } from '../store/editorStore'
 import { saveAs } from 'file-saver'
 import { Shape } from '../utils/geometry'
 
-function formatNumber(n: number): string {
+function fmt(n: number): string {
   const rounded = Math.round(n * 100) / 100
-  if (Number.isInteger(rounded)) {
-    return rounded.toString()
-  }
-  return rounded.toFixed(rounded % 1 === 0 ? 0 : rounded * 10 % 1 === 0 ? 1 : 2)
+  if (Number.isInteger(rounded)) return rounded.toString()
+  const s = rounded.toFixed(2)
+  return s.replace(/0+$/, '').replace(/\.$/, '')
 }
 
 function shapesToSVG(shapes: Shape[], width: number, height: number): string {
-  const parts: string[] = []
-  parts.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${formatNumber(width)}" height="${formatNumber(height)}" viewBox="0 0 ${formatNumber(width)} ${formatNumber(height)}">`
+  const lines: string[] = []
+  lines.push(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${fmt(width)}" height="${fmt(height)}" viewBox="0 0 ${fmt(width)} ${fmt(height)}">`
   )
+
   for (const shape of shapes) {
     const cx = shape.x + shape.width / 2
     const cy = shape.y + shape.height / 2
-    const transform = `rotate(${formatNumber(shape.rotation)} ${formatNumber(cx)} ${formatNumber(cy)})`
+    const transform =
+      shape.rotation !== 0
+        ? ` transform="rotate(${fmt(shape.rotation)} ${fmt(cx)} ${fmt(cy)})"`
+        : ''
+
     if (shape.type === 'rect') {
-      parts.push(
-        `  <rect x="${formatNumber(shape.x)}" y="${formatNumber(shape.y)}" width="${formatNumber(shape.width)}" height="${formatNumber(shape.height)}" fill="${shape.fill}" transform="${transform}"/>`
+      lines.push(
+        `  <rect x="${fmt(shape.x)}" y="${fmt(shape.y)}" width="${fmt(shape.width)}" height="${fmt(shape.height)}" fill="${shape.fill}"${transform}/>`
       )
     } else if (shape.type === 'circle') {
       const rx = shape.width / 2
       const ry = shape.height / 2
-      parts.push(
-        `  <ellipse cx="${formatNumber(cx)}" cy="${formatNumber(cy)}" rx="${formatNumber(rx)}" ry="${formatNumber(ry)}" fill="${shape.fill}" transform="${transform}"/>`
+      lines.push(
+        `  <ellipse cx="${fmt(cx)}" cy="${fmt(cy)}" rx="${fmt(rx)}" ry="${fmt(ry)}" fill="${shape.fill}"${transform}/>`
       )
     } else if (shape.type === 'triangle') {
-      const p1 = `${formatNumber(cx)},${formatNumber(shape.y)}`
-      const p2 = `${formatNumber(shape.x)},${formatNumber(shape.y + shape.height)}`
-      const p3 = `${formatNumber(shape.x + shape.width)},${formatNumber(shape.y + shape.height)}`
-      parts.push(
-        `  <polygon points="${p1} ${p2} ${p3}" fill="${shape.fill}" transform="${transform}"/>`
+      const p1 = `${fmt(cx)},${fmt(shape.y)}`
+      const p2 = `${fmt(shape.x)},${fmt(shape.y + shape.height)}`
+      const p3 = `${fmt(shape.x + shape.width)},${fmt(shape.y + shape.height)}`
+      lines.push(
+        `  <polygon points="${p1} ${p2} ${p3}" fill="${shape.fill}"${transform}/>`
       )
     }
   }
-  parts.push('</svg>')
-  return parts.join('\n')
+
+  lines.push('</svg>')
+  return lines.join('\n')
 }
 
 export default function Toolbar() {

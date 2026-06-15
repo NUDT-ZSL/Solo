@@ -16,7 +16,6 @@ type DragMode =
   | 'drawing'
   | 'moving'
   | 'resizing'
-  | 'rotating'
 
 interface DragState {
   mode: DragMode
@@ -25,16 +24,75 @@ interface DragState {
   shapeId: string | null
   handle: HandlePosition | null
   originalShape: Shape | null
-  ghostShape: Shape | null
 }
 
 const GRID_SIZE = 20
 
-function renderShape(shape: Shape, isGhost = false, isNew = false) {
+function renderShapeOnCanvas(
+  ctx: CanvasRenderingContext2D,
+  shape: Shape,
+  isGhost = false
+) {
+  const cx = shape.x + shape.width / 2
+  const cy = shape.y + shape.height / 2
+  ctx.save()
+  ctx.translate(cx, cy)
+  ctx.rotate((shape.rotation * Math.PI) / 180)
+  ctx.translate(-cx, -cy)
+  ctx.fillStyle = isGhost ? shape.fill + '80' : shape.fill
+  if (isGhost) {
+    ctx.globalAlpha = 0.5
+  }
+  if (shape.type === 'rect') {
+    ctx.fillRect(shape.x, shape.y, shape.width, shape.height)
+  } else if (shape.type === 'circle') {
+    ctx.beginPath()
+    ctx.ellipse(cx, cy, shape.width / 2, shape.height / 2, 0, 0, Math.PI * 2)
+    ctx.fill()
+  } else if (shape.type === 'triangle') {
+    ctx.beginPath()
+    ctx.moveTo(cx, shape.y)
+    ctx.lineTo(shape.x, shape.y + shape.height)
+    ctx.lineTo(shape.x + shape.width, shape.y + shape.height)
+    ctx.closePath()
+    ctx.fill()
+  }
+  ctx.restore()
+}
+
+function renderHandlesOnCanvas(
+  ctx: CanvasRenderingContext2D,
+  shape: Shape
+) {
+  const cx = shape.x + shape.width / 2
+  const cy = shape.y + shape.height / 2
+  ctx.save()
+  ctx.translate(cx, cy)
+  ctx.rotate((shape.rotation * Math.PI) / 180)
+  ctx.translate(-cx, -cy)
+
+  ctx.strokeStyle = '#2196f3'
+  ctx.lineWidth = 1
+  ctx.setLineDash([4, 3])
+  ctx.strokeRect(shape.x, shape.y, shape.width, shape.height)
+  ctx.setLineDash([])
+
+  for (const handle of handlePositions) {
+    const hp = getHandlePoint(shape, handle)
+    ctx.fillStyle = '#2196f3'
+    ctx.strokeStyle = '#ffffff'
+    ctx.lineWidth = 1
+    ctx.fillRect(hp.x - 4, hp.y - 4, 8, 8)
+    ctx.strokeRect(hp.x - 4, hp.y - 4, 8, 8)
+  }
+  ctx.restore()
+}
+
+function renderShape(shape: Shape, isNew = false) {
   const cx = shape.x + shape.width / 2
   const cy = shape.y + shape.height / 2
   const transform = `translate(${cx} ${cy}) rotate(${shape.rotation}) translate(${-cx} ${-cy})`
-  const className = `${isGhost ? 'ghost-shape' : ''} ${isNew ? 'shape-enter' : ''}`
+  const className = isNew ? 'shape-enter' : ''
 
   if (shape.type === 'rect') {
     return (
@@ -133,14 +191,14 @@ function resizeShape(
   currentPoint: Point
 ): Partial<Shape> {
   const angle = (shape.rotation * Math.PI) / 180
-  const cos = Math.cos(angle)
-  const sin = Math.sin(angle)
+  const cosA = Math.cos(angle)
+  const sinA = Math.sin(angle)
 
   const dx = currentPoint.x - startPoint.x
   const dy = currentPoint.y - startPoint.y
 
-  const localDx = dx * cos + dy * sin
-  const localDy = -dx * sin + dy * cos
+  const localDx = dx * cosA + dy * sinA
+  const localDy = -dx * sinA + dy * cosA
 
   let newX = shape.x
   let newY = shape.y
@@ -210,7 +268,10 @@ function resizeShape(
 
 export default function Canvas() {
   const svgRef = useRef<SVGSVGElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const gridCanvasRef = useRef<HTMLCanvasElement>(null)
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
+  const wheelAccumRef = useRef(0)
+  const wheelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const {
     shapes,
     selectedId,
@@ -231,7 +292,6 @@ export default function Canvas() {
     shapeId: null,
     handle: null,
     originalShape: null,
-    ghostShape: null,
   })
 
   const [newShapeIds, setNewShapeIds] = useState<Set<string>>(new Set())
@@ -263,18 +323,19 @@ export default function Canvas() {
   }, [])
 
   const drawGrid = useCallback(() => {
-    const canvas = canvasRef.current
+    const canvas = gridCanvasRef.current
     const svg = svgRef.current
     if (!canvas || !svg) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
     const rect = svg.getBoundingClientRect()
-    canvas.width = rect.width * window.devicePixelRatio
-    canvas.height = rect.height * window.devicePixelRatio
+    const dpr = window.devicePixelRatio || 1
+    canvas.width = rect.width * dpr
+    canvas.height = rect.height * dpr
     canvas.style.width = rect.width + 'px'
     canvas.style.height = rect.height + 'px'
-    ctx.scale(window.devicePixelRatio, window.devicePixelRatio)
+    ctx.scale(dpr, dpr)
 
     ctx.clearRect(0, 0, rect.width, rect.height)
     ctx.strokeStyle = '#e0e0e0'
@@ -294,12 +355,69 @@ export default function Canvas() {
     }
   }, [])
 
+  const updateOverlayCanvas = useCallback(() => {
+    const canvas = overlayCanvasRef.current
+    const svg = svgRef.current
+    if (!canvas || !svg) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const rect = svg.getBoundingClientRect()
+    const dpr = window.devicePixelRatio || 1
+    canvas.width = rect.width * dpr
+    canvas.height = rect.height * dpr
+    canvas.style.width = rect.width + 'px'
+    canvas.style.height = rect.height + 'px'
+    ctx.scale(dpr, dpr)
+
+    ctx.clearRect(0, 0, rect.width, rect.height)
+
+    if (drag.mode === 'drawing') {
+      const r = normalizeRect(
+        drag.startPoint.x,
+        drag.startPoint.y,
+        drag.currentPoint.x,
+        drag.currentPoint.y
+      )
+      if (r.width > 1 && r.height > 1) {
+        const ghost: Shape = {
+          id: 'ghost',
+          type: currentTool as 'rect' | 'circle' | 'triangle',
+          x: r.x,
+          y: r.y,
+          width: r.width,
+          height: r.height,
+          rotation: 0,
+          fill:
+            currentTool === 'rect'
+              ? '#42a5f5'
+              : currentTool === 'circle'
+              ? '#66bb6a'
+              : '#ffa726',
+        }
+        renderShapeOnCanvas(ctx, ghost, true)
+      }
+    } else if ((drag.mode === 'moving' || drag.mode === 'resizing') && drag.shapeId) {
+      const currentShape = shapes.find((s) => s.id === drag.shapeId)
+      if (currentShape) {
+        renderShapeOnCanvas(ctx, currentShape)
+        renderHandlesOnCanvas(ctx, currentShape)
+      }
+    }
+  }, [drag, shapes, currentTool])
+
   useEffect(() => {
     drawGrid()
     const handleResize = () => drawGrid()
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [drawGrid])
+
+  useEffect(() => {
+    updateOverlayCanvas()
+  }, [updateOverlayCanvas])
+
+  const isOverlayActive = drag.mode === 'drawing' || drag.mode === 'moving' || drag.mode === 'resizing'
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -314,7 +432,6 @@ export default function Canvas() {
           shapeId: null,
           handle: null,
           originalShape: null,
-          ghostShape: null,
         })
         return
       }
@@ -330,7 +447,6 @@ export default function Canvas() {
             shapeId: selectedShape.id,
             handle,
             originalShape: { ...selectedShape },
-            ghostShape: null,
           })
           return
         }
@@ -348,7 +464,6 @@ export default function Canvas() {
           shapeId: hitShape.id,
           handle: null,
           originalShape: { ...hitShape },
-          ghostShape: null,
         })
       } else {
         selectShape(null)
@@ -422,65 +537,67 @@ export default function Canvas() {
       shapeId: null,
       handle: null,
       originalShape: null,
-      ghostShape: null,
     })
   }, [drag, currentTool, addShape, setTool, commitHistory])
 
   const handleWheel = useCallback(
-    (e: React.WheelEvent) => {
+    (e: WheelEvent) => {
       if (!selectedId) return
       const shape = shapes.find((s) => s.id === selectedId)
       if (!shape) return
-      const point = getMousePoint(e)
-      let hitShape = findShapeAtPoint(point, shapes)
+      const svg = svgRef.current
+      if (!svg) return
+
+      const svgRect = svg.getBoundingClientRect()
+      const point: Point = {
+        x: e.clientX - svgRect.left,
+        y: e.clientY - svgRect.top,
+      }
+      const hitShape = findShapeAtPoint(point, shapes)
       if (!hitShape || hitShape.id !== selectedId) return
 
       e.preventDefault()
-      const delta = e.deltaY > 0 ? 15 : -15
-      const newRotation = (shape.rotation + delta) % 360
+
+      const step = e.deltaY > 0 ? 1 : -1
+      wheelAccumRef.current += step
+
+      const steps = Math.trunc(wheelAccumRef.current)
+      if (steps === 0) return
+
+      wheelAccumRef.current -= steps
+      const rotationDelta = steps * 15
+      const newRotation = ((shape.rotation + rotationDelta) % 360 + 360) % 360
       updateShapeWithoutHistory(selectedId, { rotation: newRotation })
 
-      const timer = setTimeout(() => {
+      if (wheelTimerRef.current) {
+        clearTimeout(wheelTimerRef.current)
+      }
+      wheelTimerRef.current = setTimeout(() => {
         commitHistory()
-      }, 0)
-      return () => clearTimeout(timer)
+        wheelTimerRef.current = null
+      }, 150)
     },
-    [selectedId, shapes, getMousePoint, updateShapeWithoutHistory, commitHistory]
+    [selectedId, shapes, updateShapeWithoutHistory, commitHistory]
   )
 
-  const selectedShape = shapes.find((s) => s.id === selectedId) || null
-
-  let ghostShape: Shape | null = null
-  if (drag.mode === 'drawing') {
-    const rect = normalizeRect(
-      drag.startPoint.x,
-      drag.startPoint.y,
-      drag.currentPoint.x,
-      drag.currentPoint.y
-    )
-    if (rect.width > 1 && rect.height > 1) {
-      ghostShape = {
-        id: 'ghost',
-        type: currentTool as 'rect' | 'circle' | 'triangle',
-        x: rect.x,
-        y: rect.y,
-        width: rect.width,
-        height: rect.height,
-        rotation: 0,
-        fill:
-          currentTool === 'rect'
-            ? '#42a5f5'
-            : currentTool === 'circle'
-            ? '#66bb6a'
-            : '#ffa726',
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg) return
+    svg.addEventListener('wheel', handleWheel, { passive: false })
+    return () => {
+      svg.removeEventListener('wheel', handleWheel)
+      if (wheelTimerRef.current) {
+        clearTimeout(wheelTimerRef.current)
       }
     }
-  }
+  }, [handleWheel])
+
+  const selectedShape = shapes.find((s) => s.id === selectedId) || null
 
   return (
     <div className="canvas-container">
       <canvas
-        ref={canvasRef}
+        ref={gridCanvasRef}
         style={{
           position: 'absolute',
           top: 0,
@@ -495,15 +612,30 @@ export default function Canvas() {
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
+        style={{
+          visibility: isOverlayActive ? 'hidden' : 'visible',
+        }}
       >
         {shapes.map((shape) =>
-          renderShape(shape, false, newShapeIds.has(shape.id))
+          renderShape(shape, newShapeIds.has(shape.id))
         )}
-        {ghostShape && renderShape(ghostShape, true, false)}
         {selectedShape && renderSelectionOutline(selectedShape)}
         {selectedShape && renderSelectionHandles(selectedShape)}
       </svg>
+      <canvas
+        ref={overlayCanvasRef}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          pointerEvents: isOverlayActive ? 'auto' : 'none',
+          cursor: isOverlayActive ? (drag.mode === 'moving' ? 'move' : drag.mode === 'resizing' ? 'nwse-resize' : 'crosshair') : 'default',
+          visibility: isOverlayActive ? 'visible' : 'hidden',
+        }}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      />
     </div>
   )
 }
