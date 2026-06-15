@@ -1,6 +1,42 @@
+/**
+ * ============================================================
+ *  guiController.ts - GUI 控制面板模块
+ * ============================================================
+ *
+ * 【职责】
+ *    使用 lil-gui 库创建折叠式控制面板，提供用户交互入口：
+ *    1. 时间控制（自动播放开关 + 时间滑块）
+ *    2. 天气预设切换（晴天/多云/阴天）
+ *    3. 阴影精度设置（开关 + 分辨率选择 + 自动降级开关）
+ *
+ * 【被调用关系】
+ *    main.ts → createGUIController({...})  实例化面板
+ *
+ * 【调用的外部模块方法】
+ *    → timeManager.setManualTime(time)     用户拖动时间滑块
+ *    → timeManager.resumeAutoPlay()        用户打开自动播放
+ *    → timeManager.getCurrentTime()        初始化滑块值
+ *    → timeManager.isPlaying()             初始化开关值
+ *    → timeManager.subscribe(callback)     同步时间到滑块
+ *
+ *    → shadowSimulation.setWeather(type)   用户切换天气
+ *    → shadowSimulation.setShadowResolution(res) 用户选分辨率
+ *    → shadowSimulation.setShadowsEnabled(bool)  用户开关阴影
+ *    → shadowSimulation.setAutoDowngradeEnabled(bool) 开关降级
+ *    → shadowSimulation.getWeather()       初始化天气下拉
+ *    → shadowSimulation.getShadowResolution() 初始化分辨率
+ *    → shadowSimulation.getShadowsEnabled()   初始化阴影开关
+ *    → shadowSimulation.getAutoDowngradeEnabled() 初始化降级开关
+ *
+ * 【回调输出】
+ *    → onWeatherChange(weather) 通知 main.ts 更新信息板图标
+ * ============================================================
+ */
+
 import GUI from 'lil-gui'
 import type { TimeManager } from '../modules/timeManager'
 import type { ShadowSimulation, WeatherPreset } from '../modules/shadowSimulation'
+import { SHADOW_RESOLUTION_LEVELS } from '../modules/shadowSimulation'
 
 interface GUIControllerOptions {
   timeManager: TimeManager
@@ -13,13 +49,18 @@ class GUIController {
   private timeManager: TimeManager
   private shadowSimulation: ShadowSimulation
   private onWeatherChange?: (weather: WeatherPreset) => void
+
   private params: {
     time: number
-    weather: WeatherPreset
-    shadowResolution: number
-    shadowsEnabled: boolean
     autoPlay: boolean
+    weather: WeatherPreset
+    shadowsEnabled: boolean
+    shadowResolution: number
+    autoDowngrade: boolean
   }
+
+  private timeController: any
+  private autoPlayController: any
 
   constructor(options: GUIControllerOptions) {
     this.timeManager = options.timeManager
@@ -28,10 +69,11 @@ class GUIController {
 
     this.params = {
       time: this.timeManager.getCurrentTime(),
+      autoPlay: this.timeManager.isPlaying(),
       weather: this.shadowSimulation.getWeather(),
-      shadowResolution: this.shadowSimulation.getShadowResolution(),
       shadowsEnabled: this.shadowSimulation.getShadowsEnabled(),
-      autoPlay: this.timeManager.isPlaying()
+      shadowResolution: this.shadowSimulation.getShadowResolution(),
+      autoDowngrade: this.shadowSimulation.getAutoDowngradeEnabled()
     }
 
     this.gui = new GUI({
@@ -42,10 +84,11 @@ class GUIController {
     this.setupStyle()
     this.setupControls()
     this.setupToggleButton()
+    this.setupTimeSyncSubscription()
   }
 
   private setupStyle(): void {
-    const domElement = this.gui.domElement
+    const domElement: HTMLElement = this.gui.domElement
     domElement.style.position = 'absolute'
     domElement.style.top = '20px'
     domElement.style.right = '20px'
@@ -54,21 +97,27 @@ class GUIController {
     domElement.style.borderRadius = '8px'
     domElement.style.backdropFilter = 'blur(10px)'
     ;(domElement.style as any).webkitBackdropFilter = 'blur(10px)'
-    domElement.style.transition = 'all 0.2s ease'
+    domElement.style.transition = 'transform 0.2s ease'
     domElement.style.maxHeight = 'calc(100vh - 40px)'
     domElement.style.overflowY = 'auto'
 
-    const controllerElements = domElement.querySelectorAll('.lil-gui .controller')
-    controllerElements.forEach((el) => {
-      ;(el as HTMLElement).style.marginBottom = '8px'
+    const controllerElements: NodeListOf<HTMLElement> =
+      domElement.querySelectorAll('.lil-gui .controller')
+    controllerElements.forEach((el: HTMLElement) => {
+      el.style.marginBottom = '8px'
     })
   }
 
+  /**
+   * 构建所有控制面板控件
+   * 注意：时间滑块 onChange 时必须先关闭自动播放，再设置时间
+   *       否则自动循环会覆盖用户手动设置的值
+   */
   private setupControls(): void {
-    const timeFolder = this.gui.addFolder('时间控制')
-    timeFolder.close()
+    const timeFolder: GUI = this.gui.addFolder('时间控制')
+    timeFolder.open()
 
-    timeFolder
+    this.autoPlayController = timeFolder
       .add(this.params, 'autoPlay')
       .name('自动播放')
       .onChange((value: boolean) => {
@@ -79,24 +128,26 @@ class GUIController {
         }
       })
 
-    timeFolder
+    this.timeController = timeFolder
       .add(this.params, 'time', 6, 20, 0.25)
       .name('时间 (小时)')
       .onChange((value: number) => {
         this.params.autoPlay = false
         this.timeManager.setManualTime(value)
-        this.gui.controllersRecursive().forEach((c) => {
-          if (c.property === 'autoPlay') {
-            c.updateDisplay()
-          }
-        })
+        if (this.autoPlayController) {
+          this.autoPlayController.updateDisplay()
+        }
       })
 
-    const weatherFolder = this.gui.addFolder('天气预设')
-    weatherFolder.close()
+    const weatherFolder: GUI = this.gui.addFolder('天气预设')
+    weatherFolder.open()
 
     weatherFolder
-      .add(this.params, 'weather', ['sunny', 'cloudy', 'overcast'] as WeatherPreset[])
+      .add(this.params, 'weather', {
+        '☀️ 晴天': 'sunny' as WeatherPreset,
+        '⛅ 多云': 'cloudy' as WeatherPreset,
+        '☁️ 阴天': 'overcast' as WeatherPreset
+      })
       .name('天气')
       .onChange((value: WeatherPreset) => {
         this.shadowSimulation.setWeather(value)
@@ -105,8 +156,8 @@ class GUIController {
         }
       })
 
-    const shadowFolder = this.gui.addFolder('阴影设置')
-    shadowFolder.close()
+    const shadowFolder: GUI = this.gui.addFolder('阴影设置')
+    shadowFolder.open()
 
     shadowFolder
       .add(this.params, 'shadowsEnabled')
@@ -115,29 +166,49 @@ class GUIController {
         this.shadowSimulation.setShadowsEnabled(value)
       })
 
+    const resolutionOptions: Record<string, number> = {}
+    SHADOW_RESOLUTION_LEVELS.forEach((res: number) => {
+      resolutionOptions[`${res} × ${res}`] = res
+    })
     shadowFolder
-      .add(this.params, 'shadowResolution', [512, 1024, 2048, 4096])
+      .add(this.params, 'shadowResolution', resolutionOptions)
       .name('阴影分辨率')
       .onChange((value: number) => {
         this.shadowSimulation.setShadowResolution(value)
       })
 
+    shadowFolder
+      .add(this.params, 'autoDowngrade')
+      .name('FPS自动降级')
+      .onChange((value: boolean) => {
+        this.shadowSimulation.setAutoDowngradeEnabled(value)
+      })
+  }
+
+  /**
+   * 订阅时间管理器更新 → 同步滑块位置
+   * 仅在自动播放模式下更新 GUI，避免打断用户拖动
+   */
+  private setupTimeSyncSubscription(): void {
     this.timeManager.subscribe((time: number) => {
       if (this.timeManager.isPlaying()) {
         this.params.time = time
-        this.gui.controllersRecursive().forEach((c) => {
-          if (c.property === 'time') {
-            c.updateDisplay()
-          }
-        })
+        if (this.timeController) {
+          this.timeController.updateDisplay()
+        }
+        this.params.autoPlay = true
+        if (this.autoPlayController) {
+          this.autoPlayController.updateDisplay()
+        }
       }
     })
   }
 
+  /** 右侧折叠按钮：点击后面板滑入/滑出，动画0.2秒 */
   private setupToggleButton(): void {
-    const domElement = this.gui.domElement
+    const domElement: HTMLElement = this.gui.domElement
 
-    const toggleBtn = document.createElement('button')
+    const toggleBtn: HTMLButtonElement = document.createElement('button')
     toggleBtn.innerHTML = '◀'
     toggleBtn.style.cssText = `
       position: absolute;
@@ -158,23 +229,21 @@ class GUIController {
       justify-content: center;
     `
 
-    let isCollapsed = false
+    let isCollapsed: boolean = false
 
     toggleBtn.addEventListener('click', () => {
       isCollapsed = !isCollapsed
       if (isCollapsed) {
-        domElement.style.transform = 'translateX(100%)'
+        domElement.style.transform = 'translateX(calc(100% + 40px))'
         toggleBtn.innerHTML = '▶'
-        toggleBtn.style.left = '-32px'
       } else {
         domElement.style.transform = 'translateX(0)'
         toggleBtn.innerHTML = '◀'
-        toggleBtn.style.left = '-32px'
       }
     })
 
     toggleBtn.addEventListener('mouseenter', () => {
-      toggleBtn.style.background = 'rgba(60, 60, 60, 0.9)'
+      toggleBtn.style.background = 'rgba(60, 60, 60, 0.95)'
     })
 
     toggleBtn.addEventListener('mouseleave', () => {
@@ -186,7 +255,7 @@ class GUIController {
 
   updateWeatherDisplay(weather: WeatherPreset): void {
     this.params.weather = weather
-    this.gui.controllersRecursive().forEach((c) => {
+    this.gui.controllersRecursive().forEach((c: any) => {
       if (c.property === 'weather') {
         c.updateDisplay()
       }
@@ -205,5 +274,4 @@ export function createGUIController(
 }
 
 export type { GUIController }
-
 export default createGUIController
