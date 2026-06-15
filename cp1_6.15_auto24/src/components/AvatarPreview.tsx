@@ -1,4 +1,4 @@
-import React, { forwardRef } from 'react';
+import React, { forwardRef, memo } from 'react';
 import { AvatarConfig, ColorTheme } from '../types';
 
 interface AvatarPreviewProps {
@@ -7,7 +7,7 @@ interface AvatarPreviewProps {
   isAnimating: boolean;
 }
 
-const HairSVG: React.FC<{ type: string; color: string; secondary: string }> = ({ type, color, secondary }) => {
+const HairSVG: React.FC<{ type: string; color: string; secondary: string }> = memo(({ type, color, secondary }) => {
   switch (type) {
     case 'lotus':
       return (
@@ -50,9 +50,11 @@ const HairSVG: React.FC<{ type: string; color: string; secondary: string }> = ({
     default:
       return null;
   }
-};
+});
 
-const EyesSVG: React.FC<{ type: string; color: string; accent: string }> = ({ type, color, accent }) => {
+HairSVG.displayName = 'HairSVG';
+
+const EyesSVG: React.FC<{ type: string; color: string; accent: string }> = memo(({ type, color, accent }) => {
   switch (type) {
     case 'big':
       return (
@@ -96,9 +98,11 @@ const EyesSVG: React.FC<{ type: string; color: string; accent: string }> = ({ ty
     default:
       return null;
   }
-};
+});
 
-const AccessorySVG: React.FC<{ type: string; color: string; secondary: string; accent: string }> = ({ type, color, secondary, accent }) => {
+EyesSVG.displayName = 'EyesSVG';
+
+const AccessorySVG: React.FC<{ type: string; color: string; secondary: string; accent: string }> = memo(({ type, color, secondary, accent }) => {
   switch (type) {
     case 'headphone':
       return (
@@ -155,9 +159,11 @@ const AccessorySVG: React.FC<{ type: string; color: string; secondary: string; a
     default:
       return null;
   }
-};
+});
 
-const AvatarPreview = forwardRef<SVGSVGElement, AvatarPreviewProps>(({ config, theme, isAnimating }, ref) => {
+AccessorySVG.displayName = 'AccessorySVG';
+
+const AvatarPreview = memo(forwardRef<SVGSVGElement, AvatarPreviewProps>(({ config, theme, isAnimating }, ref) => {
   return (
     <div 
       className="relative bg-transition rounded-full p-1"
@@ -177,6 +183,7 @@ const AvatarPreview = forwardRef<SVGSVGElement, AvatarPreviewProps>(({ config, t
           height: 240,
           border: `4px solid ${theme.border}`,
           background: `linear-gradient(180deg, ${theme.background} 0%, ${theme.background}cc 100%)`,
+          transition: 'border-color 0.5s ease, background 0.5s ease',
         }}
       >
         <svg
@@ -210,7 +217,7 @@ const AvatarPreview = forwardRef<SVGSVGElement, AvatarPreviewProps>(({ config, t
       </div>
     </div>
   );
-});
+}));
 
 AvatarPreview.displayName = 'AvatarPreview';
 

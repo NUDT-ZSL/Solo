@@ -1,9 +1,10 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Shuffle, Download, Sparkles } from 'lucide-react';
+import { Download, Sparkles } from 'lucide-react';
 import AvatarPreview from './components/AvatarPreview';
 import ElementPanel from './components/ElementPanel';
 import ColorThemePicker from './components/ColorThemePicker';
+import RandomGenerator from './components/RandomGenerator';
 import { AvatarConfig, ColorTheme } from './types';
 import { colorThemes, hairOptions, eyesOptions, accessoryOptions } from './data';
 
@@ -16,11 +17,12 @@ function App() {
     accessory: 'headphone',
   });
   
-  const [selectedThemeId, setSelectedThemeId] = useState<string>('neon-purple');
+  const [selectedThemeId, setSelectedThemeId] = useState<string>('deep-blue');
   const [isAnimating, setIsAnimating] = useState(false);
-  const [isRandomizing, setIsRandomizing] = useState(false);
 
-  const currentTheme: ColorTheme = colorThemes.find(t => t.id === selectedThemeId) || colorThemes[0];
+  const currentTheme: ColorTheme = useMemo(() => {
+    return colorThemes.find(t => t.id === selectedThemeId) || colorThemes[0];
+  }, [selectedThemeId]);
 
   const updateHair = useCallback((id: string) => {
     setAvatarConfig(prev => ({ ...prev, hair: id }));
@@ -38,38 +40,18 @@ function App() {
     setSelectedThemeId(id);
   }, []);
 
-  const getRandomElement = <T,>(arr: T[]): T => {
-    return arr[Math.floor(Math.random() * arr.length)];
-  };
+  const handleRandomConfigChange = useCallback((config: AvatarConfig, themeId: string) => {
+    setAvatarConfig(config);
+    setSelectedThemeId(themeId);
+  }, []);
 
-  const handleRandomize = useCallback(() => {
-    if (isRandomizing) return;
-    
-    setIsRandomizing(true);
+  const handleAnimationStart = useCallback(() => {
     setIsAnimating(true);
-    
-    let count = 0;
-    const maxCount = 3;
-    
-    const interval = setInterval(() => {
-      count++;
-      
-      setAvatarConfig({
-        hair: getRandomElement(hairOptions).id,
-        eyes: getRandomElement(eyesOptions).id,
-        accessory: getRandomElement(accessoryOptions).id,
-      });
-      setSelectedThemeId(getRandomElement(colorThemes).id);
-      
-      if (count >= maxCount) {
-        clearInterval(interval);
-        setIsRandomizing(false);
-        setTimeout(() => {
-          setIsAnimating(false);
-        }, 800);
-      }
-    }, 800);
-  }, [isRandomizing]);
+  }, []);
+
+  const handleAnimationEnd = useCallback(() => {
+    setIsAnimating(false);
+  }, []);
 
   const handleExportSVG = useCallback(() => {
     if (!svgRef.current) return;
@@ -93,9 +75,12 @@ function App() {
   }, []);
 
   useEffect(() => {
-    document.body.style.background = `linear-gradient(135deg, #1a1a2e 0%, ${currentTheme.background} 100%)`;
+    document.body.style.background = `linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, ${currentTheme.background} 100%)`;
     document.body.style.transition = 'background 0.5s ease';
+    document.body.style.minHeight = '100vh';
   }, [currentTheme.background]);
+
+  const memoizedAvatarConfig = useMemo(() => avatarConfig, [avatarConfig]);
 
   return (
     <div className="min-h-screen py-8 px-4 sm:px-6 lg:px-8">
@@ -124,7 +109,7 @@ function App() {
           <div className="w-full lg:w-auto flex flex-col items-center gap-6 lg:sticky lg:top-8">
             <AvatarPreview 
               ref={svgRef}
-              config={avatarConfig} 
+              config={memoizedAvatarConfig} 
               theme={currentTheme}
               isAnimating={isAnimating}
             />
@@ -138,25 +123,16 @@ function App() {
             </div>
             
             <div className="flex flex-wrap gap-3 justify-center">
-              <button
-                onClick={handleRandomize}
-                disabled={isRandomizing}
-                className={`
-                  flex items-center gap-2 px-6 py-3 rounded-2xl font-semibold text-white
-                  transition-all duration-300 ease-out
-                  ${isRandomizing 
-                    ? 'cursor-not-allowed opacity-70' 
-                    : 'hover:scale-105 hover:shadow-lg active:scale-95'
-                  }
-                `}
-                style={{ 
-                  backgroundColor: currentTheme.primary,
-                  boxShadow: isRandomizing ? 'none' : `0 0 30px ${currentTheme.primary}50`,
-                }}
-              >
-                <Shuffle size={20} className={isRandomizing ? 'animate-spin' : ''} />
-                {isRandomizing ? '生成中...' : '随机生成'}
-              </button>
+              <RandomGenerator
+                theme={currentTheme}
+                hairOptions={hairOptions}
+                eyesOptions={eyesOptions}
+                accessoryOptions={accessoryOptions}
+                colorThemes={colorThemes}
+                onConfigChange={handleRandomConfigChange}
+                onAnimationStart={handleAnimationStart}
+                onAnimationEnd={handleAnimationEnd}
+              />
               
               <button
                 onClick={handleExportSVG}
@@ -165,6 +141,7 @@ function App() {
                   bg-white/10 backdrop-blur-sm border border-white/20
                   transition-all duration-300 ease-out
                   hover:bg-white/20 hover:scale-105 hover:shadow-lg active:scale-95
+                  cursor-pointer
                 "
               >
                 <Download size={20} />

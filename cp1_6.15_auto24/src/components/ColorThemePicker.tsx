@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { ColorTheme } from '../types';
 import { Palette } from 'lucide-react';
 
@@ -8,11 +8,11 @@ interface ColorThemePickerProps {
   onSelect: (id: string) => void;
 }
 
-const ColorThemePicker: React.FC<ColorThemePickerProps> = ({ themes, selectedId, onSelect }) => {
+const ColorThemePicker: React.FC<ColorThemePickerProps> = memo(({ themes, selectedId, onSelect }) => {
   return (
     <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-4 border border-white/10">
       <div className="flex items-center gap-2 mb-4">
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500">
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500">
           <Palette size={18} />
         </div>
         <h3 className="text-white font-semibold text-lg">颜色主题</h3>
@@ -28,7 +28,7 @@ const ColorThemePicker: React.FC<ColorThemePickerProps> = ({ themes, selectedId,
               onClick={() => onSelect(theme.id)}
               className={`
                 group relative flex flex-col items-center gap-2
-                transition-all duration-200 ease-out
+                transition-all duration-300 ease-out
               `}
               title={theme.name}
             >
@@ -36,12 +36,13 @@ const ColorThemePicker: React.FC<ColorThemePickerProps> = ({ themes, selectedId,
                 className={`
                   relative w-14 h-14 rounded-2xl overflow-hidden
                   transition-all duration-300 ease-out
-                  ${isSelected ? 'ring-4 ring-white/80 scale-110 shadow-lg' : 'ring-2 ring-white/20 hover:ring-white/40 hover:scale-105'}
                 `}
                 style={{
                   boxShadow: isSelected 
-                    ? `0 0 30px ${theme.primary}80, 0 0 60px ${theme.primary}40` 
-                    : undefined,
+                    ? `0 0 30px ${theme.primary}80, 0 0 60px ${theme.primary}40, 0 8px 16px rgba(0,0,0,0.25)` 
+                    : '0 2px 8px rgba(0,0,0,0.1)',
+                  border: isSelected ? '3px solid rgba(255,255,255,0.9)' : '2px solid rgba(255,255,255,0.2)',
+                  transform: isSelected ? 'scale(1.1)' : 'scale(1)',
                 }}
               >
                 <div 
@@ -68,15 +69,18 @@ const ColorThemePicker: React.FC<ColorThemePickerProps> = ({ themes, selectedId,
               <span 
                 className={`
                   text-xs font-medium transition-all duration-200
-                  ${isSelected ? 'text-white scale-105' : 'text-white/60 group-hover:text-white/80'}
                 `}
+                style={{
+                  color: isSelected ? '#ffffff' : 'rgba(255,255,255,0.6)',
+                  transform: isSelected ? 'scale(1.05)' : 'scale(1)',
+                }}
               >
                 {theme.name}
               </span>
               {isSelected && (
                 <div 
-                  className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center shadow-lg"
-                  style={{ backgroundColor: theme.accent }}
+                  className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center shadow-lg z-10"
+                  style={{ backgroundColor: '#ffffff' }}
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={theme.border} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="20 6 9 17 4 12" />
@@ -89,6 +93,8 @@ const ColorThemePicker: React.FC<ColorThemePickerProps> = ({ themes, selectedId,
       </div>
     </div>
   );
-};
+});
+
+ColorThemePicker.displayName = 'ColorThemePicker';
 
 export default ColorThemePicker;
