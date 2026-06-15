@@ -177,7 +177,8 @@ function createFloatingText(
   x: number,
   y: number,
   text: string,
-  color: string
+  color: string,
+  duration = 1200
 ): FloatingText {
   return {
     id: generateId(),
@@ -186,7 +187,7 @@ function createFloatingText(
     text,
     color,
     createdAt: Date.now(),
-    duration: 800,
+    duration,
   };
 }
 
@@ -347,18 +348,29 @@ function processBattle(state: GameState, monsterId: string): GameState {
   const playerDamage = player.attack;
   monster.hp -= playerDamage;
   monster.isBlinking = true;
+
   floatingTexts.push(
     createFloatingText(
       monster.position.x,
       monster.position.y,
       `-${playerDamage}`,
-      '#ff4444'
+      '#ff2222',
+      1200
     )
   );
 
   if (monster.hp <= 0) {
     if (monster.isBoss) {
       phase = GamePhase.VICTORY;
+      floatingTexts.push(
+        createFloatingText(
+          monster.position.x,
+          monster.position.y - 1,
+          '击败!',
+          '#ffd700',
+          2000
+        )
+      );
     }
   } else {
     let monsterDamage = monster.attack;
@@ -368,17 +380,28 @@ function processBattle(state: GameState, monsterId: string): GameState {
       if (bossTurnCount % 3 === 0) {
         monsterDamage *= 2;
         isBossSpecialAttack = true;
+        floatingTexts.push(
+          createFloatingText(
+            monster.position.x,
+            monster.position.y - 1,
+            '暴怒!',
+            '#ff0000',
+            1500
+          )
+        );
       }
     }
 
     const actualDamage = Math.max(1, monsterDamage - player.defense);
     player.hp -= actualDamage;
+
     floatingTexts.push(
       createFloatingText(
         player.position.x,
         player.position.y,
         `-${actualDamage}`,
-        '#ff6666'
+        '#ff1111',
+        1200
       )
     );
 
@@ -415,7 +438,8 @@ function applyEquipmentEffect(
           player.position.x,
           player.position.y,
           `+${equipment.value} ATK`,
-          '#66ff66'
+          '#00ff66',
+          1800
         )
       );
       break;
@@ -426,7 +450,8 @@ function applyEquipmentEffect(
           player.position.x,
           player.position.y,
           `+${equipment.value} HP`,
-          '#66ff66'
+          '#00ff88',
+          1800
         )
       );
       break;
@@ -437,7 +462,8 @@ function applyEquipmentEffect(
           player.position.x,
           player.position.y,
           `+${equipment.value} DEF`,
-          '#66ff66'
+          '#22ffaa',
+          1800
         )
       );
       break;
