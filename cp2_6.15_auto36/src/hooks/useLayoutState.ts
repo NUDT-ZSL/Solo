@@ -47,8 +47,6 @@ export function useLayoutState(): UseLayoutStateReturn {
       type,
       x,
       y,
-      width: preset.width,
-      height: preset.height,
       rotation: 0,
       opacity: 1,
       ...preset,
