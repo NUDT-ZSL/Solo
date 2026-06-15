@@ -302,48 +302,120 @@ export class Tower extends Phaser.GameObjects.Container {
 
   private _playUpgradeAnimation(): void {
     const stats = this.currentStats;
+    const baseSize = stats.size;
 
-    const flash = this.scene.add.circle(this.x, this.y, stats.size + 15, 0xffffff, 0);
-    flash.setDepth(this.depth + 5);
+    for (let i = 0; i < 4; i++) {
+      const ring = this.scene.add.graphics();
+      ring.setPosition(this.x, this.y);
+      ring.setDepth(this.depth + 10 + i);
+      ring.lineStyle(3, this._config.projectileColor, 0.8 - i * 0.15);
+      ring.strokeCircle(0, 0, baseSize + 10);
+      ring.setAlpha(0);
+
+      this.scene.tweens.add({
+        targets: ring,
+        scaleX: { from: 0.4, to: 2.5 + i * 0.3 },
+        scaleY: { from: 0.4, to: 2.5 + i * 0.3 },
+        alpha: { from: 0.9, to: 0 },
+        duration: 500 + i * 80,
+        delay: i * 60,
+        ease: 'Cubic.easeOut',
+        onComplete: () => ring.destroy()
+      });
+    }
+
+    const flash = this.scene.add.circle(this.x, this.y, baseSize + 8, 0xffffff, 0);
+    flash.setDepth(this.depth + 15);
 
     this.scene.tweens.add({
       targets: flash,
-      alpha: { from: 0.8, to: 0 },
-      scaleX: { from: 0.5, to: 2 },
-      scaleY: { from: 0.5, to: 2 },
-      duration: 300,
+      alpha: 1,
+      scaleX: { from: 0.6, to: 1.8 },
+      scaleY: { from: 0.6, to: 1.8 },
+      duration: 125,
       ease: 'Cubic.easeOut',
+      yoyo: true,
+      hold: 0,
       onComplete: () => flash.destroy()
     });
 
     this.scene.tweens.add({
       targets: this,
-      scaleX: 1.3,
-      scaleY: 1.3,
-      duration: 150,
-      ease: 'Sine.easeIn',
-      yoyo: true,
-      hold: 0,
-      repeat: 0
+      scaleX: 1.4,
+      scaleY: 1.4,
+      duration: 120,
+      ease: 'Back.easeIn'
     });
 
-    for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2;
-      const particle = this.scene.add.circle(this.x, this.y, 4, this._config.projectileColor);
-      particle.setDepth(this.depth + 5);
+    this.scene.tweens.add({
+      targets: this,
+      scaleX: 1,
+      scaleY: 1,
+      duration: 250,
+      delay: 120,
+      ease: 'Elastic.easeOut',
+      easeParams: [1, 0.5]
+    });
+
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2;
+      const dist = 30 + Math.random() * 40;
+      const particle = this.scene.add.circle(
+        this.x + Math.cos(angle) * 15,
+        this.y + Math.sin(angle) * 15,
+        4 + Math.random() * 3,
+        this._config.projectileColor
+      );
+      particle.setDepth(this.depth + 8);
 
       this.scene.tweens.add({
         targets: particle,
-        x: this.x + Math.cos(angle) * 60,
-        y: this.y + Math.sin(angle) * 60,
+        x: this.x + Math.cos(angle) * dist,
+        y: this.y + Math.sin(angle) * dist - 30,
         alpha: { from: 1, to: 0 },
         scaleX: { from: 1, to: 0 },
         scaleY: { from: 1, to: 0 },
-        duration: 400,
+        duration: 500 + Math.random() * 200,
         ease: 'Cubic.easeOut',
         onComplete: () => particle.destroy()
       });
     }
+
+    for (let i = 0; i < 6; i++) {
+      const spark = this.scene.add.circle(
+        this.x + (Math.random() - 0.5) * baseSize,
+        this.y,
+        3,
+        0xffffff
+      );
+      spark.setDepth(this.depth + 12);
+
+      this.scene.tweens.add({
+        targets: spark,
+        y: this.y - 60 - Math.random() * 40,
+        alpha: { from: 1, to: 0 },
+        scaleX: { from: 1, to: 0.5 },
+        scaleY: { from: 1, to: 0.5 },
+        duration: 600 + Math.random() * 200,
+        delay: Math.random() * 100,
+        ease: 'Cubic.easeOut',
+        onComplete: () => spark.destroy()
+      });
+    }
+
+    const glow = this.scene.add.circle(this.x, this.y, baseSize + 20, this._config.projectileColor, 0);
+    glow.setDepth(this.depth - 1);
+    this.scene.tweens.add({
+      targets: glow,
+      alpha: 0.4,
+      scaleX: { from: 0.8, to: 1.5 },
+      scaleY: { from: 0.8, to: 1.5 },
+      duration: 300,
+      ease: 'Cubic.easeOut',
+      yoyo: true,
+      hold: 0,
+      onComplete: () => glow.destroy()
+    });
   }
 
   public update(time: number, delta: number): void {

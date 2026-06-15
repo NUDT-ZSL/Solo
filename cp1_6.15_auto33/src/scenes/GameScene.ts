@@ -50,12 +50,17 @@ export class GameScene extends Phaser.Scene {
   private _autoWaveBtn: Phaser.GameObjects.Container | null = null;
 
   private _countdownText: Phaser.GameObjects.Text | null = null;
+  private _countdownRings: Phaser.GameObjects.Graphics[] = [];
   private _upgradePanel: Phaser.GameObjects.Container | null = null;
 
   private _minimapContainer: Phaser.GameObjects.Container | null = null;
   private _minimapGraphics: Phaser.GameObjects.Graphics | null = null;
+  private _minimapViewport: Phaser.GameObjects.Graphics | null = null;
   private _minimapLastUpdate: number = 0;
   private _isDraggingMinimap: boolean = false;
+  private _minimapCameraTargetX: number = 0;
+  private _minimapCameraTargetY: number = 0;
+  private _isCameraPanning: boolean = false;
 
   private _gameOverOverlay: Phaser.GameObjects.Container | null = null;
   private _pathPoints: Phaser.Geom.Point[] = [];
@@ -475,7 +480,27 @@ export class GameScene extends Phaser.Scene {
 
   private _showCountdown(count: number): void {
     const { width, height } = this.cameras.main;
-    if (this._countdownText) this._countdownText.destroy();
+    this._hideCountdown();
+
+    for (let i = 0; i < 3; i++) {
+      const ring = this.add.graphics();
+      ring.setDepth(1999);
+      ring.setPosition(width / 2, height / 2 - 100);
+      ring.lineStyle(4, 0xfbbf24, 0.6 - i * 0.15);
+      ring.strokeCircle(0, 0, 80 + i * 30);
+      ring.setAlpha(0);
+      this._countdownRings.push(ring);
+
+      this.tweens.add({
+        targets: ring,
+        scaleX: { from: 0.5, to: 2 },
+        scaleY: { from: 0.5, to: 2 },
+        alpha: { from: 0.8, to: 0 },
+        duration: 800,
+        delay: i * 100,
+        ease: 'Cubic.easeOut'
+      });
+    }
 
     this._countdownText = this.add.text(width / 2, height / 2 - 100, String(count), {
       fontSize: '120px',
@@ -486,18 +511,43 @@ export class GameScene extends Phaser.Scene {
     });
     this._countdownText.setOrigin(0.5);
     this._countdownText.setDepth(2000);
-    this._countdownText.setScale(0.3);
+    this._countdownText.setScale(0.2);
     this._countdownText.setAlpha(0);
 
     this.tweens.add({
       targets: this._countdownText,
-      scaleX: { from: 0.3, to: 1.5 },
-      scaleY: { from: 0.3, to: 1.5 },
+      scaleX: { from: 0.2, to: 1.3 },
+      scaleY: { from: 0.2, to: 1.3 },
       alpha: { from: 0, to: 1 },
+      duration: 350,
+      ease: 'Back.easeOut'
+    });
+
+    this.tweens.add({
+      targets: this._countdownText,
+      scaleX: 2,
+      scaleY: 2,
+      alpha: 0,
       duration: 450,
+      delay: 550,
+      ease: 'Cubic.easeIn'
+    });
+
+    const flash = this.add.graphics();
+    flash.fillStyle(0xfbbf24, 0.15);
+    flash.fillCircle(width / 2, height / 2 - 100, 150);
+    flash.setDepth(1998);
+    flash.setAlpha(0);
+    this.tweens.add({
+      targets: flash,
+      alpha: 0.3,
+      scaleX: { from: 0.5, to: 1.2 },
+      scaleY: { from: 0.5, to: 1.2 },
+      duration: 300,
       ease: 'Cubic.easeOut',
       yoyo: true,
-      hold: 0
+      hold: 0,
+      onComplete: () => flash.destroy()
     });
   }
 
@@ -506,6 +556,8 @@ export class GameScene extends Phaser.Scene {
       this._countdownText.destroy();
       this._countdownText = null;
     }
+    this._countdownRings.forEach((ring) => ring.destroy());
+    this._countdownRings = [];
   }
 
   private _setupResourceListener(): void {
@@ -581,8 +633,11 @@ export class GameScene extends Phaser.Scene {
     const { col, row } = this._isoToGrid(pointer.x, pointer.y);
     const isValid = col >= 0 && col < GRID_COLS && row >= 0 && row < GRID_ROWS;
 
-    if (isValid && this._gridMap[row][col] !== this._hoveredTile?.col ||
-        isValid && this._gridMap[row][col] !== this._hoveredTile?.row) {
+    const hoverChanged = !this._hoveredTile ||
+      this._hoveredTile.col !== col ||
+      this._hoveredTile.row !== row;
+
+    if (hoverChanged) {
       this._hoveredTile = isValid ? { col, row } : null;
       this._updateHoverHighlight();
     }
@@ -842,7 +897,7 @@ export class GameScene extends Phaser.Scene {
     this._minimapContainer.setDepth(1000);
 
     const bg = this.add.graphics();
-    bg.fillStyle(0x0f172a, 0.9);
+    bg.fillStyle(0x0f172a, 0.92);
     bg.fillRoundedRect(0, 0, mmWidth, mmHeight, 8);
     bg.lineStyle(2, 0x6366f1, 0.5);
     bg.strokeRoundedRect(0, 0, mmWidth, mmHeight, 8);
@@ -851,12 +906,18 @@ export class GameScene extends Phaser.Scene {
     this._minimapGraphics = this.add.graphics();
     this._minimapContainer.add(this._minimapGraphics);
 
+    this._minimapViewport = this.add.graphics();
+    this._minimapContainer.add(this._minimapViewport);
+
     this._minimapContainer.setSize(mmWidth, mmHeight);
     this._minimapContainer.setInteractive({ useHandCursor: true, draggable: false });
 
-    this._minimapContainer.on('pointerdown', () => {
+    this._minimapContainer.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (pointer.button !== 0) return;
       this._isDraggingMinimap = true;
+      this._handleMinimapDrag(pointer);
     });
+
     this.input.on('pointerup', () => {
       this._isDraggingMinimap = false;
     });
@@ -870,47 +931,95 @@ export class GameScene extends Phaser.Scene {
     this._minimapContainer.add(title);
   }
 
+  private _getMinimapWorldBounds(): { minX: number; maxX: number; minY: number; maxY: number } {
+    const mapPixelWidth = (GRID_COLS + GRID_ROWS) * (TILE_WIDTH / 2);
+    const mapPixelHeight = (GRID_COLS + GRID_ROWS) * (TILE_HEIGHT / 2);
+    return {
+      minX: this._mapOffsetX - mapPixelWidth / 2 - 50,
+      maxX: this._mapOffsetX + mapPixelWidth / 2 + 50,
+      minY: this._mapOffsetY - 50,
+      maxY: this._mapOffsetY + mapPixelHeight + 50
+    };
+  }
+
+  private _worldToMinimap(worldX: number, worldY: number): { x: number; y: number } {
+    const bounds = this._getMinimapWorldBounds();
+    const mmWidth = 200;
+    const mmHeight = 120;
+    const x = ((worldX - bounds.minX) / (bounds.maxX - bounds.minX)) * mmWidth;
+    const y = ((worldY - bounds.minY) / (bounds.maxY - bounds.minY)) * mmHeight;
+    return { x, y };
+  }
+
+  private _minimapToWorld(mmX: number, mmY: number): { x: number; y: number } {
+    const bounds = this._getMinimapWorldBounds();
+    const mmWidth = 200;
+    const mmHeight = 120;
+    const x = bounds.minX + (mmX / mmWidth) * (bounds.maxX - bounds.minX);
+    const y = bounds.minY + (mmY / mmHeight) * (bounds.maxY - bounds.minY);
+    return { x, y };
+  }
+
   private _handleMinimapDrag(pointer: Phaser.Input.Pointer): void {
     if (!this._minimapContainer || !this._minimapGraphics) return;
 
-    const { width, height } = this.cameras.main;
     const bounds = (this._minimapContainer as any).getBounds();
-    const localX = pointer.x - bounds.x;
-    const localY = pointer.y - bounds.y;
+    const localX = Phaser.Math.Clamp(pointer.x - bounds.x, 0, 200);
+    const localY = Phaser.Math.Clamp(pointer.y - bounds.y, 0, 120);
 
-    const mmWidth = 200;
-    const mmHeight = 120;
-    if (localX < 0 || localX > mmWidth || localY < 0 || localY > mmHeight) return;
+    const world = this._minimapToWorld(localX, localY);
+    const { width, height } = this.cameras.main;
 
-    const mapPixelWidth = (GRID_COLS + GRID_ROWS) * (TILE_WIDTH / 2);
-    const mapPixelHeight = (GRID_COLS + GRID_ROWS) * (TILE_HEIGHT / 2);
+    const targetScrollX = world.x - width / 2;
+    const targetScrollY = world.y - height / 2;
 
-    const mapCenterX = this._mapOffsetX;
-    const mapCenterY = this._mapOffsetY + mapPixelHeight / 2;
+    const bounds2 = this._getMinimapWorldBounds();
+    const maxScrollX = bounds2.maxX - width;
+    const maxScrollY = bounds2.maxY - height;
+    const clampedX = Phaser.Math.Clamp(targetScrollX, 0, Math.max(0, maxScrollX));
+    const clampedY = Phaser.Math.Clamp(targetScrollY, 0, Math.max(0, maxScrollY));
 
-    const ratioX = (localX / mmWidth - 0.5) * 2;
-    const ratioY = (localY / mmHeight - 0.5) * 2;
+    if (this._isCameraPanning) {
+      this.tweens.killTweensOf(this.cameras.main);
+    }
 
-    const targetX = mapCenterX + ratioX * mapPixelWidth * 0.5;
-    const targetY = mapCenterY + ratioY * mapPixelHeight * 0.3;
-
-    const clampedX = Phaser.Math.Clamp(targetX, width / 2, width / 2);
-    const clampedY = Phaser.Math.Clamp(targetY, height / 2 - 50, height / 2 + 50);
-
-    this.cameras.main.stopFollow();
+    this._isCameraPanning = true;
     this.tweens.add({
       targets: this.cameras.main,
-      scrollX: clampedX - width / 2,
-      scrollY: clampedY - height / 2,
+      scrollX: clampedX,
+      scrollY: clampedY,
       duration: 200,
-      ease: 'Cubic.easeOut'
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        this._isCameraPanning = false;
+      }
     });
+  }
+
+  private _updateMinimapViewport(): void {
+    if (!this._minimapViewport) return;
+    this._minimapViewport.clear();
+
+    const { width, height } = this.cameras.main;
+    const scrollX = this.cameras.main.scrollX;
+    const scrollY = this.cameras.main.scrollY;
+
+    const topLeft = this._worldToMinimap(scrollX, scrollY);
+    const bottomRight = this._worldToMinimap(scrollX + width, scrollY + height);
+
+    this._minimapViewport.lineStyle(2, 0xfbbf24, 0.9);
+    this._minimapViewport.strokeRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
+    this._minimapViewport.fillStyle(0xfbbf24, 0.1);
+    this._minimapViewport.fillRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
   }
 
   private _updateMinimap(): void {
     if (!this._minimapGraphics) return;
     const now = this.time.now;
-    if (now - this._minimapLastUpdate < 200) return;
+    if (now - this._minimapLastUpdate < 200) {
+      this._updateMinimapViewport();
+      return;
+    }
     this._minimapLastUpdate = now;
 
     this._minimapGraphics.clear();
