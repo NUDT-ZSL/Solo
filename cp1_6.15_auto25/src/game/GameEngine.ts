@@ -68,8 +68,24 @@ const MAX_BULLETS = 5;
 const BULLET_COOLDOWN = 0.3;
 const MIN_ASTEROID_DIAMETER = 20;
 const EXPLODE_DURATION = 0.5;
+const EXPLODE_PARTICLE_LIFE = 0.6;
 const EXPLODE_PARTICLE_COUNT = 8;
 const WAVE_INTERVAL = 15;
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v));
+}
+
+function circleRectCollide(
+  cx: number, cy: number, cr: number,
+  rx: number, ry: number, rw: number, rh: number
+): boolean {
+  const closestX = clamp(cx, rx - rw / 2, rx + rw / 2);
+  const closestY = clamp(cy, ry - rh / 2, ry + rh / 2);
+  const dx = cx - closestX;
+  const dy = cy - closestY;
+  return dx * dx + dy * dy < cr * cr;
+}
 
 function rand(min: number, max: number): number {
   return Math.random() * (max - min) + min;
@@ -182,6 +198,8 @@ export class GameEngine {
 
     if (!this.state.gameOver) {
       this.update(dt);
+    } else {
+      this.updateExplosionParticles(dt);
     }
     this.render();
 
@@ -297,8 +315,8 @@ export class GameEngine {
         if (d < b.radius + a.diameter / 2) {
           bulletsToRemove.add(bi);
           asteroidsToRemove.add(ai);
-          if (a.diameter > MIN_ASTEROID_DIAMETER) {
-            const newDiameter = a.diameter / 2;
+          const newDiameter = a.diameter / 2;
+          if (newDiameter >= MIN_ASTEROID_DIAMETER) {
             const angle1 = rand(0, Math.PI * 2);
             const angle2 = angle1 + Math.PI / 2 + rand(-0.3, 0.3);
             const speed1 = newDiameter >= 50 ? rand(40, 80) : rand(80, 140);
@@ -307,10 +325,8 @@ export class GameEngine {
               { x: a.x, y: a.y, vx: Math.cos(angle1) * speed1, vy: Math.sin(angle1) * speed1, diameter: newDiameter },
               { x: a.x, y: a.y, vx: Math.cos(angle2) * speed2, vy: Math.sin(angle2) * speed2, diameter: newDiameter },
             );
-            this.state.score += a.diameter >= 50 ? 10 : 20;
-          } else {
-            this.state.score += 20;
           }
+          this.state.score += a.diameter >= 50 ? 10 : 20;
           this.state.kills += 1;
           break;
         }
@@ -324,9 +340,11 @@ export class GameEngine {
 
   private checkShipAsteroidCollisions(): void {
     const ship = this.state.ship;
+    const shipWidth = ship.size * 1.4;
+    const shipHeight = ship.size * 1.6;
     for (const a of this.state.asteroids) {
-      const d = dist(ship.x, ship.y, a.x, a.y);
-      if (d < ship.size + a.diameter / 2) {
+      const asteroidRadius = a.diameter / 2;
+      if (circleRectCollide(a.x, a.y, asteroidRadius, ship.x, ship.y, shipWidth, shipHeight)) {
         ship.exploding = true;
         ship.explodeTimer = 0;
         for (let i = 0; i < EXPLODE_PARTICLE_COUNT; i++) {
@@ -338,7 +356,7 @@ export class GameEngine {
             vx: Math.cos(angle) * speed,
             vy: Math.sin(angle) * speed,
             alpha: 1,
-            life: EXPLODE_DURATION,
+            life: EXPLODE_PARTICLE_LIFE,
           });
         }
         break;
@@ -450,11 +468,15 @@ export class GameEngine {
   }
 
   private renderExplosionParticle(ctx: CanvasRenderingContext2D, p: ExplosionParticle): void {
+    ctx.save();
     ctx.globalAlpha = p.alpha;
     ctx.fillStyle = '#ff9800';
+    ctx.shadowColor = '#ff5722';
+    ctx.shadowBlur = 10;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, 4.5, 0, Math.PI * 2);
     ctx.fill();
-    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+    ctx.restore();
   }
 }

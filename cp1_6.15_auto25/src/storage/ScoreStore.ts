@@ -17,7 +17,7 @@ export function getScores(): ScoreRecord[] {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed: ScoreRecord[] = JSON.parse(raw);
-    return parsed;
+    return parsed.slice(0, MAX_RECORDS);
   } catch {
     return [];
   }

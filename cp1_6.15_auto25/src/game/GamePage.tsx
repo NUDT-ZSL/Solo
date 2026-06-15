@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { GameEngine } from './GameEngine';
 
 interface GamePageProps {
-  onGameOver: (score: number, kills: number, duration: number) => void;
+  onGameOver: (nickname: string, score: number, kills: number, duration: number) => void;
   onBack: () => void;
 }
 
@@ -55,7 +55,7 @@ export default function GamePage({ onGameOver, onBack }: GamePageProps) {
   }, [handleGameOver]);
 
   const handleSaveAndBack = () => {
-    onGameOver(finalScore, finalKills, finalDuration);
+    onGameOver(nickname, finalScore, finalKills, finalDuration);
     onBack();
   };
 
