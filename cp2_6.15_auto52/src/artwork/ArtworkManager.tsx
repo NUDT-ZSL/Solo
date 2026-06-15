@@ -271,6 +271,24 @@ export const ArtworkManager: React.FC = () => {
         艺术品管理
       </div>
 
+      {isUploading && !showUploadForm && (
+        <div className="mb-4">
+          <div className="h-2 rounded-full bg-[#444466] overflow-hidden">
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${uploadProgress}%`,
+                background: `linear-gradient(90deg, #6c63ff 0%, #4caf50 100%)`,
+                transition: 'width 0.15s ease-out',
+              }}
+            />
+          </div>
+          <div className="text-xs text-center text-[#a0a0c0] mt-1">
+            上传中 {uploadProgress}%
+          </div>
+        </div>
+      )}
+
       {showUploadForm ? <UploadForm /> : <UploadArea />}
 
       <div className="flex-1 overflow-hidden mt-4">

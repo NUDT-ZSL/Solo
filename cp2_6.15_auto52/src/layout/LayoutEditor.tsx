@@ -25,27 +25,21 @@ export const LayoutEditor: React.FC = () => {
   const assignArtworkToStand = useStore((state) => state.assignArtworkToStand);
   const isMobile = useStore((state) => state.isMobile);
 
-  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
-  const draggingElementRef = useRef<LayoutElement | null>(null);
-  const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [draggingElement, setDraggingElement] = useState<LayoutElement | null>(null);
-  const [, forceRender] = useState(0);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const draggingRef = useRef<LayoutElement | null>(null);
+  const offsetRef = useRef({ x: 0, y: 0 });
+  const rafPendingRef = useRef(false);
+  const rafIdRef = useRef<number>(0);
+  const lastMouseRef = useRef<{ cx: number; cy: number } | null>(null);
 
-  const getCanvasCoordinates = useCallback(
-    (clientX: number, clientY: number) => {
-      if (!canvasContainerRef.current || !layout) return { x: 0, y: 0 };
-      
-      const rect = canvasContainerRef.current.getBoundingClientRect();
-      const canvasElement = canvasContainerRef.current.querySelector('canvas');
-      if (!canvasElement) return { x: 0, y: 0 };
-
-      const canvasRect = canvasElement.getBoundingClientRect();
-      const scaleX = layout.width / canvasRect.width;
-      const scaleY = layout.height / canvasRect.height;
-      
+  const getCanvasCoords = useCallback(
+    (cx: number, cy: number) => {
+      const canvas = containerRef.current?.querySelector('canvas');
+      if (!canvas || !layout) return { x: 0, y: 0 };
+      const rect = canvas.getBoundingClientRect();
       return {
-        x: (clientX - canvasRect.left) * scaleX,
-        y: (clientY - canvasRect.top) * scaleY,
+        x: (cx - rect.left) * (layout.width / rect.width),
+        y: (cy - rect.top) * (layout.height / rect.height),
       };
     },
     [layout]
@@ -53,42 +47,34 @@ export const LayoutEditor: React.FC = () => {
 
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent) => {
-      if (draggingElementRef.current) return;
-
+      if (draggingRef.current) return;
       if (selectedTool === 'select') {
         setSelectedElementId(null);
         return;
       }
-
       if (selectedTool === 'wall' || selectedTool === 'stand') {
-        const coords = getCanvasCoordinates(e.clientX, e.clientY);
+        const coords = getCanvasCoords(e.clientX, e.clientY);
         const isWall = selectedTool === 'wall';
-        const defaultWidth = isWall ? 100 : 30;
-        const defaultHeight = isWall ? 10 : 30;
-        const newElement = createNewElement(
-          selectedTool,
-          Math.max(0, Math.min(coords.x - defaultWidth / 2, (layout?.width || 600) - defaultWidth)),
-          Math.max(0, Math.min(coords.y - defaultHeight / 2, (layout?.height || 400) - defaultHeight))
-        );
-        addElement(newElement);
+        const dw = isWall ? 100 : 30;
+        const dh = isWall ? 10 : 30;
+        const nx = Math.max(0, Math.min(coords.x - dw / 2, (layout?.width || 600) - dw));
+        const ny = Math.max(0, Math.min(coords.y - dh / 2, (layout?.height || 400) - dh));
+        addElement(createNewElement(selectedTool, nx, ny));
         saveLayout();
       }
     },
-    [selectedTool, getCanvasCoordinates, addElement, saveLayout, setSelectedElementId, layout]
+    [selectedTool, getCanvasCoords, addElement, saveLayout, setSelectedElementId, layout]
   );
 
   const handleElementClick = useCallback(
     (element: LayoutElement, e: React.MouseEvent) => {
       e.stopPropagation();
-
-      if (draggingElementRef.current) return;
-
+      if (draggingRef.current) return;
       if (selectedTool === 'delete') {
         removeElement(element.id);
         saveLayout();
         return;
       }
-
       if (selectedTool === 'select') {
         setSelectedElementId(element.id);
       }
@@ -99,137 +85,137 @@ export const LayoutEditor: React.FC = () => {
   const handleElementMouseDown = useCallback(
     (element: LayoutElement, e: React.MouseEvent) => {
       if (selectedTool !== 'select') return;
-
       e.preventDefault();
-      const coords = getCanvasCoordinates(e.clientX, e.clientY);
-      
-      draggingElementRef.current = element;
-      dragOffsetRef.current = {
-        x: coords.x - element.x,
-        y: coords.y - element.y,
-      };
-      setDraggingElement(element);
+      const coords = getCanvasCoords(e.clientX, e.clientY);
+      draggingRef.current = element;
+      offsetRef.current = { x: coords.x - element.x, y: coords.y - element.y };
       setIsDragging(true);
     },
-    [selectedTool, getCanvasCoordinates, setIsDragging]
+    [selectedTool, getCanvasCoords, setIsDragging]
   );
+
+  const flushDragToStore = useCallback(() => {
+    if (!draggingRef.current) return;
+    updateElement(draggingRef.current);
+  }, [updateElement]);
+
+  const scheduleDragUpdate = useCallback(() => {
+    if (rafPendingRef.current) return;
+    rafPendingRef.current = true;
+    rafIdRef.current = requestAnimationFrame(() => {
+      rafPendingRef.current = false;
+      flushDragToStore();
+    });
+  }, [flushDragToStore]);
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (draggingElementRef.current && selectedTool === 'select') {
-        const coords = getCanvasCoordinates(e.clientX, e.clientY);
-        const el = draggingElementRef.current;
-        const newX = Math.max(0, Math.min(coords.x - dragOffsetRef.current.x, (layout?.width || 600) - el.width));
-        const newY = Math.max(0, Math.min(coords.y - dragOffsetRef.current.y, (layout?.height || 400) - el.height));
-
-        const updatedElement = {
-          ...el,
-          x: newX,
-          y: newY,
-        };
-
-        draggingElementRef.current = updatedElement;
-        updateElement(updatedElement);
-        setDraggingElement(updatedElement);
+      if (draggingRef.current && selectedTool === 'select') {
+        lastMouseRef.current = { cx: e.clientX, cy: e.clientY };
+        const coords = getCanvasCoords(e.clientX, e.clientY);
+        const el = draggingRef.current;
+        const maxX = (layout?.width || 600) - el.width;
+        const maxY = (layout?.height || 400) - el.height;
+        const nx = Math.max(0, Math.min(coords.x - offsetRef.current.x, maxX));
+        const ny = Math.max(0, Math.min(coords.y - offsetRef.current.y, maxY));
+        draggingRef.current = { ...el, x: nx, y: ny };
+        scheduleDragUpdate();
       }
 
       if (selectedTool === 'wall' || selectedTool === 'stand') {
-        const coords = getCanvasCoordinates(e.clientX, e.clientY);
+        const coords = getCanvasCoords(e.clientX, e.clientY);
         const isWall = selectedTool === 'wall';
-        const defaultWidth = isWall ? 100 : 30;
-        const defaultHeight = isWall ? 10 : 30;
-        const preview = createNewElement(
-          selectedTool,
-          Math.max(0, Math.min(coords.x - defaultWidth / 2, (layout?.width || 600) - defaultWidth)),
-          Math.max(0, Math.min(coords.y - defaultHeight / 2, (layout?.height || 400) - defaultHeight))
-        );
-        setDragPreview(preview);
+        const dw = isWall ? 100 : 30;
+        const dh = isWall ? 10 : 30;
+        const nx = Math.max(0, Math.min(coords.x - dw / 2, (layout?.width || 600) - dw));
+        const ny = Math.max(0, Math.min(coords.y - dh / 2, (layout?.height || 400) - dh));
+        setDragPreview(createNewElement(selectedTool, nx, ny));
       }
     },
-    [selectedTool, getCanvasCoordinates, updateElement, setDragPreview, layout]
+    [selectedTool, getCanvasCoords, scheduleDragUpdate, setDragPreview, layout]
   );
 
   const handleMouseUp = useCallback(() => {
-    if (draggingElementRef.current) {
+    if (draggingRef.current) {
+      if (rafPendingRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafPendingRef.current = false;
+      }
+      flushDragToStore();
       saveLayout();
     }
-    draggingElementRef.current = null;
-    setDraggingElement(null);
+    draggingRef.current = null;
     setIsDragging(false);
     setDragPreview(null);
-  }, [saveLayout, setIsDragging, setDragPreview]);
+  }, [flushDragToStore, saveLayout, setIsDragging, setDragPreview]);
 
   const handleMouseLeave = useCallback(() => {
-    if (draggingElementRef.current) {
+    if (draggingRef.current) {
+      if (rafPendingRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafPendingRef.current = false;
+      }
+      flushDragToStore();
       saveLayout();
     }
-    draggingElementRef.current = null;
-    setDraggingElement(null);
+    draggingRef.current = null;
     setIsDragging(false);
-  }, [saveLayout, setIsDragging]);
+  }, [flushDragToStore, saveLayout, setIsDragging]);
 
   const handleElementHover = useCallback(
     (elementId: string | null, pos?: { x: number; y: number }) => {
       setHoveredElementId(elementId);
-      if (pos && elementId) {
-        setTooltipPosition({ x: pos.x, y: pos.y - 40 });
-      } else {
-        setTooltipPosition(null);
-      }
+      setTooltipPosition(pos && elementId ? { x: pos.x, y: pos.y - 40 } : null);
     },
     [setHoveredElementId, setTooltipPosition]
   );
 
+  const computeArtworkColor = useCallback(async (artwork: Artwork): Promise<string> => {
+    try {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Image load failed'));
+        img.src = artwork.thumbnailUrl;
+      });
+      if (img.complete && img.naturalWidth > 0) {
+        const rgbColor = getAverageColor(img);
+        return rgbColor.startsWith('rgb(') ? rgbToHex(rgbColor) : rgbColor;
+      }
+    } catch (err) {
+      console.warn('Failed to compute average color, using server value:', err);
+    }
+    return artwork.averageColor;
+  }, []);
+
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: DRAG_TYPES.ARTWORK,
-    drop: async (item: { artwork: Artwork }, monitor) => {
+    drop: (item: { artwork: Artwork }, monitor) => {
       const offset = monitor.getClientOffset();
       if (!offset || !layout) return { dropped: false };
 
-      const canvasElement = canvasContainerRef.current?.querySelector('canvas');
-      if (!canvasElement) return { dropped: false };
+      const canvas = containerRef.current?.querySelector('canvas');
+      if (!canvas) return { dropped: false };
 
-      const canvasRect = canvasElement.getBoundingClientRect();
-      const scaleX = layout.width / canvasRect.width;
-      const scaleY = layout.height / canvasRect.height;
-      const x = (offset.x - canvasRect.left) * scaleX;
-      const y = (offset.y - canvasRect.top) * scaleY;
+      const rect = canvas.getBoundingClientRect();
+      const sx = layout.width / rect.width;
+      const sy = layout.height / rect.height;
+      const x = (offset.x - rect.left) * sx;
+      const y = (offset.y - rect.top) * sy;
 
       for (let i = layout.elements.length - 1; i >= 0; i--) {
         const el = layout.elements[i];
         if (
           el.type === 'stand' &&
-          x >= el.x &&
-          x <= el.x + el.width &&
-          y >= el.y &&
-          y <= el.y + el.height
+          x >= el.x && x <= el.x + el.width &&
+          y >= el.y && y <= el.y + el.height
         ) {
-          let computedColor = item.artwork.averageColor;
-          try {
-            const img = new Image();
-            img.crossOrigin = 'anonymous';
-            await new Promise<void>((resolve, reject) => {
-              img.onload = () => resolve();
-              img.onerror = () => reject(new Error('Image load failed'));
-              img.src = item.artwork.thumbnailUrl;
-            });
-            if (img.complete && img.naturalWidth > 0) {
-              const rgbColor = getAverageColor(img);
-              if (rgbColor.startsWith('rgb(')) {
-                computedColor = rgbToHex(rgbColor);
-              } else {
-                computedColor = rgbColor;
-              }
-            }
-          } catch (err) {
-            console.warn('Failed to compute average color, using server value:', err);
-          }
-          const artworkWithColor: Artwork = {
-            ...item.artwork,
-            averageColor: computedColor,
-          };
-          assignArtworkToStand(el.id, artworkWithColor);
-          saveLayout();
+          assignArtworkToStand(el.id, item.artwork);
+          computeArtworkColor(item.artwork).then((computedColor) => {
+            assignArtworkToStand(el.id, { ...item.artwork, averageColor: computedColor });
+            saveLayout();
+          });
           return { dropped: true };
         }
       }
@@ -239,11 +225,11 @@ export const LayoutEditor: React.FC = () => {
       isOver: monitor.isOver(),
       canDrop: monitor.canDrop(),
     }),
-  }), [layout, assignArtworkToStand, saveLayout]);
+  }), [layout, assignArtworkToStand, saveLayout, computeArtworkColor]);
 
   const setRefs = useCallback(
     (node: HTMLDivElement | null) => {
-      canvasContainerRef.current = node;
+      containerRef.current = node;
       drop(node);
     },
     [drop]
@@ -251,17 +237,20 @@ export const LayoutEditor: React.FC = () => {
 
   useEffect(() => {
     const handleGlobalMouseUp = () => {
-      if (draggingElementRef.current) {
+      if (draggingRef.current) {
+        if (rafPendingRef.current) {
+          cancelAnimationFrame(rafIdRef.current);
+          rafPendingRef.current = false;
+        }
+        flushDragToStore();
         saveLayout();
-        draggingElementRef.current = null;
-        setDraggingElement(null);
+        draggingRef.current = null;
         setIsDragging(false);
       }
     };
-
     window.addEventListener('mouseup', handleGlobalMouseUp);
     return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
-  }, [saveLayout, setIsDragging]);
+  }, [flushDragToStore, saveLayout, setIsDragging]);
 
   if (!layout) {
     return (
@@ -274,7 +263,7 @@ export const LayoutEditor: React.FC = () => {
   return (
     <div className={`flex ${isMobile ? 'flex-col-reverse' : 'flex-row'} h-full bg-[#2a2a3e]`}>
       <Toolbar />
-      
+
       <div
         ref={setRefs}
         className="flex-1 flex items-center justify-center p-4 overflow-hidden relative"
@@ -300,10 +289,9 @@ export const LayoutEditor: React.FC = () => {
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onElementHover={handleElementHover}
-            getCanvasCoordinates={(e) => getCanvasCoordinates(e.clientX, e.clientY)}
           />
         </div>
-        
+
         {isOver && canDrop && (
           <div className="absolute inset-0 border-2 border-dashed border-[#6c63ff] pointer-events-none rounded-lg m-4 animate-pulse" />
         )}

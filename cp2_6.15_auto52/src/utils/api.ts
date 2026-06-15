@@ -19,6 +19,21 @@ export const api = {
     return response.json();
   },
 
+  async updateStandArtwork(
+    standId: string,
+    artworkId: string | null,
+    artworkColor: string | null,
+    artworkName: string | null
+  ): Promise<GalleryLayout> {
+    const response = await fetch(`${API_BASE}/stand/${standId}/artwork`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ artworkId, artworkColor, artworkName }),
+    });
+    if (!response.ok) throw new Error('Failed to update stand artwork');
+    return response.json();
+  },
+
   async getArtworks(): Promise<Artwork[]> {
     const response = await fetch(`${API_BASE}/artwork`);
     if (!response.ok) throw new Error('Failed to fetch artworks');

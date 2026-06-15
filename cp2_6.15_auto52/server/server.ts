@@ -6,7 +6,14 @@ import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
-import { getLayout, updateLayout, getArtworks, addArtwork, addInvitation } from './database';
+import {
+  getLayout,
+  updateLayout,
+  updateStandArtwork,
+  getArtworks,
+  addArtwork,
+  addInvitation,
+} from './database';
 import type { LayoutElement, Artwork, Invitation } from './types';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -27,6 +34,10 @@ if (!fs.existsSync(thumbnailDir)) fs.mkdirSync(thumbnailDir, { recursive: true }
 app.use('/uploads', express.static(path.join(__dirname, '..', 'public', 'uploads')));
 app.use('/thumbnails', express.static(path.join(__dirname, '..', 'public', 'thumbnails')));
 
+const ALLOWED_EXTENSIONS = /\.(jpe?g|png|gif|webp|glb|gltf|obj|fbx|usdz|stl|dae)$/i;
+const IMAGE_MIME = /^image\//;
+const MODEL_MIME = /^model\//;
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadDir);
@@ -39,20 +50,10 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024,
-  },
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowedExtensions = /\.(jpe?g|png|gif|webp|glb|gltf|obj|fbx|usdz|stl|dae|3ds|max|ma|mb|blend)$/i;
-    const extname = allowedExtensions.test(file.originalname.toLowerCase());
-
-    const imageMimeTypes = /^image\//;
-    const modelMimeTypes = /^model\//;
-    const applicationMimeTypes = /^application\/(octet-stream|x-(glb|gltf|x-model|x-3d|octet|zip|json)$)/;
-
-    const mimetype = imageMimeTypes.test(file.mimetype) || 
-      modelMimeTypes.test(file.mimetype) ||
-      applicationMimeTypes.test(file.mimetype);
+    const extname = ALLOWED_EXTENSIONS.test(file.originalname.toLowerCase());
+    const mimetype = IMAGE_MIME.test(file.mimetype) || MODEL_MIME.test(file.mimetype);
 
     if (extname && mimetype) {
       return cb(null, true);
@@ -62,7 +63,9 @@ const upload = multer({
       return cb(null, true);
     }
 
-    cb(new Error('Only image files (.jpg, .png, .gif, .webp) and 3D model files (.glb, .gltf, .obj, .fbx) are allowed'));
+    cb(new Error(
+      'Only image files (.jpg, .png, .gif, .webp) and 3D model files (.glb, .gltf, .obj, .fbx) are allowed'
+    ));
   },
 });
 
@@ -74,32 +77,27 @@ const getAverageColorFromBuffer = async (buffer: Buffer): Promise<string> => {
       .toBuffer({ resolveWithObject: true });
 
     let r = 0, g = 0, b = 0, count = 0;
-
     for (let i = 0; i < data.length; i += 4) {
-      const alpha = data[i + 3];
-      if (alpha > 128) {
+      if (data[i + 3] > 128) {
         r += data[i];
         g += data[i + 1];
         b += data[i + 2];
         count++;
       }
     }
-
     if (count === 0) return '#6c63ff';
-
     r = Math.round(r / count);
     g = Math.round(g / count);
     b = Math.round(b / count);
-
     return `#${[r, g, b].map(x => x.toString(16).padStart(2, '0')).join('')}`;
   } catch {
     return '#6c63ff';
   }
 };
 
-app.get('/api/layout', (req, res) => {
+app.get('/api/layout', async (req, res) => {
   try {
-    const layout = getLayout();
+    const layout = await getLayout();
     res.json(layout);
   } catch (error) {
     console.error('Get layout error:', error);
@@ -107,16 +105,16 @@ app.get('/api/layout', (req, res) => {
   }
 });
 
-app.put('/api/layout/:id', (req, res) => {
+app.put('/api/layout/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { elements } = req.body as { elements: LayoutElement[] };
-    
+
     if (!Array.isArray(elements)) {
       return res.status(400).json({ error: 'Invalid elements data' });
     }
 
-    const layout = updateLayout(id, elements);
+    const layout = await updateLayout(id, elements);
     res.json(layout);
   } catch (error) {
     console.error('Update layout error:', error);
@@ -124,9 +122,23 @@ app.put('/api/layout/:id', (req, res) => {
   }
 });
 
-app.get('/api/artwork', (req, res) => {
+app.put('/api/stand/:standId/artwork', async (req, res) => {
   try {
-    const artworks = getArtworks();
+    const { standId } = req.params;
+    const { artworkId, artworkColor, artworkName } = req.body;
+
+    await updateStandArtwork(standId, artworkId ?? null, artworkColor ?? null, artworkName ?? null);
+    const layout = await getLayout();
+    res.json(layout);
+  } catch (error) {
+    console.error('Update stand artwork error:', error);
+    res.status(500).json({ error: 'Failed to update stand artwork' });
+  }
+});
+
+app.get('/api/artwork', async (req, res) => {
+  try {
+    const artworks = await getArtworks();
     res.json(artworks);
   } catch (error) {
     console.error('Get artworks error:', error);
@@ -144,7 +156,6 @@ app.post('/api/artwork/upload', upload.single('file'), async (req, res) => {
     const parsedTags = tags ? JSON.parse(tags) : [];
 
     const filename = path.basename(req.file.filename, path.extname(req.file.filename));
-    const ext = path.extname(req.file.filename);
     const thumbnailFilename = `${filename}_thumb.jpg`;
     const thumbnailPath = path.join(thumbnailDir, thumbnailFilename);
 
@@ -152,17 +163,13 @@ app.post('/api/artwork/upload', upload.single('file'), async (req, res) => {
 
     if (/\.(jpe?g|png|gif|webp)$/i.test(req.file.originalname)) {
       await sharp(req.file.path)
-        .resize(120, 120, {
-          fit: 'cover',
-          position: 'center',
-        })
+        .resize(120, 120, { fit: 'cover', position: 'center' })
         .jpeg({ quality: 80 })
         .toFile(thumbnailPath);
 
       const imageBuffer = await sharp(req.file.path).toBuffer();
       averageColor = await getAverageColorFromBuffer(imageBuffer);
     } else {
-      const placeholderPath = path.join(thumbnailDir, thumbnailFilename);
       await sharp({
         create: {
           width: 120,
@@ -172,7 +179,7 @@ app.post('/api/artwork/upload', upload.single('file'), async (req, res) => {
         },
       })
         .jpeg({ quality: 80 })
-        .toFile(placeholderPath);
+        .toFile(thumbnailPath);
     }
 
     const artwork: Omit<Artwork, 'uploadedAt'> = {
@@ -185,7 +192,7 @@ app.post('/api/artwork/upload', upload.single('file'), async (req, res) => {
       averageColor,
     };
 
-    const savedArtwork = addArtwork(artwork);
+    const savedArtwork = await addArtwork(artwork);
     res.json(savedArtwork);
   } catch (error) {
     console.error('Upload error:', error);
@@ -193,10 +200,10 @@ app.post('/api/artwork/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-app.post('/api/invite', (req, res) => {
+app.post('/api/invite', async (req, res) => {
   try {
     const { email } = req.body;
-    
+
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ error: 'Invalid email address' });
     }
@@ -208,7 +215,7 @@ app.post('/api/invite', (req, res) => {
       status: 'pending',
     };
 
-    const savedInvitation = addInvitation(invitation);
+    const savedInvitation = await addInvitation(invitation);
     res.json({ success: true, invitation: savedInvitation });
   } catch (error) {
     console.error('Invite error:', error);
