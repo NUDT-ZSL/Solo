@@ -16,11 +16,10 @@ const PARTICLE_COUNT = 2000
 const REGENERATE_INTERVAL = 2
 
 const particleVertexShader = `
-  attribute vec3 instanceColor;
   varying vec3 vColor;
   varying float vOpacity;
   void main() {
-    vColor = instanceColor;
+    vColor = instanceColor.rgb;
     vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * mvPosition;
     float dist = length(mvPosition.xyz);
@@ -59,7 +58,7 @@ export default function WindParticles() {
   )
 
   const geometry = useMemo(() => {
-    const geo = new THREE.PlaneGeometry(0.08, 0.02)
+    const geo = new THREE.PlaneGeometry(0.08, 0.02, 1, 1)
     geo.translate(0.04, 0, 0)
     return geo
   }, [])
@@ -67,6 +66,12 @@ export default function WindParticles() {
   const initParticles = useCallback((seed: number) => {
     particlesRef.current = generateParticles(PARTICLE_COUNT, seed)
     if (meshRef.current) {
+      const colorAttr = new THREE.InstancedBufferAttribute(
+        new Float32Array(PARTICLE_COUNT * 3),
+        3,
+      )
+      meshRef.current.instanceColor = colorAttr
+
       for (let i = 0; i < PARTICLE_COUNT; i++) {
         const p = particlesRef.current[i]
         const pos = latLonToVec3(p.lat, p.lon)
@@ -75,15 +80,14 @@ export default function WindParticles() {
         dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal)
         dummy.updateMatrix()
         meshRef.current.setMatrixAt(i, dummy.matrix)
-        tempColor.copy(speedToColor(p.speed))
-        meshRef.current.setColorAt(i, tempColor)
+
+        const color = speedToColor(p.speed)
+        colorAttr.setXYZ(i, color.r, color.g, color.b)
       }
       meshRef.current.instanceMatrix.needsUpdate = true
-      if (meshRef.current.instanceColor) {
-        meshRef.current.instanceColor.needsUpdate = true
-      }
+      colorAttr.needsUpdate = true
     }
-  }, [dummy, tempColor])
+  }, [dummy])
 
   useFrame((state) => {
     if (!meshRef.current) return
@@ -97,15 +101,18 @@ export default function WindParticles() {
     }
 
     if (elapsed - lastRegenRef.current > REGENERATE_INTERVAL) {
-      seedRef.current = Date.now()
+      seedRef.current = Date.now() + Math.floor(Math.random() * 100000)
       lastRegenRef.current = elapsed
     }
 
     const delta = Math.min(state.clock.getDelta(), 0.05)
     particlesRef.current = updateParticles(particlesRef.current, delta, seedRef.current)
 
-    const avgSpeed = getAverageSpeed(particlesRef.current)
+    const avgSpeed = Math.min(40, Math.max(5, getAverageSpeed(particlesRef.current)))
     setAvgWindSpeed(avgSpeed)
+
+    const colorAttr = meshRef.current.instanceColor as THREE.InstancedBufferAttribute
+    if (!colorAttr) return
 
     for (let i = 0; i < particlesRef.current.length; i++) {
       const p = particlesRef.current[i]
@@ -129,14 +136,13 @@ export default function WindParticles() {
 
       dummy.updateMatrix()
       meshRef.current.setMatrixAt(i, dummy.matrix)
-      tempColor.copy(speedToColor(p.speed))
-      meshRef.current.setColorAt(i, tempColor)
+
+      const color = speedToColor(p.speed)
+      colorAttr.setXYZ(i, color.r, color.g, color.b)
     }
 
     meshRef.current.instanceMatrix.needsUpdate = true
-    if (meshRef.current.instanceColor) {
-      meshRef.current.instanceColor.needsUpdate = true
-    }
+    colorAttr.needsUpdate = true
   })
 
   return (

@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, useState } from 'react'
+import { useRef, useCallback, useEffect } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import Earth from '@/components/Earth'
@@ -7,7 +7,7 @@ import CityMarkers from '@/components/CityMarkers'
 import ControlPanel from '@/components/ControlPanel'
 import InfoLayer from '@/components/InfoLayer'
 import { useStore } from '@/store/useStore'
-import { lerp, clampRotationY, clampZoom, INTERPOLATION_FACTOR } from '@/controls/Interaction'
+import { lerp, clampRotationY, clampZoom, INTERPOLATION_FACTOR, easeOut } from '@/controls/Interaction'
 
 const ROTATION_SENSITIVITY = 0.005
 const ZOOM_SENSITIVITY = 0.5
@@ -16,34 +16,110 @@ const TOUCH_ZOOM_SENSITIVITY = 0.02
 
 function SceneController() {
   const groupRef = useRef<THREE.Group>(null)
-  const {
-    targetRotationX, targetRotationY, targetZoomLevel,
-    rotationX, rotationY, zoomLevel,
-    setRotation, setZoom, isResetting, setResetting,
-  } = useStore()
+  const resetProgressRef = useRef(0)
+  const resetStartRef = useRef<{ rotX: number; rotY: number; zoom: number } | null>(null)
+
+  const currentRotXRef = useRef(0)
+  const currentRotYRef = useRef(0)
+  const currentZoomRef = useRef(5)
+  const targetRotXRef = useRef(0)
+  const targetRotYRef = useRef(0)
+  const targetZoomRef = useRef(5)
+  const isResettingRef = useRef(false)
+
+  console.log('SceneController rendering')
+
+  useEffect(() => {
+    console.log('SceneController useEffect running')
+    const state = useStore.getState()
+    targetRotXRef.current = state.targetRotationX
+    targetRotYRef.current = state.targetRotationY
+    targetZoomRef.current = state.targetZoomLevel
+    isResettingRef.current = state.isResetting
+    currentRotXRef.current = state.rotationX
+    currentRotYRef.current = state.rotationY
+    currentZoomRef.current = state.zoomLevel
+    console.log('Initial state:', state)
+
+    const unsubscribe = useStore.subscribe((s) => {
+      targetRotXRef.current = s.targetRotationX
+      targetRotYRef.current = s.targetRotationY
+      targetZoomRef.current = s.targetZoomLevel
+      isResettingRef.current = s.isResetting
+      console.log('Store updated, isResetting:', s.isResetting)
+    })
+
+    return () => {
+      console.log('SceneController useEffect cleanup')
+      unsubscribe()
+    }
+  }, [])
 
   useFrame((_state, delta) => {
     if (!groupRef.current) return
 
-    const factor = isResetting ? Math.min(1, delta * 4) : INTERPOLATION_FACTOR
-    const newRotX = lerp(rotationX, targetRotationX, factor)
-    const newRotY = lerp(rotationY, targetRotationY, factor)
-    const newZoom = lerp(zoomLevel, targetZoomLevel, factor)
+    const state = useStore.getState()
+    let newRotX: number, newRotY: number, newZoom: number
 
-    setRotation(newRotX, newRotY)
-    setZoom(newZoom)
+    if (isResettingRef.current) {
+      if (!resetStartRef.current) {
+        resetStartRef.current = {
+          rotX: currentRotXRef.current,
+          rotY: currentRotYRef.current,
+          zoom: currentZoomRef.current,
+        }
+        resetProgressRef.current = 0
+        console.log('Reset animation started from:', resetStartRef.current,
+          'to:', targetRotXRef.current, targetRotYRef.current, targetZoomRef.current)
+      }
+
+      resetProgressRef.current = Math.min(1, resetProgressRef.current + delta / 0.5)
+      const t = easeOut(resetProgressRef.current)
+      const start = resetStartRef.current
+
+      newRotX = start.rotX + (targetRotXRef.current - start.rotX) * t
+      newRotY = start.rotY + (targetRotYRef.current - start.rotY) * t
+      newZoom = start.zoom + (targetZoomRef.current - start.zoom) * t
+
+      console.log('Reset progress:', resetProgressRef.current, 't:', t, 'values:', newRotX, newRotY, newZoom)
+
+      if (resetProgressRef.current >= 1) {
+        console.log('Reset animation completed!')
+        newRotX = targetRotXRef.current
+        newRotY = targetRotYRef.current
+        newZoom = targetZoomRef.current
+        state.setRotation(newRotX, newRotY)
+        state.setZoom(newZoom)
+        state.setResetting(false)
+        resetProgressRef.current = 0
+        resetStartRef.current = null
+        isResettingRef.current = false
+      }
+    } else {
+      resetStartRef.current = null
+      newRotX = currentRotXRef.current + (targetRotXRef.current - currentRotXRef.current) * INTERPOLATION_FACTOR
+      newRotY = currentRotYRef.current + (targetRotYRef.current - currentRotYRef.current) * INTERPOLATION_FACTOR
+      newZoom = currentZoomRef.current + (targetZoomRef.current - currentZoomRef.current) * INTERPOLATION_FACTOR
+
+      const drx = Math.abs(targetRotXRef.current - newRotX)
+      const dry = Math.abs(targetRotYRef.current - newRotY)
+      const dz = Math.abs(targetZoomRef.current - newZoom)
+      if (drx < 0.001 && dry < 0.001 && dz < 0.01) {
+        newRotX = targetRotXRef.current
+        newRotY = targetRotYRef.current
+        newZoom = targetZoomRef.current
+      }
+
+      state.setRotation(newRotX, newRotY)
+      state.setZoom(newZoom)
+    }
+
+    currentRotXRef.current = newRotX
+    currentRotYRef.current = newRotY
+    currentZoomRef.current = newZoom
 
     groupRef.current.rotation.y = newRotX
     groupRef.current.rotation.x = clampRotationY(newRotY)
-
-    if (isResetting) {
-      const dx = Math.abs(targetRotationX - newRotX)
-      const dy = Math.abs(targetRotationY - newRotY)
-      const dz = Math.abs(targetZoomLevel - newZoom)
-      if (dx < 0.001 && dy < 0.001 && dz < 0.01) {
-        setResetting(false)
-      }
-    }
   })
 
   return (
@@ -194,7 +270,9 @@ function SimTimeUpdater() {
 
   useEffect(() => {
     function updateTime() {
-      const now = new Date()
+      const now = new Date(Date.UTC(2024, 4, 15, 14, 30, 0))
+      const offset = (Date.now() % 86400000) / 1000
+      now.setSeconds(now.getSeconds() + Math.floor(offset))
       const year = now.getUTCFullYear()
       const month = String(now.getUTCMonth() + 1).padStart(2, '0')
       const day = String(now.getUTCDate()).padStart(2, '0')
@@ -211,6 +289,7 @@ function SimTimeUpdater() {
 }
 
 function Lights() {
+  console.log('Lights rendering')
   return (
     <>
       <ambientLight intensity={0.25} />
@@ -221,15 +300,7 @@ function Lights() {
 }
 
 export default function App() {
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  if (!mounted) {
-    return <div style={{ width: '100vw', height: '100vh', background: '#0a0a1a' }} />
-  }
+  console.log('App rendering')
 
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#0a0a1a', position: 'relative' }}>
@@ -238,6 +309,7 @@ export default function App() {
         gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
         style={{ background: '#0a0a1a' }}
         onCreated={({ gl }) => {
+          console.log('Canvas onCreated')
           gl.setClearColor('#0a0a1a')
           gl.toneMapping = THREE.ACESFilmicToneMapping
           gl.toneMappingExposure = 1.2

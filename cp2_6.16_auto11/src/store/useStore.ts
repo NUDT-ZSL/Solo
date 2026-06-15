@@ -53,11 +53,14 @@ export const useStore = create<StoreState>((set) => ({
   setAvgWindSpeed: (speed) => set({ avgWindSpeed: speed }),
   selectCity: (city) => set({ selectedCity: city }),
   setSimTime: (time) => set({ simTime: time }),
-  resetView: () => set({
-    targetRotationX: INITIAL_ROTATION_X,
-    targetRotationY: INITIAL_ROTATION_Y,
-    targetZoomLevel: INITIAL_ZOOM,
-    isResetting: true,
-  }),
+  resetView: () => {
+    console.log('resetView called, setting isResetting: true')
+    set({
+      targetRotationX: INITIAL_ROTATION_X,
+      targetRotationY: INITIAL_ROTATION_Y,
+      targetZoomLevel: INITIAL_ZOOM,
+      isResetting: true,
+    })
+  },
   setResetting: (v) => set({ isResetting: v }),
 }))

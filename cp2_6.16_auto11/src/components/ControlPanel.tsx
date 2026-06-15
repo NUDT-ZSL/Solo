@@ -1,18 +1,39 @@
-import { useCallback } from 'react'
+import { useCallback, useState, useEffect, useRef } from 'react'
 import { useStore } from '@/store/useStore'
 
 export default function ControlPanel() {
-  const avgWindSpeed = useStore((s) => s.avgWindSpeed)
+  const rawAvgSpeed = useStore((s) => s.avgWindSpeed)
   const resetView = useStore((s) => s.resetView)
+  const isResetting = useStore((s) => s.isResetting)
 
-  const displaySpeed = Math.round(avgWindSpeed * 10) / 10
-  const speedPercent = Math.min(100, Math.max(0, ((avgWindSpeed - 5) / 35) * 100))
+  const [displaySpeed, setDisplaySpeed] = useState(12)
+  const speedLerpRef = useRef(12)
+  const animRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (animRef.current) cancelAnimationFrame(animRef.current)
+
+    const animate = () => {
+      speedLerpRef.current = speedLerpRef.current + (rawAvgSpeed - speedLerpRef.current) * 0.08
+      const clamped = Math.min(40, Math.max(5, Math.round(speedLerpRef.current * 10) / 10))
+      setDisplaySpeed(clamped)
+      animRef.current = requestAnimationFrame(animate)
+    }
+    animRef.current = requestAnimationFrame(animate)
+
+    return () => {
+      if (animRef.current) cancelAnimationFrame(animRef.current)
+    }
+  }, [rawAvgSpeed])
+
+  const speedPercent = Math.min(100, Math.max(0, ((displaySpeed - 5) / 35) * 100))
+
   const handleReset = useCallback(() => {
     resetView()
   }, [resetView])
 
   return (
-    <div style={styles.panel}>
+    <div style={styles.panel} className="control-panel">
       <div style={styles.title}>全球风场监测</div>
       <div style={styles.speedSection}>
         <div style={styles.speedLabel}>
@@ -32,7 +53,16 @@ export default function ControlPanel() {
           <span>40</span>
         </div>
       </div>
-      <button style={styles.resetBtn} onClick={handleReset} onMouseEnter={onBtnHover} onMouseLeave={onBtnLeave}>
+      <button
+        style={{
+          ...styles.resetBtn,
+          opacity: isResetting ? 0.6 : 1,
+        }}
+        onClick={handleReset}
+        onMouseEnter={onBtnHover}
+        onMouseLeave={onBtnLeave}
+        disabled={isResetting}
+      >
         ↻ 重置视角
       </button>
     </div>
@@ -41,6 +71,7 @@ export default function ControlPanel() {
 
 function onBtnHover(e: React.MouseEvent<HTMLButtonElement>) {
   const el = e.currentTarget as HTMLElement
+  if (el.getAttribute('disabled')) return
   el.style.background = 'rgba(255,255,255,0.2)'
 }
 
@@ -87,6 +118,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#ffeb3b',
     fontWeight: 600,
     fontSize: 12,
+    transition: 'color 0.3s',
   },
   speedBarBg: {
     width: '100%',
@@ -99,7 +131,7 @@ const styles: Record<string, React.CSSProperties> = {
     height: '100%',
     background: 'linear-gradient(to right, #1e88e5, #e53935)',
     borderRadius: 2,
-    transition: 'width 0.3s ease-out',
+    transition: 'width 0.15s ease-out',
   },
   speedRange: {
     display: 'flex',
@@ -117,7 +149,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'rgba(255,255,255,0.75)',
     fontSize: 12,
     cursor: 'pointer',
-    transition: 'background 0.15s, color 0.15s',
+    transition: 'background 0.15s, color 0.15s, opacity 0.3s',
     fontFamily: "'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
   },
 }

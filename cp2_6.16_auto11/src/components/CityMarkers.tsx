@@ -1,5 +1,5 @@
-import { useRef, useState, useCallback, useEffect } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useRef, useState, useCallback, useEffect, useMemo } from 'react'
+import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { latLonToVec3, getWind } from '@/sim/WindSimulator'
 import { useStore } from '@/store/useStore'
@@ -14,26 +14,26 @@ interface CityData {
 }
 
 const CITIES: CityData[] = [
-  { name: '北京', nameEn: 'Beijing', lat: 39.9, lon: 116.4 },
-  { name: '东京', nameEn: 'Tokyo', lat: 35.7, lon: 139.7 },
-  { name: '上海', nameEn: 'Shanghai', lat: 31.2, lon: 121.5 },
-  { name: '首尔', nameEn: 'Seoul', lat: 37.6, lon: 127.0 },
-  { name: '新德里', nameEn: 'New Delhi', lat: 28.6, lon: 77.2 },
-  { name: '孟买', nameEn: 'Mumbai', lat: 19.1, lon: 72.9 },
-  { name: '莫斯科', nameEn: 'Moscow', lat: 55.8, lon: 37.6 },
-  { name: '伦敦', nameEn: 'London', lat: 51.5, lon: -0.1 },
-  { name: '巴黎', nameEn: 'Paris', lat: 48.9, lon: 2.3 },
-  { name: '柏林', nameEn: 'Berlin', lat: 52.5, lon: 13.4 },
-  { name: '开罗', nameEn: 'Cairo', lat: 30.0, lon: 31.2 },
-  { name: '纽约', nameEn: 'New York', lat: 40.7, lon: -74.0 },
-  { name: '洛杉矶', nameEn: 'Los Angeles', lat: 34.1, lon: -118.2 },
-  { name: '多伦多', nameEn: 'Toronto', lat: 43.7, lon: -79.4 },
-  { name: '墨西哥城', nameEn: 'Mexico City', lat: 19.4, lon: -99.1 },
-  { name: '圣保罗', nameEn: 'São Paulo', lat: -23.6, lon: -46.6 },
-  { name: '布宜诺斯艾利斯', nameEn: 'Buenos Aires', lat: -34.6, lon: -58.4 },
-  { name: '悉尼', nameEn: 'Sydney', lat: -33.9, lon: 151.2 },
-  { name: '开普敦', nameEn: 'Cape Town', lat: -33.9, lon: 18.4 },
-  { name: '迪拜', nameEn: 'Dubai', lat: 25.2, lon: 55.3 },
+  { name: '北京', nameEn: 'Beijing', lat: 39.9042, lon: 116.4074 },
+  { name: '东京', nameEn: 'Tokyo', lat: 35.6762, lon: 139.6503 },
+  { name: '上海', nameEn: 'Shanghai', lat: 31.2304, lon: 121.4737 },
+  { name: '首尔', nameEn: 'Seoul', lat: 37.5665, lon: 126.9780 },
+  { name: '新德里', nameEn: 'New Delhi', lat: 28.6139, lon: 77.2090 },
+  { name: '孟买', nameEn: 'Mumbai', lat: 19.0760, lon: 72.8777 },
+  { name: '莫斯科', nameEn: 'Moscow', lat: 55.7558, lon: 37.6173 },
+  { name: '伦敦', nameEn: 'London', lat: 51.5074, lon: -0.1278 },
+  { name: '巴黎', nameEn: 'Paris', lat: 48.8566, lon: 2.3522 },
+  { name: '柏林', nameEn: 'Berlin', lat: 52.5200, lon: 13.4050 },
+  { name: '开罗', nameEn: 'Cairo', lat: 30.0444, lon: 31.2357 },
+  { name: '纽约', nameEn: 'New York', lat: 40.7128, lon: -74.0060 },
+  { name: '洛杉矶', nameEn: 'Los Angeles', lat: 34.0522, lon: -118.2437 },
+  { name: '多伦多', nameEn: 'Toronto', lat: 43.6532, lon: -79.3832 },
+  { name: '墨西哥城', nameEn: 'Mexico City', lat: 19.4326, lon: -99.1332 },
+  { name: '圣保罗', nameEn: 'São Paulo', lat: -23.5505, lon: -46.6333 },
+  { name: '布宜诺斯艾利斯', nameEn: 'Buenos Aires', lat: -34.6037, lon: -58.3816 },
+  { name: '悉尼', nameEn: 'Sydney', lat: -33.8688, lon: 151.2093 },
+  { name: '开普敦', nameEn: 'Cape Town', lat: -33.9249, lon: 18.4241 },
+  { name: '迪拜', nameEn: 'Dubai', lat: 25.2048, lon: 55.2708 },
 ]
 
 function CityMarker({
@@ -60,7 +60,7 @@ function CityMarker({
 
   const handleClick = useCallback(
     (e: THREE.Event) => {
-      e.stopPropagation()
+      ;(e as any).stopPropagation()
       const wind = getWind(city.lat, city.lon, seed)
       onClick(city, wind.speed)
     },
