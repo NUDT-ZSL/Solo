@@ -4,6 +4,7 @@ import { LayoutElement, BackgroundConfig } from '../types';
 import { GRADIENT_PRESETS, CHINESE_FONTS } from '../utils/constants';
 
 interface ToolPanelProps {
+  isOpen?: boolean;
   selectedElement: LayoutElement | null;
   background: BackgroundConfig;
   onUpdateElement: (id: string, updates: Partial<LayoutElement>) => void;
@@ -11,6 +12,7 @@ interface ToolPanelProps {
 }
 
 export const ToolPanel: React.FC<ToolPanelProps> = ({
+  isOpen = true,
   selectedElement,
   background,
   onUpdateElement,
@@ -610,7 +612,7 @@ export const ToolPanel: React.FC<ToolPanelProps> = ({
   };
 
   return (
-    <div className="tool-panel">
+    <div className={`tool-panel ${isOpen ? 'open' : ''}`} style={!isOpen ? { display: 'none' } : undefined}>
       <div className="tool-panel-header">
         <span>{selectedElement ? '元素属性' : '画布设置'}</span>
         {selectedElement && (

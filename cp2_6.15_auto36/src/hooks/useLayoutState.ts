@@ -10,7 +10,7 @@ interface UseLayoutStateReturn {
   canUndo: boolean;
   canRedo: boolean;
   lastAction: string;
-  addElement: (type: ElementType, x: number, y: number) => void;
+  addElement: (type: ElementType, x: number, y: number) => string;
   updateElement: (id: string, updates: Partial<LayoutElement>) => void;
   deleteElement: (id: string) => void;
   selectElement: (id: string | null) => void;
@@ -54,6 +54,7 @@ export function useLayoutState(): UseLayoutStateReturn {
 
     pushHistory([...elements, newElement], `添加了${type === 'text' ? '文本' : type === 'image' ? '图片' : type === 'line' ? '装饰线' : '形状'}元素`);
     setSelectedId(newElement.id);
+    return newElement.id;
   }, [elements, pushHistory]);
 
   const updateElement = useCallback((id: string, updates: Partial<LayoutElement>) => {

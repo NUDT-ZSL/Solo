@@ -73,7 +73,7 @@ interface MaterialPanelProps {
 
 export const MaterialPanel: React.FC<MaterialPanelProps> = ({ isOpen = true }) => {
   return (
-    <div className={`material-panel ${isOpen ? 'open' : ''}`}>
+    <div className={`material-panel ${isOpen ? 'open' : ''}`} style={!isOpen ? { display: 'none' } : undefined}>
       <div className="material-panel-header">
         素材库
       </div>

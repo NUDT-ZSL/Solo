@@ -56,13 +56,12 @@ const App: React.FC = () => {
   }, [lastAction, setLastAction]);
 
   const handleAddElement = useCallback((type: any, x: number, y: number) => {
-    addElement(type, x, y);
-    const newId = elements.length > 0 ? elements[elements.length - 1].id : null;
+    const newId = addElement(type, x, y);
     if (newId) {
       setNewElementId(newId);
       setTimeout(() => setNewElementId(null), 200);
     }
-  }, [addElement, elements]);
+  }, [addElement]);
 
   const handleUpdateElement = useCallback((id: string, updates: any) => {
     updateElement(id, updates);
@@ -154,14 +153,13 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        <div className={`tool-panel ${!isMobile || rightDrawerOpen ? 'open' : ''}`} style={isMobile ? { display: 'flex' } : undefined}>
-          <ToolPanel
-            selectedElement={selectedElement}
-            background={background}
-            onUpdateElement={handleUpdateElement}
-            onUpdateBackground={updateBackground}
-          />
-        </div>
+        <ToolPanel
+          isOpen={!isMobile || rightDrawerOpen}
+          selectedElement={selectedElement}
+          background={background}
+          onUpdateElement={handleUpdateElement}
+          onUpdateBackground={updateBackground}
+        />
 
         <ExportModal
           isOpen={showExportModal}
