@@ -51,7 +51,7 @@ class App {
             onToggleGrid: (show: boolean) => this.terrain.toggleGrid(show),
             onExportPath: () => this.exportPath(),
             onMeasureMode: (active: boolean) => this.handleMeasureMode(active)
-        });
+        }, this.markers);
 
         this.interaction = new InteractionManager(
             this.camera,

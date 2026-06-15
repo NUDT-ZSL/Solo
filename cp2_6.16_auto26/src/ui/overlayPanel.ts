@@ -14,9 +14,14 @@ export type ControlEvents = {
   onMeasureMode: (active: boolean) => void;
 };
 
+interface MarkerSystemLike {
+  exportPathData(): any;
+}
+
 export class OverlayPanel {
   private container: HTMLElement;
   private events: ControlEvents;
+  private markerSystem: MarkerSystemLike | null = null;
   private infoPanel!: HTMLDivElement;
   private controlBar!: HTMLDivElement;
   private measureButton!: HTMLButtonElement;
@@ -42,14 +47,30 @@ export class OverlayPanel {
     borderActive: '#00e676',
   };
 
-  constructor(container: HTMLElement, events: ControlEvents) {
+  constructor(container: HTMLElement, events: ControlEvents, markerSystem?: MarkerSystemLike) {
     this.container = container;
     this.events = events;
+    if (markerSystem) {
+      this.markerSystem = markerSystem;
+    }
     this.injectStyles();
     this.createInfoPanel();
     this.createControlBar();
     this.createMeasureButton();
     this.createContextMenu();
+  }
+
+  setMarkerSystem(markerSystem: MarkerSystemLike): void {
+    this.markerSystem = markerSystem;
+  }
+
+  handleExportPath(): void {
+    if (this.markerSystem) {
+      const data = this.markerSystem.exportPathData();
+      this.downloadJSON(data, 'path-data.json');
+    } else if (this.events.onExportPath) {
+      this.events.onExportPath();
+    }
   }
 
   private injectStyles(): void {
@@ -392,7 +413,7 @@ export class OverlayPanel {
     const exportBtn = document.createElement('button');
     exportBtn.className = 'control-btn';
     exportBtn.textContent = '导出路径';
-    exportBtn.addEventListener('click', () => this.events.onExportPath());
+    exportBtn.addEventListener('click', () => this.handleExportPath());
     this.controlBar.appendChild(exportBtn);
 
     this.container.appendChild(this.controlBar);

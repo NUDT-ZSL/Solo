@@ -73,7 +73,9 @@ export class MarkerSystem {
     const material = new THREE.MeshStandardMaterial({
       color: 0xff1744,
       emissive: 0xff1744,
-      emissiveIntensity: 0.5
+      emissiveIntensity: 1.2,
+      metalness: 0.3,
+      roughness: 0.4
     });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(point.x, point.elevation, point.z);

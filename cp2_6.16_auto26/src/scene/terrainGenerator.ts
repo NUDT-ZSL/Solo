@@ -238,9 +238,9 @@ class TerrainGenerator {
         gridGeometry.setAttribute('position', new THREE.Float32BufferAttribute(gridPoints, 3));
 
         const gridMaterial: THREE.LineBasicMaterial = new THREE.LineBasicMaterial({
-            color: 0x444444,
+            color: 0x555555,
             transparent: true,
-            opacity: 0.5
+            opacity: 0.4
         });
 
         if (this.gridLines.geometry) {
