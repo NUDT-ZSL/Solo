@@ -25,7 +25,7 @@ const LASER_DAMAGE_PER_LEVEL = 0.5
 const MINERAL_DRIFT_SPEED = 30
 const MINERAL_PICKUP_RADIUS = 25
 const ASTEROID_WAVE_INTERVAL = 5
-const MAX_ASTEROIDS = 30
+const MAX_ASTEROIDS = 15
 
 export class GameEngine {
   private canvas: HTMLCanvasElement
@@ -117,10 +117,7 @@ export class GameEngine {
     this.canvas.removeEventListener('mouseup', this.boundMouseUp)
     window.removeEventListener('resize', this.boundResize)
 
-    if (this.audioCtx) {
-      this.audioCtx.close()
-      this.audioCtx = null
-    }
+    this.cleanupAudio()
   }
 
   syncFromStore() {
@@ -182,34 +179,7 @@ export class GameEngine {
     const beam = createLaserBeam(this.ship.x, this.ship.y, this.mouseX, this.mouseY)
     this.laserBeams.push(beam)
 
-    this.checkLaserHit(this.ship.x, this.ship.y, this.mouseX, this.mouseY)
-  }
-
-  private checkLaserHit(x1: number, y1: number, x2: number, y2: number) {
-    const dx = x2 - x1
-    const dy = y2 - y1
-    const len = Math.sqrt(dx * dx + dy * dy)
-    if (len === 0) return
-
-    const dirX = dx / len
-    const dirY = dy / len
-    const damage = LASER_BASE_DAMAGE + (this.ship.laserLevel - 1) * LASER_DAMAGE_PER_LEVEL
-
-    for (let i = this.asteroids.length - 1; i >= 0; i--) {
-      const a = this.asteroids[i]
-      const t = this.pointToSegmentDist(a.x, a.y, x1, y1, x2, y2)
-      if (t < a.radius) {
-        a.hp -= damage
-        const hitX = x1 + dirX * t
-        const hitY = y1 + dirY * t
-        this.particles.push(...createExplosionParticles(hitX, hitY, '#ff9800', 4))
-
-        if (a.hp <= 0) {
-          this.destroyAsteroid(i)
-        }
-        break
-      }
-    }
+    this.handleLaserCollision(this.ship.x, this.ship.y, this.mouseX, this.mouseY)
   }
 
   private pointToSegmentDist(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
@@ -226,12 +196,50 @@ export class GameEngine {
     return Math.sqrt((px - closestX) ** 2 + (py - closestY) ** 2)
   }
 
+  private handleLaserCollision(x1: number, y1: number, x2: number, y2: number) {
+    const dx = x2 - x1
+    const dy = y2 - y1
+    const len = Math.sqrt(dx * dx + dy * dy)
+    if (len === 0) return
+
+    const dirX = dx / len
+    const dirY = dy / len
+    const damage = LASER_BASE_DAMAGE + (this.ship.laserLevel - 1) * LASER_DAMAGE_PER_LEVEL
+
+    for (let i = this.asteroids.length - 1; i >= 0; i--) {
+      const a = this.asteroids[i]
+      const t = this.pointToSegmentDist(a.x, a.y, x1, y1, x2, y2)
+      if (t < a.radius) {
+        a.hp -= damage
+        const hitX = x1 + dirX * t
+        const hitY = y1 + dirY * t
+        this.emitHitParticles(hitX, hitY)
+        if (a.hp <= 0) {
+          this.destroyAsteroid(i)
+        }
+        break
+      }
+    }
+  }
+
   private destroyAsteroid(index: number) {
     const a = this.asteroids[index]
     this.asteroids.splice(index, 1)
+    this.emitExplosionParticles(a.x, a.y, a.color1, 12)
+    this.dropMineralsFromAsteroid(a)
+    useGameStore.getState().addAsteroidsDestroyed()
+    useGameStore.getState().addExperience(Math.ceil(10 * this.difficulty))
+  }
 
-    this.particles.push(...createExplosionParticles(a.x, a.y, a.color1, 12))
+  private emitHitParticles(x: number, y: number) {
+    this.particles.push(...createExplosionParticles(x, y, '#ff9800', 4))
+  }
 
+  private emitExplosionParticles(x: number, y: number, color: string, count: number) {
+    this.particles.push(...createExplosionParticles(x, y, color, count))
+  }
+
+  private dropMineralsFromAsteroid(a: Asteroid) {
     const dropCount = 1 + Math.floor(a.radius / 15)
     for (let j = 0; j < dropCount; j++) {
       const offsetX = (Math.random() - 0.5) * a.radius
@@ -239,28 +247,65 @@ export class GameEngine {
       const type = getMineralType(this.difficulty)
       this.minerals.push(createMineral(a.x + offsetX, a.y + offsetY, type))
     }
+  }
 
-    useGameStore.getState().addAsteroidsDestroyed()
-    useGameStore.getState().addExperience(Math.ceil(10 * this.difficulty))
+  private ensureAudioContext(): AudioContext | null {
+    try {
+      if (!this.audioCtx) {
+        const AudioCtor: typeof AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext
+        if (!AudioCtor) return null
+        this.audioCtx = new AudioCtor()
+      }
+      if (this.audioCtx.state === 'suspended') {
+        this.audioCtx.resume().catch(() => {})
+      }
+      return this.audioCtx
+    } catch {
+      return null
+    }
+  }
+
+  private cleanupAudio() {
+    try {
+      if (this.audioCtx) {
+        this.audioCtx.close()
+        this.audioCtx = null
+      }
+    } catch {
+      this.audioCtx = null
+    }
   }
 
   private playPickupSound() {
+    const ctx = this.ensureAudioContext()
+    if (!ctx) return
+
     try {
-      if (!this.audioCtx) {
-        this.audioCtx = new AudioContext()
-      }
-      const osc = this.audioCtx.createOscillator()
-      const gain = this.audioCtx.createGain()
-      osc.connect(gain)
-      gain.connect(this.audioCtx.destination)
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
 
       osc.frequency.value = 800
       osc.type = 'sine'
-      gain.gain.setValueAtTime(0.15, this.audioCtx.currentTime)
-      gain.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + 0.1)
 
-      osc.start(this.audioCtx.currentTime)
-      osc.stop(this.audioCtx.currentTime + 0.1)
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.005)
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.1)
+
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+
+      const stopTime = ctx.currentTime + 0.11
+      osc.start(ctx.currentTime)
+      osc.stop(stopTime)
+
+      osc.onended = () => {
+        try {
+          osc.disconnect()
+          gain.disconnect()
+        } catch {
+          // ignore
+        }
+      }
     } catch {
       // Audio not available
     }
@@ -284,17 +329,17 @@ export class GameEngine {
 
   private update(dt: number) {
     this.syncFromStore()
-    this.handleInput(dt)
-    this.spawnAsteroids(dt)
-    this.updateAsteroids(dt)
-    this.updateMinerals(dt)
-    this.updateParticles(dt)
+    this.updateInput(dt)
+    this.updateAsteroidSpawning(dt)
+    this.updateAsteroidMovement(dt)
+    this.updateMineralMovementAndPickup(dt)
+    this.updateParticlePhysics(dt)
     this.updateLaserBeams(dt)
-    this.checkShipCollisions()
+    this.checkShipAsteroidCollisions()
     this.syncToStore()
   }
 
-  private handleInput(dt: number) {
+  private updateInput(dt: number) {
     let dx = 0, dy = 0
     if (this.keys.has('w') || this.keys.has('arrowup')) dy -= 1
     if (this.keys.has('s') || this.keys.has('arrowdown')) dy += 1
@@ -311,7 +356,6 @@ export class GameEngine {
 
     this.ship.x = Math.max(15, Math.min(this.width - 15, this.ship.x))
     this.ship.y = Math.max(15, Math.min(this.height - 15, this.ship.y))
-
     this.ship.angle = Math.atan2(this.mouseY - this.ship.y, this.mouseX - this.ship.x)
 
     if (this.isMouseDown) {
@@ -319,19 +363,22 @@ export class GameEngine {
     }
   }
 
-  private spawnAsteroids(dt: number) {
+  private updateAsteroidSpawning(dt: number) {
     this.asteroidTimer += dt
-    if (this.asteroidTimer >= ASTEROID_WAVE_INTERVAL) {
-      this.asteroidTimer = 0
-      const count = Math.floor(Math.random() * 4) + 2
-      const maxCount = Math.min(count, MAX_ASTEROIDS - this.asteroids.length)
-      for (let i = 0; i < maxCount; i++) {
-        this.asteroids.push(createAsteroid(this.width, this.height, this.difficulty))
-      }
+    if (this.asteroidTimer < ASTEROID_WAVE_INTERVAL) return
+    this.asteroidTimer = 0
+
+    if (this.asteroids.length >= MAX_ASTEROIDS) return
+
+    const waveCount = Math.floor(Math.random() * 4) + 2
+    const slotsLeft = MAX_ASTEROIDS - this.asteroids.length
+    const toSpawn = Math.min(waveCount, slotsLeft)
+    for (let i = 0; i < toSpawn; i++) {
+      this.asteroids.push(createAsteroid(this.width, this.height, this.difficulty))
     }
   }
 
-  private updateAsteroids(dt: number) {
+  private updateAsteroidMovement(dt: number) {
     for (let i = this.asteroids.length - 1; i >= 0; i--) {
       const a = this.asteroids[i]
       a.x += Math.cos(a.angle) * a.speed * dt
@@ -351,7 +398,7 @@ export class GameEngine {
     }
   }
 
-  private updateMinerals(dt: number) {
+  private updateMineralMovementAndPickup(dt: number) {
     for (let i = this.minerals.length - 1; i >= 0; i--) {
       const m = this.minerals[i]
 
@@ -382,7 +429,7 @@ export class GameEngine {
     }
   }
 
-  private updateParticles(dt: number) {
+  private updateParticlePhysics(dt: number) {
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i]
       p.x += p.vx * dt
@@ -405,7 +452,7 @@ export class GameEngine {
     }
   }
 
-  private checkShipCollisions() {
+  private checkShipAsteroidCollisions() {
     for (let i = this.asteroids.length - 1; i >= 0; i--) {
       const a = this.asteroids[i]
       const dx = this.ship.x - a.x
@@ -414,7 +461,7 @@ export class GameEngine {
 
       if (dist < a.radius + 12) {
         this.ship.shield -= a.radius
-        this.particles.push(...createExplosionParticles(a.x, a.y, '#ff5252', 6))
+        this.emitExplosionParticles(a.x, a.y, '#ff5252', 6)
         this.asteroids.splice(i, 1)
 
         if (this.ship.shield <= 0) {
@@ -434,7 +481,17 @@ export class GameEngine {
   private render() {
     const ctx = this.ctx
     ctx.clearRect(0, 0, this.width, this.height)
+    this.renderBackground(ctx)
+    this.renderStars(ctx)
+    this.renderAsteroids(ctx)
+    this.renderMinerals(ctx)
+    this.renderLaserBeams(ctx)
+    this.renderParticles(ctx)
+    this.renderShip(ctx)
+    this.renderCrosshair(ctx)
+  }
 
+  private renderBackground(ctx: CanvasRenderingContext2D) {
     const bgGrad = ctx.createRadialGradient(
       this.width / 2, this.height / 2, 0,
       this.width / 2, this.height / 2, Math.max(this.width, this.height) * 0.7
@@ -443,14 +500,6 @@ export class GameEngine {
     bgGrad.addColorStop(1, '#0a0a2e')
     ctx.fillStyle = bgGrad
     ctx.fillRect(0, 0, this.width, this.height)
-
-    this.renderStars(ctx)
-    this.renderAsteroids(ctx)
-    this.renderMinerals(ctx)
-    this.renderLaserBeams(ctx)
-    this.renderParticles(ctx)
-    this.renderShip(ctx)
-    this.renderCrosshair(ctx)
   }
 
   private renderStars(ctx: CanvasRenderingContext2D) {
@@ -539,7 +588,6 @@ export class GameEngine {
       }
       ctx.closePath()
       ctx.fill()
-
       ctx.strokeStyle = a.color2
       ctx.lineWidth = 1
       ctx.stroke()
@@ -703,11 +751,11 @@ export class GameEngine {
     ctx.lineTo(x, y + size)
     ctx.stroke()
 
-    const dotAlpha = 0.5 + Math.sin(this.gameTime * 8) * 0.5
-    ctx.globalAlpha = dotAlpha
+    const dotAlpha = 0.4 + Math.sin(this.gameTime * 8) * 0.4
+    ctx.globalAlpha = Math.max(0.15, Math.min(1, dotAlpha))
     ctx.fillStyle = '#ff1744'
     ctx.beginPath()
-    ctx.arc(x, y, 2, 0, Math.PI * 2)
+    ctx.arc(x, y, 3, 0, Math.PI * 2)
     ctx.fill()
     ctx.globalAlpha = 1
   }

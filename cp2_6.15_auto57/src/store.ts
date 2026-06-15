@@ -20,6 +20,7 @@ export interface GameState {
   engineLevel: number
   shieldLevel: number
   laserLevel: number
+  shipLevel: number
   asteroidsDestroyed: number
   experience: number
   upgradePanelOpen: boolean
@@ -53,6 +54,7 @@ const initialState = {
   engineLevel: 1,
   shieldLevel: 1,
   laserLevel: 1,
+  shipLevel: 1,
   asteroidsDestroyed: 0,
   experience: 0,
   upgradePanelOpen: false,
@@ -74,6 +76,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     engineLevel: 1,
     shieldLevel: 1,
     laserLevel: 1,
+    shipLevel: 1,
     asteroidsDestroyed: 0,
     experience: 0,
     upgradePanelOpen: false,
@@ -96,19 +99,25 @@ export const useGameStore = create<GameState>((set, get) => ({
   upgradeEngine: () => {
     const s = get()
     if (s.engineLevel >= 5) return
-    set({ engineLevel: s.engineLevel + 1, upgradeFlash: 'engine' })
+    const newEngine = s.engineLevel + 1
+    set({
+      engineLevel: newEngine,
+      shipLevel: Math.floor((newEngine + s.shieldLevel + s.laserLevel) / 3),
+      upgradeFlash: 'engine',
+    })
     setTimeout(() => set({ upgradeFlash: null }), 500)
   },
 
   upgradeShield: () => {
     const s = get()
     if (s.shieldLevel >= 5) return
-    const newLevel = s.shieldLevel + 1
-    const newMax = 100 + newLevel * 25
+    const newShield = s.shieldLevel + 1
+    const newMax = 100 + newShield * 25
     set({
-      shieldLevel: newLevel,
+      shieldLevel: newShield,
       maxShield: newMax,
       shield: newMax,
+      shipLevel: Math.floor((s.engineLevel + newShield + s.laserLevel) / 3),
       upgradeFlash: 'shield',
     })
     setTimeout(() => set({ upgradeFlash: null }), 500)
@@ -117,7 +126,12 @@ export const useGameStore = create<GameState>((set, get) => ({
   upgradeLaser: () => {
     const s = get()
     if (s.laserLevel >= 5) return
-    set({ laserLevel: s.laserLevel + 1, upgradeFlash: 'laser' })
+    const newLaser = s.laserLevel + 1
+    set({
+      laserLevel: newLaser,
+      shipLevel: Math.floor((s.engineLevel + s.shieldLevel + newLaser) / 3),
+      upgradeFlash: 'laser',
+    })
     setTimeout(() => set({ upgradeFlash: null }), 500)
   },
 

@@ -4,11 +4,8 @@ export default function StatusBar() {
   const minerals = useGameStore((s) => s.minerals)
   const shield = useGameStore((s) => s.shield)
   const maxShield = useGameStore((s) => s.maxShield)
-  const engineLevel = useGameStore((s) => s.engineLevel)
-  const shieldLevel = useGameStore((s) => s.shieldLevel)
-  const laserLevel = useGameStore((s) => s.laserLevel)
+  const shipLevel = useGameStore((s) => s.shipLevel)
 
-  const shipLevel = Math.floor((engineLevel + shieldLevel + laserLevel) / 3)
   const shieldPct = maxShield > 0 ? (shield / maxShield) * 100 : 0
 
   return (
