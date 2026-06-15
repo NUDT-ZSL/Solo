@@ -10,6 +10,7 @@ export interface ExportOptions {
   onProgress?: (progress: number) => void
   onComplete?: (blob: Blob) => void
   onStart?: () => void
+  onFrame?: (canvas: HTMLCanvasElement, time: number) => void
 }
 
 interface RecordingState {
@@ -22,6 +23,7 @@ interface RecordingState {
   canvasStream: MediaStream | null
   audioStream: MediaStream | null
   combinedStream: MediaStream | null
+  currentTime: number
 }
 
 class ExportManager {
@@ -35,12 +37,17 @@ class ExportManager {
     canvasStream: null,
     audioStream: null,
     combinedStream: null,
+    currentTime: 0,
   }
 
-  private options: ExportOptions | null = null
+  private _options: ExportOptions | null = null // preserved for future extensions
 
   get isRecording(): boolean {
     return this.state.isRecording
+  }
+
+  get currentTime(): number {
+    return this.state.currentTime
   }
 
   async startExport(
@@ -49,7 +56,7 @@ class ExportManager {
   ): Promise<void> {
     if (this.state.isRecording) return
 
-    this.options = options
+    this._options = options
     options.onStart?.()
 
     const totalDuration = audioProcessor.getDuration()
@@ -62,29 +69,50 @@ class ExportManager {
 
     this.state.targetDuration = targetDuration
     this.state.recordedChunks = []
+    this.state.currentTime = 0
 
-    const canvasStream = canvas.captureStream(60)
-    this.state.canvasStream = canvasStream
+    if (options.format === 'video') {
+      await this.startVideoExport(canvas, targetDuration, options)
+    } else {
+      await this.startGifExport(canvas, targetDuration, options)
+    }
+  }
 
-    let combinedStream = canvasStream
+  private async startVideoExport(
+    canvas: HTMLCanvasElement,
+    targetDuration: number,
+    options: ExportOptions
+  ): Promise<void> {
     try {
-      const audioCtx = (audioProcessor as unknown as { audioContext?: AudioContext }).audioContext
-      if (audioCtx) {
-        const dest = audioCtx.createMediaStreamDestination()
-        this.state.audioStream = dest.stream
+      const canvasStream = canvas.captureStream(60)
+      this.state.canvasStream = canvasStream
+
+      let combinedStream = canvasStream
+      const audioCtx = audioProcessor.getAudioContext()
+      const processorStream = audioProcessor.getMediaStream()
+
+      if (audioCtx && processorStream && processorStream.getAudioTracks().length > 0) {
+        this.state.audioStream = processorStream
         combinedStream = new MediaStream([
           ...canvasStream.getVideoTracks(),
-          ...dest.stream.getAudioTracks(),
+          ...processorStream.getAudioTracks(),
         ])
+      } else if (audioCtx) {
+        try {
+          const dest = audioCtx.createMediaStreamDestination()
+          this.state.audioStream = dest.stream
+          combinedStream = new MediaStream([
+            ...canvasStream.getVideoTracks(),
+            ...dest.stream.getAudioTracks(),
+          ])
+        } catch {
+          // silent fail
+        }
       }
-    } catch {
-      // no audio available
-    }
-    this.state.combinedStream = combinedStream
+      this.state.combinedStream = combinedStream
 
-    const mimeType = this.getSupportedMimeType()
+      const mimeType = this.getSupportedMimeType()
 
-    try {
       const mediaRecorder = new MediaRecorder(combinedStream, {
         mimeType: mimeType,
         videoBitsPerSecond: 8000000,
@@ -100,7 +128,10 @@ class ExportManager {
       }
 
       mediaRecorder.onstop = () => {
-        this.handleRecordingComplete(options.format)
+        const blob = new Blob(this.state.recordedChunks, { type: 'video/webm' })
+        this.cleanup()
+        this.downloadFile(blob, 'particle-animation.webm')
+        options.onComplete?.(blob)
       }
 
       mediaRecorder.start(100)
@@ -110,36 +141,26 @@ class ExportManager {
       audioProcessor.seek(0)
       await audioProcessor.play()
 
-      this.startProgressLoop(targetDuration, options)
+      this.startVideoProgressLoop(canvas, targetDuration, options)
     } catch (e) {
-      console.error('Failed to start recording:', e)
-      if (options.format === 'gif' || !(e instanceof Error && e.message.includes('MediaRecorder'))) {
-        await this.startGifExport(canvas, targetDuration, options)
-      }
+      console.error('Failed to start video recording:', e)
+      await this.startGifExport(canvas, targetDuration, options)
     }
   }
 
-  private getSupportedMimeType(): string {
-    const types = [
-      'video/webm;codecs=vp9,opus',
-      'video/webm;codecs=vp8,opus',
-      'video/webm',
-    ]
-    for (const type of types) {
-      if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) {
-        return type
-      }
-    }
-    return 'video/webm'
-  }
-
-  private startProgressLoop(targetDuration: number, options: ExportOptions): void {
+  private startVideoProgressLoop(
+    canvas: HTMLCanvasElement,
+    targetDuration: number,
+    options: ExportOptions
+  ): void {
     const loop = () => {
       if (!this.state.isRecording) return
 
       const elapsed = (performance.now() - this.state.startTime) / 1000
       const progress = Math.min(elapsed / targetDuration, 1)
+      this.state.currentTime = elapsed
 
+      options.onFrame?.(canvas, elapsed)
       options.onProgress?.(progress)
 
       if (elapsed >= targetDuration) {
@@ -153,212 +174,231 @@ class ExportManager {
     this.state.animationFrame = requestAnimationFrame(loop)
   }
 
-  private handleRecordingComplete(format: ExportFormat): void {
-    const blob = new Blob(this.state.recordedChunks, {
-      type: format === 'video' ? 'video/webm' : 'image/gif',
-    })
+  private async startGifExport(
+    canvas: HTMLCanvasElement,
+    targetDuration: number,
+    options: ExportOptions
+  ): Promise<void> {
+    this.state.isRecording = true
 
-    this.cleanup()
-
-    if (format === 'video') {
-      this.downloadFile(blob, 'particle-animation.webm')
-      this.options?.onComplete?.(blob)
-    } else {
-      this.convertWebmToGif(blob).then((gifBlob) => {
-        this.downloadFile(gifBlob, 'particle-animation.gif')
-        this.options?.onComplete?.(gifBlob)
-      }).catch(() => {
-        this.downloadFile(blob, 'particle-animation.webm')
-        this.options?.onComplete?.(blob)
-      })
-    }
-  }
-
-  private async convertWebmToGif(_webmBlob: Blob): Promise<Blob> {
+    const originalWidth = canvas.width
+    const originalHeight = canvas.height
     const width = 640
-    const height = 480
-    const fps = 15
-    const frameDelay = 1000 / fps
-    const totalFrames = Math.floor(this.state.targetDuration * fps)
+    const height = Math.floor((originalHeight / originalWidth) * width)
+    const fps = 12
+    const totalFrames = Math.floor(targetDuration * fps)
+    const frameDelay = Math.round(100 / fps)
+
     const playbackStartTime = audioProcessor.getCurrentTime()
+    audioProcessor.pause()
 
-    const frames: string[] = []
-
+    const frames: ImageData[] = []
     const offscreen = document.createElement('canvas')
     offscreen.width = width
     offscreen.height = height
     const ctx = offscreen.getContext('2d')!
 
-    const originalCanvas = document.querySelector('canvas') as HTMLCanvasElement | null
-    if (!originalCanvas) {
-      throw new Error('No canvas found')
-    }
-
-    audioProcessor.pause()
-
     for (let i = 0; i < totalFrames; i++) {
-      const time = playbackStartTime + (i / fps)
+      const time = (i / fps)
       audioProcessor.seek(time)
       audioProcessor.getSpectrumAtTime(time)
+
       await new Promise(r => setTimeout(r, 16))
-      ctx.drawImage(originalCanvas, 0, 0, width, height)
-      frames.push(offscreen.toDataURL('image/png'))
-      this.options?.onProgress?.(i / totalFrames * 0.9)
+
+      ctx.drawImage(canvas, 0, 0, width, height)
+      const imageData = ctx.getImageData(0, 0, width, height)
+      frames.push(imageData)
+
+      this.state.currentTime = time
+      options.onFrame?.(canvas, time)
+      options.onProgress?.(i / totalFrames * 0.8)
     }
 
-    audioProcessor.play(playbackStartTime)
+    audioProcessor.seek(playbackStartTime)
 
-    return this.createGifFromFrames(frames, width, height, frameDelay)
+    options.onProgress?.(0.85)
+    const gifBlob = await this.encodeGif(frames, width, height, frameDelay, (p) => {
+      options.onProgress?.(0.85 + p * 0.15)
+    })
+
+    this.cleanup()
+    this.downloadFile(gifBlob, 'particle-animation.gif')
+    options.onComplete?.(gifBlob)
+    this.state.isRecording = false
   }
 
-  private createGifFromFrames(
-    frames: string[],
+  private encodeGif(
+    frames: ImageData[],
     width: number,
     height: number,
-    _delay: number
+    delay: number,
+    onProgress: (progress: number) => void
   ): Promise<Blob> {
     return new Promise((resolve) => {
-      const canvas = document.createElement('canvas')
-      canvas.width = width
-      canvas.height = height
-      const ctx = canvas.getContext('2d')!
+      const palette = this.buildPalette(frames)
+      const quantizedFrames = frames.map((f, i) => {
+        onProgress(i / frames.length * 0.5)
+        return this.quantizeImage(f.data, width, height, palette)
+      })
 
-      const quantize = (data: Uint8ClampedArray): Uint8ClampedArray => {
-        const palette: number[][] = []
-        const indices = new Uint8ClampedArray(data.length / 4)
+      const gifData = this.buildGifData(quantizedFrames, width, height, delay, palette, (p) => {
+        onProgress(0.5 + p * 0.5)
+      })
 
-        for (let i = 0; i < data.length; i += 4) {
-          let bestIndex = 0
-          let bestDist = Infinity
-
-          const r = data[i]
-          const g = data[i + 1]
-          const b = data[i + 2]
-
-          if (palette.length < 256) {
-            palette.push([r, g, b])
-            indices[i / 4] = palette.length - 1
-            continue
-          }
-
-          for (let p = 0; p < palette.length; p++) {
-            const dr = r - palette[p][0]
-            const dg = g - palette[p][1]
-            const db = b - palette[p][2]
-            const dist = dr * dr + dg * dg + db * db
-            if (dist < bestDist) {
-              bestDist = dist
-              bestIndex = p
-            }
-          }
-          indices[i / 4] = bestIndex
-        }
-
-        return indices
-      }
-
-      const buildGif = async () => {
-        const chunks: number[] = []
-
-        const writeWord = (val: number) => {
-          chunks.push(val & 0xff)
-          chunks.push((val >> 8) & 0xff)
-        }
-
-        const writeBytes = (bytes: number[] | Uint8Array) => {
-          for (let i = 0; i < bytes.length; i++) {
-            chunks.push(bytes[i] & 0xff)
-          }
-        }
-
-        writeBytes([71, 73, 70, 56, 57, 97])
-        writeWord(width)
-        writeWord(height)
-
-        chunks.push(0xf7)
-        chunks.push(0)
-        chunks.push(0)
-
-        for (let i = 0; i < 256; i++) {
-          const hue = i / 256
-          const h = hue * 6
-          const x = 1 - Math.abs(h % 2 - 1)
-          let r, g, b
-          if (h < 1) { r = 1; g = x; b = 0 }
-          else if (h < 2) { r = x; g = 1; b = 0 }
-          else if (h < 3) { r = 0; g = 1; b = x }
-          else if (h < 4) { r = 0; g = x; b = 1 }
-          else if (h < 5) { r = x; g = 0; b = 1 }
-          else { r = 1; g = 0; b = x }
-          chunks.push(Math.floor(r * 255))
-          chunks.push(Math.floor(g * 255))
-          chunks.push(Math.floor(b * 255))
-        }
-
-        for (let fIdx = 0; fIdx < frames.length; fIdx++) {
-          const img = new Image()
-          img.src = frames[fIdx]
-          await new Promise<void>((res) => {
-            img.onload = () => {
-              ctx.drawImage(img, 0, 0, width, height)
-              res()
-            }
-          })
-
-          const imgData = ctx.getImageData(0, 0, width, height)
-          const quantized = quantize(imgData.data)
-
-          chunks.push(0x21, 0xff, 0x0b)
-          writeBytes([78, 69, 84, 83, 67, 65, 80, 69, 50, 46, 48])
-          chunks.push(0x03, 0x01, 0x00, 0x00, 0x00)
-
-          chunks.push(0x2c)
-          writeWord(0)
-          writeWord(0)
-          writeWord(width)
-          writeWord(height)
-          chunks.push(0)
-          chunks.push(8)
-
-          const minLzw = 2
-          chunks.push(minLzw)
-
-          const codes = this.lzwEncode(quantized, minLzw)
-          let pos = 0
-          while (pos < codes.length) {
-            const blockLen = Math.min(255, codes.length - pos)
-            chunks.push(blockLen)
-            for (let i = 0; i < blockLen; i++) {
-              chunks.push(codes[pos + i])
-            }
-            pos += blockLen
-          }
-          chunks.push(0)
-
-          this.options?.onProgress?.(0.9 + (fIdx / frames.length) * 0.1)
-        }
-
-        chunks.push(0x3b)
-
-        resolve(new Blob([new Uint8Array(chunks)], { type: 'image/gif' }))
-      }
-
-      buildGif()
+      resolve(new Blob([gifData as unknown as ArrayBuffer], { type: 'image/gif' }))
     })
   }
 
-  private lzwEncode(data: Uint8ClampedArray, minCodeSize: number): number[] {
+  private buildPalette(frames: ImageData[]): number[][] {
+    const colorCount = new Map<number, number>()
+
+    for (const frame of frames) {
+      const data = frame.data
+      for (let i = 0; i < data.length; i += 16) {
+        const r = data[i] >> 3 << 3
+        const g = data[i + 1] >> 3 << 3
+        const b = data[i + 2] >> 3 << 3
+        const key = (r << 16) | (g << 8) | b
+        colorCount.set(key, (colorCount.get(key) || 0) + 1)
+      }
+    }
+
+    const sorted = Array.from(colorCount.entries()).sort((a, b) => b[1] - a[1])
+    const palette: number[][] = []
+
+    for (let i = 0; i < 256 && i < sorted.length; i++) {
+      const key = sorted[i][0]
+      palette.push([(key >> 16) & 0xff, (key >> 8) & 0xff, key & 0xff])
+    }
+
+    while (palette.length < 256) {
+      palette.push([0, 0, 0])
+    }
+
+    return palette
+  }
+
+  private quantizeImage(
+    data: Uint8ClampedArray,
+    _width: number,
+    _height: number,
+    palette: number[][]
+  ): Uint8Array {
+    const result = new Uint8Array(data.length / 4)
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i]
+      const g = data[i + 1]
+      const b = data[i + 2]
+
+      let bestIdx = 0
+      let bestDist = Infinity
+
+      for (let p = 0; p < palette.length; p++) {
+        const dr = r - palette[p][0]
+        const dg = g - palette[p][1]
+        const db = b - palette[p][2]
+        const dist = dr * dr + dg * dg + db * db
+        if (dist < bestDist) {
+          bestDist = dist
+          bestIdx = p
+        }
+      }
+      result[i / 4] = bestIdx
+    }
+    return result
+  }
+
+  private buildGifData(
+    frames: Uint8Array[],
+    width: number,
+    height: number,
+    delay: number,
+    palette: number[][],
+    _onProgress: (progress: number) => void
+  ): Uint8Array {
+    const chunks: number[] = []
+    const delayCs = Math.round(delay / 10)
+
+    const writeWord = (val: number) => {
+      chunks.push(val & 0xff)
+      chunks.push((val >> 8) & 0xff)
+    }
+
+    const writeBytes = (bytes: Uint8Array | number[]) => {
+      for (let i = 0; i < bytes.length; i++) {
+        chunks.push(bytes[i] & 0xff)
+      }
+    }
+
+    writeBytes([71, 73, 70, 56, 57, 97])
+    writeWord(width)
+    writeWord(height)
+    chunks.push(0xf7)
+    chunks.push(0)
+    chunks.push(0)
+
+    for (const color of palette) {
+      chunks.push(color[0])
+      chunks.push(color[1])
+      chunks.push(color[2])
+    }
+
+    chunks.push(0x21, 0xff, 0x0b)
+    writeBytes([78, 69, 84, 83, 67, 65, 80, 69, 50, 46, 48])
+    chunks.push(0x03, 0x01, 0x00, 0x00, 0x00)
+
+    for (let fIdx = 0; fIdx < frames.length; fIdx++) {
+      chunks.push(0x21, 0xf9, 0x04)
+      chunks.push(0x00)
+      writeWord(delayCs)
+      chunks.push(0x00)
+      chunks.push(0x00)
+
+      chunks.push(0x2c)
+      writeWord(0)
+      writeWord(0)
+      writeWord(width)
+      writeWord(height)
+      chunks.push(0)
+      chunks.push(8)
+
+      const minLzw = 2
+      chunks.push(minLzw)
+
+      const codes = this.lzwEncode(frames[fIdx], minLzw)
+      let pos = 0
+      while (pos < codes.length) {
+        const blockLen = Math.min(255, codes.length - pos)
+        chunks.push(blockLen)
+        for (let i = 0; i < blockLen; i++) {
+          chunks.push(codes[pos + i])
+        }
+        pos += blockLen
+      }
+      chunks.push(0)
+    }
+
+    chunks.push(0x3b)
+
+    return new Uint8Array(chunks)
+  }
+
+  private lzwEncode(data: Uint8Array, minCodeSize: number): number[] {
     const result: number[] = []
     let codeSize = minCodeSize + 1
-    let clearCode = 1 << minCodeSize
-    let endCode = clearCode + 1
+    const clearCode = 1 << minCodeSize
+    const endCode = clearCode + 1
     let nextCode = endCode + 1
-    const dict = new Map<string, number>()
+    const dict = new Map<number, number>()
+
+    const getKey = (w: number, c: number): number => {
+      return (w << 8) | c
+    }
 
     const resetDict = () => {
       dict.clear()
       for (let i = 0; i < (1 << minCodeSize); i++) {
-        dict.set(String(i), i)
+        dict.set(getKey(-1, i), i)
       }
       nextCode = endCode + 1
       codeSize = minCodeSize + 1
@@ -382,18 +422,18 @@ class ExportManager {
 
     writeCode(clearCode)
 
-    let w = String(data[0])
+    let w = data[0]
 
     for (let i = 1; i < data.length; i++) {
-      const c = String(data[i])
-      const wc = w + ',' + c
+      const c = data[i]
+      const key = getKey(w, c)
 
-      if (dict.has(wc)) {
-        w = wc
+      if (dict.has(key)) {
+        w = dict.get(key)!
       } else {
-        writeCode(dict.get(w)!)
+        writeCode(w)
         if (nextCode < 4096) {
-          dict.set(wc, nextCode++)
+          dict.set(key, nextCode++)
           if (nextCode > (1 << codeSize) && codeSize < 12) {
             codeSize++
           }
@@ -405,7 +445,7 @@ class ExportManager {
       }
     }
 
-    writeCode(dict.get(w)!)
+    writeCode(w)
     writeCode(endCode)
 
     if (bitCount > 0) {
@@ -415,43 +455,20 @@ class ExportManager {
     return result
   }
 
-  async startGifExport(
-    canvas: HTMLCanvasElement,
-    targetDuration: number,
-    options: ExportOptions
-  ): Promise<void> {
-    const width = 640
-    const height = 480
-    const fps = 10
-    const totalFrames = Math.floor(targetDuration * fps)
-
-    const frames: string[] = []
-    const playbackStartTime = audioProcessor.getCurrentTime()
-
-    audioProcessor.pause()
-
-    for (let i = 0; i < totalFrames; i++) {
-      const time = playbackStartTime + (i / fps)
-      audioProcessor.seek(time)
-      audioProcessor.getSpectrumAtTime(time)
-      await new Promise(r => setTimeout(r, 50))
-
-      const offscreen = document.createElement('canvas')
-      offscreen.width = width
-      offscreen.height = height
-      const ctx = offscreen.getContext('2d')!
-      ctx.drawImage(canvas, 0, 0, width, height)
-      frames.push(offscreen.toDataURL('image/jpeg', 0.8))
-
-      options.onProgress?.(i / totalFrames * 0.8)
+  private getSupportedMimeType(): string {
+    const types = [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm',
+    ]
+    if (typeof MediaRecorder !== 'undefined') {
+      for (const type of types) {
+        if (MediaRecorder.isTypeSupported(type)) {
+          return type
+        }
+      }
     }
-
-    audioProcessor.play(playbackStartTime)
-
-    const blob = await this.createGifFromFrames(frames, width, height, 1000 / fps)
-    this.downloadFile(blob, 'particle-animation.gif')
-    options.onComplete?.(blob)
-    this.cleanup()
+    return 'video/webm'
   }
 
   stopExport(): void {

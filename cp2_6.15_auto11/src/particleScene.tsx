@@ -1,5 +1,5 @@
-import React, { useRef, useMemo, useEffect } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import React, { useRef, useMemo, useEffect, useCallback } from 'react'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { audioProcessor } from './audioProcessor'
@@ -17,25 +17,63 @@ export interface ParticleParams {
 
 interface ParticleSystemProps {
   params: ParticleParams
-  isExporting?: boolean
-  onFrame?: (time: number) => void
+  spectrumCallback?: (spectrum: Float32Array) => void
 }
 
 const PARTICLE_COUNT = 100000
 const SHELL_RADIUS = 5
 
-function ParticleSystem({ params, onFrame }: ParticleSystemProps) {
+const LOW_MIN = 2.0
+const LOW_MAX = 4.0
+const MID_BASE = 5.0
+const HIGH_MIN = 5.0
+const HIGH_MAX = 8.0
+
+const PARTICLES_PER_GROUP = Math.floor(PARTICLE_COUNT / 3)
+const GROUP_LOW_END = PARTICLES_PER_GROUP
+const GROUP_MID_END = PARTICLES_PER_GROUP * 2
+
+const hslToRgb = (h: number, s: number, l: number): [number, number, number] => {
+  let r, g, b
+  if (s === 0) {
+    r = g = b = l
+  } else {
+    const hue2rgb = (p: number, q: number, t: number) => {
+      if (t < 0) t += 1
+      if (t > 1) t -= 1
+      if (t < 1 / 6) return p + (q - p) * 6 * t
+      if (t < 1 / 2) return q
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6
+      return p
+    }
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s
+    const p = 2 * l - q
+    r = hue2rgb(p, q, h + 1 / 3)
+    g = hue2rgb(p, q, h)
+    b = hue2rgb(p, q, h - 1 / 3)
+  }
+  return [r, g, b]
+}
+
+function ParticleSystem({ params, spectrumCallback }: ParticleSystemProps) {
   const pointsRef = useRef<THREE.Points>(null)
   const velocitiesRef = useRef<Float32Array>(new Float32Array(PARTICLE_COUNT * 3))
-  const basePositionsRef = useRef<Float32Array>(new Float32Array(PARTICLE_COUNT * 3))
   const phiThetaRef = useRef<Float32Array>(new Float32Array(PARTICLE_COUNT * 2))
+  const particleGroupRef = useRef<Uint8Array>(new Uint8Array(PARTICLE_COUNT))
+  const targetRadiiRef = useRef<Float32Array>(new Float32Array(PARTICLE_COUNT))
   const timeRef = useRef(0)
-  const smoothedSpectrumRef = useRef<Float32Array>(new Float32Array(128))
+  const smoothedEnergiesRef = useRef({ low: 0, mid: 0, high: 0 })
+  const frameCountRef = useRef(0)
+
+  const materialRef = useRef<THREE.PointsMaterial | null>(null)
+  const three = useThree()
 
   const geometry = useMemo(() => {
     const posArr = new Float32Array(PARTICLE_COUNT * 3)
     const colArr = new Float32Array(PARTICLE_COUNT * 3)
     const phiTheta = phiThetaRef.current
+    const groups = particleGroupRef.current
+    const targetRadii = targetRadiiRef.current
 
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const phi = Math.random() * Math.PI * 2
@@ -46,17 +84,33 @@ function ParticleSystem({ params, onFrame }: ParticleSystemProps) {
       phiTheta[i * 2] = phi
       phiTheta[i * 2 + 1] = theta
 
-      const x = SHELL_RADIUS * sinTheta * Math.cos(phi)
-      const y = SHELL_RADIUS * sinTheta * Math.sin(phi)
-      const z = SHELL_RADIUS * cosTheta
+      let group: number
+      if (i < GROUP_LOW_END) {
+        group = 0
+      } else if (i < GROUP_MID_END) {
+        group = 1
+      } else {
+        group = 2
+      }
+      groups[i] = group
+
+      let radius = SHELL_RADIUS
+      if (group === 0) {
+        radius = LOW_MIN + Math.random() * (LOW_MAX - LOW_MIN)
+      } else if (group === 1) {
+        radius = MID_BASE
+      } else {
+        radius = HIGH_MIN + Math.random() * (HIGH_MAX - HIGH_MIN)
+      }
+      targetRadii[i] = radius
+
+      const x = radius * sinTheta * Math.cos(phi)
+      const y = radius * sinTheta * Math.sin(phi)
+      const z = radius * cosTheta
 
       posArr[i * 3] = x
       posArr[i * 3 + 1] = y
       posArr[i * 3 + 2] = z
-
-      basePositionsRef.current[i * 3] = x
-      basePositionsRef.current[i * 3 + 1] = y
-      basePositionsRef.current[i * 3 + 2] = z
 
       colArr[i * 3] = 0.5
       colArr[i * 3 + 1] = 1
@@ -75,8 +129,21 @@ function ParticleSystem({ params, onFrame }: ParticleSystemProps) {
     return [c.r, c.g, c.b]
   }, [params.solidColor])
 
+  const computeSpectrumEnergies = useCallback((): { low: number; mid: number; high: number } => {
+    const energies = audioProcessor.getLowMidHighEnergies()
+    const alpha = 0.85
+    const smoothed = smoothedEnergiesRef.current
+    smoothed.low = smoothed.low * alpha + energies.low * (1 - alpha)
+    smoothed.mid = smoothed.mid * alpha + energies.mid * (1 - alpha)
+    smoothed.high = smoothed.high * alpha + energies.high * (1 - alpha)
+    return smoothed
+  }, [])
+
   useFrame((_, delta) => {
     if (!pointsRef.current) return
+
+    frameCountRef.current++
+    timeRef.current += delta
 
     const mesh = pointsRef.current
     const posAttr = mesh.geometry.getAttribute('position') as THREE.BufferAttribute
@@ -85,56 +152,44 @@ function ParticleSystem({ params, onFrame }: ParticleSystemProps) {
     const colArr = colAttr.array as Float32Array
     const velocities = velocitiesRef.current
     const phiTheta = phiThetaRef.current
-    const smoothed = smoothedSpectrumRef.current
+    const groups = particleGroupRef.current
+    const targetRadii = targetRadiiRef.current
 
-    timeRef.current += delta
+    const energies = computeSpectrumEnergies()
+    const lowE = Math.max(0, Math.min(1, energies.low * 1.5))
+    const midE = Math.max(0, Math.min(1, energies.mid * 1.5))
+    const highE = Math.max(0, Math.min(1, energies.high * 1.5))
 
-    let spectrum = audioProcessor.getSharedSpectrum()
-    if (!spectrum) {
-      spectrum = new Float32Array(1024)
-      const t = timeRef.current
-      for (let i = 0; i < spectrum.length; i++) {
-        spectrum[i] = Math.sin(t * 2 + i * 0.1) * 0.3 + 0.3
-      }
+    if (spectrumCallback && (frameCountRef.current % 2 === 0)) {
+      const spec = audioProcessor.getSharedSpectrum()
+      if (spec) spectrumCallback(spec)
     }
-
-    const spec128 = new Float32Array(128)
-    const bucketSize = Math.floor(spectrum.length / 128)
-    for (let i = 0; i < 128; i++) {
-      let sum = 0
-      for (let j = 0; j < bucketSize; j++) {
-        sum += spectrum[i * bucketSize + j] || 0
-      }
-      spec128[i] = sum / bucketSize
-    }
-
-    for (let i = 0; i < 128; i++) {
-      smoothed[i] = smoothed[i] * 0.85 + spec128[i] * 0.15
-    }
-
-    const lowFreqEnergy = smoothed.slice(0, 10).reduce((a, b) => a + b, 0) / 10
-    const midFreqEnergy = smoothed.slice(10, 50).reduce((a, b) => a + b, 0) / 40
-    const highFreqEnergy = smoothed.slice(50, 128).reduce((a, b) => a + b, 0) / 78
 
     const speed = params.particleSpeed
     const damping = 0.98
+    const t = timeRef.current
 
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const i3 = i * 3
       const i2 = i * 2
+      const group = groups[i]
       const phi = phiTheta[i2]
       const theta = phiTheta[i2 + 1]
 
-      const specIndex = Math.floor((theta / Math.PI) * 120)
-      const freqInfluence = smoothed[Math.min(specIndex, 127)]
-
       let targetRadius: number
-      if (freqInfluence < 0.33) {
-        targetRadius = 2 + lowFreqEnergy * 2
-      } else if (freqInfluence < 0.66) {
-        targetRadius = 4.5 + midFreqEnergy * 1
+      let ringInfluence = 0
+
+      if (group === 0) {
+        targetRadius = LOW_MIN + lowE * (LOW_MAX - LOW_MIN)
+        targetRadii[i] = targetRadius
+      } else if (group === 1) {
+        ringInfluence = midE * 0.8
+        const ringRadius = MID_BASE + Math.sin(t * 2 + i * 0.0005) * ringInfluence * 1.5
+        targetRadius = ringRadius
+        targetRadii[i] = targetRadius
       } else {
-        targetRadius = 5 + highFreqEnergy * 3
+        targetRadius = HIGH_MIN + highE * (HIGH_MAX - HIGH_MIN)
+        targetRadii[i] = targetRadius
       }
 
       const sinTheta = Math.sin(theta)
@@ -142,21 +197,39 @@ function ParticleSystem({ params, onFrame }: ParticleSystemProps) {
       const baseY = targetRadius * sinTheta * Math.sin(phi)
       const baseZ = targetRadius * Math.cos(theta)
 
-      const ringFactor = midFreqEnergy * 0.5
-      const ringPhi = Math.sin(timeRef.current * 0.5 + i * 0.001) * Math.PI * ringFactor
-      const ringTheta = Math.cos(timeRef.current * 0.3 + i * 0.0015) * ringFactor
+      let tx = baseX
+      let ty = baseY
+      let tz = baseZ
 
-      const bx = baseX + Math.cos(ringPhi) * ringFactor * 2
-      const by = baseY + Math.sin(ringTheta) * ringFactor * 2
-      const bz = baseZ + Math.sin(ringPhi + ringTheta) * ringFactor
+      if (group === 1 && ringInfluence > 0.1) {
+        const ringAngle = t * 3 + i * 0.001
+        const ringOffset = ringInfluence * 2
+        tx += Math.cos(ringAngle) * ringOffset * Math.sin(theta)
+        ty += Math.sin(ringAngle) * ringOffset * Math.sin(theta)
+        tz += Math.sin(ringAngle * 0.7) * ringOffset * 0.5
+      }
 
-      const randX = (Math.random() - 0.5) * 0.1
-      const randY = (Math.random() - 0.5) * 0.1
-      const randZ = (Math.random() - 0.5) * 0.1
+      if (group === 0) {
+        const pulse = 1 + lowE * 0.3 * Math.sin(t * 4 + i * 0.002)
+        tx *= pulse
+        ty *= pulse
+        tz *= pulse
+      }
 
-      const forceX = (bx - posArr[i3]) * 0.05 * speed + randX * speed
-      const forceY = (by - posArr[i3 + 1]) * 0.05 * speed + randY * speed
-      const forceZ = (bz - posArr[i3 + 2]) * 0.05 * speed + randZ * speed
+      if (group === 2) {
+        const spread = 1 + highE * 0.5 * Math.sin(t * 5 + i * 0.003)
+        tx *= spread
+        ty *= spread
+        tz *= spread
+      }
+
+      const randX = (Math.random() - 0.5) * 0.1 * speed
+      const randY = (Math.random() - 0.5) * 0.1 * speed
+      const randZ = (Math.random() - 0.5) * 0.1 * speed
+
+      const forceX = (tx - posArr[i3]) * 0.05 * speed + randX
+      const forceY = (ty - posArr[i3 + 1]) * 0.05 * speed + randY
+      const forceZ = (tz - posArr[i3 + 2]) * 0.05 * speed + randZ
 
       velocities[i3] = (velocities[i3] + forceX) * damping
       velocities[i3 + 1] = (velocities[i3 + 1] + forceY) * damping
@@ -166,65 +239,59 @@ function ParticleSystem({ params, onFrame }: ParticleSystemProps) {
       posArr[i3 + 1] += velocities[i3 + 1]
       posArr[i3 + 2] += velocities[i3 + 2]
 
+      const groupEnergy = group === 0 ? lowE : (group === 1 ? midE : highE)
+      const intensity = 0.5 + groupEnergy * 0.5
+
       if (params.colorTheme === 'gradient') {
-        const t = freqInfluence
-        const r = 0.5 + t * 0.5
-        const g = 1 - t * 0.5
+        const tNorm = (theta / Math.PI)
+        const r = 0.5 + tNorm * 0.5
+        const g = 1 - tNorm * 0.5
         const b = 1
-        const intensity = 0.6 + freqInfluence * 0.4
+
         colArr[i3] = r * intensity
         colArr[i3 + 1] = g * intensity
         colArr[i3 + 2] = b * intensity
       } else if (params.colorTheme === 'solid') {
-        const intensity = 0.6 + freqInfluence * 0.4
         colArr[i3] = solidColorRgb[0] * intensity
         colArr[i3 + 1] = solidColorRgb[1] * intensity
         colArr[i3 + 2] = solidColorRgb[2] * intensity
       } else {
-        const hue = (i / PARTICLE_COUNT + timeRef.current * 0.05) % 1
-        const hue6 = hue * 6
-        const hi = Math.floor(hue6)
-        const f = hue6 - hi
-        const q = 1 - f
-        const intensity = 0.6 + freqInfluence * 0.4
-
-        let r, g, b
-        switch (hi % 6) {
-          case 0: r = 1; g = f; b = 0; break
-          case 1: r = q; g = 1; b = 0; break
-          case 2: r = 0; g = 1; b = f; break
-          case 3: r = 0; g = q; b = 1; break
-          case 4: r = f; g = 0; b = 1; break
-          default: r = 1; g = 0; b = q; break
+        let hue: number
+        if (group === 0) {
+          hue = ((i / GROUP_LOW_END) * 0.3 + t * 0.02) % 1
+        } else if (group === 1) {
+          hue = (0.3 + ((i - GROUP_LOW_END) / PARTICLES_PER_GROUP) * 0.4 + t * 0.03) % 1
+        } else {
+          hue = (0.7 + ((i - GROUP_MID_END) / PARTICLES_PER_GROUP) * 0.3 + t * 0.04) % 1
         }
-        colArr[i3] = r * intensity
-        colArr[i3 + 1] = g * intensity
-        colArr[i3 + 2] = b * intensity
+        const [r, g, b] = hslToRgb(hue, 0.85, 0.5 + intensity * 0.3)
+        colArr[i3] = r
+        colArr[i3 + 1] = g
+        colArr[i3 + 2] = b
       }
     }
 
     posAttr.needsUpdate = true
     colAttr.needsUpdate = true
-
-    if (onFrame) {
-      onFrame(timeRef.current)
-    }
   })
 
   useEffect(() => {
-    const g = pointsRef.current?.geometry
-    if (g) {
-      const mat = pointsRef.current?.material as THREE.PointsMaterial
-      if (mat) {
-        mat.size = params.particleSize
-        mat.needsUpdate = true
-      }
+    if (materialRef.current) {
+      materialRef.current.size = params.particleSize
+      materialRef.current.needsUpdate = true
     }
   }, [params.particleSize])
+
+  useEffect(() => {
+    const bgColor = new THREE.Color(params.background)
+    three.scene.background = bgColor
+    three.scene.fog = new THREE.Fog(bgColor, 15, 35)
+  }, [params.background, three.scene])
 
   return (
     <points ref={pointsRef} geometry={geometry}>
       <pointsMaterial
+        ref={materialRef}
         size={params.particleSize}
         vertexColors
         transparent
@@ -252,21 +319,26 @@ interface ParticleSceneProps {
   canvasRef?: React.MutableRefObject<HTMLCanvasElement | null>
   isExporting?: boolean
   exportingScale?: number
+  spectrumCallback?: (spectrum: Float32Array) => void
 }
 
-export function ParticleScene({ params, canvasRef, isExporting, exportingScale = 1 }: ParticleSceneProps) {
+export function ParticleScene({ params, canvasRef, isExporting, exportingScale = 1, spectrumCallback }: ParticleSceneProps) {
   const bgColor = params.background
+
+  const glConfig = useMemo(() => ({
+    antialias: true,
+    alpha: false,
+    powerPreference: 'high-performance' as const,
+    preserveDrawingBuffer: true,
+    precision: 'highp' as const,
+  }), [])
 
   return (
     <Canvas
       ref={canvasRef as React.Ref<HTMLCanvasElement>}
-      gl={{
-        antialias: true,
-        alpha: false,
-        powerPreference: 'high-performance',
-        preserveDrawingBuffer: true,
-      }}
+      gl={glConfig}
       camera={{ position: [0, 0, 12], fov: 60, near: 0.1, far: 1000 }}
+      frameloop="always"
       style={{
         background: bgColor,
         width: isExporting ? `${100 * exportingScale}%` : '100%',
@@ -276,7 +348,7 @@ export function ParticleScene({ params, canvasRef, isExporting, exportingScale =
       <color attach="background" args={[bgColor]} />
       <fog attach="fog" args={[bgColor, 15, 35]} />
       <SceneLighting />
-      <ParticleSystem params={params} isExporting={isExporting} />
+      <ParticleSystem params={params} spectrumCallback={spectrumCallback} />
       <OrbitControls
         enableDamping
         dampingFactor={0.05}

@@ -41,27 +41,10 @@ const COLOR_THEMES: ColorTheme[] = ['gradient', 'solid', 'rainbow']
 const THEME_NAMES = ['渐变', '单色', '彩虹']
 
 export function UIControls(props: UIControlsProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
   const formatTime = (s: number): string => {
     const m = Math.floor(s / 60)
     const sec = Math.floor(s % 60)
     return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`
-  }
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      const maxSize = 20 * 1024 * 1024
-      if (file.size > maxSize) {
-        alert('文件大小不能超过 20MB')
-        return
-      }
-      props.onFileUpload(file)
-    }
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
   }
 
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {

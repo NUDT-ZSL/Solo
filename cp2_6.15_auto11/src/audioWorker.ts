@@ -1,14 +1,33 @@
 /// <reference lib="webworker" />
 
+interface SharedAudioBuffer {
+  spectrum: Float32Array
+  beats: Float32Array
+  beatCount: Int32Array
+  currentFrame: Int32Array
+}
+
 interface FFTResult {
   type: 'fft'
   spectrum: Float32Array
   timeData: Float32Array
 }
 
+interface FFTCompleteResult {
+  type: 'fft-complete'
+  spectrum: Float32Array
+  timeData: Float32Array
+}
+
+interface ErrorResult {
+  type: 'error'
+  error: string
+}
+
 interface InitMessage {
   type: 'init'
   fftSize: number
+  sharedBuffer?: SharedAudioBuffer
 }
 
 interface ProcessMessage {
@@ -17,9 +36,20 @@ interface ProcessMessage {
   sampleRate: number
 }
 
-type WorkerMessage = InitMessage | ProcessMessage
+interface ProcessSharedMessage {
+  type: 'process-shared'
+  audioData: Float32Array
+  sampleRate: number
+  analysisBuffer?: SharedAudioBuffer
+}
+
+type WorkerMessage = InitMessage | ProcessMessage | ProcessSharedMessage
+
+const HOP_SIZE = 512
 
 let fftSize = 2048
+let sharedBuffer: SharedAudioBuffer | null = null
+let analysisBuffer: SharedAudioBuffer | null = null
 
 class SimpleFFT {
   private size: number
@@ -83,69 +113,197 @@ class SimpleFFT {
     }
   }
 
-  getMagnitude(real: Float32Array, imag: Float32Array): Float32Array {
+  getMagnitude(real: Float32Array, imag: Float32Array, out: Float32Array, offset: number): void {
     const n = this.size
-    const magnitude = new Float32Array(n / 2)
     for (let i = 0; i < n / 2; i++) {
-      magnitude[i] = Math.sqrt(real[i] * real[i] + imag[i] * imag[i]) / (n / 2)
+      const mag = Math.sqrt(real[i] * real[i] + imag[i] * imag[i]) / (n / 2)
+      out[offset + i] = mag
     }
-    return magnitude
   }
 }
 
 let fft: SimpleFFT | null = null
+let hannWindow: Float32Array | null = null
+
+function initFFT(size: number): void {
+  fft = new SimpleFFT(size)
+  hannWindow = new Float32Array(size)
+  for (let i = 0; i < size; i++) {
+    hannWindow[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / (size - 1)))
+  }
+}
+
+function processWithSharedBuffer(
+  audioData: Float32Array,
+  sampleRate: number
+): void {
+  if (!fft || !hannWindow || !sharedBuffer) {
+    self.postMessage({ type: 'error', error: 'FFT not initialized' } as ErrorResult)
+    return
+  }
+
+  try {
+    const numFrames = Math.max(1, Math.floor((audioData.length - fftSize) / HOP_SIZE) + 1)
+    const spectrumPerFrame = fftSize / 2
+
+    const spectrumFrames = new Float32Array(numFrames * spectrumPerFrame)
+    const timeFrames = new Float32Array(numFrames * fftSize)
+
+    const real = new Float32Array(fftSize)
+    const imag = new Float32Array(fftSize)
+
+    const batchSize = Math.min(128, numFrames)
+
+    for (let batchStart = 0; batchStart < numFrames; batchStart += batchSize) {
+      const batchEnd = Math.min(batchStart + batchSize, numFrames)
+
+      for (let frame = batchStart; frame < batchEnd; frame++) {
+        const start = frame * HOP_SIZE
+
+        for (let i = 0; i < fftSize; i++) {
+          const idx = start + i
+          real[i] = (idx < audioData.length ? audioData[idx] : 0) * hannWindow[i]
+          imag[i] = 0
+          if (idx < audioData.length) {
+            timeFrames[frame * fftSize + i] = audioData[idx]
+          }
+        }
+
+        fft.transform(real, imag)
+        fft.getMagnitude(real, imag, spectrumFrames, frame * spectrumPerFrame)
+      }
+
+      if (sharedBuffer) {
+        const progress = batchEnd / numFrames
+        Atomics.store(sharedBuffer.currentFrame, 0, Math.floor(progress * 1000))
+      }
+    }
+
+    if (sharedBuffer) {
+      for (let i = 0; i < spectrumPerFrame; i++) {
+        sharedBuffer.spectrum[i] = spectrumFrames[i]
+      }
+    }
+
+    if (analysisBuffer) {
+      const beats = detectBeats(spectrumFrames, numFrames, spectrumPerFrame, sampleRate)
+      Atomics.store(analysisBuffer.beatCount, 0, beats.length)
+      for (let i = 0; i < beats.length && i < analysisBuffer.beats.length; i++) {
+        analysisBuffer.beats[i] = beats[i]
+      }
+    }
+
+    const result: FFTCompleteResult = {
+      type: 'fft-complete',
+      spectrum: spectrumFrames,
+      timeData: timeFrames
+    }
+
+    self.postMessage(result, [
+      spectrumFrames.buffer,
+      timeFrames.buffer
+    ])
+  } catch (e) {
+    self.postMessage({ type: 'error', error: String(e) } as ErrorResult)
+  }
+}
+
+function detectBeats(
+  spectrum: Float32Array,
+  numFrames: number,
+  spectrumPerFrame: number,
+  sampleRate: number
+): Float32Array {
+  const bassBins = Math.min(Math.floor(200 / (sampleRate / fftSize)), spectrumPerFrame)
+  const energyHistory: number[] = []
+  const beats: number[] = []
+  const frameDuration = HOP_SIZE / sampleRate
+  const maxHistory = 43
+
+  for (let frame = 0; frame < numFrames; frame++) {
+    let bassEnergy = 0
+    const specOffset = frame * spectrumPerFrame
+    for (let i = 0; i < bassBins; i++) {
+      bassEnergy += spectrum[specOffset + i]
+    }
+    energyHistory.push(bassEnergy)
+
+    if (energyHistory.length > maxHistory) {
+      energyHistory.shift()
+    }
+
+    if (energyHistory.length >= maxHistory) {
+      const slice = energyHistory.slice(0, maxHistory - 1)
+      let sum = 0
+      let sqSum = 0
+      for (let i = 0; i < slice.length; i++) {
+        sum += slice[i]
+        sqSum += slice[i] * slice[i]
+      }
+      const avg = sum / slice.length
+      const variance = (sqSum / slice.length) - avg * avg
+      const threshold = avg * (-0.0025714 * variance + 1.5142857)
+
+      if (bassEnergy > threshold && bassEnergy > avg * 1.3) {
+        const beatTime = frame * frameDuration
+        if (beats.length === 0 || beatTime - beats[beats.length - 1] > 0.2) {
+          beats.push(beatTime)
+        }
+      }
+    }
+  }
+
+  return new Float32Array(beats)
+}
 
 self.onmessage = (e: MessageEvent<WorkerMessage>) => {
   const message = e.data
 
   if (message.type === 'init') {
     fftSize = message.fftSize
-    fft = new SimpleFFT(fftSize)
+    initFFT(fftSize)
+    if (message.sharedBuffer) {
+      sharedBuffer = message.sharedBuffer
+    }
     return
   }
 
-  if (message.type === 'process' && fft) {
+  if (message.type === 'process-shared') {
+    if (message.analysisBuffer) {
+      analysisBuffer = message.analysisBuffer
+    }
+    processWithSharedBuffer(message.audioData, message.sampleRate)
+    return
+  }
+
+  if (message.type === 'process' && fft && hannWindow) {
     const { audioData } = message
+
+    const numFrames = Math.max(1, Math.floor((audioData.length - fftSize) / HOP_SIZE) + 1)
+    const spectrumFrames = new Float32Array(numFrames * (fftSize / 2))
+    const timeFrames = new Float32Array(numFrames * fftSize)
 
     const real = new Float32Array(fftSize)
     const imag = new Float32Array(fftSize)
 
-    const windowFunc = (n: number, N: number) => 0.5 * (1 - Math.cos(2 * Math.PI * n / (N - 1)))
-    for (let i = 0; i < fftSize && i < audioData.length; i++) {
-      real[i] = audioData[i] * windowFunc(i, fftSize)
-      imag[i] = 0
-    }
-
-    fft.transform(real, imag)
-
-    const numFrames = Math.max(1, Math.floor(audioData.length / fftSize))
-    const spectrumFrames = new Float32Array(numFrames * (fftSize / 2))
-    const timeFrames = new Float32Array(numFrames * fftSize)
-
     for (let frame = 0; frame < numFrames; frame++) {
-      const start = frame * fftSize
-      const real2 = new Float32Array(fftSize)
-      const imag2 = new Float32Array(fftSize)
+      const start = frame * HOP_SIZE
 
       for (let i = 0; i < fftSize; i++) {
         const idx = start + i
         if (idx < audioData.length) {
-          real2[i] = audioData[idx] * windowFunc(i, fftSize)
+          real[i] = audioData[idx] * hannWindow[i]
         } else {
-          real2[i] = 0
+          real[i] = 0
         }
-        imag2[i] = 0
+        imag[i] = 0
         if (idx < audioData.length) {
           timeFrames[frame * fftSize + i] = audioData[idx]
         }
       }
 
-      fft.transform(real2, imag2)
-      const frameMag = fft.getMagnitude(real2, imag2)
-
-      for (let i = 0; i < fftSize / 2; i++) {
-        spectrumFrames[frame * (fftSize / 2) + i] = frameMag[i]
-      }
+      fft.transform(real, imag)
+      fft.getMagnitude(real, imag, spectrumFrames, frame * (fftSize / 2))
     }
 
     const result: FFTResult = {
