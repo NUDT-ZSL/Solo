@@ -1,6 +1,6 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { mockWorks } from './mockData.js';
+import { mockWorks } from './mockData';
 
 const app = express();
 const PORT = 3001;
@@ -64,6 +64,6 @@ app.post('/api/works/:id/comments', (req, res) => {
   res.json(newComment);
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running at http://0.0.0.0:${PORT}`);
 });

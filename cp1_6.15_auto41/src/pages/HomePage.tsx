@@ -62,7 +62,7 @@ const HomePage: React.FC = () => {
           overflow: hidden;
           cursor: pointer;
           box-shadow: inset 0 1px 4px rgba(0,0,0,0.3);
-          transition: transform 0.3s ease, box-shadow 0.3s ease;
+          transition: all 0.3s ease;
         }
         .work-card:hover {
           transform: translateY(-5px);
