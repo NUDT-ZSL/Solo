@@ -3,7 +3,8 @@ import type { CharacterConfig, Keyframe, Particle, AnimationState } from './type
 const CANVAS_WIDTH = 600;
 const CANVAS_HEIGHT = 400;
 const MAX_PARTICLES = 50;
-const FPS = 60;
+const TARGET_FPS = 60;
+const FRAME_DURATION = 1000 / TARGET_FPS;
 
 export class AnimationEngine {
   private canvas: HTMLCanvasElement;
@@ -12,13 +13,16 @@ export class AnimationEngine {
   private characterConfig: CharacterConfig;
   private animationSequence: { duration: number; keyframes: Keyframe[] } | null = null;
   private particles: Particle[] = [];
-  private startTime: number = 0;
+  private lastFrameTime: number = 0;
+  private accumulator: number = 0;
   private speedMultiplier: number = 1;
   private backgroundColor: string = '#12121e';
   private currentEmotion: string | null = null;
   private onFrameUpdate: ((state: AnimationState) => void) | null = null;
   private frameCount: number = 0;
-  private particleTimer: number = 0;
+  private particleAccumulator: number = 0;
+  private elapsedTime: number = 0;
+  private isRunning: boolean = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -39,15 +43,28 @@ export class AnimationEngine {
 
   setCharacterConfig(config: CharacterConfig): void {
     this.characterConfig = config;
-    if (!this.animationId) {
+    if (!this.isRunning) {
       this.renderStatic();
     }
   }
 
   setSpeed(speed: number): void {
+    if (this.speedMultiplier === speed) return;
     this.speedMultiplier = speed;
-    if (this.animationId && this.animationSequence) {
-      this.startAnimation(this.currentEmotion!, this.animationSequence);
+    if (this.isRunning && this.animationSequence && this.currentEmotion) {
+      const currentSequence = { ...this.animationSequence };
+      const currentEmotion = this.currentEmotion;
+      this.stopAnimation();
+      this.animationSequence = currentSequence;
+      this.currentEmotion = currentEmotion;
+      this.lastFrameTime = performance.now();
+      this.accumulator = 0;
+      this.particleAccumulator = 0;
+      this.frameCount = 0;
+      this.elapsedTime = 0;
+      this.particles = [];
+      this.isRunning = true;
+      this.animate();
     }
   }
 
@@ -59,10 +76,13 @@ export class AnimationEngine {
     this.stopAnimation();
     this.animationSequence = sequence;
     this.currentEmotion = emotion;
-    this.startTime = performance.now();
+    this.lastFrameTime = performance.now();
+    this.accumulator = 0;
+    this.particleAccumulator = 0;
     this.frameCount = 0;
+    this.elapsedTime = 0;
     this.particles = [];
-    this.particleTimer = 0;
+    this.isRunning = true;
     this.animate();
   }
 
@@ -71,50 +91,67 @@ export class AnimationEngine {
       cancelAnimationFrame(this.animationId);
       this.animationId = null;
     }
+    this.isRunning = false;
     this.animationSequence = null;
     this.currentEmotion = null;
     this.particles = [];
     this.backgroundColor = '#12121e';
+    this.elapsedTime = 0;
+    this.frameCount = 0;
   }
 
   private animate = (): void => {
-    if (!this.animationSequence) return;
+    if (!this.isRunning || !this.animationSequence) return;
 
-    const elapsed = (performance.now() - this.startTime) * this.speedMultiplier;
+    const now = performance.now();
+    let frameTime = now - this.lastFrameTime;
+    this.lastFrameTime = now;
+
+    if (frameTime > 100) frameTime = 100;
+
+    this.accumulator += frameTime * this.speedMultiplier;
+
+    const particleInterval = 50;
+    this.particleAccumulator += frameTime * this.speedMultiplier;
+    while (this.particleAccumulator >= particleInterval && this.particles.length < MAX_PARTICLES) {
+      this.emitParticle(this.currentEmotion!);
+      this.particleAccumulator -= particleInterval;
+    }
+
+    while (this.accumulator >= FRAME_DURATION) {
+      this.updateParticles(FRAME_DURATION / 1000);
+      this.accumulator -= FRAME_DURATION;
+      this.elapsedTime += FRAME_DURATION;
+      this.frameCount++;
+    }
+
     const duration = this.animationSequence.duration;
-    const progress = Math.min(elapsed / duration, 1);
-    const totalFrames = Math.floor(duration / 1000 * FPS);
+    let progress = Math.min(this.elapsedTime / duration, 1);
+
+    if (progress >= 1) {
+      this.elapsedTime = 0;
+      progress = 0;
+      this.frameCount = 0;
+    }
 
     const keyframes = this.animationSequence.keyframes;
     const currentFrameData = this.interpolateKeyframes(keyframes, progress);
-
     this.backgroundColor = currentFrameData.backgroundColor;
-    this.updateParticles();
-    this.particleTimer++;
-    
-    if (this.particleTimer % 3 === 0 && this.particles.length < MAX_PARTICLES) {
-      this.emitParticle(this.currentEmotion!);
-    }
+
+    const totalFrames = Math.floor(duration / FRAME_DURATION);
 
     this.render(currentFrameData);
 
-    this.frameCount++;
     const state: AnimationState = {
       isPlaying: true,
       currentEmotion: this.currentEmotion,
-      currentFrame: this.frameCount,
+      currentFrame: this.frameCount % totalFrames,
       totalFrames,
       progress
     };
     this.onFrameUpdate?.(state);
 
-    if (progress < 1) {
-      this.animationId = requestAnimationFrame(this.animate);
-    } else {
-      this.startTime = performance.now();
-      this.frameCount = 0;
-      this.animationId = requestAnimationFrame(this.animate);
-    }
+    this.animationId = requestAnimationFrame(this.animate);
   };
 
   private interpolateKeyframes(keyframes: Keyframe[], progress: number): Keyframe {
@@ -168,70 +205,89 @@ export class AnimationEngine {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2 - 60;
 
+    if (this.particles.length >= MAX_PARTICLES) return;
+
     const particle: Particle = {
       x: centerX + (Math.random() - 0.5) * 40,
       y: centerY,
-      vx: (Math.random() - 0.5) * 2,
+      vx: 0,
       vy: 0,
       radius: 3 + Math.random() * 3,
       color: '#ffffff',
       alpha: 1,
       life: 0,
-      maxLife: 60 + Math.random() * 30
+      maxLife: 1.5 + Math.random() * 1
     };
 
     switch (emotion) {
       case 'happy':
-        particle.vy = -1 - Math.random() * 2;
+        particle.vy = -60 - Math.random() * 60;
+        particle.vx = (Math.random() - 0.5) * 40;
         particle.color = ['#ffd700', '#ff6b6b', '#4ecdc4', '#ffe66d', '#95e1d3'][Math.floor(Math.random() * 5)];
+        particle.radius = 3 + Math.random() * 3;
+        particle.maxLife = 1.5 + Math.random() * 1;
         break;
       case 'sad':
-        particle.vy = 1 + Math.random() * 2;
-        particle.vx = (Math.random() - 0.5) * 0.5;
+        particle.y = centerY - 80;
+        particle.x = centerX + (Math.random() - 0.5) * 100;
+        particle.vy = 80 + Math.random() * 60;
+        particle.vx = (Math.random() - 0.5) * 10;
         particle.color = '#4dabf7';
         particle.radius = 2 + Math.random() * 2;
+        particle.maxLife = 2 + Math.random() * 1;
         break;
       case 'angry':
-        particle.vy = -2 - Math.random() * 2;
-        particle.vx = (Math.random() - 0.5) * 3;
+        particle.vy = -100 - Math.random() * 80;
+        particle.vx = (Math.random() - 0.5) * 60;
         particle.color = ['#fa5252', '#fd7e14', '#ff922b'][Math.floor(Math.random() * 3)];
+        particle.radius = 4 + Math.random() * 4;
+        particle.maxLife = 1 + Math.random() * 0.8;
         break;
       case 'surprised':
-        particle.vy = -1.5 - Math.random() * 1.5;
-        particle.vx = (Math.random() - 0.5) * 4;
+        particle.vy = -80 - Math.random() * 60;
+        particle.vx = (Math.random() - 0.5) * 100;
         particle.color = ['#9775fa', '#b197fc', '#e599f7'][Math.floor(Math.random() * 3)];
+        particle.radius = 3 + Math.random() * 4;
+        particle.maxLife = 1.2 + Math.random() * 0.8;
         break;
       case 'scared':
-        particle.vy = -0.5 - Math.random() * 1;
-        particle.vx = (Math.random() - 0.5) * 1;
+        particle.vy = -30 - Math.random() * 40;
+        particle.vx = (Math.random() - 0.5) * 20;
         particle.color = '#20c997';
+        particle.radius = 2 + Math.random() * 2;
+        particle.maxLife = 2 + Math.random() * 1;
         break;
       case 'bored':
-        particle.vy = -0.3;
-        particle.vx = 0.3 + Math.random() * 0.3;
+        particle.vy = -15;
+        particle.vx = 15 + Math.random() * 10;
         particle.color = '#868e96';
-        particle.maxLife = 120;
+        particle.radius = 3 + Math.random() * 2;
+        particle.maxLife = 3 + Math.random() * 2;
         break;
     }
 
     this.particles.push(particle);
   }
 
-  private updateParticles(): void {
+  private updateParticles(deltaTime: number): void {
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
-      p.x += p.vx;
-      p.y += p.vy;
-      p.life++;
-      p.alpha = 1 - p.life / p.maxLife;
+      p.x += p.vx * deltaTime;
+      p.y += p.vy * deltaTime;
+      p.life += deltaTime;
+      p.alpha = Math.max(0, 1 - p.life / p.maxLife);
 
       if (this.currentEmotion === 'sad') {
-        p.vy += 0.1;
+        p.vy += 200 * deltaTime;
       } else if (this.currentEmotion === 'happy') {
-        p.vx += (Math.random() - 0.5) * 0.3;
+        p.vx += (Math.random() - 0.5) * 20 * deltaTime * 60;
+        p.vy -= 5 * deltaTime * 60;
+      } else if (this.currentEmotion === 'angry') {
+        p.vy -= 30 * deltaTime * 60;
+        p.radius *= 0.995;
       }
 
-      if (p.life >= p.maxLife || p.alpha <= 0) {
+      if (p.life >= p.maxLife || p.alpha <= 0 || p.radius <= 0.5) {
         this.particles.splice(i, 1);
       }
     }
@@ -254,19 +310,23 @@ export class AnimationEngine {
   private drawParticles(): void {
     this.particles.forEach(p => {
       this.ctx.save();
-      this.ctx.globalAlpha = p.alpha;
+      this.ctx.globalAlpha = Math.max(0, Math.min(1, p.alpha));
       this.ctx.fillStyle = p.color;
-      
+
       if (this.currentEmotion === 'happy') {
         this.drawStar(p.x, p.y, 5, p.radius, p.radius * 0.5);
       } else if (this.currentEmotion === 'sad') {
         this.drawDrop(p.x, p.y, p.radius);
+      } else if (this.currentEmotion === 'angry') {
+        this.drawFlame(p.x, p.y, p.radius);
+      } else if (this.currentEmotion === 'surprised') {
+        this.drawSparkle(p.x, p.y, p.radius);
       } else {
         this.ctx.beginPath();
-        this.ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        this.ctx.arc(p.x, p.y, Math.max(0.5, p.radius), 0, Math.PI * 2);
         this.ctx.fill();
       }
-      
+
       this.ctx.restore();
     });
   }
@@ -299,9 +359,32 @@ export class AnimationEngine {
 
   private drawDrop(x: number, y: number, r: number): void {
     this.ctx.beginPath();
+    this.ctx.moveTo(x, y - r * 1.8);
+    this.ctx.quadraticCurveTo(x + r, y, x, y + r * 0.8);
+    this.ctx.quadraticCurveTo(x - r, y, x, y - r * 1.8);
+    this.ctx.fill();
+  }
+
+  private drawFlame(x: number, y: number, r: number): void {
+    this.ctx.beginPath();
+    this.ctx.moveTo(x, y - r * 2);
+    this.ctx.quadraticCurveTo(x + r, y - r, x + r * 0.8, y);
+    this.ctx.quadraticCurveTo(x, y + r * 0.5, x - r * 0.8, y);
+    this.ctx.quadraticCurveTo(x - r, y - r, x, y - r * 2);
+    this.ctx.fill();
+  }
+
+  private drawSparkle(x: number, y: number, r: number): void {
+    this.ctx.beginPath();
     this.ctx.moveTo(x, y - r * 1.5);
-    this.ctx.quadraticCurveTo(x + r, y, x, y + r);
-    this.ctx.quadraticCurveTo(x - r, y, x, y - r * 1.5);
+    this.ctx.lineTo(x, y + r * 1.5);
+    this.ctx.moveTo(x - r * 1.5, y);
+    this.ctx.lineTo(x + r * 1.5, y);
+    this.ctx.lineWidth = Math.max(1, r * 0.4);
+    this.ctx.strokeStyle = this.ctx.fillStyle;
+    this.ctx.stroke();
+    this.ctx.beginPath();
+    this.ctx.arc(x, y, r * 0.5, 0, Math.PI * 2);
     this.ctx.fill();
   }
 

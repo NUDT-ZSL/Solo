@@ -17,6 +17,18 @@ app.use(express.json());
 
 let db;
 
+const rowsToObjects = (result) => {
+  if (!result || result.length === 0) return [];
+  const columns = result[0].columns;
+  return result[0].values.map(row => {
+    const obj = {};
+    columns.forEach((col, i) => {
+      obj[col] = row[i];
+    });
+    return obj;
+  });
+};
+
 const initDatabase = async () => {
   const SQL = await initSqlJs();
 
@@ -29,6 +41,17 @@ const initDatabase = async () => {
     console.log('新SQLite数据库已创建');
   }
 
+  db.run('PRAGMA foreign_keys = ON');
+
+  db.run(`CREATE TABLE IF NOT EXISTS animations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    emotion TEXT UNIQUE NOT NULL,
+    duration INTEGER NOT NULL,
+    keyframes TEXT NOT NULL,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
   db.run(`CREATE TABLE IF NOT EXISTS characters (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -36,21 +59,15 @@ const initDatabase = async () => {
     clothingColor TEXT NOT NULL,
     hairstyle INTEGER NOT NULL,
     eyeStyle INTEGER NOT NULL,
-    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    animationId INTEGER,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (animationId) REFERENCES animations(id) ON DELETE SET NULL
   )`);
 
-  db.run(`CREATE TABLE IF NOT EXISTS animations (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    emotion TEXT UNIQUE NOT NULL,
-    duration INTEGER NOT NULL,
-    keyframes TEXT NOT NULL
-  )`);
+  const animResult = db.exec('SELECT COUNT(*) as count FROM animations');
+  const animCount = animResult[0]?.values[0]?.[0] || 0;
 
-  const result = db.exec('SELECT COUNT(*) as count FROM animations');
-  const count = result[0]?.values[0]?.[0] || 0;
-
-  if (count === 0) {
+  if (animCount === 0) {
     const presetAnimations = [
       {
         name: '开心',
@@ -142,21 +159,14 @@ const saveDatabase = () => {
   fs.writeFileSync(DB_FILE, buffer);
 };
 
-const rowsToObjects = (result) => {
-  if (!result || result.length === 0) return [];
-  const columns = result[0].columns;
-  return result[0].values.map(row => {
-    const obj = {};
-    columns.forEach((col, i) => {
-      obj[col] = row[i];
-    });
-    return obj;
-  });
-};
-
 app.get('/api/characters', (_, res) => {
   try {
-    const result = db.exec('SELECT * FROM characters ORDER BY createdAt DESC');
+    const result = db.exec(`
+      SELECT c.*, a.name as animationName, a.emotion as animationEmotion
+      FROM characters c
+      LEFT JOIN animations a ON c.animationId = a.id
+      ORDER BY c.createdAt DESC
+    `);
     const characters = rowsToObjects(result);
     res.json(characters);
   } catch (err) {
@@ -167,14 +177,23 @@ app.get('/api/characters', (_, res) => {
 app.get('/api/characters/:id', (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const stmt = db.prepare('SELECT * FROM characters WHERE id = ?');
-    const result = stmt.getAsObject([id]);
+    const stmt = db.prepare(`
+      SELECT c.*, a.name as animationName, a.emotion as animationEmotion
+      FROM characters c
+      LEFT JOIN animations a ON c.animationId = a.id
+      WHERE c.id = ?
+    `);
+    stmt.bind([id]);
+    let character = null;
+    if (stmt.step()) {
+      character = stmt.getAsObject();
+    }
     stmt.free();
-    if (!result || !result.id) {
+    if (!character || !character.id) {
       res.status(404).json({ error: 'Character not found' });
       return;
     }
-    res.json(result);
+    res.json(character);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -182,12 +201,13 @@ app.get('/api/characters/:id', (req, res) => {
 
 app.post('/api/characters', (req, res) => {
   try {
-    const { name, skinColor, clothingColor, hairstyle, eyeStyle } = req.body;
+    const { name, skinColor, clothingColor, hairstyle, eyeStyle, animationId } = req.body;
     const stmt = db.prepare(
-      'INSERT INTO characters (name, skinColor, clothingColor, hairstyle, eyeStyle) VALUES (?, ?, ?, ?, ?)'
+      'INSERT INTO characters (name, skinColor, clothingColor, hairstyle, eyeStyle, animationId) VALUES (?, ?, ?, ?, ?, ?)'
     );
-    stmt.run([name, skinColor, clothingColor, hairstyle, eyeStyle]);
-    const id = db.exec('SELECT last_insert_rowid() as id')[0].values[0][0];
+    stmt.run([name, skinColor, clothingColor, hairstyle, eyeStyle, animationId || null]);
+    const result = db.exec('SELECT last_insert_rowid() as id');
+    const id = result[0].values[0][0];
     stmt.free();
     saveDatabase();
     res.json({ id });
@@ -199,11 +219,11 @@ app.post('/api/characters', (req, res) => {
 app.put('/api/characters/:id', (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { name, skinColor, clothingColor, hairstyle, eyeStyle } = req.body;
+    const { name, skinColor, clothingColor, hairstyle, eyeStyle, animationId } = req.body;
     const stmt = db.prepare(
-      'UPDATE characters SET name = ?, skinColor = ?, clothingColor = ?, hairstyle = ?, eyeStyle = ? WHERE id = ?'
+      'UPDATE characters SET name = ?, skinColor = ?, clothingColor = ?, hairstyle = ?, eyeStyle = ?, animationId = ? WHERE id = ?'
     );
-    stmt.run([name, skinColor, clothingColor, hairstyle, eyeStyle, id]);
+    stmt.run([name, skinColor, clothingColor, hairstyle, eyeStyle, animationId || null, id]);
     const changes = db.getRowsModified();
     stmt.free();
     if (changes === 0) {
@@ -237,7 +257,7 @@ app.delete('/api/characters/:id', (req, res) => {
 
 app.get('/api/animations', (_, res) => {
   try {
-    const result = db.exec('SELECT * FROM animations');
+    const result = db.exec('SELECT * FROM animations ORDER BY id');
     const animations = rowsToObjects(result).map(row => ({
       ...row,
       keyframes: JSON.parse(row.keyframes)
@@ -248,10 +268,88 @@ app.get('/api/animations', (_, res) => {
   }
 });
 
+app.get('/api/animations/:id', (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const stmt = db.prepare('SELECT * FROM animations WHERE id = ?');
+    stmt.bind([id]);
+    let animation = null;
+    if (stmt.step()) {
+      animation = stmt.getAsObject();
+    }
+    stmt.free();
+    if (!animation || !animation.id) {
+      res.status(404).json({ error: 'Animation not found' });
+      return;
+    }
+    animation.keyframes = JSON.parse(animation.keyframes);
+    res.json(animation);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/animations', (req, res) => {
+  try {
+    const { name, emotion, duration, keyframes } = req.body;
+    const stmt = db.prepare(
+      'INSERT INTO animations (name, emotion, duration, keyframes) VALUES (?, ?, ?, ?)'
+    );
+    stmt.run([name, emotion, duration, JSON.stringify(keyframes)]);
+    const result = db.exec('SELECT last_insert_rowid() as id');
+    const id = result[0].values[0][0];
+    stmt.free();
+    saveDatabase();
+    res.json({ id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/animations/:id', (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { name, emotion, duration, keyframes } = req.body;
+    const stmt = db.prepare(
+      'UPDATE animations SET name = ?, emotion = ?, duration = ?, keyframes = ? WHERE id = ?'
+    );
+    stmt.run([name, emotion, duration, JSON.stringify(keyframes), id]);
+    const changes = db.getRowsModified();
+    stmt.free();
+    if (changes === 0) {
+      res.status(404).json({ error: 'Animation not found' });
+      return;
+    }
+    saveDatabase();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/animations/:id', (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const stmt = db.prepare('DELETE FROM animations WHERE id = ?');
+    stmt.run([id]);
+    const changes = db.getRowsModified();
+    stmt.free();
+    if (changes === 0) {
+      res.status(404).json({ error: 'Animation not found' });
+      return;
+    }
+    saveDatabase();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 initDatabase().then(() => {
   app.listen(PORT, () => {
     console.log(`后端服务器运行在 http://localhost:${PORT}`);
     console.log(`SQLite数据库文件: ${DB_FILE}`);
+    console.log('外键约束: 已启用');
   });
 }).catch(err => {
   console.error('数据库初始化失败:', err);
