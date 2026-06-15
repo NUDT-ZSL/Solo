@@ -30,6 +30,11 @@ let dragOffsetY = 0;
 let hoveredFurniture: FurnitureItem | null = null;
 let contextTarget: FurnitureItem | null = null;
 let animFrameId = 0;
+let furnitureDirty = true;
+let gridCached = false;
+
+let gridCanvas: OffscreenCanvas | null = null;
+let furnitureCanvas: OffscreenCanvas | null = null;
 
 const canvas = document.getElementById('sceneCanvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -44,23 +49,52 @@ const angleValueEl = document.getElementById('angleValue')!;
 const intensityValueEl = document.getElementById('intensityValue')!;
 const softnessValueEl = document.getElementById('softnessValue')!;
 
-function drawGrid(): void {
-  ctx.strokeStyle = '#d0d0d0';
-  ctx.lineWidth = 1;
+function drawGridToCanvas(targetCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D): void {
+  targetCtx.strokeStyle = '#d0d0d0';
+  targetCtx.lineWidth = 1;
   for (let i = 0; i <= GRID_COLS; i++) {
     const x = i * GRID_SIZE;
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, GRID_ROWS * GRID_SIZE);
-    ctx.stroke();
+    targetCtx.beginPath();
+    targetCtx.moveTo(x, 0);
+    targetCtx.lineTo(x, GRID_ROWS * GRID_SIZE);
+    targetCtx.stroke();
   }
   for (let j = 0; j <= GRID_ROWS; j++) {
     const y = j * GRID_SIZE;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(GRID_COLS * GRID_SIZE, y);
-    ctx.stroke();
+    targetCtx.beginPath();
+    targetCtx.moveTo(0, y);
+    targetCtx.lineTo(GRID_COLS * GRID_SIZE, y);
+    targetCtx.stroke();
   }
+}
+
+function ensureGridCanvas(): OffscreenCanvas {
+  if (!gridCanvas) {
+    gridCanvas = new OffscreenCanvas(CANVAS_W, CANVAS_H);
+    const gctx = gridCanvas.getContext('2d')!;
+    gctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    drawGridToCanvas(gctx);
+  }
+  return gridCanvas;
+}
+
+function ensureFurnitureCanvas(): OffscreenCanvas {
+  if (!furnitureCanvas) {
+    furnitureCanvas = new OffscreenCanvas(CANVAS_W, CANVAS_H);
+  }
+  if (furnitureDirty) {
+    const fctx = furnitureCanvas.getContext('2d')!;
+    fctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    for (const furniture of furnitureList) {
+      drawFurniture(fctx, furniture);
+    }
+    furnitureDirty = false;
+  }
+  return furnitureCanvas;
+}
+
+export function markFurnitureDirty(): void {
+  furnitureDirty = true;
 }
 
 function drawBoundingBox(furniture: FurnitureItem): void {
@@ -103,15 +137,13 @@ function render(): void {
   ctx.fillStyle = '#f0f0f0';
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-  drawGrid();
+  ctx.drawImage(ensureGridCanvas(), 0, 0);
 
   renderShadows(ctx, furnitureList, CANVAS_W, CANVAS_H);
 
   renderLightHalo(ctx, CANVAS_W, CANVAS_H);
 
-  for (const furniture of furnitureList) {
-    drawFurniture(ctx, furniture);
-  }
+  ctx.drawImage(ensureFurnitureCanvas(), 0, 0);
 
   if (hoveredFurniture && !dragging) {
     drawBoundingBox(hoveredFurniture);
@@ -153,6 +185,7 @@ function initFurniturePanel(): void {
       const snappedY = snapToGrid(cy - 35, SNAP_SIZE);
       const furniture = createFurniture(type, snappedX, snappedY);
       furnitureList.push(furniture);
+      markFurnitureDirty();
       markShadowDirty();
     });
 

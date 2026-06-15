@@ -147,6 +147,11 @@ export function drawFurniturePart(
   ctx.restore();
 }
 
+function noise2D(x: number, y: number): number {
+  const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+  return n - Math.floor(n);
+}
+
 function drawFabricTexture(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -155,15 +160,16 @@ function drawFabricTexture(
   h: number
 ): void {
   ctx.save();
-  ctx.globalAlpha = 0.25;
-  ctx.strokeStyle = '#5a4a3a';
-  ctx.lineWidth = 0.5;
 
-  const step = 4;
+  ctx.globalAlpha = 0.35;
+  ctx.strokeStyle = '#4a3a2a';
+  ctx.lineWidth = 0.6;
+
+  const step = 3.5;
   for (let iy = y; iy < y + h; iy += step) {
     ctx.beginPath();
-    for (let ix = x; ix < x + w; ix += 2) {
-      const offset = Math.sin(ix * 0.3 + iy * 0.1) * 0.8;
+    for (let ix = x; ix < x + w; ix += 1.5) {
+      const offset = Math.sin(ix * 0.4 + iy * 0.15) * 1;
       if (ix === x) {
         ctx.moveTo(ix, iy + offset);
       } else {
@@ -173,10 +179,12 @@ function drawFabricTexture(
     ctx.stroke();
   }
 
+  ctx.globalAlpha = 0.3;
+  ctx.strokeStyle = '#5a4a3a';
   for (let ix = x; ix < x + w; ix += step) {
     ctx.beginPath();
-    for (let iy = y; iy < y + h; iy += 2) {
-      const offset = Math.cos(iy * 0.3 + ix * 0.1) * 0.8;
+    for (let iy = y; iy < y + h; iy += 1.5) {
+      const offset = Math.cos(iy * 0.4 + ix * 0.15) * 1;
       if (iy === y) {
         ctx.moveTo(ix + offset, iy);
       } else {
@@ -186,14 +194,24 @@ function drawFabricTexture(
     ctx.stroke();
   }
 
-  ctx.globalAlpha = 0.1;
+  ctx.globalAlpha = 0.12;
   ctx.fillStyle = '#fff';
-  for (let i = 0; i < 8; i++) {
-    const dx = x + Math.random() * w;
-    const dy = y + Math.random() * h;
+  const dotCount = Math.floor(w * h / 200);
+  for (let i = 0; i < dotCount; i++) {
+    const dx = x + noise2D(i * 1.7, x) * w;
+    const dy = y + noise2D(i * 2.3, y) * h;
     ctx.beginPath();
-    ctx.arc(dx, dy, 1, 0, Math.PI * 2);
+    ctx.arc(dx, dy, 0.8, 0, Math.PI * 2);
     ctx.fill();
+  }
+
+  ctx.globalAlpha = 0.08;
+  ctx.fillStyle = '#3a2a1a';
+  const darkCount = Math.floor(w * h / 300);
+  for (let i = 0; i < darkCount; i++) {
+    const dx = x + noise2D(i * 3.1, x + 100) * w;
+    const dy = y + noise2D(i * 2.9, y + 100) * h;
+    ctx.fillRect(dx, dy, 1, 1);
   }
 
   ctx.restore();
@@ -207,7 +225,7 @@ function drawWoodTexture(
   h: number
 ): void {
   ctx.save();
-  ctx.globalAlpha = 0.15;
+  ctx.globalAlpha = 0.18;
   ctx.strokeStyle = '#4a3000';
   ctx.lineWidth = 0.6;
 
@@ -228,10 +246,10 @@ function drawWoodTexture(
   ctx.globalAlpha = 0.08;
   ctx.fillStyle = '#2a1a00';
   for (let i = 0; i < 3; i++) {
-    const kx = x + Math.random() * w * 0.8;
-    const ky = y + Math.random() * h;
+    const kx = x + noise2D(i * 5.3, x + 50) * w * 0.8 + w * 0.1;
+    const ky = y + noise2D(i * 4.7, y + 50) * h;
     ctx.beginPath();
-    ctx.ellipse(kx, ky, 2, 5 + Math.random() * 3, 0, 0, Math.PI * 2);
+    ctx.ellipse(kx, ky, 2, 5 + noise2D(i, y) * 3, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 
