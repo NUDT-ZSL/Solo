@@ -1,0 +1,61 @@
+.activity-card:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15) !important;
+}
+
+.ripple-button:hover {
+  filter: brightness(1.05);
+}
+
+.ripple-button:active {
+  transform: translateY(1px);
+}
+
+.month-arrow:hover {
+  background-color: var(--card-bg-light);
+}
+
+.modal-backdrop {
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-content {
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 768px) {
+  .activity-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .info-row-responsive {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .activity-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .item-content-responsive {
+    flex-direction: column !important;
+  }
+  .bid-section-responsive {
+    flex-wrap: wrap !important;
+  }
+}
