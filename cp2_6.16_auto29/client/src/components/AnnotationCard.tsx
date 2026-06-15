@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { likeAnnotation, getComments, addComment } from '../api';
 import type { Annotation, Comment } from '../types';
 
@@ -8,6 +8,24 @@ interface AnnotationCardProps {
   currentUserName: string;
 }
 
+const commentInputStyle: React.CSSProperties = {
+  flex: 1,
+  border: '1px solid #ddd',
+  borderRadius: 8,
+  padding: '4px 10px',
+  fontSize: 12,
+  outline: 'none',
+};
+
+const mainCommentInputStyle: React.CSSProperties = {
+  flex: 1,
+  border: '1px solid #ddd',
+  borderRadius: 8,
+  padding: '6px 10px',
+  fontSize: 12,
+  outline: 'none',
+};
+
 export default function AnnotationCard({ annotation, currentUserId, currentUserName }: AnnotationCardProps) {
   const [likes, setLikes] = useState(annotation.likes);
   const [liked, setLiked] = useState(false);
@@ -16,12 +34,29 @@ export default function AnnotationCard({ annotation, currentUserId, currentUserN
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState('');
+  const [totalCommentsCount, setTotalCommentsCount] = useState(0);
+  const commentInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const checkLikeStatus = async () => {
+      const res = await fetch(`/api/annotations/like/status?annotationId=${annotation.id}&userId=${currentUserId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLiked(data.liked);
+      }
+    };
+    checkLikeStatus();
+  }, [annotation.id, currentUserId]);
+
+  useEffect(() => {
+    setTotalCommentsCount(comments.length);
+  }, [comments]);
 
   const handleLike = async () => {
     const res = await likeAnnotation(annotation.id, currentUserId);
-    if (res.iked !== undefined || res.liked !== undefined) {
-      setLiked(res.liked ?? res.iked);
-      setLikes(prev => prev + (res.likes || (res.liked ?? res.iked ? 1 : -1)));
+    if (res.liked !== undefined) {
+      setLiked(res.liked);
+      setLikes(prev => res.liked ? prev + 1 : prev - 1);
     }
   };
 
@@ -34,7 +69,11 @@ export default function AnnotationCard({ annotation, currentUserId, currentUserN
     setShowComments(true);
     const data = await getComments(annotation.id);
     setComments(data);
+    setTotalCommentsCount(data.length);
     setCommentsLoading(false);
+    setTimeout(() => {
+      commentInputRef.current?.focus();
+    }, 100);
   };
 
   const handleSubmitComment = async (parentId: string | null, body: string) => {
@@ -66,6 +105,12 @@ export default function AnnotationCard({ annotation, currentUserId, currentUserN
   const getReplies = (parentId: string) => comments.filter(c => c.parent_id === parentId);
 
   return (
+    <>
+      <style>{`
+        .annotation-comment-input:focus {
+          border-color: #7e57c2 !important;
+        }
+      `}</style>
     <div
       id={`annotation-${annotation.id}`}
       style={{
@@ -153,7 +198,7 @@ export default function AnnotationCard({ annotation, currentUserId, currentUserN
             transition: 'all 0.2s ease',
           }}
         >
-          💬 {comments.length || '回复'}
+          💬 {totalCommentsCount}
         </button>
       </div>
 
@@ -241,14 +286,8 @@ export default function AnnotationCard({ annotation, currentUserId, currentUserN
                         onChange={e => setReplyBody(e.target.value)}
                         placeholder="回复..."
                         autoFocus
-                        style={{
-                          flex: 1,
-                          border: '1px solid #ddd',
-                          borderRadius: 8,
-                          padding: '4px 10px',
-                          fontSize: 12,
-                          outline: 'none',
-                        }}
+                        className="annotation-comment-input annotation-input"
+                        style={{ ...commentInputStyle, transition: 'border-color 0.2s ease' }}
                         onKeyDown={e => {
                           if (e.key === 'Enter' && replyBody.trim()) {
                             handleSubmitComment(cm.id, replyBody).then(() => {
@@ -291,15 +330,10 @@ export default function AnnotationCard({ annotation, currentUserId, currentUserN
               <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                 <input
                   type="text"
+                  ref={commentInputRef}
                   placeholder="添加评论..."
-                  style={{
-                    flex: 1,
-                    border: '1px solid #ddd',
-                    borderRadius: 8,
-                    padding: '6px 10px',
-                    fontSize: 12,
-                    outline: 'none',
-                  }}
+                  className="annotation-comment-input annotation-input"
+                  style={{ ...mainCommentInputStyle, transition: 'border-color 0.2s ease' }}
                   onKeyDown={e => {
                     const target = e.target as HTMLInputElement;
                     if (e.key === 'Enter' && target.value.trim()) {
@@ -315,5 +349,6 @@ export default function AnnotationCard({ annotation, currentUserId, currentUserN
         </div>
       )}
     </div>
+    </>
   );
 }

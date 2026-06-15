@@ -38,6 +38,7 @@ export default function BookLibrary({ navigate, onSelectBook }: BookLibraryProps
         </p>
       </div>
       <div
+        className="book-library-grid"
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',

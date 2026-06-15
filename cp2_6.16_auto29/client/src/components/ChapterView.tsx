@@ -124,11 +124,23 @@ export default function ChapterView({
   }
 
   const renderHighlightedContent = () => {
-    if (!chapter.annotations || chapter.annotations.length === 0) {
+    const allAnnotations = [...(chapter.annotations || [])];
+
+    if (selectionInfo) {
+      allAnnotations.push({
+        id: 'temp-highlight',
+        start_offset: selectionInfo.startOffset,
+        end_offset: selectionInfo.endOffset,
+        highlight_color: selectedColor,
+        selected_text: selectionInfo.text,
+      } as any);
+    }
+
+    if (allAnnotations.length === 0) {
       return chapter.content;
     }
 
-    const sortedAnnotations = [...chapter.annotations].sort(
+    const sortedAnnotations = [...allAnnotations].sort(
       (a, b) => a.start_offset - b.start_offset
     );
 
@@ -143,6 +155,7 @@ export default function ChapterView({
           </span>
         );
       }
+      const isTemp = ann.id === 'temp-highlight';
       parts.push(
         <mark
           key={`hl-${ann.id}`}
@@ -150,16 +163,26 @@ export default function ChapterView({
             backgroundColor: ann.highlight_color + '80',
             borderRadius: 3,
             padding: '1px 2px',
-            cursor: 'pointer',
+            cursor: isTemp ? 'default' : 'pointer',
             borderBottom: `2px solid ${ann.highlight_color}`,
             transition: 'background-color 0.2s ease',
           }}
           onClick={() => {
-            const el = document.getElementById(`annotation-${ann.id}`);
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (!isTemp) {
+              const el = document.getElementById(`annotation-${ann.id}`);
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
           }}
-          onMouseEnter={e => (e.currentTarget.style.backgroundColor = ann.highlight_color + 'cc')}
-          onMouseLeave={e => (e.currentTarget.style.backgroundColor = ann.highlight_color + '80')}
+          onMouseEnter={e => {
+            if (!isTemp) {
+              e.currentTarget.style.backgroundColor = ann.highlight_color + 'cc';
+            }
+          }}
+          onMouseLeave={e => {
+            if (!isTemp) {
+              e.currentTarget.style.backgroundColor = ann.highlight_color + '80';
+            }
+          }}
         >
           {chapter.content.slice(ann.start_offset, ann.end_offset)}
         </mark>
@@ -398,6 +421,7 @@ export default function ChapterView({
                   ))}
                 </div>
                 <textarea
+                  className="annotation-input"
                   value={annotationBody}
                   onChange={e => setAnnotationBody(e.target.value.slice(0, 500))}
                   placeholder="写下你的批注（最多500字）..."
@@ -413,8 +437,6 @@ export default function ChapterView({
                     fontFamily: 'inherit',
                     transition: 'border-color 0.2s ease',
                   }}
-                  onFocus={e => (e.currentTarget.style.borderColor = '#7e57c2')}
-                  onBlur={e => (e.currentTarget.style.borderColor = '#ddd')}
                   autoFocus
                 />
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, alignItems: 'center' }}>
@@ -505,16 +527,8 @@ export default function ChapterView({
       </div>
 
       <style>{`
-        @media (max-width: 768px) {
-          .chapter-layout {
-            flex-direction: column !important;
-          }
-          .chapter-content-panel {
-            flex: 1 1 100% !important;
-          }
-          .chapter-annotations-panel {
-            flex: 1 1 100% !important;
-          }
+        .annotation-input:focus {
+          border-color: #7e57c2 !important;
         }
       `}</style>
     </div>
@@ -622,8 +636,12 @@ function ChapterDiscussion({
             <div key={cm.id} style={{ marginBottom: 16 }}>
               <CommentItem
                 comment={cm}
-                onReply={() => setReplyTo(cm.id)}
+                onReply={() => {
+                  setReplyTo(cm.id);
+                  setReplyBody('');
+                }}
                 formatRelativeTime={formatRelativeTime}
+                isReply={false}
               />
               {getReplies(cm.id).map(reply => (
                 <div key={reply.id} style={{ marginLeft: 20 }}>
@@ -631,6 +649,7 @@ function ChapterDiscussion({
                     comment={reply}
                     onReply={null}
                     formatRelativeTime={formatRelativeTime}
+                    isReply={true}
                   />
                 </div>
               ))}
@@ -645,7 +664,10 @@ function ChapterDiscussion({
                     }}
                     value={replyBody}
                     onChange={setReplyBody}
-                    onCancel={() => setReplyTo(null)}
+                    onCancel={() => {
+                      setReplyTo(null);
+                      setReplyBody('');
+                    }}
                   />
                 </div>
               )}
@@ -657,6 +679,7 @@ function ChapterDiscussion({
       <div style={{ display: 'flex', gap: 8 }}>
         <input
           type="text"
+          className="annotation-input"
           value={newComment}
           onChange={e => setNewComment(e.target.value)}
           placeholder="发表你的看法..."
@@ -669,8 +692,6 @@ function ChapterDiscussion({
             outline: 'none',
             transition: 'border-color 0.2s ease',
           }}
-          onFocus={e => (e.currentTarget.style.borderColor = '#7e57c2')}
-          onBlur={e => (e.currentTarget.style.borderColor = '#ddd')}
           onKeyDown={e => {
             if (e.key === 'Enter' && newComment.trim()) {
               handleSubmitComment(null, newComment).then(() => setNewComment(''));
@@ -706,30 +727,37 @@ function CommentItem({
   comment,
   onReply,
   formatRelativeTime,
+  isReply = false,
 }: {
   comment: Comment;
   onReply: (() => void) | null;
   formatRelativeTime: (d: string) => string;
+  isReply?: boolean;
 }) {
+  const avatarSize = isReply ? 28 : 32;
   return (
     <div
       style={{
         display: 'flex',
         gap: 10,
         padding: '8px 0',
+        paddingLeft: isReply ? 10 : 0,
+        borderLeft: isReply ? '3px solid #e0e0e0' : 'none',
+        background: isReply ? '#fafafa' : 'transparent',
+        borderRadius: isReply ? '0 8px 8px 0' : 0,
       }}
     >
       <div
         style={{
-          width: 32,
-          height: 32,
+          width: avatarSize,
+          height: avatarSize,
           borderRadius: '50%',
           background: '#7e57c2',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           color: 'white',
-          fontSize: 13,
+          fontSize: isReply ? 12 : 13,
           fontWeight: 700,
           flexShrink: 0,
         }}
@@ -778,6 +806,7 @@ function ReplyInput({
     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
       <input
         type="text"
+        className="annotation-input"
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder="回复..."
@@ -791,8 +820,6 @@ function ReplyInput({
           outline: 'none',
           transition: 'border-color 0.2s ease',
         }}
-        onFocus={e => (e.currentTarget.style.borderColor = '#7e57c2')}
-        onBlur={e => (e.currentTarget.style.borderColor = '#ddd')}
         onKeyDown={e => {
           if (e.key === 'Enter' && value.trim()) {
             onSubmit(value);
