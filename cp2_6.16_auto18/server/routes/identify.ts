@@ -43,7 +43,7 @@ router.post('/', upload.single('image'), async (req, res) => {
         .webp({ quality: 80 })
         .toFile(filePath);
 
-      results = identifyByImage(req.file.originalname || fileName);
+      results = identifyByImage(req.file.originalname || fileName, description);
 
       results = results.map(r => ({
         ...r,
@@ -53,6 +53,7 @@ router.post('/', upload.single('image'), async (req, res) => {
       results = identifyByDescription(description);
     } else {
       return res.status(400).json({
+        success: false,
         error: 'Please provide either an image or a description',
       });
     }

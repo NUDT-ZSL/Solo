@@ -29,11 +29,11 @@ const upload = multer({
   },
 });
 
-router.get('/plant/:plantId', async (req, res) => {
+router.get('/plant/:plantId', (req, res) => {
   try {
     const { plantId } = req.params;
 
-    const records = await allQuery<any>(`
+    const records = allQuery<any>(`
       SELECT 
         id, 
         plant_id as plantId,
@@ -70,7 +70,7 @@ router.post('/plant/:plantId', upload.single('image'), async (req, res) => {
       });
     }
 
-    const plantExists = await getQuery<any>('SELECT id FROM plants WHERE id = ?', [plantId]);
+    const plantExists = getQuery<any>('SELECT id FROM plants WHERE id = ?', [plantId]);
     if (!plantExists) {
       return res.status(404).json({
         success: false,
@@ -85,7 +85,7 @@ router.post('/plant/:plantId', upload.single('image'), async (req, res) => {
       const fileName = `${recordId}.webp`;
       const filePath = join(uploadDir, fileName);
 
-      await sharp(req.file.buffer)
+      sharp(req.file.buffer)
         .resize(800, 800, { fit: 'inside' })
         .webp({ quality: 80 })
         .toFile(filePath);
@@ -98,7 +98,7 @@ router.post('/plant/:plantId', upload.single('image'), async (req, res) => {
       VALUES (?, ?, ?, ?, ?)
     `, [recordId, plantId, date, imagePath, note || '']);
 
-    const record = await getQuery<any>(`
+    const record = getQuery<any>(`
       SELECT 
         id, 
         plant_id as plantId,

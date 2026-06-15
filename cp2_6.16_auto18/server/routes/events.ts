@@ -5,11 +5,11 @@ import type { CareEvent } from '../../src/types';
 
 const router = Router();
 
-router.get('/plant/:plantId', async (req, res) => {
+router.get('/plant/:plantId', (req, res) => {
   try {
     const { plantId } = req.params;
 
-    const events = await allQuery<any>(`
+    const events = allQuery<any>(`
       SELECT 
         id, 
         plant_id as plantId,
@@ -46,7 +46,7 @@ router.post('/plant/:plantId', async (req, res) => {
       });
     }
 
-    const plantExists = await getQuery<any>('SELECT id FROM plants WHERE id = ?', [plantId]);
+    const plantExists = getQuery<any>('SELECT id FROM plants WHERE id = ?', [plantId]);
     if (!plantExists) {
       return res.status(404).json({
         success: false,
@@ -61,7 +61,7 @@ router.post('/plant/:plantId', async (req, res) => {
       VALUES (?, ?, ?, ?, ?)
     `, [eventId, plantId, type, date, note || null]);
 
-    const event = await getQuery<any>(`
+    const event = getQuery<any>(`
       SELECT 
         id, 
         plant_id as plantId,
@@ -90,7 +90,7 @@ router.put('/:id', async (req, res) => {
     const { id } = req.params;
     const { type, date, note } = req.body;
 
-    const existing = await getQuery<any>('SELECT id FROM care_events WHERE id = ?', [id]);
+    const existing = getQuery<any>('SELECT id FROM care_events WHERE id = ?', [id]);
     if (!existing) {
       return res.status(404).json({
         success: false,
@@ -104,7 +104,7 @@ router.put('/:id', async (req, res) => {
       WHERE id = ?
     `, [type, date, note || null, id]);
 
-    const event = await getQuery<any>(`
+    const event = getQuery<any>(`
       SELECT 
         id, 
         plant_id as plantId,

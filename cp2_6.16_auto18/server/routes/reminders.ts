@@ -134,9 +134,9 @@ function generateReminders(plant: Plant, lastEvents: CareEvent[]): Reminder[] {
   return reminders;
 }
 
-router.get('/', async (req, res) => {
+router.get('/', (req, res) => {
   try {
-    const plantsResult = await allQuery<any>(`
+    const plantsResult = allQuery<any>(`
       SELECT 
         id, 
         name, 
@@ -157,7 +157,7 @@ router.get('/', async (req, res) => {
     const allReminders: Reminder[] = [];
 
     for (const plant of plants) {
-      const events = await allQuery<any>(`
+      const events = allQuery<any>(`
         SELECT 
           id, 
           plant_id as plantId,
@@ -193,7 +193,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/:id/complete', async (req, res) => {
+router.post('/:id/complete', (req, res) => {
   try {
     const { id } = req.params;
     completedReminders.set(id, true);

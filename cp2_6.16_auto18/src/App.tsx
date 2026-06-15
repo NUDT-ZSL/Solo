@@ -3,8 +3,11 @@ import Navbar from "@/components/Navbar";
 import Home from "@/pages/Home";
 import PlantDetail from "@/pages/PlantDetail";
 import MyGarden from "@/pages/MyGarden";
+import { useRipple } from "@/hooks/useRipple";
 
 export default function App() {
+  useRipple();
+
   return (
     <Router>
       <div className="min-h-screen flex flex-col">

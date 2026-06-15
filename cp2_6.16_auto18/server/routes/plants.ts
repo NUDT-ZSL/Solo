@@ -6,9 +6,9 @@ import type { Plant } from '../../src/types';
 
 const router = Router();
 
-router.get('/', async (req, res) => {
+router.get('/', (req, res) => {
   try {
-    const plants = await allQuery<any>(`
+    const plants = allQuery<any>(`
       SELECT 
         id, 
         name, 
@@ -38,11 +38,11 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', (req, res) => {
   try {
     const { id } = req.params;
 
-    const plant = await getQuery<any>(`
+    const plant = getQuery<any>(`
       SELECT 
         id, 
         name, 
@@ -152,7 +152,7 @@ router.put('/:id', async (req, res) => {
     const { id } = req.params;
     const { name, scientificName, image, description, light, water, temperature, soil, location } = req.body;
 
-    const existing = await getQuery<any>('SELECT id FROM plants WHERE id = ?', [id]);
+    const existing = getQuery<any>('SELECT id FROM plants WHERE id = ?', [id]);
     if (!existing) {
       return res.status(404).json({
         success: false,
