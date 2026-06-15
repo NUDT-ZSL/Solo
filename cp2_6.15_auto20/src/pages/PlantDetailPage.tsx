@@ -20,7 +20,6 @@ const PlantDetailPage: React.FC = () => {
   const [selectedPlant, setSelectedPlant] = useState<Plant | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const [userName, setUserName] = useState(() => localStorage.getItem('visitorName') || '访客');
-  const [gridSize, setGridSize] = useState(9);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const loadData = useCallback(async () => {
@@ -37,15 +36,6 @@ const PlantDetailPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  useEffect(() => {
-    const handleResize = () => {
-      setGridSize(window.innerWidth < 768 ? 5 : 9);
-    };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

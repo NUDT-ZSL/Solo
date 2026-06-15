@@ -15,7 +15,18 @@ export function useGarden() {
   const [myGarden, setMyGarden] = useState<Garden | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const growthTimerRef = useRef<number | null>(null);
+  const refreshTimerRef = useRef<number | null>(null);
+  const myGardenIdRef = useRef<number | null>(null);
+
+  const refreshMyGardenPlants = useCallback(async () => {
+    if (myGardenIdRef.current === null) return;
+    try {
+      const res = await axiosInstance.get(`/gardens/${myGardenIdRef.current}/plants`);
+      setPlants(res.data);
+    } catch (err: any) {
+      // silent failure
+    }
+  }, []);
 
   const fetchGardens = useCallback(async () => {
     setLoading(true);
@@ -48,6 +59,7 @@ export function useGarden() {
       setMyGarden(res.data);
       setPlants([]);
       localStorage.setItem('myGardenId', String(res.data.id));
+      myGardenIdRef.current = res.data.id;
       return res.data;
     } catch (err: any) {
       setError(err.message || '创建失败');
@@ -65,6 +77,7 @@ export function useGarden() {
       const res = await axiosInstance.get(`/gardens/${savedId}`);
       setMyGarden(res.data);
       setPlants(res.data.plants || []);
+      myGardenIdRef.current = res.data.id;
       return res.data;
     } catch {
       const newGarden = await createGarden('我的植物园');
@@ -148,32 +161,16 @@ export function useGarden() {
   }, []);
 
   const startGrowthTimer = useCallback(() => {
-    if (growthTimerRef.current) return;
-    growthTimerRef.current = window.setInterval(() => {
-      setPlants(prev => {
-        let hasChanges = false;
-        const updated = prev.map(p => {
-          if (p.growthProgress >= 100) return p;
-          const newGrowth = Math.min(100, p.growthProgress + 1);
-          const newStage = newGrowth < 33 ? 0 : newGrowth < 66 ? 1 : 2;
-          if (newGrowth !== p.growthProgress || newStage !== p.stage) {
-            hasChanges = true;
-            return { ...p, growthProgress: newGrowth, stage: newStage };
-          }
-          return p;
-        });
-        if (hasChanges) {
-          return updated;
-        }
-        return prev;
-      });
+    if (refreshTimerRef.current) return;
+    refreshTimerRef.current = window.setInterval(() => {
+      refreshMyGardenPlants();
     }, 2000);
-  }, []);
+  }, [refreshMyGardenPlants]);
 
   const stopGrowthTimer = useCallback(() => {
-    if (growthTimerRef.current) {
-      clearInterval(growthTimerRef.current);
-      growthTimerRef.current = null;
+    if (refreshTimerRef.current) {
+      clearInterval(refreshTimerRef.current);
+      refreshTimerRef.current = null;
     }
   }, []);
 

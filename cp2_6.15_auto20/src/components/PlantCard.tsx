@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type { Plant } from '@/types';
 import { getPlantType, getStageName } from '@/types';
 
@@ -20,9 +20,22 @@ const PlantCard: React.FC<PlantCardProps> = React.memo(({
   const [hovered, setHovered] = useState(false);
   const [showWater, setShowWater] = useState(false);
   const [showFertilize, setShowFertilize] = useState(false);
+  const [isDark, setIsDark] = useState(() =>
+    typeof document !== 'undefined' && document.body.classList.contains('dark')
+  );
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.body.classList.contains('dark'));
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   const pt = useMemo(() => getPlantType(plant.plantType), [plant.plantType]);
   const isMature = plant.growthProgress >= 100;
+
+  const cardBackground = isDark ? '#1e1e1e' : '#ffffff';
 
   const handleWater = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -53,7 +66,7 @@ const PlantCard: React.FC<PlantCardProps> = React.memo(({
         width: '180px',
         height: '220px',
         borderRadius: '12px',
-        background: 'var(--card-bg)',
+        background: cardBackground,
         padding: '12px',
         display: 'flex',
         flexDirection: 'column',
@@ -63,7 +76,7 @@ const PlantCard: React.FC<PlantCardProps> = React.memo(({
         cursor: onClick ? 'pointer' : 'default',
         transform: hovered ? 'translateY(-5px)' : 'translateY(0)',
         boxShadow: hovered ? '0 4px 12px rgba(0,0,0,0.15)' : '0 2px 6px rgba(0,0,0,0.08)',
-        transition: 'transform 0.25s ease, box-shadow 0.25s ease',
+        transition: 'transform 0.25s ease, box-shadow 0.25s ease, background 0.3s ease',
       }}
     >
       {isMature && (

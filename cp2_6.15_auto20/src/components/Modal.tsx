@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 
 interface ModalProps {
   open: boolean;
@@ -15,18 +15,28 @@ const Modal: React.FC<ModalProps> = ({
   width = 400,
   slideUp = false,
 }) => {
+  const [isVisible, setIsVisible] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
+
   useEffect(() => {
     if (open) {
+      setIsVisible(true);
+      setIsAnimating(true);
       document.body.style.overflow = 'hidden';
     } else {
-      document.body.style.overflow = '';
+      setIsAnimating(false);
+      const timer = setTimeout(() => {
+        setIsVisible(false);
+        document.body.style.overflow = '';
+      }, 300);
+      return () => clearTimeout(timer);
     }
     return () => {
       document.body.style.overflow = '';
     };
   }, [open]);
 
-  if (!open) return null;
+  if (!isVisible && !open) return null;
 
   return (
     <div
@@ -34,12 +44,12 @@ const Modal: React.FC<ModalProps> = ({
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0, 0, 0, 0.6)',
+        background: isAnimating ? 'rgba(0, 0, 0, 0.6)' : 'rgba(0, 0, 0, 0)',
         display: 'flex',
         alignItems: slideUp ? 'flex-end' : 'center',
         justifyContent: 'center',
         zIndex: 1000,
-        animation: 'fadeIn 0.2s ease',
+        transition: 'background 0.3s ease',
       }}
     >
       <div
@@ -53,7 +63,11 @@ const Modal: React.FC<ModalProps> = ({
           padding: '24px',
           position: 'relative',
           overflowY: 'auto',
-          animation: slideUp ? 'slideUp 0.4s ease-out' : 'scaleIn 0.3s ease-out',
+          transform: slideUp
+            ? (isAnimating ? 'translateY(0)' : 'translateY(100%)')
+            : (isAnimating ? 'translateY(0) scale(1)' : 'translateY(100%) scale(0.8)'),
+          opacity: isAnimating ? 1 : 0,
+          transition: 'transform 0.4s ease-out, opacity 0.3s ease',
         }}
       >
         <button

@@ -22,7 +22,6 @@ const GardenPage: React.FC = () => {
     stopGrowthTimer,
   } = useGarden();
 
-  const [gridSize, setGridSize] = useState(9);
   const [plantModalOpen, setPlantModalOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedCell, setSelectedCell] = useState<number | null>(null);
@@ -36,15 +35,6 @@ const GardenPage: React.FC = () => {
     fetchMyGarden();
     startGrowthTimer();
     return () => stopGrowthTimer();
-  }, []);
-
-  useEffect(() => {
-    const handleResize = () => {
-      setGridSize(window.innerWidth < 480 ? 5 : 9);
-    };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const handleCellClick = useCallback((index: number, plant?: Plant) => {
@@ -124,7 +114,6 @@ const GardenPage: React.FC = () => {
           ) : (
             <GardenGrid
               plants={plants}
-              gridSize={gridSize}
               onCellClick={handleCellClick}
             />
           )}

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import type { Plant } from '@/types';
 import { getPlantType } from '@/types';
 
@@ -11,10 +11,31 @@ interface GardenGridProps {
 
 const GardenGrid: React.FC<GardenGridProps> = React.memo(({
   plants,
-  gridSize = 9,
+  gridSize: externalGridSize,
   onCellClick,
   readOnly = false,
 }) => {
+  const [internalGridSize, setInternalGridSize] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth <= 320 ? 5 : 6;
+    }
+    return 6;
+  });
+
+  const gridSize = externalGridSize || internalGridSize;
+
+  useEffect(() => {
+    if (externalGridSize) return;
+
+    const handleResize = () => {
+      setInternalGridSize(window.innerWidth <= 320 ? 5 : 6);
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [externalGridSize]);
+
   const plantMap = useMemo(() => {
     const map = new Map<number, Plant>();
     plants.forEach(p => map.set(p.gridIndex, p));
@@ -43,7 +64,7 @@ const GardenGrid: React.FC<GardenGridProps> = React.memo(({
         background: 'var(--grid-bg)',
         borderRadius: '16px',
         width: '100%',
-        maxWidth: gridSize === 9 ? '540px' : '360px',
+        maxWidth: gridSize === 5 ? '320px' : gridSize === 6 ? '400px' : '540px',
         aspectRatio: '1 / 1',
       }}
     >
@@ -79,7 +100,7 @@ const GardenGrid: React.FC<GardenGridProps> = React.memo(({
           >
             {plant && sprite ? (
               <>
-                <span style={{ fontSize: gridSize === 9 ? '22px' : '18px' }}>{sprite}</span>
+                <span style={{ fontSize: gridSize === 5 ? '16px' : gridSize === 6 ? '18px' : '22px' }}>{sprite}</span>
                 <div
                   style={{
                     position: 'absolute',
