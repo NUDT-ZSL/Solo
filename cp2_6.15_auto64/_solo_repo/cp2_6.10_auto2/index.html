@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>影音幻境</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    }
+
+    body {
+      background: radial-gradient(ellipse at center, #1A1A3A 0%, #0B0A1A 100%);
+      color: #fff;
+    }
+
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #game-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .ui-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .ui-overlay > * {
+      pointer-events: auto;
+    }
+
+    .game-header {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      padding: 20px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      z-index: 10;
+    }
+
+    .score-display {
+      font-size: 28px;
+      font-weight: 700;
+      text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .score-label {
+      font-size: 12px;
+      opacity: 0.6;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .combo-display {
+      text-align: right;
+      transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    }
+
+    .combo-number {
+      font-size: 36px;
+      font-weight: 900;
+      background: linear-gradient(135deg, #FFD700, #FFA500);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-shadow: none;
+      filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.5));
+    }
+
+    .combo-label {
+      font-size: 14px;
+      color: #FFD700;
+      opacity: 0.8;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+
+    .combo-bounce {
+      animation: comboBounce 0.3s ease-out;
+    }
+
+    @keyframes comboBounce {
+      0% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+
+    .game-footer {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      padding: 20px 30px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 20px;
+      z-index: 10;
+    }
+
+    .control-btn {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      font-size: 20px;
+    }
+
+    .control-btn:hover {
+      transform: scale(1.1);
+      background: rgba(255, 255, 255, 0.2);
+      box-shadow: 0 4px 20px rgba(255, 255, 255, 0.15);
+    }
+
+    .control-btn:active {
+      transform: translateY(2px) scale(1.05);
+    }
+
+    .control-btn svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .menu-screen, .end-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      background: transparent;
+    }
+
+    .game-title {
+      font-size: 64px;
+      font-weight: 900;
+      letter-spacing: 8px;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #FF6B6B, #4ECDC4, #FFD93D, #FF6B6B);
+      background-size: 300% 300%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: gradientShift 5s ease infinite;
+    }
+
+    @keyframes gradientShift {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    .game-subtitle {
+      font-size: 16px;
+      opacity: 0.6;
+      letter-spacing: 4px;
+      margin-bottom: 50px;
+      text-transform: uppercase;
+    }
+
+    .track-list {
+      display: flex;
+      gap: 30px;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 900px;
+      padding: 0 20px;
+    }
+
+    .track-card {
+      width: 240px;
+      padding: 30px 24px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-align: center;
+    }
+
+    .track-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+
+    .track-color-preview {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      margin: 0 auto 20px;
+      box-shadow: 0 0 30px currentColor;
+    }
+
+    .track-name {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .track-info {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      opacity: 0.7;
+    }
+
+    .track-difficulty {
+      display: flex;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .difficulty-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    .difficulty-dot.active {
+      background: #FFD700;
+      box-shadow: 0 0 8px rgba(255, 215, 0, 0.6);
+    }
+
+    .end-stats {
+      text-align: center;
+      padding: 40px 60px;
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      margin-bottom: 30px;
+    }
+
+    .end-title {
+      font-size: 32px;
+      font-weight: 800;
+      margin-bottom: 30px;
+    }
+
+    .star-rating {
+      font-size: 48px;
+      margin-bottom: 30px;
+      letter-spacing: 10px;
+    }
+
+    .star-empty {
+      opacity: 0.2;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 30px;
+      margin-bottom: 30px 0;
+    }
+
+    .stat-item {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 36px;
+      font-weight: 900;
+      margin-bottom: 6px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      opacity: 0.6;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .end-buttons {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+    }
+
+    .btn {
+      padding: 14px 32px;
+      border-radius: 30px;
+      border: none;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #FF6B6B, #FF8C42);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(255, 107, 107, 0.4);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+    }
+
+    .btn:hover {
+      transform: scale(1.05);
+    }
+
+    .btn:active {
+      transform: translateY(2px) scale(1.02);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .combo-glow {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      box-shadow: inset 0 0 100px rgba(255, 215, 0, 0);
+      transition: box-shadow 0.5s ease;
+    }
+
+    .combo-glow.active {
+      box-shadow: inset 0 0 80px rgba(255, 215, 0, 0.3);
+      animation: glowPulse 2s ease-in-out infinite;
+    }
+
+    @keyframes glowPulse {
+      0%, 100% { box-shadow: inset 0 0 60px rgba(255, 215, 0, 0.2); }
+      50% { box-shadow: inset 0 0 100px rgba(255, 215, 0, 0.4); }
+    }
+
+    .fullscreen-flash {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 215, 0, 0);
+      pointer-events: none;
+      transition: background 0.1s ease;
+    }
+
+    .fullscreen-flash.active {
+      animation: flashScreen 0.3s ease-out;
+    }
+
+    @keyframes flashScreen {
+      0% { background: rgba(255, 215, 0, 0.5); }
+      100% { background: rgba(255, 215, 0, 0); }
+    }
+
+    .loading-text {
+      font-size: 18px;
+      opacity: 0.7;
+      letter-spacing: 4px;
+    }
+
+    .loading-dots::after {
+      content: '';
+      animation: dots 1.5s steps(4, end);
+    }
+
+    @keyframes dots {
+      0% { content: ''; }
+      25% { content: '.'; }
+      50% { content: '..'; }
+      75% { content: '...'; }
+      100% { content: ''; }
+    }
+
+    @media (max-width: 768px) {
+      .game-title {
+        font-size: 36px;
+        letter-spacing: 4px;
+      }
+
+      .track-list {
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .track-card {
+        width: 280px;
+      }
+
+      .game-header {
+        flex-direction: column;
+        align-items: center;
+        padding: 15px 20px;
+      }
+
+      .combo-display {
+        text-align: center;
+        order: -1;
+        margin-bottom: 10px;
+      }
+
+      .score-display {
+        text-align: center;
+      }
+
+      .combo-number {
+        font-size: 28px;
+      }
+
+      .score-display {
+        font-size: 22px;
+      }
+
+      .end-stats {
+        padding: 30px 30px;
+        margin: 0 20px;
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+
+      .end-buttons {
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .btn {
+        width: 200px;
+      }
+    }
+
+    .key-hints {
+      position: absolute;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 20px;
+      z-index: 5;
+    }
+
+    .key-hint {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .key-cap {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+    }
+
+    .key-shape {
+      font-size: 12px;
+      opacity: 0.6;
+    }
+
+    .circle-shape { color: #FF6B6B; }
+    .triangle-shape { color: #4ECDC4; }
+    .diamond-shape { color: #FFD93D; }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+    
+    <div class="ui-overlay">
+      <div class="combo-glow" id="combo-glow"></div>
+      <div class="fullscreen-flash" id="fullscreen-flash"></div>
+
+      <div class="game-header" id="game-header">
+        <div class="score-display">
+          <div class="score-label">得分</div>
+          <div id="score-value">0</div>
+        </div>
+        <div class="combo-display" id="combo-display">
+          <div class="combo-label">连击</div>
+          <div class="combo-number" id="combo-value">0</div>
+        </div>
+      </div>
+
+      <div class="key-hints" id="key-hints">
+        <div class="key-hint">
+          <div class="key-cap circle-shape">F</div>
+          <div class="key-shape">圆形</div>
+        </div>
+        <div class="key-hint">
+          <div class="key-cap triangle-shape">G</div>
+          <div class="key-shape">三角形</div>
+        </div>
+        <div class="key-hint">
+          <div class="key-cap diamond-shape">H</div>
+          <div class="key-shape">菱形</div>
+        </div>
+      </div>
+
+      <div class="game-footer" id="game-footer">
+        <button class="control-btn" id="play-pause-btn" title="播放/暂停">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+        </button>
+        <button class="control-btn" id="sound-btn" title="音效开关">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          </svg>
+        </button>
+      </div>
+
+      <div class="menu-screen" id="menu-screen">
+        <h1 class="game-title">影音幻境</h1>
+        <p class="game-subtitle">Audio Illusion Rhythm Game</p>
+        <div class="track-list" id="track-list"></div>
+      </div>
+
+      <div class="menu-screen hidden" id="loading-screen">
+        <p class="loading-text loading-dots">正在加载</p>
+      </div>
+
+      <div class="menu-screen hidden" id="end-screen">
+        <div class="end-stats">
+          <h2 class="end-title">游戏结束</h2>
+            <div class="star-rating" id="star-rating">★★★</div>
+            <div class="stats-grid">
+              <div class="stat-item">
+                <div class="stat-value" id="final-score">0</div>
+                <div class="stat-label">总得分</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-value" id="final-accuracy">0%</div>
+                <div class="stat-label">命中率</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-value" id="final-maxcombo">0</div>
+                <div class="stat-label">最高连击</div>
+              </div>
+            </div>
+          </div>
+          <div class="end-buttons">
+            <button class="btn btn-primary" id="replay-btn">重新开始</button>
+            <button class="btn btn-secondary" id="replay-watch-btn">一键回放</button>
+            <button class="btn btn-secondary" id="back-menu-btn">返回选曲</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,535 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg-primary: #0F0F1A;
+  --bg-card: #1A1A2E;
+  --text-primary: #E0E0E0;
+  --text-secondary: #A0A0B0;
+  --accent-white: rgba(255, 255, 255, 0.6);
+  --accent-white-strong: rgba(255, 255, 255, 0.9);
+  --scrollbar-bg: #1A1A2E;
+  --scrollbar-thumb: #3A3A5E;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.app-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+.album-list-container {
+  width: 240px;
+  flex-shrink: 0;
+  padding: 20px 16px;
+  overflow-y: auto;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.album-list-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.album-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.album-card {
+  width: 180px;
+  height: 250px;
+  border-radius: 12px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+  transform: translateY(0);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  margin: 0 auto;
+}
+
+.album-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+}
+
+.album-card.selected {
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.6);
+}
+
+.album-card-cover {
+  width: 100%;
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.album-card-initial {
+  font-size: 48px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.5);
+  user-select: none;
+}
+
+.album-card-play-icon {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease-out;
+}
+
+.album-card:hover .album-card-play-icon {
+  opacity: 1;
+}
+
+.album-card-play-icon svg {
+  width: 14px;
+  height: 14px;
+  fill: #1A1A2E;
+  margin-left: 2px;
+}
+
+.album-card-info {
+  height: 70px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.album-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.album-card-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.album-card-meta .dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+}
+
+.album-list-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.album-list-container::-webkit-scrollbar-track {
+  background: var(--scrollbar-bg);
+  border-radius: 3px;
+}
+
+.album-list-container::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+
+.album-list-container::-webkit-scrollbar-thumb:hover {
+  background: #4A4A7E;
+}
+
+.track-viewer-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  position: relative;
+  overflow: hidden;
+}
+
+.track-viewer-content {
+  display: flex;
+  align-items: center;
+  gap: 60px;
+  max-width: 900px;
+  width: 100%;
+  justify-content: center;
+}
+
+.track-chart-wrapper {
+  position: relative;
+  width: 400px;
+  height: 400px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.track-chart-enter,
+.track-chart-exit {
+  position: absolute;
+}
+
+.track-chart-enter {
+  animation: chartEnter 0.5s ease-out forwards;
+}
+
+.track-chart-exit {
+  animation: chartExit 0.5s ease-out forwards;
+}
+
+@keyframes chartEnter {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes chartExit {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+    border-radius: 0;
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 0;
+    border-radius: 50%;
+  }
+}
+
+.track-chart-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  cursor: default;
+}
+
+.track-slice {
+  transition: transform 0.2s ease-out, filter 0.2s ease-out;
+  cursor: pointer;
+  transform-origin: center;
+}
+
+.track-slice:hover {
+  filter: brightness(1.2);
+}
+
+.track-slice.highlighted {
+  fill: rgba(255, 255, 255, 0.3) !important;
+}
+
+.track-tooltip {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.8);
+  color: var(--text-primary);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  pointer-events: none;
+  white-space: nowrap;
+  opacity: 0;
+  animation: tooltipFadeIn 0.2s ease-out forwards;
+  z-index: 10;
+}
+
+@keyframes tooltipFadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.play-button-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 80px;
+  height: 80px;
+  margin-top: -40px;
+  margin-left: -40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.3);
+  animation: playButtonExpand 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  z-index: 5;
+}
+
+.play-button-center svg {
+  width: 32px;
+  height: 32px;
+  fill: #1A1A2E;
+  margin-left: 4px;
+}
+
+@keyframes playButtonExpand {
+  0% {
+    width: 20px;
+    height: 20px;
+    margin-top: -10px;
+    margin-left: -10px;
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    width: 80px;
+    height: 80px;
+    margin-top: -40px;
+    margin-left: -40px;
+    opacity: 1;
+  }
+}
+
+.playing-orbit {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 360px;
+  height: 360px;
+  margin-top: -180px;
+  margin-left: -180px;
+  pointer-events: none;
+  transform-origin: center;
+  animation: orbitRotate 1.5s linear infinite;
+}
+
+@keyframes orbitRotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(-360deg);
+  }
+}
+
+.playing-dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent-white-strong);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+  top: -5px;
+  left: 50%;
+  margin-left: -5px;
+}
+
+.track-detail-panel {
+  width: 320px;
+  flex-shrink: 0;
+  animation: panelSlideIn 0.3s ease-out forwards;
+}
+
+@keyframes panelSlideIn {
+  0% {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.track-detail-header {
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.track-detail-album-name {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+}
+
+.track-detail-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+  margin-bottom: 8px;
+}
+
+.track-detail-artist {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.track-detail-info {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.track-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+}
+
+.track-detail-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.track-detail-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.track-detail-track-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  font-weight: 700;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 40px;
+}
+
+.empty-state-icon {
+  width: 80px;
+  height: 80px;
+  opacity: 0.3;
+}
+
+.empty-state-text {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.empty-state-subtext {
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column;
+  }
+
+  .album-list-container {
+    width: 100%;
+    height: 200px;
+    flex-shrink: 0;
+    padding: 12px 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .album-list-title {
+    display: none;
+  }
+
+  .album-list {
+    flex-direction: row;
+    gap: 16px;
+    height: 100%;
+    align-items: center;
+  }
+
+  .album-card {
+    margin: 0;
+    flex-shrink: 0;
+  }
+
+  .album-list-container::-webkit-scrollbar {
+    width: 0;
+    height: 4px;
+  }
+
+  .album-list-container::-webkit-scrollbar-track {
+    background: var(--scrollbar-bg);
+  }
+
+  .track-viewer-container {
+    padding: 20px;
+    overflow-y: auto;
+  }
+
+  .track-viewer-content {
+    flex-direction: column;
+    gap: 32px;
+  }
+
+  .track-chart-wrapper {
+    width: 320px;
+    height: 320px;
+  }
+
+  .track-detail-panel {
+    width: 100%;
+    max-width: 360px;
+  }
+}

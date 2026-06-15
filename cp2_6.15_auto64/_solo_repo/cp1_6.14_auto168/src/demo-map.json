@@ -1,0 +1,89 @@
+{
+  "startRoom": "start_cave",
+  "rooms": [
+    {
+      "id": "start_cave",
+      "name": "The Starting Cave",
+      "description": "You are in a dimly lit cave. Damp stone walls surround you. The air smells of earth and ancient dust. Faint echoes of dripping water reverberate through the cavern.",
+      "exits": {
+        "east": "main_hall",
+        "north": "side_chamber"
+      },
+      "items": []
+    },
+    {
+      "id": "main_hall",
+      "name": "The Grand Hall",
+      "description": "A vast underground hall stretches before you. Massive stone pillars hold up the high ceiling, disappearing into shadow. Faint moss glows softly on the walls. To the south, an ornate door stands closed.",
+      "exits": {
+        "west": "start_cave",
+        "south": {
+          "room": "treasure_room",
+          "locked": true,
+          "key": "brass_key"
+        },
+        "east": "library"
+      },
+      "items": ["torch", "statue"]
+    },
+    {
+      "id": "side_chamber",
+      "name": "The Side Chamber",
+      "description": "A small, dusty chamber. Shelves line the walls, holding various forgotten objects. A rusted chest sits in the corner, its lid slightly ajar.",
+      "exits": {
+        "south": "start_cave"
+      },
+      "items": ["brass_key"]
+    },
+    {
+      "id": "library",
+      "name": "The Ancient Library",
+      "description": "Rows of crumbling bookshelves fill this room. Most books have turned to dust long ago, but some remain intact. A single candle burns on a wooden desk, illuminating an open tome.",
+      "exits": {
+        "west": "main_hall"
+      },
+      "items": ["old_book"]
+    },
+    {
+      "id": "treasure_room",
+      "name": "The Treasure Chamber",
+      "description": "Piles of gold and jewels glitter in the torchlight. In the center of the room, on a marble pedestal, rests a magnificent golden chest. You have found the treasure! YOU WIN!",
+      "exits": {
+        "north": "main_hall"
+      },
+      "items": ["gold_chest"]
+    }
+  ],
+  "items": [
+    {
+      "id": "brass_key",
+      "name": "Brass Key",
+      "description": "A heavy brass key with intricate carvings. It looks old but well-crafted. It probably opens something important.",
+      "takeable": true
+    },
+    {
+      "id": "torch",
+      "name": "Wooden Torch",
+      "description": "A simple wooden torch. The flame flickers steadily, casting dancing shadows on the walls.",
+      "takeable": true
+    },
+    {
+      "id": "statue",
+      "name": "Stone Statue",
+      "description": "A weathered stone statue of a robed figure. Its eyes seem to follow you around the room. It is far too heavy to move.",
+      "takeable": false
+    },
+    {
+      "id": "old_book",
+      "name": "Ancient Tome",
+      "description": "A leather-bound book filled with cryptic writings. One passage is legible: 'The key to the treasure lies in the side chamber, waiting for those who seek it.'",
+      "takeable": true
+    },
+    {
+      "id": "gold_chest",
+      "name": "Golden Chest",
+      "description": "A magnificent chest made of solid gold, adorned with precious gems. It is the legendary treasure of the ancients. Victory is yours!",
+      "takeable": false
+    }
+  ]
+}

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="尘音寻迹 - 交互式迷路途经回放，记录你的行走记忆">
+  <title>尘音寻迹 | 路径记忆回放</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #1A2332;
+      min-height: 100vh;
+    }
+    
+    .splash-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: #1A2332;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      animation: splashFade 1.5s ease-out forwards;
+      animation-delay: 0.8s;
+    }
+    
+    .splash-logo {
+      font-size: 48px;
+      font-weight: 600;
+      color: #A8D8EA;
+      letter-spacing: 8px;
+      animation: splashLogo 1s ease-out;
+      font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    }
+    
+    .splash-subtitle {
+      margin-top: 16px;
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.5);
+      letter-spacing: 2px;
+      animation: splashText 1s ease-out 0.3s both;
+    }
+    
+    .splash-loading {
+      margin-top: 40px;
+      width: 200px;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+      animation: splashText 1s ease-out 0.5s both;
+    }
+    
+    .splash-loading-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #4A90D9, #6BCB77);
+      animation: loadingBar 0.8s ease-out 0.6s forwards;
+    }
+    
+    @keyframes splashLogo {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    @keyframes splashText {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+    
+    @keyframes loadingBar {
+      from {
+        width: 0%;
+      }
+      to {
+        width: 100%;
+      }
+    }
+    
+    @keyframes splashFade {
+      from {
+        opacity: 1;
+        visibility: visible;
+      }
+      to {
+        opacity: 0;
+        visibility: hidden;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="splash-screen">
+    <div class="splash-logo">尘音寻迹</div>
+    <div class="splash-subtitle">DUST & ECHO · PATH MEMORY</div>
+    <div class="splash-loading">
+      <div class="splash-loading-bar"></div>
+    </div>
+  </div>
+  
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

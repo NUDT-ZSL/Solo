@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>幻境折纸</title>
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1 class="title">幻境折纸</h1>
+      <p class="subtitle">拖动纸片的角点，折叠出立体作品</p>
+    </header>
+
+    <main class="main">
+      <div class="workspace" id="workspace">
+        <div class="canvas-container" id="canvasContainer">
+          <canvas id="paperCanvas" width="640" height="640"></canvas>
+        </div>
+
+        <div class="preview-container" id="previewContainer">
+          <canvas id="previewCanvas"></canvas>
+        </div>
+
+        <button class="toggle-preview-btn" id="togglePreviewBtn" title="显示3D预览">3D</button>
+      </div>
+
+      <div class="template-panel" id="templatePanel">
+        <div class="template-thumbs" id="templateThumbs"></div>
+      </div>
+    </main>
+
+    <div class="achievement" id="achievement"></div>
+
+    <div class="steps-indicator" id="stepsIndicator"></div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

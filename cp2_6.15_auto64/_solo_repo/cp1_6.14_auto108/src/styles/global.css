@@ -1,0 +1,359 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  background: #0b0e1a;
+  color: #ffffff;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #0b0e1a;
+}
+
+.status-bar {
+  height: 50px;
+  background: #0d1117;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid #1a1f2e;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.status-bar .tick-display {
+  font-size: 14px;
+  color: #8a8fa8;
+  font-variant-numeric: tabular-nums;
+}
+
+.status-bar .pause-btn {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 8px 16px;
+  background: #303545;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.status-bar .pause-btn:hover {
+  background: #3a4050;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.building-palette {
+  width: 100px;
+  background: #0f1320;
+  border-right: 1px solid #1a1f2e;
+  padding: 16px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.building-palette .palette-title {
+  font-size: 12px;
+  color: #8a8fa8;
+  margin-bottom: 4px;
+}
+
+.building-card {
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
+  background: #1e2434;
+  border: 2px solid #3a4050;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.building-card:hover {
+  border-color: #5a6070;
+  transform: translateY(-1px);
+}
+
+.building-card.selected {
+  border-color: #64ffda;
+  box-shadow: 0 0 12px rgba(100, 255, 218, 0.5),
+              0 0 24px rgba(100, 255, 218, 0.2);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 12px rgba(100, 255, 218, 0.5),
+                0 0 24px rgba(100, 255, 218, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(100, 255, 218, 0.7),
+                0 0 32px rgba(100, 255, 218, 0.3);
+  }
+}
+
+.building-card .building-icon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.building-card .building-name {
+  font-size: 10px;
+  color: #8a8fa8;
+  margin-top: 4px;
+}
+
+.canvas-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0b0e1a;
+  position: relative;
+  overflow: auto;
+}
+
+.colony-canvas {
+  background: #1a1f2e;
+  border: 1px solid #2a3040;
+  cursor: crosshair;
+  display: block;
+}
+
+.building-tooltip {
+  position: fixed;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.85);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.6;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.building-tooltip .tooltip-title {
+  font-weight: bold;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.building-tooltip .tooltip-level {
+  color: #64ffda;
+  margin-bottom: 6px;
+}
+
+.building-tooltip .tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.building-tooltip .tooltip-row .positive {
+  color: #81c784;
+}
+
+.building-tooltip .tooltip-row .negative {
+  color: #e57373;
+}
+
+.building-menu {
+  position: fixed;
+  background: rgba(14, 18, 30, 0.95);
+  border: 1px solid #3a4050;
+  border-radius: 8px;
+  padding: 8px;
+  z-index: 1000;
+  backdrop-filter: blur(8px);
+  min-width: 140px;
+}
+
+.building-menu button {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: #fff;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 13px;
+  transition: background 0.15s ease;
+}
+
+.building-menu button:hover {
+  background: rgba(100, 255, 218, 0.1);
+  color: #64ffda;
+}
+
+.building-menu button.danger:hover {
+  background: rgba(229, 115, 115, 0.1);
+  color: #e57373;
+}
+
+.building-menu button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.resource-panel {
+  width: 320px;
+  background: #0f1320;
+  border-left: 1px solid #1a1f2e;
+  padding: 16px;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.resource-panel .panel-title {
+  font-size: 12px;
+  color: #8a8fa8;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.resource-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.resource-card {
+  height: 80px;
+  background: #141a28;
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  border: 1px solid #1e2434;
+  transition: border-color 0.3s ease;
+}
+
+.resource-card:hover {
+  border-color: #2a3040;
+}
+
+.resource-card .resource-icon {
+  font-size: 18px;
+  position: absolute;
+  top: 8px;
+  left: 10px;
+}
+
+.resource-card .resource-value {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: bold;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.3s ease;
+}
+
+.resource-card .resource-rate {
+  font-size: 12px;
+  position: absolute;
+  bottom: 8px;
+  right: 10px;
+  color: #8a8fa8;
+  font-variant-numeric: tabular-nums;
+}
+
+.resource-card .resource-rate.positive {
+  color: #81c784;
+}
+
+.resource-card .resource-rate.negative {
+  color: #e57373;
+}
+
+.resource-card .resource-label {
+  font-size: 10px;
+  color: #8a8fa8;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+@media (max-width: 800px) {
+  .main-content {
+    flex-direction: column;
+  }
+
+  .building-palette {
+    width: 100%;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid #1a1f2e;
+    flex-direction: row;
+    padding: 10px 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .building-palette .palette-title {
+    display: none;
+  }
+
+  .canvas-container {
+    order: 2;
+  }
+
+  .resource-panel {
+    width: 100%;
+    height: auto;
+    border-left: none;
+    border-top: 1px solid #1a1f2e;
+    padding: 10px 16px;
+    order: 3;
+  }
+
+  .resource-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+
+  .resource-card {
+    height: 70px;
+  }
+
+  .resource-card .resource-value {
+    font-size: 20px;
+  }
+}

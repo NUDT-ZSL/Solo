@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>星轨回响 - Starlight Echo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #05050A;
+      font-family: monospace;
+    }
+    
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+      position: fixed;
+      top: 0;
+      left: 0;
+    }
+    
+    #ui-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 10;
+    }
+    
+    #stats {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255, 255, 255, 0.7);
+      font-family: monospace;
+      font-size: 14px;
+      text-align: center;
+      text-shadow: 0 0 10px rgba(100, 150, 255, 0.5);
+      pointer-events: none;
+      letter-spacing: 1px;
+    }
+    
+    #controls {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: flex-end;
+      pointer-events: auto;
+    }
+    
+    .theme-buttons {
+      display: flex;
+      gap: 10px;
+    }
+    
+    .theme-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .theme-btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      opacity: 0;
+      box-shadow: 0 0 20px currentColor;
+      transition: opacity 0.3s ease;
+    }
+    
+    .theme-btn:hover {
+      transform: scale(1.2);
+      border-color: rgba(255, 255, 255, 0.8);
+    }
+    
+    .theme-btn:hover::before {
+      opacity: 1;
+    }
+    
+    .theme-btn.active {
+      border-color: #ffffff;
+      box-shadow: 0 0 15px currentColor;
+    }
+    
+    .theme-purple {
+      background: linear-gradient(135deg, #9B59B6, #8E44AD, #E74C3C);
+      color: #9B59B6;
+    }
+    
+    .theme-orange {
+      background: linear-gradient(135deg, #FF6B6B, #FFD93D, #FF8C42);
+      color: #FF6B6B;
+    }
+    
+    .theme-green {
+      background: linear-gradient(135deg, #6BCB77, #4D96FF, #00D9FF);
+      color: #6BCB77;
+    }
+    
+    .theme-blue {
+      background: linear-gradient(135deg, #4D96FF, #00D9FF, #E0FFFF);
+      color: #4D96FF;
+    }
+    
+    .reset-btn {
+      width: 50px;
+      height: 50px;
+      background: #333;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      cursor: pointer;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+      clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
+    }
+    
+    .reset-btn:hover {
+      background: #555;
+      border-color: rgba(255, 255, 255, 0.8);
+      transform: scale(1.1);
+    }
+    
+    .reset-btn svg {
+      width: 24px;
+      height: 24px;
+      fill: rgba(255, 255, 255, 0.7);
+    }
+    
+    .reset-btn:hover svg {
+      fill: #fff;
+    }
+    
+    .hint {
+      position: fixed;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255, 255, 255, 0.4);
+      font-family: monospace;
+      font-size: 11px;
+      text-align: center;
+      pointer-events: none;
+    }
+    
+    @media (max-width: 768px) {
+      #stats {
+        font-size: 11.2px;
+        bottom: 10px;
+      }
+      
+      #controls {
+        top: 10px;
+        right: 10px;
+        gap: 9.6px;
+        align-items: center;
+      }
+      
+      .theme-buttons {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      
+      .theme-btn {
+        width: 25.6px;
+        height: 25.6px;
+      }
+      
+      .reset-btn {
+        width: 40px;
+        height: 40px;
+      }
+      
+      .reset-btn svg {
+        width: 19.2px;
+        height: 19.2px;
+      }
+      
+      .hint {
+        font-size: 8.8px;
+        bottom: 48px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  <div id="ui-overlay">
+    <div id="controls">
+      <div class="theme-buttons">
+        <button class="theme-btn theme-purple active" data-theme="purple" title="星河紫"></button>
+        <button class="theme-btn theme-orange" data-theme="orange" title="烈焰橙"></button>
+        <button class="theme-btn theme-green" data-theme="green" title="极光绿"></button>
+        <button class="theme-btn theme-blue" data-theme="blue" title="冰霜蓝"></button>
+      </div>
+      <button class="reset-btn" id="reset-btn" title="重置星轨">
+        <svg viewBox="0 0 24 24">
+          <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+        </svg>
+      </button>
+    </div>
+    <div id="stats">粒子: 0 | FPS: 0</div>
+    <div class="hint">左键点击生成星轨 | 右键拖拽旋转视角 | 滚轮缩放 | W键切换模式 | S键清除星轨</div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

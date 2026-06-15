@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>塔防游戏</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: #0f172a;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    #statusBar {
+      background-color: #1e293b;
+      height: 60px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      border-bottom: 1px solid #334155;
+    }
+
+    #infoDisplay {
+      display: flex;
+      gap: 32px;
+    }
+
+    .info-item {
+      font-weight: bold;
+      font-size: 16px;
+      color: #fbbf24;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #buttonContainer {
+      display: flex;
+      gap: 12px;
+    }
+
+    .game-btn {
+      background-color: #3b82f6;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+    }
+
+    .game-btn:hover {
+      background-color: #60a5fa;
+      transform: translateY(-3px);
+      box-shadow: 0 7px 14px -3px rgba(59, 130, 246, 0.4);
+    }
+
+    .game-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+    }
+
+    .game-btn.selected {
+      background-color: #f59e0b;
+      box-shadow: 0 0 20px rgba(245, 158, 11, 0.6);
+    }
+
+    .game-btn:disabled {
+      background-color: #475569;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    #upgradePanel {
+      display: none;
+      position: absolute;
+      top: 80px;
+      right: 16px;
+      background-color: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 16px;
+      z-index: 100;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    }
+
+    #upgradePanel h3 {
+      color: #fbbf24;
+      margin-bottom: 12px;
+      font-size: 16px;
+    }
+
+    #upgradePanel p {
+      color: #94a3b8;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+
+    .upgrade-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .upgrade-buttons .game-btn {
+      flex: 1;
+      font-size: 12px;
+      padding: 6px 10px;
+    }
+
+    #gameWrapper {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #gameCanvas {
+      display: block;
+      cursor: crosshair;
+    }
+
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background-color: rgba(15, 23, 42, 0.7);
+      z-index: 50;
+    }
+
+    #overlay.show {
+      display: flex;
+    }
+
+    #pauseText {
+      color: white;
+      font-size: 64px;
+      font-weight: bold;
+      text-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+      letter-spacing: 4px;
+    }
+
+    #waveAnnouncement {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%) translateY(-100%);
+      color: white;
+      font-size: 48px;
+      font-weight: bold;
+      text-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+      pointer-events: none;
+      z-index: 60;
+      opacity: 0;
+    }
+
+    #waveAnnouncement.animate {
+      animation: waveSlide 1.2s ease-out forwards;
+    }
+
+    @keyframes waveSlide {
+      0% {
+        transform: translateX(-50%) translateY(-100%);
+        opacity: 0;
+      }
+      20% {
+        transform: translateX(-50%) translateY(50px);
+        opacity: 1;
+      }
+      80% {
+        transform: translateX(-50%) translateY(50px);
+        opacity: 1;
+      }
+      100% {
+        transform: translateX(-50%) translateY(100px);
+        opacity: 0;
+      }
+    }
+
+    #gameOverPanel {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: #1e293b;
+      border: 2px solid #334155;
+      border-radius: 12px;
+      padding: 32px 48px;
+      text-align: center;
+      z-index: 100;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+    }
+
+    #gameOverPanel.show {
+      display: block;
+    }
+
+    #gameOverPanel h2 {
+      color: #fbbf24;
+      font-size: 32px;
+      margin-bottom: 16px;
+    }
+
+    #gameOverPanel .stats {
+      color: #94a3b8;
+      font-size: 16px;
+      margin-bottom: 24px;
+      line-height: 1.8;
+    }
+
+    #gameOverPanel .stats span {
+      color: #fbbf24;
+      font-weight: bold;
+    }
+
+    #fpsCounter {
+      position: absolute;
+      bottom: 8px;
+      right: 16px;
+      color: #64748b;
+      font-size: 12px;
+      font-family: monospace;
+      pointer-events: none;
+    }
+
+    #baseHealth {
+      position: absolute;
+      top: 76px;
+      left: 16px;
+      color: #fbbf24;
+      font-size: 14px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="statusBar">
+      <div id="infoDisplay">
+        <div class="info-item">
+          <span>🌊 波次:</span>
+          <span id="waveDisplay">0</span>
+        </div>
+        <div class="info-item">
+          <span>👾 敌人:</span>
+          <span id="enemyCount">0</span>
+        </div>
+        <div class="info-item">
+          <span>💰 金币:</span>
+          <span id="goldDisplay">200</span>
+        </div>
+      </div>
+      <div id="buttonContainer">
+        <button class="game-btn" id="btnArrowTower">弩箭塔 (50)</button>
+        <button class="game-btn" id="btnMagicTower">魔法塔 (80)</button>
+        <button class="game-btn" id="btnCannonTower">炮塔 (120)</button>
+        <button class="game-btn" id="btnStartWave">开始波次</button>
+      </div>
+    </div>
+    <div id="gameWrapper">
+      <canvas id="gameCanvas" width="800" height="480"></canvas>
+      <div id="baseHealth">❤️ 基地血量: 10

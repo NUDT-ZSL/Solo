@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>流星轨迹沙盘</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: linear-gradient(180deg, #0B0B2A 0%, #1B2A5A 100%);
+    }
+
+    #app {
+      position: fixed;
+      inset: 0;
+    }
+
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #loading-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, #0B0B2A 0%, #1B2A5A 100%);
+      z-index: 1000;
+      transition: opacity 0.6s ease;
+    }
+
+    #loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loading-title {
+      color: #FFFFFF;
+      font-size: 28px;
+      font-weight: 300;
+      letter-spacing: 8px;
+      margin-bottom: 40px;
+      text-shadow: 0 0 20px rgba(255, 140, 0, 0.6);
+    }
+
+    .loading-spinner {
+      width: 56px;
+      height: 56px;
+      border: 3px solid rgba(255, 140, 0, 0.15);
+      border-top-color: #FF8C00;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      box-shadow: 0 0 20px rgba(255, 140, 0, 0.3);
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    #fps-counter {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 13px;
+      font-family: monospace;
+      z-index: 10;
+      pointer-events: none;
+      padding: 6px 12px;
+      background: rgba(10, 20, 40, 0.5);
+      backdrop-filter: blur(4px);
+      border-radius: 6px;
+      border: 1px solid rgba(255, 140, 0, 0.2);
+    }
+
+    #burst-indicator {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.8);
+      color: #FF8C00;
+      font-size: 36px;
+      font-weight: bold;
+      letter-spacing: 4px;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 20;
+      text-shadow: 0 0 30px rgba(255, 140, 0, 0.8);
+      transition: opacity 0.3s, transform 0.3s;
+    }
+
+    #burst-indicator.active {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    #control-panel {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 80px;
+      background: rgba(10, 20, 40, 0.7);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 100;
+      transition: transform 0.3s ease, backdrop-filter 0.3s ease, -webkit-backdrop-filter 0.3s ease;
+    }
+
+    #control-panel:hover {
+      transform: translateY(-4px);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+
+    #control-panel:hover .divider,
+    .divider.divider-hover {
+      opacity: 0.8;
+      height: 2px;
+      box-shadow: 0 0 14px rgba(255, 140, 0, 0.9), 0 0 28px rgba(255, 140, 0, 0.5), 0 -2px 10px rgba(255, 140, 0, 0.3);
+    }
+
+    .divider {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: #FF8C00;
+      opacity: 0.3;
+      box-shadow: 0 0 8px rgba(255, 140, 0, 0.5);
+      transition: opacity 0.3s ease, box-shadow 0.3s ease, height 0.3s ease;
+    }
+
+    .controls-inner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 60px;
+      height: 100%;
+      padding: 0 40px;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-width: 260px;
+    }
+
+    .control-label {
+      color: #FFFFFF;
+      font-size: 13px;
+      font-weight: 500;
+      min-width: 64px;
+      letter-spacing: 1px;
+    }
+
+    .control-slider {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      border-radius: 2px;
+      background: #1B2A5A;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .control-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #FF8C00;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(255, 140, 0, 0.7);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    .control-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 16px rgba(255, 140, 0, 0.9);
+    }
+
+    .control-slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #FF8C00;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 10px rgba(255, 140, 0, 0.7);
+    }
+
+    .control-value {
+      color: #FFFFFF;
+      font-size: 15px;
+      font-weight: 600;
+      min-width: 56px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+
+    <div id="fps-counter">FPS: --</div>
+
+    <div id="burst-indicator">☄ 流星爆发 ☄</div>
+
+    <div id="loading-overlay">
+      <div class="loading-title">流星轨迹沙盘</div>
+      <div class="loading-spinner"></div>
+    </div>
+
+    <div id="control-panel">
+      <div class="divider"></div>
+      <div class="controls-inner">
+        <div class="control-group">
+          <span class="control-label">密度</span>
+          <input type="range" id="density-slider" class="control-slider" min="1" max="50" value="15" step="1" />
+          <span class="control-value" id="density-value">15</span>
+        </div>
+        <div class="control-group">
+          <span class="control-label">方向</span>
+          <input type="range" id="direction-slider" class="control-slider" min="0" max="360" value="270" step="1" />
+          <span class="control-value" id="direction-value">270°</span>
+        </div>
+        <div class="control-group">
+          <span class="control-label">速度</span>
+          <input type="range" id="speed-slider" class="control-slider" min="5" max="30" value="15" step="1" />
+          <span class="control-value" id="speed-value">15</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

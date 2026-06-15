@@ -1,0 +1,221 @@
+.export-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.export-modal-overlay.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.export-modal {
+  width: 480px;
+  max-height: 80vh;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 24px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  transform-origin: center center;
+  transform: scale(0.9);
+  opacity: 0;
+}
+
+.export-modal.entering {
+  animation: modal-in 0.2s ease forwards;
+}
+
+.export-modal.leaving {
+  animation: modal-out 0.15s ease forwards;
+}
+
+@keyframes modal-in {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes modal-out {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+}
+
+.export-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.export-modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+}
+
+.export-modal-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  font-size: 24px;
+  color: #6b7280;
+  cursor: pointer;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease;
+  line-height: 1;
+}
+
+.export-modal-close:hover {
+  background: #f3f4f6;
+}
+
+.export-modal-tabs {
+  display: flex;
+  gap: 4px;
+  background: #f3f4f6;
+  padding: 4px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+.export-tab {
+  flex: 1;
+  height: 36px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  border-radius: 7px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.export-tab:hover {
+  color: #374151;
+}
+
+.export-tab.active {
+  background: #ffffff;
+  color: #1f2937;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.export-modal-content {
+  position: relative;
+  flex: 1;
+  min-height: 300px;
+  max-height: 400px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #0f172a;
+  margin-bottom: 16px;
+}
+
+.export-code-pane {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow-y: auto;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.export-code-pane.active {
+  opacity: 1;
+  z-index: 1;
+}
+
+.export-code-pane::-webkit-scrollbar {
+  width: 6px;
+}
+
+.export-code-pane::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.export-code-pane::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+
+.export-code {
+  margin: 0;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.export-copy-btn {
+  width: 100%;
+  height: 44px;
+  border: none;
+  border-radius: 8px;
+  background: #1f2937;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.export-copy-btn:hover {
+  background: #111827;
+}
+
+.export-copy-btn:active {
+  transform: scale(0.98);
+}
+
+.export-copy-btn.copied {
+  background: #22c55e;
+  animation: copy-flash 0.3s ease;
+}
+
+@keyframes copy-flash {
+  0% {
+    background: #22c55e;
+  }
+  50% {
+    background: #4ade80;
+  }
+  100% {
+    background: #22c55e;
+  }
+}

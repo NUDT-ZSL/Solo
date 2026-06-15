@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nebula Particles</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0a0a2e;
+      font-family: monospace;
+    }
+    #canvas-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+    #canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+    .hint-bar {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 600px;
+      height: 36px;
+      background: rgba(0, 0, 0, 0.4);
+      color: #aaa;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px 8px 0 0;
+      font-family: monospace;
+      z-index: 10;
+      transition: color 0.3s;
+    }
+    .hint-bar.full {
+      color: #ff6b6b;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container">
+    <canvas id="canvas"></canvas>
+  </div>
+  <div class="hint-bar" id="hint-bar">点击生成星云 | 拖拽移动星云 | 碰撞融合星云</div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

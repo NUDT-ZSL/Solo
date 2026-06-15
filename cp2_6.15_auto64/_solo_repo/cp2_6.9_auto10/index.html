@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <title>全息投影 · 数字艺术展</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 100%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      color: rgba(255, 255, 255, 0.9);
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      touch-action: none;
+    }
+
+    #app {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #canvas-container canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .ui-hint {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 24px;
+      background: rgba(10, 10, 26, 0.6);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(138, 43, 226, 0.3);
+      border-radius: 999px;
+      font-size: 13px;
+      letter-spacing: 0.5px;
+      color: rgba(255, 255, 255, 0.75);
+      pointer-events: none;
+      z-index: 10;
+      animation: fadeInUp 1s ease 0.5s both;
+    }
+
+    .ui-hint strong {
+      color: #c77dff;
+      font-weight: 500;
+    }
+
+    .title {
+      position: fixed;
+      top: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      pointer-events: none;
+      z-index: 10;
+      animation: fadeInDown 1s ease both;
+    }
+
+    .title h1 {
+      font-size: clamp(18px, 3vw, 28px);
+      font-weight: 300;
+      letter-spacing: 8px;
+      background: linear-gradient(135deg, #c77dff, #7b2cbf, #e0aaff);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 6px;
+    }
+
+    .title p {
+      font-size: clamp(11px, 1.5vw, 13px);
+      letter-spacing: 3px;
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    #debug-info {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 10px 14px;
+      background: rgba(10, 10, 26, 0.7);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(138, 43, 226, 0.2);
+      border-radius: 8px;
+      font-size: 11px;
+      font-family: 'Courier New', monospace;
+      line-height: 1.6;
+      color: rgba(199, 125, 255, 0.8);
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    #debug-info span {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    @media (max-width: 1023px) {
+      #debug-info {
+        display: none;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .ui-hint {
+        bottom: 16px;
+        padding: 10px 18px;
+        font-size: 11px;
+        letter-spacing: 0.3px;
+      }
+
+      .title h1 {
+        letter-spacing: 5px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+
+    <div class="title">
+      <h1>HOLOGRAPHIC</h1>
+      <p>数字艺术 · 交互雕塑</p>
+    </div>
+
+    <div class="ui-hint">
+      <strong>拖动</strong> 旋转 · <strong>捏合</strong> 缩放 · <strong>快速滑动</strong> 粒子消散
+    </div>
+
+    <div id="debug-info">
+      FPS: <span id="fps">60</span><br />
+      Particles: <span id="particle-count">7000</span><br />
+      Mode: <span id="mode">Idle</span>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

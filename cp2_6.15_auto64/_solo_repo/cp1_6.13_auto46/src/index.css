@@ -1,0 +1,218 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: "Outfit", "Source Sans 3", system-ui, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #e2e8f0;
+  background-color: #0f172a;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body,
+#root {
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  background-color: #0f172a;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .btn-hover {
+    @apply transition-all duration-200 ease-smooth hover:brightness-110 active:scale-95;
+  }
+
+  .card-hover {
+    @apply transition-all duration-200 ease-smooth hover:-translate-y-1 hover:shadow-xl;
+  }
+}
+
+.search-input {
+  width: 100%;
+  padding: 12px 24px;
+  border-radius: 24px;
+  border: 2px solid #374151;
+  background: #1e293b;
+  color: #e2e8f0;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.search-input:focus {
+  border-color: #3b82f6;
+}
+
+.search-input::placeholder {
+  color: #64748b;
+}
+
+.course-card {
+  border-radius: 12px;
+  padding: 16px;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: #1e293b;
+}
+
+.course-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25);
+}
+
+.course-card-enter {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.course-card-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.course-card-exit {
+  opacity: 1;
+}
+
+.course-card-exit-active {
+  opacity: 0;
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-item {
+  padding: 10px 16px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #e2e8f0;
+  cursor: pointer;
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-item:hover {
+  background-color: #334155;
+}
+
+.sidebar-item.active {
+  background-color: #3b82f6;
+}
+
+.btn-primary {
+  padding: 10px 20px;
+  border-radius: 8px;
+  background-color: #3b82f6;
+  color: white;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: filter 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+.btn-primary:active {
+  transform: scale(0.95);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-danger {
+  padding: 10px 20px;
+  border-radius: 8px;
+  background-color: #ef4444;
+  color: white;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: filter 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-danger:hover {
+  filter: brightness(1.1);
+}
+
+.btn-danger:active {
+  transform: scale(0.95);
+}
+
+.btn-secondary {
+  padding: 10px 20px;
+  border-radius: 8px;
+  background-color: #334155;
+  color: #e2e8f0;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: filter 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-secondary:hover {
+  filter: brightness(1.15);
+}
+
+.btn-secondary:active {
+  transform: scale(0.95);
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(4px);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.modal-panel {
+  background: #1e293b;
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 480px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+.toast-notification {
+  font-family: "Outfit", system-ui, sans-serif;
+  border-radius: 10px !important;
+  font-size: 14px !important;
+  padding: 12px 18px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2) !important;
+}
+
+@media (max-width: 767px) {
+  .course-card {
+    width: 100%;
+  }
+}

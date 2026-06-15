@@ -1,0 +1,1 @@
+{"root":["./frontend/src/analysispanel.tsx","./frontend/src/app.tsx","./frontend/src/charactergraph.tsx","./frontend/src/editorpanel.tsx","./frontend/src/outlinepanel.tsx","./frontend/src/main.tsx","./frontend/src/store.ts","./frontend/src/types.ts","./frontend/src/utils/colorutils.ts","./server/src/index.ts"],"version":"5.8.3"}

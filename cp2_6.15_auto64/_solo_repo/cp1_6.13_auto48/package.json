@@ -1,0 +1,12 @@
+{
+  "name": "community-space-manager",
+  "version": "1.0.0",
+  "description": "社区共享空间管理系统 - 活动室预约与设备借用平台",
+  "scripts": {
+    "dev": "concurrently \"cd server && node server.js\" \"cd client && vite\"",
+    "install-all": "npm install && cd server && npm install && cd ../client && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

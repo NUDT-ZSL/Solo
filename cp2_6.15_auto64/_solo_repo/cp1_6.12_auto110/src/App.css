@@ -1,0 +1,206 @@
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f5;
+  --bg-tertiary: #e0e0e0;
+  --bg-card: #ffffff;
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --border-color: #e0e0e0;
+  --panel-bg: #f0f0f0;
+  --accent-color: #4A90D9;
+  --success-color: #52c41a;
+  --error-color: #ff4d4f;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.app {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.sidebar {
+  width: 300px;
+  flex-shrink: 0;
+  height: 100%;
+  border-right: 0.5px solid var(--border-color);
+  transition: all 0.3s ease;
+  background-color: var(--panel-bg);
+}
+
+.mainContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  transition: background-color 0.3s ease;
+  background-color: var(--bg-primary);
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 32px;
+  border-bottom: 0.5px solid var(--border-color);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+  background-color: var(--bg-primary);
+}
+
+.componentInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.currentComponentName {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  transition: color 0.3s ease;
+}
+
+.currentComponentDesc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  transition: color 0.3s ease;
+}
+
+.themeToggle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 0.5px solid var(--border-color);
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.themeToggle:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(74, 144, 217, 0.3);
+}
+
+.themeIcon {
+  font-size: 18px;
+}
+
+.tabsContainer {
+  padding: 16px 32px 0;
+  background-color: var(--bg-primary);
+  transition: background-color 0.3s ease;
+}
+
+.tabs {
+  display: inline-flex;
+  position: relative;
+  background-color: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 2px;
+  transition: background-color 0.3s ease;
+}
+
+.tab {
+  width: 80px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+  transition: color 0.3s ease;
+  border-radius: 6px;
+  font-family: inherit;
+}
+
+.tab:hover {
+  color: var(--text-primary);
+}
+
+.tab.active {
+  color: var(--accent-color);
+}
+
+.tabIndicator {
+  position: absolute;
+  bottom: 0;
+  left: 2px;
+  width: calc(25% - 4px);
+  height: 2px;
+  background-color: var(--accent-color);
+  transition: transform 0.3s ease;
+  border-radius: 1px;
+}
+
+.previewSection {
+  flex: 1;
+  padding: 32px;
+  overflow: auto;
+  transition: background-color 0.3s ease;
+  background-color: var(--bg-primary);
+}
+
+@media (max-width: 768px) {
+  .app {
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: auto;
+    max-height: 140px;
+    border-right: none;
+    border-bottom: 0.5px solid var(--border-color);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .mainContent {
+    flex: 1;
+    height: calc(100% - 140px);
+  }
+
+  .topBar {
+    padding: 16px 20px;
+  }
+
+  .tabsContainer {
+    padding: 12px 20px 0;
+  }
+
+  .previewSection {
+    padding: 20px;
+  }
+}

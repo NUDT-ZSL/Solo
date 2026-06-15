@@ -1,0 +1,347 @@
+{
+  "beans": [
+    {
+      "id": "1",
+      "name": "埃塞俄比亚 耶加雪菲",
+      "origin": "埃塞俄比亚 · 耶加雪菲产区",
+      "roastLevel": "浅",
+      "price": 168,
+      "image": "https://images.unsplash.com/photo-1447933601403-0c6688de566e?w=800&h=600&fit=crop",
+      "flavors": ["果酸", "花香", "焦糖"],
+      "flavorProfile": {
+        "acidity": 5,
+        "sweetness": 4,
+        "body": 2,
+        "aroma": 5,
+        "aftertaste": 4,
+        "balance": 4
+      },
+      "brewMethods": ["手冲", "法压壶"],
+      "brewParams": {
+        "temperature": { "min": 88, "max": 92 },
+        "grindSize": "中粗",
+        "time": { "min": "2:30", "max": "3:00" }
+      },
+      "avgRating": 4.6,
+      "reviewCount": 128,
+      "reviews": [
+        { "user": "咖啡爱好者A", "rating": 5, "comment": "茉莉花香气扑鼻，柑橘酸质明亮，尾韵悠长，非常适合夏日饮用。", "date": "2024-05-12" },
+        { "user": "新手冲煮者", "rating": 4, "comment": "第一次买浅烘，味道层次很丰富，比想象中好喝！", "date": "2024-04-28" }
+      ]
+    },
+    {
+      "id": "2",
+      "name": "哥伦比亚 慧兰",
+      "origin": "哥伦比亚 · 慧兰产区",
+      "roastLevel": "中",
+      "price": 128,
+      "image": "https://images.unsplash.com/photo-1511920170033-f8396924c348?w=800&h=600&fit=crop",
+      "flavors": ["坚果", "巧克力", "焦糖"],
+      "flavorProfile": {
+        "acidity": 3,
+        "sweetness": 5,
+        "body": 4,
+        "aroma": 4,
+        "aftertaste": 4,
+        "balance": 5
+      },
+      "brewMethods": ["手冲", "意式浓缩", "法压壶"],
+      "brewParams": {
+        "temperature": { "min": 90, "max": 94 },
+        "grindSize": "中",
+        "time": { "min": "2:00", "max": "2:45" }
+      },
+      "avgRating": 4.8,
+      "reviewCount": 256,
+      "reviews": [
+        { "user": "深度烘焙控", "rating": 5, "comment": "巧克力尾韵非常顺滑，平衡感极佳，日常口粮首选。", "date": "2024-05-20" },
+        { "user": "手冲达人", "rating": 5, "comment": "容错率很高，各种冲法都好喝，推荐给新手入门！", "date": "2024-05-05" }
+      ]
+    },
+    {
+      "id": "3",
+      "name": "哥斯达黎加 塔拉珠",
+      "origin": "哥斯达黎加 · 塔拉珠产区",
+      "roastLevel": "中",
+      "price": 198,
+      "image": "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&h=600&fit=crop",
+      "flavors": ["果酸", "花香", "草本"],
+      "flavorProfile": {
+        "acidity": 4,
+        "sweetness": 4,
+        "body": 3,
+        "aroma": 5,
+        "aftertaste": 5,
+        "balance": 4
+      },
+      "brewMethods": ["手冲", "法压壶"],
+      "brewParams": {
+        "temperature": { "min": 89, "max": 93 },
+        "grindSize": "中粗",
+        "time": { "min": "2:30", "max": "3:15" }
+      },
+      "avgRating": 4.5,
+      "reviewCount": 89,
+      "reviews": [
+        { "user": "精品咖啡迷", "rating": 4, "comment": "蜂蜜处理的甜感很明显，有柑橘和草本的复合风味。", "date": "2024-04-18" }
+      ]
+    },
+    {
+      "id": "4",
+      "name": "巴西 喜拉多",
+      "origin": "巴西 · 喜拉多产区",
+      "roastLevel": "深",
+      "price": 88,
+      "image": "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=800&h=600&fit=crop",
+      "flavors": ["坚果", "巧克力"],
+      "flavorProfile": {
+        "acidity": 2,
+        "sweetness": 4,
+        "body": 5,
+        "aroma": 3,
+        "aftertaste": 4,
+        "balance": 4
+      },
+      "brewMethods": ["意式浓缩", "法压壶"],
+      "brewParams": {
+        "temperature": { "min": 92, "max": 96 },
+        "grindSize": "细",
+        "time": { "min": "1:00", "max": "1:30" }
+      },
+      "avgRating": 4.3,
+      "reviewCount": 312,
+      "reviews": [
+        { "user": "意式机玩家", "rating": 5, "comment": "做拿铁的基底非常棒，醇厚顺滑，坚果香气浓郁。", "date": "2024-05-15" },
+        { "user": "日常饮用者", "rating": 4, "comment": "价格实惠，味道稳定，深烘不苦，非常耐喝。", "date": "2024-04-30" }
+      ]
+    },
+    {
+      "id": "5",
+      "name": "牙买加 蓝山",
+      "origin": "牙买加 · 蓝山产区",
+      "roastLevel": "浅",
+      "price": 288,
+      "image": "https://images.unsplash.com/photo-1498804103079-a6351b050096?w=800&h=600&fit=crop",
+      "flavors": ["果酸", "花香", "草本", "酒香"],
+      "flavorProfile": {
+        "acidity": 4,
+        "sweetness": 5,
+        "body": 3,
+        "aroma": 5,
+        "aftertaste": 5,
+        "balance": 5
+      },
+      "brewMethods": ["手冲"],
+      "brewParams": {
+        "temperature": { "min": 87, "max": 91 },
+        "grindSize": "中粗",
+        "time": { "min": "3:00", "max": "3:45" }
+      },
+      "avgRating": 4.9,
+      "reviewCount": 67,
+      "reviews": [
+        { "user": "资深咖啡师", "rating": 5, "comment": "传说中的蓝山，风味平衡得无可挑剔，物有所值。", "date": "2024-05-01" }
+      ]
+    },
+    {
+      "id": "6",
+      "name": "危地马拉 安提瓜",
+      "origin": "危地马拉 · 安提瓜产区",
+      "roastLevel": "中",
+      "price": 158,
+      "image": "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=800&h=600&fit=crop",
+      "flavors": ["巧克力", "焦糖", "坚果", "花香"],
+      "flavorProfile": {
+        "acidity": 3,
+        "sweetness": 5,
+        "body": 4,
+        "aroma": 4,
+        "aftertaste": 5,
+        "balance": 4
+      },
+      "brewMethods": ["手冲", "意式浓缩", "法压壶"],
+      "brewParams": {
+        "temperature": { "min": 90, "max": 94 },
+        "grindSize": "中",
+        "time": { "min": "2:15", "max": "3:00" }
+      },
+      "avgRating": 4.7,
+      "reviewCount": 198,
+      "reviews": [
+        { "user": "中烘爱好者", "rating": 5, "comment": "烟熏和可可的风味层次分明，回甘持久。", "date": "2024-05-10" },
+        { "user": "上班族", "rating": 4, "comment": "晨间一杯，唤醒一天的好选择。", "date": "2024-04-25" }
+      ]
+    },
+    {
+      "id": "7",
+      "name": "肯尼亚 AA",
+      "origin": "肯尼亚 · 涅里产区",
+      "roastLevel": "浅",
+      "price": 228,
+      "image": "https://images.unsplash.com/photo-1461023058943-07fcbe16d735?w=800&h=600&fit=crop",
+      "flavors": ["果酸", "酒香", "花香"],
+      "flavorProfile": {
+        "acidity": 5,
+        "sweetness": 4,
+        "body": 3,
+        "aroma": 5,
+        "aftertaste": 4,
+        "balance": 4
+      },
+      "brewMethods": ["手冲"],
+      "brewParams": {
+        "temperature": { "min": 88, "max": 92 },
+        "grindSize": "中",
+        "time": { "min": "2:45", "max": "3:30" }
+      },
+      "avgRating": 4.6,
+      "reviewCount": 145,
+      "reviews": [
+        { "user": "果酸党", "rating": 5, "comment": "番茄和黑加仑的酸质太美妙了，层次丰富！", "date": "2024-05-18" }
+      ]
+    },
+    {
+      "id": "8",
+      "name": "苏门答腊 曼特宁",
+      "origin": "印度尼西亚 · 苏门答腊",
+      "roastLevel": "深",
+      "price": 118,
+      "image": "https://images.unsplash.com/photo-1507133750040-4a8f57021571?w=800&h=600&fit=crop",
+      "flavors": ["草本", "坚果", "巧克力"],
+      "flavorProfile": {
+        "acidity": 1,
+        "sweetness": 3,
+        "body": 5,
+        "aroma": 4,
+        "aftertaste": 4,
+        "balance": 4
+      },
+      "brewMethods": ["法压壶", "意式浓缩"],
+      "brewParams": {
+        "temperature": { "min": 93, "max": 97 },
+        "grindSize": "粗",
+        "time": { "min": "3:30", "max": "4:30" }
+      },
+      "avgRating": 4.4,
+      "reviewCount": 221,
+      "reviews": [
+        { "user": "曼特宁粉", "rating": 5, "comment": "醇厚的草本风味，像在喝一片森林。", "date": "2024-05-08" },
+        { "user": "新手玩家", "rating": 4, "comment": "第一次喝曼特宁，很特别的风味，越喝越喜欢。", "date": "2024-04-20" }
+      ]
+    },
+    {
+      "id": "9",
+      "name": "云南 保山",
+      "origin": "中国 · 云南保山",
+      "roastLevel": "中",
+      "price": 68,
+      "image": "https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=800&h=600&fit=crop",
+      "flavors": ["坚果", "焦糖", "巧克力"],
+      "flavorProfile": {
+        "acidity": 2,
+        "sweetness": 4,
+        "body": 4,
+        "aroma": 3,
+        "aftertaste": 3,
+        "balance": 4
+      },
+      "brewMethods": ["手冲", "意式浓缩", "法压壶"],
+      "brewParams": {
+        "temperature": { "min": 89, "max": 93 },
+        "grindSize": "中",
+        "time": { "min": "2:00", "max": "2:45" }
+      },
+      "avgRating": 4.2,
+      "reviewCount": 456,
+      "reviews": [
+        { "user": "国产支持者", "rating": 4, "comment": "国产精品咖啡崛起！性价比极高，日常喝不心疼。", "date": "2024-05-22" },
+        { "user": "学生党", "rating": 5, "comment": "预算有限的最佳选择，味道超出预期！", "date": "2024-04-15" }
+      ]
+    },
+    {
+      "id": "10",
+      "name": "巴拿马 瑰夏",
+      "origin": "巴拿马 · 博克特产区",
+      "roastLevel": "浅",
+      "price": 298,
+      "image": "https://images.unsplash.com/photo-1497515114583-f29e2280ecec?w=800&h=600&fit=crop",
+      "flavors": ["花香", "果酸", "酒香", "焦糖"],
+      "flavorProfile": {
+        "acidity": 5,
+        "sweetness": 5,
+        "body": 3,
+        "aroma": 5,
+        "aftertaste": 5,
+        "balance": 5
+      },
+      "brewMethods": ["手冲"],
+      "brewParams": {
+        "temperature": { "min": 86, "max": 90 },
+        "grindSize": "中粗",
+        "time": { "min": "3:00", "max": "4:00" }
+      },
+      "avgRating": 4.95,
+      "reviewCount": 42,
+      "reviews": [
+        { "user": "瑰夏收集者", "rating": 5, "comment": "茉莉、佛手柑、白桃，完美的瑰夏体验！", "date": "2024-05-03" }
+      ]
+    },
+    {
+      "id": "11",
+      "name": "秘鲁 有机",
+      "origin": "秘鲁 · 库斯科产区",
+      "roastLevel": "中",
+      "price": 98,
+      "image": "https://images.unsplash.com/photo-1510591509098-f4fdc6d0ff04?w=800&h=600&fit=crop",
+      "flavors": ["坚果", "草本", "焦糖"],
+      "flavorProfile": {
+        "acidity": 3,
+        "sweetness": 4,
+        "body": 4,
+        "aroma": 3,
+        "aftertaste": 4,
+        "balance": 5
+      },
+      "brewMethods": ["手冲", "法压壶"],
+      "brewParams": {
+        "temperature": { "min": 90, "max": 94 },
+        "grindSize": "中",
+        "time": { "min": "2:30", "max": "3:15" }
+      },
+      "avgRating": 4.3,
+      "reviewCount": 178,
+      "reviews": [
+        { "user": "有机饮食者", "rating": 4, "comment": "有机认证喝得放心，风味干净清爽。", "date": "2024-05-14" }
+      ]
+    },
+    {
+      "id": "12",
+      "name": "卢旺达 波旁",
+      "origin": "卢旺达 · 西部省",
+      "roastLevel": "浅",
+      "price": 178,
+      "image": "https://images.unsplash.com/photo-1472437774355-71ab6752b434?w=800&h=600&fit=crop",
+      "flavors": ["果酸", "花香", "酒香"],
+      "flavorProfile": {
+        "acidity": 4,
+        "sweetness": 4,
+        "body": 3,
+        "aroma": 5,
+        "aftertaste": 4,
+        "balance": 4
+      },
+      "brewMethods": ["手冲"],
+      "brewParams": {
+        "temperature": { "min": 87, "max": 91 },
+        "grindSize": "中",
+        "time": { "min": "2:45", "max": "3:30" }
+      },
+      "avgRating": 4.5,
+      "reviewCount": 96,
+      "reviews": [
+        { "user": "非洲豆爱好者", "rating": 5, "comment": "红酒感十足，尾韵有莓果的甜，非常惊艳。", "date": "2024-05-06" }
+      ]
+    }
+  ],
+  "feedback": []
+}

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>流光回响 - 3D音乐可视化</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(180deg, #000000 0%, #1a0030 100%);
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    }
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+    #canvas-container canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .info-panel {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      color: rgba(200, 200, 255, 0.85);
+      font-size: 13px;
+      line-height: 1.8;
+      background: rgba(20, 10, 40, 0.5);
+      padding: 15px 20px;
+      border-radius: 10px;
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(150, 120, 255, 0.2);
+      pointer-events: none;
+      z-index: 100;
+    }
+    .info-panel h1 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      background: linear-gradient(90deg, #b388ff, #82b1ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .key-hint {
+      display: inline-block;
+      min-width: 24px;
+      padding: 2px 6px;
+      margin-right: 6px;
+      background: rgba(100, 80, 200, 0.4);
+      border-radius: 4px;
+      text-align: center;
+      font-family: monospace;
+      font-weight: bold;
+    }
+    .fps-counter {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      color: rgba(150, 255, 200, 0.8);
+      font-size: 12px;
+      background: rgba(20, 10, 40, 0.5);
+      padding: 8px 14px;
+      border-radius: 8px;
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(100, 255, 180, 0.15);
+      z-index: 100;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  <div class="info-panel">
+    <h1>🎵 流光回响</h1>
+    <div><span class="key-hint">P</span>钢琴 (Piano)</div>
+    <div><span class="key-hint">V</span>小提琴 (Violin)</div>
+    <div><span class="key-hint">C</span>大提琴 (Cello)</div>
+    <div><span class="key-hint">F</span>长笛 (Flute)</div>
+    <div style="margin-top:10px;opacity:0.7;font-size:11px;">鼠标拖拽旋转 · 滚轮缩放 · 点击乐器触发</div>
+  </div>
+  <div class="fps-counter" id="fps">FPS: 60</div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

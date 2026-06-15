@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VoxelFlow - 3D Voxel Density Visualization</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="canvas"></canvas>
+    <div id="drop-zone-overlay" class="drop-zone-overlay hidden">
+      <div class="drop-zone-content">
+        <div class="drop-zone-icon">📂</div>
+        <div class="drop-zone-text">Drop CSV File Here</div>
+      </div>
+    </div>
+    <div id="info-panel" class="info-panel hidden">
+      <div class="info-panel-header">Probe Info</div>
+      <div class="info-panel-row"><span class="label">Center X:</span><span id="probe-x" class="value">-</span></div>
+      <div class="info-panel-row"><span class="label">Center Y:</span><span id="probe-y" class="value">-</span></div>
+      <div class="info-panel-row"><span class="label">Center Z:</span><span id="probe-z" class="value">-</span></div>
+      <div class="info-panel-divider"></div>
+      <div class="info-panel-row"><span class="label">Voxels:</span><span id="probe-count" class="value">0</span></div>
+      <div class="info-panel-row"><span class="label">Min Density:</span><span id="probe-min" class="value">-</span></div>
+      <div class="info-panel-row"><span class="label">Max Density:</span><span id="probe-max" class="value">-</span></div>
+      <div class="info-panel-row"><span class="label">Avg Density:</span><span id="probe-avg" class="value">-</span></div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+[
+  {
+    "id": "79477074-f466-4bf0-8300-b315164ed0f9",
+    "content": "今天阳光很好，心情特别开心！",
+    "author": "匿名",
+    "emotion": "happy",
+    "timestamp": "2026-06-08T17:50:47.554717"
+  },
+  {
+    "id": "1bc712f9-6b2f-411b-b9fa-0df25e5118a2",
+    "content": "今天下雨了，有点难过 😢",
+    "author": "匿名",
+    "emotion": "sad",
+    "timestamp": "2026-06-08T17:51:07.193742"
+  },
+  {
+    "id": "8c8840e4-6fc3-4e1a-81c9-9c7646c4e518",
+    "content": "好烦啊，真的很生气！",
+    "author": "匿名",
+    "emotion": "happy",
+    "timestamp": "2026-06-08T17:51:16.056838"
+  },
+  {
+    "id": "608681f2-3e21-41fb-a1b2-b0077cb96ba3",
+    "content": "今天是周三，平平淡淡的一天。",
+    "author": "匿名",
+    "emotion": "neutral",
+    "timestamp": "2026-06-08T17:51:28.156538"
+  }
+]

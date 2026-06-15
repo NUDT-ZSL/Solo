@@ -1,0 +1,30 @@
+[
+  {
+    "id": "a1",
+    "name": "林墨轩",
+    "bio": "当代水墨艺术家，擅长将传统山水与现代抽象融合，作品多次入选国际展览。",
+    "avatar": "https://trae-api-cn.mchport.guru/api/ide/v1/text_to_image?prompt=portrait%20of%20an%20asian%20male%20artist%2C%20painter%2C%20minimalist%20style&image_size=square",
+    "createdAt": "2024-01-15"
+  },
+  {
+    "id": "a2",
+    "name": "苏雅晴",
+    "bio": "数字艺术先锋，探索AI与人类创意的交汇点，作品风格前卫大胆。",
+    "avatar": "https://trae-api-cn.mchport.guru/api/ide/v1/text_to_image?prompt=portrait%20of%20a%20female%20digital%20artist%2C%20creative%20style&image_size=square",
+    "createdAt": "2024-02-20"
+  },
+  {
+    "id": "a3",
+    "name": "陈石磊",
+    "bio": "雕塑大师，以石材和金属为媒介，探讨人与自然的关系。",
+    "avatar": "https://trae-api-cn.mchport.guru/api/ide/v1/text_to_image?prompt=portrait%20of%20a%20male%20sculptor%2C%20artistic%20style&image_size=square",
+    "createdAt": "2024-03-10"
+  },
+  {
+    "id": "a4",
+    "name": "王彩韵",
+    "bio": "水彩画艺术家，以细腻的色彩捕捉光影变幻，作品清新淡雅。",
+    "avatar": "https://trae-api-cn.mchport.guru/api/ide/v1/text_to_image?prompt=portrait%20of%20a%20female%20watercolor%20artist%2C%20gentle%20style&image_size=square",
+    "createdAt": "2024-04-05"
+  }
+]

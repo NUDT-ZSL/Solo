@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>气味日记</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html, body, #root {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+
+      body {
+        background: #1A1A2E;
+        color: #E0D8C8;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      .loading-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        gap: 24px;
+      }
+
+      .loading-flower {
+        width: 60px;
+        height: 60px;
+        position: relative;
+        animation: spin 3s linear infinite;
+      }
+
+      .loading-petal {
+        position: absolute;
+        width: 20px;
+        height: 30px;
+        background: linear-gradient(180deg, #FFB6C1 0%, #FF69B4 100%);
+        border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+        left: 50%;
+        top: 50%;
+        transform-origin: center bottom;
+        margin-left: -10px;
+        margin-top: -30px;
+        opacity: 0.8;
+      }
+
+      .loading-petal:nth-child(1) { transform: rotate(0deg) translateY(-10px); }
+      .loading-petal:nth-child(2) { transform: rotate(72deg) translateY(-10px); }
+      .loading-petal:nth-child(3) { transform: rotate(144deg) translateY(-10px); }
+      .loading-petal:nth-child(4) { transform: rotate(216deg) translateY(-10px); }
+      .loading-petal:nth-child(5) { transform: rotate(288deg) translateY(-10px); }
+
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+
+      .loading-text {
+        font-size: 16px;
+        color: #E0D8C8;
+        letter-spacing: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div class="loading-container">
+        <div class="loading-flower">
+          <div class="loading-petal"></div>
+          <div class="loading-petal"></div>
+          <div class="loading-petal"></div>
+          <div class="loading-petal"></div>
+          <div class="loading-petal"></div>
+        </div>
+        <div class="loading-text">气味日记加载中...</div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

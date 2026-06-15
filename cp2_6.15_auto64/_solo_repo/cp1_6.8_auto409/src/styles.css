@@ -1,0 +1,488 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #050510;
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.game-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.hud-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.hud-overlay button {
+  pointer-events: auto;
+}
+
+.hud-top-left {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.health-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.health-label {
+  color: #ff6666;
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  text-shadow: 0 0 8px rgba(255, 100, 100, 0.6);
+}
+
+.health-rings {
+  display: flex;
+  gap: 6px;
+}
+
+.health-ring {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid;
+  transition: all 0.3s ease;
+}
+
+.health-ring-active {
+  border-color: #44ff88;
+  background: radial-gradient(circle, #44ff88, #22aa55);
+  box-shadow: 0 0 8px rgba(68, 255, 136, 0.6), inset 0 0 4px rgba(255, 255, 255, 0.3);
+}
+
+.health-ring-empty {
+  border-color: #333;
+  background: rgba(50, 50, 50, 0.3);
+}
+
+.energy-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.energy-label {
+  color: #44ddff;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  text-shadow: 0 0 6px rgba(68, 220, 255, 0.5);
+}
+
+.energy-track {
+  position: relative;
+  width: 120px;
+  height: 8px;
+  background: rgba(30, 30, 60, 0.8);
+  border-radius: 4px;
+  border: 1px solid rgba(68, 220, 255, 0.2);
+  overflow: hidden;
+}
+
+.energy-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #2288ff, #44ddff);
+  border-radius: 4px;
+  transition: width 0.2s ease;
+}
+
+.energy-glow {
+  position: absolute;
+  top: -2px;
+  left: 0;
+  height: 12px;
+  background: linear-gradient(90deg, rgba(34, 136, 255, 0.3), rgba(68, 220, 255, 0.3));
+  border-radius: 6px;
+  filter: blur(3px);
+  transition: width 0.2s ease;
+}
+
+.energy-glow-full {
+  animation: energyPulse 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes energyPulse {
+  from { opacity: 0.5; filter: blur(3px); }
+  to { opacity: 1; filter: blur(6px); }
+}
+
+.energy-text {
+  color: #44ddff;
+  font-size: 11px;
+  font-weight: bold;
+  min-width: 32px;
+  text-shadow: 0 0 4px rgba(68, 220, 255, 0.4);
+}
+
+.score-section {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.score-label {
+  color: #ffcc44;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  text-shadow: 0 0 6px rgba(255, 204, 68, 0.5);
+}
+
+.score-value {
+  color: #ffee88;
+  font-size: 22px;
+  font-weight: bold;
+  text-shadow: 0 0 10px rgba(255, 238, 136, 0.5);
+}
+
+.game-over-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+.game-over-box {
+  background: rgba(10, 5, 30, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 68, 68, 0.3);
+  border-radius: 16px;
+  padding: 40px 60px;
+  text-align: center;
+  box-shadow: 0 0 40px rgba(255, 68, 68, 0.15);
+}
+
+.game-over-title {
+  font-size: 42px;
+  font-weight: bold;
+  color: #ff4444;
+  text-shadow: 0 0 20px rgba(255, 68, 68, 0.6);
+  margin-bottom: 12px;
+}
+
+.game-over-score {
+  font-size: 28px;
+  color: #ffcc44;
+  text-shadow: 0 0 10px rgba(255, 204, 68, 0.5);
+  margin-bottom: 24px;
+}
+
+.restart-btn {
+  background: linear-gradient(135deg, rgba(68, 220, 255, 0.2), rgba(34, 136, 255, 0.2));
+  border: 1px solid rgba(68, 220, 255, 0.4);
+  color: #44ddff;
+  font-size: 16px;
+  font-weight: bold;
+  padding: 10px 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 1px;
+}
+
+.restart-btn:hover {
+  background: linear-gradient(135deg, rgba(68, 220, 255, 0.35), rgba(34, 136, 255, 0.35));
+  box-shadow: 0 0 15px rgba(68, 220, 255, 0.3);
+}
+
+.skill-panel {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  gap: 10px;
+  pointer-events: auto;
+}
+
+.skill-btn {
+  position: relative;
+  width: 72px;
+  height: 80px;
+  background: rgba(15, 10, 40, 0.65);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(100, 180, 255, 0.2);
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+
+.skill-btn:hover {
+  border-color: rgba(100, 180, 255, 0.5);
+  background: rgba(20, 15, 50, 0.75);
+}
+
+.skill-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.skill-btn-ready {
+  border-color: rgba(68, 220, 255, 0.6);
+  animation: skillPulse 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes skillPulse {
+  from {
+    box-shadow: 0 0 8px rgba(68, 220, 255, 0.2);
+    border-color: rgba(68, 220, 255, 0.4);
+  }
+  to {
+    box-shadow: 0 0 20px rgba(68, 220, 255, 0.5);
+    border-color: rgba(68, 220, 255, 0.8);
+  }
+}
+
+.skill-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
+
+.skill-icon-shield {
+  background: radial-gradient(circle, #4dc9f6, #2288cc);
+  box-shadow: 0 0 8px rgba(77, 201, 246, 0.5);
+}
+
+.skill-icon-shield::after {
+  content: '🛡';
+  font-size: 16px;
+  position: absolute;
+  top: 14px;
+}
+
+.skill-icon-pulse {
+  background: radial-gradient(circle, #ff8844, #cc4400);
+  box-shadow: 0 0 8px rgba(255, 136, 68, 0.5);
+}
+
+.skill-icon-pulse::after {
+  content: '💥';
+  font-size: 16px;
+  position: absolute;
+  top: 14px;
+}
+
+.skill-key {
+  color: #88aacc;
+  font-size: 10px;
+  font-weight: bold;
+  background: rgba(50, 50, 80, 0.5);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.skill-name {
+  color: #aabbcc;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.skill-cooldown-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.skill-cooldown-ring {
+  fill: none;
+  stroke: rgba(68, 220, 255, 0.5);
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.1s linear;
+}
+
+.skill-cooldown-text {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  color: #44ddff;
+  font-size: 12px;
+  font-weight: bold;
+  text-shadow: 0 0 4px rgba(68, 220, 255, 0.5);
+}
+
+.hud-bottom-center {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.controls-hint {
+  color: rgba(150, 160, 180, 0.5);
+  font-size: 12px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.touch-controls {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.joystick-zone {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 45%;
+  height: 100%;
+  pointer-events: auto;
+}
+
+.joystick-base {
+  position: absolute;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: rgba(50, 50, 80, 0.25);
+  border: 2px solid rgba(100, 150, 255, 0.2);
+  opacity: 0.4;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.joystick-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(100, 180, 255, 0.4), rgba(50, 100, 200, 0.2));
+  border: 2px solid rgba(100, 180, 255, 0.3);
+  transition: transform 0.05s ease;
+}
+
+.touch-action-zone {
+  position: absolute;
+  right: 16px;
+  bottom: 20px;
+  display: flex;
+  gap: 10px;
+  pointer-events: auto;
+}
+
+.touch-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid rgba(100, 180, 255, 0.3);
+  background: rgba(15, 10, 40, 0.6);
+  backdrop-filter: blur(6px);
+  color: #88bbdd;
+  font-size: 14px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.touch-fire {
+  width: 64px;
+  height: 64px;
+  border-color: rgba(255, 100, 100, 0.4);
+  color: #ff8888;
+  font-size: 13px;
+}
+
+.touch-skill {
+  font-size: 16px;
+  border-color: rgba(68, 220, 255, 0.3);
+  color: #44ddff;
+}
+
+@media (max-width: 768px) {
+  .controls-hint {
+    display: none;
+  }
+  .skill-panel {
+    bottom: auto;
+    top: 80px;
+    right: 8px;
+  }
+  .skill-btn {
+    width: 56px;
+    height: 62px;
+  }
+  .skill-name {
+    display: none;
+  }
+  .hud-top-left {
+    top: 8px;
+    left: 8px;
+  }
+  .energy-track {
+    width: 80px;
+  }
+  .score-value {
+    font-size: 18px;
+  }
+}
+
+@media (min-width: 769px) {
+  .touch-controls {
+    display: none !important;
+  }
+}

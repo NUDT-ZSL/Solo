@@ -1,0 +1,13 @@
+{
+  "name": "zombie-tower-defense",
+  "version": "1.0.0",
+  "description": "Zombie pursuit tower defense game with Canvas and TypeScript",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vite": "^5.2.0"
+  }
+}

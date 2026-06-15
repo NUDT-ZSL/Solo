@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>纸页画廊 · Paper Gallery</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+      background: radial-gradient(ellipse at center, #1C1C1C 0%, #0A0A0A 100%);
+      color: #fff;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #app {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 加载动画 */
+    .loader {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 48px;
+      height: 48px;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top-color: rgba(255, 180, 80, 0.8);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+      z-index: 10;
+      transition: opacity 0.4s ease-out;
+    }
+
+    .loader.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    @keyframes spin {
+      to { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+
+    /* 主画布容器 */
+    .canvas-wrapper {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 32px 110px 32px;
+    }
+
+    #galleryCanvas {
+      display: block;
+      max-width: 100%;
+      max-height: 100%;
+      cursor: grab;
+      touch-action: none;
+      transition: filter 0.25s ease-out;
+    }
+
+    #galleryCanvas:active {
+      cursor: grabbing;
+    }
+
+    /* 翻页提示箭头 */
+    .page-arrow {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255, 255, 255, 0);
+      font-size: 28px;
+      font-weight: 200;
+      cursor: pointer;
+      user-select: none;
+      transition: opacity 0.3s ease-out, color 0.3s ease-out, transform 0.25s ease-out;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .page-arrow.left {
+      left: 8%;
+    }
+
+    .page-arrow.right {
+      right: 8%;
+    }
+
+    .canvas-wrapper:hover .page-arrow.visible {
+      color: rgba(255, 255, 255, 0.4);
+      pointer-events: auto;
+    }
+
+    .page-arrow:hover {
+      color: rgba(255, 255, 255, 0.7) !important;
+      transform: translateY(-50%) scale(1.15);
+    }
+
+    /* 缩略图导航条 */
+    .thumbs-bar {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.04);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 14px;
+      max-width: calc(100% - 40px);
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+      z-index: 6;
+    }
+
+    .thumbs-bar::-webkit-scrollbar {
+      height: 4px;
+    }
+
+    .thumbs-bar::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 2px;
+    }
+
+    .thumb-item {
+      position: relative;
+      flex-shrink: 0;
+      width: 60px;
+      height: 60px;
+      border-radius: 8px;
+      overflow: visible;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid transparent;
+      transition: transform 0.25s ease-out, border-color 0.25s ease-out, box-shadow 0.25s ease-out;
+      transform-origin: center center;
+    }
+
+    .thumb-item .thumb-inner {
+      width: 100%;
+      height: 100%;
+      border-radius: 6px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .thumb-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      pointer-events: none;
+    }
+
+    .thumb-item:hover,
+    .thumb-item.is-hovered {
+      transform: scale(1.2);
+      z-index: 10;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    }
+
+    .thumb-item.active {
+      border-color: rgba(255, 180, 80, 0.8);
+    }
+
+    .thumb-item .thumb-title {
+      position: absolute;
+      bottom: -28px;
+      left: 50%;
+      transform: translateX(-50%) scale(0.83) translateY(4px);
+      white-space: nowrap;
+      padding: 4px 10px;
+      background: rgba(0, 0, 0, 0.85);
+      color: #fff;
+      font-size: 11px;
+      border-radius: 5px;
+      opacity: 0;
+      transition: opacity 0.25s ease-out, transform 0.25s ease-out;
+      pointer-events: none;
+      font-weight: 400;
+      letter-spacing: 0.3px;
+    }
+
+    .thumb-item:hover .thumb-title,
+    .thumb-item.is-hovered .thumb-title {
+      opacity: 1;
+      transform: translateX(-50%) scale(1) translateY(0);
+    }
+
+    /* 上传按钮 & 拖拽热区 */
+    .upload-area {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      z-index: 8;
+    }
+
+    .upload-btn {
+      padding: 10px 18px;
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.25s ease-out, border-color 0.25s ease-out, transform 0.25s ease-out;
+    }
+
+    .upload-btn:hover {
+      background: rgba(255, 180, 80, 0.12);
+      border-color: rgba(255, 180, 80, 0.4);
+      transform: translateY(-1px);
+    }
+
+    #fileInput {
+      display: none;
+    }
+
+    /* 拖拽提示遮罩 */
+    .drop-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(255, 180, 80, 0.08);
+      border: 2px dashed rgba(255, 180, 80, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      color: rgba(255, 200, 120, 0.9);
+      letter-spacing: 2px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease-out;
+      z-index: 20;
+    }
+
+    .drop-overlay.active {
+      opacity: 1;
+    }
+
+    /* 空状态提示 */
+    .empty-hint {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      color: rgba(255, 255, 255, 0.35);
+      font-size: 15px;
+      line-height: 1.8;
+      pointer-events: none;
+      transition: opacity 0.4s ease-out;
+      z-index: 3;
+    }
+
+    .empty-hint.hidden {
+      opacity: 0;
+    }
+
+    .empty-hint strong {
+      color: rgba(255, 180, 80, 0.7);
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="loader" id="loader"></div>
+
+    <div class="upload-area">
+      <button class="upload-btn" id="uploadBtn">＋ 上传画作</button>
+      <input type="file" id="fileInput" accept="image/jpeg,image/png,image/jpg" multiple />
+    </div>
+
+    <div class="canvas-wrapper" id="canvasWrapper">
+      <canvas id="galleryCanvas"></canvas>
+
+      <div class="page-arrow left visible" id="arrowLeft">‹</div>
+      <div class="page-arrow right visible" id="arrowRight">›</div>
+
+      <div class="empty-hint" id="emptyHint">
+        点击右上角 <strong>＋ 上传画作</strong><br/>
+        或将图片拖拽至此区域开始浏览
+      </div>
+    </div>
+
+    <div class="thumbs-bar" id="thumbsBar"></div>
+
+    <div class="drop-overlay" id="dropOverlay">释放以添加图片</div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HeatVortex - 3D热力图与涡流模拟</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="scene-canvas"></canvas>
+    <div id="ui-panel">
+      <div class="panel-header">
+        <h2>HeatVortex</h2>
+        <p>3D热力图与涡流模拟</p>
+      </div>
+      <div class="panel-body" id="gui-container"></div>
+      <button id="reset-btn" class="reset-btn">重置视角</button>
+      <button id="mobile-toggle" class="mobile-toggle">展开面板</button>
+    </div>
+    <div id="tooltip" class="tooltip hidden"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,1069 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  background-color: #f4f6f9;
+  color: #2d3436;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.app {
+  min-height: 100vh;
+}
+
+/* ========== 按钮通用样式 ========== */
+.btn-primary {
+  height: 44px;
+  padding: 0 24px;
+  border: none;
+  border-radius: 8px;
+  background-color: #00b894;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.btn-primary:hover {
+  background-color: #00a884;
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: scale(0.95);
+}
+
+.btn-secondary {
+  height: 44px;
+  padding: 0 24px;
+  border: 2px solid #00b894;
+  border-radius: 8px;
+  background-color: transparent;
+  color: #00b894;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background-color: rgba(0, 184, 148, 0.1);
+}
+
+.btn-cancel {
+  height: 44px;
+  padding: 0 24px;
+  border: none;
+  border-radius: 8px;
+  background-color: #dfe6e9;
+  color: #636e72;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.btn-cancel:hover {
+  background-color: #b2bec3;
+}
+
+/* ========== 通知面板 ========== */
+.notification-panel {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.notification-card {
+  pointer-events: auto;
+  min-width: 280px;
+  max-width: 360px;
+  padding: 14px 16px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  border-left: 4px solid #00b894;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  animation: slideInFromRight 0.4s ease-out forwards;
+  opacity: 0;
+  transform: translateX(100%);
+}
+
+@keyframes slideInFromRight {
+  0% {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.notification-content {
+  flex: 1;
+}
+
+.notification-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #2d3436;
+  margin-bottom: 4px;
+}
+
+.notification-message {
+  font-size: 13px;
+  color: #636e72;
+}
+
+.notification-close {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background-color: #dfe6e9;
+  color: #636e72;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background-color 0.2s ease;
+}
+
+.notification-close:hover {
+  background-color: #b2bec3;
+  color: #2d3436;
+}
+
+/* ========== 日历页面 ========== */
+.calendar-page {
+  min-height: 100vh;
+  background-color: #f4f6f9;
+}
+
+.calendar-header {
+  background: linear-gradient(135deg, #1e3a5f 0%, #2d6a9f 100%);
+  padding: 24px 32px;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.calendar-header h1 {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.calendar-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.nav-link {
+  padding: 8px 20px;
+  color: rgba(255, 255, 255, 0.8);
+  text-decoration: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.nav-link.active {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.calendar-main {
+  padding: 32px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.calendar-container {
+  background-color: #ffffff;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.calendar-month-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.calendar-month-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #2d3436;
+}
+
+.month-nav-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background-color: #f4f6f9;
+  color: #2d3436;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.month-nav-btn:hover {
+  background-color: #e9ecef;
+  transform: scale(1.05);
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.weekday-cell {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #636e72;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.calendar-cell {
+  aspect-ratio: 1 / 1;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+  justify-self: center;
+}
+
+.calendar-cell:hover:not(.empty) {
+  background-color: #f4f6f9;
+}
+
+.calendar-cell.empty {
+  cursor: default;
+}
+
+.calendar-cell.has-activity .day-number {
+  font-weight: 600;
+  color: #1e3a5f;
+}
+
+.day-number {
+  font-size: 14px;
+  color: #2d3436;
+}
+
+.activity-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #a8e6cf;
+  margin-top: 2px;
+}
+
+/* ========== 活动详情弹窗 ========== */
+.activity-detail-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 900;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.activity-detail-card {
+  width: 320px;
+  padding: 8px;
+  background-color: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  position: relative;
+  animation: scaleIn 0.25s ease-out;
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.detail-close-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background-color: #f4f6f9;
+  color: #636e72;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  transition: background-color 0.2s ease;
+}
+
+.detail-close-btn:hover {
+  background-color: #dfe6e9;
+}
+
+.activity-detail-card h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2d3436;
+  margin: 16px 16px 12px;
+}
+
+.detail-info {
+  margin: 0 16px 16px;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #636e72;
+}
+
+.info-icon {
+  font-size: 16px;
+}
+
+.detail-description {
+  font-size: 13px;
+  color: #636e72;
+  line-height: 1.6;
+  margin: 0 16px 16px;
+  padding-top: 8px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.register-btn {
+  width: calc(100% - 32px);
+  height: 40px;
+  margin: 8px 16px 16px;
+  border: none;
+  border-radius: 8px;
+  background-color: #6c5ce7;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.register-btn:hover {
+  background-color: #5a4bd1;
+}
+
+.register-btn.registered {
+  background-color: #b2bec3;
+  cursor: not-allowed;
+  color: #ffffff;
+}
+
+/* ========== 姓名输入弹窗 ========== */
+.name-input-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 950;
+  animation: fadeIn 0.2s ease;
+}
+
+.name-input-card {
+  width: 320px;
+  padding: 24px;
+  background-color: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  animation: scaleIn 0.25s ease-out;
+}
+
+.name-input-card h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.name-input-card input {
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid #dfe6e9;
+  border-radius: 8px;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.name-input-card input:focus {
+  border-color: #6c5ce7;
+}
+
+.name-input-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.name-input-actions button {
+  flex: 1;
+}
+
+/* ========== 报名成功动画 ========== */
+.success-animation {
+  position: absolute;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 1000;
+  animation: successPop 0.8s ease-out forwards;
+}
+
+.success-check {
+  width: 32px;
+  height: 32px;
+}
+
+@keyframes successPop {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.5);
+  }
+  30% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.2);
+  }
+  50% {
+    transform: translateX(-50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px) scale(1);
+  }
+}
+
+/* ========== 管理端布局 ========== */
+.admin-layout {
+  display: flex;
+  min-height: 100vh;
+  background-color: #f4f6f9;
+  position: relative;
+}
+
+.admin-sidebar {
+  width: 280px;
+  background-color: #1e3a5f;
+  color: #ffffff;
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 100;
+  overflow-y: auto;
+}
+
+.sidebar-header {
+  padding: 24px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.sidebar-section {
+  padding: 20px;
+}
+
+.sidebar-section h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  letter-spacing: 0.5px;
+}
+
+.volunteer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.volunteer-item {
+  height: 48px;
+  padding: 0 12px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  color: #ffffff;
+  cursor: grab;
+  transition: background-color 0.2s ease;
+  user-select: none;
+}
+
+.volunteer-item:hover {
+  background-color: #2d6a9f;
+}
+
+.volunteer-item:active {
+  cursor: grabbing;
+}
+
+.admin-main {
+  flex: 1;
+  margin-left: 280px;
+  min-width: 0;
+}
+
+.hamburger-btn {
+  display: none;
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 101;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 8px;
+  background-color: #1e3a5f;
+  cursor: pointer;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.hamburger-btn span {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background-color: white;
+  border-radius: 1px;
+  transition: all 0.3s ease;
+}
+
+/* ========== 仪表板 ========== */
+.dashboard-hero {
+  background: linear-gradient(135deg, #1e3a5f 0%, #2d6a9f 100%);
+  padding: 40px 32px;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.hero-content h1 {
+  font-size: 28px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.hero-content p {
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.chart-section {
+  padding: 24px 32px;
+  margin-top: -20px;
+}
+
+.chart-section h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: white;
+}
+
+.chart-container {
+  height: 280px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.cards-section {
+  padding: 24px 32px 40px;
+}
+
+.cards-section h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #2d3436;
+}
+
+.activity-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 280px);
+  gap: 20px;
+}
+
+.activity-stat-card {
+  width: 280px;
+  height: 160px;
+  background-color: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 16px;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.activity-stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.card-header h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #2d3436;
+  line-height: 1.4;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.card-date {
+  font-size: 12px;
+  color: #b2bec3;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.card-stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #00b894;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #b2bec3;
+}
+
+.stat-divider {
+  font-size: 20px;
+  color: #dfe6e9;
+}
+
+.schedule-drop-zone {
+  margin-top: auto;
+  border: 2px dashed rgba(108, 92, 231, 0.3);
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.3);
+  padding: 8px;
+  min-height: 40px;
+  transition: all 0.2s ease;
+}
+
+.schedule-drop-zone:hover {
+  border-color: #6c5ce7;
+  background-color: rgba(108, 92, 231, 0.05);
+}
+
+.drop-zone-label {
+  font-size: 11px;
+  color: #b2bec3;
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.schedule-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.schedule-tag {
+  padding: 4px 12px;
+  background-color: #6c5ce7;
+  color: white;
+  font-size: 12px;
+  border-radius: 16px;
+  cursor: grab;
+  user-select: none;
+  transition: transform 0.2s ease;
+}
+
+.schedule-tag:hover {
+  transform: scale(1.05);
+}
+
+.schedule-tag:active {
+  cursor: grabbing;
+}
+
+/* ========== 模态窗 ========== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-content {
+  width: 420px;
+  background-color: #ffffff;
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  animation: scaleIn 0.25s ease-out;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-content h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: #2d3436;
+}
+
+.activity-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #636e72;
+}
+
+.form-group input,
+.form-group textarea {
+  padding: 10px 12px;
+  border: 1px solid #dfe6e9;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  border-color: #6c5ce7;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.btn-submit {
+  min-width: 100px;
+}
+
+/* ========== 下载进度条 ========== */
+.download-progress-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  z-index: 1000;
+  animation: fadeInUp 0.3s ease;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.download-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #636e72;
+  margin-bottom: 8px;
+}
+
+.download-progress-bar {
+  width: 240px;
+  height: 8px;
+  background-color: #dfe6e9;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.download-progress-fill {
+  height: 100%;
+  background-color: #00b894;
+  border-radius: 4px;
+  transition: width 0.1s linear;
+}
+
+/* ========== 响应式适配 ========== */
+@media (max-width: 768px) {
+  .hamburger-btn {
+    display: flex;
+  }
+
+  .admin-sidebar {
+    transform: translateX(-100%);
+  }
+
+  .admin-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .admin-main {
+    margin-left: 0;
+  }
+
+  .dashboard-hero {
+    padding: 60px 20px 24px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .hero-content h1 {
+    font-size: 22px;
+  }
+
+  .hero-actions {
+    width: 100%;
+  }
+
+  .hero-actions button {
+    flex: 1;
+  }
+
+  .chart-section,
+  .cards-section {
+    padding: 16px 20px 24px;
+  }
+
+  .chart-container {
+    height: 220px;
+    padding: 12px;
+  }
+
+  .activity-cards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .activity-stat-card {
+    width: 100%;
+    height: auto;
+    min-height: 160px;
+  }
+
+  .calendar-header {
+    padding: 16px 20px;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .calendar-header h1 {
+    font-size: 20px;
+  }
+
+  .calendar-main {
+    padding: 16px;
+  }
+
+  .calendar-container {
+    padding: 16px;
+  }
+
+  .calendar-cell {
+    width: 36px;
+    height: 36px;
+  }
+
+  .weekday-cell {
+    height: 36px;
+    font-size: 12px;
+  }
+
+  .modal-content {
+    width: calc(100% - 40px);
+    margin: 20px;
+    padding: 20px;
+  }
+
+  .notification-card {
+    min-width: 260px;
+    max-width: calc(100vw - 40px);
+  }
+
+  .notification-panel {
+    top: 12px;
+    right: 12px;
+    left: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .calendar-cell {
+    width: 32px;
+    height: 32px;
+  }
+
+  .day-number {
+    font-size: 12px;
+  }
+
+  .activity-dot {
+    width: 6px;
+    height: 6px;
+  }
+
+  .download-progress-container {
+    left: 16px;
+    right: 16px;
+  }
+
+  .download-progress-bar {
+    width: 100%;
+  }
+}

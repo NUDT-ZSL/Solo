@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>星焰骰子</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+SC:wght@300;400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-deep-purple: #1A0A2E;
+      --bg-purple-mid: #2D1B4E;
+      --accent-gold: #FF7B24;
+      --accent-gold-light: #FFA25A;
+      --accent-gold-dark: #E56A1C;
+      --particle-glow: rgba(255, 123, 36, 0.8);
+      --text-primary: #FFFFFF;
+      --text-secondary: rgba(255, 255, 255, 0.7);
+      --panel-bg: rgba(26, 10, 46, 0.95);
+      --panel-border: rgba(255, 123, 36, 0.3);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg-deep-purple);
+      font-family: 'Noto Sans SC', 'Orbitron', sans-serif;
+      color: var(--text-primary);
+    }
+
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      background: radial-gradient(ellipse at center, var(--bg-purple-mid) 0%, var(--bg-deep-purple) 70%, #0D0518 100%);
+    }
+
+    #game-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #ui-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    #ui-layer > * {
+      pointer-events: auto;
+    }
+
+    .game-title {
+      position: absolute;
+      top: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Orbitron', sans-serif;
+      font-size: 42px;
+      font-weight: 900;
+      letter-spacing: 8px;
+      background: linear-gradient(135deg, var(--accent-gold-light) 0%, var(--accent-gold) 50%, var(--accent-gold-dark) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-shadow: 0 0 40px rgba(255, 123, 36, 0.5);
+      user-select: none;
+    }
+
+    .controls {
+      position: absolute;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .roll-btn {
+      position: relative;
+      padding: 18px 64px;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      color: var(--text-primary);
+      background: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-gold-dark) 100%);
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      overflow: hidden;
+      transition: box-shadow 0.2s ease;
+      box-shadow: 0 0 30px rgba(255, 123, 36, 0.4),
+                  0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .roll-btn::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.3);
+      transform: translate(-50%, -50%);
+      transition: width 0.2s ease, height 0.2s ease, opacity 0.2s ease;
+      opacity: 0;
+    }
+
+    .roll-btn:hover {
+      box-shadow: 0 0 50px rgba(255, 123, 36, 0.6),
+                  0 6px 20px rgba(0, 0, 0, 0.4);
+    }
+
+    .roll-btn:hover::before {
+      width: 200%;
+      height: 200%;
+      opacity: 1;
+    }
+
+    .roll-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    .roll-btn:disabled:hover {
+      box-shadow: 0 0 30px rgba(255, 123, 36, 0.4),
+                  0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .color-pickers {
+      display: flex;
+      gap: 20px;
+    }
+
+    .color-picker-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .color-picker-group label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      letter-spacing: 2px;
+    }
+
+    .color-picker {
+      width: 40px;
+      height: 40px;
+      border: 2px solid var(--panel-border);
+      border-radius: 50%;
+      background: none;
+      cursor: pointer;
+      padding: 0;
+      transition: all 0.2s ease;
+    }
+
+    .color-picker:hover {
+      border-color: var(--accent-gold);
+      box-shadow: 0 0 15px rgba(255, 123, 36, 0.5);
+      transform: scale(1.1);
+    }
+
+    .color-picker::-webkit-color-swatch-wrapper {
+      padding: 3px;
+    }
+
+    .color-picker::-webkit-color-swatch {
+      border-radius: 50%;
+      border: none;
+    }
+
+    .stats-panel {
+      position: absolute;
+      top: 120px;
+      right: 30px;
+      width: 320px;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      padding: 20px;
+      backdrop-filter: blur(10px);
+      transition: transform 0.3s ease, opacity 0.3s ease;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .stats-panel.minimized {
+      transform: translateX(calc(100% - 40px));
+    }
+
+    .stats-panel.minimized .stats-content {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .stats-toggle {
+      position: absolute;
+      left: -15px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 30px;
+      height: 60px;
+      background: var(--accent-gold);
+      border: none;
+      border-radius: 8px 0 0 8px;
+      color: white;
+      cursor: pointer;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .stats-toggle:hover {
+      background: var(--accent-gold-light);
+      box-shadow: 0 0 15px rgba(255, 123, 36, 0.5);
+    }
+
+    .stats-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .stats-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent-gold);
+      letter-spacing: 2px;
+    }
+
+    .stats-summary {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    .stat-item {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--accent-gold);
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      letter-spacing: 1px;
+    }
+
+    .stats-content {
+      transition: opacity 0.3s ease;
+    }
+
+    .chart-title {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+      letter-spacing: 1px;
+    }
+
+    .result-display {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, 100px);
+      text-align: center;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+
+    .result-display.show {
+      opacity: 1;
+    }
+
+    .combo-name {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 32px;
+      font-weight: 900;
+      letter-spacing: 4px;
+      background: linear-gradient(135deg, var(--accent-gold-light), var(--accent-gold));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-shadow: 0 0 30px rgba(255, 123, 36, 0.6);
+      margin-bottom: 8px;
+    }
+
+    .combo-score {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 20px;
+      color: var(--text-secondary);
+      letter-spacing: 2px;
+    }
+
+    .combo-score span {
+      color: var(--accent-gold);
+      font-weight: 700;
+    }
+
+    .fps-counter {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 12px;
+      color: var(--text-secondary);
+      letter-spacing: 1px;
+      user-select: none;
+    }
+
+    @media (max-width: 768px) {
+      .game-title {
+        font-size: 28px;
+        letter-spacing: 4px;
+        top: 20px;
+      }
+
+      .stats-panel {
+        width: 260px;
+        right: 15px;
+        top: 100px;
+      }
+
+      .roll-btn {
+        padding: 14px 48px;
+        font-size: 16px;
+      }
+
+      .controls {
+        bottom: 40px;
+      }
+
+      .color-pickers {
+        gap: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+    <div id="ui-layer">
+      <h1 class="game-title">星 焰 骰 子</h1>
+
+      <div class="stats-panel" id="stats-panel">
+        <button class="stats-toggle" id="stats-toggle">‹</button>
+        <div class="stats-content">
+          <div class="stats-header">
+            <div class="stats-title">统 计</div>
+          </div>
+          <div class="stats-summary">
+            <div class="stat-item">
+              <div class="stat-value" id="total-games">0</div>
+              <div class="stat-label">总局数</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="total-score">0</div>
+              <div class="stat-label">总得分</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="high-score">0</div>
+              <div class="stat-label">最高分</div>
+            </div>
+          </div>
+          <div class="chart-title">最近20局得分分布</div>
+          <canvas id="stats-canvas" width="280" height="160"></canvas>
+        </div>
+      </div>
+
+      <div class="result-display" id="result-display">
+        <div class="combo-name" id="combo-name"></div>
+        <div class="combo-score">得分 <span id="combo-score">0</span></div>
+      </div>
+
+      <div class="controls">
+        <button class="roll-btn" id="roll-btn">投 掷</button>
+        <div class="color-pickers">
+          <div class="color-picker-group">
+            <label>骰子1</label>
+            <input type="color" class="color-picker" id="color1" value="#FF7B24">
+          </div>
+          <div class="color-picker-group">
+            <label>骰子2</label>
+            <input type="color" class="color-picker" id="color2" value="#FFD700">
+          </div>
+          <div class="color-picker-group">
+            <label>骰子3</label>
+            <input type="color" class="color-picker" id="color3" value="#00BFFF">
+          </div>
+        </div>
+      </div>
+
+      <div class="fps-counter" id="fps-counter">FPS: --</div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

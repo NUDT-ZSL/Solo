@@ -1,0 +1,79 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'JetBrains Mono', monospace;
+  background: #1a1a2e;
+  color: #f4f4f4;
+}
+
+@keyframes particleFlyUp {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(-18px) scale(0.3); opacity: 0; }
+}
+
+@keyframes particleFlyDown {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(18px) scale(0.3); opacity: 0; }
+}
+
+@keyframes particleFlyLeft {
+  0% { transform: translateX(0) scale(1); opacity: 1; }
+  100% { transform: translateX(-18px) scale(0.3); opacity: 0; }
+}
+
+@keyframes particleFlyRight {
+  0% { transform: translateX(0) scale(1); opacity: 1; }
+  100% { transform: translateX(18px) scale(0.3); opacity: 0; }
+}
+
+@keyframes dashFlow {
+  0% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -16; }
+}
+
+@keyframes glowPulse {
+  0% { box-shadow: 0 0 5px #38b764; }
+  50% { box-shadow: 0 0 20px #38b764, 0 0 40px rgba(56, 183, 100, 0.5); }
+  100% { box-shadow: 0 0 5px #38b764; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.particle-up { animation: particleFlyUp 0.2s ease-out forwards; }
+.particle-down { animation: particleFlyDown 0.2s ease-out forwards; }
+.particle-left { animation: particleFlyLeft 0.2s ease-out forwards; }
+.particle-right { animation: particleFlyRight 0.2s ease-out forwards; }
+
+.export-glow {
+  animation: glowPulse 0.5s ease-out;
+}
+
+::-webkit-scrollbar {
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #16213e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333c57;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #566c86;
+}

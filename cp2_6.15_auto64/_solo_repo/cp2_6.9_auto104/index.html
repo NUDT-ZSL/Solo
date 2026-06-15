@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>磁流体雕塑生成器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: radial-gradient(ellipse at center, #1a1a3e 0%, #0a0a2e 100%);
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    #fps-counter {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      font-size: 12px;
+      color: #00ff00;
+      font-family: 'Courier New', monospace;
+      font-weight: bold;
+      text-shadow: 0 0 8px rgba(0, 255, 0, 0.5);
+      z-index: 100;
+      user-select: none;
+      pointer-events: none;
+    }
+
+    #control-panel {
+      position: absolute;
+      left: 16px;
+      bottom: 16px;
+      padding: 20px 24px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      color: #e0e0e0;
+      z-index: 100;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      min-width: 240px;
+    }
+
+    #control-panel.visible {
+      opacity: 1;
+    }
+
+    #panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #e0e0e0;
+      letter-spacing: 0.5px;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    .control-label {
+      font-size: 12px;
+      color: #e0e0e0;
+      min-width: 72px;
+    }
+
+    .control-value {
+      font-size: 12px;
+      color: #e0e0e0;
+      min-width: 36px;
+      text-align: right;
+      font-family: 'Courier New', monospace;
+    }
+
+    .slider-container {
+      flex: 1;
+      margin: 0 12px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      height: 20px;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 120px;
+      height: 4px;
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+      background: linear-gradient(to right, #00ffff, #8b00ff, #ff69b4);
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #e0e0e0;
+      cursor: pointer;
+      box-shadow: 0 0 6px rgba(255, 255, 255, 0.6);
+      transition: transform 0.15s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #e0e0e0;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 6px rgba(255, 255, 255, 0.6);
+    }
+
+    #mobile-toggle {
+      display: none;
+      position: absolute;
+      left: 16px;
+      bottom: 16px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      color: #e0e0e0;
+      font-size: 24px;
+      cursor: pointer;
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+
+    @media (max-width: 768px) {
+      #control-panel {
+        display: none;
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: 80px;
+        min-width: 280px;
+        max-width: 90vw;
+      }
+
+      #control-panel.mobile-open {
+        display: block;
+        opacity: 1;
+      }
+
+      #mobile-toggle {
+        display: flex;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="fps-counter">0 FPS</div>
+    <button id="mobile-toggle" aria-label="控制面板">⚙</button>
+    <div id="control-panel">
+      <div id="panel-title">磁流体参数控制</div>
+      <div class="control-group">
+        <span class="control-label">磁场强度</span>
+        <div class="slider-container">
+          <input type="range" id="magneticStrength" min="0" max="10" step="0.1" value="5" />
+        </div>
+        <span class="control-value" id="magneticStrengthValue">5.0</span>
+      </div>
+      <div class="control-group">
+        <span class="control-label">流体粘度</span>
+        <div class="slider-container">
+          <input type="range" id="viscosity" min="0.1" max="1.0" step="0.01" value="0.5" />
+        </div>
+        <span class="control-value" id="viscosityValue">0.50</span>
+      </div>
+      <div class="control-group">
+        <span class="control-label">粒子密度</span>
+        <div class="slider-container">
+          <input type="range" id="particleDensity" min="1000" max="6000" step="100" value="3000" />
+        </div>
+        <span class="control-value" id="particleDensityValue">3000</span>
+      </div>
+      <div class="control-group">
+        <span class="control-label">颜色偏移</span>
+        <div class="slider-container">
+          <input type="range" id="colorOffset" min="-1" max="1" step="0.01" value="0" />
+        </div>
+        <span class="control-value" id="colorOffsetValue">0.00</span>
+      </div>
+      <div class="control-group">
+        <span class="control-label">粒子大小</span>
+        <div class="slider-container">
+          <input type="range" id="particleSize" min="0.02" max="0.3" step="0.01" value="0.1" />
+        </div>
+        <span class="control-value" id="particleSizeValue">0.10</span>
+      </div>
+      <div class="control-group">
+        <span class="control-label">噪声强度</span>
+        <div class="slider-container">
+          <input type="range" id="noiseStrength" min="0" max="2" step="0.01" value="1" />
+        </div>
+        <span class="control-value" id="noiseStrengthValue">1.00</span>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

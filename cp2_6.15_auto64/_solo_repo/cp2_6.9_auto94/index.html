@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0" />
+  <title>粒子时钟</title>
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <div class="app">
+    <canvas id="clockCanvas"></canvas>
+    <div class="control-panel">
+      <div class="control-group">
+        <label for="sizeSlider" class="control-label">粒子尺寸</label>
+        <input type="range" id="sizeSlider" min="1" max="10" step="0.5" value="5" class="size-slider" />
+        <span id="sizeValue" class="control-value">5.0</span>
+      </div>
+      <div class="control-group">
+        <label for="colorSelect" class="control-label">配色方案</label>
+        <select id="colorSelect" class="color-select">
+          <option value="0">珊瑚青</option>
+          <option value="1">紫粉蓝</option>
+          <option value="2">金橙红</option>
+          <option value="3">青蓝紫</option>
+          <option value="4">绿黄</option>
+          <option value="5">玫瑰金</option>
+          <option value="6">霓虹蓝</option>
+          <option value="7">日落橙</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <button id="modeToggle" class="mode-toggle">切换沙漏模式</button>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

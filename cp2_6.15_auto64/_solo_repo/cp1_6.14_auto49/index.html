@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VaporViz — 香水成分分子结构可视化</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a23; }
+    #canvas-container { width: 100%; height: 100%; position: relative; }
+    canvas { display: block; }
+
+    .panel {
+      position: fixed;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      background: #1a1a2ecc;
+      border-radius: 12px;
+      padding: 20px;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      font-size: 14px;
+      z-index: 10;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+
+    #left-panel {
+      top: 20px;
+      left: 20px;
+      width: 240px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+    }
+
+    #right-panel {
+      top: 20px;
+      right: 20px;
+      width: 220px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+    }
+
+    .panel-title {
+      font-size: 18px;
+      font-weight: bold;
+      color: #ffffff;
+      margin-bottom: 16px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .section-label {
+      font-size: 12px;
+      color: #aaa;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-top: 16px;
+      margin-bottom: 8px;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    #play-pause-btn {
+      background: #2a2a4a;
+      border: 1px solid #444;
+      color: #e0e0e0;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.2s;
+    }
+    #play-pause-btn:hover { background: #3a3a5a; }
+
+    #volatility-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 80%;
+      height: 6px;
+      background: #404040;
+      border-radius: 3px;
+      outline: none;
+      margin-top: 8px;
+    }
+    #volatility-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      background: #ff6b6b;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    #volatility-slider::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      background: #ff6b6b;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+    }
+    #volatility-value {
+      font-size: 12px;
+      color: #ff6b6b;
+      min-width: 30px;
+    }
+
+    .detail-placeholder {
+      color: #888;
+      font-style: italic;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      border-bottom: 1px solid #ffffff15;
+    }
+
+    .detail-label { color: #aaa; }
+    .detail-value { color: #fff; }
+
+    .atom-list-row {
+      display: flex;
+      gap: 6px;
+      padding: 3px 0;
+      font-size: 12px;
+      font-family: monospace;
+    }
+
+    .bond-list-row {
+      display: flex;
+      gap: 6px;
+      padding: 3px 0;
+      font-size: 12px;
+    }
+
+    @media (max-width: 768px) {
+      #left-panel {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 60px;
+        border-radius: 12px 12px 0 0;
+        max-height: 60px;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+      }
+      #left-panel.expanded {
+        max-height: 100vh;
+        height: 100vh;
+        border-radius: 0;
+        overflow-y: auto;
+      }
+      #right-panel {
+        top: 0;
+        right: 0;
+        left: 0;
+        width: 100%;
+        height: 60px;
+        border-radius: 0 0 12px 12px;
+        max-height: 60px;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+      }
+      #right-panel.expanded {
+        max-height: 100vh;
+        height: 100vh;
+        border-radius: 0;
+        overflow-y: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div id="left-panel" class="panel">
+    <div class="panel-title">香调分子库</div>
+
+    <div class="section-label">原子配色图例</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#909090;"></div><span>C 碳</span></div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ff0d0d;"></div><span>O 氧</span></div>
+    <div class="legend-item"><div class="legend-dot" style="background:#3050f8;"></div><span>N 氮</span></div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ffffff;border:1px solid #888;"></div><span>H 氢</span></div>
+
+    <div class="section-label">场景控制</div>
+    <div class="control-row">
+      <button id="play-pause-btn">⏸ 暂停旋转</button>
+    </div>
+
+    <div class="section-label">挥发度</div>
+    <input type="range" id="volatility-slider" min="0" max="1" step="0.01" value="1" />
+    <div class="control-row">
+      <span id="volatility-value">1.00</span>
+    </div>
+  </div>
+
+  <div id="right-panel" class="panel">
+    <div class="panel-title">分子详情</div>
+    <div id="detail-content">
+      <div class="detail-placeholder">点击分子查看详情</div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

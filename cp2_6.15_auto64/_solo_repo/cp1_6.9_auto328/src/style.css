@@ -1,0 +1,32 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #3E2723;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  font-family: 'Georgia', serif;
+  overflow: hidden;
+}
+
+#game-container {
+  position: relative;
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.8), 0 0 120px rgba(255, 150, 50, 0.15);
+  border: 6px solid #5D4037;
+  border-radius: 8px;
+}
+
+#game {
+  display: block;
+  cursor: default;
+  background: #3E2723;
+}
+
+#game:active {
+  cursor: grabbing;
+}

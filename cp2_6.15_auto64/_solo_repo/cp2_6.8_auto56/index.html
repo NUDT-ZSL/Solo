@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>乐高积木拼装模拟器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #1E1E2E;
+      color: #E0E0E0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: row;
+      width: 100%;
+      height: 100%;
+      transition: all 0.3s ease;
+    }
+
+    #brick-panel {
+      width: 20%;
+      min-width: 220px;
+      background: #252538;
+      border-right: 1px solid #333348;
+      padding: 16px 12px;
+      overflow-y: auto;
+      transition: all 0.3s ease;
+    }
+
+    #brick-panel h2 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #4A9EFF;
+      margin-bottom: 12px;
+      letter-spacing: 0.5px;
+    }
+
+    .brick-card {
+      background: #2D2D44;
+      border: 1px solid #3A3A52;
+      border-radius: 10px;
+      padding: 10px;
+      margin-bottom: 10px;
+      cursor: grab;
+      transition: all 0.2s ease;
+    }
+
+    .brick-card:hover {
+      border-color: #4A9EFF;
+      box-shadow: 0 0 12px rgba(74, 158, 255, 0.25);
+      transform: translateY(-2px);
+    }
+
+    .brick-card:active {
+      cursor: grabbing;
+    }
+
+    .brick-card.dragging {
+      opacity: 0.5;
+      transform: scale(0.95);
+    }
+
+    .brick-preview {
+      width: 100%;
+      height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 8px;
+    }
+
+    .brick-preview svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .brick-name {
+      font-size: 12px;
+      text-align: center;
+      color: #C0C0D0;
+      margin-bottom: 8px;
+    }
+
+    .color-options {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .color-dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.15s ease;
+    }
+
+    .color-dot:hover {
+      transform: scale(1.15);
+    }
+
+    .color-dot.selected {
+      border-color: #FFD700;
+      box-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
+    }
+
+    #scene-container {
+      flex: 1;
+      position: relative;
+      width: 70%;
+      background: #1E1E2E;
+    }
+
+    #scene-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #brick-actions {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: none;
+      gap: 10px;
+      background: rgba(45, 45, 68, 0.9);
+      padding: 12px 18px;
+      border-radius: 12px;
+      border: 1px solid #3A3A52;
+      backdrop-filter: blur(6px);
+    }
+
+    #brick-actions.visible {
+      display: flex;
+    }
+
+    .action-btn {
+      width: 44px;
+      height: 44px;
+      border: none;
+      border-radius: 8px;
+      background: #3A3A5C;
+      color: #E0E0E0;
+      cursor: pointer;
+      font-size: 18px;
+      font-weight: bold;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .action-btn:hover {
+      background: #4A9EFF;
+      transform: scale(1.1);
+      box-shadow: 0 0 10px rgba(74, 158, 255, 0.4);
+    }
+
+    .action-btn.danger:hover {
+      background: #E53935;
+      box-shadow: 0 0 10px rgba(229, 57, 53, 0.4);
+    }
+
+    .action-btn.primary:hover {
+      background: #43A047;
+      box-shadow: 0 0 10px rgba(67, 160, 71, 0.4);
+    }
+
+    #suggest-btn {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #4A9EFF, #6BB3FF);
+      color: white;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 10px rgba(74, 158, 255, 0.3);
+    }
+
+    #suggest-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(74, 158, 255, 0.5);
+    }
+
+    #suggest-panel {
+      position: absolute;
+      top: 70px;
+      left: 20px;
+      display: none;
+      gap: 8px;
+      background: rgba(45, 45, 68, 0.95);
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: 1px solid #3A3A52;
+      backdrop-filter: blur(6px);
+    }
+
+    #suggest-panel.visible {
+      display: flex;
+    }
+
+    #suggest-panel span {
+      font-size: 13px;
+      color: #00FFFF;
+      align-self: center;
+      margin-right: 6px;
+    }
+
+    #status-panel {
+      width: 10%;
+      min-width: 140px;
+      background: #252538;
+      border-left: 1px solid #333348;
+      padding: 16px 12px;
+      display: flex;
+      flex-direction: column;
+      transition: all 0.3s ease;
+    }
+
+    #status-panel h2 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #FFD700;
+      margin-bottom: 16px;
+      letter-spacing: 0.5px;
+      text-align: center;
+    }
+
+    .status-card {
+      background: #2D2D44;
+      border: 1px solid #3A3A52;
+      border-radius: 8px;
+      padding: 12px 10px;
+      margin-bottom: 12px;
+    }
+
+    .status-label {
+      font-size: 11px;
+      color: #8888A0;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .status-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: #E0E0E0;
+    }
+
+    .status-value.stable {
+      color: #43A047;
+    }
+
+    .status-value.unstable {
+      color: #E53935;
+    }
+
+    .status-value.score {
+      color: #4A9EFF;
+    }
+
+    .history-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: auto;
+    }
+
+    .history-btn {
+      flex: 1;
+      padding: 10px 0;
+      border: none;
+      border-radius: 8px;
+      background: #3A3A5C;
+      color: #E0E0E0;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+
+    .history-btn:hover:not(:disabled) {
+      background: #4A9EFF;
+      transform: translateY(-1px);
+    }
+
+    .history-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .toast {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(45, 45, 68, 0.95);
+      border: 1px solid #E53935;
+      color: #FF8080;
+      padding: 16px 24px;
+      border-radius: 10px;
+      font-size: 14px;
+      z-index: 9999;
+      box-shadow: 0 4px 20px rgba(229, 57, 53, 0.3);
+      animation: toastFade 3s ease forwards;
+    }
+
+    @keyframes toastFade {
+      0% { opacity: 0; transform: translate(-50%, -60%); }
+      15% { opacity: 1; transform: translate(-50%, -50%); }
+      85% { opacity: 1; transform: translate(-50%, -50%); }
+      100% { opacity: 0; transform: translate(-50%, -40%); }
+    }
+
+    @media (max-width: 768px) {
+      #app {
+        flex-direction: column;
+      }
+
+      #brick-panel {
+        width: 100%;
+        min-width: unset;
+        height: auto;
+        max-height: 180px;
+        border-right: none;
+        border-bottom: 1px solid #333348;
+        display: flex;
+        flex-direction: column;
+      }
+
+      #brick-panel .brick-list {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+      }
+
+      .brick-card {
+        min-width: 140px;
+        margin-bottom: 0;
+        flex-shrink: 0;
+      }
+
+      #scene-container {
+        width: 100%;
+        flex: 1;
+      }
+
+      #status-panel {
+        width: 100%;
+        min-width: unset;
+        border-left: none;
+        border-top: 1px solid #333348;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 10px;
+      }
+
+      #status-panel h2 {
+        display: none;
+      }
+
+      .status-card {
+        flex: 1;
+        min-width: 90px;
+        margin-bottom: 0;
+        padding: 8px;
+      }
+
+      .status-value {
+        font-size: 18px;
+      }
+
+      .history-buttons {
+        margin-top: 0;
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="brick-panel">
+      <h2>🧱 积木库</h2>
+      <div class="brick-list" id="brick-list"></div>
+    </div>
+
+    <div id="scene-container">
+      <canvas id="scene-canvas"></canvas>
+      <button id="suggest-btn" title="获取搭建建议">💡 搭建建议</button>
+      <div id="suggest-panel">
+        <span id="suggest-text">建议放置位置</span>
+        <button class="action-btn primary" id="confirm-suggest" title="确认放置">✓</button>
+        <button class="action-btn" id="cancel-suggest" title="取消">✗</button>
+      </div>
+      <div id="brick-actions">
+        <button class="action-btn" id="move-up" title="上移 (Y+1)">↑</button>
+        <button class="action-btn" id="move-down" title="下移 (Y-1)">↓</button>
+        <button class="action-btn" id="rotate" title="旋转 90°">↻</button>
+        <button class="action-btn danger" id="delete" title="删除">🗑</button>
+      </div>
+    </div>
+
+    <div id="status-panel">
+      <h2>📊 状态</h2>
+      <div class="status-card">
+        <div class="status-label">积木数量</div>
+        <div class="status-value" id="brick-count">0</div>
+      </div>
+      <div class="status-card">
+        <div class="status-label">结构状态</div>
+        <div class="status-value stable" id="stability-text">结构稳定</div>
+      </div>
+      <div class="status-card">
+        <div class="status-label">稳定性评分</div>
+        <div class="status-value score" id="stability-score">100%</div>
+      </div>
+      <div class="history-buttons">
+        <button class="history-btn" id="undo-btn" disabled>↶ 撤销</button>
+        <button class="history-btn" id="redo-btn" disabled>↷ 重做</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

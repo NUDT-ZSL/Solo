@@ -1,0 +1,29 @@
+[
+  {
+    "id": "job-001",
+    "title": "前端工程师",
+    "department": "技术部",
+    "headcount": 3,
+    "skills": ["React", "TypeScript", "Node.js"],
+    "salaryRange": "15-25K",
+    "createdAt": "2026-06-01T10:00:00.000Z"
+  },
+  {
+    "id": "job-002",
+    "title": "产品经理",
+    "department": "产品部",
+    "headcount": 2,
+    "skills": ["需求分析", "Axure", "数据分析"],
+    "salaryRange": "18-30K",
+    "createdAt": "2026-06-03T10:00:00.000Z"
+  },
+  {
+    "id": "job-003",
+    "title": "UI设计师",
+    "department": "设计部",
+    "headcount": 1,
+    "skills": ["Figma", "Sketch", "交互设计"],
+    "salaryRange": "12-20K",
+    "createdAt": "2026-06-05T10:00:00.000Z"
+  }
+]

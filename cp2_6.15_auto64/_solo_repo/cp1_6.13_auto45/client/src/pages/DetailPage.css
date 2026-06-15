@@ -1,0 +1,282 @@
+.detail-page {
+  min-height: 100vh;
+  background: #0f172a;
+  color: #cbd5e1;
+}
+
+.detail-page .app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 40px;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.back-btn {
+  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  color: #94a3b8;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.back-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f9fafb;
+}
+
+.page-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #f9fafb;
+  margin: 0;
+  flex: 1;
+  text-align: center;
+}
+
+.header-spacer {
+  width: 100px;
+}
+
+.detail-content {
+  display: flex;
+  gap: 24px;
+  padding: 32px 40px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.detail-sidebar {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sidebar-section {
+  background: #1e293b;
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.sidebar-section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f9fafb;
+  margin: 0 0 16px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.9;
+}
+
+.album-cover-large {
+  margin-bottom: 16px;
+}
+
+.cover-placeholder-large {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  background: #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cover-icon-large {
+  width: 64px;
+  height: 64px;
+  color: #9ca3af;
+}
+
+.album-title-large {
+  font-size: 20px;
+  font-weight: bold;
+  color: #f9fafb;
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.album-date-large {
+  font-size: 14px;
+  color: #9ca3af;
+  margin: 0;
+}
+
+.metadata-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.metadata-table tr {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.metadata-table tr:last-child {
+  border-bottom: none;
+}
+
+.metadata-table td {
+  padding: 10px 0;
+  font-size: 14px;
+}
+
+.metadata-table td:first-child {
+  color: #64748b;
+}
+
+.metadata-table td:last-child {
+  text-align: right;
+  color: #e2e8f0;
+  font-weight: 500;
+}
+
+.tags-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.tags-header h3 {
+  margin: 0;
+}
+
+.edit-tags-btn {
+  padding: 4px 12px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.edit-tags-btn:hover {
+  border-color: #f97316;
+  color: #f97316;
+}
+
+.tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-large {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: #374151;
+  color: #d1d5db;
+  border-radius: 20px;
+  font-size: 13px;
+}
+
+.remove-tag-btn {
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: #9ca3af;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+}
+
+.remove-tag-btn:hover {
+  background: #ef4444;
+  color: white;
+}
+
+.add-tag-input {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.add-tag-input input {
+  flex: 1;
+  padding: 8px 12px;
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #f9fafb;
+  font-size: 13px;
+  outline: none;
+}
+
+.add-tag-input input:focus {
+  border-color: #f97316;
+}
+
+.add-tag-input button {
+  padding: 8px 16px;
+  background: #f97316;
+  border: none;
+  color: white;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.2s ease;
+}
+
+.add-tag-input button:hover {
+  background: #ea580c;
+}
+
+.detail-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.player-section {
+  background: #1e293b;
+  border-radius: 16px;
+  padding: 32px;
+}
+
+.player-section h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #f9fafb;
+  margin: 0 0 20px 0;
+}
+
+@media (max-width: 1024px) {
+  .detail-content {
+    flex-direction: column;
+    padding: 24px;
+  }
+
+  .detail-sidebar {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .sidebar-section {
+    flex: 1;
+    min-width: 280px;
+  }
+
+  .detail-page .app-header {
+    padding: 16px 24px;
+  }
+}

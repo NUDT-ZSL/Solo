@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>蛋白幻境 - Protein Fantasy</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(ellipse at center top, #0a0a1a 0%, #1a1a3e 100%);
+      font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    }
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    #label-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .ui-panel {
+      position: absolute;
+      background: rgba(0, 0, 0, 0.6);
+      border-radius: 8px;
+      padding: 12px;
+      color: #fff;
+      pointer-events: auto;
+      z-index: 100;
+      backdrop-filter: blur(4px);
+    }
+    #info-panel {
+      top: 20px;
+      left: 20px;
+      min-width: 200px;
+    }
+    #info-panel h1 {
+      font-size: 18px;
+      color: #00FFFF;
+      font-weight: bold;
+      margin-bottom: 12px;
+      text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .legend-color {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      margin-right: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    #tips-panel {
+      top: 20px;
+      right: 20px;
+      min-width: 180px;
+    }
+    #tips-panel h2 {
+      font-size: 14px;
+      color: #CCCCCC;
+      margin-bottom: 10px;
+      font-weight: normal;
+    }
+    .tip-item {
+      font-size: 12px;
+      color: #CCCCCC;
+      margin-bottom: 6px;
+      padding-left: 14px;
+      position: relative;
+    }
+    .tip-item::before {
+      content: '▸';
+      position: absolute;
+      left: 0;
+      color: #00FFFF;
+    }
+    #reset-btn {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      width: 80px;
+      height: 30px;
+      background: #333;
+      border: 1px solid #666;
+      border-radius: 4px;
+      color: #EEE;
+      font-size: 12px;
+      cursor: pointer;
+      z-index: 100;
+      transition: all 0.2s ease;
+      pointer-events: auto;
+    }
+    #reset-btn:hover {
+      background: #555;
+    }
+    #reset-btn:active {
+      background: #777;
+    }
+    .residue-label {
+      background: rgba(0, 0, 0, 0.7);
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: #ffffff;
+      white-space: nowrap;
+      pointer-events: none;
+      border: 1px solid rgba(0, 255, 255, 0.4);
+      box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+    }
+    .residue-label .name {
+      font-weight: bold;
+      color: #00FFFF;
+      font-size: 13px;
+    }
+    .residue-label .type {
+      color: #FFE66D;
+    }
+    .residue-label .index {
+      color: #AAAAAA;
+      font-size: 11px;
+    }
+    .distance-label {
+      background: rgba(0, 0, 0, 0.7);
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-size: 14px;
+      color: #FF00FF;
+      white-space: nowrap;
+      pointer-events: none;
+      border: 1px solid rgba(255, 0, 255, 0.5);
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+    <div id="label-container"></div>
+    <div id="info-panel" class="ui-panel">
+      <h1>蛋白幻境</h1>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #FF6B35;"></div>
+        <span>疏水性残基</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #4ECDC4;"></div>
+        <span>亲水性残基</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #FFE66D;"></div>
+        <span>带电荷残基</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #95E1D3;"></div>
+        <span>特殊残基</span>
+      </div>
+    </div>
+    <div id="tips-panel" class="ui-panel">
+      <h2>操作指南</h2>
+      <div class="tip-item">拖拽旋转视角</div>
+      <div class="tip-item">滚轮缩放（0.5×~5×）</div>
+      <div class="tip-item">空格自动旋转</div>
+      <div class="tip-item">Shift+点击测距</div>
+      <div class="tip-item">悬停查看残基信息</div>
+    </div>
+    <button id="reset-btn">重置视角</button>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

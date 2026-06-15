@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-sand-50 text-forest-800 font-body;
+  }
+
+  .leaflet-container {
+    @apply w-full h-full;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-white/70 backdrop-blur-xl border border-white/30 shadow-lg;
+  }
+
+  .btn-primary {
+    @apply bg-forest-500 text-white px-4 py-2 rounded-lg font-medium
+    hover:bg-forest-600 transition-all duration-200 active:scale-95;
+  }
+
+  .btn-accent {
+    @apply bg-amber-500 text-forest-900 px-4 py-2 rounded-lg font-medium
+    hover:bg-amber-600 transition-all duration-200 active:scale-95;
+  }
+
+  .btn-ghost {
+    @apply bg-transparent text-forest-500 px-4 py-2 rounded-lg font-medium
+    hover:bg-forest-500/10 transition-all duration-200;
+  }
+
+  .input-field {
+    @apply w-full px-3 py-2 bg-white border border-forest-200 rounded-lg
+    focus:outline-none focus:ring-2 focus:ring-forest-500/30 focus:border-forest-500
+    placeholder:text-forest-300 transition-all duration-200;
+  }
+
+  .card-base {
+    @apply bg-white rounded-xl shadow-sm border border-forest-100/50
+    hover:shadow-md hover:-translate-y-[5px] transition-all duration-300;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(45, 80, 22, 0.25);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(45, 80, 22, 0.4);
+}
+
+.leaflet-control-container .leaflet-control {
+  z-index: 10;
+}
+
+.leaflet-control-container {
+  z-index: 10;
+}

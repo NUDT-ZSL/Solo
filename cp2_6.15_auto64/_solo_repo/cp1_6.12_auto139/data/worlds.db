@@ -1,0 +1,4 @@
+{"id":"2d55af03-b998-4905-9641-e6f185954642","name":"Test World","width":40,"height":40,"blocks":{"11,10":1,"10,10":1,"12,10":1},"playerStart":{"y":20,"x":20},"createdAt":1781261719740,"updatedAt":1781261719740,"_id":"uX127x4oUlNZ8xRh"}
+{"id":"80608fc6-8998-437b-9fd0-ba4049c22a9f","name":"Test World","width":40,"height":40,"blocks":{"11,10":1,"10,10":1,"12,10":1},"playerStart":{"y":20,"x":20},"createdAt":1781261821238,"updatedAt":1781261821238,"_id":"MMkElFkTMAi5iYN8"}
+{"id":"80608fc6-8998-437b-9fd0-ba4049c22a9f","name":"Updated World","width":40,"height":40,"blocks":{"11,10":2,"10,10":2,"12,10":2},"playerStart":{"y":20,"x":20},"createdAt":1781261821238,"updatedAt":1781262002203,"_id":"MMkElFkTMAi5iYN8"}
+{"$$deleted":true,"_id":"MMkElFkTMAi5iYN8"}

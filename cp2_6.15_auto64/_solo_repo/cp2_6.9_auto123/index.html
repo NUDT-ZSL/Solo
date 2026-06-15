@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>数字水彩调色板</title>
+  <link rel="stylesheet" href="/src/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <div class="toolbar">
+      <button id="undoBtn" class="tool-btn" title="撤销 (Ctrl+Z)">↶ 撤销</button>
+      <button id="clearBtn" class="tool-btn" title="清空画布">✕ 清空</button>
+      <div class="divider"></div>
+      <label class="slider-label">
+        笔刷: <span id="brushSizeLabel">30</span>px
+        <input type="range" id="brushSizeSlider" min="10" max="80" value="30" />
+      </label>
+      <div class="divider"></div>
+      <div class="shape-group">
+        <button class="shape-btn active" data-shape="circle" title="圆形">● 圆</button>
+        <button class="shape-btn" data-shape="ellipse" title="椭圆">◉ 椭圆</button>
+        <button class="shape-btn" data-shape="irregular" title="不规则斑点">✦ 斑点</button>
+      </div>
+      <div class="divider"></div>
+      <button id="eyedropperBtn" class="tool-btn" title="吸管工具 (I)">💧 吸管</button>
+      <button id="exportBtn" class="tool-btn" title="导出PNG">⬇ 导出PNG</button>
+    </div>
+
+    <div class="main-content">
+      <div class="canvas-wrapper">
+        <canvas id="mainCanvas" width="800" height="600"></canvas>
+      </div>
+
+      <aside class="palette-panel">
+        <h3 class="panel-title">调色板</h3>
+
+        <div class="color-grid" id="colorGrid">
+        </div>
+
+        <div class="sliders-section">
+          <label class="slider-label">
+            R: <span id="rValue">0</span>
+            <input type="range" id="rSlider" min="0" max="255" value="194" />
+          </label>
+          <label class="slider-label">
+            G: <span id="gValue">0</span>
+            <input type="range" id="gSlider" min="0" max="255" value="59" />
+          </label>
+          <label class="slider-label">
+            B: <span id="bValue">0</span>
+            <input type="range" id="bSlider" min="0" max="255" value="34" />
+          </label>
+          <label class="slider-label">
+            A: <span id="aValue">0.70</span>
+            <input type="range" id="aSlider" min="0" max="100" value="70" />
+          </label>
+        </div>
+
+        <div class="preview-section">
+          <div class="preview-title">当前颜色 & 笔刷预览</div>
+          <div class="preview-row">
+            <div class="color-preview" id="colorPreview"></div>
+            <canvas id="brushPreview" width="100" height="100"></canvas>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

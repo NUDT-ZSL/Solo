@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head><title>Test Image Generator</title></head>
+<body>
+<canvas id="test" width="400" height="300"></canvas>
+<script>
+const c = document.getElementById('test');
+const ctx = c.getContext('2d');
+const g = ctx.createLinearGradient(0,0,400,300);
+g.addColorStop(0,'#FF0000');
+g.addColorStop(0.33,'#00FF00');
+g.addColorStop(0.66,'#0000FF');
+g.addColorStop(1,'#FFFF00');
+ctx.fillStyle = g;
+ctx.fillRect(0,0,400,300);
+ctx.fillStyle = '#FFFFFF';
+ctx.fillRect(50,50,100,100);
+ctx.fillStyle = '#000000';
+ctx.beginPath();
+ctx.arc(300,200,60,0,Math.PI*2);
+ctx.fill();
+ctx.fillStyle = '#FF00FF';
+ctx.beginPath();
+ctx.moveTo(200,50);
+ctx.lineTo(150,150);
+ctx.lineTo(250,150);
+ctx.closePath();
+ctx.fill();
+const link = document.createElement('a');
+link.download = 'test_picture.png';
+link.href = c.toDataURL('image/png');
+link.click();
+</script>
+</body>
+</html>

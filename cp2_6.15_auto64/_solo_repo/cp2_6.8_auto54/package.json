@@ -1,0 +1,15 @@
+{
+  "name": "spaceship-resource-simulator",
+  "version": "1.0.0",
+  "description": "2D飞船资源管理与故障模拟器",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
+  }
+}

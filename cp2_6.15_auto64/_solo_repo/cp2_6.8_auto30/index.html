@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D 流体彩绘雕塑生成器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1a 100%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      color: #fff;
+      user-select: none;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+    }
+
+    .control-panel {
+      position: fixed;
+      top: 24px;
+      left: 24px;
+      width: 240px;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      z-index: 10;
+    }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      letter-spacing: 0.5px;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .panel-section {
+      margin-bottom: 16px;
+    }
+
+    .panel-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .section-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: rgba(255, 255, 255, 0.5);
+      margin-bottom: 8px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 10px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.95);
+      color: #0f0f1a;
+      border-color: rgba(255, 255, 255, 0.95);
+    }
+
+    .color-themes {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .theme-btn {
+      padding: 8px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .theme-btn:hover {
+      background: rgba(255, 255, 255, 0.95);
+      color: #0f0f1a;
+      border-color: rgba(255, 255, 255, 0.95);
+    }
+
+    .theme-btn.active {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.4);
+    }
+
+    .theme-dots {
+      display: flex;
+      gap: 2px;
+    }
+
+    .theme-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .hint {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.4);
+      letter-spacing: 0.3px;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .hint span {
+      margin: 0 8px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+    <div class="control-panel" id="control-panel">
+      <div class="panel-title">流体雕塑控制台</div>
+      <div class="panel-section">
+        <div class="section-label">操作</div>
+        <button class="btn" id="clear-btn">清空画布</button>
+      </div>
+      <div class="panel-section">
+        <div class="section-label">配色方案</div>
+        <div class="color-themes" id="color-themes"></div>
+      </div>
+    </div>
+    <div class="hint">
+      <span>左键拖拽：喷射粒子</span>
+      <span>|</span>
+      <span>右键拖拽：平移视角</span>
+      <span>|</span>
+      <span>滚轮：缩放</span>
+      <span>|</span>
+      <span>空格：切换模式</span>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

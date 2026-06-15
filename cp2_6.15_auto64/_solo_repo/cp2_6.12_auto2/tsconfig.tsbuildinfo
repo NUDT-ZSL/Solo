@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/modules/colorengine/colorengine.ts","./src/modules/colorengine/palettegenerator.ts","./src/modules/gameboard/colorgrid.tsx","./src/modules/gameboard/gameboard.tsx","./src/utils/helpers.ts"],"version":"5.8.3"}

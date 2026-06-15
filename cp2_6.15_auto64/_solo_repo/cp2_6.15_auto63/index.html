@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>虚拟乐高搭建器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #ffffff;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .main-container {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      width: 280px;
+      background: #f5f5f5;
+      border-radius: 12px;
+      margin: 16px;
+      padding: 16px;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+
+    .sidebar::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .sidebar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .sidebar::-webkit-scrollbar-thumb {
+      background: #ccc;
+      border-radius: 3px;
+    }
+
+    .sidebar-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 16px;
+    }
+
+    .brick-item {
+      display: flex;
+      align-items: center;
+      padding: 12px;
+      background: #fff;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      cursor: grab;
+      transition: all 0.2s ease;
+      user-select: none;
+    }
+
+    .brick-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .brick-item:active {
+      cursor: grabbing;
+    }
+
+    .brick-item.disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .brick-preview {
+      width: 60px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 12px;
+    }
+
+    .brick-info {
+      flex: 1;
+    }
+
+    .brick-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: #333;
+      margin-bottom: 4px;
+    }
+
+    .brick-count {
+      font-size: 12px;
+      color: #888;
+    }
+
+    .canvas-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #fafafa;
+    }
+
+    #mainCanvas {
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+      transition: transform 0.1s linear;
+      cursor: default;
+    }
+
+    .zoom-indicator {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      padding: 4px 8px;
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 4px;
+      font-size: 12px;
+      color: #666;
+      pointer-events: none;
+    }
+
+    .bottom-bar {
+      height: 60px;
+      background: #fff;
+      box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 0 24px;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      background: #eceff1;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #333;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn:hover {
+      background: #cfd8dc;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-icon {
+      transition: transform 0.3s ease;
+    }
+
+    .btn:active .btn-icon {
+      transform: rotate(-180deg);
+    }
+
+    .btn-redo:active .btn-icon {
+      transform: rotate(180deg);
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+
+    .modal-overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal {
+      background: #fff;
+      border-radius: 8px;
+      padding: 24px;
+      min-width: 320px;
+      transform: scale(0.9);
+      transition: transform 0.2s ease;
+    }
+
+    .modal-overlay.show .modal {
+      transform: scale(1);
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 12px;
+    }
+
+    .modal-content {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 24px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+
+    .btn-primary {
+      background: #ff5252;
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #ff1744;
+    }
+
+    .drag-ghost {
+      position: fixed;
+      pointer-events: none;
+      z-index: 100;
+      opacity: 0.6;
+      transition: opacity 0.2s ease;
+    }
+
+    .rotate-icon {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #ff6f00;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 8px;
+      font-weight: bold;
+    }
+
+    .selected-brick:hover .rotate-icon {
+      display: flex;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="main-container">
+      <div class="sidebar" id="brickLibrary">
+        <div class="sidebar-title">积木库</div>
+      </div>
+      <div class="canvas-container" id="canvasContainer">
+        <canvas id="mainCanvas"></canvas>
+        <div class="zoom-indicator" id="zoomIndicator">100%</div>
+      </div>
+    </div>
+    <div class="bottom-bar">
+      <button class="btn" id="undoBtn">
+        <span class="btn-icon">↶</span>
+        撤销 (Ctrl+Z)
+      </button>
+      <button class="btn btn-redo" id="redoBtn">
+        <span class="btn-icon">↷</span>
+        重做 (Ctrl+Y)
+      </button>
+      <button class="btn" id="clearBtn">
+        <span class="btn-icon">🗑</span>
+        清空画布
+      </button>
+      <button class="btn" id="exportBtn">
+        <span class="btn-icon">⬇</span>
+        导出SVG
+      </button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="confirmModal">
+    <div class="modal">
+      <div class="modal-title">确认清空</div>
+      <div class="modal-content">确定要清空画布上的所有积木吗？此操作不可撤销。</div>
+      <div class="modal-actions">
+        <button class="btn" id="cancelClearBtn">取消</button>
+        <button class="btn btn-primary" id="confirmClearBtn">确定清空</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

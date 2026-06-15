@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>声波操控光路解谜模拟器</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="status-bar">
+      <div id="status-text">调整透镜位置和声音频率，激活所有光敏开关</div>
+      <button id="reset-btn">重置</button>
+    </div>
+    <div id="canvas-container">
+      <canvas id="game-canvas" width="900" height="600"></canvas>
+    </div>
+    <div id="frequency-indicator">
+      <div id="frequency-bar"></div>
+      <div id="frequency-value">-- Hz</div>
+    </div>
+    <button id="record-btn">
+      <span id="record-icon">●</span>
+      <span id="record-text">录音</span>
+    </button>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

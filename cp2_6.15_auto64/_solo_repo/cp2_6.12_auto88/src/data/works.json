@@ -1,0 +1,259 @@
+[
+  {
+    "id": "1",
+    "name": "青瓷茶壶",
+    "category": "茶器",
+    "thumbnail": "https://images.unsplash.com/photo-1563822249366-3efb23b8e0c9?w=400&h=400&fit=crop",
+    "image": "https://images.unsplash.com/photo-1563822249366-3efb23b8e0c9?w=800&h=800&fit=crop",
+    "description": "这款青瓷茶壶采用传统手工拉坯工艺，釉色温润如玉，造型古朴典雅。壶身线条流畅，壶嘴出水流畅，柄握感舒适。每一件都经过1280度高温烧制，呈现出独特的冰裂纹理，是茶艺爱好者的收藏佳品。",
+    "videoUrl": "//player.bilibili.com/player.html?aid=170001&bvid=BV1xx411c7mu&cid=200000&page=1",
+    "comments": [
+      {
+        "id": "c1",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
+        "nickname": "清茶雅士",
+        "time": "2024-01-15 14:30",
+        "content": "收到茶壶了，釉色非常漂亮，手感也很好，出水流畅不滴水，非常满意！"
+      },
+      {
+        "id": "c2",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Lily",
+        "nickname": "瓷韵轩主人",
+        "time": "2024-01-10 09:20",
+        "content": "做工很精细，冰裂纹理自然好看，用来泡普洱很合适，推荐！"
+      },
+      {
+        "id": "c3",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Max",
+        "nickname": "老茶客",
+        "time": "2024-01-05 16:45",
+        "content": "第二把了，第一把送给父亲了，自己又入了一把，确实是好东西。"
+      }
+    ]
+  },
+  {
+    "id": "2",
+    "name": "手绘品茗杯",
+    "category": "茶器",
+    "thumbnail": "https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=400&h=400&fit=crop",
+    "image": "https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=800&h=800&fit=crop",
+    "description": "手工绘制的品茗杯，每一只都是独一无二的艺术品。杯身绘有山水图案，笔触细腻，意境悠远。采用优质高岭土烧制，胎薄如纸，透光可见指纹。是品茶赏器的绝佳选择。",
+    "videoUrl": "//player.bilibili.com/player.html?aid=170002&bvid=BV1xx411c7mv&cid=200002&page=1",
+    "comments": [
+      {
+        "id": "c4",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Sophia",
+        "nickname": "墨香书韵",
+        "time": "2024-01-12 11:00",
+        "content": "杯子很美，手绘的图案很有意境，用来喝茶心情都变好了。"
+      },
+      {
+        "id": "c5",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Leo",
+        "nickname": "瓷器收藏家",
+        "time": "2024-01-08 20:30",
+        "content": "买了一套六个，每个图案都不一样，摆在一起特别好看。"
+      }
+    ]
+  },
+  {
+    "id": "3",
+    "name": "粗陶花器",
+    "category": "花器",
+    "thumbnail": "https://images.unsplash.com/photo-1459411552884-841db9b3cc2a?w=400&h=400&fit=crop",
+    "image": "https://images.unsplash.com/photo-1459411552884-841db9b3cc2a?w=800&h=800&fit=crop",
+    "description": "质朴粗犷的手工陶制花器，保留了泥土的原始质感。每一件都带着匠人手作的温度，造型自然随性，与鲜花绿植相得益彰。适合插放干花或水培绿植，为家居增添自然气息。",
+    "videoUrl": "//player.bilibili.com/player.html?aid=170003&bvid=BV1xx411c7nv&cid=200003&page=1",
+    "comments": [
+      {
+        "id": "c6",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Aria",
+        "nickname": "花间小憩",
+        "time": "2024-01-14 15:20",
+        "content": "花盆质感很好，粗粗的很有味道，插了干花特别美。"
+      },
+      {
+        "id": "c7",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Tom",
+        "nickname": "绿植控",
+        "time": "2024-01-06 10:15",
+        "content": "尺寸刚好，透气性也好，多肉种进去状态不错。"
+      }
+    ]
+  },
+  {
+    "id": "4",
+    "name": "白瓷花瓶",
+    "category": "花器",
+    "thumbnail": "https://images.unsplash.com/photo-1578500494198-246f612d3b3d?w=400&h=400&fit=crop",
+    "image": "https://images.unsplash.com/photo-1578500494198-246f612d3b3d?w=800&h=800&fit=crop",
+    "description": "德化白瓷花瓶，釉面光洁如镜，胎质细腻温润。瓶身线条优雅流畅，造型简约大方，适合各种风格的家居装饰。无论是单枝梅花还是一束鲜花，都能映衬出东方美学的禅意。",
+    "videoUrl": "//player.bilibili.com/player.html?aid=170004&bvid=BV1xx411c7ov&cid=200004&page=1",
+    "comments": [
+      {
+        "id": "c8",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Emma",
+        "nickname": "素心匠人",
+        "time": "2024-01-11 13:40",
+        "content": "白瓷质感超棒，温润如玉，放在书房里很有禅意。"
+      },
+      {
+        "id": "c9",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Jack",
+        "nickname": "生活美学",
+        "time": "2024-01-03 09:50",
+        "content": "花瓶造型很优雅，送朋友的乔迁礼物，对方特别喜欢。"
+      }
+    ]
+  },
+  {
+    "id": "5",
+    "name": "手工陶碗",
+    "category": "食器",
+    "thumbnail": "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=400&h=400&fit=crop",
+    "image": "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=800&h=800&fit=crop",
+    "description": "手工拉坯的陶碗，每一只都略有不同，这正是手作的魅力所在。碗壁厚实有分量，隔热效果好，用来喝汤吃面都很合适。表面施有哑光釉，触感细腻温润，可用洗碗机清洗。",
+    "videoUrl": "//player.bilibili.com/player.html?aid=170005&bvid=BV1xx411c7pv&cid=200005&page=1",
+    "comments": [
+      {
+        "id": "c10",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Oliver",
+        "nickname": "美食记录者",
+        "time": "2024-01-13 18:20",
+        "content": "碗的手感特别好，沉甸甸的很有质感，拍照也上镜。"
+      },
+      {
+        "id": "c11",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Mia",
+        "nickname": "厨房达人",
+        "time": "2024-01-07 12:10",
+        "content": "买了四个，用来装沙拉和水果都很好看，家人都喜欢。"
+      }
+    ]
+  },
+  {
+    "id": "6",
+    "name": "日式餐盘套装",
+    "category": "食器",
+    "thumbnail": "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=400&h=400&fit=crop",
+    "image": "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=800&h=800&fit=crop",
+    "description": "日式风格的陶瓷餐盘套装，包含大小盘各两只。釉色是质朴的灰青色，表面有细微的颗粒质感，营造出侘寂美学的独特韵味。餐盘深浅适中，适合盛放各类家常菜肴。",
+    "videoUrl": "//player.bilibili.com/player.html?aid=170006&bvid=BV1xx411c7qv&cid=200006&page=1",
+    "comments": [
+      {
+        "id": "c12",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Luna",
+        "nickname": "日食记",
+        "time": "2024-01-10 20:00",
+        "content": "餐盘很有质感，拍出来的食物照片特别有食欲。"
+      },
+      {
+        "id": "c13",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Lucas",
+        "nickname": "慢生活",
+        "time": "2024-01-04 11:30",
+        "content": "质量很好，釉面均匀，手感顺滑，值得购买。"
+      }
+    ]
+  },
+  {
+    "id": "7",
+    "name": "陶瓷香插",
+    "category": "装饰品",
+    "thumbnail": "https://images.unsplash.com/photo-1606293459299-482d0e1d02e8?w=400&h=400&fit=crop",
+    "image": "https://images.unsplash.com/photo-1606293459299-482d0e1d02e8?w=800&h=800&fit=crop",
+    "description": "小巧精致的陶瓷香插，造型如一片舒展的莲叶。手工捏制，每一片莲叶的弧度都略有不同。适合搭配线香使用，香灰落在叶面上，别有一番禅意。是书桌上的雅致小物。",
+    "videoUrl": "//player.bilibili.com/player.html?aid=170007&bvid=BV1xx411c7rv&cid=200007&page=1",
+    "comments": [
+      {
+        "id": "c14",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Amelia",
+        "nickname": "香道爱好者",
+        "time": "2024-01-15 10:00",
+        "content": "香插很精致，造型优美，点上香之后氛围感拉满。"
+      },
+      {
+        "id": "c15",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Ethan",
+        "nickname": "禅意空间",
+        "time": "2024-01-09 16:20",
+        "content": "送给朋友的生日礼物，对方特别喜欢，很有品味的小物件。"
+      }
+    ]
+  },
+  {
+    "id": "8",
+    "name": "陶艺摆件·山岚",
+    "category": "装饰品",
+    "thumbnail": "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=400&fit=crop",
+    "image": "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=800&h=800&fit=crop",
+    "description": "以远山为灵感创作的陶艺摆件，山峦起伏，云雾缭绕。采用渐变釉色工艺，从山脚的深灰到山顶的月白，层次丰富。摆放在玄关或书架上，为空间增添一抹诗意的山水意境。",
+    "videoUrl": "//player.bilibili.com/player.html?aid=170008&bvid=BV1xx411c7sv&cid=200008&page=1",
+    "comments": [
+      {
+        "id": "c16",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Ava",
+        "nickname": "山水之间",
+        "time": "2024-01-12 09:00",
+        "content": "摆件太有意境了，放在办公桌上，累了看看心情都平静了。"
+      },
+      {
+        "id": "c17",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Noah",
+        "nickname": "文房雅趣",
+        "time": "2024-01-05 14:15",
+        "content": "做工精细，釉色过渡自然，很有艺术感的小摆件。"
+      }
+    ]
+  },
+  {
+    "id": "9",
+    "name": "建盏茶盏",
+    "category": "茶器",
+    "thumbnail": "https://images.unsplash.com/photo-1544787219-7f47ccb76574?w=400&h=400&fit=crop",
+    "image": "https://images.unsplash.com/photo-1544787219-7f47ccb76574?w=800&h=800&fit=crop",
+    "description": "仿宋代建盏工艺制作的茶盏，釉面呈现出绚丽的兔毫纹理。在光线下变幻出金、蓝、紫等多种光泽，每一只的纹理都是独一无二的。斗茶品茗的经典器型，极具收藏价值。",
+    "videoUrl": "//player.bilibili.com/player.html?aid=170009&bvid=BV1xx411c7tv&cid=200009&page=1",
+    "comments": [
+      {
+        "id": "c18",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Harper",
+        "nickname": "茶中仙",
+        "time": "2024-01-14 11:20",
+        "content": "建盏非常漂亮，兔毫纹理清晰，阳光下看特别美，性价比很高。"
+      },
+      {
+        "id": "c19",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Benjamin",
+        "nickname": "宋韵风雅",
+        "time": "2024-01-08 08:50",
+        "content": "入手第三只了，每只都不一样，这就是建盏的魅力吧。"
+      }
+    ]
+  },
+  {
+    "id": "10",
+    "name": "挂釉花插",
+    "category": "花器",
+    "thumbnail": "https://images.unsplash.com/photo-1490750967868-88aa4486c946?w=400&h=400&fit=crop",
+    "image": "https://images.unsplash.com/photo-1490750967868-88aa4486c946?w=800&h=800&fit=crop",
+    "description": "手工挂釉工艺的陶瓷花插，釉色流动自然，形成独特的窑变效果。瓶身小巧玲珑，适合插放单支鲜花或干花，摆放在案头窗台，为生活增添一抹自然之美。",
+    "videoUrl": "//player.bilibili.com/player.html?aid=170010&bvid=BV1xx411c7uv&cid=200010&page=1",
+    "comments": [
+      {
+        "id": "c20",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Evelyn",
+        "nickname": "小确幸",
+        "time": "2024-01-11 16:40",
+        "content": "花插很可爱，釉色漂亮，插一支小花特别有感觉。"
+      },
+      {
+        "id": "c21",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=James",
+        "nickname": "家居控",
+        "time": "2024-01-06 13:10",
+        "content": "买了两个不同釉色的，摆在一起很好看，各有各的美。"
+      }
+    ]
+  }
+]

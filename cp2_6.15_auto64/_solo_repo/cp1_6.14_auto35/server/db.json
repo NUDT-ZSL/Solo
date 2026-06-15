@@ -1,0 +1,220 @@
+{
+  "users": [
+    {
+      "id": "user-1",
+      "nickname": "Alice",
+      "password": "123456",
+      "avatar": "A"
+    },
+    {
+      "id": "user-2",
+      "nickname": "Bob",
+      "password": "123456",
+      "avatar": "B"
+    },
+    {
+      "id": "user-3",
+      "nickname": "Charlie",
+      "password": "123456",
+      "avatar": "C"
+    }
+  ],
+  "projects": [
+    {
+      "id": "project-1",
+      "name": "示例项目",
+      "createdAt": "2026-06-13T20:23:59.810Z",
+      "startDate": "2026-06-07"
+    }
+  ],
+  "projectMembers": [
+    {
+      "id": "pm-1",
+      "projectId": "project-1",
+      "userId": "user-1"
+    },
+    {
+      "id": "pm-2",
+      "projectId": "project-1",
+      "userId": "user-2"
+    },
+    {
+      "id": "pm-3",
+      "projectId": "project-1",
+      "userId": "user-3"
+    }
+  ],
+  "cards": [
+    {
+      "id": "card-1",
+      "projectId": "project-1",
+      "column": "todo",
+      "title": "设计登录页面",
+      "description": "完成登录页面的UI设计，包含表单验证和响应式布局。",
+      "assigneeId": "user-1",
+      "priority": "high",
+      "dueDate": "2026-06-20",
+      "tags": [
+        {
+          "name": "设计",
+          "color": "#10b981"
+        },
+        {
+          "name": "UI",
+          "color": "#8b5cf6"
+        }
+      ],
+      "createdAt": "2026-06-07T20:23:59.811Z",
+      "movedAt": null
+    },
+    {
+      "id": "card-2",
+      "projectId": "project-1",
+      "column": "todo",
+      "title": "编写API文档",
+      "description": "为所有RESTful接口编写详细的API文档。",
+      "assigneeId": "user-2",
+      "priority": "medium",
+      "dueDate": "2026-06-22",
+      "tags": [
+        {
+          "name": "文档",
+          "color": "#f59e0b"
+        }
+      ],
+      "createdAt": "2026-06-08T20:23:59.811Z",
+      "movedAt": null
+    },
+    {
+      "id": "card-3",
+      "projectId": "project-1",
+      "column": "inProgress",
+      "title": "实现拖拽功能",
+      "description": "实现看板卡片的拖拽排序和列间移动功能。",
+      "assigneeId": "user-1",
+      "priority": "urgent",
+      "dueDate": "2026-06-15",
+      "tags": [
+        {
+          "name": "前端",
+          "color": "#3b82f6"
+        }
+      ],
+      "createdAt": "2026-06-09T20:23:59.811Z",
+      "movedAt": "2026-06-12T20:23:59.811Z"
+    },
+    {
+      "id": "card-4",
+      "projectId": "project-1",
+      "column": "inProgress",
+      "title": "数据库建模",
+      "description": "设计项目、卡片、评论等数据表结构。",
+      "assigneeId": "user-3",
+      "priority": "high",
+      "dueDate": "2026-06-16",
+      "tags": [
+        {
+          "name": "后端",
+          "color": "#ef4444"
+        }
+      ],
+      "createdAt": "2026-06-10T20:23:59.811Z",
+      "movedAt": "2026-06-11T20:23:59.811Z"
+    },
+    {
+      "id": "card-5",
+      "projectId": "project-1",
+      "column": "inProgress",
+      "title": "配置CI/CD",
+      "description": "设置自动化构建和部署流水线。",
+      "assigneeId": "user-2",
+      "priority": "low",
+      "dueDate": "2026-06-25",
+      "tags": [
+        {
+          "name": "运维",
+          "color": "#6b7280"
+        }
+      ],
+      "createdAt": "2026-06-11T20:23:59.811Z",
+      "movedAt": "2026-06-12T20:23:59.811Z"
+    },
+    {
+      "id": "card-6",
+      "projectId": "project-1",
+      "column": "done",
+      "title": "项目初始化",
+      "description": "创建项目骨架，配置开发环境。",
+      "assigneeId": "user-3",
+      "priority": "high",
+      "dueDate": "2026-06-10",
+      "tags": [
+        {
+          "name": "基建",
+          "color": "#14b8a6"
+        }
+      ],
+      "createdAt": "2026-06-07T20:23:59.811Z",
+      "movedAt": "2026-06-08T20:23:59.811Z"
+    },
+    {
+      "id": "card-7",
+      "projectId": "project-1",
+      "column": "done",
+      "title": "需求分析",
+      "description": "收集并整理项目需求文档。",
+      "assigneeId": "user-1",
+      "priority": "urgent",
+      "dueDate": "2026-06-09",
+      "tags": [
+        {
+          "name": "产品",
+          "color": "#ec4899"
+        }
+      ],
+      "createdAt": "2026-06-07T20:23:59.811Z",
+      "movedAt": "2026-06-09T20:23:59.811Z"
+    },
+    {
+      "id": "card-8",
+      "projectId": "project-1",
+      "column": "done",
+      "title": "原型设计",
+      "description": "使用Figma完成产品原型设计。",
+      "assigneeId": "user-2",
+      "priority": "medium",
+      "dueDate": "2026-06-11",
+      "tags": [
+        {
+          "name": "设计",
+          "color": "#10b981"
+        }
+      ],
+      "createdAt": "2026-06-08T20:23:59.811Z",
+      "movedAt": "2026-06-10T20:23:59.811Z"
+    }
+  ],
+  "comments": [
+    {
+      "id": "comment-1",
+      "cardId": "card-3",
+      "userId": "user-2",
+      "content": "拖拽的时候记得加过渡动画，体验会更好。",
+      "createdAt": "2026-06-10T21:23:59.811Z"
+    },
+    {
+      "id": "comment-2",
+      "cardId": "card-3",
+      "userId": "user-1",
+      "content": "好的，我已经加上了0.2秒的弹性缓动。",
+      "createdAt": "2026-06-10T22:23:59.811Z"
+    },
+    {
+      "id": "comment-3",
+      "cardId": "card-6",
+      "userId": "user-1",
+      "content": "环境配置完成，大家可以拉代码了。",
+      "createdAt": "2026-06-08T20:53:59.811Z"
+    }
+  ]
+}

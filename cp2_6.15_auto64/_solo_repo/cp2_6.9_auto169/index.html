@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>动态彩色光谱蛛网</title>
+  <link rel="stylesheet" href="src/style.css" />
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div id="control-panel" class="control-panel">
+    <div class="control-group">
+      <label class="control-label">
+        <span class="label-text">丝线宽度</span>
+        <span class="label-value" id="lineWidthValue">3</span>
+      </label>
+      <input type="range" id="lineWidth" class="slider" min="1" max="8" step="0.5" value="3" />
+    </div>
+    <div class="control-group">
+      <label class="control-label">
+        <span class="label-text">发光强度</span>
+        <span class="label-value" id="glowIntensityValue">1.0</span>
+      </label>
+      <input type="range" id="glowIntensity" class="slider" min="0.5" max="2.0" step="0.1" value="1.0" />
+    </div>
+    <div class="control-group">
+      <label class="control-label">
+        <span class="label-text">蜘蛛速度</span>
+        <span class="label-value" id="spiderSpeedValue">40</span>
+      </label>
+      <input type="range" id="spiderSpeed" class="slider" min="20" max="80" step="1" value="40" />
+    </div>
+  </div>
+
+  <button id="resetBtn" class="reset-btn" title="清空画布">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="1 4 1 10 7 10"></polyline>
+      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+    </svg>
+  </button>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

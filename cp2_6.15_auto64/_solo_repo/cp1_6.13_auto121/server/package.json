@@ -1,0 +1,23 @@
+{
+  "name": "skillswap-server",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "start": "ts-node index.ts"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "nedb-promises": "^6.2.3",
+    "uuid": "^9.0.1",
+    "cors": "^2.8.5",
+    "body-parser": "^1.20.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/cors": "^2.8.17",
+    "@types/uuid": "^9.0.8",
+    "@types/node": "^20.11.19",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}

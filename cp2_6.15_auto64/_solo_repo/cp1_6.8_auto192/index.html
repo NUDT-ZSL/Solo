@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>墨光流影</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0e27; }
+    canvas { display: block; position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+
+    #control-panel {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 22px;
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      z-index: 10;
+      font-family: 'Noto Serif SC', serif;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+
+    .color-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: border-color 0.25s, box-shadow 0.25s, transform 0.2s;
+      outline: none;
+    }
+    .color-btn:hover { transform: scale(1.15); }
+    .color-btn.active {
+      border-color: rgba(255, 255, 255, 0.8);
+      box-shadow: 0 0 14px 2px var(--glow);
+      transform: scale(1.15);
+    }
+
+    #clear-btn {
+      padding: 7px 18px;
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      font-family: 'Noto Serif SC', serif;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.25s, color 0.25s, box-shadow 0.25s;
+      outline: none;
+    }
+    #clear-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 0 12px rgba(255, 255, 255, 0.1);
+    }
+
+    #hint {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: rgba(255, 255, 255, 0.2);
+      font-family: 'Noto Serif SC', serif;
+      font-size: 18px;
+      letter-spacing: 4px;
+      pointer-events: none;
+      z-index: 5;
+      animation: hintFade 4s ease-out forwards;
+    }
+    @keyframes hintFade {
+      0% { opacity: 0; }
+      20% { opacity: 1; }
+      70% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    @media (max-width: 640px) {
+      #control-panel {
+        bottom: 16px;
+        right: 50%;
+        transform: translateX(50%);
+        padding: 10px 16px;
+        gap: 10px;
+      }
+      .color-btn { width: 30px; height: 30px; }
+      #clear-btn { font-size: 12px; padding: 5px 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="hint">点击水面，投放墨滴</div>
+  <div id="control-panel">
+    <button class="color-btn active"
+      style="background: #ff6b35; --glow: rgba(255,107,53,0.5);"
+      data-color="0xff6b35" data-index="0" aria-label="红橙色"></button>
+    <button class="color-btn"
+      style="background: #7b68ee; --glow: rgba(123,104,238,0.5);"
+      data-color="0x7b68ee" data-index="1" aria-label="蓝紫色"></button>
+    <button class="color-btn"
+      style="background: #00d4aa; --glow: rgba(0,212,170,0.5);"
+      data-color="0x00d4aa" data-index="2" aria-label="青绿色"></button>
+    <button id="clear-btn">清除</button>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

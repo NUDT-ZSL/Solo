@@ -1,0 +1,33 @@
+{
+  "name": "topic-heat-analysis",
+  "version": "1.0.0",
+  "description": "Real-time topic heat analysis and keyword trend visualization",
+  "scripts": {
+    "server": "ts-node server/src/index.ts",
+    "client": "vite",
+    "start": "concurrently \"npm run server\" \"npm run client\""
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "uuid": "^9.0.0",
+    "cors": "^2.8.5",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "chart.js": "^4.4.0",
+    "react-chartjs-2": "^5.2.0",
+    "d3-cloud": "^1.2.7",
+    "concurrently": "^8.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2",
+    "@types/react": "^18.2.37",
+    "@types/react-dom": "^18.2.15",
+    "@types/express": "^4.17.21",
+    "@types/cors": "^2.8.16",
+    "@types/uuid": "^9.0.7",
+    "@types/d3-cloud": "^1.2.8",
+    "vite": "^5.0.0",
+    "@vitejs/plugin-react": "^4.1.1",
+    "ts-node": "^10.9.1"
+  }
+}

@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2D回合制战棋关卡编辑器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #000000;
+      color: #E2E8F0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      overflow: hidden;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .game-container {
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      gap: 0;
+      width: 100%;
+      height: 100%;
+      padding: 16px;
+    }
+
+    .log-panel {
+      width: 220px;
+      background: #1A202C;
+      color: #E2E8F0;
+      padding: 12px;
+      border-radius: 8px 0 0 8px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      margin-right: 0;
+    }
+
+    .log-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #F6E05E;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #4A5568;
+    }
+
+    .log-list {
+      flex: 1;
+      overflow-y: auto;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .log-list::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .log-list::-webkit-scrollbar-thumb {
+      background: #4A5568;
+      border-radius: 2px;
+    }
+
+    .log-item {
+      padding: 4px 0;
+      border-bottom: 1px dashed #2D3748;
+      word-break: break-all;
+    }
+
+    .log-item.red {
+      color: #FC8181;
+    }
+
+    .log-item.blue {
+      color: #63B3ED;
+    }
+
+    .canvas-wrapper {
+      position: relative;
+      background: #1A202C;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    #gameCanvas {
+      display: block;
+      cursor: default;
+      background: #000000;
+      border-radius: 4px;
+    }
+
+    .control-panel {
+      width: 220px;
+      background: #1A202C;
+      color: #E2E8F0;
+      padding: 12px;
+      border-radius: 0 8px 8px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+    }
+
+    .panel-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .panel-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #A0AEC0;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .terrain-buttons {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+    }
+
+    .terrain-btn {
+      width: 100%;
+      aspect-ratio: 1;
+      border: 2px solid #4A5568;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      position: relative;
+    }
+
+    .terrain-btn:hover {
+      transform: scale(1.08);
+      z-index: 2;
+    }
+
+    .terrain-btn.active {
+      border-color: #F6E05E;
+      box-shadow: 0 0 0 2px rgba(246, 224, 94, 0.3);
+      transform: scale(1.08);
+    }
+
+    .terrain-btn .tooltip {
+      position: absolute;
+      bottom: -24px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      background: #2D3748;
+      padding: 2px 6px;
+      border-radius: 3px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+
+    .terrain-btn:hover .tooltip {
+      opacity: 1;
+    }
+
+    .terrain-preview {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      padding: 6px 8px;
+      background: #2D3748;
+      border-radius: 4px;
+    }
+
+    .terrain-preview-color {
+      width: 20px;
+      height: 20px;
+      border-radius: 3px;
+      border: 1px solid #4A5568;
+    }
+
+    .unit-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .faction-toggle {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 4px;
+    }
+
+    .faction-btn {
+      flex: 1;
+      padding: 6px;
+      border: 1px solid #4A5568;
+      background: #2D3748;
+      color: #E2E8F0;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .faction-btn:hover {
+      background: #4A5568;
+    }
+
+    .faction-btn.active.red {
+      background: #9B2C2C;
+      border-color: #FC8181;
+    }
+
+    .faction-btn.active.blue {
+      background: #2C5282;
+      border-color: #63B3ED;
+    }
+
+    .unit-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: #2D3748;
+      border: 1px solid #4A5568;
+      color: #E2E8F0;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-size: 13px;
+      text-align: left;
+    }
+
+    .unit-btn:hover {
+      background: #4A5568;
+      transform: scale(1.02);
+    }
+
+    .unit-btn.active {
+      background: #4A5568;
+      border-color: #F6E05E;
+      box-shadow: 0 0 0 1px rgba(246, 224, 94, 0.3);
+    }
+
+    .unit-icon {
+      font-size: 20px;
+    }
+
+    .unit-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .unit-info .name {
+      font-weight: 600;
+    }
+
+    .unit-info .stats {
+      font-size: 10px;
+      color: #A0AEC0;
+    }
+
+    .action-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .action-btn {
+      padding: 8px 10px;
+      background: #4A5568;
+      color: #E2E8F0;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      flex: 1;
+      min-width: calc(50% - 3px);
+    }
+
+    .action-btn:hover {
+      background: #2D3748;
+      transform: scale(1.02);
+    }
+
+    .action-btn:active {
+      transform: scale(0.98);
+    }
+
+    .action-btn.primary {
+      background: #D69E2E;
+      color: #1A202C;
+      font-weight: 600;
+    }
+
+    .action-btn.primary:hover {
+      background: #ECC94B;
+    }
+
+    .battle-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.85);
+      color: #E2E8F0;
+      padding: 24px 36px;
+      border-radius: 12px;
+      border: 2px solid #F6E05E;
+      font-size: 18px;
+      font-weight: 600;
+      text-align: center;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      z-index: 100;
+      box-shadow: 0 0 30px rgba(246, 224, 94, 0.3);
+    }
+
+    .battle-overlay.visible {
+      opacity: 1;
+    }
+
+    .battle-overlay .damage {
+      font-size: 32px;
+      color: #FC8181;
+      margin: 8px 0;
+    }
+
+    .battle-overlay .killed {
+      color: #F6E05E;
+    }
+
+    #fileInput {
+      display: none;
+    }
+
+    @media (max-width: 900px) {
+      .game-container {
+        flex-direction: column;
+        overflow-y: auto;
+      }
+
+      .log-panel {
+        width: 100%;
+        max-height: 150px;
+        border-radius: 8px 8px 0 0;
+      }
+
+      .control-panel {
+        width: 100%;
+        border-radius: 0 0 8px 8px;
+        max-height: none;
+      }
+
+      .canvas-wrapper {
+        padding: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="game-container" id="gameContainer">
+      <div class="log-panel">
+        <div class="log-title">📜 战斗日志</div>
+        <div class="log-list" id="logList"></div>
+      </div>
+      <div class="canvas-wrapper" id="canvasWrapper">
+        <canvas id="gameCanvas"></canvas>
+        <div class="battle-overlay" id="battleOverlay"></div>
+      </div>
+      <div class="control-panel" id="controlPanel"></div>
+    </div>
+    <input type="file" id="fileInput" accept=".json" />
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

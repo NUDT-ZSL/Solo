@@ -1,0 +1,156 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: #1e1e2e;
+  color: #fff;
+  overflow: hidden;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+input, textarea, select {
+  font-family: inherit;
+  outline: none;
+  border: none;
+  transition: border-color 0.2s ease;
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: #3b82f6 !important;
+}
+
+::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+button:hover {
+  filter: brightness(1.1);
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+[data-chart-btn]:hover {
+  background: #2563eb !important;
+}
+
+[data-chart-btn]:active {
+  background: #1d4ed8 !important;
+}
+
+@media (max-width: 768px) {
+  html, body, #root {
+    overflow: auto;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  [data-navbar] {
+    height: 50px !important;
+    padding: 0 16px !important;
+  }
+
+  [data-project-name] {
+    font-size: 16px !important;
+  }
+
+  [data-chart-btn] {
+    height: 32px !important;
+    padding: 0 14px !important;
+    font-size: 12px !important;
+  }
+
+  [data-user-avatar] {
+    width: 30px !important;
+    height: 30px !important;
+    font-size: 12px !important;
+  }
+
+  [data-board-wrap] {
+    padding: 16px !important;
+    overflow: visible !important;
+    overflow-y: auto !important;
+  }
+
+  [data-board] {
+    flex-direction: column !important;
+    gap: 12px !important;
+    min-width: 0 !important;
+    height: auto !important;
+  }
+
+  [data-column] {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-height: none !important;
+    margin-bottom: 12px !important;
+  }
+
+  [data-column-body] {
+    max-height: 400px !important;
+  }
+
+  [data-card-detail] {
+    width: 100vw !important;
+  }
+
+  [data-project-grid] {
+    grid-template-columns: 1fr !important;
+  }
+
+  [data-auth-card] {
+    width: 92vw !important;
+    padding: 28px 20px !important;
+  }
+
+  [data-chart-modal] {
+    width: 96vw !important;
+  }
+
+  [data-stats-row] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+@keyframes kanban-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes kanban-fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

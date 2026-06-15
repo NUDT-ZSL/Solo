@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>动态彩色递归树</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1A202C;
+    }
+
+    #app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      background: #1A202C;
+    }
+
+    #control-panel {
+      position: absolute;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(26, 32, 44, 0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 16px;
+      padding: 20px 24px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      max-width: 960px;
+      width: calc(100% - 32px);
+      color: #E2E8F0;
+      z-index: 10;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    @media (max-width: 768px) {
+      #control-panel {
+        grid-template-columns: 1fr;
+        gap: 16px;
+        padding: 16px;
+        font-size: 14px;
+      }
+    }
+
+    .sliders-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .slider-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+    }
+
+    .slider-value {
+      font-weight: 600;
+      color: #51CF66;
+      font-variant-numeric: tabular-nums;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #FF6B6B, #339AF0, #51CF66);
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #E2E8F0;
+      cursor: pointer;
+      border: 2px solid #339AF0;
+      transition: transform 0.15s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #E2E8F0;
+      cursor: pointer;
+      border: 2px solid #339AF0;
+      transition: transform 0.15s ease;
+    }
+
+    .buttons-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .preset-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .action-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+
+    button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #2D3748, #4A5568);
+      color: #E2E8F0;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      font-family: inherit;
+    }
+
+    button:hover {
+      transform: scale(1.03);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    button:active {
+      transform: scale(0.95);
+      transition: transform 0.15s ease;
+    }
+
+    button.preset-jungle {
+      background: linear-gradient(135deg, #2D6A4F, #95D5B2);
+      color: #fff;
+    }
+
+    button.preset-aurora {
+      background: linear-gradient(135deg, #7400B8, #FF006E);
+      color: #fff;
+    }
+
+    button.preset-desert {
+      background: linear-gradient(135deg, #E85D04, #FFBA08);
+      color: #fff;
+    }
+
+    button.preset-ocean {
+      background: linear-gradient(135deg, #03045E, #90E0EF);
+      color: #fff;
+    }
+
+    button.btn-grow {
+      background: linear-gradient(135deg, #51CF66, #339AF0);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    button.btn-export {
+      background: linear-gradient(135deg, #339AF0, #5C7CFA);
+      color: #fff;
+    }
+
+    button.btn-reset {
+      background: linear-gradient(135deg, #FF6B6B, #FF8787);
+      color: #fff;
+    }
+
+    #branch-count {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      color: #E2E8F0;
+      font-size: 14px;
+      font-weight: 600;
+      background: rgba(26, 32, 44, 0.75);
+      backdrop-filter: blur(8px);
+      padding: 8px 14px;
+      border-radius: 10px;
+      z-index: 5;
+    }
+
+    #branch-count span {
+      color: #51CF66;
+      font-variant-numeric: tabular-nums;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="tree-canvas"></canvas>
+    <div id="branch-count">剩余树枝: <span id="count-value">0</span></div>
+    <div id="control-panel">
+      <div class="sliders-group">
+        <div class="slider-row">
+          <div class="slider-header">
+          <span>递归深度</span>
+          <span class="slider-value" id="depth-value">7</span>
+        </div>
+        <input type="range" id="depth-slider" min="1" max="10" value="7" step="1" />
+      </div>
+      <div class="slider-row">
+        <div class="slider-header">
+          <span>分支角度</span>
+          <span class="slider-value" id="angle-value">25°</span>
+        </div>
+        <input type="range" id="angle-slider" min="5" max="85" value="25" step="1" />
+      </div>
+      <div class="slider-row">
+        <div class="slider-header">
+          <span>长度比</span>
+          <span class="slider-value" id="ratio-value">0.65</span>
+        </div>
+        <input type="range" id="ratio-slider" min="20" max="100" value="65" step="1" />
+      </div>
+      <div class="slider-row">
+        <div class="slider-header">
+          <span>主干长度</span>
+          <span class="slider-value" id="length-value">60px</span>
+        </div>
+        <input type="range" id="length-slider" min="20" max="120" value="60" step="1" />
+      </div>
+      <div class="slider-row">
+        <div class="slider-header">
+          <span>起始色相</span>
+          <span class="slider-value" id="hue-value">0°</span>
+        </div>
+        <input type="range" id="hue-slider" min="0" max="360" value="0" step="1" />
+      </div>
+    </div>
+    <div class="buttons-group">
+      <div class="preset-buttons">
+        <button class="preset-jungle" data-preset="jungle">丛林</button>
+        <button class="preset-aurora" data-preset="aurora">极光</button>
+        <button class="preset-desert" data-preset="desert">沙漠</button>
+        <button class="preset-ocean" data-preset="ocean">海洋</button>
+      </div>
+      <div class="action-buttons">
+        <button class="btn-grow" id="grow-btn">生长</button>
+        <button class="btn-export" id="export-btn">导出PNG</button>
+        <button class="btn-reset" id="reset-btn">重置</button>
+      </div>
+    </div>
+  </div>
+</div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

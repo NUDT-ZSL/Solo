@@ -1,0 +1,247 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: Georgia, 'Times New Roman', serif;
+  background: #2a1810;
+}
+
+#app {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+#scrollCanvas {
+  display: block;
+  cursor: crosshair;
+}
+
+.toolbar-vertical {
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 60px;
+  background: rgba(26, 26, 26, 0.7);
+  border-radius: 12px;
+  padding: 16px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  z-index: 10;
+  backdrop-filter: blur(8px);
+}
+
+.toolbar-horizontal {
+  position: absolute;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 60px;
+  background: rgba(26, 26, 26, 0.7);
+  border-radius: 12px;
+  padding: 10px 16px;
+  display: flex;
+  flex-direction: row;
+  gap: 24px;
+  align-items: center;
+  z-index: 10;
+  backdrop-filter: blur(8px);
+}
+
+.tool-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-horizontal .tool-item {
+  flex-direction: row;
+  gap: 10px;
+}
+
+.tool-label {
+  color: #D4A76A;
+  font-size: 16px;
+  font-weight: bold;
+  position: relative;
+  cursor: default;
+}
+
+.tool-label::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 130%;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: #F5E6C8;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.tool-label:hover::after {
+  opacity: 1;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 40px;
+  height: 4px;
+  background: #4A2C1A;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+
+.toolbar-horizontal input[type="range"] {
+  width: 80px;
+}
+
+input[type="range"]:hover,
+input[type="range"]:focus,
+input[type="range"]:active {
+  box-shadow: 0 0 10px #D4A76A;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #D4A76A;
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 10px #D4A76A;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #D4A76A;
+  cursor: pointer;
+  border: none;
+}
+
+.color-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.toolbar-horizontal .color-options {
+  flex-direction: row;
+}
+
+.color-btn {
+  width: 22px;
+  height: 22px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.color-btn:hover {
+  box-shadow: 0 0 10px #D4A76A;
+  transform: scale(1.1);
+}
+
+.color-btn.active {
+  border-color: #D4A76A;
+  box-shadow: 0 0 8px #D4A76A;
+}
+
+.mount-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  padding: 10px 24px;
+  background: rgba(74, 44, 26, 0.85);
+  color: #D4A76A;
+  border: 1px solid #D4A76A;
+  border-radius: 6px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  z-index: 10;
+}
+
+.mount-btn:hover {
+  background: #D4A76A;
+  color: #4A2C1A;
+  box-shadow: 0 0 15px rgba(212, 167, 106, 0.5);
+}
+
+.status-bar {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 32px;
+  align-items: center;
+  padding: 8px 24px;
+  background: rgba(245, 230, 200, 0.9);
+  border-radius: 8px;
+  z-index: 10;
+  font-family: Georgia, 'Times New Roman', serif;
+  color: #4A2C1A;
+  font-size: 14px;
+}
+
+.undo-btn {
+  padding: 4px 16px;
+  background: transparent;
+  border: 1px solid #4A2C1A;
+  border-radius: 4px;
+  color: #4A2C1A;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.undo-btn:hover:not(:disabled) {
+  background: #4A2C1A;
+  color: #F5E6C8;
+}
+
+.undo-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (max-width: 900px) {
+  .mount-btn {
+    top: 10px;
+    right: 10px;
+    padding: 6px 16px;
+    font-size: 14px;
+  }
+}

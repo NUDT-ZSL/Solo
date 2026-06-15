@@ -1,0 +1,398 @@
+:root {
+  --color-bg-dark: hsl(210, 30%, 15%);
+  --color-bg-mid: hsl(210, 30%, 25%);
+  --color-bg-light: hsl(210, 30%, 30%);
+  --color-gold: hsl(45, 80%, 85%);
+  --color-gold-dim: hsl(45, 60%, 65%);
+  --color-gold-glow: hsla(45, 80%, 85%, 0.6);
+  --color-user-dot: hsla(200, 80%, 70%, 0.8);
+  --transition-base: all 0.3s ease-out;
+  --corridor-height: 80vh;
+  --puzzle-board-height: 20vh;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  transition: var(--transition-base);
+  background: transparent;
+  color: inherit;
+}
+
+button:hover {
+  filter: brightness(1.2);
+  transform: translateY(-2px);
+}
+
+button:active {
+  transform: scale(0.9);
+}
+
+.app-container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  background: linear-gradient(180deg, hsla(210, 30%, 10%, 0.9), transparent);
+  backdrop-filter: blur(8px);
+}
+
+.header-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--color-gold);
+  letter-spacing: 8px;
+  text-shadow: 0 0 10px var(--color-gold-glow);
+}
+
+.header-info {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  font-size: 13px;
+  color: hsl(45, 50%, 75%);
+}
+
+.online-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.online-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-user-dot);
+  box-shadow: 0 0 8px var(--color-user-dot);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.view-poems-btn {
+  padding: 6px 16px;
+  border: 1px solid var(--color-gold-dim);
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--color-gold);
+}
+
+.corridor-wrapper {
+  flex: 1;
+  margin-top: 56px;
+  height: var(--corridor-height);
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+}
+
+.corridor-wrapper:active {
+  cursor: grabbing;
+}
+
+.puzzle-wrapper {
+  height: var(--puzzle-board-height);
+  min-height: 180px;
+  position: relative;
+  z-index: 50;
+}
+
+.petal {
+  position: fixed;
+  pointer-events: none;
+  z-index: 1000;
+  font-size: 24px;
+  animation: petalFall linear forwards;
+}
+
+@keyframes petalFall {
+  0% {
+    transform: translateY(-50px) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(110vh) rotate(720deg) scale(0.5);
+    opacity: 0;
+  }
+}
+
+.scroll-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: hsla(210, 30%, 5%, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  backdrop-filter: blur(5px);
+}
+
+.scroll-container {
+  position: relative;
+  background: linear-gradient(180deg, 
+    hsl(40, 30%, 92%) 0%, 
+    hsl(40, 25%, 88%) 50%, 
+    hsl(40, 30%, 92%) 100%);
+  padding: 60px 80px;
+  border-radius: 4px;
+  box-shadow: 
+    0 0 60px var(--color-gold-glow),
+    inset 0 0 40px hsla(45, 50%, 50%, 0.2);
+  animation: scrollUnroll 1s ease-out forwards;
+  max-width: 600px;
+  width: 90%;
+}
+
+.scroll-container::before,
+.scroll-container::after {
+  content: '';
+  position: absolute;
+  left: -20px;
+  right: -20px;
+  height: 40px;
+  background: linear-gradient(90deg, 
+    hsl(30, 60%, 35%) 0%, 
+    hsl(35, 70%, 50%) 50%, 
+    hsl(30, 60%, 35%) 100%);
+  border-radius: 8px;
+  box-shadow: 0 0 20px var(--color-gold-glow);
+}
+
+.scroll-container::before {
+  top: -10px;
+}
+
+.scroll-container::after {
+  bottom: -10px;
+}
+
+@keyframes scrollUnroll {
+  0% {
+    transform: scaleX(0.1);
+    opacity: 0;
+  }
+  60% {
+    transform: scaleX(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+.poem-display {
+  text-align: center;
+  color: hsl(30, 40%, 20%);
+}
+
+.poem-title-input {
+  width: 100%;
+  text-align: center;
+  font-size: 28px;
+  font-weight: 600;
+  padding: 12px;
+  border: none;
+  border-bottom: 2px solid hsl(35, 50%, 50%);
+  background: transparent;
+  color: hsl(30, 40%, 20%);
+  font-family: inherit;
+  margin-bottom: 32px;
+  outline: none;
+}
+
+.poem-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.poem-line {
+  font-size: 20px;
+  letter-spacing: 6px;
+  line-height: 1.8;
+  padding: 8px;
+  position: relative;
+}
+
+.poem-actions {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+
+.publish-btn,
+.cancel-btn {
+  padding: 10px 32px;
+  font-size: 15px;
+  border-radius: 4px;
+  letter-spacing: 4px;
+}
+
+.publish-btn {
+  background: linear-gradient(135deg, var(--color-gold-dim), var(--color-gold));
+  color: hsl(30, 50%, 15%);
+  box-shadow: 0 4px 20px var(--color-gold-glow);
+}
+
+.cancel-btn {
+  border: 1px solid hsl(35, 40%, 50%);
+  color: hsl(30, 40%, 30%);
+}
+
+.share-link-box {
+  margin-top: 24px;
+  padding: 16px;
+  background: hsla(45, 60%, 90%, 0.8);
+  border-radius: 4px;
+  border: 1px dashed hsl(35, 50%, 50%);
+}
+
+.share-link {
+  font-size: 13px;
+  color: hsl(210, 50%, 40%);
+  word-break: break-all;
+  cursor: pointer;
+  font-family: monospace;
+}
+
+.poems-gallery {
+  position: fixed;
+  top: 56px;
+  left: 0;
+  right: 0;
+  bottom: var(--puzzle-board-height);
+  background: hsla(210, 30%, 10%, 0.95);
+  z-index: 150;
+  overflow-y: auto;
+  padding: 32px;
+  backdrop-filter: blur(12px);
+}
+
+.poems-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.poem-card {
+  background: linear-gradient(180deg, 
+    hsla(210, 30%, 25%, 0.9), 
+    hsla(210, 30%, 20%, 0.9));
+  border: 1px solid hsla(45, 60%, 60%, 0.3);
+  border-radius: 8px;
+  padding: 24px;
+  transition: var(--transition-base);
+  position: relative;
+  overflow: hidden;
+}
+
+.poem-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--color-gold-dim);
+  box-shadow: 0 8px 32px var(--color-gold-glow);
+}
+
+.poem-card-title {
+  font-size: 20px;
+  color: var(--color-gold);
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid hsla(45, 60%, 60%, 0.2);
+}
+
+.poem-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.poem-card-line {
+  font-size: 14px;
+  color: hsl(45, 40%, 75%);
+  letter-spacing: 2px;
+}
+
+.poem-card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: hsl(45, 30%, 60%);
+  padding-top: 12px;
+  border-top: 1px solid hsla(45, 60%, 60%, 0.15);
+}
+
+.like-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid hsla(45, 60%, 60%, 0.4);
+  border-radius: 20px;
+  font-size: 12px;
+}
+
+.like-btn.liked {
+  background: var(--color-gold);
+  color: hsl(30, 50%, 20%);
+  border-color: var(--color-gold);
+}
+
+.close-gallery {
+  position: fixed;
+  top: 72px;
+  right: 32px;
+  z-index: 160;
+  padding: 8px 20px;
+  border: 1px solid var(--color-gold-dim);
+  border-radius: 4px;
+  color: var(--color-gold);
+  font-size: 13px;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  color: var(--color-gold);
+  font-size: 18px;
+  letter-spacing: 8px;
+}

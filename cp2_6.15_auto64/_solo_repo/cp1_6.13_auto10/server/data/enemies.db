@@ -1,0 +1,9 @@
+{"id":"slime","name":"史莱姆","maxHp":25,"atk":5,"def":0,"level":1,"desc":"黏糊糊的绿色生物","_id":"brcQFKUvogdsGEPX"}
+{"id":"goblin","name":"哥布林","maxHp":35,"atk":7,"def":1,"level":1,"desc":"贪婪的小绿人","_id":"5HqIztnOt3TZoYsN"}
+{"id":"skeleton","name":"骷髅战士","maxHp":45,"atk":9,"def":2,"level":2,"desc":"不死的骨架战士","_id":"3Iry2ySNHYQ1MDZL"}
+{"id":"orc","name":"兽人","maxHp":60,"atk":11,"def":3,"level":2,"desc":"强壮的野蛮人","_id":"yS1RAgpidW36fPRy"}
+{"id":"dark_mage","name":"黑暗法师","maxHp":50,"atk":14,"def":1,"level":3,"desc":"精通暗黑魔法","_id":"dTBGITD0zNaJo1j6"}
+{"id":"vampire","name":"吸血鬼","maxHp":70,"atk":12,"def":2,"level":3,"desc":"吸血的不死生物","effect":{"type":"lifesteal","value":0.2},"_id":"2mJw23n94elTR4vE"}
+{"id":"golem","name":"石魔像","maxHp":100,"atk":10,"def":6,"level":4,"desc":"坚不可摧的石像","_id":"Cq9hsqPLVLWeo704"}
+{"id":"demon","name":"恶魔","maxHp":85,"atk":16,"def":3,"level":4,"desc":"来自地狱的恶魔","effect":{"type":"burn","value":2,"duration":2},"_id":"HGgCxfDtndWiSuom"}
+{"id":"dragon","name":"巨龙","maxHp":150,"atk":20,"def":5,"level":5,"desc":"传说中的巨龙","effect":{"type":"burn","value":4,"duration":3},"_id":"NutW3dpRie49WU2Z"}

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AuraWave</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body {
+      background: linear-gradient(180deg, #0a0a1a 0%, #1a1a3e 100%);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      color: #e2e8f0;
+    }
+    #canvas-container {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+    }
+    canvas { display: block; }
+
+    #control-panel {
+      position: fixed;
+      bottom: 24px;
+      left: 24px;
+      width: 220px;
+      background: rgba(15, 15, 35, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      animation: panelFadeIn 0.3s ease-out;
+      border: 1px solid rgba(124, 58, 237, 0.2);
+    }
+    @keyframes panelFadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    #control-panel label {
+      font-size: 12px;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    #toggle-btn {
+      width: 100%;
+      padding: 10px 0;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      color: #fff;
+      background: #7c3aed;
+    }
+    #toggle-btn:hover { background: #6d28d9; }
+    #toggle-btn:active { transform: scale(0.97); }
+    #toggle-btn.active { background: #dc2626; }
+    #toggle-btn.active:hover { background: #b91c1c; }
+    #freq-range {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid rgba(124, 58, 237, 0.3);
+      border-radius: 8px;
+      background: rgba(15, 15, 35, 0.6);
+      color: #e2e8f0;
+      font-size: 13px;
+      outline: none;
+      cursor: pointer;
+    }
+    #freq-range:focus { border-color: #7c3aed; }
+    #freq-range option { background: #1a1a3e; color: #e2e8f0; }
+
+    #hud {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+      z-index: 10;
+    }
+    #fps-display {
+      font-size: 13px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.03em;
+    }
+    #volume-container {
+      width: 200px;
+      height: 12px;
+      background: #1e293b;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    #volume-bar {
+      height: 100%;
+      width: 0%;
+      background: #22c55e;
+      border-radius: 6px;
+      transition: width 0.05s linear;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div id="control-panel">
+    <label>Audio Capture</label>
+    <button id="toggle-btn">Start</button>
+    <label>Frequency Range</label>
+    <select id="freq-range">
+      <option value="full">Full Spectrum</option>
+      <option value="low">Low (0 - 1kHz)</option>
+      <option value="mid">Mid (1kHz - 5kHz)</option>
+      <option value="high">High (5kHz - 20kHz)</option>
+    </select>
+  </div>
+
+  <div id="hud">
+    <div id="fps-display">FPS: --</div>
+    <div id="volume-container">
+      <div id="volume-bar"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,137 @@
+.grid-map-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: #f5f5f5;
+  overflow: auto;
+  padding: 40px;
+  min-height: 0;
+}
+
+.grid-map-wrapper {
+  position: relative;
+  padding-left: 28px;
+  padding-top: 24px;
+}
+
+.grid-coords-top {
+  position: absolute;
+  top: 0;
+  left: 28px;
+  display: flex;
+  color: #aaa;
+  font-size: 10px;
+}
+
+.grid-coords-left {
+  position: absolute;
+  left: 0;
+  top: 24px;
+  display: flex;
+  flex-direction: column;
+  color: #aaa;
+  font-size: 10px;
+}
+
+.coord-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.grid-map {
+  position: relative;
+  background: #ffffff;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+}
+
+.grid-cell {
+  position: absolute;
+  border: 1px solid #f0f0f0;
+  box-sizing: border-box;
+  transition: background 0.15s ease-out, border-color 0.15s ease-out;
+  pointer-events: none;
+}
+
+.grid-cell.hovered {
+  background: rgba(33, 150, 243, 0.15);
+  border-color: #2196F3;
+  z-index: 1;
+}
+
+.grid-cell.highlighted {
+  background: rgba(76, 175, 80, 0.5);
+  border-color: #4CAF50;
+  animation: cell-flash 0.5s ease-out;
+  z-index: 2;
+}
+
+@keyframes cell-flash {
+  0% {
+    background: rgba(76, 175, 80, 0.7);
+  }
+  100% {
+    background: rgba(76, 175, 80, 0);
+  }
+}
+
+.placed-exhibit {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+}
+
+.placed-exhibit.spring-enter {
+  animation: spring-drop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes spring-drop {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  60% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 10000;
+  transform-origin: center center;
+}
+
+.spacing-slider-popup {
+  position: fixed;
+  transform: translateX(-50%);
+  background: #fff;
+  padding: 12px 16px;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  min-width: 140px;
+}
+
+.spacing-info {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 8px;
+  text-align: center;
+  font-weight: 500;
+}
+
+.spacing-range {
+  width: 100%;
+  cursor: pointer;
+  accent-color: #2196F3;
+}

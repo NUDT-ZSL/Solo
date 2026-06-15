@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>记忆迷宫</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    body {
+      background: radial-gradient(ellipse at center, #12102A 0%, #0B0A1A 100%);
+      font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    }
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    canvas {
+      display: block;
+    }
+    #win-modal {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.75);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      z-index: 10;
+    }
+    #win-modal.show {
+      display: flex;
+    }
+    .win-title {
+      color: #FFD700;
+      font-size: 36px;
+      font-weight: bold;
+      text-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
+      margin-bottom: 30px;
+      letter-spacing: 4px;
+    }
+    .win-info {
+      color: #CCCCCC;
+      font-size: 18px;
+      margin-bottom: 10px;
+    }
+    .win-info span {
+      color: #00FFCC;
+      font-weight: bold;
+    }
+    #restart-btn {
+      margin-top: 40px;
+      padding: 12px 36px;
+      font-size: 18px;
+      color: #0B0A1A;
+      background: linear-gradient(135deg, #00FFCC, #00A8FF);
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      letter-spacing: 2px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    #restart-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 30px rgba(0, 255, 204, 0.5);
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+    <div id="win-modal">
+      <div class="win-title">记忆通关</div>
+      <div class="win-info">本轮耗时：<span id="time-spent">0</span> 秒</div>
+      <div class="win-info">路径长度：<span id="path-length">0</span> 步</div>
+      <button id="restart-btn">再来一局</button>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

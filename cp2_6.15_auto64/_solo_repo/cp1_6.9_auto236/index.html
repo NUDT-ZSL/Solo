@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>3D光学幻境</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0a0a1a;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+    canvas {
+      display: block;
+    }
+    .stats {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 14px;
+      line-height: 1.6;
+      pointer-events: none;
+      text-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
+      z-index: 10;
+    }
+    .stats div {
+      margin-bottom: 4px;
+    }
+    .control-bar {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 12px;
+      padding: 10px 20px;
+      background: rgba(40, 40, 60, 0.5);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      z-index: 10;
+      transition: transform 0.3s ease-out, box-shadow 0.3s ease-out;
+    }
+    .control-bar:hover {
+      transform: translateX(-50%) translateY(-2px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+    .control-bar button {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 10px;
+      background: rgba(100, 120, 255, 0.25);
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s ease-out;
+      backdrop-filter: blur(4px);
+    }
+    .control-bar button:hover {
+      background: rgba(100, 120, 255, 0.45);
+      color: #ffffff;
+    }
+    .control-bar button:active {
+      transform: scale(0.96);
+    }
+    @media (max-width: 768px) {
+      .control-bar {
+        bottom: auto;
+        left: auto;
+        right: 16px;
+        top: 50%;
+        transform: translateY(-50%);
+        flex-direction: column;
+        padding: 16px 10px;
+      }
+      .control-bar:hover {
+        transform: translateY(-50%) translateX(-2px);
+      }
+      .control-bar button {
+        padding: 12px 16px;
+      }
+    }
+    .pulse-ring {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 5;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="stats">
+      <div id="fps">FPS: --</div>
+      <div id="particleCount">粒子数: --</div>
+    </div>
+    <div class="control-bar">
+      <button id="playPauseBtn">⏸ 暂停</button>
+      <button id="resetViewBtn">⟲ 重置视角</button>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

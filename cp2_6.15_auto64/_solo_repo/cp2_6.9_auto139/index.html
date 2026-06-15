@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>彩虹粒子漩涡 | Rainbow Particle Spiral</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      min-width: 800px;
+      min-height: 600px;
+      overflow: hidden;
+      background: #0f0f23;
+      font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    }
+
+    #canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+
+    #theme-label {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: 500;
+      letter-spacing: 1px;
+      box-shadow: 0 0 15px rgba(255, 255, 255, 0.15),
+                  inset 0 0 10px rgba(255, 255, 255, 0.05);
+      z-index: 10;
+      transition: all 0.3s ease;
+    }
+
+    #stats {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      color: #ffffff;
+      font-size: 14px;
+      font-family: 'Consolas', monospace;
+      line-height: 1.8;
+      box-shadow: 0 0 15px rgba(0, 200, 255, 0.15),
+                  inset 0 0 10px rgba(0, 200, 255, 0.05);
+      z-index: 10;
+      text-align: right;
+    }
+
+    #stats span {
+      color: #00e5ff;
+      text-shadow: 0 0 8px #00e5ff;
+    }
+
+    #clear-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 10px 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      color: rgba(255, 255, 255, 0.3);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      z-index: 10;
+      transition: all 0.3s ease;
+      opacity: 0.3;
+      box-shadow: 0 0 10px rgba(255, 80, 120, 0.1);
+    }
+
+    #clear-btn:hover {
+      opacity: 1;
+      background: rgba(255, 80, 120, 0.15);
+      border-color: rgba(255, 80, 120, 0.4);
+      color: #ff5078;
+      text-shadow: 0 0 10px #ff5078;
+      box-shadow: 0 0 25px rgba(255, 80, 120, 0.3),
+                  inset 0 0 15px rgba(255, 80, 120, 0.1);
+    }
+
+    #color-transition {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 5;
+      transition: opacity 0.5s ease;
+      opacity: 0;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="theme-label">🌈 彩虹模式</div>
+  <div id="stats">
+    <div>FPS: <span id="fps">60</span></div>
+    <div>粒子: <span id="particle-count">0</span></div>
+  </div>
+  <button id="clear-btn">一键清屏</button>
+  <div id="color-transition"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,227 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&display=swap');
+
+:root {
+  font-family: 'Noto Serif SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  line-height: 1.6;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #fff8f0;
+  color: #5d4037;
+  min-height: 100vh;
+}
+
+.app-loading {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff8f0;
+}
+
+.loading-spinner {
+  color: #8d6e63;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.app {
+  min-height: 100vh;
+  background: #fff8f0;
+}
+
+.app-header {
+  padding: 24px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e0c8a0;
+  background: #fff;
+}
+
+.app-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-logo-icon {
+  color: #8d6e63;
+}
+
+.app-title {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 28px;
+  color: #5d4037;
+  letter-spacing: 2px;
+  margin: 0;
+}
+
+.app-subtitle {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 14px;
+  color: #8d6e63;
+  margin: 0;
+}
+
+.app-main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+.app-content {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+@media (min-width: 768px) {
+  .app-content {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+}
+
+.app-wheel-section {
+  flex-shrink: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+@media (min-width: 768px) {
+  .app-wheel-section {
+    width: auto;
+  }
+}
+
+.app-panel-section {
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 300px;
+  padding: 24px;
+  margin: 0 auto;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e0c8a0;
+  box-shadow: 0 2px 12px rgba(224, 200, 160, 0.15);
+}
+
+@media (min-width: 768px) {
+  .app-panel-section {
+    width: 300px;
+    margin: 0;
+    align-self: stretch;
+  }
+}
+
+.recipes-section {
+  margin-top: 48px;
+}
+
+.recipes-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  color: #5d4037;
+}
+
+.recipes-title {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 20px;
+  color: #5d4037;
+  margin: 0;
+}
+
+.recipes-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 640px) {
+  .recipes-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 768px) {
+  .recipes-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.recipe-card {
+  padding: 16px;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e0c8a0;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.recipe-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(224, 200, 160, 0.2);
+}
+
+.recipe-name {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 16px;
+  font-weight: 500;
+  color: #5d4037;
+  margin: 0 0 8px 0;
+}
+
+.recipe-gradient {
+  display: flex;
+  gap: 1px;
+  margin-bottom: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.recipe-gradient-segment {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.recipe-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.recipe-tag {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+
+.recipe-date {
+  font-size: 12px;
+  color: #d4a373;
+}

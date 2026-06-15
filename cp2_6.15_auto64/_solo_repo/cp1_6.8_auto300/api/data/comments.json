@@ -1,0 +1,37 @@
+[
+  {
+    "id": "11aa22bb-33cc-44dd-55ee-66ff77889900",
+    "recordId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "author": "茶友小李",
+    "content": "龙井确实是绿茶中的极品，明前龙井更是难得",
+    "createdAt": "2026-06-01T12:30:00Z"
+  },
+  {
+    "id": "22bb33cc-44dd-55ee-66ff-77889900aabb",
+    "recordId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "author": "品茗斋主",
+    "content": "80度冲泡恰到好处，温度再低就出不来豆香了",
+    "createdAt": "2026-06-01T15:00:00Z"
+  },
+  {
+    "id": "33cc44dd-55ee-66ff-7788-9900aabbccdd",
+    "recordId": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+    "author": "乌龙茶客",
+    "content": "铁观音的兰花香确实迷人，用紫砂壶泡更佳",
+    "createdAt": "2026-06-03T10:00:00Z"
+  },
+  {
+    "id": "44dd55ee-66ff-7788-9900-aabbccddeeff",
+    "recordId": "e5f6a7b8-c9d0-1234-efab-345678901234",
+    "author": "老茶骨",
+    "content": "普洱熟茶越陈越香，这款还可以再存放几年",
+    "createdAt": "2026-06-05T14:00:00Z"
+  },
+  {
+    "id": "55ee66ff-7788-9900-aabb-ccddeeff0011",
+    "recordId": "f6a7b8c9-d0e1-2345-fabc-456789012345",
+    "author": "花茶爱好者",
+    "content": "茉莉花茶配上绿豆糕，夏日绝配！",
+    "createdAt": "2026-06-06T10:00:00Z"
+  }
+]

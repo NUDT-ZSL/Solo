@@ -1,0 +1,74 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.content {
+  text-align: center;
+}
+
+.envelope {
+  font-size: 64px;
+  margin-bottom: 16px;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.code {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 72px;
+  font-weight: 700;
+  color: #4a3f6b;
+  margin: 0 0 8px;
+  line-height: 1;
+}
+
+.message {
+  font-size: 18px;
+  color: #6b608c;
+  margin: 0 0 4px;
+}
+
+.subMessage {
+  font-size: 14px;
+  color: #a098c0;
+  margin: 0 0 32px;
+}
+
+.homeBtn {
+  display: inline-block;
+  padding: 12px 32px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #8b7ec8 0%, #a89bdb 100%);
+  color: white;
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 500;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.homeBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(139, 126, 200, 0.4);
+}
+
+@media (max-width: 768px) {
+  .code {
+    font-size: 56px;
+  }
+
+  .message {
+    font-size: 16px;
+  }
+
+  .envelope {
+    font-size: 48px;
+  }
+}

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>星轨速写</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #05050D;
+      font-family: 'Courier New', monospace;
+    }
+
+    #canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      cursor: crosshair;
+      background: linear-gradient(180deg, #0A0A1A 0%, #05050D 100%);
+    }
+
+    #hud {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      color: #88AACC;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      pointer-events: none;
+      z-index: 10;
+      text-shadow: 0 0 4px rgba(0, 204, 255, 0.3);
+    }
+
+    #control-panel {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 200px;
+      background: #111122CC;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid #333355;
+      border-radius: 12px;
+      padding: 16px;
+      z-index: 20;
+      color: #CCDDEE;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+    }
+
+    .control-group {
+      margin-bottom: 14px;
+    }
+
+    .control-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      color: #AABBCC;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+    }
+
+    .control-value {
+      color: #00CCFF;
+      text-shadow: 0 0 4px rgba(0, 204, 255, 0.5);
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      background: #33446666;
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #00CCFF;
+      box-shadow: 0 0 8px #00CCFF;
+      cursor: pointer;
+      transition: box-shadow 0.2s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      box-shadow: 0 0 14px #00CCFF, 0 0 20px rgba(0, 204, 255, 0.5);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #00CCFF;
+      box-shadow: 0 0 8px #00CCFF;
+      cursor: pointer;
+      border: none;
+    }
+
+    .scheme-preview {
+      display: flex;
+      gap: 4px;
+      margin-top: 8px;
+    }
+
+    .scheme-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 1px solid #33446688;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div id="hud">
+    <div>粒子数: <span id="particle-count">0</span></div>
+    <div>FPS: <span id="fps">0</span></div>
+    <div>帧时: <span id="frame-time">0</span> ms</div>
+  </div>
+
+  <div id="control-panel">
+    <div class="control-group">
+      <div class="control-label">
+        <span>粒子数量</span>
+        <span class="control-value"><span id="count-value">40</span></span>
+      </div>
+      <input type="range" id="particle-count-slider" min="20" max="100" value="40" step="1" />
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>尾迹长度</span>
+        <span class="control-value"><span id="trail-value">8</span></span>
+      </div>
+      <input type="range" id="trail-length-slider" min="3" max="15" value="8" step="1" />
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>颜色方案</span>
+        <span class="control-value"><span id="scheme-value">暖阳</span></span>
+      </div>
+      <input type="range" id="color-scheme-slider" min="0" max="2" value="0" step="1" />
+      <div class="scheme-preview" id="scheme-preview"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

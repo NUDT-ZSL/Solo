@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>音链弹珠 - Sound Chain Pinball</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Noto Sans SC', 'Orbitron', sans-serif;
+      background: radial-gradient(ellipse at center, #1A1A2E 0%, #16213E 100%);
+      color: #fff;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .game-container {
+      position: relative;
+      width: 1280px;
+      height: 720px;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 0 60px rgba(0, 212, 255, 0.15),
+                  0 0 120px rgba(255, 51, 102, 0.08),
+                  inset 0 0 80px rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(0, 212, 255, 0.2);
+    }
+
+    .game-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: default;
+    }
+
+    .title-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      z-index: 10;
+    }
+
+    .title-bar h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 22px;
+      font-weight: 900;
+      background: linear-gradient(90deg, #00D4FF, #FF3366, #FFD700);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: 2px;
+      text-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+    }
+
+    .title-bar .subtitle {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.5);
+      letter-spacing: 4px;
+      margin-left: 16px;
+    }
+
+    .title-left {
+      display: flex;
+      align-items: center;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .speed-control {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .speed-control label {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.7);
+      letter-spacing: 1px;
+    }
+
+    .speed-slider {
+      -webkit-appearance: none;
+      width: 160px;
+      height: 4px;
+      background: linear-gradient(90deg, rgba(0, 212, 255, 0.2), rgba(255, 51, 102, 0.2));
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .speed-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00D4FF, #FF3366);
+      border: 2px solid #fff;
+      box-shadow: 0 0 12px rgba(0, 212, 255, 0.8);
+      cursor: grab;
+    }
+
+    .speed-slider::-webkit-slider-thumb:active {
+      cursor: grabbing;
+    }
+
+    .speed-value {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 12px;
+      color: #00D4FF;
+      min-width: 40px;
+      text-align: center;
+    }
+
+    .btn {
+      padding: 8px 20px;
+      border: 1px solid rgba(0, 212, 255, 0.4);
+      background: linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(0, 212, 255, 0.02));
+      color: #00D4FF;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 11px;
+      letter-spacing: 2px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+      background: linear-gradient(135deg, rgba(0, 212, 255, 0.25), rgba(0, 212, 255, 0.08));
+      box-shadow: 0 0 16px rgba(0, 212, 255, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn-danger {
+      border-color: rgba(255, 51, 102, 0.4);
+      color: #FF3366;
+      background: linear-gradient(135deg, rgba(255, 51, 102, 0.1), rgba(255, 51, 102, 0.02));
+    }
+
+    .btn-danger:hover {
+      background: linear-gradient(135deg, rgba(255, 51, 102, 0.25), rgba(255, 51, 102, 0.08));
+      box-shadow: 0 0 16px rgba(255, 51, 102, 0.4);
+    }
+
+    .info-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 40px;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.01));
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-top: 1px solid rgba(0, 212, 255, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      z-index: 10;
+    }
+
+    .info-bar .hint {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.4);
+      letter-spacing: 1px;
+    }
+
+    .info-bar .hint span {
+      color: #00D4FF;
+    }
+
+    .marble-indicators {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .marble-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.6);
+      letter-spacing: 1px;
+    }
+
+    .marble-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .marble-dot.red { background: linear-gradient(135deg, #FF3366, #FF6633); box-shadow: 0 0 8px rgba(255, 51, 102, 0.6); }
+    .marble-dot.blue { background: linear-gradient(135deg, #00BFFF, #1E90FF); box-shadow: 0 0 8px rgba(0, 191, 255, 0.6); }
+    .marble-dot.green { background: linear-gradient(135deg, #33FF99, #00CC66); box-shadow: 0 0 8px rgba(51, 255, 153, 0.6); }
+    .marble-dot.yellow { background: linear-gradient(135deg, #FFD700, #FFAA00); box-shadow: 0 0 8px rgba(255, 215, 0, 0.6); }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="game-container">
+      <canvas id="gameCanvas" class="game-canvas" width="1280" height="720"></canvas>
+      
+      <div class="title-bar">
+        <div class="title-left">
+          <h1>音链弹珠</h1>
+          <span class="subtitle">SOUND CHAIN PINBALL</span>
+        </div>
+        <div class="controls">
+          <div class="speed-control">
+            <label>速度</label>
+            <input type="range" id="speedSlider" class="speed-slider" min="0.2" max="1.5" step="0.1" value="0.5" />
+            <span class="speed-value" id="speedValue">0.5s</span>
+          </div>
+          <button class="btn" id="clearTracksBtn">清空轨道</button>
+          <button class="btn-danger btn" id="resetBtn">重置</button>
+        </div>
+      </div>
+
+      <div class="info-bar">
+        <div class="hint">
+          <span>鼠标拖拽节点</span> 绘制轨道 &nbsp;|&nbsp;
+          <span>从顶部发射区</span> 拖拽弹珠到轨道起点 &nbsp;|&nbsp;
+          <span>多色弹珠碰撞</span> 产生即兴和声
+        </div>
+        <div class="marble-indicators">
+          <div class="marble-indicator"><div class="marble-dot red"></div>鼓</div>
+          <div class="marble-indicator"><div class="marble-dot blue"></div>贝斯</div>
+          <div class="marble-indicator"><div class="marble-dot green"></div>钢琴</div>
+          <div class="marble-indicator"><div class="marble-dot yellow"></div>合成器</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/gameMain.ts"></script>
+</body>
+</html>

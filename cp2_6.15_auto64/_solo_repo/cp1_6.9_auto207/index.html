@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>隙间虹桥 - Rainbow Bridge</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0a0014;
+      cursor: grab;
+    }
+    body:active {
+      cursor: grabbing;
+    }
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+    .control-panel {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 300px;
+      padding: 24px;
+      background: rgba(30, 10, 50, 0.45);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border: 1px solid rgba(180, 120, 255, 0.25);
+      border-radius: 18px;
+      box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      color: #e8d8ff;
+      z-index: 100;
+      user-select: none;
+    }
+    .panel-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, #ffd580 0%, #ff7ab6 50%, #80a8ff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: 1px;
+    }
+    .control-group {
+      margin-bottom: 18px;
+    }
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      margin-bottom: 8px;
+      color: #c8b0e8;
+    }
+    .control-value {
+      font-family: 'Consolas', monospace;
+      font-size: 12px;
+      color: #ffa8e0;
+      background: rgba(255, 120, 200, 0.12);
+      padding: 2px 8px;
+      border-radius: 6px;
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, rgba(120, 80, 200, 0.3), rgba(255, 120, 200, 0.3));
+      outline: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    input[type="range"]:hover {
+      background: linear-gradient(90deg, rgba(150, 100, 240, 0.5), rgba(255, 150, 220, 0.5));
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #ffa8e0, #80a8ff);
+      box-shadow: 0 0 12px rgba(255, 168, 224, 0.6), 0 2px 6px rgba(0, 0, 0, 0.4);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 20px rgba(255, 168, 224, 0.9), 0 2px 10px rgba(0, 0, 0, 0.5);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border: none;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #ffa8e0, #80a8ff);
+      box-shadow: 0 0 12px rgba(255, 168, 224, 0.6), 0 2px 6px rgba(0, 0, 0, 0.4);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .theme-selector {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    .theme-btn {
+      padding: 10px 12px;
+      font-size: 12px;
+      border: 1px solid rgba(180, 120, 255, 0.3);
+      border-radius: 10px;
+      background: rgba(40, 20, 70, 0.4);
+      color: #d8c0f0;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .theme-btn::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      transition: all 0.25s ease;
+    }
+    .theme-btn[data-theme="dawn"]::before { background: linear-gradient(180deg, #ffcc66, #ff88aa); }
+    .theme-btn[data-theme="dusk"]::before { background: linear-gradient(180deg, #ff6644, #8844aa); }
+    .theme-btn[data-theme="aurora"]::before { background: linear-gradient(180deg, #44ffaa, #6688ff); }
+    .theme-btn[data-theme="neon"]::before { background: linear-gradient(180deg, #ff44ff, #00ffff); }
+    .theme-btn:hover {
+      background: rgba(80, 40, 140, 0.5);
+      border-color: rgba(220, 160, 255, 0.5);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(180, 100, 255, 0.3);
+    }
+    .theme-btn.active {
+      background: rgba(120, 60, 200, 0.55);
+      border-color: rgba(255, 180, 240, 0.7);
+      color: #fff;
+      box-shadow: 
+        0 4px 20px rgba(200, 120, 255, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+    .reset-btn {
+      width: 100%;
+      padding: 12px;
+      margin-top: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(180, 100, 255, 0.5), rgba(255, 120, 200, 0.5));
+      color: #fff;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .reset-btn::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+      transition: left 0.5s ease;
+    }
+    .reset-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(200, 120, 255, 0.5);
+    }
+    .reset-btn:hover::after {
+      left: 100%;
+    }
+    .reset-btn:active {
+      transform: translateY(0);
+    }
+    .hint {
+      position: fixed;
+      top: 24px;
+      left: 24px;
+      padding: 12px 18px;
+      background: rgba(30, 10, 50, 0.35);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(180, 120, 255, 0.2);
+      border-radius: 12px;
+      color: #b8a0d8;
+      font-size: 12px;
+      line-height: 1.8;
+      z-index: 100;
+      pointer-events: none;
+    }
+    .hint strong {
+      color: #ffa8e0;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  
+  <div class="hint">
+    <div><strong>拖拽</strong> 旋转视角</div>
+    <div><strong>滚轮</strong> 缩放远近</div>
+    <div><strong>点击桥面</strong> 触发光粒飞驰</div>
+  </div>
+
+  <div class="control-panel">
+    <div class="panel-title">隙间虹桥 · 控制台</div>
+    
+    <div class="control-group">
+      <div class="control-label">
+        <span>桥面粒度</span>
+        <span class="control-value" id="granularity-val">0.50</span>
+      </div>
+      <input type="range" id="granularity" min="0.1" max="1.0" step="0.01" value="0.5" />
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>波速</span>
+        <span class="control-value" id="wavespeed-val">1.50</span>
+      </div>
+      <input type="range" id="wavespeed" min="0.5" max="3.0" step="0.01" value="1.5" />
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>颜色主题</span>
+      </div>
+      <div class="theme-selector">
+        <button class="theme-btn" data-theme="dawn">🌅 晨曦</button>
+        <button class="theme-btn" data-theme="dusk">🌇 暮色</button>
+        <button class="theme-btn active" data-theme="aurora">🌌 极光</button>
+        <button class="theme-btn" data-theme="neon">💜 霓虹</button>
+      </div>
+    </div>
+
+    <button class="reset-btn" id="reset-view">↻ 重置视角</button>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

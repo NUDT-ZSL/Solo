@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>全球风场3D可视化</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(180deg, #0a0c1a 0%, #000000 100%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: fixed;
+      top: 0;
+      left: 0;
+    }
+
+    #ui-panel {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      padding: 12px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      color: #ffffff;
+      z-index: 100;
+      min-width: 180px;
+    }
+
+    #layer-label {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      letter-spacing: 0.5px;
+    }
+
+    #speed-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    #speed-bar-wrapper {
+      position: relative;
+      width: 8px;
+      height: 80px;
+      border-radius: 4px;
+      overflow: hidden;
+      animation: sway 0.3s ease-in-out infinite alternate;
+    }
+
+    @keyframes sway {
+      0% { transform: translateX(-1px); }
+      100% { transform: translateX(1px); }
+    }
+
+    #speed-bar {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(to top, #0066ff, #00ccff, #ffcc00, #ff6600, #ff0000);
+      border-radius: 4px;
+    }
+
+    #speed-bar-mask {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      background: rgba(10, 12, 26, 0.85);
+      transition: height 0.1s ease-out;
+    }
+
+    #speed-value {
+      font-size: 14px;
+      font-family: 'Courier New', monospace;
+      white-space: nowrap;
+    }
+
+    #speed-value .label {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 11px;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    #hint {
+      margin-top: 12px;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.5);
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  <div id="ui-panel">
+    <div id="layer-label">500hPa 高空风场</div>
+    <div id="speed-container">
+      <div id="speed-bar-wrapper">
+        <div id="speed-bar"></div>
+        <div id="speed-bar-mask"></div>
+      </div>
+      <div id="speed-value">
+        <span class="label">最快速度</span>
+        <span id="speed-number">0.00</span> 像素/帧
+      </div>
+    </div>
+    <div id="hint">
+      拖拽旋转 · 滚轮缩放<br/>
+      按键 1/2/3 切换气压层
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D 银河系旋臂粒子系统</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0A0A0A;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+    }
+
+    #title {
+      position: absolute;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #ffffff;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-shadow: 0 0 20px rgba(136, 191, 255, 0.5);
+      pointer-events: none;
+      user-select: none;
+    }
+
+    #fps-counter {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      padding: 8px 14px;
+      background: rgba(10, 10, 30, 0.7);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 8px;
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      pointer-events: none;
+      user-select: none;
+      border: 1px solid rgba(136, 191, 255, 0.15);
+    }
+
+    #control-panel {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      width: 300px;
+      background: rgba(10, 10, 30, 0.7);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 16px;
+      padding: 20px;
+      border: 1px solid rgba(136, 191, 255, 0.15);
+      transition: all 0.3s ease;
+      user-select: none;
+    }
+
+    #control-panel.collapsed {
+      width: 56px;
+      height: 56px;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    #panel-toggle {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #88BFFF 0%, #8A2BE2 100%);
+      border: none;
+      cursor: pointer;
+      transition: transform 0.5s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: white;
+      box-shadow: 0 4px 15px rgba(136, 191, 255, 0.4);
+    }
+
+    #control-panel.collapsed #panel-toggle {
+      display: flex;
+    }
+
+    #control-panel:not(.collapsed) #panel-toggle {
+      display: none;
+    }
+
+    #panel-toggle:hover {
+      transform: translate(-50%, -50%) rotate(360deg);
+    }
+
+    #panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    #control-panel.collapsed #panel-header,
+    #control-panel.collapsed #panel-content {
+      display: none;
+    }
+
+    #panel-title {
+      color: #ffffff;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    #collapse-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(136, 191, 255, 0.15);
+      border: none;
+      color: #88BFFF;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    #collapse-btn:hover {
+      background: rgba(136, 191, 255, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .control-group {
+      margin-bottom: 14px;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #cccccc;
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .control-value {
+      color: #88BFFF;
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: #334;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    input[type="range"]:hover {
+      transform: translateY(-2px);
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #88BFFF;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(136, 191, 255, 0.5);
+      transition: all 0.2s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 15px rgba(136, 191, 255, 0.8);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #88BFFF;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 10px rgba(136, 191, 255, 0.5);
+    }
+
+    .color-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .color-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .color-group label {
+      color: #cccccc;
+      font-size: 11px;
+    }
+
+    input[type="color"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 42px;
+      height: 42px;
+      border: 2px solid #88BFFF;
+      border-radius: 50%;
+      padding: 0;
+      cursor: pointer;
+      background: none;
+      transition: all 0.2s ease;
+      overflow: hidden;
+    }
+
+    input[type="color"]:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(136, 191, 255, 0.4);
+    }
+
+    input[type="color"]::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+
+    input[type="color"]::-webkit-color-swatch {
+      border: none;
+      border-radius: 50%;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+    <div id="title">✦ 银河系旋臂粒子系统 ✦</div>
+    <div id="fps-counter">FPS: --</div>
+    <div id="control-panel">
+      <button id="panel-toggle">⚙</button>
+      <div id="panel-header">
+        <span id="panel-title">控制面板</span>
+        <button id="collapse-btn">−</button>
+      </div>
+      <div id="panel-content">
+        <div class="control-group">
+          <div class="control-label">
+            <span>旋臂数量</span>
+            <span class="control-value" id="value-arms">4</span>
+          </div>
+          <input type="range" id="slider-arms" min="2" max="6" step="1" value="4" />
+        </div>
+        <div class="control-group">
+          <div class="control-label">
+            <span>旋紧度</span>
+            <span class="control-value" id="value-tightness">0.50</span>
+          </div>
+          <input type="range" id="slider-tightness" min="0.2" max="1.0" step="0.01" value="0.5" />
+        </div>
+        <div class="control-group">
+          <div class="control-label">
+            <span>粒子数量</span>
+            <span class="control-value" id="value-count">5000</span>
+          </div>
+          <input type="range" id="slider-count" min="1000" max="15000" step="500" value="5000" />
+        </div>
+        <div class="control-group">
+          <div class="control-label">
+            <span>旋转速度</span>
+            <span class="control-value" id="value-speed">0.50</span>
+          </div>
+          <input type="range" id="slider-speed" min="0.0" max="2.0" step="0.01" value="0.5" />
+        </div>
+        <div class="control-group">
+          <div class="control-label">
+            <span>粒子大小</span>
+            <span class="control-value" id="value-size">1.50</span>
+          </div>
+          <input type="range" id="slider-size" min="0.5" max="3.0" step="0.1" value="1.5" />
+        </div>
+        <div class="control-group">
+          <div class="control-label">
+            <span>随机偏移幅度</span>
+            <span class="control-value" id="value-offset">0.20</span>
+          </div>
+          <input type="range" id="slider-offset" min="0.0" max="0.5" step="0.01" value="0.2" />
+        </div>
+        <div class="control-group" style="margin-bottom: 8px;">
+          <div class="control-label">
+            <span>颜色渐变方案</span>
+          </div>
+        </div>
+        <div class="color-row">
+          <div class="color-group">
+            <label>中心起始</label>
+            <input type="color" id="color-center-start" value="#FF4500" />
+          </div>
+          <div class="color-group">
+            <label>中心结束</label>
+            <input type="color" id="color-center-end" value="#FFD700" />
+          </div>
+          <div class="color-group">
+            <label>外围起始</label>
+            <input type="color" id="color-outer-start" value="#8A2BE2" />
+          </div>
+          <div class="color-group">
+            <label>外围结束</label>
+            <input type="color" id="color-outer-end" value="#00BFFF" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

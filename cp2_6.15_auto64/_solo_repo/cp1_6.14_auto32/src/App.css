@@ -1,0 +1,474 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #12121a;
+  color: #ffffff;
+}
+
+.app-container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #12121a;
+  overflow: hidden;
+}
+
+.toolbar {
+  height: 64px;
+  background: #16162a;
+  border-bottom: 2px solid #0a0a14;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  flex-shrink: 0;
+}
+
+.toolbar-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.title-icon {
+  font-size: 28px;
+}
+
+.title-text {
+  font-size: 20px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #00d4ff 0%, #a78bfa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.mode-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  background: #2a2a3e;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.mode-btn:hover {
+  background: #3a3a4e;
+  transform: translateY(-1px);
+}
+
+.mode-btn.active {
+  background: #3b82f6;
+}
+
+.test-btn {
+  width: 120px;
+  height: 40px;
+  border: none;
+  border-radius: 8px;
+  background: #22c55e;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+}
+
+.test-btn:hover {
+  background: #16a34a;
+  box-shadow: 0 6px 16px rgba(34, 197, 94, 0.4);
+  transform: translateY(-2px);
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+.left-panel {
+  background: #1e1e2e;
+  border-right: 2px solid #0a0a14;
+  overflow: hidden;
+  transition: width 0.3s ease, min-width 0.3s ease;
+  flex-shrink: 0;
+}
+
+.right-panel {
+  background: #16162a;
+  border-left: 2px solid #0a0a14;
+  overflow: hidden;
+  transition: width 0.3s ease, min-width 0.3s ease;
+  flex-shrink: 0;
+}
+
+.canvas-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #0f0f1a;
+}
+
+.collapse-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.125);
+  border: none;
+  color: #ffffff;
+  font-size: 14px;
+  cursor: pointer;
+  z-index: 100;
+  transition: all 0.2s ease-in-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.collapse-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-50%) scale(1.1);
+}
+
+.toolbox-wrapper {
+  width: 100%;
+  height: 100%;
+  padding: 16px 12px;
+  overflow-y: auto;
+}
+
+.toolbox-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 16px;
+  padding-left: 4px;
+  opacity: 0.9;
+}
+
+.toolbox-item {
+  height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  cursor: grab;
+  transition: all 0.2s ease-in-out;
+  user-select: none;
+  background: transparent;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.toolbox-item:hover {
+  background: #2a2a3e;
+}
+
+.toolbox-item:active {
+  cursor: grabbing;
+}
+
+.toolbox-icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  border-radius: 6px;
+}
+
+.toolbox-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #e0e0e0;
+}
+
+.properties-wrapper {
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.properties-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #2a2a3e;
+}
+
+.property-group {
+  margin-bottom: 20px;
+}
+
+.property-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #9ca3af;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.property-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.property-field {
+  flex: 1;
+}
+
+.property-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #2a2a3e;
+  border-radius: 8px;
+  background: #0f0f1a;
+  color: #ffffff;
+  font-size: 13px;
+  outline: none;
+  transition: all 0.2s ease-in-out;
+}
+
+.property-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.color-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.color-preset-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.color-preset-btn {
+  width: 100%;
+  height: 40px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  position: relative;
+}
+
+.color-preset-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.color-preset-btn.selected {
+  border-color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3), 0 0 8px rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+}
+
+.color-preset-label {
+  font-size: 9px;
+  color: #6b7280;
+  font-family: monospace;
+  text-align: center;
+  user-select: none;
+}
+
+.empty-properties {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  font-size: 13px;
+  text-align: center;
+  padding: 20px;
+}
+
+.difficulty-section {
+  margin-top: auto;
+  padding-top: 16px 0;
+  border-top: 1px solid #2a2a3e;
+}
+
+.difficulty-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #ffffff;
+}
+
+.game-stats-panel {
+  padding: 12px;
+  background: #0f0f1a;
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.stat-label {
+  color: #9ca3af;
+}
+
+.stat-value {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.editor-canvas-wrapper {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.hud-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.hud-stats {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  background: rgba(22, 22, 42, 0.9);
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  display: flex;
+  gap: 20px;
+  pointer-events: auto;
+}
+
+.game-hint {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(22, 22, 42, 0.9);
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #9ca3af;
+  pointer-events: auto;
+}
+
+.completion-modal {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #16162a;
+  padding: 32px;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+  text-align: center;
+  min-width: 320px;
+}
+
+.completion-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #22c55e;
+  margin-bottom: 20px;
+}
+
+.completion-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.completion-btn {
+  padding: 12px 32px;
+  background: #3b82f6;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.completion-btn:hover {
+  background: #2563eb;
+  transform: translateY(-2px);
+}
+
+.zoom-controls {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.zoom-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(22, 22, 42, 0.9);
+  border: none;
+  color: #ffffff;
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.zoom-btn:hover {
+  background: #2a2a3e;
+}

@@ -1,0 +1,375 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg-primary: #1A1A2E;
+  --bg-secondary: #16213E;
+  --bg-tertiary: #0F3460;
+  --accent: #E94560;
+  --text-primary: #FFFFFF;
+  --text-secondary: #A0A0B8;
+  --canvas-bg: #2A2A2A;
+  --palette-width: 120px;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  padding: 20px;
+  user-select: none;
+  overflow-x: hidden;
+}
+
+.app-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background-color: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+.left-controls,
+.right-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pixel-counter {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background-color: var(--bg-tertiary);
+  padding: 6px 14px;
+  border-radius: 6px;
+  min-width: 90px;
+  text-align: center;
+}
+
+.btn {
+  padding: 8px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background-color: var(--bg-tertiary);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.05s ease;
+}
+
+.btn:hover {
+  background-color: #1a4a7a;
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn-primary {
+  background-color: var(--accent);
+}
+
+.btn-primary:hover {
+  background-color: #ff5a75;
+}
+
+.main-content {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.palette-panel {
+  width: var(--palette-width);
+  background-color: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 12px 8px;
+  flex-shrink: 0;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.palette-title,
+.history-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.palette-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.palette-item:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.palette-item.highlight {
+  box-shadow: 0 0 8px 2px rgba(255, 255, 255, 0.8);
+  animation: highlight-pulse 0.5s ease;
+}
+
+@keyframes highlight-pulse {
+  0% { box-shadow: 0 0 2px 1px rgba(255, 255, 255, 0.4); }
+  50% { box-shadow: 0 0 10px 3px rgba(255, 255, 255, 1); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+}
+
+.palette-color {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+}
+
+.palette-key {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.history-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 12px;
+}
+
+.history-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.history-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.canvas-container {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  background-color: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 10px;
+  overflow: hidden;
+}
+
+#mainCanvas {
+  display: block;
+  background-color: var(--canvas-bg);
+  border-radius: 4px;
+  cursor: crosshair;
+  max-width: 100%;
+  height: auto;
+}
+
+.canvas-overlay {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.canvas-overlay.clearing {
+  animation: clear-canvas 0.5s ease forwards;
+}
+
+@keyframes clear-canvas {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.3);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(0);
+    opacity: 0;
+  }
+}
+
+.bottom-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background-color: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+.brush-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brush-control label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+#brushSize {
+  width: 120px;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+
+#brushSize::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+#brushSize::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+#brushSizeLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 40px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.toast-container {
+  position: fixed;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.toast {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  animation: toast-in 0.3s ease, toast-out 0.3s ease 1.7s forwards;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+}
+
+.palette-panel::-webkit-scrollbar {
+  width: 4px;
+}
+
+.palette-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.palette-panel::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+}
+
+@media (max-width: 900px) {
+  body {
+    padding: 10px;
+  }
+
+  .app-container {
+    gap: 8px;
+  }
+
+  .main-content {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .palette-panel {
+    width: 100%;
+    max-height: none;
+  }
+
+  .palette-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .bottom-bar {
+    flex-direction: column;
+    gap: 10px;
+  }
+}

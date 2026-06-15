@@ -1,0 +1,33 @@
+{
+  "name": "footprint-memory-book",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "client:dev": "vite",
+    "server:dev": "ts-node --esm server/index.ts",
+    "dev": "concurrently \"npm run client:dev\" \"npm run server:dev\"",
+    "build": "tsc -b && vite build",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "multer": "^1.4.5-lts.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^22.15.30",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^4.4.1",
+    "concurrently": "^9.2.0",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5"
+  }
+}

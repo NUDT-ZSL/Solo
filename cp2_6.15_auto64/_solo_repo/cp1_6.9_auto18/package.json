@@ -1,0 +1,37 @@
+{
+  "name": "guangying-zuji",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "client:dev": "vite",
+    "server:dev": "ts-node --esm src/server/index.ts",
+    "dev": "concurrently \"npm run client:dev\" \"npm run server:dev\"",
+    "build": "tsc -b && vite build",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "leaflet": "^1.9.4",
+    "express": "^4.18.2",
+    "express-session": "^1.18.0",
+    "multer": "^1.4.5-lts.1",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/leaflet": "^1.9.12",
+    "@types/express": "^4.17.21",
+    "@types/express-session": "^1.18.0",
+    "@types/multer": "^1.4.11",
+    "@types/cors": "^2.8.17",
+    "@types/node": "^22.0.0",
+    "@vitejs/plugin-react": "^4.4.1",
+    "typescript": "^5.5.0",
+    "vite": "^5.4.0",
+    "ts-node": "^10.9.2",
+    "concurrently": "^9.0.0"
+  }
+}

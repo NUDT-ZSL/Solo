@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>像素食谱 - Pixel Recipe</title>
+  <link rel="stylesheet" href="/src/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="loading" class="loading">
+    <div class="loading-dots">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+  </div>
+  <div id="app" style="display: none;">
+    <header class="header">
+      <h1>像素食谱</h1>
+    </header>
+    
+    <div class="main-container">
+      <div class="canvas-section">
+        <div class="search-bar">
+          <input type="text" id="recipeSearch" placeholder="输入菜名搜索..." maxlength="20">
+        </div>
+        <div class="canvas-wrapper" id="canvasWrapper">
+          <canvas id="recipeCanvas"></canvas>
+        </div>
+      </div>
+      
+      <aside class="recipe-list" id="recipeList">
+        <h3>菜谱列表</h3>
+      </aside>
+    </div>
+    
+    <div class="bottom-bar">
+      <button class="pixel-btn" id="exportBtn">导出为 PNG</button>
+    </div>
+  </div>
+  
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

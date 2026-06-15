@@ -1,0 +1,17 @@
+{
+  "name": "voiceprint-canvas",
+  "version": "1.0.0",
+  "description": "声纹画卷 - 实时音频可视化Web应用",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10",
+    "@types/node": "^20.10.5"
+  }
+}

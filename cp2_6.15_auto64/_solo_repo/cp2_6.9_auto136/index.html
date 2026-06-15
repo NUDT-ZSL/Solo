@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>像素瀑布 · 音画联动</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0a0a23;
+    }
+
+    #app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+
+    #flash-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0);
+      pointer-events: none;
+      z-index: 10;
+      transition: background-color 200ms ease-out;
+    }
+
+    #flash-overlay.active {
+      background: rgba(255, 255, 255, 0.4);
+    }
+
+    #toolbar {
+      position: fixed;
+      bottom: -80px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 95%;
+      max-width: 900px;
+      height: 60px;
+      background: rgba(44, 62, 80, 0.33);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 100;
+      transition: bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    #toolbar.visible {
+      bottom: 20px;
+    }
+
+    #spectrum {
+      position: fixed;
+      bottom: 90px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: flex-end;
+      gap: 1px;
+      height: 40px;
+      z-index: 99;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    #spectrum.visible {
+      opacity: 1;
+    }
+
+    .spectrum-bar {
+      width: 2px;
+      background: linear-gradient(to top, #e74c3c, #f39c12, #2ecc71, #3498db);
+      border-radius: 1px;
+      transition: height 0.05s ease;
+    }
+
+    .palette-container {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .color-dot {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+
+    .color-dot:hover {
+      transform: scale(1.15);
+    }
+
+    .color-dot.selected {
+      border-color: #fff;
+      transform: scale(1.2);
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      padding: 8px 18px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      color: #fff;
+      transition: all 0.15s ease;
+      letter-spacing: 0.5px;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    #audio-toggle {
+      background: #c0392b;
+    }
+
+    #audio-toggle.on {
+      background: #27ae60;
+    }
+
+    #clear-btn {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    #clear-btn:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="canvas"></canvas>
+    <div id="flash-overlay"></div>
+    <div id="spectrum"></div>
+    <div id="toolbar">
+      <div class="palette-container" id="palette"></div>
+      <div class="btn-group">
+        <button id="audio-toggle" class="btn">音频关闭</button>
+        <button id="clear-btn" class="btn">清空画布</button>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,288 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 40px 36px;
+  box-shadow: 0 8px 32px rgba(139, 126, 200, 0.15);
+  position: relative;
+}
+
+.title {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 28px;
+  font-weight: 600;
+  color: #4a3f6b;
+  margin: 0 0 8px;
+  text-align: center;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: #8b83a6;
+  text-align: center;
+  margin: 0 0 28px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.error {
+  background: rgba(255, 126, 103, 0.1);
+  color: #e76f51;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  text-align: center;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b608c;
+  margin-left: 2px;
+}
+
+.field input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid rgba(139, 126, 200, 0.2);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  color: #4a3f6b;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.field input::placeholder {
+  color: #b8b0d0;
+}
+
+.field input:focus {
+  border-color: #8b7ec8;
+  box-shadow: 0 0 0 3px rgba(139, 126, 200, 0.15);
+}
+
+.field input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.inputError {
+  border-color: rgba(231, 111, 81, 0.5) !important;
+  background: rgba(255, 126, 103, 0.05) !important;
+}
+
+.inputError:focus {
+  box-shadow: 0 0 0 3px rgba(255, 126, 103, 0.15) !important;
+}
+
+.fieldError {
+  color: #e76f51;
+  font-size: 12px;
+  margin-top: 2px;
+  padding-left: 4px;
+  line-height: 1.4;
+}
+
+.submitBtn {
+  margin-top: 8px;
+  padding: 13px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #8b7ec8 0%, #a89bdb 100%);
+  color: white;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  font-family: inherit;
+  letter-spacing: 2px;
+}
+
+.submitBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(139, 126, 200, 0.4);
+}
+
+.submitBtn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.submitBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.footer {
+  margin-top: 24px;
+  text-align: center;
+  font-size: 13px;
+  color: #8b83a6;
+}
+
+.link {
+  color: #8b7ec8;
+  text-decoration: none;
+  font-weight: 500;
+  margin-left: 4px;
+  transition: color 0.2s;
+}
+
+.link:hover {
+  color: #6b5eb0;
+}
+
+.backHome {
+  display: block;
+  margin-top: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: #a098c0;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.backHome:hover {
+  color: #8b7ec8;
+}
+
+@media (max-width: 768px) {
+  .page {
+    padding: 16px;
+  }
+
+  .card {
+    padding: 28px 24px;
+    border-radius: 16px;
+  }
+
+  .title {
+    font-size: 24px;
+  }
+
+  .subtitle {
+    font-size: 13px;
+    margin-bottom: 24px;
+  }
+
+  .form {
+    gap: 16px;
+  }
+
+  .field label {
+    font-size: 12px;
+  }
+
+  .field input {
+    padding: 11px 14px;
+    font-size: 14px;
+  }
+
+  .submitBtn {
+    padding: 12px;
+    font-size: 14px;
+  }
+
+  .footer {
+    font-size: 12px;
+  }
+
+  .fieldError {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 480px) {
+  .page {
+    padding: 12px;
+    align-items: flex-start;
+    padding-top: 40px;
+  }
+
+  .card {
+    padding: 24px 20px;
+    border-radius: 14px;
+    box-shadow: 0 4px 20px rgba(139, 126, 200, 0.12);
+  }
+
+  .title {
+    font-size: 20px;
+  }
+
+  .subtitle {
+    font-size: 12px;
+    margin-bottom: 20px;
+  }
+
+  .form {
+    gap: 14px;
+  }
+
+  .field {
+    gap: 4px;
+  }
+
+  .field label {
+    font-size: 11px;
+  }
+
+  .field input {
+    padding: 10px 12px;
+    font-size: 13px;
+    border-radius: 10px;
+  }
+
+  .field input::placeholder {
+    font-size: 12px;
+  }
+
+  .submitBtn {
+    padding: 11px;
+    font-size: 13px;
+    letter-spacing: 1px;
+    margin-top: 4px;
+  }
+
+  .error {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .footer {
+    margin-top: 20px;
+    font-size: 11px;
+  }
+
+  .backHome {
+    font-size: 12px;
+    margin-top: 16px;
+  }
+
+  .fieldError {
+    font-size: 10px;
+    padding-left: 2px;
+  }
+}

@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>词间潮汐 - 文字节奏可视化器</title>
+  <style>
+    :root {
+      --glass-bg: rgba(255, 255, 255, 0.06);
+      --glass-border: rgba(255, 255, 255, 0.1);
+      --glass-blur: blur(12px);
+      --text-primary: rgba(255, 255, 255, 0.95);
+      --text-secondary: rgba(255, 255, 255, 0.6);
+      --accent-blue: #3498DB;
+      --accent-red: #E74C3C;
+      --transition-base: 0.3s ease-out;
+      --font-scale: clamp(1rem, 0.7rem + 1.5vw, 1.8rem);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont,
+                   'PingFang SC', 'Microsoft YaHei', sans-serif;
+      color: var(--text-primary);
+      font-size: var(--font-scale);
+    }
+
+    body {
+      background: radial-gradient(ellipse at center top, #0B101E 0%, #000000 100%);
+      position: relative;
+    }
+
+    .app-container {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .header {
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 10;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-red) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 18px;
+      box-shadow: 0 4px 20px rgba(52, 152, 219, 0.3);
+    }
+
+    .brand-title {
+      font-size: clamp(1rem, 1.5vw, 1.3rem);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      background: linear-gradient(90deg, #3498DB, #F39C12);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .perf-stats {
+      display: flex;
+      gap: 16px;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      font-family: 'SF Mono', monospace;
+    }
+
+    .perf-stat {
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: var(--glass-bg);
+      backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--glass-border);
+      transition: all var(--transition-base);
+    }
+
+    .perf-stat.good { color: #2ECC71; }
+    .perf-stat.warn { color: #F39C12; }
+    .perf-stat.bad  { color: #E74C3C; }
+
+    .canvas-wrapper {
+      flex: 1;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      position: relative;
+    }
+
+    #mainCanvas {
+      width: 100%;
+      height: 75vh;
+      display: block;
+    }
+
+    .input-container {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 5;
+      transition: opacity var(--transition-base), transform var(--transition-base);
+      pointer-events: none;
+    }
+
+    .input-container.has-text {
+      opacity: 0;
+      transform: translate(-50%, -60%);
+      pointer-events: none;
+    }
+
+    .input-container.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translate(-50%, -50%);
+    }
+
+    .glass-textarea {
+      width: clamp(280px, 60vw, 600px);
+      min-height: 120px;
+      padding: 16px 20px;
+      border-radius: 16px;
+      border: 1px solid var(--glass-border);
+      background: var(--glass-bg);
+      backdrop-filter: var(--glass-blur);
+      color: var(--text-primary);
+      font-size: 1rem;
+      line-height: 1.6;
+      resize: none;
+      outline: none;
+      transition: all var(--transition-base);
+      font-family: inherit;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    }
+
+    .glass-textarea::placeholder {
+      color: var(--text-secondary);
+    }
+
+    .glass-textarea:hover,
+    .glass-textarea:focus {
+      border-color: rgba(255, 255, 255, 0.2);
+      box-shadow: 0 0 0 0.2px rgba(255, 255, 255, 0.25),
+                  0 8px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .char-count {
+      position: absolute;
+      bottom: 10px;
+      right: 16px;
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      pointer-events: none;
+      font-family: 'SF Mono', monospace;
+    }
+
+    .control-panel {
+      position: fixed;
+      top: 50%;
+      right: 0;
+      transform: translateY(-50%);
+      z-index: 100;
+      display: flex;
+      align-items: stretch;
+    }
+
+    .panel-toggle {
+      width: 32px;
+      height: 72px;
+      border-radius: 12px 0 0 12px;
+      border: 1px solid var(--glass-border);
+      border-right: none;
+      background: var(--glass-bg);
+      backdrop-filter: var(--glass-blur);
+      color: var(--text-primary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--transition-base);
+      flex-shrink: 0;
+    }
+
+    .panel-toggle:hover {
+      background: rgba(255, 255, 255, 0.1);
+      box-shadow: -2px 0 0 0.2px rgba(255, 255, 255, 0.3);
+    }
+
+    .panel-toggle svg {
+      width: 16px;
+      height: 16px;
+      transition: transform 0.4s ease-in-out;
+    }
+
+    .control-panel.collapsed .panel-toggle svg {
+      transform: rotate(180deg);
+    }
+
+    .panel-content {
+      width: 280px;
+      max-height: 85vh;
+      padding: 20px;
+      border-radius: 16px 0 0 16px;
+      border: 1px solid var(--glass-border);
+      border-right: none;
+      background: var(--glass-bg);
+      backdrop-filter: var(--glass-blur);
+      overflow-y: auto;
+      overflow-x: hidden;
+      transform: translateX(0);
+      opacity: 1;
+      transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                  opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      flex-shrink: 0;
+    }
+
+    .control-panel.collapsed .panel-content {
+      transform: translateX(100%);
+      opacity: 0;
+      pointer-events: none;
+      visibility: hidden;
+      transition-delay: 0s, 0.1s;
+    }
+
+    .control-panel:not(.collapsed) .panel-content {
+      visibility: visible;
+    }
+
+    .panel-content::-webkit-scrollbar { width: 4px; }
+    .panel-content::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.15);
+      border-radius: 2px;
+    }
+
+    .panel-section {
+      margin-bottom: 22px;
+    }
+
+    .panel-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .section-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text-secondary);
+      margin-bottom: 10px;
+      font-weight: 500;
+    }
+
+    .row-input-wrap {
+      position: relative;
+    }
+
+    .row-input {
+      width: 100%;
+      padding: 12px 14px;
+      padding-right: 50px;
+      border-radius: 10px;
+      border: 1px solid var(--glass-border);
+      background: rgba(0, 0, 0, 0.2);
+      color: var(--text-primary);
+      font-size: 0.9rem;
+      outline: none;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 80px;
+      transition: all var(--transition-base);
+    }
+
+    .row-input:hover,
+    .row-input:focus {
+      border-color: rgba(255, 255, 255, 0.2);
+      box-shadow: 0 0 0 0.2px rgba(255, 255, 255, 0.25);
+    }
+
+    .row-input-count {
+      position: absolute;
+      bottom: 8px;
+      right: 12px;
+      font-size: 0.65rem;
+      color: var(--text-secondary);
+      font-family: 'SF Mono', monospace;
+      pointer-events: none;
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 12px 20px;
+      border-radius: 10px;
+      border: 1px solid var(--glass-border);
+      background: linear-gradient(135deg, rgba(52,152,219,0.2), rgba(231,76,60,0.2));
+      color: var(--text-primary);
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all var(--transition-base);
+      position: relative;
+      overflow: hidden;
+      font-family: inherit;
+    }
+
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(52,152,219,0.15), rgba(231,76,60,0.15));
+      animation: pulse-breath 1.5s ease-in-out infinite;
+      opacity: 0;
+    }
+
+    .btn-primary:hover {
+      border-color: rgba(255,255,255,0.25);
+      box-shadow: 0 0 0 0.2px rgba(255,255,255,0.3),
+                  0 4px 24px rgba(52,152,219,0.2);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:hover::before {
+      opacity: 1;
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-primary svg {
+      width: 16px;
+      height: 16px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .btn-primary span {
+      position: relative;
+      z-index: 1;
+    }
+
+    @keyframes pulse-breath {
+      0%, 100% { opacity: 0; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.02); }
+    }
+
+    .slider-group {
+      margin-bottom: 14px;
+    }
+
+    .slider-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .slider-value {
+      font-family: 'SF Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--accent-blue);
+      font-weight: 600;
+    }
+
+    .slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.1);
+      outline: none;
+      cursor: pointer;
+      transition: background var(--transition-base);
+    }
+
+    .slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #3498DB, #E74C3C);
+      cursor: pointer;
+      border: 2px solid rgba(255,255,255,0.8);
+      box-shadow: 0 2px 8px rgba(52,152,219,0.4);
+      transition: all var(--transition-base);
+    }
+
+    .slider::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 0 0.2px rgba(255,255,255,0.3),
+                  0 4px 16px rgba(52,152,219,0.5);
+    }
+
+    .slider::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #3498DB, #E74C3C);
+      cursor: pointer;
+      border: 2px solid rgba(255,255,255,0.8);
+      box-shadow: 0 2px 8px rgba(52,152,219,0.4);
+    }
+
+    .tone-buttons {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .tone-btn {
+      padding: 8px 4px;
+      border-radius: 8px;
+      border: 1px solid var(--glass-border);
+      background: rgba(0,0,0,0.2);
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all var(--transition-base);
+      font-family: inherit;
+      font-weight: 500;
+    }
+
+    .tone-btn:hover {
+      border-color: rgba(255,255,255,0.2);
+      box-shadow: 0 0 0 0.2px rgba(255,255,255,0.25);
+      color: var(--text-primary);
+    }
+
+    .tone-btn.active {
+      background: linear-gradient(135deg, rgba(52,152,219,0.25), rgba(231,76,60,0.25));
+      border-color: rgba(52,152,219,0.4);
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .tone-btn.active::before {
+      opacity: 0.6;
+    }
+
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 20px;
+      z-index: 9999;
+      transition: opacity 0.5s ease;
+      backdrop-filter: blur(8px);
+    }
+
+    .loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loading-ring {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: var(--accent-blue);
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      letter-spacing: 2px;
+    }
+
+    .mobile-controls {
+      display: none;
+    }
+
+    @media (max-width: 768px) {
+      :root {
+        --font-scale: 1rem;
+      }
+
+      .control-panel {
+        display: none;
+      }
+
+      .mobile-controls {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        padding: 12px 16px calc(12px + env(safe-area-inset-bottom)) 16px;
+        gap: 10px;
+        justify-content: space-around;
+        background: var(--glass-bg);
+        backdrop-filter: var(--glass-blur);
+        border-top: 1px solid var(--glass-border);
+        transform: translateY(100%);
+        transition: transform 0.4s ease-in-out, opacity 0.4s ease-in-out;
+        opacity: 0;
+      }
+
+      .mobile-controls.visible {
+        transform: translateY(0);
+        opacity: 1;
+      }
+
+      .mobile-icon-btn {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        border: 1px solid var(--glass-border);
+        background: rgba(0,0,0,0.2);
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all var(--transition-base);
+        flex-shrink: 0;
+        position: relative;
+        padding: 0;
+      }
+
+      .mobile-icon-btn:hover,
+      .mobile-icon-btn.active {
+        background: linear-gradient(135deg, rgba(52,152,219,0.25), rgba(231,76,60,0.25));
+        border-color: rgba(52,152,219,0.4);
+        box-shadow: 0 0 0 0.2px rgba(255,255,255,0.25);
+      }
+
+      .mobile-icon-btn.playing {
+        animation: pulse-breath 1.5s ease-in-out infinite;
+      }
+
+      .mobile-icon-btn svg {
+        width: 20px;
+        height: 20px;
+      }
+
+      .mobile-menu-panel {
+        position: fixed;
+        bottom: 70px;
+        left: 12px;
+        right: 12px;
+        padding: 20px;
+        border-radius: 16px;
+        background: var(--glass-bg);
+        backdrop-filter: var(--glass-blur);
+        border: 1px solid var(--glass-border);
+        z-index: 99;
+        transform: translateY(20px);
+        opacity: 0;
+        pointer-events: none;
+        transition: transform 0.4s ease-in-out, opacity 0.4s ease-in-out;
+        max-height: 60vh;
+        overflow-y: auto;
+      }
+
+      .mobile-menu-panel.visible {
+        transform: translateY(0);
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      #mainCanvas {
+        height: calc(75vh - 70px);
+      }
+
+      .perf-stats {
+        display: none;
+      }
+
+      .glass-textarea {
+        width: calc(100vw - 48px);
+        min-height: 100px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-ring"></div>
+    <div class="loading-text">正在加载词间潮汐...</div>
+  </div>
+
+  <div class="app-container">
+    <header class="header">
+      <div class="brand">
+        <div class="brand-logo">潮</div>
+        <div class="brand-title">词间潮汐</div>
+      </div>
+      <div class="perf-stats" id="perfStats">
+        <div class="perf-stat" id="fpsStat">FPS: --</div>
+        <div class="perf-stat" id="frameTimeStat">帧: --ms</div>
+        <div class="perf-stat" id="bpmStat">BPM: --</div>
+      </div>
+    </header>
+
+    <div class="canvas-wrapper">
+      <canvas id="mainCanvas"></canvas>
+
+      <div class="input-container" id="inputContainer">
+        <textarea
+          id="heroTextarea"
+          class="glass-textarea"
+          placeholder="输入或粘贴文字，让字符化为潮汐...&#10;&#10;例如：海浪无声 将漫无边际 化作潮汐的呼吸"
+          maxlength="200"
+          spellcheck="false"
+        ></textarea>
+        <div class="char-count"><span id="heroCharCount">0</span> / 200</div>
+      </div>
+    </div>
+
+    <aside class="control-panel" id="controlPanel">
+      <div class="panel-content" id="panelContent">
+        <div class="panel-section">
+          <div class="section-label">文字输入</div>
+          <div class="row-input-wrap">
+            <textarea
+              id="panelTextarea"
+              class="row-input"
+              placeholder="输入文字 (最多200字符)"
+              maxlength="200"
+              spellcheck="false"
+            ></textarea>
+            <div class="row-input-count"><span id="panelCharCount">0</span> / 200</div>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <div class="section-label">播放控制</div>
+          <button class="btn-primary" id="playPauseBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3" id="playIcon"></polygon>
+            </svg>
+            <span id="playPauseText">开始律动</span>
+          </button>
+        </div>
+
+        <div class="panel-section">
+          <div class="section-label">调节参数</div>
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>律动速度</span>
+              <span class="slider-value" id="speedValue">1.0x</span>
+            </div>
+            <input
+              type="range"
+              class="slider"
+              id="speedSlider"
+              min="0.5"
+              max="2.0"
+              step="0.1"
+              value="1.0"
+            />
+          </div>
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>粒子大小</span>
+              <span class="slider-value" id="sizeValue">14px</span>
+            </div>
+            <input
+              type="range"
+              class="slider"
+              id="sizeSlider"
+              min="8"
+              max="24"
+              step="1"
+              value="14"
+            />
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <div class="section-label">音色风格</div>
+          <div class="tone-buttons">
+            <button class="tone-btn active" data-tone="soft">柔和</button>
+            <button class="tone-btn" data-tone="bright">明亮</button>
+            <button class="tone-btn" data-tone="dark">暗黑</button>
+          </div>
+        </div>
+      </div>
+      <button class="panel-toggle" id="panelToggle" aria-label="控制面板">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+    </aside>
+
+    <nav class="mobile-controls" id="mobileControls">
+      <button class="mobile-icon-btn" id="mobileInputBtn" aria-label="文字输入">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+        </svg>
+      </button>
+      <button class="mobile-icon-btn" id="mobilePlayBtn" aria-label="播放/暂停">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" id="mobilePlayIcon">
+          <polygon points="5 3 19 12 5 21 5 3"></polygon>
+        </svg>
+      </button>
+      <button class="mobile-icon-btn" id="mobileToneBtn" aria-label="音色切换">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 18V5l12-2v13"></path>
+          <circle cx="6" cy="18" r="3"></circle>
+          <circle cx="18" cy="16" r="3"></circle>
+        </svg>
+      </button>
+      <button class="mobile-icon-btn" id="mobileMenuBtn" aria-label="更多设置">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
+    </nav>
+
+    <div class="mobile-menu-panel" id="mobileMenuPanel">
+      <div class="panel-section">
+        <div class="section-label">调节参数</div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>律动速度</span>
+            <span class="slider-value" id="mobileSpeedValue">1.0x</span>
+          </div>
+          <input type="range" class="slider" id="mobileSpeedSlider" min="0.5" max="2.0" step="0.1" value="1.0" />
+        </div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>粒子大小</span>
+            <span class="slider-value" id="mobileSizeValue">14px</span>
+          </div>
+          <input type="range" class="slider" id="mobileSizeSlider" min="8" max="24" step="1" value="14" />
+        </div>
+      </div>
+      <div class="panel-section">
+        <div class="section-label">音色风格</div>
+        <div class="tone-buttons">
+          <button class="tone-btn active" data-tone="soft">柔和</button>
+          <button class="tone-btn" data-tone="bright">明亮</button>
+          <button class="tone-btn" data-tone="dark">暗黑</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0">
+  <title>刃锋诗篇</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #F5F0E0;
+      font-family: "KaiTi", "STKaiti", "楷体", serif;
+      user-select: none;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    #bgCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    #fragmentsLayer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    #fragmentsLayer > * {
+      pointer-events: auto;
+    }
+
+    .fragment {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      background: #F5F0E0;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      color: #1A1A1A;
+      font-family: "KaiTi", "STKaiti", "楷体", serif;
+      cursor: grab;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+      transition: transform 0.3s ease, opacity 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .fragment:active {
+      cursor: grabbing;
+    }
+
+    .fragment.dragging {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+      z-index: 100;
+    }
+
+    .fragment-group {
+      position: absolute;
+      display: flex;
+      flex-direction: row;
+      border: 1.5px solid #C8A96E;
+      border-radius: 4px;
+      padding: 2px;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+
+    .fragment-group .fragment {
+      position: relative;
+      box-shadow: none;
+    }
+
+    .poem-card {
+      position: absolute;
+      background: rgba(240, 232, 208, 0.95);
+      border-radius: 8px;
+      padding: 8px 16px;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 4px;
+      font-weight: bold;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+
+    .poem-card .char {
+      font-size: 28px;
+      color: #1A1A1A;
+      font-family: "KaiTi", "STKaiti", "楷体", serif;
+    }
+
+    #progressContainer {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+
+    #progressText {
+      font-size: 16px;
+      color: #1A1A1A;
+      font-family: "KaiTi", "STKaiti", "楷体", serif;
+    }
+
+    #progressBar {
+      width: 180px;
+      height: 8px;
+      background: #D0D5DD;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    #progressFill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #6EC6B8 0%, #3B7DCA 100%);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    #titleBanner {
+      position: absolute;
+      top: 24px;
+      left: 24px;
+      z-index: 10;
+      font-size: 24px;
+      color: #2A1A0A;
+      font-family: "KaiTi", "STKaiti", "楷体", serif;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+      writing-mode: vertical-rl;
+      letter-spacing: 4px;
+    }
+
+    #titleBanner.visible {
+      opacity: 1;
+    }
+
+    @media (max-width: 768px) {
+      .fragment {
+        width: 36px;
+        height: 36px;
+        font-size: 20px;
+      }
+
+      .poem-card .char {
+        font-size: 22px;
+      }
+
+      #progressBar {
+        width: 140px;
+      }
+
+      #progressText {
+        font-size: 14px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .fragment {
+        width: 32px;
+        height: 32px;
+        font-size: 18px;
+      }
+
+      .poem-card .char {
+        font-size: 18px;
+      }
+
+      #progressBar {
+        width: 120px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="bgCanvas"></canvas>
+    <div id="fragmentsLayer"></div>
+    <div id="titleBanner">刃锋诗篇·完</div>
+    <div id="progressContainer">
+      <div id="progressText">0/10</div>
+      <div id="progressBar">
+        <div id="progressFill"></div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

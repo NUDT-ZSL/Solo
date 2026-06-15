@@ -1,0 +1,539 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: linear-gradient(135deg, #0a0a23 0%, #1a1a3e 100%);
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #e94560;
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #ff6b8a;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #e94560 transparent;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: row;
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ===== 左侧控制面板 ===== */
+.control-panel {
+  width: 300px;
+  min-width: 300px;
+  height: 100%;
+  background: rgba(26, 26, 62, 0.85);
+  backdrop-filter: blur(10px);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.control-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.control-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.control-panel::-webkit-scrollbar-thumb {
+  background: #e94560;
+  border-radius: 3px;
+}
+
+.control-panel::-webkit-scrollbar-thumb:hover {
+  background: #ff6b8a;
+}
+
+.panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panel-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.prize-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.prize-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.color-input {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.color-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-input::-webkit-color-swatch {
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+}
+
+.prize-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.prize-name {
+  font-size: 14px;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.count-input {
+  width: 60px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 14px;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.count-input:focus {
+  border-color: #e94560;
+}
+
+.department-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dept-btn {
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  color: #8a9db5;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dept-btn:hover {
+  background: rgba(233, 69, 96, 0.3);
+  color: #ffffff;
+}
+
+.dept-btn.active {
+  background: #e94560;
+  border-color: #e94560;
+  color: #ffffff;
+}
+
+.participant-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.participant-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.participant-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.participant-list::-webkit-scrollbar-thumb {
+  background: #e94560;
+  border-radius: 3px;
+}
+
+.participant-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.participant-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(233, 69, 96, 0.5);
+}
+
+.participant-item.won {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.participant-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.participant-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.participant-name {
+  font-size: 13px;
+  color: #ffffff;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.participant-dept {
+  font-size: 11px;
+  color: #8a9db5;
+}
+
+.win-history {
+  margin-top: 8px;
+  padding: 8px;
+  background: rgba(233, 69, 96, 0.1);
+  border-radius: 6px;
+  border-left: 3px solid #e94560;
+}
+
+.win-history-item {
+  font-size: 11px;
+  color: #8a9db5;
+  line-height: 1.6;
+}
+
+.win-history-item strong {
+  color: #e94560;
+  margin-right: 6px;
+}
+
+/* ===== 中央转盘区 ===== */
+.main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 20px;
+}
+
+.main-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.main-title {
+  font-size: 48px;
+  font-weight: 300;
+  color: #ffffff;
+  letter-spacing: 4px;
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  margin-bottom: 8px;
+}
+
+.main-subtitle {
+  font-size: 20px;
+  color: #8a9db5;
+  letter-spacing: 2px;
+}
+
+.wheel-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wheel-canvas {
+  display: block;
+  filter: drop-shadow(0 0 30px rgba(233, 69, 96, 0.3));
+}
+
+.start-btn {
+  margin-top: 40px;
+  width: 180px;
+  height: 56px;
+  background: #e94560;
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 600;
+  border: none;
+  border-radius: 28px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 4px 20px rgba(233, 69, 96, 0.4);
+  letter-spacing: 2px;
+}
+
+.start-btn:hover {
+  filter: brightness(1.2);
+  box-shadow: 0 6px 30px rgba(233, 69, 96, 0.6);
+}
+
+.start-btn:active {
+  transform: scale(0.95);
+  filter: brightness(0.9);
+}
+
+.start-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+}
+
+.start-btn:disabled:hover {
+  filter: grayscale(0.5) brightness(1);
+}
+
+/* ===== 获奖者展示 ===== */
+.winner-display {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+}
+
+.winner-char {
+  font-size: 48px;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  animation: charFadeIn 0.3s ease forwards;
+}
+
+@keyframes charFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== 右侧记录面板 ===== */
+.record-panel {
+  width: 300px;
+  min-width: 300px;
+  height: 100%;
+  background: rgba(26, 26, 62, 0.85);
+  backdrop-filter: blur(10px);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.record-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 500px;
+  overflow-y: auto;
+  margin-top: 12px;
+}
+
+.record-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.record-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.record-list::-webkit-scrollbar-thumb {
+  background: #e94560;
+  border-radius: 3px;
+}
+
+.record-list::-webkit-scrollbar-thumb:hover {
+  background: #ff6b8a;
+}
+
+.record-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 48px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.record-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.record-emoji {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.record-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.record-name {
+  font-size: 13px;
+  color: #ffffff;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.record-prize {
+  font-size: 11px;
+  color: #8a9db5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.record-time {
+  font-size: 12px;
+  color: #8a9db5;
+  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+  flex-shrink: 0;
+}
+
+.empty-state {
+  text-align: center;
+  color: #8a9db5;
+  font-size: 13px;
+  padding: 40px 20px;
+}
+
+/* ===== 粒子特效Canvas ===== */
+.particle-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* ===== 响应式适配 ===== */
+@media screen and (max-width: 1440px) {
+  .main-title {
+    font-size: 36px;
+  }
+  
+  .main-subtitle {
+    font-size: 16px;
+  }
+  
+  .start-btn {
+    width: 150px;
+    height: 48px;
+    font-size: 17px;
+    border-radius: 24px;
+  }
+  
+  .winner-char {
+    font-size: 40px;
+  }
+  
+  .control-panel,
+  .record-panel {
+    width: 260px;
+    min-width: 260px;
+  }
+}
+
+@media screen and (max-width: 1280px) {
+  .main-title {
+    font-size: 28px;
+  }
+  
+  .main-subtitle {
+    font-size: 14px;
+  }
+}

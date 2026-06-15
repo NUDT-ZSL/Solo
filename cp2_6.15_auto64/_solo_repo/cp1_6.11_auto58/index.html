@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>3D 地铁线路规划可视化工具</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Noto Sans SC', sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      user-select: none;
+    }
+    #app {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(ellipse at center, #2a2a4e 0%, #1a1a2e 60%, #0f0f1a 100%);
+    }
+    #scene-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+    #loading {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1a 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.5s ease;
+    }
+    #loading.hidden { opacity: 0; pointer-events: none; }
+    #loading .spinner {
+      width: 60px;
+      height: 60px;
+      border: 3px solid rgba(100, 200, 255, 0.2);
+      border-top: 3px solid #64c8ff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+      box-shadow: 0 0 20px rgba(100, 200, 255, 0.3);
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading .title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 18px;
+      letter-spacing: 4px;
+      color: #64c8ff;
+      text-shadow: 0 0 10px rgba(100, 200, 255, 0.5);
+    }
+    #loading .subtitle {
+      font-size: 12px;
+      color: #888;
+      margin-top: 8px;
+      letter-spacing: 2px;
+    }
+    #fps-counter {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      font-family: 'Orbitron', monospace;
+      font-size: 12px;
+      color: #64c8ff;
+      background: rgba(20, 20, 40, 0.6);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(100, 200, 255, 0.2);
+      z-index: 100;
+      pointer-events: none;
+    }
+    #fps-counter.ok { color: #4ade80; border-color: rgba(74, 222, 128, 0.3); }
+    #fps-counter.warn { color: #fbbf24; border-color: rgba(251, 191, 36, 0.3); }
+    #fps-counter.bad { color: #f87171; border-color: rgba(248, 113, 113, 0.3); }
+    #drop-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(100, 200, 255, 0.1);
+      border: 3px dashed #64c8ff;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 24px;
+      color: #64c8ff;
+      z-index: 9998;
+      pointer-events: none;
+    }
+    #drop-overlay.active { display: flex; }
+    #notification {
+      position: fixed;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(20, 20, 40, 0.85);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      color: #e0e0e0;
+      padding: 12px 24px;
+      border-radius: 8px;
+      border: 1px solid rgba(100, 200, 255, 0.3);
+      font-size: 14px;
+      z-index: 2000;
+      opacity: 0;
+      transition: all 0.3s ease;
+      pointer-events: none;
+    }
+    #notification.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="scene-canvas"></canvas>
+    <div id="fps-counter">-- FPS</div>
+    <div id="drop-overlay">释放鼠标导入 JSON 方案</div>
+    <div id="notification"></div>
+    <div id="loading">
+      <div class="spinner"></div>
+      <div class="title">METRO PLANNER 3D</div>
+      <div class="subtitle">正在初始化场景引擎</div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

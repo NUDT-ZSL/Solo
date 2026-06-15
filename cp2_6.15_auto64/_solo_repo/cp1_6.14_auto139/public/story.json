@@ -1,0 +1,1257 @@
+{
+  "startNodeId": "start",
+  "nodes": [
+    {
+      "id": "start",
+      "text": "你在一片迷雾中醒来，四周一片寂静。远处隐约可见一座古老的森林，森林深处似乎有微弱的光芒闪烁。你不知道自己是如何来到这里的，只记得一个名字——回声之境。一阵寒风吹过，你裹紧了身上的斗篷，决定开始探索这片神秘的土地。",
+      "background": "misty_forest.jpg",
+      "ambientSound": "ambient_wind",
+      "choices": [
+        {
+          "id": "choice_forest",
+          "text": "向着古老森林前进",
+          "nextNodeId": "forest_edge",
+          "effects": [
+            { "type": "set", "variable": "path_taken", "value": "forest" },
+            { "type": "add", "variable": "courage", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_light",
+          "text": "追寻那道微弱的光芒",
+          "nextNodeId": "mysterious_light",
+          "effects": [
+            { "type": "set", "variable": "path_taken", "value": "light" },
+            { "type": "add", "variable": "curiosity", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_stay",
+          "text": "原地等待，观察周围",
+          "nextNodeId": "waiting",
+          "effects": [
+            { "type": "add", "variable": "patience", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "forest_edge",
+      "text": "你来到了森林的边缘。巨大的古树直插云霄，树皮上刻满了奇异的符文。空气中弥漫着潮湿的泥土气息和不知名花朵的芬芳。一只银色的狐狸从树丛中探出头来，用充满智慧的眼睛看着你，似乎在等待着什么。",
+      "background": "ancient_forest.jpg",
+      "ambientSound": "ambient_forest",
+      "choices": [
+        {
+          "id": "choice_follow_fox",
+          "text": "跟随银狐深入森林",
+          "nextNodeId": "fox_guide",
+          "effects": [
+            { "type": "set", "variable": "has_guide", "value": true },
+            { "type": "add", "variable": "trust", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_go_alone",
+          "text": "独自探索森林",
+          "nextNodeId": "forest_depths",
+          "effects": [
+            { "type": "add", "variable": "independence", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_examine_runes",
+          "text": "仔细研究树皮上的符文",
+          "nextNodeId": "rune_study",
+          "effects": [
+            { "type": "add", "variable": "knowledge", "value": 2 },
+            { "type": "set", "variable": "knows_runes", "value": true }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mysterious_light",
+      "text": "你向着光芒的方向走去，穿过一片开阔的草地。光芒越来越亮，最后你发现它来自一座漂浮在空中的水晶塔。塔的周围环绕着彩色的光晕，如梦似幻。塔底有一扇半开的门，似乎在邀请你进入。",
+      "background": "crystal_tower.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "choice_enter_tower",
+          "text": "进入水晶塔",
+          "nextNodeId": "tower_entrance",
+          "effects": [
+            { "type": "add", "variable": "curiosity", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_circle_tower",
+          "text": "绕塔一周观察",
+          "nextNodeId": "tower_surroundings",
+          "effects": [
+            { "type": "add", "variable": "caution", "value": 1 },
+            { "type": "set", "variable": "found_secret", "value": true }
+          ]
+        },
+        {
+          "id": "choice_call_out",
+          "text": "大声呼喊，询问是否有人",
+          "nextNodeId": "echo_response",
+          "effects": [
+            { "type": "add", "variable": "bravery", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "waiting",
+      "text": "你选择原地等待，仔细观察四周。时间慢慢流逝，迷雾逐渐散去，你看到了更多的细节。不远处有一条小径，路旁有一块石碑，上面似乎刻着文字。渐渐地，你听到了远处传来的脚步声，有人正在向这边走来。",
+      "background": "misty_path.jpg",
+      "ambientSound": "ambient_wind",
+      "choices": [
+        {
+          "id": "choice_read_stone",
+          "text": "去查看石碑上的文字",
+          "nextNodeId": "stone_tablet",
+          "effects": [
+            { "type": "add", "variable": "knowledge", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_hide",
+          "text": "躲起来观察来人",
+          "nextNodeId": "hidden_observer",
+          "effects": [
+            { "type": "add", "variable": "stealth", "value": 1 },
+            { "type": "set", "variable": "saw_stranger", "value": true }
+          ]
+        },
+        {
+          "id": "choice_greet",
+          "text": "主动上前打招呼",
+          "nextNodeId": "meeting_stranger",
+          "effects": [
+            { "type": "add", "variable": "friendship", "value": 2 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "fox_guide",
+      "text": "银狐转身向森林深处走去，不时回头看看你是否跟上。你们穿过一片又一片的树林，最后来到了一个宁静的湖泊旁。湖水清澈见底，湖中央有一座小岛，岛上有一棵发光的树。银狐跳入湖中，游向小岛，然后站在岸边回头望向你。",
+      "background": "enchanted_lake.jpg",
+      "ambientSound": "ambient_water",
+      "choices": [
+        {
+          "id": "choice_swim",
+          "text": "跟着银狐游向小岛",
+          "nextNodeId": "island_tree",
+          "effects": [
+            { "type": "add", "variable": "courage", "value": 2 }
+          ]
+        },
+        {
+          "id": "choice_shore",
+          "text": "在岸边等待",
+          "nextNodeId": "lake_shore_wait",
+          "effects": [
+            { "type": "add", "variable": "patience", "value": 2 }
+          ]
+        },
+        {
+          "id": "choice_look_boat",
+          "text": "寻找船只或其他渡河方式",
+          "nextNodeId": "find_boat",
+          "effects": [
+            { "type": "add", "variable": "wisdom", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "forest_depths",
+      "text": "你独自深入森林，周围的树木越来越茂密，光线也越来越暗。突然，你听到了一阵低沉的咆哮声，一只巨大的暗影狼出现在你面前，它的眼睛闪烁着红色的光芒。它似乎在守护着什么，不让你继续前进。",
+      "background": "dark_forest.jpg",
+      "ambientSound": "ambient_rain",
+      "choices": [
+        {
+          "id": "choice_fight",
+          "text": "勇敢地面对暗影狼",
+          "nextNodeId": "wolf_confrontation",
+          "condition": { "variable": "courage", "operator": ">=", "value": 2 },
+          "effects": [
+            { "type": "add", "variable": "courage", "value": 1 },
+            { "type": "set", "variable": "defeated_wolf", "value": true }
+          ]
+        },
+        {
+          "id": "choice_retreat",
+          "text": "慢慢后退，寻找其他路径",
+          "nextNodeId": "forest_detour",
+          "effects": [
+            { "type": "add", "variable": "caution", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_communicate",
+          "text": "尝试与暗影狼沟通",
+          "nextNodeId": "wolf_dialogue",
+          "condition": { "variable": "knowledge", "operator": ">=", "value": 2 },
+          "effects": [
+            { "type": "set", "variable": "wolf_friend", "value": true },
+            { "type": "add", "variable": "friendship", "value": 3 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rune_study",
+      "text": "你仔细研究树皮上的符文，发现它们记载着关于这片土地的古老传说。据说回声之境是连接现实与梦境的边界，每个来到这里的人都需要找到自己内心的回声。符文还提到了三件圣物：勇气之心、智慧之眼和友谊之链，集齐它们可以打开通往真相的大门。",
+      "background": "rune_tree.jpg",
+      "ambientSound": "ambient_forest",
+      "choices": [
+        {
+          "id": "choice_continue_deeper",
+          "text": "带着符文的知识继续深入",
+          "nextNodeId": "forest_depths",
+          "effects": [
+            { "type": "add", "variable": "knowledge", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_seek_artifacts",
+          "text": "开始寻找三件圣物",
+          "nextNodeId": "artifact_quest",
+          "effects": [
+            { "type": "set", "variable": "artifact_quest_started", "value": true }
+          ]
+        },
+        {
+          "id": "choice_go_back_start",
+          "text": "返回迷雾处重新选择方向",
+          "nextNodeId": "start",
+          "effects": []
+        }
+      ]
+    },
+    {
+      "id": "tower_entrance",
+      "text": "你走进水晶塔，内部比外面看起来要大得多。墙壁上镶嵌着无数的水晶，散发出柔和的光芒。大厅中央有一个巨大的沙漏，沙子正在缓缓流动。沙漏旁边站着一位身穿白色长袍的老者，他转过身来，用深邃的眼睛看着你。",
+      "background": "tower_interior.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "choice_ask_elder",
+          "text": "询问老者这是什么地方",
+          "nextNodeId": "elder_explanation",
+          "effects": [
+            { "type": "add", "variable": "knowledge", "value": 2 }
+          ]
+        },
+        {
+          "id": "choice_examine_hourglass",
+          "text": "仔细观察沙漏",
+          "nextNodeId": "hourglass_mystery",
+          "effects": [
+            { "type": "add", "variable": "curiosity", "value": 2 }
+          ]
+        },
+        {
+          "id": "choice_touch_crystal",
+          "text": "触碰墙上的水晶",
+          "nextNodeId": "crystal_vision",
+          "effects": [
+            { "type": "set", "variable": "had_vision", "value": true },
+            { "type": "add", "variable": "wisdom", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "stone_tablet",
+      "text": "你走到石碑旁，拂去上面的灰尘，露出了古老的文字。上面写着：\"回声之境，心之所向。勇者无畏，智者不惑，仁者无敌。三者合一，方能归家。\" 你沉思着这些话的含义，似乎有什么重要的东西被遗忘了。",
+      "background": "stone_tablet.jpg",
+      "ambientSound": "ambient_wind",
+      "choices": [
+        {
+          "id": "choice_forest_path",
+          "text": "沿着小径走向森林",
+          "nextNodeId": "forest_edge",
+          "effects": [
+            { "type": "add", "variable": "courage", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_light_path",
+          "text": "朝着远处的光芒前进",
+          "nextNodeId": "mysterious_light",
+          "effects": [
+            { "type": "add", "variable": "wisdom", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_meditate",
+          "text": "在石碑旁打坐冥想",
+          "nextNodeId": "meditation_vision",
+          "effects": [
+            { "type": "add", "variable": "wisdom", "value": 2 },
+            { "type": "set", "variable": "had_vision", "value": true }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "meeting_stranger",
+      "text": "你主动走上前去打招呼。来人是一位年轻的旅人，名叫艾拉。她也是被迷雾带到这里的，已经在这片土地上探索了好几天。她很高兴遇到了同伴，并愿意与你分享她发现的信息。她说在东边有一座古老的神殿，也许能找到离开这里的方法。",
+      "background": "meeting_companion.jpg",
+      "ambientSound": "ambient_forest",
+      "choices": [
+        {
+          "id": "choice_team_up",
+          "text": "与艾拉结伴同行",
+          "nextNodeId": "journey_together",
+          "effects": [
+            { "type": "set", "variable": "has_companion", "value": true },
+            { "type": "add", "variable": "friendship", "value": 3 }
+          ]
+        },
+        {
+          "id": "choice_go_separate",
+          "text": "道谢后各自行动",
+          "nextNodeId": "solo_journey",
+          "effects": [
+            { "type": "add", "variable": "independence", "value": 2 }
+          ]
+        },
+        {
+          "id": "choice_ask_more_info",
+          "text": "向她询问更多信息",
+          "nextNodeId": "ella_information",
+          "effects": [
+            { "type": "add", "variable": "knowledge", "value": 2 },
+            { "type": "add", "variable": "friendship", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "island_tree",
+      "text": "你鼓起勇气跳入湖中，冰冷的湖水让你打了个寒颤，但你还是奋力游向了小岛。爬上岛后，你来到了那棵发光的树下。树干上有一个树洞，里面放着一颗心形的宝石，散发着温暖的光芒。银狐蹲坐在树旁，似乎在等你做出选择。",
+      "background": "glowing_tree.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "choice_take_heart",
+          "text": "取走心形容宝石",
+          "nextNodeId": "heart_artifact",
+          "effects": [
+            { "type": "set", "variable": "has_courage_heart", "value": true },
+            { "type": "add", "variable": "courage", "value": 3 },
+            { "type": "add", "variable": "artifact_count", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_leave_heart",
+          "text": "不触碰任何东西，静静感受",
+          "nextNodeId": "tree_wisdom",
+          "effects": [
+            { "type": "add", "variable": "wisdom", "value": 3 },
+            { "type": "set", "variable": "tree_blessing", "value": true }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "wolf_confrontation",
+      "text": "你鼓起勇气，直视着暗影狼的眼睛，没有丝毫退缩。令人惊讶的是，暗影狼的眼神中竟然出现了一丝赞许。它慢慢低下头，让你抚摸它的头。原来这只狼是森林的守护者，它在测试你的勇气。通过考验后，它愿意带你去森林最深处的秘密之地。",
+      "background": "wolf_friend.jpg",
+      "ambientSound": "ambient_forest",
+      "choices": [
+        {
+          "id": "choice_follow_wolf",
+          "text": "跟随暗影狼前往秘密之地",
+          "nextNodeId": "secret_grove",
+          "effects": [
+            { "type": "set", "variable": "wolf_companion", "value": true },
+            { "type": "add", "variable": "friendship", "value": 2 }
+          ]
+        },
+        {
+          "id": "choice_go_own_way",
+          "text": "感谢狼后继续自己的旅程",
+          "nextNodeId": "deep_forest_path",
+          "effects": [
+            { "type": "add", "variable": "independence", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "artifact_quest",
+      "text": "你决定开始寻找三件圣物的旅程。根据符文的记载，勇气之心在森林深处，智慧之眼在水晶塔顶，友谊之链则需要你找到真正的朋友才能获得。你站在森林入口处，思考着应该先从哪里开始。",
+      "background": "quest_start.jpg",
+      "ambientSound": "ambient_wind",
+      "choices": [
+        {
+          "id": "choice_forest_first",
+          "text": "先去森林寻找勇气之心",
+          "nextNodeId": "forest_edge",
+          "effects": [
+            { "type": "add", "variable": "courage", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_tower_first",
+          "text": "先去水晶塔寻找智慧之眼",
+          "nextNodeId": "mysterious_light",
+          "effects": [
+            { "type": "add", "variable": "wisdom", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_find_friend",
+          "text": "先寻找志同道合的伙伴",
+          "nextNodeId": "meeting_stranger",
+          "effects": [
+            { "type": "add", "variable": "friendship", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "elder_explanation",
+      "text": "老者告诉你，这里是回声之境，每个来到这里的人都是迷失了自我的灵魂。要离开这里，必须找到属于自己的回声——也就是真实的自己。他说水晶塔里藏着智慧之眼，能够看穿一切幻象。但要得到它，必须通过他的考验。",
+      "background": "elder_sage.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "choice_accept_test",
+          "text": "接受老者的考验",
+          "nextNodeId": "wisdom_test",
+          "effects": [
+            { "type": "add", "variable": "courage", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_ask_other_way",
+          "text": "询问是否有其他方法",
+          "nextNodeId": "other_paths",
+          "effects": [
+            { "type": "add", "variable": "curiosity", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_leave_tower",
+          "text": "暂时离开，再做考虑",
+          "nextNodeId": "mysterious_light",
+          "effects": [
+            { "type": "add", "variable": "caution", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "journey_together",
+      "text": "你和艾拉决定结伴同行。一路上，你们分享着各自的故事和发现。艾拉告诉你，她在来这里之前是一名画家，她觉得自己失去了创作的灵感，然后就在一片迷雾中醒来了。你们的友谊在旅途中逐渐加深。",
+      "background": "travel_together.jpg",
+      "ambientSound": "ambient_forest",
+      "choices": [
+        {
+          "id": "choice_go_temple",
+          "text": "一起前往古老神殿",
+          "nextNodeId": "ancient_temple",
+          "effects": [
+            { "type": "add", "variable": "friendship", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_explore_forest",
+          "text": "先探索附近的森林",
+          "nextNodeId": "forest_edge",
+          "effects": [
+            { "type": "add", "variable": "courage", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_find_tower",
+          "text": "去寻找传说中的水晶塔",
+          "nextNodeId": "mysterious_light",
+          "effects": [
+            { "type": "add", "variable": "wisdom", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "wisdom_test",
+      "text": "老者的考验开始了。他问了你三个问题：什么是真实？什么是幸福？什么是勇气？你需要在心中给出自己的答案。每个问题都没有标准答案，重要的是你是否真正理解了自己。",
+      "background": "wisdom_test.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "choice_true_self",
+          "text": "遵从本心，如实回答",
+          "nextNodeId": "pass_test",
+          "condition": { "variable": "wisdom", "operator": ">=", "value": 2 },
+          "effects": [
+            { "type": "set", "variable": "has_wisdom_eye", "value": true },
+            { "type": "add", "variable": "wisdom", "value": 2 },
+            { "type": "add", "variable": "artifact_count", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_think_deep",
+          "text": "深思熟虑后再回答",
+          "nextNodeId": "partial_pass",
+          "effects": [
+            { "type": "add", "variable": "wisdom", "value": 1 },
+            { "type": "add", "variable": "patience", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ancient_temple",
+      "text": "你和艾拉来到了古老的神殿前。神殿由巨大的石柱支撑，门上雕刻着复杂的图案。推开门，神殿中央有一个祭坛，上面放着一条闪闪发光的项链。祭坛两侧的墙壁上刻着文字：\"真正的友谊，是穿越迷雾的灯塔。\"",
+      "background": "ancient_temple.jpg",
+      "ambientSound": "ambient_wind",
+      "choices": [
+        {
+          "id": "choice_take_necklace",
+          "text": "与艾拉一起取走项链",
+          "nextNodeId": "friendship_chains",
+          "condition": { "variable": "friendship", "operator": ">=", "value": 5 },
+          "effects": [
+            { "type": "set", "variable": "has_friendship_chain", "value": true },
+            { "type": "add", "variable": "friendship", "value": 3 },
+            { "type": "add", "variable": "artifact_count", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_leave_necklace",
+          "text": "觉得不该随便拿走东西",
+          "nextNodeId": "temple_reward",
+          "effects": [
+            { "type": "add", "variable": "wisdom", "value": 2 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "heart_artifact",
+      "text": "你拿起心形容宝石的瞬间，一股温暖的力量流遍全身。你感觉自己充满了勇气，再也不害怕任何困难。银狐满意地点点头，然后在地上画了一个符号，指向远方。你明白，它在指引你去下一个地方。",
+      "background": "courage_heart.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "choice_follow_direction",
+          "text": "按照银狐指的方向前进",
+          "nextNodeId": "crossroads",
+          "effects": []
+        },
+        {
+          "id": "choice_go_tower",
+          "text": "前往水晶塔寻找智慧之眼",
+          "nextNodeId": "mysterious_light",
+          "effects": []
+        }
+      ]
+    },
+    {
+      "id": "pass_test",
+      "text": "你遵从本心回答了三个问题，老者满意地点点头。\"你已经找到了内心的智慧。\" 他伸手从虚空中取出一颗水晶眼球，递给了你。\"这是智慧之眼，它能帮助你看穿一切幻象。现在，你可以去寻找剩下的圣物了。\"",
+      "background": "wisdom_gift.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "choice_leave_tower_final",
+          "text": "离开水晶塔继续旅程",
+          "nextNodeId": "crossroads",
+          "effects": []
+        },
+        {
+          "id": "choice_ask_more_elder",
+          "text": "向老者请教更多问题",
+          "nextNodeId": "elder_advice",
+          "effects": [
+            { "type": "add", "variable": "knowledge", "value": 2 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "friendship_chains",
+      "text": "当你和艾拉的手同时触碰项链的那一刻，项链发出了耀眼的光芒。你们感觉到彼此的心意相通，友谊之链已经被你们获得。艾拉看着你，眼中充满了信任。\"不管前面有什么，我们一起面对。\"",
+      "background": "friendship_gift.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "choice_continue_together",
+          "text": "继续你们的冒险",
+          "nextNodeId": "crossroads",
+          "effects": []
+        }
+      ]
+    },
+    {
+      "id": "crossroads",
+      "text": "你来到了一个十字路口。每条路都通向不同的地方，但你能感觉到，真正的终点就在不远处。你检查了一下自己拥有的圣物，思考着接下来应该怎么做。",
+      "background": "crossroads.jpg",
+      "ambientSound": "ambient_wind",
+      "choices": [
+        {
+          "id": "choice_final_gate",
+          "text": "寻找传说中的真相之门",
+          "nextNodeId": "final_gate",
+          "condition": { "variable": "artifact_count", "operator": ">=", "value": 2 },
+          "effects": []
+        },
+        {
+          "id": "choice_explore_more",
+          "text": "继续探索，收集更多圣物",
+          "nextNodeId": "artifact_quest",
+          "effects": []
+        },
+        {
+          "id": "choice_face_self",
+          "text": "停下来，面对自己的内心",
+          "nextNodeId": "mirror_lake",
+          "effects": [
+            { "type": "add", "variable": "wisdom", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "final_gate",
+      "text": "凭借着收集到的圣物，你找到了传说中的真相之门。门高高耸立，上面镶嵌着三颗宝石的凹槽。你将自己拥有的圣物放入对应的凹槽中，门开始缓缓打开。门的另一边是什么在等待着你？",
+      "background": "final_gate.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "choice_enter_gate",
+          "text": "跨进真相之门",
+          "nextNodeId": "ending_check",
+          "effects": []
+        }
+      ]
+    },
+    {
+      "id": "ending_check",
+      "text": "你穿过大门，眼前的景象逐渐清晰...",
+      "background": "light_tunnel.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "good_ending_choice",
+          "text": "带着所有收获归来",
+          "nextNodeId": "ending_good",
+          "condition": { "variable": "artifact_count", "operator": ">=", "value": 2 }
+        },
+        {
+          "id": "friend_ending_choice",
+          "text": "与朋友一起归来",
+          "nextNodeId": "ending_good",
+          "condition": { "variable": "has_companion", "operator": "==", "value": true }
+        },
+        {
+          "id": "normal_ending_choice",
+          "text": "带着部分收获归来",
+          "nextNodeId": "ending_normal",
+          "condition": { "variable": "artifact_count", "operator": ">=", "value": 1 }
+        },
+        {
+          "id": "bad_ending_choice",
+          "text": "迷失在回声之中",
+          "nextNodeId": "ending_bad",
+          "effects": []
+        }
+      ]
+    },
+    {
+      "id": "ending_good",
+      "text": "当你走出真相之门时，你发现自己回到了现实世界。但你不再是以前的那个你了——你找到了真正的自己，带着勇气、智慧和友谊的力量。你明白了，回声之境其实是你内心的投射，而你已经战胜了自己的迷茫。阳光洒在你的脸上，你微笑着，准备迎接新的人生。",
+      "background": "good_ending.jpg",
+      "ambientSound": "ambient_magic",
+      "isEnding": true,
+      "endingType": "good",
+      "endingTitle": "光明结局 - 找到自我",
+      "choices": []
+    },
+    {
+      "id": "ending_normal",
+      "text": "你从回声之境回来了，虽然没有找到所有的答案，但你获得了一些宝贵的东西。也许是勇气，也许是智慧，又或者是一段难忘的友谊。你知道自己还有很长的路要走，但至少你已经迈出了第一步。远处的天空泛起了鱼肚白，新的一天开始了。",
+      "background": "normal_ending.jpg",
+      "ambientSound": "ambient_wind",
+      "isEnding": true,
+      "endingType": "normal",
+      "endingTitle": "普通结局 - 旅程继续",
+      "choices": []
+    },
+    {
+      "id": "ending_bad",
+      "text": "你在回声之境中迷失了方向。圣物的力量太强大，而你还没有准备好接受它们。渐渐地，你的意识开始模糊，你忘记了自己是谁，忘记了自己为什么来到这里。你变成了回声之境的一部分，永远地徘徊在迷雾之中，等待着下一个迷途的旅人...",
+      "background": "bad_ending.jpg",
+      "ambientSound": "ambient_rain",
+      "isEnding": true,
+      "endingType": "bad",
+      "endingTitle": "坏结局 - 迷失回声",
+      "choices": []
+    },
+    {
+      "id": "mirror_lake",
+      "text": "你来到了一片平静的湖泊旁。湖水像镜子一样清澈，你看到了自己的倒影。但倒影中的你似乎不太一样——它的眼神更加坚定，更加明亮。你凝视着倒影，倒影也凝视着你。渐渐地，你明白了，你一直在寻找的答案，其实就在自己心中。",
+      "background": "mirror_lake.jpg",
+      "ambientSound": "ambient_water",
+      "choices": [
+        {
+          "id": "choice_accept_self",
+          "text": "接纳真实的自己",
+          "nextNodeId": "ending_good",
+          "condition": { "variable": "wisdom", "operator": ">=", "value": 3 },
+          "effects": [
+            { "type": "set", "variable": "artifact_count", "value": 3 }
+          ]
+        },
+        {
+          "id": "choice_struggle",
+          "text": "我还没准备好",
+          "nextNodeId": "crossroads",
+          "effects": [
+            { "type": "add", "variable": "courage", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "secret_grove",
+      "text": "暗影狼带你来到了森林最深处的一片秘密林地。这里百花盛开，蝴蝶飞舞，与外面阴森的森林截然不同。林地中央有一座古老的祭坛，上面放着一颗跳动的红色宝石——那是勇气之心。暗影狼示意你过去拿走它。",
+      "background": "secret_grove.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "take_courage_heart",
+          "text": "取走勇气之心",
+          "nextNodeId": "heart_artifact",
+          "effects": [
+            { "type": "set", "variable": "has_courage_heart", "value": true },
+            { "type": "add", "variable": "artifact_count", "value": 1 }
+          ]
+        },
+        {
+          "id": "decline_heart",
+          "text": "婉拒，继续探索",
+          "nextNodeId": "deep_forest_path",
+          "effects": [
+            { "type": "add", "variable": "wisdom", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "deep_forest_path",
+      "text": "你继续在森林深处探索，发现了一条隐蔽的小路。沿着小路走下去，你来到了森林的边缘，看到了远处的水晶塔和更远处的古老神殿。原来这片森林连接着所有的地方。现在你可以选择去任何一个地方继续你的冒险。",
+      "background": "forest_overlook.jpg",
+      "ambientSound": "ambient_forest",
+      "choices": [
+        {
+          "id": "go_tower_from_forest",
+          "text": "前往水晶塔",
+          "nextNodeId": "mysterious_light",
+          "effects": []
+        },
+        {
+          "id": "go_crossroads",
+          "text": "前往十字路口",
+          "nextNodeId": "crossroads",
+          "effects": []
+        }
+      ]
+    },
+    {
+      "id": "lake_shore_wait",
+      "text": "你在岸边等待着，看着银狐在小岛上的树下休息。时间慢慢过去，你开始注意到湖水中倒映着奇异的景象——那是你过去的记忆，也是你未来的可能性。你静静地观看着，思考着自己是谁，想要成为什么样的人。",
+      "background": "lake_reflection.jpg",
+      "ambientSound": "ambient_water",
+      "choices": [
+        {
+          "id": "choice_insight",
+          "text": "从倒影中领悟真谛",
+          "nextNodeId": "mirror_lake",
+          "condition": { "variable": "wisdom", "operator": ">=", "value": 2 },
+          "effects": [
+            { "type": "add", "variable": "wisdom", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_swim_after_all",
+          "text": "决定还是游过去看看",
+          "nextNodeId": "island_tree",
+          "effects": [
+            { "type": "add", "variable": "courage", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "find_boat",
+      "text": "你沿着湖边寻找，果然发现了一艘被藤蔓缠绕的小船。清理掉藤蔓后，小船还能用。你划着船驶向小岛，银狐在岸边迎接你。船上还有一些旧物，也许是之前的旅人留下的。",
+      "background": "boat_on_lake.jpg",
+      "ambientSound": "ambient_water",
+      "choices": [
+        {
+          "id": "choice_arrive_island",
+          "text": "登上小岛",
+          "nextNodeId": "island_tree",
+          "effects": [
+            { "type": "add", "variable": "wisdom", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_search_boat",
+          "text": "仔细搜索船上的物品",
+          "nextNodeId": "boat_discovery",
+          "effects": [
+            { "type": "set", "variable": "found_old_map", "value": true },
+            { "type": "add", "variable": "knowledge", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "boat_discovery",
+      "text": "你在船底找到了一张泛黄的地图和一本日记。地图上标注了回声之境的所有重要地点，包括水晶塔、古老神殿和真相之门。日记的主人似乎也是一个迷失在这里的旅人，他记录了很多有用的信息。",
+      "background": "old_map.jpg",
+      "ambientSound": "ambient_water",
+      "choices": [
+        {
+          "id": "choice_go_island_after",
+          "text": "带着发现登上小岛",
+          "nextNodeId": "island_tree",
+          "effects": [
+            { "type": "add", "variable": "knowledge", "value": 2 }
+          ]
+        },
+        {
+          "id": "choice_go_gate_directly",
+          "text": "根据地图直接前往真相之门",
+          "nextNodeId": "final_gate",
+          "condition": { "variable": "artifact_count", "operator": ">=", "value": 1 },
+          "effects": []
+        }
+      ]
+    },
+    {
+      "id": "tower_surroundings",
+      "text": "你绕着水晶塔走了一圈，发现塔的后面有一个小花园。花园里种满了奇异的花朵，花丛中有一条通往塔顶的秘密阶梯。你还注意到塔基处有一块被藤蔓覆盖的铭牌，上面写着\"智慧之塔，唯有心静者可入\"。",
+      "background": "tower_garden.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "choice_front_door",
+          "text": "还是从正门进去比较礼貌",
+          "nextNodeId": "tower_entrance",
+          "effects": [
+            { "type": "add", "variable": "wisdom", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_examine_garden",
+          "text": "仔细研究花园里的花",
+          "nextNodeId": "garden_discovery",
+          "effects": [
+            { "type": "add", "variable": "knowledge", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "echo_response",
+      "text": "你的呼喊在空气中回荡，奇妙的是，回声似乎不仅仅是声音的反射——它像是有生命一样，在回答你的问题。你隐约听到了一些词语：\"寻找...圣物...面对...自己...\" 这些话是什么意思呢？",
+      "background": "echo_valley.jpg",
+      "ambientSound": "ambient_wind",
+      "choices": [
+        {
+          "id": "choice_more_questions",
+          "text": "继续呼喊询问更多问题",
+          "nextNodeId": "more_echoes",
+          "effects": [
+            { "type": "add", "variable": "curiosity", "value": 2 }
+          ]
+        },
+        {
+          "id": "choice_enter_now",
+          "text": "带着疑问进入水晶塔",
+          "nextNodeId": "tower_entrance",
+          "effects": [
+            { "type": "add", "variable": "courage", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "more_echoes",
+      "text": "你继续呼喊着问题，回声一次次地回应你。渐渐地，你学会了如何与回声交流。你问了关于勇气、智慧和友谊的问题，回声都给出了充满哲理的回答。你感觉自己对这片土地有了更深的理解。",
+      "background": "echo_conversation.jpg",
+      "ambientSound": "ambient_wind",
+      "choices": [
+        {
+          "id": "choice_enter_after_echoes",
+          "text": "带着领悟进入水晶塔",
+          "nextNodeId": "tower_entrance",
+          "effects": [
+            { "type": "add", "variable": "wisdom", "value": 2 }
+          ]
+        },
+        {
+          "id": "choice_go_find_friends",
+          "text": "去寻找其他旅人",
+          "nextNodeId": "meeting_stranger",
+          "effects": [
+            { "type": "add", "variable": "friendship", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hidden_observer",
+      "text": "你躲在一块大石头后面，观察着来人的方向。不一会儿，一个年轻的女子走了过来，她背着一个画夹，看起来有些迷茫。她在石碑前停了下来，似乎在阅读上面的文字。你可以选择继续隐藏，或者出去和她打招呼。",
+      "background": "hiding_spot.jpg",
+      "ambientSound": "ambient_wind",
+      "choices": [
+        {
+          "id": "choice_reveal_self",
+          "text": "走出去打招呼",
+          "nextNodeId": "meeting_stranger",
+          "effects": [
+            { "type": "add", "variable": "friendship", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_keep_hiding",
+          "text": "继续观察，看看她要做什么",
+          "nextNodeId": "ella_departs",
+          "effects": [
+            { "type": "add", "variable": "stealth", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ella_departs",
+      "text": "那名女子读完石碑后，向森林的方向走去。你远远地跟在后面，保持着安全的距离。她似乎也在探索这片土地，而且她好像对这里比你更熟悉一些。你可以选择追上她，或者继续独自探索。",
+      "background": "following_ella.jpg",
+      "ambientSound": "ambient_forest",
+      "choices": [
+        {
+          "id": "choice_catch_up",
+          "text": "追上她，结伴同行",
+          "nextNodeId": "journey_together",
+          "effects": [
+            { "type": "set", "variable": "has_companion", "value": true },
+            { "type": "add", "variable": "friendship", "value": 2 }
+          ]
+        },
+        {
+          "id": "choice_go_own_path",
+          "text": "转向另一个方向",
+          "nextNodeId": "mysterious_light",
+          "effects": [
+            { "type": "add", "variable": "independence", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "solo_journey",
+      "text": "你向艾拉道谢后，选择了独自行动。虽然少了一个同伴，但你觉得这样更能静下心来思考。你回想着石碑上的文字，\"三者合一，方能归家\"——勇气、智慧、友谊，你需要找到属于自己的答案。",
+      "background": "solo_path.jpg",
+      "ambientSound": "ambient_wind",
+      "choices": [
+        {
+          "id": "choice_forest_solo",
+          "text": "去森林中寻找勇气",
+          "nextNodeId": "forest_edge",
+          "effects": []
+        },
+        {
+          "id": "choice_tower_solo",
+          "text": "去水晶塔寻找智慧",
+          "nextNodeId": "mysterious_light",
+          "effects": []
+        },
+        {
+          "id": "choice_temple_solo",
+          "text": "去神殿寻找...其他东西",
+          "nextNodeId": "ancient_temple",
+          "effects": []
+        }
+      ]
+    },
+    {
+      "id": "ella_information",
+      "text": "艾拉很乐意分享她知道的信息。她告诉你，这片土地叫做回声之境，每个来到这里的人都有自己需要解决的问题。她还提到了三个重要的地点：古老森林、水晶塔和神殿，分别对应着勇气、智慧和友谊。",
+      "background": "sharing_info.jpg",
+      "ambientSound": "ambient_forest",
+      "choices": [
+        {
+          "id": "choice_team_up_after",
+          "text": "邀请她一起冒险",
+          "nextNodeId": "journey_together",
+          "effects": [
+            { "type": "set", "variable": "has_companion", "value": true },
+            { "type": "add", "variable": "friendship", "value": 2 }
+          ]
+        },
+        {
+          "id": "choice_go_alone_after",
+          "text": "感谢后各自行动",
+          "nextNodeId": "solo_journey",
+          "effects": [
+            { "type": "add", "variable": "knowledge", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "forest_detour",
+      "text": "你小心翼翼地后退，然后找到了另一条绕过暗影狼领地的小路。这条路虽然崎岖难行，但风景独特。你在路边发现了一些奇怪的蘑菇和发光的苔藓，它们照亮了前方的道路。",
+      "background": "forest_detour.jpg",
+      "ambientSound": "ambient_forest",
+      "choices": [
+        {
+          "id": "choice_continue_detour",
+          "text": "继续沿着小路前进",
+          "nextNodeId": "deep_forest_path",
+          "effects": [
+            { "type": "add", "variable": "knowledge", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "wolf_dialogue",
+      "text": "你运用从符文中学到的古老语言，尝试与暗影狼沟通。起初它很警惕，但当你说出特定的词语后，它的态度软化了。暗影狼告诉你，它是这片森林的守护者，已经在这里等待了很久。它可以带你去任何你想去的地方。",
+      "background": "talking_wolf.jpg",
+      "ambientSound": "ambient_forest",
+      "choices": [
+        {
+          "id": "choice_ask_secret",
+          "text": "请它带你去秘密之地",
+          "nextNodeId": "secret_grove",
+          "effects": [
+            { "type": "set", "variable": "wolf_companion", "value": true }
+          ]
+        },
+        {
+          "id": "choice_ask_exit",
+          "text": "请它带你离开森林",
+          "nextNodeId": "crossroads",
+          "effects": [
+            { "type": "add", "variable": "friendship", "value": 2 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tree_wisdom",
+      "text": "你没有拿走宝石，而是静静地坐在树下，感受着树的脉动。渐渐地，你进入了一种奇妙的状态。你听到了树的声音，它告诉你很多关于这片土地的秘密。最重要的是，你明白了——真正的勇气不是不害怕，而是即使害怕也依然前行。",
+      "background": "tree_meditation.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "choice_thank_tree",
+          "text": "感谢树的教诲后离开",
+          "nextNodeId": "crossroads",
+          "effects": [
+            { "type": "add", "variable": "wisdom", "value": 2 },
+            { "type": "add", "variable": "courage", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hourglass_mystery",
+      "text": "你仔细观察着沙漏，发现沙子流动的速度似乎在变化。有时候快，有时候慢。你伸出手，试着触碰沙漏。就在你的手指碰到沙子的那一刻，时间仿佛静止了。你看到了无数个平行的自己，每个都在做出不同的选择。",
+      "background": "time_paradox.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "choice_step_back",
+          "text": "后退一步，远离沙漏",
+          "nextNodeId": "tower_entrance",
+          "effects": [
+            { "type": "add", "variable": "caution", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_observe_parallel",
+          "text": "观察平行时空中的自己",
+          "nextNodeId": "parallel_insights",
+          "condition": { "variable": "wisdom", "operator": ">=", "value": 2 },
+          "effects": [
+            { "type": "add", "variable": "wisdom", "value": 2 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "parallel_insights",
+      "text": "你观察着平行时空中的自己，看到了不同选择带来的不同结果。有些自己过得很好，有些则陷入了困境。你逐渐明白，没有哪个选择是绝对正确或错误的，重要的是为自己的选择负责。带着这些领悟，你感觉自己变得更加成熟了。",
+      "background": "parallel_worlds.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "choice_return_present",
+          "text": "回到当下，继续旅程",
+          "nextNodeId": "crossroads",
+          "effects": [
+            { "type": "add", "variable": "artifact_count", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "crystal_vision",
+      "text": "你的手指刚一碰到水晶，一阵强烈的光芒就包围了你。你看到了一个景象——在现实世界中，你正躺在病床上昏迷不醒。你的家人和朋友都在为你祈祷。你忽然明白了，回声之境是你的意识创造出来的，你需要在这里找到回去的力量。",
+      "background": "crystal_vision.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "choice_determined",
+          "text": "我一定要回去！",
+          "nextNodeId": "crossroads",
+          "effects": [
+            { "type": "add", "variable": "courage", "value": 2 },
+            { "type": "set", "variable": "determination", "value": 3 }
+          ]
+        },
+        {
+          "id": "choice_afraid",
+          "text": "我...我还没准备好",
+          "nextNodeId": "tower_entrance",
+          "effects": [
+            { "type": "add", "variable": "fear", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "partial_pass",
+      "text": "你深思熟虑后回答了老者的问题。老者沉思片刻，然后说：\"你的回答很谨慎，但还不够真诚。你在害怕什么呢？\" 他指出了你内心的犹豫，但也给了你一些启示。虽然没有通过全部考验，但你还是获得了一些智慧。",
+      "background": "partial_wisdom.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "choice_try_again",
+          "text": "请求再给一次机会",
+          "nextNodeId": "wisdom_test",
+          "condition": { "variable": "courage", "operator": ">=", "value": 1 },
+          "effects": [
+            { "type": "add", "variable": "courage", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_leave_elder",
+          "text": "感谢老者后离开",
+          "nextNodeId": "crossroads",
+          "effects": []
+        }
+      ]
+    },
+    {
+      "id": "other_paths",
+      "text": "老者告诉你，除了通过考验获得智慧之眼，还有其他方法可以离开回声之境。比如，找到真心的朋友，或者发现自己内心的勇气。他说每个人的道路都不同，重要的是找到属于自己的答案。",
+      "background": "elder_talking.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "choice_still_try",
+          "text": "我还是想试试你的考验",
+          "nextNodeId": "wisdom_test",
+          "effects": [
+            { "type": "add", "variable": "courage", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_go_find_friends",
+          "text": "我去寻找朋友",
+          "nextNodeId": "meeting_stranger",
+          "effects": [
+            { "type": "add", "variable": "friendship", "value": 1 }
+          ]
+        },
+        {
+          "id": "choice_leave_tower_now",
+          "text": "告辞，继续探索",
+          "nextNodeId": "crossroads",
+          "effects": []
+        }
+      ]
+    },
+    {
+      "id": "temple_reward",
+      "text": "你没有取走项链，而是向祭坛鞠了一躬，表示敬意。就在这时，项链自己飞了起来，戴在了你的脖子上。一个声音在你脑海中响起：\"懂得尊重的人，才配拥有友谊的力量。\" 你获得了友谊之链。",
+      "background": "temple_blessing.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "choice_leave_temple",
+          "text": "带着礼物离开神殿",
+          "nextNodeId": "crossroads",
+          "effects": [
+            { "type": "set", "variable": "has_friendship_chain", "value": true },
+            { "type": "add", "variable": "artifact_count", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "elder_advice",
+      "text": "老者告诉你，在回声之境中，你不是一个人。还有其他迷失的灵魂也在寻找回家的路。如果能找到志同道合的伙伴，旅程会容易很多。他还给了你一个提示：真相之门在十字路口的深处，但只有集齐足够的圣物才能打开。",
+      "background": "elder_advice.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "choice_follow_advice",
+          "text": "听从老者的建议",
+          "nextNodeId": "crossroads",
+          "effects": [
+            { "type": "add", "variable": "knowledge", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "garden_discovery",
+      "text": "你仔细研究花园里的花朵，发现它们都有着奇特的属性。有的花能让人平静，有的花能增强记忆，还有的花能让人做预知梦。你采集了一些花瓣，也许以后会派上用场。",
+      "background": "magic_garden.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "choice_enter_tower_garden",
+          "text": "从花园侧门进入塔楼",
+          "nextNodeId": "tower_entrance",
+          "effects": [
+            { "type": "add", "variable": "knowledge", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "meditation_vision",
+      "text": "你闭上眼睛，开始冥想。渐渐地，你进入了一种空灵的状态。在冥想中，你看到了自己内心深处的渴望和恐惧。你明白了，来到回声之境不是偶然，而是你内心的召唤——你需要在这里找到真正的自己。",
+      "background": "meditation.jpg",
+      "ambientSound": "ambient_magic",
+      "choices": [
+        {
+          "id": "choice_awaken",
+          "text": "带着领悟醒来",
+          "nextNodeId": "crossroads",
+          "effects": [
+            { "type": "add", "variable": "artifact_count", "value": 1 }
+          ]
+        }
+      ]
+    }
+  ]
+}

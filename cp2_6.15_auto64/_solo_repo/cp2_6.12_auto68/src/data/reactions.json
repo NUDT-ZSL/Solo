@@ -1,0 +1,64 @@
+[
+  {
+    "id": "water-electrolysis",
+    "name": "水的电解",
+    "equation": "2H₂O → 2H₂ + O₂",
+    "reactants": [
+      { "moleculeId": "h2o", "count": 2, "offset": { "x": -2, "y": 0.5, "z": 0 } },
+      { "moleculeId": "h2o", "count": 0, "offset": { "x": 2, "y": -0.5, "z": 0 } }
+    ],
+    "products": [
+      { "moleculeId": "h2", "count": 2, "offset": { "x": -3, "y": 1, "z": 1 } },
+      { "moleculeId": "h2", "count": 0, "offset": { "x": -3, "y": -1, "z": -1 } },
+      { "moleculeId": "o2", "count": 0, "offset": { "x": 3, "y": 0, "z": 0 } }
+    ],
+    "durations": {
+      "glow": 1000,
+      "break": 500,
+      "drift": 800,
+      "combine": 600
+    }
+  },
+  {
+    "id": "methane-combustion",
+    "name": "甲烷燃烧",
+    "equation": "CH₄ + 2O₂ → CO₂ + 2H₂O",
+    "reactants": [
+      { "moleculeId": "ch4", "count": 1, "offset": { "x": -2, "y": 0, "z": 0 } },
+      { "moleculeId": "o2", "count": 0, "offset": { "x": 2, "y": 1.5, "z": 0 } },
+      { "moleculeId": "o2", "count": 0, "offset": { "x": 2, "y": -1.5, "z": 0 } }
+    ],
+    "products": [
+      { "moleculeId": "co2", "count": 0, "offset": { "x": 0, "y": 1.5, "z": 0 } },
+      { "moleculeId": "h2o", "count": 0, "offset": { "x": -2, "y": -1, "z": 1 } },
+      { "moleculeId": "h2o", "count": 0, "offset": { "x": 2, "y": -1, "z": -1 } }
+    ],
+    "durations": {
+      "glow": 1000,
+      "break": 500,
+      "drift": 800,
+      "combine": 600
+    }
+  },
+  {
+    "id": "ammonia-synthesis",
+    "name": "合成氨",
+    "equation": "N₂ + 3H₂ → 2NH₃",
+    "reactants": [
+      { "moleculeId": "n2", "count": 1, "offset": { "x": -2.5, "y": 0, "z": 0 } },
+      { "moleculeId": "h2", "count": 0, "offset": { "x": 2, "y": 1.5, "z": 0 } },
+      { "moleculeId": "h2", "count": 0, "offset": { "x": 2, "y": 0, "z": 1.5 } },
+      { "moleculeId": "h2", "count": 0, "offset": { "x": 2, "y": -1.5, "z": -1 } }
+    ],
+    "products": [
+      { "moleculeId": "nh3", "count": 0, "offset": { "x": -1.5, "y": 1, "z": 0 } },
+      { "moleculeId": "nh3", "count": 0, "offset": { "x": 1.5, "y": -1, "z": 0 } }
+    ],
+    "durations": {
+      "glow": 1000,
+      "break": 500,
+      "drift": 800,
+      "combine": 600
+    }
+  }
+]

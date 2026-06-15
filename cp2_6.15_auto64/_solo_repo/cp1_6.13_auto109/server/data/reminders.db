@@ -1,0 +1,2 @@
+{"_id":"021b8ba7-9a95-4bc4-8a20-a23e98dbf8a7","activityId":"d5962803-622d-44c0-b483-bd216129e6a0","title":"发布会前3天提醒","type":"email","daysBefore":3,"enabled":true,"message":"距离产品发布会还有3天，请确保所有准备工作就绪。"}
+{"_id":"6325ac97-4123-4347-b0df-a99d4372b736","activityId":"d5962803-622d-44c0-b483-bd216129e6a0","title":"发布会当天提醒","type":"sms","daysBefore":0,"enabled":true,"message":"今天是产品发布会！请准时到达上海国际会议中心。"}

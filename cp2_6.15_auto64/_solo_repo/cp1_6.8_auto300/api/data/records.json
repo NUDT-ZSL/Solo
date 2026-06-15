@@ -1,0 +1,80 @@
+[
+  {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "teaName": "龙井",
+    "variety": "绿茶",
+    "temperature": [80, 78, 75, 72, 70],
+    "steepTime": 120,
+    "notes": "清香扑鼻，回甘悠长，豆香明显",
+    "mood": ["清心", "愉悦"],
+    "rating": 5,
+    "imageUrl": "",
+    "createdAt": "2026-06-01T10:00:00Z",
+    "updatedAt": "2026-06-01T10:00:00Z"
+  },
+  {
+    "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+    "teaName": "祁门红茶",
+    "variety": "红茶",
+    "temperature": [95, 93, 90, 88, 85],
+    "steepTime": 180,
+    "notes": "蜜香馥郁，滋味醇厚，带有独特的祁门香",
+    "mood": ["温暖", "愉悦"],
+    "rating": 4,
+    "imageUrl": "",
+    "createdAt": "2026-06-02T14:30:00Z",
+    "updatedAt": "2026-06-02T14:30:00Z"
+  },
+  {
+    "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+    "teaName": "铁观音",
+    "variety": "乌龙茶",
+    "temperature": [100, 98, 95, 92, 90],
+    "steepTime": 60,
+    "notes": "兰花香高扬，音韵明显，七泡有余香",
+    "mood": ["沉思", "宁静"],
+    "rating": 5,
+    "imageUrl": "",
+    "createdAt": "2026-06-03T09:15:00Z",
+    "updatedAt": "2026-06-03T09:15:00Z"
+  },
+  {
+    "id": "d4e5f6a7-b8c9-0123-defa-234567890123",
+    "teaName": "白毫银针",
+    "variety": "白茶",
+    "temperature": [85, 83, 80, 78, 75],
+    "steepTime": 150,
+    "notes": "毫香蜜韵，汤色杏黄清澈，甘甜润口",
+    "mood": ["宁静", "清心"],
+    "rating": 4,
+    "imageUrl": "",
+    "createdAt": "2026-06-04T16:00:00Z",
+    "updatedAt": "2026-06-04T16:00:00Z"
+  },
+  {
+    "id": "e5f6a7b8-c9d0-1234-efab-345678901234",
+    "teaName": "普洱熟茶",
+    "variety": "普洱茶",
+    "temperature": [100, 100, 98, 95, 93],
+    "steepTime": 90,
+    "notes": "陈香浓郁，汤色红浓明亮，口感醇滑",
+    "mood": ["温暖", "沉思"],
+    "rating": 3,
+    "imageUrl": "",
+    "createdAt": "2026-06-05T11:20:00Z",
+    "updatedAt": "2026-06-05T11:20:00Z"
+  },
+  {
+    "id": "f6a7b8c9-d0e1-2345-fabc-456789012345",
+    "teaName": "茉莉花茶",
+    "variety": "花茶",
+    "temperature": [85, 83, 80, 78, 75],
+    "steepTime": 120,
+    "notes": "茉莉花香沁人心脾，茶味鲜爽，芬芳持久",
+    "mood": ["灵感", "愉悦"],
+    "rating": 4,
+    "imageUrl": "",
+    "createdAt": "2026-06-06T08:45:00Z",
+    "updatedAt": "2026-06-06T08:45:00Z"
+  }
+]

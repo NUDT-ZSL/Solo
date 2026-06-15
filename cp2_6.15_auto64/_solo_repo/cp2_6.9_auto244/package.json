@@ -1,0 +1,30 @@
+{
+  "name": "sand-shadow-escape",
+  "version": "1.0.0",
+  "description": "沙影谜城 - 在线密室逃脱协作解谜应用",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "tsx src/backend/server.ts",
+    "client": "vite"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.7.5"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^8.2.2",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.3",
+    "vite": "^5.3.3"
+  }
+}

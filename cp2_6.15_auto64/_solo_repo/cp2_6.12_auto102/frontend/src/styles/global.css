@@ -1,0 +1,130 @@
+:root {
+  --primary-color: #8B4513;
+  --primary-dark: #6B3410;
+  --secondary-color: #D2691E;
+  --background-color: #FFF8F0;
+  --accent-yellow: #FFD700;
+  --border-color: #E0D5C1;
+  --text-primary: #3D2314;
+  --text-secondary: #7A5C45;
+  --text-light: #FFF8F0;
+  --success-green: #2E8B57;
+  --danger-red: #CD5C5C;
+  --warning-yellow: #FFD700;
+  --shadow-sm: 0 4px 8px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 8px 16px rgba(0, 0, 0, 0.15);
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --sidebar-width: 240px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', sans-serif;
+  background-color: var(--background-color);
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  background: var(--primary-color);
+  color: white;
+  border-radius: var(--radius-sm);
+  padding: 10px 20px;
+  font-size: 14px;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+button:hover {
+  background-color: var(--primary-dark);
+}
+
+button:active {
+  transform: scale(0.95);
+}
+
+button:disabled {
+  background-color: #A89080;
+  cursor: not-allowed;
+  transform: none;
+}
+
+input, select {
+  font-family: inherit;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: white;
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+input:focus, select:focus {
+  border-color: var(--primary-color);
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F5EDE0;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #C4A882;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--secondary-color);
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: var(--radius-md);
+  padding: 24px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-md);
+}
+
+@media (max-width: 1024px) {
+  :root {
+    --sidebar-width: 0px;
+  }
+}

@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D 水晶簇生长模拟</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+      background: #000;
+      color: #fff;
+    }
+
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    .control-panel {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 20px;
+      width: 280px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      z-index: 100;
+    }
+
+    .control-panel h2 {
+      font-size: 16px;
+      margin-bottom: 15px;
+      color: #fff;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    .control-group {
+      margin-bottom: 12px;
+    }
+
+    .control-label {
+      font-size: 14px;
+      color: #fff;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .color-preview {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      display: inline-block;
+    }
+
+    .slider-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 6px;
+      background: linear-gradient(to right, #4A90D9, #4A90D9);
+      border-radius: 3px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #FFFFFF;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: #FFFFFF;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    .slider-value {
+      min-width: 40px;
+      font-size: 12px;
+      color: #fff;
+      text-align: right;
+      font-family: monospace;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    button {
+      flex: 1;
+      padding: 8px 12px;
+      background: rgba(74, 144, 217, 0.8);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    button:hover {
+      background: rgba(74, 144, 217, 1);
+      transform: translateY(-1px);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    button.paused {
+      background: rgba(255, 152, 0, 0.8);
+    }
+
+    button.paused:hover {
+      background: rgba(255, 152, 0, 1);
+    }
+
+    .status-panel {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 15px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      z-index: 100;
+      min-width: 180px;
+    }
+
+    .status-item {
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      gap: 15px;
+    }
+
+    .status-label {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .status-value {
+      font-weight: bold;
+    }
+
+    .fps-high {
+      color: #4CAF50;
+    }
+
+    .fps-medium {
+      color: #FFC107;
+    }
+
+    .fps-low {
+      color: #F44336;
+    }
+
+    .warning-message {
+      margin-top: 10px;
+      padding: 8px;
+      background: rgba(244, 67, 54, 0.3);
+      border-radius: 6px;
+      color: #FFCDD2;
+      font-size: 12px;
+      text-align: center;
+      display: none;
+    }
+
+    .warning-message.visible {
+      display: block;
+    }
+
+    @media (max-width: 768px) {
+      .control-panel {
+        bottom: 10px;
+        left: 10px;
+        right: 10px;
+        width: auto;
+        padding: 12px;
+      }
+
+      .control-panel h2 {
+        font-size: 14px;
+        margin-bottom: 10px;
+      }
+
+      .control-label {
+        font-size: 12px;
+      }
+
+      .slider-container {
+        gap: 6px;
+      }
+
+      .status-panel {
+        top: 10px;
+        right: 10px;
+        padding: 10px;
+        font-size: 11px;
+        min-width: 150px;
+      }
+
+      .button-group {
+        margin-top: 10px;
+      }
+
+      button {
+        font-size: 11px;
+        padding: 6px 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div class="control-panel" id="control-panel">
+    <h2>水晶簇控制面板</h2>
+
+    <div class="control-group">
+      <div class="control-label">生长速度</div>
+      <div class="slider-container">
+        <input type="range" id="growth-speed" min="0.1" max="0.5" step="0.05" value="0.3">
+        <span class="slider-value" id="growth-speed-value">0.30</span>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">分支角度 (度)</div>
+      <div class="slider-container">
+        <input type="range" id="branch-angle" min="10" max="40" step="1" value="20">
+        <span class="slider-value" id="branch-angle-value">20</span>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span class="color-preview" id="color-start-preview" style="background: hsl(200, 80%, 70%);"></span>
+        颜色起始 (HSL)
+      </div>
+      <div class="slider-container">
+        <input type="range" id="color-start-h" min="0" max="360" step="1" value="200">
+        <span class="slider-value" id="color-start-h-value">200</span>
+      </div>
+      <div class="slider-container" style="margin-top: 4px;">
+        <input type="range" id="color-start-s" min="0" max="100" step="1" value="80">
+        <span class="slider-value" id="color-start-s-value">80</span>
+      </div>
+      <div class="slider-container" style="margin-top: 4px;">
+        <input type="range" id="color-start-l" min="50" max="100" step="1" value="70">
+        <span class="slider-value" id="color-start-l-value">70</span>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span class="color-preview" id="color-end-preview" style="background: hsl(320, 80%, 60%);"></span>
+        颜色结束 (HSL)
+      </div>
+      <div class="slider-container">
+        <input type="range" id="color-end-h" min="0" max="360" step="1" value="320">
+        <span class="slider-value" id="color-end-h-value">320</span>
+      </div>
+      <div class="slider-container" style="margin-top: 4px;">
+        <input type="range" id="color-end-s" min="0" max="100" step="1" value="80">
+        <span class="slider-value" id="color-end-s-value">80</span>
+      </div>
+      <div class="slider-container" style="margin-top: 4px;">
+        <input type="range" id="color-end-l" min="50" max="100" step="1" value="60">
+        <span class="slider-value" id="color-end-l-value">60</span>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">光照方向</div>
+      <div class="slider-container">
+        <span style="font-size: 12px; color: rgba(255,255,255,0.7); min-width: 30px;">水平</span>
+        <input type="range" id="light-h" min="-180" max="180" step="1" value="45">
+        <span class="slider-value" id="light-h-value">45</span>
+      </div>
+      <div class="slider-container" style="margin-top: 4px;">
+        <span style="font-size: 12px; color: rgba(255,255,255,0.7); min-width: 30px;">垂直</span>
+        <input type="range" id="light-v" min="-90" max="90" step="1" value="45">
+        <span class="slider-value" id="light-v-value">45</span>
+      </div>
+    </div>
+
+    <div class="button-group">
+      <button id="reset-btn">重置</button>
+      <button id="pause-btn">暂停</button>
+    </div>
+  </div>
+
+  <div class="status-panel" id="status-panel">
+    <div class="status-item">
+      <span class="status-label">晶体段数:</span>
+      <span class="status-value" id="segment-count">0</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">平均深度:</span>
+      <span class="status-value" id="avg-depth">0.0</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">FPS:</span>
+      <span class="status-value fps-high" id="fps-value">60</span>
+    </div>
+    <div class="warning-message" id="warning-message">晶体簇已达最大复杂度</div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

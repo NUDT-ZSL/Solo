@@ -1,0 +1,89 @@
+.editor-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1e1e2e;
+  overflow: hidden;
+}
+
+.editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: #181825;
+  border-bottom: 1px solid #313244;
+  flex-shrink: 0;
+}
+
+.panel-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #cdd6f4;
+  letter-spacing: 0.3px;
+}
+
+.generate-btn {
+  padding: 8px 18px;
+  border: none;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #89b4fa 0%, #cba6f7 100%);
+  color: #1e1e2e;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+  box-shadow: 0 2px 8px rgba(137, 180, 250, 0.25);
+}
+
+.generate-btn:active {
+  transform: scale(0.95);
+}
+
+.generate-btn:hover {
+  box-shadow: 0 4px 14px rgba(137, 180, 250, 0.4);
+}
+
+.editor-wrapper {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.codemirror-container {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.codemirror-container :global(.cm-editor) {
+  height: 100%;
+}
+
+.reverse-output {
+  border-top: 1px solid #313244;
+  background: #21222c;
+  flex-shrink: 0;
+  max-height: 40%;
+  overflow: auto;
+}
+
+.reverse-title {
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #a6e3a1;
+  background: #181825;
+  border-bottom: 1px solid #313244;
+  letter-spacing: 0.3px;
+}
+
+.reverse-code {
+  padding: 14px 20px;
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #f8f8f2;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

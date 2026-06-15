@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>回声诗廊</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    html, body, #root {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    
+    body {
+      background: linear-gradient(180deg, 
+        hsl(210, 30%, 15%) 0%, 
+        hsl(210, 30%, 25%) 50%, 
+        hsl(210, 30%, 20%) 100%);
+      font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
+      color: hsl(45, 60%, 90%);
+    }
+    
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image: 
+        radial-gradient(ellipse at 20% 30%, rgba(210, 180, 120, 0.05) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 70%, rgba(210, 180, 120, 0.05) 0%, transparent 50%);
+      filter: url(#noise);
+      pointer-events: none;
+      z-index: 0;
+    }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute">
+    <filter id="noise">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="4" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+  </svg>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

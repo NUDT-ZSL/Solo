@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>季风信笺 | Monsoon Letter</title>
+  <style>
+    :root {
+      --btn-color-start: #8BC34A;
+      --btn-color-end: #FFEB3B;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background-color: #1A1A2E;
+      color: #FFFFFF;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      overflow: hidden;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      opacity: 0;
+      transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.2s;
+    }
+
+    #app.ready {
+      opacity: 1;
+    }
+
+    #app.ready .letter-wrapper {
+      animation: letterEnter 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+    }
+
+    #app.ready .season-switcher {
+      animation: slideInLeft 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.4s both;
+    }
+
+    #app.ready .particle-control {
+      animation: slideInLeft 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.5s both;
+    }
+
+    #app.ready .input-panel {
+      animation: slideInUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.55s both;
+    }
+
+    #app.ready .bottom-controls {
+      animation: slideInRight 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.5s both;
+    }
+
+    #app.ready .title,
+    #app.ready .hint {
+      animation: fadeIn 0.6s ease 0.6s both;
+    }
+
+    @keyframes letterEnter {
+      0% { opacity: 0; transform: translateY(30px) scale(0.96); filter: blur(10px); }
+      100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+    }
+    @keyframes slideInLeft {
+      0% { opacity: 0; transform: translateX(-30px); }
+      100% { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes slideInRight {
+      0% { opacity: 0; transform: translateX(30px); }
+      100% { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes slideInUp {
+      0% { opacity: 0; transform: translate(-50%, 20px); }
+      100% { opacity: 1; transform: translate(-50%, 0); }
+    }
+    @keyframes fadeIn {
+      0% { opacity: 0; }
+      100% { opacity: 1; }
+    }
+
+    .loading {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+      background: radial-gradient(circle at 50% 50%, #1F1F3A 0%, #1A1A2E 70%);
+      z-index: 9999;
+      transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.8s;
+    }
+    .loading.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .loading-particles {
+      position: relative;
+      width: 140px;
+      height: 140px;
+    }
+    .loading-particles span {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 10px;
+      height: 10px;
+      margin: -5px 0 0 -5px;
+      border-radius: 50%;
+      opacity: 0;
+      animation: particleFloat 2.8s ease-in-out infinite;
+    }
+    .loading-particles span:nth-child(1) { background: #8BC34A; animation-delay: 0s;    --tx: 45px;  --ty: -50px; }
+    .loading-particles span:nth-child(2) { background: #FFEB3B; animation-delay: 0.25s; --tx: 55px;  --ty: 0px;   }
+    .loading-particles span:nth-child(3) { background: #00BCD4; animation-delay: 0.5s;  --tx: 40px;  --ty: 45px;  }
+    .loading-particles span:nth-child(4) { background: #FF7043; animation-delay: 0.75s; --tx: 0px;   --ty: 55px;  }
+    .loading-particles span:nth-child(5) { background: #E0F7FA; animation-delay: 1s;    --tx: -45px; --ty: 40px;  }
+    .loading-particles span:nth-child(6) { background: #F48FB1; animation-delay: 1.25s; --tx: -55px; --ty: 0px;   }
+    .loading-particles span:nth-child(7) { background: #FFD700; animation-delay: 1.5s;  --tx: -40px; --ty: -50px; }
+    .loading-particles span:nth-child(8) { background: #81D4FA; animation-delay: 1.75s; --tx: 0px;   --ty: -55px; }
+
+    @keyframes particleFloat {
+      0%   { opacity: 0; transform: scale(0.3) translate(0, 0); }
+      25%  { opacity: 1; }
+      50%  { opacity: 0.9; transform: scale(1) translate(var(--tx), var(--ty)); }
+      75%  { opacity: 0.6; }
+      100% { opacity: 0; transform: scale(0.4) translate(calc(var(--tx) * 1.4), calc(var(--ty) * 1.4 + 20px)); }
+    }
+
+    .loading-text {
+      font-size: 14px;
+      letter-spacing: 6px;
+      color: rgba(255,255,255,0.75);
+      position: relative;
+    }
+    .loading-text::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 100%;
+      bottom: -10px;
+      height: 2px;
+      background: linear-gradient(90deg, #8BC34A, #00BCD4, #FF7043, #E0F7FA);
+      animation: loadBar 2.4s ease-in-out infinite;
+      border-radius: 2px;
+    }
+    @keyframes loadBar {
+      0%   { right: 100%; left: 0; }
+      50%  { right: 0;     left: 0; }
+      100% { right: 0;     left: 100%; }
+    }
+
+    .loading-dots {
+      display: flex;
+      gap: 8px;
+    }
+    .loading-dots i {
+      display: block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.35);
+      animation: dotPulse 1.4s ease-in-out infinite;
+    }
+    .loading-dots i:nth-child(1) { animation-delay: 0s;    background: #8BC34A; }
+    .loading-dots i:nth-child(2) { animation-delay: 0.15s; background: #00BCD4; }
+    .loading-dots i:nth-child(3) { animation-delay: 0.3s;  background: #FF7043; }
+    .loading-dots i:nth-child(4) { animation-delay: 0.45s; background: #B3E5FC; }
+    @keyframes dotPulse {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+      40%           { transform: scale(1.2); opacity: 1; box-shadow: 0 0 10px currentColor; }
+    }
+
+    .title {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      font-size: 13px;
+      letter-spacing: 4px;
+      color: rgba(255,255,255,0.5);
+      z-index: 100;
+      font-weight: 300;
+    }
+    .hint {
+      position: absolute;
+      top: 64px;
+      right: 24px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.25);
+      z-index: 100;
+      letter-spacing: 1px;
+    }
+
+    .season-switcher {
+      position: absolute;
+      top: 24px;
+      left: 24px;
+      display: flex;
+      gap: 12px;
+      z-index: 100;
+    }
+    .season-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.15);
+      cursor: pointer;
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  border-color 0.3s ease,
+                  box-shadow 0.4s ease;
+      position: relative;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    }
+    .season-btn.spring { background: linear-gradient(135deg, #8BC34A, #FFEB3B); color: #8BC34A; }
+    .season-btn.summer { background: linear-gradient(135deg, #00BCD4, #01579B); color: #00BCD4; }
+    .season-btn.autumn { background: linear-gradient(135deg, #FF7043, #FFD700); color: #FF7043; }
+    .season-btn.winter { background: linear-gradient(135deg, #E0F7FA, #FFFFFF); color: #B3E5FC; }
+    .season-btn:hover {
+      transform: scale(1.18);
+      border-color: rgba(255,255,255,0.7);
+      box-shadow: 0 0 24px 4px currentColor, 0 4px 18px rgba(0,0,0,0.4);
+      animation: btnGlow 1.6s ease-in-out infinite alternate;
+    }
+    @keyframes btnGlow {
+      from { box-shadow: 0 0 16px 2px currentColor, 0 4px 14px rgba(0,0,0,0.35); }
+      to   { box-shadow: 0 0 32px 6px currentColor, 0 6px 22px rgba(0,0,0,0.45); }
+    }
+    .season-btn.active {
+      border-color: #FFFFFF;
+      transform: scale(1.12);
+      box-shadow: 0 0 28px 4px currentColor;
+    }
+
+    .particle-control {
+      position: absolute;
+      top: 84px;
+      left: 24px;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 14px 16px;
+      background: rgba(255,255,255,0.04);
+      backdrop-filter: blur(10px);
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+      width: 180px;
+    }
+    .particle-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: rgba(255,255,255,0.5);
+      letter-spacing: 1px;
+    }
+    .particle-label strong {
+      color: rgba(255,255,255,0.85);
+      font-weight: 500;
+    }
+    input[type="range"].particle-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: linear-gradient(90deg, #8BC34A, #00BCD4, #FF7043, #B3E5FC);
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"].particle-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #FFFFFF;
+      border: 2px solid rgba(255,255,255,0.6);
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    input[type="range"].particle-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 12px rgba(255,255,255,0.6);
+    }
+    input[type="range"].particle-slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #FFFFFF;
+      border: 2px solid rgba(255,255,255,0.6);
+      cursor: pointer;
+    }
+
+    .letter-wrapper {
+      position: relative;
+      width: min(60vw, 700px);
+      height: 70vh;
+      min-height: 500px;
+      perspective: 2000px;
+      transform-style: preserve-3d;
+    }
+    .letter-card {
+      position: absolute;
+      inset: 0;
+      transform-style: preserve-3d;
+      transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+      box-shadow: 0 8px 60px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3);
+      border-radius: 4px;
+      cursor: grab;
+      will-change: transform;
+    }
+    .letter-card:active { cursor: grabbing; }
+    .letter-face {
+      position: absolute;
+      inset: 0;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .letter-front { background: linear-gradient(180deg, #FFFEF7 0%, #FFF9E8 100%); }
+    .letter-back {
+      background: linear-gradient(180deg, #FFF8E1 0%, #FFECB3 100%);
+      transform: rotateY(180deg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+    }
+    #particleCanvas, #textCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    #textCanvas { z-index: 10; }
+    .letter-edge {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 5;
+      border-radius: 4px;
+    }
+    .corner-hit {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      z-index: 20;
+    }
+    .corner-hit.tl { top: 0; left: 0; cursor: nesw-resize; }
+    .corner-hit.tr { top: 0; right: 0; cursor: nwse-resize; }
+    .corner-hit.bl { bottom: 0; left: 0; cursor: nwse-resize; }
+    .corner-hit.br { bottom: 0; right: 0; cursor: nesw-resize; }
+    .corner-hit::before {
+      content: '';
+      position: absolute;
+      inset: 8px;
+      border-radius: 4px;
+      opacity: 0;
+      transition: opacity 0.2s ease, background 0.2s ease;
+      pointer-events: none;
+    }
+    .corner-hit:hover::before {
+      opacity: 0.18;
+      background: radial-gradient(circle at center, rgba(0,0,0,0.25), transparent 70%);
+    }
+
+    .back-icon { width: 30%; opacity: 0.92; }
+    .back-proverb {
+      font-size: 14px;
+      color: #666666;
+      text-align: center;
+      max-width: 70%;
+      line-height: 1.8;
+      letter-spacing: 2px;
+      font-style: italic;
+    }
+
+    .bottom-controls {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      gap: 12px;
+      z-index: 100;
+    }
+    .action-btn {
+      --btn-color-start: #8BC34A;
+      --btn-color-end: #FFEB3B;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  box-shadow 0.4s ease;
+      color: #FFFFFF;
+      background: linear-gradient(135deg, var(--btn-color-start), var(--btn-color-end));
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2), 0 0 0 rgba(255,255,255,0);
+      position: relative;
+      overflow: hidden;
+    }
+    .action-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 6px 24px rgba(0,0,0,0.25), 0 0 24px var(--btn-color-start);
+      animation: btnPulse 1.8s ease-in-out infinite alternate;
+    }
+    @keyframes btnPulse {
+      from { box-shadow: 0 6px 20px rgba(0,0,0,0.22), 0 0 18px var(--btn-color-start); }
+      to   { box-shadow: 0 8px 28px rgba(0,0,0,0.28), 0 0 32px var(--btn-color-start); }
+    }
+    .action-btn:active { transform: scale(0.97); }
+    .action-btn::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.35) 50%, transparent 70%);
+      transform: translateX(-100%);
+      transition: transform 0.6s ease;
+    }
+    .action-btn:hover::after { transform: translateX(100%); }
+
+    .input-panel {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 12px;
+      z-index: 100;
+      align-items: center;
+      background: rgba(255,255,255,0.05);
+      backdrop-filter: blur(10px);
+      padding: 12px 20px;
+      border-radius: 28px;
+      border: 1px solid rgba(255,255,255,0.1);
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+    .input-panel:focus-within {
+      border-color: rgba(255,255,255,0.25);
+      box-shadow: 0 0 20px rgba(255,255,255,0.05);
+    }
+    .letter-input {
+      width: 320px;
+      padding: 10px 16px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 20px;
+      background: rgba(0,0,0,0.3);
+      color: #FFFFFF;
+      font-size: 14px;
+      outline: none;
+      transition: all 0.3s ease;
+      font-family: inherit;
+    }
+    .letter-input::placeholder { color: rgba(255,255,255,0.3); }
+    .letter-input:focus {
+      border-color: rgba(255,255,255,0.4);
+      background: rgba(0,0,0,0.5);
+    }
+    .char-count {
+      font-size: 12px;
+      color: rgba(255,255,255,0.4);
+      min-width: 48px;
+      text-align: right;
+      transition: color 0.2s ease;
+    }
+
+    .shake {
+      animation: shakeAnim 0.3s ease-in-out;
+    }
+    @keyframes shakeAnim {
+      0%, 100% { transform: translateX(0); }
+      20%      { transform: translateX(-6px); }
+      40%      { transform: translateX(6px); }
+      60%      { transform: translateX(-4px); }
+      80%      { transform: translateX(4px); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="loading" id="loading">
+    <div class="loading-particles">
+      <span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span>
+    </div>
+    <div class="loading-text">季 风 信 笺 正 在 启 程</div>
+    <div class="loading-dots">
+      <i></i><i></i><i></i><i></i>
+    </div>
+  </div>
+
+  <div id="app">
+    <div class="title">季 风 信 笺</div>
+    <div class="hint">拖拽四角折叠信纸 · 背面藏有惊喜</div>
+
+    <div class="season-switcher" id="seasonSwitcher">
+      <button class="season-btn spring active" data-season="spring" title="春芽"></button>
+      <button class="season-btn summer" data-season="summer" title="夏浪"></button>
+      <button class="season-btn autumn" data-season="autumn" title="秋枫"></button>
+      <button class="season-btn winter" data-season="winter" title="冬雪"></button>
+    </div>
+
+    <div class="particle-control">
+      <div class="particle-label">
+        <span>粒子密度</span>
+        <strong id="particleValue">140</strong>
+      </div>
+      <input type="range" class="particle-slider" id="particleSlider" min="80" max="200" />
+    </div>
+
+    <div class="letter-wrapper" id="letterWrapper">
+      <div class="letter-card" id="letterCard">
+        <div class="letter-face letter-front">
+          <canvas id="particleCanvas"></canvas>
+          <div class="letter-edge" id="letterEdge"></div>
+          <canvas id="textCanvas"></canvas>
+          <div class="corner-hit tl" data-corner="tl"></div>
+          <div class="corner-hit tr" data-corner="tr"></div>
+          <div class="corner-hit bl" data-corner="bl"></div>
+          <div class="corner-hit br" data-corner="br"></div>
+        </div>
+        <div class="letter-face letter-back" id="letterBack">
+          <div class="back-icon" id="backIcon"></div>
+          <div class="back-proverb" id="backProverb"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-panel">
+      <input type="text" class="letter-input" id="letterInput"
+             placeholder="写下一句祝福或短诗（20-100字）..." maxlength="100" />
+      <span class="char-count" id="charCount">0 / 100</span>
+    </div>
+
+    <div class="bottom-controls">
+      <button class="action-btn" id="generateBtn">生成信笺</button>
+      <button class="action-btn" id="downloadBtn">下载PNG</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

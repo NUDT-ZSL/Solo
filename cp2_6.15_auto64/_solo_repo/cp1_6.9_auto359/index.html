@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>星轨涂鸦</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        background: radial-gradient(circle at center, #0a0a2e 0%, #1a1a3e 100%);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        color: #ffffff;
+      }
+
+      #app {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+
+      #canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        cursor: none;
+      }
+
+      .info-bar {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 40px;
+        background-color: rgba(0, 0, 0, 0.25);
+        backdrop-filter: blur(8px);
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        border-top-left-radius: 12px;
+        border-top-right-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 24px;
+        z-index: 10;
+        pointer-events: none;
+      }
+
+      .info-bar .particle-count {
+        font-size: 14px;
+        color: rgba(255, 255, 255, 0.85);
+        letter-spacing: 0.5px;
+        text-shadow: 0 0 10px rgba(74, 0, 224, 0.5);
+      }
+
+      .info-bar .particle-count .count {
+        color: #8a4fff;
+        font-weight: 600;
+        margin: 0 4px;
+      }
+
+      .hint-text {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 14px;
+        color: #ffffff;
+        opacity: 0.5;
+        letter-spacing: 1px;
+        pointer-events: none;
+        text-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+        z-index: 5;
+        transition: opacity 0.5s ease;
+      }
+
+      .hint-text.hidden {
+        opacity: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="canvas"></canvas>
+      <div class="hint-text" id="hintText">绘制更多星轨来吧！</div>
+      <div class="info-bar">
+        <span class="particle-count">活跃粒子：<span class="count" id="particleCount">0</span></span>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>深渊回响 - Abyss Echo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0A0A2E;
+      font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+      color: #fff;
+      user-select: none;
+    }
+    #app {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #0A0A2E 0%, #1C1C4E 100%);
+    }
+    #game-wrapper {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      max-width: 100vw;
+      max-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #game-canvas {
+      display: block;
+      background: linear-gradient(180deg, #0A0A2E 0%, #1C1C4E 100%);
+      border-radius: 8px;
+      box-shadow: 0 0 60px rgba(74, 144, 217, 0.3);
+      image-rendering: pixelated;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+    .overlay.active {
+      pointer-events: all;
+      background: rgba(10, 10, 46, 0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .panel {
+      background: rgba(28, 28, 78, 0.6);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(74, 144, 217, 0.4);
+      border-radius: 16px;
+      padding: 40px 48px;
+      text-align: center;
+      max-width: 560px;
+      box-shadow: 0 0 40px rgba(74, 144, 217, 0.2);
+    }
+    .title {
+      font-size: 42px;
+      font-weight: bold;
+      background: linear-gradient(135deg, #4A90D9, #7B68EE);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+      letter-spacing: 4px;
+      text-shadow: 0 0 30px rgba(74, 144, 217, 0.5);
+    }
+    .subtitle {
+      font-size: 14px;
+      color: #4A90D9;
+      letter-spacing: 6px;
+      margin-bottom: 32px;
+    }
+    .instructions {
+      text-align: left;
+      margin-bottom: 28px;
+      line-height: 2;
+      font-size: 14px;
+      color: #B0C4DE;
+    }
+    .instructions h3 {
+      color: #FFD700;
+      margin-bottom: 12px;
+      font-size: 16px;
+    }
+    .instructions strong {
+      color: #4A90D9;
+    }
+    .btn {
+      display: inline-block;
+      padding: 14px 48px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #fff;
+      background: linear-gradient(135deg, rgba(74, 144, 217, 0.3), rgba(123, 104, 238, 0.3));
+      border: 2px solid rgba(74, 144, 217, 0.6);
+      border-radius: 12px;
+      cursor: pointer;
+      letter-spacing: 4px;
+      transition: all 0.3s ease-out;
+      text-shadow: 0 0 10px rgba(74, 144, 217, 0.8);
+    }
+    .btn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 24px rgba(74, 144, 217, 0.8);
+      border-color: #4A90D9;
+      background: linear-gradient(135deg, rgba(74, 144, 217, 0.5), rgba(123, 104, 238, 0.5));
+    }
+    .touch-controls {
+      position: absolute;
+      bottom: 20px;
+      left: 0;
+      right: 0;
+      display: none;
+      justify-content: space-between;
+      padding: 0 30px;
+      z-index: 5;
+      pointer-events: none;
+    }
+    .touch-controls.active {
+      display: flex;
+    }
+    .joystick {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: rgba(74, 144, 217, 0.15);
+      border: 2px solid rgba(74, 144, 217, 0.4);
+      position: relative;
+      pointer-events: auto;
+      backdrop-filter: blur(8px);
+    }
+    .joystick-knob {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: rgba(74, 144, 217, 0.6);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 16px rgba(74, 144, 217, 0.8);
+    }
+    .fire-btn {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: rgba(255, 100, 100, 0.2);
+      border: 3px solid rgba(255, 100, 100, 0.6);
+      pointer-events: auto;
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      color: #FF6464;
+      text-shadow: 0 0 10px rgba(255, 100, 100, 0.8);
+      font-weight: bold;
+      box-shadow: 0 0 20px rgba(255, 100, 100, 0.3);
+    }
+    .fire-btn:active {
+      background: rgba(255, 100, 100, 0.4);
+      transform: scale(0.95);
+    }
+    .upgrade-panel {
+      display: none;
+      gap: 20px;
+      margin-top: 24px;
+    }
+    .upgrade-panel.active {
+      display: flex;
+    }
+    .upgrade-card {
+      flex: 1;
+      padding: 20px;
+      border-radius: 12px;
+      border: 2px solid;
+      cursor: pointer;
+      transition: all 0.3s ease-out;
+      backdrop-filter: blur(8px);
+    }
+    .upgrade-card:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 24px currentColor;
+    }
+    .upgrade-card.damage {
+      border-color: #FF6B6B;
+      background: rgba(255, 107, 107, 0.1);
+      color: #FF6B6B;
+    }
+    .upgrade-card.energy {
+      border-color: #4A90D9;
+      background: rgba(74, 144, 217, 0.1);
+      color: #4A90D9;
+    }
+    .upgrade-card.speed {
+      border-color: #4ECDC4;
+      background: rgba(78, 205, 196, 0.1);
+      color: #4ECDC4;
+    }
+    .upgrade-card .icon {
+      font-size: 32px;
+      margin-bottom: 12px;
+    }
+    .upgrade-card .name {
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+    .upgrade-card .desc {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="game-wrapper">
+      <canvas id="game-canvas"></canvas>
+      
+      <div id="start-overlay" class="overlay active">
+        <div class="panel">
+          <div class="title">深渊回响</div>
+          <div class="subtitle">ABYSS ECHO</div>
+          <div class="instructions">
+            <h3>操作说明</h3>
+            <p><strong>移动：</strong>W / A / S / D 键 或 方向键</p>
+            <p><strong>攻击：</strong>鼠标左键 发射声波脉冲（可反弹增伤）</p>
+            <p><strong>目标：</strong>探索三层深海洞穴，击败发光生物群</p>
+            <p><strong>提示：</strong>收集绿色能量结晶补充能量，寻找隐藏宝箱</p>
+          </div>
+          <button id="start-btn" class="btn">开始探索</button>
+        </div>
+      </div>
+
+      <div id="gameover-overlay" class="overlay">
+        <div class="panel">
+          <div class="title" style="background: linear-gradient(135deg, #FF6B6B, #FF8E53); -webkit-background-clip: text; background-clip: text;">任务失败</div>
+          <div class="subtitle" style="color: #FF6B6B;">MISSION FAILED</div>
+          <div class="instructions" style="text-align:center;">
+            <p>你的潜水器在深渊中陨落...</p>
+            <p style="margin-top:12px;">抵达层数：<strong id="final-level" style="color:#FFD700;">1</strong></p>
+            <p>击败生物：<strong id="final-kills" style="color:#4A90D9;">0</strong></p>
+          </div>
+          <button id="restart-btn" class="btn">重新挑战</button>
+        </div>
+      </div>
+
+      <div id="levelup-overlay" class="overlay">
+        <div class="panel">
+          <div class="title" style="font-size:32px;">深度增加</div>
+          <div class="subtitle" id="level-text">LEVEL 2</div>
+          <div class="instructions" style="text-align:center;">
+            <p>选择一枚永久升级核心</p>
+          </div>
+          <div id="upgrade-panel" class="upgrade-panel active">
+            <div class="upgrade-card damage" data-upgrade="damage">
+              <div class="icon">⚡</div>
+              <div class="name">脉冲强化</div>
+              <div class="desc">声波伤害 +15%</div>
+            </div>
+            <div class="upgrade-card energy" data-upgrade="energy">
+              <div class="icon">🔋</div>
+              <div class="name">能量核心</div>
+              <div class="desc">能量恢复 +20%</div>
+            </div>
+            <div class="upgrade-card speed" data-upgrade="speed">
+              <div class="icon">💨</div>
+              <div class="name">推进优化</div>
+              <div class="desc">移动速度 +10%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="victory-overlay" class="overlay">
+        <div class="panel">
+          <div class="title" style="background: linear-gradient(135deg, #FFD700, #FFA500); -webkit-background-clip: text; background-clip: text;">深渊征服者</div>
+          <div class="subtitle" style="color: #FFD700;">VICTORY</div>
+          <div class="instructions" style="text-align:center;">
+            <p>你成功穿越了深渊的最深处！</p>
+            <p style="margin-top:12px;">击败生物：<strong id="victory-kills" style="color:#4A90D9;">0</strong></p>
+          </div>
+          <button id="victory-restart-btn" class="btn">再次挑战</button>
+        </div>
+      </div>
+
+      <div id="touch-controls" class="touch-controls">
+        <div class="joystick" id="joystick">
+          <div class="joystick-knob" id="joystick-knob"></div>
+        </div>
+        <div class="fire-btn" id="fire-btn">发</div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/game.ts"></script>
+</body>
+</html>

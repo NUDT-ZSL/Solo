@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Emoji Rain Screensaver</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+    }
+
+    #canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    .control-panel {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3),
+                  0 0 40px rgba(138, 43, 226, 0.15),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      color: #fff;
+      font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+      z-index: 100;
+      min-width: 240px;
+      user-select: none;
+      animation: panelGlow 4s ease-in-out infinite;
+    }
+
+    @keyframes panelGlow {
+      0%, 100% {
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3),
+                    0 0 40px rgba(138, 43, 226, 0.15),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      }
+      50% {
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3),
+                    0 0 60px rgba(0, 255, 255, 0.2),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      }
+    }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      background: linear-gradient(90deg, #ff6b6b, #4ecdc4, #a855f7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: 1px;
+    }
+
+    .control-group {
+      margin-bottom: 16px;
+    }
+
+    .control-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .control-label {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.7);
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .theme-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .theme-btn {
+      position: relative;
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      font-size: 11px;
+      border-radius: 8px;
+      cursor: pointer;
+      overflow: hidden;
+      transition: all 0.25s ease;
+      z-index: 1;
+    }
+
+    .theme-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.3);
+      transform: translateY(-1px);
+    }
+
+    .theme-btn.active {
+      background: linear-gradient(135deg, rgba(168, 85, 247, 0.4), rgba(78, 205, 196, 0.4));
+      border-color: rgba(168, 85, 247, 0.6);
+      box-shadow: 0 0 16px rgba(168, 85, 247, 0.3);
+    }
+
+    .theme-btn .ripple {
+      position: absolute;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.6) 0%, rgba(168, 85, 247, 0.4) 50%, transparent 70%);
+      transform: scale(0);
+      animation: rippleEffect 0.6s ease-out forwards;
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    @keyframes rippleEffect {
+      0% {
+        transform: scale(0);
+        opacity: 1;
+      }
+      100% {
+        transform: scale(1);
+        opacity: 0;
+      }
+    }
+
+    .slider-container {
+      position: relative;
+    }
+
+    .density-slider {
+      width: 100%;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .density-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #a855f7, #4ecdc4);
+      cursor: pointer;
+      box-shadow: 0 0 12px rgba(168, 85, 247, 0.5);
+      transition: transform 0.2s;
+    }
+
+    .density-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+      box-shadow: 0 0 20px rgba(168, 85, 247, 0.7);
+    }
+
+    .density-value {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.5);
+      text-align: right;
+      margin-top: 4px;
+    }
+
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      transition: 0.3s;
+    }
+
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 2px;
+      bottom: 2px;
+      background: rgba(255, 255, 255, 0.6);
+      border-radius: 50%;
+      transition: 0.3s;
+    }
+
+    input:checked + .toggle-slider {
+      background: linear-gradient(135deg, rgba(168, 85, 247, 0.5), rgba(78, 205, 196, 0.5));
+      border-color: rgba(168, 85, 247, 0.6);
+      box-shadow: 0 0 12px rgba(168, 85, 247, 0.3);
+    }
+
+    input:checked + .toggle-slider:before {
+      transform: translateX(20px);
+      background: #fff;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  
+  <div class="control-panel">
+    <div class="panel-title">🎮 EMOJI RAIN CONTROL</div>
+    
+    <div class="control-group">
+      <span class="control-label">主题色彩</span>
+      <div class="theme-buttons">
+        <button class="theme-btn active" data-theme="rainbow">🌈 彩虹</button>
+        <button class="theme-btn" data-theme="warm">🔥 暖色</button>
+        <button class="theme-btn" data-theme="cool">❄️ 冷色</button>
+        <button class="theme-btn" data-theme="mono">⚫ 单色</button>
+      </div>
+    </div>
+    
+    <div class="control-group">
+      <span class="control-label">下落密度</span>
+      <div class="slider-container">
+        <input type="range" class="density-slider" min="10" max="100" value="50" id="densitySlider">
+        <div class="density-value"><span id="densityValue">50</span> 个 emoji</div>
+      </div>
+    </div>
+    
+    <div class="control-group">
+      <div class="toggle-row">
+        <span class="control-label" style="margin-bottom: 0;">拖尾效果</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="trailToggle" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>家具光照阴影模拟器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      overflow-x: auto;
+      min-height: 100vh;
+    }
+
+    #app {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 20px;
+      gap: 16px;
+      min-width: 1340px;
+    }
+
+    .furniture-panel {
+      width: 240px;
+      background: #2c2c2c;
+      border-radius: 12px;
+      padding: 14px;
+      flex-shrink: 0;
+      transition: width 0.4s ease;
+    }
+
+    .furniture-panel h3 {
+      color: #fff;
+      font-size: 14px;
+      margin-bottom: 12px;
+      font-weight: 500;
+    }
+
+    .furniture-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease;
+      margin-bottom: 6px;
+    }
+
+    .furniture-item:hover {
+      background: #3a3a3a;
+      transform: scale(1.05);
+    }
+
+    .furniture-item canvas {
+      width: 80px;
+      height: 60px;
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+
+    .furniture-item span {
+      color: #ccc;
+      font-size: 13px;
+      transition: opacity 0.4s ease;
+    }
+
+    .scene-area {
+      width: 800px;
+      height: 500px;
+      background: #f0f0f0;
+      border-radius: 20px;
+      position: relative;
+      flex-shrink: 0;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .scene-area canvas {
+      display: block;
+      border-radius: 20px;
+    }
+
+    .control-panel {
+      width: 260px;
+      background: #fafafa;
+      border-radius: 12px;
+      border: 1px solid #e0e0e0;
+      padding: 20px 16px;
+      flex-shrink: 0;
+      transition: width 0.4s ease, transform 0.4s ease;
+    }
+
+    .control-panel h3 {
+      font-size: 14px;
+      color: #333;
+      margin-bottom: 18px;
+      font-weight: 600;
+    }
+
+    .slider-group {
+      margin-bottom: 20px;
+    }
+
+    .slider-group label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .slider-group label .slider-value {
+      font-weight: 600;
+      color: #ff7043;
+      min-width: 40px;
+      text-align: right;
+      font-size: 13px;
+    }
+
+    .slider-group input[type="range"] {
+      width: 100%;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 6px;
+      border-radius: 3px;
+      background: #bdbdbd;
+      outline: none;
+      transition: background 0.2s ease;
+    }
+
+    .slider-group input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #ff7043;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .slider-group input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 6px rgba(255,112,67,0.5);
+    }
+
+    .export-btn {
+      position: fixed;
+      right: 30px;
+      bottom: 30px;
+      width: 120px;
+      height: 40px;
+      border-radius: 20px;
+      background: #1565c0;
+      color: #fff;
+      border: none;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease;
+      z-index: 100;
+    }
+
+    .export-btn:hover {
+      background: #1976d2;
+      transform: translateY(-2px);
+    }
+
+    .context-menu {
+      position: absolute;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 3px 12px rgba(0,0,0,0.15);
+      padding: 4px 0;
+      z-index: 200;
+      min-width: 120px;
+      display: none;
+    }
+
+    .context-menu .menu-item {
+      padding: 8px 16px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+      color: #333;
+    }
+
+    .context-menu .menu-item:hover {
+      background: #f5f5f5;
+    }
+
+    @media (max-width: 1024px) {
+      #app {
+        flex-wrap: wrap;
+        min-width: unset;
+      }
+
+      .furniture-panel {
+        width: 60px;
+        overflow: hidden;
+      }
+
+      .furniture-panel h3 {
+        display: none;
+      }
+
+      .furniture-item {
+        justify-content: center;
+        padding: 6px;
+      }
+
+      .furniture-item span {
+        display: none;
+      }
+
+      .control-panel {
+        width: 100%;
+        order: 3;
+        border-radius: 12px 12px 0 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="furniture-panel" id="furniturePanel">
+      <h3>家具库</h3>
+    </div>
+    <div class="scene-area" id="sceneArea">
+      <canvas id="sceneCanvas" width="800" height="500"></canvas>
+    </div>
+    <div class="control-panel" id="controlPanel">
+      <h3>光照控制</h3>
+      <div class="slider-group">
+        <label>光照角度 <span class="slider-value" id="angleValue">0°</span></label>
+        <input type="range" id="lightAngle" min="0" max="360" step="1" value="0" />
+      </div>
+      <div class="slider-group">
+        <label>光照强度 <span class="slider-value" id="intensityValue">50%</span></label>
+        <input type="range" id="lightIntensity" min="0" max="100" step="1" value="50" />
+      </div>
+      <div class="slider-group">
+        <label>阴影柔和度 <span class="slider-value" id="softnessValue">1</span></label>
+        <input type="range" id="shadowSoftness" min="1" max="10" step="1" value="1" />
+      </div>
+    </div>
+  </div>
+  <div class="context-menu" id="contextMenu">
+    <div class="menu-item" data-action="delete">删除</div>
+    <div class="menu-item" data-action="rotate">旋转45度</div>
+    <div class="menu-item" data-action="copy">复制</div>
+  </div>
+  <button class="export-btn" id="exportBtn">导出为PNG</button>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

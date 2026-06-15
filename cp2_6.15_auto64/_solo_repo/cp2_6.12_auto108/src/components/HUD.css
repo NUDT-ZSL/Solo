@@ -1,0 +1,134 @@
+.hud-top-left {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 100;
+}
+
+.hud-top-right {
+  position: fixed;
+  top: 20px;
+  right: 320px;
+  z-index: 100;
+  text-align: right;
+}
+
+.hud-item {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 12px;
+  padding: 10px 16px;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.hud-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 2px;
+}
+
+.hud-value {
+  font-size: 18px;
+  font-weight: 600;
+  text-shadow: 0 0 10px currentColor;
+}
+
+.hud-value.speed {
+  color: #00ffff;
+}
+
+.hud-value.score {
+  color: #ffd700;
+}
+
+.hud-value.highscore {
+  color: #ff6b6b;
+}
+
+.game-over-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 300px;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.game-over-modal {
+  text-align: center;
+  padding: 48px;
+  background: rgba(20, 20, 60, 0.9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.4s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.game-over-title {
+  font-size: 32px;
+  color: white;
+  margin-bottom: 24px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+.game-over-score {
+  font-size: 24px;
+  color: #ffd700;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.game-over-highscore {
+  font-size: 18px;
+  color: #ff6b6b;
+  margin-bottom: 32px;
+}
+
+.btn-restart {
+  padding: 14px 48px;
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-restart:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+}

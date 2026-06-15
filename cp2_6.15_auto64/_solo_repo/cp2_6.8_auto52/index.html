@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Blob Evolution Arena</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="canvas"></canvas>
+    <div id="sidebar">
+      <div class="sidebar-header">
+        <h1>🧬 Blob Evolution</h1>
+        <p class="subtitle">软体生物进化竞技场</p>
+      </div>
+      
+      <div class="stats-panel">
+        <div class="stat-row">
+          <span class="stat-label">当前代数</span>
+          <span id="generation" class="stat-value">1</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">剩余时间</span>
+          <span id="time-left" class="stat-value">60s</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">存活生物</span>
+          <span id="alive-count" class="stat-value">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">平均适应度</span>
+          <span id="avg-fitness" class="stat-value">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">最佳适应度</span>
+          <span id="best-fitness" class="stat-value">0</span>
+        </div>
+      </div>
+
+      <div class="chart-container">
+        <canvas id="fitnessChart" width="300" height="150"></canvas>
+      </div>
+
+      <div class="controls">
+        <button id="pauseBtn" class="btn btn-primary">⏸ 暂停</button>
+        <button id="speedBtn" class="btn btn-primary">⏩ 1x</button>
+        <button id="resetBtn" class="btn btn-primary">🔄 重置</button>
+      </div>
+
+      <div class="params-panel">
+        <h3>遗传参数</h3>
+        <div class="slider-group">
+          <label>弹簧自然长度: <span id="springLenVal">1.2</span></label>
+          <input type="range" id="springLen" min="0.5" max="2.0" step="0.1" value="1.2" />
+        </div>
+        <div class="slider-group">
+          <label>粒子间距: <span id="particleDistVal">1.15</span></label>
+          <input type="range" id="particleDist" min="0.8" max="1.5" step="0.05" value="1.15" />
+        </div>
+        <div class="slider-group">
+          <label>移动速度: <span id="moveSpeedVal">1.2</span></label>
+          <input type="range" id="moveSpeed" min="0.5" max="2.0" step="0.1" value="1.2" />
+        </div>
+        <div class="slider-group">
+          <label>触角灵敏度: <span id="sensitivityVal">0.5</span></label>
+          <input type="range" id="sensitivity" min="0.1" max="1.0" step="0.05" value="0.5" />
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

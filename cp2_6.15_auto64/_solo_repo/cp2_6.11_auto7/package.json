@@ -1,0 +1,19 @@
+{
+  "name": "cloud-pattern-loom",
+  "version": "1.0.0",
+  "description": "云纹织机 - 交互式三维云纹纹理可视化工具",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.160.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
+  }
+}

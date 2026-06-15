@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>音律星轨</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0A0E1A;
+      font-family: -apple-system, 'Segoe UI', 'Helvetica Neue', sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+      touch-action: none;
+    }
+
+    #panel {
+      position: fixed;
+      left: 20px;
+      bottom: 20px;
+      background: rgba(10, 14, 26, 0.7);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: 12px;
+      padding: 16px;
+      width: 240px;
+      z-index: 10;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+      transition: left 0.3s ease-out, right 0.3s ease-out, width 0.3s ease;
+    }
+
+    #panel.landscape-mobile {
+      left: auto;
+      right: 20px;
+    }
+
+    .panel-title {
+      color: #E0E5EC;
+      font-weight: 500;
+      font-size: 14px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+      opacity: 0.7;
+    }
+
+    .control {
+      margin-bottom: 14px;
+    }
+
+    .control:last-of-type {
+      margin-bottom: 16px;
+    }
+
+    .control label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #E0E5EC;
+      font-weight: 500;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .control label .val {
+      color: rgba(224, 229, 236, 0.6);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.12);
+      outline: none;
+      transition: background 0.2s;
+      cursor: pointer;
+    }
+
+    input[type="range"]:hover {
+      background: rgba(255, 255, 255, 0.18);
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #E0E5EC;
+      cursor: pointer;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 0 8px rgba(224, 229, 236, 0.3);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 12px rgba(224, 229, 236, 0.5);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #E0E5EC;
+      cursor: pointer;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 0 8px rgba(224, 229, 236, 0.3);
+    }
+
+    #reset-btn {
+      width: 100%;
+      padding: 9px 0;
+      border: none;
+      border-radius: 8px;
+      background: #8B2252;
+      color: #E0E5EC;
+      font-family: inherit;
+      font-weight: 500;
+      font-size: 13px;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.1s ease;
+      outline: none;
+    }
+
+    #reset-btn:hover {
+      background: #C44569;
+    }
+
+    #reset-btn:active {
+      transform: scale(0.92);
+    }
+
+    .hint {
+      color: rgba(224, 229, 236, 0.35);
+      font-size: 11px;
+      text-align: center;
+      margin-top: 12px;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 480px) {
+      #panel {
+        width: 180px;
+        padding: 12px;
+        left: 12px;
+        bottom: 12px;
+      }
+
+      #panel.landscape-mobile {
+        left: auto;
+        right: 12px;
+      }
+
+      .panel-title {
+        font-size: 12px;
+        margin-bottom: 10px;
+      }
+
+      .control {
+        margin-bottom: 10px;
+      }
+
+      .control label {
+        font-size: 12px;
+      }
+
+      input[type="range"]::-webkit-slider-thumb {
+        width: 22px;
+        height: 22px;
+        border-width: 3px;
+      }
+
+      input[type="range"]::-moz-range-thumb {
+        width: 22px;
+        height: 22px;
+        border-width: 3px;
+      }
+
+      .hint {
+        font-size: 10px;
+        margin-top: 8px;
+      }
+    }
+
+    @media (min-width: 481px) and (max-width: 1024px) and (orientation: portrait) {
+      .control {
+        margin-bottom: 20px;
+      }
+    }
+
+    @media (max-height: 480px) and (orientation: landscape) {
+      #panel {
+        padding: 10px;
+        width: 180px;
+        right: 12px;
+        left: auto;
+      }
+
+      .panel-title {
+        font-size: 11px;
+        margin-bottom: 8px;
+      }
+
+      .control {
+        margin-bottom: 8px;
+      }
+
+      .control label {
+        font-size: 11px;
+        margin-bottom: 5px;
+      }
+
+      #reset-btn {
+        padding: 7px 0;
+        font-size: 12px;
+      }
+
+      .hint {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="panel">
+    <div class="panel-title">音律星轨</div>
+    <div class="control">
+      <label>密度 <span class="val" id="density-value">50</span></label>
+      <input type="range" id="density" min="30" max="80" value="50">
+    </div>
+    <div class="control">
+      <label>时长 <span class="val" id="duration-value">10s</span></label>
+      <input type="range" id="duration" min="5" max="20" value="10">
+    </div>
+    <button id="reset-btn">重置</button>
+    <div class="hint">按 1-7 或点击屏幕<br>长按增加力度</div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

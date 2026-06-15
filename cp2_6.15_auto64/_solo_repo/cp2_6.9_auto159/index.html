@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>墨迹扩散 · 艺术画布</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Noto Sans SC', sans-serif;
+      background: #faf0e6;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+    #toolbar {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      width: 220px;
+      z-index: 10;
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 8px;
+      padding: 14px;
+      color: #ffffff;
+      transition: all 0.2s ease;
+    }
+    .toolbar-section {
+      margin-bottom: 12px;
+    }
+    .toolbar-section:last-child {
+      margin-bottom: 0;
+    }
+    .color-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+    #color-preview {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.6);
+      flex-shrink: 0;
+      transition: transform 0.2s ease;
+    }
+    #color-preview:hover {
+      transform: scale(1.05);
+    }
+    .color-label {
+      font-size: 13px;
+      font-weight: 400;
+      opacity: 0.9;
+    }
+    .slider-group {
+      margin-top: 10px;
+    }
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      margin-bottom: 6px;
+      opacity: 0.85;
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.25);
+      border-radius: 2px;
+      outline: none;
+      transition: background 0.2s ease;
+    }
+    input[type="range"]:hover {
+      background: rgba(255, 255, 255, 0.4);
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #ffffff;
+      cursor: pointer;
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.05);
+      background: rgba(255, 255, 255, 0.5);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #ffffff;
+      cursor: pointer;
+      border: none;
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+    input[type="range"]::-moz-range-thumb:hover {
+      transform: scale(1.05);
+      background: rgba(255, 255, 255, 0.5);
+    }
+    .btn-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .btn-group button:nth-child(5) {
+      grid-column: span 2;
+    }
+    .toolbar-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #ffffff;
+      padding: 7px 8px;
+      font-size: 12px;
+      font-family: 'Noto Sans SC', sans-serif;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+    .toolbar-btn:hover {
+      transform: scale(1.05);
+      background: rgba(255, 255, 255, 0.2);
+    }
+    .toolbar-btn:active {
+      transform: scale(0.98);
+    }
+    #corner-sliders {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 10;
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 8px;
+      padding: 12px 14px;
+      width: 200px;
+      color: #ffffff;
+    }
+    .corner-slider {
+      margin-bottom: 10px;
+    }
+    .corner-slider:last-child {
+      margin-bottom: 0;
+    }
+    .swatches {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 4px;
+      margin-top: 8px;
+    }
+    .swatch {
+      width: 100%;
+      padding-bottom: 100%;
+      border-radius: 4px;
+      cursor: pointer;
+      border: 1.5px solid transparent;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+      position: relative;
+    }
+    .swatch:hover {
+      transform: scale(1.15);
+      border-color: rgba(255, 255, 255, 0.6);
+    }
+    .swatch.active {
+      border-color: #ffffff;
+    }
+    .swatch-inner {
+      position: absolute;
+      inset: 0;
+      border-radius: 4px;
+    }
+    @media (max-width: 600px) {
+      #toolbar {
+        top: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        border-radius: 0;
+        padding: 10px 12px;
+      }
+      .toolbar-section {
+        margin-bottom: 8px;
+      }
+      .btn-group {
+        gap: 4px;
+      }
+      .toolbar-btn {
+        padding: 6px 6px;
+        font-size: 11px;
+      }
+      #corner-sliders {
+        right: 10px;
+        bottom: 10px;
+        width: 170px;
+        padding: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container">
+    <canvas id="ink-canvas"></canvas>
+  </div>
+
+  <div id="toolbar">
+    <div class="toolbar-section">
+      <div class="color-row">
+        <div id="color-preview"></div>
+        <div>
+          <div class="color-label">当前颜色</div>
+          <div class="color-label" id="color-hex" style="opacity: 0.6; font-size: 11px; margin-top: 2px;">#1a1a1a</div>
+        </div>
+      </div>
+      <div class="swatches" id="swatches"></div>
+    </div>
+
+    <div class="toolbar-section">
+      <div class="slider-group">
+        <div class="slider-label">
+          <span>笔刷大小</span>
+          <span id="size-value">15</span>
+        </div>
+        <input type="range" id="size-slider" min="5" max="30" step="1" value="15" />
+      </div>
+    </div>
+
+    <div class="toolbar-section">
+      <div class="slider-group">
+        <div class="slider-label">
+          <span>笔刷透明度</span>
+          <span id="alpha-value">0.8</span>
+        </div>
+        <input type="range" id="alpha-slider" min="0.1" max="1.0" step="0.1" value="0.8" />
+      </div>
+    </div>
+
+    <div class="toolbar-section">
+      <div class="btn-group">
+        <button class="toolbar-btn" id="btn-clear">清空</button>
+        <button class="toolbar-btn" id="btn-bg">背景</button>
+        <button class="toolbar-btn" id="btn-random">随机色</button>
+        <button class="toolbar-btn" id="btn-save">保存PNG</button>
+        <button class="toolbar-btn" id="btn-undo">撤销 (Ctrl+Z)</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="corner-sliders">
+    <div class="corner-slider">
+      <div class="slider-label">
+        <span>扩散强度</span>
+        <span id="spread-value">1.0</span>
+      </div>
+      <input type="range" id="spread-slider" min="0.2" max="2.5" step="0.1" value="1.0" />
+    </div>
+    <div class="corner-slider">
+      <div class="slider-label">
+        <span>褪色速度</span>
+        <span id="fade-value">1.0</span>
+      </div>
+      <input type="range" id="fade-slider" min="0.3" max="2.5" step="0.1" value="1.0" />
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

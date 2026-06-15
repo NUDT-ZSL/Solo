@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>风语花舞 - 交互式3D蒲公英装置</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(ellipse at center,
+        hsl(260, 60%, 10%) 0%,
+        hsl(240, 70%, 5%) 60%,
+        hsl(240, 80%, 3%) 100%);
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    }
+
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #fps-counter {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 14px;
+      font-weight: 300;
+      letter-spacing: 1px;
+      pointer-events: none;
+      z-index: 10;
+      text-shadow: 0 0 8px rgba(180, 150, 255, 0.3);
+    }
+
+    #hint {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      color: rgba(200, 200, 220, 0.5);
+      font-size: 12px;
+      font-weight: 300;
+      letter-spacing: 0.5px;
+      pointer-events: none;
+      z-index: 10;
+      animation: fadeInOut 4s ease-in-out infinite;
+    }
+
+    @keyframes fadeInOut {
+      0%, 100% { opacity: 0.2; }
+      50% { opacity: 0.7; }
+    }
+
+    #cursor-glow {
+      position: fixed;
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 5;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle,
+        rgba(180, 150, 255, 0.2) 0%,
+        rgba(150, 120, 220, 0.08) 40%,
+        transparent 70%);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      mix-blend-mode: screen;
+    }
+
+    #cursor-glow.visible {
+      opacity: 1;
+    }
+
+    @media (max-width: 768px) {
+      #hint {
+        font-size: 10px;
+        bottom: 16px;
+        right: 16px;
+      }
+      #fps-counter {
+        font-size: 12px;
+        top: 12px;
+        left: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="fps-counter">FPS: --</div>
+    <div id="hint">鼠标移动吹散蒲公英 · 点击触发光蝶爆炸</div>
+    <div id="cursor-glow"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

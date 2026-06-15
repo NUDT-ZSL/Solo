@@ -1,0 +1,13 @@
+[
+  {
+    "id": "9707fc87-a4c6-4b9e-9613-7e51ec100eb4",
+    "title": "我的第一篇手写笔记",
+    "content": "# 今日学习记录\n\n今天学习了 **React Hooks** 的使用方法：\n\n- `useState` 用于状态管理\n- `useEffect` 用于副作用处理\n- `useCallback` 用于优化函数性能\n\n示例代码：\n`const [count, setCount] = useState(0);`\n\n*今天收获很大，继续加油！*",
+    "tags": [
+      "学习"
+    ],
+    "createdAt": "2026-06-09T00:01:21.581Z",
+    "updatedAt": "2026-06-09T00:01:21.581Z",
+    "cursorPosition": 170
+  }
+]

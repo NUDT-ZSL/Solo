@@ -1,0 +1,209 @@
+.borrow-record-page {
+  max-width: 100%;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  background: #F5E6D3;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  margin-bottom: 24px;
+  width: fit-content;
+}
+
+.tab {
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.tab:hover {
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--text-primary);
+}
+
+.tab.active {
+  background: white;
+  color: var(--primary-color);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.tab-count {
+  background: var(--primary-color);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.tab.active .tab-count {
+  background: var(--accent-yellow);
+  color: var(--text-primary);
+}
+
+.record-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.record-card {
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  display: flex;
+  gap: 20px;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s ease;
+}
+
+.record-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.record-cover {
+  width: 80px;
+  height: 100px;
+  background: linear-gradient(135deg, #F5E6D3 0%, #E8D5B7 100%);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.record-emoji {
+  font-size: 40px;
+}
+
+.record-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.record-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+  gap: 12px;
+}
+
+.record-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.record-author {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.record-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.meta-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.meta-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.meta-value.highlight {
+  color: var(--primary-color);
+}
+
+.meta-value.danger {
+  color: var(--danger-red);
+  font-weight: 600;
+}
+
+.record-actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 12px;
+}
+
+.status-badge {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.status-badge.borrowing {
+  background: #E3F2FD;
+  color: #1976D2;
+}
+
+.status-badge.overdue {
+  background: #FFEBEE;
+  color: #C62828;
+}
+
+.status-badge.returned {
+  background: #E8F5E9;
+  color: #2E7D32;
+}
+
+.status-badge.pending {
+  background: #FFF8E1;
+  color: #F57F17;
+}
+
+.status-badge.approved {
+  background: #E8F5E9;
+  color: #2E7D32;
+}
+
+.status-badge.cancelled {
+  background: #F5F5F5;
+  color: #757575;
+}
+
+@media (max-width: 600px) {
+  .record-card {
+    flex-direction: column;
+  }
+
+  .record-cover {
+    width: 100%;
+    height: 80px;
+  }
+
+  .record-meta {
+    gap: 12px;
+  }
+
+  .tabs {
+    width: 100%;
+    overflow-x: auto;
+  }
+}

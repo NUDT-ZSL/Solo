@@ -1,0 +1,16 @@
+{
+  "name": "hongwen-zhiji",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "虹纹织机 - 基于Canvas的交互式织锦艺术创作工具",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vite": "^5.2.0"
+  }
+}

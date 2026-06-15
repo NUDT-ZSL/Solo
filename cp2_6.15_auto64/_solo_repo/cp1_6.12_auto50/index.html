@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StarDance - Interactive 3D Star Orbit Simulator</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0a0a1a;
+      font-family: monospace;
+    }
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    #title {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      font-size: 24px;
+      font-family: monospace;
+      color: #88ccff;
+      text-shadow: 0 0 10px #4488ff, 0 0 20px #2266ff, 0 0 30px #1144ff;
+      z-index: 10;
+      user-select: none;
+      pointer-events: none;
+    }
+    #fps-counter {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      font-size: 14px;
+      font-family: monospace;
+      color: #44ff44;
+      z-index: 10;
+      user-select: none;
+      pointer-events: none;
+    }
+    #performance-warning {
+      position: absolute;
+      top: 80px;
+      left: 20px;
+      padding: 10px 16px;
+      background: rgba(255, 100, 50, 0.8);
+      color: white;
+      font-size: 12px;
+      border-radius: 8px;
+      z-index: 11;
+      display: none;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="title">★ StarDance</div>
+    <div id="fps-counter">FPS: --</div>
+    <div id="performance-warning">⚠ Performance mode: reduced particle count</div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

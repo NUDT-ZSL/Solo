@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GalleryWalk 视觉反馈测试</title>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #1a1a2e;
+      color: #fff;
+      margin: 0;
+      padding: 20px;
+    }
+    .test-container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .test-result {
+      padding: 10px;
+      margin: 5px 0;
+      border-radius: 4px;
+    }
+    .pass {
+      background: rgba(46, 204, 113, 0.2);
+      border-left: 4px solid #2ecc71;
+    }
+    .fail {
+      background: rgba(231, 76, 60, 0.2);
+      border-left: 4px solid #e74c3c;
+    }
+    .info {
+      background: rgba(52, 152, 219, 0.2);
+      border-left: 4px solid #3498db;
+    }
+    #app {
+      display: none;
+    }
+    button {
+      background: #ffd700;
+      color: #1a1a2e;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      margin: 10px 5px;
+    }
+    button:hover {
+      background: #e6c200;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div class="test-container">
+    <h1>GalleryWalk 视觉反馈与DOM状态断言测试</h1>
+    <p>此测试将验证：点击画框后边框颜色、信息面板弹出及内容正确性</p>
+    
+    <button id="start-test">开始测试</button>
+    <button id="run-manual">手动测试模式</button>
+    
+    <div id="test-results"></div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+  <script type="module">
+    import { eventBus } from '/src/eventBus.js'
+
+    let passCount = 0
+    let failCount = 0
+
+    function addResult(testName, passed, detail) {
+      const div = document.createElement('div')
+      div.className = `test-result ${passed ? 'pass' : 'fail'}`
+      div.innerHTML = `<strong>${passed ? '✓ PASS' : '✗ FAIL'}:</strong> ${testName}`
+      if (detail) {
+        div.innerHTML += `<br><small>${detail}</small>`
+      }
+      document.getElementById('test-results').appendChild(div)
+      if (passed) passCount++
+      else failCount++
+    }
+
+    function addInfo(message) {
+      const div = document.createElement('div')
+      div.className = 'test-result info'
+      div.innerHTML = `<strong>ℹ️ INFO:</strong> ${message}`
+      document.getElementById('test-results').appendChild(div)
+    }
+
+    function colorToHex(color) {
+      if (color.startsWith('#')) return color.toLowerCase()
+      const rgb = color.match(/\d+/g)
+      if (rgb) {
+        return '#' + rgb.map(x => parseInt(x).toString(16).padStart(2, '0')).join('')
+      }
+      return color.toLowerCase()
+    }
+
+    function waitForCondition(condition, timeout = 5000) {
+      return new Promise((resolve, reject) => {
+        const startTime = Date.now()
+        const interval = setInterval(() => {
+          if (condition()) {
+            clearInterval(interval)
+            resolve(true)
+          } else if (Date.now() - startTime > timeout) {
+            clearInterval(interval)
+            reject(new Error('Timeout waiting for condition'))
+          }
+        }, 100)
+      })
+    }
+
+    async function runTests() {
+      document.getElementById('test-results').innerHTML = ''
+      passCount = 0
+      failCount = 0
+
+      addInfo('等待3D场景初始化...')
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      addInfo('=== 测试1: 相机控制参数验证 ===')
+      
+      const module = await import('/src/interactionController.js')
+      addResult('ZOOM_SPEED === 0.1', module.ZOOM_SPEED === 0.1, 
+        `实际值: ${module.ZOOM_SPEED}`)
+      addResult('MIN_ZOOM === 1', module.MIN_ZOOM === 1, 
+        `实际值: ${module.MIN_ZOOM}`)
+      addResult('MAX_ZOOM === 10', module.MAX_ZOOM === 10, 
+        `实际值: ${module.MAX_ZOOM}`)
+
+      addInfo('=== 测试2: 画框高亮颜色验证 ===')
+      
+      const galleryModule = await import('/src/galleryScene.js')
+      addResult('FRAME_HIGHLIGHT_COLOR === 0xffd700', 
+        galleryModule.FRAME_HIGHLIGHT_COLOR === 0xffd700, 
+        `实际值: 0x${galleryModule.FRAME_HIGHLIGHT_COLOR.toString(16)}`)
+
+      addInfo('=== 测试3: 信息面板DOM结构验证 ===')
+      
+      const

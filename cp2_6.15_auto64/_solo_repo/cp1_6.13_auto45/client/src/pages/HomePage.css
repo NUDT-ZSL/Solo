@@ -1,0 +1,161 @@
+.home-page {
+  min-height: 100vh;
+  background: #0f172a;
+  color: #cbd5e1;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 40px;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-icon {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #f97316 0%, #fbbf24 100%);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.logo-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.logo h1 {
+  font-size: 20px;
+  font-weight: bold;
+  color: #f9fafb;
+  margin: 0;
+}
+
+.nav-links {
+  display: flex;
+  gap: 8px;
+}
+
+.nav-btn {
+  padding: 10px 20px;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.nav-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #f9fafb;
+}
+
+.nav-btn.upload-btn {
+  background: #f97316;
+  color: white;
+}
+
+.nav-btn.upload-btn:hover {
+  background: #ea580c;
+}
+
+.main-content {
+  padding: 40px;
+}
+
+.hero-section {
+  margin-bottom: 32px;
+}
+
+.hero-section h2 {
+  font-size: 28px;
+  font-weight: bold;
+  color: #f9fafb;
+  margin: 0 0 8px 0;
+}
+
+.hero-section p {
+  font-size: 16px;
+  color: #64748b;
+  margin: 0;
+}
+
+.cards-scroll-container {
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 20px;
+}
+
+.cards-wrapper {
+  display: flex;
+  gap: 24px;
+  padding: 8px 4px;
+}
+
+.loading-cards {
+  display: flex;
+  gap: 24px;
+}
+
+.skeleton-card {
+  width: 360px;
+  height: 520px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #1e293b 0%, #334155 100%);
+  animation: shimmer 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes shimmer {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.cards-scroll-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.cards-scroll-container::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.cards-scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+.cards-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+@media (max-width: 1024px) {
+  .main-content {
+    padding: 24px;
+  }
+  
+  .app-header {
+    padding: 16px 24px;
+  }
+}

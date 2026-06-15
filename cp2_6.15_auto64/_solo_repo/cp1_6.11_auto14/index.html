@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>光之橱窗 - 数字陈列廊</title>
+  <link rel="stylesheet" href="./src/styles.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="info-panel" class="panel">
+      <h2>展品信息</h2>
+      <div id="exhibit-info">
+        <p class="placeholder">点击展品查看详情</p>
+      </div>
+      <div class="control-group">
+        <label>旋转速度</label>
+        <input type="range" id="rotation-speed" min="0.5" max="3.0" step="0.1" value="1.5">
+        <span id="speed-value">1.5°/帧</span>
+      </div>
+    </aside>
+
+    <main id="gallery-container">
+      <canvas id="gallery-canvas"></canvas>
+      <div id="loading-screen">
+        <div class="loader"></div>
+        <p>正在加载光之橱窗...</p>
+      </div>
+    </main>
+
+    <aside id="template-panel" class="panel">
+      <button id="toggle-templates" class="toggle-btn">模板库</button>
+      <div id="template-list">
+        <h3>预设展品</h3>
+        <div class="templates-grid">
+          <div class="template-item" draggable="true" data-template="crystal">
+            <canvas class="template-thumb" width="80" height="80"></canvas>
+            <span>水晶塔</span>
+          </div>
+          <div class="template-item" draggable="true" data-template="orb">
+            <canvas class="template-thumb" width="80" height="80"></canvas>
+            <span>能量球</span>
+          </div>
+          <div class="template-item" draggable="true" data-template="pillar">
+            <canvas class="template-thumb" width="80" height="80"></canvas>
+            <span>光之柱</span>
+          </div>
+          <div class="template-item" draggable="true" data-template="gem">
+            <canvas class="template-thumb" width="80" height="80"></canvas>
+            <span>宝石组</span>
+          </div>
+          <div class="template-item" draggable="true" data-template="tower">
+            <canvas class="template-thumb" width="80" height="80"></canvas>
+            <span>纪念塔</span>
+          </div>
+          <div class="template-item" draggable="true" data-template="ring">
+            <canvas class="template-thumb" width="80" height="80"></canvas>
+            <span>星环</span>
+          </div>
+        </div>
+        <div class="action-buttons">
+          <button id="save-btn" class="action-btn">保存布局</button>
+          <button id="load-btn" class="action-btn">加载布局</button>
+          <input type="file" id="file-input" accept=".json" style="display: none;">
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

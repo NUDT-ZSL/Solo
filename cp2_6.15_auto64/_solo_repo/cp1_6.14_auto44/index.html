@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D音乐波形可视化</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0a0a1a;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #ffffff;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    #spectrum-canvas {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 120px;
+      background: rgba(26, 26, 46, 0.6);
+      border-radius: 12px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      z-index: 10;
+    }
+
+    #player-controls {
+      position: absolute;
+      top: 24px;
+      left: 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      z-index: 20;
+      background: rgba(26, 26, 46, 0.8);
+      padding: 12px 20px;
+      border-radius: 16px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    #play-pause-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #00bfff;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      color: white;
+      font-size: 18px;
+    }
+
+    #play-pause-btn:hover {
+      background: #33d9ff;
+      transform: scale(1.05);
+    }
+
+    #progress-container {
+      width: 300px;
+      position: relative;
+      cursor: pointer;
+    }
+
+    #progress-track {
+      width: 100%;
+      height: 6px;
+      background: #2a2a3e;
+      border-radius: 3px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #progress-buffered {
+      position: absolute;
+      height: 100%;
+      background: #4a4a5e;
+      border-radius: 3px;
+      width: 0%;
+      transition: width 0.1s ease;
+    }
+
+    #progress-played {
+      position: absolute;
+      height: 100%;
+      background: linear-gradient(90deg, #00bfff, #8a2be2);
+      border-radius: 3px;
+      width: 0%;
+    }
+
+    #progress-thumb {
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      background: white;
+      border-radius: 50%;
+      top: 50%;
+      left: 0%;
+      transform: translate(-50%, -50%);
+      cursor: grab;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    #progress-thumb:hover,
+    #progress-thumb:active {
+      background: #00bfff;
+      transform: translate(-50%, -50%) scale(1.2);
+    }
+
+    #time-display {
+      font-size: 13px;
+      color: #a0a0b0;
+      min-width: 90px;
+      text-align: center;
+    }
+
+    #file-input {
+      display: none;
+    }
+
+    #file-label {
+      padding: 10px 20px;
+      background: #00bfff;
+      border: none;
+      border-radius: 8px;
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+
+    #file-label:hover {
+      background: #33d9ff;
+    }
+
+    #control-panel {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      width: 300px;
+      background: rgba(26, 26, 46, 0.93);
+      border-radius: 16px;
+      padding: 24px;
+      z-index: 20;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      max-height: calc(100vh - 48px);
+      overflow-y: auto;
+      transition: all 0.3s ease;
+    }
+
+    #control-panel::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    #control-panel::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 3px;
+    }
+
+    #control-panel::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 3px;
+    }
+
+    .panel-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: #00bfff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .control-group {
+      margin-bottom: 20px;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      color: #c0c0d0;
+      margin-bottom: 8px;
+    }
+
+    .control-value {
+      color: #00bfff;
+      font-weight: 600;
+    }
+
+    .control-slider {
+      width: 100%;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: #2a2a3e;
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .control-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      background: #00bfff;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .control-slider::-webkit-slider-thumb:hover {
+      background: #33d9ff;
+      transform: scale(1.1);
+    }
+
+    .control-slider::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      background: #00bfff;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+    }
+
+    .control-slider::-moz-range-thumb:hover {
+      background: #33d9ff;
+    }
+
+    .control-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .control-checkbox input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      accent-color: #00bfff;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+
+    .control-button {
+      width: 100%;
+      padding: 12px 20px;
+      background: #00bfff;
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-bottom: 10px;
+    }
+
+    .control-button:hover {
+      background: #33d9ff;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 191, 255, 0.3);
+    }
+
+    .control-button:active {
+      transform: translateY(0);
+    }
+
+    .control-button.secondary {
+      background: transparent;
+      border: 1px solid #00bfff;
+      color: #00bfff;
+    }
+
+    .control-button.secondary:hover {
+      background: rgba(0, 191, 255, 0.1);
+    }
+
+    .section-divider {
+      height: 1px;
+      background: rgba(255, 255, 255, 0.1);
+      margin: 20px 0;
+    }
+
+    #toggle-panel-btn {
+      display: none;
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #00bfff;
+      border: none;
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+      z-index: 30;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(0, 191, 255, 0.4);
+    }
+
+    #toggle-panel-btn:hover {
+      background: #33d9ff;
+      transform: scale(1.1);
+    }
+
+    .drop-zone {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 400px;
+      height: 200px;
+      border: 2px dashed #00bfff;
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      background: rgba(0, 191, 255, 0.05);
+      z-index: 5;
+      transition: all 0.3s ease;
+    }
+
+    .drop-zone.drag-over {
+      background: rgba(0, 191, 255, 0.15);
+      border-color: #33d9ff;
+      transform: translate(-50%, -50%) scale(1.02);
+    }
+
+    .drop-zone-icon {
+      font-size: 48px;
+      color: #00bfff;
+    }
+
+    .drop-zone-text {
+      font-size: 16px;
+      color: #c0c0d0;
+      text-align: center;
+    }
+
+    .drop-zone-text strong {
+      color: #00bfff;
+    }
+
+    @media (max-width: 768px) {
+      #spectrum-canvas {
+        width: calc(100% - 40px);
+        height: 100px;
+        top: 100px;
+      }
+
+      #player-controls {
+        left: 12px;
+        right: 12px;
+        top: 12px;
+        padding: 10px 16px;
+      }
+
+      #progress-container {
+        width: auto;
+        flex: 1;
+      }
+
+      #control-panel {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        top: auto;
+        width: 100%;
+        max-height: 60vh;
+        border-radius: 16px 16px 0 0;
+        transform: translateY(100%);
+        transition: transform 0.3s ease;
+      }
+
+      #control-panel.expanded {
+        transform: translateY(0);
+      }
+
+      #toggle-panel-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .drop-zone {
+        width: calc(100% - 40px);
+        max-width: 350px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+    
+    <canvas id="spectrum-canvas" width="600" height="120"></canvas>
+
+    <div class="drop-zone" id="drop-zone">
+      <div class="drop-zone-icon">🎵</div>
+      <div class="drop-zone-text">
+        拖拽 MP3 文件到此处<br>
+        或 <strong>点击选择文件</strong>
+      </div>
+      <input type="file" id="file-input" accept="audio/mpeg,audio/mp3">
+      <label for="file-input" id="file-label">选择音乐文件</label>
+    </div>
+
+    <div id="player-controls" style="display: none;">
+      <button id="play-pause-btn">▶</button>
+      <div id="progress-container">
+        <div id="progress-track">
+          <div id="progress-buffered"></div>
+          <div id="progress-played"></div>
+        </div>
+        <div id="progress-thumb"></div>
+      </div>
+      <div id="time-display">0:00 / 0:00</div>
+    </div>
+
+    <div id="control-panel" style="display: none;">
+      <div class="panel-title">🎛️ 波形控制面板</div>
+      
+      <div class="control-group">
+        <div class="control-label">
+          <span>柱子高度倍率</span>
+          <span class="control-value" id="height-value">1.5</span>
+        </div>
+        <input type="range" class="control-slider" id="height-slider" min="0.5" max="3.0" step="0.1" value="1.5">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label">
+          <span>柱子粗细 (px)</span>
+          <span class="control-value" id="thickness-value">4</span>
+        </div>
+        <input type="range" class="control-slider" id="thickness-slider" min="1" max="10" step="1" value="4">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label">
+          <span>柱子间距</span>
+          <span class="control-value" id="spacing-value">2</span>
+        </div>
+        <input type="range" class="control-slider" id="spacing-slider" min="1" max="8" step="0.5" value="2">
+      </div>
+
+      <div class="section-divider"></div>
+
+      <div class="control-group">
+        <label class="control-checkbox">
+          <input type="checkbox" id="particles-toggle" checked>
+          <span>启用粒子拖尾效果</span>
+        </label>
+      </div>
+
+      <div class="control-group">
+        <label class="control-checkbox">
+          <input type="checkbox" id="autorotate-toggle">
+          <span>自动旋转视角</span>
+        </label>
+      </div>
+
+      <div class="section-divider"></div>
+
+      <button class="control-button" id="export-btn">📤 导出为 HTML</button>
+      <button class="control-button secondary" id="reset-view-btn">🔄 重置视角</button>
+    </div>
+
+    <button id="toggle-panel-btn">▲</button>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

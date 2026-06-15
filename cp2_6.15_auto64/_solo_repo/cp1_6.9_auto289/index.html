@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="description" content="流光碑帖 - 沉浸式古代书法临摹体验" />
+  <title>流光碑帖</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #2a2a2a;
+      font-family: "KaiTi", "楷体", "STKaiti", serif;
+    }
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+    canvas {
+      display: block;
+      touch-action: none;
+    }
+    .side-shadow {
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      width: 80px;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .side-shadow.left {
+      left: 0;
+      background: linear-gradient(to right, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 40%, transparent 100%);
+    }
+    .side-shadow.right {
+      right: 0;
+      background: linear-gradient(to left, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 40%, transparent 100%);
+    }
+    @media (max-width: 768px) {
+      .side-shadow {
+        width: 40px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="mainCanvas"></canvas>
+    <div class="side-shadow left"></div>
+    <div class="side-shadow right"></div>
+  </div>
+  <script type="module">
+    import { init } from '/src/main.ts'
+    init(document.getElementById('mainCanvas'))
+  </script>
+</body>
+</html>

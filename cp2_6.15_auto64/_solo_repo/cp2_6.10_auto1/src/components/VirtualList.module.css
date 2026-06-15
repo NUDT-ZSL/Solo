@@ -1,0 +1,29 @@
+.container {
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  scroll-behavior: smooth;
+}
+
+.container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.container::-webkit-scrollbar-track {
+  background: rgba(139, 126, 200, 0.08);
+  border-radius: 3px;
+}
+
+.container::-webkit-scrollbar-thumb {
+  background: rgba(139, 126, 200, 0.25);
+  border-radius: 3px;
+}
+
+.container::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 126, 200, 0.4);
+}
+
+.spacer {
+  position: relative;
+  width: 100%;
+}

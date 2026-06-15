@@ -1,0 +1,19 @@
+{
+  "name": "3d-molecule-simulator",
+  "version": "1.0.0",
+  "description": "3D molecular structure and chemical reaction simulator",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.160.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
+  }
+}

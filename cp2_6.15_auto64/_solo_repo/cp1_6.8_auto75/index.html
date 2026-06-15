@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>熔岩脉动 - Lava Pulse</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+      #three-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+      #ui-root { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+      #ui-root > * { pointer-events: auto; }
+    </style>
+  </head>
+  <body>
+    <div id="three-container"></div>
+    <div id="ui-root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

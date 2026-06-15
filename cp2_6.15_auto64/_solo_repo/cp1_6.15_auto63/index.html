@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>烟雾扩散可视化工具</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #12121A; color: #E0E0E0; font-family: 'Segoe UI', sans-serif; }
+
+    #app {
+      display: flex;
+      width: 100%;
+      height: 100%;
+    }
+
+    #left-panel {
+      width: 20%;
+      min-width: 220px;
+      background: #1E1E2E;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      z-index: 10;
+      transition: transform 0.3s ease;
+    }
+
+    #main-scene {
+      flex: 1;
+      position: relative;
+      min-width: 0;
+    }
+
+    #main-scene canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    #right-panel {
+      width: 10%;
+      min-width: 120px;
+      background: #1E1E2E;
+      padding: 16px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 10;
+      font-size: 13px;
+    }
+
+    .panel-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #B8B8D0;
+      border-bottom: 1px solid #333350;
+      padding-bottom: 8px;
+      margin-bottom: 4px;
+    }
+
+    .control-group { display: flex; flex-direction: column; gap: 4px; }
+    .control-label { font-size: 12px; color: #9999BB; }
+    .control-value { font-size: 12px; color: #6C63FF; font-weight: 600; }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 8px;
+      border-radius: 4px;
+      background: #2A2A3E;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #6C63FF;
+      cursor: pointer;
+      box-shadow: 0 0 6px rgba(108,99,255,0.5);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #6C63FF;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn {
+      background: #2A2A3E;
+      color: #E0E0E0;
+      border: 1px solid #3A3A55;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.15s, transform 0.1s;
+      text-align: center;
+    }
+    .btn:hover { background: #3A3A55; }
+    .btn:active { transform: scale(0.95); }
+    .btn.active { background: #6C63FF; border-color: #6C63FF; color: #fff; }
+
+    .view-bar {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      display: flex;
+      gap: 6px;
+      z-index: 20;
+    }
+    .view-bar .btn { font-size: 12px; padding: 6px 10px; }
+
+    .bottom-bar {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      z-index: 20;
+    }
+    .bottom-bar .btn { font-size: 12px; padding: 6px 14px; }
+    .bottom-bar span { font-size: 12px; color: #9999BB; }
+
+    .info-item { display: flex; flex-direction: column; gap: 2px; }
+    .info-label { font-size: 11px; color: #777799; }
+    .info-value { font-size: 16px; font-weight: 700; color: #6C63FF; }
+
+    #emitter-panel {
+      position: absolute;
+      top: 0;
+      right: -320px;
+      width: 300px;
+      height: 100%;
+      background: #1E1E2Eee;
+      padding: 20px;
+      z-index: 30;
+      transition: right 0.3s ease-out;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      border-left: 1px solid #333350;
+    }
+    #emitter-panel.open { right: 0; }
+    #emitter-panel .panel-title { display: flex; justify-content: space-between; align-items: center; }
+    #emitter-panel .close-btn {
+      background: none;
+      border: none;
+      color: #E0E0E0;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 0 4px;
+    }
+
+    .color-input-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .color-input-wrap input[type="color"] {
+      width: 36px;
+      height: 28px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      background: transparent;
+    }
+
+    .playback-controls {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .playback-controls select {
+      background: #2A2A3E;
+      color: #E0E0E0;
+      border: 1px solid #3A3A55;
+      border-radius: 4px;
+      padding: 4px 6px;
+      font-size: 12px;
+    }
+
+    @media (max-width: 768px) {
+      #app { flex-direction: column; }
+      #left-panel { width: 100%; min-width: unset; max-height: 30vh; flex-direction: row; flex-wrap: wrap; overflow-x: auto; }
+      #right-panel { width: 100%; min-width: unset; flex-direction: row; flex-wrap: wrap; padding: 10px; }
+      #main-scene { flex: 1; min-height: 50vh; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="left-panel"></div>
+    <div id="main-scene">
+      <div class="view-bar" id="view-bar"></div>
+      <div class="bottom-bar" id="bottom-bar"></div>
+      <div id="emitter-panel"></div>
+    </div>
+    <div id="right-panel"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

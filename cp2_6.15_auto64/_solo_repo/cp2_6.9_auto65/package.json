@@ -1,0 +1,18 @@
+{
+  "name": "emotion-garden",
+  "version": "1.0.0",
+  "description": "交互式情绪花园 - 基于情绪识别和粒子系统生成",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "simplex-noise": "^4.0.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
+  }
+}

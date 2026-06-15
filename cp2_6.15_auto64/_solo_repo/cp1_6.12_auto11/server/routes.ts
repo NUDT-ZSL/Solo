@@ -1,0 +1,159 @@
+import { Router, Request, Response } from 'express';
+import {
+  getAllArticles,
+  getArticleById,
+  createArticle,
+  updateArticle,
+  getVersionsByArticleId,
+  restoreVersion,
+  getVersionById
+} from './db';
+
+const router = Router();
+
+interface CreateArticleBody {
+  title: string;
+  content: string;
+  editorNickname: string;
+}
+
+interface UpdateArticleBody {
+  title: string;
+  content: string;
+  editorNickname: string;
+}
+
+interface RestoreVersionBody {
+  editorNickname: string;
+}
+
+router.get('/articles', (req: Request, res: Response) => {
+  try {
+    const { search } = req.query;
+    const articles = getAllArticles(search as string | undefined);
+    res.json(articles);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || '获取词条列表失败' });
+  }
+});
+
+router.get('/articles/search', (req: Request, res: Response) => {
+  try {
+    const { q } = req.query;
+    const keyword = (q as string) || '';
+    if (!keyword.trim()) {
+      return res.json([]);
+    }
+    const articles = getAllArticles(keyword);
+    res.json(articles);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || '搜索词条失败' });
+  }
+});
+
+router.post('/articles', (req: Request, res: Response) => {
+  try {
+    const { title, content, editorNickname } = req.body as CreateArticleBody;
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: '标题不能为空' });
+    }
+    if (title.length > 100) {
+      return res.status(400).json({ error: '标题不能超过100字符' });
+    }
+    if (!editorNickname || !editorNickname.trim()) {
+      return res.status(400).json({ error: '编辑者昵称不能为空' });
+    }
+
+    const article = createArticle(title.trim(), content || '', editorNickname.trim());
+    res.status(201).json(article);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || '创建词条失败' });
+  }
+});
+
+router.get('/articles/:id', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const article = getArticleById(id);
+    if (!article) {
+      return res.status(404).json({ error: '词条不存在' });
+    }
+    res.json(article);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || '获取词条失败' });
+  }
+});
+
+router.put('/articles/:id', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { title, content, editorNickname } = req.body as UpdateArticleBody;
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: '标题不能为空' });
+    }
+    if (title.length > 100) {
+      return res.status(400).json({ error: '标题不能超过100字符' });
+    }
+    if (!editorNickname || !editorNickname.trim()) {
+      return res.status(400).json({ error: '编辑者昵称不能为空' });
+    }
+
+    const article = updateArticle(id, title.trim(), content || '', editorNickname.trim());
+    if (!article) {
+      return res.status(404).json({ error: '词条不存在' });
+    }
+    res.json(article);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || '更新词条失败' });
+  }
+});
+
+router.get('/articles/:id/versions', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const article = getArticleById(id);
+    if (!article) {
+      return res.status(404).json({ error: '词条不存在' });
+    }
+    const versions = getVersionsByArticleId(id);
+    res.json(versions);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || '获取版本历史失败' });
+  }
+});
+
+router.get('/articles/:id/versions/:versionId', (req: Request, res: Response) => {
+  try {
+    const { versionId } = req.params;
+    const version = getVersionById(versionId);
+    if (!version) {
+      return res.status(404).json({ error: '版本不存在' });
+    }
+    res.json(version);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || '获取版本失败' });
+  }
+});
+
+router.post('/articles/:id/restore/:versionId', (req: Request, res: Response) => {
+  try {
+    const { id, versionId } = req.params;
+    const { editorNickname } = req.body as RestoreVersionBody;
+
+    if (!editorNickname || !editorNickname.trim()) {
+      return res.status(400).json({ error: '编辑者昵称不能为空' });
+    }
+
+    const article = restoreVersion(id, versionId, editorNickname.trim());
+    if (!article) {
+      return res.status(404).json({ error: '词条或版本不存在' });
+    }
+    res.json(article);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || '回滚版本失败' });
+  }
+});
+
+export default router;

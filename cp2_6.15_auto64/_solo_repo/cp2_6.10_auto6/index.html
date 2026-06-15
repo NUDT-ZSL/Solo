@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>岩脉流光</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body {
+      background: radial-gradient(ellipse at center, #2E2B28 0%, #0D0806 100%);
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    }
+    #canvas-container {
+      width: 100%; height: 100%; position: fixed; top: 0; left: 0;
+    }
+    canvas { display: block; cursor: grab; }
+    canvas:active { cursor: grabbing; }
+
+    #control-panel {
+      position: fixed;
+      left: 20px;
+      bottom: 20px;
+      width: 200px;
+      background: rgba(26, 26, 26, 0.72);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-radius: 8px;
+      padding: 14px 14px 10px;
+      z-index: 100;
+      color: #ccc;
+      user-select: none;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    #control-panel .panel-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #FFD700;
+      margin-bottom: 10px;
+      letter-spacing: 1px;
+      text-align: center;
+    }
+    .slider-group {
+      margin-bottom: 10px;
+    }
+    .slider-group label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 5px;
+      font-size: 11px;
+      color: #aaa;
+    }
+    .slider-group label .val {
+      color: #FFD700;
+      font-weight: 600;
+      font-size: 11px;
+      min-width: 32px;
+      text-align: right;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: #555;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #FFD700;
+      cursor: pointer;
+      transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+      box-shadow: 0 0 4px rgba(255, 215, 0, 0.4);
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 8px rgba(255, 215, 0, 0.7);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #FFD700;
+      cursor: pointer;
+      border: none;
+      transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+      box-shadow: 0 0 4px rgba(255, 215, 0, 0.4);
+    }
+    input[type="range"]::-moz-range-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 8px rgba(255, 215, 0, 0.7);
+    }
+    input[type="range"]::-moz-range-track {
+      height: 4px;
+      border-radius: 2px;
+      background: #555;
+      border: none;
+    }
+
+    .tip {
+      font-size: 10px;
+      color: #666;
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+    .tip kbd {
+      background: #333;
+      color: #FFD700;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-family: inherit;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div id="control-panel">
+    <div class="panel-title">岩脉控制</div>
+    <div class="slider-group">
+      <label><span>运动速度</span><span class="val" id="speed-val">1.0</span></label>
+      <input type="range" id="speed-slider" min="0.1" max="2.0" step="0.1" value="1.0" />
+    </div>
+    <div class="slider-group">
+      <label><span>渐变速度</span><span class="val" id="color-val">0.5</span></label>
+      <input type="range" id="color-slider" min="0.1" max="1.0" step="0.05" value="0.5" />
+    </div>
+    <div class="slider-group">
+      <label><span>粒子密度</span><span class="val" id="density-val">1.0</span></label>
+      <input type="range" id="density-slider" min="0.5" max="2.0" step="0.1" value="1.0" />
+    </div>
+    <div class="tip">
+      拖拽旋转 · 滚轮缩放<br/>
+      点击爆裂 · <kbd>Shift</kbd>+点击合并
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

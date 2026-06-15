@@ -1,0 +1,16 @@
+{
+  "name": "guqin-editor",
+  "version": "1.0.0",
+  "description": "古琴减字谱在线编辑器与演奏器",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/web": "^0.0.99",
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0"
+  }
+}

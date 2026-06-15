@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>音链弹珠 · Sonic Marble Chain</title>
+  <style>
+    :root {
+      --bg-deep: #1A1A2E;
+      --bg-purple: #16213E;
+      --neon-blue: #00D4FF;
+      --drum-red: #FF3366;
+      --bass-blue: #00BFFF;
+      --piano-green: #00FF88;
+      --synth-yellow: #FFD700;
+      --glass-bg: rgba(22, 33, 62, 0.55);
+      --glass-border: rgba(0, 212, 255, 0.35);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(ellipse at center, var(--bg-deep) 0%, var(--bg-purple) 100%);
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      color: #E8F0FF;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .game-wrapper {
+      position: relative;
+      width: 1280px;
+      height: 720px;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow:
+        0 0 40px rgba(0, 212, 255, 0.15),
+        0 0 120px rgba(0, 212, 255, 0.08),
+        inset 0 0 60px rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(0, 212, 255, 0.2);
+    }
+
+    .game-canvas {
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    .header-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      gap: 32px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(14px) saturate(160%);
+      -webkit-backdrop-filter: blur(14px) saturate(160%);
+      border-bottom: 1px solid var(--glass-border);
+      z-index: 10;
+    }
+
+    .header-bar::before {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--neon-blue), transparent);
+      opacity: 0.6;
+    }
+
+    .title {
+      font-weight: 900;
+      font-size: 20px;
+      letter-spacing: 2px;
+      background: linear-gradient(90deg, var(--neon-blue), #7B68EE, var(--neon-blue));
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      color: transparent;
+      animation: shimmer 3s linear infinite;
+      white-space: nowrap;
+      display: block;
+    }
+
+    @keyframes shimmer {
+      to { background-position: 200% center; }
+    }
+
+    .subtitle {
+      font-weight: 500;
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: rgba(0, 212, 255, 0.7);
+      white-space: nowrap;
+      display: block;
+    }
+
+    .title-group {
+      display: flex;
+      align-items: center;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      gap: 12px;
+      flex: 0 0 auto;
+    }
+
+    .speed-control {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      flex: 0 0 auto;
+      flex-shrink: 0;
+      min-width: 380px;
+      justify-content: flex-end;
+    }
+
+    .speed-label {
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      color: rgba(232, 240, 255, 0.7);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .speed-value {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--neon-blue);
+      min-width: 48px;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .neon-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 180px;
+      height: 4px;
+      background: linear-gradient(90deg, rgba(0, 212, 255, 0.15), rgba(0, 212, 255, 0.4));
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .neon-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--neon-blue);
+      cursor: pointer;
+      box-shadow: 0 0 10px var(--neon-blue), 0 0 20px rgba(0, 212, 255, 0.5);
+      border: 2px solid #fff;
+      transition: transform 0.15s ease;
+    }
+
+    .neon-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    .neon-slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--neon-blue);
+      cursor: pointer;
+      box-shadow: 0 0 10px var(--neon-blue);
+      border: 2px solid #fff;
+    }
+
+    .reset-btn {
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      padding: 8px 18px;
+      background: transparent;
+      border: 1px solid rgba(255, 102, 102, 0.5);
+      color: #FF6666;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .reset-btn:hover {
+      background: rgba(255, 102, 102, 0.15);
+      box-shadow: 0 0 15px rgba(255, 102, 102, 0.3);
+      border-color: #FF6666;
+    }
+
+    .status-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(14px) saturate(160%);
+      -webkit-backdrop-filter: blur(14px) saturate(160%);
+      border-top: 1px solid var(--glass-border);
+      z-index: 10;
+      font-size: 13px;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: rgba(232, 240, 255, 0.7);
+      white-space: nowrap;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--neon-blue);
+      box-shadow: 0 0 8px currentColor;
+      display: inline-block;
+    }
+
+    .marble-launcher {
+      position: absolute;
+      top: 84px;
+      left: 0;
+      right: 0;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 48px;
+      z-index: 10;
+    }
+
+    .launcher-marble {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: grab;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .launcher-marble:hover {
+      transform: scale(1.15);
+    }
+
+    .launcher-marble:active {
+      cursor: grabbing;
+    }
+
+    .launcher-marble.drum {
+      background: radial-gradient(circle at 30% 30%, #FF99AA, #FF3366 50%, #CC1144);
+      box-shadow: 0 0 15px rgba(255, 51, 102, 0.6), inset 0 -4px 8px rgba(0, 0, 0, 0.3);
+    }
+    .launcher-marble.drum:hover {
+      box-shadow: 0 0 25px rgba(255, 51, 102, 0.9), inset 0 -4px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .launcher-marble.bass {
+      background: radial-gradient(circle at 30% 30%, #66DDFF, #00BFFF 50%, #0077BB);
+      box-shadow: 0 0 15px rgba(0, 191, 255, 0.6), inset 0 -4px 8px rgba(0, 0, 0, 0.3);
+    }
+    .launcher-marble.bass:hover {
+      box-shadow: 0 0 25px rgba(0, 191, 255, 0.9), inset 0 -4px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .launcher-marble.piano {
+      background: radial-gradient(circle at 30% 30%, #99FFCC, #00FF88 50%, #00AA55);
+      box-shadow: 0 0 15px rgba(0, 255, 136, 0.6), inset 0 -4px 8px rgba(0, 0, 0, 0.3);
+    }
+    .launcher-marble.piano:hover {
+      box-shadow: 0 0 25px rgba(0, 255, 136, 0.9), inset 0 -4px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .launcher-marble.synth {
+      background: radial-gradient(circle at 30% 30%, #FFEE99, #FFD700 50%, #CC9900);
+      box-shadow: 0 0 15px rgba(255, 215, 0, 0.6), inset 0 -4px 8px rgba(0, 0, 0, 0.3);
+    }
+    .launcher-marble.synth:hover {
+      box-shadow: 0 0 25px rgba(255, 215, 0, 0.9), inset 0 -4px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .launcher-label {
+      position: absolute;
+      bottom: -22px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      letter-spacing: 1px;
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      pointer-events: none;
+      font-weight: 600;
+    }
+
+    .launcher-marble:hover .launcher-label {
+      opacity: 0.85;
+    }
+
+    .hint-text {
+      position: absolute;
+      top: 158px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 12px;
+      letter-spacing: 1px;
+      color: rgba(232, 240, 255, 0.35);
+      z-index: 10;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    .track-info {
+      position: absolute;
+      top: 180px;
+      left: 28px;
+      font-size: 11px;
+      letter-spacing: 1px;
+      color: rgba(0, 212, 255, 0.5);
+      z-index: 10;
+      pointer-events: none;
+      line-height: 1.7;
+    }
+
+    .track-info span {
+      color: rgba(232, 240, 255, 0.7);
+      font-weight: 600;
+    }
+
+    .dragging-ghost {
+      position: fixed;
+      pointer-events: none;
+      border-radius: 50%;
+      z-index: 9999;
+      transform: translate(-50%, -50%);
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="game-wrapper" id="gameWrapper">
+      <canvas id="gameCanvas" class="game-canvas" width="1280" height="720"></canvas>
+
+      <div class="header-bar">
+        <div class="title-group">
+          <span class="title">音链弹珠</span>
+          <span class="subtitle">SONIC · MARBLE · CHAIN</span>
+        </div>
+        <div class="speed-control">
+          <span class="speed-label">SPEED</span>
+          <input type="range" id="speedSlider" class="neon-slider" min="0.2" max="1.5" step="0.05" value="0.5" />
+          <span class="speed-value" id="speedValue">0.50s</span>
+          <button class="reset-btn" id="resetBtn">RESET</button>
+        </div>
+      </div>
+
+      <div class="marble-launcher" id="marbleLauncher">
+        <div class="launcher-marble drum" data-type="drum">
+          <span class="launcher-label" style="color:#FF6699">DRUM · 鼓</span>
+        </div>
+        <div class="launcher-marble bass" data-type="bass">
+          <span class="launcher-label" style="color:#66CCFF">BASS · 贝斯</span>
+        </div>
+        <div class="launcher-marble piano" data-type="piano">
+          <span class="launcher-label" style="color:#66FFAA">PIANO · 钢琴</span>
+        </div>
+        <div class="launcher-marble synth" data-type="synth">
+          <span class="launcher-label" style="color:#FFDD66">SYNTH · 合成器</span>
+        </div>
+      </div>
+
+      <div class="hint-text">点击空白处创建轨道节点 · 拖拽节点调整位置 · Shift+点击创建新轨道 · 从上方拖拽彩色弹珠到轨道起点</div>
+
+      <div class="track-info" id="trackInfo">
+        轨道 TRACKS: <span id="trackCount">2/4</span><br/>
+        节点 NODES: <span id="nodeCount">14/32</span>
+      </div>
+
+      <div class="status-bar">
+        <div class="status-item">
+          <span class="status-dot" id="activeDot"></span>
+          <span id="activeVoice">就绪 · READY</span>
+        </div>
+        <div class="status-item">
+          <span>弹珠数 MARBLES</span>
+          <span id="marbleCount" style="color:var(--neon-blue);font-weight:700">0 / 4</span>
+        </div>
+        <div class="status-item">
+          <span>FPS</span>
+          <span id="fpsDisplay" style="color:var(--neon-blue);font-weight:700">60</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/gameMain.ts"></script>
+</body>
+</html>

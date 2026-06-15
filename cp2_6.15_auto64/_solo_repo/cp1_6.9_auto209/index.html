@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>旋涡幻境</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html, body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+      }
+      #app {
+        width: 100%;
+        height: 100%;
+        position: relative;
+        background: linear-gradient(135deg, #0a0012 0%, #1a0033 50%, #0d001a 100%);
+      }
+      canvas {
+        display: block;
+        cursor: grab;
+      }
+      canvas:active {
+        cursor: grabbing;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="vortex-canvas"></canvas>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

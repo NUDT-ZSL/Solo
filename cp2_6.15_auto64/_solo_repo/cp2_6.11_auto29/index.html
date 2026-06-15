@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>蓝鳍视界 - 海底生态观测</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #051D2D;
+      color: #E0F7FA;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    .navbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: rgba(11, 43, 64, 0.7);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      z-index: 100;
+      transition: all 0.3s ease-out;
+    }
+
+    .navbar-title {
+      font-size: 24px;
+      color: #E0F7FA;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-shadow: 0 0 10px rgba(74, 144, 217, 0.5);
+    }
+
+    .reset-btn {
+      padding: 8px 20px;
+      background: rgba(74, 144, 217, 0.3);
+      border: 1px solid rgba(74, 144, 217, 0.5);
+      border-radius: 8px;
+      color: #E0F7FA;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s ease-out;
+    }
+
+    .reset-btn:hover {
+      transform: scale(1.05);
+      border-color: #00BFFF;
+      background: rgba(0, 191, 255, 0.3);
+      box-shadow: 0 0 15px rgba(0, 191, 255, 0.4);
+    }
+
+    .observation-card {
+      position: fixed;
+      left: 20px;
+      bottom: 20px;
+      width: 350px;
+      background: rgba(13, 43, 62, 0.8);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 20px;
+      z-index: 100;
+      transition: all 0.3s ease-out;
+      border: 1px solid rgba(74, 144, 217, 0.3);
+      opacity: 0;
+      transform: translateY(20px);
+      pointer-events: none;
+    }
+
+    .observation-card.active {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .observation-card h3 {
+      font-size: 16px;
+      color: #4A90D9;
+      margin-bottom: 16px;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(74, 144, 217, 0.2);
+      font-size: 14px;
+    }
+
+    .info-row:last-of-type {
+      border-bottom: none;
+    }
+
+    .info-label {
+      color: #6B9EC2;
+    }
+
+    .info-value {
+      color: #E0F7FA;
+      font-weight: 500;
+    }
+
+    .record-btn {
+      margin-top: 16px;
+      width: 100%;
+      padding: 10px;
+      background: rgba(255, 107, 107, 0.2);
+      border: 1px solid rgba(255, 107, 107, 0.5);
+      border-radius: 8px;
+      color: #FFB3B3;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s ease-out;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .record-btn:hover {
+      transform: scale(1.05);
+      border-color: #00BFFF;
+      background: rgba(0, 191, 255, 0.2);
+      color: #00BFFF;
+    }
+
+    .record-btn.flash::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+      animation: flash 0.2s ease-out;
+    }
+
+    @keyframes flash {
+      0% { left: -100%; }
+      100% { left: 100%; }
+    }
+
+    .sidebar {
+      position: fixed;
+      right: 20px;
+      top: 80px;
+      bottom: 20px;
+      width: 280px;
+      background: rgba(13, 43, 62, 0.7);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 20px;
+      z-index: 90;
+      border: 1px solid rgba(74, 144, 217, 0.3);
+      transition: all 0.3s ease-out;
+      overflow-y: auto;
+    }
+
+    .sidebar h3 {
+      font-size: 16px;
+      color: #4A90D9;
+      margin-bottom: 16px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      position: sticky;
+      top: 0;
+      background: rgba(13, 43, 62, 0.9);
+      padding-bottom: 10px;
+    }
+
+    .log-list {
+      list-style: none;
+      line-height: 1.5;
+    }
+
+    .log-item {
+      background: rgba(74, 144, 217, 0.1);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      transition: all 0.3s ease-out;
+      position: relative;
+      cursor: pointer;
+      border: 1px solid transparent;
+    }
+
+    .log-item:hover {
+      background: rgba(255, 107, 107, 0.1);
+      border-color: rgba(255, 107, 107, 0.3);
+    }
+
+    .log-time {
+      color: #A8D5E2;
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+
+    .log-coord {
+      color: #E0F7FA;
+    }
+
+    .log-delete {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      color: #FF6B6B;
+      font-size: 12px;
+      opacity: 0;
+      transition: opacity 0.3s ease-out;
+    }
+
+    .log-item:hover .log-delete {
+      opacity: 1;
+    }
+
+    .empty-log {
+      color: #6B9EC2;
+      font-size: 13px;
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    .fullscreen-hint {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(224, 247, 250, 0.5);
+      font-size: 12px;
+      z-index: 10;
+      pointer-events: none;
+      transition: opacity 0.5s ease-out;
+    }
+
+    .fullscreen-hint.hidden {
+      opacity: 0;
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: rgba(74, 144, 217, 0.1);
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(74, 144, 217, 0.4);
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(74, 144, 217, 0.6);
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+    
+    <nav class="navbar">
+      <div class="navbar-title">蓝鳍视界</div>
+      <button class="reset-btn" id="resetViewBtn">重置视角</button>
+    </nav>
+
+    <div class="observation-card" id="observationCard">
+      <h3>🔍 观测点信息</h3>
+      <div class="info-row">
+        <span class="info-label">坐标 X:</span>
+        <span class="info-value" id="coordX">--</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">坐标 Z:</span>
+        <span class="info-value" id="coordZ">--</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">水温:</span>
+        <span class="info-value" id="waterTemp">--</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">盐度:</span>
+        <span class="info-value" id="salinity">--</span>
+      </div>
+      <button class="record-btn" id="recordBtn">📝 记录观测</button>
+    </div>
+
+    <aside class="sidebar" id="sidebar">
+      <h3>📋 观测日志</h3>
+      <ul class="log-list" id="logList">
+        <li class="empty-log">暂无观测记录</li>
+      </ul>
+    </aside>
+
+    <div class="fullscreen-hint" id="fullscreenHint">
+      🖱️ 拖拽旋转视角 · 滚轮缩放 · 双击标记观测点
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

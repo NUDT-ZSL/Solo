@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>海洋洋流三维动态可视化</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    body {
+      background: linear-gradient(180deg, #0a0a2e 0%, #1a1a4e 100%);
+    }
+
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+    }
+
+    #info-label {
+      position: fixed;
+      pointer-events: none;
+      display: none;
+      background: rgba(0, 0, 0, 0.8);
+      color: #ffffff;
+      padding: 12px 18px;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 1.6;
+      border: 1px solid rgba(100, 200, 255, 0.3);
+      box-shadow: 0 4px 20px rgba(0, 100, 255, 0.2);
+      z-index: 1000;
+      backdrop-filter: blur(6px);
+      transition: opacity 0.2s ease;
+    }
+
+    #info-label .label-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #64d8ff;
+      margin-bottom: 6px;
+      text-shadow: 0 0 8px rgba(100, 216, 255, 0.5);
+    }
+
+    #info-label .label-row {
+      color: #cccccc;
+    }
+
+    #info-label .label-value {
+      color: #ffffff;
+      font-weight: 500;
+    }
+
+    .dg.ac {
+      z-index: 100 !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+    <div id="info-label">
+      <div class="label-title" id="label-region"></div>
+      <div class="label-row">平均流速: <span class="label-value" id="label-speed"></span></div>
+      <div class="label-row">当前深度: <span class="label-value" id="label-depth"></span></div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

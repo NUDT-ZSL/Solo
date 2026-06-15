@@ -1,0 +1,23 @@
+{
+  "name": "lumiscape",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "check": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "three": "^0.160.0",
+    "canvas-confetti": "^1.9.2"
+  },
+  "devDependencies": {
+    "@types/three": "^0.160.0",
+    "@types/canvas-confetti": "^1.6.4",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5"
+  }
+}

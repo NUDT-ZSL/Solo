@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>歌词声波可视化乐谱</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(180deg, #0A0A23 0%, #1A1A3E 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 40px 0;
+      color: #E0E0FF;
+    }
+
+    .container {
+      width: 900px;
+      max-width: 95%;
+    }
+
+    .input-section {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .input-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .lyric-input {
+      width: 100%;
+      height: 40px;
+      padding: 10px;
+      border: 2px solid transparent;
+      border-radius: 8px;
+      background-color: #2C2C3C;
+      color: #E0E0FF;
+      font-size: 16px;
+      font-family: 'Segoe UI', sans-serif;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .lyric-input:focus {
+      border-color: #4169E1;
+    }
+
+    .lyric-input::placeholder {
+      color: #8888AA;
+    }
+
+    .char-count {
+      font-size: 12px;
+      color: #32CD32;
+    }
+
+    .char-count.over-limit {
+      color: #FF4500;
+    }
+
+    .generate-btn {
+      height: 40px;
+      width: 120px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(90deg, #4169E1 0%, #8A2BE2 100%);
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: filter 0.2s;
+      flex-shrink: 0;
+      margin-top: 0;
+    }
+
+    .generate-btn:hover {
+      filter: brightness(1.15);
+    }
+
+    .generate-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      filter: none;
+    }
+
+    .reset-btn {
+      height: 40px;
+      width: 80px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(90deg, #DC143C 0%, #B22222 100%);
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: filter 0.2s;
+      flex-shrink: 0;
+    }
+
+    .reset-btn:hover {
+      filter: brightness(1.15);
+    }
+
+    .control-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .play-btn {
+      height: 36px;
+      width: 100px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(90deg, #32CD32 0%, #228B22 100%);
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: filter 0.2s;
+    }
+
+    .play-btn:hover {
+      filter: brightness(1.15);
+    }
+
+    .play-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      filter: none;
+    }
+
+    .params-panel {
+      background-color: rgba(44, 44, 60, 0.6);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+      transition: all 0.3s;
+    }
+
+    .params-panel.collapsed .params-content {
+      display: none;
+    }
+
+    .params-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .params-title {
+      font-size: 12px;
+      color: white;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .params-toggle {
+      color: #8888AA;
+      font-size: 14px;
+      transition: transform 0.3s;
+    }
+
+    .params-panel.collapsed .params-toggle {
+      transform: rotate(-90deg);
+    }
+
+    .params-content {
+      display: flex;
+      gap: 24px;
+      margin-top: 12px;
+    }
+
+    .param-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .param-label {
+      font-size: 12px;
+      color: #B0B0D0;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .param-value {
+      color: #4169E1;
+      font-weight: 600;
+    }
+
+    .param-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #444455 0%, #666677 100%);
+      outline: none;
+    }
+
+    .param-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6495ED 0%, #4169E1 100%);
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .param-slider::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6495ED 0%, #4169E1 100%);
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .canvas-container {
+      background-color: #0A0A0A;
+      border-radius: 12px;
+      padding: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #waveCanvas {
+      display: block;
+      width: 100%;
+      height: 300px;
+      cursor: crosshair;
+    }
+
+    .info-card {
+      position: absolute;
+      background-color: #F5F5F5;
+      color: #333333;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.1s;
+      z-index: 10;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      white-space: nowrap;
+    }
+
+    .info-card.visible {
+      opacity: 1;
+    }
+
+    .info-card .char {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 4px;
+      text-align: center;
+    }
+
+    .info-card .detail {
+      font-size: 11px;
+      color: #666666;
+      line-height: 1.5;
+    }
+
+    .tip-message {
+      font-size: 12px;
+      color: #FFA500;
+      margin-top: 4px;
+      min-height: 16px;
+    }
+
+    @media (max-width: 920px) {
+      .container {
+        width: 95%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="input-section">
+      <div class="input-wrapper">
+        <input 
+          type="text" 
+          id="lyricInput" 
+          class="lyric-input" 
+          placeholder="输入歌词（10-100个字符），支持中英文..."
+          maxlength="200"
+        >
+        <div class="char-count" id="charCount">0 / 100</div>
+        <div class="tip-message" id="tipMessage"></div>
+      </div>
+      <button class="generate-btn" id="generateBtn" disabled>生成</button>
+      <button class="reset-btn" id="resetBtn">重置</button>
+    </div>
+
+    <div class="params-panel" id="paramsPanel">
+      <div class="params-header" id="paramsHeader">
+        <span class="params-title">调节参数</span>
+        <span class="params-toggle">▼</span>
+      </div>
+      <div class="params-content">
+        <div class="param-item">
+          <div class="param-label">
+            <span>播放速度</span>
+            <span class="param-value" id="speedValue">1.0x</span>
+          </div>
+          <input type="range" id="speedSlider" class="param-slider" min="0.5" max="3" step="0.1" value="1">
+        </div>
+        <div class="param-item">
+          <div class="param-label">
+            <span>波幅缩放</span>
+            <span class="param-value" id="ampValue">1.0x</span>
+          </div>
+          <input type="range" id="ampSlider" class="param-slider" min="0.5" max="2" step="0.1" value="1">
+        </div>
+      </div>
+    </div>
+
+    <div class="control-row">
+      <button class="play-btn" id="playBtn" disabled>播放</button>
+    </div>
+
+    <div class="canvas-container" id="canvasContainer">
+      <canvas id="waveCanvas"></canvas>
+      <div class="info-card" id="infoCard">
+        <div class="char" id="infoChar"></div>
+        <div class="detail" id="infoDetail"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

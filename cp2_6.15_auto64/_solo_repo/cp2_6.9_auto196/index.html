@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>虚拟舞台灯光秀编排工具</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(180deg, #0A0A0F 0%, #1A1A2E 100%);
+      color: #fff;
+    }
+
+    #app {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 70%;
+    }
+
+    #canvas-container canvas {
+      display: block;
+    }
+
+    #bottom-panel {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 30%;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 16px 24px;
+      z-index: 10;
+    }
+
+    #control-panel {
+      background: rgba(44, 44, 62, 0.8);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .light-icons-row {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .light-icon {
+      width: 60px;
+      height: 60px;
+      border-radius: 12px;
+      cursor: grab;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .light-icon:hover {
+      transform: scale(1.15);
+      box-shadow: 0 0 20px currentColor, inset 0 0 10px rgba(0, 0, 0, 0.25);
+    }
+
+    .light-icon:active {
+      cursor: grabbing;
+      transform: scale(0.95);
+    }
+
+    .light-icon::after {
+      content: '';
+      position: absolute;
+      width: 60%;
+      height: 80%;
+      background: linear-gradient(180deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.1) 50%, transparent 100%);
+      border-radius: 4px;
+    }
+
+    #timeline-container {
+      background: #1C1C1E;
+      border-radius: 12px;
+      height: 60px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      cursor: pointer;
+    }
+
+    #timeline-track {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    #timeline-scanline {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1px;
+      height: 100%;
+      background: #ffffff;
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    .keyframe {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 12px;
+      height: 8px;
+      border-radius: 2px;
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+
+    .keyframe:hover {
+      transform: translate(-50%, -50%) scale(1.3);
+    }
+
+    #play-container {
+      position: absolute;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+    }
+
+    #play-button {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #34C759;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s ease, transform 0.15s ease;
+      box-shadow: 0 0 20px rgba(52, 199, 89, 0.4);
+    }
+
+    #play-button:hover {
+      transform: scale(1.15);
+      box-shadow: 0 0 30px rgba(52, 199, 89, 0.6), inset 0 0 10px rgba(0, 0, 0, 0.25);
+    }
+
+    #play-button.playing {
+      background: #FF3B30;
+      box-shadow: 0 0 20px rgba(255, 59, 48, 0.4);
+    }
+
+    #play-button.playing:hover {
+      box-shadow: 0 0 30px rgba(255, 59, 48, 0.6), inset 0 0 10px rgba(0, 0, 0, 0.25);
+    }
+
+    #play-button svg {
+      width: 20px;
+      height: 20px;
+      fill: white;
+    }
+
+    #keyframe-editor {
+      position: fixed;
+      display: none;
+      width: 280px;
+      height: 320px;
+      background: rgba(50, 50, 70, 0.85);
+      backdrop-filter: blur(12px);
+      border-radius: 16px;
+      padding: 20px;
+      z-index: 100;
+      color: #fff;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    }
+
+    #keyframe-editor.active {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    #keyframe-editor h3 {
+      font-size: 16px;
+      margin-bottom: 4px;
+      color: #fff;
+    }
+
+    .editor-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .editor-field label {
+      font-size: 12px;
+      color: #aaa;
+    }
+
+    .editor-field input[type="range"] {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: #333;
+      outline: none;
+      -webkit-appearance: none;
+    }
+
+    .editor-field input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #007AFF;
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+
+    .editor-field input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    .editor-field input[type="color"] {
+      width: 100%;
+      height: 32px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .editor-field input[type="number"] {
+      background: #333;
+      border: 1px solid #444;
+      color: #fff;
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+
+    .editor-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .editor-value {
+      font-size: 11px;
+      color: #888;
+      min-width: 50px;
+      text-align: right;
+    }
+
+    #editor-close {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #444;
+      border: none;
+      color: #fff;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #editor-delete {
+      background: #FF3B30;
+      color: white;
+      border: none;
+      padding: 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-top: auto;
+      transition: transform 0.15s ease;
+    }
+
+    #editor-delete:hover {
+      transform: scale(1.05);
+    }
+
+    #instructions {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 12px;
+      color: #ccc;
+      line-height: 1.8;
+      z-index: 10;
+      backdrop-filter: blur(6px);
+    }
+
+    #instructions b {
+      color: #fff;
+    }
+
+    .particle {
+      position: fixed;
+      pointer-events: none;
+      border-radius: 50%;
+      z-index: 9999;
+    }
+
+    #height-slider-container {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(44, 44, 62, 0.8);
+      backdrop-filter: blur(10px);
+      padding: 16px;
+      border-radius: 12px;
+      z-index: 10;
+      display: none;
+      min-width: 180px;
+    }
+
+    #height-slider-container.active {
+      display: block;
+    }
+
+    #height-slider-container label {
+      font-size: 12px;
+      color: #aaa;
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    #height-slider {
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+
+    <div id="instructions">
+      <b>操作说明：</b><br>
+      • 拖拽底部色块到舞台锚点创建光柱<br>
+      • 点击时间轴添加关键帧，点击关键帧编辑<br>
+      • <b>R</b> 重置光柱 &nbsp; <b>空格</b> 播放/暂停<br>
+      • <b>C</b> 切换视角 &nbsp; <b>F</b> 全屏 &nbsp; 鼠标拖拽旋转视角
+    </div>
+
+    <div id="height-slider-container">
+      <label>光柱高度: <span id="height-value">6</span> 单位</label>
+      <input type="range" id="height-slider" min="4" max="8" step="0.5" value="6">
+    </div>
+
+    <div id="play-container">
+      <button id="play-button" title="播放/暂停">
+        <svg id="play-icon" viewBox="0 0 24 24">
+          <polygon points="8,5 19,12 8,19"/>
+        </svg>
+        <svg id="pause-icon" viewBox="0 0 24 24" style="display:none">
+          <rect x="6" y="5" width="4" height="14"/>
+          <rect x="14" y="5" width="4" height="14"/>
+        </svg>
+      </button>
+    </div>
+
+    <div id="bottom-panel">
+      <div id="control-panel">
+        <div class="light-icons-row" id="light-icons-row-1"></div>
+        <div class="light-icons-row" id="light-icons-row-2"></div>
+      </div>
+
+      <div id="timeline-container">
+        <div id="timeline-track">
+          <div id="timeline-scanline"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="keyframe-editor">
+      <button id="editor-close">×</button>
+      <h3>编辑关键帧</h3>
+      <div class="editor-field">
+        <label>时间 (ms)</label>
+        <div class="editor-row">
+          <input type="range" id="editor-time" min="0" max="10000" step="50" value="0">
+          <span class="editor-value" id="editor-time-value">0ms</span>
+        </div>
+      </div>
+      <div class="editor-field">
+        <label>颜色</label>
+        <input type="color" id="editor-color" value="#FF3B30">
+      </div>
+      <div class="editor-field">
+        <label>旋转角度 (°)</label>
+        <div class="editor-row">
+          <input type="range" id="editor-rotation" min="0" max="360" step="1" value="0">
+          <span class="editor-value" id="editor-rotation-value">0°</span>
+        </div>
+      </div>
+      <div class="editor-field">
+        <label>亮度 (%)</label>
+        <div class="editor-row">
+          <input type="range" id="editor-brightness" min="0" max="100" step="1" value="80">
+          <span class="editor-value" id="editor-brightness-value">80%</span>
+        </div>
+      </div>
+      <div class="editor-field">
+        <label>渐变速度 (s)</label>
+        <div class="editor-row">
+          <input type="range" id="editor-duration" min="0.1" max="2.0" step="0.1" value="0.5">
+          <span class="editor-value" id="editor-duration-value">0.5s</span>
+        </div>
+      </div>
+      <button id="editor-delete">删除关键帧</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

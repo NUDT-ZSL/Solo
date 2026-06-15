@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>符文回廊 - Rune Corridor</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Courier New', Courier, monospace;
+    }
+
+    body {
+      background: radial-gradient(ellipse at center, 
+        hsl(270, 60%, 8%) 0%, 
+        hsl(240, 70%, 4%) 50%,
+        hsl(250, 80%, 2%) 100%);
+    }
+
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    #ui-overlay {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      z-index: 100;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    #counter {
+      color: #ffffff;
+      font-size: 16px;
+      font-family: 'Courier New', Courier, monospace;
+      font-weight: bold;
+      letter-spacing: 1px;
+      text-shadow: 0 0 10px rgba(200, 100, 255, 0.8),
+                   0 0 20px rgba(200, 100, 255, 0.5);
+      padding: 12px 20px;
+      background: rgba(30, 10, 60, 0.6);
+      border: 1px solid rgba(200, 100, 255, 0.3);
+      border-radius: 4px;
+      backdrop-filter: blur(4px);
+    }
+
+    #selection-box {
+      position: absolute;
+      border: 2px dashed rgba(150, 100, 255, 0.8);
+      background: rgba(150, 100, 255, 0.1);
+      pointer-events: none;
+      display: none;
+      z-index: 99;
+    }
+
+    #fade-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #000000;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 200;
+      transition: opacity 2s ease-in-out;
+    }
+
+    #complete-message {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #ffffff;
+      font-size: 48px;
+      font-family: 'Courier New', Courier, monospace;
+      font-weight: bold;
+      letter-spacing: 8px;
+      text-shadow: 0 0 20px rgba(200, 100, 255, 1),
+                   0 0 40px rgba(200, 100, 255, 0.8),
+                   0 0 60px rgba(200, 100, 255, 0.5);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 201;
+      transition: opacity 1.5s ease-in-out;
+    }
+
+    #stats-container {
+      position: absolute !important;
+      top: 20px !important;
+      left: 20px !important;
+      z-index: 150;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+    <div id="ui-overlay">
+      <div id="counter">已收集符文：0/40</div>
+    </div>
+    <div id="selection-box"></div>
+    <div id="fade-overlay"></div>
+    <div id="complete-message">遗迹已唤醒</div>
+    <div id="stats-container"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

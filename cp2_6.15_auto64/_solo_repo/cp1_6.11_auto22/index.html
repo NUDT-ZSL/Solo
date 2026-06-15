@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>手绘粒子云 - Sketch to Particle Cloud</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'IBM Plex Mono', monospace;
+      background: linear-gradient(180deg, #0B0B1A 0%, #1A1A2E 100%);
+      color: #E0E0E0;
+      font-size: 14px;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #app {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    .sidebar {
+      width: 220px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+
+    .sidebar-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #FFFFFF;
+      letter-spacing: 0.5px;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .control-label {
+      font-size: 12px;
+      color: #A0A0A0;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .color-palette {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .color-swatch {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .color-swatch:hover {
+      transform: translateY(-2px);
+    }
+
+    .color-swatch.selected {
+      box-shadow: 0 0 0 3px currentColor, 0 0 15px currentColor;
+    }
+
+    .slider-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.1);
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .slider:hover {
+      transform: translateY(-2px);
+    }
+
+    .slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #FF3366;
+      cursor: pointer;
+      box-shadow: 0 0 10px currentColor;
+      transition: all 0.2s ease;
+    }
+
+    .slider::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #FF3366;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 10px currentColor;
+      transition: all 0.2s ease;
+    }
+
+    .slider-value {
+      font-size: 12px;
+      color: #808080;
+      text-align: right;
+    }
+
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      padding: 20px;
+    }
+
+    .canvas-wrapper {
+      width: 80%;
+      min-height: 400px;
+      height: auto;
+      aspect-ratio: 16 / 9;
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+    }
+
+    #drawCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #0B0B1A;
+      cursor: none;
+    }
+
+    #threeCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    #threeCanvas.interactive {
+      pointer-events: auto;
+    }
+
+    .reset-button {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(255, 68, 68, 0.1);
+      border: 1px solid rgba(255, 68, 68, 0.3);
+      color: #FF4444;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      transition: all 0.2s ease;
+      z-index: 10;
+    }
+
+    .reset-button:hover {
+      background: rgba(255, 102, 102, 0.2);
+      border-color: #FF6666;
+      color: #FF6666;
+      transform: translateY(-2px) rotate(180deg);
+    }
+
+    .reset-button svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+    }
+
+    #loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #0B0B1A;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      font-size: 16px;
+      color: #E0E0E0;
+      letter-spacing: 2px;
+    }
+
+    .loading-spinner {
+      width: 30px;
+      height: 30px;
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-top-color: #FF3366;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 15px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .custom-cursor {
+      position: fixed;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      pointer-events: none;
+      z-index: 9999;
+      transform: translate(-50%, -50%);
+      display: none;
+    }
+
+    .custom-cursor::before,
+    .custom-cursor::after {
+      content: '';
+      position: absolute;
+      background: rgba(255, 255, 255, 0.5);
+    }
+
+    .custom-cursor::before {
+      width: 1px;
+      height: 8px;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    .custom-cursor::after {
+      width: 8px;
+      height: 1px;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    .color-preview {
+      position: fixed;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 9998;
+      transform: translate(15px, 15px);
+      display: none;
+      box-shadow: 0 0 10px currentColor;
+    }
+
+    #tooltip {
+      position: fixed;
+      background: rgba(0, 0, 0, 0.7);
+      color: #FFFFFF;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      pointer-events: none;
+      z-index: 1000;
+      display: none;
+      white-space: nowrap;
+      backdrop-filter: blur(4px);
+      transform: translate(15px, 15px);
+    }
+
+    .mode-switch {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .mode-btn {
+      flex: 1;
+      padding: 8px 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #A0A0A0;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      transition: all 0.2s ease;
+    }
+
+    .mode-btn:hover {
+      transform: translateY(-2px);
+    }
+
+    .mode-btn.active {
+      background: rgba(255, 51, 102, 0.2);
+      border-color: #FF3366;
+      color: #FF3366;
+    }
+
+    .particle-count {
+      font-size: 11px;
+      color: #606060;
+      margin-top: auto;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .particle-count span {
+      color: #33CC66;
+    }
+
+    .instructions {
+      font-size: 11px;
+      color: #606060;
+      line-height: 1.6;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 6px;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <div class="loading-spinner"></div>
+    <span>正在初始化粒子引擎...</span>
+  </div>
+
+  <div id="app">
+    <aside class="sidebar">
+      <div class="sidebar-title">粒子云控制台</div>
+
+      <div class="control-group">
+        <div class="mode-switch">
+          <button class="mode-btn active" data-mode="draw">绘制</button>
+          <button class="mode-btn" data-mode="view">观察</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label class="control-label">画笔颜色</label>
+        <div class="color-palette" id="colorPalette"></div>
+      </div>
+
+      <div class="control-group">
+        <label class="control-label">画笔宽度</label>
+        <div class="slider-container">
+          <input type="range" class="slider" id="brushWidth" min="1" max="10" value="3">
+          <div class="slider-value" id="brushWidthValue">3px</div>
+        </div>
+      </div>
+
+      <div class="instructions">
+        🖌️ 绘制模式：拖拽鼠标绘制草图<br>
+        👁️ 观察模式：拖拽旋转视角，滚轮缩放<br>
+        ⏱️ 停止绘制2秒后自动生成粒子云
+      </div>
+
+      <div class="particle-count">
+        粒子数量：<span id="particleCount">0</span> / 3000
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <button class="reset-button" id="resetBtn" title="重置画布">
+        <svg viewBox="0 0 24 24">
+          <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+        </svg>
+      </button>
+
+      <div class="canvas-wrapper">
+        <canvas id="drawCanvas"></canvas>
+        <canvas id="threeCanvas"></canvas>
+      </div>
+    </main>
+  </div>
+
+  <div class="custom-cursor" id="customCursor"></div>
+  <div class="color-preview" id="colorPreview"></div>
+  <div id="tooltip"></div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>动态沙漏计时器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    #canvas {
+      display: block;
+    }
+    #controls {
+      position: fixed;
+      top: 50%;
+      right: 24px;
+      transform: translateY(-50%);
+      width: 240px;
+      padding: 24px;
+      background: rgba(30, 30, 40, 0.8);
+      border-radius: 12px;
+      backdrop-filter: blur(10px);
+      color: #eee;
+      z-index: 10;
+    }
+    .control-group {
+      margin-bottom: 20px;
+    }
+    .control-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 300;
+      color: #aaa;
+      margin-bottom: 8px;
+      letter-spacing: 0.5px;
+    }
+    .control-group input[type="range"] {
+      width: 100%;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      border-radius: 2px;
+      background: #444;
+      outline: none;
+      cursor: pointer;
+      transition: filter 0.15s ease;
+    }
+    .control-group input[type="range"]:hover {
+      filter: brightness(1.2);
+    }
+    .control-group input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #C2A77D;
+      cursor: pointer;
+      transition: transform 0.1s ease;
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
+    }
+    .control-group input[type="range"]::-webkit-slider-thumb:active {
+      transform: scale(0.9);
+    }
+    .control-group input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #C2A77D;
+      cursor: pointer;
+      border: none;
+      transition: transform 0.1s ease;
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
+    }
+    .control-group input[type="range"]::-moz-range-thumb:active {
+      transform: scale(0.9);
+    }
+    .value-display {
+      font-size: 11px;
+      color: #888;
+      margin-top: 4px;
+      text-align: right;
+      font-weight: 300;
+    }
+    #resetBtn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255, 255, 255, 0.1);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+      margin: 0 auto;
+    }
+    #resetBtn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      filter: brightness(1.2);
+    }
+    #resetBtn:active {
+      transform: scale(0.9);
+    }
+    #resetBtn svg {
+      width: 18px;
+      height: 18px;
+      fill: #ccc;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="controls">
+    <div class="control-group">
+      <label>沙粒颜色</label>
+      <input type="range" id="colorSlider" min="0" max="100" value="0" />
+      <div class="value-display" id="colorValue">#C2A77D</div>
+    </div>
+    <div class="control-group">
+      <label>流速</label>
+      <input type="range" id="speedSlider" min="1" max="5" value="3" />
+      <div class="value-display" id="speedValue">3</div>
+    </div>
+    <div class="control-group">
+      <label>倾斜角度</label>
+      <input type="range" id="angleSlider" min="0" max="15" value="0" />
+      <div class="value-display" id="angleValue">0°</div>
+    </div>
+    <button id="resetBtn" title="重置">
+      <svg viewBox="0 0 24 24">
+        <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+      </svg>
+    </button>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

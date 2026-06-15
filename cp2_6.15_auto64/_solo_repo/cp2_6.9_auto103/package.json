@@ -1,0 +1,21 @@
+{
+  "name": "ai-doodle-exquisite-corpse",
+  "version": "1.0.0",
+  "description": "AI-feedback-based collaborative doodle exquisite corpse game",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"node server.js\" \"vite\"",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "uuid": "^9.0.0",
+    "ws": "^8.14.2"
+  },
+  "devDependencies": {
+    "@types/uuid": "^9.0.4",
+    "concurrently": "^8.2.1",
+    "typescript": "^5.2.2",
+    "vite": "^4.4.9"
+  }
+}

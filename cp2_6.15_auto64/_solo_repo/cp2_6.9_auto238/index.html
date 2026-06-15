@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>幻墨涟漪</title>
+  <link rel="stylesheet" href="./src/styles.css">
+</head>
+<body>
+  <div id="app">
+    <canvas id="canvas" width="800" height="800"></canvas>
+
+    <div id="tool-panel" class="tool-panel">
+      <div class="panel-title">幻墨涟漪</div>
+      
+      <div class="tool-item">
+        <label for="brush-size">笔刷大小</label>
+        <div class="slider-container">
+          <input type="range" id="brush-size" min="2" max="30" value="8">
+          <span id="brush-size-value">8px</span>
+        </div>
+        <div id="brush-preview" class="brush-preview"></div>
+      </div>
+
+      <div class="tool-item">
+        <label for="ink-density">墨色浓淡</label>
+        <div class="slider-container">
+          <input type="range" id="ink-density" min="10" max="100" value="70">
+          <span id="ink-density-value">70%</span>
+        </div>
+      </div>
+
+      <button id="clear-btn" class="ink-btn">清除画布</button>
+    </div>
+
+    <button id="toggle-stats" class="toggle-btn">显/隐</button>
+
+    <div id="stats-panel" class="stats-panel hidden">
+      <div class="stats-title">墨色统计</div>
+      <div class="stats-item">
+        <span>平均浓度</span>
+        <span id="avg-density">0%</span>
+      </div>
+      <div class="stats-item">
+        <span>笔触总长</span>
+        <span id="total-length">0px</span>
+      </div>
+      <div class="stats-item">
+        <span>密度热力图</span>
+        <canvas id="heatmap" width="80" height="80"></canvas>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

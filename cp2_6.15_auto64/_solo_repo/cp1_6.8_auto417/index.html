@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>梦境速写</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&display=swap" rel="stylesheet" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body, #root {
+        width: 100%; min-height: 100vh;
+        background: linear-gradient(135deg, #0a0a2e 0%, #1a0a3e 40%, #2d0a4e 70%, #3a0a2e 100%);
+        font-family: 'Noto Serif SC', serif;
+        color: rgba(255,255,255,0.85);
+        overflow-x: hidden;
+      }
+      ::-webkit-scrollbar { width: 6px; }
+      ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+      ::-webkit-scrollbar-thumb { background: rgba(180,130,255,0.3); border-radius: 3px; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

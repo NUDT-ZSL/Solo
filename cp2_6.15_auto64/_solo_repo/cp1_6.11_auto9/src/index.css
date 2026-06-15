@@ -1,0 +1,138 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-warm: #F5E6C8;
+  --nav-brown: #3E2723;
+  --btn-wheat: #D4A373;
+  --btn-wheat-hover: #E0B97E;
+  --card-cream: #FFF8E7;
+  --text-brown: #3E2723;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  min-width: 320px;
+  font-family: 'Noto Serif SC', 'Georgia', serif;
+  background: var(--bg-warm);
+  color: var(--text-brown);
+  overflow: hidden;
+}
+
+.mapboxgl-map { font-family: inherit; }
+
+.sound-wave-marker {
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sound-wave-marker svg {
+  animation: waveAnim 1.2s ease-in-out infinite;
+}
+
+@keyframes waveAnim {
+  0%, 100% { transform: scaleY(0.5); }
+  50% { transform: scaleY(1); }
+}
+
+.marker-ripple {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid var(--btn-wheat);
+  animation: rippleOut 0.8s var(--ease) forwards;
+  pointer-events: none;
+}
+
+@keyframes rippleOut {
+  0% { transform: scale(0.5); opacity: 1; }
+  100% { transform: scale(3); opacity: 0; }
+}
+
+.sound-card-enter {
+  animation: cardSlideIn 0.3s var(--ease) forwards;
+}
+
+@keyframes cardSlideIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.btn-primary {
+  background: var(--btn-wheat);
+  color: var(--text-brown);
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s var(--ease), transform 0.15s var(--ease);
+}
+.btn-primary:hover {
+  background: var(--btn-wheat-hover);
+}
+.btn-primary:active {
+  transform: scale(0.97);
+}
+
+.navbar {
+  background: var(--nav-brown);
+  color: white;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  z-index: 100;
+  position: relative;
+}
+
+.card {
+  background: var(--card-cream);
+  border-radius: 16px;
+  box-shadow: rgba(0,0,0,0.1) 0px 4px 12px;
+}
+
+.scrollbar-thin::-webkit-scrollbar { width: 4px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(62,39,35,0.2); border-radius: 2px; }
+
+@media (max-width: 768px) {
+  .sound-card-responsive {
+    position: fixed !important;
+    bottom: 20px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: 95% !important;
+    max-height: 60vh !important;
+    z-index: 200 !important;
+  }
+}
+
+input, textarea, select {
+  font-family: inherit;
+  font-size: 14px;
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: 2px solid var(--btn-wheat);
+  outline-offset: 1px;
+}
+
+.tag-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 4px;
+}

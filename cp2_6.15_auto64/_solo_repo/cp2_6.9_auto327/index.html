@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>暗影裂痕</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #0D0515;
+      overflow: hidden;
+      font-family: 'Courier New', monospace;
+      touch-action: none;
+    }
+    #app {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0D0515;
+    }
+    #game-wrapper {
+      position: relative;
+      width: 900px;
+      height: 650px;
+      border-radius: 20px;
+      border: 2px solid #8A2BE2;
+      box-shadow: 0 0 20px rgba(138, 43, 226, 0.5);
+      overflow: hidden;
+    }
+    #game-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: default;
+    }
+    #ui-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    #energy-bar-wrap {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      width: 200px;
+      height: 12px;
+      background: #2D1B4E;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    #energy-bar {
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(90deg, #8A2BE2 0%, #FF00FF 100%);
+      border-radius: 6px;
+      transition: width 0.1s linear;
+    }
+    #energy-label {
+      position: absolute;
+      top: 2px;
+      left: 0;
+      width: 100%;
+      text-align: center;
+      font-size: 10px;
+      color: #FFFFFF;
+      line-height: 12px;
+    }
+    #timer {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      font-size: 20px;
+      color: #DDA0DD;
+      font-weight: bold;
+    }
+    #score-panel {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.9);
+      padding: 40px 60px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      text-align: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.4s ease;
+    }
+    #score-panel.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+      pointer-events: auto;
+    }
+    #score-title {
+      font-size: 28px;
+      color: #FFD700;
+      margin-bottom: 20px;
+      text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+    }
+    #score-value {
+      font-size: 48px;
+      color: #FF00FF;
+      font-weight: bold;
+      text-shadow: 0 0 15px rgba(255, 0, 255, 0.7);
+    }
+    #score-detail {
+      margin-top: 15px;
+      font-size: 14px;
+      color: #DDA0DD;
+      line-height: 1.8;
+    }
+    #restart-btn {
+      margin-top: 25px;
+      padding: 12px 40px;
+      background: linear-gradient(135deg, #8A2BE2 0%, #4B0082 100%);
+      border: 1px solid #FF00FF;
+      border-radius: 8px;
+      color: #FFFFFF;
+      font-size: 16px;
+      font-family: 'Courier New', monospace;
+      cursor: pointer;
+      pointer-events: auto;
+      transition: all 0.15s ease;
+    }
+    #restart-btn:hover {
+      filter: brightness(1.1);
+    }
+    #restart-btn:active {
+      transform: scale(0.95);
+    }
+    @media (max-width: 800px) {
+      #game-wrapper {
+        width: 100%;
+        height: 600px;
+        border-radius: 0;
+        border: none;
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="game-wrapper">
+      <canvas id="game-canvas"></canvas>
+      <div id="ui-overlay">
+        <div id="energy-bar-wrap">
+          <div id="energy-bar"></div>
+          <div id="energy-label">100 / 100</div>
+        </div>
+        <div id="timer">120s</div>
+        <div id="score-panel">
+          <div id="score-title">暗影终章</div>
+          <div id="score-value">0</div>
+          <div id="score-detail"></div>
+          <button id="restart-btn">重新开始</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

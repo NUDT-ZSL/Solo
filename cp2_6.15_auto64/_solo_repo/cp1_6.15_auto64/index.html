@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2D Wind Farm Simulator</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #37474F;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow: hidden;
+    }
+
+    #app-container {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #control-bar {
+      width: 600px;
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      padding: 8px 0;
+      background: #455A64;
+      border-radius: 8px 8px 0 0;
+    }
+
+    .ctrl-btn {
+      background: #66BB6A;
+      color: #fff;
+      border: none;
+      padding: 6px 18px;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: transform 0.15s ease;
+      font-family: inherit;
+    }
+
+    .ctrl-btn:active {
+      transform: scale(0.93);
+    }
+
+    .ctrl-btn:hover {
+      filter: brightness(1.1);
+      transform: scale(1.1);
+    }
+
+    #canvas-wrapper {
+      position: relative;
+      line-height: 0;
+    }
+
+    #mainCanvas {
+      display: block;
+      border-radius: 0 0 8px 8px;
+      cursor: crosshair;
+    }
+
+    #config-panel {
+      position: absolute;
+      top: 4px;
+      right: -260px;
+      width: 240px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+      padding: 16px;
+      transition: right 0.25s ease-out;
+      z-index: 10;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    #config-panel.open {
+      right: 8px;
+    }
+
+    #config-panel h3 {
+      margin-bottom: 12px;
+      font-size: 15px;
+      color: #37474F;
+      font-weight: 600;
+    }
+
+    .config-row {
+      margin-bottom: 10px;
+    }
+
+    .config-row label {
+      display: block;
+      font-size: 13px;
+      color: #607D8B;
+      margin-bottom: 4px;
+    }
+
+    .config-row input[type="range"] {
+      width: 100%;
+      accent-color: #66BB6A;
+    }
+
+    .config-row .value-display {
+      font-size: 12px;
+      color: #78909C;
+      text-align: right;
+    }
+
+    #tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: rgba(255,255,255,0.92);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: #37474F;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      white-space: nowrap;
+      display: none;
+      z-index: 20;
+    }
+  </style>
+</head>
+<body>
+  <div id="app-container">
+    <div id="control-bar">
+      <button class="ctrl-btn" id="btn-reset">重置布局</button>
+      <button class="ctrl-btn" id="btn-export">导出数据</button>
+    </div>
+    <div id="canvas-wrapper">
+      <canvas id="mainCanvas" width="600" height="400"></canvas>
+      <div id="config-panel">
+        <h3 id="panel-title">涡轮机 #1</h3>
+        <div class="config-row">
+          <label>叶片转速 (RPM)</label>
+          <input type="range" id="cfg-rpm" min="5" max="20" step="1" value="12" />
+          <div class="value-display" id="cfg-rpm-val">12 RPM</div>
+        </div>
+        <div class="config-row">
+          <label>初始风向角度</label>
+          <input type="range" id="cfg-wind" min="0" max="360" step="5" value="0" />
+          <div class="value-display" id="cfg-wind-val">0°</div>
+        </div>
+      </div>
+      <div id="tooltip"></div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

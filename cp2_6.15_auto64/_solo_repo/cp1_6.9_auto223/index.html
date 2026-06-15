@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D 迷幻万花筒</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(ellipse at 30% 25%, #1a0a2e 0%, #0d0520 40%, #050010 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #fff;
+    }
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+    .title {
+      position: absolute;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      z-index: 10;
+      pointer-events: none;
+      user-select: none;
+    }
+    .title h1 {
+      font-size: 28px;
+      font-weight: 300;
+      letter-spacing: 8px;
+      background: linear-gradient(90deg, #ff6ec7, #9b59ff, #6ec7ff, #ff6ec7);
+      background-size: 300% 100%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: titleShimmer 4s linear infinite;
+      text-shadow: 0 0 40px rgba(155, 89, 255, 0.3);
+    }
+    .title p {
+      margin-top: 8px;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.5);
+      letter-spacing: 2px;
+    }
+    @keyframes titleShimmer {
+      0% { background-position: 0% 50%; }
+      100% { background-position: 300% 50%; }
+    }
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+    }
+    #control-panel {
+      position: absolute;
+      left: 24px;
+      bottom: 24px;
+      z-index: 20;
+    }
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    .panel-label {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.6);
+      margin-bottom: 8px;
+      letter-spacing: 1px;
+    }
+    .btn-group {
+      display: flex;
+      gap: 8px;
+    }
+    .symmetry-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: rgba(255, 255, 255, 0.9);
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      letter-spacing: 0.5px;
+    }
+    .symmetry-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.3);
+      box-shadow: 0 4px 20px rgba(155, 89, 255, 0.25);
+    }
+    .symmetry-btn:active {
+      transform: scale(0.96);
+    }
+    .symmetry-btn.active {
+      background: linear-gradient(135deg, rgba(155, 89, 255, 0.4), rgba(255, 110, 199, 0.4));
+      border-color: rgba(255, 255, 255, 0.4);
+      box-shadow: 0 4px 20px rgba(155, 89, 255, 0.35);
+    }
+    .hints {
+      position: absolute;
+      right: 24px;
+      bottom: 24px;
+      z-index: 10;
+      pointer-events: none;
+      user-select: none;
+    }
+    .hints ul {
+      list-style: none;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.4);
+      line-height: 1.8;
+      text-align: right;
+    }
+    .hints li::before {
+      content: "✦ ";
+      color: rgba(155, 89, 255, 0.6);
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="title">
+      <h1>KALEIDOSCOPE</h1>
+      <p>3D 迷幻万花筒 · 算法艺术的秩序与混沌</p>
+    </div>
+    <div id="canvas-container"></div>
+    <div id="control-panel"></div>
+    <div class="hints">
+      <ul>
+        <li>拖拽旋转视角</li>
+        <li>滚轮缩放场景</li>
+        <li>点击触发光环</li>
+      </ul>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

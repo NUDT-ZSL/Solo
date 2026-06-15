@@ -1,0 +1,245 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&family=ZCOOL+QingKe+HuangYou&display=swap');
+
+:root {
+  --paper-color: #F5E6C8;
+  --ink-color: #2C1810;
+  --panel-bg: rgba(245, 230, 200, 0.65);
+  --panel-border: rgba(180, 160, 130, 0.35);
+  --accent-color: #8B4513;
+  --accent-hover: #A0522D;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--paper-color);
+  font-family: 'ZCOOL QingKe HuangYou', cursive, sans-serif;
+}
+
+.app-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.control-panel {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  width: 220px;
+  padding: 20px 18px;
+  background: var(--panel-bg);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  box-shadow:
+    0 8px 32px rgba(44, 24, 16, 0.12),
+    0 2px 8px rgba(44, 24, 16, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  z-index: 100;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+}
+
+.control-panel:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 12px 40px rgba(44, 24, 16, 0.15),
+    0 4px 12px rgba(44, 24, 16, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(180, 160, 130, 0.25);
+}
+
+.panel-icon {
+  color: var(--accent-color);
+  opacity: 0.8;
+}
+
+.panel-title {
+  font-family: 'ZCOOL XiaoWei', serif;
+  font-size: 20px;
+  color: var(--ink-color);
+  letter-spacing: 2px;
+}
+
+.panel-section {
+  margin-bottom: 16px;
+}
+
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: rgba(44, 24, 16, 0.7);
+  margin-bottom: 8px;
+  font-family: 'ZCOOL QingKe HuangYou', cursive;
+}
+
+.inline-icon {
+  opacity: 0.6;
+}
+
+.slider-value {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--accent-color);
+  font-weight: 500;
+}
+
+.font-selector {
+  display: flex;
+  gap: 6px;
+}
+
+.font-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 4px;
+  border: 1.5px solid rgba(180, 160, 130, 0.3);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: 'ZCOOL XiaoWei', serif;
+}
+
+.font-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(139, 69, 19, 0.4);
+  transform: translateY(-1px);
+}
+
+.font-btn-active {
+  background: rgba(139, 69, 19, 0.15);
+  border-color: var(--accent-color);
+  box-shadow: 0 2px 8px rgba(139, 69, 19, 0.2);
+}
+
+.font-btn-active .font-btn-label {
+  color: var(--accent-color);
+}
+
+.font-btn-label {
+  font-size: 15px;
+  color: var(--ink-color);
+  transition: color 0.3s ease;
+}
+
+.font-btn-desc {
+  font-size: 9px;
+  color: rgba(44, 24, 16, 0.45);
+  margin-top: 2px;
+  font-family: 'ZCOOL QingKe HuangYou', cursive;
+}
+
+.ink-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, rgba(44, 24, 16, 0.15), rgba(44, 24, 16, 0.5));
+  outline: none;
+  cursor: pointer;
+}
+
+.ink-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #C4A070, var(--accent-color));
+  box-shadow: 0 2px 6px rgba(44, 24, 16, 0.3);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ink-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 3px 10px rgba(44, 24, 16, 0.4);
+}
+
+.ink-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #C4A070, var(--accent-color));
+  box-shadow: 0 2px 6px rgba(44, 24, 16, 0.3);
+  cursor: pointer;
+  border: none;
+}
+
+.panel-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(180, 160, 130, 0.25);
+}
+
+.action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 9px 8px;
+  border: 1.5px solid rgba(180, 160, 130, 0.35);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--ink-color);
+  font-family: 'ZCOOL QingKe HuangYou', cursive;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.action-btn:hover {
+  transform: translateY(-1px);
+}
+
+.clear-btn:hover {
+  background: rgba(139, 69, 19, 0.1);
+  border-color: rgba(139, 69, 19, 0.5);
+  box-shadow: 0 3px 10px rgba(139, 69, 19, 0.12);
+}
+
+.export-btn:hover {
+  background: rgba(139, 69, 19, 0.2);
+  border-color: var(--accent-color);
+  box-shadow: 0 3px 10px rgba(139, 69, 19, 0.2);
+  color: var(--accent-color);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.control-panel {
+  animation: fadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}

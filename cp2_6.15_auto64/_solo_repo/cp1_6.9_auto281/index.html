@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>纸影迷踪 - 剪影故事剧场</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'FZSongti', 'SimSun', 'Songti SC', serif, sans-serif;
+    }
+
+    body {
+      background: 
+        repeating-linear-gradient(
+          45deg,
+          rgba(60, 55, 50, 0.03) 0px,
+          rgba(60, 55, 50, 0.03) 2px,
+          transparent 2px,
+          transparent 4px
+        ),
+        radial-gradient(ellipse at center, #3a3530 0%, #25201a 70%, #1a1612 100%);
+      position: relative;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .main-container {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      gap: 16px;
+      position: relative;
+    }
+
+    .character-rack {
+      width: 90px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 12px 8px;
+      background: rgba(40, 38, 35, 0.6);
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      overflow-y: auto;
+      backdrop-filter: blur(5px);
+    }
+
+    .character-card {
+      width: 60px;
+      height: 80px;
+      margin: 0 auto;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: grab;
+      transition: all 0.2s ease;
+      user-select: none;
+      position: relative;
+    }
+
+    .character-card:hover {
+      transform: scale(1.1);
+      background: rgba(255, 255, 255, 0.12);
+      box-shadow: 0 0 15px rgba(255, 200, 120, 0.3);
+      border-color: rgba(255, 200, 120, 0.4);
+    }
+
+    .character-card:active {
+      cursor: grabbing;
+    }
+
+    .character-card svg {
+      width: 42px;
+      height: 56px;
+      pointer-events: none;
+    }
+
+    .character-name {
+      position: absolute;
+      bottom: 2px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .stage-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .stage-container {
+      flex: 1;
+      width: 100%;
+      position: relative;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 
+        inset 2px 2px 6px rgba(0, 0, 0, 0.3),
+        0 4px 20px rgba(0, 0, 0, 0.4);
+      background: linear-gradient(135deg, #2a2a2a 0%, #5a5a5a 100%);
+    }
+
+    #stage-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .subtitle-bar {
+      width: 80%;
+      height: 60px;
+      margin: 0 auto;
+      background: rgba(20, 18, 16, 0.85);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 30px;
+      backdrop-filter: blur(8px);
+      flex-shrink: 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #subtitle-text {
+      color: #ffffff;
+      font-size: 18px;
+      letter-spacing: 2px;
+      text-align: center;
+      line-height: 1.4;
+      min-height: 1.4em;
+    }
+
+    #subtitle-text::after {
+      content: '|';
+      display: inline-block;
+      animation: blink 0.8s infinite;
+      margin-left: 2px;
+      opacity: 0.7;
+    }
+
+    @keyframes blink {
+      0%, 50% { opacity: 0.7; }
+      51%, 100% { opacity: 0; }
+    }
+
+    .toolbar {
+      width: 160px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 16px 12px;
+      background: rgba(40, 38, 35, 0.6);
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(5px);
+    }
+
+    .toolbar-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toolbar-label {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.6);
+      margin-bottom: 4px;
+    }
+
+    .color-picker-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #hue-slider {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 20px;
+      border-radius: 10px;
+      background: linear-gradient(to right, 
+        hsl(0, 40%, 35%),
+        hsl(60, 40%, 35%),
+        hsl(120, 40%, 35%),
+        hsl(180, 40%, 35%),
+        hsl(240, 40%, 35%),
+        hsl(300, 40%, 35%),
+        hsl(360, 40%, 35%)
+      );
+      outline: none;
+      cursor: pointer;
+    }
+
+    #hue-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: white;
+      border: 2px solid #333;
+      cursor: pointer;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
+
+    .toggle-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px;
+      border-radius: 6px;
+      background: transparent;
+      transition: background 0.2s ease;
+      cursor: pointer;
+    }
+
+    .toggle-wrapper:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .toggle-wrapper:active {
+      transform: scale(0.98);
+    }
+
+    .toggle-switch {
+      width: 40px;
+      height: 22px;
+      border-radius: 11px;
+      background: rgba(255, 255, 255, 0.15);
+      position: relative;
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .toggle-switch.active {
+      background: rgba(100, 255, 150, 0.4);
+    }
+
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: white;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    .toggle-switch.active::after {
+      left: 20px;
+      background: #6aff96;
+    }
+
+    .toggle-label {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.8);
+      flex: 1;
+    }
+
+    .btn {
+      padding: 10px 14px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: transparent;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+      width: 100%;
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .btn:active {
+      transform: scale(0.95);
+      transition: transform 0.1s ease;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, rgba(255, 180, 80, 0.3), rgba(255, 140, 80, 0.3));
+      border-color: rgba(255, 180, 80, 0.4);
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, rgba(255, 180, 80, 0.45), rgba(255, 140, 80, 0.45));
+      box-shadow: 0 0 12px rgba(255, 180, 80, 0.2);
+    }
+
+    .dialog-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .dialog-overlay.visible {
+      display: flex;
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .dialog-box {
+      background: hsla(240, 30%, 25%, 0.7);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 24px;
+      width: 420px;
+      max-width: 90%;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    .dialog-title {
+      font-size: 16px;
+      color: white;
+      margin-bottom: 16px;
+      letter-spacing: 1px;
+    }
+
+    .dialog-input {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(0, 0, 0, 0.25);
+      color: white;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s ease;
+      resize: none;
+      min-height: 80px;
+    }
+
+    .dialog-input:focus {
+      border-color: rgba(255, 200, 120, 0.6);
+    }
+
+    .dialog-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 18px;
+      justify-content: flex-end;
+    }
+
+    .dialog-actions .btn {
+      width: auto;
+      padding: 8px 20px;
+    }
+
+    .hint-bar {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.4);
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.6);
+      backdrop-filter: blur(4px);
+      pointer-events: none;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="main-container">
+      <aside class="character-rack" id="character-rack"></aside>
+
+      <div class="stage-wrapper">
+        <div class="stage-container">
+          <canvas id="stage-canvas"></canvas>
+          <div class="hint-bar" id="hint-bar">
+            从左侧拖拽角色到舞台 · 滚轮缩放 · 拖动旋转 · 双击连线添加对白 · Ctrl+Z 撤销
+          </div>
+        </div>
+        <div class="subtitle-bar">
+          <span id="subtitle-text"></span>
+        </div>
+      </div>
+
+      <aside class="toolbar">
+        <div class="toolbar-section">
+          <div class="toolbar-label">舞台背景</div>
+          <div class="color-picker-wrapper">
+            <input type="range" id="hue-slider" min="0" max="360" value="0" />
+          </div>
+        </div>
+
+        <div class="toolbar-section">
+          <div class="toggle-wrapper" id="glow-toggle">
+            <div class="toggle-switch" id="glow-switch"></div>
+            <span class="toggle-label">夜光模式</span>
+          </div>
+        </div>
+
+        <div class="toolbar-section">
+          <button class="btn btn-primary" id="export-btn">导出故事板</button>
+        </div>
+
+        <div class="toolbar-section">
+          <button class="btn" id="undo-btn">↶ 撤销 (Ctrl+Z)</button>
+          <button class="btn" id="redo-btn">↷ 重做 (Ctrl+Y)</button>
+          <button class="btn" id="clear-btn">清空舞台</button>
+        </div>
+      </aside>
+    </div>
+
+    <div class="dialog-overlay" id="dialog-overlay">
+      <div class="dialog-box">
+        <div class="dialog-title">✦ 输入角色对白 ✦</div>
+        <textarea class="dialog-input" id="dialog-input" placeholder="请输入这句对白..."></textarea>
+        <div class="dialog-actions">
+          <button class="btn" id="dialog-cancel">取消</button>
+          <button class="btn btn-primary" id="dialog-confirm">确认</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

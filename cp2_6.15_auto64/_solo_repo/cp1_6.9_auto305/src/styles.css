@@ -1,0 +1,300 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  min-width: 800px;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  color: #ffffff;
+  user-select: none;
+  background: linear-gradient(180deg, #0a0a2e 0%, #1a1a3e 100%);
+}
+
+#canvas-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+#canvas-container canvas {
+  display: block;
+  cursor: default;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0.5;
+    box-shadow: 0 0 20px rgba(68, 102, 255, 0.15),
+                inset 0 0 30px rgba(68, 102, 255, 0.05);
+  }
+  50% {
+    opacity: 0.8;
+    box-shadow: 0 0 40px rgba(68, 102, 255, 0.35),
+                inset 0 0 50px rgba(68, 102, 255, 0.1);
+  }
+}
+
+@keyframes text-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.control-panel {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: 240px;
+  padding: 24px 20px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(68, 102, 255, 0.4);
+  animation: pulse-glow 4s ease-in-out infinite;
+}
+
+.left-panel {
+  left: 24px;
+}
+
+.right-panel {
+  right: 24px;
+}
+
+.panel-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  text-align: center;
+  letter-spacing: 3px;
+  background: linear-gradient(90deg, #6688ff, #aa88ff, #66aaff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: text-pulse 3s ease-in-out infinite;
+}
+
+.stat-item {
+  margin-bottom: 20px;
+}
+
+.stat-item:last-child {
+  margin-bottom: 0;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 8px;
+  letter-spacing: 1px;
+}
+
+.stat-value {
+  font-size: 13px;
+  font-weight: 500;
+  color: #aac8ff;
+  text-align: right;
+  margin-top: 4px;
+}
+
+.stat-value.big {
+  font-size: 28px;
+  font-weight: 700;
+  text-align: center;
+  color: #ffffff;
+  text-shadow: 0 0 20px rgba(68, 102, 255, 0.8);
+  letter-spacing: 2px;
+  margin-top: 8px;
+  animation: text-pulse 2.5s ease-in-out infinite;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #ff4444, #ffaa44, #ffff44, #44ff44, #44aaff);
+  border-radius: 4px;
+  transition: width 0.1s ease-out;
+  box-shadow: 0 0 10px rgba(255, 170, 68, 0.6);
+}
+
+.hue-dial {
+  width: 120px;
+  height: 120px;
+  margin: 12px auto;
+  position: relative;
+}
+
+.dial-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    hsl(0, 80%, 60%),
+    hsl(30, 80%, 60%),
+    hsl(60, 80%, 60%),
+    hsl(90, 80%, 60%),
+    hsl(120, 80%, 60%),
+    hsl(150, 80%, 60%),
+    hsl(180, 80%, 60%),
+    hsl(210, 80%, 60%),
+    hsl(240, 80%, 60%),
+    hsl(270, 80%, 60%),
+    hsl(300, 80%, 60%),
+    hsl(330, 80%, 60%),
+    hsl(360, 80%, 60%)
+  );
+  mask: radial-gradient(transparent 40px, black 42px);
+  -webkit-mask: radial-gradient(transparent 40px, black 42px);
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+.dial-pointer {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 3px;
+  height: 50%;
+  margin-left: -1.5px;
+  transform-origin: 50% 100%;
+  pointer-events: none;
+}
+
+.dial-pointer::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 10px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.9),
+              0 0 24px rgba(68, 102, 255, 0.6);
+}
+
+.dial-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(10, 10, 46, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+  border: 1px solid rgba(68, 102, 255, 0.5);
+  text-shadow: 0 0 8px rgba(68, 102, 255, 0.8);
+  animation: text-pulse 2s ease-in-out infinite;
+}
+
+.reset-btn {
+  display: block;
+  margin: 20px auto 0;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: rgba(68, 102, 255, 0.2);
+  border: 2px solid rgba(68, 102, 255, 0.6);
+  color: #88aaff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  animation: pulse-glow 3.5s ease-in-out infinite;
+}
+
+.reset-btn:hover {
+  background: rgba(68, 102, 255, 0.4);
+  color: #ffffff;
+  border-color: rgba(120, 150, 255, 0.9);
+  transform: scale(1.08);
+}
+
+.reset-btn:active {
+  transform: scale(0.95);
+}
+
+.hint-text {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  padding: 10px 28px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(68, 102, 255, 0.3);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.75);
+  letter-spacing: 1px;
+  white-space: nowrap;
+  animation: pulse-glow 5s ease-in-out infinite;
+}
+
+@media (max-width: 1100px) {
+  .control-panel {
+    width: 200px;
+    padding: 18px 14px;
+  }
+
+  .left-panel { left: 14px; }
+  .right-panel { right: 14px; }
+
+  .panel-title {
+    font-size: 14px;
+    letter-spacing: 2px;
+    margin-bottom: 14px;
+  }
+
+  .hue-dial {
+    width: 100px;
+    height: 100px;
+  }
+
+  .dial-center {
+    width: 52px;
+    height: 52px;
+    font-size: 13px;
+  }
+
+  .dial-ring {
+    mask: radial-gradient(transparent 32px, black 34px);
+    -webkit-mask: radial-gradient(transparent 32px, black 34px);
+  }
+
+  .stat-value.big {
+    font-size: 22px;
+  }
+}

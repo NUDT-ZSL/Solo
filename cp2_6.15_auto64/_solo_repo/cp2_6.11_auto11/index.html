@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>墨影书道 - 交互式书法创作</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #F5E6CA;
+      color: #3E2723;
+    }
+
+    body {
+      background-color: #F5E6CA;
+      background-image:
+        radial-gradient(circle at 20% 30%, rgba(232, 216, 184, 0.6) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(232, 216, 184, 0.4) 0%, transparent 50%),
+        url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.08'/%3E%3C/svg%3E");
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 24px;
+      border-bottom: 1px solid rgba(62, 39, 35, 0.1);
+      background: rgba(245, 230, 202, 0.7);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    .header h1 {
+      font-family: 'Ma Shan Zheng', cursive;
+      font-size: 24px;
+      color: #3E2723;
+      letter-spacing: 4px;
+    }
+
+    .main-container {
+      flex: 1;
+      display: flex;
+      position: relative;
+      overflow: hidden;
+      padding: 24px;
+      gap: 24px;
+    }
+
+    .canvas-wrapper {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .canvas-container {
+      position: relative;
+      max-width: 900px;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      background: #FAF0DC;
+      border-radius: 8px;
+      box-shadow: 0 4px 24px rgba(62, 39, 35, 0.15);
+      overflow: hidden;
+    }
+
+    #mainCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+      touch-action: none;
+    }
+
+    #textureLayer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .toolbar {
+      width: 240px;
+      background: rgba(255, 248, 232, 0.75);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      height: fit-content;
+      max-height: calc(100vh - 180px);
+      overflow-y: auto;
+    }
+
+    .toolbar-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #3E2723;
+      opacity: 0.8;
+      margin-bottom: 4px;
+    }
+
+    .size-control {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .size-slider {
+      width: 100%;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(62, 39, 35, 0.15);
+      border-radius: 3px;
+      outline: none;
+    }
+
+    .size-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #3E2723;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .size-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .size-value {
+      font-size: 12px;
+      color: #3E2723;
+      opacity: 0.7;
+      text-align: right;
+    }
+
+    .color-palette {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .color-dot {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+      position: relative;
+    }
+
+    .color-dot:hover {
+      transform: scale(1.1);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .color-dot.active {
+      border-color: #3E2723;
+      box-shadow: 0 0 0 2px rgba(62, 39, 35, 0.2);
+    }
+
+    .texture-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .texture-btn {
+      padding: 10px 14px;
+      border: 1px solid rgba(62, 39, 35, 0.2);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.5);
+      color: #3E2723;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .texture-btn:hover {
+      transform: scale(1.02);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      background: rgba(255, 255, 255, 0.8);
+    }
+
+    .texture-btn.active {
+      background: #3E2723;
+      color: #FAF0DC;
+      border-color: #3E2723;
+    }
+
+    .action-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .action-btn {
+      padding: 10px;
+      border: 1px solid rgba(62, 39, 35, 0.2);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.5);
+      color: #3E2723;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .action-btn:hover:not(:disabled) {
+      transform: scale(1.05);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      background: rgba(255, 255, 255, 0.8);
+    }
+
+    .action-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .export-btn {
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #1A237E 0%, #1B5E20 100%);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .export-btn:hover {
+      transform: scale(1.03);
+      box-shadow: 0 4px 12px rgba(26, 35, 126, 0.3);
+    }
+
+    .status-bar {
+      height: 48px;
+      background: rgba(255, 248, 232, 0.75);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-top: 1px solid rgba(62, 39, 35, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+      padding: 0 24px;
+      position: relative;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #3E2723;
+      opacity: 0.85;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 1px solid rgba(62, 39, 35, 0.3);
+    }
+
+    .history-progress {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #1A237E 0%, #1B5E20 100%);
+      transition: width 0.3s ease;
+      border-radius: 0 2px 0 0;
+    }
+
+    .mobile-toggle {
+      display: none;
+      position: fixed;
+      bottom: 60px;
+      right: 20px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #3E2723;
+      color: #FAF0DC;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      z-index: 100;
+      transition: transform 0.2s;
+    }
+
+    .mobile-toggle:hover {
+      transform: scale(1.1);
+    }
+
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal {
+      background: #FAF0DC;
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 480px;
+      width: 90%;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-title {
+      font-family: 'Ma Shan Zheng', cursive;
+      font-size: 20px;
+      color: #3E2723;
+      margin-bottom: 20px;
+    }
+
+    .preview-container {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 20px;
+      border: 1px solid rgba(62, 39, 35, 0.1);
+    }
+
+    .preview-container canvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    .export-options {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .option-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .option-label {
+      font-size: 13px;
+      color: #3E2723;
+      font-weight: 600;
+    }
+
+    .option-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .option-btn {
+      padding: 8px 16px;
+      border: 1px solid rgba(62, 39, 35, 0.2);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.6);
+      color: #3E2723;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .option-btn:hover {
+      background: rgba(255, 255, 255, 0.9);
+    }
+
+    .option-btn.active {
+      background: #3E2723;
+      color: #FAF0DC;
+      border-color: #3E2723;
+    }
+
+    .modal-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+
+    .modal-btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .modal-btn.cancel {
+      background: rgba(62, 39, 35, 0.1);
+      color: #3E2723;
+    }
+
+    .modal-btn.cancel:hover {
+      background: rgba(62, 39, 35, 0.2);
+    }
+
+    .modal-btn.confirm {
+      background: linear-gradient(135deg, #1A237E 0%, #1B5E20 100%);
+      color: #fff;
+    }
+
+    .modal-btn.confirm:hover {
+      transform: scale(1.03);
+      box-shadow: 0 4px 12px rgba(26, 35, 126, 0.3);
+    }
+
+    .modal-btn.confirm:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 768px) {
+      .main-container {
+        flex-direction: column;
+        padding: 12px;
+        gap: 12px;
+      }
+
+      .toolbar {
+        position: fixed;
+        bottom: -100%;
+        left: 0;
+        right: 0;
+        width: 100%;
+        max-height: 70vh;
+        border-radius: 16px 16px 0 0;
+        transition: bottom 0.3s ease;
+        z-index: 50;
+        padding: 20px;
+      }
+
+      .toolbar.open {
+        bottom: 48px;
+      }
+
+      .mobile-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .status-bar {
+        gap: 16px;
+        flex-wrap: wrap;
+        padding: 8px 16px;
+        height: auto;
+        min-height: 48px;
+      }
+
+      .header h1 {
+        font-size: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <h1>墨影书道</h1>
+    </header>
+
+    <div class="main-container">
+      <div class="canvas-wrapper">
+        <div class="canvas-container">
+          <canvas id="textureLayer"></canvas>
+          <canvas id="mainCanvas"></canvas>
+        </div>
+      </div>
+
+      <aside class="toolbar" id="toolbar">
+        <div class="toolbar-section">
+          <div class="section-title">笔刷大小</div>
+          <div class="size-control">
+            <input type="range" class="size-slider" id="sizeSlider" min="1" max="50" value="10">
+            <div class="size-value" id="sizeValue">10 px</div>
+          </div>
+        </div>
+
+        <div class="toolbar-section">
+          <div class="section-title">墨色选择</div>
+          <div class="color-palette" id="colorPalette">
+            <div class="color-dot active" data-color="#1A1A1A" style="background:#1A1A1A" title="浓墨"></div>
+            <div class="color-dot" data-color="#5A5A5A" style="background:#5A5A5A" title="淡墨"></div>
+            <div class="color-dot" data-color="#C04040" style="background:#C04040" title="朱砂"></div>
+            <div class="color-dot" data-color="#2E6B8A" style="background:#2E6B8A" title="石青"></div>
+          </div>
+        </div>
+
+        <div class="toolbar-section">
+          <div class="section-title">宣纸纹理</div>
+          <div class="texture-buttons" id="textureButtons">
+            <button class="texture-btn active" data-texture="plain">单宣</button>
+            <button class="texture-btn" data-texture="gold">洒金</button>
+            <button class="texture-btn" data-texture="cloud">云龙纸</button>
+          </div>
+        </div>
+
+        <div class="toolbar-section">
+          <div class="section-title">操作</div>
+          <div class="action-buttons">
+            <button class="action-btn" id="undoBtn" disabled>
+              <span>↶</span> 撤销
+            </button>
+            <button class="action-btn" id="redoBtn" disabled>
+              <span>↷</span> 重做
+            </button>
+            <button class="action-btn" id="clearBtn">
+              <span>✕</span> 清空
+            </button>
+            <button class="action-btn" id="resetBtn">
+              <span>↺</span> 重置
+            </button>
+          </div>
+        </div>
+
+        <div class="toolbar-section">
+          <button class="export-btn" id="exportBtn">
+            导出作品
+          </button>
+        </div>
+      </aside>
+
+      <button class="mobile-toggle" id="mobileToggle">☰</button>
+    </div>
+
+    <footer class="status-bar">
+      <div class="status-item">
+        <span>笔触：</span>
+        <span id="statusWidth">10</span><span>px</span>
+      </div>
+      <div class="status-item">
+        <span>墨色：</span>
+        <span class="status-dot" id="statusColor" style="background:#1A1A1A"></span>
+        <span id="statusColorName">浓墨</span>
+      </div>
+      <div class="status-item">
+        <span>纹理：</span>
+        <span id="statusTexture">单宣</span>
+      </div>
+      <div class="status-item">
+        <span>撤销步数：</span>
+        <span id="statusHistory">0 / 50</span>
+      </div>
+      <div class="history-progress" id="historyProgress" style="width:0%"></div>
+    </footer>
+
+    <div class="modal-overlay" id="exportModal">
+      <div class="modal">
+        <div class="modal-title">导出预览</div>
+        <div class="preview-container">
+          <canvas id="previewCanvas"></canvas>
+        </div>
+        <div class="export-options">
+          <div class="option-group">
+            <div class="option-label">导出格式</div>
+            <div class="option-buttons" id="formatButtons">
+              <button class="option-btn active" data-format="png">PNG (位图)</button>
+              <button class="option-btn" data-format="svg">SVG (矢量)</button>
+            </div>
+          </div>
+          <div class="option-group" id="resolutionGroup">
+            <div class="option-label">分辨率</div>
+            <div class="option-buttons" id="resolutionButtons">
+              <button class="option-btn" data-scale="1">1x (1024×768)</button>
+              <button class="option-btn" data-scale="2">2x (2048×1536)</button>
+              <button class="option-btn active" data-scale="4">4x (4096×3072)</button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button class="modal-btn cancel" id="cancelExport">取消</button>
+          <button class="modal-btn confirm" id="confirmExport">
+            <span class="loading-spinner" id="exportSpinner" style="display:none"></span>
+            <span id="exportBtnText">确认下载</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

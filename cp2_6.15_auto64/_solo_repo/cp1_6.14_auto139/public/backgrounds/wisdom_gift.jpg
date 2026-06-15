@@ -1,0 +1,12 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="30%" y2="100%">
+      <stop offset="0%" style="stop-color:#2a1a5a"/>
+      <stop offset="100%" style="stop-color:#4a3a7a"/>
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+<circle cx="960" cy="500" r="100" fill="#4a2a6a" opacity="0.3"/>
+<circle cx="960" cy="500" r="50" fill="#6a4a8a" opacity="0.2"/>
+<polygon points="960,400 920,500 1000,500" fill="#5a3a7a" opacity="0.3"/>
+</svg>

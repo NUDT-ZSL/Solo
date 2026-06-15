@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>量子折纸</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: radial-gradient(ellipse at center, #16213e 0%, #1a1a2e 100%);
+    }
+
+    #app {
+      display: flex;
+      width: 100%;
+      height: 100%;
+    }
+
+    #scene-container {
+      width: 70%;
+      height: 100%;
+      position: relative;
+    }
+
+    #scene-container canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #ui-panel {
+      width: 30%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-left: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 24px;
+      overflow-y: auto;
+      color: #e0e0e0;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    #ui-panel h2 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: #ffffff;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    #ui-panel h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #aab4d0;
+      margin-bottom: 8px;
+    }
+
+    .panel-section {
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 20px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #e0e0e0;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s ease-in-out;
+      user-select: none;
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.35);
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn.active {
+      background: rgba(255, 182, 193, 0.3);
+      border-color: #FFB6C1;
+      color: #FFB6C1;
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .progress-bar-container {
+      width: 100%;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #FFB6C1, #FFD700);
+      border-radius: 4px;
+      transition: width 0.5s ease-in-out;
+    }
+
+    .progress-text {
+      font-size: 13px;
+      color: #aab4d0;
+      margin-top: 4px;
+    }
+
+    .creature-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .creature-card {
+      aspect-ratio: 1;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.3s ease-in-out;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .creature-card:hover {
+      border-color: rgba(255, 215, 0, 0.4);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .creature-card.locked {
+      opacity: 0.35;
+      cursor: default;
+    }
+
+    .creature-card.locked:hover {
+      border-color: rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .creature-card canvas {
+      width: 80%;
+      height: 80%;
+    }
+
+    .creature-name {
+      font-size: 12px;
+      color: #aab4d0;
+      margin-top: 4px;
+    }
+
+    .creature-card.unlocked .creature-name {
+      color: #FFD700;
+    }
+
+    .flash-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: white;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 9999;
+      transition: opacity 0.3s ease-in-out;
+    }
+
+    .flash-overlay.active {
+      opacity: 0.6;
+    }
+
+    #loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(ellipse at center, #16213e 0%, #1a1a2e 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      transition: opacity 0.5s ease-in-out;
+    }
+
+    #loading-screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loading-title {
+      font-size: 36px;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: 6px;
+      margin-bottom: 32px;
+    }
+
+    .loading-spinner {
+      width: 48px;
+      height: 48px;
+      border: 3px solid rgba(255, 255, 255, 0.15);
+      border-top-color: #FFD700;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .instructions {
+      font-size: 13px;
+      color: rgba(255,255,255,0.5);
+      line-height: 1.6;
+      margin-top: 12px;
+    }
+
+    @media (max-width: 768px) {
+      #app {
+        flex-direction: column;
+      }
+
+      #scene-container {
+        width: 100%;
+        height: calc(100% - 100px);
+      }
+
+      #ui-panel {
+        width: 100%;
+        height: 100px;
+        flex-direction: row;
+        align-items: center;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 8px 16px;
+        gap: 12px;
+        border-left: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.15);
+      }
+
+      .panel-section {
+        min-width: max-content;
+        padding: 8px 12px;
+      }
+
+      .creature-grid {
+        grid-template-columns: repeat(3, 60px);
+      }
+
+      .creature-card {
+        width: 60px;
+        height: 60px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="loading-screen">
+    <div class="loading-title">量子折纸</div>
+    <div class="loading-spinner"></div>
+  </div>
+
+  <div id="app">
+    <div id="scene-container"></div>
+    <div id="ui-panel">
+      <div class="panel-section">
+        <h3>操作模式</h3>
+        <div class="btn-row">
+          <button class="btn active" id="btn-fold">折叠模式</button>
+          <button class="btn" id="btn-snap">拼接模式</button>
+        </div>
+        <div class="instructions" id="mode-hint">点击纸片上的折叠线进行折叠</div>
+      </div>
+
+      <div class="panel-section">
+        <h3>纸片操作</h3>
+        <div class="btn-row">
+          <button class="btn" id="btn-add-paper">添加纸片</button>
+          <button class="btn" id="btn-reset">重置场景</button>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h3>收集进度</h3>
+        <div class="progress-bar-container">
+          <div class="progress-bar-fill" id="progress-fill" style="width: 0%"></div>
+        </div>
+        <div class="progress-text" id="progress-text">0 / 3 已解锁</div>
+      </div>
+
+      <div class="panel-section">
+        <h3>生物图鉴</h3>
+        <div class="creature-grid" id="creature-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flash-overlay" id="flash-overlay"></div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

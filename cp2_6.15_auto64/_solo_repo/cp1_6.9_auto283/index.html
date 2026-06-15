@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>磁轨甲虫 - Magnetic Beetle</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(180deg, 
+        hsl(240, 50%, 8%) 0%, 
+        hsl(270, 50%, 12%) 50%, 
+        hsl(300, 50%, 10%) 100%);
+      font-family: 'Microsoft YaHei', sans-serif;
+    }
+
+    #game-container {
+      width: 100%;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #game-container canvas {
+      border: 2px solid rgba(140, 120, 200, 0.3);
+      box-shadow: 0 0 40px rgba(140, 120, 200, 0.4);
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>参数化塔楼生成器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #1A202C;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    }
+    #app {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      position: relative;
+    }
+    #canvas-container {
+      flex: 1;
+      width: 75%;
+      height: 100%;
+      position: relative;
+    }
+    #canvas-container canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #control-panel {
+      width: 25%;
+      min-width: 240px;
+      height: 100%;
+      background: #2D3748;
+      border-radius: 16px 0 0 16px;
+      padding: 20px;
+      overflow-y: auto;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .panel-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+    .section-label {
+      font-size: 13px;
+      color: #A0AEC0;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: #E2E8F0;
+    }
+    .slider-value {
+      background: #4A5568;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      background: #4A5568;
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #4299E1;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      background: #63B3ED;
+    }
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .tab-btn {
+      padding: 6px 14px;
+      border: 1px solid #4A5568;
+      background: transparent;
+      color: #A0AEC0;
+      border-radius: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: #4299E1;
+      color: #fff;
+      border-color: #4299E1;
+    }
+    .tab-btn:hover:not(.active) {
+      border-color: #63B3ED;
+      color: #E2E8F0;
+    }
+    .style-group {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .style-btn {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid #fff;
+      background: transparent;
+      color: #fff;
+      border-radius: 999px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+    .style-btn.active {
+      background: #4299E1;
+      border-color: #4299E1;
+    }
+    .style-btn:hover:not(.active) {
+      border-color: #63B3ED;
+      color: #63B3ED;
+    }
+    .sim-btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #3182CE, #4299E1);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .sim-btn:hover {
+      background: linear-gradient(135deg, #4299E1, #63B3ED);
+      box-shadow: 0 4px 12px rgba(66, 153, 225, 0.4);
+    }
+    .sim-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .displacement-display {
+      margin-top: 10px;
+      padding: 12px;
+      background: #1A202C;
+      border-radius: 8px;
+      text-align: center;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .displacement-value {
+      font-size: 14px;
+      color: #E2E8F0;
+      font-family: 'SF Mono', 'Consolas', monospace;
+    }
+    .mobile-header {
+      display: none;
+      width: 100%;
+      height: 60px;
+      background: #2D3748;
+      padding: 0 20px;
+      align-items: center;
+      justify-content: space-between;
+      color: #fff;
+      cursor: pointer;
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 100;
+    }
+    .mobile-header-title {
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .mobile-menu-btn {
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 24px;
+      cursor: pointer;
+    }
+    .drawer-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 99;
+    }
+    .drawer-overlay.active {
+      display: block;
+    }
+    @media (max-width: 768px) {
+      #app {
+        flex-direction: column;
+      }
+      #canvas-container {
+        width: 100%;
+        height: calc(100% - 60px);
+        position: absolute;
+        top: 60px;
+        left: 0;
+      }
+      #control-panel {
+        position: fixed;
+        top: 0;
+        right: -100%;
+        width: 85%;
+        max-width: 360px;
+        height: 100%;
+        border-radius: 0;
+        z-index: 101;
+        transition: right 0.3s ease;
+      }
+      #control-panel.active {
+        right: 0;
+      }
+      .mobile-header {
+        display: flex;
+      }
+    }
+    .divider {
+      height: 1px;
+      background: #4A5568;
+      margin: 8px 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="mobile-header" id="mobile-header">
+      <span class="mobile-header-title">参数化塔楼生成器</span>
+      <button class="mobile-menu-btn" id="menu-toggle">☰</button>
+    </div>
+    <div class="drawer-overlay" id="drawer-overlay"></div>
+    <div id="canvas-container"></div>
+    <div id="control-panel">
+      <div class="panel-title">参数化塔楼生成器</div>
+      <div class="divider"></div>
+
+      <div>
+        <div class="section-label">层数</div>
+        <div class="slider-group">
+          <div class="slider-header">
+            <span>总层数</span>
+            <span class="slider-value" id="floor-count-value">4</span>
+          </div>
+          <input type="range" id="floor-count" min="3" max="6" value="4" step="1" />
+        </div>
+      </div>
+
+      <div>
+        <div class="section-label">楼层参数</div>
+        <div class="tabs" id="floor-tabs"></div>
+        <div id="floor-sliders"></div>
+      </div>
+
+      <div>
+        <div class="section-label">建筑风格</div>
+        <div class="style-group">
+          <button class="style-btn active" data-style="classic">经典方形塔</button>
+          <button class="style-btn" data-style="spiral">螺旋锥塔</button>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div>
+        <button class="sim-btn" id="wind-btn">施加风荷载</button>
+        <div class="displacement-display">
+          <span class="displacement-value" id="displacement-text">位移：0.0 mm</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>星际拓荒 · Stellar Pioneer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #050514;
+      cursor: crosshair;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    canvas {
+      display: block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      box-shadow: 0 0 80px rgba(120, 80, 255, 0.15);
+    }
+    .hint {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255, 230, 150, 0.55);
+      font-size: 12px;
+      letter-spacing: 1.5px;
+      user-select: none;
+      pointer-events: none;
+      text-shadow: 0 0 8px rgba(255, 200, 80, 0.3);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div class="hint">鼠标移动操控星舰 · 左移拉伸采集 · 右移喷射加速 · 空格键刷新矿物</div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "name": "phantom-maze",
+  "version": "1.0.0",
+  "description": "幻象迷宫 - 赛博幻境风格动态迷宫探索游戏",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vite": "^5.2.0"
+  },
+  "dependencies": {
+    "phaser": "^3.80.0"
+  }
+}

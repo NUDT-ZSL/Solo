@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>动态天气效果切换</title>
+  <style>
+    :root {
+      --bg-start: #87CEEB;
+      --bg-end: #FFD700;
+      --accent-color: #FFA500;
+      --ui-bg: rgba(255, 255, 255, 0.2);
+      --ui-border: rgba(255, 255, 255, 0.3);
+      --text-color: #333;
+      --transition-duration: 1s;
+      --flash-overlay: rgba(0, 0, 0, 0);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    body {
+      background: linear-gradient(180deg, var(--bg-start) 0%, var(--bg-end) 100%);
+      transition: background var(--transition-duration) ease;
+      position: relative;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--flash-overlay);
+      pointer-events: none;
+      z-index: 5;
+      transition: background 0.03s linear;
+      mix-blend-mode: screen;
+    }
+
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    #weather-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .ui-overlay {
+      position: fixed;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .ui-overlay > * {
+      pointer-events: auto;
+    }
+
+    /* 顶部滑块区域 */
+    .slider-container {
+      top: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      padding: 12px 24px;
+      background: var(--ui-bg);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid var(--ui-border);
+      border-radius: 30px;
+    }
+
+    .slider-label {
+      color: var(--text-color);
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .slider-value {
+      color: var(--accent-color);
+      font-size: 14px;
+      font-weight: 600;
+      min-width: 50px;
+      text-align: center;
+    }
+
+    #density-slider {
+      width: 200px;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    #density-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      background: var(--accent-color);
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      transition: transform 0.2s ease;
+    }
+
+    #density-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    #density-slider::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      background: var(--accent-color);
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    /* 右上角信息面板 */
+    .info-panel {
+      top: 30px;
+      right: 30px;
+      padding: 20px 28px;
+      background: var(--ui-bg);
+      backdrop-filter: blur(15px);
+      -webkit-backdrop-filter: blur(15px);
+      border: 1px solid var(--ui-border);
+      border-radius: 16px;
+      min-width: 180px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .info-item {
+      margin-bottom: 12px;
+    }
+
+    .info-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .info-label {
+      font-size: 12px;
+      color: var(--text-color);
+      opacity: 0.7;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+
+    .info-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text-color);
+      transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                  transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      display: inline-block;
+    }
+
+    .info-value.weather-name {
+      font-size: 28px;
+      background: linear-gradient(135deg, var(--accent-color), var(--bg-end));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .info-value.fading {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+
+    /* 底部天气按钮组 */
+    .weather-buttons {
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 20px;
+      padding: 16px 24px;
+      background: var(--ui-bg);
+      backdrop-filter: blur(15px);
+      -webkit-backdrop-filter: blur(15px);
+      border: 1px solid var(--ui-border);
+      border-radius: 40px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .weather-btn {
+      position: relative;
+      width: 56px;
+      height: 56px;
+      border: none;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+      font-size: 24px;
+    }
+
+    .weather-btn:hover {
+      transform: scale(1.1);
+      background: rgba(255, 255, 255, 0.4);
+    }
+
+    .weather-btn.active {
+      background: var(--accent-color);
+      box-shadow: 0 0 20px var(--accent-color);
+    }
+
+    .weather-btn.active::before {
+      content: '';
+      position: absolute;
+      top: -4px;
+      left: -4px;
+      right: -4px;
+      bottom: -4px;
+      border: 2px solid var(--accent-color);
+      border-radius: 50%;
+      animation: spin 3s linear infinite;
+      border-top-color: transparent;
+      border-right-color: transparent;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .weather-btn .tooltip {
+      position: absolute;
+      bottom: -28px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 12px;
+      color: var(--text-color);
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+
+    .weather-btn:hover .tooltip {
+      opacity: 1;
+    }
+
+    /* FPS 显示 */
+    .fps-display {
+      bottom: 30px;
+      right: 30px;
+      padding: 8px 16px;
+      background: var(--ui-bg);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid var(--ui-border);
+      border-radius: 20px;
+      font-size: 12px;
+      color: var(--text-color);
+      font-weight: 600;
+    }
+
+    .fps-display .fps-value {
+      color: var(--accent-color);
+      font-weight: 700;
+    }
+
+    /* 淡入淡出动画 */
+    .fade-enter {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+
+    .fade-enter-active {
+      opacity: 1;
+      transform: translateY(0);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container">
+    <canvas id="weather-canvas"></canvas>
+  </div>
+
+  <!-- 顶部粒子密度滑块 -->
+  <div class="ui-overlay slider-container">
+    <span class="slider-label">粒子密度</span>
+    <input type="range" id="density-slider" min="100" max="2000" value="500" step="50">
+    <span class="slider-value" id="density-value">500</span>
+  </div>
+
+  <!-- 右上角信息面板 -->
+  <div class="ui-overlay info-panel">
+    <div class="info-item">
+      <div class="info-label">当前天气</div>
+      <div class="info-value weather-name" id="weather-name">晴天</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">粒子数量</div>
+      <div class="info-value" id="particle-count">500</div>
+    </div>
+  </div>
+
+  <!-- 底部天气切换按钮 -->
+  <div class="ui-overlay weather-buttons">
+    <button class="weather-btn active" data-weather="sunny" title="晴天">
+      ☀️
+      <span class="tooltip">晴天</span>
+    </button>
+    <button class="weather-btn" data-weather="rainy" title="雨天">
+      🌧️
+      <span class="tooltip">雨天</span>
+    </button>
+    <button class="weather-btn" data-weather="snowy" title="雪天">
+      ❄️
+      <span class="tooltip">雪天</span>
+    </button>
+    <button class="weather-btn" data-weather="thunder" title="雷暴">
+      ⛈️
+      <span class="tooltip">雷暴</span>
+    </button>
+  </div>
+
+  <!-- FPS 显示 -->
+  <div class="ui-overlay fps-display">
+    FPS: <span class="fps-value" id="fps-value">60</span>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

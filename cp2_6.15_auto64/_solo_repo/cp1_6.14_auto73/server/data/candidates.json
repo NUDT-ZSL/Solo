@@ -1,0 +1,99 @@
+[
+  {
+    "id": "cand-001",
+    "jobId": "job-001",
+    "name": "张三",
+    "phone": "13800138001",
+    "email": "zhangsan@example.com",
+    "yearsOfExperience": 3,
+    "skills": ["React", "Vue", "TypeScript"],
+    "stage": "new",
+    "resumeFileName": "zhangsan_resume.pdf",
+    "interviews": [],
+    "createdAt": "2026-06-10T10:00:00.000Z"
+  },
+  {
+    "id": "cand-002",
+    "jobId": "job-001",
+    "name": "李四",
+    "phone": "13800138002",
+    "email": "lisi@example.com",
+    "yearsOfExperience": 5,
+    "skills": ["React", "TypeScript", "Node.js"],
+    "stage": "screening",
+    "interviews": [],
+    "createdAt": "2026-06-09T10:00:00.000Z"
+  },
+  {
+    "id": "cand-003",
+    "jobId": "job-001",
+    "name": "王五",
+    "phone": "13800138003",
+    "email": "wangwu@example.com",
+    "yearsOfExperience": 2,
+    "skills": ["Vue", "JavaScript"],
+    "stage": "interview",
+    "interviews": [],
+    "createdAt": "2026-06-08T10:00:00.000Z"
+  },
+  {
+    "id": "cand-004",
+    "jobId": "job-002",
+    "name": "赵六",
+    "phone": "13800138004",
+    "email": "zhaoliu@example.com",
+    "yearsOfExperience": 4,
+    "skills": ["需求分析", "Axure", "SQL"],
+    "stage": "offer",
+    "interviews": [
+      {
+        "id": "intv-001",
+        "date": "2026-06-12",
+        "timeSlot": "10:00-10:30",
+        "createdAt": "2026-06-10T10:00:00.000Z"
+      }
+    ],
+    "offer": {
+      "salary": "22K",
+      "onboardDate": "2026-06-18",
+      "notes": "背景调查已通过"
+    },
+    "createdAt": "2026-06-05T10:00:00.000Z"
+  },
+  {
+    "id": "cand-005",
+    "jobId": "job-002",
+    "name": "孙七",
+    "phone": "13800138005",
+    "email": "sunqi@example.com",
+    "yearsOfExperience": 6,
+    "skills": ["产品规划", "数据分析", "用户研究"],
+    "stage": "hired",
+    "interviews": [
+      {
+        "id": "intv-002",
+        "date": "2026-06-06",
+        "timeSlot": "14:00-14:30",
+        "createdAt": "2026-06-04T10:00:00.000Z"
+      }
+    ],
+    "offer": {
+      "salary": "25K",
+      "onboardDate": "2026-06-10",
+      "notes": "已入职"
+    },
+    "createdAt": "2026-06-01T10:00:00.000Z"
+  },
+  {
+    "id": "cand-006",
+    "jobId": "job-003",
+    "name": "周八",
+    "phone": "13800138006",
+    "email": "zhouba@example.com",
+    "yearsOfExperience": 2,
+    "skills": ["Figma", "Sketch", "Photoshop"],
+    "stage": "new",
+    "interviews": [],
+    "createdAt": "2026-06-12T10:00:00.000Z"
+  }
+]

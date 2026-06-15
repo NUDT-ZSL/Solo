@@ -1,0 +1,257 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #0a0a1a;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  color: #d0d0e0;
+}
+
+#app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+#scene-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#ui-panel {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  width: 280px;
+  background: rgba(30, 30, 46, 0.9);
+  border: 1px solid #3a3a5a;
+  border-radius: 12px;
+  padding: 16px;
+  backdrop-filter: blur(8px);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  transition: all 0.3s ease;
+}
+
+.panel-header h2 {
+  font-size: 18px;
+  color: #00d4ff;
+  margin-bottom: 4px;
+  letter-spacing: 1px;
+}
+
+.panel-header p {
+  font-size: 11px;
+  color: #8080a0;
+  letter-spacing: 0.5px;
+}
+
+.panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lil-gui {
+  --width: 100%;
+  --name-width: 35%;
+  --background-color: transparent;
+  --widget-color: #2a2a4a;
+  --hover-color: #3a3a5a;
+  --focus-color: #3a3a5a;
+  --text-color: #d0d0e0;
+  --title-text-color: #d0d0e0;
+  --number-color: #00d4ff;
+  --string-color: #ff6b35;
+  --font-size: 12px;
+  --font-family: 'Courier New', monospace;
+  --padding: 6px;
+  --slider-color: #00d4ff;
+  --knob-color: #00d4ff;
+}
+
+.lil-gui .controller {
+  padding: 6px 0;
+}
+
+.lil-gui .name {
+  font-size: 12px;
+}
+
+.lil-gui input[type="range"] {
+  height: 8px;
+  border-radius: 4px;
+  background: #2a2a4a;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.lil-gui input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #00d4ff;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.5);
+}
+
+.lil-gui input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #00d4ff;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.5);
+}
+
+.lil-gui select {
+  background: #2a2a4a;
+  color: #ffffff;
+  border: 1px solid #3a3a5a;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.lil-gui select:hover {
+  background: #3a3a5a;
+}
+
+.lil-gui select option {
+  background: #2a2a4a;
+  color: #ffffff;
+}
+
+.reset-btn {
+  background: #ff6b35;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 8px;
+  letter-spacing: 1px;
+}
+
+.reset-btn:hover {
+  background: #ff8255;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+}
+
+.reset-btn:active {
+  transform: scale(0.95);
+}
+
+.tooltip {
+  position: absolute;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #ffffff;
+  font-size: 16px;
+  font-family: 'Courier New', monospace;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 200;
+  opacity: 1;
+  transition: opacity 0.5s ease-out;
+  white-space: nowrap;
+  transform: translate(-50%, -100%);
+  margin-top: -10px;
+}
+
+.tooltip.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tooltip.fade-out {
+  opacity: 0;
+}
+
+.mobile-toggle {
+  display: none;
+  background: #ff6b35;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.mobile-toggle:hover {
+  background: #ff8255;
+}
+
+.mobile-toggle:active {
+  transform: scale(0.95);
+}
+
+@media (max-width: 768px) {
+  #ui-panel {
+    top: auto;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: 80px;
+    max-height: 80px;
+    border-radius: 12px 12px 0 0;
+    padding: 12px 16px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    overflow: hidden;
+  }
+
+  #ui-panel.expanded {
+    height: auto;
+    max-height: 80vh;
+    flex-direction: column;
+    align-items: stretch;
+    overflow-y: auto;
+  }
+
+  #ui-panel:not(.expanded) .panel-header,
+  #ui-panel:not(.expanded) .panel-body,
+  #ui-panel:not(.expanded) .reset-btn {
+    display: none;
+  }
+
+  .mobile-toggle {
+    display: block;
+  }
+
+  .panel-header {
+    display: block;
+    margin-bottom: 4px;
+  }
+}

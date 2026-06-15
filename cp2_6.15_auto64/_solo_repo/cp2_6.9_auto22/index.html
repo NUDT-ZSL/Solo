@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>宇宙引力沙盒</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0B0B1A;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #fff;
+      user-select: none;
+    }
+    #app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+    .control-panel {
+      position: absolute;
+      left: 20px;
+      bottom: 20px;
+      z-index: 10;
+      padding: 18px 22px;
+      min-width: 260px;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 14px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      transition: opacity 0.4s ease;
+    }
+    .control-panel.fading {
+      opacity: 0;
+    }
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      letter-spacing: 0.5px;
+      color: rgba(255, 255, 255, 0.9);
+    }
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .slider-label {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.7);
+      min-width: 60px;
+    }
+    .slider-wrap {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #6ea8ff;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(110, 168, 255, 0.6);
+      transition: transform 0.1s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:active {
+      transform: scale(1.15);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: #6ea8ff;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 8px rgba(110, 168, 255, 0.6);
+    }
+    .slider-value {
+      min-width: 42px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: #6ea8ff;
+      font-variant-numeric: tabular-nums;
+      transition: transform 0.1s ease, color 0.1s ease;
+    }
+    .slider-value.flash {
+      transform: scale(1.25);
+      color: #ffd966;
+    }
+    .reset-btn {
+      width: 100%;
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      background: linear-gradient(135deg, rgba(255, 100, 100, 0.25), rgba(255, 150, 100, 0.15));
+      border: 1px solid rgba(255, 120, 120, 0.3);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    .reset-btn:hover {
+      background: linear-gradient(135deg, rgba(255, 100, 100, 0.35), rgba(255, 150, 100, 0.25));
+      box-shadow: 0 4px 12px rgba(255, 100, 100, 0.2);
+    }
+    .reset-btn:active {
+      transform: translateY(1px);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+      background: linear-gradient(135deg, rgba(255, 100, 100, 0.2), rgba(255, 150, 100, 0.1));
+    }
+    .stats-panel {
+      position: absolute;
+      right: 20px;
+      top: 20px;
+      z-index: 10;
+      padding: 12px 18px;
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      font-size: 12px;
+      line-height: 1.8;
+      color: rgba(255, 255, 255, 0.8);
+      font-variant-numeric: tabular-nums;
+    }
+    .stats-value {
+      color: #ffd966;
+      font-weight: 600;
+      margin-left: 6px;
+    }
+    .hint {
+      position: absolute;
+      left: 50%;
+      top: 20px;
+      transform: translateX(-50%);
+      z-index: 10;
+      padding: 8px 18px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.5);
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 20px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="gameCanvas"></canvas>
+    <div class="hint">左键放置行星 · 右键放置恒星 · 拖拽平移 · 滚轮缩放 · Delete 删除选中</div>
+    <div class="stats-panel">
+      <div>天体数量<span class="stats-value" id="bodyCount">0</span></div>
+      <div>系统动能<span class="stats-value" id="kineticEnergy">0</span></div>
+    </div>
+    <div class="control-panel" id="controlPanel">
+      <div class="panel-title">控制面板</div>
+      <div class="slider-row">
+        <span class="slider-label">速度倍率</span>
+        <div class="slider-wrap">
+          <input type="range" id="speedSlider" min="0.1" max="10" step="0.1" value="1" />
+        </div>
+        <span class="slider-value" id="speedValue">1.0×</span>
+      </div>
+      <button class="reset-btn" id="resetBtn">重置宇宙</button>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

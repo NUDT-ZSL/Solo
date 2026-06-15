@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>字体效果实验沙盒</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow: hidden;
+      height: 100vh;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    .control-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      z-index: 100;
+    }
+
+    .control-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .control-item label {
+      font-size: 13px;
+      color: #E0E0E0;
+      white-space: nowrap;
+    }
+
+    .control-item select,
+    .control-item input[type="text"],
+    .control-item input[type="number"] {
+      background: #2D2D3A;
+      border: 1px solid #3D3D4A;
+      color: #E0E0E0;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .control-item select:focus,
+    .control-item input:focus {
+      border-color: #6C63FF;
+    }
+
+    .control-item input[type="text"] {
+      width: 200px;
+    }
+
+    .control-item input[type="color"] {
+      width: 36px;
+      height: 32px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .control-item input[type="range"] {
+      -webkit-appearance: none;
+      width: 100px;
+      height: 6px;
+      background: #2D2D3A;
+      border-radius: 3px;
+      outline: none;
+    }
+
+    .control-item input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #6C63FF;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    .control-item input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    .radio-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .radio-group label {
+      background: #2D2D3A;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+
+    .radio-group label:hover {
+      border-color: #6C63FF;
+    }
+
+    .radio-group input[type="radio"] {
+      display: none;
+    }
+
+    .radio-group input[type="radio"]:checked + span {
+      color: #6C63FF;
+    }
+
+    .radio-group input[type="radio"]:checked + label,
+    .radio-group label:has(input:checked) {
+      background: #3D3D5A;
+      border-color: #6C63FF;
+    }
+
+    .main-content {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    #preview {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #F5F5F5;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #preview-text {
+      font-size: 48px;
+      color: #333333;
+      font-family: Georgia, serif;
+      transition: all 0.3s ease;
+      user-select: none;
+      will-change: transform, opacity;
+    }
+
+    .panel {
+      width: 280px;
+      background: #1E1E2E;
+      display: flex;
+      flex-direction: column;
+      border-left: 1px solid #2D2D3A;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid #2D2D3A;
+    }
+
+    .panel-title {
+      color: #E0E0E0;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .panel-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .icon-btn {
+      width: 32px;
+      height: 32px;
+      background: #2D2D3A;
+      border: none;
+      border-radius: 6px;
+      color: #E0E0E0;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      font-size: 16px;
+      position: relative;
+    }
+
+    .icon-btn:hover {
+      transform: scale(1.1);
+      background: #3D3D5A;
+    }
+
+    .icon-btn.copied::after {
+      content: '已复制';
+      position: absolute;
+      top: -30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #6C63FF;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      white-space: nowrap;
+      opacity: 0;
+      animation: copied-toast 0.5s ease;
+    }
+
+    @keyframes copied-toast {
+      0% { opacity: 0; transform: translateX(-50%) translateY(5px); }
+      20%, 80% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      100% { opacity: 0; transform: translateX(-50%) translateY(-5px); }
+    }
+
+    .code-panel {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .code-keyword { color: #C586C0; }
+    .code-property { color: #9CDCFE; }
+    .code-string { color: #CE9178; }
+    .code-value { color: #B5CEA8; }
+    .code-comment { color: #6A9955; }
+    .code-brace { color: #D4D4D4; }
+
+    .perf-monitor {
+      position: fixed;
+      bottom: 12px;
+      left: 12px;
+      background: rgba(0, 0, 0, 0.5);
+      color: #00FF00;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 12px;
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    @keyframes blink-anim {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    @keyframes float-anim {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+
+    @keyframes rotate3d-anim {
+      0% { transform: perspective(400px) rotateY(0deg); }
+      100% { transform: perspective(400px) rotateY(360deg); }
+    }
+
+    @media (max-width: 768px) {
+      .main-content {
+        flex-direction: column;
+      }
+
+      .control-bar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .control-item {
+        flex-wrap: wrap;
+      }
+
+      .control-item input[type="text"] {
+        width: 100%;
+      }
+
+      .panel {
+        width: 100%;
+        height: 40vh;
+        border-left: none;
+        border-top: 1px solid #2D2D3A;
+        position: relative;
+      }
+
+      .panel.collapsed {
+        height: 48px;
+      }
+
+      .panel-header {
+        cursor: row-resize;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="control-bar" id="control-bar">
+      <div class="control-item">
+        <label for="font-family">字体:</label>
+        <select id="font-family">
+          <option value="Georgia, serif">Serif</option>
+          <option value="Arial, Helvetica, sans-serif">Sans-serif</option>
+          <option value="'Courier New', Courier, monospace">Monospace</option>
+          <option value="'Brush Script MT', cursive">手写体</option>
+          <option value="Impact, fantasy">装饰体</option>
+        </select>
+      </div>
+
+      <div class="control-item">
+        <label for="text-input">文本:</label>
+        <input type="text" id="text-input" value="字体效果实验" maxlength="50" />
+      </div>
+
+      <div class="control-item">
+        <label for="font-size">字号:</label>
+        <input type="number" id="font-size" value="48" min="12" max="200" />
+        <span style="color:#999;font-size:12px;">px</span>
+      </div>
+
+      <div class="control-item">
+        <label for="text-color">文字颜色:</label>
+        <input type="color" id="text-color" value="#333333" />
+      </div>
+
+      <div class="control-item">
+        <label for="bg-color">背景颜色:</label>
+        <input type="color" id="bg-color" value="#F5F5F5" />
+      </div>
+
+      <div class="control-item">
+        <label for="shadow-color">阴影颜色:</label>
+        <input type="color" id="shadow-color" value="#000000" />
+      </div>
+
+      <div class="control-item">
+        <label>阴影X:</label>
+        <input type="range" id="shadow-offset-x" min="-20" max="20" value="2" />
+        <span id="shadow-x-val" style="color:#999;font-size:12px;width:30px;">2px</span>
+      </div>
+
+      <div class="control-item">
+        <label>阴影Y:</label>
+        <input type="range" id="shadow-offset-y" min="-20" max="20" value="2" />
+        <span id="shadow-y-val" style="color:#999;font-size:12px;width:30px;">2px</span>
+      </div>
+
+      <div class="control-item">
+        <label>模糊:</label>
+        <input type="range" id="shadow-blur" min="0" max="30" value="4" />
+        <span id="shadow-blur-val" style="color:#999;font-size:12px;width:30px;">4px</span>
+      </div>
+
+      <div class="control-item">
+        <label>动画:</label>
+        <div class="radio-group">
+          <label>
+            <input type="radio" name="animation" value="none" checked />
+            <span>无</span>
+          </label>
+          <label>
+            <input type="radio" name="animation" value="blink" />
+            <span>闪烁</span>
+          </label>
+          <label>
+            <input type="radio" name="animation" value="float" />
+            <span>浮动</span>
+          </label>
+          <label>
+            <input type="radio" name="animation" value="rotate3d" />
+            <span>3D旋转</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="main-content">
+      <div id="preview">
+        <div id="preview-text">字体效果实验</div>
+      </div>
+
+      <div class="panel" id="panel">
+        <div class="panel-header">
+          <span class="panel-title">CSS 代码</span>
+          <div class="panel-actions">
+            <button class="icon-btn" id="export-png" title="导出PNG">
+              📷
+            </button>
+            <button class="icon-btn" id="copy-code" title="复制代码">
+              📋
+            </button>
+          </div>
+        </div>
+        <div class="code-panel" id="code-panel"></div>
+      </div>
+    </div>
+
+    <div class="perf-monitor" id="perf-monitor">
+      FPS: -- | Frame: -- ms
+    </div>
+  </div>
+
+  <script type="module" src="/src/app.ts"></script>
+</body>
+</html>

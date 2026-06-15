@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>三维粒子星系</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000008;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    }
+    #app {
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+    canvas {
+      display: block;
+    }
+    .control-panel {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      width: 280px;
+      padding: 20px;
+      background: rgba(20, 20, 30, 0.55);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #fff;
+      z-index: 100;
+      user-select: none;
+    }
+    .control-panel h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      letter-spacing: 0.5px;
+      opacity: 0.9;
+    }
+    .control-group {
+      margin-bottom: 16px;
+    }
+    .control-group:last-child {
+      margin-bottom: 0;
+    }
+    .control-group label {
+      display: block;
+      font-size: 12px;
+      margin-bottom: 8px;
+      opacity: 0.8;
+    }
+    .control-group .value-display {
+      float: right;
+      opacity: 0.6;
+      font-variant-numeric: tabular-nums;
+    }
+    .control-group input[type="range"] {
+      width: 100%;
+      height: 4px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    .control-group input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      background: #fff;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+    .control-group input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+    .control-group input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      background: #fff;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .color-preset-list {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .color-preset {
+      flex: 1;
+      min-width: 40px;
+      height: 32px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .color-preset:hover {
+      transform: translateY(-2px);
+    }
+    .color-preset.active {
+      border-color: #fff;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+    }
+    .color-preset::after {
+      content: attr(data-name);
+      position: absolute;
+      bottom: 2px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 9px;
+      color: rgba(255, 255, 255, 0.9);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+      white-space: nowrap;
+    }
+    .fps-counter {
+      position: fixed;
+      left: 20px;
+      top: 20px;
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      z-index: 100;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div class="fps-counter" id="fpsCounter">FPS: --</div>
+  <div class="control-panel" id="controlPanel">
+    <h3>✦ 星系控制面板</h3>
+    <div class="control-group">
+      <label>配色方案</label>
+      <div class="color-preset-list" id="colorPresets"></div>
+    </div>
+    <div class="control-group">
+      <label>
+        粒子大小
+        <span class="value-display" id="sizeValue">1.00</span>
+      </label>
+      <input type="range" id="sizeSlider" min="0.5" max="4.0" step="0.01" value="1.0" />
+    </div>
+    <div class="control-group">
+      <label>
+        旋转速度
+        <span class="value-display" id="speedValue">0.50</span>
+      </label>
+      <input type="range" id="speedSlider" min="0" max="2.0" step="0.01" value="0.5" />
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

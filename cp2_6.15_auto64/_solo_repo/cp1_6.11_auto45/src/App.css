@@ -1,0 +1,340 @@
+.app-container {
+  min-height: 100vh;
+  padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.app-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.app-title {
+  font-size: 2.2rem;
+  background: linear-gradient(135deg, #1E90FF, #FF4500);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 6px;
+}
+
+.app-subtitle {
+  color: #8b949e;
+  font-size: 0.95rem;
+}
+
+.app-main {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.left-panel {
+  width: 320px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 20px;
+}
+
+.right-panel {
+  flex: 1;
+  min-width: 0;
+}
+
+.form-card {
+  background: rgba(30, 30, 30, 0.8);
+  border: 1px solid rgba(0, 200, 255, 0.1);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 0 15px rgba(0, 200, 255, 0.1);
+  transition: box-shadow 0.3s ease;
+}
+
+.form-card:hover {
+  box-shadow: 0 0 25px rgba(0, 200, 255, 0.15);
+}
+
+.form-title {
+  font-size: 1.3rem;
+  margin-bottom: 20px;
+  color: #e6edf3;
+}
+
+.form-group {
+  margin-bottom: 18px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 8px;
+  color: #c9d1d9;
+  font-size: 0.9rem;
+}
+
+.score-value {
+  font-size: 1.4rem;
+  font-weight: bold;
+  margin-left: 8px;
+  transition: color 0.3s ease;
+}
+
+.form-select {
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(22, 27, 34, 0.9);
+  border: 1px solid rgba(0, 200, 255, 0.15);
+  border-radius: 10px;
+  color: #e6edf3;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  appearance: none;
+  cursor: pointer;
+}
+
+.form-select:focus {
+  border-color: #1E90FF;
+  box-shadow: 0 0 10px rgba(30, 144, 255, 0.3);
+}
+
+.slider-container {
+  position: relative;
+  padding: 8px 0;
+}
+
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #e6edf3;
+  cursor: pointer;
+  border: 2px solid #333;
+  box-shadow: 0 0 12px rgba(30, 144, 255, 0.5);
+  transition: box-shadow 0.3s ease, transform 0.2s ease;
+}
+
+.slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 20px rgba(30, 144, 255, 0.8);
+}
+
+.slider::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #e6edf3;
+  cursor: pointer;
+  border: 2px solid #333;
+  box-shadow: 0 0 12px rgba(30, 144, 255, 0.5);
+}
+
+.slider-glow {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  pointer-events: none;
+  transition: left 0.15s ease, background 0.3s ease;
+  z-index: 0;
+}
+
+.form-textarea {
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(22, 27, 34, 0.9);
+  border: 1px solid rgba(0, 200, 255, 0.15);
+  border-radius: 10px;
+  color: #e6edf3;
+  font-size: 0.9rem;
+  outline: none;
+  resize: vertical;
+  font-family: inherit;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.form-textarea:focus {
+  border-color: #1E90FF;
+  box-shadow: 0 0 10px rgba(30, 144, 255, 0.3);
+}
+
+.char-count {
+  display: block;
+  text-align: right;
+  color: #8b949e;
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+
+.submit-btn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #1E90FF, #4169E1);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.submit-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(30, 144, 255, 0.4);
+}
+
+.submit-btn:active {
+  transform: translateY(0);
+}
+
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.submit-btn.submit-success {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  box-shadow: 0 6px 20px rgba(34, 197, 94, 0.4);
+}
+
+.heatmap-wrapper {
+  background: rgba(30, 30, 30, 0.8);
+  border: 1px solid rgba(0, 200, 255, 0.1);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 0 15px rgba(0, 200, 255, 0.1);
+  transition: box-shadow 0.3s ease;
+}
+
+.heatmap-wrapper:hover {
+  box-shadow: 0 0 25px rgba(0, 200, 255, 0.15);
+}
+
+.heatmap-title {
+  font-size: 1.3rem;
+  margin-bottom: 16px;
+  color: #e6edf3;
+}
+
+.heatmap-canvas {
+  width: 100%;
+  height: 420px;
+  border-radius: 12px;
+}
+
+.toolbar {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.toolbar-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.clear-btn {
+  background: rgba(255, 69, 0, 0.15);
+  color: #FF4500;
+  border: 1px solid rgba(255, 69, 0, 0.3);
+}
+
+.clear-btn:hover:not(:disabled) {
+  background: rgba(255, 69, 0, 0.25);
+  box-shadow: 0 6px 20px rgba(255, 69, 0, 0.2);
+  transform: translateY(-1px);
+}
+
+.clear-btn.confirm {
+  background: rgba(255, 69, 0, 0.4);
+  animation: pulse-red 0.5s ease infinite alternate;
+}
+
+@keyframes pulse-red {
+  from { box-shadow: 0 0 10px rgba(255, 69, 0, 0.3); }
+  to { box-shadow: 0 0 20px rgba(255, 69, 0, 0.6); }
+}
+
+.simulate-btn {
+  background: rgba(30, 144, 255, 0.15);
+  color: #1E90FF;
+  border: 1px solid rgba(30, 144, 255, 0.3);
+}
+
+.simulate-btn:hover:not(:disabled) {
+  background: rgba(30, 144, 255, 0.25);
+  box-shadow: 0 6px 20px rgba(30, 144, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+  .app-main {
+    flex-direction: column;
+  }
+
+  .left-panel {
+    width: 100%;
+    position: static;
+  }
+
+  .heatmap-canvas {
+    height: 520px;
+  }
+
+  .app-title {
+    font-size: 1.6rem;
+  }
+
+  .toolbar {
+    flex-direction: column;
+  }
+
+  .toolbar-btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-container {
+    padding: 12px;
+  }
+
+  .form-card,
+  .heatmap-wrapper {
+    padding: 16px;
+  }
+
+  .heatmap-canvas {
+    height: 580px;
+  }
+}

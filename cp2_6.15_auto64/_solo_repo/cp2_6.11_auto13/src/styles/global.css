@@ -1,0 +1,44 @@
+:root {
+  --bg-primary: #1A1A2E;
+  --bg-secondary: #16213E;
+  --text-primary: #FFFFFF;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-muted: rgba(255, 255, 255, 0.5);
+  --text-dim: rgba(255, 255, 255, 0.4);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-light: rgba(255, 255, 255, 0.1);
+  --border-medium: rgba(255, 255, 255, 0.15);
+  --border-visible: rgba(255, 255, 255, 0.2);
+  --surface-glass: rgba(255, 255, 255, 0.05);
+  --surface-overlay: rgba(0, 0, 0, 0.2);
+  --surface-dark: rgba(0, 0, 0, 0.3);
+  --accent-blue: rgba(100, 200, 255, 0.5);
+  --accent-blue-solid: #64B5F6;
+  --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --color-danger: #EF5350;
+  --color-danger-bg: rgba(239, 83, 80, 0.2);
+  --color-danger-border: rgba(239, 83, 80, 0.5);
+  --color-success: #81C784;
+  --color-success-bg: rgba(76, 175, 80, 0.9);
+  --color-sealed: #B71C1C;
+  --blur-amount: 10px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+}
+
+html, body, #root {
+  width: 100%;
+  min-height: 100vh;
+  font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+  color: #E0E0E0;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}

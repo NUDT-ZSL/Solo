@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>熔岩管洞穴生态模拟器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+      background: #000;
+    }
+
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+    }
+
+    #app-title {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      font-size: 24px;
+      font-weight: 700;
+      color: #88FF88;
+      text-shadow: 
+        -1px -1px 0 #000,
+        1px -1px 0 #000,
+        -1px 1px 0 #000,
+        1px 1px 0 #000;
+      z-index: 10;
+      letter-spacing: 1px;
+    }
+
+    #fps-counter {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      font-size: 14px;
+      color: #00FF00;
+      z-index: 10;
+      font-family: 'Consolas', monospace;
+      text-shadow: 0 0 4px rgba(0, 255, 0, 0.5);
+    }
+
+    #fps-counter.low {
+      color: #FF0000;
+      text-shadow: 0 0 4px rgba(255, 0, 0, 0.5);
+    }
+
+    #stats-dashboard {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.6);
+      border-radius: 12px;
+      padding: 16px 20px;
+      z-index: 10;
+      min-width: 220px;
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(0, 255, 255, 0.2);
+    }
+
+    .dashboard-title {
+      font-size: 14px;
+      color: #00FFFF;
+      text-shadow: 0 0 2px rgba(0, 255, 255, 0.8);
+      margin-bottom: 12px;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+
+    .stats-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      font-size: 13px;
+    }
+
+    .stats-label {
+      color: #00FFFF;
+      text-shadow: 0 0 2px rgba(0, 255, 255, 0.8);
+    }
+
+    .stats-value {
+      color: #00FFFF;
+      text-shadow: 0 0 2px rgba(0, 255, 255, 0.8);
+      font-weight: 600;
+      font-family: 'Consolas', monospace;
+    }
+
+    .stats-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.3), transparent);
+      margin: 8px 0;
+    }
+
+    .fungus-dot { color: #00FF88; }
+    .worm-dot { color: #FF8800; }
+    .moth-dot { color: #FF33AA; }
+
+    #control-panel {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(26, 26, 46, 0.85);
+      border-radius: 12px;
+      padding: 20px;
+      z-index: 10;
+      min-width: 300px;
+      backdrop-filter: blur(12px);
+      box-shadow: 
+        inset 0 2px 8px rgba(0, 0, 0, 0.33),
+        0 4px 20px rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .panel-title {
+      font-size: 16px;
+      color: #88FF88;
+      font-weight: 600;
+      margin-bottom: 16px;
+      letter-spacing: 1px;
+    }
+
+    .control-group {
+      margin-bottom: 16px;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: #CCCCCC;
+      margin-bottom: 8px;
+    }
+
+    .control-value {
+      color: #00FFFF;
+      font-family: 'Consolas', monospace;
+      text-shadow: 0 0 2px rgba(0, 255, 255, 0.6);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #00FF88, #FF8800, #FF33AA);
+      outline: none;
+      -webkit-appearance: none;
+      cursor: pointer;
+      transition: transform 0.2s ease-out;
+    }
+
+    input[type="range"]:hover {
+      transform: scale(1.05);
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #FFFFFF;
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+      transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+      box-shadow: 0 0 12px rgba(255, 255, 255, 1);
+    }
+
+    .button-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .control-btn {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      color: #CCCCCC;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease-out;
+      font-family: inherit;
+    }
+
+    .control-btn:hover {
+      transform: scale(1.05);
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(0, 255, 255, 0.4);
+      color: #00FFFF;
+    }
+
+    .control-btn.active {
+      background: rgba(0, 255, 136, 0.15);
+      border-color: rgba(0, 255, 136, 0.5);
+      color: #00FF88;
+    }
+
+    .toggle-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 48px;
+      height: 24px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.2s ease-out, transform 0.2s ease-out;
+    }
+
+    .toggle-switch:hover {
+      transform: scale(1.05);
+    }
+
+    .toggle-switch.on {
+      background: rgba(0, 255, 136, 0.4);
+    }
+
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background: #FFFFFF;
+      border-radius: 50%;
+      transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+      box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+    }
+
+    .toggle-switch.on::after {
+      transform: translateX(24px);
+      box-shadow: 0 0 8px rgba(0, 255, 136, 0.8);
+    }
+
+    #info-label {
+      position: absolute;
+      padding: 8px 14px;
+      background: rgba(0, 0, 0, 0.85);
+      border-radius: 8px;
+      font-size: 13px;
+      color: #00FFFF;
+      text-shadow: 0 0 4px rgba(0, 255, 255, 0.8);
+      border: 1px solid rgba(0, 255, 255, 0.4);
+      z-index: 20;
+      pointer-events: none;
+      display: none;
+      white-space: nowrap;
+    }
+
+    #panel-toggle {
+      display: none;
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: rgba(26, 26, 46, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #88FF88;
+      font-size: 24px;
+      cursor: pointer;
+      z-index: 15;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      transition: transform 0.2s ease-out;
+    }
+
+    #panel-toggle:hover {
+      transform: scale(1.1);
+    }
+
+    #mobile-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.9);
+      z-index: 50;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #mobile-overlay.open {
+      display: flex;
+    }
+
+    #mobile-panel {
+      width: 90%;
+      max-width: 400px;
+      max-height: 90vh;
+      overflow-y: auto;
+      background: rgba(26, 26, 46, 0.95);
+      border-radius: 16px;
+      padding: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .close-overlay {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      color: #FFFFFF;
+      font-size: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    @media (max-width: 768px) {
+      #app-title {
+        font-size: 18px;
+      }
+
+      #control-panel {
+        display: none;
+      }
+
+      #panel-toggle {
+        display: flex;
+      }
+
+      #stats-dashboard {
+        min-width: 160px;
+        padding: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+    
+    <div id="app-title">熔岩管洞穴生态模拟器</div>
+    
+    <div id="fps-counter">FPS: --</div>
+    
+    <div id="stats-dashboard">
+      <div class="dashboard-title">◆ 实时统计</div>
+      <div class="stats-row">
+        <span class="stats-label">生物总数</span>
+        <span class="stats-value" id="stat-total">0</span>
+      </div>
+      <div class="stats-divider"></div>
+      <div class="stats-row">
+        <span class="stats-label"><span class="fungus-dot">●</span> 荧光真菌</span>
+        <span class="stats-value" id="stat-fungus">0</span>
+      </div>
+      <div class="stats-row">
+        <span class="stats-label"><span class="worm-dot">●</span> 发光蠕虫</span>
+        <span class="stats-value" id="stat-worm">0</span>
+      </div>
+      <div class="stats-row">
+        <span class="stats-label"><span class="moth-dot">●</span> 散射飞蛾</span>
+        <span class="stats-value" id="stat-moth">0</span>
+      </div>
+      <div class="stats-divider"></div>
+      <div class="stats-row">
+        <span class="stats-label">平均亮度</span>
+        <span class="stats-value" id="stat-brightness">0%</span>
+      </div>
+    </div>
+    
+    <div id="control-panel">
+      <div class="panel-title">⚙ 控制面板</div>
+      
+      <div class="control-group">
+        <div class="control-label">
+          <span>全局光照强度</span>
+          <span class="control-value" id="light-value">100%</span>
+        </div>
+        <input type="range" id="light-slider" min="0" max="200" value="100" />
+      </div>
+      
+      <div class="control-group">
+        <div class="control-label">
+          <span>生物数量密度</span>
+          <span class="control-value" id="density-value">100%</span>
+        </div>
+        <input type="range" id="density-slider" min="50" max="200" value="100" />
+      </div>
+      
+      <div class="control-group">
+        <div class="control-label">
+          <span>昼夜周期</span>
+        </div>
+        <div class="button-row">
+          <button class="control-btn" id="day-btn">☀ 白天模式</button>
+          <button class="control-btn active" id="night-btn">☾ 夜晚模式</button>
+        </div>
+      </div>
+      
+      <div class="control-group">
+        <div class="control-label toggle-container">
+          <span>运动动画</span>
+          <div class="toggle-switch on" id="animation-toggle"></div>
+        </div>
+      </div>
+    </div>
+    
+    <button id="panel-toggle">⚙</button>
+    
+    <div id="mobile-overlay">
+      <button class="close-overlay" id="close-overlay">✕</button>
+      <div id="mobile-panel"></div>
+    </div>
+    
+    <div id="info-label"></div>
+  </div>
+  
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

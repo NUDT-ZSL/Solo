@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>流星轨迹沙盘</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@300;400;600&display=swap');
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(135deg, #0B0B2A 0%, #1B2A5A 100%);
+      font-family: 'Rajdhani', sans-serif;
+      color: #FFFFFF;
+    }
+
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    #canvas-container canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 100;
+      background: linear-gradient(135deg, #0B0B2A 0%, #1B2A5A 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.8s ease-out;
+    }
+
+    #loading-screen.fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loader-ring {
+      width: 60px;
+      height: 60px;
+      border: 3px solid rgba(255, 140, 0, 0.15);
+      border-top: 3px solid #FF8C00;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    .loader-text {
+      margin-top: 20px;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 14px;
+      letter-spacing: 4px;
+      color: rgba(255, 140, 0, 0.7);
+      text-transform: uppercase;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    #glow-divider {
+      position: fixed;
+      bottom: 80px;
+      left: 0;
+      width: 100%;
+      height: 1px;
+      background: rgba(255, 140, 0, 0);
+      box-shadow:
+        0 0 0 rgba(255, 140, 0, 0),
+        0 0 0 rgba(255, 140, 0, 0),
+        0 0 0 rgba(255, 140, 0, 0),
+        0 0 0 rgba(255, 100, 0, 0);
+      z-index: 10;
+      transition: background 0.5s ease-out, box-shadow 0.5s ease-out;
+    }
+
+    #glow-divider.active {
+      background: rgba(255, 140, 0, 0.45);
+      box-shadow:
+        0 0 4px rgba(255, 140, 0, 0.5),
+        0 0 12px rgba(255, 140, 0, 0.4),
+        0 0 30px rgba(255, 140, 0, 0.2),
+        0 0 60px rgba(255, 100, 0, 0.1);
+    }
+
+    #control-panel {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 80px;
+      background: rgba(10, 20, 40, 0.7);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 40px;
+      padding: 0 30px;
+      transition: transform 0.3s ease, backdrop-filter 0.3s ease;
+    }
+
+    #control-panel:hover {
+      transform: translateY(-4px);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      min-width: 180px;
+    }
+
+    .slider-label {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: rgba(180, 200, 255, 0.7);
+      text-transform: uppercase;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .slider-value {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      color: #FFFFFF;
+      min-width: 42px;
+      text-align: right;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      background: #1B2A5A;
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #FF8C00;
+      cursor: pointer;
+      box-shadow: 0 0 6px rgba(255, 140, 0, 0.5);
+      transition: box-shadow 0.2s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      box-shadow: 0 0 12px rgba(255, 140, 0, 0.8);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #FF8C00;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 6px rgba(255, 140, 0, 0.5);
+    }
+
+    input[type="range"]::-moz-range-track {
+      height: 6px;
+      background: #1B2A5A;
+      border-radius: 3px;
+    }
+
+    .burst-hint {
+      position: fixed;
+      bottom: 92px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 12px;
+      color: rgba(255, 140, 0, 0.4);
+      letter-spacing: 1px;
+      z-index: 10;
+      pointer-events: none;
+      transition: opacity 0.5s ease;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading-screen">
+    <div class="loader-ring"></div>
+    <div class="loader-text">Initializing</div>
+  </div>
+
+  <div id="canvas-container"></div>
+
+  <div id="glow-divider"></div>
+
+  <div id="control-panel">
+    <div class="slider-group">
+      <span class="slider-label">Density</span>
+      <div class="slider-row">
+        <input type="range" id="slider-density" min="1" max="50" value="15" step="1" />
+        <span class="slider-value" id="value-density">15</span>
+      </div>
+    </div>
+    <div class="slider-group">
+      <span class="slider-label">Direction</span>
+      <div class="slider-row">
+        <input type="range" id="slider-direction" min="0" max="360" value="225" step="1" />
+        <span class="slider-value" id="value-direction">225°</span>
+      </div>
+    </div>
+    <div class="slider-group">
+      <span class="slider-label">Speed</span>
+      <div class="slider-row">
+        <input type="range" id="slider-speed" min="5" max="30" value="15" step="0.5" />
+        <span class="slider-value" id="value-speed">15</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="burst-hint">点击空白区域触发流星爆发</div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

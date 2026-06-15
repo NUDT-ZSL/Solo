@@ -1,0 +1,98 @@
+[
+  {
+    "id": "star-001",
+    "content": "你好，来自遥远星系的旅者。我在银河的边缘写下这封信，希望它能穿越光年的距离，抵达你的星球。如果星星能说话，它们会告诉你我有多孤独。",
+    "title": "银河边缘的问候",
+    "coordinates": "RA 14h 29m 43s, Dec -62° 40' 46\"",
+    "symbols": "♍ ✧ ◈",
+    "envelopeColor": "linear-gradient(135deg, #ff6b9d, #c44dff, #6e2eff)",
+    "createdAt": "2026-06-01T08:30:00Z",
+    "parentId": null,
+    "replyIds": ["star-002"],
+    "position": { "x": 0.15, "y": 0.3 }
+  },
+  {
+    "id": "star-002",
+    "content": "我收到了你的信号。在半人马座α星，我们也有同样的星空，只是视角不同。孤独是宇宙的常态，但信件让距离缩短了一光秒。",
+    "title": "来自半人马座的回响",
+    "coordinates": "RA 14h 39m 36s, Dec -60° 50' 02\"",
+    "symbols": "♐ ✦ ◇",
+    "envelopeColor": "linear-gradient(135deg, #4dc9f6, #3d7be0, #6e2eff)",
+    "createdAt": "2026-06-02T14:20:00Z",
+    "parentId": "star-001",
+    "replyIds": [],
+    "position": { "x": 0.17, "y": 0.33 }
+  },
+  {
+    "id": "star-003",
+    "content": "今天观测到一颗超新星爆发，光芒穿越了三百万年才抵达我的望远镜。想到这束光出发时地球上还没有人类，就觉得时间真是最深的海洋。",
+    "title": "超新星的低语",
+    "coordinates": "RA 05h 35m 17s, Dec -05° 23' 28\"",
+    "symbols": "♓ ✧ △",
+    "envelopeColor": "linear-gradient(135deg, #ffd700, #ff8c00, #ff4500)",
+    "createdAt": "2026-06-03T22:15:00Z",
+    "parentId": null,
+    "replyIds": [],
+    "position": { "x": 0.55, "y": 0.2 }
+  },
+  {
+    "id": "star-004",
+    "content": "在仙女座的某颗行星上，日落持续七十二小时。我们用整个黄昏写诗，用整个黎明去阅读。你那边的日落是什么样的？",
+    "title": "七十二小时的日落",
+    "coordinates": "RA 00h 42m 44s, Dec +41° 16' 09\"",
+    "symbols": "♊ ✦ ◎",
+    "envelopeColor": "linear-gradient(135deg, #a18cd1, #fbc2eb, #f6d5f7)",
+    "createdAt": "2026-06-04T06:45:00Z",
+    "parentId": null,
+    "replyIds": ["star-005"],
+    "position": { "x": 0.78, "y": 0.55 }
+  },
+  {
+    "id": "star-005",
+    "content": "我这里的日落只有十七分钟，但天空会从橘红变成深紫，最后满天星斗如同洒落的钻石。时间虽短，却足以让整个宇宙屏住呼吸。",
+    "title": "十七分钟的钻石夜",
+    "coordinates": "RA 18h 36m 56s, Dec +38° 47' 01\"",
+    "symbols": "♌ ✧ ◈",
+    "envelopeColor": "linear-gradient(135deg, #667eea, #764ba2, #f093fb)",
+    "createdAt": "2026-06-05T19:30:00Z",
+    "parentId": "star-004",
+    "replyIds": [],
+    "position": { "x": 0.8, "y": 0.58 }
+  },
+  {
+    "id": "star-006",
+    "content": "如果你正在读这封信，那么我们共享了同一片时空。在这个宇宙里，所有的相遇都是概率的奇迹。请抬头看看星星，我在那里对你微笑。",
+    "title": "概率的奇迹",
+    "coordinates": "RA 12h 51m 26s, Dec +27° 07' 42\"",
+    "symbols": "♎ ✦ ◇",
+    "envelopeColor": "linear-gradient(135deg, #43e97b, #38f9d7, #4facfe)",
+    "createdAt": "2026-06-06T11:00:00Z",
+    "parentId": null,
+    "replyIds": [],
+    "position": { "x": 0.35, "y": 0.7 }
+  },
+  {
+    "id": "star-007",
+    "content": "猎户座的大星云是宇宙的摇篮，新生的恒星在那里第一次睁开眼睛。我总觉得每颗星星都有记忆，它们记得自己诞生时的温度。",
+    "title": "星星的记忆",
+    "coordinates": "RA 05h 35m 17s, Dec -05° 23' 28\"",
+    "symbols": "♒ ✧ △",
+    "envelopeColor": "linear-gradient(135deg, #fa709a, #fee140, #fa709a)",
+    "createdAt": "2026-06-07T03:20:00Z",
+    "parentId": null,
+    "replyIds": [],
+    "position": { "x": 0.6, "y": 0.45 }
+  },
+  {
+    "id": "star-008",
+    "content": "在天鹅座的暗星云背后，我截获了一段来自未知文明的信号。它只是一串简单的脉冲，但那节奏像是心跳。也许宇宙的语言就是心跳。",
+    "title": "宇宙的心跳",
+    "coordinates": "RA 20h 41m 25s, Dec +40° 15' 38\"",
+    "symbols": "♏ ✦ ◎",
+    "envelopeColor": "linear-gradient(135deg, #0ba360, #3cba92, #30dd8a)",
+    "createdAt": "2026-06-07T16:50:00Z",
+    "parentId": null,
+    "replyIds": [],
+    "position": { "x": 0.9, "y": 0.15 }
+  }
+]

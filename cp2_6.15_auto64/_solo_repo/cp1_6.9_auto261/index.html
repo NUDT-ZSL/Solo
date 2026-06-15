@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>笔尖花园</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(180deg, #0d0d2b 0%, #000011 100%);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      transition: background 1s ease;
+    }
+    body.theme-morning {
+      background: linear-gradient(180deg, #e8f5e9 0%, #fff9c4 100%);
+    }
+    .app {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    @media (max-width: 768px) {
+      .app {
+        padding: 10px;
+      }
+    }
+    .canvas-wrapper {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+    }
+    #gardenCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+    .title {
+      position: absolute;
+      top: 30px;
+      left: 30px;
+      font-family: 'Caveat', cursive;
+      font-size: 42px;
+      font-weight: 700;
+      color: #7dcea0;
+      opacity: 0.85;
+      pointer-events: auto;
+      cursor: default;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+      text-shadow: 0 2px 12px rgba(125, 206, 160, 0.3);
+      z-index: 10;
+    }
+    .title:hover {
+      transform: scale(1.05);
+      opacity: 1;
+    }
+    body.theme-morning .title {
+      color: #2e7d32;
+      text-shadow: 0 2px 12px rgba(46, 125, 50, 0.2);
+    }
+    .theme-btn {
+      position: absolute;
+      top: 30px;
+      right: 30px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      background: radial-gradient(circle at 30% 30%, #ffe082 0%, #ff8a65 60%, #d84315 100%);
+      box-shadow: 0 2px 12px rgba(255, 138, 101, 0.4);
+      transition: width 0.2s ease, height 0.2s ease, transform 0.2s ease;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    body.theme-morning .theme-btn {
+      background: radial-gradient(circle at 30% 30%, #90caf9 0%, #5c6bc0 60%, #283593 100%);
+      box-shadow: 0 2px 12px rgba(92, 107, 192, 0.4);
+    }
+    .theme-btn:hover {
+      width: 45px;
+      height: 45px;
+      transform: translate(-2.5px, -2.5px);
+    }
+    .theme-btn::after {
+      content: '切换主题';
+      position: absolute;
+      right: 55px;
+      top: 50%;
+      transform: translateY(-50%);
+      white-space: nowrap;
+      padding: 6px 10px;
+      background: rgba(0, 0, 0, 0.7);
+      color: #fff;
+      font-size: 12px;
+      border-radius: 6px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    body.theme-morning .theme-btn::after {
+      background: rgba(255, 255, 255, 0.9);
+      color: #333;
+    }
+    .theme-btn:hover::after {
+      opacity: 1;
+    }
+    .theme-btn-icon {
+      width: 20px;
+      height: 20px;
+      fill: #fff;
+    }
+    .tip-bar {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 20px;
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(8px);
+      border-radius: 24px;
+      color: #888888;
+      font-size: 14px;
+      letter-spacing: 0.5px;
+      z-index: 10;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+    body.theme-morning .tip-bar {
+      background: rgba(0, 0, 0, 0.05);
+      color: #555555;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    .clear-toast {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 16px 32px;
+      background: rgba(0, 0, 0, 0.75);
+      color: #ffffff;
+      font-size: 18px;
+      border-radius: 12px;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 20;
+      letter-spacing: 1px;
+      transition: opacity 0.4s ease;
+    }
+    .clear-toast.show {
+      opacity: 1;
+    }
+    body.theme-morning .clear-toast {
+      background: rgba(255, 255, 255, 0.92);
+      color: #222;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    }
+    .canvas-fade {
+      animation: fadeSwap 1s ease;
+    }
+    @keyframes fadeSwap {
+      0% { opacity: 0; }
+      100% { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="canvas-wrapper" id="canvasWrapper">
+      <canvas id="gardenCanvas"></canvas>
+      <div class="title" id="title">笔尖花园</div>
+      <button class="theme-btn" id="themeBtn" aria-label="切换主题">
+        <svg class="theme-btn-icon" viewBox="0 0 24 24">
+          <path id="themeIcon" d="M21,12.79A9,9 0 1,1 11.21,3 7,7 0 0,0 21,12.79Z"/>
+        </svg>
+      </button>
+      <div class="tip-bar">绘制线条开始你的花园 | Ctrl+Z撤销 | C清空</div>
+      <div class="clear-toast" id="clearToast">画布已清空</div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WaveField - 3D粒子波浪模拟器</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html, body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: linear-gradient(180deg, #0c1929 0%, #1a3a5c 100%);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      #app {
+        width: 100%;
+        height: 100vh;
+        position: relative;
+      }
+      #scene-canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+        cursor: grab;
+      }
+      #scene-canvas:active {
+        cursor: grabbing;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="scene-canvas"></canvas>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,9 @@
+{"id":"vote1","proposalId":"prop1","userId":"user1","voteType":"approve","createdAt":"2024-03-15T09:15:00Z","_id":"h8cvhpbPg7e5zwnd"}
+{"id":"vote2","proposalId":"prop1","userId":"user2","voteType":"approve","createdAt":"2024-03-15T09:16:00Z","_id":"5gYfFdcGGhsCE7xp"}
+{"id":"vote3","proposalId":"prop1","userId":"user3","voteType":"reject","createdAt":"2024-03-15T09:17:00Z","_id":"cjanfxE0Ld5AJFqy"}
+{"id":"vote4","proposalId":"prop2","userId":"user1","voteType":"approve","createdAt":"2024-03-15T09:45:00Z","_id":"NycktjGeIJu2PgXp"}
+{"id":"vote5","proposalId":"prop2","userId":"user2","voteType":"approve","createdAt":"2024-03-15T09:46:00Z","_id":"kLujbKvfQO0H1Qmt"}
+{"id":"vote6","proposalId":"prop2","userId":"user3","voteType":"approve","createdAt":"2024-03-15T09:47:00Z","_id":"pWiXwvx7m2hAdkMY"}
+{"id":"vote7","proposalId":"prop3","userId":"user1","voteType":"abstain","createdAt":"2024-03-15T10:15:00Z","_id":"yHHZVT3bGuxbZ5He"}
+{"id":"vote8","proposalId":"prop3","userId":"user2","voteType":"reject","createdAt":"2024-03-15T10:16:00Z","_id":"ESB5iCQpoU7TeQrh"}
+{"id":"vote9","proposalId":"prop3","userId":"user3","voteType":"reject","createdAt":"2024-03-15T10:17:00Z","_id":"UgE0jxz9J0Q1Und8"}

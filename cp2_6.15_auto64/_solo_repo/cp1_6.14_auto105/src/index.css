@@ -1,0 +1,820 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --color-primary: #3182ce;
+  --color-primary-hover: #2b6cb0;
+  --color-primary-active: #2c5282;
+  --color-primary-disabled: #a0aec0;
+  --color-success: #38a169;
+  --color-success-hover: #2f855a;
+  --color-success-active: #276749;
+  --color-danger: #e53e3e;
+  --color-warning: #d69e2e;
+  --color-orange: #dd6b20;
+  --color-purple: #805ad5;
+  --color-text: #2d3748;
+  --color-text-light: #a0aec0;
+  --color-bg: #f7fafc;
+  --color-bg-white: #ffffff;
+  --color-border: #e2e8f0;
+  --color-nav: #2c5282;
+  --toast-success-bg: #c6f6d5;
+  --toast-success-text: #22543d;
+  --toast-error-bg: #fed7d7;
+  --toast-error-text: #9b2c2c;
+  --transition: 0.2s ease;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ====== Toast ====== */
+.toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 9999;
+  animation: toastIn 0.3s ease;
+}
+
+.toast-success {
+  background: var(--toast-success-bg);
+  color: var(--toast-success-text);
+}
+
+.toast-error {
+  background: var(--toast-error-bg);
+  color: var(--toast-error-text);
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* ====== Navbar ====== */
+.navbar {
+  height: 56px;
+  background: var(--color-nav);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.navbar-brand {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.navbar-links {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-link {
+  color: white;
+  font-size: 14px;
+  text-decoration: none;
+  opacity: 0.85;
+  transition: opacity var(--transition);
+}
+
+.admin-link:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.admin-badge {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* ====== Main Layout ====== */
+.main-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  height: calc(100vh - 56px);
+}
+
+.left-panel {
+  flex-grow: 1;
+  background: var(--color-bg);
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.left-panel.scrolled {
+  box-shadow: inset 0 100px 50px -60px rgba(0, 0, 0, 0.04);
+}
+
+.divider {
+  width: 8px;
+  background: var(--color-border);
+  flex-shrink: 0;
+}
+
+.right-panel {
+  width: 400px;
+  flex-shrink: 0;
+  background: var(--color-bg-white);
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.right-panel-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ====== Device Grid ====== */
+.device-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 24px;
+  max-width: 100%;
+}
+
+/* ====== Skeleton ====== */
+.skeleton-card {
+  border-radius: 12px;
+  background: var(--color-bg-white);
+  overflow: hidden;
+  animation: skeletonPulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-img {
+  height: 160px;
+  background: var(--color-border);
+}
+
+.skeleton-text {
+  height: 16px;
+  margin: 16px 16px 8px;
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+.skeleton-text.short {
+  width: 60%;
+}
+
+.skeleton-btn {
+  height: 44px;
+  margin: 12px 16px 16px;
+  background: var(--color-border);
+  border-radius: 8px;
+}
+
+@keyframes skeletonPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ====== Device Card ====== */
+.device-card {
+  background: var(--color-bg-white);
+  border-radius: 12px;
+  overflow: hidden;
+  max-width: 360px;
+  width: 100%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: box-shadow var(--transition), transform var(--transition);
+}
+
+.device-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+.device-card.editing {
+  padding: 16px;
+}
+
+.device-img-wrapper {
+  position: relative;
+  height: 160px;
+  overflow: hidden;
+}
+
+.device-img {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  display: block;
+}
+
+.status-tag {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 8px;
+  letter-spacing: 0.3px;
+}
+
+.status-available {
+  background: #38a169;
+}
+
+.status-borrowed {
+  background: #e53e3e;
+}
+
+.status-maintenance {
+  background: #dd6b20;
+}
+
+.device-info {
+  padding: 14px 16px 10px;
+}
+
+.device-name {
+  font-size: 18px;
+  font-family: 'Inter', sans-serif;
+  color: var(--color-text);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.device-desc {
+  font-size: 13px;
+  color: var(--color-text-light);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ====== Reserve Button - with disabled state fix ====== */
+.btn-reserve {
+  width: 100%;
+  height: 44px;
+  border: none;
+  border-radius: 8px;
+  background: var(--color-primary);
+  color: white;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+  margin: 0 0 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.btn-reserve:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.btn-reserve:active:not(:disabled) {
+  background: var(--color-primary-active);
+}
+
+.btn-reserve:disabled {
+  background: #a0aec0;
+  color: white;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+/* ====== Admin Manage Button ====== */
+.btn-admin-manage {
+  width: 100%;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: var(--color-purple);
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  margin: 0 0 0;
+  transition: opacity var(--transition), transform var(--transition);
+}
+
+.btn-admin-manage:hover {
+  opacity: 0.9;
+}
+
+.btn-admin-manage:active {
+  opacity: 0.8;
+}
+
+/* ====== Edit Form ====== */
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.edit-form label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.edit-form input,
+.edit-form textarea,
+.edit-form select {
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--color-bg);
+  color: var(--color-text);
+  transition: border-color var(--transition);
+}
+
+.edit-form input:focus,
+.edit-form textarea:focus,
+.edit-form select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.edit-form textarea {
+  min-height: 60px;
+  resize: vertical;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-save {
+  flex: 1;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: var(--color-success);
+  color: white;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.btn-save:hover:not(:disabled) {
+  background: var(--color-success-hover);
+}
+
+.btn-save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-cancel {
+  flex: 1;
+  height: 36px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: white;
+  color: var(--color-text);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.btn-cancel:hover {
+  background: var(--color-bg);
+}
+
+/* ====== Reservation Form - slide-in ====== */
+.reservation-form-container {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.form-header h3 {
+  font-size: 16px;
+  font-family: 'Inter', sans-serif;
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.btn-close-form {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: var(--color-bg);
+  color: var(--color-text-light);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition);
+}
+
+.btn-close-form:hover {
+  background: var(--color-border);
+}
+
+.reservation-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.form-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--color-bg);
+  color: var(--color-text);
+  transition: border-color var(--transition);
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.form-textarea {
+  height: 80px;
+  resize: vertical;
+  background: #f7fafc;
+  border-color: #e2e8f0;
+  border-radius: 6px;
+}
+
+.btn-submit {
+  width: 100%;
+  height: 44px;
+  border: none;
+  border-radius: 8px;
+  background: var(--color-success);
+  color: white;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), transform var(--transition);
+}
+
+.btn-submit:hover:not(:disabled) {
+  background: var(--color-success-hover);
+}
+
+.btn-submit:active:not(:disabled) {
+  background: var(--color-success-active);
+}
+
+.btn-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ====== No Device Hint ====== */
+.no-device-hint {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--color-text-light);
+}
+
+.hint-icon {
+  font-size: 40px;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.no-device-hint p {
+  font-size: 14px;
+}
+
+/* ====== My Reservations ====== */
+.my-reservations,
+.admin-pending {
+  border-top: 2px solid var(--color-border);
+  padding-top: 16px;
+}
+
+.section-title {
+  font-size: 16px;
+  font-family: 'Inter', sans-serif;
+  color: var(--color-text);
+  font-weight: 600;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--color-border);
+}
+
+.empty-hint {
+  color: var(--color-text-light);
+  font-size: 14px;
+  text-align: center;
+  padding: 16px 0;
+}
+
+.reservation-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reservation-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--color-bg);
+  border-radius: 8px;
+  transition: background var(--transition);
+}
+
+.reservation-item:hover {
+  background: #edf2f7;
+}
+
+.res-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.res-device-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.res-detail {
+  font-size: 12px;
+  color: var(--color-text-light);
+}
+
+.res-status-tag {
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.res-status-pending {
+  background: #d69e2e;
+}
+
+.res-status-approved {
+  background: #38a169;
+}
+
+.res-status-rejected {
+  background: #e53e3e;
+}
+
+.btn-cancel-res {
+  background: none;
+  border: none;
+  color: var(--color-danger);
+  font-size: 13px;
+  cursor: pointer;
+  transition: text-decoration var(--transition);
+}
+
+.btn-cancel-res:hover {
+  text-decoration: underline;
+}
+
+/* ====== Admin Actions ====== */
+.admin-item {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.admin-actions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.btn-approve,
+.btn-reject {
+  flex: 1;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity var(--transition);
+}
+
+.btn-approve {
+  background: #38a169;
+}
+
+.btn-reject {
+  background: #e53e3e;
+}
+
+.btn-approve:hover,
+.btn-reject:hover {
+  opacity: 0.85;
+}
+
+/* ====== FAB Button (Mobile) ====== */
+.fab-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-primary);
+  color: white;
+  font-size: 24px;
+  font-weight: 300;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  transition: background var(--transition), transform var(--transition);
+}
+
+.fab-btn:hover {
+  background: var(--color-primary-hover);
+}
+
+.fab-btn:active {
+  background: var(--color-primary-active);
+}
+
+/* ====== Bottom Drawer (Mobile) ====== */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 299;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.drawer-overlay.open {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.bottom-drawer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--color-bg-white);
+  border-radius: 16px 16px 0 0;
+  z-index: 300;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 12px 16px 24px;
+  transform: translateY(100%);
+  transition: transform 0.3s ease-out;
+}
+
+.bottom-drawer.open {
+  transform: translateY(0);
+}
+
+.drawer-handle {
+  width: 40px;
+  height: 4px;
+  background: var(--color-border);
+  border-radius: 2px;
+  margin: 0 auto 12px;
+}
+
+/* ====== Responsive ====== */
+@media (max-width: 900px) {
+  .left-panel {
+    padding: 16px;
+  }
+
+  .device-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .device-card {
+    max-width: 100%;
+  }
+
+  .divider {
+    display: none;
+  }
+
+  .right-panel {
+    display: none;
+  }
+
+  .fab-btn {
+    display: flex;
+  }
+}
+
+@media (min-width: 901px) {
+  .fab-btn {
+    display: none !important;
+  }
+
+  .bottom-drawer {
+    display: none !important;
+  }
+
+  .drawer-overlay {
+    display: none !important;
+  }
+}

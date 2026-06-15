@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1920, height=1080" />
+  <title>记忆珊瑚 · Memory Coral</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      background: radial-gradient(
+        ellipse at center,
+        #0a0a2e 0%,
+        #070720 40%,
+        #050510 100%
+      );
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+
+    #app {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      cursor: pointer;
+    }
+
+    .title-overlay {
+      position: fixed;
+      top: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(180, 210, 255, 0.65);
+      font-size: 22px;
+      letter-spacing: 8px;
+      pointer-events: none;
+      user-select: none;
+      text-shadow: 0 0 20px rgba(120, 160, 255, 0.4);
+      z-index: 10;
+    }
+
+    .hint-overlay {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(140, 180, 230, 0.5);
+      font-size: 13px;
+      letter-spacing: 3px;
+      pointer-events: none;
+      user-select: none;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div class="title-overlay">记 忆 珊 瑚</div>
+  <div class="hint-overlay">悬停唤醒记忆 · 点击释放碎片</div>
+  <div id="app"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

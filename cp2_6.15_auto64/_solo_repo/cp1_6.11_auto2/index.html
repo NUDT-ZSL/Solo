@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>熵变棋局</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Zhi+Mang+Xing&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      min-height: 100vh;
+      background: radial-gradient(ellipse at center, #4A3B1A 0%, #0D0D0D 70%);
+      font-family: 'Noto Sans SC', sans-serif;
+      overflow-x: hidden;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 20px 16px 40px;
+      color: #fff;
+    }
+
+    .game-container {
+      position: relative;
+      width: 100%;
+      max-width: 500px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #game-canvas {
+      display: block;
+      border-radius: 12px;
+      box-shadow: 0 0 40px rgba(212, 175, 55, 0.15);
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 500px;
+      margin-top: 20px;
+      padding: 0 8px;
+    }
+
+    .mode-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #D4AF37;
+      font-size: 14px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .mode-toggle input[type="checkbox"] {
+      appearance: none;
+      width: 42px;
+      height: 22px;
+      background: rgba(42, 31, 13, 0.8);
+      border: 2px solid #D4AF37;
+      border-radius: 11px;
+      position: relative;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      outline: none;
+    }
+
+    .mode-toggle input[type="checkbox"]::after {
+      content: '';
+      position: absolute;
+      top: 1px;
+      left: 1px;
+      width: 16px;
+      height: 16px;
+      background: #666;
+      border-radius: 50%;
+      transition: all 0.25s ease;
+    }
+
+    .mode-toggle input[type="checkbox"]:checked {
+      background: rgba(212, 175, 55, 0.25);
+    }
+
+    .mode-toggle input[type="checkbox"]:checked::after {
+      left: 21px;
+      background: #D4AF37;
+      box-shadow: 0 0 8px rgba(212, 175, 55, 0.6);
+    }
+
+    .reset-btn {
+      background: #D4AF37;
+      color: #0D0D0D;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      font-family: 'Noto Sans SC', sans-serif;
+      cursor: pointer;
+      box-shadow: 0 0 12px rgba(212, 175, 55, 0.4);
+      transform: scale(1);
+      will-change: transform, box-shadow, background-color;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  box-shadow 0.2s ease,
+                  background-color 0.2s ease;
+    }
+
+    .reset-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 20px rgba(212, 175, 55, 0.7);
+      background: #E6C85A;
+    }
+
+    .reset-btn:active {
+      transform: scale(1.02);
+      transition: transform 0.1s ease;
+    }
+
+    .game-result {
+      margin-top: 16px;
+      font-size: 14px;
+      color: #aaa;
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    .game-result strong {
+      color: #D4AF37;
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <canvas id="game-canvas"></canvas>
+    <div class="controls">
+      <label class="mode-toggle">
+        <input type="checkbox" id="ai-toggle" />
+        <span>AI 对战模式</span>
+      </label>
+      <button class="reset-btn" id="reset-btn">重置游戏</button>
+    </div>
+    <div class="game-result">
+      <p>玩法：轮流落子，每次落子后棋盘<strong>随机重置</strong>。</p>
+      <p>先形成三连（横/竖/斜）者获胜。</p>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

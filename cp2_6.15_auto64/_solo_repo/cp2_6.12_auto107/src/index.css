@@ -1,0 +1,370 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: #fafafa;
+  color: #2c3e50;
+}
+
+.app-root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  background: #fff;
+  border-bottom: 1px solid #e8e8e8;
+  flex-shrink: 0;
+}
+
+.app-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #2c3e50;
+  letter-spacing: -0.3px;
+}
+
+.app-header-info {
+  display: flex;
+  gap: 8px;
+}
+
+.header-badge {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.app-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ===== Task Form ===== */
+.task-form-wrapper {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 100;
+}
+
+.task-form {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  width: 300px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+}
+
+.task-form-inner {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #2c3e50;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #eee;
+}
+
+.form-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+}
+
+.form-input {
+  padding: 7px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+  color: #2c3e50;
+  background: #fff;
+}
+
+.form-input:focus {
+  border-color: #4A90D9;
+  box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.15);
+}
+
+.form-row {
+  display: flex;
+  gap: 8px;
+}
+
+.deps-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 120px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.dep-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #2c3e50;
+}
+
+.dep-item input[type="checkbox"] {
+  accent-color: #4A90D9;
+}
+
+.form-submit {
+  padding: 8px 16px;
+  background: #4A90D9;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.form-submit:hover {
+  background: #3a7bc8;
+}
+
+.form-toggle-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #4A90D9;
+  color: #fff;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(74, 144, 217, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+}
+
+.form-toggle-btn:hover {
+  transform: scale(1.1);
+}
+
+/* ===== Gantt Section ===== */
+.gantt-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.gantt-main-row {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.gantt-scroll-area {
+  flex: 1;
+  overflow: auto;
+  background: #fff;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.gantt-scroll-area::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.gantt-scroll-area::-webkit-scrollbar-track {
+  background: #f0f0f0;
+}
+
+.gantt-scroll-area::-webkit-scrollbar-thumb {
+  background: #c0c0c0;
+  border-radius: 4px;
+}
+
+/* ===== Minimap ===== */
+.minimap-panel {
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* ===== Zoom Control ===== */
+.zoom-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: #fff;
+  border-bottom: 1px solid #e8e8e8;
+  flex-shrink: 0;
+}
+
+.zoom-label {
+  font-size: 12px;
+  color: #888;
+  font-weight: 600;
+}
+
+.zoom-slider {
+  flex: 1;
+  max-width: 200px;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #e0e0e0;
+  border-radius: 2px;
+  outline: none;
+}
+
+.zoom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #4A90D9;
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+
+.zoom-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #4A90D9;
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+
+.zoom-value {
+  font-size: 12px;
+  color: #4A90D9;
+  font-weight: 600;
+  min-width: 30px;
+}
+
+/* ===== Status Bar ===== */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.status-text {
+  font-size: 12px;
+  color: #888;
+  font-weight: 500;
+}
+
+.status-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.status-progress-bg {
+  flex: 1;
+  max-width: 200px;
+  height: 6px;
+  background: #eee;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.status-progress-fill {
+  height: 100%;
+  background: #4A90D9;
+  border-radius: 3px;
+}
+
+.status-pct {
+  font-size: 12px;
+  color: #4A90D9;
+  font-weight: 600;
+}
+
+/* ===== SVG Task Bar hover ===== */
+.gantt-scroll-area svg rect {
+  transition: filter 0.1s;
+}
+
+.gantt-scroll-area svg rect:hover {
+  filter: brightness(1.08);
+}
+
+/* ===== Mobile ===== */
+@media (max-width: 768px) {
+  .app-header {
+    padding: 10px 14px;
+  }
+
+  .app-title {
+    font-size: 16px;
+  }
+
+  .app-header-info {
+    display: none;
+  }
+
+  .task-form-wrapper {
+    top: 8px;
+    left: 8px;
+  }
+
+  .task-form {
+    width: calc(100vw - 16px);
+    max-width: 340px;
+  }
+
+  .zoom-slider {
+    max-width: 120px;
+  }
+
+  .status-progress-bg {
+    max-width: 120px;
+  }
+}

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D 粒子宇宙</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="canvas-container"></div>
+  
+  <div id="stats-container">
+    <div id="fps-counter">FPS: 60</div>
+    <div id="particle-counter">粒子: 2000</div>
+  </div>
+
+  <div id="info-panel" class="hidden">
+    <div class="info-title">粒子信息</div>
+    <div class="info-row">
+      <span class="info-label">编号:</span>
+      <span id="info-id" class="info-value">-</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">坐标:</span>
+      <span id="info-position" class="info-value">-</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">速度:</span>
+      <span id="info-velocity" class="info-value">-</span>
+    </div>
+  </div>
+
+  <div id="control-panel">
+    <button class="mode-btn active" data-mode="spiral">螺旋星系</button>
+    <button class="mode-btn" data-mode="sphere">球状星团</button>
+    <button class="mode-btn" data-mode="explosion">爆炸效果</button>
+    <button class="mode-btn" data-mode="random">随机模式</button>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

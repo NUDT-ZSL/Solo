@@ -1,0 +1,21 @@
+{
+  "name": "digital-artifact-museum",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "基于 Three.js 的交互式数字文物浏览平台",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.160.0",
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0"
+  }
+}

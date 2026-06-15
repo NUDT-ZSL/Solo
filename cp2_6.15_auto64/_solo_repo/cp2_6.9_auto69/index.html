@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>动态流体波浪背景</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #ffffff;
+    }
+
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(180deg, #0a1a3a 0%, #123456 100%);
+    }
+
+    #canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .control-panel {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 80px;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      padding: 0 24px;
+      z-index: 100;
+      flex-wrap: wrap;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .control-label {
+      font-size: 12px;
+      white-space: nowrap;
+      min-width: 40px;
+    }
+
+    .slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100px;
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.2);
+      outline: none;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+
+    .slider:hover {
+      transform: scale(1.05);
+    }
+
+    .slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #00c6ff;
+      cursor: pointer;
+      border: 2px solid #ffffff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #00c6ff;
+      cursor: pointer;
+      border: 2px solid #ffffff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .color-picker {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 36px;
+      height: 36px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      padding: 0;
+      background: transparent;
+      transition: transform 0.2s ease;
+    }
+
+    .color-picker:hover {
+      transform: scale(1.05);
+    }
+
+    .color-picker::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+
+    .color-picker::-webkit-color-swatch {
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 8px;
+    }
+
+    .color-picker::-moz-color-swatch {
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 8px;
+    }
+
+    .btn {
+      position: relative;
+      padding: 8px 20px;
+      border: none;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.15);
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      overflow: hidden;
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+
+    .btn:hover {
+      transform: scale(1.05);
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #00c6ff, #0072ff);
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #00d4ff, #0082ff);
+    }
+
+    .ripple {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.5);
+      pointer-events: none;
+      animation: ripple-effect 0.4s ease-out forwards;
+    }
+
+    @keyframes ripple-effect {
+      0% {
+        width: 0;
+        height: 0;
+        opacity: 0.5;
+      }
+      100% {
+        width: 60px;
+        height: 60px;
+        opacity: 0;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .control-panel {
+        height: 120px;
+        padding: 10px 12px;
+        gap: 8px 12px;
+        align-content: center;
+      }
+
+      .slider {
+        width: 80px;
+      }
+
+      .control-label {
+        font-size: 11px;
+        min-width: 32px;
+      }
+
+      .btn {
+        padding: 6px 14px;
+        font-size: 12px;
+      }
+
+      .color-picker {
+        width: 30px;
+        height: 30px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container">
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <div class="control-panel" id="controlPanel">
+    <div class="control-group">
+      <span class="control-label">振幅</span>
+      <input type="range" class="slider" id="amplitude" min="20" max="120" step="1" value="60">
+    </div>
+    <div class="control-group">
+      <span class="control-label">频率</span>
+      <input type="range" class="slider" id="frequency" min="0.01" max="0.1" step="0.001" value="0.05">
+    </div>
+    <div class="control-group">
+      <span class="control-label">流速</span>
+      <input type="range" class="slider" id="speed" min="0.001" max="0.02" step="0.001" value="0.01">
+    </div>
+    <div class="control-group">
+      <span class="control-label">层数</span>
+      <input type="range" class="slider" id="layers" min="3" max="7" step="1" value="5">
+    </div>
+    <div class="control-group">
+      <span class="control-label">主色</span>
+      <input type="color" class="color-picker" id="primaryColor" value="#00c6ff">
+    </div>
+    <div class="control-group">
+      <span class="control-label">辅色</span>
+      <input type="color" class="color-picker" id="secondaryColor" value="#0072ff">
+    </div>
+    <button class="btn btn-primary" id="pauseBtn">暂停</button>
+    <button class="btn" id="resetBtn">重置</button>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

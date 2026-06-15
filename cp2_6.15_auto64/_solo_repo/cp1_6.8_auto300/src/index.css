@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Serif+SC:wght@400;600;700&display=swap');
+
+:root {
+  --tea-50: #FAF6F0;
+  --tea-100: #F0E6D6;
+  --tea-200: #E8D5B7;
+  --tea-300: #D4B896;
+  --tea-400: #C4A47A;
+  --tea-500: #B08D5E;
+  --tea-600: #9A7548;
+  --tea-700: #7D5C38;
+  --tea-800: #5E4429;
+  --tea-900: #3D2D1A;
+  --warm-gold: #D4A24E;
+  --sage-green: #7A9E7E;
+  --font-serif: 'Noto Serif SC', serif;
+  --font-sans: 'Noto Sans SC', sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #FAF6F0 0%, #E8D5B7 50%, #D4B896 100%);
+  background-attachment: fixed;
+  font-family: var(--font-sans);
+  color: var(--tea-800);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-serif);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--tea-100);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--tea-400);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--tea-500);
+}

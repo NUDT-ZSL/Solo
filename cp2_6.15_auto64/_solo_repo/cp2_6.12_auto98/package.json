@@ -1,0 +1,37 @@
+{
+  "name": "story-loom",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "client:dev": "vite",
+    "build": "tsc -b && vite build",
+    "check": "tsc --noEmit",
+    "server:dev": "node server/index.js",
+    "dev": "concurrently \"npm run client:dev\" \"npm run server:dev\""
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.3.0",
+    "axios": "^1.7.0",
+    "framer-motion": "^11.0.0",
+    "zustand": "^5.0.3",
+    "express": "^4.21.2",
+    "cors": "^2.8.5",
+    "uuid": "^10.0.0",
+    "lucide-react": "^0.511.0",
+    "sql.js": "^1.11.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/node": "^22.15.30",
+    "@vitejs/plugin-react": "^4.4.1",
+    "concurrently": "^9.2.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "vite-plugin-trae-solo-badge": "^1.0.0",
+    "vite-tsconfig-paths": "^5.1.4"
+  }
+}

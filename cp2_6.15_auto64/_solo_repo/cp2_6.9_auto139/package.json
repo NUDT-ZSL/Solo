@@ -1,0 +1,15 @@
+{
+  "name": "rainbow-particle-spiral",
+  "version": "1.0.0",
+  "description": "Interactive rainbow particle spiral with keyboard theme switching",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vite": "^5.2.0"
+  }
+}

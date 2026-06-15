@@ -1,0 +1,163 @@
+.module-card {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+}
+
+.module-card.dragging {
+  opacity: 0.8;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.module-card.isDraggingOver {
+  background: #f0f7ff;
+}
+
+.module-header {
+  background: linear-gradient(90deg, #1e3a5f 0%, #2563eb 100%);
+  color: white;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: grab;
+  user-select: none;
+}
+
+.module-header:active {
+  cursor: grabbing;
+}
+
+.module-icon {
+  font-size: 20px;
+}
+
+.module-title-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  outline: none;
+  width: 100%;
+}
+
+.module-title-input::placeholder {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.drag-handle {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 18px;
+  cursor: grab;
+}
+
+.module-content {
+  padding: 16px 20px;
+  position: relative;
+}
+
+.editor-wrapper {
+  position: relative;
+  min-height: 200px;
+}
+
+.editor-wrapper :global(.ql-container) {
+  font-size: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  min-height: 180px;
+}
+
+.editor-wrapper :global(.ql-toolbar) {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px 8px 0 0;
+  background: #f8fafc;
+}
+
+.editor-wrapper :global(.ql-editor) {
+  min-height: 150px;
+}
+
+.module-card.user-a {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2), 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.module-card.user-b {
+  border-color: #f97316;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.2), 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.user-bubble {
+  position: absolute;
+  top: -12px;
+  right: 20px;
+  z-index: 10;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.user-avatar-bubble {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #60a5fa, #3b82f6);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  border: 3px solid white;
+}
+
+.user-avatar-bubble.orange {
+  background: linear-gradient(135deg, #fb923c, #f97316);
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4);
+}
+
+.other-editors {
+  position: absolute;
+  top: 50px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 5;
+}
+
+.remote-cursor {
+  position: absolute;
+  width: 2px;
+  height: 20px;
+  background: #f97316;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.remote-cursor-label {
+  position: absolute;
+  top: -20px;
+  left: 0;
+  background: #f97316;
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>萤火迷宫 · 灵光寻径</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body,
+      #root {
+        width: 100%;
+        height: 100%;
+        min-height: 100vh;
+      }
+      body {
+        background: #05051a;
+        font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        overflow: hidden;
+        color: #ffffff;
+      }
+    </style>
+    <script type="module">
+      if (import.meta.hot?.on) {
+        import.meta.hot.on('vite:error', (error) => {
+          if (error.err) {
+            console.error(
+              [error.err.message, error.err.frame].filter(Boolean).join('\n')
+            );
+          }
+        });
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root">
+      <div
+        id="game-container"
+        style="
+          width: 100vw;
+          height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          position: relative;
+        "
+      >
+        <canvas
+          id="game-canvas"
+          width="800"
+          height="800"
+          style="
+            display: block;
+            box-shadow: 0 0 60px rgba(100, 100, 255, 0.25);
+            border-radius: 8px;
+          "
+        ></canvas>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

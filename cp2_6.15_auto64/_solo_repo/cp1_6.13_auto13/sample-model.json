@@ -1,0 +1,42 @@
+{
+  "layers": [
+    {
+      "name": "Input",
+      "type": "input",
+      "neurons": 10,
+      "activation": "relu"
+    },
+    {
+      "name": "Hidden 1",
+      "type": "hidden",
+      "neurons": 8,
+      "activation": "relu"
+    },
+    {
+      "name": "Hidden 2",
+      "type": "hidden",
+      "neurons": 6,
+      "activation": "relu"
+    },
+    {
+      "name": "Hidden 3",
+      "type": "hidden",
+      "neurons": 4,
+      "activation": "sigmoid"
+    },
+    {
+      "name": "Output",
+      "type": "output",
+      "neurons": 2,
+      "activation": "softmax"
+    }
+  ],
+  "connections": [
+    [
+      { "from": 0, "to": 0, "weight": 0.8 },
+      { "from": 0, "to": 1, "weight": -0.3 },
+      { "from": 1, "to": 0, "weight": 0.5 },
+      { "from": 1, "to": 1, "weight": 0.9 }
+    ]
+  ]
+}

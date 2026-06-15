@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-aurora-dark text-white font-noto;
+    background: linear-gradient(135deg, #0a0e27 0%, #1a0533 50%, #0a0e27 100%);
+    min-height: 100vh;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl;
+  }
+
+  .glow-button {
+    @apply relative px-6 py-3 rounded-xl font-orbitron font-bold
+           text-white bg-gradient-to-r from-aurora-cyan to-aurora-pink
+           transition-all duration-300 ease-in-out;
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+  }
+
+  .glow-button:hover {
+    box-shadow: 0 0 40px rgba(0, 212, 255, 0.6), 0 0 80px rgba(255, 0, 255, 0.3);
+    transform: translateY(-2px);
+  }
+
+  .aurora-bg {
+    background: linear-gradient(
+      135deg,
+      #0a0e27 0%,
+      #1a0533 25%,
+      #0a0e27 50%,
+      #1a0533 75%,
+      #0a0e27 100%
+    );
+    background-size: 400% 400%;
+    animation: aurora-shift 8s ease infinite;
+  }
+
+  .waveform-glow {
+    filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.6));
+  }
+
+  .pulse-animation {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+}
+
+@layer utilities {
+  .transition-smooth {
+    @apply transition-all duration-300 ease-in-out;
+  }
+}
+
+@keyframes aurora-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}

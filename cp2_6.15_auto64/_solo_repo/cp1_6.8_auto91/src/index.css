@@ -1,0 +1,301 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Noto+Sans+SC:wght@300;400;500&display=swap');
+
+:root {
+  font-family: 'Noto Sans SC', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.app-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.scene-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+.scene-container canvas {
+  display: block;
+}
+
+.ui-panel {
+  position: fixed;
+  top: 50%;
+  right: 24px;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: 220px;
+  padding: 24px 20px;
+  background: rgba(61, 31, 71, 0.35);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(232, 168, 56, 0.2);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ui-panel-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #E8A838;
+  text-align: center;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.ui-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ui-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: rgba(232, 168, 56, 0.85);
+  font-weight: 500;
+}
+
+.ui-value {
+  margin-left: auto;
+  font-family: 'Playfair Display', serif;
+  font-size: 13px;
+  color: #E8A838;
+}
+
+.ui-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: rgba(232, 168, 56, 0.2);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.ui-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #E8A838, #D4542A);
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(232, 168, 56, 0.5);
+  transition: transform 0.15s ease;
+}
+
+.ui-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.ui-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #E8A838, #D4542A);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 8px rgba(232, 168, 56, 0.5);
+}
+
+.ui-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, rgba(232, 168, 56, 0.7), rgba(212, 84, 42, 0.7));
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(232, 168, 56, 0.3);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 1px;
+}
+
+.ui-btn:hover {
+  transform: scale(1.03);
+  background: linear-gradient(135deg, rgba(232, 168, 56, 0.9), rgba(212, 84, 42, 0.9));
+  box-shadow: 0 4px 20px rgba(232, 168, 56, 0.3);
+}
+
+.ui-btn:active {
+  transform: scale(0.97);
+}
+
+.info-card {
+  position: fixed;
+  z-index: 20;
+  padding: 16px 20px;
+  background: rgba(61, 31, 71, 0.4);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(232, 168, 56, 0.25);
+  border-radius: 12px;
+  min-width: 160px;
+  pointer-events: none;
+  transform: translate(-50%, -120%);
+}
+
+.info-card-enter {
+  animation: cardFadeIn 0.35s ease forwards;
+}
+
+.info-card-exit {
+  animation: cardFadeOut 0.5s ease forwards;
+}
+
+.info-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.info-card-row + .info-card-row {
+  border-top: 1px solid rgba(232, 168, 56, 0.1);
+}
+
+.info-card-label {
+  font-size: 12px;
+  color: rgba(232, 168, 56, 0.7);
+}
+
+.info-card-value {
+  font-family: 'Playfair Display', serif;
+  font-size: 14px;
+  color: #E8A838;
+  font-weight: 700;
+}
+
+.app-hint {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  font-size: 12px;
+  color: rgba(232, 168, 56, 0.5);
+  letter-spacing: 1px;
+  pointer-events: none;
+  animation: hintPulse 3s ease-in-out infinite;
+}
+
+@keyframes cardFadeIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -100%) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -120%) scale(1);
+  }
+}
+
+@keyframes cardFadeOut {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -120%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -140%) scale(0.9);
+  }
+}
+
+@keyframes hintPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.7; }
+}
+
+@media (max-width: 768px) {
+  .ui-panel {
+    top: auto;
+    bottom: 16px;
+    right: 16px;
+    left: 16px;
+    width: auto;
+    transform: none;
+    padding: 16px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .ui-panel-title {
+    width: 100%;
+    font-size: 14px;
+  }
+
+  .ui-control-group {
+    flex: 1;
+    min-width: 80px;
+  }
+
+  .ui-btn {
+    width: 100%;
+  }
+
+  .info-card {
+    transform: translate(-50%, 20px);
+  }
+
+  @keyframes cardFadeIn {
+    from {
+      opacity: 0;
+      transform: translate(-50%, 30px) scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, 20px) scale(1);
+    }
+  }
+
+  @keyframes cardFadeOut {
+    from {
+      opacity: 1;
+      transform: translate(-50%, 20px) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: translate(-50%, 10px) scale(0.9);
+    }
+  }
+}

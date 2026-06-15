@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>浮光掠影 · 三维光影雕塑</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      min-width: 800px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    }
+
+    #app {
+      width: 100vw;
+      height: 100vh;
+      background: linear-gradient(135deg, #0D1321 0%, #1D2B4A 100%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    #scene-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    .info-panel {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      background: rgba(20, 30, 55, 0.7);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 12px 16px;
+      color: rgba(255, 255, 255, 0.9);
+      font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      z-index: 100;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      min-width: 220px;
+    }
+
+    .info-panel .title {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #B0C4DE;
+      letter-spacing: 0.5px;
+    }
+
+    .info-panel .fps {
+      color: #FFD700;
+      font-weight: 600;
+    }
+
+    .info-panel .light-info {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .info-panel .light-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 2px 0;
+    }
+
+    .info-panel .light-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .control-panel {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-radius: 20px;
+      padding: 8px;
+      display: flex;
+      gap: 8px;
+      z-index: 100;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .control-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: none;
+      color: rgba(255, 255, 255, 0.85);
+      padding: 10px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+      transition: all 0.25s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .control-btn:hover {
+      background: rgba(255, 255, 255, 0.16);
+      color: #fff;
+      transform: translateY(-1px);
+    }
+
+    .control-btn:active {
+      transform: translateY(0);
+    }
+
+    .control-btn.active {
+      background: rgba(176, 196, 222, 0.3);
+      color: #fff;
+    }
+
+    @media (min-width: 1440px) {
+      #app {
+        padding: 0 calc((100vw - 1440px) / 2);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="scene-container"></div>
+
+    <div class="info-panel" id="info-panel">
+      <div class="title">浮光掠影 · Light & Shadow</div>
+      <div>FPS: <span class="fps" id="fps-value">--</span></div>
+      <div class="light-info" id="light-info">
+      </div>
+    </div>
+
+    <div class="control-panel">
+      <button class="control-btn" id="btn-glass">磨砂玻璃</button>
+      <button class="control-btn" id="btn-chrome">高光镀铬</button>
+      <button class="control-btn" id="btn-reset">重置视角</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

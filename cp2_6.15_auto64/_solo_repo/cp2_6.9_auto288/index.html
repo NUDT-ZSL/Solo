@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>雾隐灯塔</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    #app {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(ellipse at center, #2C3E50 0%, #1A2333 100%);
+      position: relative;
+    }
+    #gameCanvas {
+      display: block;
+      border-radius: 12px;
+      box-shadow: 0 10px 60px rgba(0, 0, 0, 0.5);
+      cursor: pointer;
+    }
+    #statusIndicator {
+      position: absolute;
+      top: 24px;
+      left: 24px;
+      background: rgba(42, 58, 74, 0.8);
+      color: #E8D5B7;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      letter-spacing: 1px;
+      backdrop-filter: blur(6px);
+      z-index: 10;
+      user-select: none;
+    }
+    #statusIndicator .count {
+      display: inline-block;
+      color: #FFD700;
+      font-weight: 600;
+      min-width: 24px;
+      text-align: center;
+      transition: transform 0.2s ease-out;
+    }
+    #resetBtn {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      background: rgba(58, 90, 122, 0.4);
+      color: #E8D5B7;
+      padding: 6px 18px;
+      border-radius: 20px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      letter-spacing: 1px;
+      transition: background 0.3s ease-out;
+      backdrop-filter: blur(6px);
+      z-index: 10;
+      user-select: none;
+    }
+    #resetBtn:hover {
+      background: rgba(74, 122, 154, 0.8);
+    }
+    #resetBtn:active {
+      transform: scale(0.96);
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="gameCanvas" width="900" height="650"></canvas>
+    <div id="statusIndicator">
+      <span class="count" id="collectedCount">0</span>/<span id="totalCount">0</span> 碎片
+    </div>
+    <button id="resetBtn">重置迷雾</button>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

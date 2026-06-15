@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D 星云粒子系统</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #000000;
+      font-family: sans-serif;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+    }
+
+    #control-panel {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 260px;
+      padding: 20px;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid #334155;
+      border-radius: 12px;
+      color: #ffffff;
+      transition: opacity 0.3s ease, transform 0.5s ease-out;
+      opacity: 0.8;
+      transform: translateX(0);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+    }
+
+    #control-panel.hidden {
+      transform: translateX(120%);
+    }
+
+    #control-panel:hover {
+      opacity: 1.0;
+    }
+
+    #control-panel h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #e2e8f0;
+    }
+
+    .control-group {
+      margin-bottom: 16px;
+    }
+
+    .control-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .control-group label {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 8px;
+      color: #f1f5f9;
+    }
+
+    .control-group .value-display {
+      display: inline-block;
+      margin-left: 8px;
+      font-size: 12px;
+      color: #94a3b8;
+      min-width: 40px;
+      text-align: right;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 200px;
+      height: 6px;
+      background: #1e293b;
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #8B5CF6;
+      cursor: pointer;
+      border: none;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+      box-shadow: 0 0 8px rgba(139, 92, 246, 0.6);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #8B5CF6;
+      cursor: pointer;
+      border: none;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    input[type="range"]::-moz-range-thumb:hover {
+      transform: scale(1.15);
+      box-shadow: 0 0 8px rgba(139, 92, 246, 0.6);
+    }
+
+    .theme-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .theme-btn {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #334155;
+      background: #1e293b;
+      color: #f1f5f9;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .theme-btn:hover {
+      border-color: #8B5CF6;
+      background: rgba(139, 92, 246, 0.2);
+    }
+
+    .theme-btn.active {
+      border-color: #8B5CF6;
+      background: rgba(139, 92, 246, 0.3);
+      color: #ffffff;
+    }
+
+    .shortcuts-info {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #334155;
+      font-size: 11px;
+      color: #64748b;
+      line-height: 1.8;
+    }
+
+    .shortcuts-info kbd {
+      display: inline-block;
+      padding: 1px 6px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 10px;
+      color: #cbd5e1;
+    }
+
+    @media (max-width: 768px) {
+      #control-panel {
+        width: 60vw;
+      }
+
+      #control-panel h3 {
+        font-size: 14px;
+      }
+
+      .control-group label {
+        font-size: 12px;
+      }
+
+      input[type="range"] {
+        width: calc(60vw - 40px - 40px);
+      }
+
+      .theme-btn {
+        font-size: 11px;
+        padding: 6px 8px;
+      }
+
+      .shortcuts-info {
+        font-size: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+    <div id="control-panel" class="hidden">
+      <h3>✨ 星云控制面板</h3>
+      
+      <div class="control-group">
+        <label>粒子大小 <span class="value-display" id="size-value">1.25</span></label>
+        <input type="range" id="particle-size" min="0.5" max="5.0" step="0.1" value="1.25" />
+      </div>
+
+      <div class="control-group">
+        <label>旋转速度 <span class="value-display" id="speed-value">0.0020</span></label>
+        <input type="range" id="rotation-speed" min="0" max="0.01" step="0.0005" value="0.002" />
+      </div>
+
+      <div class="control-group">
+        <label>颜色主题</label>
+        <div class="theme-buttons">
+          <button class="theme-btn active" data-theme="A">主题 A</button>
+          <button class="theme-btn" data-theme="B">主题 B</button>
+        </div>
+      </div>
+
+      <div class="shortcuts-info">
+        <div><kbd>R</kbd> 重置视角</div>
+        <div><kbd>1</kbd> 主题 A · <kbd>2</kbd> 主题 B</div>
+        <div><kbd>+</kbd> 增加粒子 · <kbd>-</kbd> 减少粒子</div>
+        <div>鼠标拖拽旋转 · 滚轮缩放</div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

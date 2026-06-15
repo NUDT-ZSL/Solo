@@ -1,0 +1,15 @@
+{
+  "name": "sound-chain-pinball",
+  "version": "1.0.0",
+  "description": "音链弹珠 - 结合音序器和物理弹珠玩法的交互式音乐生成游戏",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
+  }
+}

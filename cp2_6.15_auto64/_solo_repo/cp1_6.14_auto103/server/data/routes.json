@@ -1,0 +1,97 @@
+{
+  "routes": [
+    {
+      "id": "demo1",
+      "name": "黄山徒步路线",
+      "description": "经典的黄山登山路线，从云谷寺上山，经过光明顶，到达迎客松",
+      "waypoints": [
+        {
+          "id": "wp1",
+          "lat": 30.1322,
+          "lng": 118.1786,
+          "elevation": 890,
+          "timestamp": "2024-03-15T08:00:00Z",
+          "photos": [
+            {
+              "id": "ph1",
+              "url": "https://images.unsplash.com/photo-1544737693-b7f4a0ff1b35?w=400",
+              "thumbnail": "https://images.unsplash.com/photo-1544737693-b7f4a0ff1b35?w=100",
+              "name": "云谷寺入口.jpg"
+            }
+          ],
+          "notes": "早上8点从云谷寺出发，天气晴朗，准备好登山杖和足够的水。"
+        },
+        {
+          "id": "wp2",
+          "lat": 30.1378,
+          "lng": 118.1721,
+          "elevation": 1650,
+          "timestamp": "2024-03-15T10:30:00Z",
+          "photos": [
+            {
+              "id": "ph2",
+              "url": "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?w=400",
+              "thumbnail": "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?w=100",
+              "name": "半山腰风光.jpg"
+            }
+          ],
+          "notes": "到达半山腰，云雾缭绕，可以看到远处的山峰若隐若现。"
+        },
+        {
+          "id": "wp3",
+          "lat": 30.1419,
+          "lng": 118.1683,
+          "elevation": 1864,
+          "timestamp": "2024-03-15T12:45:00Z",
+          "photos": [
+            {
+              "id": "ph3",
+              "url": "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=400",
+              "thumbnail": "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=100",
+              "name": "光明顶.jpg"
+            }
+          ],
+          "notes": "登顶光明顶！海拔1864米，视野开阔，可以俯瞰整个黄山风景区。"
+        },
+        {
+          "id": "wp4",
+          "lat": 30.1385,
+          "lng": 118.1640,
+          "elevation": 1670,
+          "timestamp": "2024-03-15T14:20:00Z",
+          "photos": [
+            {
+              "id": "ph4",
+              "url": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=400",
+              "thumbnail": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=100",
+              "name": "迎客松.jpg"
+            }
+          ],
+          "notes": "来到著名的迎客松，这是黄山的标志性景观，松树姿态优美。"
+        }
+      ],
+      "isFavorite": true,
+      "reviews": [
+        {
+          "id": "rv1",
+          "userId": "u1",
+          "userName": "登山爱好者小王",
+          "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=wang",
+          "content": "这条路线非常经典，沿途风景优美，推荐体力较好的朋友尝试！",
+          "rating": 5,
+          "createdAt": "2024-03-20T10:00:00Z"
+        },
+        {
+          "id": "rv2",
+          "userId": "u2",
+          "userName": "户外达人Lisa",
+          "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=lisa",
+          "content": "光明顶的日出真的太美了，建议前一天住在山上。",
+          "rating": 4,
+          "createdAt": "2024-04-01T08:30:00Z"
+        }
+      ],
+      "createdAt": "2024-03-10T12:00:00Z"
+    }
+  ]
+}

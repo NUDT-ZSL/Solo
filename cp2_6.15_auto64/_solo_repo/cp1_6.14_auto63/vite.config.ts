@@ -1,0 +1,15 @@
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  server: {
+    host: true,
+    port: 5180,
+    hmr: true,
+    strictPort: true
+  },
+  build: {
+    target: 'esnext',
+    minify: 'esbuild',
+    sourcemap: true
+  }
+});

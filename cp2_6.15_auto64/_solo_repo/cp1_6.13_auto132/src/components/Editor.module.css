@@ -1,0 +1,122 @@
+.editorContainer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #1e1e1e;
+  position: relative;
+  overflow: hidden;
+}
+
+.collapsed {
+  width: 48px !important;
+  min-width: 48px !important;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #252526;
+  border-bottom: 1px solid #3c3c3c;
+  flex-shrink: 0;
+}
+
+.collapsed .header {
+  justify-content: center;
+}
+
+.collapseButton {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.1s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.collapseButton:hover {
+  background-color: #374151;
+  color: #f9fafb;
+}
+
+.collapseButton:active {
+  transform: scale(0.95);
+}
+
+.title {
+  color: #9ca3af;
+  font-size: 13px;
+  font-weight: 500;
+  margin-left: 8px;
+}
+
+.collapsed .title {
+  display: none;
+}
+
+.editor {
+  flex: 1;
+  overflow: hidden;
+}
+
+.collapsed .editor {
+  display: none;
+}
+
+.errorBar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background-color: #ef4444;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  animation: slideIn 0.3s ease-out;
+  z-index: 10;
+}
+
+.fadeOut {
+  animation: fadeOut 0.5s ease-out forwards;
+}
+
+.errorIcon {
+  color: #ffffff;
+  margin-right: 8px;
+  font-size: 16px;
+}
+
+.errorText {
+  color: #ffffff;
+  font-size: 13px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}

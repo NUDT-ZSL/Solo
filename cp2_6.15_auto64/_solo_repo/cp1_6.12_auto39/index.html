@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>PuzzlePhrase - 星空拼词</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Nunito:wght@400;600;800&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0e27; }
+    body { font-family: 'Nunito', sans-serif; color: #e8eaf6; -webkit-tap-highlight-color: transparent; }
+    #game-container { position: relative; width: 100vw; height: 100vh; }
+    #game-canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    .loading {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 20px; color: #4fc3f7;
+      background: linear-gradient(135deg, #0a0e27 0%, #1a1f4a 100%);
+      letter-spacing: 2px;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div class="loading" id="loading">Loading PuzzlePhrase...</div>
+    <canvas id="game-canvas"></canvas>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

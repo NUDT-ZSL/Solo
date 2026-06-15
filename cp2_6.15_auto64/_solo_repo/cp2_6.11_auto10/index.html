@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>像素孵化器 | Pixel Incubator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      background: #0D1420;
+      font-family: 'Press Start 2P', monospace;
+      overflow: hidden;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      position: relative;
+    }
+    #game-wrapper {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      max-width: 100%;
+      max-height: 100vh;
+    }
+    .border-top, .border-bottom {
+      width: 100%;
+      height: 24px;
+      background: linear-gradient(180deg, rgba(27,40,56,1) 0%, rgba(13,20,32,0.85) 100%);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      flex-shrink: 0;
+    }
+    .border-bottom {
+      background: linear-gradient(0deg, rgba(27,40,56,1) 0%, rgba(13,20,32,0.85) 100%);
+      box-shadow: 0 -4px 12px rgba(0,0,0,0.5);
+    }
+    #canvas-container {
+      position: relative;
+      background: #1B2838;
+      box-shadow: 0 0 40px rgba(0,0,0,0.6), inset 0 0 0 2px rgba(245,212,66,0.3);
+    }
+    canvas {
+      display: block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      cursor: pointer;
+    }
+    #status-panel {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 200px;
+      height: 100px;
+      background: rgba(27, 40, 56, 0.85);
+      border: 2px solid rgba(245, 212, 66, 0.4);
+      border-radius: 8px;
+      padding: 10px 12px;
+      z-index: 10;
+      backdrop-filter: blur(4px);
+    }
+    .panel-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .panel-label {
+      color: #F5D442;
+      font-size: 8px;
+      margin-right: 6px;
+      min-width: 48px;
+    }
+    #hearts { display: flex; gap: 2px; flex-wrap: wrap; }
+    .heart {
+      width: 10px; height: 10px;
+      position: relative;
+      transition: transform 0.3s ease;
+    }
+    .heart svg { width: 100%; height: 100%; }
+    .heart.filling svg path {
+      animation: heartFill 0.5s ease forwards;
+    }
+    @keyframes heartFill {
+      0% { fill: #4a4a4a; transform: scale(1); }
+      50% { transform: scale(1.4); }
+      100% { fill: #e74c3c; transform: scale(1); }
+    }
+    #evolution-level {
+      font-size: 14px;
+      font-weight: bold;
+      background: linear-gradient(135deg, #F5D442, #E25822, #F5D442);
+      background-size: 200% 200%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: gradientFlow 2s ease infinite;
+    }
+    @keyframes gradientFlow {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+    #intimacy-bar {
+      width: 100%;
+      height: 10px;
+      background: #2a2a2a;
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid rgba(245,212,66,0.3);
+    }
+    #intimacy-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #e74c3c, #f1c40f);
+      transition: width 0.4s ease;
+      position: relative;
+    }
+    #evolution-notification {
+      position: absolute;
+      top: 40px;
+      left: 50%;
+      transform: translateX(-50%) scale(0);
+      background: linear-gradient(135deg, rgba(245,212,66,0.95), rgba(226,88,34,0.95));
+      color: #1B2838;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 12px;
+      z-index: 20;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      opacity: 0;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    #evolution-notification.show {
+      animation: popIn 0.5s cubic-bezier(0.68,-0.55,0.265,1.55) forwards;
+    }
+    #evolution-notification.hide {
+      animation: popOut 0.4s ease forwards;
+    }
+    @keyframes popIn {
+      0% { transform: translateX(-50%) scale(0); opacity: 0; }
+      100% { transform: translateX(-50%) scale(1); opacity: 1; }
+    }
+    @keyframes popOut {
+      0% { transform: translateX(-50%) scale(1); opacity: 1; }
+      100% { transform: translateX(-50%) scale(0.6); opacity: 0; }
+    }
+    #time-indicator {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 8px;
+      z-index: 5;
+      transition: background 0.5s ease;
+      pointer-events: none;
+    }
+    #weather-label {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      color: #F5D442;
+      font-size: 8px;
+      z-index: 10;
+      text-shadow: 2px 2px 0 #1B2838;
+    }
+    #click-hint {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #F5D442;
+      font-size: 9px;
+      z-index: 10;
+      text-align: center;
+      text-shadow: 2px 2px 0 #1B2838;
+      animation: hintBlink 1.5s ease-in-out infinite;
+    }
+    @keyframes hintBlink {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+    #click-hint.hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div id="game-wrapper">
+    <div class="border-top"></div>
+    <div id="canvas-container">
+      <div id="time-indicator"></div>
+      <div id="weather-label">☀️ 晴天</div>
+      <canvas id="game" width="640" height="480"></canvas>
+      <div id="status-panel">
+        <div class="panel-row">
+          <span class="panel-label">饱食度</span>
+          <div id="hearts"></div>
+        </div>
+        <div class="panel-row">
+          <span class="panel-label">进化</span>
+          <span id="evolution-level">1</span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-label">亲密度</span>
+          <div id="intimacy-bar">
+            <div id="intimacy-fill"></div>
+          </div>
+        </div>
+      </div>
+      <div id="evolution-notification"></div>
+      <div id="click-hint">点击蛋开始孵化</div>
+    </div>
+    <div class="border-bottom"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

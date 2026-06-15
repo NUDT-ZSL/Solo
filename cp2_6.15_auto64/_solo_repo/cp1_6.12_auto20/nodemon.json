@@ -1,0 +1,9 @@
+{
+  "watch": ["src/server", "shared"],
+  "ext": "ts,mts,js,json",
+  "exec": "tsx src/server/main.ts",
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "delay": 1000
+}

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>像素跑酷节奏</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #1a1a2e;
+      font-family: 'Courier New', monospace;
+      color: #fff;
+      -webkit-user-select: none;
+      user-select: none;
+      touch-action: none;
+    }
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    #gameCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    #preloader {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #1a1a2e;
+      z-index: 100;
+      font-size: 18px;
+      color: #e94560;
+      letter-spacing: 2px;
+    }
+    .scene {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      z-index: 10;
+    }
+    .scene.active { display: flex; }
+    .menu-title {
+      font-size: 48px;
+      color: #e94560;
+      letter-spacing: 4px;
+      margin-bottom: 12px;
+      text-shadow: 0 0 20px rgba(233, 69, 96, 0.6);
+    }
+    .menu-subtitle {
+      font-size: 14px;
+      color: #0f3460;
+      margin-bottom: 40px;
+      letter-spacing: 2px;
+    }
+    .btn {
+      background: #e94560;
+      color: #fff;
+      border: none;
+      padding: 14px 40px;
+      font-size: 18px;
+      font-family: inherit;
+      cursor: pointer;
+      margin: 8px;
+      letter-spacing: 2px;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      min-width: 220px;
+      box-shadow: 0 4px 0 #a82d42;
+    }
+    .btn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 6px 0 #a82d42, 0 0 20px rgba(233, 69, 96, 0.5);
+    }
+    .btn:active {
+      transform: translateY(2px) scale(1.08);
+      box-shadow: 0 2px 0 #a82d42;
+    }
+    .sound-pack-selector {
+      display: flex;
+      gap: 10px;
+      margin: 20px 0 30px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .sound-pack-btn {
+      background: transparent;
+      border: 2px solid #0f3460;
+      color: #0f3460;
+      padding: 10px 20px;
+      font-size: 14px;
+      font-family: inherit;
+      cursor: pointer;
+      letter-spacing: 1px;
+      transition: all 0.15s ease;
+    }
+    .sound-pack-btn:hover {
+      border-color: #e94560;
+      color: #e94560;
+    }
+    .sound-pack-btn.active {
+      background: #e94560;
+      border-color: #e94560;
+      color: #fff;
+    }
+    .gameover-score {
+      font-size: 64px;
+      color: #e94560;
+      margin-bottom: 8px;
+    }
+    .gameover-label {
+      font-size: 14px;
+      color: #0f3460;
+      margin-bottom: 4px;
+      letter-spacing: 2px;
+    }
+    .gameover-value {
+      font-size: 28px;
+      color: #fff;
+      margin-bottom: 24px;
+    }
+    .playback-controls {
+      display: flex;
+      gap: 8px;
+      margin: 16px 0;
+      justify-content: center;
+    }
+    .speed-btn {
+      background: #0f3460;
+      color: #fff;
+      border: none;
+      padding: 8px 16px;
+      font-family: inherit;
+      cursor: pointer;
+      letter-spacing: 1px;
+      font-size: 14px;
+    }
+    .speed-btn.active {
+      background: #e94560;
+    }
+    .playback-info {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      text-align: right;
+      font-size: 14px;
+      color: #0f3460;
+      letter-spacing: 1px;
+    }
+    .playback-info span { color: #e94560; }
+    .touch-controls {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: none;
+      justify-content: space-between;
+      padding: 20px;
+      z-index: 20;
+    }
+    .touch-controls.active { display: flex; }
+    .touch-btn-group { display: flex; gap: 12px; }
+    .touch-btn {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: rgba(233, 69, 96, 0.7);
+      border: 3px solid #e94560;
+      color: #fff;
+      font-size: 24px;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+    }
+    .touch-btn:active { background: rgba(233, 69, 96, 1); }
+    @media (max-width: 768px) {
+      .menu-title { font-size: 32px; }
+      .btn { min-width: 180px; padding: 12px 28px; font-size: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="preloader">加载中...</div>
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="menuScene" class="scene">
+      <div class="menu-title">像素跑酷节奏</div>
+      <div class="menu-subtitle">PIXEL PARKOUR RHYTHM</div>
+      <div class="gameover-label">选择音色包</div>
+      <div class="sound-pack-selector" id="soundPackSelector">
+        <button class="sound-pack-btn active" data-pack="electronic">电子音</button>
+        <button class="sound-pack-btn" data-pack="piano">钢琴音</button>
+        <button class="sound-pack-btn" data-pack="synth">合成贝斯</button>
+      </div>
+      <button class="btn" id="startBtn">开始游戏</button>
+      <div class="gameover-label" style="margin-top: 30px; font-size: 12px;">
+        空格：跳跃（长按跳更高） · S：滑铲
+      </div>
+    </div>
+
+    <div id="gameoverScene" class="scene">
+      <div class="menu-title" style="font-size: 36px;">游戏结束</div>
+      <div class="gameover-score" id="finalScore">0</div>
+      <div class="gameover-label">最高连击</div>
+      <div class="gameover-value" id="maxCombo">0</div>
+      <button class="btn" id="replayBtn">回放录影</button>
+      <button class="btn" id="restartBtn">再来一局</button>
+      <button class="btn" id="menuBtn">返回主菜单</button>
+    </div>
+
+    <div id="playbackScene" class="scene">
+      <div class="playback-info">
+        <div>BPM: <span id="playbackBpm">120</span></div>
+        <div>COMBO: <span id="playbackCombo">0</span></div>
+      </div>
+      <div style="position: absolute; bottom: 30px;">
+        <div class="gameover-label">回放速度</div>
+        <div class="playback-controls">
+          <button class="speed-btn" data-speed="0.5">0.5x</button>
+          <button class="speed-btn active" data-speed="1">1x</button>
+          <button class="speed-btn" data-speed="2">2x</button>
+        </div>
+        <button class="btn" id="exitPlaybackBtn">退出回放</button>
+      </div>
+    </div>
+
+    <div class="touch-controls" id="touchControls">
+      <div class="touch-btn-group">
+        <button class="touch-btn" id="slideBtn">S</button>
+      </div>
+      <div class="touch-btn-group">
+        <button class="touch-btn" id="jumpBtn">↑</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

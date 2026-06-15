@@ -1,0 +1,223 @@
+{
+  "components": [
+    {
+      "id": "comp-button",
+      "name": "Button",
+      "version": "2.1.0",
+      "category": "/Basic",
+      "tags": ["React", "TS"],
+      "defaultProps": {
+        "label": "Click Me",
+        "variant": "primary",
+        "disabled": false
+      },
+      "styleConfig": {
+        "color": "#ffffff",
+        "backgroundColor": "#4A90D9",
+        "fontSize": 14,
+        "borderRadius": 8,
+        "padding": 12,
+        "boxShadow": "0 2px 4px rgba(0,0,0,0.1)",
+        "width": 120,
+        "height": 40
+      }
+    },
+    {
+      "id": "comp-card",
+      "name": "Card",
+      "version": "1.5.2",
+      "category": "/Basic",
+      "tags": ["React", "TS"],
+      "defaultProps": {
+        "title": "Card Title",
+        "subtitle": "Card description here",
+        "elevated": true
+      },
+      "styleConfig": {
+        "color": "#333333",
+        "backgroundColor": "#ffffff",
+        "fontSize": 14,
+        "borderRadius": 12,
+        "padding": 24,
+        "boxShadow": "0 4px 12px rgba(0,0,0,0.08)",
+        "width": 300,
+        "height": 200
+      }
+    },
+    {
+      "id": "comp-input",
+      "name": "Input",
+      "version": "3.0.1",
+      "category": "/Basic",
+      "tags": ["React", "TS"],
+      "defaultProps": {
+        "placeholder": "Enter text...",
+        "type": "text",
+        "required": false
+      },
+      "styleConfig": {
+        "color": "#333333",
+        "backgroundColor": "#ffffff",
+        "fontSize": 14,
+        "borderRadius": 8,
+        "padding": 12,
+        "boxShadow": "inset 0 1px 3px rgba(0,0,0,0.1)",
+        "width": 240,
+        "height": 40
+      }
+    },
+    {
+      "id": "comp-grid",
+      "name": "Grid",
+      "version": "1.2.0",
+      "category": "/Layout",
+      "tags": ["React"],
+      "defaultProps": {
+        "columns": 3,
+        "gap": 16,
+        "responsive": true
+      },
+      "styleConfig": {
+        "color": "#333333",
+        "backgroundColor": "#f8f9fa",
+        "fontSize": 14,
+        "borderRadius": 8,
+        "padding": 16,
+        "boxShadow": "0 1px 3px rgba(0,0,0,0.06)",
+        "width": 400,
+        "height": 240
+      }
+    },
+    {
+      "id": "comp-flex",
+      "name": "Flex",
+      "version": "1.0.3",
+      "category": "/Layout",
+      "tags": ["React"],
+      "defaultProps": {
+        "direction": "row",
+        "align": "center",
+        "justify": "start"
+      },
+      "styleConfig": {
+        "color": "#333333",
+        "backgroundColor": "#f0f4f8",
+        "fontSize": 14,
+        "borderRadius": 8,
+        "padding": 16,
+        "boxShadow": "none",
+        "width": 360,
+        "height": 120
+      }
+    },
+    {
+      "id": "comp-modal",
+      "name": "Modal",
+      "version": "2.3.0",
+      "category": "/Feedback",
+      "tags": ["React", "TS"],
+      "defaultProps": {
+        "title": "Modal Title",
+        "open": true,
+        "closable": true
+      },
+      "styleConfig": {
+        "color": "#333333",
+        "backgroundColor": "#ffffff",
+        "fontSize": 14,
+        "borderRadius": 12,
+        "padding": 24,
+        "boxShadow": "0 8px 32px rgba(0,0,0,0.15)",
+        "width": 400,
+        "height": 260
+      }
+    },
+    {
+      "id": "comp-alert",
+      "name": "Alert",
+      "version": "1.8.1",
+      "category": "/Feedback",
+      "tags": ["React", "TS"],
+      "defaultProps": {
+        "type": "info",
+        "message": "This is an alert message",
+        "closable": true
+      },
+      "styleConfig": {
+        "color": "#155724",
+        "backgroundColor": "#d4edda",
+        "fontSize": 14,
+        "borderRadius": 8,
+        "padding": 16,
+        "boxShadow": "0 1px 3px rgba(0,0,0,0.06)",
+        "width": 360,
+        "height": 60
+      }
+    },
+    {
+      "id": "comp-tab",
+      "name": "Tab",
+      "version": "1.4.0",
+      "category": "/Navigation",
+      "tags": ["React"],
+      "defaultProps": {
+        "activeTab": 0,
+        "tabs": ["Tab 1", "Tab 2", "Tab 3"],
+        "variant": "line"
+      },
+      "styleConfig": {
+        "color": "#4A90D9",
+        "backgroundColor": "#ffffff",
+        "fontSize": 14,
+        "borderRadius": 8,
+        "padding": 8,
+        "boxShadow": "0 1px 3px rgba(0,0,0,0.06)",
+        "width": 360,
+        "height": 48
+      }
+    },
+    {
+      "id": "comp-breadcrumb",
+      "name": "Breadcrumb",
+      "version": "1.1.2",
+      "category": "/Navigation",
+      "tags": ["React"],
+      "defaultProps": {
+        "items": ["Home", "Products", "Detail"],
+        "separator": "/"
+      },
+      "styleConfig": {
+        "color": "#666666",
+        "backgroundColor": "transparent",
+        "fontSize": 13,
+        "borderRadius": 4,
+        "padding": 8,
+        "boxShadow": "none",
+        "width": 320,
+        "height": 32
+      }
+    },
+    {
+      "id": "comp-table",
+      "name": "Table",
+      "version": "2.0.0",
+      "category": "/Data",
+      "tags": ["React", "TS"],
+      "defaultProps": {
+        "columns": ["Name", "Age", "Role"],
+        "rows": [["Alice", "28", "Dev"], ["Bob", "32", "Lead"]],
+        "striped": true
+      },
+      "styleConfig": {
+        "color": "#333333",
+        "backgroundColor": "#ffffff",
+        "fontSize": 13,
+        "borderRadius": 8,
+        "padding": 0,
+        "boxShadow": "0 1px 3px rgba(0,0,0,0.06)",
+        "width": 420,
+        "height": 160
+      }
+    }
+  ]
+}

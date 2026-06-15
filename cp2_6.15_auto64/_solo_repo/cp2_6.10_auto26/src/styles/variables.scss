@@ -1,0 +1,89 @@
+// ===== 颜色系统 =====
+$color-bg: #F0F4F8;
+$color-bg-card: #FFFFFF;
+$color-primary: #1A365D;
+$color-primary-light: #2C5282;
+$color-primary-lighter: #3182CE;
+$color-accent: #63B3ED;
+$color-success: #38A169;
+$color-success-light: #C6F6D5;
+$color-danger: #E53E3E;
+$color-danger-light: #FED7D7;
+$color-warning: #DD6B20;
+$color-text: #2D3748;
+$color-text-light: #718096;
+$color-text-lighter: #A0AEC0;
+$color-border: #E2E8F0;
+$color-border-light: #EDF2F7;
+
+// ===== 渐变 =====
+$gradient-progress: linear-gradient(90deg, #3182CE 0%, #63B3ED 100%);
+$gradient-success: linear-gradient(135deg, #38A169 0%, #48BB78 100%);
+$gradient-danger: linear-gradient(135deg, #E53E3E 0%, #FC8181 100%);
+$gradient-bar: linear-gradient(180deg, #3182CE 0%, #63B3ED 100%);
+$gradient-card-hover: linear-gradient(145deg, #FFFFFF 0%, #F7FAFC 100%);
+
+// ===== 间距系统 (8px基础) =====
+$space-1: 4px;
+$space-2: 8px;
+$space-3: 12px;
+$space-4: 16px;
+$space-5: 20px;
+$space-6: 24px;
+$space-8: 32px;
+$space-10: 40px;
+$space-12: 48px;
+$space-16: 64px;
+
+// ===== 圆角 =====
+$radius-sm: 4px;
+$radius-md: 8px;
+$radius-lg: 12px;
+$radius-xl: 16px;
+$radius-2xl: 24px;
+$radius-full: 9999px;
+
+// ===== 阴影 =====
+$shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+$shadow-md: 0 4px 6px -1px rgba(26, 54, 93, 0.1), 0 2px 4px -1px rgba(26, 54, 93, 0.06);
+$shadow-lg: 0 10px 15px -3px rgba(26, 54, 93, 0.1), 0 4px 6px -2px rgba(26, 54, 93, 0.05);
+$shadow-xl: 0 20px 25px -5px rgba(26, 54, 93, 0.1), 0 10px 10px -5px rgba(26, 54, 93, 0.04);
+$shadow-hover: 0 20px 40px -10px rgba(26, 54, 93, 0.15);
+
+// ===== 字体 =====
+$font-sans: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+$font-serif: 'Noto Serif SC', Georgia, 'Times New Roman', serif;
+$font-mono: 'SF Mono', Menlo, Consolas, monospace;
+
+$font-xs: 12px;
+$font-sm: 14px;
+$font-base: 16px;
+$font-lg: 18px;
+$font-xl: 20px;
+$font-2xl: 24px;
+$font-3xl: 30px;
+$font-4xl: 36px;
+
+// ===== 动效时长 =====
+$duration-fast: 100ms;
+$duration-base: 150ms;
+$duration-normal: 200ms;
+$duration-slow: 300ms;
+$duration-slower: 500ms;
+
+// ===== 断点 =====
+$breakpoint-sm: 640px;
+$breakpoint-md: 768px;
+$breakpoint-lg: 1024px;
+$breakpoint-xl: 1280px;
+
+// ===== 过渡曲线 =====
+$ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+$ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+$ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+// ===== 层级 =====
+$z-dropdown: 100;
+$z-sticky: 200;
+$z-modal: 300;
+$z-tooltip: 400;

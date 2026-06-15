@@ -1,0 +1,257 @@
+:root {
+  --primary: #6c63ff;
+  --secondary-1: #e8e6ff;
+  --secondary-2: #f0f0ff;
+  --accent: #ff6584;
+  --background: #f5f5f5;
+  --text-dark: #333333;
+  --text-light: #ffffff;
+  --border-gray: #dddddd;
+  --border-light-gray: #e0e0e0;
+  --sidebar-bg: #fafafa;
+  --panel-bg: #ffffff;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  transition: all 0.2s ease-in-out;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background-color: var(--background);
+  color: var(--text-dark);
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.upload-area {
+  width: 400px;
+  height: 240px;
+  border-radius: 16px;
+  border: 2px dashed var(--primary);
+  background-color: var(--secondary-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.upload-area.dragging {
+  border-style: solid;
+  background-color: var(--secondary-1);
+}
+
+.preview-area {
+  width: 200px;
+  height: 200px;
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 5px var(--border-gray);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--panel-bg);
+}
+
+.preview-area img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.emotion-buttons {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+}
+
+.emotion-button {
+  width: 80px;
+  height: 40px;
+  border-radius: 20px;
+  border: none;
+  background-color: var(--border-light-gray);
+  color: var(--text-dark);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.emotion-button:hover {
+  opacity: 0.85;
+}
+
+.emotion-button.active {
+  background-color: var(--primary);
+  color: var(--text-light);
+}
+
+.edit-panel {
+  height: 180px;
+  background-color: var(--panel-bg);
+  border-top: 1px solid var(--border-light-gray);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sticker-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.sticker-item {
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
+  background-color: var(--secondary-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.sticker-item:hover {
+  background-color: var(--secondary-1);
+}
+
+.sticker-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.export-button {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  border-radius: 8px;
+  background-color: var(--primary);
+  color: var(--text-light);
+  border: none;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.export-button:hover {
+  background-color: #5a52e0;
+  transform: scale(1.05);
+  transition: all 0.2s ease-out;
+}
+
+.history-sidebar {
+  width: 280px;
+  background-color: var(--sidebar-bg);
+  height: 100vh;
+  position: fixed;
+  right: 0;
+  top: 0;
+  border-left: 1px solid var(--border-light-gray);
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.history-item:hover {
+  background-color: var(--secondary-2);
+}
+
+.history-thumbnail {
+  width: 50px;
+  height: 50px;
+  border-radius: 6px;
+  object-fit: cover;
+  background-color: var(--panel-bg);
+  border: 1px solid var(--border-gray);
+}
+
+.history-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.history-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-dark);
+}
+
+.history-time {
+  font-size: 12px;
+  color: #666666;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--secondary-1);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 768px) {
+  .main-container {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .upload-area {
+    width: 100%;
+    max-width: 400px;
+  }
+
+  .preview-area {
+    width: 100%;
+    max-width: 200px;
+  }
+
+  .history-sidebar {
+    width: 100%;
+    height: 200px;
+    position: relative;
+    border-left: none;
+    border-top: 1px solid var(--border-light-gray);
+  }
+
+  .export-button {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 100;
+  }
+}

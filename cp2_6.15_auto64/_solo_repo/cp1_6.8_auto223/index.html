@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>星语织梦 — Stardream Weaver</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Quicksand:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(135deg, #0a0a2e 0%, #1a0a2e 50%, #0d0d1a 100%);
+      font-family: 'Quicksand', sans-serif;
+      color: #e8e0ff;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      opacity: 0;
+      transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    #app.fade-in {
+      opacity: 1;
+    }
+
+    .canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    .canvas-container canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+
+    .control-panel {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 260px;
+      padding: 20px 22px;
+      background: rgba(15, 12, 41, 0.55);
+      backdrop-filter: blur(20px) saturate(1.4);
+      -webkit-backdrop-filter: blur(20px) saturate(1.4);
+      border: 1px solid rgba(232, 224, 255, 0.12);
+      border-radius: 16px;
+      box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      z-index: 100;
+      user-select: none;
+      animation: panelSlideIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.5s both;
+    }
+
+    @keyframes panelSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(30px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .panel-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #ffd700;
+      text-align: center;
+      margin-bottom: 18px;
+      text-shadow: 0 0 12px rgba(255, 215, 0, 0.3);
+    }
+
+    .panel-group {
+      margin-bottom: 16px;
+    }
+
+    .panel-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      color: rgba(232, 224, 255, 0.7);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .panel-slider {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      background: rgba(232, 224, 255, 0.15);
+      border-radius: 2px;
+      outline: none;
+      transition: background 0.2s;
+    }
+
+    .panel-slider:hover {
+      background: rgba(232, 224, 255, 0.25);
+    }
+
+    .panel-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #e8e0ff, #ffd700);
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(255, 215, 0, 0.4);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .panel-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 14px rgba(255, 215, 0, 0.6);
+    }
+
+    .panel-slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #e8e0ff, #ffd700);
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 8px rgba(255, 215, 0, 0.4);
+    }
+
+    .slider-value {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 11px;
+      color: #ffd700;
+      min-width: 32px;
+      text-align: right;
+    }
+
+    .panel-reset-btn {
+      width: 100%;
+      padding: 10px;
+      margin-top: 4px;
+      background: rgba(255, 215, 0, 0.1);
+      border: 1px solid rgba(255, 215, 0, 0.3);
+      border-radius: 24px;
+      color: #ffd700;
+      font-family: 'Quicksand', sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      outline: none;
+    }
+
+    .panel-reset-btn:hover {
+      background: rgba(255, 215, 0, 0.2);
+      border-color: rgba(255, 215, 0, 0.5);
+      box-shadow: 0 0 16px rgba(255, 215, 0, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .panel-reset-btn:active {
+      transform: translateY(0);
+      background: rgba(255, 215, 0, 0.25);
+    }
+
+    .panel-hint {
+      margin-top: 14px;
+      font-size: 10px;
+      color: rgba(232, 224, 255, 0.35);
+      text-align: center;
+      letter-spacing: 0.3px;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 1024px) {
+      .control-panel {
+        width: 220px;
+        padding: 16px 18px;
+        bottom: 16px;
+        right: 16px;
+        border-radius: 12px;
+      }
+
+      .panel-title {
+        font-size: 12px;
+        margin-bottom: 14px;
+      }
+
+      .panel-label {
+        font-size: 10px;
+      }
+
+      .panel-slider::-webkit-slider-thumb {
+        width: 14px;
+        height: 14px;
+      }
+
+      .panel-reset-btn {
+        padding: 8px;
+        font-size: 11px;
+      }
+
+      .panel-hint {
+        font-size: 9px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .control-panel {
+        width: 190px;
+        padding: 14px 14px;
+        bottom: 12px;
+        right: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="canvas-container"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

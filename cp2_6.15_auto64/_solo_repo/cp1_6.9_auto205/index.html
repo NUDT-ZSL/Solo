@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>光海浮岛</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+      background: #000;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+    }
+
+    .control-panel {
+      position: absolute;
+      right: 20px;
+      bottom: 20px;
+      width: 300px;
+      padding: 20px;
+      background: rgba(20, 20, 40, 0.35);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 16px;
+      color: #fff;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      user-select: none;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      z-index: 100;
+    }
+
+    .control-panel:hover {
+      box-shadow: 0 12px 48px rgba(100, 150, 255, 0.2);
+    }
+
+    .panel-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      letter-spacing: 2px;
+      background: linear-gradient(135deg, #ffd700, #4fc3f7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .control-group {
+      margin-bottom: 18px;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      margin-bottom: 8px;
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .control-value {
+      font-weight: 600;
+      color: #ffd700;
+      font-size: 12px;
+    }
+
+    .slider {
+      width: 100%;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .slider:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: linear-gradient(135deg, #ffd700, #ff8c00);
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(255, 215, 0, 0.5);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .slider::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 4px 16px rgba(255, 215, 0, 0.7);
+    }
+
+    .slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: linear-gradient(135deg, #ffd700, #ff8c00);
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 2px 8px rgba(255, 215, 0, 0.5);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .slider::-moz-range-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 4px 16px rgba(255, 215, 0, 0.7);
+    }
+
+    .theme-selector {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .theme-btn {
+      padding: 8px 4px;
+      font-size: 11px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+      color: rgba(255, 255, 255, 0.8);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .theme-btn::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: var(--theme-color);
+    }
+
+    .theme-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .theme-btn.active {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: var(--theme-color);
+      color: #fff;
+      font-weight: 600;
+      box-shadow: 0 0 12px var(--theme-color);
+    }
+
+    .reset-btn {
+      width: 100%;
+      padding: 12px;
+      margin-top: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      background: linear-gradient(135deg, rgba(79, 195, 247, 0.3), rgba(156, 39, 176, 0.3));
+      border: 1px solid rgba(79, 195, 247, 0.4);
+      color: #fff;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .reset-btn:hover {
+      background: linear-gradient(135deg, rgba(79, 195, 247, 0.5), rgba(156, 39, 176, 0.5));
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(79, 195, 247, 0.3);
+    }
+
+    .reset-btn:active {
+      transform: translateY(0);
+    }
+
+    .reset-btn::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.3);
+      transform: translate(-50%, -50%);
+      transition: width 0.5s, height 0.5s;
+    }
+
+    .reset-btn:active::after {
+      width: 300px;
+      height: 300px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+    
+    <div class="control-panel" id="controlPanel">
+      <div class="panel-title">✦ 光海浮岛控制台 ✦</div>
+      
+      <div class="control-group">
+        <div class="control-label">
+          <span>浮岛数量</span>
+          <span class="control-value" id="islandCountValue">15</span>
+        </div>
+        <input type="range" class="slider" id="islandCount" min="5" max="30" value="15" step="1">
+      </div>
+      
+      <div class="control-group">
+        <div class="control-label">
+          <span>光纹速度</span>
+          <span class="control-value" id="waveSpeedValue">1.0</span>
+        </div>
+        <input type="range" class="slider" id="waveSpeed" min="0.1" max="2.0" value="1.0" step="0.1">
+      </div>
+      
+      <div class="control-group">
+        <div class="control-label">
+          <span>颜色主题</span>
+        </div>
+        <div class="theme-selector" id="themeSelector">
+          <button class="theme-btn active" data-theme="coral" style="--theme-color: #ff6b6b;">珊瑚</button>
+          <button class="theme-btn" data-theme="aurora" style="--theme-color: #4fc3f7;">极光</button>
+          <button class="theme-btn" data-theme="lava" style="--theme-color: #ff8c00;">熔岩</button>
+          <button class="theme-btn" data-theme="deep" style="--theme-color: #7c4dff;">深海</button>
+        </div>
+      </div>
+      
+      <button class="reset-btn" id="resetView">重置视角</button>
+    </div>
+  </div>
+  
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

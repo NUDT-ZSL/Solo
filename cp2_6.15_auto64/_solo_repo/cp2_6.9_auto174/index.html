@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>音乐可视化 · Music Visualizer</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: linear-gradient(180deg, #0A0A1A 0%, #1A1A3A 100%);
+      color: #fff;
+      user-select: none;
+    }
+
+    .app-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+    }
+
+    #controlPanel {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 260px;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-right: 1px solid rgba(255, 255, 255, 0.125);
+      padding: 24px 20px;
+      overflow-y: auto;
+      z-index: 100;
+      transition: transform 0.3s ease;
+    }
+
+    #controlPanel::-webkit-scrollbar {
+      width: 4px;
+    }
+    #controlPanel::-webkit-scrollbar-track { background: transparent; }
+    #controlPanel::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 2px;
+    }
+
+    #menuToggle {
+      display: none;
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      z-index: 101;
+      width: 44px;
+      height: 44px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 20px;
+      backdrop-filter: blur(10px);
+      transition: all 0.2s ease;
+    }
+    #menuToggle:hover { transform: scale(1.05); }
+    #menuToggle:active { transform: scale(0.95); }
+
+    .panel-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      background: linear-gradient(90deg, #00FFC6, #6366F1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .panel-subtitle {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.4);
+      margin-bottom: 24px;
+    }
+
+    .section {
+      margin-bottom: 24px;
+    }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.6);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 10px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.06);
+      color: #fff;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-bottom: 8px;
+    }
+    .btn:hover { transform: scale(1.05); background: rgba(255, 255, 255, 0.1); }
+    .btn:active { transform: scale(0.95); }
+    .btn.active {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.4), rgba(0, 255, 198, 0.3));
+      border-color: rgba(99, 102, 241, 0.6);
+    }
+    .btn:last-child { margin-bottom: 0; }
+
+    .play-row {
+      display: flex;
+      gap: 8px;
+    }
+    .play-row .btn {
+      flex: 1;
+      margin-bottom: 0;
+    }
+
+    .slider-group {
+      margin-bottom: 12px;
+    }
+    .slider-group:last-child { margin-bottom: 0; }
+
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.6);
+      margin-bottom: 6px;
+    }
+    .slider-value {
+      color: #00FFC6;
+      font-weight: 500;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      background: linear-gradient(135deg, #00FFC6, #6366F1);
+      border-radius: 50%;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 0 10px rgba(0, 255, 198, 0.4);
+    }
+    input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+    input[type="range"]::-webkit-slider-thumb:active { transform: scale(0.9); }
+    input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      background: linear-gradient(135deg, #00FFC6, #6366F1);
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+    }
+
+    select {
+      width: 100%;
+      padding: 8px 12px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 13px;
+      cursor: pointer;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+    select:hover { background: rgba(255, 255, 255, 0.1); }
+    select option {
+      background: #1A1A3A;
+      color: #fff;
+    }
+
+    .mode-buttons {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+    .mode-btn {
+      padding: 10px 6px;
+      font-size: 11px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .mode-icon {
+      font-size: 18px;
+    }
+
+    .theme-buttons {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .theme-btn {
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: 8px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+    .theme-btn:hover { transform: scale(1.05); }
+    .theme-btn:active { transform: scale(0.95); }
+    .theme-btn.active {
+      border-color: #fff;
+      box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+    }
+    .theme-aurora { background: linear-gradient(135deg, #00FFC6, #6366F1); }
+    .theme-lava { background: linear-gradient(135deg, #FF4500, #FFD700); }
+    .theme-deepsea { background: linear-gradient(135deg, #1E3A8A, #7C3AED); }
+    .theme-neon { background: linear-gradient(135deg, #06B6D4, #EC4899); }
+
+    .canvas-area {
+      flex: 1;
+      margin-left: 260px;
+      position: relative;
+      height: 100%;
+    }
+
+    #visualizerCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+    }
+    #visualizerCanvas:active { cursor: grabbing; }
+
+    #spectrumPreview {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 180px;
+      height: 60px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    #canvasHint {
+      position: absolute;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.7);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+
+    #fileInput { display: none; }
+
+    @media (max-width: 768px) {
+      #menuToggle { display: flex; align-items: center; justify-content: center; }
+      #controlPanel {
+        width: 100%;
+        height: auto;
+        max-height: 70vh;
+        top: 0;
+        left: 0;
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.125);
+        transform: translateY(-100%);
+      }
+      #controlPanel.expanded {
+        transform: translateY(0);
+      }
+      .canvas-area {
+        margin-left: 0;
+      }
+      #spectrumPreview {
+        top: 16px;
+        right: 16px;
+        width: 120px;
+        height: 40px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <button id="menuToggle">☰</button>
+
+    <aside id="controlPanel">
+      <h1 class="panel-title">🎵 音乐可视化</h1>
+      <p class="panel-subtitle">Audio Visualizer</p>
+
+      <div class="section">
+        <div class="section-title">音频控制</div>
+        <button id="uploadBtn" class="btn">📁 上传音频</button>
+        <input type="file" id="fileInput" accept="audio/mp3,audio/wav,audio/mpeg,audio/*" />
+        <div class="play-row">
+          <button id="playBtn" class="btn">▶ 播放</button>
+        </div>
+        <div style="height: 12px;"></div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>音量</span>
+            <span class="slider-value" id="volumeValue">70%</span>
+          </div>
+          <input type="range" id="volumeSlider" min="0" max="100" value="70" />
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">振荡器设置</div>
+        <select id="oscillatorType">
+          <option value="sine">正弦波 Sine</option>
+          <option value="square">方波 Square</option>
+          <option value="sawtooth">锯齿波 Sawtooth</option>
+          <option value="triangle">三角波 Triangle</option>
+        </select>
+        <div style="height: 12px;"></div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>频率</span>
+            <span class="slider-value" id="frequencyValue">440Hz</span>
+          </div>
+          <input type="range" id="frequencySlider" min="20" max="2000" value="440" />
+        </div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>增益</span>
+            <span class="slider-value" id="gainValue">50%</span>
+          </div>
+          <input type="range" id="gainSlider" min="0" max="100" value="50" />
+        </div>
+        <button id="oscillatorBtn" class="btn">🔊 启动振荡器</button>
+      </div>
+
+      <div class="section">
+        <div class="section-title">可视化模式</div>
+        <div class="mode-buttons">
+          <button id="modeBars" class="btn mode-btn active">
+            <span class="mode-icon">📊</span>
+            <span>条形</span>
+          </button>
+          <button id="modeParticles" class="btn mode-btn">
+            <span class="mode-icon">✨</span>
+            <span>粒子</span>
+          </button>
+          <button id="modeWave" class="btn mode-btn">
+            <span class="mode-icon">🌊</span>
+            <span>波浪</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">颜色主题</div>
+        <div class="theme-buttons">
+          <div id="themeAurora" class="theme-btn theme-aurora active" title="极光"></div>
+          <div id="themeLava" class="theme-btn theme-lava" title="熔岩"></div>
+          <div id="themeDeepSea" class="theme-btn theme-deepsea" title="深海"></div>
+          <div id="themeNeon" class="theme-btn theme-neon" title="霓虹"></div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="canvas-area">
+      <canvas id="visualizerCanvas"></canvas>
+      <canvas id="spectrumPreview"></canvas>
+      <div id="canvasHint">💡 拖拽调整位置 · 滚轮缩放</div>
+    </main>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+  <script>
+    const volSlider = document.getElementById('volumeSlider');
+    const volValue = document.getElementById('volumeValue');
+    const freqSlider = document.getElementById('frequencySlider');
+    const freqValue = document.getElementById('frequencyValue');
+    const gainSlider = document.getElementById('gainSlider');
+    const gainValue = document.getElementById('gainValue');
+
+    volSlider?.addEventListener('input', (e) => {
+      volValue.textContent = (e.target as HTMLInputElement).value + '%';
+    });
+    freqSlider?.addEventListener('input', (e) => {
+      freqValue.textContent = (e.target as HTMLInputElement).value + 'Hz';
+    });
+    gainSlider?.addEventListener('input', (e) => {
+      gainValue.textContent = (e.target as HTMLInputElement).value + '%';
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>古琴减字谱在线编辑器与演奏器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #1A1A2E;
+      font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+      color: #E0E0E0;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .mountain-bg {
+      position: absolute;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 800px;
+      height: 200px;
+      background: radial-gradient(ellipse at 20% 80%, rgba(212, 167, 106, 0.08) 0%, transparent 50%),
+                  radial-gradient(ellipse at 50% 60%, rgba(212, 167, 106, 0.06) 0%, transparent 45%),
+                  radial-gradient(ellipse at 80% 90%, rgba(212, 167, 106, 0.07) 0%, transparent 55%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .header {
+      width: 100%;
+      padding: 16px 32px;
+      text-align: center;
+      z-index: 1;
+    }
+
+    .header h1 {
+      font-size: 22px;
+      font-weight: 500;
+      color: #D4A76A;
+      letter-spacing: 4px;
+    }
+
+    .main-content {
+      flex: 1;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 20px;
+      gap: 24px;
+      z-index: 1;
+    }
+
+    .guqin-wrapper {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #guqin-canvas {
+      display: block;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      cursor: pointer;
+    }
+
+    .bubble {
+      position: absolute;
+      width: 120px;
+      padding: 10px 8px;
+      background: rgba(30, 30, 46, 0.95);
+      border: 1px solid #D4A76A;
+      border-radius: 8px;
+      text-align: center;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 10;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+
+    .bubble.visible {
+      opacity: 1;
+    }
+
+    .bubble .symbol {
+      font-size: 20px;
+      font-weight: bold;
+      color: #D4A76A;
+      margin-bottom: 4px;
+    }
+
+    .bubble .note {
+      font-size: 14px;
+      color: #E0E0E0;
+    }
+
+    .bubble::after {
+      content: '';
+      position: absolute;
+      bottom: -8px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 8px 8px 0;
+      border-style: solid;
+      border-color: rgba(30, 30, 46, 0.95) transparent transparent;
+    }
+
+    #score-library {
+      margin-top: 28px;
+      width: 80%;
+      max-width: 800px;
+      height: 120px;
+      background: rgba(44, 44, 62, 0.7);
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .score-library-title {
+      font-size: 13px;
+      color: #D4A76A;
+      margin-bottom: 10px;
+      letter-spacing: 2px;
+    }
+
+    .score-cards {
+      flex: 1;
+      display: flex;
+      gap: 14px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      cursor: grab;
+      scroll-behavior: smooth;
+      padding-bottom: 4px;
+    }
+
+    .score-cards.dragging {
+      cursor: grabbing;
+      scroll-behavior: auto;
+    }
+
+    .score-cards::-webkit-scrollbar {
+      height: 4px;
+    }
+
+    .score-cards::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 2px;
+    }
+
+    .score-cards::-webkit-scrollbar-thumb {
+      background: rgba(212, 167, 106, 0.4);
+      border-radius: 2px;
+    }
+
+    .score-card {
+      flex-shrink: 0;
+      width: 200px;
+      height: 80px;
+      background: linear-gradient(135deg, #6B4226 0%, #8B5A2B 100%);
+      border-radius: 8px;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: transform 0.2s ease, opacity 0.2s ease;
+      border: 1px solid rgba(212, 167, 106, 0.3);
+    }
+
+    .score-card:hover {
+      transform: translateY(-2px);
+      opacity: 0.85;
+    }
+
+    .score-card:active {
+      transform: translateY(1px) scale(0.95);
+      opacity: 0.95;
+    }
+
+    .score-card .name {
+      font-size: 16px;
+      font-weight: 500;
+      color: #FFF8E7;
+      letter-spacing: 1px;
+    }
+
+    .score-card .stars {
+      font-size: 14px;
+      color: #FFD700;
+      letter-spacing: 2px;
+    }
+
+    #record-panel {
+      width: 280px;
+      background: #1E1E2E;
+      border: 1px solid #3D2B1F;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .panel-title {
+      font-size: 14px;
+      color: #D4A76A;
+      letter-spacing: 2px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .circle-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.15s ease, opacity 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: #fff;
+      font-weight: bold;
+    }
+
+    .circle-btn:hover {
+      opacity: 0.7;
+      transform: translateY(-2px);
+    }
+
+    .circle-btn:active {
+      transform: translateY(1px) scale(0.95);
+    }
+
+    .record-btn {
+      background: #CC3333;
+    }
+
+    .record-btn.recording {
+      animation: pulse 0.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(204, 51, 51, 0.7); }
+      50% { box-shadow: 0 0 0 8px rgba(204, 51, 51, 0); }
+    }
+
+    .clear-btn {
+      background: #555;
+    }
+
+    .playback-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(61, 43, 31, 0.6);
+    }
+
+    .speed-label {
+      font-size: 12px;
+      color: #AAA;
+      white-space: nowrap;
+    }
+
+    .speed-slider {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      background: #3D2B1F;
+      border-radius: 2px;
+      outline: none;
+    }
+
+    .speed-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      background: #D4A76A;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    .speed-value {
+      font-size: 12px;
+      color: #D4A76A;
+      min-width: 32px;
+      text-align: right;
+    }
+
+    .log-container {
+      flex: 1;
+      overflow-y: auto;
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 4px;
+      padding: 8px;
+      font-family: "Consolas", "Courier New", monospace;
+      font-size: 12px;
+      min-height: 200px;
+      max-height: 400px;
+    }
+
+    .log-container::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .log-container::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .log-container::-webkit-scrollbar-thumb {
+      background: rgba(212, 167, 106, 0.4);
+      border-radius: 2px;
+    }
+
+    .log-line {
+      height: 24px;
+      line-height: 24px;
+      color: #E0E0E0;
+      padding: 0 4px;
+      border-radius: 2px;
+      transition: background 0.2s ease;
+    }
+
+    .log-line.active {
+      background: rgba(212, 167, 106, 0.15);
+      color: #FFD700;
+    }
+
+    .log-empty {
+      color: #666;
+      text-align: center;
+      padding: 20px 0;
+      font-size: 12px;
+    }
+
+    .playback-btn-wrapper {
+      display: flex;
+      justify-content: center;
+      margin-top: 14px;
+    }
+
+    .playback-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #2ECC71;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.15s ease, opacity 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 16px;
+    }
+
+    .playback-btn:hover {
+      opacity: 0.7;
+      transform: translateY(-2px);
+    }
+
+    .playback-btn:active {
+      transform: translateY(1px) scale(0.95);
+    }
+
+    .playback-btn:disabled {
+      background: #4a6b55;
+      cursor: not-allowed;
+      opacity: 0.6;
+      transform: none;
+    }
+
+    @media (max-width: 768px) {
+      .main-content {
+        flex-direction: column;
+        align-items: center;
+        padding: 10px;
+      }
+
+      #guqin-canvas {
+        transform: scale(0.8);
+        transform-origin: top center;
+      }
+
+      #record-panel {
+        width: 90%;
+        max-width: 480px;
+        margin-top: 0;
+      }
+
+      .log-container {
+        min-height: 150px;
+        max-height: 250px;
+      }
+
+      #score-library {
+        width: 95%;
+        margin-top: 10px;
+      }
+
+      .mountain-bg {
+        width: 90%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="mountain-bg"></div>
+
+    <div class="header">
+      <h1>古琴减字谱 · 在线演奏器</h1>
+    </div>
+
+    <div class="main-content">
+      <div class="guqin-wrapper">
+        <canvas id="guqin-canvas" width="1200" height="180"></canvas>
+        <div class="bubble" id="note-bubble">
+          <div class="symbol" id="bubble-symbol"></div>
+          <div class="note" id="bubble-note"></div>
+        </div>
+
+        <div id="score-library">
+          <div class="score-library-title">经 典 曲 目 谱 库</div>
+          <div class="score-cards" id="score-cards"></div>
+        </div>
+      </div>
+
+      <div id="record-panel">
+        <div class="panel-header">
+          <div class="panel-title">演 奏 记 录</div>
+          <div class="button-group">
+            <button class="circle-btn record-btn" id="record-btn" title="录音">●</button>
+            <button class="circle-btn clear-btn" id="clear-btn" title="清除">✕</button>
+          </div>
+        </div>
+
+        <div class="playback-controls">
+          <span class="speed-label">速度</span>
+          <input type="range" class="speed-slider" id="speed-slider" min="0.5" max="3" step="0.1" value="1" />
+          <span class="speed-value" id="speed-value">1.0x</span>
+        </div>
+
+        <div class="log-container" id="log-container">
+          <div class="log-empty" id="log-empty">暂无记录，点击琴弦开始弹奏</div>
+        </div>
+
+        <div class="playback-btn-wrapper">
+          <button class="playback-btn" id="playback-btn" title="回放" disabled>▶</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
