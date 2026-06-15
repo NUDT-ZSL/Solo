@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Artwork, PlacedItem, DragPreview, AnimatingItem } from './types';
+import { Artwork, PlacedItem, AnimatingItem } from './types';
 
 interface GalleryCanvasProps {
   placedItems: PlacedItem[];
@@ -9,6 +9,8 @@ interface GalleryCanvasProps {
   onSelectItem: (id: string | null) => void;
   onPreview3D: () => void;
   artworks: Artwork[];
+  draggingArtwork: Artwork | null;
+  onCanvasDragEnd: () => void;
 }
 
 const CANVAS_WIDTH = 800;
@@ -16,21 +18,34 @@ const CANVAS_HEIGHT = 600;
 const GRID_SIZE = 20;
 const ELASTIC_DURATION = 300;
 
+interface PreviewState {
+  artwork: Artwork;
+  x: number;
+  y: number;
+}
+
 const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
   placedItems,
   onItemsChange,
   selectedItemId,
   onSelectItem,
   onPreview3D,
-  artworks
+  artworks,
+  draggingArtwork,
+  onCanvasDragEnd
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationFrameRef = useRef<number>();
-  const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
+  const animationFrameRef = useRef<number>(0);
+  const [preview, setPreview] = useState<PreviewState | null>(null);
   const [animatingItems, setAnimatingItems] = useState<AnimatingItem[]>([]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [draggingItem, setDraggingItem] = useState<string | null>(null);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const animatingItemsRef = useRef<AnimatingItem[]>([]);
+
+  useEffect(() => {
+    animatingItemsRef.current = animatingItems;
+  }, [animatingItems]);
 
   const artworkMap = useMemo(() => {
     const map = new Map<string, Artwork>();
@@ -43,7 +58,8 @@ const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
   }, []);
 
   const easeOutElastic = useCallback((t: number): number => {
-    if (t === 0 || t === 1) return t;
+    if (t <= 0) return 0;
+    if (t >= 1) return 1;
     const p = 0.3;
     const s = p / 4;
     return Math.pow(2, -10 * t) * Math.sin((t - s) * (2 * Math.PI) / p) + 1;
@@ -78,7 +94,7 @@ const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
       ctx.fillRect(-halfW, -halfH, width, height);
       ctx.strokeRect(-halfW, -halfH, width, height);
       
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
       ctx.fillRect(-halfW + 4, -halfH + 4, width - 8, height - 8);
     } else {
       ctx.beginPath();
@@ -88,7 +104,7 @@ const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
       
       ctx.beginPath();
       ctx.arc(0, 0, halfW - 4, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
       ctx.fill();
     }
 
@@ -96,26 +112,26 @@ const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
   }, []);
 
   const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
-    ctx.strokeStyle = 'rgba(139, 125, 114, 0.15)';
+    ctx.strokeStyle = 'rgba(139, 125, 114, 0.12)';
     ctx.lineWidth = 1;
 
     for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE) {
       ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, CANVAS_HEIGHT);
+      ctx.moveTo(x + 0.5, 0);
+      ctx.lineTo(x + 0.5, CANVAS_HEIGHT);
       ctx.stroke();
     }
 
     for (let y = 0; y <= CANVAS_HEIGHT; y += GRID_SIZE) {
       ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(CANVAS_WIDTH, y);
+      ctx.moveTo(0, y + 0.5);
+      ctx.lineTo(CANVAS_WIDTH, y + 0.5);
       ctx.stroke();
     }
 
-    ctx.strokeStyle = 'rgba(139, 125, 114, 0.3)';
+    ctx.strokeStyle = 'rgba(139, 125, 114, 0.35)';
     ctx.lineWidth = 2;
-    ctx.strokeRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    ctx.strokeRect(1, 1, CANVAS_WIDTH - 2, CANVAS_HEIGHT - 2);
   }, []);
 
   const render = useCallback(() => {
@@ -132,7 +148,12 @@ const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
     drawGrid(ctx);
 
     const now = performance.now();
+    const currentAnims = animatingItemsRef.current;
     const activeAnimations: AnimatingItem[] = [];
+    let needsRender = false;
+
+    const animMap = new Map<string, AnimatingItem>();
+    currentAnims.forEach(a => animMap.set(a.id, a));
 
     placedItems.forEach(item => {
       const artwork = artworkMap.get(item.artworkId);
@@ -142,17 +163,19 @@ const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
       let displayY = item.y;
       let animAlpha = 1;
 
-      const animation = animatingItems.find(a => a.id === item.id);
+      const animation = animMap.get(item.id);
       if (animation) {
-        const progress = Math.min(1, (now - animation.startTime) / animation.duration);
+        const elapsed = now - animation.startTime;
+        const progress = Math.min(1, elapsed / animation.duration);
         const easedProgress = easeOutElastic(progress);
         
         displayX = animation.fromX + (animation.toX - animation.fromX) * easedProgress;
         displayY = animation.fromY + (animation.toY - animation.fromY) * easedProgress;
-        animAlpha = 0.5 + 0.5 * easedProgress;
+        animAlpha = 0.4 + 0.6 * easedProgress;
 
         if (progress < 1) {
           activeAnimations.push(animation);
+          needsRender = true;
         }
       }
 
@@ -168,41 +191,48 @@ const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
       );
     });
 
-    if (animatingItems.length !== activeAnimations.length) {
+    if (activeAnimations.length !== currentAnims.length) {
+      animatingItemsRef.current = activeAnimations;
       setAnimatingItems(activeAnimations);
     }
 
-    if (dragPreview && dragPreview.visible) {
-      const artwork = dragPreview.artwork;
+    if (preview) {
+      const snapX = snapToGrid(preview.x);
+      const snapY = snapToGrid(preview.y);
+
       drawArtwork(
         ctx,
-        artwork,
-        dragPreview.x,
-        dragPreview.y,
+        preview.artwork,
+        preview.x,
+        preview.y,
         0,
         1,
         false,
-        0.5
+        0.35
       );
 
-      const snapX = snapToGrid(dragPreview.x);
-      const snapY = snapToGrid(dragPreview.y);
-      ctx.strokeStyle = 'rgba(92, 79, 68, 0.5)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      ctx.moveTo(snapX - 10, snapY);
-      ctx.lineTo(snapX + 10, snapY);
-      ctx.moveTo(snapX, snapY - 10);
-      ctx.lineTo(snapX, snapY + 10);
-      ctx.stroke();
+      ctx.strokeStyle = 'rgba(92, 79, 68, 0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      
+      const pw = preview.artwork.width;
+      const ph = preview.artwork.height;
+      ctx.strokeRect(snapX - pw / 2, snapY - ph / 2, pw, ph);
+      
       ctx.setLineDash([]);
+
+      ctx.fillStyle = 'rgba(92, 79, 68, 0.8)';
+      ctx.beginPath();
+      ctx.arc(snapX, snapY, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      needsRender = true;
     }
 
-    if (activeAnimations.length > 0 || dragPreview) {
+    if (needsRender || preview) {
       animationFrameRef.current = requestAnimationFrame(render);
     }
-  }, [placedItems, dragPreview, animatingItems, selectedItemId, artworkMap, drawGrid, drawArtwork, easeOutElastic, snapToGrid]);
+  }, [placedItems, preview, selectedItemId, artworkMap, drawGrid, drawArtwork, easeOutElastic, snapToGrid]);
 
   useEffect(() => {
     animationFrameRef.current = requestAnimationFrame(render);
@@ -213,86 +243,113 @@ const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
     };
   }, [render]);
 
+  const addElasticAnimation = useCallback((
+    id: string,
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number
+  ) => {
+    const anim: AnimatingItem = {
+      id,
+      fromX,
+      fromY,
+      toX,
+      toY,
+      startTime: performance.now(),
+      duration: ELASTIC_DURATION
+    };
+    animatingItemsRef.current = [...animatingItemsRef.current, anim];
+    setAnimatingItems(prev => [...prev, anim]);
+    if (!animationFrameRef.current) {
+      animationFrameRef.current = requestAnimationFrame(render);
+    }
+  }, [render]);
+
+  const getCanvasPos = useCallback((clientX: number, clientY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top
+    };
+  }, []);
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    if (!draggingArtwork) return;
+    setIsDraggingOver(true);
+    const pos = getCanvasPos(e.clientX, e.clientY);
+    setPreview({ artwork: draggingArtwork, x: pos.x, y: pos.y });
+    if (!animationFrameRef.current) {
+      animationFrameRef.current = requestAnimationFrame(render);
+    }
+  }, [draggingArtwork, getCanvasPos, render]);
+
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
-    setIsDraggingOver(true);
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    try {
-      const artwork = JSON.parse(e.dataTransfer.getData('application/json'));
-      setDragPreview({
-        artwork,
-        x,
-        y,
-        visible: true
-      });
-    } catch {
-      // 忽略解析错误
-    }
-  }, []);
+    if (!draggingArtwork) return;
+    
+    const pos = getCanvasPos(e.clientX, e.clientY);
+    const clampedX = Math.max(draggingArtwork.width / 2, Math.min(CANVAS_WIDTH - draggingArtwork.width / 2, pos.x));
+    const clampedY = Math.max(draggingArtwork.height / 2, Math.min(CANVAS_HEIGHT - draggingArtwork.height / 2, pos.y));
+    
+    setPreview(prev => {
+      if (!prev || prev.x !== clampedX || prev.y !== clampedY) {
+        return { artwork: draggingArtwork, x: clampedX, y: clampedY };
+      }
+      return prev;
+    });
+  }, [draggingArtwork, getCanvasPos]);
 
   const handleDragLeave = useCallback(() => {
     setIsDraggingOver(false);
-    setDragPreview(null);
+    setPreview(null);
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDraggingOver(false);
-    setDragPreview(null);
-
-    try {
-      const artwork: Artwork = JSON.parse(e.dataTransfer.getData('application/json'));
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const rect = canvas.getBoundingClientRect();
-      const x = snapToGrid(e.clientX - rect.left);
-      const y = snapToGrid(e.clientY - rect.top);
-
-      const clampedX = Math.max(artwork.width / 2, Math.min(CANVAS_WIDTH - artwork.width / 2, x));
-      const clampedY = Math.max(artwork.height / 2, Math.min(CANVAS_HEIGHT - artwork.height / 2, y));
-
-      const newItem: PlacedItem = {
-        id: uuidv4(),
-        artworkId: artwork.id,
-        x: clampedX,
-        y: clampedY,
-        rotation: 0,
-        scale: 1
-      };
-
-      setAnimatingItems(prev => [...prev, {
-        id: newItem.id,
-        fromX: x,
-        fromY: y - 50,
-        toX: clampedX,
-        toY: clampedY,
-        startTime: performance.now(),
-        duration: ELASTIC_DURATION
-      }]);
-
-      onItemsChange([...placedItems, newItem]);
-      onSelectItem(newItem.id);
-    } catch {
-      // 忽略解析错误
+    
+    if (!draggingArtwork) {
+      setPreview(null);
+      return;
     }
-  }, [placedItems, onItemsChange, onSelectItem, snapToGrid]);
+
+    const pos = getCanvasPos(e.clientX, e.clientY);
+    const rawX = Math.max(draggingArtwork.width / 2, Math.min(CANVAS_WIDTH - draggingArtwork.width / 2, pos.x));
+    const rawY = Math.max(draggingArtwork.height / 2, Math.min(CANVAS_HEIGHT - draggingArtwork.height / 2, pos.y));
+    
+    const snapX = snapToGrid(rawX);
+    const snapY = snapToGrid(rawY);
+
+    const clampedSnapX = Math.max(draggingArtwork.width / 2, Math.min(CANVAS_WIDTH - draggingArtwork.width / 2, snapX));
+    const clampedSnapY = Math.max(draggingArtwork.height / 2, Math.min(CANVAS_HEIGHT - draggingArtwork.height / 2, snapY));
+
+    const newItem: PlacedItem = {
+      id: uuidv4(),
+      artworkId: draggingArtwork.id,
+      x: clampedSnapX,
+      y: clampedSnapY,
+      rotation: 0,
+      scale: 1
+    };
+
+    addElasticAnimation(newItem.id, rawX, rawY - 40, clampedSnapX, clampedSnapY);
+    
+    setPreview(null);
+    onCanvasDragEnd();
+    onItemsChange([...placedItems, newItem]);
+    onSelectItem(newItem.id);
+  }, [draggingArtwork, getCanvasPos, snapToGrid, addElasticAnimation, onCanvasDragEnd, placedItems, onItemsChange, onSelectItem]);
 
   const handleCanvasClick = useCallback((e: React.MouseEvent) => {
     const canvas = canvasRef.current;
     if (!canvas || draggingItem) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const { x, y } = getCanvasPos(e.clientX, e.clientY);
 
     for (let i = placedItems.length - 1; i >= 0; i--) {
       const item = placedItems[i];
@@ -322,15 +379,13 @@ const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
     }
 
     onSelectItem(null);
-  }, [placedItems, artworkMap, onSelectItem, draggingItem]);
+  }, [placedItems, artworkMap, onSelectItem, draggingItem, getCanvasPos]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     const canvas = canvasRef.current;
     if (!canvas || !selectedItemId) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const { x, y } = getCanvasPos(e.clientX, e.clientY);
 
     const selectedItem = placedItems.find(item => item.id === selectedItemId);
     if (!selectedItem) return;
@@ -359,17 +414,14 @@ const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
       dragOffsetRef.current = { x: dx, y: dy };
       e.preventDefault();
     }
-  }, [selectedItemId, placedItems, artworkMap]);
+  }, [selectedItemId, placedItems, artworkMap, getCanvasPos]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!draggingItem) return;
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left - dragOffsetRef.current.x;
-    const y = e.clientY - rect.top - dragOffsetRef.current.y;
+    const { x, y } = getCanvasPos(e.clientX, e.clientY);
+    const targetX = x - dragOffsetRef.current.x;
+    const targetY = y - dragOffsetRef.current.y;
 
     const selectedItem = placedItems.find(item => item.id === draggingItem);
     if (!selectedItem) return;
@@ -380,52 +432,43 @@ const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
     const halfW = (artwork.width * selectedItem.scale) / 2;
     const halfH = (artwork.height * selectedItem.scale) / 2;
 
-    const clampedX = Math.max(halfW, Math.min(CANVAS_WIDTH - halfW, x));
-    const clampedY = Math.max(halfH, Math.min(CANVAS_HEIGHT - halfH, y));
-
-    setDragPreview({
-      artwork,
-      x: clampedX,
-      y: clampedY,
-      visible: true
-    });
+    const clampedX = Math.max(halfW, Math.min(CANVAS_WIDTH - halfW, targetX));
+    const clampedY = Math.max(halfH, Math.min(CANVAS_HEIGHT - halfH, targetY));
 
     onItemsChange(placedItems.map(item => 
       item.id === draggingItem 
         ? { ...item, x: clampedX, y: clampedY }
         : item
     ));
-  }, [draggingItem, placedItems, artworkMap, onItemsChange]);
+  }, [draggingItem, placedItems, artworkMap, onItemsChange, getCanvasPos]);
 
   const handleMouseUp = useCallback(() => {
     if (draggingItem) {
       const item = placedItems.find(i => i.id === draggingItem);
       if (item) {
-        const snapX = snapToGrid(item.x);
-        const snapY = snapToGrid(item.y);
-        
-        if (snapX !== item.x || snapY !== item.y) {
-          setAnimatingItems(prev => [...prev, {
-            id: draggingItem,
-            fromX: item.x,
-            fromY: item.y,
-            toX: snapX,
-            toY: snapY,
-            startTime: performance.now(),
-            duration: ELASTIC_DURATION
-          }]);
-
-          onItemsChange(placedItems.map(i =>
-            i.id === draggingItem
-              ? { ...i, x: snapX, y: snapY }
-              : i
-          ));
+        const artwork = artworkMap.get(item.artworkId);
+        if (artwork) {
+          const halfW = (artwork.width * item.scale) / 2;
+          const halfH = (artwork.height * item.scale) / 2;
+          
+          const snapX = snapToGrid(item.x);
+          const snapY = snapToGrid(item.y);
+          const clampedSnapX = Math.max(halfW, Math.min(CANVAS_WIDTH - halfW, snapX));
+          const clampedSnapY = Math.max(halfH, Math.min(CANVAS_HEIGHT - halfH, snapY));
+          
+          if (clampedSnapX !== item.x || clampedSnapY !== item.y) {
+            addElasticAnimation(draggingItem, item.x, item.y, clampedSnapX, clampedSnapY);
+            onItemsChange(placedItems.map(i =>
+              i.id === draggingItem
+                ? { ...i, x: clampedSnapX, y: clampedSnapY }
+                : i
+            ));
+          }
         }
       }
       setDraggingItem(null);
-      setDragPreview(null);
     }
-  }, [draggingItem, placedItems, snapToGrid, onItemsChange]);
+  }, [draggingItem, placedItems, artworkMap, snapToGrid, addElasticAnimation, onItemsChange]);
 
   return (
     <div className="canvas-container">
@@ -436,12 +479,13 @@ const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
         </button>
       </div>
       
-      <div className="canvas-wrapper">
+      <div className={`canvas-wrapper ${isDraggingOver ? 'dragging-over' : ''}`}>
         <canvas
           ref={canvasRef}
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
-          className={`gallery-canvas ${isDraggingOver ? 'dragging-over' : ''}`}
+          className="gallery-canvas"
+          onDragEnter={handleDragEnter}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -454,7 +498,7 @@ const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
       </div>
 
       <div className="canvas-hint">
-        <span>从左侧拖拽艺术品到画布 · 点击选中 · 拖动调整位置</span>
+        <span>从左侧拖拽艺术品到画布 · 点击选中 · 拖动调整位置（自动吸附20px网格）</span>
       </div>
 
       <style>{`
@@ -464,6 +508,8 @@ const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
           align-items: center;
           padding: 20px;
           box-sizing: border-box;
+          flex: 1;
+          overflow: auto;
         }
 
         .canvas-header {
@@ -472,6 +518,7 @@ const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
           justify-content: space-between;
           width: 800px;
           margin-bottom: 16px;
+          flex-shrink: 0;
         }
 
         .canvas-header h2 {
@@ -491,35 +538,38 @@ const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
           font-size: 15px;
           font-weight: 500;
           cursor: pointer;
-          transition: all 0.2s ease;
+          transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
           border-radius: 2px;
           letter-spacing: 1px;
           text-transform: uppercase;
         }
 
         .preview-btn:hover {
-          background: #5C4F44;
+          background: #6F6359;
+          box-shadow: 0 2px 8px rgba(92, 79, 68, 0.2);
         }
 
         .preview-btn:active {
+          background: #5C4F44;
           transform: scale(0.98);
         }
 
         .canvas-wrapper {
           position: relative;
-          box-shadow: 0 8px 32px rgba(44, 44, 44, 0.15);
+          box-shadow: 0 8px 32px rgba(44, 44, 44, 0.12);
           border-radius: 4px;
           overflow: hidden;
+          transition: box-shadow 0.2s ease;
+          flex-shrink: 0;
+        }
+
+        .canvas-wrapper.dragging-over {
+          box-shadow: 0 0 0 3px rgba(92, 79, 68, 0.25), 0 12px 40px rgba(44, 44, 44, 0.18);
         }
 
         .gallery-canvas {
           display: block;
           cursor: default;
-          transition: box-shadow 0.2s ease;
-        }
-
-        .gallery-canvas.dragging-over {
-          box-shadow: 0 0 0 3px rgba(92, 79, 68, 0.3), 0 8px 32px rgba(44, 44, 44, 0.15);
         }
 
         .canvas-hint {
@@ -528,6 +578,7 @@ const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
           font-size: 13px;
           font-style: italic;
           color: #8B7D72;
+          flex-shrink: 0;
         }
       `}</style>
     </div>

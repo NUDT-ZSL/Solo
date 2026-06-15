@@ -10,7 +10,7 @@ const App: React.FC = () => {
   const [placedItems, setPlacedItems] = useState<PlacedItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
+  const [draggingArtwork, setDraggingArtwork] = useState<Artwork | null>(null);
 
   const selectedItem = useMemo(() => {
     return placedItems.find(item => item.id === selectedItemId) || null;
@@ -21,12 +21,12 @@ const App: React.FC = () => {
     return artworks.find(a => a.id === selectedItem.artworkId);
   }, [selectedItem]);
 
-  const handleDragStart = useCallback((_artwork: Artwork) => {
-    setIsDragging(true);
+  const handleDragStart = useCallback((artwork: Artwork) => {
+    setDraggingArtwork(artwork);
   }, []);
 
   const handleDragEnd = useCallback(() => {
-    setIsDragging(false);
+    setDraggingArtwork(null);
   }, []);
 
   const handleItemsChange = useCallback((items: PlacedItem[]) => {
@@ -57,7 +57,7 @@ const App: React.FC = () => {
   }, []);
 
   return (
-    <div className={`app-container ${isDragging ? 'dragging' : ''}`}>
+    <div className={`app-container ${draggingArtwork ? 'dragging' : ''}`}>
       <AssetLibrary 
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
@@ -76,6 +76,8 @@ const App: React.FC = () => {
           onSelectItem={handleSelectItem}
           onPreview3D={handlePreview3D}
           artworks={artworks}
+          draggingArtwork={draggingArtwork}
+          onCanvasDragEnd={handleDragEnd}
         />
       </main>
       

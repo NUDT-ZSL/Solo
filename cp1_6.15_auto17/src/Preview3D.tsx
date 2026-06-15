@@ -10,13 +10,19 @@ interface Preview3DProps {
 const ROOM_WIDTH = 800;
 const ROOM_HEIGHT = 400;
 const ROOM_DEPTH = 600;
+const TIMEOUT_DURATION = 1000;
+
+type LoadState = 'loading' | 'ready' | 'timeout';
 
 const Preview3D: React.FC<Preview3DProps> = ({ placedItems, artworks, onClose }) => {
   const [rotationY, setRotationY] = useState(-30);
   const [rotationX, setRotationX] = useState(15);
   const [isDragging, setIsDragging] = useState(false);
+  const [loadState, setLoadState] = useState<LoadState>('loading');
   const lastMousePos = useRef({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+  const timeoutRef = useRef<number | null>(null);
+  const startTimeRef = useRef<number>(performance.now());
 
   const artworkMap = React.useMemo(() => {
     const map = new Map<string, Artwork>();
@@ -24,10 +30,49 @@ const Preview3D: React.FC<Preview3DProps> = ({ placedItems, artworks, onClose })
     return map;
   }, [artworks]);
 
+  useEffect(() => {
+    startTimeRef.current = performance.now();
+    
+    const timer = window.setTimeout(() => {
+      setLoadState(prev => {
+        if (prev === 'loading') {
+          return 'timeout';
+        }
+        return prev;
+      });
+    }, TIMEOUT_DURATION);
+    timeoutRef.current = timer;
+
+    const checkTimer = window.setTimeout(() => {
+      const elapsed = performance.now() - startTimeRef.current;
+      if (elapsed < TIMEOUT_DURATION) {
+        setLoadState('ready');
+      }
+    }, 50);
+
+    return () => {
+      if (timeoutRef.current !== null) {
+        clearTimeout(timeoutRef.current);
+      }
+      clearTimeout(checkTimer);
+    };
+  }, []);
+
+  const handleContentLoad = useCallback(() => {
+    if (loadState !== 'timeout') {
+      if (timeoutRef.current !== null) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      setLoadState('ready');
+    }
+  }, [loadState]);
+
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (loadState !== 'ready') return;
     setIsDragging(true);
     lastMousePos.current = { x: e.clientX, y: e.clientY };
-  }, []);
+  }, [loadState]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
@@ -91,6 +136,98 @@ const Preview3D: React.FC<Preview3DProps> = ({ placedItems, artworks, onClose })
     }
   };
 
+  const renderFallbackView = () => (
+    <div className="fallback-view">
+      <div className="fallback-icon">⚠</div>
+      <h3>预览加载超时</h3>
+      <p>您的浏览器CSS 3D渲染可能受限</p>
+      <div className="fallback-summary">
+        <div className="summary-item">
+          <span className="summary-label">艺术品数量</span>
+          <span className="summary-value">{placedItems.length} 件</span>
+        </div>
+        <div className="summary-item">
+          <span className="summary-label">画作品类</span>
+          <span className="summary-value">
+            {placedItems.filter(i => {
+              const a = artworkMap.get(i.artworkId);
+              return a?.type === 'painting';
+            }).length} 画作 · 
+            {placedItems.filter(i => {
+              const a = artworkMap.get(i.artworkId);
+              return a?.type === 'sculpture';
+            }).length} 雕塑
+          </span>
+        </div>
+      </div>
+      <div className="fallback-grid">
+        {placedItems.slice(0, 8).map(item => {
+          const a = artworkMap.get(item.artworkId);
+          if (!a) return null;
+          return (
+            <div key={item.id} className="fallback-item">
+              <div 
+                className={`fallback-thumb ${a.type}`}
+                style={{ backgroundColor: a.color }}
+              />
+              <div className="fallback-name">{a.title}</div>
+              <div className="fallback-pos">({item.x}, {item.y})</div>
+            </div>
+          );
+        })}
+      </div>
+      <button className="retry-btn" onClick={() => {
+        setLoadState('loading');
+        startTimeRef.current = performance.now();
+        setTimeout(() => {
+          const elapsed = performance.now() - startTimeRef.current;
+          if (elapsed < TIMEOUT_DURATION) {
+            handleContentLoad();
+          }
+        }, 30);
+      }}>
+        重新尝试
+      </button>
+    </div>
+  );
+
+  const renderLoadingView = () => (
+    <div className="loading-view">
+      <div className="loading-spinner" />
+      <p>正在生成3D预览...</p>
+      <p className="loading-timeout">若超过1秒将显示简化视图</p>
+    </div>
+  );
+
+  const renderContentView = () => (
+    <div 
+      ref={containerRef}
+      className={`preview-scene ${isDragging ? 'dragging' : ''}`}
+      onMouseDown={handleMouseDown}
+      onLoadCapture={handleContentLoad}
+      style={{ cursor: loadState === 'ready' ? (isDragging ? 'grabbing' : 'grab') : 'default' }}
+    >
+      <div 
+        className="room"
+        style={{
+          transform: `rotateX(${rotationX}deg) rotateY(${rotationY}deg)`
+        }}
+      >
+        <div className="room-face floor" />
+        <div className="room-face ceiling" />
+        <div className="room-face back-wall" />
+        <div className="room-face left-wall" />
+        <div className="room-face right-wall" />
+        
+        {placedItems.map(renderArtwork)}
+        
+        <div className="spotlight spotlight-1" />
+        <div className="spotlight spotlight-2" />
+        <div className="spotlight spotlight-3" />
+      </div>
+    </div>
+  );
+
   return (
     <div className="preview-overlay" onClick={onClose}>
       <div className="preview-container" onClick={e => e.stopPropagation()}>
@@ -99,57 +236,37 @@ const Preview3D: React.FC<Preview3DProps> = ({ placedItems, artworks, onClose })
           <button className="close-btn" onClick={onClose}>×</button>
         </div>
         
-        <div 
-          ref={containerRef}
-          className={`preview-scene ${isDragging ? 'dragging' : ''}`}
-          onMouseDown={handleMouseDown}
-          style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
-        >
-          <div 
-            className="room"
-            style={{
-              transform: `rotateX(${rotationX}deg) rotateY(${rotationY}deg)`
-            }}
-          >
-            <div className="room-face floor" />
-            <div className="room-face ceiling" />
-            <div className="room-face back-wall" />
-            <div className="room-face left-wall" />
-            <div className="room-face right-wall" />
-            
-            {placedItems.map(renderArtwork)}
-            
-            <div className="spotlight spotlight-1" />
-            <div className="spotlight spotlight-2" />
-            <div className="spotlight spotlight-3" />
-          </div>
-        </div>
+        {loadState === 'loading' && renderLoadingView()}
+        {loadState === 'timeout' && renderFallbackView()}
+        {loadState === 'ready' && renderContentView()}
         
-        <div className="preview-controls">
-          <div className="control-info">
-            <span>拖拽旋转视角 · 当前角度: ({Math.round(rotationY)}°, {Math.round(rotationX)}°)</span>
+        {loadState === 'ready' && (
+          <div className="preview-controls">
+            <div className="control-info">
+              <span>拖拽旋转视角 · 当前角度: ({Math.round(rotationY)}°, {Math.round(rotationX)}°)</span>
+            </div>
+            <div className="control-buttons">
+              <button 
+                className="control-btn" 
+                onClick={() => setRotationY(prev => prev - 30)}
+              >
+                ←
+              </button>
+              <button 
+                className="control-btn" 
+                onClick={() => setRotationY(prev => prev + 30)}
+              >
+                →
+              </button>
+              <button 
+                className="control-btn reset-btn" 
+                onClick={() => { setRotationY(-30); setRotationX(15); }}
+              >
+                重置视角
+              </button>
+            </div>
           </div>
-          <div className="control-buttons">
-            <button 
-              className="control-btn" 
-              onClick={() => setRotationY(prev => prev - 30)}
-            >
-              ←
-            </button>
-            <button 
-              className="control-btn" 
-              onClick={() => setRotationY(prev => prev + 30)}
-            >
-              →
-            </button>
-            <button 
-              className="control-btn reset-btn" 
-              onClick={() => { setRotationY(-30); setRotationX(15); }}
-            >
-              重置视角
-            </button>
-          </div>
-        </div>
+        )}
       </div>
 
       <style>{`
@@ -159,7 +276,7 @@ const Preview3D: React.FC<Preview3DProps> = ({ placedItems, artworks, onClose })
           left: 0;
           right: 0;
           bottom: 0;
-          background: rgba(44, 44, 44, 0.9);
+          background: rgba(44, 44, 44, 0.92);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -180,6 +297,8 @@ const Preview3D: React.FC<Preview3DProps> = ({ placedItems, artworks, onClose })
           flex-direction: column;
           gap: 16px;
           animation: slideUp 0.4s ease;
+          max-height: 90vh;
+          overflow: auto;
         }
 
         @keyframes slideUp {
@@ -208,8 +327,8 @@ const Preview3D: React.FC<Preview3DProps> = ({ placedItems, artworks, onClose })
         }
 
         .close-btn {
-          width: 32px;
-          height: 32px;
+          width: 36px;
+          height: 36px;
           border: none;
           background: #8B7D72;
           color: #F5F0EB;
@@ -219,11 +338,17 @@ const Preview3D: React.FC<Preview3DProps> = ({ placedItems, artworks, onClose })
           display: flex;
           align-items: center;
           justify-content: center;
-          transition: all 0.2s ease;
+          transition: background-color 0.2s ease, transform 0.2s ease;
         }
 
         .close-btn:hover {
+          background: #6F6359;
+          transform: scale(1.05);
+        }
+
+        .close-btn:active {
           background: #5C4F44;
+          transform: scale(0.98);
         }
 
         .preview-scene {
@@ -237,10 +362,181 @@ const Preview3D: React.FC<Preview3DProps> = ({ placedItems, artworks, onClose })
           display: flex;
           align-items: center;
           justify-content: center;
+          position: relative;
         }
 
         .preview-scene.dragging {
           cursor: grabbing;
+        }
+
+        .loading-view {
+          width: 700px;
+          height: 500px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(180deg, #1A1A1A 0%, #2C2C2C 100%);
+          border-radius: 4px;
+          color: #8B7D72;
+          gap: 12px;
+        }
+
+        .loading-spinner {
+          width: 48px;
+          height: 48px;
+          border: 3px solid rgba(139, 125, 114, 0.2);
+          border-top-color: #8B7D72;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        .loading-view p {
+          font-family: 'Cormorant Garamond', serif;
+          font-size: 15px;
+          margin: 0;
+        }
+
+        .loading-timeout {
+          font-size: 13px !important;
+          opacity: 0.7;
+          font-style: italic;
+        }
+
+        .fallback-view {
+          width: 700px;
+          min-height: 500px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          background: #FFFFFF;
+          border-radius: 4px;
+          padding: 40px;
+          box-sizing: border-box;
+          gap: 16px;
+        }
+
+        .fallback-icon {
+          font-size: 48px;
+          color: #C4956A;
+        }
+
+        .fallback-view h3 {
+          font-family: 'Playfair Display', serif;
+          font-size: 20px;
+          font-weight: 600;
+          color: #2C2C2C;
+          margin: 0;
+        }
+
+        .fallback-view > p {
+          font-family: 'Cormorant Garamond', serif;
+          font-size: 14px;
+          font-style: italic;
+          color: #8B7D72;
+          margin: 0;
+        }
+
+        .fallback-summary {
+          display: flex;
+          gap: 24px;
+          margin: 8px 0;
+          padding: 16px 24px;
+          background: #F5F0EB;
+          border-radius: 4px;
+        }
+
+        .summary-item {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .summary-label {
+          font-family: 'Cormorant Garamond', serif;
+          font-size: 12px;
+          color: #8B7D72;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+
+        .summary-value {
+          font-family: 'Playfair Display', serif;
+          font-size: 16px;
+          font-weight: 600;
+          color: #2C2C2C;
+        }
+
+        .fallback-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 12px;
+          width: 100%;
+          max-width: 500px;
+        }
+
+        .fallback-item {
+          background: #F5F0EB;
+          padding: 12px;
+          border-radius: 4px;
+          text-align: center;
+        }
+
+        .fallback-thumb {
+          width: 40px;
+          height: 40px;
+          margin: 0 auto 8px;
+          border: 2px solid #8B7D72;
+        }
+
+        .fallback-thumb.sculpture {
+          border-radius: 50%;
+        }
+
+        .fallback-name {
+          font-family: 'Playfair Display', serif;
+          font-size: 11px;
+          color: #2C2C2C;
+          margin-bottom: 2px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .fallback-pos {
+          font-family: 'Cormorant Garamond', serif;
+          font-size: 10px;
+          color: #8B7D72;
+        }
+
+        .retry-btn {
+          margin-top: 8px;
+          padding: 10px 24px;
+          background: #8B7D72;
+          color: #F5F0EB;
+          border: none;
+          font-family: 'Cormorant Garamond', serif;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          border-radius: 2px;
+          transition: background-color 0.2s ease, transform 0.2s ease;
+          letter-spacing: 1px;
+        }
+
+        .retry-btn:hover {
+          background: #6F6359;
+        }
+
+        .retry-btn:active {
+          background: #5C4F44;
+          transform: scale(0.98);
         }
 
         .room {
@@ -389,11 +685,17 @@ const Preview3D: React.FC<Preview3DProps> = ({ placedItems, artworks, onClose })
           font-size: 14px;
           cursor: pointer;
           border-radius: 2px;
-          transition: all 0.2s ease;
+          transition: background-color 0.2s ease, transform 0.2s ease;
+          min-width: 40px;
         }
 
         .control-btn:hover {
+          background: #6F6359;
+        }
+
+        .control-btn:active {
           background: #5C4F44;
+          transform: scale(0.96);
         }
 
         .control-btn.reset-btn {
@@ -403,9 +705,14 @@ const Preview3D: React.FC<Preview3DProps> = ({ placedItems, artworks, onClose })
         }
 
         .control-btn.reset-btn:hover {
+          background: #8B7D72;
+          border-color: #8B7D72;
+          color: #F5F0EB;
+        }
+
+        .control-btn.reset-btn:active {
           background: #5C4F44;
           border-color: #5C4F44;
-          color: #F5F0EB;
         }
       `}</style>
     </div>

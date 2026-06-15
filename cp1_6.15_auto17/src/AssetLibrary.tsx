@@ -1,11 +1,15 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Artwork, FilterState } from './types';
 import { artworks, genreLabels, yearRanges } from './data/artworks';
+
+type AnimationPhase = 'idle' | 'fading-out' | 'fading-in';
 
 interface AssetLibraryProps {
   onDragStart: (artwork: Artwork) => void;
   onDragEnd: () => void;
 }
+
+const ANIMATION_DURATION = 250;
 
 const AssetLibrary: React.FC<AssetLibraryProps> = ({ onDragStart, onDragEnd }) => {
   const [filter, setFilter] = useState<FilterState>({
@@ -13,10 +17,18 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({ onDragStart, onDragEnd }) =
     yearRange: [1400, 2000]
   });
 
-  const [animatingItems, setAnimatingItems] = useState<Set<string>>(new Set());
-  const [filterKey, setFilterKey] = useState(0);
+  const [displayFilter, setDisplayFilter] = useState<FilterState>({
+    genre: 'all',
+    yearRange: [1400, 2000]
+  });
 
-  const filteredArtworks = useMemo(() => {
+  const [animationPhase, setAnimationPhase] = useState<AnimationPhase>('idle');
+  const [animProgress, setAnimProgress] = useState(1);
+  const animationTimerRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const animStartTimeRef = useRef<number>(0);
+
+  const currentArtworks = useMemo(() => {
     return artworks.filter(art => {
       const genreMatch = filter.genre === 'all' || art.genre === filter.genre;
       const yearMatch = art.year >= filter.yearRange[0] && art.year <= filter.yearRange[1];
@@ -24,44 +36,123 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({ onDragStart, onDragEnd }) =
     });
   }, [filter]);
 
-  const handleFilterChange = useCallback((newFilter: Partial<FilterState>) => {
-    const allIds = new Set(artworks.map(a => a.id));
-    setAnimatingItems(allIds);
-    
-    setTimeout(() => {
-      setFilter(prev => ({ ...prev, ...newFilter }));
-      setFilterKey(prev => prev + 1);
-      
-      setTimeout(() => {
-        setAnimatingItems(new Set());
-      }, 250);
-    }, 125);
+  const displayArtworks = useMemo(() => {
+    return artworks.filter(art => {
+      const genreMatch = displayFilter.genre === 'all' || art.genre === displayFilter.genre;
+      const yearMatch = art.year >= displayFilter.yearRange[0] && art.year <= displayFilter.yearRange[1];
+      return genreMatch && yearMatch;
+    });
+  }, [displayFilter]);
+
+  const cancelAnimation = useCallback(() => {
+    if (animationTimerRef.current !== null) {
+      clearTimeout(animationTimerRef.current);
+      animationTimerRef.current = null;
+    }
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
   }, []);
+
+  useEffect(() => {
+    return () => cancelAnimation();
+  }, [cancelAnimation]);
+
+  const runFadeAnimation = useCallback((isFadeOut: boolean, onComplete: () => void) => {
+    cancelAnimation();
+    animStartTimeRef.current = performance.now();
+    
+    const animate = (now: number) => {
+      const elapsed = now - animStartTimeRef.current;
+      const progress = Math.min(1, elapsed / ANIMATION_DURATION);
+      setAnimProgress(isFadeOut ? 1 - progress : progress);
+      
+      if (progress < 1) {
+        rafRef.current = requestAnimationFrame(animate);
+      } else {
+        rafRef.current = null;
+        onComplete();
+      }
+    };
+    rafRef.current = requestAnimationFrame(animate);
+  }, [cancelAnimation]);
+
+  const handleFilterChange = useCallback((newFilter: Partial<FilterState>) => {
+    if (animationPhase !== 'idle') return;
+
+    const updatedFilter = { ...filter, ...newFilter };
+    const isSame = 
+      updatedFilter.genre === filter.genre &&
+      updatedFilter.yearRange[0] === filter.yearRange[0] &&
+      updatedFilter.yearRange[1] === filter.yearRange[1];
+    
+    if (isSame) return;
+
+    setAnimationPhase('fading-out');
+    setFilter(updatedFilter);
+    
+    runFadeAnimation(true, () => {
+      setDisplayFilter(updatedFilter);
+      setAnimationPhase('fading-in');
+      
+      runFadeAnimation(false, () => {
+        setAnimationPhase('idle');
+      });
+    });
+  }, [filter, animationPhase, runFadeAnimation]);
 
   const handleDragStart = useCallback((e: React.DragEvent, artwork: Artwork) => {
     e.dataTransfer.effectAllowed = 'copy';
     e.dataTransfer.setData('application/json', JSON.stringify(artwork));
+    const dragImage = e.currentTarget.cloneNode(true) as HTMLElement;
+    dragImage.style.opacity = '0';
+    dragImage.style.position = 'absolute';
+    dragImage.style.top = '-9999px';
+    document.body.appendChild(dragImage);
+    e.dataTransfer.setDragImage(dragImage, 0, 0);
+    setTimeout(() => document.body.removeChild(dragImage), 0);
     onDragStart(artwork);
   }, [onDragStart]);
 
+  const getTransformStyle = (artwork: Artwork): React.CSSProperties => {
+    const isInNew = currentArtworks.some(a => a.id === artwork.id);
+    const isInDisplay = displayArtworks.some(a => a.id === artwork.id);
+    
+    let scale: number;
+    let opacity: number;
+
+    if (animationPhase === 'idle') {
+      scale = isInDisplay ? 1 : 0;
+      opacity = isInDisplay ? 1 : 0;
+    } else if (animationPhase === 'fading-out') {
+      scale = isInDisplay ? 0.6 + 0.4 * animProgress : 0;
+      opacity = isInDisplay ? animProgress : 0;
+    } else {
+      scale = isInNew ? 0.6 + 0.4 * animProgress : 0;
+      opacity = isInNew ? animProgress : 0;
+    }
+
+    return {
+      transform: `scale(${scale})`,
+      opacity,
+      visibility: scale === 0 && opacity === 0 ? 'hidden' : 'visible',
+      position: 'relative' as const
+    };
+  };
+
   const renderThumbnail = (artwork: Artwork) => {
-    const isAnimating = animatingItems.has(artwork.id);
-    const isVisible = filteredArtworks.some(a => a.id === artwork.id);
+    const style = getTransformStyle(artwork);
+    const isVisible = style.visibility !== 'hidden';
     
     return (
       <div
-        key={`${artwork.id}-${filterKey}`}
-        draggable
-        onDragStart={(e) => handleDragStart(e, artwork)}
+        key={artwork.id}
+        draggable={isVisible}
+        onDragStart={isVisible ? (e) => handleDragStart(e, artwork) : undefined}
         onDragEnd={onDragEnd}
         className="artwork-card"
-        style={{
-          opacity: isAnimating ? 0 : 1,
-          transform: isAnimating ? 'scale(0.8)' : 'scale(1)',
-          transition: 'opacity 0.25s ease, transform 0.25s ease',
-          display: isVisible || isAnimating ? 'block' : 'none',
-          cursor: 'grab'
-        }}
+        style={style}
       >
         <div className="artwork-thumbnail">
           {artwork.type === 'painting' ? (
@@ -89,39 +180,47 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({ onDragStart, onDragEnd }) =
     <div className="asset-library">
       <div className="library-header">
         <h2>素材库</h2>
-        <p className="library-subtitle">{filteredArtworks.length} / {artworks.length} 件艺术品</p>
+        <p className="library-subtitle">{currentArtworks.length} / {artworks.length} 件艺术品</p>
       </div>
 
       <div className="filter-section">
         <div className="filter-group">
           <label>流派</label>
           <div className="filter-buttons">
-            {Object.entries(genreLabels).map(([key, label]) => (
-              <button
-                key={key}
-                className={`filter-btn ${filter.genre === key ? 'active' : ''}`}
-                onClick={() => handleFilterChange({ genre: key as FilterState['genre'] })}
-              >
-                {label}
-              </button>
-            ))}
+            {Object.entries(genreLabels).map(([key, label]) => {
+              const isActive = filter.genre === key;
+              const isDisabled = animationPhase !== 'idle';
+              return (
+                <button
+                  key={key}
+                  className={`filter-btn ${isActive ? 'active' : ''}`}
+                  onClick={() => handleFilterChange({ genre: key as FilterState['genre'] })}
+                  disabled={isDisabled}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         <div className="filter-group">
           <label>年代</label>
           <div className="filter-buttons">
-            {yearRanges.map(({ label, range }) => (
-              <button
-                key={label}
-                className={`filter-btn ${
-                  filter.yearRange[0] === range[0] && filter.yearRange[1] === range[1] ? 'active' : ''
-                }`}
-                onClick={() => handleFilterChange({ yearRange: range })}
-              >
-                {label}
-              </button>
-            ))}
+            {yearRanges.map(({ label, range }) => {
+              const isActive = filter.yearRange[0] === range[0] && filter.yearRange[1] === range[1];
+              const isDisabled = animationPhase !== 'idle';
+              return (
+                <button
+                  key={label}
+                  className={`filter-btn ${isActive ? 'active' : ''}`}
+                  onClick={() => handleFilterChange({ yearRange: range })}
+                  disabled={isDisabled}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -198,19 +297,36 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({ onDragStart, onDragEnd }) =
           font-family: 'Cormorant Garamond', serif;
           font-size: 13px;
           cursor: pointer;
-          transition: all 0.2s ease;
           border-radius: 2px;
+          transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
         }
 
-        .filter-btn:hover {
-          border-color: #F5F0EB;
+        .filter-btn:hover:not(:disabled) {
+          background: #8B7D72;
+          border-color: #8B7D72;
+          color: #F5F0EB;
+        }
+
+        .filter-btn:active:not(:disabled) {
+          background: #5C4F44;
+          border-color: #5C4F44;
           color: #F5F0EB;
         }
 
         .filter-btn.active {
+          background: #8B7D72;
+          border-color: #8B7D72;
+          color: #F5F0EB;
+        }
+
+        .filter-btn.active:hover {
           background: #5C4F44;
           border-color: #5C4F44;
-          color: #F5F0EB;
+        }
+
+        .filter-btn:disabled {
+          cursor: not-allowed;
+          opacity: 0.5;
         }
 
         .artworks-grid {
@@ -231,8 +347,13 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({ onDragStart, onDragEnd }) =
         }
 
         .artworks-grid::-webkit-scrollbar-thumb {
-          background: #5C4F44;
+          background: #8B7D72;
           border-radius: 2px;
+          transition: background-color 0.2s ease;
+        }
+
+        .artworks-grid::-webkit-scrollbar-thumb:hover {
+          background: #5C4F44;
         }
 
         .artwork-card {
@@ -240,16 +361,21 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({ onDragStart, onDragEnd }) =
           border-radius: 4px;
           overflow: hidden;
           user-select: none;
-          transition: all 0.2s ease;
+          will-change: transform, opacity;
+          transform-origin: center center;
         }
 
-        .artwork-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        .artwork-card:not([style*="visibility: hidden"]):not([style*="scale(0)"]) {
+          transition: box-shadow 0.2s ease;
+          cursor: grab;
         }
 
-        .artwork-card:active {
-          cursor: 'grabbing';
+        .artwork-card:not([style*="visibility: hidden"]):not([style*="scale(0)"]):hover {
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        .artwork-card:not([style*="visibility: hidden"]):not([style*="scale(0)"]):active {
+          cursor: grabbing;
         }
 
         .artwork-thumbnail {
