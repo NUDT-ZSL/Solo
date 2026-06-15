@@ -101,10 +101,8 @@ function App() {
         )}
 
         {state.view === 'quiz' && (
-          <QuizPanel
-          <div key={state.reviewTag || state.reviewMode ? 'special' : 'normal'}>
+          <div key={(state.reviewTag || 'all') + (state.reviewMode ? '-wrong' : '-normal')}>
             <QuizPanel
-              key={state.reviewTag || 'all' + (state.reviewMode ? '-wrong' : '')}
               onComplete={handleQuizComplete}
               onBack={handleBackToIntro}
               filterTag={state.reviewTag}
