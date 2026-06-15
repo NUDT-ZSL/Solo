@@ -39,6 +39,8 @@ export class GameMap {
   obstacles: Obstacle[];
   cols: number;
   rows: number;
+  lastPathTime: number = 0;
+  lastPathCache: Map<string, { time: number; path: Vec2[] }> = new Map();
 
   constructor(width: number, height: number) {
     this.width = width;
@@ -184,16 +186,26 @@ export class GameMap {
   }
 
   findPath(startX: number, startY: number, endX: number, endY: number): Vec2[] {
+    const now = performance.now();
     const start = this.worldToGrid(startX, startY);
     const end = this.worldToGrid(endX, endY);
+    const cacheKey = `${start.gx},${start.gy}-${end.gx},${end.gy}`;
+
+    const cached = this.lastPathCache.get(cacheKey);
+    if (cached && now - cached.time < 1000) {
+      return cached.path;
+    }
 
     if (!this.canWalk(start.gx, start.gy) || !this.canWalk(end.gx, end.gy)) {
+      this.lastPathCache.set(cacheKey, { time: now, path: [] });
       return [];
     }
 
     if (start.gx === end.gx && start.gy === end.gy) {
       const p = this.gridToWorld(start.gx, start.gy);
-      return [{ x: p.x, y: p.y }];
+      const result = [{ x: p.x, y: p.y }];
+      this.lastPathCache.set(cacheKey, { time: now, path: result });
+      return result;
     }
 
     const open: Map<string, AStarNode> = new Map();
@@ -241,6 +253,11 @@ export class GameMap {
           const p = this.gridToWorld(node.gx, node.gy);
           path.unshift({ x: p.x, y: p.y });
           node = node.parent;
+        }
+        this.lastPathCache.set(cacheKey, { time: now, path });
+        if (this.lastPathCache.size > 50) {
+          const firstKey = this.lastPathCache.keys().next().value;
+          if (firstKey) this.lastPathCache.delete(firstKey);
         }
         return path;
       }
