@@ -21,9 +21,9 @@ export default function App() {
   const controlsRef = useRef<OrbitControls | null>(null)
   const raycasterRef = useRef(new THREE.Raycaster())
   const mouseRef = useRef(new THREE.Vector2())
-  const elapsedFramesRef = useRef(0)
   const animationIdRef = useRef<number>(0)
   const startTimeRef = useRef(0)
+  const lastFrameTimeRef = useRef(0)
   const [isInitialized, setIsInitialized] = useState(false)
 
   const { colorMode, particleCount } = useAuroraStore()
@@ -35,6 +35,10 @@ export default function App() {
     if (!containerRef.current) return
 
     containerRef.current.appendChild(renderer.domElement)
+
+    raycasterRef.current.params.Points = {
+      threshold: 6.0,
+    }
 
     const starData = createStarField()
     scene.add(starData.points)
@@ -53,16 +57,18 @@ export default function App() {
     controlsRef.current = controls
 
     startTimeRef.current = performance.now() / 1000
+    lastFrameTimeRef.current = startTimeRef.current
 
     const animate = () => {
       animationIdRef.current = requestAnimationFrame(animate)
 
       const currentTime = performance.now() / 1000
       const elapsedTime = currentTime - startTimeRef.current
-      elapsedFramesRef.current++
+      const deltaTime = Math.min(currentTime - lastFrameTimeRef.current, 0.1)
+      lastFrameTimeRef.current = currentTime
 
       updateStarField(starData, elapsedTime)
-      updateAuroraParticles(auroraData, currentTime, elapsedFramesRef.current)
+      updateAuroraParticles(auroraData, currentTime, deltaTime)
 
       controls.update()
       renderer.render(scene, camera)

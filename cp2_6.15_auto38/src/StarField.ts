@@ -34,14 +34,30 @@ export function createStarField(): StarData {
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
   geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1))
 
+  const canvas = document.createElement('canvas')
+  canvas.width = 32
+  canvas.height = 32
+  const ctx = canvas.getContext('2d')!
+  const gradient = ctx.createRadialGradient(16, 16, 0, 16, 16, 16)
+  gradient.addColorStop(0, 'rgba(255,255,255,1)')
+  gradient.addColorStop(0.4, 'rgba(255,255,255,0.8)')
+  gradient.addColorStop(0.7, 'rgba(255,255,255,0.3)')
+  gradient.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, 32, 32)
+  const starTexture = new THREE.CanvasTexture(canvas)
+
   const material = new THREE.PointsMaterial({
     color: 0xffffff,
-    size: 1,
+    size: 1.2,
     transparent: true,
-    opacity: 0.8,
+    opacity: 0.85,
     sizeAttenuation: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
+    map: starTexture,
+    alphaMap: starTexture,
+    alphaTest: 0.01,
   })
 
   const points = new THREE.Points(geometry, material)
