@@ -146,21 +146,30 @@ export class GameEngine {
   }
 
   private setupCanvas(): void {
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-      || window.innerWidth < 768;
     const isPortrait = window.innerHeight > window.innerWidth;
+    const smallScreen = window.innerWidth < 768;
 
     let targetWidth: number;
     let targetHeight: number;
+    const aspectRatio = this.BASE_HEIGHT / this.BASE_WIDTH;
 
-    if (isMobile && isPortrait) {
+    if (isPortrait) {
       targetWidth = window.innerWidth * 0.9;
-      const aspectRatio = this.BASE_HEIGHT / this.BASE_WIDTH;
+      targetHeight = targetWidth * aspectRatio;
+
+      if (targetHeight > window.innerHeight * 0.72) {
+        targetHeight = window.innerHeight * 0.72;
+        targetWidth = targetHeight / aspectRatio;
+      }
+    } else if (smallScreen) {
+      targetWidth = Math.min(window.innerWidth * 0.6, this.BASE_WIDTH);
       targetHeight = targetWidth * aspectRatio;
     } else {
-      targetWidth = this.BASE_WIDTH;
-      targetHeight = this.BASE_HEIGHT;
+      targetWidth = Math.min(this.BASE_WIDTH, window.innerWidth * 0.55);
+      targetHeight = targetWidth * aspectRatio;
     }
+
+    targetWidth = Math.max(280, targetWidth);
 
     const dpr = window.devicePixelRatio || 1;
     this.canvas.width = targetWidth * dpr;
@@ -326,21 +335,26 @@ export class GameEngine {
 
   private generateBreakParticles(x: number, y: number, color: string): Fragment[] {
     const fragments: Fragment[] = [];
-    const fragmentCount = 18;
+    const fragmentCount = 26;
+    const upBias = -0.35;
     for (let i = 0; i < fragmentCount; i++) {
-      const baseAngle = (i / fragmentCount) * Math.PI * 2;
-      const randomAngle = baseAngle + (Math.random() - 0.5) * 0.8;
-      const speed = 100 + Math.random() * 200;
+      const baseAngle = (i / fragmentCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+      const spreadAngle = baseAngle + upBias;
+      const speedMin = 260;
+      const speedMax = 820;
+      const speed = speedMin + Math.random() * (speedMax - speedMin);
+      const verticalBoost = -160 * Math.random();
+      const maxLife = 1.0 + Math.random() * 0.9;
       fragments.push({
-        x: x + (Math.random() - 0.5) * 10,
-        y: y + (Math.random() - 0.5) * 10,
-        vx: Math.cos(randomAngle) * speed * (0.6 + Math.random() * 0.8),
-        vy: Math.sin(randomAngle) * speed * (0.6 + Math.random() * 0.8) - 80,
-        size: 3 + Math.random() * 10,
+        x: x + (Math.random() - 0.5) * 18,
+        y: y + (Math.random() - 0.5) * 18,
+        vx: Math.cos(spreadAngle) * speed * (0.75 + Math.random() * 0.9),
+        vy: Math.sin(spreadAngle) * speed * (0.75 + Math.random() * 0.9) + verticalBoost,
+        size: 3 + Math.random() * 12,
         rotation: Math.random() * Math.PI * 2,
-        rotationSpeed: (Math.random() - 0.5) * 15,
-        life: 0.8 + Math.random() * 0.4,
-        maxLife: 1.2,
+        rotationSpeed: (Math.random() - 0.5) * 22,
+        life: maxLife,
+        maxLife: maxLife,
         color: color
       });
     }
@@ -359,57 +373,57 @@ export class GameEngine {
     return vertices;
   }
 
+  private pointInPolygon(
+    px: number, py: number,
+    vertices: { x: number; y: number }[]
+  ): boolean {
+    let inside = false;
+    const n = vertices.length;
+    for (let i = 0, j = n - 1; i < n; j = i++) {
+      const xi = vertices[i].x, yi = vertices[i].y;
+      const xj = vertices[j].x, yj = vertices[j].y;
+
+      const intersect =
+        (yi > py) !== (yj > py) &&
+        px < ((xj - xi) * (py - yi)) / ((yj - yi) || 1e-9) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
   private circlePolygonCollision(
     circleX: number, circleY: number, circleRadius: number,
     vertices: { x: number; y: number }[]
   ): boolean {
-    const axes: { x: number; y: number }[] = [];
+    if (this.pointInPolygon(circleX, circleY, vertices)) {
+      return true;
+    }
+
+    const rSq = circleRadius * circleRadius;
 
     for (let i = 0; i < vertices.length; i++) {
       const v1 = vertices[i];
       const v2 = vertices[(i + 1) % vertices.length];
-      const edge = { x: v2.x - v1.x, y: v2.y - v1.y };
-      const len = Math.sqrt(edge.x * edge.x + edge.y * edge.y);
-      if (len > 0) {
-        axes.push({ x: -edge.y / len, y: edge.x / len });
+
+      const ex = v2.x - v1.x;
+      const ey = v2.y - v1.y;
+      const lenSq = ex * ex + ey * ey;
+
+      let t = ((circleX - v1.x) * ex + (circleY - v1.y) * ey) / (lenSq || 1e-9);
+      t = Math.max(0, Math.min(1, t));
+
+      const closestX = v1.x + t * ex;
+      const closestY = v1.y + t * ey;
+
+      const dx = circleX - closestX;
+      const dy = circleY - closestY;
+
+      if (dx * dx + dy * dy < rSq) {
+        return true;
       }
     }
 
-    let minDist = Infinity;
-    let closestVertex = vertices[0];
-    for (const v of vertices) {
-      const dx = v.x - circleX;
-      const dy = v.y - circleY;
-      const dist = dx * dx + dy * dy;
-      if (dist < minDist) {
-        minDist = dist;
-        closestVertex = v;
-      }
-    }
-    const axis = {
-      x: (closestVertex.x - circleX) / Math.sqrt(minDist || 1),
-      y: (closestVertex.y - circleY) / Math.sqrt(minDist || 1)
-    };
-    axes.push(axis);
-
-    for (const ax of axes) {
-      let minPoly = Infinity, maxPoly = -Infinity;
-      for (const v of vertices) {
-        const proj = v.x * ax.x + v.y * ax.y;
-        minPoly = Math.min(minPoly, proj);
-        maxPoly = Math.max(maxPoly, proj);
-      }
-
-      const circleProj = circleX * ax.x + circleY * ax.y;
-      const minCircle = circleProj - circleRadius;
-      const maxCircle = circleProj + circleRadius;
-
-      if (maxCircle < minPoly || minCircle > maxPoly) {
-        return false;
-      }
-    }
-
-    return true;
+    return false;
   }
 
   private generateCollectParticles(x: number, y: number, color: string): void {
@@ -603,15 +617,15 @@ export class GameEngine {
       obs.x = obs.baseX + waveOffset;
 
       if (obs.broken) {
-        obs.breakProgress += dt * 1.5;
+        obs.breakProgress += dt * 1.2;
 
         for (let j = obs.fragments.length - 1; j >= 0; j--) {
           const f = obs.fragments[j];
           f.x += f.vx * dt;
           f.y += f.vy * dt;
-          f.vy += 400 * dt;
-          f.vx *= 0.985;
-          f.vy *= 0.99;
+          f.vy += 620 * dt;
+          f.vx *= 0.994;
+          f.vy *= 0.996;
           f.rotation += f.rotationSpeed * dt;
           f.life -= dt;
 

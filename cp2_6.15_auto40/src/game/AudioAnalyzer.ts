@@ -22,7 +22,7 @@ export class AudioAnalyzer {
   private onSpectrumCallback: AudioAnalyzerOptions['onSpectrum'];
   private rafId: number | null = null;
   private startTime: number = 0;
-  private lastBeatTime: number = 0;
+  private lastBeatTime: number = -10;
   private beatThreshold: number = 0.6;
   private bpmHistory: number[] = [];
   private smoothedBpm: number = 120;
@@ -36,6 +36,13 @@ export class AudioAnalyzer {
   private readonly WINDOW_OVERLAP = 0.5;
   private readonly ANALYSIS_WINDOW = 0.5;
 
+  private readonly FFT_SIZE = 2048;
+  private estimatedLatencyMs: number = 0;
+  private lastAudioFrameTime: number = 0;
+  private beatStableCounter: number = 0;
+  private expectedNextBeatTime: number = 0;
+  private analyserLatencyCompensation: number = 0;
+
   constructor(options: AudioAnalyzerOptions = {}) {
     this.onBeatCallback = options.onBeat;
     this.onSpectrumCallback = options.onSpectrum;
@@ -46,13 +53,11 @@ export class AudioAnalyzer {
     const workerCode = `
       const SAMPLE_RATE = 44100;
       const FFT_SIZE = 2048;
-      const HOP_SIZE = 512;
-      
+
       let prevSpectrum = new Float32Array(FFT_SIZE / 2);
       let energyBuffer = [];
-      let bufferStartTime = 0;
-      let lastBeatInBuffer = -1;
-      const MIN_BEAT_INTERVAL = 0.3;
+      let lastBeatInBuffer = -100;
+      const MIN_BEAT_INTERVAL = 0.28;
       const MAX_BEAT_INTERVAL = 2.0;
 
       function computeRMS(buffer) {
@@ -64,7 +69,7 @@ export class AudioAnalyzer {
       }
 
       function computeLowBandEnergy(buffer, sampleRate) {
-        const lowFreqEnd = Math.floor(200 / (sampleRate / 2) * buffer.length);
+        const lowFreqEnd = Math.max(2, Math.floor(250 / (sampleRate / 2) * buffer.length));
         let sum = 0;
         for (let i = 0; i < lowFreqEnd && i < buffer.length; i++) {
           sum += Math.abs(buffer[i]);
@@ -74,11 +79,12 @@ export class AudioAnalyzer {
 
       function computeSpectralFlux(spectrum, prevSpectrum) {
         let flux = 0;
-        for (let i = 0; i < spectrum.length; i++) {
+        const half = Math.min(spectrum.length, prevSpectrum.length, 128);
+        for (let i = 0; i < half; i++) {
           const diff = spectrum[i] - prevSpectrum[i];
           flux += Math.max(0, diff);
         }
-        return flux;
+        return flux / half;
       }
 
       function fft(buffer) {
@@ -89,7 +95,6 @@ export class AudioAnalyzer {
           real[i] = buffer[i];
           imag[i] = 0;
         }
-        
         const bits = Math.log2(n);
         for (let i = 0; i < n; i++) {
           let j = 0;
@@ -101,7 +106,6 @@ export class AudioAnalyzer {
             [imag[i], imag[j]] = [imag[j], imag[i]];
           }
         }
-        
         for (let len = 2; len <= n; len <<= 1) {
           const halfLen = len >> 1;
           const ang = -2 * Math.PI / len;
@@ -120,7 +124,6 @@ export class AudioAnalyzer {
             }
           }
         }
-        
         const magnitude = new Float32Array(n / 2);
         for (let i = 0; i < n / 2; i++) {
           magnitude[i] = Math.sqrt(real[i] * real[i] + imag[i] * imag[i]);
@@ -128,109 +131,106 @@ export class AudioAnalyzer {
         return magnitude;
       }
 
+      function findPeakOffset(waveform, sampleRate) {
+        const n = Math.min(waveform.length, Math.floor(sampleRate * 0.08));
+        let peakIdx = 0, peakVal = 0;
+        for (let i = 0; i < n; i++) {
+          const v = Math.abs(waveform[i]);
+          if (v > peakVal) { peakVal = v; peakIdx = i; }
+        }
+        return peakIdx / sampleRate;
+      }
+
       function autocorrelate(buffer, sampleRate, minLag, maxLag) {
         const n = buffer.length;
         const c = new Float32Array(maxLag + 1);
-        
         for (let lag = minLag; lag <= maxLag; lag++) {
           let sum = 0;
-          for (let i = 0; i < n - lag; i++) {
+          const end = n - lag;
+          for (let i = 0; i < end; i++) {
             sum += buffer[i] * buffer[i + lag];
           }
           c[lag] = sum;
         }
-        
-        let bestLag = -1;
-        let bestVal = 0;
-        for (let lag = minLag; lag <= maxLag; lag++) {
-          if (c[lag] > bestVal && c[lag] > c[lag - 1] && c[lag] > c[lag + 1]) {
-            bestVal = c[lag];
-            bestLag = lag;
+        let bestLag = -1, bestVal = 0;
+        for (let lag = minLag + 2; lag <= maxLag - 2; lag++) {
+          if (c[lag] > bestVal && c[lag] > c[lag - 1] && c[lag] > c[lag + 1] &&
+              c[lag] > c[lag - 2] && c[lag] > c[lag + 2]) {
+            bestVal = c[lag]; bestLag = lag;
           }
         }
-        
         return { lag: bestLag, confidence: bestVal / (c[0] || 1) };
       }
 
       function detectBPM(energyBuffer, sampleRate) {
-        const minBpm = 60;
-        const maxBpm = 180;
-        const minLag = Math.floor(sampleRate * 60 / maxBpm);
+        const minBpm = 58, maxBpm = 184;
+        const minLag = Math.max(2, Math.floor(sampleRate * 60 / maxBpm));
         const maxLag = Math.floor(sampleRate * 60 / minBpm);
-        
-        const { lag, confidence } = autocorrelate(energyBuffer, sampleRate, minLag, maxLag);
-        
+        const { lag, confidence } = autocorrelate(energyBuffer, sampleRate, minLag, Math.min(maxLag, energyBuffer.length - 5));
         if (lag <= 0) return { bpm: 0, confidence: 0 };
-        
         let bpm = 60 * sampleRate / lag;
-        
         while (bpm < 80) bpm *= 2;
         while (bpm > 160) bpm /= 2;
-        
         return { bpm, confidence };
       }
 
       self.onmessage = function(e) {
         const { waveform, sampleRate, currentTime } = e.data;
-        
         const rms = computeRMS(waveform);
         const lowEnergy = computeLowBandEnergy(waveform, sampleRate);
-        
         const fftSize = Math.min(2048, Math.pow(2, Math.floor(Math.log2(waveform.length))));
         const fftInput = waveform.slice(0, fftSize);
         const spectrum = fft(fftInput);
-        
         const flux = computeSpectralFlux(spectrum, prevSpectrum);
         prevSpectrum = spectrum;
-        
-        const windowEnergy = rms * 0.3 + lowEnergy * 0.5 + flux * 0.2;
-        
-        const samplesPerMs = sampleRate / 1000;
-        const windowMs = waveform.length / samplesPerMs;
-        const windowTime = currentTime;
-        
-        energyBuffer.push({ time: windowTime, energy: windowEnergy });
-        if (energyBuffer.length > 100) {
-          energyBuffer.shift();
-        }
-        
+        const windowEnergy = rms * 0.25 + lowEnergy * 0.55 + flux * 0.2;
+        const windowDuration = waveform.length / sampleRate;
+        const windowCenter = currentTime - windowDuration * 0.5;
+
+        energyBuffer.push({ time: windowCenter, energy: windowEnergy });
+        if (energyBuffer.length > 140) energyBuffer.shift();
+
         let beatDetected = false;
         let beatConfidence = 0;
-        
-        if (energyBuffer.length >= 30) {
+        let beatTimeOffset = 0;
+        if (energyBuffer.length >= 35) {
           const energies = energyBuffer.map(e => e.energy);
           const mean = energies.reduce((a, b) => a + b, 0) / energies.length;
           const variance = energies.reduce((a, b) => a + (b - mean) ** 2, 0) / energies.length;
-          const stdDev = Math.sqrt(variance);
-          const threshold = mean + stdDev * 1.2;
-          
-          const timeSinceLastBeat = windowTime - lastBeatInBuffer;
-          
-          if (windowEnergy > threshold && timeSinceLastBeat > MIN_BEAT_INTERVAL && timeSinceLastBeat < MAX_BEAT_INTERVAL) {
+          const stdDev = Math.sqrt(variance) + 1e-6;
+          const threshold = mean + stdDev * 1.25;
+          const timeSinceLastBeat = windowCenter - lastBeatInBuffer;
+
+          if (windowEnergy > threshold && timeSinceLastBeat > MIN_BEAT_INTERVAL) {
             beatDetected = true;
-            lastBeatInBuffer = windowTime;
-            beatConfidence = Math.min(1, (windowEnergy - threshold) / (stdDev * 2));
-          } else if (windowEnergy > threshold * 0.8 && timeSinceLastBeat > MAX_BEAT_INTERVAL) {
+            beatTimeOffset = findPeakOffset(waveform, sampleRate);
+            beatConfidence = Math.min(1, (windowEnergy - threshold) / (stdDev * 2) + 0.15);
+            lastBeatInBuffer = windowCenter + beatTimeOffset;
+          } else if (windowEnergy > threshold * 0.92 && timeSinceLastBeat > MAX_BEAT_INTERVAL) {
             beatDetected = true;
-            lastBeatInBuffer = windowTime;
-            beatConfidence = 0.5;
+            beatConfidence = 0.35;
+            lastBeatInBuffer = windowCenter;
           }
         }
-        
+
         let bpmResult = { bpm: 0, confidence: 0 };
-        if (energyBuffer.length >= 60) {
+        if (energyBuffer.length >= 80) {
           const energyArray = new Float32Array(energyBuffer.map(e => e.energy));
-          bpmResult = detectBPM(energyArray, sampleRate / (windowMs / 1000));
+          const totalTime = energyBuffer[energyBuffer.length - 1].time - energyBuffer[0].time;
+          const effectiveSR = totalTime > 0 ? energyBuffer.length / totalTime : 60;
+          bpmResult = detectBPM(energyArray, effectiveSR);
         }
-        
+
         self.postMessage({
-          time: windowTime,
+          time: windowCenter,
           energy: windowEnergy,
           lowEnergy: lowEnergy,
           flux: flux,
           rms: rms,
           beatDetected: beatDetected,
           beatConfidence: beatConfidence,
+          beatTimeOffset: beatTimeOffset,
+          windowDuration: windowDuration,
           bpm: bpmResult.bpm,
           bpmConfidence: bpmResult.confidence,
           spectrum: spectrum
@@ -255,68 +255,104 @@ export class AudioAnalyzer {
     rms: number;
     beatDetected: boolean;
     beatConfidence: number;
+    beatTimeOffset: number;
+    windowDuration: number;
     bpm: number;
     bpmConfidence: number;
     spectrum: Float32Array;
   }): void {
+    const sampleRate = this.audioContext?.sampleRate || 44100;
+    const frameCompensation = (this.FFT_SIZE / sampleRate) * 0.5 + this.analyserLatencyCompensation;
+
     this.energyHistory.push(data.energy);
-    if (this.energyHistory.length > 43) {
-      this.energyHistory.shift();
-    }
+    if (this.energyHistory.length > 45) this.energyHistory.shift();
 
-    if (data.bpm > 0 && data.bpmConfidence > 0.3) {
+    if (data.bpm > 0 && data.bpmConfidence > 0.25) {
       this.detectedPeriods.push(data.bpm);
-      if (this.detectedPeriods.length > 20) {
-        this.detectedPeriods.shift();
-      }
+      if (this.detectedPeriods.length > 24) this.detectedPeriods.shift();
 
-      if (this.detectedPeriods.length >= 5) {
+      if (this.detectedPeriods.length >= 6) {
         const sorted = [...this.detectedPeriods].sort((a, b) => a - b);
-        const q1 = sorted[Math.floor(sorted.length * 0.25)];
-        const q3 = sorted[Math.floor(sorted.length * 0.75)];
-        const iqr = q3 - q1;
+        const q1 = sorted[Math.floor(sorted.length * 0.2)];
+        const q3 = sorted[Math.floor(sorted.length * 0.8)];
+        const iqr = Math.max(0.5, q3 - q1);
         const filtered = sorted.filter(b => b >= q1 - iqr * 1.5 && b <= q3 + iqr * 1.5);
-        
         if (filtered.length > 0) {
           this.confidentBpm = filtered.reduce((a, b) => a + b, 0) / filtered.length;
-          this.smoothedBpm = this.smoothedBpm * 0.7 + this.confidentBpm * 0.3;
+          const prev = this.smoothedBpm;
+          this.smoothedBpm = prev * 0.65 + this.confidentBpm * 0.35;
+          if (Math.abs(this.smoothedBpm - prev) < 4) {
+            this.beatStableCounter = Math.min(50, this.beatStableCounter + 1);
+          } else {
+            this.beatStableCounter = Math.max(0, this.beatStableCounter - 2);
+          }
+        }
+      }
+    }
+
+    const audioNow = (this.audioContext ? this.audioContext.currentTime - this.startTime : performance.now() / 1000);
+
+    if (this.beatStableCounter > 8 && this.smoothedBpm > 0) {
+      const beatInterval = 60 / this.smoothedBpm;
+      const tolerance = beatInterval * 0.1;
+      if (audioNow >= this.expectedNextBeatTime - tolerance &&
+          audioNow <= this.expectedNextBeatTime + tolerance) {
+        if (audioNow - this.lastBeatTime > beatInterval * 0.75) {
+          this.issueBeat(audioNow, Math.max(data.energy, 0.5), 0.55);
+          this.expectedNextBeatTime = audioNow + beatInterval;
         }
       }
     }
 
     if (data.beatDetected && data.beatConfidence > 0.2) {
-      const interval = data.time - this.lastBeatTime;
+      const beatTime = data.time + data.beatTimeOffset + frameCompensation;
+      const interval = beatTime - this.lastBeatTime;
       if (interval > 0.25 && interval < 2.0) {
-        this.lastBeatTime = data.time;
-        
-        if (this.smoothedBpm > 0) {
-          const expectedInterval = 60 / this.smoothedBpm;
-          this.beatPhase = (interval % expectedInterval) / expectedInterval;
+        const prevBpm = this.smoothedBpm;
+        if (prevBpm > 0 && this.beatStableCounter > 4) {
+          const expectedInterval = 60 / prevBpm;
+          const drift = Math.abs(interval - expectedInterval);
+          if (drift > expectedInterval * 0.25 && data.beatConfidence < 0.5) {
+            return;
+          }
         }
-        
-        this.bpmHistory.push(interval);
-        if (this.bpmHistory.length > 16) {
-          this.bpmHistory.shift();
-        }
-
-        if (this.onBeatCallback) {
-          this.onBeatCallback({
-            bpm: Math.round(this.smoothedBpm),
-            energy: data.energy,
-            time: data.time,
-            phase: this.beatPhase
-          });
+        this.issueBeat(beatTime, data.energy, data.beatConfidence);
+        if (this.beatStableCounter > 6 && prevBpm > 0) {
+          this.expectedNextBeatTime = beatTime + 60 / prevBpm;
         }
       }
     }
 
     if (this.onSpectrumCallback) {
       const byteSpectrum = new Uint8Array(this.spectrumData.length);
-      const scale = 255 / Math.max(...data.spectrum, 1);
+      const maxVal = Math.max(...data.spectrum.slice(0, byteSpectrum.length), 1);
+      const scale = 255 / maxVal;
       for (let i = 0; i < byteSpectrum.length && i < data.spectrum.length; i++) {
         byteSpectrum[i] = Math.min(255, data.spectrum[i] * scale);
       }
       this.onSpectrumCallback(byteSpectrum);
+    }
+  }
+
+  private issueBeat(beatTime: number, energy: number, confidence: number): void {
+    this.lastBeatTime = beatTime;
+
+    if (this.smoothedBpm > 0) {
+      const expectedInterval = 60 / this.smoothedBpm;
+      this.beatPhase = ((beatTime % expectedInterval) + expectedInterval) % expectedInterval / expectedInterval;
+      this.bpmHistory.push(expectedInterval);
+    } else {
+      this.beatPhase = 0;
+    }
+    if (this.bpmHistory.length > 18) this.bpmHistory.shift();
+
+    if (this.onBeatCallback) {
+      this.onBeatCallback({
+        bpm: Math.round(this.smoothedBpm) || 120,
+        energy: energy,
+        time: beatTime,
+        phase: this.beatPhase
+      });
     }
   }
 
@@ -329,9 +365,12 @@ export class AudioAnalyzer {
       await this.audioContext.resume();
     }
 
+    const sr = this.audioContext.sampleRate;
+    this.analyserLatencyCompensation = 0.025;
+
     this.analyser = this.audioContext.createAnalyser();
-    this.analyser.fftSize = 2048;
-    this.analyser.smoothingTimeConstant = 0.7;
+    this.analyser.fftSize = this.FFT_SIZE;
+    this.analyser.smoothingTimeConstant = 0.62;
 
     this.gainNode = this.audioContext.createGain();
     this.gainNode.gain.value = 0.8;
@@ -352,7 +391,7 @@ export class AudioAnalyzer {
 
     this.spectrumData = new Uint8Array(this.analyser.frequencyBinCount);
     this.waveformData = new Float32Array(this.analyser.fftSize);
-    
+
     this.resetState();
   }
 
@@ -362,9 +401,11 @@ export class AudioAnalyzer {
     this.confidentBpm = 0;
     this.smoothedBpm = 120;
     this.beatPhase = 0;
-    this.lastBeatTime = 0;
+    this.lastBeatTime = -10;
     this.energyHistory = [];
     this.bpmHistory = [];
+    this.beatStableCounter = 0;
+    this.expectedNextBeatTime = -1;
   }
 
   public async start(): Promise<void> {
@@ -388,26 +429,27 @@ export class AudioAnalyzer {
       if (!this.audioContext) {
         this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
+      this.analyserLatencyCompensation = 0.06;
 
       navigator.mediaDevices.getUserMedia({ audio: true })
         .then((stream) => {
-          this.analyser = this.audioContext!.createAnalyser();
-          this.analyser.fftSize = 2048;
-          this.analyser.smoothingTimeConstant = 0.7;
-
           const ctx = this.audioContext!;
+          this.analyser = ctx.createAnalyser();
+          this.analyser.fftSize = this.FFT_SIZE;
+          this.analyser.smoothingTimeConstant = 0.62;
+
           this.source = ctx.createMediaStreamSource(stream);
           this.source.connect(this.analyser!);
 
           this.gainNode = ctx.createGain();
           this.gainNode.gain.value = 1;
           this.analyser.connect(this.gainNode);
-          this.gainNode.connect(this.audioContext!.destination);
+          this.gainNode.connect(ctx.destination);
 
           this.spectrumData = new Uint8Array(this.analyser.frequencyBinCount);
           this.waveformData = new Float32Array(this.analyser.fftSize);
 
-          this.startTime = this.audioContext!.currentTime;
+          this.startTime = ctx.currentTime;
           this.resetState();
           this.analyzeLoop();
           resolve();
@@ -514,6 +556,10 @@ export class AudioAnalyzer {
 
   public getBeatPhase(): number {
     return this.beatPhase;
+  }
+
+  public getEstimatedLatencyMs(): number {
+    return this.estimatedLatencyMs;
   }
 
   public stop(): void {

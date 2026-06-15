@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { Difficulty } from './DifficultySelect';
 import PlayerManager from '../player/PlayerManager';
 import Leaderboard, { LeaderboardEntry } from '../player/Leaderboard';
@@ -27,6 +27,7 @@ const GameOverPanel: React.FC<GameOverPanelProps> = ({
   const [displayScore, setDisplayScore] = useState(0);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const typewriterTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const uploadAndFetch = async () => {
@@ -50,23 +51,35 @@ const GameOverPanel: React.FC<GameOverPanelProps> = ({
   }, [score, nickname, difficulty]);
 
   useEffect(() => {
+    if (typewriterTimerRef.current) {
+      clearInterval(typewriterTimerRef.current);
+      typewriterTimerRef.current = null;
+    }
+
     const scoreStr = score.toString();
-    let displayedChars = 0;
+    let charIndex = 0;
     setDisplayScore(0);
 
-    const typeNextChar = () => {
-      displayedChars++;
-      if (displayedChars <= scoreStr.length) {
-        const currentStr = scoreStr.substring(0, displayedChars);
-        setDisplayScore(parseInt(currentStr, 10));
-        setTimeout(typeNextChar, 100);
-      }
-    };
-
-    const initialDelay = setTimeout(typeNextChar, 200);
+    const startTimer = window.setTimeout(() => {
+      typewriterTimerRef.current = window.setInterval(() => {
+        charIndex++;
+        if (charIndex <= scoreStr.length) {
+          const partial = scoreStr.substring(0, charIndex);
+          setDisplayScore(parseInt(partial, 10) || 0);
+        }
+        if (charIndex >= scoreStr.length && typewriterTimerRef.current) {
+          clearInterval(typewriterTimerRef.current);
+          typewriterTimerRef.current = null;
+        }
+      }, 100);
+    }, 200);
 
     return () => {
-      clearTimeout(initialDelay);
+      clearTimeout(startTimer);
+      if (typewriterTimerRef.current) {
+        clearInterval(typewriterTimerRef.current);
+        typewriterTimerRef.current = null;
+      }
     };
   }, [score]);
 
