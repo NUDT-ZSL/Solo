@@ -8,19 +8,16 @@ interface BidCardProps {
   onManualBid: (itemId: string, amount: number) => void;
 }
 
-function getPriceColor(ratio: number): string {
-  const r = Math.round(59 + (239 - 59) * ratio);
-  const g = Math.round(130 + (68 - 130) * ratio);
-  const b = Math.round(246 + (68 - 246) * ratio);
-  return `rgb(${r},${g},${b})`;
-}
-
 function WaveformChart({ bids, startingPrice }: { bids: { amount: number; valid: boolean }[]; startingPrice: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animRef = useRef<number>(0);
+  const rafRef = useRef<number>(0);
   const prevSnapshotRef = useRef<{ x: number; y: number }[]>([]);
   const transitionStartRef = useRef(0);
   const transitionDuration = 300;
+  const bidsRef = useRef(bids);
+  bidsRef.current = bids;
+  const startingPriceRef = useRef(startingPrice);
+  startingPriceRef.current = startingPrice;
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -38,17 +35,19 @@ function WaveformChart({ bids, startingPrice }: { bids: { amount: number; valid:
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
-    const validBids = bids.filter((b) => b.valid);
+    const currentBids = bidsRef.current;
+    const currentStartingPrice = startingPriceRef.current;
+    const validBids = currentBids.filter((b) => b.valid);
     if (validBids.length === 0) {
-      ctx.fillStyle = 'rgba(255,255,255,0.1)';
-      ctx.font = '11px system-ui';
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.font = '11px system-ui, -apple-system, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('等待出价...', w / 2, h / 2 + 4);
       return;
     }
 
     const amounts = validBids.map((b) => b.amount);
-    const minAmt = Math.min(...amounts, startingPrice) * 0.95;
+    const minAmt = Math.min(...amounts, currentStartingPrice) * 0.95;
     const maxAmt = Math.max(...amounts) * 1.05;
     const range = maxAmt - minAmt || 1;
 
@@ -56,84 +55,119 @@ function WaveformChart({ bids, startingPrice }: { bids: { amount: number; valid:
 
     const targetPoints = validBids.map((b, i) => ({
       x: validBids.length <= 1 ? w / 2 : stepX * i,
-      y: h - ((b.amount - minAmt) / range) * (h - 16) - 8,
-      amount: b.amount,
+      y: h - ((b.amount - minAmt) / range) * (h - 18) - 9,
       ratio: (b.amount - minAmt) / range,
     }));
 
     const elapsed = Date.now() - transitionStartRef.current;
     const progress = Math.min(1, elapsed / transitionDuration);
-    const ease = 1 - Math.pow(1 - progress, 3);
+    const ease = progress < 1 ? 1 - Math.pow(1 - progress, 3) : 1;
 
     const prev = prevSnapshotRef.current;
     const displayPoints = targetPoints.map((tp, i) => {
       const pp = prev[i];
-      const sx = pp ? pp.x + (tp.x - pp.x) * ease : tp.x;
-      const sy = pp ? pp.y + (tp.y - pp.y) * ease : tp.y;
-      return { x: sx, y: sy, ratio: tp.ratio, amount: tp.amount };
+      if (!pp) return { x: tp.x, y: tp.y, ratio: tp.ratio };
+      return {
+        x: pp.x + (tp.x - pp.x) * ease,
+        y: pp.y + (tp.y - pp.y) * ease,
+        ratio: tp.ratio,
+      };
     });
+
+    // --- Smooth horizontal gradient across the entire polyline (blue -> purple -> red) ---
+    const lineGradient = ctx.createLinearGradient(0, 0, w, 0);
+    lineGradient.addColorStop(0, '#3b82f6');
+    lineGradient.addColorStop(0.35, '#6366f1');
+    lineGradient.addColorStop(0.7, '#a855f7');
+    lineGradient.addColorStop(1, '#ef4444');
 
     if (displayPoints.length === 1) {
       const p = displayPoints[0];
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-      ctx.fillStyle = getPriceColor(p.ratio);
+      ctx.arc(p.x, p.y, 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = lineGradient;
       ctx.fill();
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(239,68,68,0.35)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
     } else {
-      for (let i = 1; i < displayPoints.length; i++) {
-        const p0 = displayPoints[i - 1];
-        const p1 = displayPoints[i];
-        const ratio = (p0.ratio + p1.ratio) / 2;
-        ctx.beginPath();
-        ctx.lineWidth = 2.5;
-        ctx.strokeStyle = getPriceColor(ratio);
-        ctx.moveTo(p0.x, p0.y);
-        ctx.lineTo(p1.x, p1.y);
-        ctx.stroke();
-      }
-
+      // Draw the single continuous path with shared gradient stroke
+      ctx.beginPath();
+      ctx.lineWidth = 2.5;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
       displayPoints.forEach((p, i) => {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, i === displayPoints.length - 1 ? 4 : 3, 0, Math.PI * 2);
-        ctx.fillStyle = getPriceColor(p.ratio);
-        ctx.fill();
-        if (i === displayPoints.length - 1) {
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      });
+      ctx.strokeStyle = lineGradient;
+      ctx.stroke();
+
+      // Subtle area fill under the line
+      const last = displayPoints[displayPoints.length - 1];
+      const first = displayPoints[0];
+      ctx.beginPath();
+      ctx.moveTo(first.x, h - 4);
+      displayPoints.forEach((p) => ctx.lineTo(p.x, p.y));
+      ctx.lineTo(last.x, h - 4);
+      ctx.closePath();
+      const areaGradient = ctx.createLinearGradient(0, 0, 0, h);
+      areaGradient.addColorStop(0, 'rgba(139,92,246,0.25)');
+      areaGradient.addColorStop(1, 'rgba(139,92,246,0)');
+      ctx.fillStyle = areaGradient;
+      ctx.fill();
+
+      // Points colored by individual price level
+      displayPoints.forEach((p, i) => {
+        const r = Math.round(59 + (239 - 59) * p.ratio);
+        const g = Math.round(130 + (68 - 130) * p.ratio);
+        const b = Math.round(246 + (68 - 246) * p.ratio);
+        const isLast = i === displayPoints.length - 1;
+
+        if (isLast) {
           ctx.beginPath();
-          ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
-          ctx.strokeStyle = getPriceColor(p.ratio) + '66';
-          ctx.lineWidth = 2;
+          ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(${r},${g},${b},0.35)`;
+          ctx.lineWidth = 2.5;
           ctx.stroke();
         }
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, isLast ? 4.5 : 3, 0, Math.PI * 2);
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.fill();
       });
     }
 
     if (progress < 1) {
-      animRef.current = requestAnimationFrame(draw);
+      rafRef.current = requestAnimationFrame(draw);
+    } else {
+      // Commit final positions as the new baseline for next transition
+      prevSnapshotRef.current = targetPoints.map((tp) => ({ x: tp.x, y: tp.y }));
     }
-  }, [bids, startingPrice]);
+  }, []);
 
   useEffect(() => {
     transitionStartRef.current = Date.now();
+    // Don't overwrite prevSnapshot yet — draw() reads it and will update it when the anim finishes
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(draw);
 
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const w = canvas.clientWidth;
-      const h = canvas.clientHeight;
-      const validBids = bids.filter((b) => b.valid);
-      const amounts = validBids.map((b) => b.amount);
-      const minAmt = Math.min(...amounts, startingPrice) * 0.95;
-      const maxAmt = Math.max(...amounts) * 1.05;
-      const range = maxAmt - minAmt || 1;
-      const stepX = validBids.length <= 1 ? w / 2 : w / (validBids.length - 1);
-      prevSnapshotRef.current = validBids.map((b, i) => ({
-        x: validBids.length <= 1 ? w / 2 : stepX * i,
-        y: h - ((b.amount - minAmt) / range) * (h - 16) - 8,
-      }));
-    }
+    const handleResize = () => {
+      prevSnapshotRef.current = [];
+      transitionStartRef.current = Date.now();
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(draw);
+    };
+    window.addEventListener('resize', handleResize);
 
-    animRef.current = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(animRef.current);
-  }, [bids, draw, startingPrice]);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, [bids, draw]);
 
   return (
     <canvas

@@ -55,7 +55,10 @@ export function auctionReducer(state: AuctionState, action: AuctionAction): Auct
       const user = state.users.find((u) => u.id === userId);
       if (!user) return state;
 
-      const isValid = amount > item.currentHighestBid && user.balance >= amount;
+      // Explicit strict greater-than: use >= boundary check then reject equal bids
+      const amountStrictlyHigher = (amount >= item.currentHighestBid) && !(amount === item.currentHighestBid);
+      const balanceSufficient = user.balance >= amount;
+      const isValid = amountStrictlyHigher && balanceSufficient;
 
       const tempValidBids = [...item.bidHistory.filter((b) => b.valid)];
       if (isValid) tempValidBids.push({ id: 'tmp', itemId, userId, userName: user.name, amount, timestamp: 0, valid: true, rank: 0 });
@@ -117,7 +120,9 @@ export function auctionReducer(state: AuctionState, action: AuctionAction): Auct
       const item = state.items[itemIndex];
       if (item.status !== 'active') return state;
 
-      const isValid = amount > item.currentHighestBid;
+      // Explicit strict greater-than: use >= boundary check then reject equal bids
+      const amountStrictlyHigher = (amount >= item.currentHighestBid) && !(amount === item.currentHighestBid);
+      const isValid = amountStrictlyHigher;
 
       const tempValidBids = [...item.bidHistory.filter((b) => b.valid)];
       if (isValid) tempValidBids.push({ id: 'tmp', itemId, userId: 'manual', userName: 'You', amount, timestamp: 0, valid: true, rank: 0 });
