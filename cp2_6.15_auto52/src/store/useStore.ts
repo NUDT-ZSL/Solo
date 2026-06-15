@@ -129,12 +129,6 @@ export const useStore = create<AppStore>((set, get) => ({
   uploadArtwork: async (file: File, name: string, description: string, tags: string[]) => {
     set({ isUploading: true, uploadProgress: 0 });
 
-    const progressInterval = setInterval(() => {
-      set((state) => ({
-        uploadProgress: Math.min(state.uploadProgress + 5, 90),
-      }));
-    }, 100);
-
     try {
       const artwork = await api.uploadArtwork(
         file,
@@ -146,7 +140,6 @@ export const useStore = create<AppStore>((set, get) => ({
         }
       );
 
-      clearInterval(progressInterval);
       set({ uploadProgress: 100 });
       set((state) => ({ artworks: [artwork, ...state.artworks] }));
 
@@ -154,7 +147,6 @@ export const useStore = create<AppStore>((set, get) => ({
         set({ isUploading: false, uploadProgress: 0 });
       }, 500);
     } catch (error) {
-      clearInterval(progressInterval);
       set({ isUploading: false, uploadProgress: 0 });
       console.error('Failed to upload artwork:', error);
       throw error;

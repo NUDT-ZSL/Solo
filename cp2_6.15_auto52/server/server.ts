@@ -43,17 +43,26 @@ const upload = multer({
     fileSize: 10 * 1024 * 1024,
   },
   fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif|webp|glb|gltf|obj|fbx/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype) || 
-      file.mimetype.startsWith('model/') ||
-      file.mimetype.startsWith('application/');
-    
+    const allowedExtensions = /\.(jpe?g|png|gif|webp|glb|gltf|obj|fbx|usdz|stl|dae|3ds|max|ma|mb|blend)$/i;
+    const extname = allowedExtensions.test(file.originalname.toLowerCase());
+
+    const imageMimeTypes = /^image\//;
+    const modelMimeTypes = /^model\//;
+    const applicationMimeTypes = /^application\/(octet-stream|x-(glb|gltf|x-model|x-3d|octet|zip|json)$)/;
+
+    const mimetype = imageMimeTypes.test(file.mimetype) || 
+      modelMimeTypes.test(file.mimetype) ||
+      applicationMimeTypes.test(file.mimetype);
+
     if (extname && mimetype) {
       return cb(null, true);
-    } else {
-      cb(new Error('Only image and 3D model files are allowed'));
     }
+
+    if (extname && file.mimetype === 'application/octet-stream') {
+      return cb(null, true);
+    }
+
+    cb(new Error('Only image files (.jpg, .png, .gif, .webp) and 3D model files (.glb, .gltf, .obj, .fbx) are allowed'));
   },
 });
 
@@ -82,22 +91,23 @@ const getAverageColorFromBuffer = async (buffer: Buffer): Promise<string> => {
     g = Math.round(g / count);
     b = Math.round(b / count);
 
-    return `rgb(${r}, ${g}, ${b})`;
+    return `#${[r, g, b].map(x => x.toString(16).padStart(2, '0')).join('')}`;
   } catch {
     return '#6c63ff';
   }
 };
 
-app.get('/api/layout', async (req, res) => {
+app.get('/api/layout', (req, res) => {
   try {
-    const layout = await getLayout();
+    const layout = getLayout();
     res.json(layout);
   } catch (error) {
+    console.error('Get layout error:', error);
     res.status(500).json({ error: 'Failed to fetch layout' });
   }
 });
 
-app.put('/api/layout/:id', async (req, res) => {
+app.put('/api/layout/:id', (req, res) => {
   try {
     const { id } = req.params;
     const { elements } = req.body as { elements: LayoutElement[] };
@@ -106,18 +116,20 @@ app.put('/api/layout/:id', async (req, res) => {
       return res.status(400).json({ error: 'Invalid elements data' });
     }
 
-    const layout = await updateLayout(id, elements);
+    const layout = updateLayout(id, elements);
     res.json(layout);
   } catch (error) {
+    console.error('Update layout error:', error);
     res.status(500).json({ error: 'Failed to update layout' });
   }
 });
 
-app.get('/api/artwork', async (req, res) => {
+app.get('/api/artwork', (req, res) => {
   try {
-    const artworks = await getArtworks();
+    const artworks = getArtworks();
     res.json(artworks);
   } catch (error) {
+    console.error('Get artworks error:', error);
     res.status(500).json({ error: 'Failed to fetch artworks' });
   }
 });
@@ -173,7 +185,7 @@ app.post('/api/artwork/upload', upload.single('file'), async (req, res) => {
       averageColor,
     };
 
-    const savedArtwork = await addArtwork(artwork);
+    const savedArtwork = addArtwork(artwork);
     res.json(savedArtwork);
   } catch (error) {
     console.error('Upload error:', error);
@@ -181,7 +193,7 @@ app.post('/api/artwork/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-app.post('/api/invite', async (req, res) => {
+app.post('/api/invite', (req, res) => {
   try {
     const { email } = req.body;
     
@@ -189,15 +201,17 @@ app.post('/api/invite', async (req, res) => {
       return res.status(400).json({ error: 'Invalid email address' });
     }
 
-    const invitation: Omit<Invitation, 'createdAt'> = {
+    const invitation: Omit<Invitation, 'createdAt'> & { layoutId?: string } = {
       id: uuidv4(),
+      layoutId: 'default',
       email,
       status: 'pending',
     };
 
-    const savedInvitation = await addInvitation(invitation);
+    const savedInvitation = addInvitation(invitation);
     res.json({ success: true, invitation: savedInvitation });
   } catch (error) {
+    console.error('Invite error:', error);
     res.status(500).json({ error: 'Failed to send invitation' });
   }
 });
