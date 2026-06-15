@@ -7,6 +7,8 @@ export interface InteractionOptions {
   target?: THREE.Vector3;
 }
 
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
+
 export class InteractionController {
   private camera: THREE.PerspectiveCamera;
   private controls: OrbitControls;
@@ -14,6 +16,10 @@ export class InteractionController {
   private moveSpeed = 10;
   private verticalSpeed = 8;
   private target: THREE.Vector3;
+
+  private forwardDir = new THREE.Vector3();
+  private rightDir = new THREE.Vector3();
+  private moveVector = new THREE.Vector3();
 
   constructor(options: InteractionOptions) {
     this.camera = options.camera;
@@ -43,31 +49,40 @@ export class InteractionController {
     const moveAmount = this.moveSpeed * deltaTime;
     const verticalAmount = this.verticalSpeed * deltaTime;
 
-    const direction = new THREE.Vector3();
-    const right = new THREE.Vector3();
+    this.moveVector.set(0, 0, 0);
 
-    this.camera.getWorldDirection(direction);
-    direction.y = 0;
-    direction.normalize();
+    this.camera.getWorldDirection(this.forwardDir);
+    this.forwardDir.y = 0;
+    if (this.forwardDir.lengthSq() > 0.0001) {
+      this.forwardDir.normalize();
+    } else {
+      this.forwardDir.set(0, 0, -1);
+    }
 
-    right.crossVectors(direction, new THREE.Vector3(0, 1, 0)).normalize();
+    this.rightDir.crossVectors(this.forwardDir, WORLD_UP).normalize();
 
     if (this.keys['KeyW']) {
-      this.camera.position.addScaledVector(direction, moveAmount);
-      this.controls.target.addScaledVector(direction, moveAmount);
+      this.moveVector.add(this.forwardDir);
     }
     if (this.keys['KeyS']) {
-      this.camera.position.addScaledVector(direction, -moveAmount);
-      this.controls.target.addScaledVector(direction, -moveAmount);
+      this.moveVector.sub(this.forwardDir);
     }
     if (this.keys['KeyA']) {
-      this.camera.position.addScaledVector(right, -moveAmount);
-      this.controls.target.addScaledVector(right, -moveAmount);
+      this.moveVector.sub(this.rightDir);
     }
     if (this.keys['KeyD']) {
-      this.camera.position.addScaledVector(right, moveAmount);
-      this.controls.target.addScaledVector(right, moveAmount);
+      this.moveVector.add(this.rightDir);
     }
+
+    if (this.moveVector.lengthSq() > 0) {
+      this.moveVector.y = 0;
+      if (this.moveVector.lengthSq() > 0) {
+        this.moveVector.normalize().multiplyScalar(moveAmount);
+      }
+      this.camera.position.add(this.moveVector);
+      this.controls.target.add(this.moveVector);
+    }
+
     if (this.keys['Space']) {
       this.camera.position.y += verticalAmount;
       this.controls.target.y += verticalAmount;

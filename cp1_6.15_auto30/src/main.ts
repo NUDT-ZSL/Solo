@@ -1,11 +1,32 @@
 import * as THREE from 'three';
-import { generateTerrainGeometry, createWater, updateWater, TerrainParams, getTerrainColor } from './terrain';
+import {
+  generateTerrainGeometry,
+  createWater,
+  updateWater,
+  updateWaterLevel,
+  TerrainParams,
+  getWaterLevel,
+  TerrainData
+} from './terrain';
 import { InteractionController } from './interaction';
 import { GUIController, GUISettings, createInfoPanel } from './gui';
+import { tweenManager, Easing, createFPSMonitor } from './animation';
 
 const TERRAIN_SIZE = 100;
 const TERRAIN_RESOLUTION = 128;
 const TRANSITION_DURATION = 500;
+
+interface TransitionState {
+  startHeights: Float32Array;
+  endHeights: Float32Array;
+  startMin: number;
+  startMax: number;
+  endMin: number;
+  endMax: number;
+  startColors: Float32Array;
+  endColors: Float32Array;
+  cancelTween: (() => void) | null;
+}
 
 interface AppState {
   scene: THREE.Scene;
@@ -16,15 +37,98 @@ interface AppState {
   interaction: InteractionController;
   gui: GUIController;
   infoPanel: ReturnType<typeof createInfoPanel>;
-  currentHeights: number[];
-  targetHeights: number[];
-  currentMinHeight: number;
-  currentMaxHeight: number;
-  targetMinHeight: number;
-  targetMaxHeight: number;
-  isTransitioning: boolean;
-  transitionStart: number;
   terrainParams: TerrainParams;
+  transition: TransitionState;
+  fpsMonitor: ReturnType<typeof createFPSMonitor>;
+  rebuildCount: number;
+}
+
+function createTransitionState(initial: TerrainData): TransitionState {
+  const startHeights = new Float32Array(initial.heights);
+  const startColors = new Float32Array(initial.colors);
+  return {
+    startHeights,
+    endHeights: new Float32Array(initial.heights),
+    startMin: initial.minHeight,
+    startMax: initial.maxHeight,
+    endMin: initial.minHeight,
+    endMax: initial.maxHeight,
+    startColors,
+    endColors: new Float32Array(initial.colors),
+    cancelTween: null
+  };
+}
+
+function beginTerrainTransition(state: AppState): void {
+  const newData = generateTerrainGeometry(state.terrainParams);
+
+  const posArr = state.terrainMesh.geometry.attributes.position.array as Float32Array;
+  const vertexCount = posArr.length / 3;
+  for (let i = 0; i < vertexCount; i++) {
+    state.transition.startHeights[i] = posArr[i * 3 + 1];
+  }
+
+  const srcColors = state.terrainMesh.geometry.attributes.color.array as Float32Array;
+  state.transition.startColors.set(srcColors);
+
+  state.transition.endHeights.set(newData.heights);
+  state.transition.endColors.set(newData.colors);
+  state.transition.startMin = state.transition.endMin;
+  state.transition.startMax = state.transition.endMax;
+  state.transition.endMin = newData.minHeight;
+  state.transition.endMax = newData.maxHeight;
+
+  if (state.transition.cancelTween) {
+    state.transition.cancelTween();
+    state.transition.cancelTween = null;
+  }
+
+  state.fpsMonitor.reset();
+  state.rebuildCount++;
+
+  const posAttr = state.terrainMesh.geometry.attributes.position;
+  const colAttr = state.terrainMesh.geometry.attributes.color;
+  const colArr = colAttr.array as Float32Array;
+
+  state.transition.cancelTween = tweenManager.start({
+    duration: TRANSITION_DURATION,
+    easing: Easing.SmoothStep,
+    onUpdate: (_progress, eased) => {
+      const lerpMin = state.transition.startMin + (state.transition.endMin - state.transition.startMin) * eased;
+      const lerpMax = state.transition.startMax + (state.transition.endMax - state.transition.startMax) * eased;
+
+      for (let i = 0; i < vertexCount; i++) {
+        const h = state.transition.startHeights[i] +
+          (state.transition.endHeights[i] - state.transition.startHeights[i]) * eased;
+        posArr[i * 3 + 1] = h;
+
+        const sr = state.transition.startColors[i * 3];
+        const sg = state.transition.startColors[i * 3 + 1];
+        const sb = state.transition.startColors[i * 3 + 2];
+        const er = state.transition.endColors[i * 3];
+        const eg = state.transition.endColors[i * 3 + 1];
+        const eb = state.transition.endColors[i * 3 + 2];
+        colArr[i * 3] = sr + (er - sr) * eased;
+        colArr[i * 3 + 1] = sg + (eg - sg) * eased;
+        colArr[i * 3 + 2] = sb + (eb - sb) * eased;
+      }
+
+      posAttr.needsUpdate = true;
+      colAttr.needsUpdate = true;
+      state.terrainMesh.geometry.computeVertexNormals();
+
+      const waterY = getWaterLevel(lerpMin, lerpMax);
+      updateWaterLevel(state.waterMesh, waterY);
+    },
+    onComplete: () => {
+      state.transition.cancelTween = null;
+      const minFps = state.fpsMonitor.getMinFPS();
+      const maxFps = state.fpsMonitor.getMaxFPS();
+      console.log(`[Terrain Rebuild #${state.rebuildCount}] FPS min=${minFps.toFixed(1)} max=${maxFps.toFixed(1)}`);
+    }
+  });
+
+  newData.geometry.dispose();
 }
 
 function init(): AppState {
@@ -52,9 +156,10 @@ function init(): AppState {
   scene.add(ambientLight);
 
   const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.2);
+  const angle1Rad = (-30 * Math.PI) / 180;
   dirLight1.position.set(
-    Math.cos(-Math.PI / 6) * 100,
-    Math.sin(-Math.PI / 6) * 100,
+    Math.cos(angle1Rad) * 100,
+    Math.sin(angle1Rad) * 100,
     50
   );
   dirLight1.castShadow = true;
@@ -69,9 +174,10 @@ function init(): AppState {
   scene.add(dirLight1);
 
   const dirLight2 = new THREE.DirectionalLight(0xffffff, 1.2);
+  const angle2Rad = (45 * Math.PI) / 180;
   dirLight2.position.set(
-    Math.cos(Math.PI / 4) * 100,
-    Math.sin(Math.PI / 4) * 100,
+    Math.cos(angle2Rad) * 100,
+    Math.sin(angle2Rad) * 100,
     -50
   );
   scene.add(dirLight2);
@@ -84,7 +190,7 @@ function init(): AppState {
     colorBlend: 0.5
   };
 
-  const { geometry, minHeight, maxHeight, heights } = generateTerrainGeometry(initialParams);
+  const terrainData = generateTerrainGeometry(initialParams);
 
   const material = new THREE.MeshPhongMaterial({
     vertexColors: true,
@@ -92,22 +198,27 @@ function init(): AppState {
     shininess: 10
   });
 
-  const terrainMesh = new THREE.Mesh(geometry, material);
+  const terrainMesh = new THREE.Mesh(terrainData.geometry, material);
   terrainMesh.receiveShadow = true;
   terrainMesh.castShadow = true;
   scene.add(terrainMesh);
 
-  const waterLevel = minHeight + (maxHeight - minHeight) * 0.2;
-  const waterMesh = createWater(TERRAIN_SIZE, waterLevel);
+  const waterY = getWaterLevel(terrainData.minHeight, terrainData.maxHeight);
+  const waterMesh = createWater(TERRAIN_SIZE, waterY);
   scene.add(waterMesh);
 
   const interaction = new InteractionController({
     camera,
     renderer,
-    target: new THREE.Vector3(0, (minHeight + maxHeight) / 2, 0)
+    target: new THREE.Vector3(0, (terrainData.minHeight + terrainData.maxHeight) / 2, 0)
   });
 
   const infoPanel = createInfoPanel();
+  const fpsMonitor = createFPSMonitor(45);
+
+  fpsMonitor.onLowFPS((fps) => {
+    console.warn(`[Low FPS] ${fps.toFixed(1)}fps detected`);
+  });
 
   const initialGuiSettings: GUISettings = {
     heightScale: initialParams.heightScale,
@@ -115,7 +226,9 @@ function init(): AppState {
     fogDensity: 0.008
   };
 
-  let state: Partial<AppState> = {};
+  const transition = createTransitionState(terrainData);
+
+  const state: Partial<AppState> = {};
 
   const gui = new GUIController(initialGuiSettings, (settings) => {
     const s = state as AppState;
@@ -126,10 +239,10 @@ function init(): AppState {
     s.terrainParams.heightScale = settings.heightScale;
     s.terrainParams.colorBlend = settings.colorBlend;
 
-    startTerrainTransition(s);
+    beginTerrainTransition(s);
   });
 
-  state = {
+  Object.assign(state, {
     scene,
     camera,
     renderer,
@@ -138,16 +251,11 @@ function init(): AppState {
     interaction,
     gui,
     infoPanel,
-    currentHeights: [...heights],
-    targetHeights: [...heights],
-    currentMinHeight: minHeight,
-    currentMaxHeight: maxHeight,
-    targetMinHeight: minHeight,
-    targetMaxHeight: maxHeight,
-    isTransitioning: false,
-    transitionStart: 0,
-    terrainParams: initialParams
-  };
+    terrainParams: initialParams,
+    transition,
+    fpsMonitor,
+    rebuildCount: 0
+  });
 
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -158,83 +266,24 @@ function init(): AppState {
   return state as AppState;
 }
 
-function startTerrainTransition(state: AppState): void {
-  const { geometry, minHeight, maxHeight, heights } = generateTerrainGeometry(state.terrainParams);
-
-  state.targetHeights = heights;
-  state.targetMinHeight = minHeight;
-  state.targetMaxHeight = maxHeight;
-  state.isTransitioning = true;
-  state.transitionStart = performance.now();
-
-  geometry.dispose();
-}
-
-function updateTerrainTransition(state: AppState, currentTime: number): void {
-  if (!state.isTransitioning) return;
-
-  const elapsed = currentTime - state.transitionStart;
-  const progress = Math.min(elapsed / TRANSITION_DURATION, 1);
-  const smoothProgress = progress * progress * (3 - 2 * progress);
-
-  const positions = state.terrainMesh.geometry.attributes.position;
-  const colors = state.terrainMesh.geometry.attributes.color;
-  const posArray = positions.array as Float32Array;
-  const colorArray = colors.array as Float32Array;
-
-  const lerpMin = state.currentMinHeight + (state.targetMinHeight - state.currentMinHeight) * smoothProgress;
-  const lerpMax = state.currentMaxHeight + (state.targetMaxHeight - state.currentMaxHeight) * smoothProgress;
-
-  for (let i = 0; i < state.currentHeights.length; i++) {
-    const newHeight = state.currentHeights[i] + (state.targetHeights[i] - state.currentHeights[i]) * smoothProgress;
-    posArray[i * 3 + 1] = newHeight;
-
-    const color = getTerrainColor(newHeight, lerpMin, lerpMax, state.terrainParams.colorBlend);
-    colorArray[i * 3] = color.r;
-    colorArray[i * 3 + 1] = color.g;
-    colorArray[i * 3 + 2] = color.b;
-  }
-
-  positions.needsUpdate = true;
-  colors.needsUpdate = true;
-  state.terrainMesh.geometry.computeVertexNormals();
-
-  const waterLevel = lerpMin + (lerpMax - lerpMin) * 0.2;
-  state.waterMesh.position.y = waterLevel;
-
-  if (progress >= 1) {
-    state.isTransitioning = false;
-    state.currentHeights = [...state.targetHeights];
-    state.currentMinHeight = state.targetMinHeight;
-    state.currentMaxHeight = state.targetMaxHeight;
-  }
-}
-
 function animate(state: AppState): void {
   const clock = new THREE.Clock();
-  let lastFpsUpdate = 0;
-  let frameCount = 0;
 
   function loop(currentTime: number): void {
     requestAnimationFrame(loop);
+
+    state.fpsMonitor.beginFrame();
 
     const deltaTime = clock.getDelta();
 
     state.interaction.update(deltaTime);
 
-    updateTerrainTransition(state, currentTime);
-
     updateWater(state.waterMesh, currentTime * 0.001);
 
     state.renderer.render(state.scene, state.camera);
 
-    frameCount++;
-    if (currentTime - lastFpsUpdate >= 1000) {
-      const fps = (frameCount * 1000) / (currentTime - lastFpsUpdate);
-      state.infoPanel.updateFPS(fps);
-      frameCount = 0;
-      lastFpsUpdate = currentTime;
-    }
+    state.fpsMonitor.endFrame();
+    state.infoPanel.updateFPS(state.fpsMonitor.getFPS());
 
     const pos = state.interaction.getCameraPosition();
     state.infoPanel.updatePosition(pos.x, pos.y, pos.z);
