@@ -102,7 +102,7 @@ const App: React.FC = () => {
         <div
           style={{
             ...themeBarStyle,
-            transition: 'background-color 0.5s ease',
+            transition: 'background-color 0.5s ease, border-color 0.5s ease',
             backgroundColor: currentTheme.ceilingColor,
             borderTop: `1px solid ${currentTheme.wallColorDark}`,
           }}
@@ -123,6 +123,7 @@ const App: React.FC = () => {
                     boxShadow: isActive
                       ? `0 4px 12px ${theme.shadowColor}, 0 0 0 3px ${theme.accentColor}30`
                       : `0 2px 6px ${theme.shadowColor}`,
+                    transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.5s ease, box-shadow 0.5s ease',
                   }}
                   title={theme.name}
                 >
@@ -131,6 +132,7 @@ const App: React.FC = () => {
                       style={{
                         ...checkMarkStyle,
                         color: theme.accentColor,
+                        transition: 'color 0.5s ease',
                       }}
                     >
                       ✓
@@ -151,6 +153,7 @@ const App: React.FC = () => {
                       ? currentTheme.accentColor
                       : '#8B8680',
                   fontWeight: theme.id === currentThemeId ? 600 : 400,
+                  transition: 'color 0.5s ease, font-weight 0.3s ease',
                 }}
               >
                 {theme.name}
@@ -222,7 +225,6 @@ const themeButtonStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
 }
 
 const checkMarkStyle: React.CSSProperties = {
@@ -241,7 +243,6 @@ const themeNameStyle: React.CSSProperties = {
   fontSize: 12,
   width: 56,
   textAlign: 'center',
-  transition: 'all 0.3s ease',
 }
 
 const generateButtonStyle: React.CSSProperties = {

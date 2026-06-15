@@ -14,6 +14,10 @@ export interface SlotPosition {
   y: number
   width: number
   height: number
+  pixelX?: number
+  pixelY?: number
+  pixelWidth?: number
+  pixelHeight?: number
 }
 
 export interface ThemeConfig {
@@ -53,10 +57,42 @@ export const ALL_ITEMS: FurnitureItem[] = [
 ]
 
 export const SLOT_POSITIONS: Record<ItemCategory, SlotPosition> = {
-  sofa: { category: 'sofa', x: 50, y: 65, width: 30, height: 18 },
-  chandelier: { category: 'chandelier', x: 50, y: 8, width: 18, height: 14 },
-  painting: { category: 'painting', x: 78, y: 30, width: 14, height: 20 },
+  sofa: {
+    category: 'sofa',
+    x: 50,
+    y: 65,
+    width: 30,
+    height: 18,
+    pixelX: 400,
+    pixelY: 420,
+    pixelWidth: 240,
+    pixelHeight: 110,
+  },
+  chandelier: {
+    category: 'chandelier',
+    x: 50,
+    y: 12,
+    width: 18,
+    height: 14,
+    pixelX: 400,
+    pixelY: 80,
+    pixelWidth: 144,
+    pixelHeight: 90,
+  },
+  painting: {
+    category: 'painting',
+    x: 78,
+    y: 35,
+    width: 14,
+    height: 20,
+    pixelX: 624,
+    pixelY: 225,
+    pixelWidth: 112,
+    pixelHeight: 130,
+  },
 }
+
+export const SNAP_THRESHOLD = 0.5
 
 export const THEMES: ThemeConfig[] = [
   {

@@ -1,11 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react'
-import { FurnitureItem, ItemCategory, ThemeConfig, SLOT_POSITIONS } from '../utils/constants'
-
-interface PlacedItemState {
-  item: FurnitureItem
-  category: ItemCategory
-  animating: 'entering' | 'exiting' | 'none'
-}
+import { FurnitureItem, ItemCategory, ThemeConfig, SLOT_POSITIONS, SNAP_THRESHOLD } from '../utils/constants'
 
 interface CatalogueViewProps {
   placedItems: Record<ItemCategory, FurnitureItem | null>
@@ -25,6 +19,12 @@ interface DragState {
   currentY: number
 }
 
+interface AnimationState {
+  exiting: Record<ItemCategory, FurnitureItem | null>
+  entering: Record<ItemCategory, boolean>
+  snapping: ItemCategory | null
+}
+
 const CatalogueView: React.FC<CatalogueViewProps> = ({
   placedItems,
   theme,
@@ -33,69 +33,83 @@ const CatalogueView: React.FC<CatalogueViewProps> = ({
 }) => {
   const canvasRef = useRef<HTMLDivElement>(null)
   const [dragState, setDragState] = useState<DragState | null>(null)
-  const [snapAnimation, setSnapAnimation] = useState<ItemCategory | null>(null)
-  const [previousItems, setPreviousItems] = useState<Record<ItemCategory, FurnitureItem | null>>({
+  const [animState, setAnimState] = useState<AnimationState>({
+    exiting: { sofa: null, chandelier: null, painting: null },
+    entering: { sofa: false, chandelier: false, painting: false },
+    snapping: null,
+  })
+  const [prevItems, setPrevItems] = useState<Record<ItemCategory, FurnitureItem | null>>({
     sofa: null,
     chandelier: null,
     painting: null,
-  })
-  const [exitingItems, setExitingItems] = useState<Record<ItemCategory, FurnitureItem | null>>({
-    sofa: null,
-    chandelier: null,
-    painting: null,
-  })
-  const [enteringItems, setEnteringItems] = useState<Record<ItemCategory, boolean>>({
-    sofa: false,
-    chandelier: false,
-    painting: false,
   })
 
   useEffect(() => {
     const categories: ItemCategory[] = ['sofa', 'chandelier', 'painting']
+
     categories.forEach((cat) => {
       const current = placedItems[cat]
-      const prev = previousItems[cat]
+      const prev = prevItems[cat]
 
       if (current && prev && current.id !== prev.id) {
-        setExitingItems((prevState) => ({ ...prevState, [cat]: prev }))
-        setEnteringItems((prevState) => ({ ...prevState, [cat]: false }))
+        setAnimState((prevState) => ({
+          ...prevState,
+          exiting: { ...prevState.exiting, [cat]: prev },
+          entering: { ...prevState.entering, [cat]: false },
+        }))
 
         const exitTimer = setTimeout(() => {
-          setExitingItems((prevState) => ({ ...prevState, [cat]: null }))
-          setEnteringItems((prevState) => ({ ...prevState, [cat]: true }))
+          setAnimState((prevState) => ({
+            ...prevState,
+            exiting: { ...prevState.exiting, [cat]: null },
+            entering: { ...prevState.entering, [cat]: true },
+          }))
+          setPrevItems((p) => ({ ...p, [cat]: current }))
+
+          const enterTimer = setTimeout(() => {
+            setAnimState((prevState) => ({
+              ...prevState,
+              entering: { ...prevState.entering, [cat]: false },
+            }))
+          }, 300)
+
+          return () => clearTimeout(enterTimer)
         }, 200)
 
-        const enterTimer = setTimeout(() => {
-          setEnteringItems((prevState) => ({ ...prevState, [cat]: false }))
-        }, 500)
-
-        setPreviousItems((prevState) => ({ ...prevState, [cat]: current }))
-
-        return () => {
-          clearTimeout(exitTimer)
-          clearTimeout(enterTimer)
-        }
+        return () => clearTimeout(exitTimer)
       } else if (current && !prev) {
-        setEnteringItems((prevState) => ({ ...prevState, [cat]: true }))
-        setPreviousItems((prevState) => ({ ...prevState, [cat]: current }))
+        setAnimState((prevState) => ({
+          ...prevState,
+          entering: { ...prevState.entering, [cat]: true },
+        }))
+        setPrevItems((p) => ({ ...p, [cat]: current }))
 
         const timer = setTimeout(() => {
-          setEnteringItems((prevState) => ({ ...prevState, [cat]: false }))
+          setAnimState((prevState) => ({
+            ...prevState,
+            entering: { ...prevState.entering, [cat]: false },
+          }))
         }, 300)
 
         return () => clearTimeout(timer)
       } else if (!current && prev) {
-        setExitingItems((prevState) => ({ ...prevState, [cat]: prev }))
-        setPreviousItems((prevState) => ({ ...prevState, [cat]: null }))
+        setAnimState((prevState) => ({
+          ...prevState,
+          exiting: { ...prevState.exiting, [cat]: prev },
+        }))
 
         const timer = setTimeout(() => {
-          setExitingItems((prevState) => ({ ...prevState, [cat]: null }))
+          setAnimState((prevState) => ({
+            ...prevState,
+            exiting: { ...prevState.exiting, [cat]: null },
+          }))
+          setPrevItems((p) => ({ ...p, [cat]: null }))
         }, 200)
 
         return () => clearTimeout(timer)
       }
     })
-  }, [placedItems, previousItems])
+  }, [placedItems, prevItems])
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent, category: ItemCategory, item: FurnitureItem) => {
@@ -151,12 +165,21 @@ const CatalogueView: React.FC<CatalogueViewProps> = ({
       Math.pow(itemCenterX - slotCenterX, 2) + Math.pow(itemCenterY - slotCenterY, 2)
     )
 
-    const threshold = Math.min(itemWidth, itemHeight) * 0.5
+    const threshold = Math.min(itemWidth, itemHeight) * SNAP_THRESHOLD
 
     if (distance < threshold) {
-      setSnapAnimation(dragState.category)
-      setTimeout(() => setSnapAnimation(null), 200)
+      setAnimState((prevState) => ({
+        ...prevState,
+        snapping: dragState.category,
+      }))
       onItemPlaced(dragState.category, dragState.item)
+
+      setTimeout(() => {
+        setAnimState((prevState) => ({
+          ...prevState,
+          snapping: null,
+        }))
+      }, 200)
     }
 
     setDragState(null)
@@ -166,14 +189,18 @@ const CatalogueView: React.FC<CatalogueViewProps> = ({
     if (dragState) {
       window.addEventListener('mousemove', handleMouseMove)
       window.addEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = 'grabbing'
       return () => {
         window.removeEventListener('mousemove', handleMouseMove)
         window.removeEventListener('mouseup', handleMouseUp)
+        document.body.style.cursor = ''
       }
     }
   }, [dragState, handleMouseMove, handleMouseUp])
 
   const renderItemVisual = (item: FurnitureItem, themeColor: string, secondaryColor: string) => {
+    const colorTransition = 'fill 0.5s ease, stroke 0.5s ease'
+
     if (item.category === 'sofa') {
       return (
         <svg viewBox="0 0 200 100" width="100%" height="100%" preserveAspectRatio="none">
@@ -183,12 +210,12 @@ const CatalogueView: React.FC<CatalogueViewProps> = ({
               <stop offset="100%" stopColor={secondaryColor} />
             </linearGradient>
           </defs>
-          <rect x="15" y="35" width="170" height="55" rx="10" fill={`url(#sofa-grad-${item.id})`} />
-          <rect x="15" y="20" width="35" height="70" rx="10" fill={`url(#sofa-grad-${item.id})`} />
-          <rect x="150" y="20" width="35" height="70" rx="10" fill={`url(#sofa-grad-${item.id})`} />
-          <rect x="40" y="45" width="120" height="40" rx="6" fill={secondaryColor} opacity="0.4" />
-          <ellipse cx="32" cy="88" rx="8" ry="4" fill={secondaryColor} opacity="0.3" />
-          <ellipse cx="168" cy="88" rx="8" ry="4" fill={secondaryColor} opacity="0.3" />
+          <rect x="15" y="35" width="170" height="55" rx="10" fill={`url(#sofa-grad-${item.id})`} style={{ transition: colorTransition }} />
+          <rect x="15" y="20" width="35" height="70" rx="10" fill={`url(#sofa-grad-${item.id})`} style={{ transition: colorTransition }} />
+          <rect x="150" y="20" width="35" height="70" rx="10" fill={`url(#sofa-grad-${item.id})`} style={{ transition: colorTransition }} />
+          <rect x="40" y="45" width="120" height="40" rx="6" fill={secondaryColor} opacity="0.4" style={{ transition: colorTransition }} />
+          <ellipse cx="32" cy="88" rx="8" ry="4" fill={secondaryColor} opacity="0.3" style={{ transition: colorTransition }} />
+          <ellipse cx="168" cy="88" rx="8" ry="4" fill={secondaryColor} opacity="0.3" style={{ transition: colorTransition }} />
         </svg>
       )
     }
@@ -196,16 +223,16 @@ const CatalogueView: React.FC<CatalogueViewProps> = ({
     if (item.category === 'chandelier') {
       return (
         <svg viewBox="0 0 180 140" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
-          <line x1="90" y1="0" x2="90" y2="30" stroke={themeColor} strokeWidth="3" />
-          <ellipse cx="90" cy="32" rx="18" ry="8" fill={themeColor} />
-          <path d="M 25 55 Q 90 30 155 55" stroke={themeColor} strokeWidth="4" fill="none" />
-          <path d="M 50 48 Q 90 35 130 48" stroke={themeColor} strokeWidth="3" fill="none" opacity="0.7" />
+          <line x1="90" y1="0" x2="90" y2="30" stroke={themeColor} strokeWidth="3" style={{ transition: colorTransition }} />
+          <ellipse cx="90" cy="32" rx="18" ry="8" fill={themeColor} style={{ transition: colorTransition }} />
+          <path d="M 25 55 Q 90 30 155 55" stroke={themeColor} strokeWidth="4" fill="none" style={{ transition: colorTransition }} />
+          <path d="M 50 48 Q 90 35 130 48" stroke={themeColor} strokeWidth="3" fill="none" opacity="0.7" style={{ transition: colorTransition }} />
           <ellipse cx="35" cy="60" rx="14" ry="18" fill="#FFF8E7" opacity="0.9" />
           <ellipse cx="90" cy="55" rx="20" ry="26" fill="#FFFBF0" opacity="0.95" />
           <ellipse cx="145" cy="60" rx="14" ry="18" fill="#FFF8E7" opacity="0.9" />
-          <circle cx="35" cy="58" r="7" fill={themeColor} opacity="0.8" />
-          <circle cx="90" cy="52" r="10" fill={themeColor} opacity="0.8" />
-          <circle cx="145" cy="58" r="7" fill={themeColor} opacity="0.8" />
+          <circle cx="35" cy="58" r="7" fill={themeColor} opacity="0.8" style={{ transition: colorTransition }} />
+          <circle cx="90" cy="52" r="10" fill={themeColor} opacity="0.8" style={{ transition: colorTransition }} />
+          <circle cx="145" cy="58" r="7" fill={themeColor} opacity="0.8" style={{ transition: colorTransition }} />
           <ellipse cx="90" cy="75" rx="40" ry="10" fill="rgba(255, 248, 231, 0.2)" />
         </svg>
       )
@@ -214,8 +241,8 @@ const CatalogueView: React.FC<CatalogueViewProps> = ({
     if (item.category === 'painting') {
       return (
         <svg viewBox="0 0 120 160" width="100%" height="100%" preserveAspectRatio="none">
-          <rect x="2" y="2" width="116" height="156" rx="2" fill={secondaryColor} />
-          <rect x="8" y="8" width="104" height="144" fill={themeColor} />
+          <rect x="2" y="2" width="116" height="156" rx="2" fill={secondaryColor} style={{ transition: colorTransition }} />
+          <rect x="8" y="8" width="104" height="144" fill={themeColor} style={{ transition: colorTransition }} />
           {item.id === 'painting-abstract' && (
             <>
               <circle cx="45" cy="55" r="28" fill="#E8C872" opacity="0.85" />
@@ -265,18 +292,17 @@ const CatalogueView: React.FC<CatalogueViewProps> = ({
 
   const renderPlacedItem = (category: ItemCategory) => {
     const item = placedItems[category]
-    const exitingItem = exitingItems[category]
-    const entering = enteringItems[category]
+    const exitingItem = animState.exiting[category]
+    const entering = animState.entering[category]
+    const isSnapping = animState.snapping === category
+    const isDragging = dragState?.category === category
     const slot = SLOT_POSITIONS[category]
-    const isSnapping = snapAnimation === category
 
     if (!item && !exitingItem) return null
 
     const displayItem = item || exitingItem
     const themeColor = displayItem ? theme.itemColorMap[displayItem.id] || displayItem.color : '#ccc'
-    const secondaryColor = displayItem
-      ? displayItem.secondaryColor || themeColor
-      : '#999'
+    const secondaryColor = displayItem ? displayItem.secondaryColor || themeColor : '#999'
 
     const baseStyle: React.CSSProperties = {
       position: 'absolute',
@@ -284,29 +310,31 @@ const CatalogueView: React.FC<CatalogueViewProps> = ({
       top: `${slot.y - slot.height / 2}%`,
       width: `${slot.width}%`,
       height: `${slot.height}%`,
-      cursor: 'grab',
-      transition: exitingItem ? 'opacity 0.2s ease-out' : 'none',
-      opacity: exitingItem ? 0 : 1,
+      cursor: isDragging ? 'grabbing' : 'grab',
+      transition: exitingItem ? 'opacity 0.2s ease-out, transform 0.2s ease-out' : 'opacity 0.3s ease, transform 0.2s ease-out',
+      opacity: exitingItem ? 0 : isDragging ? 0.5 : 1,
       pointerEvents: exitingItem ? 'none' : 'auto',
+      transform: isDragging ? 'scale(1.1)' : 'scale(1)',
+      zIndex: isDragging ? 500 : 10,
     }
 
     const enterAnimationStyle: React.CSSProperties = entering
       ? {
-          animation: 'elasticIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+          animation: 'elasticIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards',
         }
       : {}
 
     const snapStyle: React.CSSProperties = isSnapping
       ? {
-          animation: 'snapBounce 0.2s ease-out',
+          animation: 'snapBounce 0.2s ease-out forwards',
         }
       : {}
 
     return (
       <div
-        key={`${category}-${displayItem?.id || 'empty'}`}
+        key={`${category}-${displayItem?.id || 'empty'}-${exitingItem ? 'exit' : 'normal'}`}
         style={{ ...baseStyle, ...enterAnimationStyle, ...snapStyle }}
-        onMouseDown={(e) => item && handleMouseDown(e, category, item)}
+        onMouseDown={(e) => item && !exitingItem && handleMouseDown(e, category, item)}
       >
         {renderItemVisual(displayItem!, themeColor, secondaryColor)}
       </div>
@@ -334,7 +362,9 @@ const CatalogueView: React.FC<CatalogueViewProps> = ({
           pointerEvents: 'none',
           opacity: 0.5,
           zIndex: 1000,
-          filter: `drop-shadow(0 10px 20px ${theme.shadowColor})`,
+          filter: `drop-shadow(0 10px 25px ${theme.shadowColor})`,
+          transform: 'scale(1.1)',
+          transition: 'none',
         }}
       >
         {renderItemVisual(dragState.item, themeColor, secondaryColor)}
@@ -345,8 +375,10 @@ const CatalogueView: React.FC<CatalogueViewProps> = ({
   const renderSlotHighlight = (category: ItemCategory) => {
     const slot = SLOT_POSITIONS[category]
     const hasItem = placedItems[category] !== null
+    const isSnapping = animState.snapping === category
+    const isDraggingOver = dragState?.category === category
 
-    if (hasItem) return null
+    if (hasItem && !isDraggingOver) return null
 
     return (
       <div
@@ -356,19 +388,23 @@ const CatalogueView: React.FC<CatalogueViewProps> = ({
           top: `${slot.y - slot.height / 2}%`,
           width: `${slot.width}%`,
           height: `${slot.height}%`,
-          border: '2px dashed rgba(180, 175, 170, 0.4)',
+          border: `2px dashed ${isDraggingOver ? theme.accentColor : 'rgba(180, 175, 170, 0.4)'}`,
           borderRadius: 8,
           pointerEvents: 'none',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          backgroundColor: isDraggingOver ? `${theme.accentColor}10` : 'transparent',
+          transition: 'all 0.2s ease',
+          transform: isSnapping ? 'scale(1.05)' : 'scale(1)',
         }}
       >
         <span
           style={{
             fontFamily: "'Noto Sans SC', sans-serif",
             fontSize: 11,
-            color: 'rgba(150, 145, 140, 0.6)',
+            color: isDraggingOver ? theme.accentColor : 'rgba(150, 145, 140, 0.6)',
+            transition: 'color 0.2s ease',
           }}
         >
           {category === 'sofa' ? '沙发位' : category === 'chandelier' ? '吊灯位' : '装饰画位'}
@@ -400,6 +436,14 @@ const CatalogueView: React.FC<CatalogueViewProps> = ({
           50% { transform: scale(1.1); }
           100% { transform: scale(1); }
         }
+        @keyframes fadeIn {
+          0% { opacity: 0; }
+          100% { opacity: 1; }
+        }
+        @keyframes fadeOut {
+          0% { opacity: 1; }
+          100% { opacity: 0; }
+        }
       `}</style>
 
       <div
@@ -421,7 +465,7 @@ const CatalogueView: React.FC<CatalogueViewProps> = ({
           left: 0,
           right: '30%',
           height: '55%',
-          transition: 'background-color 0.5s ease',
+          transition: 'background 0.5s ease, background-color 0.5s ease',
           background: `linear-gradient(180deg, ${theme.wallColor} 0%, ${theme.wallColorDark} 100%)`,
         }}
       />
@@ -433,7 +477,7 @@ const CatalogueView: React.FC<CatalogueViewProps> = ({
           right: 0,
           width: '30%',
           height: '55%',
-          transition: 'background-color 0.5s ease',
+          transition: 'background 0.5s ease, background-color 0.5s ease',
           background: `linear-gradient(90deg, ${theme.wallColorDark} 0%, ${theme.wallColor} 100%)`,
         }}
       />
@@ -445,7 +489,7 @@ const CatalogueView: React.FC<CatalogueViewProps> = ({
           left: 0,
           right: 0,
           bottom: 0,
-          transition: 'background-color 0.5s ease',
+          transition: 'background 0.5s ease, background-color 0.5s ease',
           background: `linear-gradient(180deg, ${theme.floorColor} 0%, ${theme.floorColor} 100%)`,
           transform: 'perspective(800px) rotateX(30deg)',
           transformOrigin: 'top center',
@@ -508,7 +552,7 @@ const CatalogueView: React.FC<CatalogueViewProps> = ({
           }}
         >
           当前主题：
-          <strong style={{ color: theme.accentColor, marginLeft: 4 }}>{theme.name}</strong>
+          <strong style={{ color: theme.accentColor, marginLeft: 4, transition: 'color 0.5s ease' }}>{theme.name}</strong>
         </span>
       </div>
     </div>

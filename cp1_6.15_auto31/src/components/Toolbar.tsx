@@ -20,6 +20,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
   theme,
   onItemClick,
 }) => {
+  const colorTransition = 'fill 0.5s ease, stroke 0.5s ease'
+
   const renderItemThumbnail = (item: FurnitureItem) => {
     const color = theme.itemColorMap[item.id] || item.color
     const secondaryColor = item.secondaryColor || color
@@ -27,12 +29,12 @@ const Toolbar: React.FC<ToolbarProps> = ({
     if (item.category === 'sofa') {
       return (
         <svg viewBox="0 0 100 60" width="100%" height="100%">
-          <rect x="10" y="25" width="80" height="25" rx="6" fill={color} />
-          <rect x="10" y="15" width="20" height="30" rx="6" fill={color} />
-          <rect x="70" y="15" width="20" height="30" rx="6" fill={color} />
-          <rect x="18" y="30" width="64" height="18" rx="4" fill={secondaryColor} opacity="0.6" />
-          <rect x="14" y="48" width="6" height="8" rx="2" fill={secondaryColor} />
-          <rect x="80" y="48" width="6" height="8" rx="2" fill={secondaryColor} />
+          <rect x="10" y="25" width="80" height="25" rx="6" fill={color} style={{ transition: colorTransition }} />
+          <rect x="10" y="15" width="20" height="30" rx="6" fill={color} style={{ transition: colorTransition }} />
+          <rect x="70" y="15" width="20" height="30" rx="6" fill={color} style={{ transition: colorTransition }} />
+          <rect x="18" y="30" width="64" height="18" rx="4" fill={secondaryColor} opacity="0.6" style={{ transition: colorTransition }} />
+          <rect x="14" y="48" width="6" height="8" rx="2" fill={secondaryColor} style={{ transition: colorTransition }} />
+          <rect x="80" y="48" width="6" height="8" rx="2" fill={secondaryColor} style={{ transition: colorTransition }} />
         </svg>
       )
     }
@@ -40,15 +42,15 @@ const Toolbar: React.FC<ToolbarProps> = ({
     if (item.category === 'chandelier') {
       return (
         <svg viewBox="0 0 100 80" width="100%" height="100%">
-          <line x1="50" y1="5" x2="50" y2="20" stroke={color} strokeWidth="2" />
-          <ellipse cx="50" cy="20" rx="8" ry="4" fill={color} />
-          <path d="M 20 30 Q 50 20 80 30" stroke={color} strokeWidth="3" fill="none" />
+          <line x1="50" y1="5" x2="50" y2="20" stroke={color} strokeWidth="2" style={{ transition: colorTransition }} />
+          <ellipse cx="50" cy="20" rx="8" ry="4" fill={color} style={{ transition: colorTransition }} />
+          <path d="M 20 30 Q 50 20 80 30" stroke={color} strokeWidth="3" fill="none" style={{ transition: colorTransition }} />
           <circle cx="25" cy="35" r="6" fill="#FFF8E7" />
           <circle cx="50" cy="32" r="8" fill="#FFF8E7" />
           <circle cx="75" cy="35" r="6" fill="#FFF8E7" />
-          <circle cx="25" cy="35" r="3" fill={color} />
-          <circle cx="50" cy="32" r="4" fill={color} />
-          <circle cx="75" cy="35" r="3" fill={color} />
+          <circle cx="25" cy="35" r="3" fill={color} style={{ transition: colorTransition }} />
+          <circle cx="50" cy="32" r="4" fill={color} style={{ transition: colorTransition }} />
+          <circle cx="75" cy="35" r="3" fill={color} style={{ transition: colorTransition }} />
         </svg>
       )
     }
@@ -56,8 +58,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
     if (item.category === 'painting') {
       return (
         <svg viewBox="0 0 80 100" width="100%" height="100%">
-          <rect x="2" y="2" width="76" height="96" rx="2" fill={secondaryColor} />
-          <rect x="8" y="8" width="64" height="84" fill={color} />
+          <rect x="2" y="2" width="76" height="96" rx="2" fill={secondaryColor} style={{ transition: colorTransition }} />
+          <rect x="8" y="8" width="64" height="84" fill={color} style={{ transition: colorTransition }} />
           {item.id === 'painting-abstract' && (
             <>
               <circle cx="30" cy="40" r="15" fill="#E8C872" opacity="0.8" />
@@ -128,6 +130,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 style={{
                   ...colorDotStyle,
                   backgroundColor: color,
+                  transition: 'background-color 0.5s ease',
                 }}
               />
             </div>
@@ -142,10 +145,12 @@ const Toolbar: React.FC<ToolbarProps> = ({
       ...toolbarStyle,
       backgroundColor: '#FAF8F5',
       borderRight: `1px solid ${theme.wallColorDark}`,
+      transition: 'background-color 0.5s ease, border-color 0.5s ease',
     }}>
       <div style={{
         ...headerStyle,
         borderBottom: `1px solid ${theme.wallColorDark}`,
+        transition: 'border-color 0.5s ease',
       }}>
         <h2 style={titleStyle}>软装物品</h2>
         <p style={subtitleStyle}>点击物品放置到房间</p>
@@ -214,7 +219,7 @@ const cardStyle: React.CSSProperties = {
   padding: 10,
   cursor: 'pointer',
   border: '2px solid transparent',
-  transition: 'all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)',
+  transition: 'all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.5s ease, border-color 0.5s ease',
   position: 'relative',
 }
 
