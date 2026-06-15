@@ -1,4 +1,13 @@
-import { IProjectile, IEnemy, IParticle, IWeapon, WeaponType } from '../WeaponModule/WeaponType';
+import {
+  IProjectile,
+  IEnemy,
+  IParticle,
+  IWeapon,
+  WeaponType,
+  UI_CONSTANTS,
+  PLAYER_CONSTANTS,
+  ENEMY_CONSTANTS
+} from '../WeaponModule/WeaponType';
 
 interface IToolbarButton {
   type: WeaponType;
@@ -6,6 +15,7 @@ interface IToolbarButton {
   y: number;
   width: number;
   height: number;
+  borderAlpha: number;
 }
 
 export class Renderer {
@@ -19,6 +29,8 @@ export class Renderer {
   private toolbarButtons: IToolbarButton[] = [];
   private isGameOver = false;
   private finalScore = 0;
+  private borderTransitionSpeed = 0.1;
+  private minMapWidth = UI_CONSTANTS.MIN_MAP_WIDTH;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -32,13 +44,15 @@ export class Renderer {
     this.updateToolbarButtons();
   }
 
-  getMapBounds(): { top: number; bottom: number; left: number; right: number; height: number } {
+  getMapBounds(): { top: number; bottom: number; left: number; right: number; height: number; width: number } {
+    const mapWidth = Math.max(this.minMapWidth - 40, this.width - 40);
     return {
       top: this.mapTop,
       bottom: this.mapTop + this.mapHeight,
       left: 20,
-      right: this.width - 20,
-      height: this.mapHeight
+      right: 20 + mapWidth,
+      height: this.mapHeight,
+      width: mapWidth
     };
   }
 
@@ -52,30 +66,62 @@ export class Renderer {
   }
 
   updateSize(width: number, height: number): void {
-    this.width = width;
+    this.width = Math.max(width, this.minMapWidth);
     this.height = height;
-    this.canvas.width = width;
-    this.canvas.height = height;
+    this.canvas.width = this.width;
+    this.canvas.height = this.height;
     this.mapHeight = this.height - 130;
     this.updateToolbarButtons();
   }
 
   private updateToolbarButtons(): void {
-    const toolbarWidth = this.width * 0.6;
-    const toolbarHeight = 80;
+    const toolbarHeight = UI_CONSTANTS.TOOLBAR_HEIGHT;
+    const toolbarWidth = Math.min(
+      this.width * UI_CONSTANTS.TOOLBAR_WIDTH_PERCENT,
+      this.width - 80
+    );
     const toolbarX = (this.width - toolbarWidth) / 2;
-    const buttonW = 50;
-    const buttonH = 50;
+    const buttonW = UI_CONSTANTS.BUTTON_WIDTH;
+    const buttonH = UI_CONSTANTS.BUTTON_HEIGHT;
     const spacing = 40;
     const totalWidth = buttonW * 3 + spacing * 2;
     const startX = toolbarX + (toolbarWidth - totalWidth) / 2;
-    const buttonY = this.height - 15 + (toolbarHeight - buttonH) / 2;
+    const buttonY = this.height - toolbarHeight + -15 + (toolbarHeight - buttonH) / 2;
 
+    const existingButtons = this.toolbarButtons;
     this.toolbarButtons = [
-      { type: WeaponType.ARROW, x: startX, y: buttonY, width: buttonW, height: buttonH },
-      { type: WeaponType.MAGIC, x: startX + buttonW + spacing, y: buttonY, width: buttonW, height: buttonH },
-      { type: WeaponType.AXE, x: startX + buttonW * 2 + spacing * 2, y: buttonY, width: buttonW, height: buttonH }
+      {
+        type: WeaponType.ARROW,
+        x: startX,
+        y: buttonY,
+        width: buttonW,
+        height: buttonH,
+        borderAlpha: existingButtons[0]?.borderAlpha ?? (this.currentWeaponType === WeaponType.ARROW ? 1 : 0)
+      },
+      {
+        type: WeaponType.MAGIC,
+        x: startX + buttonW + spacing,
+        y: buttonY,
+        width: buttonW,
+        height: buttonH,
+        borderAlpha: existingButtons[1]?.borderAlpha ?? (this.currentWeaponType === WeaponType.MAGIC ? 1 : 0)
+      },
+      {
+        type: WeaponType.AXE,
+        x: startX + buttonW * 2 + spacing * 2,
+        y: buttonY,
+        width: buttonW,
+        height: buttonH,
+        borderAlpha: existingButtons[2]?.borderAlpha ?? (this.currentWeaponType === WeaponType.AXE ? 1 : 0)
+      }
     ];
+  }
+
+  updateToolbarTransitions(): void {
+    for (const btn of this.toolbarButtons) {
+      const targetAlpha = btn.type === this.currentWeaponType ? 1 : 0;
+      btn.borderAlpha += (targetAlpha - btn.borderAlpha) * this.borderTransitionSpeed;
+    }
   }
 
   getToolbarButtonAt(x: number, y: number): WeaponType | null {
@@ -88,20 +134,22 @@ export class Renderer {
   }
 
   isPointInMapArea(x: number, y: number): boolean {
-    return x >= 20 && x <= this.width - 20 && y >= this.mapTop && y <= this.mapTop + this.mapHeight;
+    const bounds = this.getMapBounds();
+    return x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom;
   }
 
   clear(): void {
-    this.ctx.fillStyle = '#1a1a2e';
+    this.ctx.fillStyle = UI_CONSTANTS.BG_COLOR;
     this.ctx.fillRect(0, 0, this.width, this.height);
   }
 
   drawMap(): void {
-    const radius = 8;
-    const x = 20;
-    const y = this.mapTop;
-    const w = this.width - 40;
-    const h = this.mapHeight;
+    const bounds = this.getMapBounds();
+    const radius = UI_CONSTANTS.MAP_RADIUS;
+    const x = bounds.left;
+    const y = bounds.top;
+    const w = bounds.width;
+    const h = bounds.height;
 
     this.ctx.beginPath();
     this.ctx.moveTo(x + radius, y);
@@ -114,32 +162,45 @@ export class Renderer {
     this.ctx.lineTo(x, y + radius);
     this.ctx.quadraticCurveTo(x, y, x + radius, y);
     this.ctx.closePath();
-    this.ctx.fillStyle = '#2d2d44';
+    this.ctx.fillStyle = UI_CONSTANTS.MAP_COLOR;
     this.ctx.fill();
   }
 
-  drawPlayer(x: number, y: number, radius: number, healthAnim: number, scoreAnim: number, score: number, health: number): void {
+  drawPlayer(
+    x: number,
+    y: number,
+    radius: number,
+    healthAnim: number,
+    scoreAnim: number,
+    score: number,
+    health: number
+  ): void {
     this.ctx.save();
-    this.ctx.shadowColor = '#ffd700';
+    this.ctx.shadowColor = PLAYER_CONSTANTS.STROKE_COLOR;
     this.ctx.shadowBlur = 15;
     this.ctx.beginPath();
     this.ctx.arc(x, y, radius, 0, Math.PI * 2);
-    this.ctx.fillStyle = '#ffd700';
+    this.ctx.fillStyle = PLAYER_CONSTANTS.COLOR;
     this.ctx.fill();
-    this.ctx.strokeStyle = '#ffd700';
-    this.ctx.lineWidth = 2;
+    this.ctx.strokeStyle = PLAYER_CONSTANTS.STROKE_COLOR;
+    this.ctx.lineWidth = PLAYER_CONSTANTS.STROKE_WIDTH;
     this.ctx.stroke();
     this.ctx.restore();
 
     this.drawHUD(score, health, scoreAnim, healthAnim);
   }
 
-  private drawHUD(score: number, health: number, scoreAnim: number, healthAnim: number): void {
-    const scoreScale = 1 + scoreAnim * 0.3;
-    const healthScale = 1 + healthAnim * 0.3;
+  private drawHUD(
+    score: number,
+    health: number,
+    scoreAnim: number,
+    healthAnim: number
+  ): void {
+    const scoreScale = 1 + scoreAnim * UI_CONSTANTS.SCORE_SCALE_AMOUNT;
+    const healthScale = 1 + healthAnim * UI_CONSTANTS.SCORE_SCALE_AMOUNT;
 
     this.ctx.save();
-    this.ctx.font = `600 ${24 * scoreScale}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+    this.ctx.font = `600 ${UI_CONSTANTS.SCORE_FONT_SIZE * scoreScale}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
     this.ctx.fillStyle = '#ffffff';
     this.ctx.textAlign = 'right';
     this.ctx.fillText(`得分: ${score}`, this.width - 30, 50);
@@ -173,12 +234,12 @@ export class Renderer {
 
   drawEnemy(enemy: IEnemy): void {
     this.ctx.save();
-    this.ctx.shadowColor = '#00ff88';
+    this.ctx.shadowColor = ENEMY_CONSTANTS.STROKE_COLOR;
     this.ctx.shadowBlur = 8;
-    this.ctx.fillStyle = '#2ecc71';
+    this.ctx.fillStyle = ENEMY_CONSTANTS.COLOR;
     this.ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
-    this.ctx.strokeStyle = '#00ff88';
-    this.ctx.lineWidth = 1;
+    this.ctx.strokeStyle = ENEMY_CONSTANTS.STROKE_COLOR;
+    this.ctx.lineWidth = ENEMY_CONSTANTS.STROKE_WIDTH;
     this.ctx.strokeRect(enemy.x, enemy.y, enemy.width, enemy.height);
     this.ctx.restore();
 
@@ -187,7 +248,7 @@ export class Renderer {
     const barY = enemy.y - 8;
     this.ctx.fillStyle = '#333';
     this.ctx.fillRect(enemy.x, barY, barW, barH);
-    this.ctx.fillStyle = '#00ff88';
+    this.ctx.fillStyle = ENEMY_CONSTANTS.STROKE_COLOR;
     this.ctx.fillRect(enemy.x, barY, barW * (enemy.health / enemy.maxHealth), barH);
   }
 
@@ -266,8 +327,8 @@ export class Renderer {
 
   drawAimLine(startX: number, startY: number, endX: number, endY: number): void {
     this.ctx.save();
-    this.ctx.strokeStyle = '#ff5252';
-    this.ctx.lineWidth = 2;
+    this.ctx.strokeStyle = UI_CONSTANTS.AIM_LINE_COLOR;
+    this.ctx.lineWidth = UI_CONSTANTS.AIM_LINE_WIDTH;
     this.ctx.setLineDash([8, 4]);
     this.ctx.beginPath();
     this.ctx.moveTo(startX, startY);
@@ -276,14 +337,20 @@ export class Renderer {
     this.ctx.restore();
 
     this.ctx.save();
-    this.ctx.fillStyle = '#ff5252';
+    this.ctx.fillStyle = UI_CONSTANTS.AIM_LINE_COLOR;
     this.ctx.beginPath();
     this.ctx.arc(endX, endY, 6, 0, Math.PI * 2);
     this.ctx.fill();
     this.ctx.restore();
   }
 
-  drawTrajectoryPreview(startX: number, startY: number, weapon: IWeapon, targetX: number, targetY: number): void {
+  drawTrajectoryPreview(
+    startX: number,
+    startY: number,
+    weapon: IWeapon,
+    targetX: number,
+    targetY: number
+  ): void {
     const dx = targetX - startX;
     const dy = targetY - startY;
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -312,29 +379,62 @@ export class Renderer {
   }
 
   drawToolbar(): void {
-    const toolbarWidth = this.width * 0.6;
-    const toolbarHeight = 80;
+    this.updateToolbarTransitions();
+
+    const toolbarWidth = Math.min(
+      this.width * UI_CONSTANTS.TOOLBAR_WIDTH_PERCENT,
+      this.width - 80
+    );
+    const toolbarHeight = UI_CONSTANTS.TOOLBAR_HEIGHT;
     const toolbarX = (this.width - toolbarWidth) / 2;
-    const toolbarY = this.height - 95;
+    const toolbarY = this.height - toolbarHeight - 15;
 
     this.ctx.save();
-    this.ctx.fillStyle = 'rgba(30, 30, 30, 0.9)';
+    this.ctx.fillStyle = UI_CONSTANTS.TOOLBAR_BG;
     this.ctx.beginPath();
-    this.ctx.roundRect(toolbarX, toolbarY, toolbarWidth, toolbarHeight, 16);
+    this.ctx.roundRect(toolbarX, toolbarY, toolbarWidth, toolbarHeight, UI_CONSTANTS.TOOLBAR_RADIUS);
     this.ctx.fill();
     this.ctx.restore();
 
     for (const btn of this.toolbarButtons) {
-      const isSelected = btn.type === this.currentWeaponType;
       this.drawWeaponIcon(btn);
+
+      const alpha = btn.borderAlpha;
+      const borderColor = this.lerpColorHex(
+        UI_CONSTANTS.UNSELECTED_BORDER,
+        UI_CONSTANTS.SELECTED_BORDER,
+        alpha
+      );
+      const lineWidth = 2 + alpha * 1;
+
       this.ctx.save();
-      this.ctx.strokeStyle = isSelected ? '#ffd700' : '#888888';
-      this.ctx.lineWidth = isSelected ? 3 : 2;
+      this.ctx.strokeStyle = borderColor;
+      this.ctx.lineWidth = lineWidth;
       this.ctx.beginPath();
-      this.ctx.roundRect(btn.x, btn.y, btn.width, btn.height, 8);
+      this.ctx.roundRect(btn.x, btn.y, btn.width, btn.height, UI_CONSTANTS.BUTTON_RADIUS);
       this.ctx.stroke();
       this.ctx.restore();
     }
+  }
+
+  private lerpColorHex(color1: string, color2: string, t: number): string {
+    const c1 = this.hexToRgb(color1);
+    const c2 = this.hexToRgb(color2);
+    const r = Math.round(c1.r + (c2.r - c1.r) * t);
+    const g = Math.round(c1.g + (c2.g - c1.g) * t);
+    const b = Math.round(c1.b + (c2.b - c1.b) * t);
+    return `rgb(${r},${g},${b})`;
+  }
+
+  private hexToRgb(hex: string): { r: number; g: number; b: number } {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result
+      ? {
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
+          b: parseInt(result[3], 16)
+        }
+      : { r: 136, g: 136, b: 136 };
   }
 
   private drawWeaponIcon(btn: IToolbarButton): void {

@@ -1,5 +1,58 @@
 import { eventBus } from '../shared/EventBus';
-import { IEnemy, IProjectile, IParticle } from '../WeaponModule/WeaponType';
+import { ObjectPool, IPoolable } from '../shared/ObjectPool';
+import {
+  IEnemy,
+  IProjectile,
+  IParticle,
+  PARTICLE_CONSTANTS,
+  ENEMY_CONSTANTS
+} from '../WeaponModule/WeaponType';
+
+class PoolableParticle implements IParticle, IPoolable {
+  id = 0;
+  x = 0;
+  y = 0;
+  vx = 0;
+  vy = 0;
+  radius = 3;
+  color = '#ffaa00';
+  life = 0;
+  maxLife = PARTICLE_CONSTANTS.LIFE_FRAMES;
+
+  reset(): void {
+    this.id = 0;
+    this.x = 0;
+    this.y = 0;
+    this.vx = 0;
+    this.vy = 0;
+    this.radius = 3;
+    this.color = '#ffaa00';
+    this.life = 0;
+    this.maxLife = PARTICLE_CONSTANTS.LIFE_FRAMES;
+  }
+}
+
+class PoolableEnemy implements IEnemy, IPoolable {
+  id = 0;
+  x = 0;
+  y = 0;
+  width = ENEMY_CONSTANTS.WIDTH;
+  height = ENEMY_CONSTANTS.HEIGHT;
+  speed = 1;
+  health = 1;
+  maxHealth = 1;
+
+  reset(): void {
+    this.id = 0;
+    this.x = 0;
+    this.y = 0;
+    this.width = ENEMY_CONSTANTS.WIDTH;
+    this.height = ENEMY_CONSTANTS.HEIGHT;
+    this.speed = 1;
+    this.health = 1;
+    this.maxHealth = 1;
+  }
+}
 
 export class EnemyManager {
   private enemies: IEnemy[] = [];
@@ -11,14 +64,28 @@ export class EnemyManager {
   private mapWidth: number;
   private mapHeight: number;
   private mapTop: number;
-  private readonly ENEMY_WIDTH = 40;
-  private readonly ENEMY_HEIGHT = 40;
-  private readonly PARTICLE_LIFE = 36;
+  private readonly ENEMY_WIDTH = ENEMY_CONSTANTS.WIDTH;
+  private readonly ENEMY_HEIGHT = ENEMY_CONSTANTS.HEIGHT;
+
+  private particlePool: ObjectPool<PoolableParticle>;
+  private enemyPool: ObjectPool<PoolableEnemy>;
 
   constructor(mapWidth: number, mapHeight: number, mapTop: number) {
     this.mapWidth = mapWidth;
     this.mapHeight = mapHeight;
     this.mapTop = mapTop;
+
+    this.particlePool = new ObjectPool<PoolableParticle>(
+      () => new PoolableParticle(),
+      64,
+      256
+    );
+    this.enemyPool = new ObjectPool<PoolableEnemy>(
+      () => new PoolableEnemy(),
+      20,
+      60
+    );
+
     this.setupEventListeners();
   }
 
@@ -31,6 +98,15 @@ export class EnemyManager {
       };
       this.handleEnemyHit(enemyId, projectileId, splashRadius);
     });
+  }
+
+  private lerpColor(t: number): string {
+    const start = PARTICLE_CONSTANTS.START_COLOR;
+    const end = PARTICLE_CONSTANTS.END_COLOR;
+    const r = Math.round(start.r + (end.r - start.r) * t);
+    const g = Math.round(start.g + (end.g - start.g) * t);
+    const b = Math.round(start.b + (end.b - start.b) * t);
+    return `rgb(${r},${g},${b})`;
   }
 
   private handleEnemyHit(enemyId: number, _projectileId: number, splashRadius?: number): void {
@@ -49,6 +125,10 @@ export class EnemyManager {
           const dist = Math.sqrt((ex - centerX) ** 2 + (ey - centerY) ** 2);
           if (dist <= splashRadius) {
             e.health -= 0.5;
+            if (e.health <= 0) {
+              this.createExplosion(ex, ey);
+              this.removeEnemyInternal(e);
+            }
           }
         }
       });
@@ -62,42 +142,55 @@ export class EnemyManager {
   }
 
   private createExplosion(x: number, y: number): void {
-    for (let i = 0; i < 8; i++) {
-      const angle = (Math.PI * 2 * i) / 8 + Math.random() * 0.5;
+    const count = PARTICLE_CONSTANTS.COUNT;
+    for (let i = 0; i < count; i++) {
+      const particle = this.particlePool.acquire();
+      const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
       const speed = 2 + Math.random() * 3;
-      const t = Math.random();
-      const r = Math.floor(255 * (1 - t) + 255 * t);
-      const g = Math.floor(170 * (1 - t) + 51 * t);
-      const b = Math.floor(0 * (1 - t) + 0 * t);
-      const color = `rgb(${r},${g},${b})`;
+      const t = i / (count - 1);
 
-      this.particles.push({
-        id: ++this.particleIdCounter,
-        x,
-        y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        radius: 3 + Math.random() * 3,
-        color,
-        life: this.PARTICLE_LIFE,
-        maxLife: this.PARTICLE_LIFE
-      });
+      particle.id = ++this.particleIdCounter;
+      particle.x = x;
+      particle.y = y;
+      particle.vx = Math.cos(angle) * speed;
+      particle.vy = Math.sin(angle) * speed;
+      particle.radius = PARTICLE_CONSTANTS.MIN_RADIUS +
+        Math.random() * (PARTICLE_CONSTANTS.MAX_RADIUS - PARTICLE_CONSTANTS.MIN_RADIUS);
+      particle.color = this.lerpColor(t);
+      particle.life = PARTICLE_CONSTANTS.LIFE_FRAMES;
+      particle.maxLife = PARTICLE_CONSTANTS.LIFE_FRAMES;
+
+      this.particles.push(particle);
     }
   }
 
   spawnEnemy(): void {
+    const enemy = this.enemyPool.acquire();
     const y = this.mapTop + 50 + Math.random() * (this.mapHeight - 100 - this.ENEMY_HEIGHT);
-    const enemy: IEnemy = {
-      id: ++this.enemyIdCounter,
-      x: this.mapWidth - this.ENEMY_WIDTH,
-      y,
-      width: this.ENEMY_WIDTH,
-      height: this.ENEMY_HEIGHT,
-      speed: 1 + Math.random() * 0.5,
-      health: 1,
-      maxHealth: 1
-    };
+
+    enemy.id = ++this.enemyIdCounter;
+    enemy.x = this.mapWidth - this.ENEMY_WIDTH;
+    enemy.y = y;
+    enemy.width = this.ENEMY_WIDTH;
+    enemy.height = this.ENEMY_HEIGHT;
+    enemy.speed = 1 + Math.random() * 0.5;
+    enemy.health = 1;
+    enemy.maxHealth = 1;
+
     this.enemies.push(enemy);
+  }
+
+  private removeEnemyInternal(enemy: IEnemy): void {
+    const index = this.enemies.indexOf(enemy);
+    if (index !== -1) {
+      eventBus.emit('enemy:death', {
+        enemyId: enemy.id,
+        x: enemy.x + enemy.width / 2,
+        y: enemy.y + enemy.height / 2
+      });
+      this.enemies.splice(index, 1);
+      this.enemyPool.release(enemy as PoolableEnemy);
+    }
   }
 
   removeEnemy(id: number): void {
@@ -110,6 +203,7 @@ export class EnemyManager {
         y: enemy.y + enemy.height / 2
       });
       this.enemies.splice(index, 1);
+      this.enemyPool.release(enemy as PoolableEnemy);
     }
   }
 
@@ -135,7 +229,12 @@ export class EnemyManager {
     return null;
   }
 
-  checkCollisions(projectiles: IProjectile[], playerX: number, playerY: number, playerRadius: number): number[] {
+  checkCollisions(
+    projectiles: IProjectile[],
+    playerX: number,
+    playerY: number,
+    playerRadius: number
+  ): number[] {
     const hitProjectileIds: number[] = [];
 
     for (let i = projectiles.length - 1; i >= 0; i--) {
@@ -158,13 +257,16 @@ export class EnemyManager {
       }
     }
 
-    for (const enemy of this.enemies) {
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const enemy = this.enemies[i];
       const ex = enemy.x + enemy.width / 2;
       const ey = enemy.y + enemy.height / 2;
       const dist = Math.sqrt((ex - playerX) ** 2 + (ey - playerY) ** 2);
       if (dist < playerRadius + enemy.width / 2) {
         eventBus.emit('player:damage', { damage: 1 });
-        this.removeEnemy(enemy.id);
+        this.createExplosion(ex, ey);
+        const removedEnemy = this.enemies.splice(i, 1)[0];
+        this.enemyPool.release(removedEnemy as PoolableEnemy);
       }
     }
 
@@ -183,7 +285,8 @@ export class EnemyManager {
       enemy.x -= enemy.speed;
       if (enemy.x + enemy.width < 0) {
         eventBus.emit('player:damage', { damage: 1 });
-        this.enemies.splice(i, 1);
+        const removedEnemy = this.enemies.splice(i, 1)[0];
+        this.enemyPool.release(removedEnemy as PoolableEnemy);
       }
     }
 
@@ -194,7 +297,8 @@ export class EnemyManager {
       p.vy += 0.1;
       p.life--;
       if (p.life <= 0) {
-        this.particles.splice(i, 1);
+        const removedParticle = this.particles.splice(i, 1)[0];
+        this.particlePool.release(removedParticle as PoolableParticle);
       }
     }
   }
@@ -206,10 +310,23 @@ export class EnemyManager {
   }
 
   reset(): void {
+    for (const e of this.enemies) {
+      this.enemyPool.release(e as PoolableEnemy);
+    }
+    for (const p of this.particles) {
+      this.particlePool.release(p as PoolableParticle);
+    }
     this.enemies = [];
     this.particles = [];
     this.spawnTimer = 0;
     this.enemyIdCounter = 0;
     this.particleIdCounter = 0;
+  }
+
+  getPoolStats(): { enemies: number; particles: number } {
+    return {
+      enemies: this.enemyPool.size(),
+      particles: this.particlePool.size()
+    };
   }
 }

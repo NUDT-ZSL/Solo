@@ -1,6 +1,6 @@
 import { eventBus } from '../shared/EventBus';
 import { WeaponFactory } from '../WeaponModule/WeaponFactory';
-import { WeaponType } from '../WeaponModule/WeaponType';
+import { WeaponType, PLAYER_CONSTANTS } from '../WeaponModule/WeaponType';
 
 export class Player {
   x: number;
@@ -15,7 +15,7 @@ export class Player {
   healthAnimation: number;
   gameOver: boolean;
   private weaponFactory: WeaponFactory;
-  private readonly INTERPOLATION = 0.15;
+  private readonly INTERPOLATION = PLAYER_CONSTANTS.INTERPOLATION;
 
   constructor(
     x: number,
