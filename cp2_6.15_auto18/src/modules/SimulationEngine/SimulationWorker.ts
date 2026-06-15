@@ -1,239 +1,221 @@
-import type { Particle, Galaxy, SimulationParams, WorkerCommand, WorkerResponse } from '../../constants'
+import type { Galaxy, Particle, SimulationParams, WorkerCommand, WorkerResponse } from '../../constants'
 
-interface WorkerState {
-  galaxies: Galaxy[]
-  params: SimulationParams
-  running: boolean
-  collisionActive: boolean
-  collisionGalaxyIds: [string, string] | null
-  collisionStartTime: number
-  collisionDuration: number
-  galaxyRotations: Record<string, number>
-  burstParticles: Particle[]
-  burstStartTime: number
-  burstDuration: number
+interface CollisionContext {
+  active: boolean
+  galaxyIds: [string, string] | null
+  startTime: number
+  duration: number
+  galaxyAColor: [number, number, number]
+  galaxyBColor: [number, number, number]
+  aGalaxyId: string
+  bGalaxyId: string
 }
 
-const state: WorkerState = {
-  galaxies: [],
-  params: { gravityConstant: 1.0, elasticity: 0.5, simulationSpeed: 1.0 },
-  running: false,
-  collisionActive: false,
-  collisionGalaxyIds: null,
-  collisionStartTime: 0,
-  collisionDuration: 3000,
-  galaxyRotations: {},
-  burstParticles: [],
-  burstStartTime: 0,
-  burstDuration: 2000,
+interface Burst {
+  startTime: number
+  duration: number
+  particles: Particle[]
 }
+
+const MAX_PARTICLES = 5000
+
+let galaxies: Galaxy[] = []
+let params: SimulationParams = { gravityConstant: 1.0, elasticity: 0.5, simulationSpeed: 1.0 }
+let running = false
+let galaxyRotations: Record<string, number> = {}
+let collisionCtx: CollisionContext = {
+  active: false,
+  galaxyIds: null,
+  startTime: 0,
+  duration: 3000,
+  galaxyAColor: [0, 0, 0],
+  galaxyBColor: [0, 0, 0],
+  aGalaxyId: '',
+  bGalaxyId: '',
+}
+let bursts: Burst[] = []
+let placedGalaxies: Record<string, { startTime: number; duration: number }> = {}
+
+const positionsBuf = new Float32Array(MAX_PARTICLES * 3)
+const colorsBuf = new Float32Array(MAX_PARTICLES * 3)
+const prevPositionsBuf = new Float32Array(MAX_PARTICLES * 3)
+const particleIdsBuf = new Int32Array(MAX_PARTICLES)
+const particleGalaxiesBuf = new Int32Array(MAX_PARTICLES)
 
 function send(msg: WorkerResponse) {
   self.postMessage(msg)
 }
 
-function initGalaxyRotations() {
-  state.galaxies.forEach(g => {
-    if (state.galaxyRotations[g.id] === undefined) {
-      state.galaxyRotations[g.id] = 0
-    }
-  })
-}
-
-function computeGravity(p: Particle, allParticles: Particle[], params: SimulationParams): [number, number, number] {
-  let fx = 0, fy = 0, fz = 0
-  const G = params.gravityConstant * 0.001
-  const softening = 0.5
-
-  const sampleSize = Math.min(allParticles.length, 200)
-  const step = Math.max(1, Math.floor(allParticles.length / sampleSize))
-
-  for (let i = 0; i < allParticles.length; i += step) {
-    const other = allParticles[i]
-    if (other.id === p.id) continue
-
-    const dx = other.position[0] - p.position[0]
-    const dy = other.position[1] - p.position[1]
-    const dz = other.position[2] - p.position[2]
-    const distSq = dx * dx + dy * dy + dz * dz + softening * softening
-    const dist = Math.sqrt(distSq)
-    const force = (G * other.mass * step) / distSq
-
-    fx += (dx / dist) * force
-    fy += (dy / dist) * force
-    fz += (dz / dist) * force
-  }
-
-  return [fx, fy, fz]
-}
-
-function computeCollisionGravity(
-  p: Particle,
-  galaxies: Galaxy[],
-  collisionIds: [string, string],
-  params: SimulationParams
-): [number, number, number] {
-  let fx = 0, fy = 0, fz = 0
-  const G = params.gravityConstant * 0.005
-  const softening = 0.3
-
-  for (const gid of collisionIds) {
-    const galaxy = galaxies.find(g => g.id === gid)
-    if (!galaxy) continue
-
-    const cx = galaxy.position[0]
-    const cy = galaxy.position[1]
-    const cz = galaxy.position[2]
-
-    const dx = cx - p.position[0]
-    const dy = cy - p.position[1]
-    const dz = cz - p.position[2]
-    const distSq = dx * dx + dy * dy + dz * dz + softening * softening
-    const dist = Math.sqrt(distSq)
-    const totalMass = galaxy.particles.reduce((s, pp) => s + pp.mass, 0)
-    const force = (G * totalMass) / distSq
-
-    fx += (dx / dist) * force
-    fy += (dy / dist) * force
-    fz += (dz / dist) * force
-  }
-
-  return [fx, fy, fz]
-}
-
-function blendColors(
-  c1: [number, number, number],
-  c2: [number, number, number],
+function lerpColor(
+  a: [number, number, number],
+  b: [number, number, number],
   t: number
 ): [number, number, number] {
   return [
-    c1[0] + (c2[0] - c1[0]) * t,
-    c1[1] + (c2[1] - c1[1]) * t,
-    c1[2] + (c2[2] - c1[2]) * t,
+    a[0] + (b[0] - a[0]) * t,
+    a[1] + (b[1] - a[1]) * t,
+    a[2] + (b[2] - a[2]) * t,
   ]
 }
 
+function gravityForce(
+  p: Particle,
+  center: [number, number, number],
+  totalMass: number,
+  G: number
+): [number, number, number] {
+  const dx = center[0] - p.position[0]
+  const dy = center[1] - p.position[1]
+  const dz = center[2] - p.position[2]
+  const distSq = dx * dx + dy * dy + dz * dz + 0.3 * 0.3
+  const dist = Math.sqrt(distSq)
+  const force = (G * totalMass) / distSq
+  return [(dx / dist) * force, (dy / dist) * force, (dz / dist) * force]
+}
+
+function galaxyCenterMass(g: Galaxy): { center: [number, number, number]; mass: number } {
+  let cx = 0, cy = 0, cz = 0, m = 0
+  for (const p of g.particles) {
+    cx += p.position[0] * p.mass
+    cy += p.position[1] * p.mass
+    cz += p.position[2] * p.mass
+    m += p.mass
+  }
+  if (m === 0) return { center: g.position, mass: 0 }
+  return { center: [cx / m, cy / m, cz / m], mass: m }
+}
+
+function rotateGalaxyParticles(g: Galaxy, scaledDt: number) {
+  const rot = (g.rotationSpeed * 0.0015) * scaledDt
+  const cm = galaxyCenterMass(g)
+  const cx = cm.center[0]
+  const cy = cm.center[1]
+  const cz = cm.center[2]
+  const cos = Math.cos(rot)
+  const sin = Math.sin(rot)
+  for (const p of g.particles) {
+    const dx = p.position[0] - cx
+    const dz = p.position[2] - cz
+    p.prevPosition[0] = p.position[0]
+    p.prevPosition[1] = p.position[1]
+    p.prevPosition[2] = p.position[2]
+    p.position[0] = cx + dx * cos - dz * sin
+    p.position[2] = cz + dx * sin + dz * cos
+    const tx = p.prevPosition[0] - cx
+    const tz = p.prevPosition[2] - cz
+    p.prevPosition[0] = cx + tx * cos - tz * sin
+    p.prevPosition[2] = cz + tx * sin + tz * cos
+  }
+  g.position[0] = cx
+  g.position[1] = cy
+  g.position[2] = cz
+}
+
 function generateBurstParticles(center: [number, number, number], count: number): Particle[] {
-  const particles: Particle[] = []
+  const result: Particle[] = []
   for (let i = 0; i < count; i++) {
     const theta = Math.random() * Math.PI * 2
     const phi = Math.acos(2 * Math.random() - 1)
-    const speed = 0.02 + Math.random() * 0.04
+    const speed = 0.03 + Math.random() * 0.05
     const vx = Math.sin(phi) * Math.cos(theta) * speed
     const vy = Math.sin(phi) * Math.sin(theta) * speed
     const vz = Math.cos(phi) * speed
-
-    particles.push({
-      id: 100000 + i,
-      position: [...center],
+    result.push({
+      id: 900000 + Math.floor(Math.random() * 99999),
+      galaxyId: '__burst__',
+      position: [...center] as [number, number, number],
+      prevPosition: [...center] as [number, number, number],
       velocity: [vx, vy, vz],
-      color: [1, 0.9, 0.5],
-      originalColor: [1, 0.9, 0.5],
-      mass: 0.1,
+      color: [1, 0.95, 0.7],
+      originalColor: [1, 0.95, 0.7],
+      galaxyColor: [1, 0.9, 0.5],
+      mass: 0.05,
     })
   }
-  return particles
+  return result
 }
 
 function simulate(dt: number) {
-  const speed = state.params.simulationSpeed
-  const scaledDt = dt * speed
-  const allParticles: Particle[] = []
+  const speed = params.simulationSpeed
+  const scaledDt = Math.min(dt, 3) * speed
+  const G = params.gravityConstant * 0.003
+  const allGalaxiesData = galaxies.map(g => ({ galaxy: g, ...galaxyCenterMass(g) }))
 
-  for (const galaxy of state.galaxies) {
-    allParticles.push(...galaxy.particles)
-  }
+  if (collisionCtx.active && collisionCtx.galaxyIds) {
+    const elapsed = Date.now() - collisionCtx.startTime
+    const blendProgress = Math.min(1, elapsed / collisionCtx.duration)
+    const [idA, idB] = collisionCtx.galaxyIds
+    const gA = allGalaxiesData.find(d => d.galaxy.id === idA)
+    const gB = allGalaxiesData.find(d => d.galaxy.id === idB)
 
-  if (state.collisionActive && state.collisionGalaxyIds) {
-    const elapsed = Date.now() - state.collisionStartTime
-    const blendProgress = Math.min(1, elapsed / 3000)
-
-    const [id1, id2] = state.collisionGalaxyIds
-    const g1 = state.galaxies.find(g => g.id === id1)
-    const g2 = state.galaxies.find(g => g.id === id2)
-
-    if (g1 && g2) {
-      for (const galaxy of state.galaxies) {
-        const isCollisionGalaxy = galaxy.id === id1 || galaxy.id === id2
-
-        for (const p of galaxy.particles) {
-          if (isCollisionGalaxy) {
-            const [fx, fy, fz] = computeCollisionGravity(p, state.galaxies, state.collisionGalaxyIds, state.params)
-            p.velocity[0] += fx * scaledDt
-            p.velocity[1] += fy * scaledDt
-            p.velocity[2] += fz * scaledDt
-
-            const otherGalaxy = galaxy.id === id1 ? g2 : g1
-            p.color = blendColors(p.originalColor, otherGalaxy.particles[0]?.originalColor || p.originalColor, blendProgress)
+    if (gA && gB) {
+      const colA = collisionCtx.galaxyAColor
+      const colB = collisionCtx.galaxyBColor
+      for (const gd of allGalaxiesData) {
+        const isA = gd.galaxy.id === idA
+        const isB = gd.galaxy.id === idB
+        const isCollision = isA || isB
+        for (const p of gd.galaxy.particles) {
+          p.prevPosition[0] = p.position[0]
+          p.prevPosition[1] = p.position[1]
+          p.prevPosition[2] = p.position[2]
+          if (isCollision) {
+            const targetCenter = isA ? gB.center : gA.center
+            const targetMass = isA ? gB.mass : gA.mass
+            const ownCenter = isA ? gA.center : gB.center
+            const ownMass = isA ? gA.mass : gB.mass
+            const [fx1, fy1, fz1] = gravityForce(p, ownCenter, ownMass, G * 0.3)
+            const [fx2, fy2, fz2] = gravityForce(p, targetCenter, targetMass, G * 0.9)
+            p.velocity[0] += (fx1 + fx2) * scaledDt
+            p.velocity[1] += (fy1 + fy2) * scaledDt
+            p.velocity[2] += (fz1 + fz2) * scaledDt
+            const original = isA ? colA : colB
+            const target = isA ? colB : colA
+            const newColor = lerpColor(original, target, blendProgress)
+            p.color[0] = newColor[0]
+            p.color[1] = newColor[1]
+            p.color[2] = newColor[2]
           } else {
-            const [fx, fy, fz] = computeGravity(p, allParticles, state.params)
+            const [fx, fy, fz] = gravityForce(p, gd.center, gd.mass, G)
             p.velocity[0] += fx * scaledDt
             p.velocity[1] += fy * scaledDt
             p.velocity[2] += fz * scaledDt
           }
-
           p.velocity[0] *= 0.999
           p.velocity[1] *= 0.999
           p.velocity[2] *= 0.999
-
           p.position[0] += p.velocity[0] * scaledDt
           p.position[1] += p.velocity[1] * scaledDt
           p.position[2] += p.velocity[2] * scaledDt
         }
       }
-
-      if (elapsed >= state.collisionDuration) {
-        const center: [number, number, number] = [
-          (g1.position[0] + g2.position[0]) / 2,
-          (g1.position[1] + g2.position[1]) / 2,
-          (g1.position[2] + g2.position[2]) / 2,
+      if (elapsed >= collisionCtx.duration) {
+        const mid: [number, number, number] = [
+          (gA.center[0] + gB.center[0]) / 2,
+          (gA.center[1] + gB.center[1]) / 2,
+          (gA.center[2] + gB.center[2]) / 2,
         ]
-
-        state.burstParticles = generateBurstParticles(center, 80)
-        state.burstStartTime = Date.now()
-
-        const mergedGalaxyId = `merged_${Date.now()}`
-        state.collisionActive = false
-        state.collisionGalaxyIds = null
-        send({ type: 'COLLISION_COMPLETE', mergedGalaxyId })
+        bursts.push({
+          startTime: Date.now(),
+          duration: 2000,
+          particles: generateBurstParticles(mid, 80),
+        })
+        collisionCtx.active = false
+        collisionCtx.galaxyIds = null
+        send({ type: 'COLLISION_COMPLETE', mergedGalaxyId: `merged_${Date.now()}` })
       }
     }
   } else {
-    for (const galaxy of state.galaxies) {
-      const rotSpeed = galaxy.rotationSpeed * 0.002 * speed
-      state.galaxyRotations[galaxy.id] = (state.galaxyRotations[galaxy.id] || 0) + rotSpeed * scaledDt
-
-      for (const p of galaxy.particles) {
-        const dx = p.position[0] - galaxy.position[0]
-        const dz = p.position[2] - galaxy.position[2]
-
-        const angle = rotSpeed * scaledDt
-        const cos = Math.cos(angle)
-        const sin = Math.sin(angle)
-
-        const newX = dx * cos - dz * sin
-        const newZ = dx * sin + dz * cos
-
-        p.position[0] = galaxy.position[0] + newX
-        p.position[2] = galaxy.position[2] + newZ
-
-        const [fx, fy, fz] = computeGravity(p, allParticles, state.params)
+    for (const gd of allGalaxiesData) {
+      rotateGalaxyParticles(gd.galaxy, scaledDt)
+      for (const p of gd.galaxy.particles) {
+        const [fx, fy, fz] = gravityForce(p, gd.center, gd.mass, G * 0.3)
         p.velocity[0] += fx * scaledDt
         p.velocity[1] += fy * scaledDt
         p.velocity[2] += fz * scaledDt
-
-        const toCenterX = galaxy.position[0] - p.position[0]
-        const toCenterZ = galaxy.position[2] - p.position[2]
-        const toCenterDist = Math.sqrt(toCenterX * toCenterX + toCenterZ * toCenterZ)
-        if (toCenterDist > 0.01) {
-          p.velocity[0] += toCenterX / toCenterDist * 0.0001 * scaledDt
-          p.velocity[2] += toCenterZ / toCenterDist * 0.0001 * scaledDt
-        }
-
-        p.velocity[0] *= 0.998
-        p.velocity[1] *= 0.998
-        p.velocity[2] *= 0.998
-
+        p.velocity[0] *= 0.9985
+        p.velocity[1] *= 0.9985
+        p.velocity[2] *= 0.9985
         p.position[0] += p.velocity[0] * scaledDt
         p.position[1] += p.velocity[1] * scaledDt
         p.position[2] += p.velocity[2] * scaledDt
@@ -241,84 +223,134 @@ function simulate(dt: number) {
     }
   }
 
-  if (state.burstParticles.length > 0) {
-    const burstElapsed = Date.now() - state.burstStartTime
-    const burstProgress = burstElapsed / state.burstDuration
-
-    for (const bp of state.burstParticles) {
-      bp.position[0] += bp.velocity[0] * scaledDt * 2
-      bp.position[1] += bp.velocity[1] * scaledDt * 2
-      bp.position[2] += bp.velocity[2] * scaledDt * 2
-
-      bp.color = [
-        1 * (1 - burstProgress) + 0.3 * burstProgress,
-        0.9 * (1 - burstProgress) + 0.1 * burstProgress,
-        0.5 * (1 - burstProgress) + 0.1 * burstProgress,
-      ]
+  const now = Date.now()
+  bursts = bursts.filter(b => {
+    const elapsed = now - b.startTime
+    const prog = elapsed / b.duration
+    for (const p of b.particles) {
+      p.prevPosition[0] = p.position[0]
+      p.prevPosition[1] = p.position[1]
+      p.prevPosition[2] = p.position[2]
+      p.position[0] += p.velocity[0] * scaledDt * 1.5
+      p.position[1] += p.velocity[1] * scaledDt * 1.5
+      p.position[2] += p.velocity[2] * scaledDt * 1.5
+      const alpha = 1 - prog
+      p.color[0] = Math.min(1, 1 * alpha + 0.3 * (1 - alpha))
+      p.color[1] = Math.min(1, 0.95 * alpha + 0.2 * (1 - alpha))
+      p.color[2] = Math.min(1, 0.6 * alpha + 0.1 * (1 - alpha))
     }
+    return elapsed < b.duration
+  })
 
-    if (burstElapsed >= state.burstDuration) {
-      state.burstParticles = []
+  let idx = 0
+  const galaxyIdList = galaxies.map(g => g.id)
+  for (let gi = 0; gi < galaxies.length; gi++) {
+    const g = galaxies[gi]
+    for (const p of g.particles) {
+      if (idx >= MAX_PARTICLES) break
+      positionsBuf[idx * 3] = p.position[0]
+      positionsBuf[idx * 3 + 1] = p.position[1]
+      positionsBuf[idx * 3 + 2] = p.position[2]
+      prevPositionsBuf[idx * 3] = p.prevPosition[0]
+      prevPositionsBuf[idx * 3 + 1] = p.prevPosition[1]
+      prevPositionsBuf[idx * 3 + 2] = p.prevPosition[2]
+      colorsBuf[idx * 3] = p.color[0]
+      colorsBuf[idx * 3 + 1] = p.color[1]
+      colorsBuf[idx * 3 + 2] = p.color[2]
+      particleIdsBuf[idx] = p.id
+      particleGalaxiesBuf[idx] = gi
+      idx++
     }
+    if (idx >= MAX_PARTICLES) break
+  }
+  for (const b of bursts) {
+    for (const p of b.particles) {
+      if (idx >= MAX_PARTICLES) break
+      positionsBuf[idx * 3] = p.position[0]
+      positionsBuf[idx * 3 + 1] = p.position[1]
+      positionsBuf[idx * 3 + 2] = p.position[2]
+      prevPositionsBuf[idx * 3] = p.prevPosition[0]
+      prevPositionsBuf[idx * 3 + 1] = p.prevPosition[1]
+      prevPositionsBuf[idx * 3 + 2] = p.prevPosition[2]
+      colorsBuf[idx * 3] = p.color[0]
+      colorsBuf[idx * 3 + 1] = p.color[1]
+      colorsBuf[idx * 3 + 2] = p.color[2]
+      particleIdsBuf[idx] = p.id
+      particleGalaxiesBuf[idx] = -1
+      idx++
+    }
+    if (idx >= MAX_PARTICLES) break
   }
 
-  const resultParticles: Particle[] = []
-  for (const galaxy of state.galaxies) {
-    resultParticles.push(...galaxy.particles)
-  }
-  resultParticles.push(...state.burstParticles)
-
-  send({ type: 'FRAME_UPDATE', particles: resultParticles, galaxyRotations: { ...state.galaxyRotations } })
+  send({
+    type: 'FRAME_UPDATE',
+    positions: positionsBuf.subarray(0, idx * 3),
+    colors: colorsBuf.subarray(0, idx * 3),
+    prevPositions: prevPositionsBuf.subarray(0, idx * 3),
+    particleIds: particleIdsBuf.subarray(0, idx),
+    galaxyIds: galaxyIdList,
+    particleGalaxies: particleGalaxiesBuf.subarray(0, idx),
+    totalParticles: idx,
+  })
 }
 
 self.onmessage = (e: MessageEvent<WorkerCommand>) => {
   const msg = e.data
-
   switch (msg.type) {
     case 'INIT':
-      state.galaxies = msg.galaxies
-      state.params = msg.params
-      state.running = true
-      initGalaxyRotations()
+      galaxies = msg.galaxies
+      params = msg.params
+      running = true
+      for (const g of galaxies) {
+        galaxyRotations[g.id] = 0
+        placedGalaxies[g.id] = { startTime: Date.now(), duration: 800 }
+      }
       send({ type: 'READY' })
       break
-
     case 'UPDATE_PARAMS':
-      state.params = { ...state.params, ...msg.params }
+      params = { ...params, ...msg.params }
       break
-
     case 'ADD_GALAXY':
-      state.galaxies.push(msg.galaxy)
-      state.galaxyRotations[msg.galaxy.id] = 0
+      galaxies.push(msg.galaxy)
+      galaxyRotations[msg.galaxy.id] = 0
+      placedGalaxies[msg.galaxy.id] = { startTime: Date.now(), duration: 800 }
       break
-
-    case 'START_COLLISION':
-      state.collisionActive = true
-      state.collisionGalaxyIds = msg.galaxyIds
-      state.collisionStartTime = Date.now()
-      break
-
-    case 'PAUSE':
-      state.running = false
-      break
-
-    case 'RESUME':
-      state.running = true
-      break
-
-    case 'RESET':
-      state.galaxies = []
-      state.running = false
-      state.collisionActive = false
-      state.collisionGalaxyIds = null
-      state.burstParticles = []
-      state.galaxyRotations = {}
-      break
-
-    case 'STEP':
-      if (state.running) {
-        simulate(msg.dt)
+    case 'START_COLLISION': {
+      const [idA, idB] = msg.galaxyIds
+      const gA = galaxies.find(g => g.id === idA)
+      const gB = galaxies.find(g => g.id === idB)
+      collisionCtx.active = true
+      collisionCtx.galaxyIds = msg.galaxyIds
+      collisionCtx.startTime = Date.now()
+      collisionCtx.duration = 3000
+      collisionCtx.aGalaxyId = idA
+      collisionCtx.bGalaxyId = idB
+      if (gA && gB) {
+        collisionCtx.galaxyAColor = [...gA.galaxyBaseColor] as [number, number, number]
+        collisionCtx.galaxyBColor = [...gB.galaxyBaseColor] as [number, number, number]
       }
+      send({ type: 'COLLISION_STARTED' })
+      break
+    }
+    case 'PAUSE':
+      running = false
+      break
+    case 'RESUME':
+      running = true
+      break
+    case 'RESET':
+      galaxies = []
+      running = false
+      collisionCtx.active = false
+      collisionCtx.galaxyIds = null
+      bursts = []
+      galaxyRotations = {}
+      placedGalaxies = {}
+      break
+    case 'STEP':
+      if (running) simulate(msg.dt)
       break
   }
 }
+
+export {}
