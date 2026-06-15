@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ProjectCard from './ProjectCard';
 import InspirationBoard from './InspirationBoard';
 import TaskList from './TaskList';
@@ -35,12 +35,40 @@ const App: React.FC = () => {
     deadline: ''
   });
   const [contentVisible, setContentVisible] = useState(false);
-  const [animatedProgress, setAnimatedProgress] = useState(0);
+  const [skeletonVisible, setSkeletonVisible] = useState(true);
+  const [displayProgress, setDisplayProgress] = useState(0);
+  const progressRef = useRef(0);
+  const progressAnimRef = useRef<number | null>(null);
+
+  const animateProgress = useCallback((target: number) => {
+    const start = progressRef.current;
+    const duration = 800;
+    const startTime = performance.now();
+
+    if (progressAnimRef.current !== null) {
+      cancelAnimationFrame(progressAnimRef.current);
+    }
+
+    const step = (now: number) => {
+      const elapsed = now - startTime;
+      const t = Math.min(elapsed / duration, 1);
+      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      const current = Math.round(start + (target - start) * ease);
+      progressRef.current = current;
+      setDisplayProgress(current);
+      if (t < 1) {
+        progressAnimRef.current = requestAnimationFrame(step);
+      }
+    };
+
+    progressAnimRef.current = requestAnimationFrame(step);
+  }, []);
 
   useEffect(() => {
     const loadInitialData = async () => {
       setLoading(true);
       setContentVisible(false);
+      setSkeletonVisible(true);
       const [projectsData, allTasksData] = await Promise.all([
         fetchProjects(),
         fetchAllTasks()
@@ -48,41 +76,43 @@ const App: React.FC = () => {
       setProjects(projectsData);
       setAllTasks(allTasksData);
       setLoading(false);
-      setTimeout(() => setContentVisible(true), 50);
+
+      const completed = allTasksData.filter(t => t.completed).length;
+      const total = allTasksData.length;
+      progressRef.current = 0;
+      const targetProgress = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      setTimeout(() => {
+        setSkeletonVisible(false);
+      }, 100);
+
+      setTimeout(() => {
+        setContentVisible(true);
+        animateProgress(targetProgress);
+      }, 500);
     };
     loadInitialData();
-  }, []);
+
+    return () => {
+      if (progressAnimRef.current !== null) {
+        cancelAnimationFrame(progressAnimRef.current);
+      }
+    };
+  }, [animateProgress]);
 
   useEffect(() => {
-    if (!loading) {
+    if (!loading && !skeletonVisible) {
       const completed = allTasks.filter(t => t.completed).length;
       const total = allTasks.length;
       const targetProgress = total > 0 ? Math.round((completed / total) * 100) : 0;
-      setAnimatedProgress(prev => {
-        const step = targetProgress > prev ? 1 : targetProgress < prev ? -1 : 0;
-        if (step !== 0) {
-          const timer = setInterval(() => {
-            setAnimatedProgress(p => {
-              if (p === targetProgress) {
-                clearInterval(timer);
-                return p;
-              }
-              return p + step;
-            });
-          }, 10);
-        }
-        return prev;
-      });
+      animateProgress(targetProgress);
     }
-  }, [allTasks, loading]);
-
-  const progressPercentage = allTasks.length > 0
-    ? Math.round((allTasks.filter(t => t.completed).length / allTasks.length) * 100)
-    : 0;
+  }, [allTasks, loading, skeletonVisible, animateProgress]);
 
   const loadProjectDetail = useCallback(async (projectId: string) => {
     setLoading(true);
     setContentVisible(false);
+    setSkeletonVisible(true);
     const [projectData, inspirationsData, tasksData, allTasksData] = await Promise.all([
       fetchProjects().then(p => p.find(p => p.id === projectId) || null),
       fetchInspirations(projectId),
@@ -96,7 +126,14 @@ const App: React.FC = () => {
       setAllTasks(allTasksData);
     }
     setLoading(false);
-    setTimeout(() => setContentVisible(true), 50);
+
+    setTimeout(() => {
+      setSkeletonVisible(false);
+    }, 100);
+
+    setTimeout(() => {
+      setContentVisible(true);
+    }, 500);
   }, []);
 
   const handleProjectClick = (projectId: string) => {
@@ -105,7 +142,7 @@ const App: React.FC = () => {
     loadProjectDetail(projectId);
   };
 
-  const handleBackToHome = async () => {
+  const handleBackToHome = () => {
     setCurrentView('home');
     setSelectedProjectId(null);
     setCurrentProject(null);
@@ -182,7 +219,7 @@ const App: React.FC = () => {
 
   const getProgressColor = (progress: number) => {
     const r = Math.round(233 * (1 - progress / 100));
-    const g = Math.round(69 * (progress / 100) + 255 * (progress / 100));
+    const g = Math.round(69 * (progress / 100) + 186 * (progress / 100));
     const b = 96;
     return `rgb(${r}, ${g}, ${b})`;
   };
@@ -193,11 +230,6 @@ const App: React.FC = () => {
         @keyframes pulse {
           0%, 100% { opacity: 0.4; }
           50% { opacity: 0.8; }
-        }
-        @keyframes flip {
-          0% { transform: rotateY(0deg); }
-          50% { transform: rotateY(90deg); }
-          100% { transform: rotateY(0deg); }
         }
         @keyframes fadeIn {
           from { opacity: 0; }
@@ -211,21 +243,18 @@ const App: React.FC = () => {
           from { transform: scaleY(1); opacity: 1; }
           to { transform: scaleY(0); opacity: 0; }
         }
-        @keyframes bounce {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-5px); }
-        }
         .skeleton {
           background: linear-gradient(90deg, #2a2a4a 25%, #3a3a5a 50%, #2a2a4a 75%);
           background-size: 200% 100%;
           animation: pulse 1.5s infinite;
           border-radius: 12px;
         }
-        .fade-in {
-          animation: fadeIn 0.4s ease forwards;
-        }
-        .fade-out {
+        .skeleton-fade-out {
           animation: fadeOut 0.4s ease forwards;
+          pointer-events: none;
+        }
+        .content-fade-in {
+          animation: fadeIn 0.4s ease forwards;
         }
         @media (max-width: 1200px) {
           .project-grid {
@@ -238,9 +267,6 @@ const App: React.FC = () => {
           }
           .detail-container {
             flex-direction: column !important;
-          }
-          .inspiration-board {
-            column-count: 1 !important;
           }
         }
       `}</style>
@@ -259,13 +285,13 @@ const App: React.FC = () => {
               <div
                 style={{
                   ...styles.progressBarFill,
-                  width: `${animatedProgress}%`,
-                  background: `linear-gradient(90deg, #e94560, ${getProgressColor(animatedProgress)})`,
-                  transition: 'width 0.5s ease'
+                  width: `${displayProgress}%`,
+                  background: `linear-gradient(90deg, #e94560, ${getProgressColor(displayProgress)})`,
+                  transition: 'width 0.5s ease, background 0.5s ease'
                 }}
               />
             </div>
-            <span style={styles.progressText}>{animatedProgress}%</span>
+            <span style={styles.progressText}>{displayProgress}%</span>
           </div>
         )}
       </header>
@@ -273,135 +299,144 @@ const App: React.FC = () => {
       {currentView === 'home' ? (
         <main style={styles.main}>
           <div style={styles.topBar}>
-          <h2 style={styles.pageTitle}>我的项目</h2>
-          <button
-            style={styles.createButton}
-            onClick={() => setShowCreateModal(true)}
-          >
-            + 新建项目
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="project-grid" style={styles.projectGrid}>
-            {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className="skeleton" style={styles.skeletonCard} />
-            ))}
-          </div>
-        ) : (
-          <div
-            className={`project-grid ${contentVisible ? 'fade-in' : ''}`}
-            style={{ ...styles.projectGrid, opacity: contentVisible ? 1 : 0 }}
-          >
-            {projects.map(project => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                onClick={() => handleProjectClick(project.id)}
-                onStatusChange={handleStatusChange}
-              />
-            ))}
-          </div>
-        )}
-      </main>
-    ) : (
-      currentProject && (
-        <main style={styles.detailMain}>
-          <div style={styles.detailHeader}>
-            <div>
-              <h2 style={styles.projectTitle}>{currentProject.name}</h2>
-              <p style={styles.projectDesc}>{currentProject.description}</p>
-              <p style={styles.projectDeadline}>截止日期: {currentProject.deadline}</p>
-            </div>
-            <select
-              value={currentProject.status}
-              onChange={(e) => handleStatusChange(currentProject.id, e.target.value as ProjectStatus)}
-              style={styles.statusSelect}
+            <h2 style={styles.pageTitle}>我的项目</h2>
+            <button
+              style={styles.createButton}
+              onClick={() => setShowCreateModal(true)}
             >
-              <option value="待启动">待启动</option>
-              <option value="进行中">进行中</option>
-              <option value="已延期">已延期</option>
-              <option value="已完成">已完成</option>
-            </select>
+              + 新建项目
+            </button>
           </div>
 
-          <div className="detail-container" style={styles.detailContainer}>
-            <div style={styles.leftPanel}>
-              <InspirationBoard
-                inspirations={inspirations}
-                onAddInspiration={handleAddInspiration}
-                loading={loading}
-                contentVisible={contentVisible}
-              />
-            </div>
-            <div style={styles.rightPanel}>
-              <TaskList
-                tasks={tasks}
-                onAddTask={handleAddTask}
-                onToggleTask={handleToggleTask}
-                onReorderTasks={handleReorderTasks}
-                loading={loading}
-                contentVisible={contentVisible}
-              />
-            </div>
+          <div style={{ position: 'relative' }}>
+            {loading || skeletonVisible ? (
+              <div
+                className={`project-grid skeleton ${!loading && !skeletonVisible ? '' : skeletonVisible && !loading ? 'skeleton-fade-out' : ''}`}
+                style={styles.projectGrid}
+              >
+                {[1, 2, 3, 4, 5, 6].map(i => (
+                  <div key={i} style={styles.skeletonCard} />
+                ))}
+              </div>
+            ) : null}
+
+            {!loading && contentVisible ? (
+              <div
+                className="project-grid content-fade-in"
+                style={styles.projectGrid}
+              >
+                {projects.map(project => (
+                  <ProjectCard
+                    key={project.id}
+                    project={project}
+                    onClick={() => handleProjectClick(project.id)}
+                    onStatusChange={handleStatusChange}
+                  />
+                ))}
+              </div>
+            ) : null}
           </div>
         </main>
-      )
-    )}
-
-    {showCreateModal && (
-      <div style={styles.modalOverlay}>
-        <div style={styles.modalContent}>
-          <h3 style={styles.modalTitle}>创建新项目</h3>
-          <form onSubmit={handleCreateProject} style={styles.form}>
-            <div style={styles.formGroup}>
-              <label style={styles.label}>项目名称</label>
-              <input
-                type="text"
-                value={newProject.name}
-                onChange={(e) => setNewProject(prev => ({ ...prev, name: e.target.value }))}
-                style={styles.input}
-                placeholder="请输入项目名称"
-                required
-              />
-            </div>
-            <div style={styles.formGroup}>
-              <label style={styles.label}>目标描述</label>
-              <textarea
-                value={newProject.description}
-                onChange={(e) => setNewProject(prev => ({ ...prev, description: e.target.value }))}
-                style={styles.textarea}
-                placeholder="请输入项目目标描述"
-                rows={3}
-              />
-            </div>
-            <div style={styles.formGroup}>
-              <label style={styles.label}>截止日期</label>
-              <input
-                type="date"
-                value={newProject.deadline}
-                onChange={(e) => setNewProject(prev => ({ ...prev, deadline: e.target.value }))}
-                style={styles.input}
-                required
-              />
-            </div>
-            <div style={styles.modalActions}>
-              <button
-                type="button"
-                onClick={() => setShowCreateModal(false)}
-                style={{ ...styles.button, ...styles.cancelButton }}
+      ) : (
+        currentProject && (
+          <main style={styles.detailMain}>
+            <div style={styles.detailHeader}>
+              <div>
+                <h2 style={styles.projectTitle}>{currentProject.name}</h2>
+                <p style={styles.projectDesc}>{currentProject.description}</p>
+                <p style={styles.projectDeadline}>截止日期: {currentProject.deadline}</p>
+              </div>
+              <select
+                value={currentProject.status}
+                onChange={(e) => handleStatusChange(currentProject.id, e.target.value as ProjectStatus)}
+                style={styles.statusSelect}
               >
-                取消
-              </button>
-              <button type="submit" style={styles.button}>
-                创建
-              </button>
+                <option value="待启动">待启动</option>
+                <option value="进行中">进行中</option>
+                <option value="已延期">已延期</option>
+                <option value="已完成">已完成</option>
+              </select>
             </div>
-          </form>
+
+            <div className="detail-container" style={styles.detailContainer}>
+              <div style={styles.leftPanel}>
+                <InspirationBoard
+                  inspirations={inspirations}
+                  onAddInspiration={handleAddInspiration}
+                  loading={loading}
+                  skeletonVisible={skeletonVisible}
+                  contentVisible={contentVisible}
+                />
+              </div>
+              <div style={styles.rightPanel}>
+                <TaskList
+                  tasks={tasks}
+                  onAddTask={handleAddTask}
+                  onToggleTask={handleToggleTask}
+                  onReorderTasks={handleReorderTasks}
+                  loading={loading}
+                  skeletonVisible={skeletonVisible}
+                  contentVisible={contentVisible}
+                />
+              </div>
+            </div>
+          </main>
+        )
+      )}
+
+      {showCreateModal && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalContent}>
+            <h3 style={styles.modalTitle}>创建新项目</h3>
+            <form onSubmit={handleCreateProject} style={styles.form}>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>项目名称</label>
+                <input
+                  type="text"
+                  value={newProject.name}
+                  onChange={(e) => setNewProject(prev => ({ ...prev, name: e.target.value }))}
+                  style={styles.input}
+                  placeholder="请输入项目名称"
+                  required
+                />
+              </div>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>目标描述</label>
+                <textarea
+                  value={newProject.description}
+                  onChange={(e) => setNewProject(prev => ({ ...prev, description: e.target.value }))}
+                  style={styles.textarea}
+                  placeholder="请输入项目目标描述"
+                  rows={3}
+                />
+              </div>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>截止日期</label>
+                <input
+                  type="date"
+                  value={newProject.deadline}
+                  onChange={(e) => setNewProject(prev => ({ ...prev, deadline: e.target.value }))}
+                  style={styles.input}
+                  required
+                />
+              </div>
+              <div style={styles.modalActions}>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  style={{ ...styles.button, ...styles.cancelButton }}
+                >
+                  取消
+                </button>
+                <button type="submit" style={styles.button}>
+                  创建
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
-    )}
-  </div>
+      )}
+    </div>
   );
 };
 
@@ -410,7 +445,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     minHeight: '100vh',
     backgroundColor: '#1a1a2e',
     color: '#ffffff',
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     transition: 'all 0.3s ease'
   },
   header: {

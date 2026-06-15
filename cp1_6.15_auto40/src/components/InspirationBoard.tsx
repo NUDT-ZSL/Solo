@@ -5,6 +5,7 @@ interface InspirationBoardProps {
   inspirations: Inspiration[];
   onAddInspiration: (imageUrl: string, note: string) => void;
   loading: boolean;
+  skeletonVisible: boolean;
   contentVisible: boolean;
 }
 
@@ -12,6 +13,7 @@ const InspirationBoard: React.FC<InspirationBoardProps> = ({
   inspirations,
   onAddInspiration,
   loading,
+  skeletonVisible,
   contentVisible
 }) => {
   const [showAddForm, setShowAddForm] = useState(false);
@@ -73,6 +75,37 @@ const InspirationBoard: React.FC<InspirationBoardProps> = ({
 
   return (
     <div style={styles.container}>
+      <style>{`
+        .masonry-layout {
+          column-count: 2;
+          column-gap: 16px;
+        }
+        @media (max-width: 768px) {
+          .masonry-layout {
+            column-count: 1 !important;
+          }
+        }
+        .masonry-item {
+          break-inside: avoid;
+          margin-bottom: 16px;
+        }
+        .skeleton-masonry {
+          column-count: 2;
+          column-gap: 16px;
+        }
+        @media (max-width: 768px) {
+          .skeleton-masonry {
+            column-count: 1 !important;
+          }
+        }
+        .inspiration-card:hover .inspiration-image {
+          transform: scale(1.05);
+        }
+        .inspiration-card:hover .inspiration-overlay {
+          opacity: 1;
+        }
+      `}</style>
+
       <div style={styles.header}>
         <h3 style={styles.title}>💡 灵感看板</h3>
         <button
@@ -116,55 +149,75 @@ const InspirationBoard: React.FC<InspirationBoardProps> = ({
         </div>
       )}
 
-      {loading ? (
-        <div className="inspiration-board" style={styles.masonry}>
-          {[1, 2, 3, 4, 5, 6].map(i => (
-            <div
-              key={i}
-              className="skeleton"
-              style={{ ...styles.skeletonItem, height: 200 + (i % 3) * 80 }}
-            />
-          ))}
-        </div>
-      ) : (
-        <div
-          className={`inspiration-board ${contentVisible ? 'fade-in' : ''}`}
-          style={{ ...styles.masonry, opacity: contentVisible ? 1 : 0 }}
-        >
-          {inspirations.map((inspiration, index) => (
-            <div
-              key={inspiration.id}
-              style={styles.masonryItem}
-              onMouseEnter={() => setHoveredId(inspiration.id)}
-              onMouseLeave={() => setHoveredId(null)}
-              onClick={() => openPreview(index)}
-            >
-              <div style={styles.imageWrapper}>
-                <img
-                  src={inspiration.imageUrl}
-                  alt={inspiration.note}
-                  style={{
-                    ...styles.image,
-                    transform: hoveredId === inspiration.id ? 'scale(1.05)' : 'scale(1)',
-                    height: inspiration.height
-                  }}
-                />
-                {hoveredId === inspiration.id && (
-                  <div style={styles.overlay}>
+      <div style={{ position: 'relative', minHeight: '400px' }}>
+        {loading || skeletonVisible ? (
+          <div
+            className={`skeleton-masonry ${skeletonVisible && !loading ? 'skeleton-fade-out' : ''}`}
+            style={{
+              animation: skeletonVisible && !loading ? 'fadeOut 0.4s ease forwards' : undefined
+            }}
+          >
+            {[1, 2, 3, 4, 5, 6].map(i => (
+              <div
+                key={i}
+                className="skeleton masonry-item"
+                style={{ height: 180 + (i % 3) * 100 }}
+              />
+            ))}
+          </div>
+        ) : null}
+
+        {!loading && contentVisible ? (
+          <div
+            className="masonry-layout content-fade-in"
+            style={{
+              animation: 'fadeIn 0.4s ease forwards'
+            }}
+          >
+            {inspirations.map((inspiration, index) => (
+              <div
+                key={inspiration.id}
+                className="inspiration-card masonry-item"
+                style={styles.masonryItem}
+                onMouseEnter={() => setHoveredId(inspiration.id)}
+                onMouseLeave={() => setHoveredId(null)}
+                onClick={() => openPreview(index)}
+              >
+                <div style={styles.imageWrapper}>
+                  <img
+                    src={inspiration.imageUrl}
+                    alt={inspiration.note}
+                    className="inspiration-image"
+                    style={{
+                      ...styles.image,
+                      height: inspiration.height
+                    }}
+                    loading="lazy"
+                  />
+                  <div
+                    className="inspiration-overlay"
+                    style={{
+                      ...styles.overlay,
+                      opacity: hoveredId === inspiration.id ? 1 : 0
+                    }}
+                  >
                     <p style={styles.overlayText}>
-                      {inspiration.note.length > 60
-                        ? inspiration.note.substring(0, 60) + '...'
+                      {inspiration.note.length > 80
+                        ? inspiration.note.substring(0, 80) + '...'
                         : inspiration.note
                       }
                     </p>
                   </div>
-                )}
+                </div>
+                <p style={styles.note}>{inspiration.note}</p>
+                <div style={styles.itemFooter}>
+                  <span style={styles.itemDate}>{inspiration.createdAt}</span>
+                </div>
               </div>
-              <p style={styles.note}>{inspiration.note}</p>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        ) : null}
+      </div>
 
       {previewIndex !== null && (
         <div style={styles.previewOverlay} onClick={closePreview}>
@@ -284,23 +337,16 @@ const styles: { [key: string]: React.CSSProperties } = {
     backgroundColor: 'transparent',
     border: '1px solid #3a3a5a'
   },
-  masonry: {
-    columnCount: 2,
-    columnGap: '16px',
-    transition: 'opacity 0.4s ease'
-  },
   masonryItem: {
-    breakInside: 'avoid',
-    marginBottom: '16px',
     backgroundColor: '#1a1a2e',
     borderRadius: '8px',
     overflow: 'hidden',
     cursor: 'pointer',
-    transition: 'all 0.3s ease'
-  },
-  skeletonItem: {
-    breakInside: 'avoid',
-    marginBottom: '16px'
+    transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+    ':hover': {
+      transform: 'translateY(-4px)',
+      boxShadow: '0 8px 16px rgba(0,0,0,0.4)'
+    }
   },
   imageWrapper: {
     position: 'relative',
@@ -319,26 +365,38 @@ const styles: { [key: string]: React.CSSProperties } = {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    background: 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.85) 100%)',
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'center',
     padding: '20px',
-    transition: 'all 0.3s ease'
+    transition: 'opacity 0.3s ease',
+    pointerEvents: 'none'
   },
   overlayText: {
     color: '#ffffff',
-    fontSize: '14px',
-    lineHeight: 1.5,
+    fontSize: '13px',
+    lineHeight: 1.6,
     textAlign: 'center',
-    margin: 0
+    margin: 0,
+    fontWeight: 400,
+    textShadow: '0 1px 3px rgba(0,0,0,0.5)'
   },
   note: {
-    padding: '12px',
+    padding: '12px 14px',
     margin: 0,
     fontSize: '13px',
     color: '#a0a0a0',
     lineHeight: 1.5
+  },
+  itemFooter: {
+    padding: '0 14px 12px 14px',
+    display: 'flex',
+    justifyContent: 'flex-end'
+  },
+  itemDate: {
+    fontSize: '11px',
+    color: '#505070'
   },
   previewOverlay: {
     position: 'fixed',
@@ -346,8 +404,9 @@ const styles: { [key: string]: React.CSSProperties } = {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
-    backdropFilter: 'blur(10px)',
+    backgroundColor: 'rgba(0, 0, 0, 0.92)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -356,79 +415,89 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   previewContent: {
     position: 'relative',
-    maxWidth: '90vw',
-    maxHeight: '90vh',
+    maxWidth: '92vw',
+    maxHeight: '92vh',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center'
   },
   closeBtn: {
     position: 'absolute',
-    top: '-50px',
+    top: '-56px',
     right: 0,
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     border: 'none',
     color: '#ffffff',
-    fontSize: '36px',
+    fontSize: '32px',
     cursor: 'pointer',
-    padding: '0 10px',
-    transition: 'all 0.3s ease'
+    padding: '4px 14px',
+    borderRadius: '8px',
+    transition: 'all 0.3s ease',
+    lineHeight: 1
   },
   navBtnPrev: {
     position: 'absolute',
-    left: '-60px',
+    left: '-72px',
     top: '50%',
     transform: 'translateY(-50%)',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     border: 'none',
     color: '#ffffff',
-    fontSize: '48px',
+    fontSize: '42px',
     cursor: 'pointer',
-    width: '50px',
-    height: '50px',
+    width: '56px',
+    height: '56px',
     borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    transition: 'all 0.3s ease'
+    transition: 'all 0.3s ease',
+    fontWeight: 300,
+    lineHeight: 1,
+    paddingBottom: '6px'
   },
   navBtnNext: {
     position: 'absolute',
-    right: '-60px',
+    right: '-72px',
     top: '50%',
     transform: 'translateY(-50%)',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     border: 'none',
     color: '#ffffff',
-    fontSize: '48px',
+    fontSize: '42px',
     cursor: 'pointer',
-    width: '50px',
-    height: '50px',
+    width: '56px',
+    height: '56px',
     borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    transition: 'all 0.3s ease'
+    transition: 'all 0.3s ease',
+    fontWeight: 300,
+    lineHeight: 1,
+    paddingBottom: '6px'
   },
   previewImage: {
-    maxWidth: '80vw',
-    maxHeight: '70vh',
+    maxWidth: '78vw',
+    maxHeight: '68vh',
     objectFit: 'contain',
-    borderRadius: '8px'
+    borderRadius: '12px',
+    boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
   },
   previewInfo: {
-    marginTop: '16px',
-    textAlign: 'center'
+    marginTop: '20px',
+    textAlign: 'center',
+    maxWidth: '700px'
   },
   previewNote: {
     color: '#ffffff',
     fontSize: '16px',
-    margin: '0 0 8px 0',
-    maxWidth: '600px'
+    margin: '0 0 10px 0',
+    lineHeight: 1.6
   },
   previewCounter: {
-    color: '#a0a0a0',
-    fontSize: '14px',
+    color: '#8080a0',
+    fontSize: '13px',
     margin: 0
   }
 };

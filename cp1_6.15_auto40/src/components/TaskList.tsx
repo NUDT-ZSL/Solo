@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { Task, Priority } from '../data/mockData';
 
 interface TaskListProps {
@@ -7,6 +7,7 @@ interface TaskListProps {
   onToggleTask: (taskId: string) => void;
   onReorderTasks: (taskId: string, newOrder: number) => void;
   loading: boolean;
+  skeletonVisible: boolean;
   contentVisible: boolean;
 }
 
@@ -16,12 +17,16 @@ const priorityColors: Record<Priority, string> = {
   '低': '#27ae60'
 };
 
+const TASK_CARD_HEIGHT = 84;
+const TASK_CARD_GAP = 12;
+
 const TaskList: React.FC<TaskListProps> = ({
   tasks,
   onAddTask,
   onToggleTask,
   onReorderTasks,
   loading,
+  skeletonVisible,
   contentVisible
 }) => {
   const [showAddForm, setShowAddForm] = useState(false);
@@ -31,19 +36,50 @@ const TaskList: React.FC<TaskListProps> = ({
     priority: '中' as Priority,
     estimatedHours: 1
   });
-  const [draggedTask, setDraggedTask] = useState<string | null>(null);
-  const [dragOverTask, setDragOverTask] = useState<string | null>(null);
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
   const [dragPosition, setDragPosition] = useState<'above' | 'below' | null>(null);
-  const [completingTask, setCompletingTask] = useState<string | null>(null);
+  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
+  const [reordering, setReordering] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const sortedTasks = [...tasks].sort((a, b) => {
-    if (a.completed !== b.completed) return a.completed ? 1 : -1;
-    return a.order - b.order;
-  });
+  const sortedTasks = useMemo(() => {
+    return [...tasks].sort((a, b) => {
+      if (a.completed !== b.completed) return a.completed ? 1 : -1;
+      return a.order - b.order;
+    });
+  }, [tasks]);
 
-  const uncompletedTasks = sortedTasks.filter(t => !t.completed);
-  const completedTasks = sortedTasks.filter(t => t.completed);
+  const uncompletedTasks = useMemo(() => sortedTasks.filter(t => !t.completed), [sortedTasks]);
+  const completedTasks = useMemo(() => sortedTasks.filter(t => t.completed), [sortedTasks]);
+
+  const getTaskTranslateY = useCallback((task: Task): number => {
+    if (!draggedTaskId || draggedTaskId === task.id || task.completed) return 0;
+
+    const draggedTask = uncompletedTasks.find(t => t.id === draggedTaskId);
+    if (!draggedTask || !dragOverTaskId || !dragPosition) return 0;
+
+    const draggedOrder = draggedTask.order;
+    const targetTask = uncompletedTasks.find(t => t.id === dragOverTaskId);
+    if (!targetTask) return 0;
+
+    const targetOrder = targetTask.order + (dragPosition === 'below' ? 1 : 0);
+
+    if (draggedOrder < targetOrder) {
+      if (task.order > draggedOrder && task.order < targetOrder) {
+        return -(TASK_CARD_HEIGHT + TASK_CARD_GAP);
+      }
+      if (task.order === targetOrder - 1) {
+        return -(TASK_CARD_HEIGHT + TASK_CARD_GAP);
+      }
+    } else if (draggedOrder > targetOrder) {
+      if (task.order >= targetOrder && task.order < draggedOrder) {
+        return (TASK_CARD_HEIGHT + TASK_CARD_GAP);
+      }
+    }
+
+    return 0;
+  }, [draggedTaskId, dragOverTaskId, dragPosition, uncompletedTasks]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,39 +95,42 @@ const TaskList: React.FC<TaskListProps> = ({
   };
 
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
-    setDraggedTask(taskId);
+    setDraggedTaskId(taskId);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', taskId);
+    const target = e.currentTarget as HTMLElement;
+    target.style.opacity = '0.4';
+    e.dataTransfer.setDragImage(target, 20, 20);
   };
 
   const handleDragOver = (e: React.DragEvent, taskId: string) => {
     e.preventDefault();
-    if (draggedTask === taskId) return;
+    if (draggedTaskId === taskId) return;
 
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const middleY = rect.top + rect.height / 2;
     const position = e.clientY < middleY ? 'above' : 'below';
 
-    setDragOverTask(taskId);
+    setDragOverTaskId(taskId);
     setDragPosition(position);
   };
 
   const handleDragLeave = () => {
-    setDragOverTask(null);
+    setDragOverTaskId(null);
     setDragPosition(null);
   };
 
   const handleDrop = (e: React.DragEvent, targetTaskId: string) => {
     e.preventDefault();
-    if (!draggedTask || draggedTask === targetTaskId) {
-      setDraggedTask(null);
-      setDragOverTask(null);
+    if (!draggedTaskId || draggedTaskId === targetTaskId) {
+      setDraggedTaskId(null);
+      setDragOverTaskId(null);
       setDragPosition(null);
       return;
     }
 
-    const draggedItem = tasks.find(t => t.id === draggedTask);
-    const targetItem = tasks.find(t => t.id === targetTaskId);
+    const draggedItem = uncompletedTasks.find(t => t.id === draggedTaskId);
+    const targetItem = uncompletedTasks.find(t => t.id === targetTaskId);
 
     if (!draggedItem || !targetItem) return;
 
@@ -102,24 +141,33 @@ const TaskList: React.FC<TaskListProps> = ({
       newOrder = draggedItem.order < targetItem.order ? targetItem.order - 1 : targetItem.order;
     }
 
-    onReorderTasks(draggedTask, newOrder);
-    setDraggedTask(null);
-    setDragOverTask(null);
-    setDragPosition(null);
+    setReordering(true);
+    onReorderTasks(draggedTaskId, newOrder);
+
+    setTimeout(() => {
+      setDraggedTaskId(null);
+      setDragOverTaskId(null);
+      setDragPosition(null);
+      setReordering(false);
+    }, 200);
   };
 
-  const handleDragEnd = () => {
-    setDraggedTask(null);
-    setDragOverTask(null);
+  const handleDragEnd = (e: React.DragEvent) => {
+    const target = e.currentTarget as HTMLElement;
+    target.style.opacity = '1';
+    setDraggedTaskId(null);
+    setDragOverTaskId(null);
     setDragPosition(null);
   };
 
   const handleToggle = useCallback((taskId: string, completed: boolean) => {
     if (!completed) {
-      setCompletingTask(taskId);
+      setCompletingTaskId(taskId);
       setTimeout(() => {
         onToggleTask(taskId);
-        setCompletingTask(null);
+        setTimeout(() => {
+          setCompletingTaskId(null);
+        }, 100);
       }, 300);
     } else {
       onToggleTask(taskId);
@@ -135,6 +183,43 @@ const TaskList: React.FC<TaskListProps> = ({
 
   return (
     <div style={styles.container}>
+      <style>{`
+        @keyframes bounceIn {
+          0% { transform: translateY(0); }
+          40% { transform: translateY(-8px); }
+          100% { transform: translateY(0); }
+        }
+        @keyframes slideToBottom {
+          0% { transform: scaleY(1); opacity: 1; margin-bottom: 12px; }
+          50% { transform: scaleY(0.3); opacity: 0.5; margin-bottom: 6px; }
+          100% { transform: scaleY(0); opacity: 0; margin-bottom: 0; padding: 0; height: 0; overflow: hidden; }
+        }
+        .task-card-dragging {
+          opacity: 0.4 !important;
+          transform: scale(0.98);
+          box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important;
+        }
+        .checkbox-custom:checked + .checkmark-custom::after {
+          display: block;
+        }
+        .checkmark-custom::after {
+          content: '';
+          position: absolute;
+          display: none;
+          left: 5px;
+          top: 1px;
+          width: 5px;
+          height: 10px;
+          border: solid white;
+          border-width: 0 2px 2px 0;
+          transform: rotate(45deg);
+        }
+        .checkbox-custom:checked + .checkmark-custom {
+          background-color: #27ae60;
+          border-color: #27ae60 !important;
+        }
+      `}</style>
+
       <div style={styles.header}>
         <h3 style={styles.title}>✅ 进度列表</h3>
         <button
@@ -155,7 +240,7 @@ const TaskList: React.FC<TaskListProps> = ({
             style={{
               ...styles.progressBarFill,
               width: `${progress}%`,
-              transition: 'width 0.5s ease'
+              transition: 'width 0.5s cubic-bezier(0.4, 0, 0.2, 1)'
             }}
           />
         </div>
@@ -225,65 +310,101 @@ const TaskList: React.FC<TaskListProps> = ({
       )}
 
       <div ref={listRef} style={styles.taskList}>
-        {loading ? (
-          [1, 2, 3, 4, 5].map(i => (
-            <div key={i} className="skeleton" style={styles.skeletonTask} />
-          ))
-        ) : (
-          <div style={{ opacity: contentVisible ? 1 : 0, transition: 'opacity 0.4s ease' }}>
-            {uncompletedTasks.map(task => (
-              <div
-                key={task.id}
-                draggable
-                onDragStart={(e) => handleDragStart(e, task.id)}
-                onDragOver={(e) => handleDragOver(e, task.id)}
-                onDragLeave={handleDragLeave}
-                onDrop={(e) => handleDrop(e, task.id)}
-                onDragEnd={handleDragEnd}
-                style={{
-                  ...styles.taskCard,
-                  opacity: draggedTask === task.id ? 0.4 : 1,
-                  transform: completingTask === task.id ? 'scaleY(0)' : 'scaleY(1)',
-                  transformOrigin: 'top',
-                  transition: draggedTask === task.id
-                    ? 'opacity 0.2s ease'
-                    : completingTask === task.id
-                    ? 'transform 0.3s ease, opacity 0.3s ease'
-                    : dragOverTask === task.id
-                    ? `transform 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55)`
-                    : 'all 0.3s ease',
-                  marginTop: dragOverTask === task.id && dragPosition === 'above' ? '60px' : '0',
-                  marginBottom: dragOverTask === task.id && dragPosition === 'below' ? '60px' : '0'
-                }}
-              >
-                <div style={styles.dragHandle} title="拖拽排序">⋮⋮</div>
-                <label style={styles.checkboxLabel}>
-                  <input
-                    type="checkbox"
-                    checked={task.completed}
-                    onChange={() => handleToggle(task.id, task.completed)}
-                    style={styles.checkbox}
-                  />
-                  <span style={styles.checkmark} />
-                </label>
-                <div style={styles.taskContent}>
-                  <span style={styles.taskName}>{task.name}</span>
-                  <div style={styles.taskMeta}>
-                    <span style={{
-                      ...styles.priorityTag,
-                      backgroundColor: priorityColors[task.priority]
-                    }}>
-                      {task.priority}
-                    </span>
-                    <span style={styles.assignee}>👤 {task.assignee}</span>
-                    <span style={styles.hours}>⏱ {task.estimatedHours}h</span>
-                  </div>
-                </div>
-                {draggedTask === task.id && (
-                  <div style={styles.dragGhost} />
-                )}
-              </div>
+        {loading || skeletonVisible ? (
+          <div style={{
+            animation: skeletonVisible && !loading ? 'fadeOut 0.4s ease forwards' : undefined
+          }}>
+            {[1, 2, 3, 4, 5].map(i => (
+              <div key={i} className="skeleton" style={styles.skeletonTask} />
             ))}
+          </div>
+        ) : (
+          <div style={{
+            opacity: contentVisible ? 1 : 0,
+            transition: 'opacity 0.4s ease'
+          }}>
+            {uncompletedTasks.map(task => {
+              const translateY = getTaskTranslateY(task);
+              const isCompleting = completingTaskId === task.id;
+              return (
+                <div
+                  key={task.id}
+                  className={`task-card-item ${draggedTaskId === task.id ? 'task-card-dragging' : ''}`}
+                  draggable={!isCompleting}
+                  onDragStart={(e) => handleDragStart(e, task.id)}
+                  onDragOver={(e) => handleDragOver(e, task.id)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, task.id)}
+                  onDragEnd={handleDragEnd}
+                  style={{
+                    ...styles.taskCard,
+                    transform: isCompleting
+                      ? 'scaleY(0) translateY(100px)'
+                      : `translateY(${translateY}px)`,
+                    transformOrigin: 'top center',
+                    opacity: isCompleting ? 0 : 1,
+                    transition: draggedTaskId === task.id
+                      ? 'opacity 0.1s ease'
+                      : isCompleting
+                      ? 'transform 0.3s ease, opacity 0.3s ease, margin 0.3s ease, padding 0.3s ease'
+                      : reordering
+                      ? 'transform 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55)'
+                      : draggedTaskId !== null && translateY !== 0
+                      ? `transform 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55), opacity 0.2s ease`
+                      : 'transform 0.3s ease, opacity 0.3s ease',
+                    marginBottom: isCompleting ? 0 : TASK_CARD_GAP,
+                    height: isCompleting ? 0 : 'auto',
+                    padding: isCompleting ? '0 16px' : undefined,
+                    overflow: isCompleting ? 'hidden' : 'visible',
+                    zIndex: draggedTaskId === task.id ? 10 : 1,
+                    position: draggedTaskId === task.id ? 'relative' : 'static'
+                  }}
+                >
+                  <div style={styles.dragHandle} title="拖拽排序">⋮⋮</div>
+                  <label style={styles.checkboxLabel}>
+                    <input
+                      type="checkbox"
+                      className="checkbox-custom"
+                      checked={task.completed}
+                      onChange={() => handleToggle(task.id, task.completed)}
+                      style={styles.checkbox}
+                      disabled={isCompleting}
+                    />
+                    <span
+                      className="checkmark-custom"
+                      style={{
+                        ...styles.checkmark,
+                        backgroundColor: task.completed ? '#27ae60' : 'transparent',
+                        borderColor: task.completed ? '#27ae60' : '#3a3a5a'
+                      }}
+                    />
+                  </label>
+                  <div style={styles.taskContent}>
+                    <span style={styles.taskName}>{task.name}</span>
+                    <div style={styles.taskMeta}>
+                      <span style={{
+                        ...styles.priorityTag,
+                        backgroundColor: priorityColors[task.priority]
+                      }}>
+                        {task.priority}
+                      </span>
+                      <span style={styles.assignee}>👤 {task.assignee}</span>
+                      <span style={styles.hours}>⏱ {task.estimatedHours}h</span>
+                    </div>
+                  </div>
+                  {draggedTaskId === task.id && (
+                    <div style={styles.dragGhost} />
+                  )}
+                  {dragOverTaskId === task.id && (
+                    <div style={{
+                      ...styles.dropIndicator,
+                      top: dragPosition === 'above' ? '-2px' : 'auto',
+                      bottom: dragPosition === 'below' ? '-2px' : 'auto'
+                    }} />
+                  )}
+                </div>
+              );
+            })}
 
             {completedTasks.length > 0 && (
               <div style={styles.completedSection}>
@@ -295,19 +416,26 @@ const TaskList: React.FC<TaskListProps> = ({
                     key={task.id}
                     style={{
                       ...styles.taskCard,
-                      ...styles.completedTaskCard,
-                      opacity: completingTask === task.id ? 0.5 : 1
+                      ...styles.completedTaskCard
                     }}
                   >
                     <div style={styles.dragHandle} />
                     <label style={styles.checkboxLabel}>
                       <input
                         type="checkbox"
+                        className="checkbox-custom"
                         checked={task.completed}
                         onChange={() => handleToggle(task.id, task.completed)}
                         style={styles.checkbox}
                       />
-                      <span style={styles.checkmark} />
+                      <span
+                        className="checkmark-custom"
+                        style={{
+                          ...styles.checkmark,
+                          backgroundColor: '#27ae60',
+                          borderColor: '#27ae60'
+                        }}
+                      />
                     </label>
                     <div style={styles.taskContent}>
                       <span style={{ ...styles.taskName, ...styles.completedTaskName }}>
@@ -492,11 +620,10 @@ const styles: { [key: string]: React.CSSProperties } = {
     padding: '16px',
     backgroundColor: '#1a1a2e',
     borderRadius: '8px',
-    marginBottom: '12px',
     position: 'relative',
-    transition: 'all 0.3s ease',
     cursor: 'grab',
-    userSelect: 'none'
+    userSelect: 'none',
+    willChange: 'transform, opacity'
   },
   completedTaskCard: {
     opacity: 0.5,
@@ -509,7 +636,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     padding: '2px 4px',
     lineHeight: 1,
     flexShrink: 0,
-    marginTop: '4px'
+    marginTop: '4px',
+    transition: 'color 0.2s ease'
   },
   checkboxLabel: {
     position: 'relative',
@@ -520,7 +648,9 @@ const styles: { [key: string]: React.CSSProperties } = {
   checkbox: {
     position: 'absolute',
     opacity: 0,
-    cursor: 'pointer'
+    cursor: 'pointer',
+    width: 0,
+    height: 0
   },
   checkmark: {
     display: 'inline-block',
@@ -529,7 +659,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     border: '2px solid #3a3a5a',
     borderRadius: '4px',
     position: 'relative',
-    transition: 'all 0.3s ease'
+    transition: 'all 0.25s ease'
   },
   taskContent: {
     flex: 1,
@@ -577,11 +707,22 @@ const styles: { [key: string]: React.CSSProperties } = {
     bottom: 0,
     border: '2px dashed #e94560',
     borderRadius: '8px',
-    backgroundColor: 'rgba(233, 69, 96, 0.1)',
-    pointerEvents: 'none'
+    backgroundColor: 'rgba(233, 69, 96, 0.08)',
+    pointerEvents: 'none',
+    zIndex: 5
+  },
+  dropIndicator: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: '3px',
+    backgroundColor: '#e94560',
+    borderRadius: '2px',
+    zIndex: 20,
+    boxShadow: '0 0 8px rgba(233, 69, 96, 0.6)'
   },
   completedSection: {
-    marginTop: '20px'
+    marginTop: '24px'
   },
   completedDivider: {
     display: 'flex',
