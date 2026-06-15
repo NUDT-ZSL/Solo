@@ -163,11 +163,14 @@ class App {
   }
 
   private handleStationSelect(_stationId: string): void {
+    (window as any).lastStationSelectCall = { stationId: _stationId, dispatchMode: this.dispatchMode, time: Date.now() };
     if (!this.dispatchMode) return;
 
     const { startId, endId } = this.mapManager.getDispatchSelection();
+    (window as any).dispatchSelection = { startId, endId };
 
     if (startId && endId) {
+      (window as any).startDispatchCalled = { startId, endId, time: Date.now() };
       this.startDispatch(startId, endId);
     }
   }
@@ -247,6 +250,7 @@ class App {
   }
 
   private startDispatch(fromId: string, toId: string): void {
+    (window as any).startDispatchExecuting = { fromId, toId, time: Date.now() };
     const fromStation = this.stations.find(s => s.id === fromId);
     const toStation = this.stations.find(s => s.id === toId);
 
@@ -254,6 +258,8 @@ class App {
 
     const transferCount = Math.min(DISPATCH_BIKE_COUNT, fromStation.bikeCount);
     const actualTransfer = Math.min(transferCount, toStation.capacity - toStation.bikeCount);
+
+    (window as any).dispatchTransfer = { transferCount, actualTransfer, fromBikes: fromStation.bikeCount, toBikes: toStation.bikeCount };
 
     if (actualTransfer <= 0) {
       this.mapManager.clearDispatchSelection();
@@ -263,6 +269,7 @@ class App {
     const task = createDispatchTask(fromId, toId, actualTransfer);
     task.status = 'moving';
     this.dispatchTasks.push(task);
+    (window as any).dispatchTaskCreated = task;
 
     this.stations = this.stations.map(s => {
       if (s.id === fromId) {
@@ -275,7 +282,9 @@ class App {
     this.mapManager.clearDispatchSelection();
     this.updateStatsPanel();
 
+    (window as any).beforeAnimCall = Date.now();
     this.mapManager.startDispatchAnimation(task, this.stations, () => {
+      (window as any).dispatchAnimComplete = Date.now();
       this.completeDispatch(task);
     });
   }
@@ -346,6 +355,8 @@ class App {
     const startTime = performance.now();
     const diff = to - from;
 
+    (window as any)[`anim_${elementId}_start`] = { from, to, startTime };
+
     const step = (currentTime: number) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
@@ -358,6 +369,7 @@ class App {
         const id = requestAnimationFrame(step);
         this.animationFrameIds.set(elementId, id);
       } else {
+        (window as any)[`anim_${elementId}_end`] = { to, endTime: performance.now() };
         this.animationFrameIds.delete(elementId);
       }
     };

@@ -80,14 +80,11 @@ export class MapManager {
     const marker = L.marker([station.lat, station.lng], { icon });
     marker.addTo(this.map);
 
-    marker.on('click', () => {
-      this.handleMarkerClick(station.id);
-    });
-
     this.markers.set(station.id, marker);
   }
 
   private handleMarkerClick(stationId: string): void {
+    (window as any).lastMarkerClick = { stationId, dispatchMode: this.dispatchMode, time: Date.now() };
     if (this.dispatchMode) {
       this.handleDispatchSelect(stationId);
     } else {
@@ -96,13 +93,16 @@ export class MapManager {
   }
 
   private handleDispatchSelect(stationId: string): void {
+    (window as any).lastDispatchSelect = { stationId, selectedStartId: this.selectedStartId, selectedEndId: this.selectedEndId, time: Date.now() };
     if (!this.selectedStartId) {
       this.selectedStartId = stationId;
       this.updateMarkerDispatchClass(stationId, 'dispatch-start');
+      (window as any).dispatchStartSelected = stationId;
       this.callbacks.onStationSelect?.(stationId);
     } else if (!this.selectedEndId && stationId !== this.selectedStartId) {
       this.selectedEndId = stationId;
       this.updateMarkerDispatchClass(stationId, 'dispatch-end');
+      (window as any).dispatchEndSelected = stationId;
       this.callbacks.onStationSelect?.(stationId);
     }
   }
@@ -141,6 +141,7 @@ export class MapManager {
 
   setDispatchMode(enabled: boolean): void {
     this.dispatchMode = enabled;
+    (window as any).mapDispatchMode = enabled;
     if (!enabled) {
       this.clearDispatchSelection();
     }
@@ -226,6 +227,8 @@ export class MapManager {
 
     requestAnimationFrame(() => {
       this.heatmapPane.style.opacity = show ? '1' : '0';
+      (window as any).heatmapOpacityStart = this.heatmapPane.style.opacity;
+      (window as any).heatmapToggleTime = Date.now();
     });
 
     if (!show) {
@@ -290,6 +293,8 @@ export class MapManager {
     const duration = task.duration;
     const startTime = performance.now();
 
+    const truckEl = truckMarker.getElement();
+
     const animateFrame = (currentTime: number) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
@@ -299,6 +304,11 @@ export class MapManager {
       const currentLng = startLng + (endLng - startLng) * eased;
 
       truckMarker.setLatLng([currentLat, currentLng]);
+
+      if (truckEl) {
+        const point = this.map.latLngToContainerPoint([currentLat, currentLng]);
+        truckEl.style.transform = `translate3d(${point.x - 18}px, ${point.y - 18}px, 0px)`;
+      }
 
       if (progress < 1) {
         const animId = requestAnimationFrame(animateFrame);
