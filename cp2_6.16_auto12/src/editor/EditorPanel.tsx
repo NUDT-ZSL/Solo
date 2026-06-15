@@ -46,6 +46,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({ onPlay }) => {
   const [isDraggingEnemy, setIsDraggingEnemy] = useState(false);
   const [isDraggingControl, setIsDraggingControl] = useState<number | null>(null);
   const [engineStatus, setEngineStatus] = useState<PlayableStatus>('ready');
+  const [timelineTime, setTimelineTime] = useState<number>(0);
 
   useEffect(() => {
     setPlayableCallback((status) => {
@@ -178,6 +179,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({ onPlay }) => {
           if (timelineTimeRef.current > maxTime) {
             timelineTimeRef.current = 0;
           }
+          setTimelineTime(timelineTimeRef.current);
         }
         rendererRef.current.render(enemies, timelineTimeRef.current);
       }
@@ -192,8 +194,13 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({ onPlay }) => {
     };
   }, [enemies]);
 
-  const handleDragStart = (type: EnemyType) => {
+  const handleDragStart = (e: React.DragEvent, type: EnemyType) => {
+    e.dataTransfer.setData('enemyType', type);
     setDraggedTemplate(type);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedTemplate(null);
   };
 
   const handleCanvasDragOver = (e: React.DragEvent) => {
@@ -358,7 +365,9 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({ onPlay }) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const maxTime = Math.max(...enemies.map(e => e.spawnTime + e.path.duration), 10);
-    timelineTimeRef.current = (x / rect.width) * maxTime;
+    const newTime = (x / rect.width) * maxTime;
+    timelineTimeRef.current = newTime;
+    setTimelineTime(newTime);
   };
 
   const toggleTimelinePlay = () => {
@@ -398,16 +407,18 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({ onPlay }) => {
           <div
             key={template.type}
             draggable
-            onDragStart={() => handleDragStart(template.type)}
+            onDragStart={(e) => handleDragStart(e, template.type)}
+            onDragEnd={handleDragEnd}
             style={{
               background: '#3d3d3d',
               borderRadius: '6px',
               padding: '12px',
               cursor: 'grab',
-              transition: 'transform 0.2s, background 0.2s',
+              transition: 'transform 0.2s, background 0.2s, opacity 0.2s',
               display: 'flex',
               alignItems: 'center',
-              gap: '12px'
+              gap: '12px',
+              opacity: draggedTemplate === template.type ? 0.5 : 1
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = '#4d4d4d';
@@ -700,7 +711,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({ onPlay }) => {
               {isPlayingTimelineRef.current ? '⏸ 暂停' : '▶ 播放'}
             </button>
             <span style={{ color: '#888', fontSize: '12px' }}>
-              时间: {timelineTimeRef.current.toFixed(1)}s
+              时间: {timelineTime.toFixed(1)}s
             </span>
           </div>
 
@@ -771,7 +782,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({ onPlay }) => {
 
             <div style={{
               position: 'absolute',
-              left: `${(timelineTimeRef.current / maxTimelineTime) * 100}%`,
+              left: `${(timelineTime / maxTimelineTime) * 100}%`,
               top: 0,
               bottom: 0,
               width: '2px',

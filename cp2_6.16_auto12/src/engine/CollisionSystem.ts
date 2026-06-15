@@ -69,6 +69,9 @@ export class CollisionSystem {
     this.clear();
     const events: CollisionEvent[] = [];
 
+    const enemyIds = new Set(enemies.map(e => e.id));
+    const enemyBulletIds = new Set(enemyBullets.map(b => b.id));
+
     enemies.forEach(e => this.insert(e));
     enemyBullets.forEach(b => this.insert(b));
 
@@ -78,7 +81,7 @@ export class CollisionSystem {
         const cell = this.grid.get(key);
         if (!cell) return;
         cell.forEach(obj => {
-          if (enemies.some(e => e.id === obj.id) && this.checkCircleCollision(bullet, obj)) {
+          if (enemyIds.has(obj.id) && this.checkCircleCollision(bullet, obj)) {
             events.push({ aId: bullet.id, bId: obj.id, aType: 'playerBullet', bType: 'enemy' });
           }
         });
@@ -90,10 +93,10 @@ export class CollisionSystem {
       const cell = this.grid.get(key);
       if (!cell) return;
       cell.forEach(obj => {
-        if (enemyBullets.some(b => b.id === obj.id) && this.checkCircleCollision(player, obj)) {
+        if (enemyBulletIds.has(obj.id) && this.checkCircleCollision(player, obj)) {
           events.push({ aId: player.id, bId: obj.id, aType: 'player', bType: 'enemyBullet' });
         }
-        if (enemies.some(e => e.id === obj.id) && this.checkCircleCollision(player, obj)) {
+        if (enemyIds.has(obj.id) && this.checkCircleCollision(player, obj)) {
           events.push({ aId: player.id, bId: obj.id, aType: 'player', bType: 'enemy' });
         }
       });

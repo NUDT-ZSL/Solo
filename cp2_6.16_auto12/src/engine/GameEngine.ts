@@ -44,6 +44,7 @@ interface Bullet {
   type: 'player' | 'enemy';
   shape: 'circle' | 'diamond' | 'star';
   trail: Position[];
+  isHoming: boolean;
 }
 
 interface Particle {
@@ -297,9 +298,22 @@ export class GameEngine {
     if (this.keys.has('KeyA')) this.player.targetVx = -speed;
     if (this.keys.has('KeyD')) this.player.targetVx = speed;
 
-    const accel = 10;
-    this.player.vx += (this.player.targetVx - this.player.vx) * accel * dt;
-    this.player.vy += (this.player.targetVy - this.player.vy) * accel * dt;
+    const accel = 2400;
+    const dvx = this.player.targetVx - this.player.vx;
+    const dvy = this.player.targetVy - this.player.vy;
+    const maxDelta = accel * dt;
+
+    if (Math.abs(dvx) <= maxDelta) {
+      this.player.vx = this.player.targetVx;
+    } else {
+      this.player.vx += Math.sign(dvx) * maxDelta;
+    }
+
+    if (Math.abs(dvy) <= maxDelta) {
+      this.player.vy = this.player.targetVy;
+    } else {
+      this.player.vy += Math.sign(dvy) * maxDelta;
+    }
 
     this.player.x += this.player.vx * dt;
     this.player.y += this.player.vy * dt;
@@ -331,7 +345,8 @@ export class GameEngine {
         color: '#ffeb3b',
         type: 'player',
         shape: 'circle',
-        trail: []
+        trail: [],
+        isHoming: false
       });
     }
   }
@@ -391,7 +406,8 @@ export class GameEngine {
         color: pattern.bulletColor,
         type: 'enemy',
         shape: 'diamond',
-        trail: []
+        trail: [],
+        isHoming: true
       });
     } else if (pattern.type === 'fan') {
       const count = pattern.count || 6;
@@ -409,7 +425,8 @@ export class GameEngine {
           color: pattern.bulletColor,
           type: 'enemy',
           shape: 'circle',
-          trail: []
+          trail: [],
+          isHoming: false
         });
       }
     } else if (pattern.type === 'spiral') {
@@ -426,7 +443,8 @@ export class GameEngine {
           color: pattern.bulletColor,
           type: 'enemy',
           shape: 'star',
-          trail: []
+          trail: [],
+          isHoming: false
         });
       }
       enemy.spiralAngle += dt * 2;
@@ -437,6 +455,24 @@ export class GameEngine {
     const updateBullet = (bullet: Bullet) => {
       bullet.trail.unshift({ x: bullet.x, y: bullet.y });
       if (bullet.trail.length > 6) bullet.trail.pop();
+
+      if (bullet.isHoming) {
+        const speed = Math.sqrt(bullet.vx * bullet.vx + bullet.vy * bullet.vy);
+        const currentAngle = Math.atan2(bullet.vy, bullet.vx);
+        const targetAngle = Math.atan2(this.player.y - bullet.y, this.player.x - bullet.x);
+
+        let angleDiff = targetAngle - currentAngle;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+        const turnSpeed = 3;
+        const maxTurn = turnSpeed * dt;
+        const t = Math.max(-1, Math.min(1, angleDiff / maxTurn));
+        const newAngle = currentAngle + t * maxTurn;
+
+        bullet.vx = Math.cos(newAngle) * speed;
+        bullet.vy = Math.sin(newAngle) * speed;
+      }
 
       bullet.x += bullet.vx * dt;
       bullet.y += bullet.vy * dt;
