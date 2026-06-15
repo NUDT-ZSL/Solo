@@ -1,0 +1,510 @@
+.app {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: #121212;
+  color: #e0e0e0;
+}
+
+.upload-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.app-title {
+  font-size: 36px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #ffb347, #ff5e62);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0;
+}
+
+.app-subtitle {
+  font-size: 16px;
+  color: #888;
+  margin: 0;
+}
+
+.upload-area {
+  width: 320px;
+  height: 200px;
+  border: 2px dashed #ffb347;
+  border-radius: 16px;
+  background: #fff3e0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.upload-area:hover {
+  border-color: #ffa726;
+  background: #ffe8cc;
+}
+
+.upload-area--dragging {
+  border-color: #ff9966;
+  background: #ffe0cc;
+  transform: scale(1.02);
+}
+
+.upload-area__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-area__text {
+  color: #5d4037;
+  font-size: 14px;
+  font-weight: 500;
+  margin: 0;
+}
+
+.upload-area__hint {
+  color: #8d6e63;
+  font-size: 12px;
+  margin: 0;
+}
+
+.upload-area__input {
+  display: none;
+}
+
+.upload-area__thumbnail {
+  max-width: 160px;
+  max-height: 140px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.upload-info {
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.upload-info__file {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: #b0b0b0;
+}
+
+.upload-info__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+
+.upload-info__size {
+  flex-shrink: 0;
+  color: #888;
+}
+
+.upload-progress {
+  width: 60%;
+  height: 4px;
+  border-radius: 2px;
+  background: #333;
+  overflow: hidden;
+  margin: 0 auto;
+}
+
+.upload-progress__bar {
+  height: 100%;
+  background: linear-gradient(90deg, #ff9966, #ff5e62);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.scratch-page {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.control-panel {
+  width: 240px;
+  background: #2b2b2b;
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.panel-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin: 0 0 8px 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #3a3a3a;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.control-label {
+  font-size: 14px;
+  color: #b0b0b0;
+}
+
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: #444;
+  outline: none;
+  cursor: pointer;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffb347;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.slider::-webkit-slider-thumb:hover {
+  background: #ffa726;
+}
+
+.slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffb347;
+  cursor: pointer;
+  border: none;
+  transition: background 0.2s ease;
+}
+
+.slider::-moz-range-thumb:hover {
+  background: #ffa726;
+}
+
+.btn {
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #fff;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn:active {
+  transform: scale(0.96);
+}
+
+.btn--danger {
+  background: #ef5350;
+}
+
+.btn--danger:hover {
+  background: #d32f2f;
+}
+
+.btn--success {
+  background: #66bb6a;
+}
+
+.btn--success:hover {
+  background: #43a047;
+}
+
+.btn--primary {
+  background: linear-gradient(135deg, #ffb347, #ff9966);
+}
+
+.btn--primary:hover {
+  background: linear-gradient(135deg, #ffa726, #ff8a65);
+}
+
+.btn--outline {
+  background: transparent;
+  border: 1px solid #ffb347;
+  color: #ffb347;
+}
+
+.btn--outline:hover {
+  background: rgba(255, 179, 71, 0.1);
+}
+
+.progress-ring-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid #3a3a3a;
+}
+
+.progress-ring {
+  position: relative;
+  width: 48px;
+  height: 48px;
+}
+
+.progress-ring svg {
+  transform: rotate(-90deg);
+}
+
+.progress-ring__text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.progress-ring__label {
+  font-size: 12px;
+  color: #888;
+  margin: 0;
+}
+
+.canvas-wrapper {
+  position: relative;
+  width: 600px;
+  height: 600px;
+  background: #1e1e1e;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scratch-canvas-container {
+  position: relative;
+  width: 600px;
+  height: 600px;
+}
+
+.scratch-canvas {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.scratch-canvas--cover {
+  cursor: grab;
+  touch-action: none;
+}
+
+.scratch-canvas--cover:active {
+  cursor: grabbing;
+}
+
+.scratch-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #888;
+  font-size: 16px;
+}
+
+.celebration-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.celebration-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.result-card {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 320px;
+  height: 160px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  z-index: 20;
+  animation: slideUp 0.4s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.result-card__title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+  text-align: center;
+}
+
+.result-card__message {
+  font-size: 13px;
+  color: #e0e0e0;
+  text-align: center;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.result-card__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.result-card__actions .btn {
+  flex: 1;
+  font-size: 13px;
+  padding: 8px 12px;
+}
+
+@media (max-width: 768px) {
+  .scratch-page {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .control-panel {
+    width: 100%;
+    max-width: 600px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 16px;
+  }
+
+  .panel-title {
+    width: 100%;
+    margin: 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #3a3a3a;
+  }
+
+  .control-group {
+    flex: 1;
+    min-width: 150px;
+  }
+
+  .btn {
+    flex: 1;
+    min-width: 100px;
+  }
+
+  .progress-ring-wrapper {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+    border-left: 1px solid #3a3a3a;
+    padding-left: 16px;
+    margin-left: 8px;
+  }
+
+  .canvas-wrapper {
+    width: 100%;
+    max-width: 600px;
+    height: auto;
+    aspect-ratio: 1;
+  }
+
+  .scratch-canvas-container {
+    width: 100%;
+    height: 100%;
+  }
+
+  .scratch-canvas {
+    width: 100%;
+    height: 100%;
+  }
+
+  .result-card {
+    width: 90%;
+    max-width: 320px;
+    height: auto;
+    min-height: 140px;
+    bottom: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-title {
+    font-size: 28px;
+  }
+
+  .upload-area {
+    width: 100%;
+    max-width: 320px;
+  }
+
+  .upload-info {
+    width: 100%;
+    max-width: 320px;
+  }
+
+  .control-panel {
+    gap: 12px;
+  }
+
+  .btn {
+    font-size: 13px;
+    padding: 8px 12px;
+  }
+}
