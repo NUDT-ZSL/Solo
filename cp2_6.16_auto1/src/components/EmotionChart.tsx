@@ -69,6 +69,7 @@ export default function EmotionChart() {
       backgroundColor: `${EMOTION_CONFIG[stat.emotion].color}20`,
       borderWidth: 2,
       pointRadius: 6,
+      pointHoverRadius: 8,
       pointBackgroundColor: EMOTION_CONFIG[stat.emotion].color,
       pointBorderColor: '#fff',
       pointBorderWidth: 2,
@@ -109,8 +110,9 @@ export default function EmotionChart() {
           duration: 200,
         },
         callbacks: {
-          label: function (context: { parsed: { y: number } }) {
+          label: function (context: { parsed: { y: number | null } }) {
             const value = context.parsed.y;
+            if (value === null) return '';
             const emotionEntry = Object.entries(EMOTION_CONFIG).find(
               ([, config]) => config.level === value
             );
@@ -201,8 +203,9 @@ export default function EmotionChart() {
           duration: 200,
         },
         callbacks: {
-          label: function (context: { parsed: { y: number } }) {
-            return `阅读 ${context.parsed.y} 分钟`;
+          label: function (context: { parsed: { y: number | null } }) {
+            const value = context.parsed.y;
+            return value !== null ? `阅读 ${value} 分钟` : '';
           },
         },
       },

@@ -17,13 +17,13 @@ export const EMOTION_CONFIG: Record<EmotionType, EmotionConfig> = {
     emoji: '😐',
     label: '无聊',
     level: 3,
-    color: '#ff9800',
+    color: '#9e9e9e',
   },
   irritated: {
     emoji: '😠',
     label: '烦躁',
     level: 2,
-    color: '#f44336',
+    color: '#ff9800',
   },
   crying: {
     emoji: '😢',
