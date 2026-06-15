@@ -120,6 +120,46 @@ export class GridManager {
   public render(): void {
     this.drawGrid();
     this.drawBricks();
+    this.drawZoomIndicator();
+  }
+
+  private drawZoomIndicator(): void {
+    const ctx = this.ctx;
+    const percent = Math.round(this.scale * 100);
+    const text = `${percent}%`;
+    const fontSize = 12;
+    const paddingX = 8;
+    const paddingY = 4;
+
+    ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
+    const textMetrics = ctx.measureText(text);
+    const textWidth = textMetrics.width;
+    const boxWidth = textWidth + paddingX * 2;
+    const boxHeight = fontSize + paddingY * 2;
+    const boxX = 10;
+    const boxY = 10;
+    const radius = 4;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.beginPath();
+    ctx.moveTo(boxX + radius, boxY);
+    ctx.lineTo(boxX + boxWidth - radius, boxY);
+    ctx.quadraticCurveTo(boxX + boxWidth, boxY, boxX + boxWidth, boxY + radius);
+    ctx.lineTo(boxX + boxWidth, boxY + boxHeight - radius);
+    ctx.quadraticCurveTo(boxX + boxWidth, boxY + boxHeight, boxX + boxWidth - radius, boxY + boxHeight);
+    ctx.lineTo(boxX + radius, boxY + boxHeight);
+    ctx.quadraticCurveTo(boxX, boxY + boxHeight, boxX, boxY + boxHeight - radius);
+    ctx.lineTo(boxX, boxY + radius);
+    ctx.quadraticCurveTo(boxX, boxY, boxX + radius, boxY);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(102, 102, 102, 0.9)';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, boxX + paddingX, boxY + boxHeight / 2);
+    ctx.restore();
   }
 
   public getGridPosition(clientX: number, clientY: number): { row: number; col: number } {
@@ -133,11 +173,63 @@ export class GridManager {
     return { row, col };
   }
 
+  public getGridPositionPixel(clientX: number, clientY: number): { pixelX: number; pixelY: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    const pixelX = (clientX - rect.left) / this.scale;
+    const pixelY = (clientY - rect.top) / this.scale;
+    return { pixelX, pixelY };
+  }
+
   public snapToGrid(row: number, col: number): { row: number; col: number } {
     return {
       row: Math.max(0, Math.min(this.rows - 1, Math.round(row))),
       col: Math.max(0, Math.min(this.cols - 1, Math.round(col)))
     };
+  }
+
+  public snapToGridByPixel(clientX: number, clientY: number, brickWidth: number, brickHeight: number): { row: number; col: number; canPlace: boolean } {
+    const rect = this.canvas.getBoundingClientRect();
+    const pixelX = (clientX - rect.left) / this.scale;
+    const pixelY = (clientY - rect.top) / this.scale;
+
+    const brickPixelWidth = brickWidth * this.cellSize;
+    const brickPixelHeight = brickHeight * this.cellSize;
+    const centerOffsetX = brickPixelWidth / 2;
+    const centerOffsetY = brickPixelHeight / 2;
+
+    const brickLeftPixel = pixelX - centerOffsetX;
+    const brickTopPixel = pixelY - centerOffsetY;
+
+    const rawCol = brickLeftPixel / this.cellSize;
+    const rawRow = brickTopPixel / this.cellSize;
+
+    const snapThresholdPx = this.snapDistance / this.scale;
+    const snapThresholdCells = snapThresholdPx / this.cellSize;
+
+    const roundedCol = Math.round(rawCol);
+    const roundedRow = Math.round(rawRow);
+    const diffCol = Math.abs(rawCol - roundedCol);
+    const diffRow = Math.abs(rawRow - roundedRow);
+
+    let finalCol: number;
+    let finalRow: number;
+
+    if (diffCol <= snapThresholdCells) {
+      finalCol = roundedCol;
+    } else {
+      finalCol = Math.floor(rawCol);
+    }
+
+    if (diffRow <= snapThresholdCells) {
+      finalRow = roundedRow;
+    } else {
+      finalRow = Math.floor(rawRow);
+    }
+
+    const adjustedCol = Math.max(0, Math.min(this.cols - brickWidth, finalCol));
+    const adjustedRow = Math.max(0, Math.min(this.rows - brickHeight, finalRow));
+
+    return { row: adjustedRow, col: adjustedCol, canPlace: true };
   }
 
   public isInBounds(row: number, col: number, width: number, height: number): boolean {
@@ -328,6 +420,14 @@ export class GridManager {
     this.canvas.style.transform = `translate(${this.offsetX}px, ${this.offsetY}px) scale(${this.scale})`;
   }
 
+  public startDeleteAnimation(brickId: string): boolean {
+    const brick = this.getBrickById(brickId);
+    if (!brick) return false;
+    this.freeCells(brick);
+    brick.startDeleteAnimation();
+    return true;
+  }
+
   public updateAnimations(deltaTime: number): void {
     const bricksToRemove: string[] = [];
 
@@ -341,7 +441,10 @@ export class GridManager {
     }
 
     for (const brickId of bricksToRemove) {
-      this.removeBrick(brickId);
+      const index = this.bricks.findIndex(b => b.id === brickId);
+      if (index !== -1) {
+        this.bricks.splice(index, 1);
+      }
     }
   }
 

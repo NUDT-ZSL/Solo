@@ -12,7 +12,6 @@ class LegoBuilderApp {
   private brickLibrary: BrickLibrary;
   private canvas: HTMLCanvasElement;
   private canvasContainer: HTMLElement;
-  private zoomIndicator: HTMLElement;
 
   private isDraggingFromLibrary: boolean = false;
   private currentDragType: BrickType | null = null;
@@ -42,7 +41,6 @@ class LegoBuilderApp {
   constructor() {
     this.canvas = document.getElementById('mainCanvas') as HTMLCanvasElement;
     this.canvasContainer = document.getElementById('canvasContainer') as HTMLElement;
-    this.zoomIndicator = document.getElementById('zoomIndicator') as HTMLElement;
 
     this.gridManager = new GridManager(this.canvas);
     this.brickLibrary = new BrickLibrary(
@@ -56,7 +54,6 @@ class LegoBuilderApp {
     this.bindEvents();
     this.saveState();
     this.startAnimationLoop();
-    this.updateZoomIndicator();
     this.updateButtonStates();
   }
 
@@ -131,7 +128,6 @@ class LegoBuilderApp {
       const delta = e.deltaY > 0 ? -this.gridManager.scaleStep : this.gridManager.scaleStep;
       const newScale = this.gridManager.scale + delta;
       this.gridManager.setScale(newScale, e.clientX, e.clientY);
-      this.updateZoomIndicator();
     }, { passive: false });
 
     document.addEventListener('keydown', (e) => {
@@ -156,11 +152,32 @@ class LegoBuilderApp {
       this.gridManager.centerCanvas();
     });
 
-    document.getElementById('undoBtn')?.addEventListener('click', () => {
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+
+    undoBtn?.addEventListener('click', () => {
+      const icon = undoBtn.querySelector('.btn-icon') as HTMLElement;
+      if (icon) {
+        icon.style.transition = 'none';
+        icon.style.transform = 'rotate(0deg)';
+        requestAnimationFrame(() => {
+          icon.style.transition = 'transform 0.3s ease';
+          icon.style.transform = 'rotate(-180deg)';
+        });
+      }
       this.undo();
     });
 
-    document.getElementById('redoBtn')?.addEventListener('click', () => {
+    redoBtn?.addEventListener('click', () => {
+      const icon = redoBtn.querySelector('.btn-icon') as HTMLElement;
+      if (icon) {
+        icon.style.transition = 'none';
+        icon.style.transform = 'rotate(0deg)';
+        requestAnimationFrame(() => {
+          icon.style.transition = 'transform 0.3s ease';
+          icon.style.transform = 'rotate(180deg)';
+        });
+      }
       this.redo();
     });
 
@@ -245,14 +262,13 @@ class LegoBuilderApp {
     if (!brick) return;
 
     const type = brick.type;
-    brick.startDeleteAnimation();
+    this.gridManager.startDeleteAnimation(brickId);
+    this.selectedBrickId = null;
 
     setTimeout(() => {
-      this.gridManager.removeBrick(brickId);
       this.brickLibrary.incrementCount(type);
       this.saveState();
-      this.selectedBrickId = null;
-    }, 300);
+    }, 350);
   }
 
   private rotateSelectedBrick(): void {
@@ -266,8 +282,13 @@ class LegoBuilderApp {
 
   private updatePreview(): void {
     if (this.currentDragType && this.isMouseOverCanvas) {
-      const { row, col } = this.gridManager.getGridPosition(this.mouseX, this.mouseY);
-      const snapped = this.gridManager.snapToGrid(row, col);
+      const config = BRICK_CONFIGS[this.currentDragType];
+      const snapped = this.gridManager.snapToGridByPixel(
+        this.mouseX,
+        this.mouseY,
+        config.width,
+        config.height
+      );
 
       this.previewRow = snapped.row;
       this.previewCol = snapped.col;
@@ -350,11 +371,6 @@ class LegoBuilderApp {
     if (redoBtn) {
       redoBtn.disabled = this.historyIndex >= this.history.length - 1;
     }
-  }
-
-  private updateZoomIndicator(): void {
-    const percent = Math.round(this.gridManager.scale * 100);
-    this.zoomIndicator.textContent = `${percent}%`;
   }
 
   private showClearConfirm(): void {
