@@ -19,7 +19,6 @@ import {
 } from './types';
 
 class Game {
-  private canvas: HTMLCanvasElement;
   private levelGenerator: LevelGenerator;
   private effectManager: EffectManager;
   private renderer: Renderer;
@@ -34,7 +33,6 @@ class Game {
     const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
     if (!canvas) throw new Error('Canvas element not found');
 
-    this.canvas = canvas;
     this.levelGenerator = new LevelGenerator();
     this.effectManager = new EffectManager();
     this.renderer = new Renderer(canvas);
@@ -310,5 +308,6 @@ class Game {
 
 window.addEventListener('DOMContentLoaded', () => {
   const game = new Game();
+  (window as unknown as { __game: Game }).__game = game;
   game.start();
 });

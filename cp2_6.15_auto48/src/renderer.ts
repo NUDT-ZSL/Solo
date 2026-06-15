@@ -198,7 +198,6 @@ export class Renderer {
   }
 
   private drawStars(stars: Star[]): void {
-    const ctx = this.ctx;
     for (const star of stars) {
       if (star.collected) continue;
       this.drawStarShape(star.x + star.size / 2, star.y + star.size / 2, star.size / 2, '#ffcc00', '#ff9900');

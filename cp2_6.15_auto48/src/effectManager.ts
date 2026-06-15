@@ -2,7 +2,6 @@ import {
   Particle,
   ScreenFlash,
   PARTICLE_COLORS,
-  ParticleColor,
   PARTICLE_COUNT,
   PARTICLE_LIFE,
   HIT_FLASH_DURATION,
