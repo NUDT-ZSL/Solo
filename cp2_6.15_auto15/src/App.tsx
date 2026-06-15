@@ -31,6 +31,45 @@ const App: React.FC = () => {
 
   return (
     <div style={styles.container}>
+      <style>{`
+        input[type="range"]::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 14px;
+          height: 14px;
+          background: linear-gradient(135deg, #d0d8e8 0%, #a8b0c0 100%);
+          border-radius: 50%;
+          cursor: pointer;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+          transition: all 0.2s ease;
+          border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+          transform: scale(1.15);
+          box-shadow: 0 3px 12px rgba(208, 216, 232, 0.5);
+          background: linear-gradient(135deg, #ffffff 0%, #d0d8e8 100%);
+        }
+        input[type="range"]::-moz-range-thumb {
+          width: 14px;
+          height: 14px;
+          background: linear-gradient(135deg, #d0d8e8 0%, #a8b0c0 100%);
+          border-radius: 50%;
+          cursor: pointer;
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+          transition: all 0.2s ease;
+        }
+        input[type="range"]::-moz-range-thumb:hover {
+          transform: scale(1.15);
+          background: linear-gradient(135deg, #ffffff 0%, #d0d8e8 100%);
+        }
+        input[type="range"]:hover {
+          filter: brightness(1.3) !important;
+        }
+        button:hover {
+          filter: brightness(1.2) !important;
+        }
+      `}</style>
       <Canvas
         camera={{ position: [0, 3, 15], fov: 60, near: 0.1, far: 1000 }}
         gl={{ antialias: true, alpha: false }}
@@ -143,15 +182,14 @@ const styles: Record<string, React.CSSProperties> = {
     left: 24,
     width: 260,
     padding: 20,
-    background: 'rgba(255, 255, 255, 0.1)',
-    backdropFilter: 'blur(12px)',
-    WebkitBackdropFilter: 'blur(12px)',
-    border: '1px solid rgba(255, 255, 255, 0.18)',
+    background: 'linear-gradient(135deg, rgba(13, 13, 43, 0.85) 0%, rgba(20, 20, 60, 0.75) 50%, rgba(13, 13, 43, 0.85) 100%)',
+    border: '1px solid rgba(255, 255, 255, 0.25)',
     borderRadius: 12,
     color: '#d0d8e8',
     fontFamily: '"Segoe UI", system-ui, sans-serif',
     transition: 'all 0.3s ease',
     zIndex: 10,
+    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
   },
   panelCollapsed: {
     width: 44,
@@ -161,6 +199,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    background: 'linear-gradient(135deg, rgba(13, 13, 43, 0.9) 0%, rgba(20, 20, 60, 0.85) 100%)',
   },
   panelHeader: {
     display: 'flex',
@@ -168,7 +207,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     marginBottom: 20,
     paddingBottom: 12,
-    borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
+    borderBottom: '1px solid rgba(255, 255, 255, 0.15)',
   },
   panelTitle: {
     fontSize: 14,
@@ -179,8 +218,8 @@ const styles: Record<string, React.CSSProperties> = {
   collapseBtn: {
     width: 28,
     height: 28,
-    background: 'rgba(255, 255, 255, 0.08)',
-    border: '1px solid rgba(255, 255, 255, 0.15)',
+    background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%)',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
     borderRadius: 6,
     color: '#d0d8e8',
     fontSize: 16,
@@ -193,10 +232,8 @@ const styles: Record<string, React.CSSProperties> = {
   expandBtn: {
     width: 44,
     height: 44,
-    background: 'rgba(255, 255, 255, 0.1)',
-    backdropFilter: 'blur(12px)',
-    WebkitBackdropFilter: 'blur(12px)',
-    border: '1px solid rgba(255, 255, 255, 0.18)',
+    background: 'linear-gradient(135deg, rgba(13, 13, 43, 0.9) 0%, rgba(20, 20, 60, 0.85) 100%)',
+    border: '1px solid rgba(255, 255, 255, 0.25)',
     borderRadius: '50%',
     color: '#d0d8e8',
     fontSize: 18,
@@ -205,6 +242,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     transition: 'all 0.2s ease',
+    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
   },
   controlGroup: {
     marginBottom: 18,
@@ -226,7 +264,7 @@ const styles: Record<string, React.CSSProperties> = {
     height: 4,
     WebkitAppearance: 'none',
     appearance: 'none',
-    background: 'rgba(255, 255, 255, 0.15)',
+    background: 'linear-gradient(90deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.2) 100%)',
     borderRadius: 2,
     outline: 'none',
     cursor: 'pointer',

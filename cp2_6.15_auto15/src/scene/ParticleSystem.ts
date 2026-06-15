@@ -14,12 +14,13 @@ export class ParticleSystem {
   private particles: Particle[] = []
   private maxParticles: number
   private geometry: THREE.BufferGeometry
-  private material: THREE.PointsMaterial
+  private material: THREE.ShaderMaterial
   public points: THREE.Points
 
   private positions: Float32Array
   private colors: Float32Array
   private sizes: Float32Array
+  private alphas: Float32Array
 
   constructor(maxParticles: number = 500) {
     this.maxParticles = maxParticles
@@ -27,20 +28,46 @@ export class ParticleSystem {
     this.positions = new Float32Array(this.maxParticles * 3)
     this.colors = new Float32Array(this.maxParticles * 3)
     this.sizes = new Float32Array(this.maxParticles)
+    this.alphas = new Float32Array(this.maxParticles)
 
     this.geometry = new THREE.BufferGeometry()
     this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3))
     this.geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 3))
     this.geometry.setAttribute('size', new THREE.BufferAttribute(this.sizes, 1))
+    this.geometry.setAttribute('alpha', new THREE.BufferAttribute(this.alphas, 1))
 
-    this.material = new THREE.PointsMaterial({
-      size: 0.1,
-      vertexColors: true,
+    this.material = new THREE.ShaderMaterial({
+      uniforms: {
+        pointTexture: { value: null },
+      },
+      vertexShader: `
+        attribute float size;
+        attribute float alpha;
+        varying vec3 vColor;
+        varying float vAlpha;
+        void main() {
+          vColor = color;
+          vAlpha = alpha;
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = size * (300.0 / -mvPosition.z);
+          gl_Position = projectionMatrix * mvPosition;
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vColor;
+        varying float vAlpha;
+        void main() {
+          vec2 center = gl_PointCoord - vec2(0.5);
+          float dist = length(center);
+          if (dist > 0.5) discard;
+          float softEdge = 1.0 - smoothstep(0.3, 0.5, dist);
+          gl_FragColor = vec4(vColor, vAlpha * softEdge);
+        }
+      `,
       transparent: true,
-      opacity: 1,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      sizeAttenuation: true,
+      vertexColors: true,
     })
 
     this.points = new THREE.Points(this.geometry, this.material)
@@ -126,9 +153,18 @@ export class ParticleSystem {
 
     for (let i = 0; i < count; i++) {
       const p = this.particles[i]
-      const lifeRatio = p.life / p.maxLife
+      const lifeRatio = Math.max(0, p.life / p.maxLife)
 
-      const sizeMultiplier = p.isTrail ? lifeRatio : Math.min(lifeRatio * 2, 1)
+      let sizeMultiplier: number
+      let alphaMultiplier: number
+
+      if (p.isTrail) {
+        sizeMultiplier = lifeRatio * lifeRatio
+        alphaMultiplier = lifeRatio
+      } else {
+        sizeMultiplier = Math.min(lifeRatio * 2, 1)
+        alphaMultiplier = Math.min(lifeRatio * 1.5, 1)
+      }
 
       this.positions[i * 3] = p.position.x
       this.positions[i * 3 + 1] = p.position.y
@@ -139,6 +175,7 @@ export class ParticleSystem {
       this.colors[i * 3 + 2] = p.color.b
 
       this.sizes[i] = p.size * sizeMultiplier
+      this.alphas[i] = alphaMultiplier
     }
 
     for (let i = count; i < this.maxParticles; i++) {
@@ -146,15 +183,18 @@ export class ParticleSystem {
       this.positions[i * 3 + 1] = -1000
       this.positions[i * 3 + 2] = 0
       this.sizes[i] = 0
+      this.alphas[i] = 0
     }
 
     const posAttr = this.geometry.getAttribute('position') as THREE.BufferAttribute
     const colorAttr = this.geometry.getAttribute('color') as THREE.BufferAttribute
     const sizeAttr = this.geometry.getAttribute('size') as THREE.BufferAttribute
+    const alphaAttr = this.geometry.getAttribute('alpha') as THREE.BufferAttribute
 
     posAttr.needsUpdate = true
     colorAttr.needsUpdate = true
     sizeAttr.needsUpdate = true
+    alphaAttr.needsUpdate = true
 
     this.geometry.setDrawRange(0, count)
     this.geometry.computeBoundingSphere()

@@ -13,6 +13,19 @@ interface AuroraSceneProps {
   params: AuroraParams
 }
 
+interface FlowDisturbance {
+  offset: THREE.Vector3
+  life: number
+  maxLife: number
+}
+
+interface VertexDisturbance {
+  flowOffset: THREE.Vector3
+  colorMix: number
+  targetColor: THREE.Color
+  flowDisturbances: FlowDisturbance[]
+}
+
 interface Disturbance {
   position: THREE.Vector3
   radius: number
@@ -28,7 +41,7 @@ interface StarData {
   position: THREE.Vector3
   size: number
   phase: number
-  speed: number
+  period: number
 }
 
 const AuroraScene: React.FC<AuroraSceneProps> = ({ params }) => {
@@ -49,6 +62,7 @@ const AuroraScene: React.FC<AuroraSceneProps> = ({ params }) => {
   const starPointsRef = useRef<THREE.Points | null>(null)
 
   const auroraRibbonCount = 5
+  const vertexDisturbancesRef = useRef<Map<THREE.Mesh, VertexDisturbance[]>>(new Map())
 
   useMemo(() => {
     const stars: StarData[] = []
@@ -65,7 +79,7 @@ const AuroraScene: React.FC<AuroraSceneProps> = ({ params }) => {
         ),
         size: 1 + Math.random() * 2,
         phase: Math.random() * Math.PI * 2,
-        speed: (1 / 2) + Math.random() * (1 / 3),
+        period: 2 + Math.random() * 1,
       })
     }
     starsRef.current = stars
@@ -169,9 +183,10 @@ const AuroraScene: React.FC<AuroraSceneProps> = ({ params }) => {
         void main() {
           vec3 pos = originalPosition;
 
-          float wave1 = sin(pos.y * 0.3 + uTime * 0.8 * uWindSpeed + uOffset) * 0.8;
-          float wave2 = sin(pos.y * 0.15 + uTime * 0.5 * uWindSpeed + uOffset * 1.5) * 1.2;
-          float wave3 = cos(pos.x * 0.5 + uTime * 0.6 * uWindSpeed) * 0.4;
+          float flowX = uTime * 0.05 * uWindSpeed * 100.0;
+          float wave1 = sin(pos.y * 0.3 - flowX * 0.8 + uOffset) * 0.8;
+          float wave2 = sin(pos.y * 0.15 - flowX * 0.5 + uOffset * 1.5) * 1.2;
+          float wave3 = cos(pos.x * 0.5 - flowX * 0.6) * 0.4;
 
           pos.x += wave1 + wave3;
           pos.z += wave2;
@@ -233,6 +248,18 @@ const AuroraScene: React.FC<AuroraSceneProps> = ({ params }) => {
       const mesh = createAuroraRibbon(i)
       auroraMeshesRef.current.push(mesh)
       scene.add(mesh)
+
+      const vertexCount = mesh.geometry.attributes.position.count
+      const vertexDisturbances: VertexDisturbance[] = []
+      for (let v = 0; v < vertexCount; v++) {
+        vertexDisturbances.push({
+          flowOffset: new THREE.Vector3(0, 0, 0),
+          colorMix: 0,
+          targetColor: new THREE.Color(0xffffff),
+          flowDisturbances: [],
+        })
+      }
+      vertexDisturbancesRef.current.set(mesh, vertexDisturbances)
     }
 
     if (starPointsRef.current) {
@@ -252,6 +279,7 @@ const AuroraScene: React.FC<AuroraSceneProps> = ({ params }) => {
         ;(mesh.material as THREE.Material).dispose()
       })
       auroraMeshesRef.current = []
+      vertexDisturbancesRef.current.clear()
       if (starPointsRef.current && starGeometryRef.current && starMaterialRef.current) {
         scene.remove(starPointsRef.current)
         starGeometryRef.current.dispose()
@@ -275,9 +303,10 @@ const AuroraScene: React.FC<AuroraSceneProps> = ({ params }) => {
       starsRef.current.forEach((star, i) => {
         const brightness = 0.6 + 0.4 * (params.intensity / 100)
         if (colors) {
-          colors.array[i * 3] = brightness * (0.8 + 0.2 * Math.sin(star.phase))
-          colors.array[i * 3 + 1] = brightness * (0.8 + 0.2 * Math.sin(star.phase))
-          colors.array[i * 3 + 2] = brightness * 1.05 * (0.8 + 0.2 * Math.sin(star.phase))
+          const twinkle = 0.8 + 0.2 * Math.sin(star.phase)
+          colors.array[i * 3] = brightness * twinkle
+          colors.array[i * 3 + 1] = brightness * twinkle
+          colors.array[i * 3 + 2] = brightness * 1.05 * twinkle
         }
       })
       if (colors) colors.needsUpdate = true
@@ -424,6 +453,8 @@ const AuroraScene: React.FC<AuroraSceneProps> = ({ params }) => {
 
   useFrame((state, delta) => {
     const time = state.clock.elapsedTime
+    const windFactor = params.windSpeed / 100
+    const baseFlowSpeed = 0.05
 
     if (particleSystemRef.current) {
       particleSystemRef.current.update(delta)
@@ -432,7 +463,8 @@ const AuroraScene: React.FC<AuroraSceneProps> = ({ params }) => {
     if (starPointsRef.current && starGeometryRef.current) {
       const colors = starGeometryRef.current.attributes.color as THREE.BufferAttribute
       starsRef.current.forEach((star, i) => {
-        star.phase += delta * star.speed * Math.PI * 2
+        const angularSpeed = (Math.PI * 2) / star.period
+        star.phase += delta * angularSpeed
         const brightness = 0.7 + 0.3 * Math.sin(star.phase)
         colors.array[i * 3] = brightness
         colors.array[i * 3 + 1] = brightness
@@ -453,8 +485,9 @@ const AuroraScene: React.FC<AuroraSceneProps> = ({ params }) => {
     auroraMeshesRef.current.forEach((mesh, meshIdx) => {
       const material = mesh.material as THREE.ShaderMaterial
       material.uniforms.uTime.value = time
+      material.uniforms.uWindSpeed.value = windFactor
 
-      const windOffset = (params.windSpeed / 100) * 0.05 * delta
+      const windOffset = windFactor * baseFlowSpeed * delta
       mesh.position.x -= windOffset
       if (mesh.position.x < -40) {
         mesh.position.x = 40
@@ -463,6 +496,7 @@ const AuroraScene: React.FC<AuroraSceneProps> = ({ params }) => {
       const positions = mesh.geometry.attributes.position as THREE.BufferAttribute
       const originalPositions = mesh.geometry.attributes.originalPosition as THREE.BufferAttribute
       const baseColors = mesh.geometry.attributes.baseColor as THREE.BufferAttribute
+      const vertexDisturbances = vertexDisturbancesRef.current.get(mesh)
 
       const baseColorsArray = mesh.userData.baseColors as Float32Array
 
@@ -475,11 +509,34 @@ const AuroraScene: React.FC<AuroraSceneProps> = ({ params }) => {
         let worldY = oy + mesh.position.y
         let worldZ = oz + mesh.position.z
 
-        let localDisturbX = 0
-        let localDisturbY = 0
-        let localDisturbZ = 0
-        let colorMix = 0
-        let mixedColor = new THREE.Color(0xffffff)
+        const vd = vertexDisturbances?.[i]
+
+        if (vd) {
+          for (let fi = vd.flowDisturbances.length - 1; fi >= 0; fi--) {
+            const fd = vd.flowDisturbances[fi]
+            fd.life -= delta
+            const recoveryRate = Math.pow(0.01, delta / fd.maxLife)
+            fd.offset.multiplyScalar(recoveryRate)
+            if (fd.life <= 0 || fd.offset.length() < 0.001) {
+              vd.flowDisturbances.splice(fi, 1)
+            }
+          }
+
+          vd.flowOffset.set(0, 0, 0)
+          vd.flowDisturbances.forEach(fd => {
+            vd.flowOffset.add(fd.offset)
+          })
+
+          if (vd.colorMix > 0) {
+            vd.colorMix *= Math.pow(0.01, delta / 3)
+            if (vd.colorMix < 0.001) {
+              vd.colorMix = 0
+            }
+          }
+        }
+
+        let colorMix = vd?.colorMix ?? 0
+        let mixedColor = vd?.targetColor ?? new THREE.Color(0xffffff)
 
         for (let di = disturbancesRef.current.length - 1; di >= 0; di--) {
           const d = disturbancesRef.current[di]
@@ -492,24 +549,36 @@ const AuroraScene: React.FC<AuroraSceneProps> = ({ params }) => {
 
           if (dist < d.radius) {
             const influence = (1 - dist / d.radius) * (d.life / d.maxLife) * d.strength
-            localDisturbX += d.direction.x * influence * 3
-            localDisturbY += d.direction.y * influence * 2
-            localDisturbZ += d.direction.z * influence * 3
+
+            if (vd) {
+              vd.flowDisturbances.push({
+                offset: d.direction.clone().multiplyScalar(influence * 3),
+                life: d.maxLife,
+                maxLife: d.maxLife,
+              })
+            }
 
             if (influence > colorMix) {
               colorMix = influence
               mixedColor = d.color.clone()
+              if (vd) {
+                vd.colorMix = influence
+                vd.targetColor = d.color.clone()
+              }
             }
           }
         }
 
-        const wave1 = Math.sin(oy * 0.3 + time * 0.8 * (params.windSpeed / 100) + meshIdx * 0.7) * 0.8
-        const wave2 = Math.sin(oy * 0.15 + time * 0.5 * (params.windSpeed / 100) + meshIdx * 1.05) * 1.2
-        const wave3 = Math.cos(ox * 0.5 + time * 0.6 * (params.windSpeed / 100)) * 0.4
+        const storedFlowOffset = vd?.flowOffset ?? new THREE.Vector3(0, 0, 0)
 
-        positions.setX(i, ox + wave1 + wave3 + localDisturbX)
-        positions.setY(i, oy + localDisturbY)
-        positions.setZ(i, oz + wave2 + localDisturbZ)
+        const flowX = time * baseFlowSpeed * windFactor * 100
+        const wave1 = Math.sin(oy * 0.3 - flowX * 0.8 + meshIdx * 0.7) * 0.8
+        const wave2 = Math.sin(oy * 0.15 - flowX * 0.5 + meshIdx * 1.05) * 1.2
+        const wave3 = Math.cos(ox * 0.5 - flowX * 0.6) * 0.4
+
+        positions.setX(i, ox + wave1 + wave3 + storedFlowOffset.x)
+        positions.setY(i, oy + storedFlowOffset.y)
+        positions.setZ(i, oz + wave2 + storedFlowOffset.z)
 
         const idx3 = i * 3
         const bcR = baseColorsArray[idx3] ?? 0.5
@@ -518,7 +587,7 @@ const AuroraScene: React.FC<AuroraSceneProps> = ({ params }) => {
 
         if (colorMix > 0) {
           const originalColor = new THREE.Color(bcR, bcG, bcB)
-          const finalColor = originalColor.lerp(mixedColor, colorMix * 0.7)
+          const finalColor = originalColor.clone().lerp(mixedColor, colorMix * 0.7)
 
           baseColors.setX(i, finalColor.r)
           baseColors.setY(i, finalColor.g)
