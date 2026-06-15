@@ -1,147 +1,224 @@
 import { useRef, useMemo, useEffect, useState, useCallback } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { usePlantStore } from './store';
-import { BranchData } from './utils/lSystem';
+import { BranchData, getBranchAndChildren } from './utils/lSystem';
 
-interface BranchMeshProps {
-  branch: BranchData;
+const createBranchGeometry = () => {
+  return new THREE.CylinderGeometry(1, 1, 1, 8, 1, false);
+};
+
+const createTipGeometry = () => {
+  return new THREE.SphereGeometry(1, 8, 8);
+};
+
+const hexToRgbFloat = (hex: string): THREE.Color => {
+  return new THREE.Color(hex);
+};
+
+interface MergedBranchesProps {
+  branches: BranchData[];
   trunkColorBottom: string;
   trunkColorTop: string;
   leafColor: string;
-  onClick: (branchId: string) => void;
+  onPrune: (branchId: string) => void;
   isClickable: boolean;
 }
 
-const BranchMesh = ({
-  branch,
+const MergedBranches = ({
+  branches,
   trunkColorBottom,
   trunkColorTop,
   leafColor,
-  onClick,
+  onPrune,
   isClickable,
-}: BranchMeshProps) => {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const tipRef = useRef<THREE.Mesh>(null);
+}: MergedBranchesProps) => {
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const tipMeshRef = useRef<THREE.InstancedMesh>(null);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const { camera, raycaster, pointer } = useThree();
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  const { position, rotation, scale } = useMemo(() => {
-    const direction = new THREE.Vector3()
-      .subVectors(branch.end, branch.start)
-      .normalize();
-    const length = branch.start.distanceTo(branch.end);
+  const activeBranches = useMemo(() => {
+    return branches.filter((b) => b.growProgress > 0 || b.opacity > 0 || b.pruneProgress > 0);
+  }, [branches]);
 
-    const growProgress = branch.growProgress;
-    const pruneProgress = branch.pruneProgress;
+  const branchColors = useMemo(() => {
+    return activeBranches.map((branch) => {
+      if (branch.isLeaf) {
+        return hexToRgbFloat(leafColor);
+      }
+      const maxLevel = 8;
+      const t = branch.level / maxLevel;
+      const startColor = hexToRgbFloat(trunkColorBottom);
+      const endColor = hexToRgbFloat(trunkColorTop);
+      return startColor.clone().lerp(endColor, t);
+    });
+  }, [activeBranches, trunkColorBottom, trunkColorTop, leafColor]);
 
-    const effectiveProgress = Math.max(0, growProgress - pruneProgress);
-    const currentLength = length * effectiveProgress;
+  const instanceIdToBranchId = useMemo(() => {
+    const map = new Map<number, string>();
+    activeBranches.forEach((branch, index) => {
+      map.set(index, branch.id);
+    });
+    return map;
+  }, [activeBranches]);
 
-    const midPoint = new THREE.Vector3()
-      .copy(branch.start)
-      .add(direction.clone().multiplyScalar(currentLength / 2));
+  const branchIdToIndex = useMemo(() => {
+    const map = new Map<string, number>();
+    activeBranches.forEach((branch, index) => {
+      map.set(branch.id, index);
+    });
+    return map;
+  }, [activeBranches]);
 
-    const quaternion = new THREE.Quaternion();
-    quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+  useFrame(() => {
+    if (!meshRef.current) return;
 
-    const euler = new THREE.Euler().setFromQuaternion(quaternion);
+    activeBranches.forEach((branch, i) => {
+      const direction = new THREE.Vector3()
+        .subVectors(branch.end, branch.start)
+        .normalize();
+      const fullLength = branch.start.distanceTo(branch.end);
 
-    const radiusScale = 1 - pruneProgress * 0.5;
+      const growProgress = branch.growProgress;
+      const pruneProgress = branch.pruneProgress;
+      const effectiveProgress = Math.max(0, growProgress - pruneProgress);
+      const currentLength = fullLength * effectiveProgress;
 
-    return {
-      position: midPoint,
-      rotation: new THREE.Euler(euler.x, euler.y, euler.z),
-      scale: new THREE.Vector3(
-        branch.radius * radiusScale,
-        currentLength / 2,
-        branch.radius * radiusScale
-      ),
-    };
-  }, [branch]);
+      const midPoint = new THREE.Vector3()
+        .copy(branch.start)
+        .add(direction.clone().multiplyScalar(currentLength / 2));
 
-  const color = useMemo(() => {
-    if (branch.isLeaf) {
-      return leafColor;
+      dummy.position.copy(midPoint);
+
+      const quaternion = new THREE.Quaternion();
+      quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+      dummy.quaternion.copy(quaternion);
+
+      const radiusScale = 1 - pruneProgress * 0.5;
+      const radius = branch.radius * radiusScale;
+      dummy.scale.set(radius, currentLength / 2, radius);
+
+      dummy.updateMatrix();
+      meshRef.current!.setMatrixAt(i, dummy.matrix);
+
+      const opacity = Math.max(0, branch.opacity * (1 - pruneProgress));
+      const color = branchColors[i].clone();
+      meshRef.current!.setColorAt(i, color);
+    });
+
+    meshRef.current.instanceMatrix.needsUpdate = true;
+    if (meshRef.current.instanceColor) {
+      meshRef.current.instanceColor.needsUpdate = true;
     }
-    const maxLevel = 8;
-    const t = branch.level / maxLevel;
-    return t < 0.5 ? trunkColorBottom : trunkColorTop;
-  }, [branch, trunkColorBottom, trunkColorTop, leafColor]);
 
-  const handleClick = useCallback(
-    (e: any) => {
-      e.stopPropagation();
-      if (isClickable && !branch.isPruned && branch.growProgress >= 1) {
-        onClick(branch.id);
+    if (tipMeshRef.current) {
+      activeBranches.forEach((branch, i) => {
+        if (!isClickable || branch.isPruned || branch.growProgress < 1) {
+          dummy.scale.set(0, 0, 0);
+        } else {
+          const direction = new THREE.Vector3()
+            .subVectors(branch.end, branch.start)
+            .normalize();
+          const fullLength = branch.start.distanceTo(branch.end);
+          const growProgress = branch.growProgress;
+          const pruneProgress = branch.pruneProgress;
+          const effectiveProgress = Math.max(0, growProgress - pruneProgress);
+
+          const tipPos = branch.start
+            .clone()
+            .add(direction.clone().multiplyScalar(fullLength * effectiveProgress));
+
+          dummy.position.copy(tipPos);
+          dummy.quaternion.identity();
+          const scale = branch.radius * 2 * (hoveredId === branch.id ? 1.5 : 1);
+          dummy.scale.set(scale, scale, scale);
+        }
+
+        dummy.updateMatrix();
+        tipMeshRef.current!.setMatrixAt(i, dummy.matrix);
+      });
+      tipMeshRef.current.instanceMatrix.needsUpdate = true;
+    }
+  });
+
+  const handlePointerMove = useCallback(
+    (event: any) => {
+      if (!tipMeshRef.current || !isClickable) return;
+
+      raycaster.setFromCamera(pointer, camera);
+      const intersects = raycaster.intersectObject(tipMeshRef.current);
+
+      if (intersects.length > 0) {
+        const instanceId = intersects[0].instanceId;
+        if (instanceId !== undefined) {
+          const branchId = instanceIdToBranchId.get(instanceId);
+          if (branchId && branchId !== hoveredId) {
+            setHoveredId(branchId);
+            document.body.style.cursor = 'pointer';
+          }
+        }
+      } else if (hoveredId) {
+        setHoveredId(null);
+        document.body.style.cursor = 'auto';
       }
     },
-    [branch, onClick, isClickable]
+    [pointer, camera, raycaster, instanceIdToBranchId, hoveredId, isClickable]
   );
 
-  const opacity = useMemo(() => {
-    return Math.max(0, branch.opacity * (1 - branch.pruneProgress));
-  }, [branch.opacity, branch.pruneProgress]);
+  const handleClick = useCallback(
+    (event: any) => {
+      if (!tipMeshRef.current || !isClickable) return;
 
-  const tipPosition = useMemo(() => {
-    const direction = new THREE.Vector3()
-      .subVectors(branch.end, branch.start)
-      .normalize();
-    const growProgress = branch.growProgress;
-    const pruneProgress = branch.pruneProgress;
-    const effectiveProgress = Math.max(0, growProgress - pruneProgress);
-    const length = branch.start.distanceTo(branch.end);
-    return branch.start
-      .clone()
-      .add(direction.clone().multiplyScalar(length * effectiveProgress));
-  }, [branch]);
+      raycaster.setFromCamera(pointer, camera);
+      const intersects = raycaster.intersectObject(tipMeshRef.current);
+
+      if (intersects.length > 0) {
+        const instanceId = intersects[0].instanceId;
+        if (instanceId !== undefined) {
+          const branchId = instanceIdToBranchId.get(instanceId);
+          if (branchId) {
+            const branch = activeBranches.find((b) => b.id === branchId);
+            if (branch && !branch.isPruned && branch.growProgress >= 1) {
+              event.stopPropagation();
+              onPrune(branchId);
+            }
+          }
+        }
+      }
+    },
+    [pointer, camera, raycaster, instanceIdToBranchId, activeBranches, isClickable, onPrune]
+  );
 
   return (
-    <group>
-      <mesh
+    <group onPointerMove={handlePointerMove} onClick={handleClick}>
+      <instancedMesh
         ref={meshRef}
-        position={position}
-        rotation={rotation}
-        scale={scale}
+        args={[createBranchGeometry(), undefined, activeBranches.length]}
         castShadow
         receiveShadow
-        onClick={handleClick}
       >
-        <cylinderGeometry args={[1, 1, 1, 8]} />
         <meshStandardMaterial
-          color={color}
           transparent
-          opacity={opacity}
           side={THREE.DoubleSide}
           roughness={0.8}
           metalness={0.1}
+          vertexColors
         />
-      </mesh>
+      </instancedMesh>
 
-      {isClickable &&
-        !branch.isPruned &&
-        branch.growProgress >= 1 &&
-        branch.children.length >= 0 && (
-          <mesh
-            ref={tipRef}
-            position={tipPosition}
-            onClick={handleClick}
-            onPointerOver={(e) => {
-              e.stopPropagation();
-              document.body.style.cursor = 'pointer';
-            }}
-            onPointerOut={() => {
-              document.body.style.cursor = 'auto';
-            }}
-          >
-            <sphereGeometry args={[branch.radius * 1.5, 8, 8]} />
-            <meshStandardMaterial
-              color="#ffffff"
-              transparent
-              opacity={0.0}
-              emissive="#ffffff"
-              emissiveIntensity={0}
-            />
-          </mesh>
-        )}
+      <instancedMesh
+        ref={tipMeshRef}
+        args={[createTipGeometry(), undefined, activeBranches.length]}
+      >
+        <meshBasicMaterial
+          color="#ffffff"
+          transparent
+          opacity={0.01}
+          side={THREE.DoubleSide}
+        />
+      </instancedMesh>
     </group>
   );
 };
@@ -150,11 +227,7 @@ const Ground = () => {
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.5, 0]} receiveShadow>
       <circleGeometry args={[5, 32]} />
-      <meshStandardMaterial
-        color="#1a2332"
-        roughness={0.9}
-        metalness={0.1}
-      />
+      <meshStandardMaterial color="#1a2332" roughness={0.9} metalness={0.1} />
     </mesh>
   );
 };
@@ -167,14 +240,15 @@ const PruneAnimationController = () => {
 
   const pruneBranch = usePlantStore((state) => state.pruneBranch);
   const updatePruneProgress = usePlantStore((state) => state.updatePruneProgress);
-  const removePrunedBranches = usePlantStore(
-    (state) => state.removePrunedBranches
-  );
+  const removePrunedBranches = usePlantStore((state) => state.removePrunedBranches);
 
-  const handlePrune = useCallback((branchId: string) => {
-    pruneBranch(branchId);
-    setActivePrune({ branchId, startTime: performance.now() });
-  }, [pruneBranch]);
+  const handlePrune = useCallback(
+    (branchId: string) => {
+      pruneBranch(branchId);
+      setActivePrune({ branchId, startTime: performance.now() });
+    },
+    [pruneBranch]
+  );
 
   useEffect(() => {
     (window as any).__pruneBranch = handlePrune;
@@ -208,17 +282,13 @@ export const Plant = () => {
   const trunkColorTop = usePlantStore((state) => state.trunkColorTop);
   const leafColor = usePlantStore((state) => state.leafColor);
   const isGrowing = usePlantStore((state) => state.isGrowing);
-  const updateGrowthProgress = usePlantStore(
-    (state) => state.updateGrowthProgress
-  );
-  const updateColorTransition = usePlantStore(
-    (state) => state.updateColorTransition
-  );
+  const updateGrowthProgress = usePlantStore((state) => state.updateGrowthProgress);
+  const updateColorTransition = usePlantStore((state) => state.updateColorTransition);
   const colorTransition = usePlantStore((state) => state.colorTransition);
 
   const lastTimeRef = useRef(performance.now());
 
-  useFrame(({ clock }) => {
+  useFrame(() => {
     const currentTime = performance.now();
     const deltaTime = (currentTime - lastTimeRef.current) / 1000;
     lastTimeRef.current = currentTime;
@@ -232,19 +302,16 @@ export const Plant = () => {
     }
   });
 
-  const handleBranchClick = useCallback((branchId: string) => {
+  const handlePrune = useCallback((branchId: string) => {
     if ((window as any).__pruneBranch) {
       (window as any).__pruneBranch(branchId);
     }
   }, []);
 
-  const visibleBranches = useMemo(() => {
-    return branches.filter((b) => b.growProgress > 0 || b.opacity > 0);
-  }, [branches]);
-
   return (
     <group key={generation}>
       <PruneAnimationController />
+
       <ambientLight intensity={0.4} />
       <hemisphereLight args={['#87ceeb', '#2d4a3e', 0.6]} />
       <directionalLight
@@ -262,17 +329,14 @@ export const Plant = () => {
 
       <Ground />
 
-      {visibleBranches.map((branch) => (
-        <BranchMesh
-          key={branch.id}
-          branch={branch}
-          trunkColorBottom={trunkColorBottom}
-          trunkColorTop={trunkColorTop}
-          leafColor={leafColor}
-          onClick={handleBranchClick}
-          isClickable={!isGrowing}
-        />
-      ))}
+      <MergedBranches
+        branches={branches}
+        trunkColorBottom={trunkColorBottom}
+        trunkColorTop={trunkColorTop}
+        leafColor={leafColor}
+        onPrune={handlePrune}
+        isClickable={!isGrowing}
+      />
 
       <fog attach="fog" args={['#0b0f19', 3, 12]} />
     </group>
