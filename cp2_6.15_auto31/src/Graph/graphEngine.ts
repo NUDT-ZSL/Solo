@@ -261,17 +261,26 @@ export class GraphEngine {
       return;
     }
     
+    const now = performance.now();
     for (let i = 0; i < nodeArray.length; i++) {
       const node = nodeArray[i];
       if (this.nodePositions.has(node.id)) {
         const pos = this.nodePositions.get(node.id)!;
         node.x = pos.x;
         node.y = pos.y;
+        node.opacity = 1;
       } else {
         const angle = (i / nodeArray.length) * Math.PI * 2;
         const radius = 150 + node.level * 80;
         node.x = centerX + Math.cos(angle) * radius;
         node.y = centerY + Math.sin(angle) * radius;
+        node.opacity = 0;
+        this.fadingNodes.set(node.id, {
+          startOpacity: 0,
+          targetOpacity: 1,
+          startTime: now + i * 30,
+          duration: 500,
+        });
       }
       node.vx = 0;
       node.vy = 0;
@@ -590,14 +599,20 @@ export class GraphEngine {
         continue;
       }
       
-      const progress = Math.min(1, (now - fadeInfo.startTime) / fadeInfo.duration);
+      const rawProgress = (now - fadeInfo.startTime) / fadeInfo.duration;
+      if (rawProgress < 0) continue;
+      
+      const progress = Math.min(1, rawProgress);
       const eased = 1 - Math.pow(1 - progress, 3);
       node.opacity = fadeInfo.startOpacity + (fadeInfo.targetOpacity - fadeInfo.startOpacity) * eased;
+      if (node.opacity > 0) node.visible = true;
       
       if (progress >= 1) {
         node.opacity = fadeInfo.targetOpacity;
         if (fadeInfo.targetOpacity <= 0) {
           node.visible = false;
+        } else {
+          node.visible = true;
         }
         this.fadingNodes.delete(id);
       }
