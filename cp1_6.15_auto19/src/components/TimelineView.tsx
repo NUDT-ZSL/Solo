@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useFocusStore } from '../store';
 import { getDateKey, getRecordsForDate, ActivityRecord, ActivityLabel } from '../types';
 import { ZoomIn, ZoomOut } from 'lucide-react';
@@ -20,6 +20,18 @@ export default function TimelineView() {
   const records = useFocusStore(s => s.records);
   const labels = useFocusStore(s => s.labels);
   const activeTimer = useFocusStore(s => s.activeTimer);
+  const [, forceUpdate] = useState(0);
+  const tickRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!activeTimer) return;
+    tickRef.current = window.setInterval(() => {
+      forceUpdate(v => v + 1);
+    }, 1000);
+    return () => {
+      if (tickRef.current) window.clearInterval(tickRef.current);
+    };
+  }, [activeTimer]);
 
   const todayKey = getDateKey(Date.now());
   const todayRecords = useMemo(
@@ -85,7 +97,7 @@ export default function TimelineView() {
     return items;
   }, [todayRecords, activeTimer]);
 
-  const timelineWidth = BASE_WIDTH * zoom;
+  const timelineWidth = BASE_WIDTH;
   const maxRow = bars.reduce((max, b) => Math.max(max, b.row), -1);
   const contentHeight = bars.length > 0 ? (maxRow + 1) * 32 + 20 : 60;
 
@@ -131,15 +143,23 @@ export default function TimelineView() {
       ) : (
         <div className="overflow-x-auto px-4 pb-4">
           <div
-            className="relative transition-all duration-300"
-            style={{ width: timelineWidth, height: contentHeight }}
+            className="relative transition-transform duration-300"
+            style={{
+              width: timelineWidth,
+              height: contentHeight,
+              transform: `scaleX(${zoom})`,
+              transformOrigin: 'left center',
+            }}
           >
             {HOUR_MARKS.map(hour => {
               const left = (hour / 24) * timelineWidth;
               return (
                 <div key={hour} className="absolute top-0 h-full" style={{ left }}>
                   <div className="h-full border-l border-dashed border-border" />
-                  <span className="absolute -translate-x-1/2 text-[6px] text-textSub md:text-[10px]">
+                  <span
+                    className="absolute -translate-x-1/2 text-[6px] text-textSub md:text-[10px]"
+                    style={{ transform: `translateX(-50%) scaleX(${1 / zoom})`, transformOrigin: 'center top' }}
+                  >
                     {String(hour).padStart(2, '0')}:00
                   </span>
                 </div>
@@ -159,7 +179,7 @@ export default function TimelineView() {
               return (
                 <div
                   key={bar.id}
-                  className={`absolute flex items-center rounded px-1 text-[10px] font-medium text-text transition-all duration-300${
+                  className={`absolute flex items-center rounded px-1 text-[10px] font-medium text-text${
                     bar.isActive ? ' animate-pulse' : ''
                   }`}
                   style={{
@@ -168,6 +188,8 @@ export default function TimelineView() {
                     top,
                     height: 28,
                     backgroundColor: color + '99',
+                    transform: `scaleX(${1 / zoom})`,
+                    transformOrigin: 'left center',
                   }}
                 >
                   <span className="truncate">{bar.label}</span>

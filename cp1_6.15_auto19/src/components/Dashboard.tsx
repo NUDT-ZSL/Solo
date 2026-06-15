@@ -52,8 +52,7 @@ function drawTrend(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  dayScores: DayScore[],
-  onPointClick: (index: number, x: number, y: number) => void
+  dayScores: DayScore[]
 ) {
   const padding = { top: 20, right: 20, bottom: 30, left: 40 };
   const chartW = width - padding.left - padding.right;
@@ -80,7 +79,7 @@ function drawTrend(
     ctx.fillText(String(v), padding.left - 6, y);
   });
 
-  if (dayScores.length === 0) return;
+  if (dayScores.length === 0) return { points: [], chartRect: { left: 0, top: 0, width: 0, height: 0 } };
 
   const points: { x: number; y: number }[] = dayScores.map((ds, i) => ({
     x: padding.left + (dayScores.length === 1 ? chartW / 2 : (i / (dayScores.length - 1)) * chartW),
@@ -162,13 +161,14 @@ export default function Dashboard() {
   const ringCanvasRef = useRef<HTMLCanvasElement>(null);
   const trendCanvasRef = useRef<HTMLCanvasElement>(null);
   const pieCanvasRef = useRef<HTMLCanvasElement>(null);
-  const prevScoreRef = useRef(0);
+  const prevScoreRef = useRef<number | null>(null);
+  const isFirstRenderRef = useRef(true);
+  const prevRecordsCountRef = useRef(records.length);
   const animFrameRef = useRef(0);
 
   const [selectedDay, setSelectedDay] = useState<DayScore | null>(null);
-  const [popupPos, setPopupPos] = useState<{ x: number; y: number } | null>(null);
   const [trendPoints, setTrendPoints] = useState<{ x: number; y: number }[]>([]);
-  const trendLayoutRef = useRef<{ left: number; top: number; width: number; height: number } | null>(null);
+  const trendCanvasSizeRef = useRef<{ width: number; height: number }>({ width: 400, height: 200 });
 
   const todayKey = getDateKey(Date.now());
 
@@ -187,7 +187,22 @@ export default function Dashboard() {
     if (!canvas) return;
     const ctx = setupCanvas(canvas, 180, 180);
     const targetScore = todayScore.score;
-    const startScore = prevScoreRef.current;
+    const recordsCountChanged = records.length !== prevRecordsCountRef.current;
+
+    if (isFirstRenderRef.current) {
+      drawRing(ctx, targetScore, 180, 12);
+      prevScoreRef.current = targetScore;
+      isFirstRenderRef.current = false;
+      prevRecordsCountRef.current = records.length;
+      return;
+    }
+
+    if (!recordsCountChanged && prevScoreRef.current === targetScore) {
+      prevRecordsCountRef.current = records.length;
+      return;
+    }
+
+    const startScore = prevScoreRef.current ?? targetScore;
     const duration = 500;
     const startTime = performance.now();
 
@@ -207,22 +222,25 @@ export default function Dashboard() {
     };
     animFrameRef.current = requestAnimationFrame(animate);
 
+    prevRecordsCountRef.current = records.length;
+
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [todayScore.score]);
+  }, [todayScore.score, records.length]);
 
   useEffect(() => {
     const canvas = trendCanvasRef.current;
     if (!canvas) return;
     const container = canvas.parentElement;
     const width = container ? container.clientWidth : 400;
-    const ctx = setupCanvas(canvas, width, 200);
+    const height = 200;
+    trendCanvasSizeRef.current = { width, height };
+    const ctx = setupCanvas(canvas, width, height);
 
-    const result = drawTrend(ctx, width, 200, dayScores, () => {});
+    const result = drawTrend(ctx, width, height, dayScores);
     if (result) {
       setTrendPoints(result.points);
-      trendLayoutRef.current = result.chartRect;
     }
   }, [records, labels]);
 
@@ -232,8 +250,9 @@ export default function Dashboard() {
       if (!canvas || trendPoints.length === 0) return;
 
       const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.offsetWidth / rect.width;
-      const scaleY = canvas.offsetHeight / rect.height;
+      const { width, height } = trendCanvasSizeRef.current;
+      const scaleX = width / rect.width;
+      const scaleY = height / rect.height;
       const mx = (e.clientX - rect.left) * scaleX;
       const my = (e.clientY - rect.top) * scaleY;
 
@@ -242,7 +261,6 @@ export default function Dashboard() {
         const dist = Math.sqrt((mx - p.x) ** 2 + (my - p.y) ** 2);
         if (dist <= 12) {
           setSelectedDay(dayScores[i]);
-          setPopupPos({ x: e.clientX, y: e.clientY });
           return;
         }
       }
@@ -262,7 +280,6 @@ export default function Dashboard() {
 
     const aggregated: Record<string, number> = {};
     dayRecords.forEach(r => {
-      const lbl = labelMap.get(r.label);
       const key = r.label;
       aggregated[key] = (aggregated[key] || 0) + r.durationMs;
     });
@@ -306,7 +323,7 @@ export default function Dashboard() {
   })();
 
   return (
-    <div className="rounded-card border-border bg-surface hover:shadow-lg transition-shadow p-6 space-y-6">
+    <div className="rounded-card border-2 border-border bg-surface hover:shadow-lg transition-shadow p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-text">专注评分</h2>
         <button
@@ -325,14 +342,14 @@ export default function Dashboard() {
       <div>
         <h3 className="text-sm font-medium text-textSub mb-2">7 日趋势</h3>
         <div className="w-full">
-          <canvas ref={trendCanvasRef} onClick={handleTrendClick} className="cursor-pointer w-full" />
+          <canvas ref={trendCanvasRef} onClick={handleTrendClick} className="cursor-pointer" />
         </div>
       </div>
 
       {selectedDay && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setSelectedDay(null)}>
           <div
-            className="bg-surface border-border rounded-card p-5 w-80 shadow-xl"
+            className="bg-surface border-2 border-border rounded-card p-5 w-80 shadow-xl"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
