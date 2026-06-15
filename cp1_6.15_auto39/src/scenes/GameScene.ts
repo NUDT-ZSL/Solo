@@ -1,10 +1,9 @@
 import Phaser from 'phaser';
 import { Player } from '../entities/Player';
-import { ObstaclePool, ObstacleType } from '../entities/Obstacle';
+import { ObstaclePool, ObstacleType, Obstacle } from '../entities/Obstacle';
 import { CoinPool, Coin } from '../entities/Coin';
 import {
   GAME_WIDTH,
-  GAME_HEIGHT,
   GROUND_Y,
   GROUND_HEIGHT,
   INITIAL_SPEED,
@@ -19,10 +18,15 @@ import {
   SCORE_COIN_WEIGHT,
 } from '../config/gameConfig';
 
+const SPEED_SMOOTH_LAMBDA = 4;
+
 export class GameScene extends Phaser.Scene {
   player!: Player;
   obstaclePool!: ObstaclePool;
   coinPool!: CoinPool;
+
+  obstacleGroup!: Phaser.Physics.Arcade.Group;
+  coinGroup!: Phaser.Physics.Arcade.Group;
 
   targetSpeed: number = INITIAL_SPEED;
   currentSpeed: number = INITIAL_SPEED;
@@ -30,7 +34,6 @@ export class GameScene extends Phaser.Scene {
   coinCount: number = 0;
   isGameOver: boolean = false;
   elapsedTime: number = 0;
-  lastSpeedUpAt: number = 0;
 
   nextObstacleAt: number = 0;
   nextCoinAt: number = 0;
@@ -66,7 +69,6 @@ export class GameScene extends Phaser.Scene {
     this.coinCount = 0;
     this.isGameOver = false;
     this.elapsedTime = 0;
-    this.lastSpeedUpAt = 0;
     this.groundOffset = 0;
     this.mountainOffset = 0;
     this.NUM_TILES = Math.ceil(GAME_WIDTH / this.TILE_W) + 2;
@@ -77,9 +79,19 @@ export class GameScene extends Phaser.Scene {
     this.createGround();
     this.createHUD();
 
-    this.player = new Player(this);
     this.obstaclePool = new ObstaclePool(this);
     this.coinPool = new CoinPool(this);
+
+    this.player = new Player(this);
+
+    this.obstacleGroup = this.physics.add.group({
+      allowGravity: false,
+      immovable: true,
+    });
+    this.coinGroup = this.physics.add.group({
+      allowGravity: false,
+      immovable: true,
+    });
 
     this.setupInput();
     this.setupCollisionCallbacks();
@@ -98,16 +110,15 @@ export class GameScene extends Phaser.Scene {
 
   private setupCollisionCallbacks() {
     this.physics.add.overlap(
-      this.player.physicsRect,
-      this.obstaclePool.getActivePhysicsObjects(),
+      this.player,
+      this.obstacleGroup,
       this.onPlayerHitObstacle,
       undefined,
       this,
     );
-
     this.physics.add.overlap(
-      this.player.physicsRect,
-      this.coinPool.getActivePhysicsObjects(),
+      this.player,
+      this.coinGroup,
       this.onPlayerCollectCoin,
       undefined,
       this,
@@ -130,10 +141,7 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private onPlayerHitObstacle(
-    _playerObj: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
-    _obstacleObj: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
-  ) {
+  private onPlayerHitObstacle() {
     if (this.isGameOver) return;
     this.gameOver();
   }
@@ -143,19 +151,12 @@ export class GameScene extends Phaser.Scene {
     coinObj: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
   ) {
     if (this.isGameOver) return;
-    const physicsCircle = coinObj as Phaser.GameObjects.Arc;
-    const coin = this.coinPool.activeCoins.find(
-      (c) => c.physicsCircle === physicsCircle && c.isActive,
-    );
-    if (coin) {
-      this.coinCount++;
-      this.showFloatingText(
-        coin.physicsCircle.x,
-        coin.physicsCircle.y - 30,
-        '+1',
-      );
-      coin.collect();
-    }
+    const coin = coinObj as Coin;
+    if (!coin.isActive) return;
+    this.coinCount++;
+    this.showFloatingText(coin.x, coin.y - 30, '+1');
+    this.coinGroup.remove(coin, false, false);
+    coin.collect();
   }
 
   private createBackground() {
@@ -336,7 +337,7 @@ export class GameScene extends Phaser.Scene {
     this.obstaclePool.update(this.currentSpeed, delta);
     this.coinPool.update(this.currentSpeed, delta);
 
-    this.refreshOverlapColliders();
+    this.pruneInactiveFromGroups();
 
     this.updateDistance(delta);
     this.updateHUD();
@@ -355,8 +356,9 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private updateSpeed(_delta: number) {
-    const lerpFactor = 0.03;
+  private updateSpeed(delta: number) {
+    const dt = delta / 1000;
+    const lerpFactor = 1 - Math.exp(-SPEED_SMOOTH_LAMBDA * dt);
     this.currentSpeed = Phaser.Math.Linear(
       this.currentSpeed,
       this.targetSpeed,
@@ -394,30 +396,34 @@ export class GameScene extends Phaser.Scene {
     const now = this.time.now;
     if (now >= this.nextObstacleAt) {
       const type = this.obstaclePool.getRandomType();
-      this.obstaclePool.spawn(type, GAME_WIDTH + 50);
+      const obstacle = this.obstaclePool.spawn(type, GAME_WIDTH + 50) as Obstacle;
+      if (!this.obstacleGroup.contains(obstacle)) {
+        this.obstacleGroup.add(obstacle);
+      }
       this.nextObstacleAt = now + Phaser.Math.Between(OBSTACLE_SPAWN_MIN, OBSTACLE_SPAWN_MAX);
     }
     if (now >= this.nextCoinAt) {
-      this.coinPool.spawn(GAME_WIDTH + 50);
+      const coin = this.coinPool.spawn(GAME_WIDTH + 50) as Coin;
+      if (!this.coinGroup.contains(coin)) {
+        this.coinGroup.add(coin);
+      }
       this.nextCoinAt = now + Phaser.Math.Between(COIN_SPAWN_MIN, COIN_SPAWN_MAX);
     }
   }
 
-  private refreshOverlapColliders() {
-    this.physics.overlap(
-      this.player.physicsRect,
-      this.obstaclePool.getActivePhysicsObjects(),
-      this.onPlayerHitObstacle,
-      undefined,
-      this,
-    );
-    this.physics.overlap(
-      this.player.physicsRect,
-      this.coinPool.getActivePhysicsObjects(),
-      this.onPlayerCollectCoin,
-      undefined,
-      this,
-    );
+  private pruneInactiveFromGroups() {
+    const obsChildren = this.obstacleGroup.getChildren() as Obstacle[];
+    for (let i = obsChildren.length - 1; i >= 0; i--) {
+      if (!obsChildren[i].isActive) {
+        this.obstacleGroup.remove(obsChildren[i], false, false);
+      }
+    }
+    const coinChildren = this.coinGroup.getChildren() as Coin[];
+    for (let i = coinChildren.length - 1; i >= 0; i--) {
+      if (!coinChildren[i].isActive) {
+        this.coinGroup.remove(coinChildren[i], false, false);
+      }
+    }
   }
 
   private updateDistance(delta: number) {

@@ -17,17 +17,13 @@ export enum PlayerState {
   FALLING = 'falling',
 }
 
-export class Player {
-  scene: Phaser.Scene;
+export class Player extends Phaser.GameObjects.Container {
+  body!: Phaser.Physics.Arcade.Body;
   state: PlayerState = PlayerState.RUNNING;
   isSliding: boolean = false;
   isGrounded: boolean = true;
   isHit: boolean = false;
 
-  physicsRect: Phaser.GameObjects.Rectangle;
-  body: Phaser.Physics.Arcade.Body;
-
-  private visualContainer: Phaser.GameObjects.Container;
   private sprite: Phaser.GameObjects.Rectangle;
   private head: Phaser.GameObjects.Rectangle;
   private eye: Phaser.GameObjects.Rectangle;
@@ -38,23 +34,7 @@ export class Player {
   private slideTimerEvent: Phaser.Time.TimerEvent | null = null;
 
   constructor(scene: Phaser.Scene) {
-    this.scene = scene;
-
-    this.physicsRect = scene.add.rectangle(
-      PLAYER_X,
-      GROUND_Y - PLAYER_HEIGHT / 2,
-      PLAYER_WIDTH,
-      PLAYER_HEIGHT,
-      0x000000,
-      0,
-    );
-    scene.physics.add.existing(this.physicsRect);
-    this.body = this.physicsRect.body as Phaser.Physics.Arcade.Body;
-    this.body.setAllowGravity(true);
-    this.body.setGravityY(GRAVITY);
-    this.body.setImmovable(false);
-    this.body.setCollideWorldBounds(false);
-    this.body.setSize(PLAYER_WIDTH, PLAYER_HEIGHT);
+    super(scene, PLAYER_X, GROUND_Y - PLAYER_HEIGHT / 2);
 
     this.sprite = scene.add.rectangle(0, 0, PLAYER_WIDTH, PLAYER_HEIGHT, 0x4a90d9);
     this.head = scene.add.rectangle(0, -PLAYER_HEIGHT / 2 + 8, 20, 16, 0x5ba0e0);
@@ -63,16 +43,18 @@ export class Player {
     this.leg2 = scene.add.rectangle(6, PLAYER_HEIGHT / 2 - 4, 8, 10, 0x3a7bc0);
     this.arm = scene.add.rectangle(12, -4, 6, 14, 0x3a7bc0);
 
-    this.visualContainer = scene.add.container(PLAYER_X, GROUND_Y - PLAYER_HEIGHT / 2, [
-      this.sprite,
-      this.head,
-      this.eye,
-      this.leg1,
-      this.leg2,
-      this.arm,
-    ]);
-    this.visualContainer.setDepth(10);
-    this.physicsRect.setDepth(0);
+    this.add([this.sprite, this.head, this.eye, this.leg1, this.leg2, this.arm]);
+    this.setDepth(10);
+
+    scene.add.existing(this);
+    scene.physics.add.existing(this);
+    this.body = this.body as Phaser.Physics.Arcade.Body;
+    this.body.setAllowGravity(true);
+    this.body.setGravityY(GRAVITY);
+    this.body.setImmovable(false);
+    this.body.setCollideWorldBounds(false);
+    this.body.setSize(PLAYER_WIDTH, PLAYER_HEIGHT);
+    this.body.setOffset(-PLAYER_WIDTH / 2, -PLAYER_HEIGHT / 2);
   }
 
   jump() {
@@ -81,7 +63,7 @@ export class Player {
     this.isGrounded = false;
     this.body.setVelocityY(JUMP_VELOCITY);
     this.scene.tweens.add({
-      targets: this.visualContainer,
+      targets: this,
       scaleX: 0.9,
       scaleY: 1.15,
       duration: 100,
@@ -96,17 +78,15 @@ export class Player {
     this.state = PlayerState.SLIDING;
 
     this.body.setSize(PLAYER_WIDTH, PLAYER_SLIDE_HEIGHT);
-    this.body.setOffset(0, PLAYER_HEIGHT - PLAYER_SLIDE_HEIGHT);
-    this.body.reset(
-      this.body.position.x + PLAYER_WIDTH / 2,
-      GROUND_Y - PLAYER_SLIDE_HEIGHT / 2,
+    this.body.setOffset(
+      -PLAYER_WIDTH / 2,
+      PLAYER_HEIGHT / 2 - PLAYER_SLIDE_HEIGHT / 2 - PLAYER_HEIGHT / 2,
     );
-
-    this.visualContainer.setScaleY(0.5);
-    this.visualContainer.setY(GROUND_Y - PLAYER_SLIDE_HEIGHT / 2);
+    this.y = GROUND_Y - PLAYER_SLIDE_HEIGHT / 2;
+    this.setScaleY(0.5);
 
     if (this.slideTimerEvent) {
-      this.slideTimerEvent.destroy();
+      this.slideTimerEvent.remove(false);
     }
     this.slideTimerEvent = this.scene.time.delayedCall(SLIDE_DURATION, () => {
       this.endSlide();
@@ -118,23 +98,20 @@ export class Player {
     this.isSliding = false;
     this.state = PlayerState.RUNNING;
 
-    const cx = this.body.position.x + PLAYER_WIDTH / 2;
     this.body.setSize(PLAYER_WIDTH, PLAYER_HEIGHT);
-    this.body.setOffset(0, 0);
-    this.body.reset(cx, GROUND_Y - PLAYER_HEIGHT / 2);
+    this.body.setOffset(-PLAYER_WIDTH / 2, -PLAYER_HEIGHT / 2);
+    this.y = GROUND_Y - PLAYER_HEIGHT / 2;
+    this.setScaleY(1);
     this.body.setVelocityY(0);
-
-    this.visualContainer.setScaleY(1);
-    this.visualContainer.setY(GROUND_Y - PLAYER_HEIGHT / 2);
     this.slideTimerEvent = null;
   }
 
   update(delta: number) {
     if (this.isHit) return;
 
-    const bodyY = this.body.position.y + this.body.height / 2;
+    const bodyBottom = this.body.y + this.body.height;
 
-    if (bodyY >= GROUND_Y - 2) {
+    if (bodyBottom >= GROUND_Y - 2) {
       if (!this.isGrounded) {
         this.isGrounded = true;
         if (this.state !== PlayerState.SLIDING) {
@@ -144,25 +121,17 @@ export class Player {
       const targetY = this.isSliding
         ? GROUND_Y - PLAYER_SLIDE_HEIGHT / 2
         : GROUND_Y - PLAYER_HEIGHT / 2;
-      const cx = this.body.position.x + PLAYER_WIDTH / 2;
-      this.body.reset(cx, targetY);
+      this.body.reset(this.body.x + this.body.width / 2, targetY);
       this.body.setVelocityY(0);
     } else {
       this.isGrounded = false;
-      if (this.body.velocity.y > 0) {
-        if (this.state !== PlayerState.SLIDING) {
-          this.state = PlayerState.FALLING;
-        }
+      if (this.body.velocity.y > 0 && this.state !== PlayerState.SLIDING) {
+        this.state = PlayerState.FALLING;
       }
     }
 
-    this.visualContainer.setPosition(
-      this.body.position.x + PLAYER_WIDTH / 2,
-      this.body.position.y + this.body.height / 2,
-    );
-
     this.runTimer += delta;
-    const visualScaleY = this.visualContainer.scaleY;
+    const visualScaleY = this.scaleY;
     const scaledHalfH = (PLAYER_HEIGHT / 2) * visualScaleY;
 
     if (this.state === PlayerState.RUNNING) {
@@ -196,23 +165,18 @@ export class Player {
     this.sprite.setFillStyle(0xff0000);
     this.head.setFillStyle(0xff3333);
     this.scene.tweens.add({
-      targets: this.visualContainer,
+      targets: this,
       alpha: 0.3,
       duration: 100,
       yoyo: true,
       repeat: 1,
       onComplete: () => {
-        this.visualContainer.setAlpha(1);
+        this.setAlpha(1);
       },
     });
     this.scene.time.delayedCall(200, () => {
       this.sprite.setFillStyle(0x4a90d9);
       this.head.setFillStyle(0x5ba0e0);
     });
-  }
-
-  destroy() {
-    this.visualContainer.destroy();
-    this.physicsRect.destroy();
   }
 }

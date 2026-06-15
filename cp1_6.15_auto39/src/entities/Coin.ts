@@ -6,14 +6,10 @@ import {
   GAME_WIDTH,
 } from '../config/gameConfig';
 
-export class Coin {
-  scene: Phaser.Scene;
+export class Coin extends Phaser.GameObjects.Container {
+  body!: Phaser.Physics.Arcade.Body;
   isActive: boolean = false;
 
-  physicsCircle: Phaser.GameObjects.Arc;
-  body: Phaser.Physics.Arcade.Body;
-
-  private visualContainer: Phaser.GameObjects.Container;
   private coinCircle: Phaser.GameObjects.Ellipse;
   private coinInner: Phaser.GameObjects.Ellipse;
   private glow: Phaser.GameObjects.Ellipse;
@@ -21,42 +17,34 @@ export class Coin {
   private baseY: number = 0;
 
   constructor(scene: Phaser.Scene) {
-    this.scene = scene;
-
-    this.physicsCircle = scene.add.circle(
-      GAME_WIDTH + COIN_SIZE,
-      COIN_Y_MIN,
-      COIN_SIZE / 2,
-      0x000000,
-      0,
-    );
-    scene.physics.add.existing(this.physicsCircle);
-    this.body = this.physicsCircle.body as Phaser.Physics.Arcade.Body;
-    this.body.setAllowGravity(false);
-    this.body.setImmovable(true);
-    this.body.setSize(COIN_SIZE, COIN_SIZE);
+    super(scene, GAME_WIDTH + COIN_SIZE, COIN_Y_MIN);
 
     this.glow = scene.add.ellipse(0, 0, COIN_SIZE + 8, COIN_SIZE + 8, 0xffd700, 0.3);
     this.coinCircle = scene.add.ellipse(0, 0, COIN_SIZE, COIN_SIZE, 0xffd700);
     this.coinInner = scene.add.ellipse(0, 0, COIN_SIZE * 0.5, COIN_SIZE * 0.5, 0xffec8b);
 
-    this.visualContainer = scene.add.container(GAME_WIDTH + COIN_SIZE, 0, [
-      this.glow,
-      this.coinCircle,
-      this.coinInner,
-    ]);
-    this.visualContainer.setDepth(8);
+    this.add([this.glow, this.coinCircle, this.coinInner]);
+    this.setDepth(8);
+
+    scene.add.existing(this);
+    scene.physics.add.existing(this);
+    this.body = this.body as Phaser.Physics.Arcade.Body;
+    this.body.setAllowGravity(false);
+    this.body.setImmovable(true);
+    this.body.setSize(COIN_SIZE, COIN_SIZE);
+    this.body.setOffset(-COIN_SIZE / 2, -COIN_SIZE / 2);
+
     this.deactivate();
   }
 
   spawn(x: number, y: number) {
     this.baseY = y;
     this.body.reset(x, y);
-    this.visualContainer.setPosition(x, y);
-    this.visualContainer.setVisible(true);
-    this.visualContainer.setScale(1, 1);
-    this.visualContainer.setAlpha(1);
-    this.physicsCircle.setActive(true);
+    this.setPosition(x, y);
+    this.setVisible(true);
+    this.setActive(true);
+    this.setScale(1, 1);
+    this.setAlpha(1);
     this.body.enable = true;
     this.isActive = true;
     this.floatOffset = 0;
@@ -69,12 +57,12 @@ export class Coin {
     this.floatOffset += delta * 0.005;
     const fy = this.baseY + Math.sin(this.floatOffset) * 5;
     this.body.position.y = fy;
-    this.visualContainer.setPosition(
+    this.setPosition(
       this.body.position.x + this.body.width / 2,
       this.body.position.y + this.body.height / 2,
     );
     const scaleX = Math.abs(Math.cos(this.floatOffset * 2));
-    this.visualContainer.setScale(Math.max(0.3, scaleX), 1);
+    this.setScale(Math.max(0.3, scaleX), 1);
     this.glow.setAlpha(0.2 + Math.sin(this.floatOffset * 3) * 0.15);
 
     if (this.body.position.x < -COIN_SIZE * 2) {
@@ -85,18 +73,18 @@ export class Coin {
   collect(onComplete?: () => void) {
     this.isActive = false;
     this.body.enable = false;
-    this.physicsCircle.setActive(false);
+    this.setActive(false);
     this.scene.tweens.add({
-      targets: this.visualContainer,
+      targets: this,
       scaleX: 2,
       scaleY: 2,
       alpha: 0,
       duration: 300,
       ease: 'Back.easeOut',
       onComplete: () => {
-        this.visualContainer.setVisible(false);
-        this.visualContainer.setScale(1, 1);
-        this.visualContainer.setAlpha(1);
+        this.setVisible(false);
+        this.setScale(1, 1);
+        this.setAlpha(1);
         if (onComplete) onComplete();
       },
     });
@@ -104,11 +92,13 @@ export class Coin {
 
   deactivate() {
     this.isActive = false;
-    this.visualContainer.setVisible(false);
-    this.visualContainer.setScale(1, 1);
-    this.visualContainer.setAlpha(1);
-    this.body.enable = false;
-    this.physicsCircle.setActive(false);
+    this.setVisible(false);
+    this.setActive(false);
+    this.setScale(1, 1);
+    this.setAlpha(1);
+    if (this.body) {
+      this.body.enable = false;
+    }
   }
 }
 
@@ -153,9 +143,5 @@ export class CoinPool {
       c.deactivate();
     }
     this.activeCoins = [];
-  }
-
-  getActivePhysicsObjects(): Phaser.GameObjects.GameObject[] {
-    return this.activeCoins.map((c) => c.physicsCircle);
   }
 }

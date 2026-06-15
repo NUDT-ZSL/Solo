@@ -13,61 +13,49 @@ export enum ObstacleType {
   LOW = 'low',
 }
 
-export class Obstacle {
-  scene: Phaser.Scene;
+export class Obstacle extends Phaser.GameObjects.Container {
+  body!: Phaser.Physics.Arcade.Body;
   type: ObstacleType;
   height: number;
   isActive: boolean = false;
 
-  physicsRect: Phaser.GameObjects.Rectangle;
-  body: Phaser.Physics.Arcade.Body;
-
-  private visualContainer: Phaser.GameObjects.Container;
   private bodyRect: Phaser.GameObjects.Rectangle;
   private stripe1: Phaser.GameObjects.Rectangle;
   private stripe2: Phaser.GameObjects.Rectangle;
 
   constructor(scene: Phaser.Scene, type: ObstacleType) {
-    this.scene = scene;
-    this.type = type;
-    this.height = type === ObstacleType.HIGH ? OBSTACLE_HIGH_HEIGHT : OBSTACLE_LOW_HEIGHT;
+    const height = type === ObstacleType.HIGH ? OBSTACLE_HIGH_HEIGHT : OBSTACLE_LOW_HEIGHT;
     const color = type === ObstacleType.HIGH ? 0xe74c3c : 0xe67e22;
+    const y = GROUND_Y - height / 2;
 
-    const y = GROUND_Y - this.height / 2;
-    this.physicsRect = scene.add.rectangle(
-      GAME_WIDTH + OBSTACLE_WIDTH,
-      y,
-      OBSTACLE_WIDTH,
-      this.height,
-      0x000000,
-      0,
-    );
-    scene.physics.add.existing(this.physicsRect);
-    this.body = this.physicsRect.body as Phaser.Physics.Arcade.Body;
+    super(scene, GAME_WIDTH + OBSTACLE_WIDTH, y);
+    this.type = type;
+    this.height = height;
+
+    this.bodyRect = scene.add.rectangle(0, 0, OBSTACLE_WIDTH, height, color);
+    this.stripe1 = scene.add.rectangle(0, -height / 2 + 4, OBSTACLE_WIDTH, 4, 0xffffff, 0.4);
+    this.stripe2 = scene.add.rectangle(0, height / 2 - 4, OBSTACLE_WIDTH, 4, 0x000000, 0.2);
+
+    this.add([this.bodyRect, this.stripe1, this.stripe2]);
+    this.setDepth(5);
+
+    scene.add.existing(this);
+    scene.physics.add.existing(this);
+    this.body = this.body as Phaser.Physics.Arcade.Body;
     this.body.setAllowGravity(false);
     this.body.setImmovable(true);
-    this.body.setSize(OBSTACLE_WIDTH, this.height);
+    this.body.setSize(OBSTACLE_WIDTH, height);
+    this.body.setOffset(-OBSTACLE_WIDTH / 2, -height / 2);
 
-    this.bodyRect = scene.add.rectangle(0, 0, OBSTACLE_WIDTH, this.height, color);
-    this.stripe1 = scene.add.rectangle(0, -this.height / 2 + 4, OBSTACLE_WIDTH, 4, 0xffffff, 0.4);
-    this.stripe2 = scene.add.rectangle(0, this.height / 2 - 4, OBSTACLE_WIDTH, 4, 0x000000, 0.2);
-
-    this.visualContainer = scene.add.container(GAME_WIDTH + OBSTACLE_WIDTH, y, [
-      this.bodyRect,
-      this.stripe1,
-      this.stripe2,
-    ]);
-    this.visualContainer.setDepth(5);
     this.deactivate();
   }
 
   spawn(x: number) {
     const y = GROUND_Y - this.height / 2;
     this.body.reset(x, y);
-    this.visualContainer.setPosition(x, y);
-    this.visualContainer.setVisible(true);
-    this.physicsRect.setVisible(false);
-    this.physicsRect.setActive(true);
+    this.setPosition(x, y);
+    this.setVisible(true);
+    this.setActive(true);
     this.body.enable = true;
     this.isActive = true;
   }
@@ -76,7 +64,7 @@ export class Obstacle {
     if (!this.isActive) return;
     const move = (speed * delta) / 1000;
     this.body.position.x -= move;
-    this.visualContainer.x = this.body.position.x + this.body.width / 2;
+    this.x = this.body.position.x + this.body.width / 2;
     if (this.body.position.x < -OBSTACLE_WIDTH * 2) {
       this.deactivate();
     }
@@ -84,9 +72,11 @@ export class Obstacle {
 
   deactivate() {
     this.isActive = false;
-    this.visualContainer.setVisible(false);
-    this.body.enable = false;
-    this.physicsRect.setActive(false);
+    this.setVisible(false);
+    this.setActive(false);
+    if (this.body) {
+      this.body.enable = false;
+    }
   }
 }
 
@@ -135,9 +125,5 @@ export class ObstaclePool {
 
   getRandomType(): ObstacleType {
     return Math.random() < OBSTACLE_HIGH_RATIO ? ObstacleType.HIGH : ObstacleType.LOW;
-  }
-
-  getActivePhysicsObjects(): Phaser.GameObjects.GameObject[] {
-    return this.activeObstacles.map((o) => o.physicsRect);
   }
 }
