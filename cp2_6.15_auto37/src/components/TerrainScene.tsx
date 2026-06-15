@@ -1,6 +1,6 @@
 import { useMemo, useRef, useEffect, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { OrbitControls, Line as ThreeLine } from '@react-three/drei'
+import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { useTrailStore } from '../store/trailStore'
 import { projectTrailToScene } from '../parser/terrainLoader'
@@ -8,45 +8,13 @@ import type { TerrainData, TrailPoint } from '../store/trailStore'
 
 interface TerrainMeshProps {
   terrainData: TerrainData
-  showSkeleton: boolean
 }
 
-function TerrainMesh({ terrainData, showSkeleton }: TerrainMeshProps) {
+function TerrainMesh({ terrainData }: TerrainMeshProps) {
   const meshRef = useRef<THREE.Mesh>(null)
   const wireframeRef = useRef<THREE.LineSegments>(null)
   const materialRef = useRef<THREE.MeshStandardMaterial>(null)
   const wireframeMatRef = useRef<THREE.LineBasicMaterial>(null)
-  const [skeletonProgress, setSkeletonProgress] = useState(0)
-  const [fadeProgress, setFadeProgress] = useState(0)
-
-  useEffect(() => {
-    if (showSkeleton) {
-      setSkeletonProgress(0)
-      setFadeProgress(0)
-      const start = performance.now()
-      const anim = () => {
-        const t = (performance.now() - start) / 1500
-        if (t < 1) {
-          setSkeletonProgress(t)
-          requestAnimationFrame(anim)
-        } else {
-          setSkeletonProgress(1)
-          const fadeStart = performance.now()
-          const fadeAnim = () => {
-            const ft = (performance.now() - fadeStart) / 500
-            if (ft < 1) {
-              setFadeProgress(ft)
-              requestAnimationFrame(fadeAnim)
-            } else {
-              setFadeProgress(1)
-            }
-          }
-          requestAnimationFrame(fadeAnim)
-        }
-      }
-      requestAnimationFrame(anim)
-    }
-  }, [showSkeleton, terrainData])
 
   const { geometry, wireframeGeometry } = useMemo(() => {
     const { vertices, width, height, minEle, maxEle } = terrainData
@@ -84,27 +52,44 @@ function TerrainMesh({ terrainData, showSkeleton }: TerrainMeshProps) {
     return { geometry: geo, wireframeGeometry: edges }
   }, [terrainData])
 
-  useFrame(() => {
-    if (meshRef.current) {
-      const scale = showSkeleton ? 0.1 + skeletonProgress * 0.9 : 1
-      const rotation = showSkeleton ? skeletonProgress * Math.PI * 2 : 0
+  useFrame((state) => {
+    const t = state.clock.elapsedTime
+    if (t < 1.5 && meshRef.current && wireframeRef.current) {
+      const progress = Math.min(1, t / 1.5)
+      const easeProgress = 1 - Math.pow(1 - progress, 3)
+      const scale = 0.1 + easeProgress * 0.9
+      const rotation = easeProgress * Math.PI * 2
+
       meshRef.current.scale.setScalar(scale)
       meshRef.current.rotation.y = rotation
-    }
-    if (wireframeRef.current) {
-      const scale = showSkeleton ? 0.1 + skeletonProgress * 0.9 : 1
-      const rotation = showSkeleton ? skeletonProgress * Math.PI * 2 : 0
       wireframeRef.current.scale.setScalar(scale)
       wireframeRef.current.rotation.y = rotation
-    }
-    if (materialRef.current) {
-      materialRef.current.opacity = fadeProgress
-      materialRef.current.transparent = fadeProgress < 1
-    }
-    if (wireframeMatRef.current) {
-      const targetOpacity = showSkeleton ? (1 - fadeProgress) : 0
-      wireframeMatRef.current.opacity = Math.max(0, targetOpacity)
-      wireframeMatRef.current.transparent = true
+
+      if (materialRef.current) {
+        materialRef.current.opacity = Math.max(0, (t - 1) / 0.5)
+        materialRef.current.transparent = true
+      }
+      if (wireframeMatRef.current) {
+        wireframeMatRef.current.opacity = Math.max(0, 1 - (t - 1) / 0.5)
+        wireframeMatRef.current.transparent = true
+      }
+    } else if (t >= 1.5) {
+      if (meshRef.current) {
+        meshRef.current.scale.setScalar(1)
+        meshRef.current.rotation.y = 0
+      }
+      if (wireframeRef.current) {
+        wireframeRef.current.scale.setScalar(1)
+        wireframeRef.current.rotation.y = 0
+      }
+      if (materialRef.current) {
+        materialRef.current.opacity = 1
+        materialRef.current.transparent = false
+      }
+      if (wireframeMatRef.current) {
+        wireframeMatRef.current.opacity = 0
+        wireframeMatRef.current.transparent = true
+      }
     }
   })
 
@@ -148,62 +133,76 @@ function TrailLine({ trailPoints, terrainData }: TrailLineProps) {
     return scenePoints.map((p) => new THREE.Vector3(p.x, p.z + 0.05, p.y))
   }, [scenePoints])
 
-  const colors = useMemo(() => {
-    return scenePoints.map((_, i) => {
-      const t = i / (scenePoints.length - 1 || 1)
-      const startColor = new THREE.Color('#00e676')
-      const endColor = new THREE.Color('#00bcd4')
-      return startColor.clone().lerp(endColor, t)
-    })
-  }, [scenePoints])
-
-  const lineGeometry = useMemo(() => {
+  const lineObject = useMemo(() => {
     const positions = new Float32Array(points3D.length * 3)
-    const vertexColors = new Float32Array(points3D.length * 3)
+    const colors = new Float32Array(points3D.length * 3)
 
     for (let i = 0; i < points3D.length; i++) {
       positions[i * 3] = points3D[i].x
       positions[i * 3 + 1] = points3D[i].y
       positions[i * 3 + 2] = points3D[i].z
 
-      const color = colors[i]
-      vertexColors[i * 3] = color.r
-      vertexColors[i * 3 + 1] = color.g
-      vertexColors[i * 3 + 2] = color.b
+      const t = i / (points3D.length - 1 || 1)
+      const startColor = new THREE.Color('#00e676')
+      const endColor = new THREE.Color('#00bcd4')
+      const color = startColor.clone().lerp(endColor, t)
+
+      colors[i * 3] = color.r
+      colors[i * 3 + 1] = color.g
+      colors[i * 3 + 2] = color.b
     }
 
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    geo.setAttribute('color', new THREE.BufferAttribute(vertexColors, 3))
-    return geo
-  }, [points3D, colors])
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
 
-  const mainLine = useMemo(() => {
     const mat = new THREE.LineBasicMaterial({
       vertexColors: true,
       linewidth: 2,
       transparent: true,
       opacity: 1,
     })
-    return new THREE.Line(lineGeometry, mat)
-  }, [lineGeometry])
 
-  const glowLine = useMemo(() => {
+    return new THREE.Line(geo, mat)
+  }, [points3D])
+
+  const glowLineObject = useMemo(() => {
+    const positions = new Float32Array(points3D.length * 3)
+    const colors = new Float32Array(points3D.length * 3)
+
+    for (let i = 0; i < points3D.length; i++) {
+      positions[i * 3] = points3D[i].x
+      positions[i * 3 + 1] = points3D[i].y + 0.02
+      positions[i * 3 + 2] = points3D[i].z
+
+      const t = i / (points3D.length - 1 || 1)
+      const startColor = new THREE.Color('#00e676')
+      const endColor = new THREE.Color('#00bcd4')
+      const color = startColor.clone().lerp(endColor, t)
+
+      colors[i * 3] = color.r
+      colors[i * 3 + 1] = color.g
+      colors[i * 3 + 2] = color.b
+    }
+
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+
     const mat = new THREE.LineBasicMaterial({
       vertexColors: true,
       linewidth: 4,
       transparent: true,
-      opacity: 0.25,
+      opacity: 0.3,
     })
-    const line = new THREE.Line(lineGeometry, mat)
-    line.position.y = 0.05
-    return line
-  }, [lineGeometry])
+
+    return new THREE.Line(geo, mat)
+  }, [points3D])
 
   return (
     <group>
-      <primitive object={glowLine} />
-      <primitive object={mainLine} />
+      <primitive object={glowLineObject} />
+      <primitive object={lineObject} />
     </group>
   )
 }
@@ -215,9 +214,7 @@ interface PlaybackMarkerProps {
 }
 
 function PlaybackMarker({ trailPoints, terrainData, currentIndex }: PlaybackMarkerProps) {
-  const meshRef = useRef<THREE.Mesh>(null)
-  const glowRef = useRef<THREE.Mesh>(null)
-  const haloRef = useRef<THREE.Mesh>(null)
+  const markerGroup = useRef<THREE.Group>(null)
   const targetPos = useRef(new THREE.Vector3())
   const currentPos = useRef(new THREE.Vector3())
   const smoothIndex = useRef(currentIndex)
@@ -232,72 +229,66 @@ function PlaybackMarker({ trailPoints, terrainData, currentIndex }: PlaybackMark
   }, [currentIndex])
 
   useFrame((state, delta) => {
-    if (scenePoints.length === 0) return
+    if (scenePoints.length === 0 || !markerGroup.current) return
 
     smoothIndex.current += (currentIndex - smoothIndex.current) * Math.min(1, delta / 0.3)
 
-    const idx = Math.min(Math.max(Math.round(smoothIndex.current), 0), scenePoints.length - 1)
-    const pt = scenePoints[idx]
+    const floatIdx = smoothIndex.current
+    const idx0 = Math.floor(Math.max(0, floatIdx))
+    const idx1 = Math.ceil(Math.min(scenePoints.length - 1, floatIdx))
+    const t = floatIdx - idx0
 
-    targetPos.current.set(pt.x, pt.z + 0.15, pt.y)
-    currentPos.current.lerp(targetPos.current, Math.min(delta / 0.3, 1))
+    const p0 = scenePoints[Math.max(0, Math.min(idx0, scenePoints.length - 1))]
+    const p1 = scenePoints[Math.max(0, Math.min(idx1, scenePoints.length - 1))]
 
-    if (meshRef.current) {
-      meshRef.current.position.copy(currentPos.current)
-      meshRef.current.rotation.y += delta * 2
-    }
-    if (glowRef.current) {
-      glowRef.current.position.copy(currentPos.current)
-      const pulse = 1 + Math.sin(state.clock.elapsedTime * 3) * 0.15
-      glowRef.current.scale.setScalar(pulse)
-    }
-    if (haloRef.current) {
-      haloRef.current.position.copy(currentPos.current)
-      const pulse = 1 + Math.sin(state.clock.elapsedTime * 2) * 0.25
-      haloRef.current.scale.setScalar(pulse)
-      const mat = haloRef.current.material as THREE.MeshBasicMaterial
-      mat.opacity = 0.3 * (1 - Math.abs(Math.sin(state.clock.elapsedTime * 2)) * 0.5)
-    }
+    const x = p0.x + (p1.x - p0.x) * t
+    const z = p0.z + (p1.z - p0.z) * t
+    const y = p0.y + (p1.y - p0.y) * t
+
+    targetPos.current.set(x, z + 0.15, y)
+    currentPos.current.lerp(targetPos.current, Math.min(1, delta / 0.3))
+    markerGroup.current.position.copy(currentPos.current)
   })
 
   if (scenePoints.length === 0) return null
 
   return (
-    <group>
-      <mesh ref={haloRef}>
-        <sphereGeometry args={[0.3, 16, 16]} />
+    <group ref={markerGroup}>
+      <mesh>
+        <sphereGeometry args={[0.3, 24, 24]} />
+        <meshBasicMaterial color="#00e676" transparent opacity={0.15} />
+      </mesh>
+      <mesh position={[0, 0, 0]}>
+        <sphereGeometry args={[0.18, 24, 24]} />
         <meshBasicMaterial color="#00bcd4" transparent opacity={0.3} />
       </mesh>
-      <mesh ref={glowRef}>
-        <sphereGeometry args={[0.2, 16, 16]} />
-        <meshBasicMaterial color="#00e676" transparent opacity={0.4} />
-      </mesh>
-      <mesh ref={meshRef}>
-        <sphereGeometry args={[0.1, 16, 16]} />
+      <mesh position={[0, 0, 0]}>
+        <sphereGeometry args={[0.1, 24, 24]} />
         <meshStandardMaterial
           color="#00e676"
           emissive="#00e676"
-          emissiveIntensity={1.2}
-          metalness={0.5}
+          emissiveIntensity={2}
+          metalness={0.3}
           roughness={0.2}
         />
       </mesh>
+      <pointLight color="#00e676" intensity={0.8} distance={2} />
     </group>
   )
 }
 
-interface CameraAnimatorProps {
+interface CameraSetupProps {
   loaded: boolean
 }
 
-function CameraAnimator({ loaded }: CameraAnimatorProps) {
+function CameraSetup({ loaded }: CameraSetupProps) {
   const { camera } = useThree()
   const hasAnimated = useRef(false)
 
   useEffect(() => {
     if (loaded && !hasAnimated.current) {
       hasAnimated.current = true
-      const startPos = camera.position.clone()
+      const startPos = new THREE.Vector3(0, 2, 0.1)
       const endPos = new THREE.Vector3(15, 15, 15)
       const start = performance.now()
       const duration = 1500
@@ -324,7 +315,6 @@ function SceneContent({ loaded }: SceneContentProps) {
   const trailPoints = useTrailStore((s) => s.trailPoints)
   const terrainData = useTrailStore((s) => s.terrainData)
   const currentIndex = useTrailStore((s) => s.currentIndex)
-  const controlsRef = useRef<any>(null)
 
   if (!loaded || !terrainData || trailPoints.length === 0) {
     return null
@@ -349,7 +339,7 @@ function SceneContent({ loaded }: SceneContentProps) {
       <hemisphereLight args={['#87ceeb', '#4caf50', 0.4]} />
       <pointLight position={[-10, 10, -10]} intensity={0.5} color="#00bcd4" />
 
-      <TerrainMesh terrainData={terrainData} showSkeleton={loaded} />
+      <TerrainMesh terrainData={terrainData} />
       <TrailLine trailPoints={trailPoints} terrainData={terrainData} />
       <PlaybackMarker
         trailPoints={trailPoints}
@@ -358,7 +348,6 @@ function SceneContent({ loaded }: SceneContentProps) {
       />
 
       <OrbitControls
-        ref={controlsRef}
         enableDamping
         dampingFactor={0.05}
         minDistance={5}
@@ -367,11 +356,11 @@ function SceneContent({ loaded }: SceneContentProps) {
         target={[0, 0, 0]}
       />
 
-      <CameraAnimator loaded={loaded} />
+      <CameraSetup loaded={loaded} />
 
       <fog attach="fog" args={['#1a237e', 25, 60]} />
 
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.5, 0]} receiveShadow>
         <planeGeometry args={[100, 100]} />
         <meshStandardMaterial color="#0d1452" />
       </mesh>
@@ -385,10 +374,15 @@ export default function TerrainScene() {
   return (
     <Canvas
       shadows
-      camera={{ position: [0, 0, 1], fov: 60 }}
+      camera={{ position: [0, 2, 0.1], fov: 60 }}
       gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
       dpr={[1, 2]}
-      style={{ background: 'linear-gradient(180deg, #1a237e 0%, #0d1452 60%, #050826 100%)' }}
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'block',
+        background: 'linear-gradient(180deg, #1a237e 0%, #0d1452 60%, #050826 100%)',
+      }}
     >
       <SceneContent loaded={loaded} />
     </Canvas>
