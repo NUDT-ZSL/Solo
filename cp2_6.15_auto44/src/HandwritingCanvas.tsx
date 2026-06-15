@@ -26,9 +26,10 @@ const HandwritingCanvas = forwardRef<HandwritingCanvasHandle, HandwritingCanvasP
     const drawTimerRef = useRef<number | null>(null);
     const recognizeTimerRef = useRef<number | null>(null);
     const pendingPointRef = useRef<StrokePoint | null>(null);
-    const loadingCenterRef = useRef<{ x: number; y: number } | null>(null);
+    const loadingPosRef = useRef<{ x: number; y: number } | null>(null);
     const loaderAnimRef = useRef<number | null>(null);
     const loaderAngleRef = useRef(0);
+    const lastPointRef = useRef<StrokePoint | null>(null);
 
     const getCoords = useCallback((e: React.MouseEvent | React.TouchEvent): StrokePoint | null => {
       const canvas = canvasRef.current;
@@ -50,70 +51,57 @@ const HandwritingCanvas = forwardRef<HandwritingCanvasHandle, HandwritingCanvasP
       };
     }, []);
 
-    const computeStrokePathLength = (points: StrokePoint[]): number => {
-      let len = 0;
-      for (let i = 1; i < points.length; i++) {
-        const dx = points[i].x - points[i - 1].x;
-        const dy = points[i].y - points[i - 1].y;
-        len += Math.sqrt(dx * dx + dy * dy);
-      }
-      return len;
-    };
-
     const drawStroke = useCallback((ctx: CanvasRenderingContext2D, points: StrokePoint[]) => {
-      if (points.length < 2) {
-        if (points.length === 1) {
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          ctx.arc(points[0].x, points[0].y, STROKE_WIDTH / 2, 0, Math.PI * 2);
-          ctx.fill();
-        }
+      if (points.length === 0) return;
+
+      if (points.length === 1) {
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.arc(points[0].x, points[0].y, STROKE_WIDTH / 2, 0, Math.PI * 2);
+        ctx.fill();
         return;
       }
 
-      const totalLength = computeStrokePathLength(points);
-      const fadeLength = totalLength * FADE_RATIO;
-      let accumulated = 0;
+      const n = points.length;
+      const fadeStartIdx = Math.floor(n * (1 - FADE_RATIO));
+      const fadeCount = n - fadeStartIdx;
 
-      for (let i = 1; i < points.length; i++) {
-        const p0 = points[i - 1];
-        const p1 = points[i];
-        const segLen = Math.sqrt((p1.x - p0.x) ** 2 + (p1.y - p0.y) ** 2);
-        const segStart = accumulated;
-        const segEnd = accumulated + segLen;
-        const fadeStart = totalLength - fadeLength;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = STROKE_WIDTH;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
 
-        if (segEnd <= fadeStart || fadeLength < 1) {
-          ctx.strokeStyle = `rgba(255, 255, 255, 1)`;
-          ctx.lineWidth = STROKE_WIDTH;
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-          ctx.beginPath();
-          ctx.moveTo(p0.x, p0.y);
-          ctx.lineTo(p1.x, p1.y);
-          ctx.stroke();
-        } else {
-          const steps = Math.max(2, Math.ceil(segLen / 2));
-          for (let s = 0; s < steps; s++) {
-            const t0 = s / steps;
-            const t1 = (s + 1) / steps;
-            const d0 = segStart + segLen * t0;
-            const d1 = segStart + segLen * t1;
-            const alpha0 = d0 < fadeStart ? 1 : Math.max(0, 1 - (d0 - fadeStart) / fadeLength);
-            const alpha1 = d1 < fadeStart ? 1 : Math.max(0, 1 - (d1 - fadeStart) / fadeLength);
-            const alpha = (alpha0 + alpha1) / 2;
-            ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
-            ctx.lineWidth = STROKE_WIDTH;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.beginPath();
-            ctx.moveTo(p0.x + (p1.x - p0.x) * t0, p0.y + (p1.y - p0.y) * t0);
-            ctx.lineTo(p0.x + (p1.x - p0.x) * t1, p0.y + (p1.y - p0.y) * t1);
-            ctx.stroke();
-          }
+      if (fadeCount <= 1 || n < 4) {
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < n; i++) {
+          ctx.lineTo(points[i].x, points[i].y);
         }
-        accumulated += segLen;
+        ctx.stroke();
+        return;
       }
+
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i <= fadeStartIdx; i++) {
+        ctx.lineTo(points[i].x, points[i].y);
+      }
+      ctx.stroke();
+
+      for (let i = fadeStartIdx + 1; i < n; i++) {
+        const t = (i - fadeStartIdx) / fadeCount;
+        const alpha = 1 - t;
+        ctx.globalAlpha = Math.max(0, alpha);
+        ctx.beginPath();
+        ctx.moveTo(points[i - 1].x, points[i - 1].y);
+        ctx.lineTo(points[i].x, points[i].y);
+        ctx.stroke();
+      }
+
+      ctx.globalAlpha = 1;
     }, []);
 
     const redraw = useCallback(() => {
@@ -141,20 +129,20 @@ const HandwritingCanvas = forwardRef<HandwritingCanvasHandle, HandwritingCanvasP
 
       ctx.clearRect(0, 0, overlay.width, overlay.height);
 
-      if (!isRecognizing || !loadingCenterRef.current) {
+      if (!isRecognizing || !loadingPosRef.current) {
         loaderAnimRef.current = null;
         return;
       }
 
-      const { x, y } = loadingCenterRef.current;
+      const { x, y } = loadingPosRef.current;
       const radius = 10;
       const lineWidth = 3;
-      const spinY = -radius - 12;
+      const offsetY = -radius - 14;
 
-      loaderAngleRef.current += 0.12;
+      loaderAngleRef.current += 0.14;
 
       ctx.save();
-      ctx.translate(x, y + spinY);
+      ctx.translate(x, y + offsetY);
       ctx.lineWidth = lineWidth;
       ctx.strokeStyle = 'rgba(0, 220, 220, 0.25)';
       ctx.beginPath();
@@ -172,7 +160,7 @@ const HandwritingCanvas = forwardRef<HandwritingCanvasHandle, HandwritingCanvasP
     }, [isRecognizing]);
 
     useEffect(() => {
-      if (isRecognizing && loadingCenterRef.current) {
+      if (isRecognizing && loadingPosRef.current) {
         if (!loaderAnimRef.current) {
           loaderAnimRef.current = requestAnimationFrame(drawLoadingSpinner);
         }
@@ -194,6 +182,7 @@ const HandwritingCanvas = forwardRef<HandwritingCanvasHandle, HandwritingCanvasP
     const flushPendingPoint = useCallback(() => {
       if (pendingPointRef.current) {
         currentStrokeRef.current.push(pendingPointRef.current);
+        lastPointRef.current = pendingPointRef.current;
         pendingPointRef.current = null;
         redraw();
       }
@@ -214,6 +203,7 @@ const HandwritingCanvas = forwardRef<HandwritingCanvasHandle, HandwritingCanvasP
 
       setIsDrawing(true);
       currentStrokeRef.current = [pt];
+      lastPointRef.current = pt;
       pendingPointRef.current = null;
       redraw();
     }, [getCoords, isRecognizing, redraw]);
@@ -231,6 +221,7 @@ const HandwritingCanvas = forwardRef<HandwritingCanvasHandle, HandwritingCanvasP
 
       if (pendingPointRef.current) {
         currentStrokeRef.current.push(pendingPointRef.current);
+        lastPointRef.current = pendingPointRef.current;
       }
       pendingPointRef.current = pt;
       redraw();
@@ -247,6 +238,7 @@ const HandwritingCanvas = forwardRef<HandwritingCanvasHandle, HandwritingCanvasP
       }
       if (pendingPointRef.current) {
         currentStrokeRef.current.push(pendingPointRef.current);
+        lastPointRef.current = pendingPointRef.current;
         pendingPointRef.current = null;
       }
 
@@ -257,14 +249,9 @@ const HandwritingCanvas = forwardRef<HandwritingCanvasHandle, HandwritingCanvasP
       setIsDrawing(false);
       redraw();
 
-      if (strokesRef.current.length > 0) {
-        const allPoints: StrokePoint[] = [];
-        strokesRef.current.forEach(s => allPoints.push(...s.points));
-        const minX = Math.min(...allPoints.map(p => p.x));
-        const maxX = Math.max(...allPoints.map(p => p.x));
-        const minY = Math.min(...allPoints.map(p => p.y));
-        const center = { x: (minX + maxX) / 2, y: minY };
-        loadingCenterRef.current = center;
+      if (strokesRef.current.length > 0 && lastPointRef.current) {
+        const lastPt = lastPointRef.current;
+        loadingPosRef.current = { x: lastPt.x, y: lastPt.y };
 
         if (recognizeTimerRef.current !== null) {
           clearTimeout(recognizeTimerRef.current);
@@ -272,7 +259,7 @@ const HandwritingCanvas = forwardRef<HandwritingCanvasHandle, HandwritingCanvasP
         recognizeTimerRef.current = window.setTimeout(() => {
           recognizeTimerRef.current = null;
           const data = strokesRef.current.map(s => ({ points: [...s.points] }));
-          onRecognitionStart(center);
+          onRecognitionStart({ x: lastPt.x, y: lastPt.y });
           onRecognitionComplete('', data);
         }, 200);
       }
@@ -282,7 +269,8 @@ const HandwritingCanvas = forwardRef<HandwritingCanvasHandle, HandwritingCanvasP
       strokesRef.current = [];
       currentStrokeRef.current = [];
       pendingPointRef.current = null;
-      loadingCenterRef.current = null;
+      loadingPosRef.current = null;
+      lastPointRef.current = null;
       if (drawTimerRef.current !== null) {
         clearTimeout(drawTimerRef.current);
         drawTimerRef.current = null;

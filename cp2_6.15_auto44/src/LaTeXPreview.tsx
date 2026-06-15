@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { MathJax, MathJaxContext } from 'mathjax-react';
+import { useMathJax } from 'mathjax-react';
 
 interface LaTeXPreviewProps {
   latex: string;
@@ -7,35 +7,47 @@ interface LaTeXPreviewProps {
   resetKey?: number;
 }
 
+const MATHJAX_SRC = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js';
+
 const LaTeXPreview: React.FC<LaTeXPreviewProps> = ({ latex, onChange, resetKey }) => {
   const [inputValue, setInputValue] = useState(latex);
   const [displayLatex, setDisplayLatex] = useState(latex);
   const [fadeIn, setFadeIn] = useState(false);
   const debounceTimerRef = useRef<number | null>(null);
-  const fadeTimerRef = useRef<number | null>(null);
+  const lastRenderedRef = useRef<string>('');
+  const contentKeyRef = useRef(0);
+
+  const { renderedHTML, getProps, error } = useMathJax({
+    src: displayLatex || ' ',
+    lang: 'tex',
+    display: true,
+    settings: {
+      src: MATHJAX_SRC
+    }
+  });
+
+  useEffect(() => {
+    if (renderedHTML && renderedHTML !== lastRenderedRef.current) {
+      lastRenderedRef.current = renderedHTML;
+      setFadeIn(false);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setFadeIn(true);
+        });
+      });
+    }
+  }, [renderedHTML]);
 
   useEffect(() => {
     setInputValue(latex);
     setDisplayLatex(latex);
+    contentKeyRef.current += 1;
     setFadeIn(false);
-    if (fadeTimerRef.current !== null) {
-      clearTimeout(fadeTimerRef.current);
-    }
-    fadeTimerRef.current = window.setTimeout(() => {
-      setFadeIn(true);
-      fadeTimerRef.current = null;
-    }, 20);
   }, [latex, resetKey]);
 
   useEffect(() => {
+    contentKeyRef.current += 1;
     setFadeIn(false);
-    if (fadeTimerRef.current !== null) {
-      clearTimeout(fadeTimerRef.current);
-    }
-    fadeTimerRef.current = window.setTimeout(() => {
-      setFadeIn(true);
-      fadeTimerRef.current = null;
-    }, 20);
   }, [displayLatex]);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -60,10 +72,6 @@ const LaTeXPreview: React.FC<LaTeXPreviewProps> = ({ latex, onChange, resetKey }
         clearTimeout(debounceTimerRef.current);
         debounceTimerRef.current = null;
       }
-      if (fadeTimerRef.current !== null) {
-        clearTimeout(fadeTimerRef.current);
-        fadeTimerRef.current = null;
-      }
     };
   }, []);
 
@@ -75,15 +83,20 @@ const LaTeXPreview: React.FC<LaTeXPreviewProps> = ({ latex, onChange, resetKey }
         </span>
       );
     }
-    try {
-      return <MathJax>{displayLatex}</MathJax>;
-    } catch {
+    if (error) {
       return (
         <span style={{ color: '#e74c3c', fontSize: 14, fontFamily: 'monospace' }}>
           {displayLatex}
         </span>
       );
     }
+    return (
+      <div
+        key={contentKeyRef.current}
+        {...getProps()}
+        style={{ minHeight: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      />
+    );
   };
 
   return (
@@ -113,9 +126,7 @@ const LaTeXPreview: React.FC<LaTeXPreviewProps> = ({ latex, onChange, resetKey }
           minHeight: 0
         }}
       >
-        <MathJaxContext>
-          {renderContent()}
-        </MathJaxContext>
+        {renderContent()}
       </div>
       <textarea
         value={inputValue}

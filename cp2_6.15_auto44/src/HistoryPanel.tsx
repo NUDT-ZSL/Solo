@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { MathJax, MathJaxContext } from 'mathjax-react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { MathComponent } from 'mathjax-react';
 
 export interface HistoryEntry {
   id: string;
@@ -21,25 +21,97 @@ const formatTime = (ts: number): string => {
   return `${hh}:${mm}:${ss}`;
 };
 
+interface DeletingState {
+  phase: 'slide' | 'shrink';
+  height: number;
+}
+
+const MATHJAX_SRC = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js';
+
 const HistoryPanel: React.FC<HistoryPanelProps> = ({ entries, onSelect, onDelete }) => {
-  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState<Map<string, DeletingState>>(new Map());
+  const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const handleDelete = useCallback((id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setDeletingIds(prev => {
-      const next = new Set(prev);
-      next.add(id);
+    const el = itemRefs.current.get(id);
+    const height = el?.offsetHeight ?? 48;
+
+    setDeleting(prev => {
+      const next = new Map(prev);
+      next.set(id, { phase: 'slide', height });
       return next;
     });
+
     setTimeout(() => {
-      onDelete(id);
-      setDeletingIds(prev => {
-        const next = new Set(prev);
-        next.delete(id);
+      setDeleting(prev => {
+        const next = new Map(prev);
+        const state = next.get(id);
+        if (state) {
+          next.set(id, { ...state, phase: 'shrink' });
+        }
         return next;
       });
     }, 200);
+
+    setTimeout(() => {
+      onDelete(id);
+      setDeleting(prev => {
+        const next = new Map(prev);
+        next.delete(id);
+        return next;
+      });
+    }, 200 + 200);
   }, [onDelete]);
+
+  const setItemRef = useCallback((id: string) => (el: HTMLDivElement | null) => {
+    if (el) {
+      itemRefs.current.set(id, el);
+    } else {
+      itemRefs.current.delete(id);
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      itemRefs.current.clear();
+    };
+  }, []);
+
+  const getItemStyle = (id: string): React.CSSProperties => {
+    const state = deleting.get(id);
+    if (!state) {
+      return {
+        transform: 'translateX(0)',
+        opacity: 1,
+        maxHeight: 48,
+        marginTop: 0,
+        marginBottom: 0,
+        paddingTop: 0,
+        paddingBottom: 0
+      };
+    }
+    if (state.phase === 'slide') {
+      return {
+        transform: 'translateX(-100%)',
+        opacity: 0,
+        maxHeight: state.height,
+        marginTop: 0,
+        marginBottom: 0,
+        paddingTop: 0,
+        paddingBottom: 0
+      };
+    }
+    return {
+      transform: 'translateX(-100%)',
+      opacity: 0,
+      maxHeight: 0,
+      marginTop: 0,
+      marginBottom: 0,
+      paddingTop: 0,
+      paddingBottom: 0
+    };
+  };
 
   return (
     <div
@@ -68,12 +140,14 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ entries, onSelect, onDelete
         </div>
       )}
       {entries.map(entry => {
-        const isDeleting = deletingIds.has(entry.id);
+        const style = getItemStyle(entry.id);
         return (
           <div
             key={entry.id}
+            ref={setItemRef(entry.id)}
             onClick={() => onSelect(entry)}
             style={{
+              ...style,
               height: 48,
               borderRadius: 8,
               backgroundColor: '#fff',
@@ -85,9 +159,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ entries, onSelect, onDelete
               cursor: 'pointer',
               overflow: 'hidden',
               boxSizing: 'border-box',
-              transform: isDeleting ? 'translateX(-100%)' : 'translateX(0)',
-              opacity: isDeleting ? 0 : 1,
-              transition: 'transform 0.2s ease-out, opacity 0.2s ease-out',
+              transition: 'transform 0.2s ease-out, opacity 0.2s ease-out, max-height 0.2s ease-out, margin 0.2s ease-out, padding 0.2s ease-out',
               flexShrink: 0
             }}
           >
@@ -101,11 +173,9 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ entries, onSelect, onDelete
                 fontSize: 13
               }}
             >
-              <MathJaxContext>
-                <div style={{ transform: 'scale(0.75)', transformOrigin: 'left center', whiteSpace: 'nowrap' }}>
-                  <MathJax>{entry.latex || '?'}</MathJax>
-                </div>
-              </MathJaxContext>
+              <div style={{ transform: 'scale(0.7)', transformOrigin: 'left center', whiteSpace: 'nowrap' }}>
+                <MathComponent tex={entry.latex || '?'} settings={{ src: MATHJAX_SRC }} />
+              </div>
             </div>
             <div
               style={{
