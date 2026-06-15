@@ -253,3 +253,11 @@ export function createNewTaskData(
     priority,
   };
 }
+
+export function getCurrentMembers(state: BoardState): string[] {
+  const memberSet = new Set<string>();
+  for (const task of Object.values(state.tasks)) {
+    memberSet.add(task.assignee);
+  }
+  return Array.from(memberSet).sort();
+}

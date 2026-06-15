@@ -63,5 +63,6 @@ export const PRIORITY_LABELS: Record<Priority, string> = {
 
 export const OVERLOAD_THRESHOLD = 5;
 export const MEMBER_CAPACITY = 8;
+export const OVERLOAD_BLINK_INTERVAL = 0.5;
 
 export const TEAM_MEMBERS = ['张三', '李四', '王五', '赵六', '钱七'];

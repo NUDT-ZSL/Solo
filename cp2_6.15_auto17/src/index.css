@@ -30,22 +30,6 @@ select {
   outline: none;
 }
 
-@keyframes blink-red {
-  0%,
-  100% {
-    background-color: #ff4d4d;
-    opacity: 1;
-  }
-  50% {
-    background-color: #ff8a8a;
-    opacity: 0.6;
-  }
-}
-
-.overload-blink {
-  animation: blink-red 0.5s ease-in-out infinite;
-}
-
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

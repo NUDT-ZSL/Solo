@@ -10,6 +10,7 @@ import {
   Tooltip,
 } from 'recharts';
 import type { WorkloadSummary, MemberWorkload } from '@/types';
+import { OVERLOAD_BLINK_INTERVAL } from '@/types';
 
 interface WorkloadChartProps {
   summary: WorkloadSummary;
@@ -66,12 +67,12 @@ const WorkloadChart: React.FC<WorkloadChartProps> = ({
         fill={color}
         animate={
           isOverloaded
-            ? { opacity: [1, 0.5, 1] }
+            ? { fill: ['#ff4d4d', '#ff8a8a', '#ff4d4d'], opacity: [1, 0.6, 1] }
             : { opacity: 1 }
         }
         transition={
           isOverloaded
-            ? { repeat: Infinity, duration: 0.5, ease: 'easeInOut' }
+            ? { repeat: Infinity, duration: OVERLOAD_BLINK_INTERVAL, ease: 'easeInOut' }
             : {}
         }
         style={{ cursor: 'pointer' }}

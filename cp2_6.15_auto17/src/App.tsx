@@ -23,6 +23,20 @@ const App: React.FC = () => {
     return () => window.removeEventListener('resize', checkWidth);
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (selectedMember) {
+          setSelectedMember(null);
+        } else if (isDrawerOpen) {
+          setIsDrawerOpen(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedMember, isDrawerOpen]);
+
   const handleTasksChange = useCallback((newTasks: Task[]) => {
     setTasks(newTasks);
   }, []);

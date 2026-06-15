@@ -1,5 +1,5 @@
 import React from 'react';
-import { Draggable } from 'react-beautiful-dnd';
+import { Draggable } from '@hello-pangea/dnd';
 import { motion } from 'framer-motion';
 import type { Task } from '@/types';
 import { PRIORITY_COLORS } from '@/types';

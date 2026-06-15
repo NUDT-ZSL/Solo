@@ -1,18 +1,19 @@
-import React, { useReducer, useState, useCallback, useEffect } from 'react';
+import React, { useReducer, useState, useCallback, useEffect, useMemo } from 'react';
 import {
   DragDropContext,
   Droppable,
   type DropResult,
-} from 'react-beautiful-dnd';
+} from '@hello-pangea/dnd';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Task, BoardAction } from '@/types';
-import { TEAM_MEMBERS, PRIORITY_COLORS, PRIORITY_LABELS, type Priority } from '@/types';
+import { PRIORITY_COLORS, PRIORITY_LABELS, type Priority } from '@/types';
 import {
   boardReducer,
   initialBoardState,
   getColumnTasks,
   getAllTasks,
   createNewTaskData,
+  getCurrentMembers,
 } from '../logic/boardLogic';
 import TaskCard from './TaskCard';
 
@@ -32,9 +33,17 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
   const [showAddForm, setShowAddForm] = useState(false);
 
   const [formTitle, setFormTitle] = useState('');
-  const [formAssignee, setFormAssignee] = useState(TEAM_MEMBERS[0]);
+  const [formAssignee, setFormAssignee] = useState('');
   const [formHours, setFormHours] = useState(2);
   const [formPriority, setFormPriority] = useState<Priority>('medium');
+
+  const currentMembers = useMemo(() => getCurrentMembers(state), [state]);
+
+  useEffect(() => {
+    if (currentMembers.length > 0 && !currentMembers.includes(formAssignee)) {
+      setFormAssignee(currentMembers[0]);
+    }
+  }, [currentMembers, formAssignee]);
 
   useEffect(() => {
     onTasksChange(getAllTasks(state));
@@ -77,20 +86,29 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
       dispatch({ type: 'ADD_TASK', payload: taskData });
 
       setFormTitle('');
-      setFormAssignee(TEAM_MEMBERS[0]);
+      if (currentMembers.length > 0) {
+        setFormAssignee(currentMembers[0]);
+      }
       setFormHours(2);
       setFormPriority('medium');
       setShowAddForm(false);
     },
-    [formTitle, formAssignee, formHours, formPriority]
+    [formTitle, formAssignee, formHours, formPriority, currentMembers]
   );
 
-  const columns = state.columnOrder.map((colId) => ({
-    ...state.columns[colId],
-    tasks: getColumnTasks(state, colId, searchKeyword),
-  }));
+  const columns = useMemo(
+    () =>
+      state.columnOrder.map((colId) => ({
+        ...state.columns[colId],
+        tasks: getColumnTasks(state, colId, searchKeyword),
+      })),
+    [state, searchKeyword]
+  );
 
-  const hasSearchResult = columns.some((col) => col.tasks.length > 0);
+  const hasSearchResult = useMemo(
+    () => columns.some((col) => col.tasks.length > 0),
+    [columns]
+  );
 
   const priorities: Priority[] = ['urgent', 'high', 'medium', 'low'];
 
@@ -413,7 +431,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
                       background: '#ffffff',
                     }}
                   >
-                    {TEAM_MEMBERS.map((m) => (
+                    {currentMembers.map((m) => (
                       <option key={m} value={m}>
                         {m}
                       </option>

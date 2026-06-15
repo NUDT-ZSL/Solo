@@ -2,12 +2,16 @@ import type { Task, MemberWorkload, WorkloadSummary } from '@/types';
 import { OVERLOAD_THRESHOLD, MEMBER_CAPACITY, TEAM_MEMBERS } from '@/types';
 
 export function calculateWorkload(tasks: Task[]): WorkloadSummary {
-  const memberMap = new Map<string, Task[]>();
+  const allMemberNames = new Set<string>(TEAM_MEMBERS);
+  for (const task of tasks) {
+    allMemberNames.add(task.assignee);
+  }
+  const sortedMemberNames = Array.from(allMemberNames).sort();
 
-  for (const member of TEAM_MEMBERS) {
+  const memberMap = new Map<string, Task[]>();
+  for (const member of sortedMemberNames) {
     memberMap.set(member, []);
   }
-
   for (const task of tasks) {
     if (!memberMap.has(task.assignee)) {
       memberMap.set(task.assignee, []);
@@ -15,7 +19,7 @@ export function calculateWorkload(tasks: Task[]): WorkloadSummary {
     memberMap.get(task.assignee)!.push(task);
   }
 
-  const members: MemberWorkload[] = TEAM_MEMBERS.map((name) => {
+  const members: MemberWorkload[] = sortedMemberNames.map((name) => {
     const memberTasks = memberMap.get(name) || [];
     const taskCount = memberTasks.length;
     const totalHours = memberTasks.reduce((sum, t) => sum + t.estimateHours, 0);
