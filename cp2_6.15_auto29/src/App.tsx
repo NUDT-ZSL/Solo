@@ -10,7 +10,7 @@ function StarField() {
   const pointsRef = useRef<THREE.Points>(null)
   const count = 300
 
-  const [positions, sizes, phases] = useMemo(() => {
+  const [positions, baseSizes, phases] = useMemo(() => {
     const pos = new Float32Array(count * 3)
     const sz = new Float32Array(count)
     const ph = new Float32Array(count)
@@ -31,35 +31,65 @@ function StarField() {
     return [pos, sz, ph]
   }, [])
 
-  useFrame((state) => {
-    if (!pointsRef.current) return
-    const geom = pointsRef.current.geometry
-    const sizeAttr = geom.getAttribute('size') as THREE.BufferAttribute
+  const starUniforms = useMemo(() => ({
+    uTime: { value: 0 },
+    uPixelRatio: { value: window.devicePixelRatio || 1 },
+  }), [])
 
-    for (let i = 0; i < count; i++) {
-      const period = 2 + (phases[i] / (Math.PI * 2)) * 2
-      const t = (state.clock.elapsedTime + phases[i]) / period
-      const twinkle = 0.5 + Math.sin(t * Math.PI * 2) * 0.5
-      sizeAttr.setX(i, sizes[i] * (0.5 + twinkle * 0.8))
-    }
-    sizeAttr.needsUpdate = true
+  useFrame((state) => {
+    starUniforms.uTime.value = state.clock.elapsedTime
   })
 
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    geo.setAttribute('size', new THREE.BufferAttribute(sizes.slice(), 1))
+    geo.setAttribute('aBaseSize', new THREE.BufferAttribute(baseSizes, 1))
+    geo.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1))
     return geo
-  }, [positions, sizes])
+  }, [positions, baseSizes, phases])
 
   return (
     <points ref={pointsRef} geometry={geometry}>
-      <pointsMaterial
-        size={0.08}
-        color="#ffffff"
+      <shaderMaterial
+        uniforms={starUniforms}
+        vertexShader={`
+          attribute float aBaseSize;
+          attribute float aPhase;
+          uniform float uTime;
+          uniform float uPixelRatio;
+          varying float vTwinkle;
+
+          void main() {
+            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+
+            float period = 2.0 + (aPhase / 6.28318) * 2.0;
+            float t = (uTime + aPhase) / period;
+            float twinkle = 0.5 + sin(t * 6.28318) * 0.5;
+            vTwinkle = twinkle;
+
+            float pixelSize = 1.0 + twinkle * 2.0;
+            float size = aBaseSize * pixelSize;
+
+            gl_PointSize = size * uPixelRatio * (300.0 / -mvPosition.z);
+            gl_Position = projectionMatrix * mvPosition;
+          }
+        `}
+        fragmentShader={`
+          varying float vTwinkle;
+
+          void main() {
+            vec2 center = gl_PointCoord - 0.5;
+            float dist = length(center);
+            if (dist > 0.5) discard;
+
+            float alpha = smoothstep(0.5, 0.2, dist);
+            alpha *= 0.7 + vTwinkle * 0.5;
+
+            vec3 color = vec3(1.0);
+            gl_FragColor = vec4(color, alpha);
+          }
+        `}
         transparent
-        opacity={0.9}
-        sizeAttenuation
         depthWrite={false}
         blending={THREE.AdditiveBlending}
       />
@@ -132,18 +162,14 @@ function BackgroundGradient() {
 
 function VolumeMeter({ volume }: { volume: number }) {
   const v = Math.min(1, Math.max(0, volume))
-  const getColor = (val: number) => {
-    if (val < 0.5) return `linear-gradient(90deg, #00cc66 ${val * 100}%, #333 ${val * 100}%)`
-    if (val < 0.8) return `linear-gradient(90deg, #00cc66 50%, #ffcc00 ${val * 100}%, #333 ${val * 100}%)`
-    return `linear-gradient(90deg, #00cc66 50%, #ffcc00 80%, #ff3333 ${val * 100}%, #333 ${val * 100}%)`
-  }
+  const maskWidth = (1 - v) * 100
 
   return (
     <div
       style={{
         width: 200,
         height: 20,
-        background: '#333',
+        background: 'linear-gradient(90deg, #00cc66 0%, #00cc66 45%, #ffcc00 65%, #ffcc00 80%, #ff3333 95%, #ff3333 100%)',
         borderRadius: 4,
         overflow: 'hidden',
         position: 'relative',
@@ -152,10 +178,14 @@ function VolumeMeter({ volume }: { volume: number }) {
     >
       <div
         style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
           height: '100%',
-          width: `${v * 100}%`,
-          background: getColor(v),
+          width: `${maskWidth}%`,
+          background: '#2a2a2a',
           transition: 'width 0.05s ease-out',
+          boxShadow: 'inset 2px 0 4px rgba(0,0,0,0.3)',
         }}
       />
     </div>

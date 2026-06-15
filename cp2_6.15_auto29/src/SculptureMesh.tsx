@@ -9,7 +9,7 @@ const REDUCED_SEGMENTS = 32
 const MIN_RADIUS = 0.5
 const MAX_RADIUS = 3.0
 const Y_SPACING = 0.22
-const BEAT_EXPANSION = 0.3
+const BEAT_EXPANSION_RATIO = 0.1
 const VERTEX_UPDATE_THRESHOLD = 5
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
@@ -21,14 +21,15 @@ interface SculptureMeshProps {}
 export default function SculptureMesh({}: SculptureMeshProps) {
   const meshRef = useRef<THREE.Mesh>(null)
   const geometryRef = useRef<THREE.BufferGeometry | null>(null)
-  const materialRef = useRef<THREE.ShaderMaterial | null>(null)
+  const materialRef = useRef<THREE.MeshStandardMaterial | null>(null)
   const basePositionsRef = useRef<Float32Array | null>(null)
+  const baseRadiiRef = useRef<Float32Array | null>(null)
   const targetColorsRef = useRef<THREE.Color[]>([])
   const currentColorsRef = useRef<THREE.Color[]>([])
   const beatStartTimeRef = useRef<number>(-1)
   const lastBeatRef = useRef<boolean>(false)
-  const lastUpdateTimeRef = useRef<number>(0)
   const slowFrameCountRef = useRef<number>(0)
+  const vertexUpdateTimeRef = useRef<number>(0)
   const [segments, setSegments] = useState(DEFAULT_SEGMENTS)
 
   const spectrum = useAudioStore((s) => s.spectrum)
@@ -42,10 +43,11 @@ export default function SculptureMesh({}: SculptureMeshProps) {
   const highColor = useMemo(() => new THREE.Color('#3366ff'), [])
   const whiteColor = useMemo(() => new THREE.Color('#ffffff'), [])
 
-  const { geometry, initialBasePositions } = useMemo(() => {
+  const { geometry, initialBasePositions, initialBaseRadii } = useMemo(() => {
     const totalVertices = RING_COUNT * segments
     const positions = new Float32Array(totalVertices * 3)
     const basePositions = new Float32Array(totalVertices * 3)
+    const baseRadii = new Float32Array(RING_COUNT)
     const colors = new Float32Array(totalVertices * 3)
     const indices: number[] = []
     const initialTargetColors: THREE.Color[] = []
@@ -54,6 +56,7 @@ export default function SculptureMesh({}: SculptureMeshProps) {
     for (let ring = 0; ring < RING_COUNT; ring++) {
       const ringProgress = ring / (RING_COUNT - 1)
       const radius = MIN_RADIUS + (MAX_RADIUS - MIN_RADIUS) * ringProgress
+      baseRadii[ring] = radius
       const y = (ring - RING_COUNT / 2) * Y_SPACING
       const twistAngle = ringProgress * Math.PI * 1.5
 
@@ -119,30 +122,31 @@ export default function SculptureMesh({}: SculptureMeshProps) {
     return {
       geometry: geo,
       initialBasePositions: basePositions,
+      initialBaseRadii: baseRadii,
     }
   }, [segments])
 
   useEffect(() => {
     basePositionsRef.current = initialBasePositions
+    baseRadiiRef.current = initialBaseRadii
     geometryRef.current = geometry
-  }, [geometry, initialBasePositions])
+  }, [geometry, initialBasePositions, initialBaseRadii])
 
   useEffect(() => {
     slowFrameCountRef.current = 0
-    lastUpdateTimeRef.current = 0
+    vertexUpdateTimeRef.current = 0
     geometryRef.current = geometry
     geometry.computeVertexNormals()
   }, [segments, geometry])
 
   useFrame((state, delta) => {
-    const startTime = performance.now()
-    if (!geometryRef.current || !basePositionsRef.current) return
+    const perfStartTime = performance.now()
+    if (!geometryRef.current || !baseRadiiRef.current) return
 
     const positionAttr = geometryRef.current.getAttribute('position') as THREE.BufferAttribute
     const colorAttr = geometryRef.current.getAttribute('color') as THREE.BufferAttribute
     const positions = positionAttr.array as Float32Array
     const colors = colorAttr.array as Float32Array
-    void basePositionsRef.current
 
     if (beat && !lastBeatRef.current) {
       beatStartTimeRef.current = state.clock.elapsedTime
@@ -150,7 +154,6 @@ export default function SculptureMesh({}: SculptureMeshProps) {
     lastBeatRef.current = beat
 
     let beatProgress = 0
-    let beatExpansion = 0
     let beatFlash = 0
 
     if (beatStartTimeRef.current >= 0) {
@@ -159,29 +162,38 @@ export default function SculptureMesh({}: SculptureMeshProps) {
         beatProgress = 1
         beatStartTimeRef.current = -1
       }
-
-      const expansionProgress = Math.min(beatProgress, 0.2 / 0.3) / (0.2 / 0.3)
-      beatExpansion = easeOut(1 - expansionProgress) * BEAT_EXPANSION
-
       beatFlash = Math.sin(beatProgress * Math.PI) * 1.5
     }
 
     const colorLerpSpeed = 0.1
     const colorLerpAmount = Math.min(1, delta / colorLerpSpeed)
 
-    const totalEnergy = lowFreqEnergy + midFreqEnergy + highFreqEnergy + 0.001
+    const rawTotalEnergy = lowFreqEnergy + midFreqEnergy + highFreqEnergy
+    const totalEnergy = rawTotalEnergy + 0.001
     const lowWeight = lowFreqEnergy / totalEnergy
     const midWeight = midFreqEnergy / totalEnergy
     const highWeight = highFreqEnergy / totalEnergy
 
-    const globalTargetColor = new THREE.Color(
+    const audioColor = new THREE.Color(
       lowColor.r * lowWeight + midColor.r * midWeight + highColor.r * highWeight,
       lowColor.g * lowWeight + midColor.g * midWeight + highColor.g * highWeight,
       lowColor.b * lowWeight + midColor.b * midWeight + highColor.b * highWeight
     )
 
+    const defaultColor = new THREE.Color('#4466aa')
+    const audioBlend = Math.min(1, rawTotalEnergy * 1.5)
+    const globalTargetColor = defaultColor.clone().lerp(audioColor, audioBlend)
+
     if (beatFlash > 0) {
       globalTargetColor.lerp(whiteColor, beatFlash * 0.4)
+    }
+
+    const emissiveIntensity = 1.2 + beatFlash + (lowFreqEnergy * 0.5 + midFreqEnergy * 0.3)
+    if (materialRef.current) {
+      materialRef.current.emissive.copy(globalTargetColor)
+      materialRef.current.emissiveIntensity = emissiveIntensity
+      materialRef.current.color.copy(globalTargetColor).multiplyScalar(0.25)
+      materialRef.current.opacity = 0.7 + Math.min(0.2, lowFreqEnergy * 0.3)
     }
 
     const spectrumLength = spectrum.length
@@ -195,8 +207,15 @@ export default function SculptureMesh({}: SculptureMeshProps) {
       const localT = (ringProgress * (spectrumLength - 1)) % 1
       const smoothSpec = lerp(specValue, adjSpecValue, localT)
 
-      const ringExpansion = beatExpansion * (0.7 + ringProgress * 0.6)
-      const baseRadius = MIN_RADIUS + (MAX_RADIUS - MIN_RADIUS) * ringProgress
+      const baseRadius = baseRadiiRef.current[ring]
+      let ringExpansion = 0
+
+      if (beatProgress > 0) {
+        const expansionProgress = Math.min(beatProgress, 0.2 / 0.3) / (0.2 / 0.3)
+        const expansionFactor = easeOut(1 - expansionProgress) * BEAT_EXPANSION_RATIO
+        ringExpansion = baseRadius * expansionFactor
+      }
+
       const yCenter = (ring - RING_COUNT / 2) * Y_SPACING
 
       const ringFreqColor = new THREE.Color()
@@ -254,89 +273,41 @@ export default function SculptureMesh({}: SculptureMeshProps) {
       meshRef.current.rotation.x = Math.sin(state.clock.elapsedTime * 0.3) * 0.1
     }
 
-    if (materialRef.current) {
-      const emissiveIntensity = 1.0 + beatFlash + (lowFreqEnergy * 0.5 + midFreqEnergy * 0.3)
-      materialRef.current.uniforms.uEmissiveIntensity.value = emissiveIntensity
-      materialRef.current.uniforms.uTime.value = state.clock.elapsedTime
-    }
+    const vertexUpdateTime = performance.now() - perfStartTime
+    vertexUpdateTimeRef.current = vertexUpdateTime
 
-    const elapsed = performance.now() - startTime
-    lastUpdateTimeRef.current = elapsed
-
-    if (elapsed > VERTEX_UPDATE_THRESHOLD && segments === DEFAULT_SEGMENTS) {
+    if (vertexUpdateTime > VERTEX_UPDATE_THRESHOLD && segments === DEFAULT_SEGMENTS) {
       slowFrameCountRef.current++
       if (slowFrameCountRef.current > 10) {
+        console.log(`[Performance] Vertex update ${vertexUpdateTime.toFixed(2)}ms > ${VERTEX_UPDATE_THRESHOLD}ms, reducing segments to ${REDUCED_SEGMENTS}`)
         setSegments(REDUCED_SEGMENTS)
         slowFrameCountRef.current = 0
       }
-    } else if (elapsed < VERTEX_UPDATE_THRESHOLD - 1 && segments === REDUCED_SEGMENTS) {
+    } else if (vertexUpdateTime < VERTEX_UPDATE_THRESHOLD - 1 && segments === REDUCED_SEGMENTS) {
       slowFrameCountRef.current--
       if (slowFrameCountRef.current < -30) {
+        console.log(`[Performance] Vertex update ${vertexUpdateTime.toFixed(2)}ms < ${VERTEX_UPDATE_THRESHOLD - 1}ms, restoring segments to ${DEFAULT_SEGMENTS}`)
         setSegments(DEFAULT_SEGMENTS)
         slowFrameCountRef.current = 0
       }
     }
   })
 
-  const uniforms = useMemo(() => ({
-    uEmissiveIntensity: { value: 1.0 },
-    uTime: { value: 0 },
-  }), [])
-
   return (
     <mesh ref={meshRef} geometry={geometry}>
-      <shaderMaterial
+      <meshStandardMaterial
         ref={materialRef as any}
-        uniforms={uniforms}
-        vertexShader={`
-          varying vec3 vColor;
-          varying vec3 vNormal;
-          varying vec3 vPosition;
-          uniform float uTime;
-
-          void main() {
-            vColor = color;
-            vNormal = normalize(normalMatrix * normal);
-            vPosition = position;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          }
-        `}
-        fragmentShader={`
-          varying vec3 vColor;
-          varying vec3 vNormal;
-          varying vec3 vPosition;
-          uniform float uEmissiveIntensity;
-          uniform float uTime;
-
-          void main() {
-            vec3 lightDir = normalize(vec3(0.5, 1.0, 0.5));
-            float diff = max(dot(vNormal, lightDir), 0.0);
-
-            vec3 viewDir = normalize(-vec3(0.0, 0.0, 1.0));
-            vec3 reflectDir = reflect(-lightDir, vNormal);
-            float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
-
-            float fresnel = pow(1.0 - max(dot(viewDir, vNormal), 0.0), 2.0);
-
-            vec3 ambient = vColor * 0.2;
-            vec3 diffuse = vColor * diff * 0.6;
-            vec3 specular = vec3(1.0) * spec * 0.3;
-            vec3 emissive = vColor * uEmissiveIntensity;
-            vec3 rim = vColor * fresnel * 0.4;
-
-            vec3 finalColor = ambient + diffuse + specular + emissive + rim;
-
-            float alpha = 0.7 + fresnel * 0.3;
-            alpha = clamp(alpha, 0.4, 0.95);
-
-            gl_FragColor = vec4(finalColor, alpha);
-          }
-        `}
+        color="#ffffff"
+        emissive="#4444aa"
+        emissiveIntensity={1.5}
         transparent
+        opacity={0.75}
         side={THREE.DoubleSide}
         depthWrite={false}
         blending={THREE.AdditiveBlending}
         vertexColors
+        metalness={0.05}
+        roughness={0.5}
       />
     </mesh>
   )
