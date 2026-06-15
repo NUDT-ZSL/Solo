@@ -1,0 +1,12 @@
+{
+  "nextId": 2,
+  "records": [
+    {
+      "id": 1,
+      "melody": "[{\"note\":60,\"duration\":1},{\"note\":60,\"duration\":1},{\"note\":67,\"duration\":1},{\"note\":67,\"duration\":1},{\"note\":69,\"duration\":1},{\"note\":69,\"duration\":1},{\"note\":67,\"duration\":2},{\"note\":65,\"duration\":1},{\"note\":65,\"duration\":1},{\"note\":64,\"duration\":1},{\"note\":64,\"duration\":1},{\"note\":62,\"duration\":1},{\"note\":62,\"duration\":1},{\"note\":60,\"duration\":2},{\"note\":67,\"duration\":1},{\"note\":67,\"duration\":1},{\"note\":65,\"duration\":1},{\"note\":65,\"duration\":1},{\"note\":64,\"duration\":1},{\"note\":64,\"duration\":1},{\"note\":62,\"duration\":2},{\"note\":67,\"duration\":1},{\"note\":67,\"duration\":1},{\"note\":65,\"duration\":1},{\"note\":65,\"duration\":1},{\"note\":64,\"duration\":1},{\"note\":64,\"duration\":1},{\"note\":62,\"duration\":2},{\"note\":60,\"duration\":1},{\"note\":60,\"duration\":1},{\"note\":67,\"duration\":1},{\"note\":67,\"duration\":1},{\"note\":69,\"duration\":1},{\"note\":69,\"duration\":1},{\"note\":67,\"duration\":2},{\"note\":65,\"duration\":1},{\"note\":65,\"duration\":1},{\"note\":64,\"duration\":1},{\"note\":64,\"duration\":1},{\"note\":62,\"duration\":1},{\"note\":62,\"duration\":1},{\"note\":60,\"duration\":3}]",
+      "chords": "[{\"chord\":\"I\",\"duration\":4,\"quality\":\"major\",\"notes\":[48,52,55]},{\"chord\":\"I\",\"duration\":4,\"quality\":\"major\",\"notes\":[48,52,55]},{\"chord\":\"I\",\"duration\":4,\"quality\":\"major\",\"notes\":[48,52,55]},{\"chord\":\"I\",\"duration\":4,\"quality\":\"major\",\"notes\":[48,52,55]},{\"chord\":\"I\",\"duration\":4,\"quality\":\"major\",\"notes\":[48,52,55]},{\"chord\":\"I\",\"duration\":4,\"quality\":\"major\",\"notes\":[48,52,55]},{\"chord\":\"I\",\"duration\":4,\"quality\":\"major\",\"notes\":[48,52,55]},{\"chord\":\"I\",\"duration\":4,\"quality\":\"major\",\"notes\":[48,52,55]},{\"chord\":\"I\",\"duration\":4,\"quality\":\"major\",\"notes\":[48,52,55]},{\"chord\":\"I\",\"duration\":4,\"quality\":\"major\",\"notes\":[48,52,55]},{\"chord\":\"I\",\"duration\":4,\"quality\":\"major\",\"notes\":[48,52,55]},{\"chord\":\"I\",\"duration\":4,\"quality\":\"major\",\"notes\":[48,52,55]}]",
+      "melody_text": "1 1 5 5 6 6 5- 4 4 3 3 2 2 1- 5 5 4 4 3 3 2- 5 5 4 4 3 3 2- 1 1 5 5 6 6 5- 4 4 3 3 2 2 1--",
+      "created_at": "2026-06-15T16:19:14.632Z"
+    }
+  ]
+}
