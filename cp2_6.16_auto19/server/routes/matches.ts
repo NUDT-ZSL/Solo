@@ -12,16 +12,16 @@ function parseBook(book: any): any {
   };
 }
 
-router.get('/:userId', async (req: Request, res: Response) => {
+router.get('/:userId', (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
 
-    const user = await get('SELECT * FROM users WHERE id = ?', [userId]);
+    const user = get('SELECT * FROM users WHERE id = ?', [userId]);
     if (!user) {
       return res.status(404).json({ error: '用户不存在' });
     }
 
-    const userBooks = await all('SELECT * FROM books WHERE owner_id = ?', [userId]);
+    const userBooks = all('SELECT * FROM books WHERE owner_id = ?', [userId]);
     const userTags = new Set<string>();
     userBooks.forEach(book => {
       const tags = JSON.parse(book.tags || '[]');
@@ -30,7 +30,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
 
     const userTagArray = Array.from(userTags);
 
-    const otherBooks = await all(
+    const otherBooks = all(
       `SELECT b.*, u.id as owner_id, u.username as owner_name, u.latitude as owner_lat, u.longitude as owner_lon
        FROM books b
        JOIN users u ON b.owner_id = u.id

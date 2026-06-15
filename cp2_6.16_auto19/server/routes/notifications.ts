@@ -3,11 +3,11 @@ import { all, get, run } from '../db.js';
 
 const router = Router();
 
-router.get('/:userId', async (req: Request, res: Response) => {
+router.get('/:userId', (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
 
-    const notifications = await all(
+    const notifications = all(
       'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC',
       [userId]
     );
@@ -24,18 +24,18 @@ router.get('/:userId', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id/read', async (req: Request, res: Response) => {
+router.put('/:id/read', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const notification = await get('SELECT * FROM notifications WHERE id = ?', [id]);
+    const notification = get('SELECT * FROM notifications WHERE id = ?', [id]);
     if (!notification) {
       return res.status(404).json({ error: '通知不存在' });
     }
 
-    await run('UPDATE notifications SET is_read = 1 WHERE id = ?', [id]);
+    run('UPDATE notifications SET is_read = 1 WHERE id = ?', [id]);
 
-    const updated = await get('SELECT * FROM notifications WHERE id = ?', [id]);
+    const updated = get('SELECT * FROM notifications WHERE id = ?', [id]);
     res.json({ notification: { ...updated, is_read: updated.is_read === 1 } });
   } catch (error) {
     console.error('标记已读错误:', error);
@@ -43,11 +43,11 @@ router.put('/:id/read', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/:userId/unread-count', async (req: Request, res: Response) => {
+router.get('/:userId/unread-count', (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
 
-    const result = await get(
+    const result = get(
       'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0',
       [userId]
     );

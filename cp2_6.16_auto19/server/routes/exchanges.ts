@@ -12,7 +12,7 @@ function parseBook(book: any): any {
   };
 }
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', (req: Request, res: Response) => {
   try {
     const { from_user_id, to_user_id, from_book_id, to_book_id } = req.body;
 
@@ -22,16 +22,16 @@ router.post('/', async (req: Request, res: Response) => {
 
     const id = uuidv4();
 
-    await run(
+    run(
       'INSERT INTO exchanges (id, from_user_id, to_user_id, from_book_id, to_book_id, status) VALUES (?, ?, ?, ?, ?, ?)',
       [id, from_user_id, to_user_id, from_book_id, to_book_id, 'pending']
     );
 
     const notificationId = uuidv4();
-    const fromBook = await get('SELECT title FROM books WHERE id = ?', [from_book_id]);
-    const fromUser = await get('SELECT username FROM users WHERE id = ?', [from_user_id]);
+    const fromBook = get('SELECT title FROM books WHERE id = ?', [from_book_id]);
+    const fromUser = get('SELECT username FROM users WHERE id = ?', [from_user_id]);
 
-    await run(
+    run(
       'INSERT INTO notifications (id, user_id, type, content, related_id) VALUES (?, ?, ?, ?, ?)',
       [
         notificationId,
@@ -42,7 +42,7 @@ router.post('/', async (req: Request, res: Response) => {
       ]
     );
 
-    const exchange = await get('SELECT * FROM exchanges WHERE id = ?', [id]);
+    const exchange = get('SELECT * FROM exchanges WHERE id = ?', [id]);
     res.status(201).json({ exchange });
   } catch (error) {
     console.error('发起交换错误:', error);
@@ -50,11 +50,11 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/:userId', async (req: Request, res: Response) => {
+router.get('/:userId', (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
 
-    const exchanges = await all(
+    const exchanges = all(
       `SELECT e.*,
               fb.title as from_book_title, fb.author as from_book_author, fb.tags as from_book_tags, fb.gradient_colors as from_book_gradient,
               tb.title as to_book_title, tb.author as to_book_author, tb.tags as to_book_tags, tb.gradient_colors as to_book_gradient,
@@ -102,7 +102,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id/status', async (req: Request, res: Response) => {
+router.put('/:id/status', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -112,7 +112,7 @@ router.put('/:id/status', async (req: Request, res: Response) => {
       return res.status(400).json({ error: '无效的状态' });
     }
 
-    const exchange = await get('SELECT * FROM exchanges WHERE id = ?', [id]);
+    const exchange = get('SELECT * FROM exchanges WHERE id = ?', [id]);
     if (!exchange) {
       return res.status(404).json({ error: '交换不存在' });
     }
@@ -120,9 +120,9 @@ router.put('/:id/status', async (req: Request, res: Response) => {
     const completedAt = status === 'completed' ? new Date().toISOString() : null;
 
     if (completedAt) {
-      await run('UPDATE exchanges SET status = ?, completed_at = ? WHERE id = ?', [status, completedAt, id]);
+      run('UPDATE exchanges SET status = ?, completed_at = ? WHERE id = ?', [status, completedAt, id]);
     } else {
-      await run('UPDATE exchanges SET status = ? WHERE id = ?', [status, id]);
+      run('UPDATE exchanges SET status = ? WHERE id = ?', [status, id]);
     }
 
     const statusMap: Record<string, string> = {
@@ -136,7 +136,7 @@ router.put('/:id/status', async (req: Request, res: Response) => {
     const notifyUserId = exchange.from_user_id;
     const notificationId = uuidv4();
 
-    await run(
+    run(
       'INSERT INTO notifications (id, user_id, type, content, related_id) VALUES (?, ?, ?, ?, ?)',
       [
         notificationId,
@@ -147,7 +147,7 @@ router.put('/:id/status', async (req: Request, res: Response) => {
       ]
     );
 
-    const updatedExchange = await get('SELECT * FROM exchanges WHERE id = ?', [id]);
+    const updatedExchange = get('SELECT * FROM exchanges WHERE id = ?', [id]);
     res.json({ exchange: updatedExchange });
   } catch (error) {
     console.error('更新交换状态错误:', error);

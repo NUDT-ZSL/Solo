@@ -19,7 +19,7 @@ function parseToken(token: string): string | null {
   }
 }
 
-router.post('/register', async (req: Request, res: Response) => {
+router.post('/register', (req: Request, res: Response) => {
   try {
     const { username, email, password, latitude, longitude } = req.body;
 
@@ -27,20 +27,20 @@ router.post('/register', async (req: Request, res: Response) => {
       return res.status(400).json({ error: '用户名、邮箱和密码不能为空' });
     }
 
-    const existingUser = await get('SELECT id FROM users WHERE email = ? OR username = ?', [email, username]);
+    const existingUser = get('SELECT id FROM users WHERE email = ? OR username = ?', [email, username]);
     if (existingUser) {
       return res.status(400).json({ error: '用户名或邮箱已存在' });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = bcrypt.hashSync(password, 10);
     const id = uuidv4();
 
-    await run(
+    run(
       'INSERT INTO users (id, username, email, password_hash, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?)',
       [id, username, email, passwordHash, latitude || null, longitude || null]
     );
 
-    const user = await get('SELECT id, username, email, latitude, longitude, reputation, created_at FROM users WHERE id = ?', [id]);
+    const user = get('SELECT id, username, email, latitude, longitude, reputation, created_at FROM users WHERE id = ?', [id]);
     const token = generateToken(id);
 
     res.json({ user, token });
@@ -50,7 +50,7 @@ router.post('/register', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', (req: Request, res: Response) => {
   try {
     const { username, password } = req.body;
 
@@ -58,12 +58,12 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(400).json({ error: '用户名和密码不能为空' });
     }
 
-    const user = await get('SELECT * FROM users WHERE username = ?', [username]);
+    const user = get('SELECT * FROM users WHERE username = ?', [username]);
     if (!user) {
       return res.status(401).json({ error: '用户名或密码错误' });
     }
 
-    const isValid = await bcrypt.compare(password, user.password_hash);
+    const isValid = bcrypt.compareSync(password, user.password_hash);
     if (!isValid) {
       return res.status(401).json({ error: '用户名或密码错误' });
     }

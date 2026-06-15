@@ -12,7 +12,7 @@ function parseBook(book: any): any {
   };
 }
 
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', (req: Request, res: Response) => {
   try {
     const { search, tags, page = '1', limit = '10' } = req.query;
     const pageNum = parseInt(page as string, 10);
@@ -35,13 +35,13 @@ router.get('/', async (req: Request, res: Response) => {
     }
 
     const countSql = sql.replace('SELECT *', 'SELECT COUNT(*) as count');
-    const countResult = await get(countSql, params);
+    const countResult = get(countSql, params);
     const total = countResult?.count || 0;
 
     sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
     params.push(limitNum, offset);
 
-    const books = await all(sql, params);
+    const books = all(sql, params);
     const parsedBooks = books.map(parseBook);
 
     res.json({
@@ -59,16 +59,16 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const book = await get('SELECT * FROM books WHERE id = ?', [id]);
+    const book = get('SELECT * FROM books WHERE id = ?', [id]);
 
     if (!book) {
       return res.status(404).json({ error: '图书不存在' });
     }
 
-    const owner = await get('SELECT id, username, email, reputation FROM users WHERE id = ?', [book.owner_id]);
+    const owner = get('SELECT id, username, email, reputation FROM users WHERE id = ?', [book.owner_id]);
 
     res.json({ book: parseBook(book), owner });
   } catch (error) {
@@ -77,10 +77,10 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/user/:userId', async (req: Request, res: Response) => {
+router.get('/user/:userId', (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
-    const books = await all('SELECT * FROM books WHERE owner_id = ? ORDER BY created_at DESC', [userId]);
+    const books = all('SELECT * FROM books WHERE owner_id = ? ORDER BY created_at DESC', [userId]);
     res.json({ books: books.map(parseBook) });
   } catch (error) {
     console.error('获取用户图书错误:', error);
@@ -88,7 +88,7 @@ router.get('/user/:userId', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', (req: Request, res: Response) => {
   try {
     const { owner_id, title, author, tags, condition, image_url, gradient_colors } = req.body;
 
@@ -100,12 +100,12 @@ router.post('/', async (req: Request, res: Response) => {
     const tagsJson = JSON.stringify(tags || []);
     const gradientJson = gradient_colors ? JSON.stringify(gradient_colors) : null;
 
-    await run(
+    run(
       'INSERT INTO books (id, owner_id, title, author, tags, condition, image_url, gradient_colors) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       [id, owner_id, title, author, tagsJson, condition || '八成新', image_url || null, gradientJson]
     );
 
-    const book = await get('SELECT * FROM books WHERE id = ?', [id]);
+    const book = get('SELECT * FROM books WHERE id = ?', [id]);
     res.status(201).json({ book: parseBook(book) });
   } catch (error) {
     console.error('发布图书错误:', error);
