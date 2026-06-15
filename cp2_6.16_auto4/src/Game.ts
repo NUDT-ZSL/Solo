@@ -62,6 +62,14 @@ class AudioManager {
     this.init();
     if (!this.audioContext) return;
 
+    // #region debug-point H3:audio-context
+    if (Math.random() < 0.05) {
+      const DEBUG_URL = 'http://127.0.0.1:7777/event';
+      const SESSION_ID = 'maze-race-multi-bug';
+      fetch(DEBUG_URL, { method: 'POST', body: JSON.stringify({ sessionId: SESSION_ID, runId: 'pre', hypothesisId: 'H3', location: 'Game.ts:62', msg: '[DEBUG] AudioContext state', data: { state: this.audioContext.state, currentTime: this.audioContext.currentTime }, ts: Date.now() }) }).catch(() => {});
+    }
+    // #endregion
+
     const oscillator = this.audioContext.createOscillator();
     const gainNode = this.audioContext.createGain();
 

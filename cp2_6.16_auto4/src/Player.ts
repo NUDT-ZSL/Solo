@@ -106,12 +106,31 @@ export class Player {
       const newX = this.x + this.velocityX * (deltaTime / 1000);
       const newY = this.y + this.velocityY * (deltaTime / 1000);
 
+      // #region debug-point H5:slow-effect
+      const oldX = this.x;
+      const oldY = this.y;
+      const oldSpeed = this.speed;
+      const isSlowed = this.isSlowed;
+      // #endregion
+
       if (!this.checkCollision(newX, this.y, maze, cellSize)) {
         this.x = newX;
       }
       if (!this.checkCollision(this.x, newY, maze, cellSize)) {
         this.y = newY;
       }
+
+      // #region debug-point H5:slow-effect
+      if (Math.random() < 0.03) {
+        const DEBUG_URL = 'http://127.0.0.1:7777/event';
+        const SESSION_ID = 'maze-race-multi-bug';
+        const actualDx = Math.abs(this.x - oldX);
+        const actualDy = Math.abs(this.y - oldY);
+        const expectedDx = Math.abs(this.velocityX * (deltaTime / 1000));
+        const expectedDy = Math.abs(this.velocityY * (deltaTime / 1000));
+        fetch(DEBUG_URL, { method: 'POST', body: JSON.stringify({ sessionId: SESSION_ID, runId: 'pre', hypothesisId: 'H5', location: 'Player.ts:113', msg: '[DEBUG] Slow effect check', data: { playerId: this.id, isSlowed, currentSpeed: oldSpeed, baseSpeed: this.baseSpeed, expectedDx, expectedDy, actualDx, actualDy }, ts: Date.now() }) }).catch(() => {});
+      }
+      // #endregion
 
       this.animationFrame = (this.animationFrame + deltaTime * 0.01) % 4;
 
@@ -136,11 +155,21 @@ export class Player {
       { x: newX + halfSize - 2, y: newY + halfSize - 2 },
     ];
 
-    for (const corner of corners) {
+    // #region debug-point H2:collision-detection
+    let detectedWall = false;
+    let wallInfo: { corner: string; cell: string; wall: string } | null = null;
+    // #endregion
+
+    for (let i = 0; i < corners.length; i++) {
+      const corner = corners[i];
       const cellX = Math.floor(corner.x / cellSize);
       const cellY = Math.floor(corner.y / cellSize);
 
       if (cellX < 0 || cellX >= maze[0].length || cellY < 0 || cellY >= maze.length) {
+        // #region debug-point H2:collision-detection
+        detectedWall = true;
+        wallInfo = { corner: `corner${i}`, cell: 'out_of_bounds', wall: 'boundary' };
+        // #endregion
         return true;
       }
 
@@ -149,11 +178,43 @@ export class Player {
       const localY = corner.y - cellY * cellSize;
       const wallThickness = 3;
 
-      if (cell.walls.top && localY < wallThickness) return true;
-      if (cell.walls.bottom && localY > cellSize - wallThickness) return true;
-      if (cell.walls.left && localX < wallThickness) return true;
-      if (cell.walls.right && localX > cellSize - wallThickness) return true;
+      if (cell.walls.top && localY < wallThickness) {
+        // #region debug-point H2:collision-detection
+        detectedWall = true;
+        wallInfo = { corner: `corner${i}`, cell: `${cellX},${cellY}`, wall: 'top' };
+        // #endregion
+        return true;
+      }
+      if (cell.walls.bottom && localY > cellSize - wallThickness) {
+        // #region debug-point H2:collision-detection
+        detectedWall = true;
+        wallInfo = { corner: `corner${i}`, cell: `${cellX},${cellY}`, wall: 'bottom' };
+        // #endregion
+        return true;
+      }
+      if (cell.walls.left && localX < wallThickness) {
+        // #region debug-point H2:collision-detection
+        detectedWall = true;
+        wallInfo = { corner: `corner${i}`, cell: `${cellX},${cellY}`, wall: 'left' };
+        // #endregion
+        return true;
+      }
+      if (cell.walls.right && localX > cellSize - wallThickness) {
+        // #region debug-point H2:collision-detection
+        detectedWall = true;
+        wallInfo = { corner: `corner${i}`, cell: `${cellX},${cellY}`, wall: 'right' };
+        // #endregion
+        return true;
+      }
     }
+
+    // #region debug-point H2:collision-detection
+    if (Math.random() < 0.02) {
+      const DEBUG_URL = 'http://127.0.0.1:7777/event';
+      const SESSION_ID = 'maze-race-multi-bug';
+      fetch(DEBUG_URL, { method: 'POST', body: JSON.stringify({ sessionId: SESSION_ID, runId: 'pre', hypothesisId: 'H2', location: 'Player.ts:158', msg: '[DEBUG] Collision check', data: { playerId: this.id, playerX: this.x, playerY: this.y, newX, newY, halfSize, detectedWall, wallInfo, playerSize: this.size }, ts: Date.now() }) }).catch(() => {});
+    }
+    // #endregion
 
     return false;
   }

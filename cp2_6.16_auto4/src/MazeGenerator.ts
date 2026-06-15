@@ -112,6 +112,27 @@ export class MazeGenerator {
     this.grid[0][0].isStart = true;
     this.grid[this.size - 1][this.size - 1].isExit = true;
 
+    // #region debug-point H1:maze-connectivity
+    (() => {
+      const DEBUG_URL = 'http://127.0.0.1:7777/event';
+      const SESSION_ID = 'maze-race-multi-bug';
+      const visited = new Set<string>();
+      const queue = [{ x: 0, y: 0 }];
+      visited.add('0,0');
+      let reachable = false;
+      while (queue.length > 0) {
+        const { x, y } = queue.shift()!;
+        if (x === this.size - 1 && y === this.size - 1) { reachable = true; break; }
+        const cell = this.grid[y][x];
+        if (!cell.walls.top && y > 0 && !visited.has(`${x},${y - 1}`)) { visited.add(`${x},${y - 1}`); queue.push({ x, y: y - 1 }); }
+        if (!cell.walls.right && x < this.size - 1 && !visited.has(`${x + 1},${y}`)) { visited.add(`${x + 1},${y}`); queue.push({ x: x + 1, y }); }
+        if (!cell.walls.bottom && y < this.size - 1 && !visited.has(`${x},${y + 1}`)) { visited.add(`${x},${y + 1}`); queue.push({ x, y: y + 1 }); }
+        if (!cell.walls.left && x > 0 && !visited.has(`${x - 1},${y}`)) { visited.add(`${x - 1},${y}`); queue.push({ x: x - 1, y }); }
+      }
+      fetch(DEBUG_URL, { method: 'POST', body: JSON.stringify({ sessionId: SESSION_ID, runId: 'pre', hypothesisId: 'H1', location: 'MazeGenerator.ts:115', msg: '[DEBUG] Maze connectivity check', data: { exitReachable: reachable, reachableCells: visited.size, totalCells: this.size * this.size }, ts: Date.now() }) }).catch(() => {});
+    })();
+    // #endregion
+
     return this.grid;
   }
 

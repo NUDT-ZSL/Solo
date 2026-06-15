@@ -382,6 +382,16 @@ export class Renderer {
       return 0;
     });
 
+    // #region debug-point H4:ranking
+    if (Math.random() < 0.1) {
+      const DEBUG_URL = 'http://127.0.0.1:7777/event';
+      const SESSION_ID = 'maze-race-multi-bug';
+      const originalOrder = players.map(p => ({ id: p.id, name: p.name, keys: p.keysCollected, finished: p.finished }));
+      const sortedOrder = sortedPlayers.map(p => ({ id: p.id, name: p.name, keys: p.keysCollected, finished: p.finished, rank: sortedPlayers.indexOf(p) + 1 }));
+      fetch(DEBUG_URL, { method: 'POST', body: JSON.stringify({ sessionId: SESSION_ID, runId: 'pre', hypothesisId: 'H4', location: 'Renderer.ts:377', msg: '[DEBUG] Ranking calculation', data: { originalOrder, sortedOrder }, ts: Date.now() }) }).catch(() => {});
+    }
+    // #endregion
+
     for (let i = 0; i < sortedPlayers.length; i++) {
       const player = sortedPlayers[i];
       const y = panelY + 60 + i * 40;
