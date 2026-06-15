@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import MapView, { computeStats } from './map-view';
 import TravelForm from './travel-form';
@@ -10,32 +10,80 @@ import {
   deleteRecord,
   exportToJson,
   saveRecords,
+  seedTestDataIfEmpty,
 } from './data-store';
 import './main.css';
 
 function AnimatedNumber({ value }: { value: string | number }) {
   const [display, setDisplay] = useState(value);
-  const [flipping, setFlipping] = useState(false);
+  const [progress, setProgress] = useState(1);
+  const rafRef = useRef<number | null>(null);
+  const prevValueRef = useRef<string | number>(value);
 
   useEffect(() => {
-    if (display === value) return;
-    setFlipping(true);
-    const timer = setTimeout(() => {
-      setDisplay(value);
-      setFlipping(false);
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [value, display]);
+    const prev = prevValueRef.current;
+    if (prev === value) return;
 
+    const isPrevNumber =
+      typeof prev === 'number' && typeof value === 'number';
+    const start = performance.now();
+    const duration = 300;
+
+    const fromVal = prev;
+    const toVal = value;
+    let canceled = false;
+
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setProgress(1 - Math.sin(eased * Math.PI));
+      if (isPrevNumber) {
+        const from = fromVal as number;
+        const to = toVal as number;
+        const current = from + (to - from) * eased;
+        const rounded = Number.isInteger(to)
+          ? Math.round(current)
+          : Math.round(current * 100) / 100;
+        setDisplay(rounded as any);
+      } else {
+        if (t < 0.5) {
+          setDisplay(fromVal);
+        } else {
+          setDisplay(toVal);
+        }
+      }
+      if (t < 1 && !canceled) {
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        setDisplay(toVal);
+        setProgress(1);
+        prevValueRef.current = toVal;
+      }
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      canceled = true;
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    };
+  }, [value]);
+
+  const translateY = (1 - progress) * -6;
   return (
-    <span className={`stat-value ${flipping ? 'stat-value--flip' : ''}`}>
+    <span
+      className="stat-value"
+      style={{
+        transform: `translateY(${translateY}px) rotateX(${(1 - progress) * 60}deg)`,
+        opacity: 0.4 + progress * 0.6,
+      }}
+    >
       {display}
     </span>
   );
 }
 
 function App() {
-  const [records, setRecords] = useState<TravelRecord[]>(() => loadRecords());
+  const [records, setRecords] = useState<TravelRecord[]>(() => seedTestDataIfEmpty());
   const [cutoffDate, setCutoffDate] = useState<string>('');
   const [activeId, setActiveId] = useState<string | null>(null);
 

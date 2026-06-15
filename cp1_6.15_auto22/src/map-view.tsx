@@ -10,12 +10,13 @@ interface MapViewProps {
 }
 
 function createCircleIcon(index: number, zoom: number): L.DivIcon {
-  const baseSize = 28;
-  const scale = zoom >= 12 ? 1.2 : zoom >= 8 ? 1.0 : 0.8;
+  const baseSize = 32;
+  const scale = zoom >= 12 ? 1.3 : zoom >= 8 ? 1.0 : 0.7;
   const size = Math.round(baseSize * scale);
+  const fontSize = Math.round(14 * scale);
   return L.divIcon({
-    className: 'custom-marker-icon',
-    html: `<div class="marker-circle" style="width:${size}px;height:${size}px;font-size:${Math.round(12 * scale)}px;">${index}</div>`,
+    className: 'custom-marker-icon-wrapper',
+    html: `<div class="custom-marker-icon" style="width:${size}px;height:${size}px;font-size:${fontSize}px;line-height:${size}px;">${index}</div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
     popupAnchor: [0, -size / 2],
@@ -99,14 +100,21 @@ export default function MapView({
     if (!map) return;
 
     const prevVisible = prevVisibleRef.current;
-    const toAdd = new Set<string>();
+    const toAdd: string[] = [];
     const toRemove = new Set<string>();
 
     visibleIds.forEach((id) => {
-      if (!prevVisible.has(id)) toAdd.add(id);
+      if (!prevVisible.has(id)) toAdd.push(id);
     });
     prevVisible.forEach((id) => {
       if (!visibleIds.has(id)) toRemove.add(id);
+    });
+
+    toAdd.sort((a, b) => {
+      const ra = records.find((r) => r.id === a);
+      const rb = records.find((r) => r.id === b);
+      if (!ra || !rb) return 0;
+      return ra.arriveTime.localeCompare(rb.arriveTime);
     });
 
     toRemove.forEach((id) => {
@@ -117,24 +125,29 @@ export default function MapView({
       }
     });
 
-    toAdd.forEach((id) => {
+    toAdd.forEach((id, idx) => {
       const record = records.find((r) => r.id === id);
       if (!record) return;
-      const idx = indexMap.get(id) || 1;
-      const icon = createCircleIcon(idx, map.getZoom());
+      const idxNum = indexMap.get(id) || 1;
+      const icon = createCircleIcon(idxNum, map.getZoom());
       const marker = L.marker([record.latitude, record.longitude], { icon })
         .addTo(map)
         .bindPopup(buildPopupContent(record), {
-          maxWidth: 280,
+          maxWidth: 300,
           className: 'custom-popup',
+          autoPan: true,
+          autoPanPadding: [40, 40],
         });
       marker.on('click', () => onActiveChange(id));
       const el = marker.getElement();
       if (el) {
+        const delay = idx * 0.12;
+        el.style.animationDelay = `${delay}s`;
         el.classList.add('marker-bounce-in');
         el.addEventListener('animationend', () => {
           el.classList.remove('marker-bounce-in');
-        });
+          el.style.animationDelay = '';
+        }, { once: true });
       }
       markersRef.current.set(id, marker);
     });
