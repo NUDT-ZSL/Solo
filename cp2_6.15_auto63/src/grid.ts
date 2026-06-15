@@ -155,7 +155,7 @@ export class GridManager {
     ctx.closePath();
     ctx.fill();
 
-    ctx.fillStyle = 'rgba(102, 102, 102, 0.9)';
+    ctx.fillStyle = 'rgba(102, 102, 102, 0.6)';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, boxX + paddingX, boxY + boxHeight / 2);
@@ -188,46 +188,57 @@ export class GridManager {
   }
 
   public snapToGridByPixel(clientX: number, clientY: number, brickWidth: number, brickHeight: number): { row: number; col: number; canPlace: boolean } {
-    const rect = this.canvas.getBoundingClientRect();
-    const pixelX = (clientX - rect.left) / this.scale;
-    const pixelY = (clientY - rect.top) / this.scale;
+    const container = this.canvas.parentElement;
+    if (!container) {
+      return { row: 0, col: 0, canPlace: false };
+    }
 
-    const brickPixelWidth = brickWidth * this.cellSize;
-    const brickPixelHeight = brickHeight * this.cellSize;
-    const centerOffsetX = brickPixelWidth / 2;
-    const centerOffsetY = brickPixelHeight / 2;
+    const containerRect = container.getBoundingClientRect();
+    const containerMouseX = clientX - containerRect.left;
+    const containerMouseY = clientY - containerRect.top;
 
-    const brickLeftPixel = pixelX - centerOffsetX;
-    const brickTopPixel = pixelY - centerOffsetY;
+    const gridOriginX = this.offsetX;
+    const gridOriginY = this.offsetY;
 
-    const rawCol = brickLeftPixel / this.cellSize;
-    const rawRow = brickTopPixel / this.cellSize;
+    const gridMouseX = (containerMouseX - gridOriginX) / this.scale;
+    const gridMouseY = (containerMouseY - gridOriginY) / this.scale;
 
-    const snapThresholdPx = this.snapDistance / this.scale;
-    const snapThresholdCells = snapThresholdPx / this.cellSize;
+    const brickPixelW = brickWidth * this.cellSize;
+    const brickPixelH = brickHeight * this.cellSize;
+    const anchorX = gridMouseX - brickPixelW / 2;
+    const anchorY = gridMouseY - brickPixelH / 2;
 
-    const roundedCol = Math.round(rawCol);
-    const roundedRow = Math.round(rawRow);
-    const diffCol = Math.abs(rawCol - roundedCol);
-    const diffRow = Math.abs(rawRow - roundedRow);
+    const rawColFloat = anchorX / this.cellSize;
+    const rawRowFloat = anchorY / this.cellSize;
+
+    const nearestCol = Math.round(rawColFloat);
+    const nearestRow = Math.round(rawRowFloat);
+
+    const nearestColPixel = nearestCol * this.cellSize;
+    const nearestRowPixel = nearestRow * this.cellSize;
+
+    const distToNearestColLine = Math.abs(anchorX - nearestColPixel);
+    const distToNearestRowLine = Math.abs(anchorY - nearestRowPixel);
 
     let finalCol: number;
     let finalRow: number;
 
-    if (diffCol <= snapThresholdCells) {
-      finalCol = roundedCol;
+    if (distToNearestColLine <= this.snapDistance) {
+      finalCol = nearestCol;
     } else {
-      finalCol = Math.floor(rawCol);
+      finalCol = Math.floor(rawColFloat);
     }
 
-    if (diffRow <= snapThresholdCells) {
-      finalRow = roundedRow;
+    if (distToNearestRowLine <= this.snapDistance) {
+      finalRow = nearestRow;
     } else {
-      finalRow = Math.floor(rawRow);
+      finalRow = Math.floor(rawRowFloat);
     }
 
-    const adjustedCol = Math.max(0, Math.min(this.cols - brickWidth, finalCol));
-    const adjustedRow = Math.max(0, Math.min(this.rows - brickHeight, finalRow));
+    const maxCol = this.cols - brickWidth;
+    const maxRow = this.rows - brickHeight;
+    const adjustedCol = Math.max(0, Math.min(maxCol, finalCol));
+    const adjustedRow = Math.max(0, Math.min(maxRow, finalRow));
 
     return { row: adjustedRow, col: adjustedCol, canPlace: true };
   }
@@ -424,6 +435,7 @@ export class GridManager {
     const brick = this.getBrickById(brickId);
     if (!brick) return false;
     this.freeCells(brick);
+    this.debugValidateOccupancy();
     brick.startDeleteAnimation();
     return true;
   }
@@ -441,9 +453,27 @@ export class GridManager {
     }
 
     for (const brickId of bricksToRemove) {
+      const brick = this.getBrickById(brickId);
+      if (brick) {
+        this.freeCells(brick);
+      }
       const index = this.bricks.findIndex(b => b.id === brickId);
       if (index !== -1) {
         this.bricks.splice(index, 1);
+      }
+    }
+
+    this.debugValidateOccupancy();
+  }
+
+  private debugValidateOccupancy(): void {
+    const activeBrickIds = new Set(this.bricks.map(b => b.id));
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        const occupant = this.gridOccupancy[r][c];
+        if (occupant && !activeBrickIds.has(occupant)) {
+          this.gridOccupancy[r][c] = null;
+        }
       }
     }
   }

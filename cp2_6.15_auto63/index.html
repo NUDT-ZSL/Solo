@@ -180,15 +180,26 @@
     }
 
     .btn-icon {
-      transition: transform 0.3s ease;
+      display: inline-block;
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    .btn:active .btn-icon {
-      transform: rotate(-180deg);
+    .icon-rotate-undo {
+      animation: rotateUndo 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
     }
 
-    .btn-redo:active .btn-icon {
-      transform: rotate(180deg);
+    .icon-rotate-redo {
+      animation: rotateRedo 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+
+    @keyframes rotateUndo {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(-180deg); }
+    }
+
+    @keyframes rotateRedo {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(180deg); }
     }
 
     .modal-overlay {

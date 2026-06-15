@@ -155,28 +155,30 @@ class LegoBuilderApp {
     const undoBtn = document.getElementById('undoBtn');
     const redoBtn = document.getElementById('redoBtn');
 
-    undoBtn?.addEventListener('click', () => {
+    undoBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
       const icon = undoBtn.querySelector('.btn-icon') as HTMLElement;
       if (icon) {
-        icon.style.transition = 'none';
-        icon.style.transform = 'rotate(0deg)';
-        requestAnimationFrame(() => {
-          icon.style.transition = 'transform 0.3s ease';
-          icon.style.transform = 'rotate(-180deg)';
-        });
+        icon.classList.remove('icon-rotate-undo');
+        void icon.offsetWidth;
+        icon.classList.add('icon-rotate-undo');
+        setTimeout(() => {
+          icon.classList.remove('icon-rotate-undo');
+        }, 350);
       }
       this.undo();
     });
 
-    redoBtn?.addEventListener('click', () => {
+    redoBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
       const icon = redoBtn.querySelector('.btn-icon') as HTMLElement;
       if (icon) {
-        icon.style.transition = 'none';
-        icon.style.transform = 'rotate(0deg)';
-        requestAnimationFrame(() => {
-          icon.style.transition = 'transform 0.3s ease';
-          icon.style.transform = 'rotate(180deg)';
-        });
+        icon.classList.remove('icon-rotate-redo');
+        void icon.offsetWidth;
+        icon.classList.add('icon-rotate-redo');
+        setTimeout(() => {
+          icon.classList.remove('icon-rotate-redo');
+        }, 350);
       }
       this.redo();
     });
