@@ -95,6 +95,9 @@ import {
 } from './modules/shadowSimulation'
 import { createGUIController, type GUIController } from './utils/guiController'
 
+/** ───────── 功能验证脚本（页面加载后自动运行） ───────── */
+import './utils/validationTests'
+
 /**
  * 应用主类 - 所有模块的装配容器
  *
@@ -228,12 +231,70 @@ class ShadowSimulationApp {
   /**
    * Step 3: 建立 时间管理器 → 阴影 + UI 的核心数据管道
    *
-   * 这是整个应用最关键的数据流节点！
-   * 通过 timeManager.subscribe() 注册回调，
-   * 每当时间变化（自动步进 / 手动设置）时：
-   *   ① 更新信息板时间显示
-   *   ② 调用 shadowSimulation.updateShadow() 传入太阳位置，返回阴影面积
-   *   ③ 更新信息板阴影面积显示
+   * =========================================================================
+   *  ⚡⚡⚡  时间更新 → 阴影重新计算 完整函数调用链  ⚡⚡⚡
+   * =========================================================================
+   *
+   * 【触发源】（两种路径）
+   *  ├─ 路径A（自动播放）：
+   *  │   timeManager.loop() [每帧执行]
+   *  │     → if (isAutoPlaying && now - lastUpdateTime >= 200ms)
+   *  │       → timeManager.advanceToNextStep()
+   *  │         → nextTime = currentTime + 15分钟
+   *  │         → timeManager.beginTransition(currentTime, nextTime)
+   *  │           → 记录 transitionFromSun, transitionToSun（计算太阳位置）
+   *  │           → isTransitioning = true
+   *  │
+   *  └─ 路径B（GUI手动）：
+   *      guiController 时间滑块.onChange(time)
+   *        → timeManager.setManualTime(time)
+   *          → isAutoPlaying = false  ❗【关键：暂停自动循环】
+   *          → timeManager.beginTransition(currentTime, time)
+   *            → 同上
+   *
+   * 【过渡执行】（每帧执行，持续0.3秒）
+   *  timeManager.loop()
+   *    → if (isTransitioning)
+   *      → timeManager.updateTransition(now)
+   *        → t = elapsed / 300ms, easeInOutCubic 缓动
+   *        → currentTime    = lerp(fromTime, toTime, t)
+   *        → currentSunPos  = lerp(fromSun, toSun, t)
+   *        → timeManager.notifySubscribers()  🌟【触发回调】
+   *          → subscribers.forEach(callback)
+   *            ↓↓↓↓↓↓  回调函数（在本方法中定义） ↓↓↓↓↓↓
+   *
+   * 【回调执行】（main.ts 中注册的匿名函数）
+   *  (time, sunPosition) => {
+   *    ① this.updateTimeDisplay(time)
+   *        → DOM: timeDisplay.textContent = "HH:MM"
+   *
+   *    ② this.currentShadowArea = this.shadowSimulation.updateShadow(
+   *         sunPosition.azimuth,    ← 角度：-90° ~ +90°
+   *         sunPosition.altitude    ← 角度：0° ~ 90° ~ 0°
+   *       )
+   *        ↓↓↓↓↓↓  shadowSimulation 内部执行 ↓↓↓↓↓↓
+   *        → 1. collectFpsSample()    采集FPS样本（用于自动降级）
+   *        → 2. checkAutoDowngrade()  FPS监测（每3秒一次）
+   *        → 3. if (isWeatherTransitioning) updateWeatherTransition()
+   *             → 1秒线性插值 intensity / ambientColor / shadowIntensity
+   *        → 4. 若 altitude <= 0: return 0
+   *        → 5. 球坐标转笛卡尔坐标: sunX/Y/Z = cos/sin(alt) * cos/sin(azi) * 600
+   *        → 6. directionalLight.position.set(sunX, sunY, sunZ)
+   *        → 7. calculateShadowAreaGeometry(azimuthRad, altitudeRad)
+   *             → tanAlt = tan(altitudeRad)
+   *             → shadowLength = buildingHeight / tanAlt
+   *             → 对每栋建筑：底部4角 + 顶部4角 = 8个投影点
+   *             → Andrew 凸包算法 + Shoelace 公式 = 精确投影面积
+   *             → × weatherFactor（阴影强度插值）= 最终面积
+   *        → 8. return shadowArea
+   *
+   *    ③ this.updateShadowAreaDisplay()
+   *        → DOM: shadowAreaDisplay.textContent = "xxxx.x"
+   *  }
+   *
+   * 【回调完成】
+   *  → 若 progress >= 1: isTransitioning = false, 最终值固化
+   * =========================================================================
    */
   private step3_connectTimeManagerToShadowSimAndUI(): void {
     timeManager.subscribe((time: number, sunPosition: SunPosition) => {

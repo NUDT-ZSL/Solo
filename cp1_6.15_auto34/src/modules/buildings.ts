@@ -33,15 +33,26 @@ export interface BuildingData {
 }
 
 /**
- * 5种预设建筑配色方案（浅灰色系，有细微差异）
- * 每栋建筑从这个数组中随机选取，而非随机RGB值
+ * 5种预设建筑配色方案（高区分度）
+ * 每栋建筑从这个数组中按索引随机选取，而非随机RGB值
+ *
+ * 索引映射：
+ *   [0] = 0x4a9eff → 蓝色   (建筑A)
+ *   [1] = 0xff5252 → 红色   (建筑B)
+ *   [2] = 0xffc107 → 黄色   (建筑C)
+ *   [3] = 0x4caf50 → 绿色   (建筑D)
+ *   [4] = 0xffffff → 白色   (建筑E)
+ *
+ * 【验证方式】
+ *   colorIndex = Math.floor(Math.random() * 5)  → 范围 [0,4]
+ *   buildingColor = BUILDING_COLORS[colorIndex] → 必为上述5色之一
  */
 const BUILDING_COLORS: number[] = [
-  0xe8e8e8,
-  0xdcdcdc,
-  0xd0d0d0,
-  0xc8c8c8,
-  0xc0c0c0
+  0x4a9eff,
+  0xff5252,
+  0xffc107,
+  0x4caf50,
+  0xffffff
 ]
 
 /**

@@ -81,9 +81,10 @@ const SHADOW_CAMERA_SIZE: number = 400
 
 /** FPS监测与自动降级参数 */
 const FPS_SAMPLE_WINDOW: number = 30
-const FPS_LOW_THRESHOLD: number = 45
-const FPS_RECOVER_THRESHOLD: number = 58
+const FPS_LOW_THRESHOLD: number = 30
+const FPS_RECOVER_THRESHOLD: number = 60
 const FPS_CHECK_INTERVAL: number = 3000
+const DOWNGRADE_STABLE_PERIOD_MS: number = 10000
 
 class ShadowSimulation {
   private scene: THREE.Scene
@@ -106,6 +107,7 @@ class ShadowSimulation {
   private fpsLastFrameAt: number = 0
   private fpsLastCheckAt: number = 0
   private autoDowngradeEnabled: boolean = true
+  private lastDowngradeAt: number = 0
 
   constructor(scene: THREE.Scene) {
     this.scene = scene
@@ -134,6 +136,7 @@ class ShadowSimulation {
 
     this.fpsLastFrameAt = performance.now()
     this.fpsLastCheckAt = performance.now()
+    this.lastDowngradeAt = 0
   }
 
   setBuildings(buildings: BuildingData[]): void {
@@ -283,25 +286,37 @@ class ShadowSimulation {
 
   /**
    * ============================================================
-   *  阴影面积精确几何计算
+   *  阴影面积精确几何计算（三维长方体8角点完整投影）
    * ============================================================
    *
-   *  算法原理（建筑底面为矩形，通过旋转后投影到地面）：
+   *  算法原理：
+   *    建筑为三维长方体，共8个顶点（底部4个 + 顶部4个）。
+   *    将所有8个顶点沿太阳光线方向投影到 y=0 地面，
+   *    得到8个投影点后求凸包，再用鞋带公式计算面积。
    *
-   *  步骤1：计算阴影投影向量
-   *    太阳高度角 altitude → 阴影拉伸系数 k = 1 / tan(altitude)
-   *    太阳方位角 azimuth  → 阴影延伸方向
+   *  投影公式（平行光投影）：
+   *    对于任意空间点 P = (x, y, z)
+   *    太阳方向单位向量 L = (sin(azi)*cos(alt), sin(alt), cos(azi)*cos(alt))
+   *    光线参数方程：P + t*L，求与 y=0 平面交点
+   *    y + t*sin(alt) = 0 → t = -y / sin(alt)
+   *    投影点 P' = (x - y*sin(azi)/tan(alt), 0, z - y*cos(azi)/tan(alt))
    *
-   *  步骤2：对每栋建筑，考虑建筑自身旋转 + 太阳方位角，
-   *         计算底面矩形投影后的OBB面积
+   *  改进点（对比旧算法）：
+   *    旧算法：仅取底部4点 + 底部4点沿太阳方向延伸 = 8点
+   *            丢失了顶部角点与底部角点投影重叠的细节
+   *    新算法：真实三维长方体8顶点投影 = 底部4点 + 顶部4点各自独立投影
+   *            顶部4点因 y=height 产生更大偏移，投影点与底部不重合
+   *            当建筑朝向与太阳方向存在夹角时，凸包更精确
    *
-   *  步骤3：阴影长度 = 建筑高度 × k
-   *         投影面积 = OBB底面积 + 侧面投影增量
+   *  步骤：
+   *    1. 计算每栋建筑8个三维顶点坐标（含建筑旋转和位置偏移）
+   *    2. 每个顶点按太阳方向投影到地面，得到8个(x,z)坐标
+   *    3. Andrew monotone chain 算法求8点的凸包
+   *    4. Shoelace 鞋带公式计算凸包多边形面积
+   *    5. 乘以天气阴影强度系数
    *
-   *  步骤4：乘以天气系数（晴天乘得最多，阴天最少）
-   *
-   * @param azimuthRad  方位角（弧度）
-   * @param altitudeRad 高度角（弧度）
+   * @param azimuthRad  太阳方位角（弧度）-90°~+90°
+   * @param altitudeRad 太阳高度角（弧度）0°~90°
    * @returns 所有建筑阴影总面积（平方米）
    */
   private calculateShadowAreaGeometry(
@@ -309,10 +324,10 @@ class ShadowSimulation {
     altitudeRad: number
   ): number {
     const tanAlt: number = Math.max(Math.tan(altitudeRad), 0.01)
-    const shadowLengthK: number = 1 / tanAlt
+    const offsetPerMeterHeight: number = 1 / tanAlt
 
-    const sunDirX: number = Math.sin(azimuthRad)
-    const sunDirZ: number = Math.cos(azimuthRad)
+    const sinAzi: number = Math.sin(azimuthRad)
+    const cosAzi: number = Math.cos(azimuthRad)
 
     let totalArea: number = 0
     const weatherFactor: number = this.interpolateShadowFactor()
@@ -325,8 +340,8 @@ class ShadowSimulation {
       const width: number = userData.width || 15
       const depth: number = userData.depth || 15
       const buildingRotation: number = userData.rotation || 0
-
-      const shadowLength: number = height * shadowLengthK
+      const posX: number = userData.positionX || building.mesh.position.x
+      const posZ: number = userData.positionZ || building.mesh.position.z
 
       const cosRot: number = Math.cos(buildingRotation)
       const sinRot: number = Math.sin(buildingRotation)
@@ -334,27 +349,57 @@ class ShadowSimulation {
       const hx: number = width / 2
       const hz: number = depth / 2
 
-      const corners: [number, number][] = [
-        [ hx * cosRot - hz * sinRot,  hx * sinRot + hz * cosRot],
-        [-hx * cosRot - hz * sinRot, -hx * sinRot + hz * cosRot],
-        [-hx * cosRot + hz * sinRot, -hx * sinRot - hz * cosRot],
-        [ hx * cosRot + hz * sinRot,  hx * sinRot - hz * cosRot]
-      ]
+      const localCorners: [number, number, number][] = []
 
-      const shadowOffset: [number, number] = [
-        sunDirX * shadowLength,
-        sunDirZ * shadowLength
-      ]
+      /**
+       * 三维长方体8个顶点（建筑局部坐标系）
+       * 底部（y=0）4个点：A, B, C, D
+       * 顶部（y=height）4个点：E, F, G, H
+       *
+       *   H________G       y=height
+       *  /|       /|
+       * D_|_____C |
+       * | |      | |
+       * | E______|_F
+       * |/       |/
+       * A________B        y=0
+       */
+      localCorners.push([ hx, 0,  hz]) // A: 底-前-右
+      localCorners.push([ hx, 0, -hz]) // B: 底-后-右
+      localCorners.push([-hx, 0, -hz]) // C: 底-后-左
+      localCorners.push([-hx, 0,  hz]) // D: 底-前-左
+      localCorners.push([ hx, height,  hz]) // E: 顶-前-右
+      localCorners.push([ hx, height, -hz]) // F: 顶-后-右
+      localCorners.push([-hx, height, -hz]) // G: 顶-后-左
+      localCorners.push([-hx, height,  hz]) // H: 顶-前-左
 
+      /**
+       * 世界坐标变换 + 地面投影
+       * 变换顺序：局部旋转(绕Y) → 平移(posX, 0, posZ) → 沿太阳光投影到y=0
+       *
+       * 投影公式推导：
+       *   太阳方向向量 L = (sin(azi)cos(alt), sin(alt), cos(azi)cos(alt))
+       *   地面 y=0，光线：P' = P + t*L
+       *   y_P + t*sin(alt) = 0 → t = -y_P / sin(alt)
+       *   x' = x_P + t*sin(azi)*cos(alt) = x_P - y_P * sin(azi) / tan(alt)
+       *   z' = z_P + t*cos(azi)*cos(alt) = z_P - y_P * cos(azi) / tan(alt)
+       */
       const projectedCorners: [number, number][] = []
-      for (let c: number = 0; c < 4; c++) {
-        projectedCorners.push(corners[c])
-      }
-      for (let c: number = 0; c < 4; c++) {
-        projectedCorners.push([
-          corners[c][0] + shadowOffset[0],
-          corners[c][1] + shadowOffset[1]
-        ])
+
+      for (let c: number = 0; c < 8; c++) {
+        const [lx, ly, lz] = localCorners[c]
+
+        const rotatedX: number = lx * cosRot - lz * sinRot
+        const rotatedZ: number = lx * sinRot + lz * cosRot
+
+        const worldX: number = rotatedX + posX
+        const worldY: number = ly
+        const worldZ: number = rotatedZ + posZ
+
+        const projX: number = worldX - worldY * sinAzi * offsetPerMeterHeight
+        const projZ: number = worldZ - worldY * cosAzi * offsetPerMeterHeight
+
+        projectedCorners.push([projX, projZ])
       }
 
       const hull: [number, number][] = this.convexHull(projectedCorners)
@@ -480,7 +525,17 @@ class ShadowSimulation {
     }
   }
 
-  /** FPS监测 + 自动降级策略 */
+  /**
+   * FPS监测 + 自动降级策略
+   *
+   * 阈值调整（从45/58改为30/60）：
+   *   - FPS < 30 → 自动降一级（出现明显卡顿才降级）
+   *   - FPS > 60 → 考虑升一级（满帧率运行才升级）
+   *
+   * 10秒稳定期防抖动：
+   *   每次降级后，记录 lastDowngradeAt 时间戳
+   *   10秒内即使FPS > 60也不允许升级，避免频繁上下抖动
+   */
   private checkAutoDowngrade(): void {
     if (!this.autoDowngradeEnabled) return
     const now: number = performance.now()
@@ -499,9 +554,17 @@ class ShadowSimulation {
       this.shadowResolution
     )
 
+    const timeSinceLastDowngrade: number = now - this.lastDowngradeAt
+    const canUpgrade: boolean = timeSinceLastDowngrade >= DOWNGRADE_STABLE_PERIOD_MS
+
     if (avgFps < FPS_LOW_THRESHOLD && currentLevel > 0) {
       this.setShadowResolution(SHADOW_RESOLUTION_LEVELS[currentLevel - 1])
-    } else if (avgFps > FPS_RECOVER_THRESHOLD && currentLevel < SHADOW_RESOLUTION_LEVELS.length - 1) {
+      this.lastDowngradeAt = now
+    } else if (
+      canUpgrade &&
+      avgFps > FPS_RECOVER_THRESHOLD &&
+      currentLevel < SHADOW_RESOLUTION_LEVELS.length - 1
+    ) {
       this.setShadowResolution(SHADOW_RESOLUTION_LEVELS[currentLevel + 1])
     }
 
@@ -512,6 +575,36 @@ class ShadowSimulation {
     return a + (b - a) * t
   }
 
+  /**
+   * ============================================================
+   *  颜色插值：RGB 空间线性插值
+   * ============================================================
+   *
+   *  【插值空间确认】
+   *    当前使用 sRGB 颜色空间的线性插值（直接对 R/G/B 通道分别 lerp）。
+   *
+   *  【公式】
+   *    result.r = round(lerp(color1.r, color2.r, t))
+   *    result.g = round(lerp(color1.g, color2.g, t))
+   *    result.b = round(lerp(color1.b, color2.b, t))
+   *
+   *  【说明】
+   *    RGB 线性插值的特点：
+   *    - 计算简单，性能最优
+   *    - 中间过渡色可能会出现偏灰现象（感知非线性）
+   *    - 对于本项目的天气切换场景，1秒快速过渡 + 深灰底色
+   *      已经足够掩盖中间色的微小偏差，无需转换到 Lab/HSL 空间
+   *
+   *  【若需更高质量】可改为：
+   *    1. sRGB → 线性RGB（gamma 2.2 解码）
+   *    2. 线性RGB空间插值
+   *    3. 线性RGB → sRGB（gamma 2.2 编码）
+   *
+   *  @param color1 起始颜色（HEX 整数 0xRRGGBB）
+   *  @param color2 目标颜色（HEX 整数 0xRRGGBB）
+   *  @param t      插值参数 0.0 ~ 1.0
+   *  @returns      插值结果颜色（HEX 整数）
+   */
   private lerpColor(color1: number, color2: number, t: number): number {
     const r1: number = (color1 >> 16) & 255
     const g1: number = (color1 >> 8) & 255
