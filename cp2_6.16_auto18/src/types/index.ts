@@ -62,6 +62,8 @@ export interface PlantData {
   water: string;
   temperature: string;
   soil: string;
+  colorProfile?: number[][];
+  tags?: string[];
 }
 
 export const EVENT_COLORS: Record<string, string> = {

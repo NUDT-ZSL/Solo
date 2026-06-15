@@ -15,16 +15,17 @@ if (!existsSync(uploadDir)) {
 }
 
 const storage = multer.memoryStorage();
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const upload = multer({
   storage,
   limits: {
-    fileSize: 10 * 1024 * 1024,
+    fileSize: 5 * 1024 * 1024,
   },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
+    if (ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Only image files are allowed!'));
+      cb(new Error('Only JPG, PNG and WebP image files are allowed!'));
     }
   },
 });
@@ -85,9 +86,9 @@ router.post('/plant/:plantId', upload.single('image'), async (req, res) => {
       const fileName = `${recordId}.webp`;
       const filePath = join(uploadDir, fileName);
 
-      sharp(req.file.buffer)
+      await sharp(req.file.buffer)
         .resize(800, 800, { fit: 'inside' })
-        .webp({ quality: 80 })
+        .webp({ quality: 75, effort: 6 })
         .toFile(filePath);
 
       imagePath = `/uploads/${fileName}`;
