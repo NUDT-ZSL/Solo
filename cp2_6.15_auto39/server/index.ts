@@ -23,10 +23,10 @@ const wss = new WebSocketServer({ server });
 
 const groceryLists: Record<string, Record<string, GroceryItem>> = {};
 
-app.get('/api/recipes', async (req, res) => {
+app.get('/api/recipes', (req, res) => {
   try {
     const search = typeof req.query.search === 'string' ? req.query.search : undefined;
-    const recipes = await getAllRecipes(search);
+    const recipes = getAllRecipes(search);
     res.json(recipes);
   } catch (e) {
     console.error(e);
@@ -34,10 +34,10 @@ app.get('/api/recipes', async (req, res) => {
   }
 });
 
-app.get('/api/recipes/:id', async (req, res) => {
+app.get('/api/recipes/:id', (req, res) => {
   try {
     const id = Number(req.params.id);
-    const recipe = await getRecipeById(id);
+    const recipe = getRecipeById(id);
     if (!recipe) return res.status(404).json({ error: '菜谱不存在' });
     res.json(recipe);
   } catch (e) {
@@ -46,9 +46,9 @@ app.get('/api/recipes/:id', async (req, res) => {
   }
 });
 
-app.post('/api/recipes', async (req, res) => {
+app.post('/api/recipes', (req, res) => {
   try {
-    const recipe = await createRecipe(req.body);
+    const recipe = createRecipe(req.body);
     res.status(201).json(recipe);
   } catch (e) {
     console.error(e);
@@ -56,10 +56,10 @@ app.post('/api/recipes', async (req, res) => {
   }
 });
 
-app.put('/api/recipes/:id', async (req, res) => {
+app.put('/api/recipes/:id', (req, res) => {
   try {
     const id = Number(req.params.id);
-    const recipe = await updateRecipe(id, req.body);
+    const recipe = updateRecipe(id, req.body);
     if (!recipe) return res.status(404).json({ error: '菜谱不存在' });
     res.json(recipe);
   } catch (e) {
@@ -68,10 +68,10 @@ app.put('/api/recipes/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/recipes/:id', async (req, res) => {
+app.delete('/api/recipes/:id', (req, res) => {
   try {
     const id = Number(req.params.id);
-    await deleteRecipe(id);
+    deleteRecipe(id);
     res.json({ success: true });
   } catch (e) {
     console.error(e);
@@ -79,10 +79,10 @@ app.delete('/api/recipes/:id', async (req, res) => {
   }
 });
 
-app.patch('/api/recipes/:id/rating', async (req, res) => {
+app.patch('/api/recipes/:id/rating', (req, res) => {
   try {
     const id = Number(req.params.id);
-    const recipe = await updateRecipe(id, { rating: req.body.rating });
+    const recipe = updateRecipe(id, { rating: req.body.rating });
     if (!recipe) return res.status(404).json({ error: '菜谱不存在' });
     res.json(recipe);
   } catch (e) {
@@ -91,12 +91,12 @@ app.patch('/api/recipes/:id/rating', async (req, res) => {
   }
 });
 
-app.patch('/api/recipes/:id/favorite', async (req, res) => {
+app.patch('/api/recipes/:id/favorite', (req, res) => {
   try {
     const id = Number(req.params.id);
-    const current = await getRecipeById(id);
+    const current = getRecipeById(id);
     if (!current) return res.status(404).json({ error: '菜谱不存在' });
-    const recipe = await updateRecipe(id, { isFavorite: !current.isFavorite });
+    const recipe = updateRecipe(id, { isFavorite: !current.isFavorite });
     res.json(recipe);
   } catch (e) {
     console.error(e);
@@ -104,10 +104,10 @@ app.patch('/api/recipes/:id/favorite', async (req, res) => {
   }
 });
 
-app.post('/api/grocery/aggregate', async (req, res) => {
+app.post('/api/grocery/aggregate', (req, res) => {
   try {
     const { recipeIds, scales } = req.body;
-    const list = await aggregateIngredients(recipeIds || [], scales || {});
+    const list = aggregateIngredients(recipeIds || [], scales || {});
     const items: GroceryItem[] = list.map((item, idx) => ({
       id: `${item.name}-${idx}`,
       ...item,
@@ -201,12 +201,12 @@ wss.on('connection', (ws) => {
 });
 
 const PORT = 3001;
-async function start() {
-  await initDatabase();
-  await seedSampleData();
+try {
+  initDatabase();
+  seedSampleData();
   server.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
+} catch (e) {
+  console.error('Startup error:', e);
 }
-
-start().catch(console.error);
