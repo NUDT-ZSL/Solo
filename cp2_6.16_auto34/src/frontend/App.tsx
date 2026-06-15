@@ -205,13 +205,7 @@ const App: React.FC = () => {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, 1fr)',
     gap: '24px',
-    marginTop: '32px',
-    '@media (max-width: 960px)': {
-      gridTemplateColumns: 'repeat(2, 1fr)'
-    },
-    '@media (max-width: 640px)': {
-      gridTemplateColumns: '1fr'
-    }
+    marginTop: '32px'
   };
 
   const navBarStyle: React.CSSProperties = {
@@ -226,10 +220,7 @@ const App: React.FC = () => {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '0 24px',
-    zIndex: 100,
-    '@media (max-width: 480px)': {
-      padding: '0 12px'
-    }
+    zIndex: 100
   };
 
   const navButtonStyle: React.CSSProperties = {

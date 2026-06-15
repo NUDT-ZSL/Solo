@@ -83,17 +83,14 @@ const Drawer: React.FC<DrawerProps> = ({
     maxWidth: '100%',
     height: '100vh',
     backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    backdropFilter: 'blur(20px)',
-    WebkitBackdropFilter: 'blur(20px)',
+    backdropFilter: 'blur(20px) saturate(180%)',
+    WebkitBackdropFilter: 'blur(20px) saturate(180%)',
     boxShadow: '-4px 0 24px rgba(0,0,0,0.1)',
     zIndex: 300,
     transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
     transition: 'transform 300ms ease-out',
     display: 'flex',
-    flexDirection: 'column',
-    '@media (max-width: 480px)': {
-      width: '100%'
-    }
+    flexDirection: 'column'
   };
 
   const headerStyle: React.CSSProperties = {

@@ -8,6 +8,36 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
+let dbReady = false;
+let initPromise: Promise<void> | null = null;
+
+const initDatabase = async () => {
+  if (initPromise) return initPromise;
+  initPromise = (async () => {
+    try {
+      await db.init();
+      dbReady = true;
+      console.log('Database initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize database:', error);
+      throw error;
+    }
+  })();
+  return initPromise;
+};
+
+const waitForDb = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (dbReady) {
+    next();
+  } else {
+    initDatabase()
+      .then(() => next())
+      .catch(() => res.status(500).json({ error: 'Database initialization failed' }));
+  }
+};
+
+app.use(waitForDb);
+
 app.get('/api/ingredients', (req, res) => {
   try {
     const input = req.query.q as string;
@@ -19,6 +49,7 @@ app.get('/api/ingredients', (req, res) => {
       res.json(ingredients);
     }
   } catch (error) {
+    console.error('Error fetching ingredients:', error);
     res.status(500).json({ error: 'Failed to fetch ingredients' });
   }
 });
@@ -43,6 +74,7 @@ app.get('/api/recipes', (req, res) => {
     
     res.json(recipes);
   } catch (error) {
+    console.error('Error fetching recipes:', error);
     res.status(500).json({ error: 'Failed to fetch recipes' });
   }
 });
@@ -57,6 +89,7 @@ app.get('/api/recipes/:id', (req, res) => {
       res.status(404).json({ error: 'Recipe not found' });
     }
   } catch (error) {
+    console.error('Error fetching recipe:', error);
     res.status(500).json({ error: 'Failed to fetch recipe' });
   }
 });
@@ -66,6 +99,7 @@ app.get('/api/favorites', (req, res) => {
     const favorites = db.getFavorites();
     res.json(favorites);
   } catch (error) {
+    console.error('Error fetching favorites:', error);
     res.status(500).json({ error: 'Failed to fetch favorites' });
   }
 });
@@ -76,6 +110,7 @@ app.post('/api/favorites', (req, res) => {
     const favorite = db.addFavorite(recipeId, recipeName, cuisine, difficulty);
     res.status(201).json(favorite);
   } catch (error) {
+    console.error('Error adding favorite:', error);
     res.status(500).json({ error: 'Failed to add favorite' });
   }
 });
@@ -86,10 +121,16 @@ app.delete('/api/favorites/:id', (req, res) => {
     db.removeFavorite(id);
     res.status(204).send();
   } catch (error) {
+    console.error('Error removing favorite:', error);
     res.status(500).json({ error: 'Failed to remove favorite' });
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+initDatabase().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}).catch((error) => {
+  console.error('Failed to start server:', error);
+  process.exit(1);
 });

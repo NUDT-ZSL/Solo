@@ -79,15 +79,17 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
     width: '280px',
     height: '340px',
     borderRadius: '16px',
-    background: theme.cardBackground,
+    background: 'linear-gradient(135deg, #fff8e1 0%, #fce4ec 100%)',
     padding: '16px',
+    boxSizing: 'border-box',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-between',
     boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
     transition: 'transform 200ms ease, box-shadow 200ms ease',
     position: 'relative',
-    margin: '0 auto'
+    margin: '0 auto',
+    overflow: 'hidden'
   };
 
   const headerStyle: React.CSSProperties = {
@@ -151,13 +153,14 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
   const tagStyle = (color: string, isHighlighted: boolean): React.CSSProperties => ({
     padding: '4px 10px',
     borderRadius: '8px',
-    backgroundColor: color,
+    backgroundColor: isHighlighted ? '#e8f5e9' : color,
     fontSize: '12px',
     color: theme.textPrimary,
     cursor: 'pointer',
-    border: isHighlighted ? `2px solid ${theme.success}` : '2px solid transparent',
-    transition: 'transform 150ms ease, box-shadow 150ms ease',
-    userSelect: 'none'
+    border: isHighlighted ? '2px solid #66bb6a' : '2px solid transparent',
+    transition: 'transform 150ms ease, box-shadow 150ms ease, background-color 200ms ease, border-color 200ms ease',
+    userSelect: 'none',
+    fontWeight: isHighlighted ? 600 : 400
   });
 
   const buttonContainerStyle: React.CSSProperties = {

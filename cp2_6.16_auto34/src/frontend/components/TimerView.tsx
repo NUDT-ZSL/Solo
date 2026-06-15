@@ -176,13 +176,14 @@ const TimerView: React.FC<TimerViewProps> = ({ recipe, onClose }) => {
   const progressBarStyle: React.CSSProperties = {
     height: '100%',
     width: `${progress}%`,
-    background: isLowTime 
-      ? '#e53935' 
+    background: isLowTime && isRunning
+      ? '#e53935'
       : 'linear-gradient(90deg, #ffb74d 0%, #ff7043 100%)',
     borderRadius: '4px',
-    transition: 'width 0.2s linear, background-color 0.3s ease',
-    animation: isLowTime && isRunning ? 'blink 1s infinite' : 'none'
+    transition: 'width 0.2s linear, background-color 0.3s ease'
   };
+
+  const progressBarClass = isLowTime && isRunning ? 'progress-bar-blink' : '';
 
   const contentStyle: React.CSSProperties = {
     flex: 1,
@@ -208,10 +209,11 @@ const TimerView: React.FC<TimerViewProps> = ({ recipe, onClose }) => {
     color: isLowTime && isRunning ? '#e53935' : '#ff7043',
     marginBottom: '24px',
     fontVariantNumeric: 'tabular-nums',
-    animation: isLowTime && isRunning ? 'blink 1s infinite' : 'none',
-    textShadow: isLowTime && isRunning ? '0 0 20px rgba(229, 57, 53, 0.3)' : 'none',
+    textShadow: isLowTime && isRunning ? '0 0 20px rgba(229, 57, 53, 0.4)' : 'none',
     transition: 'color 0.3s ease'
   };
+
+  const timerDisplayClass = isLowTime && isRunning ? 'timer-display-blink' : '';
 
   const stepDescriptionStyle: React.CSSProperties = {
     fontSize: '20px',
@@ -362,7 +364,7 @@ const TimerView: React.FC<TimerViewProps> = ({ recipe, onClose }) => {
       </div>
 
       <div style={progressBarContainerStyle}>
-        <div style={progressBarStyle} />
+        <div style={progressBarStyle} className={progressBarClass} />
       </div>
 
       {isCompleted ? (
@@ -397,7 +399,7 @@ const TimerView: React.FC<TimerViewProps> = ({ recipe, onClose }) => {
             步骤 {currentStep + 1} / {totalSteps}
           </div>
 
-          <div style={timerDisplayStyle}>
+          <div style={timerDisplayStyle} className={timerDisplayClass}>
             {formatTime(timeRemaining)}
           </div>
 
@@ -567,9 +569,31 @@ const TimerView: React.FC<TimerViewProps> = ({ recipe, onClose }) => {
       )}
 
       <style>{`
-        @keyframes blink {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.6; }
+        @keyframes progress-blink {
+          0%, 100% { 
+            opacity: 1; 
+            box-shadow: 0 0 0 rgba(229, 57, 53, 0);
+          }
+          50% { 
+            opacity: 0.7; 
+            box-shadow: 0 0 12px rgba(229, 57, 53, 0.6);
+          }
+        }
+        .progress-bar-blink {
+          animation: progress-blink 1s ease-in-out infinite;
+        }
+        @keyframes timer-blink {
+          0%, 100% { 
+            opacity: 1;
+            transform: scale(1);
+          }
+          50% { 
+            opacity: 0.7;
+            transform: scale(1.02);
+          }
+        }
+        .timer-display-blink {
+          animation: timer-blink 1s ease-in-out infinite;
         }
       `}</style>
     </div>

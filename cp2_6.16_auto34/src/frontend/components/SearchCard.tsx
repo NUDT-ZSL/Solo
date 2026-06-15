@@ -56,15 +56,11 @@ const SearchCard: React.FC<SearchCardProps> = ({ onSearch, onClear, theme, loadi
     borderRadius: '24px',
     boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
     padding: '24px',
+    boxSizing: 'border-box',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-between',
-    transition: 'transform 200ms ease, box-shadow 200ms ease',
-    '@media (max-width: 640px)': {
-      width: '100%',
-      height: 'auto',
-      minHeight: '200px'
-    }
+    transition: 'transform 200ms ease, box-shadow 200ms ease'
   };
 
   const textareaStyle: React.CSSProperties = {

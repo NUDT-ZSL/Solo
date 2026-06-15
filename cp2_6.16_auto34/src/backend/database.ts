@@ -1,12 +1,15 @@
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import initSqlJs, { Database } from 'sql.js';
+import { fileURLToPath, pathToFileURL } from 'url';
+import { dirname, join, resolve } from 'path';
 import fs from 'fs';
+import { createRequire } from 'module';
 import { v4 as uuidv4 } from 'uuid';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const require = createRequire(import.meta.url);
 
-const dataPath = join(__dirname, 'recipe_data.json');
+const dbPath = join(__dirname, 'recipes.db');
 
 export interface Ingredient {
   id: string;
@@ -37,12 +40,6 @@ export interface Favorite {
   cuisine: string;
   difficulty: string;
   createdAt: string;
-}
-
-interface DatabaseData {
-  ingredients: Ingredient[];
-  recipes: Recipe[];
-  favorites: Favorite[];
 }
 
 const defaultIngredients: Omit<Ingredient, 'id'>[] = [
@@ -805,72 +802,202 @@ const defaultRecipes: Omit<Recipe, 'id'>[] = [
 ];
 
 class RecipeDatabase {
-  private data: DatabaseData;
+  private db: Database | null = null;
 
-  constructor() {
-    this.data = this.loadData();
-    this.init();
-  }
-
-  private loadData(): DatabaseData {
-    try {
-      if (fs.existsSync(dataPath)) {
-        const rawData = fs.readFileSync(dataPath, 'utf-8');
-        return JSON.parse(rawData);
+  async init(): Promise<void> {
+    const SQL = await initSqlJs({
+      locateFile: (file: string) => {
+        return require.resolve(`sql.js/dist/${file}`);
       }
-    } catch (error) {
-      console.log('No existing data file found, using default data');
-    }
-    return {
-      ingredients: [],
-      recipes: [],
-      favorites: []
-    };
-  }
+    });
 
-  private saveData(): void {
-    try {
-      fs.writeFileSync(dataPath, JSON.stringify(this.data, null, 2), 'utf-8');
-    } catch (error) {
-      console.error('Failed to save data:', error);
-    }
-  }
-
-  private init(): void {
-    if (this.data.ingredients.length === 0) {
+    if (fs.existsSync(dbPath)) {
+      const fileBuffer = fs.readFileSync(dbPath);
+      this.db = new SQL.Database(fileBuffer);
+      console.log('Loaded existing SQLite database');
+    } else {
+      this.db = new SQL.Database();
+      console.log('Created new SQLite database');
+      this.createTables();
       this.insertIngredients();
       this.insertRecipes();
-      this.saveData();
+      this.saveToDisk();
     }
+  }
+
+  private saveToDisk(): void {
+    if (!this.db) return;
+    try {
+      const data = this.db.export();
+      const buffer = Buffer.from(data);
+      fs.writeFileSync(dbPath, buffer);
+    } catch (error) {
+      console.error('Failed to save database to disk:', error);
+    }
+  }
+
+  private createTables(): void {
+    if (!this.db) return;
+
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS ingredients (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL
+      )
+    `);
+
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS recipes (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        cuisine TEXT NOT NULL,
+        total_time INTEGER NOT NULL,
+        difficulty TEXT NOT NULL,
+        description TEXT,
+        steps_json TEXT NOT NULL
+      )
+    `);
+
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS recipe_ingredients (
+        id TEXT PRIMARY KEY,
+        recipe_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        amount TEXT NOT NULL,
+        FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
+      )
+    `);
+
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS favorites (
+        id TEXT PRIMARY KEY,
+        recipe_id TEXT NOT NULL,
+        recipe_name TEXT NOT NULL,
+        cuisine TEXT NOT NULL,
+        difficulty TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    `);
+
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe_id ON recipe_ingredients(recipe_id)');
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_ingredients_name ON ingredients(name)');
   }
 
   private insertIngredients(): void {
+    if (!this.db) return;
+
     const uniqueIngredients = defaultIngredients.filter(
       (ingredient, index, self) =>
         index === self.findIndex((i) => i.name === ingredient.name)
-    );
+    ).slice(0, 150);
 
-    this.data.ingredients = uniqueIngredients.slice(0, 150).map((ing, index) => ({
-      id: `ing_${index + 1}`,
-      name: ing.name,
-      category: ing.category
-    }));
+    const stmt = this.db.prepare('INSERT INTO ingredients (id, name, category) VALUES (?, ?, ?)');
+    uniqueIngredients.forEach((ing, index) => {
+      stmt.run([`ing_${index + 1}`, ing.name, ing.category]);
+    });
+    stmt.free();
+
+    console.log(`Inserted ${uniqueIngredients.length} ingredients`);
   }
 
   private insertRecipes(): void {
-    this.data.recipes = defaultRecipes.map((recipe, index) => ({
-      id: `rec_${index + 1}`,
-      ...recipe
-    }));
+    if (!this.db) return;
+
+    const recipeStmt = this.db.prepare(
+      'INSERT INTO recipes (id, name, cuisine, total_time, difficulty, description, steps_json) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    );
+    const ingredientStmt = this.db.prepare(
+      'INSERT INTO recipe_ingredients (id, recipe_id, name, amount) VALUES (?, ?, ?, ?)'
+    );
+
+    defaultRecipes.forEach((recipe, recipeIndex) => {
+      const recipeId = `rec_${recipeIndex + 1}`;
+      recipeStmt.run([
+        recipeId,
+        recipe.name,
+        recipe.cuisine,
+        recipe.totalTime,
+        recipe.difficulty,
+        recipe.description,
+        JSON.stringify(recipe.steps)
+      ]);
+
+      recipe.ingredients.forEach((ing, ingIndex) => {
+        ingredientStmt.run([
+          `ri_${recipeIndex + 1}_${ingIndex + 1}`,
+          recipeId,
+          ing.name,
+          ing.amount
+        ]);
+      });
+    });
+
+    recipeStmt.free();
+    ingredientStmt.free();
+
+    console.log(`Inserted ${defaultRecipes.length} recipes`);
+  }
+
+  private getRecipeByIdFromDb(id: string): Recipe | null {
+    if (!this.db) return null;
+
+    const recipeResult = this.db.exec(
+      'SELECT * FROM recipes WHERE id = ?',
+      [id]
+    );
+
+    if (recipeResult.length === 0 || recipeResult[0].values.length === 0) {
+      return null;
+    }
+
+    const recipeRow = recipeResult[0].values[0];
+    const ingredientsResult = this.db.exec(
+      'SELECT name, amount FROM recipe_ingredients WHERE recipe_id = ? ORDER BY rowid',
+      [id]
+    );
+
+    const ingredients = ingredientsResult.length > 0
+      ? ingredientsResult[0].values.map((row: any[]) => ({
+          name: row[0] as string,
+          amount: row[1] as string
+        }))
+      : [];
+
+    return {
+      id: recipeRow[0] as string,
+      name: recipeRow[1] as string,
+      cuisine: recipeRow[2] as 'chinese' | 'western' | 'japanese' | 'other',
+      totalTime: recipeRow[3] as number,
+      difficulty: recipeRow[4] as 'easy' | 'medium' | 'hard',
+      description: recipeRow[5] as string,
+      steps: JSON.parse(recipeRow[6] as string),
+      ingredients
+    };
   }
 
   getAllIngredients(): Ingredient[] {
-    return [...this.data.ingredients];
+    if (!this.db) return [];
+
+    const result = this.db.exec('SELECT id, name, category FROM ingredients ORDER BY name');
+    if (result.length === 0) return [];
+
+    return result[0].values.map((row: any[]) => ({
+      id: row[0] as string,
+      name: row[1] as string,
+      category: row[2] as string
+    }));
   }
 
   matchIngredients(input: string): Ingredient[] {
+    if (!this.db) return [];
+
     const keywords = input.split(/[,，、\s]+/).filter(k => k.trim());
-    return this.data.ingredients.filter(ing =>
+    if (keywords.length === 0) return [];
+
+    const allIngredients = this.getAllIngredients();
+    
+    return allIngredients.filter(ing =>
       keywords.some(keyword =>
         ing.name.includes(keyword.trim()) || keyword.trim().includes(ing.name)
       )
@@ -878,9 +1005,11 @@ class RecipeDatabase {
   }
 
   getRecipesByIngredients(ingredientNames: string[]): Recipe[] {
-    const recipes = this.data.recipes;
+    if (!this.db || ingredientNames.length === 0) return [];
 
-    const scored = recipes.map(recipe => {
+    const allRecipes = this.getAllRecipes();
+
+    const scored = allRecipes.map(recipe => {
       const recipeIngredientNames = recipe.ingredients.map(i => i.name);
       const matchCount = ingredientNames.filter(name =>
         recipeIngredientNames.some(ri => ri.includes(name) || name.includes(ri))
@@ -893,19 +1022,39 @@ class RecipeDatabase {
     return scored.filter(s => s.score > 0).slice(0, 10).map(s => s.recipe);
   }
 
+  private getAllRecipes(): Recipe[] {
+    if (!this.db) return [];
+
+    const result = this.db.exec('SELECT id FROM recipes ORDER BY name');
+    if (result.length === 0) return [];
+
+    const recipeIds = result[0].values.map((row: any[]) => row[0] as string);
+    return recipeIds
+      .map(id => this.getRecipeByIdFromDb(id))
+      .filter((r): r is Recipe => r !== null);
+  }
+
   searchRecipes(query: string): Recipe[] {
+    if (!this.db || !query) return [];
+
     const searchTerm = query.toLowerCase();
-    return this.data.recipes.filter(recipe =>
+    const allRecipes = this.getAllRecipes();
+
+    return allRecipes.filter(recipe =>
       recipe.name.toLowerCase().includes(searchTerm) ||
       recipe.description.toLowerCase().includes(searchTerm)
     ).slice(0, 10);
   }
 
   getRecipeById(id: string): Recipe | null {
-    return this.data.recipes.find(r => r.id === id) || null;
+    return this.getRecipeByIdFromDb(id);
   }
 
   addFavorite(recipeId: string, recipeName: string, cuisine: string, difficulty: string): Favorite {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
     const favorite: Favorite = {
       id: `fav_${Date.now()}_${uuidv4().slice(0, 8)}`,
       recipeId,
@@ -914,21 +1063,39 @@ class RecipeDatabase {
       difficulty,
       createdAt: new Date().toISOString()
     };
-    
-    this.data.favorites.unshift(favorite);
-    this.saveData();
+
+    this.db.run(
+      'INSERT INTO favorites (id, recipe_id, recipe_name, cuisine, difficulty, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [favorite.id, favorite.recipeId, favorite.recipeName, favorite.cuisine, favorite.difficulty, favorite.createdAt]
+    );
+
+    this.saveToDisk();
     return favorite;
   }
 
   removeFavorite(id: string): void {
-    this.data.favorites = this.data.favorites.filter(f => f.id !== id);
-    this.saveData();
+    if (!this.db) return;
+
+    this.db.run('DELETE FROM favorites WHERE id = ?', [id]);
+    this.saveToDisk();
   }
 
   getFavorites(): Favorite[] {
-    return [...this.data.favorites].sort((a, b) => 
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    if (!this.db) return [];
+
+    const result = this.db.exec(
+      'SELECT id, recipe_id, recipe_name, cuisine, difficulty, created_at FROM favorites ORDER BY created_at DESC'
     );
+    if (result.length === 0) return [];
+
+    return result[0].values.map((row: any[]) => ({
+      id: row[0] as string,
+      recipeId: row[1] as string,
+      recipeName: row[2] as string,
+      cuisine: row[3] as string,
+      difficulty: row[4] as string,
+      createdAt: row[5] as string
+    }));
   }
 }
 
