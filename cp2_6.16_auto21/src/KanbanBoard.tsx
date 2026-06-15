@@ -1,20 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   DndContext,
   closestCenter,
   KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   DragEndEvent,
   DragOverEvent,
   DragStartEvent,
+  DragOverlay,
 } from '@dnd-kit/core';
 import {
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Task, TaskStatus, useTasks } from './store';
 import TaskCard from './TaskCard';
 import './KanbanBoard.css';
@@ -48,7 +51,7 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, title, tasks, onEdi
           <span className="column-count">{tasks.length}</span>
         </div>
       </div>
-      <div className="column-content">
+      <div className="column-content" data-droppable-id={status}>
         <SortableContext items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
           {tasks.map(task => (
             <TaskCard
@@ -75,6 +78,7 @@ interface KanbanBoardProps {
 
 const KanbanBoard: React.FC<KanbanBoardProps> = ({ onEditTask }) => {
   const { getTasksByStatus, moveTask, tasks, deleteTask } = useTasks();
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   const todoTasks = getTasksByStatus('todo');
   const inProgressTasks = getTasksByStatus('inProgress');
@@ -86,6 +90,12 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ onEditTask }) => {
         distance: 8,
       },
     }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 200,
+        tolerance: 5,
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -95,13 +105,10 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ onEditTask }) => {
     return tasks.find(t => t.id === id);
   };
 
-  const getStatusFromId = (id: string): TaskStatus | null => {
-    const task = findTaskById(id);
-    return task ? task.status : null;
-  };
+  const activeTask = activeId ? findTaskById(activeId) : null;
 
   const handleDragStart = (event: DragStartEvent) => {
-    // Can add visual feedback here if needed
+    setActiveId(event.active.id as string);
   };
 
   const handleDragOver = (event: DragOverEvent) => {
@@ -109,49 +116,58 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ onEditTask }) => {
 
     if (!over) return;
 
-    const activeId = active.id as string;
-    const overId = over.id as string;
+    const activeIdStr = active.id as string;
+    const overIdStr = over.id as string;
 
-    const activeTask = findTaskById(activeId);
-    if (!activeTask) return;
+    const activeTaskItem = findTaskById(activeIdStr);
+    if (!activeTaskItem) return;
 
-    const overTask = findTaskById(overId);
+    const overTaskItem = findTaskById(overIdStr);
 
-    if (overTask) {
-      if (activeTask.status !== overTask.status) {
-        const overTasks = getTasksByStatus(overTask.status);
-        const overIndex = overTasks.findIndex(t => t.id === overId);
-        moveTask(activeId, overTask.status, overIndex);
+    if (overTaskItem) {
+      if (activeTaskItem.status !== overTaskItem.status) {
+        const overTasks = getTasksByStatus(overTaskItem.status);
+        const overIndex = overTasks.findIndex(t => t.id === overIdStr);
+        moveTask(activeIdStr, overTaskItem.status, overIndex);
       }
     }
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
+    setActiveId(null);
     const { active, over } = event;
 
     if (!over) return;
 
-    const activeId = active.id as string;
-    const overId = over.id as string;
+    const activeIdStr = active.id as string;
+    const overIdStr = over.id as string;
 
-    if (activeId === overId) return;
+    if (activeIdStr === overIdStr) return;
 
-    const activeTask = findTaskById(activeId);
-    const overTask = findTaskById(overId);
+    const activeTaskItem = findTaskById(activeIdStr);
+    const overTaskItem = findTaskById(overIdStr);
 
-    if (!activeTask || !overTask) return;
+    if (!activeTaskItem || !overTaskItem) return;
 
-    const overTasks = getTasksByStatus(overTask.status);
-    const overIndex = overTasks.findIndex(t => t.id === overId);
+    const overTasks = getTasksByStatus(overTaskItem.status);
+    const overIndex = overTasks.findIndex(t => t.id === overIdStr);
 
-    if (activeTask.status === overTask.status) {
-      const activeIndex = overTasks.findIndex(t => t.id === activeId);
+    if (activeTaskItem.status === overTaskItem.status) {
+      const activeIndex = overTasks.findIndex(t => t.id === activeIdStr);
       if (activeIndex !== overIndex) {
-        moveTask(activeId, activeTask.status, overIndex);
+        moveTask(activeIdStr, activeTaskItem.status, overIndex);
       }
     } else {
-      moveTask(activeId, overTask.status, overIndex);
+      moveTask(activeIdStr, overTaskItem.status, overIndex);
     }
+  };
+
+  const handleDragCancel = () => {
+    setActiveId(null);
+  };
+
+  const handleEdit = (task: Task) => {
+    onEditTask(task);
   };
 
   return (
@@ -161,30 +177,54 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ onEditTask }) => {
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
     >
       <div className="kanban-board">
         <KanbanColumn
           status="todo"
           title="To Do"
           tasks={todoTasks}
-          onEdit={onEditTask}
+          onEdit={handleEdit}
           onDelete={deleteTask}
         />
         <KanbanColumn
           status="inProgress"
           title="In Progress"
           tasks={inProgressTasks}
-          onEdit={onEditTask}
+          onEdit={handleEdit}
           onDelete={deleteTask}
         />
         <KanbanColumn
           status="done"
           title="Done"
           tasks={doneTasks}
-          onEdit={onEditTask}
+          onEdit={handleEdit}
           onDelete={deleteTask}
         />
       </div>
+
+      <DragOverlay>
+        {activeTask ? (
+          <div
+            className="task-card drag-overlay-card"
+            style={{
+              transform: `translate3d(0, 0, 0) scale(1.02)`,
+              opacity: 0.6,
+            }}
+          >
+            <h3 className="task-card-title">{activeTask.title || '无标题'}</h3>
+            {(() => {
+              const tmp = document.createElement('div');
+              tmp.innerHTML = activeTask.description;
+              const plain = tmp.textContent || tmp.innerText || '';
+              const preview = plain.length > 60
+                ? plain.substring(0, 60) + '...'
+                : plain;
+              return preview ? <p className="task-card-content">{preview}</p> : null;
+            })()}
+          </div>
+        ) : null}
+      </DragOverlay>
     </DndContext>
   );
 };

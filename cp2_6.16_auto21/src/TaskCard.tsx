@@ -29,11 +29,24 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.6 : 1,
+    opacity: isDragging ? 1 : 1,
     zIndex: isDragging ? 10 : 1,
   };
 
-  const plainContent = stripHtml(task.content);
+  if (isDragging) {
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        {...attributes}
+        {...listeners}
+      >
+        <div className="task-card-drop-indicator" />
+      </div>
+    );
+  }
+
+  const plainContent = stripHtml(task.description);
   const previewContent = plainContent.length > 60
     ? plainContent.substring(0, 60) + '...'
     : plainContent;

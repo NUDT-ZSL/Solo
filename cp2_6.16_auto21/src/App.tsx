@@ -9,18 +9,18 @@ const App: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
+  const [description, setDescription] = useState('');
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   const openModal = (task?: Task) => {
     if (task) {
       setEditingTask(task);
       setTitle(task.title);
-      setContent(task.content);
+      setDescription(task.description);
     } else {
       setEditingTask(null);
       setTitle('');
-      setContent('');
+      setDescription('');
     }
     setIsModalOpen(true);
   };
@@ -29,7 +29,7 @@ const App: React.FC = () => {
     setIsModalOpen(false);
     setEditingTask(null);
     setTitle('');
-    setContent('');
+    setDescription('');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -40,9 +40,9 @@ const App: React.FC = () => {
     }
 
     if (editingTask) {
-      updateTask(editingTask.id, title.trim(), content);
+      updateTask(editingTask.id, title.trim(), description);
     } else {
-      addTask(title.trim(), content);
+      addTask(title.trim(), description);
     }
 
     closeModal();
@@ -162,8 +162,8 @@ const App: React.FC = () => {
               <div className="form-group">
                 <label className="form-label">描述</label>
                 <Editor
-                  value={content}
-                  onChange={setContent}
+                  value={description}
+                  onChange={setDescription}
                   placeholder="输入任务描述..."
                 />
               </div>

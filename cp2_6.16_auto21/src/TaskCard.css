@@ -77,3 +77,19 @@
 .action-btn.delete-btn:hover {
   color: #3a3a3a;
 }
+
+.task-card-drop-indicator {
+  height: 2px;
+  margin-bottom: 12px;
+  border-top: 2px dashed #3a3a3a;
+  border-radius: 2px;
+  box-sizing: content-box;
+  padding: 0;
+  transition: all 0.15s ease;
+}
+
+.drag-overlay-card {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  cursor: grabbing;
+  pointer-events: none;
+}

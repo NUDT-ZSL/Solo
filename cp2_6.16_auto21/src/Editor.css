@@ -39,6 +39,16 @@
   color: #2c2c2c;
 }
 
+.toolbar-btn-active {
+  background-color: #3a3a3a;
+  color: #faf8f0;
+}
+
+.toolbar-btn-active:hover {
+  background-color: #555;
+  color: #faf8f0;
+}
+
 .toolbar-btn:active {
   background-color: #3a3a3a;
   color: #faf8f0;
