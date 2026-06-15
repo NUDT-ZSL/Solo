@@ -9,6 +9,11 @@ interface PreviewCardProps {
 
 export default function PreviewCard({ onClose, uiStyleConfig, translationText }: PreviewCardProps) {
   const [theme, setTheme] = useState<ThemeMode>('dark');
+  const [previewFontSize, setPreviewFontSize] = useState<number>(uiStyleConfig.fontSize);
+
+  useEffect(() => {
+    setPreviewFontSize(uiStyleConfig.fontSize);
+  }, [uiStyleConfig.fontSize]);
 
   const getThemeAdjustedStyles = () => {
     if (theme === 'light') {
@@ -34,6 +39,26 @@ export default function PreviewCard({ onClose, uiStyleConfig, translationText }:
       <div className="preview-card-header">
         <div className="preview-card-title">🎬 实时预览</div>
         <div className="preview-card-actions">
+          <div className="font-size-control">
+            <span className="font-size-label" style={{ color: '#aaa', fontSize: '11px', marginRight: '6px' }}>字号</span>
+            <input
+              type="range"
+              min="10"
+              max="28"
+              value={previewFontSize}
+              onChange={(e) => setPreviewFontSize(parseInt(e.target.value))}
+              style={{
+                width: '70px',
+                height: '4px',
+                accentColor: '#4a90d9',
+                verticalAlign: 'middle',
+                marginRight: '6px'
+              }}
+            />
+            <span style={{ color: '#aaa', fontSize: '11px', minWidth: '24px', display: 'inline-block' }}>
+              {previewFontSize}px
+            </span>
+          </div>
           <div className="theme-toggle">
             <button
               className={`theme-btn ${theme === 'light' ? 'active' : ''}`}
@@ -73,7 +98,7 @@ export default function PreviewCard({ onClose, uiStyleConfig, translationText }:
             style={{
               backgroundColor: adjustedStyles.dialogBgColor,
               color: adjustedStyles.textColor,
-              fontSize: `${uiStyleConfig.fontSize}px`,
+              fontSize: `${previewFontSize}px`,
               lineHeight: uiStyleConfig.lineHeight,
               padding: `${uiStyleConfig.padding}px`,
               borderRadius: `${uiStyleConfig.borderRadius}px`
