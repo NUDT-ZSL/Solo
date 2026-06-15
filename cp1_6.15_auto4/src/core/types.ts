@@ -23,6 +23,12 @@ export interface TrianglePlatform extends BaseObject {
   triangleHeight: number
 }
 
+export interface SpikeTrap extends BaseObject {
+  type: 'trap-spike'
+  spikeBaseWidth: number
+  spikeHeight: number
+}
+
 export interface MovingPlatform extends BaseObject {
   type: 'trap-moving'
   moveRangeX: number
@@ -30,7 +36,7 @@ export interface MovingPlatform extends BaseObject {
   moveSpeed: number
 }
 
-export type LevelObject = BaseObject | TrianglePlatform | MovingPlatform
+export type LevelObject = BaseObject | TrianglePlatform | SpikeTrap | MovingPlatform
 
 export interface LevelData {
   version: string
@@ -59,5 +65,7 @@ export interface CollisionRect {
 }
 
 export const DEFAULT_COLOR = '#E94560'
+export const TRIANGLE_DEFAULT_COLOR = '#4ECDC4'
+export const SPIKE_DEFAULT_COLOR = '#FF6B6B'
 export const GRID_SIZE = 40
 export const MAX_HISTORY = 50
