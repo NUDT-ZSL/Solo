@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+
 export interface BuildingData {
   id: number;
   x: number;

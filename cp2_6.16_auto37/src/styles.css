@@ -1,0 +1,218 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #1a1a2e;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.app-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.canvas-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: calc(100% - 60px);
+}
+
+.status-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 60px;
+  background-color: #0d0d1a;
+  color: #e0e0e0;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  font-size: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.status-item {
+  margin-right: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-label {
+  color: #888;
+}
+
+.status-value {
+  color: #e0e0e0;
+  font-weight: 500;
+}
+
+.sim-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.sim-status-badge.idle {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #aaa;
+}
+
+.sim-status-badge.calculating {
+  background-color: rgba(33, 150, 243, 0.2);
+  color: #64b5f6;
+}
+
+.sim-status-badge.done {
+  background-color: rgba(76, 175, 80, 0.2);
+  color: #81c784;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.top-right-status {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 10;
+}
+
+.bottom-left-info {
+  position: absolute;
+  bottom: 80px;
+  left: 20px;
+  z-index: 10;
+  background-color: rgba(13, 13, 26, 0.8);
+  backdrop-filter: blur(8px);
+  padding: 12px 18px;
+  border-radius: 10px;
+  color: #e0e0e0;
+  font-size: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.bottom-left-info .info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 4px 0;
+}
+
+.bottom-left-info .info-label {
+  color: #888;
+}
+
+.bottom-left-info .info-value {
+  color: #fff;
+  font-weight: 500;
+}
+
+.gui-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.gui-container > * {
+  pointer-events: auto;
+}
+
+.dg.ac {
+  z-index: 100 !important;
+  position: absolute !important;
+  top: 0 !important;
+  right: auto !important;
+  left: 0 !important;
+}
+
+.dg .main {
+  backdrop-filter: blur(8px) !important;
+  background: rgba(30, 30, 50, 0.75) !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  margin: 16px !important;
+}
+
+.dg .cr {
+  border-left: none !important;
+}
+
+.dg .property-name {
+  padding: 4px 8px !important;
+}
+
+.dg .c {
+  padding: 3px 8px !important;
+}
+
+.dg .slider {
+  height: 16px !important;
+}
+
+.dg .slider-fg {
+  background: #64b5f6 !important;
+}
+
+.dg .c .slider:hover .slider-fg {
+  background: #90caf9 !important;
+}
+
+.dg .button {
+  transition: background 0.2s ease !important;
+}
+
+.dg .button:hover {
+  background: rgba(100, 181, 246, 0.3) !important;
+}
+
+@media (max-width: 768px) {
+  .status-bar {
+    font-size: 12px;
+    padding: 0 12px;
+    height: 50px;
+  }
+
+  .status-item {
+    margin-right: 16px;
+  }
+
+  .canvas-container {
+    height: calc(100% - 50px);
+  }
+
+  .bottom-left-info {
+    bottom: 70px;
+    left: 12px;
+    padding: 8px 12px;
+    font-size: 11px;
+  }
+}
