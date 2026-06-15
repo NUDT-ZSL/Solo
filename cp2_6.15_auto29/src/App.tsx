@@ -64,10 +64,10 @@ function StarField() {
 
             float period = 2.0 + (aPhase / 6.28318) * 2.0;
             float t = (uTime + aPhase) / period;
-            float twinkle = 0.5 + sin(t * 6.28318) * 0.5;
+            float twinkle = clamp(0.5 + sin(t * 6.28318) * 0.5, 0.0, 1.0);
             vTwinkle = twinkle;
 
-            float pixelSize = 1.0 + twinkle * 2.0;
+            float pixelSize = clamp(1.0 + twinkle * 2.0, 1.0, 3.0);
             float size = aBaseSize * pixelSize;
 
             gl_PointSize = size * uPixelRatio * (300.0 / -mvPosition.z);
@@ -161,8 +161,10 @@ function BackgroundGradient() {
 }
 
 function VolumeMeter({ volume }: { volume: number }) {
-  const v = Math.min(1, Math.max(0, volume))
-  const maskWidth = (1 - v) * 100
+  const clampedVolume = Math.max(0, Math.min(1, volume))
+  const safeVolume = isNaN(clampedVolume) ? 0 : clampedVolume
+  const maskWidth = (1 - safeVolume) * 100
+  const safeMaskWidth = Math.max(0, Math.min(100, maskWidth))
 
   return (
     <div
@@ -182,7 +184,7 @@ function VolumeMeter({ volume }: { volume: number }) {
           top: 0,
           right: 0,
           height: '100%',
-          width: `${maskWidth}%`,
+          width: `${safeMaskWidth}%`,
           background: '#2a2a2a',
           transition: 'width 0.05s ease-out',
           boxShadow: 'inset 2px 0 4px rgba(0,0,0,0.3)',

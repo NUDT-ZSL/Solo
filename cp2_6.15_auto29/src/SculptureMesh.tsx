@@ -11,6 +11,10 @@ const MAX_RADIUS = 3.0
 const Y_SPACING = 0.22
 const BEAT_EXPANSION_RATIO = 0.1
 const VERTEX_UPDATE_THRESHOLD = 5
+const PERFORMANCE_HYSTERESIS = 1.5
+const SMOOTHING_ALPHA = 0.3
+
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
@@ -30,6 +34,8 @@ export default function SculptureMesh({}: SculptureMeshProps) {
   const lastBeatRef = useRef<boolean>(false)
   const slowFrameCountRef = useRef<number>(0)
   const vertexUpdateTimeRef = useRef<number>(0)
+  const smoothedUpdateTimeRef = useRef<number>(0)
+  const isDegradedRef = useRef<boolean>(false)
   const [segments, setSegments] = useState(DEFAULT_SEGMENTS)
 
   const spectrum = useAudioStore((s) => s.spectrum)
@@ -188,11 +194,14 @@ export default function SculptureMesh({}: SculptureMeshProps) {
       globalTargetColor.lerp(whiteColor, beatFlash * 0.4)
     }
 
-    const emissiveIntensity = 1.2 + beatFlash + (lowFreqEnergy * 0.5 + midFreqEnergy * 0.3)
+    const baseVertexBrightness = 0.8
+    const emissiveIntensity = 1.4 + beatFlash + (lowFreqEnergy * 0.5 + midFreqEnergy * 0.3)
+    const emissiveColor = globalTargetColor.clone().multiplyScalar(1.1)
+
     if (materialRef.current) {
-      materialRef.current.emissive.copy(globalTargetColor)
+      materialRef.current.emissive.copy(emissiveColor)
       materialRef.current.emissiveIntensity = emissiveIntensity
-      materialRef.current.color.copy(globalTargetColor).multiplyScalar(0.25)
+      materialRef.current.color.copy(globalTargetColor).multiplyScalar(0.35)
       materialRef.current.opacity = 0.7 + Math.min(0.2, lowFreqEnergy * 0.3)
     }
 
@@ -212,7 +221,7 @@ export default function SculptureMesh({}: SculptureMeshProps) {
 
       if (beatProgress > 0) {
         const expansionProgress = Math.min(beatProgress, 0.2 / 0.3) / (0.2 / 0.3)
-        const expansionFactor = easeOut(1 - expansionProgress) * BEAT_EXPANSION_RATIO
+        const expansionFactor = clamp(easeOut(1 - expansionProgress) * BEAT_EXPANSION_RATIO, 0, BEAT_EXPANSION_RATIO)
         ringExpansion = baseRadius * expansionFactor
       }
 
@@ -229,7 +238,8 @@ export default function SculptureMesh({}: SculptureMeshProps) {
 
       const vertexTargetColor = new THREE.Color()
       vertexTargetColor.copy(globalTargetColor).lerp(ringFreqColor, 0.3 + ringProgress * 0.3)
-      vertexTargetColor.multiplyScalar(0.6 + smoothSpec * 0.8)
+      const vertexBrightness = baseVertexBrightness + smoothSpec * 0.7
+      vertexTargetColor.multiplyScalar(vertexBrightness)
 
       const twistAngle = ringProgress * Math.PI * 1.5
 
@@ -276,19 +286,41 @@ export default function SculptureMesh({}: SculptureMeshProps) {
     const vertexUpdateTime = performance.now() - perfStartTime
     vertexUpdateTimeRef.current = vertexUpdateTime
 
-    if (vertexUpdateTime > VERTEX_UPDATE_THRESHOLD && segments === DEFAULT_SEGMENTS) {
-      slowFrameCountRef.current++
-      if (slowFrameCountRef.current > 10) {
-        console.log(`[Performance] Vertex update ${vertexUpdateTime.toFixed(2)}ms > ${VERTEX_UPDATE_THRESHOLD}ms, reducing segments to ${REDUCED_SEGMENTS}`)
-        setSegments(REDUCED_SEGMENTS)
-        slowFrameCountRef.current = 0
+    smoothedUpdateTimeRef.current = lerp(
+      smoothedUpdateTimeRef.current,
+      vertexUpdateTime,
+      SMOOTHING_ALPHA
+    )
+
+    const smoothedTime = smoothedUpdateTimeRef.current
+
+    if (!isDegradedRef.current && segments === DEFAULT_SEGMENTS) {
+      const degradeThreshold = VERTEX_UPDATE_THRESHOLD
+      if (smoothedTime > degradeThreshold) {
+        slowFrameCountRef.current++
+        if (slowFrameCountRef.current > 8) {
+          console.log(`[Performance] Smoothed ${smoothedTime.toFixed(2)}ms > ${degradeThreshold}ms, reducing to ${REDUCED_SEGMENTS} segments`)
+          setSegments(REDUCED_SEGMENTS)
+          isDegradedRef.current = true
+          slowFrameCountRef.current = 0
+          smoothedUpdateTimeRef.current = 0
+        }
+      } else {
+        slowFrameCountRef.current = Math.max(0, slowFrameCountRef.current - 1)
       }
-    } else if (vertexUpdateTime < VERTEX_UPDATE_THRESHOLD - 1 && segments === REDUCED_SEGMENTS) {
-      slowFrameCountRef.current--
-      if (slowFrameCountRef.current < -30) {
-        console.log(`[Performance] Vertex update ${vertexUpdateTime.toFixed(2)}ms < ${VERTEX_UPDATE_THRESHOLD - 1}ms, restoring segments to ${DEFAULT_SEGMENTS}`)
-        setSegments(DEFAULT_SEGMENTS)
-        slowFrameCountRef.current = 0
+    } else if (isDegradedRef.current && segments === REDUCED_SEGMENTS) {
+      const restoreThreshold = VERTEX_UPDATE_THRESHOLD - PERFORMANCE_HYSTERESIS
+      if (smoothedTime < restoreThreshold) {
+        slowFrameCountRef.current++
+        if (slowFrameCountRef.current > 25) {
+          console.log(`[Performance] Smoothed ${smoothedTime.toFixed(2)}ms < ${restoreThreshold}ms, restoring to ${DEFAULT_SEGMENTS} segments`)
+          setSegments(DEFAULT_SEGMENTS)
+          isDegradedRef.current = false
+          slowFrameCountRef.current = 0
+          smoothedUpdateTimeRef.current = 0
+        }
+      } else {
+        slowFrameCountRef.current = Math.max(0, slowFrameCountRef.current - 1)
       }
     }
   })
