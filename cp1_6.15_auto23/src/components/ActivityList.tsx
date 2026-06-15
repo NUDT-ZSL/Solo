@@ -8,9 +8,9 @@ interface ActivityListProps {
 }
 
 function getProgressColor(ratio: number): string {
-  if (ratio < 0.5) return '#4CAF50'
-  if (ratio <= 0.8) return '#FFC107'
-  return '#F44336'
+  if (ratio < 0.3) return '#F44336'
+  if (ratio <= 0.7) return '#FFC107'
+  return '#4CAF50'
 }
 
 export default function ActivityList({ activities, selectedActivityId, onSelect }: ActivityListProps) {

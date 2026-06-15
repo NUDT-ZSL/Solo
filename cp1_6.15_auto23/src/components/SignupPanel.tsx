@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { Activity, Signup, FilterStatus } from '../types'
 
 interface SignupPanelProps {
@@ -20,6 +20,7 @@ export default function SignupPanel({
   onToggleSupply,
   onBack,
 }: SignupPanelProps) {
+  const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<FilterStatus>('all')
   const [page, setPage] = useState(1)
@@ -29,6 +30,19 @@ export default function SignupPanel({
   const [addLoading, setAddLoading] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Signup | null>(null)
   const [animKey, setAnimKey] = useState(0)
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setSearch(searchInput)
+      setPage(1)
+      setAnimKey((k) => k + 1)
+    }, 200)
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [searchInput])
 
   const filteredSignups = useMemo(() => {
     let result = signups
@@ -107,10 +121,9 @@ export default function SignupPanel({
           type="text"
           placeholder="搜索昵称..."
           className="search-input"
-          value={search}
+          value={searchInput}
           onChange={(e) => {
-            setSearch(e.target.value)
-            setPage(1)
+            setSearchInput(e.target.value)
           }}
         />
         <div className="filter-tabs">
@@ -141,7 +154,7 @@ export default function SignupPanel({
               <th className="col-action">操作</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody key={animKey}>
             {pagedSignups.map((signup, idx) => (
               <tr key={signup.id} className={`table-row fade-in anim-${animKey % 3}`}>
                 <td>{(currentPage - 1) * PAGE_SIZE + idx + 1}</td>

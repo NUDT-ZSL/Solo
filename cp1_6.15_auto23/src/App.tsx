@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Activity, Signup } from './types'
 import ActivityList from './components/ActivityList'
 import SignupPanel from './components/SignupPanel'
@@ -8,6 +8,26 @@ export default function App() {
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null)
   const [signups, setSignups] = useState<Signup[]>([])
   const [mobileView, setMobileView] = useState<'list' | 'detail'>('list')
+  const [isMobile, setIsMobile] = useState(false)
+  const signupsRef = useRef<Signup[]>([])
+  const activitiesRef = useRef<Activity[]>([])
+
+  useEffect(() => {
+    signupsRef.current = signups
+  }, [signups])
+
+  useEffect(() => {
+    activitiesRef.current = activities
+  }, [activities])
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   const fetchActivities = useCallback(async () => {
     try {
@@ -43,8 +63,10 @@ export default function App() {
 
   const handleSelectActivity = useCallback((id: string) => {
     setSelectedActivityId(id)
-    setMobileView('detail')
-  }, [])
+    if (isMobile) {
+      setMobileView('detail')
+    }
+  }, [isMobile])
 
   const handleAddSignup = useCallback(async (activityId: string, nickname: string, phone: string) => {
     const res = await fetch('/api/signups', {
@@ -72,21 +94,61 @@ export default function App() {
   }, [signups])
 
   const handleToggleSupply = useCallback(async (signupId: string, supplyName: string) => {
-    const signup = signups.find((s) => s.id === signupId)
+    const currentSignups = signupsRef.current
+    const currentActivities = activitiesRef.current
+    const signup = currentSignups.find((s) => s.id === signupId)
     if (!signup || !selectedActivityId) return
+
     const newSupplies = signup.supplies.includes(supplyName)
       ? signup.supplies.filter((s) => s !== supplyName)
       : [...signup.supplies, supplyName]
-    const res = await fetch(`/api/activities/${selectedActivityId}/supplies`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ signupId, supplies: newSupplies }),
+
+    const delta = signup.supplies.includes(supplyName) ? -1 : 1
+
+    const optimisticSignups = currentSignups.map((s) =>
+      s.id === signupId ? { ...s, supplies: newSupplies } : s
+    )
+    setSignups(optimisticSignups)
+    signupsRef.current = optimisticSignups
+
+    const optimisticActivities = currentActivities.map((a) => {
+      if (a.id !== selectedActivityId) return a
+      return {
+        ...a,
+        supplies: a.supplies.map((sup) =>
+          sup.name === supplyName
+            ? { ...sup, allocated: Math.max(0, sup.allocated + delta) }
+            : sup
+        ),
+      }
     })
-    if (!res.ok) return
-    const { signup: updatedSignup, activity } = await res.json()
-    setSignups((prev) => prev.map((s) => (s.id === updatedSignup.id ? updatedSignup : s)))
-    setActivities((prev) => prev.map((a) => (a.id === activity.id ? activity : a)))
-  }, [signups, selectedActivityId])
+    setActivities(optimisticActivities)
+    activitiesRef.current = optimisticActivities
+
+    try {
+      const res = await fetch(`/api/activities/${selectedActivityId}/supplies`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signupId, supplies: newSupplies }),
+      })
+      if (!res.ok) throw new Error('PUT failed')
+      const { signup: updatedSignup, activity } = await res.json()
+
+      const syncedSignups = signupsRef.current.map((s) =>
+        s.id === updatedSignup.id ? updatedSignup : s
+      )
+      setSignups(syncedSignups)
+      signupsRef.current = syncedSignups
+
+      const syncedActivities = activitiesRef.current.map((a) =>
+        a.id === activity.id ? activity : a
+      )
+      setActivities(syncedActivities)
+      activitiesRef.current = syncedActivities
+    } catch (e) {
+      console.error('Failed to update supplies', e)
+    }
+  }, [selectedActivityId])
 
   const selectedActivity = activities.find((a) => a.id === selectedActivityId) || null
 
