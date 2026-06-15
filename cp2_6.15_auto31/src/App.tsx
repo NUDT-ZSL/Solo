@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useGraphData } from './hooks/useGraphData';
+import { useGraphData } from './Graph/useGraphData';
 import { GraphEngine } from './Graph/graphEngine';
 import './App.css';
 
