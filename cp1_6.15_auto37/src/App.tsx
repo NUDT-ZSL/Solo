@@ -15,24 +15,36 @@ const AnimatedRoutes: React.FC = () => {
   const [displayLocation, setDisplayLocation] = useState(location);
   const [transitionStage, setTransitionStage] = useState<'enter' | 'exit'>('enter');
   const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('left');
-  const prevPathRef = useRef(location.pathname);
+  const navHistoryRef = useRef<string[]>([location.pathname]);
 
   useEffect(() => {
-    if (location.pathname !== prevPathRef.current) {
-      const navOrder = ['/', '/stats', '/settings'];
-      const prevIndex = navOrder.indexOf(prevPathRef.current);
-      const nextIndex = navOrder.indexOf(location.pathname);
-      setSlideDirection(nextIndex > prevIndex ? 'left' : 'right');
+    const currentPath = location.pathname;
+    const history = navHistoryRef.current;
+    const lastPath = history[history.length - 1];
 
-      setTransitionStage('exit');
-      const timer = setTimeout(() => {
-        setDisplayLocation(location);
-        setTransitionStage('enter');
-      }, 150);
+    if (currentPath === lastPath) return;
 
-      prevPathRef.current = location.pathname;
-      return () => clearTimeout(timer);
+    let direction: 'left' | 'right' = 'left';
+    const prevIndex = history.length - 1;
+    const existingIndex = history.indexOf(currentPath);
+
+    if (existingIndex !== -1 && existingIndex < prevIndex) {
+      direction = 'right';
+      history.length = existingIndex + 1;
+    } else {
+      direction = 'left';
+      history.push(currentPath);
     }
+
+    setSlideDirection(direction);
+    setTransitionStage('exit');
+
+    const timer = setTimeout(() => {
+      setDisplayLocation(location);
+      setTransitionStage('enter');
+    }, 150);
+
+    return () => clearTimeout(timer);
   }, [location]);
 
   const getTransitionClass = () => {
@@ -185,47 +197,50 @@ const App: React.FC = () => {
         .routes-wrapper {
           position: relative;
           width: 100%;
+          min-height: calc(100vh - 140px);
           overflow: hidden;
         }
 
         .routes-container {
-          position: relative;
+          position: absolute;
+          inset: 0;
           width: 100%;
-          min-height: calc(100vh - 120px);
+          opacity: 0;
+          transform: translateX(0);
+          transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          will-change: transform, opacity;
         }
 
-        .page-enter {
-          animation-duration: 0.3s;
-          animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-          animation-fill-mode: both;
+        .routes-container.page-exit {
+          pointer-events: none;
+          opacity: 0;
         }
 
-        .page-exit {
-          animation-duration: 0.15s;
-          animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-          animation-fill-mode: both;
+        .routes-container.page-exit-left {
+          transform: translateX(-25px);
         }
 
-        .page-enter-left {
-          animation-name: slideInFromRight;
+        .routes-container.page-exit-right {
+          transform: translateX(25px);
         }
 
-        .page-enter-right {
-          animation-name: slideInFromLeft;
+        .routes-container.page-enter {
+          opacity: 1;
+          transform: translateX(0);
         }
 
-        .page-exit-left {
-          animation-name: slideOutToLeft;
+        .routes-container.page-enter-left {
+          animation: slideInFromRight 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        .page-exit-right {
-          animation-name: slideOutToRight;
+        .routes-container.page-enter-right {
+          animation: slideInFromLeft 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         @keyframes slideInFromRight {
           from {
             opacity: 0;
-            transform: translateX(30px);
+            transform: translateX(25px);
           }
           to {
             opacity: 1;
@@ -236,33 +251,11 @@ const App: React.FC = () => {
         @keyframes slideInFromLeft {
           from {
             opacity: 0;
-            transform: translateX(-30px);
+            transform: translateX(-25px);
           }
           to {
             opacity: 1;
             transform: translateX(0);
-          }
-        }
-
-        @keyframes slideOutToLeft {
-          from {
-            opacity: 1;
-            transform: translateX(0);
-          }
-          to {
-            opacity: 0;
-            transform: translateX(-30px);
-          }
-        }
-
-        @keyframes slideOutToRight {
-          from {
-            opacity: 1;
-            transform: translateX(0);
-          }
-          to {
-            opacity: 0;
-            transform: translateX(30px);
           }
         }
 

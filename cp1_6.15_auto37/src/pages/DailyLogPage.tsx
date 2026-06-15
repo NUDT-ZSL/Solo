@@ -3,12 +3,18 @@ import type { FoodRecord, RecordsResponse } from '../api/types';
 import { MEAL_TYPE_LABELS, NUTRIENT_NAMES, NUTRIENT_UNITS } from '../api/types';
 import { formatDisplayDate, getDateInfo, getDaysInWeek, formatDate, formatTime } from '../utils/timeHelpers';
 
+interface WeekData {
+  records: FoodRecord[];
+  weekStart: string;
+  weekEnd: string;
+}
+
 const DailyLogPage: React.FC = () => {
   const [weekOffset, setWeekOffset] = useState(0);
-  const [records, setRecords] = useState<FoodRecord[]>([]);
-  const [weekStart, setWeekStart] = useState('');
-  const [weekEnd, setWeekEnd] = useState('');
+  const [currentWeek, setCurrentWeek] = useState<WeekData | null>(null);
+  const [prevWeek, setPrevWeek] = useState<WeekData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [slideState, setSlideState] = useState<'idle' | 'transitioning'>('idle');
   const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right');
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
@@ -20,28 +26,62 @@ const DailyLogPage: React.FC = () => {
     imageUrl: '',
   });
 
-  const fetchRecords = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/records?week=${weekOffset}`);
-      const data: RecordsResponse = await response.json();
-      setRecords(data.records);
-      setWeekStart(data.weekStart);
-      setWeekEnd(data.weekEnd);
-    } catch (error) {
-      console.error('Failed to fetch records:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [weekOffset]);
+  const fetchRecords = useCallback(async (offset: number): Promise<WeekData> => {
+    const response = await fetch(`/api/records?week=${offset}`);
+    const data: RecordsResponse = await response.json();
+    return {
+      records: data.records,
+      weekStart: data.weekStart,
+      weekEnd: data.weekEnd,
+    };
+  }, []);
 
   useEffect(() => {
-    fetchRecords();
+    const init = async () => {
+      setLoading(true);
+      try {
+        const data = await fetchRecords(0);
+        setCurrentWeek(data);
+      } catch (error) {
+        console.error('Failed to fetch records:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    init();
   }, [fetchRecords]);
 
-  const handleWeekChange = (direction: number) => {
-    setSlideDirection(direction > 0 ? 'left' : 'right');
-    setWeekOffset((prev) => prev + direction);
+  const handleWeekChange = async (direction: number) => {
+    if (slideState === 'transitioning' || !currentWeek) return;
+
+    const newOffset = weekOffset + direction;
+    const dir = direction > 0 ? 'left' : 'right';
+
+    setSlideDirection(dir);
+    setPrevWeek(currentWeek);
+    setSlideState('transitioning');
+
+    try {
+      const newData = await fetchRecords(newOffset);
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            setCurrentWeek(newData);
+            setWeekOffset(newOffset);
+
+            setTimeout(() => {
+              setSlideState('idle');
+              setPrevWeek(null);
+            }, 400);
+          }, 20);
+        });
+      });
+    } catch (error) {
+      console.error('Failed to fetch records:', error);
+      setSlideState('idle');
+      setPrevWeek(null);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -73,7 +113,9 @@ const DailyLogPage: React.FC = () => {
         body: JSON.stringify(newRecord),
       });
       const savedRecord = await response.json();
-      setRecords((prev) => [...prev, savedRecord]);
+      setCurrentWeek((prev) =>
+        prev ? { ...prev, records: [...prev.records, savedRecord] } : prev
+      );
       setShowForm(false);
       setFormData({
         foodName: '',
@@ -88,18 +130,16 @@ const DailyLogPage: React.FC = () => {
     }
   };
 
-  const groupRecordsByDate = () => {
-    if (!weekStart) return [];
-    const days = getDaysInWeek(weekStart);
+  const groupRecordsByDate = (weekData: WeekData) => {
+    if (!weekData.weekStart) return [];
+    const days = getDaysInWeek(weekData.weekStart);
     return days.map((date) => ({
       date,
-      records: records
+      records: weekData.records
         .filter((r) => r.date === date)
         .sort((a, b) => a.time.localeCompare(b.time)),
     }));
   };
-
-  const groupedRecords = groupRecordsByDate();
 
   return (
     <div className="page daily-log-page">
@@ -121,7 +161,9 @@ const DailyLogPage: React.FC = () => {
           ← 上一周
         </button>
         <span className="week-range">
-          {formatDisplayDate(weekStart)} - {formatDisplayDate(weekEnd)}
+          {currentWeek
+            ? `${formatDisplayDate(currentWeek.weekStart)} - ${formatDisplayDate(currentWeek.weekEnd)}`
+            : '加载中...'}
         </span>
         <button
           className="btn btn-secondary week-btn"
@@ -214,86 +256,158 @@ const DailyLogPage: React.FC = () => {
         </div>
       )}
 
-      {loading || !weekStart ? (
+      {loading || !currentWeek ? (
         <div className="loading">加载中...</div>
       ) : (
-        <div
-          className={`timeline-container slide-${slideDirection}`}
-          key={weekOffset}
-        >
-          {groupedRecords.map(({ date, records: dayRecords }, index) => {
-            const dateInfo = getDateInfo(date);
-            const hasRecords = dayRecords.length > 0;
-            return (
-              <div
-                className={`day-card ${hasRecords ? 'has-records' : ''}`}
-                key={date}
-                style={{ animationDelay: `${index * 0.1}s` }}
-              >
-                <div className="day-header">
-                  <div className="day-date">
-                    <span className="day-number">{dateInfo.day}</span>
-                    <div className="day-month-week">
-                      <span className="day-month">{dateInfo.month}月</span>
-                      <span className="day-weekday">{dateInfo.weekday}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="day-records">
-                  {dayRecords.length === 0 ? (
-                    <div className="empty-day">暂无记录</div>
-                  ) : (
-                    dayRecords.map((record) => (
-                      <div className="record-card" key={record.id}>
-                        {record.imageUrl && (
-                          <img
-                            src={record.imageUrl}
-                            alt={record.foodName}
-                            className="record-image"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                            }}
-                          />
-                        )}
-                        <div className="record-content">
-                          <div className="record-header">
-                            <span className="record-time">{record.time}</span>
-                            <span className="record-meal-type">
-                              {MEAL_TYPE_LABELS[record.mealType]}
-                            </span>
-                          </div>
-                          <h4 className="record-food-name">{record.foodName}</h4>
-                          <div className="record-meta">
-                            <span>
-                              {record.portion}
-                              {record.portionUnit}
-                            </span>
-                            <span className="record-calories">
-                              {record.calories} 千卡
-                            </span>
-                          </div>
-                          <div className="record-nutrition">
-                            {Object.entries(record.nutrition).map(([key, value]) => (
-                              <span key={key} className="nutrition-tag">
-                                {NUTRIENT_NAMES[key as keyof typeof NUTRIENT_NAMES]}:{' '}
-                                {value}
-                                {NUTRIENT_UNITS[key as keyof typeof NUTRIENT_UNITS]}
-                              </span>
-                            ))}
+        <div className="timeline-viewport">
+          <div
+            className={`timeline-slider ${slideState === 'transitioning' ? `transitioning-${slideDirection}` : ''}`}
+          >
+            {prevWeek && (
+              <div className="timeline-pane">
+                {groupRecordsByDate(prevWeek).map(({ date, records: dayRecords }) => {
+                  const dateInfo = getDateInfo(date);
+                  const hasRecords = dayRecords.length > 0;
+                  return (
+                    <div
+                      className={`day-card ${hasRecords ? 'has-records' : ''}`}
+                      key={`prev-${date}`}
+                    >
+                      <div className="day-header">
+                        <div className="day-date">
+                          <span className="day-number">{dateInfo.day}</span>
+                          <div className="day-month-week">
+                            <span className="day-month">{dateInfo.month}月</span>
+                            <span className="day-weekday">{dateInfo.weekday}</span>
                           </div>
                         </div>
                       </div>
-                    ))
-                  )}
-                </div>
-
-                {hasRecords && (
-                  <div className="day-completion-check">✓</div>
-                )}
+                      <div className="day-records">
+                        {dayRecords.length === 0 ? (
+                          <div className="empty-day">暂无记录</div>
+                        ) : (
+                          dayRecords.map((record) => (
+                            <div className="record-card" key={record.id}>
+                              {record.imageUrl && (
+                                <img
+                                  src={record.imageUrl}
+                                  alt={record.foodName}
+                                  className="record-image"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                  }}
+                                />
+                              )}
+                              <div className="record-content">
+                                <div className="record-header">
+                                  <span className="record-time">{record.time}</span>
+                                  <span className="record-meal-type">
+                                    {MEAL_TYPE_LABELS[record.mealType]}
+                                  </span>
+                                </div>
+                                <h4 className="record-food-name">{record.foodName}</h4>
+                                <div className="record-meta">
+                                  <span>
+                                    {record.portion}
+                                    {record.portionUnit}
+                                  </span>
+                                  <span className="record-calories">
+                                    {record.calories} 千卡
+                                  </span>
+                                </div>
+                                <div className="record-nutrition">
+                                  {Object.entries(record.nutrition).map(([key, value]) => (
+                                    <span key={key} className="nutrition-tag">
+                                      {NUTRIENT_NAMES[key as keyof typeof NUTRIENT_NAMES]}:{' '}
+                                      {value}
+                                      {NUTRIENT_UNITS[key as keyof typeof NUTRIENT_UNITS]}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      {hasRecords && <div className="day-completion-check">✓</div>}
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            )}
+
+            <div className="timeline-pane">
+              {groupRecordsByDate(currentWeek).map(({ date, records: dayRecords }, index) => {
+                const dateInfo = getDateInfo(date);
+                const hasRecords = dayRecords.length > 0;
+                return (
+                  <div
+                    className={`day-card ${hasRecords ? 'has-records' : ''}`}
+                    key={`curr-${date}`}
+                    style={{ animationDelay: `${index * 0.1}s` }}
+                  >
+                    <div className="day-header">
+                      <div className="day-date">
+                        <span className="day-number">{dateInfo.day}</span>
+                        <div className="day-month-week">
+                          <span className="day-month">{dateInfo.month}月</span>
+                          <span className="day-weekday">{dateInfo.weekday}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="day-records">
+                      {dayRecords.length === 0 ? (
+                        <div className="empty-day">暂无记录</div>
+                      ) : (
+                        dayRecords.map((record) => (
+                          <div className="record-card" key={record.id}>
+                            {record.imageUrl && (
+                              <img
+                                src={record.imageUrl}
+                                alt={record.foodName}
+                                className="record-image"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                              />
+                            )}
+                            <div className="record-content">
+                              <div className="record-header">
+                                <span className="record-time">{record.time}</span>
+                                <span className="record-meal-type">
+                                  {MEAL_TYPE_LABELS[record.mealType]}
+                                </span>
+                              </div>
+                              <h4 className="record-food-name">{record.foodName}</h4>
+                              <div className="record-meta">
+                                <span>
+                                  {record.portion}
+                                  {record.portionUnit}
+                                </span>
+                                <span className="record-calories">
+                                  {record.calories} 千卡
+                                </span>
+                              </div>
+                              <div className="record-nutrition">
+                                {Object.entries(record.nutrition).map(([key, value]) => (
+                                  <span key={key} className="nutrition-tag">
+                                    {NUTRIENT_NAMES[key as keyof typeof NUTRIENT_NAMES]}:{' '}
+                                    {value}
+                                    {NUTRIENT_UNITS[key as keyof typeof NUTRIENT_UNITS]}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    {hasRecords && <div className="day-completion-check">✓</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
 
@@ -343,47 +457,33 @@ const DailyLogPage: React.FC = () => {
           font-size: 0.95rem;
         }
 
-        .timeline-container {
+        .timeline-viewport {
+          width: 100%;
+          overflow: hidden;
+          position: relative;
+        }
+
+        .timeline-slider {
+          display: flex;
+          width: 100%;
+          transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+          will-change: transform;
+        }
+
+        .timeline-slider.transitioning-left {
+          transform: translateX(-100%);
+        }
+
+        .timeline-slider.transitioning-right {
+          transform: translateX(0%);
+        }
+
+        .timeline-pane {
+          flex-shrink: 0;
+          width: 100%;
           display: grid;
           grid-template-columns: repeat(7, 1fr);
           gap: 1rem;
-        }
-
-        .timeline-container.slide-left {
-          animation: slideInFromLeft 0.4s ease-out both;
-        }
-
-        .timeline-container.slide-right {
-          animation: slideInFromRight 0.4s ease-out both;
-        }
-
-        .timeline-container.slide-left .day-card,
-        .timeline-container.slide-right .day-card {
-          animation: none !important;
-          opacity: 1 !important;
-          transform: none !important;
-        }
-
-        @keyframes slideInFromLeft {
-          from {
-            opacity: 0;
-            transform: translateX(50px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-
-        @keyframes slideInFromRight {
-          from {
-            opacity: 0;
-            transform: translateX(-50px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
         }
 
         .day-card {
@@ -655,7 +755,7 @@ const DailyLogPage: React.FC = () => {
         }
 
         @media (max-width: 768px) {
-          .timeline-container {
+          .timeline-pane {
             grid-template-columns: 1fr;
           }
 

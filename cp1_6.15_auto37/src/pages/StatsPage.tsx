@@ -185,9 +185,12 @@ const StatsPage: React.FC = () => {
               return (
                 <div
                   key={nutrient}
-                  className={`nutrient-card ${isVisible ? 'visible' : ''} ${isExpanded ? 'expanded' : ''}`}
+                  className={`nutrient-card ${isVisible ? 'is-visible' : ''} ${isExpanded ? 'expanded' : ''}`}
                   onClick={() => setExpandedNutrient(isExpanded ? null : nutrient)}
-                  style={{ animationDelay: `${index * 0.2}s` }}
+                  style={{
+                    animationDelay: `${index * 0.2}s`,
+                    transitionDelay: `${index * 0.2}s`,
+                  }}
                 >
                   <div className="nutrient-header">
                     <h4 className="nutrient-name">{NUTRIENT_NAMES[nutrient]}</h4>
@@ -378,28 +381,20 @@ const StatsPage: React.FC = () => {
           padding: 1.25rem;
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
           cursor: pointer;
-          transition: box-shadow 0.3s ease;
           opacity: 0;
           transform: translateY(30px);
+          transition: opacity 0.5s ease, transform 0.5s ease, box-shadow 0.3s ease;
+          transition-delay: 0s;
+          will-change: opacity, transform;
         }
 
-        .nutrient-card.visible {
-          animation: fadeInUp 0.5s ease-out forwards;
+        .nutrient-card.is-visible {
+          opacity: 1;
+          transform: translateY(0);
         }
 
         .nutrient-card.expanded {
           box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
-        }
-
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
         }
 
         .nutrient-header {

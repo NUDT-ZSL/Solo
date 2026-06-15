@@ -55,7 +55,7 @@ const SettingsPage: React.FC = () => {
 
       if (response.ok) {
         setShowSuccess(true);
-        setTimeout(() => setShowSuccess(false), 600);
+        setTimeout(() => setShowSuccess(false), 800);
       }
     } catch (error) {
       console.error('Failed to save settings:', error);
@@ -329,13 +329,13 @@ const SettingsPage: React.FC = () => {
           align-items: center;
           justify-content: center;
           z-index: 100;
-          animation: fadeInOverlay 0.6s ease forwards;
+          animation: fadeInOverlay 0.8s ease forwards;
         }
 
         @keyframes fadeInOverlay {
           0% { opacity: 0; }
-          20% { opacity: 1; }
-          80% { opacity: 1; }
+          15% { opacity: 1; }
+          70% { opacity: 1; }
           100% { opacity: 0; }
         }
 
@@ -347,8 +347,11 @@ const SettingsPage: React.FC = () => {
           display: flex;
           align-items: center;
           justify-content: center;
-          animation: scaleInOut 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+          opacity: 0;
+          transform: scale(0);
+          animation: scaleInOut 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
           box-shadow: 0 4px 20px rgba(72, 187, 120, 0.4);
+          transition: opacity 0.1s ease;
         }
 
         @keyframes scaleInOut {
@@ -356,20 +359,24 @@ const SettingsPage: React.FC = () => {
             transform: scale(0);
             opacity: 0;
           }
-          30% {
+          20% {
             transform: scale(1.1);
             opacity: 1;
           }
-          50% {
+          35% {
             transform: scale(1);
             opacity: 1;
           }
-          70% {
-            transform: scale(1.2);
+          60% {
+            transform: scale(1.15);
             opacity: 1;
           }
+          80% {
+            transform: scale(1.6);
+            opacity: 0.6;
+          }
           100% {
-            transform: scale(2);
+            transform: scale(2.5);
             opacity: 0;
           }
         }
@@ -382,13 +389,13 @@ const SettingsPage: React.FC = () => {
         .checkmark-circle {
           stroke-dasharray: 166;
           stroke-dashoffset: 166;
-          animation: stroke 0.4s cubic-bezier(0.65, 0, 0.45, 1) 0.1s forwards;
+          animation: stroke 0.35s cubic-bezier(0.65, 0, 0.45, 1) 0.1s forwards;
         }
 
         .checkmark-check {
           stroke-dasharray: 48;
           stroke-dashoffset: 48;
-          animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.25s forwards;
+          animation: stroke 0.25s cubic-bezier(0.65, 0, 0.45, 1) 0.25s forwards;
         }
 
         @keyframes stroke {

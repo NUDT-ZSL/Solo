@@ -14,14 +14,18 @@ const AnimatedNumber: React.FC<AnimatedNumberProps> = ({
   const [displayValue, setDisplayValue] = useState(value);
   const animationRef = useRef<number | null>(null);
   const startTimeRef = useRef<number | null>(null);
-  const startValueRef = useRef<number>(value);
+  const prevValueRef = useRef<number>(value);
 
   useEffect(() => {
+    if (prevValueRef.current === value) {
+      return;
+    }
+
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
     }
 
-    startValueRef.current = displayValue;
+    const startValue = prevValueRef.current;
     startTimeRef.current = null;
 
     const animate = (currentTime: number) => {
@@ -33,13 +37,15 @@ const AnimatedNumber: React.FC<AnimatedNumberProps> = ({
       const progress = Math.min(elapsed / duration, 1);
       const easeProgress = 1 - Math.pow(1 - progress, 3);
       const current = Math.round(
-        startValueRef.current + (value - startValueRef.current) * easeProgress
+        startValue + (value - startValue) * easeProgress
       );
 
       setDisplayValue(current);
 
       if (progress < 1) {
         animationRef.current = requestAnimationFrame(animate);
+      } else {
+        prevValueRef.current = value;
       }
     };
 
