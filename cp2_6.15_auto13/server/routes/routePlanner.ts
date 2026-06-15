@@ -35,6 +35,7 @@ function createRouteRouter(db: Database.Database): Router {
 
       res.json(routes);
     } catch (error) {
+      console.error('Failed to fetch routes:', error);
       res.status(500).json({ error: 'Failed to fetch routes' });
     }
   });
@@ -68,6 +69,7 @@ function createRouteRouter(db: Database.Database): Router {
 
       res.json(routeWithPoints);
     } catch (error) {
+      console.error('Failed to fetch route:', error);
       res.status(500).json({ error: 'Failed to fetch route' });
     }
   });
@@ -96,6 +98,7 @@ function createRouteRouter(db: Database.Database): Router {
 
       res.status(201).json(newRoute);
     } catch (error) {
+      console.error('Failed to create route:', error);
       res.status(500).json({ error: 'Failed to create route' });
     }
   });
@@ -128,6 +131,7 @@ function createRouteRouter(db: Database.Database): Router {
 
       res.json(updatedRoute);
     } catch (error) {
+      console.error('Failed to update route:', error);
       res.status(500).json({ error: 'Failed to update route' });
     }
   });
@@ -145,12 +149,31 @@ function createRouteRouter(db: Database.Database): Router {
         return;
       }
 
-      db.prepare(`
-        DELETE FROM routes WHERE id = ?
-      `).run(id);
+      const deleteStmt = db.transaction(() => {
+        db.prepare(`
+          UPDATE logs SET routeId = NULL WHERE routeId = ?
+        `).run(id);
+
+        db.prepare(`
+          UPDATE logs SET pointId = NULL WHERE pointId IN (
+            SELECT id FROM route_points WHERE routeId = ?
+          )
+        `).run(id);
+
+        db.prepare(`
+          DELETE FROM route_points WHERE routeId = ?
+        `).run(id);
+
+        db.prepare(`
+          DELETE FROM routes WHERE id = ?
+        `).run(id);
+      });
+
+      deleteStmt();
 
       res.json({ message: 'Route deleted successfully' });
     } catch (error) {
+      console.error('Failed to delete route:', error);
       res.status(500).json({ error: 'Failed to delete route' });
     }
   });
@@ -177,7 +200,7 @@ function createRouteRouter(db: Database.Database): Router {
       const result = db.prepare(`
         INSERT INTO route_points (routeId, lat, lng, name, note, orderIndex)
         VALUES (?, ?, ?, ?, ?, ?)
-      `).run(id, lat, lng, name || null, note || null, orderIndex);
+      `).run(Number(id), Number(lat), Number(lng), name || null, note || null, Number(orderIndex));
 
       const newPoint = db.prepare(`
         SELECT id, routeId, lat, lng, name, note, orderIndex
@@ -187,6 +210,7 @@ function createRouteRouter(db: Database.Database): Router {
 
       res.status(201).json(newPoint);
     } catch (error) {
+      console.error('Failed to add point:', error);
       res.status(500).json({ error: 'Failed to add point' });
     }
   });
@@ -210,11 +234,11 @@ function createRouteRouter(db: Database.Database): Router {
         SET lat = ?, lng = ?, name = ?, note = ?, orderIndex = ?
         WHERE id = ?
       `).run(
-        lat,
-        lng,
+        Number(lat),
+        Number(lng),
         name || null,
         note || null,
-        orderIndex,
+        Number(orderIndex),
         pointId
       );
 
@@ -226,6 +250,7 @@ function createRouteRouter(db: Database.Database): Router {
 
       res.json(updatedPoint);
     } catch (error) {
+      console.error('Failed to update point:', error);
       res.status(500).json({ error: 'Failed to update point' });
     }
   });
@@ -243,12 +268,21 @@ function createRouteRouter(db: Database.Database): Router {
         return;
       }
 
-      db.prepare(`
-        DELETE FROM route_points WHERE id = ?
-      `).run(pointId);
+      const deleteStmt = db.transaction(() => {
+        db.prepare(`
+          UPDATE logs SET pointId = NULL WHERE pointId = ?
+        `).run(pointId);
+
+        db.prepare(`
+          DELETE FROM route_points WHERE id = ?
+        `).run(pointId);
+      });
+
+      deleteStmt();
 
       res.json({ message: 'Point deleted successfully' });
     } catch (error) {
+      console.error('Failed to delete point:', error);
       res.status(500).json({ error: 'Failed to delete point' });
     }
   });

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
+import fs from 'fs';
 import type Database from 'better-sqlite3';
 
 interface Log {
@@ -15,8 +16,8 @@ interface Log {
 
 const uploadDir = path.join(__dirname, '..', 'upload');
 
-if (!require('fs').existsSync(uploadDir)) {
-  require('fs').mkdirSync(uploadDir, { recursive: true });
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
 }
 
 const storage = multer.diskStorage({
@@ -58,6 +59,7 @@ function createLogRouter(db: Database.Database): Router {
 
       res.json(logs);
     } catch (error) {
+      console.error('Failed to fetch logs:', error);
       res.status(500).json({ error: 'Failed to fetch logs' });
     }
   });
@@ -79,6 +81,7 @@ function createLogRouter(db: Database.Database): Router {
 
       res.json(log);
     } catch (error) {
+      console.error('Failed to fetch log:', error);
       res.status(500).json({ error: 'Failed to fetch log' });
     }
   });
@@ -94,8 +97,8 @@ function createLogRouter(db: Database.Database): Router {
         INSERT INTO logs (routeId, pointId, content, weather, imagePath, createdAt)
         VALUES (?, ?, ?, ?, ?, ?)
       `).run(
-        routeId || null,
-        pointId || null,
+        routeId ? Number(routeId) : null,
+        pointId ? Number(pointId) : null,
         content || null,
         weather || null,
         imagePath,
@@ -110,6 +113,7 @@ function createLogRouter(db: Database.Database): Router {
 
       res.status(201).json(newLog);
     } catch (error) {
+      console.error('Failed to create log:', error);
       res.status(500).json({ error: 'Failed to create log' });
     }
   });
@@ -135,8 +139,8 @@ function createLogRouter(db: Database.Database): Router {
         SET routeId = ?, pointId = ?, content = ?, weather = ?, imagePath = ?
         WHERE id = ?
       `).run(
-        routeId || null,
-        pointId || null,
+        routeId ? Number(routeId) : null,
+        pointId ? Number(pointId) : null,
         content || null,
         weather || null,
         imagePath,
@@ -151,6 +155,7 @@ function createLogRouter(db: Database.Database): Router {
 
       res.json(updatedLog);
     } catch (error) {
+      console.error('Failed to update log:', error);
       res.status(500).json({ error: 'Failed to update log' });
     }
   });
@@ -174,6 +179,7 @@ function createLogRouter(db: Database.Database): Router {
 
       res.json({ message: 'Log deleted successfully' });
     } catch (error) {
+      console.error('Failed to delete log:', error);
       res.status(500).json({ error: 'Failed to delete log' });
     }
   });

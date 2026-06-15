@@ -12,9 +12,9 @@ interface LogEntryProps {
   onClose: () => void;
 }
 
-const LogEntry: React.FC<LogEntryProps> = ({ log, pointName, defaultWeather, onSave, onClose }) => {
+const LogEntry: React.FC<LogEntryProps> = ({ log, pointName, defaultWeather = 'sunny', onSave, onClose }) => {
   const [content, setContent] = useState('');
-  const [weather, setWeather] = useState<WeatherType>('sunny');
+  const [weather, setWeather] = useState<WeatherType>(defaultWeather);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -22,12 +22,12 @@ const LogEntry: React.FC<LogEntryProps> = ({ log, pointName, defaultWeather, onS
   useEffect(() => {
     if (log) {
       setContent(log.content || '');
-      setWeather((log.weather as WeatherType) || 'sunny');
+      setWeather((log.weather as WeatherType) || defaultWeather);
       setImagePreview(log.imagePath || null);
       setImageFile(null);
     } else {
       setContent('');
-      setWeather(defaultWeather || 'sunny');
+      setWeather(defaultWeather);
       setImagePreview(null);
       setImageFile(null);
     }
@@ -67,9 +67,6 @@ const LogEntry: React.FC<LogEntryProps> = ({ log, pointName, defaultWeather, onS
     formData.append('weather', weather);
     if (imageFile) {
       formData.append('image', imageFile);
-    }
-    if (log) {
-      formData.append('id', String(log.id));
     }
     onSave(formData);
   };

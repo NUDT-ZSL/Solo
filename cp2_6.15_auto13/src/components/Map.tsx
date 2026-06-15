@@ -46,18 +46,8 @@ const createNumberedIcon = (number: number, confirmed: boolean) => {
   });
 };
 
-const MapController: React.FC<{ center?: [number, number]; zoom?: number; points: RoutePoint[] }> = ({
-  center,
-  zoom,
-  points,
-}) => {
+const MapController: React.FC<{ points: RoutePoint[] }> = ({ points }) => {
   const map = useMap();
-
-  useEffect(() => {
-    if (center && zoom) {
-      map.setView(center, zoom);
-    }
-  }, [center, zoom, map]);
 
   useEffect(() => {
     if (points.length > 0) {
@@ -91,29 +81,37 @@ const DraggableMarker: React.FC<{
 }> = ({ point, index, prevPoint, onDragEnd, onRightClick, onConfirm, onCancel }) => {
   const markerRef = useRef<L.Marker>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [dragLatLng, setDragLatLng] = useState<[number, number] | null>(null);
-  const [name, setName] = useState(point.name);
-  const [note, setNote] = useState(point.note);
+  const [dragPosition, setDragPosition] = useState<[number, number] | null>(null);
+  const [name, setName] = useState(point.name || '');
+  const [note, setNote] = useState(point.note || '');
+
+  useEffect(() => {
+    setName(point.name || '');
+    setNote(point.note || '');
+  }, [point.name, point.note]);
 
   useEffect(() => {
     if (!point.confirmed && markerRef.current) {
-      markerRef.current.openPopup();
+      setTimeout(() => {
+        markerRef.current?.openPopup();
+      }, 100);
     }
-  }, [point.confirmed]);
+  }, [point.confirmed, point.id]);
 
-  const handleDragStart = () => {
+  const handleDragStart = useCallback(() => {
     setIsDragging(true);
-  };
+    setDragPosition([point.lat, point.lng]);
+  }, [point.lat, point.lng]);
 
-  const handleDrag = () => {
+  const handleDrag = useCallback(() => {
     const marker = markerRef.current;
     if (marker) {
       const latLng = marker.getLatLng();
-      setDragLatLng([latLng.lat, latLng.lng]);
+      setDragPosition([latLng.lat, latLng.lng]);
     }
-  };
+  }, []);
 
-  const handleDragEnd = () => {
+  const handleDragEnd = useCallback(() => {
     setIsDragging(false);
     const marker = markerRef.current;
     if (marker) {
@@ -124,15 +122,16 @@ const DraggableMarker: React.FC<{
         lng: latLng.lng,
       });
     }
-    setDragLatLng(null);
-  };
+    setDragPosition(null);
+  }, [point, onDragEnd]);
 
-  const handleContextMenu = (e: L.LeafletMouseEvent) => {
+  const handleContextMenu = useCallback((e: L.LeafletMouseEvent) => {
     if (point.confirmed) {
-      e.originalEvent.preventDefault();
+      L.DomEvent.stopPropagation(e);
+      L.DomEvent.preventDefault(e);
       onRightClick(point);
     }
-  };
+  }, [point, onRightClick]);
 
   const handleConfirm = () => {
     if (!name.trim()) {
@@ -144,17 +143,18 @@ const DraggableMarker: React.FC<{
 
   return (
     <>
-      {isDragging && dragLatLng && prevPoint && (
+      {isDragging && dragPosition && prevPoint && (
         <Polyline
           positions={[
             [prevPoint.lat, prevPoint.lng],
-            dragLatLng,
+            dragPosition,
           ]}
           pathOptions={{
-            color: '#888',
+            color: '#888888',
             dashArray: '8, 4',
             weight: 2,
             opacity: 0.6,
+            interactive: false,
           }}
         />
       )}
@@ -314,7 +314,7 @@ const Map: React.FC<MapProps> = ({ route, points, onAddPoint, onUpdatePoint, onP
     [route, points.length, unconfirmedPoint]
   );
 
-  const handleConfirm = (point: RoutePoint, name: string, note: string) => {
+  const handleConfirm = useCallback((point: RoutePoint, name: string, note: string) => {
     onAddPoint({
       routeId: point.routeId,
       name,
@@ -323,19 +323,19 @@ const Map: React.FC<MapProps> = ({ route, points, onAddPoint, onUpdatePoint, onP
       lng: point.lng,
     });
     setUnconfirmedPoint(null);
-  };
+  }, [onAddPoint]);
 
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     setUnconfirmedPoint(null);
-  };
+  }, []);
 
-  const handleDragEnd = (point: RoutePoint) => {
+  const handleDragEnd = useCallback((point: RoutePoint) => {
     if (point.confirmed) {
       onUpdatePoint(point);
     } else {
       setUnconfirmedPoint(point);
     }
-  };
+  }, [onUpdatePoint]);
 
   const displayPoints = unconfirmedPoint ? [...points, unconfirmedPoint] : points;
   const sortedPoints = [...displayPoints].sort((a, b) => a.orderIndex - b.orderIndex);
@@ -345,9 +345,6 @@ const Map: React.FC<MapProps> = ({ route, points, onAddPoint, onUpdatePoint, onP
     .sort((a, b) => a.orderIndex - b.orderIndex)
     .map((p) => [p.lat, p.lng] as [number, number]);
 
-  const confirmedPoints = sortedPoints.filter((p) => p.confirmed);
-  const useCluster = confirmedPoints.length > 100;
-
   return (
     <div style={{ width: '100%', height: '100%' }}>
       <MapContainer
@@ -355,6 +352,7 @@ const Map: React.FC<MapProps> = ({ route, points, onAddPoint, onUpdatePoint, onP
         zoom={13}
         style={{ height: '100%', width: '100%' }}
         doubleClickZoom={false}
+        scrollWheelZoom={true}
       >
         <MapController points={points} />
         <MapEventHandler onDblClick={handleDblClick} />
