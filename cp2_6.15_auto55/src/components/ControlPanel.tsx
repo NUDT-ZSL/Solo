@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store';
 
 const panelStyle: React.CSSProperties = {
@@ -94,20 +94,41 @@ export default function ControlPanel() {
     setParticleSize,
     setSpeedMultiplier,
     resetCamera,
+    fetchParticles,
   } = useStore();
 
   const [isResetAnimating, setIsResetAnimating] = useState(false);
   const [clickedButton, setClickedButton] = useState<number | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
+  const formatTime = (simulationTime: number): string => {
+    const actualSeconds = (simulationTime / 100) * 30;
+    const mins = Math.floor(actualSeconds / 60);
+    const secs = Math.floor(actualSeconds % 60);
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSimulationTime(parseInt(e.target.value, 10));
+    const newSimulationTime = parseInt(e.target.value, 10);
+    setSimulationTime(newSimulationTime);
+
+    const actualSeconds = (newSimulationTime / 100) * 30;
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      fetchParticles(actualSeconds);
+    }, 50);
   };
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleParticleSizeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setParticleSize(parseFloat(e.target.value));
@@ -184,7 +205,7 @@ export default function ControlPanel() {
           <input
             type="range"
             min="0"
-            max="30"
+            max="100"
             step="1"
             value={simulationTime}
             onChange={handleTimeChange}

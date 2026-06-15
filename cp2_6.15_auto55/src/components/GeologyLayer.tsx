@@ -49,14 +49,17 @@ interface LayerMeshProps {
 function LayerMesh({ layer, displacementMap, onLayerClick }: LayerMeshProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
-  const [selected, setSelected] = useState(false);
+  const selectedPoint = useStore((state) => state.selectedPoint);
+  const queryPoint = useStore((state) => state.queryPoint);
+
+  const isSelected = selectedPoint !== null && selectedPoint.layerId === layer.id;
 
   useFrame((state) => {
     if (meshRef.current) {
       const material = meshRef.current.material as THREE.MeshStandardMaterial;
-      material.opacity = selected ? 0.6 : hovered ? 0.45 : 0.3;
-      material.emissive = new THREE.Color(selected ? '#ffffff' : hovered ? '#aaaaaa' : '#000000');
-      material.emissiveIntensity = selected ? 0.2 : hovered ? 0.1 : 0;
+      material.opacity = isSelected ? 0.6 : hovered ? 0.45 : 0.3;
+      material.emissive = new THREE.Color(isSelected ? '#ffffff' : hovered ? '#aaaaaa' : '#000000');
+      material.emissiveIntensity = isSelected ? 0.3 : hovered ? 0.1 : 0;
       
       const time = state.clock.elapsedTime;
       displacementMap.offset.y = time * 0.05;
@@ -66,7 +69,10 @@ function LayerMesh({ layer, displacementMap, onLayerClick }: LayerMeshProps) {
 
   const handleClick = (e: any) => {
     e.stopPropagation();
-    setSelected(!selected);
+    const x = 0;
+    const y = -layer.depth - layer.height / 2;
+    const z = 0;
+    queryPoint(x, y, z);
     onLayerClick?.(layer);
   };
 
