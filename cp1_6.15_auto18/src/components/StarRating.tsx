@@ -12,6 +12,7 @@ function StarRating({ rating, size = 18, animated = true, keyProp }: StarRatingP
   const [animateStars, setAnimateStars] = useState(0);
 
   useEffect(() => {
+    setAnimateStars(0);
     if (animated) {
       let current = 0;
       const timer = setInterval(() => {
@@ -28,20 +29,23 @@ function StarRating({ rating, size = 18, animated = true, keyProp }: StarRatingP
   }, [animated, keyProp]);
 
   const getStarColor = (starIndex: number) => {
-    const progress = (starIndex + 1) / 5;
-    const r = Math.round(231 + (255 - 231) * (1 - progress));
-    const g = Math.round(76 + 193 * progress);
-    const b = Math.round(60 + 0 * progress);
+    const normalizedRating = Math.min(Math.max(rating, 1), 5);
+    const progress = normalizedRating / 5;
+    const r = Math.round(231 * (1 - progress) + 255 * progress);
+    const g = Math.round(76 + 179 * progress);
+    const b = Math.round(60 - 30 * progress);
     return `rgb(${r}, ${g}, ${b})`;
   };
 
   const renderStar = (index: number) => {
     const isFull = rating >= index + 1;
-    const isHalf = !isFull && rating > index;
+    const isHalf = !isFull && rating > index && rating < index + 1;
+    const halfPercent = isHalf ? Math.round((rating - index) * 100) : 0;
     const color = getStarColor(index);
     const isAnimated = animateStars > index;
 
     const gradientId = `star-gradient-${index}-${keyProp || 'default'}`;
+    const emptyColor = '#D4C8BC';
 
     return (
       <span
@@ -63,9 +67,15 @@ function StarRating({ rating, size = 18, animated = true, keyProp }: StarRatingP
           <defs>
             <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" stopColor={color} />
-              <stop offset={isHalf ? '50%' : '100%'} stopColor={color} />
-              <stop offset={isHalf ? '50%' : '100%'} stopColor="#DDD" />
-              <stop offset="100%" stopColor="#DDD" />
+              {isHalf ? (
+                <>
+                  <stop offset={`${halfPercent}%`} stopColor={color} />
+                  <stop offset={`${halfPercent}%`} stopColor={emptyColor} />
+                  <stop offset="100%" stopColor={emptyColor} />
+                </>
+              ) : (
+                <stop offset="100%" stopColor={isFull ? color : emptyColor} />
+              )}
             </linearGradient>
           </defs>
           <path

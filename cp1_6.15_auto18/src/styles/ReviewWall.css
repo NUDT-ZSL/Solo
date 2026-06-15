@@ -47,22 +47,28 @@
 }
 
 .rating-chip {
-  padding: 6px 14px;
+  padding: 8px 16px;
   border-radius: 20px;
   background-color: #F5F0EB;
   color: #8B7355;
   font-size: 13px;
   transition: all 0.2s ease;
-  min-height: 36px;
+  min-height: 44px;
+  min-width: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .rating-chip:hover {
   background-color: #E8DDD4;
+  transform: translateY(-1px);
 }
 
 .rating-chip.active {
   background-color: #C49A6C;
   color: white;
+  box-shadow: 0 2px 8px rgba(196, 154, 108, 0.4);
 }
 
 .sort-section {
@@ -72,23 +78,28 @@
 }
 
 .sort-btn {
-  padding: 6px 16px;
+  padding: 8px 18px;
   border-radius: 8px;
   background-color: #F5F0EB;
   color: #8B7355;
   font-size: 13px;
   transition: all 0.2s ease;
-  min-height: 36px;
-  min-width: 56px;
+  min-height: 44px;
+  min-width: 60px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .sort-btn:hover {
   background-color: #E8DDD4;
+  transform: translateY(-1px);
 }
 
 .sort-btn.active {
   background-color: #C49A6C;
   color: white;
+  box-shadow: 0 2px 8px rgba(196, 154, 108, 0.4);
 }
 
 .loading-container {
@@ -97,44 +108,83 @@
   align-items: center;
   justify-content: center;
   padding: 80px 20px;
-  gap: 20px;
+  gap: 24px;
 }
 
 .book-spinner {
-  animation: bookSpin 1.5s ease-in-out infinite;
+  perspective: 1000px;
+  width: 80px;
+  height: 80px;
 }
 
-@keyframes bookSpin {
-  0%, 100% {
+.book-rotate-group {
+  display: block;
+  transform-origin: center center;
+  animation: bookRotate3D 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes bookRotate3D {
+  0% {
     transform: rotateY(0deg);
   }
   50% {
     transform: rotateY(180deg);
   }
+  100% {
+    transform: rotateY(360deg);
+  }
 }
 
 .book-page {
-  transform-origin: center top;
-  animation: pageFlip 1.5s ease-in-out infinite;
+  transform-origin: 32px 8px;
 }
 
-.page-1 { animation-delay: 0s; }
-.page-2 { animation-delay: 0.1s; }
-.page-3 { animation-delay: 0.2s; }
-.page-4 { animation-delay: 0.3s; }
+.page-1 {
+  animation: pageFlip1 1.2s ease-in-out infinite;
+}
 
-@keyframes pageFlip {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
+.page-2 {
+  animation: pageFlip2 1.2s ease-in-out infinite;
+}
+
+.page-3 {
+  animation: pageFlip3 1.2s ease-in-out infinite;
+}
+
+.page-4 {
+  animation: pageFlip4 1.2s ease-in-out infinite;
+}
+
+@keyframes pageFlip1 {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes pageFlip2 {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes pageFlip3 {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes pageFlip4 {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 .loading-text {
-  font-size: 14px;
+  font-size: 15px;
   color: #8B7355;
+  font-weight: 500;
+  animation: loadingPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes loadingPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 
 .empty-state {
@@ -149,6 +199,12 @@
 .empty-icon {
   font-size: 64px;
   opacity: 0.6;
+  animation: emptyBounce 2s ease-in-out infinite;
+}
+
+@keyframes emptyBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
 }
 
 .empty-text {
@@ -173,12 +229,25 @@
   opacity: 0;
 }
 
+.slide-in {
+  animation: slideInFromRight 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes slideInFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 .masonry-column {
   flex: 1;
-  min-width: 280px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
 }
 
 .review-card {
@@ -188,15 +257,16 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   opacity: 0;
-  transform: scale(0.95);
+  transform: scale(0.95) translateY(10px);
+  will-change: transform, opacity;
 }
 
 .card-enter {
-  animation: cardFadeIn 0.2s ease forwards;
+  animation: cardFadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .card-exit {
-  animation: cardFadeOut 0.25s ease forwards;
+  animation: cardFadeOut 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 @keyframes cardFadeIn {
@@ -223,7 +293,7 @@
 
 .review-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
 }
 
 .review-header {
@@ -294,12 +364,12 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
+  padding: 8px 12px;
   border-radius: 8px;
   background-color: transparent;
   transition: all 0.2s ease;
   min-width: 44px;
-  min-height: 32px;
+  min-height: 44px;
   justify-content: center;
 }
 
@@ -307,13 +377,23 @@
   background-color: #F5F0EB;
 }
 
+.like-button.liked {
+  background-color: #FDECEA;
+}
+
+.like-button svg {
+  transition: transform 0.2s ease;
+}
+
 .like-button.liked svg {
-  animation: heartBounce 0.2s ease;
+  animation: heartBounce 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
 }
 
 @keyframes heartBounce {
   0% { transform: scale(1); }
-  50% { transform: scale(1.3); }
+  30% { transform: scale(1.4); }
+  50% { transform: scale(0.95); }
+  70% { transform: scale(1.15); }
   100% { transform: scale(1); }
 }
 
@@ -321,6 +401,7 @@
   font-size: 13px;
   color: #8B7355;
   font-weight: 500;
+  transition: color 0.2s ease;
 }
 
 .like-button.liked .like-count {
@@ -328,17 +409,12 @@
 }
 
 @media (max-width: 900px) {
+  .masonry-container {
+    gap: 10px;
+  }
+
   .masonry-column {
-    min-width: unset;
-  }
-  
-  .masonry-column:nth-child(3) {
-    display: none;
-  }
-  
-  .masonry-column:nth-child(1),
-  .masonry-column:nth-child(2) {
-    flex: 1;
+    gap: 10px;
   }
 }
 
@@ -347,9 +423,13 @@
     padding: 12px;
     margin-bottom: 16px;
   }
-  
+
   .wall-title {
     font-size: 18px;
+  }
+
+  .wall-header {
+    margin-bottom: 12px;
   }
 }
 
@@ -357,32 +437,28 @@
   .masonry-container {
     gap: 6px;
   }
-  
+
   .masonry-column {
     gap: 6px;
   }
-  
-  .masonry-column:nth-child(2) {
-    display: none;
-  }
-  
-  .masonry-column:nth-child(1) {
-    flex: 1;
-    width: 100%;
-  }
-  
+
   .review-card {
     padding: 14px;
   }
-  
+
   .filter-bar {
     flex-direction: column;
     align-items: flex-start;
+    gap: 14px;
   }
-  
+
   .sort-section {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .filter-section {
+    width: 100%;
   }
 }
 
@@ -390,41 +466,41 @@
   .wall-header {
     margin-bottom: 12px;
   }
-  
+
   .rating-chip {
-    padding: 8px 12px;
-    font-size: 12px;
+    padding: 10px 14px;
+    font-size: 13px;
+    min-height: 44px;
+    min-width: 52px;
   }
-  
+
   .sort-btn {
-    padding: 8px 14px;
-    font-size: 12px;
+    padding: 10px 16px;
+    font-size: 13px;
+    min-height: 44px;
   }
-  
+
   .user-avatar {
-    width: 36px;
-    height: 36px;
-    font-size: 14px;
+    width: 40px;
+    height: 40px;
+    font-size: 15px;
   }
-  
+
   .like-button {
     min-height: 44px;
-    min-width: 44px;
-    padding: 8px 12px;
+    min-width: 52px;
+    padding: 10px 14px;
   }
-}
 
-.slide-in {
-  animation: slideInRight 0.3s ease;
-}
-
-@keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(20px);
+  .filter-bar {
+    padding: 14px;
   }
-  to {
-    opacity: 1;
-    transform: translateX(0);
+
+  .loading-container {
+    padding: 60px 16px;
+  }
+
+  .empty-state {
+    padding: 60px 16px;
   }
 }

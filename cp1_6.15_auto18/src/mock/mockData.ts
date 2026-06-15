@@ -95,11 +95,11 @@ const comments = [
 
 function generateReviews(): Review[] {
   const reviews: Review[] = [];
+  const predefinedRatings = [4.8, 3.5, 2.3, 4.1, 4.6, 3.2, 1.8, 4.9, 2.7, 3.9, 4.3, 5.0, 3.6, 2.5, 4.7, 1.5, 3.8, 4.2, 4.5, 3.1];
   
   for (let i = 0; i < 20; i++) {
     const bookIndex = i % books.length;
     const userNameIndex = i % userNames.length;
-    const rating = (Math.random() * 4 + 1).toFixed(1);
     
     reviews.push({
       id: uuidv4(),
@@ -107,10 +107,10 @@ function generateReviews(): Review[] {
       userId: `user-${userNameIndex}`,
       userName: userNames[userNameIndex],
       userAvatar: avatarColors[userNameIndex],
-      rating: parseFloat(rating),
+      rating: predefinedRatings[i],
       comment: comments[i % comments.length],
-      timestamp: Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000,
-      likes: Math.floor(Math.random() * 50)
+      timestamp: Date.now() - (i + 1) * 60 * 60 * 1000 - Math.random() * 30 * 60 * 1000,
+      likes: Math.floor(Math.random() * 50) + 5
     });
   }
   

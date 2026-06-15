@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import BookList from './components/BookList';
 import ReviewWall from './components/ReviewWall';
 import { getBooks, getReviews, Book, Review, ReviewFilter } from './api';
 import './styles/App.css';
+
+const globalLikedReviews = new Map<string, boolean>();
+const globalLikesDelta = new Map<string, number>();
 
 function App() {
   const [books, setBooks] = useState<Book[]>([]);
@@ -12,7 +15,7 @@ function App() {
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [selectedRatings, setSelectedRatings] = useState<number[]>([]);
   const [sortBy, setSortBy] = useState<'latest' | 'hottest'>('latest');
-  const [likedReviews, setLikedReviews] = useState<Set<string>>(new Set());
+  const [likedReviews, setLikedReviews] = useState<Map<string, boolean>>(new Map(globalLikedReviews));
 
   useEffect(() => {
     const fetchBooks = async () => {
@@ -39,7 +42,13 @@ function App() {
           sortBy
         };
         const reviewsData = await getReviews(filter);
-        setReviews(reviewsData);
+        
+        const adjustedReviews = reviewsData.map(r => {
+          const delta = globalLikesDelta.get(r.id) || 0;
+          return { ...r, likes: Math.max(0, r.likes + delta) };
+        });
+        
+        setReviews(adjustedReviews);
       } catch (error) {
         console.error('Failed to fetch reviews:', error);
       } finally {
@@ -58,20 +67,21 @@ function App() {
   };
 
   const handleLike = (reviewId: string) => {
+    const currentlyLiked = globalLikedReviews.get(reviewId) || false;
+    const newLiked = !currentlyLiked;
+    
+    globalLikedReviews.set(reviewId, newLiked);
+    
+    const currentDelta = globalLikesDelta.get(reviewId) || 0;
+    globalLikesDelta.set(reviewId, newLiked ? currentDelta + 1 : currentDelta - 1);
+    
+    setLikedReviews(new Map(globalLikedReviews));
+    
     setReviews(prev => prev.map(r => 
       r.id === reviewId 
-        ? { ...r, likes: likedReviews.has(reviewId) ? r.likes - 1 : r.likes + 1 }
+        ? { ...r, likes: Math.max(0, r.likes + (newLiked ? 1 : -1)) }
         : r
     ));
-    setLikedReviews(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(reviewId)) {
-        newSet.delete(reviewId);
-      } else {
-        newSet.add(reviewId);
-      }
-      return newSet;
-    });
   };
 
   const handleRatingFilterChange = (rating: number) => {
@@ -79,7 +89,7 @@ function App() {
       if (prev.includes(rating)) {
         return prev.filter(r => r !== rating);
       } else {
-        return [...prev, rating].sort();
+        return [...prev, rating].sort((a, b) => b - a);
       }
     });
   };

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import StarRating from './StarRating';
 import { Review, Book } from '../api';
 import '../styles/ReviewWall.css';
@@ -8,12 +8,14 @@ interface ReviewWallProps {
   loading: boolean;
   selectedRatings: number[];
   sortBy: 'latest' | 'hottest';
-  likedReviews: Set<string>;
+  likedReviews: Map<string, boolean>;
   onRatingFilterChange: (rating: number) => void;
   onSortChange: (sort: 'latest' | 'hottest') => void;
   onLike: (reviewId: string) => void;
   selectedBook?: Book;
 }
+
+const COLUMN_GAP = 10;
 
 function ReviewWall({
   reviews,
@@ -28,7 +30,35 @@ function ReviewWall({
 }: ReviewWallProps) {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [displayReviews, setDisplayReviews] = useState<Review[]>([]);
+  const [columnCount, setColumnCount] = useState(3);
   const prevReviewsRef = useRef<Review[]>([]);
+  const prevBookIdRef = useRef<string | undefined>();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [slideKey, setSlideKey] = useState(0);
+
+  const getColumnCount = useCallback(() => {
+    const width = typeof window !== 'undefined' ? window.innerWidth : 1200;
+    if (width < 600) return 1;
+    if (width < 900) return 2;
+    return 3;
+  }, []);
+
+  useEffect(() => {
+    setColumnCount(getColumnCount());
+    const handleResize = () => {
+      setColumnCount(getColumnCount());
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [getColumnCount]);
+
+  useEffect(() => {
+    const currentBookId = selectedBook?.id;
+    if (prevBookIdRef.current !== undefined && prevBookIdRef.current !== currentBookId) {
+      setSlideKey(k => k + 1);
+    }
+    prevBookIdRef.current = currentBookId;
+  }, [selectedBook?.id]);
 
   useEffect(() => {
     if (prevReviewsRef.current.length > 0 && reviews !== prevReviewsRef.current) {
@@ -44,6 +74,20 @@ function ReviewWall({
     prevReviewsRef.current = reviews;
   }, [reviews]);
 
+  const columns = useMemo(() => {
+    const result: Review[][] = Array.from({ length: columnCount }, () => []);
+    const columnHeights = new Array(columnCount).fill(0);
+
+    displayReviews.forEach(review => {
+      const estimatedHeight = 140 + Math.ceil(review.comment.length / 25) * 22;
+      const shortestColumnIndex = columnHeights.indexOf(Math.min(...columnHeights));
+      result[shortestColumnIndex].push(review);
+      columnHeights[shortestColumnIndex] += estimatedHeight + COLUMN_GAP;
+    });
+
+    return result;
+  }, [displayReviews, columnCount]);
+
   const formatTime = (timestamp: number) => {
     const now = Date.now();
     const diff = now - timestamp;
@@ -57,14 +101,15 @@ function ReviewWall({
     return '刚刚';
   };
 
-  const renderReviewCard = (review: Review, index: number) => {
-    const isLiked = likedReviews.has(review.id);
+  const renderReviewCard = (review: Review, index: number, columnIndex: number) => {
+    const isLiked = likedReviews.get(review.id) || false;
+    const globalIndex = columns.slice(0, columnIndex).reduce((acc, col) => acc + col.length, 0) + index;
 
     return (
       <div
         key={review.id}
         className={`review-card ${isTransitioning ? 'card-exit' : 'card-enter'}`}
-        style={{ animationDelay: `${index * 0.05}s` }}
+        style={{ animationDelay: `${globalIndex * 0.05}s` }}
       >
         <div className="review-header">
           <div
@@ -80,7 +125,7 @@ function ReviewWall({
         </div>
 
         <div className="review-rating">
-          <StarRating rating={review.rating} size={16} animated={false} keyProp={review.id} />
+          <StarRating rating={review.rating} size={16} animated={true} keyProp={review.id} />
           <span className="rating-text">{review.rating.toFixed(1)}</span>
         </div>
 
@@ -92,6 +137,7 @@ function ReviewWall({
           <button
             className={`like-button ${isLiked ? 'liked' : ''}`}
             onClick={() => onLike(review.id)}
+            aria-label={isLiked ? '取消点赞' : '点赞'}
           >
             <svg
               width="20"
@@ -156,34 +202,36 @@ function ReviewWall({
       {loading ? (
         <div className="loading-container">
           <div className="book-spinner">
-            <svg width="60" height="60" viewBox="0 0 64 64" fill="none">
-              <path
-                d="M32 8L40 24H24L32 8Z"
-                fill="#C49A6C"
-                className="book-page page-1"
-              />
-              <path
-                d="M32 16L40 32H24L32 16Z"
-                fill="#D4A574"
-                className="book-page page-2"
-              />
-              <path
-                d="M32 24L40 40H24L32 24Z"
-                fill="#E4B88A"
-                className="book-page page-3"
-              />
-              <path
-                d="M32 32L40 48H24L32 32Z"
-                fill="#F0CCA0"
-                className="book-page page-4"
-              />
-              <path
-                d="M24 48H40V52C40 54.2 36.4 56 32 56C27.6 56 24 54.2 24 52V48Z"
-                fill="#8B7355"
-              />
+            <svg width="80" height="80" viewBox="0 0 64 64" fill="none">
+              <g className="book-rotate-group">
+                <path
+                  d="M32 8L40 24H24L32 8Z"
+                  fill="#C49A6C"
+                  className="book-page page-1"
+                />
+                <path
+                  d="M32 16L40 32H24L32 16Z"
+                  fill="#D4A574"
+                  className="book-page page-2"
+                />
+                <path
+                  d="M32 24L40 40H24L32 24Z"
+                  fill="#E4B88A"
+                  className="book-page page-3"
+                />
+                <path
+                  d="M32 32L40 48H24L32 32Z"
+                  fill="#F0CCA0"
+                  className="book-page page-4"
+                />
+                <path
+                  d="M24 48H40V52C40 54.2 36.4 56 32 56C27.6 56 24 54.2 24 52V48Z"
+                  fill="#8B7355"
+                />
+              </g>
             </svg>
           </div>
-          <p className="loading-text">加载中...</p>
+          <p className="loading-text">正在加载书评...</p>
         </div>
       ) : displayReviews.length === 0 ? (
         <div className="empty-state">
@@ -192,22 +240,26 @@ function ReviewWall({
           <p className="empty-hint">试试调整筛选条件吧</p>
         </div>
       ) : (
-        <div className={`masonry-container ${isTransitioning ? 'fading' : ''}`}>
-          <div className="masonry-column">
-            {displayReviews.filter((_, i) => i % 3 === 0).map((review, i) => 
-              renderReviewCard(review, i * 3)
-            )}
-          </div>
-          <div className="masonry-column">
-            {displayReviews.filter((_, i) => i % 3 === 1).map((review, i) => 
-              renderReviewCard(review, i * 3 + 1)
-            )}
-          </div>
-          <div className="masonry-column">
-            {displayReviews.filter((_, i) => i % 3 === 2).map((review, i) => 
-              renderReviewCard(review, i * 3 + 2)
-            )}
-          </div>
+        <div 
+          key={slideKey}
+          ref={containerRef}
+          className={`masonry-container ${isTransitioning ? 'fading' : ''} slide-in`}
+        >
+          {columns.map((column, columnIndex) => (
+            <div 
+              key={columnIndex} 
+              className="masonry-column"
+              style={{ 
+                flex: 1,
+                minWidth: columnCount === 1 ? '100%' : '280px',
+                gap: COLUMN_GAP
+              }}
+            >
+              {column.map((review, index) => 
+                renderReviewCard(review, index, columnIndex)
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>

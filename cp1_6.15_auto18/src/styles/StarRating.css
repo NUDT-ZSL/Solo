@@ -10,10 +10,11 @@
   justify-content: center;
   opacity: 0;
   transform: scale(0.5);
+  line-height: 0;
 }
 
 .star-enter {
-  animation: starFill 0.1s ease forwards;
+  animation: starFill 0.1s ease-out forwards;
 }
 
 @keyframes starFill {
@@ -25,4 +26,9 @@
     opacity: 1;
     transform: scale(1);
   }
+}
+
+.star svg {
+  display: block;
+  filter: drop-shadow(0 0.5px 1px rgba(0, 0, 0, 0.1));
 }
