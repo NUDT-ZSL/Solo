@@ -1,14 +1,13 @@
-import sqlite3 from 'sqlite3';
+import initSqlJs, { Database } from 'sql.js';
 import { v4 as uuidv4 } from 'uuid';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const dbPath = join(__dirname, '..', 'database.db');
-
-const db = new sqlite3.Database(dbPath);
 
 export interface Song {
   id: string;
@@ -27,46 +26,54 @@ export interface HistoryRecord {
   calories: number;
 }
 
-export function initDB(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    db.serialize(() => {
-      db.run(`CREATE TABLE IF NOT EXISTS songs (
-        id TEXT PRIMARY KEY,
-        title TEXT NOT NULL,
-        artist TEXT NOT NULL,
-        bpm INTEGER NOT NULL,
-        duration INTEGER NOT NULL,
-        cover_url TEXT
-      )`, (err) => {
-        if (err) reject(err);
-      });
+let db: Database;
 
-      db.run(`CREATE TABLE IF NOT EXISTS history (
-        id TEXT PRIMARY KEY,
-        heart_rate INTEGER NOT NULL,
-        cadence INTEGER NOT NULL,
-        timestamp INTEGER NOT NULL,
-        calories REAL NOT NULL
-      )`, (err) => {
-        if (err) reject(err);
-      });
+function saveDb() {
+  if (!db) return;
+  try {
+    const data = db.export();
+    const buffer = Buffer.from(data);
+    writeFileSync(dbPath, buffer);
+  } catch {}
+}
 
-      db.run(`CREATE INDEX IF NOT EXISTS idx_history_timestamp ON history(timestamp)`, (err) => {
-        if (err) reject(err);
-      });
+export async function initDB(): Promise<void> {
+  const SQL = await initSqlJs();
 
-      db.get('SELECT COUNT(*) as count FROM songs', (err, row: any) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        if (row.count === 0) {
-          seedSongs();
-        }
-        resolve();
-      });
-    });
-  });
+  if (existsSync(dbPath)) {
+    const fileBuffer = readFileSync(dbPath);
+    db = new SQL.Database(fileBuffer);
+  } else {
+    db = new SQL.Database();
+  }
+
+  db.run(`CREATE TABLE IF NOT EXISTS songs (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    artist TEXT NOT NULL,
+    bpm INTEGER NOT NULL,
+    duration INTEGER NOT NULL,
+    cover_url TEXT
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS history (
+    id TEXT PRIMARY KEY,
+    heart_rate INTEGER NOT NULL,
+    cadence INTEGER NOT NULL,
+    timestamp INTEGER NOT NULL,
+    calories REAL NOT NULL
+  )`);
+
+  db.run(`CREATE INDEX IF NOT EXISTS idx_history_timestamp ON history(timestamp)`);
+
+  const countResult = db.exec('SELECT COUNT(*) as count FROM songs');
+  const count = countResult[0]?.values[0]?.[0] as number ?? 0;
+
+  if (count === 0) {
+    seedSongs();
+  }
+
+  saveDb();
 }
 
 function seedSongs() {
@@ -77,7 +84,7 @@ function seedSongs() {
     { title: 'Urban Rhythm', artist: 'City Walker', bpm: 105, duration: 205 },
     { title: 'Neon Step', artist: 'Flash Mob', bpm: 110, duration: 230 },
     { title: 'Speed Walker', artist: 'Quick Tempo', bpm: 115, duration: 215 },
-    { title: 'Runner\'s High', artist: 'Endorphin', bpm: 120, duration: 240 },
+    { title: "Runner's High", artist: 'Endorphin', bpm: 120, duration: 240 },
     { title: 'Cardio Blast', artist: 'Heart Pump', bpm: 125, duration: 225 },
     { title: 'Sprint Beat', artist: 'Dash Music', bpm: 130, duration: 200 },
     { title: 'Velocity', artist: 'Fast Forward', bpm: 135, duration: 235 },
@@ -93,58 +100,63 @@ function seedSongs() {
     { title: 'Recovery Walk', artist: 'Cool Down', bpm: 75, duration: 260 }
   ];
 
-  const stmt = db.prepare('INSERT INTO songs (id, title, artist, bpm, duration, cover_url) VALUES (?, ?, ?, ?, ?, ?)');
-  
-  songs.forEach((song) => {
-    stmt.run(uuidv4(), song.title, song.artist, song.bpm, song.duration, null);
-  });
-  
-  stmt.finalize();
-}
-
-export function getAllSongs(): Promise<Song[]> {
-  return new Promise((resolve, reject) => {
-    db.all('SELECT * FROM songs ORDER BY bpm', (err, rows: Song[]) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
-  });
-}
-
-export function getSongById(id: string): Promise<Song | undefined> {
-  return new Promise((resolve, reject) => {
-    db.get('SELECT * FROM songs WHERE id = ?', [id], (err, row: Song | undefined) => {
-      if (err) reject(err);
-      else resolve(row);
-    });
-  });
-}
-
-export function addHistoryRecord(record: Omit<HistoryRecord>): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const id = uuidv4();
+  for (const song of songs) {
     db.run(
-      'INSERT INTO history (id, heart_rate, cadence, timestamp, calories) VALUES (?, ?, ?, ?, ?)',
-      [id, record.heart_rate, record.cadence, record.timestamp, record.calories],
-      function(err) {
-        if (err) reject(err);
-        else resolve(id);
-      }
+      'INSERT INTO songs (id, title, artist, bpm, duration, cover_url) VALUES (?, ?, ?, ?, ?, ?)',
+      [uuidv4(), song.title, song.artist, song.bpm, song.duration, null]
     );
-  });
+  }
 }
 
-export function getHistory(limit: number = 100): Promise<HistoryRecord[]> {
-  return new Promise((resolve, reject) => {
-    db.all(
-      'SELECT * FROM history ORDER BY timestamp DESC LIMIT ?',
-      [limit],
-      (err, rows: HistoryRecord[]) => {
-        if (err) reject(err);
-        else resolve(rows.reverse());
-      }
-    );
-  });
+export function getAllSongs(): Song[] {
+  const result = db.exec('SELECT id, title, artist, bpm, duration, cover_url FROM songs ORDER BY bpm');
+  if (!result[0]) return [];
+  return result[0].values.map((row) => ({
+    id: row[0] as string,
+    title: row[1] as string,
+    artist: row[2] as string,
+    bpm: row[3] as number,
+    duration: row[4] as number,
+    cover_url: row[5] as string | null
+  }));
 }
 
-export default db;
+export function getSongById(id: string): Song | undefined {
+  const result = db.exec('SELECT id, title, artist, bpm, duration, cover_url FROM songs WHERE id = ?', [id]);
+  if (!result[0]?.values[0]) return undefined;
+  const row = result[0].values[0];
+  return {
+    id: row[0] as string,
+    title: row[1] as string,
+    artist: row[2] as string,
+    bpm: row[3] as number,
+    duration: row[4] as number,
+    cover_url: row[5] as string | null
+  };
+}
+
+export function addHistoryRecord(record: Omit<HistoryRecord, 'id'>): string {
+  const id = uuidv4();
+  db.run(
+    'INSERT INTO history (id, heart_rate, cadence, timestamp, calories) VALUES (?, ?, ?, ?, ?)',
+    [id, record.heart_rate, record.cadence, record.timestamp, record.calories]
+  );
+  saveDb();
+  return id;
+}
+
+export function getHistory(limit: number = 100): HistoryRecord[] {
+  const result = db.exec(
+    'SELECT id, heart_rate, cadence, timestamp, calories FROM history ORDER BY timestamp DESC LIMIT ?',
+    [limit]
+  );
+  if (!result[0]) return [];
+  const rows = result[0].values.map((row) => ({
+    id: row[0] as string,
+    heart_rate: row[1] as number,
+    cadence: row[2] as number,
+    timestamp: row[3] as number,
+    calories: row[4] as number
+  }));
+  return rows.reverse();
+}

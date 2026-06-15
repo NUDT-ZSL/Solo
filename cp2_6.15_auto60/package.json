@@ -16,8 +16,9 @@
     "zustand": "^4.5.0",
     "framer-motion": "^11.0.0",
     "express": "^4.18.0",
-    "sqlite3": "^5.1.0",
-    "uuid": "^9.0.0"
+    "sql.js": "^1.10.0",
+    "uuid": "^9.0.0",
+    "cors": "^2.8.5"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",
@@ -28,6 +29,7 @@
     "@types/express": "^4.17.0",
     "@types/uuid": "^9.0.0",
     "tsx": "^4.7.0",
-    "concurrently": "^8.2.0"
+    "concurrently": "^8.2.0",
+    "@types/cors": "^2.8.0"
   }
 }
