@@ -1,0 +1,21 @@
+{
+  "name": "stardust-mines",
+  "version": "1.0.0",
+  "description": "星尘矿脉 - 多人协作太空采矿模拟器",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "build": "tsc && vite build",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/ws": "^8.5.10",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.12"
+  }
+}
