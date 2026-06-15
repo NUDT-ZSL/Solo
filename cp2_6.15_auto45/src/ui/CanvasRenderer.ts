@@ -1,4 +1,4 @@
-import type { DungeonMap, Position } from '../game/types';
+import type { DungeonMap, Position, Room } from '../game/types';
 
 interface PlayerState {
   position: Position;
@@ -14,6 +14,27 @@ interface AnimationState {
 
 const TILE_SIZE = 40;
 const CANVAS_PADDING = 0;
+
+function pointInRect(px: number, py: number, rx: number, ry: number, rw: number, rh: number): boolean {
+  return px >= rx && px < rx + rw && py >= ry && py < ry + rh;
+}
+
+function rectIntersect(
+  ax: number, ay: number, aw: number, ah: number,
+  bx: number, by: number, bw: number, bh: number,
+): boolean {
+  return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+}
+
+function playerRoomCollision(playerPos: Position, playerRadius: number, room: Room): boolean {
+  const playerLeft = playerPos.x - playerRadius;
+  const playerTop = playerPos.y - playerRadius;
+  const playerSize = playerRadius * 2;
+  return rectIntersect(
+    playerLeft, playerTop, playerSize, playerSize,
+    room.x, room.y, room.width, room.height,
+  );
+}
 
 export class CanvasRenderer {
   private canvas: HTMLCanvasElement;
@@ -97,15 +118,10 @@ export class CanvasRenderer {
 
   private updateExploredRooms(pos: Position): void {
     if (!this.map) return;
+    const playerRadius = 0.25;
     for (const room of this.map.rooms) {
-      if (
-        pos.x >= room.x &&
-        pos.x < room.x + room.width &&
-        pos.y >= room.y &&
-        pos.y < room.y + room.height
-      ) {
+      if (playerRoomCollision(pos, playerRadius, room)) {
         this.map.exploredRooms.add(room.id);
-        break;
       }
     }
   }

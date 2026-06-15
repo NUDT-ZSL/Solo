@@ -3,6 +3,7 @@ import cors from 'cors';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import fs from 'fs';
+import Database from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -15,40 +16,72 @@ app.use(cors());
 app.use(express.json());
 
 const DATA_DIR = join(__dirname, '..', 'data');
-const DB_FILE = join(DATA_DIR, 'gamedata.json');
-
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-function loadDatabase() {
-  try {
-    if (fs.existsSync(DB_FILE)) {
-      const data = fs.readFileSync(DB_FILE, 'utf8');
-      const parsed = JSON.parse(data);
-      return {
-        seeds: parsed.seeds || [],
-        records: parsed.records || [],
-      };
-    }
-  } catch (e) {
-    console.error('Error loading database:', e.message);
-  }
-  return { seeds: [], records: [] };
+const DB_FILE = join(DATA_DIR, 'game.db');
+const db = new Database(DB_FILE);
+
+db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');
+db.pragma('foreign_keys = ON');
+
+function initDatabase() {
+  const createSeedsTable = db.prepare(`
+    CREATE TABLE IF NOT EXISTS seeds (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      seed TEXT UNIQUE NOT NULL,
+      threat_level INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  createSeedsTable.run();
+
+  const createRecordsTable = db.prepare(`
+    CREATE TABLE IF NOT EXISTS game_records (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      seed TEXT NOT NULL,
+      threat_level INTEGER NOT NULL,
+      time_spent REAL NOT NULL,
+      remaining_hp INTEGER NOT NULL,
+      max_hp INTEGER NOT NULL,
+      kill_count INTEGER NOT NULL,
+      treasure_collected INTEGER NOT NULL,
+      cleared INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (seed) REFERENCES seeds(seed)
+    )
+  `);
+  createRecordsTable.run();
+
+  const createRecordsIndex = db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_records_created_at ON game_records(created_at DESC)
+  `);
+  createRecordsIndex.run();
+
+  console.log('Database tables initialized');
 }
 
-function saveDatabase(db) {
-  try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf8');
-    return true;
-  } catch (e) {
-    console.error('Error saving database:', e.message);
-    return false;
-  }
-}
+initDatabase();
 
-let gameDB = loadDatabase();
-console.log(`Database loaded: ${gameDB.seeds.length} seeds, ${gameDB.records.length} records`);
+const insertSeedStmt = db.prepare(
+  'INSERT INTO seeds (seed, threat_level) VALUES (?, ?)',
+);
+
+const getRecentRecordsStmt = db.prepare(
+  'SELECT * FROM game_records ORDER BY created_at DESC LIMIT ?',
+);
+
+const getAllRecordsStmt = db.prepare(
+  'SELECT * FROM game_records ORDER BY created_at DESC',
+);
+
+const insertRecordStmt = db.prepare(`
+  INSERT INTO game_records
+    (seed, threat_level, time_spent, remaining_hp, max_hp, kill_count, treasure_collected, cleared)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+`);
 
 function generateSeed() {
   return uuidv4().replace(/-/g, '').substring(0, 16);
@@ -197,20 +230,13 @@ app.get('/api/seed', (req, res) => {
   const safeThreatLevel = Math.max(1, Math.min(10, threatLevel));
 
   const seed = generateSeed();
-  const now = new Date().toISOString();
 
-  gameDB.seeds.push({
-    id: gameDB.seeds.length + 1,
-    seed,
-    threat_level: safeThreatLevel,
-    created_at: now,
+  const insertTx = db.transaction(() => {
+    insertSeedStmt.run(seed, safeThreatLevel);
   });
-  saveDatabase(gameDB);
+  insertTx();
 
-  const recentRecords = [...gameDB.records]
-    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-    .slice(0, 5);
-
+  const recentRecords = getRecentRecordsStmt.all(5);
   const config = calculateDifficultyConfig(safeThreatLevel, recentRecords);
 
   res.json({ seed, config });
@@ -232,39 +258,49 @@ app.post('/api/record', (req, res) => {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
-  const now = new Date().toISOString();
-  const newRecord = {
-    id: gameDB.records.length + 1,
-    seed,
-    threat_level: threatLevel,
-    time_spent: timeSpent || 0,
-    remaining_hp: remainingHp ?? 0,
-    max_hp: maxHp || 100,
-    kill_count: killCount || 0,
-    treasure_collected: treasureCollected || 0,
-    cleared: cleared ? 1 : 0,
-    created_at: now,
-  };
+  const insertTx = db.transaction(() => {
+    insertRecordStmt.run(
+      seed,
+      threatLevel,
+      timeSpent || 0,
+      remainingHp ?? 0,
+      maxHp || 100,
+      killCount || 0,
+      treasureCollected || 0,
+      cleared ? 1 : 0,
+    );
+  });
+  insertTx();
 
-  gameDB.records.push(newRecord);
-  saveDatabase(gameDB);
+  const allRecords = getAllRecordsStmt.all();
+  const response = buildStatsResponse(allRecords);
 
-  const response = buildStatsResponse(gameDB.records);
   res.json(response);
 });
 
 app.get('/api/stats', (req, res) => {
-  const response = buildStatsResponse(gameDB.records);
+  const allRecords = getAllRecordsStmt.all();
+  const response = buildStatsResponse(allRecords);
   res.json(response);
 });
 
 app.get('/api/health', (req, res) => {
+  const seedCount = db.prepare('SELECT COUNT(*) as count FROM seeds').get();
+  const recordCount = db.prepare('SELECT COUNT(*) as count FROM game_records').get();
+
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    seeds: gameDB.seeds.length,
-    records: gameDB.records.length,
+    seeds: seedCount.count,
+    records: recordCount.count,
   });
+});
+
+process.on('SIGINT', () => {
+  console.log('\nClosing database connection...');
+  db.close();
+  console.log('Database connection closed');
+  process.exit(0);
 });
 
 app.listen(PORT, () => {

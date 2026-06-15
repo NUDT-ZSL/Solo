@@ -547,26 +547,49 @@ export default function App() {
             gap: '8px',
           }}
         >
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
+          <div
             style={{
-              animation: isCommunicating ? 'spin 2s linear infinite' : 'none',
+              width: '24px',
+              height: '24px',
+              position: 'relative',
+              display: 'inline-block',
             }}
           >
-            <circle
-              cx="12"
-              cy="12"
-              r="10"
-              fill="none"
-              stroke="#00bcd4"
-              strokeWidth="2"
-              strokeDasharray="60"
-              strokeDashoffset={isCommunicating ? '0' : '45'}
-              style={{ transition: 'stroke-dashoffset 0.3s' }}
-            />
-          </svg>
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              style={{
+                animation: isCommunicating
+                  ? 'spinner-rotate 2s linear infinite'
+                  : 'none',
+              }}
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="10"
+                fill="none"
+                stroke="rgba(0, 188, 212, 0.2)"
+                strokeWidth="2.5"
+              />
+              <circle
+                cx="12"
+                cy="12"
+                r="10"
+                fill="none"
+                stroke="#00bcd4"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeDasharray="35 80"
+                strokeDashoffset="0"
+                style={{
+                  transformOrigin: 'center',
+                  transition: 'stroke-dasharray 0.3s',
+                }}
+              />
+            </svg>
+          </div>
           <span style={{ color: '#00bcd4', fontSize: '12px' }}>
             {isCommunicating ? '通信中...' : '已连接'}
           </span>
@@ -595,9 +618,13 @@ export default function App() {
       </div>
 
       <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
+        @keyframes spinner-rotate {
+          0% {
+            transform: rotate(0deg);
+          }
+          100% {
+            transform: rotate(360deg);
+          }
         }
         input[type='range']::-webkit-slider-thumb {
           -webkit-appearance: none;

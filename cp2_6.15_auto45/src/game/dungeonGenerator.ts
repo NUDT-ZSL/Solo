@@ -98,17 +98,48 @@ function carveCorridor(
   tiles[y][x] = 'floor';
 }
 
+const MIN_ROOM_SIZE = 4;
+const MAX_ROOM_SIZE = 8;
+const MIN_ROOM_COUNT = 3;
+const MAX_ROOM_COUNT = 5;
+
+function randomInt(
+  random: () => number,
+  min: number,
+  max: number,
+): number {
+  return Math.floor(random() * (max - min + 1)) + min;
+}
+
 function generateRooms(random: () => number): Room[] {
   const rooms: Room[] = [];
-  const targetRooms = 3 + Math.floor(random() * 3);
+  const targetRooms = randomInt(random, MIN_ROOM_COUNT, MAX_ROOM_COUNT);
   let attempts = 0;
 
   while (rooms.length < targetRooms && attempts < 200) {
     attempts++;
-    const width = 4 + Math.floor(random() * 5);
-    const height = 4 + Math.floor(random() * 5);
-    const x = 1 + Math.floor(random() * (MAP_WIDTH - width - 2));
-    const y = 1 + Math.floor(random() * (MAP_HEIGHT - height - 2));
+
+    const width = randomInt(random, MIN_ROOM_SIZE, MAX_ROOM_SIZE);
+    const height = randomInt(random, MIN_ROOM_SIZE, MAX_ROOM_SIZE);
+
+    const maxX = MAP_WIDTH - width - 2;
+    const maxY = MAP_HEIGHT - height - 2;
+
+    if (maxX < 1 || maxY < 1) {
+      continue;
+    }
+
+    const x = 1 + Math.floor(random() * maxX);
+    const y = 1 + Math.floor(random() * maxY);
+
+    if (
+      x < 1 ||
+      y < 1 ||
+      x + width > MAP_WIDTH - 1 ||
+      y + height > MAP_HEIGHT - 1
+    ) {
+      continue;
+    }
 
     const newRoom: Room = {
       id: rooms.length,
@@ -200,13 +231,16 @@ function generateMonsters(
     }
 
     if (pos) {
-      const treasureChance = 0.1 + 0.1 * config.treasureDropRate;
+      const minChance = 0.1;
+      const maxChance = 0.2;
+      const treasureChance =
+        minChance + random() * (maxChance - minChance);
       monsters.push({
         id: uuidv4(),
         position: pos,
         roomId: room.id,
         hp: 10 + threatLevel * 5,
-        hasTreasure: random() < treasureChance,
+        hasTreasure: random() < treasureChance * config.treasureDropRate,
       });
     }
   }
