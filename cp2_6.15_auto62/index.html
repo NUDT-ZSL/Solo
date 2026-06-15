@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>流体力学烟雾模拟</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: #0d1117;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    #canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    .control-panel {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      width: 280px;
+      padding: 20px;
+      background: rgba(30, 30, 30, 0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 16px;
+      z-index: 100;
+      opacity: 0.85;
+      transition: opacity 0.3s ease;
+    }
+
+    .control-panel:hover {
+      opacity: 0.95;
+    }
+
+    .control-panel h2 {
+      color: #e0e0e0;
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+
+    .stats-panel {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 12px 16px;
+      background: rgba(30, 30, 30, 0.75);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 8px;
+      z-index: 100;
+      text-align: right;
+      font-family: 'Consolas', 'Monaco', monospace;
+    }
+
+    .stats-panel .fps {
+      font-size: 14px;
+      color: #4caf50;
+      font-weight: 600;
+      margin-bottom: 4px;
+      transition: opacity 0.25s ease;
+    }
+
+    .stats-panel .fps.warning {
+      color: #f44336;
+    }
+
+    .stats-panel .particles {
+      font-size: 14px;
+      color: #ff9800;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  
+  <div class="control-panel" id="controlPanel">
+    <h2>烟雾模拟控制</h2>
+    <div id="sliderContainer"></div>
+  </div>
+
+  <div class="stats-panel" id="statsPanel">
+    <div class="fps" id="fpsDisplay">FPS: --</div>
+    <div class="particles" id="particleDisplay">粒子数: --</div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
