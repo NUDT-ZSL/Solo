@@ -1,8 +1,9 @@
 import type { Unit, Tower, UnitType, UnitStats, PlayerId, HexCoord } from '../shared/types';
+import { hexToPixel, getHexNeighbors } from '../utils/HexUtils';
 
 let unitIdCounter = 0;
 
-const UNIT_STATS: Record<UnitType, UnitStats> = {
+export const UNIT_STATS: Record<UnitType, UnitStats> = {
   attack_tower: {
     maxHp: 100,
     attack: 20,
@@ -34,48 +35,6 @@ const UNIT_STATS: Record<UnitType, UnitStats> = {
     attackCooldown: 1.0,
   },
 };
-
-const HEX_SIZE = 40;
-
-export function hexToPixel(q: number, r: number): { x: number; y: number } {
-  const x = HEX_SIZE * (3 / 2 * q);
-  const y = HEX_SIZE * (Math.sqrt(3) / 2 * q + Math.sqrt(3) * r);
-  return { x, y };
-}
-
-export function pixelToHex(x: number, y: number): HexCoord {
-  const q = (2 / 3 * x) / HEX_SIZE;
-  const r = (-1 / 3 * x + Math.sqrt(3) / 3 * y) / HEX_SIZE;
-  return hexRound(q, r);
-}
-
-function hexRound(q: number, r: number): HexCoord {
-  const s = -q - r;
-  let rq = Math.round(q);
-  let rr = Math.round(r);
-  let rs = Math.round(s);
-  const qDiff = Math.abs(rq - q);
-  const rDiff = Math.abs(rr - r);
-  const sDiff = Math.abs(rs - s);
-  if (qDiff > rDiff && qDiff > sDiff) {
-    rq = -rr - rs;
-  } else if (rDiff > sDiff) {
-    rr = -rq - rs;
-  }
-  return { q: rq, r: rr };
-}
-
-export function hexDistance(a: HexCoord, b: HexCoord): number {
-  return (Math.abs(a.q - b.q) + Math.abs(a.q + a.r - b.q - b.r) + Math.abs(a.r - b.r)) / 2;
-}
-
-export function getHexNeighbors(hex: HexCoord): HexCoord[] {
-  const directions = [
-    { q: 1, r: 0 }, { q: 1, r: -1 }, { q: 0, r: -1 },
-    { q: -1, r: 0 }, { q: -1, r: 1 }, { q: 0, r: 1 },
-  ];
-  return directions.map(d => ({ q: hex.q + d.q, r: hex.r + d.r }));
-}
 
 export function generateId(): string {
   unitIdCounter++;

@@ -2,88 +2,32 @@ import type {
   GameState, PlayerId, Unit, Tower, HexCoord, UnitType, Particle, Base, Crystal
 } from '../shared/types';
 import {
-  createUnit, hexDistance, getHexNeighbors, hexToPixel, getSpawnPosition
+  createUnit, getSpawnPosition
 } from './UnitFactory';
+import {
+  hexDistance, getHexNeighbors, hexToPixel, coordKey, aStarSearch, HEX_SIZE
+} from '../utils/HexUtils';
 import type { WebSocket } from 'ws';
 
 const GRID_SIZE = 20;
 const GAME_DURATION = 15 * 60;
 
-interface AStarNode {
-  coord: HexCoord;
-  g: number;
-  h: number;
-  f: number;
-  parent: AStarNode | null;
-}
+type UnitDelta = { id: string } & Partial<Unit>;
+type TowerDelta = { id: string } & Partial<Tower>;
 
-function coordKey(c: HexCoord): string {
-  return `${c.q},${c.r}`;
-}
-
-function aStar(
-  start: HexCoord,
-  goal: HexCoord,
-  blockedSet: Set<string>,
-  gridSize: number
-): HexCoord[] | null {
-  const open: AStarNode[] = [];
-  const closed = new Set<string>();
-
-  const startNode: AStarNode = {
-    coord: start,
-    g: 0,
-    h: hexDistance(start, goal),
-    f: 0,
-    parent: null,
-  };
-  startNode.f = startNode.g + startNode.h;
-  open.push(startNode);
-
-  while (open.length > 0) {
-    open.sort((a, b) => a.f - b.f);
-    const current = open.shift()!;
-    const currentKey = coordKey(current.coord);
-
-    if (currentKey === coordKey(goal)) {
-      const path: HexCoord[] = [];
-      let node: AStarNode | null = current;
-      while (node) {
-        path.unshift(node.coord);
-        node = node.parent;
-      }
-      return path;
-    }
-
-    closed.add(currentKey);
-
-    for (const neighbor of getHexNeighbors(current.coord)) {
-      const nKey = coordKey(neighbor);
-      if (closed.has(nKey)) continue;
-      if (neighbor.q < 0 || neighbor.q >= gridSize || neighbor.r < 0 || neighbor.r >= gridSize) continue;
-      if (blockedSet.has(nKey) && nKey !== coordKey(goal)) continue;
-
-      const tentativeG = current.g + 1;
-      const existingIndex = open.findIndex(n => coordKey(n.coord) === nKey);
-      if (existingIndex === -1 || tentativeG < open[existingIndex].g) {
-        const h = hexDistance(neighbor, goal);
-        const neighborNode: AStarNode = {
-          coord: neighbor,
-          g: tentativeG,
-          h,
-          f: tentativeG + h,
-          parent: current,
-        };
-        if (existingIndex === -1) {
-          open.push(neighborNode);
-        } else {
-          open[existingIndex] = neighborNode;
-        }
-      }
-    }
-  }
-
-  return null;
+interface StateDelta {
+  tick: number;
+  units?: UnitDelta[];
+  towers?: TowerDelta[];
+  removedUnits?: string[];
+  removedTowers?: string[];
+  particles?: Particle[];
+  crystal?: Partial<Crystal>;
+  bases?: { red?: Partial<Base>; blue?: Partial<Base> };
+  scores?: { red?: number; blue?: number };
+  timeRemaining?: number;
+  status?: string;
+  winner?: PlayerId | 'draw' | null;
 }
 
 export class GameEngine {
@@ -94,6 +38,7 @@ export class GameEngine {
   private tickTimer: NodeJS.Timeout | null = null;
   private broadcastTimer: NodeJS.Timeout | null = null;
   private onGameOverCallback: ((winner: PlayerId | 'draw') => void) | null = null;
+  private lastSentState: GameState | null = null;
 
   constructor(gameId: string) {
     this.gameId = gameId;
@@ -144,6 +89,16 @@ export class GameEngine {
 
   addPlayer(playerId: PlayerId, ws: WebSocket, name: string) {
     this.players.set(playerId, { ws, name });
+
+    ws.on('message', (data) => {
+      try {
+        const msg = JSON.parse(data.toString());
+        this.handleClientMessage(msg, playerId);
+      } catch (e) {
+        console.error('Failed to parse client message:', e);
+      }
+    });
+
     ws.on('close', () => {
       this.players.delete(playerId);
       if (this.state.status === 'playing') {
@@ -155,6 +110,24 @@ export class GameEngine {
       this.state.status = 'playing';
       this.lastUpdate = Date.now();
       this.startGameLoop();
+      this.sendFullState();
+    }
+  }
+
+  private handleClientMessage(msg: any, playerId: PlayerId) {
+    switch (msg.type) {
+      case 'ping':
+        this.sendToPlayer(playerId, { type: 'pong', timestamp: Date.now() });
+        break;
+      case 'build_unit':
+        this.buildUnit(playerId, msg.unitType as UnitType);
+        break;
+      case 'surrender':
+        this.endGame(playerId === 'red' ? 'blue' : 'red');
+        break;
+      case 'request_full_state':
+        this.sendFullStateToPlayer(playerId);
+        break;
     }
   }
 
@@ -171,7 +144,7 @@ export class GameEngine {
     }, 1000 / 60);
 
     this.broadcastTimer = setInterval(() => {
-      this.broadcastState();
+      this.sendDeltaState();
     }, 50);
   }
 
@@ -226,6 +199,19 @@ export class GameEngine {
     return blocked;
   }
 
+  private getTerrainWeights(): Map<string, number> {
+    const weights = new Map<string, number>();
+    for (const t of this.state.towers) {
+      const towerKey = coordKey(t.position);
+      for (const neighbor of getHexNeighbors(t.position)) {
+        const nKey = coordKey(neighbor);
+        const currentWeight = weights.get(nKey) || 1;
+        weights.set(nKey, currentWeight + (t.owner === 'red' ? 0 : 0.5));
+      }
+    }
+    return weights;
+  }
+
   private update(dt: number) {
     if (this.state.status !== 'playing') return;
 
@@ -238,9 +224,10 @@ export class GameEngine {
     }
 
     const blocked = this.getBlockedSet();
+    const terrainWeights = Object.fromEntries(this.getTerrainWeights());
 
     for (const unit of this.state.units) {
-      this.updateUnit(unit, dt, blocked);
+      this.updateUnit(unit, dt, blocked, terrainWeights);
     }
 
     for (const tower of this.state.towers) {
@@ -250,9 +237,10 @@ export class GameEngine {
     this.updateCrystal(dt);
     this.updateParticles(dt);
     this.cleanupDeadUnits();
+    this.checkWinCondition();
   }
 
-  private updateUnit(unit: Unit, dt: number, blocked: Set<string>) {
+  private updateUnit(unit: Unit, dt: number, blocked: Set<string>, terrainWeights: Record<string, number>) {
     if (unit.spawnAnimTimer > 0) {
       unit.spawnAnimTimer = Math.max(0, unit.spawnAnimTimer - dt);
     }
@@ -284,12 +272,12 @@ export class GameEngine {
         }
       } else {
         unit.isAttacking = false;
-        this.moveTowardsTarget(unit, targetInfo.target.position, dt, blocked);
+        this.moveTowardsTarget(unit, targetInfo.target.position, dt, blocked, terrainWeights);
       }
     } else {
       unit.isAttacking = false;
       const enemyBase = this.state.bases[unit.owner === 'red' ? 'blue' : 'red'];
-      this.moveTowardsTarget(unit, enemyBase.position, dt, blocked);
+      this.moveTowardsTarget(unit, enemyBase.position, dt, blocked, terrainWeights);
 
       const baseDist = hexDistance(unit.position, enemyBase.position);
       if (baseDist <= unit.stats.range && unit.attackTimer <= 0) {
@@ -304,9 +292,15 @@ export class GameEngine {
     }
   }
 
-  private moveTowardsTarget(unit: Unit, targetPos: HexCoord, dt: number, blocked: Set<string>) {
-    if (unit.path.length === 0 || unit.tick % 30 === 0) {
-      const path = aStar(unit.position, targetPos, blocked, GRID_SIZE);
+  private moveTowardsTarget(
+    unit: Unit,
+    targetPos: HexCoord,
+    dt: number,
+    blocked: Set<string>,
+    terrainWeights: Record<string, number>
+  ) {
+    if (unit.path.length === 0 || this.state.tick % 30 === 0) {
+      const path = aStarSearch(unit.position, targetPos, GRID_SIZE, blocked, terrainWeights, true);
       if (path && path.length > 1) {
         unit.path = path.slice(1);
       }
@@ -319,7 +313,7 @@ export class GameEngine {
       const dy = targetPixel.y - unit.pixelY;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      const speed = unit.stats.speed * 40 * (1 - unit.slowAmount);
+      const speed = unit.stats.speed * HEX_SIZE * (1 - unit.slowAmount);
       const moveAmount = speed * dt;
 
       if (dist <= moveAmount) {
@@ -367,9 +361,11 @@ export class GameEngine {
       (target as Unit).slowTimer = attacker.stats.slowDuration || 2;
     }
 
-    this.spawnHitParticles(target.pixelX || hexToPixel(target.position.q, target.position.r).x,
-                           target.pixelY || hexToPixel(target.position.q, target.position.r).y,
-                           attacker.owner);
+    this.spawnHitParticles(
+      'pixelX' in target ? target.pixelX : hexToPixel(target.position.q, target.position.r).x,
+      'pixelY' in target ? target.pixelY : hexToPixel(target.position.q, target.position.r).y,
+      attacker.owner
+    );
   }
 
   private attackBase(attacker: Unit, base: Base) {
@@ -622,23 +618,169 @@ export class GameEngine {
       this.spawnExplosionParticles(loserBase.position);
     }
 
-    this.broadcastState();
+    this.sendFullState();
 
     if (this.onGameOverCallback) {
       this.onGameOverCallback(winner);
     }
   }
 
-  private broadcastState() {
+  private computeDelta(): StateDelta | null {
+    if (!this.lastSentState) {
+      return null;
+    }
+
+    const delta: StateDelta = { tick: this.state.tick };
+    let hasChanges = false;
+
+    const unitDeltas: UnitDelta[] = [];
+    const removedUnits: string[] = [];
+    const lastUnits = new Map(this.lastSentState.units.map(u => [u.id, u]));
+    for (const u of this.state.units) {
+      const last = lastUnits.get(u.id);
+      if (!last) {
+        unitDeltas.push({ ...u });
+        hasChanges = true;
+      } else {
+        const d: UnitDelta = { id: u.id };
+        if (u.pixelX !== last.pixelX) { d.pixelX = u.pixelX; hasChanges = true; }
+        if (u.pixelY !== last.pixelY) { d.pixelY = u.pixelY; hasChanges = true; }
+        if (u.hp !== last.hp) { d.hp = u.hp; hasChanges = true; }
+        if (u.position.q !== last.position.q || u.position.r !== last.position.r) {
+          d.position = u.position; hasChanges = true;
+        }
+        if (u.attackFlashTimer !== last.attackFlashTimer) {
+          d.attackFlashTimer = u.attackFlashTimer; hasChanges = true;
+        }
+        if (u.slowTimer !== last.slowTimer) {
+          d.slowTimer = u.slowTimer; hasChanges = true;
+        }
+        if (u.spawnAnimTimer !== last.spawnAnimTimer) {
+          d.spawnAnimTimer = u.spawnAnimTimer; hasChanges = true;
+        }
+        if (Object.keys(d).length > 1) unitDeltas.push(d);
+      }
+      lastUnits.delete(u.id);
+    }
+    for (const [id] of lastUnits) {
+      removedUnits.push(id);
+      hasChanges = true;
+    }
+
+    const towerDeltas: TowerDelta[] = [];
+    const removedTowers: string[] = [];
+    const lastTowers = new Map(this.lastSentState.towers.map(t => [t.id, t]));
+    for (const t of this.state.towers) {
+      const last = lastTowers.get(t.id);
+      if (!last) {
+        towerDeltas.push({ ...t });
+        hasChanges = true;
+      } else {
+        const d: TowerDelta = { id: t.id };
+        if (t.hp !== last.hp) { d.hp = t.hp; hasChanges = true; }
+        if (t.attackFlashTimer !== last.attackFlashTimer) {
+          d.attackFlashTimer = t.attackFlashTimer; hasChanges = true;
+        }
+        if (t.spawnAnimTimer !== last.spawnAnimTimer) {
+          d.spawnAnimTimer = t.spawnAnimTimer; hasChanges = true;
+        }
+        if (Object.keys(d).length > 1) towerDeltas.push(d);
+      }
+      lastTowers.delete(t.id);
+    }
+    for (const [id] of lastTowers) {
+      removedTowers.push(id);
+      hasChanges = true;
+    }
+
+    if (unitDeltas.length > 0) delta.units = unitDeltas;
+    if (removedUnits.length > 0) delta.removedUnits = removedUnits;
+    if (towerDeltas.length > 0) delta.towers = towerDeltas;
+    if (removedTowers.length > 0) delta.removedTowers = removedTowers;
+
+    if (this.state.particles.length > 0) {
+      delta.particles = this.state.particles;
+      hasChanges = true;
+    }
+
+    const lastCrystal = this.lastSentState.crystal;
+    if (this.state.crystal.captureProgress !== lastCrystal.captureProgress ||
+        this.state.crystal.owner !== lastCrystal.owner ||
+        this.state.crystal.capturingPlayer !== lastCrystal.capturingPlayer) {
+      delta.crystal = { ...this.state.crystal };
+      hasChanges = true;
+    }
+
+    if (this.state.bases.red.hp !== this.lastSentState.bases.red.hp ||
+        this.state.bases.blue.hp !== this.lastSentState.bases.blue.hp) {
+      delta.bases = {
+        red: { hp: this.state.bases.red.hp },
+        blue: { hp: this.state.bases.blue.hp },
+      };
+      hasChanges = true;
+    }
+
+    if (this.state.scores.red !== this.lastSentState.scores.red ||
+        this.state.scores.blue !== this.lastSentState.scores.blue) {
+      delta.scores = { ...this.state.scores };
+      hasChanges = true;
+    }
+
+    if (this.state.timeRemaining !== this.lastSentState.timeRemaining) {
+      delta.timeRemaining = this.state.timeRemaining;
+      hasChanges = true;
+    }
+
+    if (this.state.status !== this.lastSentState.status) {
+      delta.status = this.state.status;
+      delta.winner = this.state.winner;
+      hasChanges = true;
+    }
+
+    return hasChanges ? delta : null;
+  }
+
+  private sendFullState() {
     const message = JSON.stringify({
       type: 'game_state',
       state: this.state,
     });
+    this.broadcast(message);
+    this.lastSentState = JSON.parse(JSON.stringify(this.state));
+  }
 
+  private sendFullStateToPlayer(playerId: PlayerId) {
+    const message = JSON.stringify({
+      type: 'game_state',
+      state: this.state,
+    });
+    this.sendToPlayer(playerId, message);
+  }
+
+  private sendDeltaState() {
+    const delta = this.computeDelta();
+    if (delta) {
+      const message = JSON.stringify({
+        type: 'state_delta',
+        delta,
+      });
+      this.broadcast(message);
+      this.lastSentState = JSON.parse(JSON.stringify(this.state));
+    }
+  }
+
+  private broadcast(message: string) {
     for (const [, player] of this.players) {
       if (player.ws.readyState === 1) {
         player.ws.send(message);
       }
+    }
+  }
+
+  private sendToPlayer(playerId: PlayerId, message: any) {
+    const player = this.players.get(playerId);
+    if (player && player.ws.readyState === 1) {
+      player.ws.send(JSON.stringify(message));
     }
   }
 }

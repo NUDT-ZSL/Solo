@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { GameState, HexCoord, Unit, Tower, PlayerId, UnitType } from '../shared/types';
-import { hexToPixel, pixelToHex } from '../game/UnitFactory';
-
-const HEX_SIZE = 40;
+import {
+  hexToPixel, pixelToHex, drawHex, getFactionColor, getHealthColor, HEX_SIZE
+} from '../utils/HexUtils';
 
 interface GameBoardProps {
   gameState: GameState | null;
@@ -21,27 +21,6 @@ export default function GameBoard({ gameState, playerId, playerName, onBuild }: 
   const animationRef = useRef<number>(0);
   const timeRef = useRef(0);
 
-  const drawHex = useCallback((ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, fill?: string, stroke?: string, lineWidth: number = 1) => {
-    ctx.beginPath();
-    for (let i = 0; i < 6; i++) {
-      const angle = (Math.PI / 3) * i - Math.PI / 6;
-      const x = cx + size * Math.cos(angle);
-      const y = cy + size * Math.sin(angle);
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    if (fill) {
-      ctx.fillStyle = fill;
-      ctx.fill();
-    }
-    if (stroke) {
-      ctx.strokeStyle = stroke;
-      ctx.lineWidth = lineWidth;
-      ctx.stroke();
-    }
-  }, []);
-
   const render = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas || !gameState) return;
@@ -53,6 +32,8 @@ export default function GameBoard({ gameState, playerId, playerName, onBuild }: 
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width * dpr;
     canvas.height = rect.height * dpr;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
     ctx.scale(dpr, dpr);
 
     const width = rect.width;
@@ -66,29 +47,26 @@ export default function GameBoard({ gameState, playerId, playerName, onBuild }: 
     ctx.scale(scale, scale);
 
     const gridSize = gameState.gridSize;
-    const centerOffset = -hexToPixel(Math.floor(gridSize / 2), Math.floor(gridSize / 2));
+    const mid = Math.floor(gridSize / 2);
+    const centerOffset = hexToPixel(mid, mid);
 
     ctx.save();
-    ctx.translate(centerOffset.x, centerOffset.y);
+    ctx.translate(-centerOffset.x, -centerOffset.y);
 
     for (let q = 0; q < gridSize; q++) {
       for (let r = 0; r < gridSize; r++) {
         const pixel = hexToPixel(q, r);
         const isHovered = hoveredHex && hoveredHex.q === q && hoveredHex.r === r;
 
-        drawHex(
-          ctx, pixel.x, pixel.y, HEX_SIZE,
-          undefined,
-          'rgba(42, 90, 42, 0.5)',
-          1
-        );
+        drawHex(ctx, pixel.x, pixel.y, HEX_SIZE, {
+          stroke: 'rgba(42, 90, 42, 0.5)',
+          lineWidth: 1,
+        });
 
         if (isHovered) {
-          drawHex(
-            ctx, pixel.x, pixel.y, HEX_SIZE - 2,
-            'rgba(255, 221, 68, 0.3)',
-            undefined
-          );
+          drawHex(ctx, pixel.x, pixel.y, HEX_SIZE - 2, {
+            fill: 'rgba(255, 221, 68, 0.3)',
+          });
         }
       }
     }
@@ -106,19 +84,27 @@ export default function GameBoard({ gameState, playerId, playerName, onBuild }: 
     crystalGradient.addColorStop(0.5, '#4488ff');
     crystalGradient.addColorStop(1, '#2266cc');
 
-    drawHex(ctx, crystalPixel.x, crystalPixel.y, crystalSize, crystalGradient as unknown as string, '#66aaff', 2);
+    drawHex(ctx, crystalPixel.x, crystalPixel.y, crystalSize, {
+      fill: '#4488ff',
+      stroke: '#66aaff',
+      lineWidth: 2,
+    });
 
     ctx.save();
     ctx.globalAlpha = 0.3;
-    drawHex(ctx, crystalPixel.x, crystalPixel.y, crystalSize * 1.3, '#4488ff');
+    drawHex(ctx, crystalPixel.x, crystalPixel.y, crystalSize * 1.3, {
+      fill: '#4488ff',
+    });
     ctx.restore();
 
     if (crystal.capturingPlayer && crystal.captureProgress > 0) {
-      const captureColor = crystal.capturingPlayer === 'red' ? '#ff4444' : '#4488ff';
+      const captureColor = getFactionColor(crystal.capturingPlayer as PlayerId).primary;
       ctx.strokeStyle = captureColor;
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(crystalPixel.x, crystalPixel.y, crystalSize + 10, -Math.PI / 2, -Math.PI / 2 + crystal.captureProgress * Math.PI * 2);
+      ctx.arc(
+        crystalPixel.x, crystalPixel.y, crystalSize + 10, -Math.PI / 2, -Math.PI / 2 + crystal.captureProgress * Math.PI * 2
+      );
       ctx.stroke();
     }
 
@@ -126,16 +112,20 @@ export default function GameBoard({ gameState, playerId, playerName, onBuild }: 
     for (const baseId of ['red', 'blue'] as PlayerId[]) {
       const base = bases[baseId];
       const basePixel = hexToPixel(base.position.q, base.position.r);
-      const baseColor = baseId === 'red' ? '#ff4444' : '#4444ff';
+      const colors = getFactionColor(baseId);
 
       const baseGradient = ctx.createRadialGradient(
         basePixel.x, basePixel.y, 0,
         basePixel.x, basePixel.y, HEX_SIZE * 1.2
       );
-      baseGradient.addColorStop(0, baseColor);
-      baseGradient.addColorStop(1, baseId === 'red' ? '#aa2222' : '#2222aa');
+      baseGradient.addColorStop(0, colors.primary);
+      baseGradient.addColorStop(1, colors.dark);
 
-      drawHex(ctx, basePixel.x, basePixel.y, HEX_SIZE * 1.2, baseGradient as unknown as string, baseColor, 3);
+      drawHex(ctx, basePixel.x, basePixel.y, HEX_SIZE * 1.2, {
+        fill: colors.primary,
+        stroke: colors.primary,
+        lineWidth: 3,
+      });
 
       const hpRatio = base.hp / base.maxHp;
       const barWidth = HEX_SIZE * 1.5;
@@ -146,8 +136,7 @@ export default function GameBoard({ gameState, playerId, playerName, onBuild }: 
       ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
       ctx.fillRect(barX, barY, barWidth, barHeight);
 
-      const hpColor = hpRatio > 0.5 ? '#44ff44' : hpRatio > 0.25 ? '#ffaa00' : '#ff4444';
-      ctx.fillStyle = hpColor;
+      ctx.fillStyle = getHealthColor(hpRatio);
       ctx.fillRect(barX, barY, barWidth * hpRatio, barHeight);
 
       ctx.fillStyle = '#ffffff';
@@ -158,7 +147,7 @@ export default function GameBoard({ gameState, playerId, playerName, onBuild }: 
 
     for (const tower of gameState.towers) {
       const towerPixel = hexToPixel(tower.position.q, tower.position.r);
-      const towerColor = tower.owner === 'red' ? '#ff6644' : '#4488ff';
+      const colors = getFactionColor(tower.owner);
       const scale = tower.spawnAnimTimer > 0 ? 1 - tower.spawnAnimTimer / 0.3 : 1;
 
       ctx.save();
@@ -166,21 +155,25 @@ export default function GameBoard({ gameState, playerId, playerName, onBuild }: 
       ctx.scale(scale, scale);
 
       if (tower.type === 'attack_tower') {
-        ctx.fillStyle = towerColor;
+        ctx.fillStyle = colors.primary;
         ctx.beginPath();
         ctx.arc(0, 0, HEX_SIZE * 0.5, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.fillStyle = towerColor === '#ff6644' ? '#ffaa88' : '#88bbff';
+        ctx.fillStyle = colors.light;
         ctx.beginPath();
         ctx.arc(0, -HEX_SIZE * 0.2, HEX_SIZE * 0.25, 0, Math.PI * 2);
         ctx.fill();
       } else {
-        ctx.fillStyle = '#88ddff';
-        drawHex(ctx, 0, 0, HEX_SIZE * 0.45, '#88ddff', '#4488ff', 2);
+        drawHex(ctx, 0, 0, HEX_SIZE * 0.45, {
+          fill: '#88ddff',
+          stroke: colors.secondary,
+          lineWidth: 2,
+        });
 
-        ctx.fillStyle = '#aaeeff';
-        drawHex(ctx, 0, 0, HEX_SIZE * 0.25, '#aaeeff');
+        drawHex(ctx, 0, 0, HEX_SIZE * 0.25, {
+          fill: '#aaeeff',
+        });
       }
 
       if (tower.attackFlashTimer > 0) {
@@ -201,12 +194,12 @@ export default function GameBoard({ gameState, playerId, playerName, onBuild }: 
 
       ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
       ctx.fillRect(barX, barY, barWidth, barHeight);
-      ctx.fillStyle = hpRatio > 0.5 ? '#44ff44' : '#ff4444';
+      ctx.fillStyle = getHealthColor(hpRatio);
       ctx.fillRect(barX, barY, barWidth * hpRatio, barHeight);
     }
 
     for (const unit of gameState.units) {
-      const unitColor = unit.owner === 'red' ? '#ff4444' : '#4488ff';
+      const colors = getFactionColor(unit.owner);
       const scale = unit.spawnAnimTimer > 0 ? 1 - unit.spawnAnimTimer / 0.3 : 1;
 
       ctx.save();
@@ -214,7 +207,7 @@ export default function GameBoard({ gameState, playerId, playerName, onBuild }: 
       ctx.scale(scale, scale);
 
       if (unit.type === 'fast_unit') {
-        ctx.fillStyle = unitColor;
+        ctx.fillStyle = colors.primary;
         ctx.beginPath();
         ctx.moveTo(0, -HEX_SIZE * 0.35);
         ctx.lineTo(HEX_SIZE * 0.3, HEX_SIZE * 0.3);
@@ -222,10 +215,10 @@ export default function GameBoard({ gameState, playerId, playerName, onBuild }: 
         ctx.closePath();
         ctx.fill();
       } else {
-        ctx.fillStyle = unitColor;
+        ctx.fillStyle = colors.primary;
         ctx.fillRect(-HEX_SIZE * 0.3, -HEX_SIZE * 0.3, HEX_SIZE * 0.6, HEX_SIZE * 0.6);
 
-        ctx.strokeStyle = unit.owner === 'red' ? '#cc2222' : '#2266cc';
+        ctx.strokeStyle = colors.dark;
         ctx.lineWidth = 2;
         ctx.strokeRect(-HEX_SIZE * 0.3, -HEX_SIZE * 0.3, HEX_SIZE * 0.6, HEX_SIZE * 0.6);
       }
@@ -262,7 +255,7 @@ export default function GameBoard({ gameState, playerId, playerName, onBuild }: 
       const hpGradient = ctx.createLinearGradient(barX, barY, barX + barWidth, barY);
       hpGradient.addColorStop(0, '#44ff44');
       hpGradient.addColorStop(1, '#ff4444');
-      ctx.fillStyle = hpGradient as unknown as string;
+      ctx.fillStyle = hpGradient;
       ctx.fillRect(barX, barY, barWidth * hpRatio, barHeight);
 
       ctx.fillStyle = '#ffffff';
@@ -283,7 +276,7 @@ export default function GameBoard({ gameState, playerId, playerName, onBuild }: 
 
     ctx.restore();
     ctx.restore();
-  }, [gameState, hoveredHex, offset, scale, drawHex]);
+  }, [gameState, hoveredHex, offset, scale]);
 
   useEffect(() => {
     const animate = () => {
@@ -302,10 +295,10 @@ export default function GameBoard({ gameState, playerId, playerName, onBuild }: 
     const x = (e.clientX - rect.left - rect.width / 2 - offset.x) / scale;
     const y = (e.clientY - rect.top - rect.height / 2 - offset.y) / scale;
 
-    const gridSize = gameState.gridSize;
-    const centerOffset = hexToPixel(Math.floor(gridSize / 2), Math.floor(gridSize / 2));
-    const worldX = x - centerOffset.x;
-    const worldY = y - centerOffset.y;
+    const mid = Math.floor(gameState.gridSize / 2);
+    const centerOffset = hexToPixel(mid, mid);
+    const worldX = x + centerOffset.x;
+    const worldY = y + centerOffset.y;
 
     const hex = pixelToHex(worldX, worldY);
 
@@ -328,13 +321,13 @@ export default function GameBoard({ gameState, playerId, playerName, onBuild }: 
     const x = (e.clientX - rect.left - rect.width / 2 - offset.x) / scale;
     const y = (e.clientY - rect.top - rect.height / 2 - offset.y) / scale;
 
-    const gridSize = gameState.gridSize;
-    const centerOffset = hexToPixel(Math.floor(gridSize / 2), Math.floor(gridSize / 2));
-    const worldX = x - centerOffset.x;
-    const worldY = y - centerOffset.y;
+    const mid = Math.floor(gameState.gridSize / 2);
+    const centerOffset = hexToPixel(mid, mid);
+    const worldX = x + centerOffset.x;
+    const worldY = y + centerOffset.y;
 
     const hex = pixelToHex(worldX, worldY);
-    if (hex.q >= 0 && hex.q < gridSize && hex.r >= 0 && hex.r < gridSize) {
+    if (hex.q >= 0 && hex.q < gameState.gridSize && hex.r >= 0 && hex.r < gameState.gridSize) {
       setHoveredHex(hex);
     } else {
       setHoveredHex(null);
@@ -371,7 +364,7 @@ export default function GameBoard({ gameState, playerId, playerName, onBuild }: 
           <div className="w-24 h-3 bg-gray-700 rounded-full overflow-hidden">
             <div
               className="h-full bg-gradient-to-r from-red-600 to-red-400 transition-all duration-300"
-              style={{ height: `${Math.max(10, ((gameState?.timeRemaining || 0) / 900) * 100)}%` }}
+              style={{ height: `${Math.max(10, ((gameState?.timeRemaining || 0) / 900) * 100)}%`
             />
           </div>
         </div>
@@ -384,7 +377,7 @@ export default function GameBoard({ gameState, playerId, playerName, onBuild }: 
           <div className="w-24 h-3 bg-gray-700 rounded-full overflow-hidden">
             <div
               className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-300 ml-auto"
-              style={{ height: `${Math.max(10, ((gameState?.timeRemaining || 0) / 900) * 100)}%` }}
+              style={{ height: `${Math.max(10, ((gameState?.timeRemaining || 0) / 900) * 100)}%`
             />
           </div>
           <span className="text-white font-bold text-lg">{gameState?.scores.blue || 0}</span>
@@ -412,7 +405,7 @@ export default function GameBoard({ gameState, playerId, playerName, onBuild }: 
               onClick={() => handleBuild('attack_tower')}
             >
               <div className="font-bold">攻击塔</div>
-              <div className="text-red-200 text-[10px]">攻击20 射程3</div>
+              <div className="text-red-200 text-[10px">攻击20 射程3</div>
             </button>
             <button
               className="px-3 py-2 bg-cyan-600/80 hover:bg-cyan-500 text-white text-xs rounded-lg transition-all hover:scale-105"

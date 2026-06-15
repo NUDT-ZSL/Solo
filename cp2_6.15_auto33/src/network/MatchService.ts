@@ -8,10 +8,15 @@ import type { WebSocket } from 'ws';
 const dbPath = path.join(process.cwd(), 'game.db');
 const db = new sqlite3.Database(dbPath);
 
+const MATCH_TIMEOUT_MS = 60000;
+const MAX_WAIT_TIME_MS = 30000;
+const RANK_MATCH_THRESHOLD = 5;
+
 interface MatchQueueItem {
   queueId: string;
   playerName: string;
   createdAt: number;
+  rank: number;
 }
 
 interface GameInstance {
@@ -21,8 +26,16 @@ interface GameInstance {
   createdAt: number;
 }
 
+interface PlayerRank {
+  name: string;
+  wins: number;
+  losses: number;
+  rank: number;
+}
+
 let matchQueue: MatchQueueItem[] = [];
 const games = new Map<string, GameInstance>();
+const playerRanks = new Map<string, PlayerRank>();
 
 export function initDatabase(): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -52,57 +65,153 @@ export function initDatabase(): Promise<void> {
       });
     });
 
-    setTimeout(resolve, 100);
+    setTimeout(() => {
+      refreshPlayerRanks().then(resolve).catch(reject);
+    }, 100);
   });
 }
 
-export function joinMatchQueue(playerName: string): { queueId: string; status: 'waiting' | 'matched' | 'failed'; gameId?: string; playerId?: PlayerId } {
-  if (matchQueue.find(q => q.playerName === playerName)) {
-    const existing = matchQueue.find(q => q.playerName === playerName)!;
+async function refreshPlayerRanks() {
+  return new Promise<void>((resolve, reject) => {
+    db.all(
+      `SELECT name, wins, losses FROM players ORDER BY wins DESC,
+        CASE WHEN wins + losses > 0 THEN CAST(wins AS FLOAT) / (wins + losses) ELSE 0 END DESC`,
+      [],
+      (err, rows: any[]) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        playerRanks.clear();
+        rows.forEach((row, index) => {
+          playerRanks.set(row.name, {
+            name: row.name,
+            wins: row.wins,
+            losses: row.losses,
+            rank: index + 1,
+          });
+        });
+        resolve();
+      }
+    );
+  });
+}
+
+function getPlayerRank(playerName: string): number {
+  return playerRanks.get(playerName)?.rank || playerRanks.size + 1;
+}
+
+function findMatchingOpponent(player: MatchQueueItem): MatchQueueItem | null {
+  const now = Date.now();
+
+  let bestMatch: MatchQueueItem | null = null;
+  let bestRankDiff = Infinity;
+
+  for (const opponent of matchQueue) {
+    if (opponent.queueId === player.queueId) continue;
+
+    const waitTime = now - opponent.createdAt;
+    const rankDiff = Math.abs(player.rank - opponent.rank);
+
+    if (waitTime > MAX_WAIT_TIME_MS || rankDiff <= RANK_MATCH_THRESHOLD) {
+      if (rankDiff < bestRankDiff) {
+        bestRankDiff = rankDiff;
+        bestMatch = opponent;
+      }
+    }
+  }
+
+  return bestMatch;
+}
+
+export function joinMatchQueue(playerName: string): {
+  queueId: string;
+  status: 'waiting' | 'matched' | 'failed';
+  gameId?: string;
+  playerId?: PlayerId;
+} {
+  const existing = matchQueue.find(q => q.playerName === playerName);
+  if (existing) {
     return { queueId: existing.queueId, status: 'waiting' };
   }
 
-  if (matchQueue.length === 0) {
-    const queueId = `queue_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    matchQueue.push({ queueId, playerName, createdAt: Date.now() });
-    return { queueId, status: 'waiting' };
+  const rank = getPlayerRank(playerName);
+  const queueItem: MatchQueueItem = {
+    queueId: `queue_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    playerName,
+    createdAt: Date.now(),
+    rank,
+  };
+
+  const opponent = findMatchingOpponent(queueItem);
+  if (opponent) {
+    matchQueue = matchQueue.filter(q => q.queueId !== opponent.queueId);
+
+    const gameId = `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const engine = new GameEngine(gameId);
+    games.set(gameId, {
+      gameId,
+      engine,
+      players: { red: opponent.playerName, blue: playerName },
+      createdAt: Date.now(),
+    });
+
+    engine.setOnGameOver((winner) => {
+      handleGameOver(gameId, winner);
+    });
+
+    return {
+      queueId: `matched_${gameId}`,
+      status: 'matched',
+      gameId,
+      playerId: 'blue',
+    };
   }
 
-  const opponent = matchQueue.shift()!;
-  const gameId = `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-  const engine = new GameEngine(gameId);
-  games.set(gameId, {
-    gameId,
-    engine,
-    players: { red: opponent.playerName, blue: playerName },
-    createdAt: Date.now(),
-  });
-
-  engine.setOnGameOver((winner) => {
-    handleGameOver(gameId, winner);
-  });
-
-  return {
-    queueId: `matched_${gameId}`,
-    status: 'matched',
-    gameId,
-    playerId: 'blue',
-  };
+  matchQueue.push(queueItem);
+  return { queueId: queueItem.queueId, status: 'waiting' };
 }
 
-export function getMatchStatus(queueId: string): { status: 'waiting' | 'matched' | 'failed'; gameId?: string; playerId?: PlayerId } {
+export function getMatchStatus(queueId: string): {
+  status: 'waiting' | 'matched' | 'failed';
+  gameId?: string;
+  playerId?: PlayerId;
+} {
   const item = matchQueue.find(q => q.queueId === queueId);
   if (item) {
+    const waitTime = Date.now() - item.createdAt;
+    if (waitTime > MATCH_TIMEOUT_MS) {
+      matchQueue = matchQueue.filter(q => q.queueId !== queueId);
+      return { status: 'failed' };
+    }
+
+    const opponent = findMatchingOpponent(item);
+    if (opponent) {
+      matchQueue = matchQueue.filter(q => q.queueId !== queueId && q.queueId !== opponent.queueId);
+
+      const gameId = `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const engine = new GameEngine(gameId);
+      games.set(gameId, {
+        gameId,
+        engine,
+        players: { red: opponent.playerName, blue: item.playerName },
+        createdAt: Date.now(),
+      });
+
+      engine.setOnGameOver((winner) => {
+        handleGameOver(gameId, winner);
+      });
+
+      return { status: 'matched', gameId, playerId: 'blue' };
+    }
+
     return { status: 'waiting' };
   }
 
   if (queueId.startsWith('matched_')) {
     const gameId = queueId.replace('matched_', '');
     if (games.has(gameId)) {
-      const game = games.get(gameId)!;
-      const playerId = game.players.red ? 'red' : 'blue';
-      return { status: 'matched', gameId, playerId };
+      return { status: 'matched', gameId, playerId: 'blue' };
     }
   }
 
@@ -126,12 +235,18 @@ export function addPlayerToGame(gameId: string, playerId: PlayerId, ws: WebSocke
   }
 }
 
-export async function recordMatchResult(gameId: string, playerName: string, won: boolean, duration: number): Promise<void> {
+export async function recordMatchResult(
+  gameId: string,
+  playerName: string,
+  won: boolean,
+  duration: number
+): Promise<void> {
   await ensurePlayerExists(playerName);
 
   return new Promise((resolve, reject) => {
     db.serialize(() => {
-      db.run('INSERT INTO match_results (game_id, player_name, won, duration_seconds) VALUES (?, ?, ?, ?)',
+      db.run(
+        'INSERT INTO match_results (game_id, player_name, won, duration_seconds) VALUES (?, ?, ?, ?)',
         [gameId, playerName, won ? 1 : 0, duration],
         (err) => {
           if (err) reject(err);
@@ -139,11 +254,15 @@ export async function recordMatchResult(gameId: string, playerName: string, won:
       );
 
       const field = won ? 'wins' : 'losses';
-      db.run(`UPDATE players SET ${field} = ${field} + 1 WHERE name = ?`,
+      db.run(
+        `UPDATE players SET ${field} = ${field} + 1 WHERE name = ?`,
         [playerName],
         (err) => {
-          if (err) reject(err);
-          else resolve();
+          if (err) {
+            reject(err);
+          } else {
+            refreshPlayerRanks().then(resolve).catch(reject);
+          }
         }
       );
     });
@@ -158,7 +277,10 @@ function ensurePlayerExists(name: string): Promise<void> {
       } else if (!row) {
         db.run('INSERT INTO players (name) VALUES (?)', [name], (err2) => {
           if (err2) reject(err2);
-          else resolve();
+          else {
+            playerRanks.set(name, { name, wins: 0, losses: 0, rank: playerRanks.size + 1 });
+            resolve();
+          }
         });
       } else {
         resolve();
@@ -194,7 +316,13 @@ export function getLeaderboard(limit: number = 10): Promise<LeaderboardEntry[]> 
   });
 }
 
-export function getPlayerStats(name: string): Promise<{ playerName: string; wins: number; losses: number; winRate: number } | null> {
+export function getPlayerStats(name: string): Promise<{
+  playerName: string;
+  wins: number;
+  losses: number;
+  winRate: number;
+  rank: number;
+} | null> {
   return new Promise((resolve, reject) => {
     db.get(
       `SELECT name, wins, losses,
@@ -213,6 +341,7 @@ export function getPlayerStats(name: string): Promise<{ playerName: string; wins
             wins: row.wins,
             losses: row.losses,
             winRate: Math.round(row.winRate * 100) / 100,
+            rank: getPlayerRank(name),
           });
         }
       }
@@ -226,12 +355,15 @@ function handleGameOver(gameId: string, winner: PlayerId | 'draw') {
 
   const duration = Math.floor((Date.now() - game.createdAt) / 1000);
 
+  const results: Promise<void>[] = [];
   if (game.players.red) {
-    recordMatchResult(gameId, game.players.red, winner === 'red', duration).catch(console.error);
+    results.push(recordMatchResult(gameId, game.players.red, winner === 'red', duration));
   }
   if (game.players.blue) {
-    recordMatchResult(gameId, game.players.blue, winner === 'blue', duration).catch(console.error);
+    results.push(recordMatchResult(gameId, game.players.blue, winner === 'blue', duration));
   }
+
+  Promise.all(results).catch(console.error);
 
   setTimeout(() => {
     const g = games.get(gameId);
@@ -244,7 +376,11 @@ function handleGameOver(gameId: string, winner: PlayerId | 'draw') {
 
 setInterval(() => {
   const now = Date.now();
-  matchQueue = matchQueue.filter(q => now - q.createdAt < 60000);
+  const initialLength = matchQueue.length;
+  matchQueue = matchQueue.filter(q => now - q.createdAt < MATCH_TIMEOUT_MS);
+  if (matchQueue.length < initialLength) {
+    console.log(`Removed ${initialLength - matchQueue.length} timed out players from match queue`);
+  }
 }, 10000);
 
 export function handleJoinMatch(req: Request, res: Response) {
@@ -253,7 +389,7 @@ export function handleJoinMatch(req: Request, res: Response) {
     res.status(400).json({ error: 'Invalid playerName' });
     return;
   }
-  const result = joinMatchQueue(playerName);
+  const result = joinMatchQueue(playerName.trim());
   res.json(result);
 }
 
