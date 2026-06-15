@@ -20,6 +20,7 @@ interface Enemy {
   type: 'normal' | 'elite' | 'boss';
   x: number;
   y: number;
+  radius: number;
   health: number;
   maxHealth: number;
   spawnTime: number;
@@ -231,6 +232,7 @@ export class GameEngine {
       type: instance.type,
       x: instance.initialPosition.x,
       y: instance.initialPosition.y,
+      radius: config.width / 2,
       health: config.health,
       maxHealth: config.health,
       spawnTime: instance.spawnTime,
@@ -289,30 +291,39 @@ export class GameEngine {
   }
 
   private updatePlayer(dt: number): void {
-    const speed = 240;
-    this.player.targetVx = 0;
-    this.player.targetVy = 0;
-
-    if (this.keys.has('KeyW')) this.player.targetVy = -speed;
-    if (this.keys.has('KeyS')) this.player.targetVy = speed;
-    if (this.keys.has('KeyA')) this.player.targetVx = -speed;
-    if (this.keys.has('KeyD')) this.player.targetVx = speed;
-
+    const maxSpeed = 240;
     const accel = 2400;
-    const dvx = this.player.targetVx - this.player.vx;
-    const dvy = this.player.targetVy - this.player.vy;
-    const maxDelta = accel * dt;
 
-    if (Math.abs(dvx) <= maxDelta) {
-      this.player.vx = this.player.targetVx;
-    } else {
-      this.player.vx += Math.sign(dvx) * maxDelta;
+    let inputX = 0;
+    let inputY = 0;
+    if (this.keys.has('KeyW')) inputY -= 1;
+    if (this.keys.has('KeyS')) inputY += 1;
+    if (this.keys.has('KeyA')) inputX -= 1;
+    if (this.keys.has('KeyD')) inputX += 1;
+
+    const inputLen = Math.sqrt(inputX * inputX + inputY * inputY);
+    if (inputLen > 0) {
+      inputX /= inputLen;
+      inputY /= inputLen;
     }
 
-    if (Math.abs(dvy) <= maxDelta) {
-      this.player.vy = this.player.targetVy;
+    const targetVx = inputX * maxSpeed;
+    const targetVy = inputY * maxSpeed;
+    this.player.targetVx = targetVx;
+    this.player.targetVy = targetVy;
+
+    const dvx = targetVx - this.player.vx;
+    const dvy = targetVy - this.player.vy;
+    const dvLen = Math.sqrt(dvx * dvx + dvy * dvy);
+    const maxDelta = accel * dt;
+
+    if (dvLen <= maxDelta || dvLen === 0) {
+      this.player.vx = targetVx;
+      this.player.vy = targetVy;
     } else {
-      this.player.vy += Math.sign(dvy) * maxDelta;
+      const ratio = maxDelta / dvLen;
+      this.player.vx += dvx * ratio;
+      this.player.vy += dvy * ratio;
     }
 
     this.player.x += this.player.vx * dt;
@@ -459,15 +470,25 @@ export class GameEngine {
       if (bullet.isHoming) {
         const speed = Math.sqrt(bullet.vx * bullet.vx + bullet.vy * bullet.vy);
         const currentAngle = Math.atan2(bullet.vy, bullet.vx);
-        const targetAngle = Math.atan2(this.player.y - bullet.y, this.player.x - bullet.x);
+        const dx = this.player.x - bullet.x;
+        const dy = this.player.y - bullet.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const targetAngle = Math.atan2(dy, dx);
 
         let angleDiff = targetAngle - currentAngle;
         while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
         while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
-        const turnSpeed = 3;
-        const maxTurn = turnSpeed * dt;
-        const t = Math.max(-1, Math.min(1, angleDiff / maxTurn));
+        const minTrackDist = 60;
+        const fullTrackDist = 180;
+        let trackFactor = 1;
+        if (dist < fullTrackDist) {
+          trackFactor = Math.max(0, (dist - minTrackDist) / (fullTrackDist - minTrackDist));
+        }
+
+        const turnSpeed = 2;
+        const maxTurn = turnSpeed * dt * trackFactor;
+        const t = Math.max(-1, Math.min(1, angleDiff / (maxTurn || 1)));
         const newAngle = currentAngle + t * maxTurn;
 
         bullet.vx = Math.cos(newAngle) * speed;
@@ -478,15 +499,30 @@ export class GameEngine {
       bullet.y += bullet.vy * dt;
     };
 
-    this.playerBullets.forEach(updateBullet);
-    this.enemyBullets.forEach(updateBullet);
+    const minX = -50;
+    const maxX = this.canvas.width + 50;
+    const minY = -50;
+    const maxY = this.canvas.height + 50;
 
-    this.playerBullets = this.playerBullets.filter(b =>
-      b.x > -50 && b.x < this.canvas.width + 50 && b.y > -50 && b.y < this.canvas.height + 50
-    );
-    this.enemyBullets = this.enemyBullets.filter(b =>
-      b.x > -50 && b.x < this.canvas.width + 50 && b.y > -50 && b.y < this.canvas.height + 50
-    );
+    let writeIdx = 0;
+    for (let i = 0; i < this.playerBullets.length; i++) {
+      const b = this.playerBullets[i];
+      updateBullet(b);
+      if (b.x > minX && b.x < maxX && b.y > minY && b.y < maxY) {
+        this.playerBullets[writeIdx++] = b;
+      }
+    }
+    this.playerBullets.length = writeIdx;
+
+    writeIdx = 0;
+    for (let i = 0; i < this.enemyBullets.length; i++) {
+      const b = this.enemyBullets[i];
+      updateBullet(b);
+      if (b.x > minX && b.x < maxX && b.y > minY && b.y < maxY) {
+        this.enemyBullets[writeIdx++] = b;
+      }
+    }
+    this.enemyBullets.length = writeIdx;
   }
 
   private updateParticles(dt: number): void {
@@ -515,6 +551,13 @@ export class GameEngine {
   }
 
   private handleCollisions(): void {
+    const activeEnemies: Enemy[] = [];
+    for (let i = 0; i < this.enemies.length; i++) {
+      if (this.enemies[i].active) {
+        activeEnemies.push(this.enemies[i]);
+      }
+    }
+
     const playerCollidable = {
       id: 'player',
       x: this.player.x,
@@ -523,14 +566,9 @@ export class GameEngine {
     };
 
     const events = this.collisionSystem.checkCollisions(
-      this.playerBullets.map(b => ({ id: b.id, x: b.x, y: b.y, radius: b.radius })),
-      this.enemies.filter(e => e.active).map(e => ({
-        id: e.id,
-        x: e.x,
-        y: e.y,
-        radius: ENEMY_CONFIGS[e.type].width / 2
-      })),
-      this.enemyBullets.map(b => ({ id: b.id, x: b.x, y: b.y, radius: b.radius })),
+      this.playerBullets,
+      activeEnemies,
+      this.enemyBullets,
       playerCollidable
     );
 
@@ -538,7 +576,8 @@ export class GameEngine {
     const destroyedPlayerBulletIds = new Set<string>();
     const destroyedEnemyBulletIds = new Set<string>();
 
-    events.forEach(event => {
+    for (let i = 0; i < events.length; i++) {
+      const event = events[i];
       if (event.aType === 'playerBullet' && event.bType === 'enemy') {
         destroyedPlayerBulletIds.add(event.aId);
         const enemy = this.enemies.find(e => e.id === event.bId);
@@ -560,7 +599,7 @@ export class GameEngine {
       if (event.aType === 'player' && event.bType === 'enemy' && !this.player.invincible) {
         this.playerHit();
       }
-    });
+    }
 
     this.playerBullets = this.playerBullets.filter(b => !destroyedPlayerBulletIds.has(b.id));
     this.enemyBullets = this.enemyBullets.filter(b => !destroyedEnemyBulletIds.has(b.id));

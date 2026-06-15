@@ -36,6 +36,8 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({ onPlay }) => {
   const currentTimeRef = useRef<number>(0);
   const timelineTimeRef = useRef<number>(0);
   const isPlayingTimelineRef = useRef<boolean>(false);
+  const lastTimelineUiUpdateRef = useRef<number>(0);
+  const draggedTypeRef = useRef<EnemyType | null>(null);
 
   const [enemies, setEnemies] = useState<EditorEnemy[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -171,7 +173,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({ onPlay }) => {
       rendererRef.current = new CanvasRenderer(canvasRef.current);
     }
 
-    const renderLoop = () => {
+    const renderLoop = (timestamp: number) => {
       if (rendererRef.current) {
         if (isPlayingTimelineRef.current) {
           timelineTimeRef.current += 1 / 60;
@@ -179,7 +181,10 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({ onPlay }) => {
           if (timelineTimeRef.current > maxTime) {
             timelineTimeRef.current = 0;
           }
-          setTimelineTime(timelineTimeRef.current);
+          if (timestamp - lastTimelineUiUpdateRef.current >= 100) {
+            setTimelineTime(timelineTimeRef.current);
+            lastTimelineUiUpdateRef.current = timestamp;
+          }
         }
         rendererRef.current.render(enemies, timelineTimeRef.current);
       }
@@ -195,30 +200,35 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({ onPlay }) => {
   }, [enemies]);
 
   const handleDragStart = (e: React.DragEvent, type: EnemyType) => {
-    e.dataTransfer.setData('enemyType', type);
+    e.dataTransfer.setData('text/plain', type);
+    e.dataTransfer.effectAllowed = 'copy';
+    draggedTypeRef.current = type;
     setDraggedTemplate(type);
   };
 
   const handleDragEnd = () => {
+    draggedTypeRef.current = null;
     setDraggedTemplate(null);
   };
 
   const handleCanvasDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
   };
 
   const handleCanvasDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    if (!draggedTemplate || !rendererRef.current || !canvasRef.current) return;
+    const enemyType = e.dataTransfer.getData('text/plain') as EnemyType || draggedTypeRef.current;
+    if (!enemyType || !rendererRef.current || !canvasRef.current) return;
 
     const rect = canvasRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    const config = ENEMY_CONFIGS[draggedTemplate];
+    const config = ENEMY_CONFIGS[enemyType];
     const newEnemy: EditorEnemy = {
       id: generateId(),
-      type: draggedTemplate,
+      type: enemyType,
       spawnTime: Math.max(0, timelineTimeRef.current),
       initialPosition: { x, y },
       path: createDefaultPath(x, y),
@@ -232,6 +242,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({ onPlay }) => {
     saveHistory(newEnemies, newEnemy.id);
     setSelectedId(newEnemy.id);
     setDraggedTemplate(null);
+    draggedTypeRef.current = null;
   };
 
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -368,10 +379,14 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({ onPlay }) => {
     const newTime = (x / rect.width) * maxTime;
     timelineTimeRef.current = newTime;
     setTimelineTime(newTime);
+    lastTimelineUiUpdateRef.current = performance.now();
   };
 
   const toggleTimelinePlay = () => {
     isPlayingTimelineRef.current = !isPlayingTimelineRef.current;
+    if (!isPlayingTimelineRef.current) {
+      setTimelineTime(timelineTimeRef.current);
+    }
   };
 
   const enemyTemplates: { type: EnemyType; name: string; desc: string }[] = [
