@@ -20,6 +20,7 @@ export default function TranslationPanel({
   const [localTranslations, setLocalTranslations] = useState<Map<string, string>>(new Map());
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   const [flashingIds, setFlashingIds] = useState<Set<string>>(new Set());
+  const [checkmarkIds, setCheckmarkIds] = useState<Set<string>>(new Set());
   const [focusedId, setFocusedId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -79,6 +80,15 @@ export default function TranslationPanel({
     try {
       await axios.put(`/api/translations/${id}`, { translatedText });
 
+      setCheckmarkIds((prev) => new Set(prev).add(id));
+      setTimeout(() => {
+        setCheckmarkIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }, 300);
+
       setFlashingIds((prev) => new Set(prev).add(id));
       setTimeout(() => {
         setFlashingIds((prev) => {
@@ -101,13 +111,11 @@ export default function TranslationPanel({
     } catch (error) {
       console.error('Failed to save translation:', error);
     } finally {
-      setTimeout(() => {
-        setSavingIds((prev) => {
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
-      }, 600);
+      setSavingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   }, [savingIds, onProgressUpdate]);
 
@@ -196,7 +204,7 @@ export default function TranslationPanel({
                   onBlur={() => handleBlur(item.id)}
                   placeholder="请输入译文..."
                 />
-                {savingIds.has(item.id) && (
+                {checkmarkIds.has(item.id) && (
                   <span className="save-checkmark show">✓</span>
                 )}
               </td>
