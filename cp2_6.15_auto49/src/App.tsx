@@ -1,5 +1,5 @@
 import { Canvas } from '@react-three/fiber';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import * as THREE from 'three';
 import StratumModel from './modules/visualization/StratumModel';
 import SceneControls from './modules/visualization/Controls';
@@ -148,15 +148,17 @@ export default function App() {
 }
 
 function GroundPlane() {
+  const grid = useMemo(() => {
+    const g = new THREE.GridHelper(300, 30, '#90a4ae', '#90a4ae');
+    g.position.y = STRATUM.yTop;
+    (g.material as THREE.Material).transparent = true;
+    (g.material as THREE.Material).opacity = 0.2;
+    return g;
+  }, []);
+
   return (
     <group>
-      <gridHelper
-        args={[300, 30, '#90a4ae', '#90a4ae']}
-        position={[0, STRATUM.yTop, 0]}
-        rotation={[0, 0, 0]}
-      >
-        <meshBasicMaterial transparent opacity={0.2} />
-      </gridHelper>
+      <primitive object={grid} />
 
       <mesh position={[0, STRATUM.yTop - 0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[300, 300]} />

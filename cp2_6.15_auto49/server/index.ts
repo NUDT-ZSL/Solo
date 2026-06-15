@@ -116,7 +116,6 @@ app.delete('/api/annotations/:id', (req, res) => {
     if (isNaN(id)) {
       return res.status(400).json({ error: '无效的ID' });
     }
-    const before = db.exec('SELECT changes() as c')[0].values[0][0];
     db.run('DELETE FROM annotations WHERE id = ?', [id]);
     const changesStmt = db.prepare('SELECT changes() as c');
     changesStmt.step();

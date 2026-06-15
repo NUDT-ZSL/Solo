@@ -39,13 +39,10 @@ interface CrossSectionMeshProps {
   clippingPlanes: THREE.Plane[];
 }
 
-function CrossSectionMesh({ layer, cutAxis, cutPosition, side, clippingPlanes }: CrossSectionMeshProps) {
+function CrossSectionMesh({ layer, cutAxis, cutPosition, clippingPlanes }: Omit<CrossSectionMeshProps, 'side'>) {
   const meshRef = useRef<THREE.Mesh>(null);
-  const matRef = useRef<THREE.ShaderMaterial>(null);
 
   const { geometry, position } = useMemo(() => {
-    const w = STRATUM.width / 2;
-    const d = STRATUM.depth / 2;
     const thickness = 0.01;
     const height = layer.yTop - layer.yBottom;
     const centerY = (layer.yTop + layer.yBottom) / 2;
@@ -92,26 +89,21 @@ function CrossSectionMesh({ layer, cutAxis, cutPosition, side, clippingPlanes }:
     [cutAxis]
   );
 
-  const material = useMemo(
-    () => createLithologyMaterial(layer.color, layer.layerIndex, true, cutAxisVec),
-    [layer, cutAxisVec]
-  );
-
-  useEffect(() => {
-    if (matRef.current) {
-      matRef.current.clippingPlanes = clippingPlanes;
-      matRef.current.clipShadows = true;
-    }
-  }, [clippingPlanes]);
+  const material = useMemo(() => {
+    const mat = createLithologyMaterial(layer.color, layer.layerIndex, true, cutAxisVec);
+    mat.clippingPlanes = clippingPlanes;
+    mat.clipShadows = true;
+    return mat;
+  }, [layer, cutAxisVec, clippingPlanes]);
 
   useFrame(({ clock }) => {
-    if (matRef.current) {
-      matRef.current.uniforms.uTime.value = clock.getElapsedTime();
+    if (material && 'uniforms' in material) {
+      (material as THREE.ShaderMaterial).uniforms.uTime.value = clock.getElapsedTime();
     }
   });
 
   return (
-    <mesh ref={meshRef} position={position} geometry={geometry} material={material} material-ref={matRef} />
+    <mesh ref={meshRef} position={position} geometry={geometry} material={material} />
   );
 }
 
@@ -122,7 +114,6 @@ interface LayerMeshProps {
 
 function LayerMesh({ layer, clippingPlanes }: LayerMeshProps) {
   const meshRef = useRef<THREE.Mesh>(null);
-  const matRef = useRef<THREE.ShaderMaterial>(null);
 
   const { geometry, position } = useMemo(() => {
     const height = layer.yTop - layer.yBottom;
@@ -146,21 +137,16 @@ function LayerMesh({ layer, clippingPlanes }: LayerMeshProps) {
     return { geometry: geom, position: [0, centerY, 0] as [number, number, number] };
   }, [layer]);
 
-  const material = useMemo(
-    () => createLithologyMaterial(layer.color, layer.layerIndex, false),
-    [layer]
-  );
-
-  useEffect(() => {
-    if (matRef.current) {
-      matRef.current.clippingPlanes = clippingPlanes;
-      matRef.current.clipShadows = true;
-    }
-  }, [clippingPlanes]);
+  const material = useMemo(() => {
+    const mat = createLithologyMaterial(layer.color, layer.layerIndex, false);
+    mat.clippingPlanes = clippingPlanes;
+    mat.clipShadows = true;
+    return mat;
+  }, [layer, clippingPlanes]);
 
   useFrame(({ clock }) => {
-    if (matRef.current) {
-      matRef.current.uniforms.uTime.value = clock.getElapsedTime();
+    if (material && 'uniforms' in material) {
+      (material as THREE.ShaderMaterial).uniforms.uTime.value = clock.getElapsedTime();
     }
   });
 
@@ -170,7 +156,6 @@ function LayerMesh({ layer, clippingPlanes }: LayerMeshProps) {
       position={position}
       geometry={geometry}
       material={material}
-      material-ref={matRef}
       castShadow
       receiveShadow
     />
@@ -209,7 +194,6 @@ export default function StratumModel() {
             layer={layer}
             cutAxis="x"
             cutPosition={cutX - 0.005}
-            side="positive"
             clippingPlanes={clippingPlanes}
           />
         ))}
@@ -221,7 +205,6 @@ export default function StratumModel() {
             layer={layer}
             cutAxis="z"
             cutPosition={cutZ - 0.005}
-            side="positive"
             clippingPlanes={clippingPlanes}
           />
         ))}

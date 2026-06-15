@@ -24,6 +24,9 @@ function CuttingPlane({ axis, initialPosition, onActivate }: CuttingPlaneProps) 
   const minLimit = axis === 'x' ? -halfW : -halfD;
   const maxLimit = axis === 'x' ? halfW : halfD;
 
+  const halfSize = axis === 'x' ? halfD : halfW;
+  const halfHeight = STRATUM.height / 2;
+
   useEffect(() => {
     const clamped = Math.max(minLimit, Math.min(maxLimit, position));
     if (axis === 'x') setCutX(clamped);
@@ -113,23 +116,67 @@ function CuttingPlane({ axis, initialPosition, onActivate }: CuttingPlaneProps) 
         />
       </mesh>
 
-      <gridHelper
-        args={[
-          axis === 'x' ? STRATUM.depth : STRATUM.width,
-          20,
-          '#ef5350',
-          '#ef5350',
-        ]}
+      <lineSegments
         position={[0, (STRATUM.yTop + STRATUM.yBottom) / 2, 0]}
         rotation={axis === 'x' ? [Math.PI / 2, 0, 0] : [Math.PI / 2, Math.PI / 2, 0]}
       >
-        <meshBasicMaterial transparent opacity={0.5} side={THREE.DoubleSide} />
-      </gridHelper>
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            count={4}
+            array={new Float32Array([
+              -halfSize, -halfHeight, 0,
+               halfSize, -halfHeight, 0,
+               halfSize,  halfHeight, 0,
+              -halfSize,  halfHeight, 0,
+            ])}
+            itemSize={3}
+          />
+          <bufferAttribute
+            attach="index"
+            count={8}
+            array={new Uint16Array([0, 1, 1, 2, 2, 3, 3, 0])}
+            itemSize={1}
+          />
+        </bufferGeometry>
+        <lineBasicMaterial color="#ef5350" transparent opacity={0.7} />
+      </lineSegments>
+
+      <lineSegments
+        position={[0, (STRATUM.yTop + STRATUM.yBottom) / 2, 0]}
+        rotation={axis === 'x' ? [Math.PI / 2, 0, 0] : [Math.PI / 2, Math.PI / 2, 0]}
+      >
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            count={16}
+            array={new Float32Array([
+              -halfSize, -halfHeight * 0.5, 0,  halfSize, -halfHeight * 0.5, 0,
+              -halfSize, 0, 0,               halfSize, 0, 0,
+              -halfSize, halfHeight * 0.5, 0, halfSize, halfHeight * 0.5, 0,
+              -halfSize * 0.5, -halfHeight, 0, -halfSize * 0.5, halfHeight, 0,
+              0, -halfHeight, 0,              0, halfHeight, 0,
+              halfSize * 0.5, -halfHeight, 0,  halfSize * 0.5, halfHeight, 0,
+              -halfSize * 0.25, -halfHeight, 0,-halfSize * 0.25, halfHeight, 0,
+              halfSize * 0.25, -halfHeight, 0, halfSize * 0.25, halfHeight, 0,
+            ])}
+            itemSize={3}
+          />
+          <bufferAttribute
+            attach="index"
+            count={16}
+            array={new Uint16Array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15])}
+            itemSize={1}
+          />
+        </bufferGeometry>
+        <lineBasicMaterial color="#ef5350" transparent opacity={0.35} />
+      </lineSegments>
 
       <mesh
         ref={handleRef}
         position={handlePos}
         onPointerDown={handlePointerDown}
+        userData={{ isCuttingHandle: true }}
       >
         <sphereGeometry args={[handleSize / 2, 16, 16]} />
         <meshStandardMaterial

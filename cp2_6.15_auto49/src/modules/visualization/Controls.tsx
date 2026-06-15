@@ -30,6 +30,8 @@ export default function SceneControls() {
       controlsRef.current.enableDamping = true;
       controlsRef.current.dampingFactor = 0.08;
       controlsRef.current.screenSpacePanning = true;
+      controlsRef.current.minPolarAngle = 0;
+      controlsRef.current.maxPolarAngle = Math.PI / 2.2;
     }
   }, []);
 
@@ -72,14 +74,36 @@ export default function SceneControls() {
     }
   });
 
-  const handleClick = useCallback(
-    (event: any) => {
-      const { raycaster, point } = event;
-      if (!raycaster || !point) return;
+  const raycaster = useRef(new THREE.Raycaster());
+  const mouse = useRef(new THREE.Vector2());
+
+  const handleCanvasClick = useCallback(
+    (event: MouseEvent) => {
+      const rect = gl.domElement.getBoundingClientRect();
+      mouse.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.current.setFromCamera(mouse.current, camera);
+
+      const meshes: THREE.Mesh[] = [];
+      scene.traverse((obj) => {
+        if (obj instanceof THREE.Mesh && obj.visible) {
+          const userData = obj.userData as { isCuttingHandle?: boolean };
+          if (!userData.isCuttingHandle) {
+            meshes.push(obj);
+          }
+        }
+      });
+
+      const intersects = raycaster.current.intersectObjects(meshes, true);
+
+      if (intersects.length === 0) return;
+
+      const point = intersects[0].point.clone();
       const { cutX, cutZ } = useStore.getState();
 
       let isOnCrossSection = false;
-      const tolerance = 1.5;
+      const tolerance = 2.0;
 
       if (cutX !== null) {
         if (Math.abs(point.x - cutX) < tolerance) isOnCrossSection = true;
@@ -126,7 +150,7 @@ export default function SceneControls() {
         timestamp: Date.now(),
       });
     },
-    [setQueryPoint, addRipple]
+    [camera, gl, scene, setQueryPoint, addRipple]
   );
 
   useEffect(() => {
@@ -137,13 +161,49 @@ export default function SceneControls() {
     }
   }, [camera]);
 
+  useEffect(() => {
+    const canvas = gl.domElement;
+    let downPos = { x: 0, y: 0 };
+    let isDragging = false;
+
+    const onPointerDown = (e: PointerEvent) => {
+      downPos = { x: e.clientX, y: e.clientY };
+      isDragging = false;
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      const dx = Math.abs(e.clientX - downPos.x);
+      const dy = Math.abs(e.clientY - downPos.y);
+      if (dx > 3 || dy > 3) {
+        isDragging = true;
+      }
+    };
+
+    const onPointerUp = (e: PointerEvent) => {
+      const dx = Math.abs(e.clientX - downPos.x);
+      const dy = Math.abs(e.clientY - downPos.y);
+      if (!isDragging && dx < 5 && dy < 5) {
+        handleCanvasClick(e as unknown as MouseEvent);
+      }
+    };
+
+    canvas.addEventListener('pointerdown', onPointerDown);
+    canvas.addEventListener('pointermove', onPointerMove);
+    canvas.addEventListener('pointerup', onPointerUp);
+
+    return () => {
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('pointermove', onPointerMove);
+      canvas.removeEventListener('pointerup', onPointerUp);
+    };
+  }, [handleCanvasClick, gl]);
+
   return (
     <>
       <OrbitControls
         ref={controlsRef}
         makeDefault
         target={[0, -100, 0]}
-        onClick={handleClick}
       />
     </>
   );
