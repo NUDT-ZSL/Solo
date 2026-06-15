@@ -15,29 +15,34 @@ const statusColors: Record<ProjectStatus, string> = {
 };
 
 const ProjectCard: React.FC<ProjectCardProps> = ({ project, onClick, onStatusChange }) => {
-  const [flipPhase, setFlipPhase] = useState<'front' | 'flipping' | 'back'>('front');
+  const [isFlipped, setIsFlipped] = useState(false);
   const [frontStatus, setFrontStatus] = useState(project.status);
   const [backStatus, setBackStatus] = useState(project.status);
   const prevStatusRef = useRef(project.status);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
 
   useEffect(() => {
-    if (prevStatusRef.current !== project.status) {
+    if (prevStatusRef.current !== project.status && !isAnimating) {
+      setIsAnimating(true);
       const newStatus = project.status;
-      setFlipPhase('flipping');
-      setTimeout(() => {
-        if (flipPhase === 'front') {
-          setBackStatus(newStatus);
-        } else {
-          setFrontStatus(newStatus);
-        }
-        setFlipPhase(flipPhase === 'front' ? 'back' : 'front');
-        prevStatusRef.current = newStatus;
-      }, 150);
-    }
-  }, [project.status, flipPhase]);
 
-  const currentStatus = flipPhase === 'front' ? frontStatus : backStatus;
+      if (!isFlipped) {
+        setBackStatus(newStatus);
+      } else {
+        setFrontStatus(newStatus);
+      }
+
+      setIsFlipped(!isFlipped);
+
+      setTimeout(() => {
+        prevStatusRef.current = newStatus;
+        setIsAnimating(false);
+      }, 300);
+    }
+  }, [project.status]);
+
+  const currentVisibleStatus = isFlipped ? backStatus : frontStatus;
 
   const handleStatusClick = (e: React.MouseEvent, newStatus: ProjectStatus) => {
     e.stopPropagation();
@@ -53,46 +58,102 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, onClick, onStatusCha
   return (
     <div style={styles.cardWrapper} onClick={handleCardClick}>
       <style>{`
-        @keyframes flipFrontToBack {
-          0% { transform: rotateY(0deg); }
-          100% { transform: rotateY(180deg); }
+        .flip-container {
+          perspective: 1000px;
+          width: 100%;
         }
-        @keyframes flipBackToFront {
-          0% { transform: rotateY(180deg); }
-          100% { transform: rotateY(360deg); }
+        .flip-inner {
+          position: relative;
+          width: 100%;
+          transform-style: preserve-3d;
+          transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .flip-front {
-          animation: flipFrontToBack 0.3s ease forwards;
+        .flip-flipped {
+          transform: rotateY(180deg);
+        }
+        .flip-front,
+        .flip-back {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          backface-visibility: hidden;
+          -webkit-backface-visibility: hidden;
         }
         .flip-back {
-          animation: flipBackToFront 0.3s ease forwards;
+          transform: rotateY(180deg);
         }
-        .status-tag-hover:hover {
-          filter: brightness(1.1);
+        .status-tag-wrapper {
+          position: relative;
+          width: 84px;
+          height: 28px;
+          perspective: 200px;
+        }
+        .status-tag-inner {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          transform-style: preserve-3d;
+          transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .status-tag-front,
+        .status-tag-back {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          border-radius: 20px;
+          font-size: 12px;
+          font-weight: 500;
+          color: #ffffff;
+          backface-visibility: hidden;
+          -webkit-backface-visibility: hidden;
+        }
+        .status-tag-back {
+          transform: rotateY(180deg);
+        }
+        .status-tag-flipped {
+          transform: rotateY(180deg);
         }
         .status-menu-item:hover {
           background-color: rgba(233, 69, 96, 0.15);
         }
+        .project-card-hover:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 12px 24px rgba(0,0,0,0.4);
+        }
       `}</style>
 
-      <div style={styles.card}>
+      <div className="project-card-hover" style={styles.card}>
         <div style={styles.cardInner}>
           <div style={styles.cardHeader}>
-            <div style={{ perspective: '500px', display: 'inline-block' }}>
-              <div
-                className={`status-tag-hover ${flipPhase === 'flipping' ? (prevStatusRef.current === frontStatus ? 'flip-front' : 'flip-back') : ''}`}
-                style={{
-                  ...styles.statusTag,
-                  backgroundColor: statusColors[currentStatus],
-                  transformStyle: 'preserve-3d'
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setMenuOpen(!menuOpen);
-                }}
-              >
-                {currentStatus}
-                <span style={styles.statusArrow}>▼</span>
+            <div
+              className="status-tag-wrapper"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen(!menuOpen);
+              }}
+            >
+              <div className={`status-tag-inner ${isFlipped ? 'status-tag-flipped' : ''}`}>
+                <div
+                  className="status-tag-front"
+                  style={{ backgroundColor: statusColors[frontStatus] }}
+                >
+                  {frontStatus}
+                  <span style={styles.statusArrow}>▼</span>
+                </div>
+                <div
+                  className="status-tag-back"
+                  style={{ backgroundColor: statusColors[backStatus] }}
+                >
+                  {backStatus}
+                  <span style={styles.statusArrow}>▼</span>
+                </div>
               </div>
             </div>
             {menuOpen && (
@@ -105,7 +166,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, onClick, onStatusCha
                       ...styles.statusMenuItem,
                       color: statusColors[status],
                       borderLeft: `3px solid ${statusColors[status]}`,
-                      backgroundColor: status === currentStatus ? 'rgba(233, 69, 96, 0.1)' : 'transparent'
+                      backgroundColor: status === currentVisibleStatus ? 'rgba(233, 69, 96, 0.1)' : 'transparent'
                     }}
                     onClick={(e) => handleStatusClick(e, status)}
                   >
@@ -133,24 +194,21 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, onClick, onStatusCha
 
 const styles: { [key: string]: React.CSSProperties } = {
   cardWrapper: {
-    perspective: '1000px',
-    cursor: 'pointer'
+    cursor: 'pointer',
+    width: '100%'
   },
   card: {
     backgroundColor: '#16213e',
     borderRadius: '12px',
     boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
-    transition: 'all 0.3s ease',
+    transition: 'transform 0.3s ease, box-shadow 0.3s ease',
     position: 'relative',
-    overflow: 'visible',
-    ':hover': {
-      transform: 'translateY(-4px)',
-      boxShadow: '0 8px 16px rgba(0,0,0,0.4)'
-    }
+    overflow: 'visible'
   },
   cardInner: {
     padding: '24px',
     height: '100%',
+    minHeight: '200px',
     display: 'flex',
     flexDirection: 'column'
   },
@@ -159,19 +217,6 @@ const styles: { [key: string]: React.CSSProperties } = {
     justifyContent: 'flex-start',
     marginBottom: '16px',
     position: 'relative'
-  },
-  statusTag: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '6px',
-    padding: '6px 12px',
-    borderRadius: '20px',
-    fontSize: '12px',
-    fontWeight: 500,
-    color: '#ffffff',
-    userSelect: 'none',
-    backfaceVisibility: 'hidden',
-    transition: 'background-color 0.3s ease, filter 0.3s ease'
   },
   statusArrow: {
     fontSize: '8px',

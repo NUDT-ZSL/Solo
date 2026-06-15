@@ -52,7 +52,7 @@ const App: React.FC = () => {
     const step = (now: number) => {
       const elapsed = now - startTime;
       const t = Math.min(elapsed / duration, 1);
-      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      const ease = t * (2 - t);
       const current = Math.round(start + (target - start) * ease);
       progressRef.current = current;
       setDisplayProgress(current);
@@ -311,8 +311,11 @@ const App: React.FC = () => {
           <div style={{ position: 'relative' }}>
             {loading || skeletonVisible ? (
               <div
-                className={`project-grid skeleton ${!loading && !skeletonVisible ? '' : skeletonVisible && !loading ? 'skeleton-fade-out' : ''}`}
-                style={styles.projectGrid}
+                className={`project-grid skeleton ${!loading ? 'skeleton-fade-out' : ''}`}
+                style={{
+                  ...styles.projectGrid,
+                  pointerEvents: !loading ? 'none' : 'auto'
+                }}
               >
                 {[1, 2, 3, 4, 5, 6].map(i => (
                   <div key={i} style={styles.skeletonCard} />
@@ -371,12 +374,16 @@ const App: React.FC = () => {
               <div style={styles.rightPanel}>
                 <TaskList
                   tasks={tasks}
-                  onAddTask={handleAddTask}
-                  onToggleTask={handleToggleTask}
-                  onReorderTasks={handleReorderTasks}
                   loading={loading}
                   skeletonVisible={skeletonVisible}
-                  contentVisible={contentVisible}
+                  onTasksChange={(updatedTasks) => {
+                    setTasks(updatedTasks);
+                    setAllTasks(prev => {
+                      const updatedTaskIds = new Set(updatedTasks.map(t => t.id));
+                      const otherTasks = prev.filter(t => !updatedTaskIds.has(t.id));
+                      return [...otherTasks, ...updatedTasks];
+                    });
+                  }}
                 />
               </div>
             </div>

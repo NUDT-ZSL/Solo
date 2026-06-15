@@ -1,462 +1,381 @@
-import React, { useState, useRef, useCallback, useMemo } from 'react';
-import { Task, Priority } from '../data/mockData';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { Task, Priority, updateTaskOrder, toggleTaskCompletion } from '../data/mockData';
 
 interface TaskListProps {
   tasks: Task[];
-  onAddTask: (name: string, assignee: string, priority: Priority, estimatedHours: number) => void;
-  onToggleTask: (taskId: string) => void;
-  onReorderTasks: (taskId: string, newOrder: number) => void;
   loading: boolean;
   skeletonVisible: boolean;
-  contentVisible: boolean;
+  onTasksChange: (tasks: Task[]) => void;
 }
 
-const priorityColors: Record<Priority, string> = {
-  '高': '#e94560',
-  '中': '#f39c12',
-  '低': '#27ae60'
-};
-
-const TASK_CARD_HEIGHT = 84;
+const TASK_CARD_HEIGHT = 72;
 const TASK_CARD_GAP = 12;
 
-const TaskList: React.FC<TaskListProps> = ({
-  tasks,
-  onAddTask,
-  onToggleTask,
-  onReorderTasks,
-  loading,
-  skeletonVisible,
-  contentVisible
-}) => {
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newTask, setNewTask] = useState({
-    name: '',
-    assignee: '',
-    priority: '中' as Priority,
-    estimatedHours: 1
-  });
+const priorityColors: Record<Priority, string> = {
+  'high': '#e94560',
+  'medium': '#e67e22',
+  'low': '#27ae60'
+};
+
+const priorityLabels: Record<Priority, string> = {
+  'high': '高',
+  'medium': '中',
+  'low': '低'
+};
+
+const TaskList: React.FC<TaskListProps> = ({ tasks, loading, skeletonVisible, onTasksChange }) => {
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
-  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
-  const [dragPosition, setDragPosition] = useState<'above' | 'below' | null>(null);
-  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
-  const [reordering, setReordering] = useState(false);
+  const [draggedOrder, setDraggedOrder] = useState<number | null>(null);
+  const [draggedOverOrder, setDraggedOverOrder] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [collapsingTaskIds, setCollapsingTaskIds] = useState<Set<string>>(new Set());
   const listRef = useRef<HTMLDivElement>(null);
+  const dragCounterRef = useRef(0);
 
-  const sortedTasks = useMemo(() => {
-    return [...tasks].sort((a, b) => {
-      if (a.completed !== b.completed) return a.completed ? 1 : -1;
-      return a.order - b.order;
-    });
-  }, [tasks]);
-
-  const uncompletedTasks = useMemo(() => sortedTasks.filter(t => !t.completed), [sortedTasks]);
-  const completedTasks = useMemo(() => sortedTasks.filter(t => t.completed), [sortedTasks]);
+  const sortedTasks = [...tasks].sort((a, b) => {
+    if (a.completed !== b.completed) {
+      return a.completed ? 1 : -1;
+    }
+    return a.order - b.order;
+  });
 
   const getTaskTranslateY = useCallback((task: Task): number => {
-    if (!draggedTaskId || draggedTaskId === task.id || task.completed) return 0;
+    if (draggedTaskId === null || draggedOrder === null || draggedOverOrder === null) {
+      return 0;
+    }
 
-    const draggedTask = uncompletedTasks.find(t => t.id === draggedTaskId);
-    if (!draggedTask || !dragOverTaskId || !dragPosition) return 0;
+    if (task.id === draggedTaskId) {
+      return 0;
+    }
 
-    const draggedOrder = draggedTask.order;
-    const targetTask = uncompletedTasks.find(t => t.id === dragOverTaskId);
-    if (!targetTask) return 0;
+    if (task.completed) {
+      return 0;
+    }
 
-    const targetOrder = targetTask.order + (dragPosition === 'below' ? 1 : 0);
+    const dragOrder = draggedOrder;
+    const targetOrder = draggedOverOrder;
 
-    if (draggedOrder < targetOrder) {
-      if (task.order > draggedOrder && task.order < targetOrder) {
+    if (dragOrder === targetOrder) {
+      return 0;
+    }
+
+    if (dragOrder < targetOrder) {
+      if (task.order > dragOrder && task.order <= targetOrder) {
         return -(TASK_CARD_HEIGHT + TASK_CARD_GAP);
       }
-      if (task.order === targetOrder - 1) {
-        return -(TASK_CARD_HEIGHT + TASK_CARD_GAP);
-      }
-    } else if (draggedOrder > targetOrder) {
-      if (task.order >= targetOrder && task.order < draggedOrder) {
+    } else if (dragOrder > targetOrder) {
+      if (task.order >= targetOrder && task.order < dragOrder) {
         return (TASK_CARD_HEIGHT + TASK_CARD_GAP);
       }
     }
 
     return 0;
-  }, [draggedTaskId, dragOverTaskId, dragPosition, uncompletedTasks]);
+  }, [draggedTaskId, draggedOrder, draggedOverOrder]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTask.name.trim() || !newTask.assignee.trim()) return;
-    onAddTask(
-      newTask.name.trim(),
-      newTask.assignee.trim(),
-      newTask.priority,
-      newTask.estimatedHours
-    );
-    setNewTask({ name: '', assignee: '', priority: '中', estimatedHours: 1 });
-    setShowAddForm(false);
-  };
-
-  const handleDragStart = (e: React.DragEvent, taskId: string) => {
-    setDraggedTaskId(taskId);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', taskId);
-    const target = e.currentTarget as HTMLElement;
-    target.style.opacity = '0.4';
-    e.dataTransfer.setDragImage(target, 20, 20);
-  };
-
-  const handleDragOver = (e: React.DragEvent, taskId: string) => {
-    e.preventDefault();
-    if (draggedTaskId === taskId) return;
-
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const middleY = rect.top + rect.height / 2;
-    const position = e.clientY < middleY ? 'above' : 'below';
-
-    setDragOverTaskId(taskId);
-    setDragPosition(position);
-  };
-
-  const handleDragLeave = () => {
-    setDragOverTaskId(null);
-    setDragPosition(null);
-  };
-
-  const handleDrop = (e: React.DragEvent, targetTaskId: string) => {
-    e.preventDefault();
-    if (!draggedTaskId || draggedTaskId === targetTaskId) {
-      setDraggedTaskId(null);
-      setDragOverTaskId(null);
-      setDragPosition(null);
+  const handleDragStart = (e: React.DragEvent, task: Task) => {
+    if (task.completed) {
+      e.preventDefault();
       return;
     }
 
-    const draggedItem = uncompletedTasks.find(t => t.id === draggedTaskId);
-    const targetItem = uncompletedTasks.find(t => t.id === targetTaskId);
+    setDraggedTaskId(task.id);
+    setDraggedOrder(task.order);
+    setDraggedOverOrder(task.order);
+    setIsDragging(true);
+    dragCounterRef.current = 0;
 
-    if (!draggedItem || !targetItem) return;
-
-    let newOrder = targetItem.order;
-    if (dragPosition === 'below') {
-      newOrder = draggedItem.order < targetItem.order ? targetItem.order : targetItem.order + 1;
-    } else {
-      newOrder = draggedItem.order < targetItem.order ? targetItem.order - 1 : targetItem.order;
-    }
-
-    setReordering(true);
-    onReorderTasks(draggedTaskId, newOrder);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', task.id);
 
     setTimeout(() => {
-      setDraggedTaskId(null);
-      setDragOverTaskId(null);
-      setDragPosition(null);
-      setReordering(false);
-    }, 200);
+      const target = e.currentTarget as HTMLElement;
+      if (target) {
+        target.style.opacity = '0.5';
+        target.style.transform = 'scale(1.02)';
+        target.style.boxShadow = '0 8px 24px rgba(233, 69, 96, 0.4)';
+      }
+    }, 0);
   };
 
-  const handleDragEnd = (e: React.DragEvent) => {
+  const handleDragEnd = async (e: React.DragEvent) => {
     const target = e.currentTarget as HTMLElement;
-    target.style.opacity = '1';
+    if (target) {
+      target.style.opacity = '';
+      target.style.transform = '';
+      target.style.boxShadow = '';
+    }
+
+    if (draggedTaskId !== null && draggedOverOrder !== null && draggedOrder !== null && draggedOrder !== draggedOverOrder) {
+      try {
+        await updateTaskOrder(draggedTaskId, draggedOverOrder);
+
+        const updatedTasks = tasks.map(t => {
+          if (t.id === draggedTaskId) {
+            return { ...t, order: draggedOverOrder };
+          }
+
+          if (t.completed) return t;
+
+          if (draggedOrder < draggedOverOrder) {
+            if (t.order > draggedOrder && t.order <= draggedOverOrder) {
+              return { ...t, order: t.order - 1 };
+            }
+          } else if (draggedOrder > draggedOverOrder) {
+            if (t.order >= draggedOverOrder && t.order < draggedOrder) {
+              return { ...t, order: t.order + 1 };
+            }
+          }
+
+          return t;
+        });
+
+        onTasksChange(updatedTasks);
+      } catch (err) {
+        console.error('Failed to update task order:', err);
+      }
+    }
+
     setDraggedTaskId(null);
-    setDragOverTaskId(null);
-    setDragPosition(null);
+    setDraggedOrder(null);
+    setDraggedOverOrder(null);
+    setIsDragging(false);
   };
 
-  const handleToggle = useCallback((taskId: string, completed: boolean) => {
-    if (!completed) {
-      setCompletingTaskId(taskId);
-      setTimeout(() => {
-        onToggleTask(taskId);
-        setTimeout(() => {
-          setCompletingTaskId(null);
-        }, 100);
+  const handleDragOver = (e: React.DragEvent, task: Task) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+
+    if (draggedTaskId === null || task.completed || task.id === draggedTaskId) {
+      return;
+    }
+
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const mouseY = e.clientY - rect.top;
+    const isBottomHalf = mouseY > rect.height / 2;
+
+    let newTargetOrder = task.order;
+    if (draggedOrder !== null && draggedOrder < task.order) {
+      newTargetOrder = isBottomHalf ? task.order : task.order - 1;
+    } else if (draggedOrder !== null && draggedOrder > task.order) {
+      newTargetOrder = isBottomHalf ? task.order : task.order - 0;
+    }
+
+    if (newTargetOrder !== draggedOverOrder) {
+      setDraggedOverOrder(newTargetOrder);
+    }
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current++;
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current--;
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current = 0;
+  };
+
+  const handleTaskToggle = async (taskId: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    if (!task.completed) {
+      setCollapsingTaskIds(prev => new Set(prev).add(taskId));
+
+      setTimeout(async () => {
+        try {
+          await toggleTaskCompletion(taskId);
+          const updatedTasks = tasks.map(t =>
+            t.id === taskId ? { ...t, completed: !t.completed } : t
+          );
+          onTasksChange(updatedTasks);
+        } catch (err) {
+          console.error('Failed to toggle task:', err);
+        } finally {
+          setCollapsingTaskIds(prev => {
+            const next = new Set(prev);
+            next.delete(taskId);
+            return next;
+          });
+        }
       }, 300);
     } else {
-      onToggleTask(taskId);
+      try {
+        await toggleTaskCompletion(taskId);
+        const updatedTasks = tasks.map(t =>
+          t.id === taskId ? { ...t, completed: !t.completed } : t
+        );
+        onTasksChange(updatedTasks);
+      } catch (err) {
+        console.error('Failed to toggle task:', err);
+      }
     }
-  }, [onToggleTask]);
+  };
 
-  const progress = tasks.length > 0
-    ? Math.round((tasks.filter(t => t.completed).length / tasks.length) * 100)
-    : 0;
-
-  const totalHours = tasks.reduce((sum, t) => sum + t.estimatedHours, 0);
-  const completedHours = tasks.filter(t => t.completed).reduce((sum, t) => sum + t.estimatedHours, 0);
-
-  return (
-    <div style={styles.container}>
-      <style>{`
-        @keyframes bounceIn {
-          0% { transform: translateY(0); }
-          40% { transform: translateY(-8px); }
-          100% { transform: translateY(0); }
-        }
-        @keyframes slideToBottom {
-          0% { transform: scaleY(1); opacity: 1; margin-bottom: 12px; }
-          50% { transform: scaleY(0.3); opacity: 0.5; margin-bottom: 6px; }
-          100% { transform: scaleY(0); opacity: 0; margin-bottom: 0; padding: 0; height: 0; overflow: hidden; }
-        }
-        .task-card-dragging {
-          opacity: 0.4 !important;
-          transform: scale(0.98);
-          box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important;
-        }
-        .checkbox-custom:checked + .checkmark-custom::after {
-          display: block;
-        }
-        .checkmark-custom::after {
-          content: '';
-          position: absolute;
-          display: none;
-          left: 5px;
-          top: 1px;
-          width: 5px;
-          height: 10px;
-          border: solid white;
-          border-width: 0 2px 2px 0;
-          transform: rotate(45deg);
-        }
-        .checkbox-custom:checked + .checkmark-custom {
-          background-color: #27ae60;
-          border-color: #27ae60 !important;
-        }
-      `}</style>
-
-      <div style={styles.header}>
-        <h3 style={styles.title}>✅ 进度列表</h3>
-        <button
-          style={styles.addButton}
-          onClick={() => setShowAddForm(true)}
+  const renderSkeletonTasks = () => {
+    const items = [];
+    for (let i = 0; i < 6; i++) {
+      items.push(
+        <div
+          key={i}
+          style={{
+            ...styles.taskItem,
+            height: TASK_CARD_HEIGHT,
+            padding: '16px',
+            opacity: skeletonVisible ? 1 : 0,
+            transition: 'opacity 0.4s ease',
+            pointerEvents: skeletonVisible ? 'auto' : 'none'
+          }}
         >
-          + 添加任务
-        </button>
-      </div>
-
-      <div style={styles.progressSection}>
-        <div style={styles.progressInfo}>
-          <span style={styles.progressLabel}>项目进度</span>
-          <span style={styles.progressValue}>{progress}%</span>
-        </div>
-        <div style={styles.progressBarWrapper}>
           <div
             style={{
-              ...styles.progressBarFill,
-              width: `${progress}%`,
-              transition: 'width 0.5s cubic-bezier(0.4, 0, 0.2, 1)'
+              width: '100%',
+              height: '100%',
+              background: 'linear-gradient(90deg, #2a2a4a 25%, #3a3a5a 50%, #2a2a4a 75%)',
+              backgroundSize: '200% 100%',
+              animation: 'pulse 1.5s infinite',
+              borderRadius: '6px'
             }}
           />
         </div>
-        <div style={styles.hoursInfo}>
-          <span style={styles.hoursText}>
-            已完成 {completedHours}h / 总工时 {totalHours}h
-          </span>
-        </div>
-      </div>
+      );
+    }
+    return items;
+  };
 
-      {showAddForm && (
-        <div style={styles.addForm}>
-          <form onSubmit={handleSubmit} style={styles.form}>
-            <input
-              type="text"
-              placeholder="任务名称"
-              value={newTask.name}
-              onChange={(e) => setNewTask(prev => ({ ...prev, name: e.target.value }))}
-              style={styles.input}
-              required
-            />
-            <div style={styles.formRow}>
-              <input
-                type="text"
-                placeholder="负责人"
-                value={newTask.assignee}
-                onChange={(e) => setNewTask(prev => ({ ...prev, assignee: e.target.value }))}
-                style={{ ...styles.input, flex: 1 }}
-                required
-              />
-              <select
-                value={newTask.priority}
-                onChange={(e) => setNewTask(prev => ({ ...prev, priority: e.target.value as Priority }))}
-                style={styles.select}
-              >
-                <option value="高">高优</option>
-                <option value="中">中优</option>
-                <option value="低">低优</option>
-              </select>
-            </div>
-            <div style={styles.formRow}>
-              <label style={styles.hoursLabel}>预计工时:</label>
-              <input
-                type="number"
-                min="0.5"
-                step="0.5"
-                value={newTask.estimatedHours}
-                onChange={(e) => setNewTask(prev => ({ ...prev, estimatedHours: parseFloat(e.target.value) }))}
-                style={{ ...styles.input, width: '80px' }}
-              />
-              <span style={styles.hoursUnit}>小时</span>
-            </div>
-            <div style={styles.formActions}>
-              <button
-                type="button"
-                onClick={() => setShowAddForm(false)}
-                style={{ ...styles.btn, ...styles.cancelBtn }}
-              >
-                取消
-              </button>
-              <button type="submit" style={styles.btn}>
-                添加
-              </button>
-            </div>
-          </form>
+  const renderTaskItem = (task: Task, index: number) => {
+    const translateY = getTaskTranslateY(task);
+    const isCollapsing = collapsingTaskIds.has(task.id);
+    const isDragged = task.id === draggedTaskId;
+    const isDropTarget = !isDragging && false;
+    const shouldShowIndicator = isDragging && draggedOverOrder === task.order && task.id !== draggedTaskId;
+
+    return (
+      <div
+        key={task.id}
+        draggable={!task.completed}
+        onDragStart={(e) => handleDragStart(e, task)}
+        onDragEnd={handleDragEnd}
+        onDragOver={(e) => handleDragOver(e, task)}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        style={{
+          ...styles.taskItem,
+          padding: '16px',
+          transform: `translateY(${translateY}px) scaleY(${isCollapsing ? 0 : 1})`,
+          opacity: isCollapsing ? 0 : 1,
+          transformOrigin: 'top',
+          transition: !isDragging
+            ? 'transform 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55), opacity 0.3s ease'
+            : 'transform 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55)',
+          zIndex: isDragged ? 10 : 1,
+          cursor: task.completed ? 'default' : 'grab',
+          userSelect: isDragged ? 'none' : 'auto'
+        }}
+      >
+        {shouldShowIndicator && (
+          <div style={styles.dropIndicator} />
+        )}
+        <label style={styles.checkboxContainer}>
+          <input
+            type="checkbox"
+            className="checkbox-custom"
+            checked={task.completed}
+            onChange={() => handleTaskToggle(task.id)}
+            style={styles.checkboxInput}
+          />
+          <span className="checkbox-visual" style={styles.checkboxVisual} />
+        </label>
+        <div style={styles.taskContent}>
+          <p style={{
+            ...styles.taskTitle,
+            textDecoration: task.completed ? 'line-through' : 'none',
+            opacity: task.completed ? 0.5 : 1
+          }}>
+            {task.title}
+          </p>
+          {task.description && (
+            <p style={{
+              ...styles.taskDesc,
+              opacity: task.completed ? 0.5 : 1
+            }}>
+              {task.description}
+            </p>
+          )}
+        </div>
+        <span style={{
+          ...styles.priorityTag,
+          backgroundColor: priorityColors[task.priority] + '20',
+          color: priorityColors[task.priority],
+          opacity: task.completed ? 0.5 : 1
+        }}>
+          {priorityLabels[task.priority]}
+        </span>
+      </div>
+    );
+  };
+
+  const incompleteTasks = sortedTasks.filter(t => !t.completed);
+  const completedTasks = sortedTasks.filter(t => t.completed);
+
+  return (
+    <div ref={listRef} style={styles.list}>
+      <style>{`
+        @keyframes pulse {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        .checkbox-custom:checked + .checkbox-visual {
+          background-color: #e94560;
+          border-color: #e94560;
+        }
+        .checkbox-custom:checked + .checkbox-visual::after {
+          content: '';
+          position: absolute;
+          left: 6px;
+          top: 2px;
+          width: 6px;
+          height: 12px;
+          border: solid #ffffff;
+          border-width: 0 2px 2px 0;
+          transform: rotate(45deg);
+        }
+      `}</style>
+
+      <h2 style={styles.title}>进度列表</h2>
+
+      {loading && (
+        <div style={styles.skeletonList}>
+          {renderSkeletonTasks()}
         </div>
       )}
 
-      <div ref={listRef} style={styles.taskList}>
-        {loading || skeletonVisible ? (
-          <div style={{
-            animation: skeletonVisible && !loading ? 'fadeOut 0.4s ease forwards' : undefined
-          }}>
-            {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} className="skeleton" style={styles.skeletonTask} />
-            ))}
-          </div>
-        ) : (
-          <div style={{
-            opacity: contentVisible ? 1 : 0,
-            transition: 'opacity 0.4s ease'
-          }}>
-            {uncompletedTasks.map(task => {
-              const translateY = getTaskTranslateY(task);
-              const isCompleting = completingTaskId === task.id;
-              return (
-                <div
-                  key={task.id}
-                  className={`task-card-item ${draggedTaskId === task.id ? 'task-card-dragging' : ''}`}
-                  draggable={!isCompleting}
-                  onDragStart={(e) => handleDragStart(e, task.id)}
-                  onDragOver={(e) => handleDragOver(e, task.id)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, task.id)}
-                  onDragEnd={handleDragEnd}
-                  style={{
-                    ...styles.taskCard,
-                    transform: isCompleting
-                      ? 'scaleY(0) translateY(100px)'
-                      : `translateY(${translateY}px)`,
-                    transformOrigin: 'top center',
-                    opacity: isCompleting ? 0 : 1,
-                    transition: draggedTaskId === task.id
-                      ? 'opacity 0.1s ease'
-                      : isCompleting
-                      ? 'transform 0.3s ease, opacity 0.3s ease, margin 0.3s ease, padding 0.3s ease'
-                      : reordering
-                      ? 'transform 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55)'
-                      : draggedTaskId !== null && translateY !== 0
-                      ? `transform 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55), opacity 0.2s ease`
-                      : 'transform 0.3s ease, opacity 0.3s ease',
-                    marginBottom: isCompleting ? 0 : TASK_CARD_GAP,
-                    height: isCompleting ? 0 : 'auto',
-                    padding: isCompleting ? '0 16px' : undefined,
-                    overflow: isCompleting ? 'hidden' : 'visible',
-                    zIndex: draggedTaskId === task.id ? 10 : 1,
-                    position: draggedTaskId === task.id ? 'relative' : 'static'
-                  }}
-                >
-                  <div style={styles.dragHandle} title="拖拽排序">⋮⋮</div>
-                  <label style={styles.checkboxLabel}>
-                    <input
-                      type="checkbox"
-                      className="checkbox-custom"
-                      checked={task.completed}
-                      onChange={() => handleToggle(task.id, task.completed)}
-                      style={styles.checkbox}
-                      disabled={isCompleting}
-                    />
-                    <span
-                      className="checkmark-custom"
-                      style={{
-                        ...styles.checkmark,
-                        backgroundColor: task.completed ? '#27ae60' : 'transparent',
-                        borderColor: task.completed ? '#27ae60' : '#3a3a5a'
-                      }}
-                    />
-                  </label>
-                  <div style={styles.taskContent}>
-                    <span style={styles.taskName}>{task.name}</span>
-                    <div style={styles.taskMeta}>
-                      <span style={{
-                        ...styles.priorityTag,
-                        backgroundColor: priorityColors[task.priority]
-                      }}>
-                        {task.priority}
-                      </span>
-                      <span style={styles.assignee}>👤 {task.assignee}</span>
-                      <span style={styles.hours}>⏱ {task.estimatedHours}h</span>
-                    </div>
-                  </div>
-                  {draggedTaskId === task.id && (
-                    <div style={styles.dragGhost} />
-                  )}
-                  {dragOverTaskId === task.id && (
-                    <div style={{
-                      ...styles.dropIndicator,
-                      top: dragPosition === 'above' ? '-2px' : 'auto',
-                      bottom: dragPosition === 'below' ? '-2px' : 'auto'
-                    }} />
-                  )}
-                </div>
-              );
-            })}
+      <div style={{
+        ...styles.taskList,
+        opacity: loading ? 0 : 1,
+        transition: 'opacity 0.4s ease',
+        pointerEvents: loading ? 'none' : 'auto'
+      }}>
+        {!loading && incompleteTasks.map((task, index) => renderTaskItem(task, index))}
 
-            {completedTasks.length > 0 && (
-              <div style={styles.completedSection}>
-                <div style={styles.completedDivider}>
-                  <span style={styles.completedLabel}>已完成 ({completedTasks.length})</span>
-                </div>
-                {completedTasks.map(task => (
-                  <div
-                    key={task.id}
-                    style={{
-                      ...styles.taskCard,
-                      ...styles.completedTaskCard
-                    }}
-                  >
-                    <div style={styles.dragHandle} />
-                    <label style={styles.checkboxLabel}>
-                      <input
-                        type="checkbox"
-                        className="checkbox-custom"
-                        checked={task.completed}
-                        onChange={() => handleToggle(task.id, task.completed)}
-                        style={styles.checkbox}
-                      />
-                      <span
-                        className="checkmark-custom"
-                        style={{
-                          ...styles.checkmark,
-                          backgroundColor: '#27ae60',
-                          borderColor: '#27ae60'
-                        }}
-                      />
-                    </label>
-                    <div style={styles.taskContent}>
-                      <span style={{ ...styles.taskName, ...styles.completedTaskName }}>
-                        {task.name}
-                      </span>
-                      <div style={styles.taskMeta}>
-                        <span style={{
-                          ...styles.priorityTag,
-                          backgroundColor: priorityColors[task.priority],
-                          opacity: 0.5
-                        }}>
-                          {task.priority}
-                        </span>
-                        <span style={styles.assignee}>👤 {task.assignee}</span>
-                        <span style={styles.hours}>⏱ {task.estimatedHours}h</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+        {!loading && completedTasks.length > 0 && (
+          <>
+            <div style={styles.completedDivider}>
+              <span style={styles.completedText}>已完成 ({completedTasks.length})</span>
+            </div>
+            {completedTasks.map((task, index) => renderTaskItem(task, index + incompleteTasks.length))}
+          </>
+        )}
+
+        {!loading && tasks.length === 0 && (
+          <div style={styles.emptyState}>
+            <p style={styles.emptyText}>暂无待办事项</p>
           </div>
         )}
       </div>
@@ -465,274 +384,129 @@ const TaskList: React.FC<TaskListProps> = ({
 };
 
 const styles: { [key: string]: React.CSSProperties } = {
-  container: {
+  list: {
     backgroundColor: '#16213e',
     borderRadius: '12px',
     padding: '24px',
-    boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
-    height: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    maxHeight: 'calc(100vh - 280px)',
-    overflow: 'hidden'
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '16px',
-    flexShrink: 0
+    position: 'relative',
+    minHeight: '400px'
   },
   title: {
-    margin: 0,
+    margin: '0 0 20px 0',
     fontSize: '20px',
-    fontWeight: 600
-  },
-  addButton: {
-    padding: '8px 16px',
-    backgroundColor: '#e94560',
-    color: '#ffffff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: 500,
-    transition: 'all 0.3s ease'
-  },
-  progressSection: {
-    marginBottom: '20px',
-    padding: '16px',
-    backgroundColor: '#1a1a2e',
-    borderRadius: '8px',
-    flexShrink: 0
-  },
-  progressInfo: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '8px'
-  },
-  progressLabel: {
-    fontSize: '13px',
-    color: '#a0a0a0'
-  },
-  progressValue: {
-    fontSize: '18px',
     fontWeight: 600,
-    color: '#e94560'
+    color: '#ffffff'
   },
-  progressBarWrapper: {
-    height: '6px',
-    backgroundColor: '#2a2a4a',
-    borderRadius: '3px',
-    overflow: 'hidden',
-    marginBottom: '8px'
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#e94560',
-    borderRadius: '3px'
-  },
-  hoursInfo: {
-    textAlign: 'right'
-  },
-  hoursText: {
-    fontSize: '12px',
-    color: '#606080'
-  },
-  addForm: {
-    marginBottom: '20px',
-    padding: '16px',
-    backgroundColor: '#1a1a2e',
-    borderRadius: '8px',
-    flexShrink: 0
-  },
-  form: {
+  skeletonList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px'
-  },
-  formRow: {
-    display: 'flex',
-    gap: '10px',
-    alignItems: 'center'
-  },
-  input: {
-    padding: '10px 14px',
-    backgroundColor: '#16213e',
-    border: '1px solid #3a3a5a',
-    borderRadius: '6px',
-    color: '#ffffff',
-    fontSize: '13px',
-    transition: 'all 0.3s ease'
-  },
-  select: {
-    padding: '10px 14px',
-    backgroundColor: '#16213e',
-    border: '1px solid #3a3a5a',
-    borderRadius: '6px',
-    color: '#ffffff',
-    fontSize: '13px',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease'
-  },
-  hoursLabel: {
-    fontSize: '13px',
-    color: '#a0a0a0'
-  },
-  hoursUnit: {
-    fontSize: '13px',
-    color: '#606080'
-  },
-  formActions: {
-    display: 'flex',
-    gap: '10px',
-    justifyContent: 'flex-end'
-  },
-  btn: {
-    padding: '8px 16px',
-    backgroundColor: '#e94560',
-    color: '#ffffff',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: 500,
-    transition: 'all 0.3s ease'
-  },
-  cancelBtn: {
-    backgroundColor: 'transparent',
-    border: '1px solid #3a3a5a'
+    gap: `${TASK_CARD_GAP}px`,
+    position: 'absolute',
+    top: '72px',
+    left: '24px',
+    right: '24px',
+    zIndex: 5
   },
   taskList: {
-    flex: 1,
-    overflowY: 'auto',
-    paddingRight: '4px'
-  },
-  skeletonTask: {
-    height: '72px',
-    marginBottom: '12px'
-  },
-  taskCard: {
     display: 'flex',
-    alignItems: 'flex-start',
-    gap: '12px',
-    padding: '16px',
+    flexDirection: 'column',
+    gap: `${TASK_CARD_GAP}px`,
+    position: 'relative'
+  },
+  taskItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
     backgroundColor: '#1a1a2e',
     borderRadius: '8px',
     position: 'relative',
-    cursor: 'grab',
-    userSelect: 'none',
     willChange: 'transform, opacity'
   },
-  completedTaskCard: {
-    opacity: 0.5,
-    cursor: 'default'
-  },
-  dragHandle: {
-    color: '#404060',
-    fontSize: '16px',
-    cursor: 'grab',
-    padding: '2px 4px',
-    lineHeight: 1,
-    flexShrink: 0,
-    marginTop: '4px',
-    transition: 'color 0.2s ease'
-  },
-  checkboxLabel: {
+  checkboxContainer: {
     position: 'relative',
     cursor: 'pointer',
     flexShrink: 0,
-    marginTop: '2px'
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
   },
-  checkbox: {
-    position: 'absolute',
+  checkboxInput: {
     opacity: 0,
+    position: 'absolute',
+    width: '20px',
+    height: '20px',
     cursor: 'pointer',
-    width: 0,
-    height: 0
+    zIndex: 1
   },
-  checkmark: {
-    display: 'inline-block',
-    width: '18px',
-    height: '18px',
-    border: '2px solid #3a3a5a',
+  checkboxVisual: {
+    width: '20px',
+    height: '20px',
+    border: '2px solid #4a4a6a',
     borderRadius: '4px',
-    position: 'relative',
-    transition: 'all 0.25s ease'
+    backgroundColor: 'transparent',
+    transition: 'all 0.2s ease',
+    position: 'relative'
   },
   taskContent: {
     flex: 1,
     minWidth: 0
   },
-  taskName: {
-    display: 'block',
-    fontSize: '14px',
+  taskTitle: {
+    margin: '0 0 4px 0',
+    fontSize: '15px',
     fontWeight: 500,
     color: '#ffffff',
-    marginBottom: '8px',
-    wordBreak: 'break-word'
-  },
-  completedTaskName: {
-    textDecoration: 'line-through',
-    color: '#606080'
-  },
-  taskMeta: {
-    display: 'flex',
-    gap: '8px',
-    alignItems: 'center',
-    flexWrap: 'wrap'
-  },
-  priorityTag: {
-    padding: '2px 8px',
-    borderRadius: '10px',
-    fontSize: '11px',
-    fontWeight: 500,
-    color: '#ffffff',
+    lineHeight: 1.4,
     transition: 'all 0.3s ease'
   },
-  assignee: {
-    fontSize: '12px',
-    color: '#a0a0a0'
+  taskDesc: {
+    margin: 0,
+    fontSize: '13px',
+    color: '#8080a0',
+    lineHeight: 1.4,
+    display: '-webkit-box',
+    WebkitLineClamp: 1,
+    WebkitBoxOrient: 'vertical',
+    overflow: 'hidden'
   },
-  hours: {
+  priorityTag: {
+    padding: '4px 10px',
+    borderRadius: '12px',
     fontSize: '12px',
-    color: '#a0a0a0'
-  },
-  dragGhost: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    border: '2px dashed #e94560',
-    borderRadius: '8px',
-    backgroundColor: 'rgba(233, 69, 96, 0.08)',
-    pointerEvents: 'none',
-    zIndex: 5
+    fontWeight: 600,
+    flexShrink: 0,
+    transition: 'all 0.3s ease'
   },
   dropIndicator: {
     position: 'absolute',
-    left: 0,
-    right: 0,
+    top: -6,
+    left: '16px',
+    right: '16px',
     height: '3px',
     backgroundColor: '#e94560',
     borderRadius: '2px',
-    zIndex: 20,
     boxShadow: '0 0 8px rgba(233, 69, 96, 0.6)'
-  },
-  completedSection: {
-    marginTop: '24px'
   },
   completedDivider: {
     display: 'flex',
     alignItems: 'center',
-    marginBottom: '12px'
+    padding: '8px 0',
+    marginTop: '16px',
+    borderTop: '1px solid #2a2a4a'
   },
-  completedLabel: {
+  completedText: {
     fontSize: '12px',
     color: '#606080',
-    padding: '0 8px'
+    fontWeight: 500
+  },
+  emptyState: {
+    padding: '48px 16px',
+    textAlign: 'center'
+  },
+  emptyText: {
+    margin: 0,
+    fontSize: '14px',
+    color: '#606080'
   }
 };
 
