@@ -252,8 +252,7 @@
   }
 
   .right-panel {
-    width: 100%;
-    height: 250px;
+    display: none;
   }
 
   .itinerary-panel {
@@ -272,6 +271,103 @@
   .day-card {
     min-width: 160px;
     flex-shrink: 0;
+  }
+
+  .tablet-map-tab {
+    display: block;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    padding: 12px 16px;
+    background: white;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .tablet-map-btn {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #ff6f00 0%, #ff8f00 100%);
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .tablet-map-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 111, 0, 0.3);
+  }
+
+  .tablet-map-btn.active {
+    background: linear-gradient(135deg, #00897b 0%, #00695c 100%);
+  }
+
+  .tablet-map-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    background: white;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+    transform: translateY(100%);
+    transition: transform 0.4s ease-out;
+    max-height: 60vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .tablet-map-container.open {
+    transform: translateY(0);
+  }
+
+  .tablet-map-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    border-bottom: 1px solid #f0f0f0;
+    flex-shrink: 0;
+  }
+
+  .tablet-map-header h3 {
+    margin: 0;
+    font-size: 18px;
+    color: #00897b;
+    font-weight: 600;
+  }
+
+  .tablet-map-header button {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: #f0f0f0;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 24px;
+    line-height: 1;
+    color: #333;
+    transition: background 0.2s ease;
+  }
+
+  .tablet-map-header button:hover {
+    background: #e0e0e0;
+  }
+
+  .tablet-map-container > :last-child {
+    flex: 1;
+    min-height: 0;
+    padding: 0 16px 16px 16px;
   }
 }
 
@@ -309,5 +405,10 @@
 
   .results-container {
     padding-top: 0;
+  }
+
+  .tablet-map-tab,
+  .tablet-map-container {
+    display: none;
   }
 }

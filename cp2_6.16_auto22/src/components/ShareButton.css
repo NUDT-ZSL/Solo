@@ -19,18 +19,23 @@
   justify-content: center;
   box-shadow: 0 4px 12px rgba(255, 111, 0, 0.4);
   transition: all 0.2s ease;
+  transform-origin: center center;
 }
 
 .share-fab:hover {
   width: 64px;
   height: 64px;
-  transform: rotate(30deg);
+  transform: scale(1.14) rotate(30deg);
   box-shadow: 0 6px 16px rgba(255, 111, 0, 0.5);
 }
 
 .share-fab.open {
   background: #ff5252;
-  transform: rotate(45deg);
+  transform: scale(1) rotate(45deg);
+}
+
+.share-fab.open:hover {
+  transform: scale(1.14) rotate(45deg);
 }
 
 .fab-icon {

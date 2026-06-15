@@ -9,10 +9,11 @@ import { getItineraryById } from './services/budgetService';
 import './App.css';
 
 const App: React.FC = () => {
-  const { itinerary, setItinerary, setSelectedDay } = useItinerary();
+  const { itinerary, setItinerary, setSelectedDay, selectedDay } = useItinerary();
   const [showResults, setShowResults] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileMapOpen, setMobileMapOpen] = useState(false);
+  const [tabletMapOpen, setTabletMapOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -108,6 +109,23 @@ const App: React.FC = () => {
             <div className="right-panel">
               <MapView />
             </div>
+          </div>
+
+          <div className="tablet-map-tab">
+            <button
+              className={`tablet-map-btn ${tabletMapOpen ? 'active' : ''}`}
+              onClick={() => setTabletMapOpen(!tabletMapOpen)}
+            >
+              🗺️ 地图路线
+            </button>
+          </div>
+
+          <div className={`tablet-map-container ${tabletMapOpen ? 'open' : ''}`}>
+            <div className="tablet-map-header">
+              <h3>行程地图 - 第 {selectedDay} 天路线</h3>
+              <button onClick={() => setTabletMapOpen(false)}>×</button>
+            </div>
+            <MapView />
           </div>
 
           {mobileMapOpen && (
