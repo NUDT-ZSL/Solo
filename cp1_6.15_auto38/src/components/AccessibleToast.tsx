@@ -13,29 +13,87 @@ interface AccessibleToastProps {
   triggerRef?: React.RefObject<HTMLElement | null>;
 }
 
-export const AccessibleToast: React.FC<AccessibleToastProps> = ({ messages, onRemove, triggerRef }) => {
+type CloseReason = 'manual' | 'auto' | 'keyboard';
+
+export const AccessibleToast: React.FC<AccessibleToastProps> = ({
+  messages,
+  onRemove,
+  triggerRef,
+}) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const timersRef = useRef<Map<string, number>>(new Map());
-  const prevMessageCountRef = useRef(0);
+  const prevMessagesRef = useRef<Set<string>>(new Set());
+  const closeReasonsRef = useRef<Map<string, CloseReason>>(new Map());
+  const observerRef = useRef<MutationObserver | null>(null);
+
+  const restoreFocusToTrigger = useCallback(() => {
+    if (!triggerRef?.current) return;
+
+    const performRestore = () => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!triggerRef.current) return;
+          const currentFocus = document.activeElement as HTMLElement | null;
+          const isBodyOrRoot =
+            currentFocus === document.body ||
+            currentFocus === document.documentElement ||
+            !currentFocus;
+          const focusIsGone =
+            !currentFocus ||
+            !document.contains(currentFocus) ||
+            currentFocus.closest('.toast-item');
+          if (isBodyOrRoot || focusIsGone) {
+            focusManager.pushFocus(triggerRef.current);
+            focusManager.restoreFocus();
+          }
+        });
+      });
+    };
+
+    performRestore();
+  }, [triggerRef]);
 
   const handleRemove = useCallback(
-    (id: string) => {
+    (id: string, reason: CloseReason = 'auto') => {
       const timer = timersRef.current.get(id);
       if (timer) {
         window.clearTimeout(timer);
         timersRef.current.delete(id);
       }
+      closeReasonsRef.current.set(id, reason);
       onRemove(id);
     },
     [onRemove]
   );
 
   useEffect(() => {
+    const currentIds = new Set(messages.map((m) => m.id));
+    const removedIds: string[] = [];
+    prevMessagesRef.current.forEach((id) => {
+      if (!currentIds.has(id)) {
+        removedIds.push(id);
+      }
+    });
+
+    const hasManualOrKeyboardRemove = removedIds.some(
+      (id) =>
+        closeReasonsRef.current.get(id) === 'manual' ||
+        closeReasonsRef.current.get(id) === 'keyboard'
+    );
+    const allGone = currentIds.size === 0 && prevMessagesRef.current.size > 0;
+
+    if ((allGone && triggerRef?.current) || hasManualOrKeyboardRemove) {
+      restoreFocusToTrigger();
+    }
+
+    removedIds.forEach((id) => closeReasonsRef.current.delete(id));
+    prevMessagesRef.current = currentIds;
+
     messages.forEach((msg) => {
       if (!timersRef.current.has(msg.id)) {
         const duration = msg.duration ?? 3000;
         const timer = window.setTimeout(() => {
-          handleRemove(msg.id);
+          handleRemove(msg.id, 'auto');
         }, duration);
         timersRef.current.set(msg.id, timer);
       }
@@ -49,22 +107,48 @@ export const AccessibleToast: React.FC<AccessibleToastProps> = ({ messages, onRe
         timersRef.current.delete(id);
       }
     });
-  }, [messages, handleRemove]);
+  }, [messages, handleRemove, triggerRef, restoreFocusToTrigger]);
 
   useEffect(() => {
-    if (prevMessageCountRef.current > 0 && messages.length === 0) {
-      if (triggerRef?.current) {
-        focusManager.pushFocus(triggerRef.current);
-        focusManager.restoreFocus();
+    const node = containerRef.current;
+    if (!node) return;
+
+    observerRef.current = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === 'childList') {
+          if (
+            node.childElementCount === 0 &&
+            prevMessagesRef.current.size === 0 &&
+            triggerRef?.current
+          ) {
+            restoreFocusToTrigger();
+          }
+        }
       }
-    }
-    prevMessageCountRef.current = messages.length;
-  }, [messages.length, triggerRef]);
+    });
+
+    observerRef.current.observe(node, { childList: true, subtree: false });
+
+    return () => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+    };
+  }, [triggerRef, restoreFocusToTrigger]);
+
+  useEffect(() => {
+    return () => {
+      timersRef.current.forEach((timer) => window.clearTimeout(timer));
+      timersRef.current.clear();
+      closeReasonsRef.current.clear();
+      prevMessagesRef.current.clear();
+      observerRef.current?.disconnect();
+    };
+  }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent, id: string) => {
     if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      handleRemove(id);
+      handleRemove(id, 'keyboard');
     }
   };
 
@@ -89,7 +173,7 @@ export const AccessibleToast: React.FC<AccessibleToastProps> = ({ messages, onRe
           <span className="toast-message">{msg.message}</span>
           <button
             className="toast-close"
-            onClick={() => handleRemove(msg.id)}
+            onClick={() => handleRemove(msg.id, 'manual')}
             aria-label={`关闭通知: ${msg.message}`}
           >
             ×

@@ -8,6 +8,8 @@ import { focusManager } from './engine/focusManager';
 
 type Severity = 'error' | 'warning' | 'success';
 
+const DEFAULT_CARD_HEIGHT = 160;
+
 const App: React.FC = () => {
   const [buttonDisabled, setButtonDisabled] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -21,9 +23,56 @@ const App: React.FC = () => {
   const dialogTriggerRef = useRef<HTMLButtonElement>(null);
   const toastTriggerRef = useRef<HTMLButtonElement>(null);
   const resultsContainerRef = useRef<HTMLDivElement>(null);
+  const listScrollRef = useRef<HTMLDivElement>(null);
+  const cardHeightsRef = useRef<Map<string, number>>(new Map());
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+
+  const observeCardHeight = useCallback(
+    (node: HTMLDivElement | null, _reportId: string) => {
+      if (!node) return;
+      if (!resizeObserverRef.current) {
+        resizeObserverRef.current = new ResizeObserver((entries) => {
+          for (const entry of entries) {
+            const id = (entry.target as HTMLElement).dataset.reportId;
+            if (id) {
+              cardHeightsRef.current.set(id, entry.borderBoxSize[0]?.blockSize || entry.contentRect.height);
+            }
+          }
+        });
+      }
+      resizeObserverRef.current.observe(node);
+    },
+    []
+  );
+
+  const getCardMinHeight = useCallback((reportId: string, violationsCount: number): number => {
+    const cached = cardHeightsRef.current.get(reportId);
+    if (cached) return cached;
+    const baseHeight = 110;
+    const perViolation = violationsCount > 0 ? 90 : 0;
+    return Math.max(DEFAULT_CARD_HEIGHT, baseHeight + perViolation);
+  }, []);
 
   const addReport = useCallback((report: A11yReport) => {
-    setReports((prev) => [report, ...prev].slice(0, 50));
+    const scrollEl = listScrollRef.current;
+    const prevScrollTop = scrollEl?.scrollTop ?? 0;
+    const prevScrollHeight = scrollEl?.scrollHeight ?? 0;
+    const wasAtTop = prevScrollTop <= 4;
+
+    setReports((prev) => {
+      const next = [report, ...prev].slice(0, 50);
+      requestAnimationFrame(() => {
+        const el = listScrollRef.current;
+        if (!el) return;
+        if (wasAtTop) {
+          el.scrollTop = 0;
+        } else {
+          const delta = el.scrollHeight - prevScrollHeight;
+          el.scrollTop = prevScrollTop + delta;
+        }
+      });
+      return next;
+    });
   }, []);
 
   const runButtonCheck = useCallback(() => {
@@ -117,10 +166,18 @@ const App: React.FC = () => {
       setFocusPolicyEnabled(true);
       setReports([]);
       focusManager.clearHistory();
+      cardHeightsRef.current.clear();
       setIsResetting(false);
       setTimeout(() => runButtonCheck(), 100);
     }, 500);
   }, [runButtonCheck]);
+
+  useEffect(() => {
+    return () => {
+      resizeObserverRef.current?.disconnect();
+      resizeObserverRef.current = null;
+    };
+  }, []);
 
   const getSeverityLabel = (severity: Severity): string => {
     switch (severity) {
@@ -296,13 +353,21 @@ const App: React.FC = () => {
               <p className="empty-hint">与左侧组件交互，将在此显示可访问性检查结果</p>
             </div>
           ) : (
-            <div className="reports-list">
-              {reports.map((report, index) => (
-                <article
-                  key={report.id}
-                  className="report-card"
-                  style={{ animationDelay: `${Math.min(index * 30, 300)}ms` }}
-                >
+            <div className="reports-list" ref={listScrollRef}>
+              {reports.map((report, index) => {
+                const minHeight = getCardMinHeight(report.id, report.violations.length);
+                return (
+                  <div
+                    key={`wrapper-${report.id}`}
+                    className="report-card-wrapper"
+                    ref={(node) => observeCardHeight(node, report.id)}
+                    data-report-id={report.id}
+                    style={{ minHeight: `${minHeight}px` }}
+                  >
+                    <article
+                      className="report-card"
+                      style={{ animationDelay: `${Math.min(index * 30, 300)}ms` }}
+                    >
                   <header className="report-header">
                     <h3 className="report-component-name">{report.componentName}</h3>
                     <span
@@ -346,8 +411,10 @@ const App: React.FC = () => {
                   ) : (
                     <p className="no-violations">所有检查项均通过 ✓</p>
                   )}
-                </article>
-              ))}
+                    </article>
+                  </div>
+                );
+              })}
             </div>
           )}
         </main>
