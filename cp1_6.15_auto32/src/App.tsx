@@ -17,7 +17,7 @@ const App: React.FC = () => {
   const [toast, setToast] = useState<string | null>(null);
 
   const {
-    gaugeAngle,
+    gaugeValue,
     setGaugeValue,
     highlightedSentenceId,
     setHighlightedSentence,
@@ -58,7 +58,7 @@ const App: React.FC = () => {
       
       setAnalysis(analysisResult);
       setSimplifiedResult(simplifiedResult);
-      setGaugeValue(analysisResult.fleschKincaid);
+      setGaugeValue(Math.min(100, (analysisResult.fleschKincaid / 20) * 100));
       setIsAnalyzing(false);
     }, 50);
   }, [setGaugeValue]);
@@ -135,7 +135,7 @@ const App: React.FC = () => {
         <InputPanel
           onAnalyze={handleAnalyze}
           analysis={analysis}
-          gaugeAngle={gaugeAngle}
+          gaugeValue={gaugeValue}
           isAnalyzing={isAnalyzing}
           selectedLevel={selectedLevel}
           onLevelChange={handleLevelChange}
