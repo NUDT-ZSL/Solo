@@ -118,10 +118,11 @@ class PlantManager {
     const wateredLogs = logs.filter(log => log.watered);
     if (wateredLogs.length === 0) return -1;
     
-    const today = new Date();
-    const lastWatered = new Date(wateredLogs[0].date);
-    const diffTime = today.getTime() - lastWatered.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const todayStr = this.getTodayDate();
+    const todayDate = new Date(todayStr + 'T00:00:00');
+    const lastWatered = new Date(wateredLogs[0].date + 'T00:00:00');
+    const diffTime = todayDate.getTime() - lastWatered.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
   }
 
@@ -132,7 +133,10 @@ class PlantManager {
   }
 
   formatDate(date: Date): string {
-    return date.toISOString().split('T')[0];
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   getTodayDate(): string {
@@ -151,13 +155,13 @@ class PlantManager {
   }
 
   getDateLabel(dateStr: string): string {
-    const date = new Date(dateStr);
+    const date = new Date(dateStr + 'T00:00:00');
     const days = ['日', '一', '二', '三', '四', '五', '六'];
     return `周${days[date.getDay()]} ${date.getMonth() + 1}/${date.getDate()}`;
   }
 
   isWeekend(dateStr: string): boolean {
-    const date = new Date(dateStr);
+    const date = new Date(dateStr + 'T00:00:00');
     const day = date.getDay();
     return day === 0 || day === 6;
   }
