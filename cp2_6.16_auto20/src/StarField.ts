@@ -29,13 +29,29 @@ export class StarField {
     this.generateStars();
   }
 
-  private sphericalToCartesian(ra: number, dec: number, radius: number): THREE.Vector3 {
-    const raRad = (ra * Math.PI) / 12;
-    const decRad = (dec * Math.PI) / 180;
+  /**
+   * 将球坐标 (theta, phi) 转换为三维笛卡尔坐标 (x, y, z)
+   * 
+   * 坐标系定义:
+   * - theta: 方位角（赤经/RA），以小时为单位 (0-24)，对应绕 Y 轴的旋转
+   * - phi: 极角（赤纬/Dec），以度为单位 (-90 到 90)，从赤道面向上为正
+   * - radius: 天球半径
+   * 
+   * 转换公式:
+   *   x = radius * cos(phi) * cos(theta)
+   *   y = radius * sin(phi)
+   *   z = radius * cos(phi) * sin(theta)
+   * 
+   * 其中 theta 需转换为弧度: theta_rad = theta * PI / 12
+   *       phi 需转换为弧度: phi_rad = phi * PI / 180
+   */
+  private sphericalToCartesian(theta: number, phi: number, radius: number): THREE.Vector3 {
+    const thetaRad = (theta * Math.PI) / 12;
+    const phiRad = (phi * Math.PI) / 180;
     
-    const x = radius * Math.cos(decRad) * Math.cos(raRad);
-    const y = radius * Math.sin(decRad);
-    const z = radius * Math.cos(decRad) * Math.sin(raRad);
+    const x = radius * Math.cos(phiRad) * Math.cos(thetaRad);
+    const y = radius * Math.sin(phiRad);
+    const z = radius * Math.cos(phiRad) * Math.sin(thetaRad);
     
     return new THREE.Vector3(x, y, z);
   }
@@ -227,7 +243,9 @@ export class StarField {
 
   public updateVisibility(frustum: THREE.Frustum): void {
     this.stars.forEach(star => {
-      const isVisible = frustum.containsPoint(star.mesh.position);
+      const starRadius = this.magnitudeToSize(star.data.magnitude) * 0.4;
+      const sphere = new THREE.Sphere(star.mesh.position, starRadius);
+      const isVisible = frustum.intersectsSphere(sphere);
       star.mesh.visible = isVisible;
       star.sprite.visible = isVisible;
     });

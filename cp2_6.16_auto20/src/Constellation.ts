@@ -143,23 +143,90 @@ export class Constellation {
   private celestialSphereRadius: number = 100;
   private visibleConstellations: Set<string> = new Set();
   private highlightedConstellation: string | null = null;
+  private constellationStarMap: Map<string, number[]> = new Map();
 
   constructor(starField: StarField) {
     this.starField = starField;
     this.group = new THREE.Group();
+    this.buildConstellationStarMap();
     this.createAllConstellationLines();
     this.showAll();
   }
 
-  private sphericalToCartesian(ra: number, dec: number, radius: number): THREE.Vector3 {
-    const raRad = (ra * Math.PI) / 12;
-    const decRad = (dec * Math.PI) / 180;
+  /**
+   * 将球坐标 (theta, phi) 转换为三维笛卡尔坐标 (x, y, z)
+   * 
+   * 坐标系定义:
+   * - theta: 方位角（赤经/RA），以小时为单位
+   * - phi: 极角（赤纬/Dec），以度为单位
+   * - radius: 天球半径
+   * 
+   * 转换公式:
+   *   x = radius * cos(phi) * cos(theta)
+   *   y = radius * sin(phi)
+   *   z = radius * cos(phi) * sin(theta)
+   */
+  private sphericalToCartesian(theta: number, phi: number, radius: number): THREE.Vector3 {
+    const thetaRad = (theta * Math.PI) / 12;
+    const phiRad = (phi * Math.PI) / 180;
     
-    const x = radius * Math.cos(decRad) * Math.cos(raRad);
-    const y = radius * Math.sin(decRad);
-    const z = radius * Math.cos(decRad) * Math.sin(raRad);
+    const x = radius * Math.cos(phiRad) * Math.cos(thetaRad);
+    const y = radius * Math.sin(phiRad);
+    const z = radius * Math.cos(phiRad) * Math.sin(thetaRad);
     
     return new THREE.Vector3(x, y, z);
+  }
+
+  /**
+   * 根据星座数据中的恒星名称和坐标，在 StarField 的恒星列表中查找匹配的恒星索引
+   * 优先按名称匹配，名称不匹配时按经纬度距离匹配
+   */
+  public buildConstellationStarMap(): void {
+    const stars = this.starField.getStars();
+    
+    this.constellationData.forEach(constellation => {
+      const starIndices: number[] = [];
+      
+      constellation.stars.forEach(constellationStar => {
+        let matchedIndex = -1;
+        let minDistance = Infinity;
+        
+        const constellationStarName = constellationStar.name.toLowerCase();
+        
+        for (let i = 0; i < stars.length; i++) {
+          const starData = stars[i].data;
+          
+          const starName = starData.name.toLowerCase();
+          if (starName.includes(constellationStarName) || 
+              constellationStarName.includes(starName)) {
+            matchedIndex = starData.id;
+            break;
+          }
+          
+          const raDiff = Math.abs(starData.ra - constellationStar.ra);
+          const decDiff = Math.abs(starData.dec - constellationStar.dec);
+          const distance = Math.sqrt(raDiff * raDiff + decDiff * decDiff);
+          
+          if (distance < minDistance && distance < 0.5) {
+            minDistance = distance;
+            matchedIndex = starData.id;
+          }
+        }
+        
+        if (matchedIndex >= 0) {
+          starIndices.push(matchedIndex);
+        }
+      });
+      
+      this.constellationStarMap.set(constellation.id, starIndices);
+    });
+  }
+
+  /**
+   * 根据星座ID获取匹配的 StarField 恒星索引数组
+   */
+  public getConstellationStarIndices(constellationId: string): number[] {
+    return this.constellationStarMap.get(constellationId) || [];
   }
 
   private createAllConstellationLines(): void {
@@ -284,8 +351,6 @@ export class Constellation {
   public updateVisibility(frustum: THREE.Frustum): void {
     this.constellationLines.forEach((lines) => {
       lines.forEach(line => {
-        if (!line.visible) return;
-        
         const positions = line.geometry.attributes.position;
         const start = new THREE.Vector3(
           positions.getX(0),
@@ -298,10 +363,12 @@ export class Constellation {
           positions.getZ(1)
         );
         
+        const lineLength = start.distanceTo(end);
+        const lineRadius = lineLength * 0.5 + 1.0;
         const center = start.clone().add(end).multiplyScalar(0.5);
-        line.visible = frustum.containsPoint(center) || 
-                       frustum.containsPoint(start) || 
-                       frustum.containsPoint(end);
+        const boundingSphere = new THREE.Sphere(center, lineRadius);
+        
+        line.visible = frustum.intersectsSphere(boundingSphere);
       });
     });
   }

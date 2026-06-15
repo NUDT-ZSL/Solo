@@ -17,6 +17,9 @@ class Planetarium {
   private timeControl: TimeControl;
   private ui: UI;
 
+  private sunLight: THREE.DirectionalLight;
+  private ambientLight: THREE.AmbientLight;
+
   private isDragging: boolean = false;
   private previousMousePosition: { x: number; y: number } = { x: 0, y: 0 };
   private targetRotationY: number = 0;
@@ -65,12 +68,22 @@ class Planetarium {
     });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.2;
     this.container.appendChild(this.renderer.domElement);
 
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
     this.frustum = new THREE.Frustum();
     this.matrix = new THREE.Matrix4();
+
+    this.sunLight = new THREE.DirectionalLight(0xffffff, 0.0);
+    this.sunLight.position.set(0, 0, -100);
+    this.scene.add(this.sunLight);
+
+    this.ambientLight = new THREE.AmbientLight(0x101020, 0.3);
+    this.scene.add(this.ambientLight);
 
     this.starField = new StarField(this.camera);
     this.constellation = new Constellation(this.starField);
@@ -277,6 +290,7 @@ class Planetarium {
   }
 
   private updateFrustum(): void {
+    this.camera.updateMatrixWorld();
     this.matrix.multiplyMatrices(
       this.camera.projectionMatrix,
       this.camera.matrixWorldInverse
@@ -325,9 +339,40 @@ class Planetarium {
     this.starField.updateRotation(timeState.skyRotation);
     this.constellation.updateRotation(timeState.skyRotation);
 
+    this.updateSunLight(timeState.sunRa, timeState.sunDec);
+
     this.updateFrustum();
     this.starField.updateVisibility(this.frustum);
     this.constellation.updateVisibility(this.frustum);
+  }
+
+  private updateSunLight(sunRa: number, sunDec: number): void {
+    const sunThetaRad = (sunRa * Math.PI) / 12;
+    const sunPhiRad = (sunDec * Math.PI) / 180;
+    
+    const sunDirection = new THREE.Vector3(
+      Math.cos(sunPhiRad) * Math.cos(sunThetaRad),
+      Math.sin(sunPhiRad),
+      Math.cos(sunPhiRad) * Math.sin(sunThetaRad)
+    );
+    
+    const lightDistance = 150;
+    this.sunLight.position.copy(sunDirection).multiplyScalar(lightDistance);
+    
+    const sunAltitude = Math.max(0, Math.sin(sunPhiRad));
+    const sunIntensity = sunAltitude * 0.8;
+    this.sunLight.intensity = sunIntensity;
+    
+    const warmColor = new THREE.Color(0xffeedd);
+    const coolColor = new THREE.Color(0x8899ff);
+    const sunColor = coolColor.clone().lerp(warmColor, sunAltitude);
+    this.sunLight.color.copy(sunColor);
+    
+    const nightAmbient = new THREE.Color(0x0a0a1a);
+    const dayAmbient = new THREE.Color(0x3a3a5a);
+    const ambientColor = nightAmbient.clone().lerp(dayAmbient, sunAltitude * 0.5);
+    this.ambientLight.color.copy(ambientColor);
+    this.ambientLight.intensity = 0.3 + sunAltitude * 0.2;
   }
 
   private render(): void {
