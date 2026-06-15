@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { GeologyLayer, ParticleData, QueryResult } from '@/types';
+import type { GeologyLayer, ParticleData, QueryResult, VectorFieldSample } from '@/types';
 import * as api from '@/api/dataService';
 
 interface StoreState {
@@ -9,6 +9,7 @@ interface StoreState {
   cameraResetKey: number;
   layers: GeologyLayer[];
   particles: ParticleData[];
+  vectorField: VectorFieldSample[];
   selectedPoint: QueryResult | null;
   setSimulationTime: (time: number) => void;
   setParticleSize: (size: number) => void;
@@ -17,6 +18,7 @@ interface StoreState {
   resetCamera: () => void;
   fetchLayers: () => Promise<void>;
   fetchParticles: (time: number) => Promise<void>;
+  fetchVectorField: () => Promise<void>;
   queryPoint: (x: number, y: number, z: number) => Promise<void>;
 }
 
@@ -27,6 +29,7 @@ export const useStore = create<StoreState>((set) => ({
   cameraResetKey: 0,
   layers: [],
   particles: [],
+  vectorField: [],
   selectedPoint: null,
 
   setSimulationTime: (time) => set({ simulationTime: time }),
@@ -50,6 +53,15 @@ export const useStore = create<StoreState>((set) => ({
       set({ particles });
     } catch (error) {
       console.error('Failed to fetch particles:', error);
+    }
+  },
+
+  fetchVectorField: async () => {
+    try {
+      const vectorField = await api.getVectorField();
+      set({ vectorField });
+    } catch (error) {
+      console.error('Failed to fetch vector field:', error);
     }
   },
 

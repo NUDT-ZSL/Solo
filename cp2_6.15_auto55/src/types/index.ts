@@ -30,6 +30,16 @@ export interface QueryResult {
   layerId: number;
 }
 
+export interface VectorFieldSample {
+  id: number;
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data: T;

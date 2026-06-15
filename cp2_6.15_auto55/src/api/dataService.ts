@@ -1,4 +1,4 @@
-import type { GeologyLayer, ParticleData, QueryResult, ApiResponse } from '@/types'
+import type { GeologyLayer, ParticleData, QueryResult, ApiResponse, VectorFieldSample } from '@/types'
 
 async function fetchData<T>(url: string): Promise<T> {
   const response = await fetch(url)
@@ -19,4 +19,8 @@ export function getParticles(time: number): Promise<ParticleData[]> {
 
 export function queryPoint(x: number, y: number, z: number): Promise<QueryResult> {
   return fetchData<QueryResult>(`/api/query?x=${x}&y=${y}&z=${z}`)
+}
+
+export function getVectorField(): Promise<VectorFieldSample[]> {
+  return fetchData<VectorFieldSample[]>('/api/vector-field')
 }
