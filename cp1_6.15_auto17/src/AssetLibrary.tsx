@@ -24,9 +24,11 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({ onDragStart, onDragEnd }) =
 
   const [animationPhase, setAnimationPhase] = useState<AnimationPhase>('idle');
   const [animProgress, setAnimProgress] = useState(1);
-  const animationTimerRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
   const animStartTimeRef = useRef<number>(0);
+  const animStartProgressRef = useRef<number>(1);
+  const animDirectionRef = useRef<'in' | 'out'>('in');
+  const pendingFilterRef = useRef<FilterState | null>(null);
 
   const currentArtworks = useMemo(() => {
     return artworks.filter(art => {
@@ -45,10 +47,6 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({ onDragStart, onDragEnd }) =
   }, [displayFilter]);
 
   const cancelAnimation = useCallback(() => {
-    if (animationTimerRef.current !== null) {
-      clearTimeout(animationTimerRef.current);
-      animationTimerRef.current = null;
-    }
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
@@ -59,16 +57,24 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({ onDragStart, onDragEnd }) =
     return () => cancelAnimation();
   }, [cancelAnimation]);
 
-  const runFadeAnimation = useCallback((isFadeOut: boolean, onComplete: () => void) => {
+  const runFadeAnimation = useCallback((direction: 'in' | 'out', onComplete: () => void) => {
     cancelAnimation();
     animStartTimeRef.current = performance.now();
-    
+    animStartProgressRef.current = animProgress;
+    animDirectionRef.current = direction;
+
+    const targetProgress = direction === 'out' ? 0 : 1;
+    const startProgress = animStartProgressRef.current;
+    const totalDistance = Math.abs(targetProgress - startProgress);
+    const adjustedDuration = totalDistance * ANIMATION_DURATION;
+
     const animate = (now: number) => {
       const elapsed = now - animStartTimeRef.current;
-      const progress = Math.min(1, elapsed / ANIMATION_DURATION);
-      setAnimProgress(isFadeOut ? 1 - progress : progress);
-      
-      if (progress < 1) {
+      const rawProgress = adjustedDuration === 0 ? 1 : Math.min(1, elapsed / adjustedDuration);
+      const current = startProgress + (targetProgress - startProgress) * rawProgress;
+      setAnimProgress(current);
+
+      if (rawProgress < 1) {
         rafRef.current = requestAnimationFrame(animate);
       } else {
         rafRef.current = null;
@@ -76,11 +82,9 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({ onDragStart, onDragEnd }) =
       }
     };
     rafRef.current = requestAnimationFrame(animate);
-  }, [cancelAnimation]);
+  }, [cancelAnimation, animProgress]);
 
   const handleFilterChange = useCallback((newFilter: Partial<FilterState>) => {
-    if (animationPhase !== 'idle') return;
-
     const updatedFilter = { ...filter, ...newFilter };
     const isSame = 
       updatedFilter.genre === filter.genre &&
@@ -89,18 +93,36 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({ onDragStart, onDragEnd }) =
     
     if (isSame) return;
 
-    setAnimationPhase('fading-out');
+    pendingFilterRef.current = updatedFilter;
     setFilter(updatedFilter);
-    
-    runFadeAnimation(true, () => {
-      setDisplayFilter(updatedFilter);
-      setAnimationPhase('fading-in');
-      
-      runFadeAnimation(false, () => {
-        setAnimationPhase('idle');
+
+    if (animationPhase === 'idle') {
+      setAnimationPhase('fading-out');
+      runFadeAnimation('out', () => {
+        const finalFilter = pendingFilterRef.current!;
+        setDisplayFilter(finalFilter);
+        setAnimationPhase('fading-in');
+
+        runFadeAnimation('in', () => {
+          pendingFilterRef.current = null;
+          setAnimationPhase('idle');
+        });
       });
-    });
-  }, [filter, animationPhase, runFadeAnimation]);
+    } else if (animationPhase === 'fading-in') {
+      setAnimationPhase('fading-out');
+      cancelAnimation();
+      runFadeAnimation('out', () => {
+        const finalFilter = pendingFilterRef.current!;
+        setDisplayFilter(finalFilter);
+        setAnimationPhase('fading-in');
+
+        runFadeAnimation('in', () => {
+          pendingFilterRef.current = null;
+          setAnimationPhase('idle');
+        });
+      });
+    }
+  }, [filter, animationPhase, runFadeAnimation, cancelAnimation]);
 
   const handleDragStart = useCallback((e: React.DragEvent, artwork: Artwork) => {
     e.dataTransfer.effectAllowed = 'copy';

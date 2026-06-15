@@ -388,20 +388,28 @@ const DetailPanel: React.FC<DetailPanelProps> = ({
           margin-top: auto;
           padding: 12px;
           background: transparent;
-          border: 1px solid #C44;
-          color: #C44;
+          border: 1px solid #8B7D72;
+          color: #8B7D72;
           font-family: 'Cormorant Garamond', serif;
           font-size: 14px;
           font-weight: 500;
           cursor: pointer;
           border-radius: 2px;
-          transition: all 0.2s ease;
+          transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
           flex-shrink: 0;
         }
 
         .delete-btn:hover {
-          background: #C44;
-          color: #FFFFFF;
+          background: #8B7D72;
+          border-color: #8B7D72;
+          color: #F5F0EB;
+        }
+
+        .delete-btn:active {
+          background: #5C4F44;
+          border-color: #5C4F44;
+          color: #F5F0EB;
+          transform: scale(0.98);
         }
       `}</style>
     </div>

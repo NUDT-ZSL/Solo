@@ -12,7 +12,7 @@ const ROOM_HEIGHT = 400;
 const ROOM_DEPTH = 600;
 const TIMEOUT_DURATION = 1000;
 
-type LoadState = 'loading' | 'ready' | 'timeout';
+type LoadState = 'loading' | 'ready' | 'degraded';
 
 const Preview3D: React.FC<Preview3DProps> = ({ placedItems, artworks, onClose }) => {
   const [rotationY, setRotationY] = useState(-30);
@@ -36,7 +36,7 @@ const Preview3D: React.FC<Preview3DProps> = ({ placedItems, artworks, onClose })
     const timer = window.setTimeout(() => {
       setLoadState(prev => {
         if (prev === 'loading') {
-          return 'timeout';
+          return 'degraded';
         }
         return prev;
       });
@@ -44,11 +44,8 @@ const Preview3D: React.FC<Preview3DProps> = ({ placedItems, artworks, onClose })
     timeoutRef.current = timer;
 
     const checkTimer = window.setTimeout(() => {
-      const elapsed = performance.now() - startTimeRef.current;
-      if (elapsed < TIMEOUT_DURATION) {
-        setLoadState('ready');
-      }
-    }, 50);
+      handleContentLoad();
+    }, 80);
 
     return () => {
       if (timeoutRef.current !== null) {
@@ -59,17 +56,15 @@ const Preview3D: React.FC<Preview3DProps> = ({ placedItems, artworks, onClose })
   }, []);
 
   const handleContentLoad = useCallback(() => {
-    if (loadState !== 'timeout') {
-      if (timeoutRef.current !== null) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-      setLoadState('ready');
+    if (timeoutRef.current !== null) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
     }
-  }, [loadState]);
+    setLoadState(prev => prev === 'loading' ? 'ready' : prev);
+  }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (loadState !== 'ready') return;
+    if (loadState === 'loading') return;
     setIsDragging(true);
     lastMousePos.current = { x: e.clientX, y: e.clientY };
   }, [loadState]);
@@ -136,61 +131,6 @@ const Preview3D: React.FC<Preview3DProps> = ({ placedItems, artworks, onClose })
     }
   };
 
-  const renderFallbackView = () => (
-    <div className="fallback-view">
-      <div className="fallback-icon">⚠</div>
-      <h3>预览加载超时</h3>
-      <p>您的浏览器CSS 3D渲染可能受限</p>
-      <div className="fallback-summary">
-        <div className="summary-item">
-          <span className="summary-label">艺术品数量</span>
-          <span className="summary-value">{placedItems.length} 件</span>
-        </div>
-        <div className="summary-item">
-          <span className="summary-label">画作品类</span>
-          <span className="summary-value">
-            {placedItems.filter(i => {
-              const a = artworkMap.get(i.artworkId);
-              return a?.type === 'painting';
-            }).length} 画作 · 
-            {placedItems.filter(i => {
-              const a = artworkMap.get(i.artworkId);
-              return a?.type === 'sculpture';
-            }).length} 雕塑
-          </span>
-        </div>
-      </div>
-      <div className="fallback-grid">
-        {placedItems.slice(0, 8).map(item => {
-          const a = artworkMap.get(item.artworkId);
-          if (!a) return null;
-          return (
-            <div key={item.id} className="fallback-item">
-              <div 
-                className={`fallback-thumb ${a.type}`}
-                style={{ backgroundColor: a.color }}
-              />
-              <div className="fallback-name">{a.title}</div>
-              <div className="fallback-pos">({item.x}, {item.y})</div>
-            </div>
-          );
-        })}
-      </div>
-      <button className="retry-btn" onClick={() => {
-        setLoadState('loading');
-        startTimeRef.current = performance.now();
-        setTimeout(() => {
-          const elapsed = performance.now() - startTimeRef.current;
-          if (elapsed < TIMEOUT_DURATION) {
-            handleContentLoad();
-          }
-        }, 30);
-      }}>
-        重新尝试
-      </button>
-    </div>
-  );
-
   const renderLoadingView = () => (
     <div className="loading-view">
       <div className="loading-spinner" />
@@ -199,16 +139,15 @@ const Preview3D: React.FC<Preview3DProps> = ({ placedItems, artworks, onClose })
     </div>
   );
 
-  const renderContentView = () => (
+  const renderContentView = (isDegraded: boolean = false) => (
     <div 
       ref={containerRef}
       className={`preview-scene ${isDragging ? 'dragging' : ''}`}
       onMouseDown={handleMouseDown}
-      onLoadCapture={handleContentLoad}
-      style={{ cursor: loadState === 'ready' ? (isDragging ? 'grabbing' : 'grab') : 'default' }}
+      style={{ cursor: loadState === 'loading' ? 'default' : (isDragging ? 'grabbing' : 'grab') }}
     >
       <div 
-        className="room"
+        className={`room ${isDegraded ? 'degraded-mode' : ''}`}
         style={{
           transform: `rotateX(${rotationX}deg) rotateY(${rotationY}deg)`
         }}
@@ -225,6 +164,23 @@ const Preview3D: React.FC<Preview3DProps> = ({ placedItems, artworks, onClose })
         <div className="spotlight spotlight-2" />
         <div className="spotlight spotlight-3" />
       </div>
+      {isDegraded && <div className="degraded-overlay">
+        <div className="degraded-banner">
+          <span className="degraded-icon">◎</span>
+          <span>渲染耗时较长，已启用降级模式，功能正常可用</span>
+          <button
+            className="retry-inline"
+            onClick={(e) => {
+              e.stopPropagation();
+              setLoadState('loading');
+              startTimeRef.current = performance.now();
+              const checkTimer = setTimeout(() => handleContentLoad(), 50);
+            }}
+          >
+            重试
+          </button>
+        </div>
+      </div>}
     </div>
   );
 
@@ -237,10 +193,10 @@ const Preview3D: React.FC<Preview3DProps> = ({ placedItems, artworks, onClose })
         </div>
         
         {loadState === 'loading' && renderLoadingView()}
-        {loadState === 'timeout' && renderFallbackView()}
-        {loadState === 'ready' && renderContentView()}
+        {loadState === 'ready' && renderContentView(false)}
+        {loadState === 'degraded' && renderContentView(true)}
         
-        {loadState === 'ready' && (
+        {loadState !== 'loading' && (
           <div className="preview-controls">
             <div className="control-info">
               <span>拖拽旋转视角 · 当前角度: ({Math.round(rotationY)}°, {Math.round(rotationX)}°)</span>
@@ -407,136 +363,62 @@ const Preview3D: React.FC<Preview3DProps> = ({ placedItems, artworks, onClose })
           font-style: italic;
         }
 
-        .fallback-view {
-          width: 700px;
-          min-height: 500px;
+        .degraded-overlay {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          pointer-events: none;
           display: flex;
-          flex-direction: column;
-          align-items: center;
           justify-content: center;
-          background: #FFFFFF;
+          padding-top: 12px;
+          z-index: 10;
+        }
+
+        .degraded-banner {
+          background: rgba(245, 240, 235, 0.95);
+          border: 1px solid rgba(139, 125, 114, 0.4);
+          padding: 8px 16px;
           border-radius: 4px;
-          padding: 40px;
-          box-sizing: border-box;
-          gap: 16px;
-        }
-
-        .fallback-icon {
-          font-size: 48px;
-          color: #C4956A;
-        }
-
-        .fallback-view h3 {
-          font-family: 'Playfair Display', serif;
-          font-size: 20px;
-          font-weight: 600;
-          color: #2C2C2C;
-          margin: 0;
-        }
-
-        .fallback-view > p {
-          font-family: 'Cormorant Garamond', serif;
-          font-size: 14px;
-          font-style: italic;
-          color: #8B7D72;
-          margin: 0;
-        }
-
-        .fallback-summary {
           display: flex;
-          gap: 24px;
-          margin: 8px 0;
-          padding: 16px 24px;
-          background: #F5F0EB;
-          border-radius: 4px;
-        }
-
-        .summary-item {
-          display: flex;
-          flex-direction: column;
           align-items: center;
-          gap: 4px;
-        }
-
-        .summary-label {
+          gap: 10px;
+          pointer-events: auto;
+          box-shadow: 0 2px 12px rgba(44, 44, 44, 0.15);
           font-family: 'Cormorant Garamond', serif;
-          font-size: 12px;
-          color: #8B7D72;
-          text-transform: uppercase;
-          letter-spacing: 1px;
+          font-size: 13px;
+          color: #5C4F44;
         }
 
-        .summary-value {
-          font-family: 'Playfair Display', serif;
+        .degraded-icon {
+          color: #C4956A;
           font-size: 16px;
-          font-weight: 600;
-          color: #2C2C2C;
         }
 
-        .fallback-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 12px;
-          width: 100%;
-          max-width: 500px;
-        }
-
-        .fallback-item {
-          background: #F5F0EB;
-          padding: 12px;
-          border-radius: 4px;
-          text-align: center;
-        }
-
-        .fallback-thumb {
-          width: 40px;
-          height: 40px;
-          margin: 0 auto 8px;
-          border: 2px solid #8B7D72;
-        }
-
-        .fallback-thumb.sculpture {
-          border-radius: 50%;
-        }
-
-        .fallback-name {
-          font-family: 'Playfair Display', serif;
-          font-size: 11px;
-          color: #2C2C2C;
-          margin-bottom: 2px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .fallback-pos {
-          font-family: 'Cormorant Garamond', serif;
-          font-size: 10px;
-          color: #8B7D72;
-        }
-
-        .retry-btn {
-          margin-top: 8px;
-          padding: 10px 24px;
+        .retry-inline {
+          padding: 4px 12px;
           background: #8B7D72;
           color: #F5F0EB;
           border: none;
           font-family: 'Cormorant Garamond', serif;
-          font-size: 14px;
-          font-weight: 500;
+          font-size: 12px;
           cursor: pointer;
           border-radius: 2px;
-          transition: background-color 0.2s ease, transform 0.2s ease;
-          letter-spacing: 1px;
+          transition: background-color 0.2s ease;
+          letter-spacing: 0.5px;
         }
 
-        .retry-btn:hover {
+        .retry-inline:hover {
           background: #6F6359;
         }
 
-        .retry-btn:active {
+        .retry-inline:active {
           background: #5C4F44;
-          transform: scale(0.98);
+        }
+
+        .room.degraded-mode {
+          filter: saturate(0.85);
+          transition: transform 0.15s ease-out, filter 0.5s ease;
         }
 
         .room {

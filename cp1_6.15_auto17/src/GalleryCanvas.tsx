@@ -60,9 +60,14 @@ const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
   const easeOutElastic = useCallback((t: number): number => {
     if (t <= 0) return 0;
     if (t >= 1) return 1;
-    const p = 0.3;
+    const p = 0.5;
     const s = p / 4;
-    return Math.pow(2, -10 * t) * Math.sin((t - s) * (2 * Math.PI) / p) + 1;
+    const raw = Math.pow(2, -10 * t) * Math.sin((t - s) * (2 * Math.PI) / p) + 1;
+    if (t >= 0.85) {
+      const tailT = (t - 0.85) / 0.15;
+      return raw + (1 - raw) * Math.min(1, tailT);
+    }
+    return raw;
   }, []);
 
   const drawArtwork = useCallback((
@@ -281,7 +286,11 @@ const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
     if (!draggingArtwork) return;
     setIsDraggingOver(true);
     const pos = getCanvasPos(e.clientX, e.clientY);
-    setPreview({ artwork: draggingArtwork, x: pos.x, y: pos.y });
+    const halfW = draggingArtwork.width / 2;
+    const halfH = draggingArtwork.height / 2;
+    const clampedX = Math.max(halfW, Math.min(CANVAS_WIDTH - halfW, pos.x));
+    const clampedY = Math.max(halfH, Math.min(CANVAS_HEIGHT - halfH, pos.y));
+    setPreview({ artwork: draggingArtwork, x: clampedX, y: clampedY });
     if (!animationFrameRef.current) {
       animationFrameRef.current = requestAnimationFrame(render);
     }
