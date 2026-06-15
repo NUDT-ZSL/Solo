@@ -201,7 +201,7 @@ function drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[]): vo
 function drawTrapPreview(ctx: CanvasRenderingContext2D, ui: GameStateUI): void {
   if (!ui.selectedTrap) return;
   const config = TRAP_CONFIG[ui.selectedTrap];
-  const canPlace = Trap.canPlace(ui.mouseX, ui.mouseY, ui.map, ui.traps);
+  const canPlace = Trap.canPlace(ui.selectedTrap, ui.mouseX, ui.mouseY, ui.map, ui.traps);
   ctx.save();
   ctx.globalAlpha = 0.5;
   ctx.strokeStyle = canPlace ? '#4caf50' : '#f44336';

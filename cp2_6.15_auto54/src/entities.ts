@@ -182,6 +182,7 @@ export function updatePlayer(
       let nearestDist = Infinity;
 
       for (const zombie of zombies) {
+        if (zombie.health <= 0) continue;
         const zxDiff = zombie.x - player.x;
         const zyDiff = zombie.y - player.y;
         const zDist = Math.hypot(zxDiff, zyDiff);
@@ -222,6 +223,7 @@ export function updatePlayer(
     let nearestDist = Infinity;
 
     for (const zombie of zombies) {
+      if (zombie.health <= 0) continue;
       const zxDiff = zombie.x - player.x;
       const zyDiff = zombie.y - player.y;
       const zDist = Math.hypot(zxDiff, zyDiff);

@@ -27,6 +27,7 @@ export class Game {
   private waveTimer: number = 0;
   private waveInterval: number = 10000;
   private waveGeneratorId: number | null = null;
+  private waveCount: number = 0;
 
   private selectedTrap: TrapType | null = null;
   private mouseX: number = 0;
@@ -95,6 +96,7 @@ export class Game {
     this.surviveTime = 0;
     this.lastResourceTick = performance.now();
     this.waveTimer = 0;
+    this.waveCount = 0;
     this.selectedTrap = null;
 
     for (let i = 0; i < 2; i++) {
@@ -112,7 +114,13 @@ export class Game {
   }
 
   private spawnWave(): void {
-    const count = 5 + Math.floor(Math.random() * 6);
+    this.waveCount++;
+    const baseCount = 5;
+    const maxExtra = 5 + Math.min(this.waveCount * 2, 15);
+    const count = baseCount + Math.floor(Math.random() * maxExtra);
+    const speedMultiplier = 1 + (this.waveCount - 1) * 0.05;
+
+
     const types: ZombieType[] = ['normal', 'fast', 'giant'];
     const weights = [0.6, 0.3, 0.1];
 
@@ -150,7 +158,9 @@ export class Game {
         }
       }
 
-      this.zombies.push(createZombie(ztype, x, y));
+      const zombie = createZombie(ztype, x, y);
+      zombie.speed = Math.floor(zombie.speed * speedMultiplier);
+      this.zombies.push(zombie);
     }
   }
 
@@ -240,7 +250,7 @@ export class Game {
     if (!this.selectedTrap) return false;
     const config = TRAP_CONFIG[this.selectedTrap];
     if (this.resources < config.cost) return false;
-    if (!Trap.canPlace(x, y, this.map, this.traps)) return false;
+    if (!Trap.canPlace(this.selectedTrap, x, y, this.map, this.traps)) return false;
     this.resources -= config.cost;
     this.traps.push(createTrap(this.selectedTrap, x, y));
     this.resourceAnimTime = 0.3;

@@ -185,6 +185,27 @@ export class GameMap {
     return this.grid[gy][gx];
   }
 
+  private addToCache(key: string, value: { time: number; path: Vec2[] }): void {
+    this.lastPathCache.delete(key);
+    this.lastPathCache.set(key, value);
+    while (this.lastPathCache.size > 50) {
+      const firstKey = this.lastPathCache.keys().next().value;
+      if (firstKey) this.lastPathCache.delete(firstKey);
+    }
+  }
+
+  private cleanupExpiredCache(now: number): void {
+    const expiredKeys: string[] = [];
+    for (const [key, value] of this.lastPathCache) {
+      if (now - value.time > 5000) {
+        expiredKeys.push(key);
+      }
+    }
+    for (const key of expiredKeys) {
+      this.lastPathCache.delete(key);
+    }
+  }
+
   findPath(startX: number, startY: number, endX: number, endY: number): Vec2[] {
     const now = performance.now();
     const start = this.worldToGrid(startX, startY);
@@ -193,18 +214,22 @@ export class GameMap {
 
     const cached = this.lastPathCache.get(cacheKey);
     if (cached && now - cached.time < 1000) {
+      this.lastPathCache.delete(cacheKey);
+      this.lastPathCache.set(cacheKey, cached);
       return cached.path;
     }
 
+    this.cleanupExpiredCache(now);
+
     if (!this.canWalk(start.gx, start.gy) || !this.canWalk(end.gx, end.gy)) {
-      this.lastPathCache.set(cacheKey, { time: now, path: [] });
+      this.addToCache(cacheKey, { time: now, path: [] });
       return [];
     }
 
     if (start.gx === end.gx && start.gy === end.gy) {
       const p = this.gridToWorld(start.gx, start.gy);
       const result = [{ x: p.x, y: p.y }];
-      this.lastPathCache.set(cacheKey, { time: now, path: result });
+      this.addToCache(cacheKey, { time: now, path: result });
       return result;
     }
 
@@ -254,11 +279,7 @@ export class GameMap {
           path.unshift({ x: p.x, y: p.y });
           node = node.parent;
         }
-        this.lastPathCache.set(cacheKey, { time: now, path });
-        if (this.lastPathCache.size > 50) {
-          const firstKey = this.lastPathCache.keys().next().value;
-          if (firstKey) this.lastPathCache.delete(firstKey);
-        }
+        this.addToCache(cacheKey, { time: now, path });
         return path;
       }
 

@@ -44,17 +44,19 @@ export abstract class Trap {
     this.createdAt = performance.now();
   }
 
-  static canPlace(x: number, y: number, map: GameMap, traps: Trap[]): boolean {
+  static canPlace(type: TrapType, x: number, y: number, map: GameMap, traps: Trap[]): boolean {
     if (x < 0 || x > map.width || y < 0 || y > map.height) {
       return false;
     }
-    if (map.pointInObstacle(x, y, 10)) {
+    const config = TRAP_CONFIG[type];
+    const obstaclePadding = Math.max(config.radius, 15);
+    if (map.pointInObstacle(x, y, obstaclePadding)) {
       return false;
     }
     for (const trap of traps) {
       if (!trap.active) continue;
       const dist = Math.hypot(trap.x - x, trap.y - y);
-      if (dist < trap.radius + 15) {
+      if (dist < trap.radius + config.radius + 10) {
         return false;
       }
     }
