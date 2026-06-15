@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
-import initSqlJs, { Database } from 'sql.js';
+import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -11,10 +11,11 @@ const PORT = 3001;
 app.use(cors());
 app.use(bodyParser.json());
 
-const dbPath = path.join(__dirname, '..', 'learning.db');
+const dbPath = path.join(process.cwd(), 'learning.db');
 let db: Database;
+let SQL: SqlJsStatic;
 
-function saveDb() {
+function saveDatabase(): void {
   try {
     const data = db.export();
     const buffer = Buffer.from(data);
@@ -44,14 +45,26 @@ function runSql(sql: string, params: any[] = []): void {
   db.run(sql, params);
 }
 
-async function initDb() {
-  const SQL = await initSqlJs();
+function getLastInsertId(): number {
+  const row = queryOne('SELECT last_insert_rowid() as id');
+  return row ? row.id : 0;
+}
+
+async function initDb(): Promise<void> {
+  SQL = await initSqlJs();
 
   if (fs.existsSync(dbPath)) {
-    const fileBuffer = fs.readFileSync(dbPath);
-    db = new SQL.Database(fileBuffer);
+    try {
+      const fileBuffer = fs.readFileSync(dbPath);
+      db = new SQL.Database(fileBuffer);
+      console.log('Database loaded from file');
+    } catch (e) {
+      console.error('Failed to load database, creating new one:', e);
+      db = new SQL.Database();
+    }
   } else {
     db = new SQL.Database();
+    console.log('New database created');
   }
 
   db.run(`CREATE TABLE IF NOT EXISTS courses (
@@ -94,7 +107,7 @@ async function initDb() {
 
   const courseCount = queryOne('SELECT COUNT(*) as count FROM courses');
   if (courseCount.count === 0) {
-    const coursesData = [
+    const coursesData: [string, string, number][] = [
       ['React前端开发', '组件设计,状态管理,路由,Hooks,性能优化', 40],
       ['Node.js后端开发', 'Express框架,REST API,数据库,中间件,部署', 35],
       ['Python数据分析', 'NumPy,Pandas,数据可视化,统计分析,机器学习基础', 50],
@@ -104,10 +117,11 @@ async function initDb() {
     coursesData.forEach(c => {
       db.run('INSERT INTO courses (name, topics, total_hours) VALUES (?, ?, ?)', c);
     });
-    saveDb();
+    saveDatabase();
+    console.log('Sample courses inserted');
   }
 
-  console.log('Database initialized');
+  console.log('Database initialized successfully');
 }
 
 app.get('/api/courses', (req, res) => {
@@ -127,20 +141,23 @@ app.post('/api/plan', (req, res) => {
     }
 
     const course = queryOne('SELECT * FROM courses WHERE id = ?', [course_id]);
-    if (!course) return res.status(404).json({ error: '课程不存在' });
+    if (!course) {
+      return res.status(404).json({ error: '课程不存在' });
+    }
 
     const startDate = new Date();
+    startDate.setHours(0, 0, 0, 0);
     const endDate = new Date(target_date);
+    endDate.setHours(0, 0, 0, 0);
     const diffTime = endDate.getTime() - startDate.getTime();
-    const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+    const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
 
     const topics = (course.topics as string).split(',');
     const totalHours = course.total_hours as number;
     const hoursPerDay = Math.max(1, Math.round((totalHours / diffDays) * 10) / 10);
 
     db.run('INSERT INTO plans (course_id, target_date) VALUES (?, ?)', [course_id, target_date]);
-    const planRow = queryOne('SELECT last_insert_rowid() as id');
-    const planId = planRow.id;
+    const planId = getLastInsertId();
 
     for (let i = 0; i < diffDays; i++) {
       const taskDate = new Date(startDate);
@@ -155,7 +172,7 @@ app.post('/api/plan', (req, res) => {
       );
     }
 
-    saveDb();
+    saveDatabase();
 
     const insertedTasks = queryAll(
       'SELECT * FROM tasks WHERE plan_id = ? ORDER BY date ASC',
@@ -174,7 +191,9 @@ app.post('/api/plan', (req, res) => {
 app.get('/api/plan/latest', (req, res) => {
   try {
     const plan = queryOne('SELECT * FROM plans ORDER BY id DESC LIMIT 1');
-    if (!plan) return res.json({ plan: null, tasks: [] });
+    if (!plan) {
+      return res.json({ plan: null, tasks: [] });
+    }
 
     const course = queryOne('SELECT name FROM courses WHERE id = ?', [plan.course_id]);
     const tasks = queryAll('SELECT * FROM tasks WHERE plan_id = ? ORDER BY date ASC', [plan.id]);
@@ -200,11 +219,13 @@ app.put('/api/task/:id', (req, res) => {
     if (detail !== undefined) { fields.push('detail = ?'); values.push(detail); }
     if (duration !== undefined) { fields.push('duration = ?'); values.push(duration); }
 
-    if (fields.length === 0) return res.status(400).json({ error: '没有更新字段' });
+    if (fields.length === 0) {
+      return res.status(400).json({ error: '没有更新字段' });
+    }
     values.push(id);
 
     db.run(`UPDATE tasks SET ${fields.join(', ')} WHERE id = ?`, values);
-    saveDb();
+    saveDatabase();
 
     const task = queryOne('SELECT date, plan_id FROM tasks WHERE id = ?', [id]);
     if (task) {
@@ -212,12 +233,12 @@ app.put('/api/task/:id', (req, res) => {
         'SELECT status FROM tasks WHERE date = ? AND plan_id = ?',
         [task.date, task.plan_id]
       );
-      const allCompleted = dayTasks.length > 0 && dayTasks.every(t => t.status === '已完成');
+      const allCompleted = dayTasks.length > 0 && dayTasks.every((t: any) => t.status === '已完成');
       db.run(
         'INSERT OR REPLACE INTO daily_completions (date, all_completed) VALUES (?, ?)',
         [task.date, allCompleted ? 1 : 0]
       );
-      saveDb();
+      saveDatabase();
     }
 
     res.json({ message: '更新成功' });
@@ -246,10 +267,10 @@ app.post('/api/activity', (req, res) => {
       'INSERT INTO activities (date, duration, description, knowledge_scores) VALUES (?, ?, ?, ?)',
       [date, duration, description, scoresJson]
     );
-    saveDb();
+    saveDatabase();
 
-    const row = queryOne('SELECT last_insert_rowid() as id');
-    res.json({ id: row.id, message: '活动记录成功' });
+    const id = getLastInsertId();
+    res.json({ id, message: '活动记录成功' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -259,6 +280,7 @@ app.get('/api/stats', (req, res) => {
   try {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
     const startDate = sevenDaysAgo.toISOString().split('T')[0];
 
     const dailyDurations = queryAll(
@@ -305,7 +327,9 @@ app.get('/api/stats', (req, res) => {
             knowledgeTotals[key].count += 1;
           }
         });
-      } catch (e) {}
+      } catch (e) {
+        // ignore parse errors
+      }
     });
 
     const knowledgeStats = Object.entries(knowledgeTotals).map(([name, data]) => ({
@@ -322,5 +346,6 @@ app.get('/api/stats', (req, res) => {
 initDb().then(() => {
   app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Database file: ${dbPath}`);
   });
 });

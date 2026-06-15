@@ -45,7 +45,7 @@ const TaskCard = React.memo(({ task, onClick }: { task: Task; onClick: (t: Task)
   const statusTagClass = `status-tag status-tag--${task.status}`;
 
   return (
-    <div className={`task-card ${statusClass}`} onClick={() => onClick(task)}>
+    <div className={`task-card ${statusClass}`} onClick={() => onClick(task)} role="button" tabIndex={0}>
       <div className="task-name">{task.name}</div>
       <div className="task-meta">
         <span>⏱ {task.duration}分钟</span>
@@ -68,7 +68,8 @@ const PlanningModule: React.FC = () => {
   const [completions, setCompletions] = useState<DailyCompletion[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editForm, setEditForm] = useState({ name: '', status: '未开始', detail: '', duration: 0 });
-  const [starKey, setStarKey] = useState(0);
+  const [badgeTrigger, setBadgeTrigger] = useState<number>(0);
+  const [saving, setSaving] = useState<boolean>(false);
 
   useEffect(() => {
     axios.get('/api/courses').then(res => setCourses(res.data)).catch(() => {});
@@ -127,7 +128,8 @@ const PlanningModule: React.FC = () => {
       });
       setPlan(res.data.plan);
       setTasks(res.data.tasks);
-      await loadLatestPlan();
+      setBadgeTrigger(prev => prev + 1);
+      loadLatestPlan();
     } catch (err: any) {
       setError(err.response?.data?.error || '生成计划失败');
     } finally {
@@ -145,10 +147,20 @@ const PlanningModule: React.FC = () => {
     });
   }, []);
 
+  const handleCloseModal = useCallback(() => {
+    setEditingTask(null);
+  }, []);
+
   const handleSaveTask = useCallback(async () => {
     if (!editingTask) return;
+    setSaving(true);
     try {
+      const wasNotCompleted = !tasks
+        .filter(t => t.date === editingTask.date)
+        .every(t => t.status === '已完成' || t.id === editingTask.id);
+
       await axios.put(`/api/task/${editingTask.id}`, editForm);
+
       setTasks(prev =>
         prev.map(t =>
           t.id === editingTask.id
@@ -156,12 +168,24 @@ const PlanningModule: React.FC = () => {
             : t
         )
       );
+
+      const dateTasks = tasks.filter(t => t.date === editingTask.date && t.id !== editingTask.id);
+      const allNowCompleted = dateTasks.length > 0
+        ? [...dateTasks, { ...editingTask, ...editForm }].every(t => t.status === '已完成')
+        : editForm.status === '已完成';
+
+      if (wasNotCompleted && allNowCompleted) {
+        setBadgeTrigger(prev => prev + 1);
+      }
+
+      setTimeout(() => loadLatestPlan(), 100);
       setEditingTask(null);
-      setTimeout(() => loadLatestPlan(), 200);
     } catch {
       setError('更新任务失败');
+    } finally {
+      setSaving(false);
     }
-  }, [editingTask, editForm, loadLatestPlan]);
+  }, [editingTask, editForm, tasks, loadLatestPlan]);
 
   const minDate = useMemo(() => {
     const d = new Date();
@@ -226,7 +250,7 @@ const PlanningModule: React.FC = () => {
           <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>📋 {plan?.course_name || '学习计划'}</span>
             <span style={{ fontSize: '13px', color: '#78909c', fontWeight: 400 }}>
-              目标: {plan?.target_date}
+              目标: {plan?.target_date} · 共{tasks.length}个任务
             </span>
           </div>
           <div className="timeline">
@@ -235,7 +259,13 @@ const PlanningModule: React.FC = () => {
                 <div className="timeline-date">
                   <span>{group.date}</span>
                   {isDateCompleted(group.date) && (
-                    <span className="completion-badge" key={`badge-${group.date}-${starKey}`}>✓</span>
+                    <span
+                      className="completion-badge"
+                      key={`badge-${group.date}-${badgeTrigger}`}
+                      title="今日任务全部完成"
+                    >
+                      ✓
+                    </span>
                   )}
                 </div>
                 {group.tasks.map(task => (
@@ -257,9 +287,9 @@ const PlanningModule: React.FC = () => {
       )}
 
       {editingTask && (
-        <div className="modal-overlay" onClick={() => setEditingTask(null)}>
+        <div className="modal-overlay" onClick={handleCloseModal}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3 className="modal-title">编辑任务</h3>
+            <h3 className="modal-title">编辑任务详情</h3>
             <div className="form-group">
               <label className="form-label">任务名称</label>
               <input
@@ -270,7 +300,7 @@ const PlanningModule: React.FC = () => {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">状态</label>
+              <label className="form-label">任务状态</label>
               <select
                 className="form-select"
                 value={editForm.status}
@@ -289,21 +319,26 @@ const PlanningModule: React.FC = () => {
                 value={editForm.duration}
                 min={5}
                 max={480}
+                step={5}
                 onChange={e => setEditForm(prev => ({ ...prev, duration: Number(e.target.value) }))}
               />
             </div>
             <div className="form-group">
-              <label className="form-label">备注详情</label>
+              <label className="form-label">学习笔记/备注</label>
               <textarea
                 className="form-textarea"
                 value={editForm.detail}
                 onChange={e => setEditForm(prev => ({ ...prev, detail: e.target.value }))}
-                placeholder="添加学习笔记或备注..."
+                placeholder="记录学习要点、笔记或待办事项..."
+                rows={4}
               />
             </div>
             <div className="modal-actions">
-              <button className="btn btn--secondary" onClick={() => setEditingTask(null)}>取消</button>
-              <button className="btn" onClick={handleSaveTask}>保存</button>
+              <button className="btn btn--secondary" onClick={handleCloseModal}>取消</button>
+              <button className="btn" onClick={handleSaveTask} disabled={saving}>
+                {saving ? <span className="spinner" /> : null}
+                {saving ? '保存中...' : '保存修改'}
+              </button>
             </div>
           </div>
         </div>

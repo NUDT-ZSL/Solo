@@ -33,28 +33,45 @@ interface Stats {
 
 const KNOWLEDGE_POINTS = ['组件设计', '状态管理', '路由配置', '性能优化', '工程化'];
 
-const StarRating = React.memo(({ value, onChange }: { value: number; onChange: (v: number) => void }) => {
+interface StarRatingProps {
+  value: number;
+  onChange: (v: number) => void;
+  size?: number;
+}
+
+const StarRating = React.memo(({ value, onChange, size = 28 }: StarRatingProps) => {
   const [clickedStar, setClickedStar] = useState<number | null>(null);
+  const [hoverStar, setHoverStar] = useState<number>(0);
 
   const handleClick = (star: number) => {
     setClickedStar(star);
     onChange(star);
-    setTimeout(() => setClickedStar(null), 200);
+    setTimeout(() => setClickedStar(null), 300);
   };
 
+  const displayValue = hoverStar > 0 ? hoverStar : value;
+
   return (
-    <div className="star-rating">
-      {[1, 2, 3, 4, 5].map(star => (
-        <span
-          key={star}
-          className={`star ${star <= value ? 'star--active' : ''} ${clickedStar === star ? 'star--click' : ''}`}
-          onClick={() => handleClick(star)}
-          role="button"
-          aria-label={`${star}星`}
-        >
-          ★
-        </span>
-      ))}
+    <div className="star-rating" style={{ gap: '2px' }}>
+      {[1, 2, 3, 4, 5].map(star => {
+        const isActive = star <= displayValue;
+        const isClicked = clickedStar === star;
+        return (
+          <span
+            key={star}
+            className={`star ${isActive ? 'star--active' : ''} ${isClicked ? 'star--click' : ''}`}
+            style={{ fontSize: `${size}px` }}
+            onClick={() => handleClick(star)}
+            onMouseEnter={() => setHoverStar(star)}
+            onMouseLeave={() => setHoverStar(0)}
+            role="button"
+            aria-label={`${star}星`}
+            tabIndex={0}
+          >
+            ★
+          </span>
+        );
+      })}
     </div>
   );
 });
@@ -73,6 +90,7 @@ const TrackingModule: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [submitting, setSubmitting] = useState<boolean>(false);
+  const [chartKey, setChartKey] = useState<number>(0);
 
   useEffect(() => {
     loadStats();
@@ -83,6 +101,7 @@ const TrackingModule: React.FC = () => {
     try {
       const res = await axios.get('/api/stats');
       setStats(res.data);
+      setChartKey(prev => prev + 1);
     } catch {
       setError('加载统计数据失败');
     } finally {
@@ -159,7 +178,7 @@ const TrackingModule: React.FC = () => {
         <h3 className="card-title">📝 记录学习活动</h3>
 
         <div className="form-group">
-          <label className="form-label">学习时长</label>
+          <label className="form-label">学习时长（拖拽滑块调节）</label>
           <div className="slider-container">
             <input
               type="range"
@@ -180,7 +199,8 @@ const TrackingModule: React.FC = () => {
             className="form-textarea"
             value={description}
             onChange={e => setDescription(e.target.value)}
-            placeholder="描述今天的学习内容..."
+            placeholder="描述今天的学习内容、收获或遇到的问题..."
+            rows={3}
           />
         </div>
 
@@ -193,6 +213,7 @@ const TrackingModule: React.FC = () => {
                 <StarRating
                   value={knowledgeScores[point] || 0}
                   onChange={score => handleKnowledgeScore(point, score)}
+                  size={26}
                 />
               </div>
             ))}
@@ -206,7 +227,7 @@ const TrackingModule: React.FC = () => {
           style={{ width: '100%' }}
         >
           {submitting ? <span className="spinner" /> : null}
-          {submitting ? '提交中...' : '提交记录'}
+          {submitting ? '提交中...' : '提交学习记录'}
         </button>
       </div>
 
@@ -221,7 +242,11 @@ const TrackingModule: React.FC = () => {
           <div className="chart-container">
             <h4 className="chart-title">📈 最近7天学习时长</h4>
             <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={barChartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+              <BarChart
+                key={`bar-${chartKey}`}
+                data={barChartData}
+                margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#eceff1" />
                 <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#78909c' }} />
                 <YAxis tick={{ fontSize: 12, fill: '#78909c' }} unit="分" />
@@ -234,6 +259,7 @@ const TrackingModule: React.FC = () => {
                   fill="#4fc3f7"
                   radius={[4, 4, 0, 0]}
                   animationDuration={500}
+                  animationEasing="ease-out"
                 />
               </BarChart>
             </ResponsiveContainer>
@@ -242,7 +268,13 @@ const TrackingModule: React.FC = () => {
           <div className="chart-container">
             <h4 className="chart-title">🎯 知识点掌握度</h4>
             <ResponsiveContainer width="100%" height={260}>
-              <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="70%">
+              <RadarChart
+                key={`radar-${chartKey}`}
+                data={radarData}
+                cx="50%"
+                cy="50%"
+                outerRadius="70%"
+              >
                 <PolarGrid stroke="#cfd8dc" />
                 <PolarAngleAxis
                   dataKey="name"
@@ -260,6 +292,8 @@ const TrackingModule: React.FC = () => {
                   fill="#4fc3f7"
                   fillOpacity={0.35}
                   animationDuration={500}
+                  animationEasing="ease-out"
+                  isAnimationActive={true}
                 />
                 <Tooltip
                   formatter={(value: number) => [`${value}%`, '掌握度']}
