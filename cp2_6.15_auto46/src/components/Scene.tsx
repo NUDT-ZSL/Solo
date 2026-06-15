@@ -8,27 +8,24 @@ import Chart3D from './Chart3D';
 
 function SceneContent() {
   const groupRef = useRef<THREE.Group>(null);
-  const { isLoaded, sceneRotation, setIsLoaded } = useMeteoStore();
-  const animationRef = useRef({ progress: 0, startRotation: 0 });
+  const { sceneRotation, setIsLoaded } = useMeteoStore();
+  const animationRef = useRef({ progress: 0, duration: 2 });
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoaded(true);
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [setIsLoaded]);
+    animationRef.current.progress = 0;
+  }, []);
 
   useFrame((_, delta) => {
     if (!groupRef.current) return;
 
     const anim = animationRef.current;
-    const targetProgress = isLoaded ? 1 : 0;
-    const speed = 0.5;
 
-    if (anim.progress < targetProgress) {
-      anim.progress = Math.min(anim.progress + delta * speed, targetProgress);
-    } else if (anim.progress > targetProgress) {
-      anim.progress = Math.max(anim.progress - delta * speed, targetProgress);
+    if (anim.progress < 1) {
+      anim.progress = Math.min(anim.progress + delta / anim.duration, 1);
+
+      if (anim.progress >= 1) {
+        setIsLoaded(true);
+      }
     }
 
     const t = anim.progress;
@@ -37,16 +34,25 @@ function SceneContent() {
     const scale = easeOutCubic;
     groupRef.current.scale.setScalar(scale);
 
-    const initialRotation = sceneRotation;
-    const startRotation = anim.startRotation;
-    const currentRotation = startRotation + (initialRotation - startRotation) * easeOutCubic;
-    groupRef.current.rotation.y = currentRotation;
-  });
-
-  useFrame(() => {
-    if (groupRef.current && isLoaded) {
+    if (anim.progress < 1) {
+      const startRotation = -Math.PI / 4;
+      groupRef.current.rotation.y = startRotation * (1 - easeOutCubic);
+    } else {
       groupRef.current.rotation.y = sceneRotation;
     }
+
+    const opacity = easeOutCubic;
+    groupRef.current.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.material) {
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        materials.forEach((mat) => {
+          if (mat instanceof THREE.Material) {
+            mat.transparent = true;
+            mat.opacity = opacity;
+          }
+        });
+      }
+    });
   });
 
   return (
