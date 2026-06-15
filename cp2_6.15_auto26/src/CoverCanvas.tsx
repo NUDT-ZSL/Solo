@@ -118,7 +118,9 @@ const CoverCanvas = forwardRef<CoverCanvasHandle, CoverCanvasProps>(
 
       const gradient = ctx.createRadialGradient(x, y, 0, x, y, brushRadius);
       gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
-      gradient.addColorStop(0.6, 'rgba(0, 0, 0, 0.8)');
+      gradient.addColorStop(0.4, 'rgba(0, 0, 0, 0.9)');
+      gradient.addColorStop(0.7, 'rgba(0, 0, 0, 0.5)');
+      gradient.addColorStop(0.85, 'rgba(0, 0, 0, 0.2)');
       gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
       ctx.globalCompositeOperation = 'destination-out';

@@ -31,11 +31,9 @@ const Celebration: React.FC<CelebrationProps> = ({ active, duration = 2000 }) =>
   const startTimeRef = useRef<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const colors = ['#ffd700', '#ffc107', '#ff9800', '#ff8c00', '#ffa500', '#ffeb3b'];
-
   const createParticles = useCallback((width: number, height: number) => {
     const particles: Particle[] = [];
-    const count = 80;
+    const count = 100;
     const centerX = width / 2;
     const centerY = height / 2;
 
@@ -46,24 +44,32 @@ const Celebration: React.FC<CelebrationProps> = ({ active, duration = 2000 }) =>
       switch (side) {
         case 0:
           startX = Math.random() * width;
-          startY = -20;
+          startY = -30;
           break;
         case 1:
-          startX = width + 20;
+          startX = width + 30;
           startY = Math.random() * height;
           break;
         case 2:
           startX = Math.random() * width;
-          startY = height + 20;
+          startY = height + 30;
           break;
         default:
-          startX = -20;
+          startX = -30;
           startY = Math.random() * height;
           break;
       }
 
-      const targetX = centerX + (Math.random() - 0.5) * width * 0.8;
-      const targetY = centerY + (Math.random() - 0.5) * height * 0.8;
+      const targetX = centerX + (Math.random() - 0.5) * width * 0.85;
+      const targetY = centerY + (Math.random() - 0.5) * height * 0.85;
+
+      const isCircle = Math.random() > 0.5;
+      const size = Math.random() * 6 + 6;
+      const colorRatio = Math.random();
+      const r = Math.round(255);
+      const g = Math.round(215 + (140 - 215) * colorRatio);
+      const b = Math.round(0 + (0 - 0) * colorRatio);
+      const color = `rgb(${r}, ${g}, ${b})`;
 
       particles.push({
         x: startX,
@@ -72,13 +78,13 @@ const Celebration: React.FC<CelebrationProps> = ({ active, duration = 2000 }) =>
         startY,
         targetX,
         targetY,
-        vx: (Math.random() - 0.5) * 3,
-        vy: Math.random() * 2 + 1,
-        size: Math.random() * 6 + 6,
+        vx: (Math.random() - 0.5) * 4,
+        vy: Math.random() * 2.5 + 1,
+        size,
         rotation: Math.random() * Math.PI * 2,
-        rotationSpeed: (Math.random() - 0.5) * 0.2,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        isCircle: Math.random() > 0.5,
+        rotationSpeed: (Math.random() - 0.5) * 0.25,
+        color,
+        isCircle,
         alpha: 1,
         phase: 'enter',
         enterProgress: 0,

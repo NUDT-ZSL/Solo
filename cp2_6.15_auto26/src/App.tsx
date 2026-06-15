@@ -9,10 +9,13 @@ const DEFAULT_BRUSH_RADIUS = 30;
 
 const App: React.FC = () => {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [thumbnailSrc, setThumbnailSrc] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>('');
   const [fileSize, setFileSize] = useState<number>(0);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [uploadComplete, setUploadComplete] = useState(false);
+  const [showScratch, setShowScratch] = useState(false);
   const [brushRadius, setBrushRadius] = useState(DEFAULT_BRUSH_RADIUS);
   const [eraseProgress, setEraseProgress] = useState(0);
   const [celebrationTriggered, setCelebrationTriggered] = useState(false);
@@ -30,6 +33,11 @@ const App: React.FC = () => {
     setFileName(file.name);
     setFileSize(file.size);
     setUploadProgress(0);
+    setUploadComplete(false);
+    setShowScratch(false);
+
+    const objectUrl = URL.createObjectURL(file);
+    setThumbnailSrc(objectUrl);
 
     const reader = new FileReader();
 
@@ -44,9 +52,11 @@ const App: React.FC = () => {
       const result = e.target?.result as string;
       setImageSrc(result);
       setUploadProgress(100);
+      setUploadComplete(true);
       setCelebrationTriggered(false);
       setShowResult(false);
       setEraseProgress(0);
+      URL.revokeObjectURL(objectUrl);
     };
 
     reader.readAsDataURL(file);
@@ -80,6 +90,10 @@ const App: React.FC = () => {
 
   const handleUploadClick = useCallback(() => {
     fileInputRef.current?.click();
+  }, []);
+
+  const handleStartScratch = useCallback(() => {
+    setShowScratch(true);
   }, []);
 
   const handleProgressChange = useCallback((progress: number) => {
@@ -122,7 +136,7 @@ const App: React.FC = () => {
     }
   }, [celebrationActive]);
 
-  if (!imageSrc) {
+  if (!showScratch || !imageSrc) {
     return (
       <div className="app">
         <div className="upload-page">
@@ -130,18 +144,17 @@ const App: React.FC = () => {
           <p className="app-subtitle">上传图片，刮开惊喜</p>
 
           <div
-            className={`upload-area ${isDragging ? 'upload-area--dragging' : ''}`}
+            className={`upload-area ${isDragging ? 'upload-area--dragging' : ''} ${uploadComplete ? 'upload-area--complete' : ''}`}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            onClick={handleUploadClick}
+            onClick={!uploadComplete ? handleUploadClick : undefined}
           >
-            {fileName && uploadProgress > 0 ? (
+            {thumbnailSrc ? (
               <img
-                src={imageSrc || ''}
+                src={thumbnailSrc}
                 alt="预览"
                 className="upload-area__thumbnail"
-                style={{ opacity: uploadProgress / 100 }}
               />
             ) : (
               <>
@@ -178,6 +191,15 @@ const App: React.FC = () => {
                 />
               </div>
             </div>
+          )}
+
+          {uploadComplete && (
+            <button
+              className="btn btn--primary btn--start"
+              onClick={handleStartScratch}
+            >
+              开始刮除 →
+            </button>
           )}
         </div>
       </div>
@@ -226,7 +248,7 @@ const App: React.FC = () => {
                 <circle
                   cx="24"
                   cy="24"
-                  r="20"
+                  r="22"
                   fill="none"
                   stroke="#333"
                   strokeWidth="4"
@@ -234,13 +256,13 @@ const App: React.FC = () => {
                 <circle
                   cx="24"
                   cy="24"
-                  r="20"
+                  r="22"
                   fill="none"
                   stroke="#ffb347"
                   strokeWidth="4"
                   strokeLinecap="round"
-                  strokeDasharray={2 * Math.PI * 20}
-                  strokeDashoffset={2 * Math.PI * 20 * (1 - eraseProgress)}
+                  strokeDasharray={2 * Math.PI * 22}
+                  strokeDashoffset={2 * Math.PI * 22 * (1 - eraseProgress)}
                   transform="rotate(-90 24 24)"
                   style={{ transition: 'stroke-dashoffset 0.2s ease' }}
                 />
