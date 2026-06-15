@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import type { Photo, Narrative, TimelineNode } from '../types';
 import PhotoCard from './PhotoCard';
-import { FileText, GripVertical, Trash2, X } from 'lucide-react';
+import { FileText, GripVertical, Trash2 } from 'lucide-react';
 
 interface TimelineProps {
   photos: Photo[];
@@ -31,13 +31,16 @@ const Timeline: React.FC<TimelineProps> = ({
   onPhotoScrollComplete,
 }) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const [visibleRange, setVisibleRange] = useState<{ start: number; end: number }>({ start: 0, end: 9 });
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [editingNarrative, setEditingNarrative] = useState<string | null>(null);
   const nodeRefs = useRef<(HTMLDivElement | null)[]>([]);
   const touchStartX = useRef<number>(0);
   const touchStartScroll = useRef<number>(0);
+  const isTouchDragging = useRef(false);
+  const lastTouchX = useRef<number>(0);
+  const lastTouchTime = useRef<number>(0);
+  const velocity = useRef<number>(0);
 
   const nodes: TimelineNode[] = useMemo(() => {
     const list: TimelineNode[] = [
@@ -47,24 +50,6 @@ const Timeline: React.FC<TimelineProps> = ({
     list.sort((a, b) => a.orderIndex - b.orderIndex);
     return list;
   }, [photos, narratives]);
-
-  useEffect(() => {
-    if (!wrapperRef.current) return;
-    const updateVisible = () => {
-      const el = wrapperRef.current!;
-      const start = Math.max(0, Math.floor(el.scrollLeft / NODE_WIDTH) - 3);
-      const end = Math.min(nodes.length - 1, Math.ceil((el.scrollLeft + el.clientWidth) / NODE_WIDTH) + 3);
-      setVisibleRange({ start, end });
-    };
-    updateVisible();
-    const el = wrapperRef.current;
-    el.addEventListener('scroll', updateVisible, { passive: true });
-    window.addEventListener('resize', updateVisible);
-    return () => {
-      el.removeEventListener('scroll', updateVisible);
-      window.removeEventListener('resize', updateVisible);
-    };
-  }, [nodes.length]);
 
   useEffect(() => {
     if (scrollToPhotoId && wrapperRef.current) {
@@ -79,12 +64,34 @@ const Timeline: React.FC<TimelineProps> = ({
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
     touchStartScroll.current = wrapperRef.current?.scrollLeft ?? 0;
+    isTouchDragging.current = true;
+    lastTouchX.current = e.touches[0].clientX;
+    lastTouchTime.current = Date.now();
+    velocity.current = 0;
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (!wrapperRef.current) return;
-    const delta = e.touches[0].clientX - touchStartX.current;
+    if (!wrapperRef.current || !isTouchDragging.current) return;
+    const currentX = e.touches[0].clientX;
+    const now = Date.now();
+    const dt = now - lastTouchTime.current;
+    if (dt > 0) {
+      velocity.current = (lastTouchX.current - currentX) / dt;
+    }
+    lastTouchX.current = currentX;
+    lastTouchTime.current = now;
+    const delta = currentX - touchStartX.current;
     wrapperRef.current.scrollLeft = touchStartScroll.current - delta;
+  };
+
+  const handleTouchEnd = () => {
+    isTouchDragging.current = false;
+    if (wrapperRef.current && Math.abs(velocity.current) > 0.3) {
+      const momentum = velocity.current * 200;
+      const currentScroll = wrapperRef.current.scrollLeft;
+      const targetScroll = currentScroll + momentum;
+      wrapperRef.current.scrollTo({ left: targetScroll, behavior: 'smooth' });
+    }
   };
 
   const handleDragStart = (idx: number) => (e: React.DragEvent) => {
@@ -122,9 +129,11 @@ const Timeline: React.FC<TimelineProps> = ({
         minWidth: '100%',
         WebkitOverflowScrolling: 'touch',
         willChange: 'transform',
+        touchAction: 'pan-y',
       }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
       <div
         style={{
@@ -150,7 +159,6 @@ const Timeline: React.FC<TimelineProps> = ({
         />
 
         {nodes.map((node, idx) => {
-          const isVisible = idx >= visibleRange.start && idx <= visibleRange.end;
           const isDragging = dragIndex === idx;
           const isDragTarget = dragOverIndex === idx && dragIndex !== idx;
 
@@ -176,7 +184,6 @@ const Timeline: React.FC<TimelineProps> = ({
               {node.type === 'photo' ? (
                 <PhotoCard
                   photo={node.data as Photo}
-                  isVisible={isVisible}
                   onSelect={onSelectPhoto}
                   onDelete={onDeletePhoto}
                   isSelected={selectedPhotoId === (node.data as Photo).id}

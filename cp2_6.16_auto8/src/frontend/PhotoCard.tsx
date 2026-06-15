@@ -1,32 +1,55 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { Photo } from '../types';
 import { Image, MapPin, Calendar, Trash2 } from 'lucide-react';
 
 interface PhotoCardProps {
   photo: Photo;
-  isVisible: boolean;
   onSelect: (photo: Photo) => void;
   onDelete: (id: string) => void;
   isSelected: boolean;
 }
 
-const PhotoCard: React.FC<PhotoCardProps> = ({ photo, isVisible, onSelect, onDelete, isSelected }) => {
+const PhotoCard: React.FC<PhotoCardProps> = ({ photo, onSelect, onDelete, isSelected }) => {
   const [loaded, setLoaded] = useState(false);
   const [hover, setHover] = useState(false);
   const [error, setError] = useState(false);
+  const [nearVisible, setNearVisible] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const hasBeenVisible = useRef(false);
+
+  const handleIntersection = useCallback((entries: IntersectionObserverEntry[]) => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) {
+        hasBeenVisible.current = true;
+        setNearVisible(true);
+      }
+    }
+  }, []);
 
   useEffect(() => {
-    if (isVisible && imgRef.current && !loaded) {
+    const el = cardRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(handleIntersection, {
+      rootMargin: '300px 344px 300px 344px',
+      threshold: 0,
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [handleIntersection]);
+
+  useEffect(() => {
+    if (nearVisible && imgRef.current && !loaded) {
       imgRef.current.src = photo.filepath;
     }
-  }, [isVisible, photo.filepath, loaded]);
+  }, [nearVisible, photo.filepath, loaded]);
 
   const date = new Date(photo.timestamp);
   const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
   return (
     <div
+      ref={cardRef}
       style={{
         position: 'relative',
         display: 'flex',
@@ -93,7 +116,7 @@ const PhotoCard: React.FC<PhotoCardProps> = ({ photo, isVisible, onSelect, onDel
             position: 'relative',
           }}
         >
-          {isVisible && !error ? (
+          {nearVisible && !error ? (
             <img
               ref={imgRef}
               onLoad={() => setLoaded(true)}
@@ -108,7 +131,7 @@ const PhotoCard: React.FC<PhotoCardProps> = ({ photo, isVisible, onSelect, onDel
               loading="lazy"
             />
           ) : null}
-          {(!loaded || !isVisible || error) && (
+          {(!loaded || !nearVisible || error) && (
             <Image size={36} color="#bbb" />
           )}
         </div>
@@ -136,7 +159,7 @@ const PhotoCard: React.FC<PhotoCardProps> = ({ photo, isVisible, onSelect, onDel
         zIndex: 3,
       }} />
 
-      {hover && isVisible && loaded && !error && (
+      {hover && nearVisible && loaded && !error && (
         <div
           style={{
             position: 'absolute',
