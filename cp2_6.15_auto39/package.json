@@ -15,7 +15,6 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.3.0",
     "express": "^4.21.2",
-    "better-sqlite3": "^11.3.0",
     "ws": "^8.18.0",
     "cors": "^2.8.5"
   },
@@ -26,7 +25,7 @@
     "@types/node": "^22.15.30",
     "@types/ws": "^8.5.13",
     "@types/cors": "^2.8.19",
-    "@types/better-sqlite3": "^7.6.11",
+
     "@vitejs/plugin-react": "^4.4.1",
     "concurrently": "^9.2.0",
     "tsx": "^4.20.3",

@@ -1,14 +1,11 @@
-import Database from 'better-sqlite3';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import fs from 'fs';
 import type { Recipe, Ingredient, RecipeStep } from '../src/types';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DB_PATH = path.join(__dirname, '..', 'kitchen.db');
-
-const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
+const DATA_PATH = path.join(__dirname, '..', 'kitchen-data.json');
 
 const UNIT_CONVERSION: Record<string, { toKg?: number; toMl?: number }> = {
   g: { toKg: 0.001 },
@@ -24,212 +21,82 @@ const UNIT_CONVERSION: Record<string, { toKg?: number; toMl?: number }> = {
   杯: { toMl: 240 },
 };
 
-export function initDatabase(): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS recipes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      author TEXT NOT NULL DEFAULT '匿名',
-      thumbnail TEXT,
-      rating REAL DEFAULT 0,
-      isFavorite INTEGER DEFAULT 0
-    );
-
-    CREATE TABLE IF NOT EXISTS ingredients (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      recipeId INTEGER NOT NULL,
-      name TEXT NOT NULL,
-      quantity REAL NOT NULL,
-      unit TEXT NOT NULL,
-      category TEXT NOT NULL DEFAULT '其他',
-      pricePerUnit REAL,
-      FOREIGN KEY (recipeId) REFERENCES recipes(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS steps (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      recipeId INTEGER NOT NULL,
-      orderNum INTEGER NOT NULL,
-      description TEXT NOT NULL,
-      FOREIGN KEY (recipeId) REFERENCES recipes(id)
-    );
-  `);
+interface StoredData {
+  nextId: number;
+  recipes: Recipe[];
 }
 
-function assembleRecipes(
-  recipeRows: any[],
-  ingredientRows: any[],
-  stepRows: any[],
-): Recipe[] {
-  const ingsByRecipe: Record<number, Ingredient[]> = {};
-  ingredientRows.forEach((r) => {
-    if (!ingsByRecipe[r.recipeId]) ingsByRecipe[r.recipeId] = [];
-    ingsByRecipe[r.recipeId].push({
-      id: r.id,
-      name: r.name,
-      quantity: r.quantity,
-      unit: r.unit,
-      category: r.category,
-      pricePerUnit: r.pricePerUnit ?? undefined,
-    });
-  });
+let data: StoredData = {
+  nextId: 1,
+  recipes: [],
+};
 
-  const stepsByRecipe: Record<number, RecipeStep[]> = {};
-  stepRows.forEach((r) => {
-    if (!stepsByRecipe[r.recipeId]) stepsByRecipe[r.recipeId] = [];
-    stepsByRecipe[r.recipeId].push({
-      order: r.orderNum,
-      description: r.description,
-    });
-  });
+function saveData() {
+  try {
+    fs.writeFileSync(DATA_PATH, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (e) {
+    // ignore write errors for demo
+  }
+}
 
-  return recipeRows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    author: row.author,
-    thumbnail: row.thumbnail,
-    rating: row.rating,
-    isFavorite: row.isFavorite === 1,
-    ingredients: ingsByRecipe[row.id] || [],
-    steps: (stepsByRecipe[row.id] || []).sort((a, b) => a.order - b.order),
-  }));
+function loadData() {
+  try {
+    if (fs.existsSync(DATA_PATH)) {
+      const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+      data = JSON.parse(raw);
+      return true;
+    }
+  } catch (e) {
+    // ignore
+  }
+  return false;
+}
+
+export function initDatabase(): void {
+  loadData();
 }
 
 export function getAllRecipes(search?: string): Recipe[] {
-  let recipeRows: any[];
-  if (search) {
-    recipeRows = db
-      .prepare('SELECT * FROM recipes WHERE name LIKE ? ORDER BY id DESC')
-      .all(`%${search}%`) as any[];
-  } else {
-    recipeRows = db.prepare('SELECT * FROM recipes ORDER BY id DESC').all() as any[];
-  }
-
-  if (recipeRows.length === 0) return [];
-
-  const ids = recipeRows.map((r) => r.id);
-  const placeholders = ids.map(() => '?').join(',');
-
-  const ingredientRows = db
-    .prepare(`SELECT * FROM ingredients WHERE recipeId IN (${placeholders})`)
-    .all(...ids) as any[];
-  const stepRows = db
-    .prepare(`SELECT * FROM steps WHERE recipeId IN (${placeholders})`)
-    .all(...ids) as any[];
-
-  let recipes = assembleRecipes(recipeRows, ingredientRows, stepRows);
-
+  let list = [...data.recipes].sort((a, b) => b.id - a.id);
   if (search) {
     const kw = search.toLowerCase();
-    const matchedIngredientRecipeIds = new Set<number>();
-    ingredientRows.forEach((r) => {
-      if (r.name.toLowerCase().includes(kw)) matchedIngredientRecipeIds.add(r.recipeId);
-    });
-    recipes = recipes.filter(
+    list = list.filter(
       (r) =>
-        r.name.toLowerCase().includes(kw) || matchedIngredientRecipeIds.has(r.id),
+        r.name.toLowerCase().includes(kw) ||
+        r.ingredients.some((ing) => ing.name.toLowerCase().includes(kw)),
     );
   }
-
-  return recipes;
+  return list;
 }
 
 export function getRecipeById(id: number): Recipe | null {
-  const row = db.prepare('SELECT * FROM recipes WHERE id = ?').get(id) as any;
-  if (!row) return null;
-
-  const ingredientRows = db
-    .prepare('SELECT * FROM ingredients WHERE recipeId = ?')
-    .all(id) as any[];
-  const stepRows = db
-    .prepare('SELECT * FROM steps WHERE recipeId = ? ORDER BY orderNum')
-    .all(id) as any[];
-
-  return assembleRecipes([row], ingredientRows, stepRows)[0];
+  return data.recipes.find((r) => r.id === id) || null;
 }
 
 export function createRecipe(recipe: Omit<Recipe, 'id'>): Recipe {
-  const tx = db.transaction(() => {
-    const info = db
-      .prepare(
-        'INSERT INTO recipes (name, author, thumbnail, rating, isFavorite) VALUES (?, ?, ?, ?, ?)',
-      )
-      .run(
-        recipe.name,
-        recipe.author,
-        recipe.thumbnail,
-        recipe.rating,
-        recipe.isFavorite ? 1 : 0,
-      );
-    const newId = Number(info.lastInsertRowid);
-
-    const ingStmt = db.prepare(
-      'INSERT INTO ingredients (recipeId, name, quantity, unit, category, pricePerUnit) VALUES (?, ?, ?, ?, ?, ?)',
-    );
-    recipe.ingredients.forEach((ing) => {
-      ingStmt.run(
-        newId,
-        ing.name,
-        ing.quantity,
-        ing.unit,
-        ing.category,
-        ing.pricePerUnit ?? null,
-      );
-    });
-
-    const stepStmt = db.prepare(
-      'INSERT INTO steps (recipeId, orderNum, description) VALUES (?, ?, ?)',
-    );
-    recipe.steps.forEach((s) => {
-      stepStmt.run(newId, s.order, s.description);
-    });
-
-    return newId;
-  });
-
-  const newId = tx();
-  return getRecipeById(newId) as Recipe;
+  const newId = data.nextId++;
+  const newRecipe: Recipe = {
+    ...recipe,
+    id: newId,
+    ingredients: recipe.ingredients.map((ing, idx) => ({ ...ing, id: newId * 1000 + idx })),
+    steps: [...recipe.steps],
+  };
+  data.recipes.push(newRecipe);
+  saveData();
+  return newRecipe;
 }
 
 export function updateRecipe(id: number, recipe: Partial<Recipe>): Recipe | null {
-  const fields: string[] = [];
-  const values: any[] = [];
-  if (recipe.name !== undefined) {
-    fields.push('name = ?');
-    values.push(recipe.name);
-  }
-  if (recipe.author !== undefined) {
-    fields.push('author = ?');
-    values.push(recipe.author);
-  }
-  if (recipe.thumbnail !== undefined) {
-    fields.push('thumbnail = ?');
-    values.push(recipe.thumbnail);
-  }
-  if (recipe.rating !== undefined) {
-    fields.push('rating = ?');
-    values.push(recipe.rating);
-  }
-  if (recipe.isFavorite !== undefined) {
-    fields.push('isFavorite = ?');
-    values.push(recipe.isFavorite ? 1 : 0);
-  }
-
-  if (fields.length > 0) {
-    values.push(id);
-    db.prepare(`UPDATE recipes SET ${fields.join(', ')} WHERE id = ?`).run(...values);
-  }
-
-  return getRecipeById(id);
+  const idx = data.recipes.findIndex((r) => r.id === id);
+  if (idx === -1) return null;
+  data.recipes[idx] = { ...data.recipes[idx], ...recipe };
+  saveData();
+  return data.recipes[idx];
 }
 
 export function deleteRecipe(id: number): void {
-  const tx = db.transaction(() => {
-    db.prepare('DELETE FROM steps WHERE recipeId = ?').run(id);
-    db.prepare('DELETE FROM ingredients WHERE recipeId = ?').run(id);
-    db.prepare('DELETE FROM recipes WHERE id = ?').run(id);
-  });
-  tx();
+  data.recipes = data.recipes.filter((r) => r.id !== id);
+  saveData();
 }
 
 export function aggregateIngredients(
@@ -237,47 +104,47 @@ export function aggregateIngredients(
   scales: Record<number, number>,
 ): Array<{ name: string; quantity: number; unit: string; category: string; pricePerUnit: number }> {
   if (recipeIds.length === 0) return [];
-  const placeholders = recipeIds.map(() => '?').join(',');
-  const rows = db
-    .prepare(`SELECT * FROM ingredients WHERE recipeId IN (${placeholders})`)
-    .all(...recipeIds) as any[];
+
+  const selected = data.recipes.filter((r) => recipeIds.includes(r.id));
 
   const grouped: Record<
     string,
     { kg: number; ml: number; unit: string; category: string; pricePerUnit: number; names: string[] }
   > = {};
 
-  rows.forEach((row) => {
-    const scale = scales[row.recipeId] ?? 1;
-    const key = row.name.toLowerCase();
-    const conv = UNIT_CONVERSION[row.unit] || {};
+  selected.forEach((recipe) => {
+    const scale = scales[recipe.id] ?? 1;
+    recipe.ingredients.forEach((ing) => {
+      const key = ing.name.toLowerCase();
+      const conv = UNIT_CONVERSION[ing.unit] || {};
 
-    if (!grouped[key]) {
-      grouped[key] = {
-        kg: 0,
-        ml: 0,
-        unit: row.unit,
-        category: row.category,
-        pricePerUnit: row.pricePerUnit ?? 0,
-        names: [],
-      };
-    }
-    if (conv.toKg) {
-      grouped[key].kg += row.quantity * conv.toKg * scale;
-      grouped[key].unit = 'kg';
-    } else if (conv.toMl) {
-      grouped[key].ml += row.quantity * conv.toMl * scale;
-      grouped[key].unit = 'ml';
-    } else {
-      grouped[key].kg += row.quantity * scale;
-    }
-    grouped[key].category = row.category;
-    if (row.pricePerUnit) {
-      grouped[key].pricePerUnit = row.pricePerUnit;
-    }
-    if (!grouped[key].names.includes(row.name)) {
-      grouped[key].names.push(row.name);
-    }
+      if (!grouped[key]) {
+        grouped[key] = {
+          kg: 0,
+          ml: 0,
+          unit: ing.unit,
+          category: ing.category,
+          pricePerUnit: ing.pricePerUnit ?? 0,
+          names: [],
+        };
+      }
+      if (conv.toKg) {
+        grouped[key].kg += ing.quantity * conv.toKg * scale;
+        grouped[key].unit = 'kg';
+      } else if (conv.toMl) {
+        grouped[key].ml += ing.quantity * conv.toMl * scale;
+        grouped[key].unit = 'ml';
+      } else {
+        grouped[key].kg += ing.quantity * scale;
+      }
+      grouped[key].category = ing.category;
+      if (ing.pricePerUnit) {
+        grouped[key].pricePerUnit = ing.pricePerUnit;
+      }
+      if (!grouped[key].names.includes(ing.name)) {
+        grouped[key].names.push(ing.name);
+      }
+    });
   });
 
   return Object.entries(grouped).map(([key, v]) => ({
@@ -290,8 +157,7 @@ export function aggregateIngredients(
 }
 
 export function seedSampleData(): void {
-  const row = db.prepare('SELECT COUNT(*) as cnt FROM recipes').get() as any;
-  if (row.cnt > 0) return;
+  if (data.recipes.length > 0) return;
 
   const samples: Omit<Recipe, 'id'>[] = [
     {
