@@ -1,491 +1,563 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { InstrumentType, EnsembleMode, Note, EnsembleResult, Measure, INSTRUMENTS, MODE_COLORS } from '@/types';
-import { v4 as uuidv4 } from 'uuid';
+import React, { useState, useRef, useEffect, useCallback } from 'react'
+import {
+  InstrumentType,
+  EnsembleMode,
+  Note,
+  EnsembleResult,
+  Measure,
+  INSTRUMENTS,
+  MODE_COLORS,
+  TOTAL_MEASURES,
+} from '@/types'
+import { NotesBuffer } from '@/engine/NotesBuffer'
+import { mergeEnsemble } from '@/engine/MergeEngine'
+import { AudioEngine } from '@/engine/AudioEngine'
 
 interface RehearsalRoomProps {
-  instrument: InstrumentType;
-  onComplete: (result: EnsembleResult) => void;
+  instrument: InstrumentType
+  onComplete: (result: EnsembleResult) => void
 }
 
-const TOTAL_MEASURES = 8;
+function genId(): string {
+  return Math.random().toString(36).substring(2, 10)
+}
 
 export default function RehearsalRoom({ instrument, onComplete }: RehearsalRoomProps) {
-  const [mode, setMode] = useState<EnsembleMode>('align');
-  const [currentMeasure, setCurrentMeasure] = useState(1);
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [draggingNote, setDraggingNote] = useState<Note | null>(null);
-  const [dragPath, setDragPath] = useState<{ x: number; y: number }[]>([]);
-  const [showModeDropdown, setShowModeDropdown] = useState(false);
-  const [measures, setMeasures] = useState<Measure[]>([]);
-  const [startTime, setStartTime] = useState(Date.now());
-  const staffRef = useRef<HTMLDivElement>(null);
-  const velocityRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const [mode, setMode] = useState<EnsembleMode>('align')
+  const [currentMeasure, setCurrentMeasure] = useState(1)
+  const [notes, setNotes] = useState<Note[]>([])
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [draggingNote, setDraggingNote] = useState<Note | null>(null)
+  const [dragPath, setDragPath] = useState<{ x: number; y: number }[]>([])
+  const [showModePanel, setShowModePanel] = useState(false)
+  const [completedMeasures, setCompletedMeasures] = useState<Measure[]>([])
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  const instrumentConfig = INSTRUMENTS.find((i) => i.id === instrument)!;
-  const modeColor = MODE_COLORS[mode];
+  const staffRef = useRef<HTMLDivElement>(null)
+  const velocityRef = useRef<{ x: number; y: number; time: number } | null>(null)
+  const bufferRef = useRef<NotesBuffer>(new NotesBuffer(instrument))
+  const audioRef = useRef<AudioEngine>(AudioEngine.getInstance())
+  const startTimeRef = useRef<number>(Date.now())
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null)
+
+  const instrumentConfig = INSTRUMENTS.find((i) => i.id === instrument)!
+  const modeColor = MODE_COLORS[mode]
 
   useEffect(() => {
-    const styleSheet = document.createElement('style');
-    styleSheet.textContent = `
-      .mode-dropdown {
-        transition: height 0.3s ease-out, opacity 0.3s ease-out;
-        overflow: hidden;
-      }
-      .mode-dropdown.collapsed {
-        height: 0 !important;
-        opacity: 0 !important;
-      }
-      .mode-dropdown.expanded {
-        height: 36px !important;
-        opacity: 1 !important;
-      }
-      .note-dragging {
-        transform: scale(1.2) !important;
-        z-index: 100 !important;
-      }
-      .staff-line {
-        position: absolute;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background-color: rgba(255,255,255,0.3);
-      }
-      .progress-bar-fill {
-        transition: width 0.1s linear;
-      }
-      .note-deleting {
-        animation: noteDelete 0.3s ease-out forwards;
-      }
-      @keyframes noteDelete {
-        0% { opacity: 1; transform: scale(1); }
-        100% { opacity: 0; transform: scale(0.5) translateX(50px); }
-      }
-    `;
-    document.head.appendChild(styleSheet);
-    return () => {
-      document.head.removeChild(styleSheet);
-    };
-  }, []);
+    audioRef.current.init()
+  }, [])
 
-  const playBeep = useCallback(() => {
-    try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      oscillator.frequency.value = 880;
-      oscillator.type = 'sine';
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.15);
-    } catch (e) {
-      console.log('Audio not supported');
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => handleDragMove(e)
+    const onUp = (e: MouseEvent) => handleDragEnd(e)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
     }
-  }, []);
+  })
 
   const handleStaffClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!staffRef.current || draggingNote) return;
-      const rect = staffRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const pitch = Math.floor((1 - y / rect.height) * 12);
-      const beat = Math.floor((x / rect.width) * 4);
+      if (!staffRef.current || draggingNote) return
+      const rect = staffRef.current.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      const pitch = Math.max(0, Math.min(11, Math.floor((1 - y / rect.height) * 12)))
+      const beat = Math.max(0, Math.min(3, Math.floor((x / rect.width) * 4)))
+
+      const canPlace = checkModeConstraint(beat)
+      if (!canPlace) return
+
       const newNote: Note = {
-        id: uuidv4(),
+        id: genId(),
         instrument,
-        pitch: Math.max(0, Math.min(11, pitch)),
-        beat: Math.max(0, Math.min(3, beat)),
+        pitch,
+        beat,
         duration: 1,
         x,
         y,
-      };
-      setNotes((prev) => [...prev, newNote]);
+      }
+      setNotes((prev) => [...prev, newNote])
+      bufferRef.current.addNote(newNote, currentMeasure)
+      audioRef.current.playNote(instrument, pitch, 0.5)
     },
-    [instrument, draggingNote]
-  );
+    [instrument, draggingNote, currentMeasure, mode]
+  )
 
-  const handleNoteMouseDown = useCallback(
-    (e: React.MouseEvent, note: Note) => {
-      e.stopPropagation();
-      setDraggingNote(note);
-      setDragPath([{ x: e.clientX, y: e.clientY }]);
-      velocityRef.current = { x: e.clientX, y: e.clientY, time: Date.now() };
-    },
-    []
-  );
+  const checkModeConstraint = (beat: number): boolean => {
+    if (mode === 'align') {
+      return beat === 0
+    }
+    if (mode === 'follow') {
+      const lastNote = notes[notes.length - 1]
+      if (lastNote && beat <= lastNote.beat) return false
+      return true
+    }
+    return true
+  }
 
-  const handleMouseMove = useCallback(
+  const handleNoteMouseDown = useCallback((e: React.MouseEvent, note: Note) => {
+    e.stopPropagation()
+    e.preventDefault()
+    setDraggingNote(note)
+    dragStartRef.current = { x: note.x, y: note.y }
+    velocityRef.current = { x: e.clientX, y: e.clientY, time: Date.now() }
+    setDragPath([{ x: note.x, y: note.y }])
+  }, [])
+
+  const handleDragMove = useCallback(
     (e: MouseEvent) => {
-      if (!draggingNote || !staffRef.current) return;
-      const rect = staffRef.current.getBoundingClientRect();
-      const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
-      const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
-      setDragPath((prev) => [...prev, { x: e.clientX, y: e.clientY }]);
-      const now = Date.now();
-      velocityRef.current = { x: e.clientX, y: e.clientY, time: now };
+      if (!draggingNote || !staffRef.current) return
+      const rect = staffRef.current.getBoundingClientRect()
+      const x = Math.max(20, Math.min(rect.width - 20, e.clientX - rect.left))
+      const y = Math.max(14, Math.min(rect.height - 14, e.clientY - rect.top))
+      const pitch = Math.max(0, Math.min(11, Math.floor((1 - y / rect.height) * 12)))
+      const beat = Math.max(0, Math.min(3, Math.floor((x / rect.width) * 4)))
+
+      setDragPath((prev) => [...prev, { x, y }])
+      velocityRef.current = { x: e.clientX, y: e.clientY, time: Date.now() }
+
       setNotes((prev) =>
         prev.map((n) =>
-          n.id === draggingNote.id
-            ? {
-                ...n,
-                x,
-                y,
-                pitch: Math.max(0, Math.min(11, Math.floor((1 - y / rect.height) * 12))),
-                beat: Math.max(0, Math.min(3, Math.floor((x / rect.width) * 4))),
-              }
-            : n
+          n.id === draggingNote.id ? { ...n, x, y, pitch, beat } : n
         )
-      );
+      )
     },
     [draggingNote]
-  );
+  )
 
-  const handleMouseUp = useCallback(
+  const handleDragEnd = useCallback(
     (e: MouseEvent) => {
-      if (!draggingNote) return;
+      if (!draggingNote) return
+
       if (velocityRef.current) {
-        const dt = (Date.now() - velocityRef.current.time) / 1000;
-        if (dt > 0 && dt < 0.1) {
-          const dx = e.clientX - velocityRef.current.x;
-          const dy = e.clientY - velocityRef.current.y;
-          const speed = Math.sqrt(dx * dx + dy * dy) / dt;
-          if (speed > 500) {
-            setNotes((prev) => prev.filter((n) => n.id !== draggingNote.id));
-            setDraggingNote(null);
-            setDragPath([]);
-            return;
+        const dt = (Date.now() - velocityRef.current.time) / 1000
+        if (dt > 0 && dt < 0.15) {
+          const dx = e.clientX - velocityRef.current.x
+          const dy = e.clientY - velocityRef.current.y
+          const speed = Math.sqrt(dx * dx + dy * dy) / dt
+          if (speed > 800) {
+            setDeletingId(draggingNote.id)
+            setTimeout(() => {
+              setNotes((prev) => prev.filter((n) => n.id !== draggingNote.id))
+              bufferRef.current.removeNote(draggingNote.id, currentMeasure)
+              setDeletingId(null)
+            }, 300)
+            setDraggingNote(null)
+            setDragPath([])
+            return
           }
         }
       }
-      setDraggingNote(null);
-      setDragPath([]);
-    },
-    [draggingNote]
-  );
 
-  const handleNoteDoubleClick = useCallback(
-    (e: React.MouseEvent, noteId: string) => {
-      e.stopPropagation();
-      setNotes((prev) => prev.filter((n) => n.id !== noteId));
-    },
-    []
-  );
+      bufferRef.current.updateNote(draggingNote.id, {
+        x: draggingNote.x,
+        y: draggingNote.y,
+        pitch: draggingNote.pitch,
+        beat: draggingNote.beat,
+      })
 
-  useEffect(() => {
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [handleMouseMove, handleMouseUp]);
+      setDraggingNote(null)
+      setDragPath([])
+    },
+    [draggingNote, currentMeasure]
+  )
+
+  const handleNoteDoubleClick = useCallback((e: React.MouseEvent, noteId: string) => {
+    e.stopPropagation()
+    setDeletingId(noteId)
+    setTimeout(() => {
+      setNotes((prev) => prev.filter((n) => n.id !== noteId))
+      bufferRef.current.removeNote(noteId, currentMeasure)
+      setDeletingId(null)
+    }, 300)
+  }, [currentMeasure])
 
   const handleCompleteMeasure = useCallback(() => {
-    playBeep();
+    audioRef.current.playBell()
+    bufferRef.current.completeMeasure(currentMeasure)
+
     const newMeasure: Measure = {
       measureNumber: currentMeasure,
       notes: [...notes],
       completed: true,
-    };
-    const updatedMeasures = [...measures, newMeasure];
-    setMeasures(updatedMeasures);
+    }
+
+    const updated = [...completedMeasures, newMeasure]
+    setCompletedMeasures(updated)
 
     if (currentMeasure >= TOTAL_MEASURES) {
-      const instrumentActivity: Record<InstrumentType, number> = {
+      bufferRef.current.completeMeasure(currentMeasure)
+      const result = mergeEnsemble([bufferRef.current], mode, TOTAL_MEASURES)
+      result.totalDuration = Math.floor((Date.now() - startTimeRef.current) / 1000)
+      result.instrumentActivity = {
         piano: 0,
         violin: 0,
         cello: 0,
         flute: 0,
         percussion: 0,
-      };
-      updatedMeasures.forEach((m) => {
+      }
+      updated.forEach((m) => {
         m.notes.forEach((n) => {
-          instrumentActivity[n.instrument]++;
-        });
-      });
-      const result: EnsembleResult = {
-        sessionId: uuidv4(),
-        totalDuration: Math.floor((Date.now() - startTime) / 1000),
-        measures: updatedMeasures,
-        instrumentActivity,
-        mode,
-        createdAt: Date.now(),
-      };
-      onComplete(result);
+          result.instrumentActivity[n.instrument]++
+        })
+      })
+      onComplete(result)
     } else {
-      setCurrentMeasure((prev) => prev + 1);
-      setNotes([]);
+      setCurrentMeasure((prev) => prev + 1)
+      setNotes([])
     }
-  }, [currentMeasure, notes, measures, mode, startTime, onComplete, playBeep]);
+  }, [currentMeasure, notes, completedMeasures, mode, onComplete])
 
   const handlePlay = useCallback(() => {
-    setIsPlaying(true);
-    setProgress(0);
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsPlaying(false);
-          return 100;
-        }
-        return prev + 2;
-      });
-    }, 50);
-  }, []);
+    if (notes.length === 0) return
+    setIsPlaying(true)
+    setProgress(0)
+    const tempMeasures: Measure[] = [
+      { measureNumber: currentMeasure, notes, completed: false },
+    ]
+    const tempResult: EnsembleResult = {
+      sessionId: 'preview',
+      totalDuration: 2,
+      measures: tempMeasures,
+      instrumentActivity: { piano: 0, violin: 0, cello: 0, flute: 0, percussion: 0 },
+      mode,
+      createdAt: Date.now(),
+    }
+    audioRef.current.playEnsemble(tempResult, (p) => {
+      setProgress(p)
+      if (p >= 100) {
+        setIsPlaying(false)
+      }
+    })
+  }, [notes, currentMeasure, mode])
 
   const renderStaffLines = () => {
-    const lines = [];
+    const lines = []
     for (let i = 0; i < 5; i++) {
       lines.push(
         <div
           key={i}
-          className="staff-line"
-          style={{ top: `${20 + i * 15}%` }}
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: `${20 + i * 15}%`,
+            height: '1px',
+            backgroundColor: 'rgba(255,255,255,0.25)',
+            pointerEvents: 'none',
+          }}
         />
-      );
+      )
     }
-    return lines;
-  };
+    return lines
+  }
+
+  const renderBeatMarkers = () => {
+    const markers = []
+    for (let i = 0; i < 4; i++) {
+      markers.push(
+        <div
+          key={i}
+          style={{
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            left: `${(i + 0.5) * 25}%`,
+            width: '1px',
+            backgroundColor: 'rgba(255,255,255,0.08)',
+            pointerEvents: 'none',
+          }}
+        />
+      )
+    }
+    return markers
+  }
 
   const renderDragPath = () => {
-    if (dragPath.length < 2 || !staffRef.current) return null;
-    const rect = staffRef.current.getBoundingClientRect();
+    if (dragPath.length < 2 || !draggingNote) return null
     const pathData = dragPath
-      .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x - rect.left} ${p.y - rect.top}`)
-      .join(' ');
+      .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
+      .join(' ')
     return (
-      <svg style={styles.dragPathSvg}>
+      <svg
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          zIndex: 50,
+        }}
+      >
         <path
           d={pathData}
           stroke="rgba(255,255,255,0.5)"
-          strokeWidth="2"
-          strokeDasharray="5,5"
+          strokeWidth="3"
+          strokeDasharray="6,4"
           fill="none"
         />
       </svg>
-    );
-  };
+    )
+  }
 
-  const modes: { id: EnsembleMode; name: string }[] = [
-    { id: 'align', name: '对齐模式' },
-    { id: 'follow', name: '跟随模式' },
-    { id: 'free', name: '自由模式' },
-  ];
+  const modes: { id: EnsembleMode; name: string; desc: string }[] = [
+    { id: 'align', name: '对齐', desc: '仅小节开头触发' },
+    { id: 'follow', name: '跟随', desc: '顺序节拍触发' },
+    { id: 'free', name: '自由', desc: '无限制触发' },
+  ]
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <div style={styles.measureCounter}>
-          小节 {String(currentMeasure).padStart(3, '0')} / {String(TOTAL_MEASURES).padStart(3, '0')}
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        height: '100vh',
+        padding: '24px 32px',
+        boxSizing: 'border-box',
+        background: 'linear-gradient(135deg, #1e1e2e 0%, #2b2b3c 100%)',
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '20px',
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            color: '#ffffff',
+            fontSize: '24px',
+            fontWeight: 'bold',
+            fontFamily: "'Playfair Display', serif",
+            letterSpacing: '1px',
+          }}
+        >
+          小节 {String(currentMeasure).padStart(3, '0')} /{' '}
+          {String(TOTAL_MEASURES).padStart(3, '0')}
         </div>
-        <div style={styles.modeSelector}>
-          <button
-            style={{ ...styles.modeToggle, background: `linear-gradient(135deg, ${modeColor}, ${modeColor}99)` }}
-            onClick={() => setShowModeDropdown(!showModeDropdown)}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '6px 16px',
+              borderRadius: '12px',
+              backgroundColor: instrumentConfig.color + '33',
+            }}
           >
-            {modes.find((m) => m.id === mode)?.name} ▼
-          </button>
-          <div className={`mode-dropdown ${showModeDropdown ? 'expanded' : 'collapsed'}`} style={styles.modeDropdown}>
-            {modes.map((m) => (
-              <button
-                key={m.id}
-                style={{
-                  ...styles.modeButton,
-                  background: `linear-gradient(135deg, ${MODE_COLORS[m.id]}, ${MODE_COLORS[m.id]}99)`,
-                }}
-                onClick={() => {
-                  setMode(m.id);
-                  setShowModeDropdown(false);
-                }}
-              >
-                {m.name}
-              </button>
-            ))}
+            <span style={{ fontSize: '20px' }}>{instrumentConfig.icon}</span>
+            <span style={{ color: instrumentConfig.color, fontSize: '14px', fontWeight: 600 }}>
+              {instrumentConfig.name}
+            </span>
+          </div>
+
+          <div style={{ position: 'relative' }}>
+            <button
+              style={{
+                padding: '8px 20px',
+                border: 'none',
+                borderRadius: '10px',
+                color: '#ffffff',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                background: `linear-gradient(135deg, ${modeColor}, ${modeColor}bb)`,
+                transition: 'transform 0.2s ease-out',
+              }}
+              onClick={() => setShowModePanel(!showModePanel)}
+            >
+              {modes.find((m) => m.id === mode)?.name}模式 ▾
+            </button>
+
+            <div
+              style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: '4px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+                overflow: 'hidden',
+                height: showModePanel ? 'auto' : '0',
+                opacity: showModePanel ? 1 : 0,
+                transition: 'height 0.3s ease-out, opacity 0.3s ease-out',
+              }}
+            >
+              {modes.map((m) => (
+                <button
+                  key={m.id}
+                  style={{
+                    height: '36px',
+                    padding: '0 20px',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: '#ffffff',
+                    fontSize: '13px',
+                    fontWeight: '500',
+                    cursor: 'pointer',
+                    background:
+                      mode === m.id
+                        ? `linear-gradient(135deg, ${MODE_COLORS[m.id]}, ${MODE_COLORS[m.id]}99)`
+                        : `linear-gradient(135deg, #37474f, #37474fbb)`,
+                    transition:
+                      'background 0.3s ease-out, height 0.3s ease-out, opacity 0.3s ease-out',
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                  onClick={() => {
+                    setMode(m.id)
+                    setShowModePanel(false)
+                  }}
+                >
+                  <span>{m.name}</span>
+                  <span style={{ fontSize: '11px', opacity: 0.7 }}>{m.desc}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
       <div
         ref={staffRef}
-        style={styles.staffArea}
+        style={{
+          width: '85%',
+          height: '60%',
+          backgroundColor: 'rgba(255,255,255,0.08)',
+          borderRadius: '24px',
+          position: 'relative',
+          overflow: 'hidden',
+          cursor: 'crosshair',
+          flexShrink: 0,
+        }}
         onClick={handleStaffClick}
       >
         {renderStaffLines()}
+        {renderBeatMarkers()}
         {renderDragPath()}
-        {notes.map((note) => (
-          <div
-            key={note.id}
-            className={draggingNote?.id === note.id ? 'note-dragging' : ''}
-            style={{
-              ...styles.note,
-              backgroundColor: instrumentConfig.color + 'cc',
-              left: note.x - 20,
-              top: note.y - 14,
-              transform: draggingNote?.id === note.id ? 'scale(1.2)' : 'scale(1)',
-              transition: draggingNote?.id === note.id ? 'none' : 'transform 0.2s ease-out',
-            }}
-            onMouseDown={(e) => handleNoteMouseDown(e, note)}
-            onDoubleClick={(e) => handleNoteDoubleClick(e, note.id)}
-          />
-        ))}
+        {notes.map((note) => {
+          const isDragging = draggingNote?.id === note.id
+          const isDeleting = deletingId === note.id
+          return (
+            <div
+              key={note.id}
+              style={{
+                position: 'absolute',
+                width: '40px',
+                height: '28px',
+                borderRadius: '50%',
+                backgroundColor: instrumentConfig.color + 'cc',
+                left: note.x - 20,
+                top: note.y - 14,
+                cursor: isDragging ? 'grabbing' : 'grab',
+                transform: isDragging
+                  ? 'scale(1.2)'
+                  : isDeleting
+                  ? 'scale(0.5) translateX(40px)'
+                  : 'scale(1)',
+                opacity: isDeleting ? 0 : 1,
+                transition: isDragging
+                  ? 'none'
+                  : 'transform 0.3s ease-out, opacity 0.3s ease-out',
+                zIndex: isDragging ? 100 : 10,
+                border: `2px solid ${instrumentConfig.color}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                userSelect: 'none',
+              }}
+              onMouseDown={(e) => handleNoteMouseDown(e, note)}
+              onDoubleClick={(e) => handleNoteDoubleClick(e, note.id)}
+            >
+              <span
+                style={{
+                  fontSize: '10px',
+                  color: '#37474f',
+                  fontWeight: 'bold',
+                  pointerEvents: 'none',
+                }}
+              >
+                {note.pitch}
+              </span>
+            </div>
+          )
+        })}
       </div>
 
-      <div style={styles.footer}>
-        <div style={styles.progressBar}>
+      <div style={{ width: '100%', marginTop: '20px', flexShrink: 0 }}>
+        <div
+          style={{
+            width: '100%',
+            height: '6px',
+            borderRadius: '3px',
+            backgroundColor: '#4a4a5a',
+            overflow: 'hidden',
+            marginBottom: '20px',
+          }}
+        >
           <div
-            className="progress-bar-fill"
             style={{
-              ...styles.progressFill,
+              height: '100%',
+              borderRadius: '3px',
               width: `${progress}%`,
-              backgroundColor: modeColor,
+              background: `linear-gradient(90deg, ${modeColor}, ${modeColor}aa)`,
+              transition: 'width 0.1s linear',
             }}
           />
         </div>
-        <div style={styles.buttonGroup}>
+
+        <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
           <button
-            style={{ ...styles.playButton, backgroundColor: modeColor }}
+            style={{
+              padding: '12px 32px',
+              border: 'none',
+              borderRadius: '12px',
+              color: '#ffffff',
+              fontSize: '15px',
+              fontWeight: '600',
+              cursor: isPlaying ? 'not-allowed' : 'pointer',
+              backgroundColor: isPlaying ? '#4a4a5a' : modeColor,
+              opacity: isPlaying ? 0.6 : 1,
+              transition: 'background-color 0.2s ease-out, opacity 0.2s ease-out',
+            }}
             onClick={handlePlay}
             disabled={isPlaying}
           >
             {isPlaying ? '播放中...' : '播放预览'}
           </button>
           <button
-            style={{ ...styles.completeButton, backgroundColor: modeColor }}
+            style={{
+              padding: '12px 32px',
+              border: 'none',
+              borderRadius: '12px',
+              color: '#ffffff',
+              fontSize: '15px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              background: `linear-gradient(135deg, ${modeColor}, ${modeColor}cc)`,
+              transition: 'background-color 0.2s ease-out',
+            }}
             onClick={handleCompleteMeasure}
           >
-            完成当前小节
+            完成小节 ({currentMeasure}/{TOTAL_MEASURES})
           </button>
         </div>
       </div>
     </div>
-  );
+  )
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: '100vh',
-    padding: '20px',
-    background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-    boxSizing: 'border-box',
-  },
-  header: {
-    width: '100%',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '20px',
-  },
-  measureCounter: {
-    color: '#ffffff',
-    fontSize: '24px',
-    fontWeight: 'bold',
-    fontFamily: "'Playfair Display', serif",
-  },
-  modeSelector: {
-    position: 'relative',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-end',
-  },
-  modeToggle: {
-    padding: '8px 20px',
-    border: 'none',
-    borderRadius: '8px',
-    color: '#ffffff',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'transform 0.2s ease-out',
-  },
-  modeDropdown: {
-    display: 'flex',
-    gap: '8px',
-    marginTop: '8px',
-  },
-  modeButton: {
-    padding: '6px 16px',
-    border: 'none',
-    borderRadius: '6px',
-    color: '#ffffff',
-    fontSize: '12px',
-    fontWeight: '500',
-    cursor: 'pointer',
-    transition: 'transform 0.2s ease-out',
-  },
-  staffArea: {
-    width: '85%',
-    height: '60%',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: '24px',
-    position: 'relative',
-    overflow: 'hidden',
-    cursor: 'crosshair',
-  },
-  note: {
-    position: 'absolute',
-    width: '40px',
-    height: '28px',
-    borderRadius: '50%',
-    cursor: 'grab',
-    transition: 'transform 0.2s ease-out',
-    zIndex: 10,
-  },
-  dragPathSvg: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-    pointerEvents: 'none',
-  },
-  footer: {
-    width: '100%',
-    marginTop: '20px',
-  },
-  progressBar: {
-    width: '100%',
-    height: '6px',
-    borderRadius: '3px',
-    backgroundColor: '#4a4a5a',
-    overflow: 'hidden',
-    marginBottom: '20px',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: '3px',
-  },
-  buttonGroup: {
-    display: 'flex',
-    gap: '16px',
-    justifyContent: 'center',
-  },
-  playButton: {
-    padding: '12px 32px',
-    border: 'none',
-    borderRadius: '12px',
-    color: '#ffffff',
-    fontSize: '16px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'transform 0.2s ease-out, opacity 0.2s ease-out',
-  },
-  completeButton: {
-    padding: '12px 32px',
-    border: 'none',
-    borderRadius: '12px',
-    color: '#ffffff',
-    fontSize: '16px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'transform 0.2s ease-out',
-  },
-};

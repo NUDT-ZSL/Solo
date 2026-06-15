@@ -1,59 +1,108 @@
-import type { Note, Measure, InstrumentType } from '../types';
+import type { Note, Measure, InstrumentType } from '../types'
 
 export class NotesBuffer {
-  private measures: Map<number, Note[]> = new Map();
-  private currentMeasure: number = 1;
-  private instrument: InstrumentType;
+  private measures: Map<number, Note[]> = new Map()
+  private completedMeasures: Set<number> = new Set()
+  private currentMeasure: number = 1
+  private instrument: InstrumentType
 
   constructor(instrument: InstrumentType) {
-    this.instrument = instrument;
+    this.instrument = instrument
   }
 
   addNote(note: Note, measureNumber?: number): void {
-    const targetMeasure = measureNumber ?? this.currentMeasure;
-    const existingNotes = this.measures.get(targetMeasure) ?? [];
-    this.measures.set(targetMeasure, [...existingNotes, note]);
+    const target = measureNumber ?? this.currentMeasure
+    const existing = this.measures.get(target) ?? []
+    this.measures.set(target, [...existing, { ...note, instrument: this.instrument }])
+  }
+
+  removeNote(noteId: string, measureNumber?: number): void {
+    if (measureNumber !== undefined) {
+      const existing = this.measures.get(measureNumber) ?? []
+      this.measures.set(measureNumber, existing.filter((n) => n.id !== noteId))
+      return
+    }
+    for (const [num, notes] of this.measures.entries()) {
+      const filtered = notes.filter((n) => n.id !== noteId)
+      if (filtered.length !== notes.length) {
+        this.measures.set(num, filtered)
+        return
+      }
+    }
+  }
+
+  updateNote(noteId: string, updates: Partial<Note>): void {
+    for (const [num, notes] of this.measures.entries()) {
+      const idx = notes.findIndex((n) => n.id === noteId)
+      if (idx !== -1) {
+        const updated = [...notes]
+        updated[idx] = { ...updated[idx], ...updates }
+        this.measures.set(num, updated)
+        return
+      }
+    }
   }
 
   getMeasureNotes(measureNumber: number): Note[] {
-    return this.measures.get(measureNumber) ?? [];
+    return this.measures.get(measureNumber) ?? []
   }
 
   getAllNotes(): Note[] {
-    const allNotes: Note[] = [];
+    const all: Note[] = []
     for (const notes of this.measures.values()) {
-      allNotes.push(...notes);
+      all.push(...notes)
     }
-    return allNotes;
+    return all
   }
 
   getAllMeasures(): Measure[] {
-    const measures: Measure[] = [];
-    const sortedMeasureNumbers = Array.from(this.measures.keys()).sort((a, b) => a - b);
-    for (const measureNumber of sortedMeasureNumbers) {
+    const measures: Measure[] = []
+    const sorted = Array.from(this.measures.keys()).sort((a, b) => a - b)
+    for (const num of sorted) {
       measures.push({
-        measureNumber,
-        notes: this.measures.get(measureNumber) ?? [],
-        completed: false
-      });
+        measureNumber: num,
+        notes: this.measures.get(num) ?? [],
+        completed: this.completedMeasures.has(num),
+      })
     }
-    return measures;
+    return measures
   }
 
   completeMeasure(measureNumber: number): void {
-    this.currentMeasure = Math.max(this.currentMeasure, measureNumber + 1);
+    this.completedMeasures.add(measureNumber)
+    if (measureNumber >= this.currentMeasure) {
+      this.currentMeasure = measureNumber + 1
+    }
   }
 
   clearMeasure(measureNumber: number): void {
-    this.measures.delete(measureNumber);
+    this.measures.delete(measureNumber)
+    this.completedMeasures.delete(measureNumber)
   }
 
   reset(): void {
-    this.measures.clear();
-    this.currentMeasure = 1;
+    this.measures.clear()
+    this.completedMeasures.clear()
+    this.currentMeasure = 1
   }
 
   isMeasureComplete(measureNumber: number): boolean {
-    return measureNumber < this.currentMeasure;
+    return this.completedMeasures.has(measureNumber)
+  }
+
+  getInstrument(): InstrumentType {
+    return this.instrument
+  }
+
+  getCurrentMeasure(): number {
+    return this.currentMeasure
+  }
+
+  getNoteCount(): number {
+    let count = 0
+    for (const notes of this.measures.values()) {
+      count += notes.length
+    }
+    return count
   }
 }

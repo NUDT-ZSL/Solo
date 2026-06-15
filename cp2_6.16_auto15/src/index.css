@@ -3,23 +3,26 @@
 @tailwind utilities;
 
 :root {
-  --color-piano: #e74c3c;
-  --color-violin: #f39c12;
-  --color-cello: #9b59b6;
-  --color-flute: #3498db;
-  --color-percussion: #2ecc71;
+  --color-piano: #ffcdd2;
+  --color-violin: #c8e6c9;
+  --color-cello: #bbdefb;
+  --color-flute: #fff9c4;
+  --color-percussion: #d1c4e9;
+
+  --mode-align: #66bb6a;
+  --mode-follow: #42a5f5;
+  --mode-free: #ef5350;
 
   --bg-primary: #1a1a2e;
   --bg-secondary: #16213e;
 
-  --transition-fast: 0.15s ease;
-  --transition-normal: 0.3s ease;
-  --transition-slow: 0.5s ease;
+  --transition-fast: 0.2s ease-out;
+  --transition-normal: 0.3s ease-out;
+  --transition-slow: 0.4s ease-out;
 
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -27,14 +30,32 @@
 }
 
 * {
-  transition: all var(--transition-normal);
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
 body {
-  margin: 0;
   min-height: 100vh;
+  overflow: hidden;
 }
 
 #root {
   min-height: 100vh;
+}
+
+button:hover {
+  filter: brightness(1.1);
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+@media (max-width: 768px) {
+  .card-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 12px !important;
+  }
 }

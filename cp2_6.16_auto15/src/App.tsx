@@ -12,48 +12,51 @@ export default function App() {
 
   const handleSelectInstrument = async (instrument: InstrumentType) => {
     try {
-      const response = await fetch('http://localhost:5000/api/session', {
+      const response = await fetch('/api/session', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ instrument }),
       })
       const data = await response.json()
       setSessionId(data.sessionId)
-      setSelectedInstrument(instrument)
-    } catch (error) {
-      console.error('Failed to create session:', error)
+    } catch {
+      setSessionId('local-' + Date.now())
     }
+    setSelectedInstrument(instrument)
   }
 
   const handleComplete = async (result: EnsembleResult) => {
     try {
-      await fetch('http://localhost:5000/api/ensemble', {
+      await fetch('/api/ensemble', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, result }),
       })
-      setEnsembleResult(result)
-      setShowSummary(true)
-    } catch (error) {
-      console.error('Failed to save ensemble record:', error)
+    } catch {
+      // local mode fallback
     }
+    setEnsembleResult(result)
+    setShowSummary(true)
   }
 
-  const handleBack = () => {
+  const handleClose = () => {
+    setSelectedInstrument(null)
+    setEnsembleResult(null)
+    setShowSummary(false)
+    setSessionId(null)
+  }
+
+  const handleRestart = () => {
     setEnsembleResult(null)
     setShowSummary(false)
   }
 
   return (
     <div
-      className="min-h-screen w-full"
       style={{
+        minHeight: '100vh',
+        width: '100%',
         background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-        transition: 'all var(--transition-normal)',
       }}
     >
       {!selectedInstrument && (
@@ -63,7 +66,11 @@ export default function App() {
         <RehearsalRoom instrument={selectedInstrument} onComplete={handleComplete} />
       )}
       {showSummary && ensembleResult && (
-        <SummaryPanel result={ensembleResult} onBack={handleBack} />
+        <SummaryPanel
+          result={ensembleResult}
+          onClose={handleClose}
+          onRestart={handleRestart}
+        />
       )}
     </div>
   )

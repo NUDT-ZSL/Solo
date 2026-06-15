@@ -1,217 +1,252 @@
-import type { InstrumentType, EnsembleResult, Note } from '../types';
+import type { InstrumentType, EnsembleResult, Note, EnsembleMode, Measure } from '../types'
 
 export class AudioEngine {
-  private static instance: AudioEngine | null = null;
-  private audioContext: AudioContext | null = null;
+  private static instance: AudioEngine | null = null
+  private audioContext: AudioContext | null = null
 
   private constructor() {}
 
   static getInstance(): AudioEngine {
     if (!AudioEngine.instance) {
-      AudioEngine.instance = new AudioEngine();
+      AudioEngine.instance = new AudioEngine()
     }
-    return AudioEngine.instance;
+    return AudioEngine.instance
   }
 
   init(): void {
     if (!this.audioContext) {
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
     }
     if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
+      this.audioContext.resume()
     }
   }
 
-  playNote(instrument: InstrumentType, pitch: number, duration: number): void {
-    if (!this.audioContext) return;
+  private getContext(): AudioContext | null {
+    return this.audioContext
+  }
 
-    const ctx = this.audioContext;
-    const baseFreq = 220 * Math.pow(2, pitch / 12);
-    const now = ctx.currentTime;
+  playNote(instrument: InstrumentType, pitch: number, duration: number): void {
+    const ctx = this.getContext()
+    if (!ctx) return
+
+    const baseFreq = 220 * Math.pow(2, pitch / 12)
+    const now = ctx.currentTime
 
     switch (instrument) {
       case 'piano': {
-        const osc1 = ctx.createOscillator();
-        const osc2 = ctx.createOscillator();
-        const gainNode = ctx.createGain();
+        const osc1 = ctx.createOscillator()
+        const osc2 = ctx.createOscillator()
+        const gain = ctx.createGain()
 
-        osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(baseFreq, now);
-        osc2.type = 'triangle';
-        osc2.frequency.setValueAtTime(baseFreq * 2, now);
+        osc1.type = 'sine'
+        osc1.frequency.setValueAtTime(baseFreq, now)
+        osc2.type = 'triangle'
+        osc2.frequency.setValueAtTime(baseFreq * 2, now)
 
-        gainNode.gain.setValueAtTime(0, now);
-        gainNode.gain.linearRampToValueAtTime(0.4, now + 0.01);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration);
+        const osc2Gain = ctx.createGain()
+        osc2Gain.gain.setValueAtTime(0.3, now)
 
-        osc1.connect(gainNode);
-        osc2.connect(gainNode);
-        gainNode.connect(ctx.destination);
+        gain.gain.setValueAtTime(0, now)
+        gain.gain.linearRampToValueAtTime(0.4, now + 0.01)
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration)
 
-        osc1.start(now);
-        osc2.start(now);
-        osc1.stop(now + duration);
-        osc2.stop(now + duration);
-        break;
+        osc1.connect(gain)
+        osc2.connect(osc2Gain)
+        osc2Gain.connect(gain)
+        gain.connect(ctx.destination)
+
+        osc1.start(now)
+        osc2.start(now)
+        osc1.stop(now + duration)
+        osc2.stop(now + duration)
+        break
       }
+
       case 'violin': {
-        const osc = ctx.createOscillator();
-        const gainNode = ctx.createGain();
-        const lfo = ctx.createOscillator();
-        const lfoGain = ctx.createGain();
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        const lfo = ctx.createOscillator()
+        const lfoGain = ctx.createGain()
 
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(baseFreq, now);
+        osc.type = 'sawtooth'
+        osc.frequency.setValueAtTime(baseFreq, now)
 
-        lfo.type = 'sine';
-        lfo.frequency.setValueAtTime(6, now);
-        lfoGain.gain.setValueAtTime(3, now);
+        lfo.type = 'sine'
+        lfo.frequency.setValueAtTime(6, now)
+        lfoGain.gain.setValueAtTime(3, now)
 
-        gainNode.gain.setValueAtTime(0, now);
-        gainNode.gain.linearRampToValueAtTime(0.3, now + 0.05);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration);
+        gain.gain.setValueAtTime(0, now)
+        gain.gain.linearRampToValueAtTime(0.3, now + 0.05)
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration)
 
-        lfo.connect(lfoGain);
-        lfoGain.connect(osc.frequency);
-        osc.connect(gainNode);
-        gainNode.connect(ctx.destination);
+        lfo.connect(lfoGain)
+        lfoGain.connect(osc.frequency)
+        osc.connect(gain)
+        gain.connect(ctx.destination)
 
-        osc.start(now);
-        lfo.start(now);
-        osc.stop(now + duration);
-        lfo.stop(now + duration);
-        break;
+        osc.start(now)
+        lfo.start(now)
+        osc.stop(now + duration)
+        lfo.stop(now + duration)
+        break
       }
+
       case 'cello': {
-        const osc = ctx.createOscillator();
-        const gainNode = ctx.createGain();
+        const osc = ctx.createOscillator()
+        const osc2 = ctx.createOscillator()
+        const gain = ctx.createGain()
 
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(baseFreq / 2, now);
+        osc.type = 'sawtooth'
+        osc.frequency.setValueAtTime(baseFreq / 2, now)
+        osc2.type = 'sine'
+        osc2.frequency.setValueAtTime(baseFreq / 2, now)
 
-        gainNode.gain.setValueAtTime(0, now);
-        gainNode.gain.linearRampToValueAtTime(0.35, now + 0.1);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration);
+        const osc2Gain = ctx.createGain()
+        osc2Gain.gain.setValueAtTime(0.5, now)
 
-        osc.connect(gainNode);
-        gainNode.connect(ctx.destination);
+        gain.gain.setValueAtTime(0, now)
+        gain.gain.linearRampToValueAtTime(0.35, now + 0.1)
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration)
 
-        osc.start(now);
-        osc.stop(now + duration);
-        break;
+        osc.connect(gain)
+        osc2.connect(osc2Gain)
+        osc2Gain.connect(gain)
+        gain.connect(ctx.destination)
+
+        osc.start(now)
+        osc2.start(now)
+        osc.stop(now + duration)
+        osc2.stop(now + duration)
+        break
       }
+
       case 'flute': {
-        const osc = ctx.createOscillator();
-        const gainNode = ctx.createGain();
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
 
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(baseFreq, now);
+        osc.type = 'sine'
+        osc.frequency.setValueAtTime(baseFreq, now)
 
-        gainNode.gain.setValueAtTime(0, now);
-        gainNode.gain.linearRampToValueAtTime(0.25, now + 0.005);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration);
+        gain.gain.setValueAtTime(0, now)
+        gain.gain.linearRampToValueAtTime(0.25, now + 0.005)
+        gain.gain.linearRampToValueAtTime(0.2, now + 0.05)
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration)
 
-        osc.connect(gainNode);
-        gainNode.connect(ctx.destination);
+        osc.connect(gain)
+        gain.connect(ctx.destination)
 
-        osc.start(now);
-        osc.stop(now + duration);
-        break;
+        osc.start(now)
+        osc.stop(now + duration)
+        break
       }
+
       case 'percussion': {
-        const bufferSize = ctx.sampleRate * duration;
-        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-        const data = buffer.getChannelData(0);
+        const bufferSize = Math.floor(ctx.sampleRate * duration)
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+        const data = buffer.getChannelData(0)
 
         for (let i = 0; i < bufferSize; i++) {
-          data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.3));
+          data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.15))
         }
 
-        const source = ctx.createBufferSource();
-        source.buffer = buffer;
+        const source = ctx.createBufferSource()
+        source.buffer = buffer
 
-        const gainNode = ctx.createGain();
-        gainNode.gain.setValueAtTime(0.5, now);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration);
+        const gain = ctx.createGain()
+        gain.gain.setValueAtTime(0.5, now)
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration)
 
-        const filter = ctx.createBiquadFilter();
-        filter.type = 'highpass';
-        filter.frequency.setValueAtTime(1000, now);
+        const filter = ctx.createBiquadFilter()
+        filter.type = 'highpass'
+        filter.frequency.setValueAtTime(800 + pitch * 100, now)
 
-        source.connect(filter);
-        filter.connect(gainNode);
-        gainNode.connect(ctx.destination);
+        source.connect(filter)
+        filter.connect(gain)
+        gain.connect(ctx.destination)
 
-        source.start(now);
-        break;
+        source.start(now)
+        break
       }
     }
   }
 
   playBell(): void {
-    if (!this.audioContext) return;
+    const ctx = this.getContext()
+    if (!ctx) return
 
-    const ctx = this.audioContext;
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gainNode = ctx.createGain();
+    const now = ctx.currentTime
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
 
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, now);
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(880, now)
 
-    gainNode.gain.setValueAtTime(0, now);
-    gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+    gain.gain.setValueAtTime(0, now)
+    gain.gain.linearRampToValueAtTime(0.3, now + 0.01)
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15)
 
-    osc.connect(gainNode);
-    gainNode.connect(ctx.destination);
+    osc.connect(gain)
+    gain.connect(ctx.destination)
 
-    osc.start(now);
-    osc.stop(now + 0.15);
+    osc.start(now)
+    osc.stop(now + 0.15)
   }
 
-  async playEnsemble(result: EnsembleResult, onProgress: (progress: number) => void): Promise<void> {
+  async playEnsemble(
+    result: EnsembleResult,
+    onProgress: (progress: number) => void
+  ): Promise<void> {
+    const ctx = this.getContext()
+    if (!ctx) {
+      onProgress(100)
+      return
+    }
+
+    const events: Array<{ time: number; note: Note }> = []
+    const beatsPerSecond = 2
+
+    for (const measure of result.measures) {
+      for (const note of measure.notes) {
+        const time =
+          (measure.measureNumber - 1) * 4 * beatsPerSecond + note.beat * beatsPerSecond
+        events.push({ time, note })
+      }
+    }
+
+    if (events.length === 0) {
+      onProgress(100)
+      return
+    }
+
+    const startAt = ctx.currentTime
+    const totalDur = result.totalDuration
+
+    for (const event of events) {
+      const delay = event.time * 1000
+      setTimeout(() => {
+        this.playNote(event.note.instrument, event.note.pitch, event.note.duration)
+      }, delay)
+    }
+
     return new Promise((resolve) => {
-      if (!this.audioContext) {
-        resolve();
-        return;
-      }
-
-      const events: Array<{ time: number; note: Note }> = [];
-      const beatsPerSecond = 2;
-
-      for (const measure of result.measures) {
-        for (const note of measure.notes) {
-          const time = (measure.measureNumber - 1) * 4 * beatsPerSecond + note.beat * beatsPerSecond;
-          events.push({ time, note });
+      const interval = setInterval(() => {
+        if (!this.audioContext) {
+          clearInterval(interval)
+          onProgress(100)
+          resolve()
+          return
         }
-      }
+        const elapsed = this.audioContext.currentTime - startAt
+        const prog = Math.min(100, (elapsed / totalDur) * 100)
+        onProgress(prog)
 
-      if (events.length === 0) {
-        onProgress(100);
-        resolve();
-        return;
-      }
-
-      const startTime = this.audioContext.currentTime;
-      const totalDuration = result.totalDuration;
-
-      for (const event of events) {
-        setTimeout(() => {
-          this.playNote(event.note.instrument, event.note.pitch, event.note.duration);
-        }, event.time * 1000);
-      }
-
-      const progressInterval = setInterval(() => {
-        const elapsed = this.audioContext!.currentTime - startTime;
-        const progress = Math.min(100, (elapsed / totalDuration) * 100);
-        onProgress(progress);
-
-        if (progress >= 100) {
-          clearInterval(progressInterval);
-          resolve();
+        if (prog >= 100) {
+          clearInterval(interval)
+          onProgress(100)
+          resolve()
         }
-      }, 50);
-    });
+      }, 50)
+    })
   }
 }
