@@ -16,7 +16,7 @@ function createCircleIcon(index: number, zoom: number): L.DivIcon {
   const fontSize = Math.round(14 * scale);
   return L.divIcon({
     className: 'custom-marker-icon-wrapper',
-    html: `<div class="custom-marker-icon" style="width:${size}px;height:${size}px;font-size:${fontSize}px;line-height:${size}px;">${index}</div>`,
+    html: `<div class="custom-marker-icon" data-index="${index}" style="width:${size}px;height:${size}px;font-size:${fontSize}px;line-height:${size}px;">${index}</div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
     popupAnchor: [0, -size / 2],
@@ -125,34 +125,58 @@ export default function MapView({
       }
     });
 
+    const timeouts: number[] = [];
     toAdd.forEach((id, idx) => {
-      const record = records.find((r) => r.id === id);
-      if (!record) return;
-      const idxNum = indexMap.get(id) || 1;
-      const icon = createCircleIcon(idxNum, map.getZoom());
-      const marker = L.marker([record.latitude, record.longitude], { icon })
-        .addTo(map)
-        .bindPopup(buildPopupContent(record), {
+      const delay = idx * 120;
+      const t = window.setTimeout(() => {
+        if (!mapRef.current) return;
+        const record = records.find((r) => r.id === id);
+        if (!record) return;
+        const existing = markersRef.current.get(id);
+        if (existing) return;
+        const idxNum = indexMap.get(id) || 1;
+        const zoom = mapRef.current.getZoom();
+        const icon = createCircleIcon(idxNum, zoom);
+        const popupZindex = 9000 + zoom * 100 + idxNum;
+        const marker = L.marker([record.latitude, record.longitude], {
+          icon,
+          keyboard: false,
+        }).addTo(mapRef.current);
+        marker.bindPopup(buildPopupContent(record), {
           maxWidth: 300,
           className: 'custom-popup',
           autoPan: true,
           autoPanPadding: [40, 40],
+          offset: L.point(0, -4),
         });
-      marker.on('click', () => onActiveChange(id));
-      const el = marker.getElement();
-      if (el) {
-        const delay = idx * 0.12;
-        el.style.animationDelay = `${delay}s`;
-        el.classList.add('marker-bounce-in');
-        el.addEventListener('animationend', () => {
-          el.classList.remove('marker-bounce-in');
-          el.style.animationDelay = '';
-        }, { once: true });
-      }
-      markersRef.current.set(id, marker);
+        marker.on('popupopen', () => {
+          const pw = (marker as any)._popupWrapper as HTMLElement | undefined;
+          if (pw) pw.style.zIndex = String(popupZindex);
+        });
+        marker.on('click', () => onActiveChange(id));
+        const el = marker.getElement();
+        if (el) {
+          const inner = el.querySelector('.custom-marker-icon') as HTMLElement | null;
+          if (inner) {
+            inner.style.animation = 'none';
+            void inner.offsetWidth;
+            inner.style.animation = '';
+            inner.classList.add('marker-bounce-in');
+            inner.addEventListener('animationend', () => {
+              inner.classList.remove('marker-bounce-in');
+            }, { once: true });
+          }
+          el.style.zIndex = String(500 + idxNum);
+        }
+        markersRef.current.set(id, marker);
+      }, delay);
+      timeouts.push(t);
     });
 
     prevVisibleRef.current = new Set(visibleIds);
+    return () => {
+      timeouts.forEach((t) => window.clearTimeout(t));
+    };
   }, [visibleIds, records, indexMap, onActiveChange]);
 
   useEffect(() => {
@@ -177,6 +201,10 @@ export default function MapView({
       markersRef.current.forEach((marker, id) => {
         const idx = indexMap.get(id) || 1;
         marker.setIcon(createCircleIcon(idx, zoom));
+        const pw = (marker as any)._popupWrapper as HTMLElement | undefined;
+        if (pw) pw.style.zIndex = String(9000 + zoom * 100 + idx);
+        const el = marker.getElement();
+        if (el) el.style.zIndex = String(500 + idx);
       });
     };
     map.on('zoomend', onZoom);

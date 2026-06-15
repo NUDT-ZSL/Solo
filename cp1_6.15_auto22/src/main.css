@@ -141,7 +141,16 @@ body {
   display: inline-block;
   transform-origin: center;
   transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
   will-change: transform, opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  perspective: 200px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.stat-value.stat-animating {
+  filter: drop-shadow(0 0 4px rgba(245, 166, 35, 0.5));
 }
 
 .stat-unit {
@@ -440,9 +449,14 @@ body {
   color: var(--text-secondary);
 }
 
-.leaflet-marker-icon.custom-marker-icon-wrapper,
-.custom-marker-icon-wrapper {
+/* ---------- 强力覆盖 Leaflet 默认 marker 样式 ---------- */
+.leaflet-pane .leaflet-marker-pane img,
+.leaflet-pane .leaflet-marker-icon,
+.leaflet-marker-icon,
+.leaflet-marker-icon.leaflet-interactive {
   background: transparent !important;
+  background-image: none !important;
+  background-color: transparent !important;
   border: none !important;
   width: auto !important;
   height: auto !important;
@@ -452,47 +466,94 @@ body {
   will-change: transform, opacity;
 }
 
-.leaflet-marker-icon.custom-marker-icon-wrapper img,
-.custom-marker-icon-wrapper img {
-  display: none !important;
+.leaflet-marker-icon.custom-marker-icon-wrapper {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
 
+/* 内层自定义圆形标记 ---------- */
 .custom-marker-icon {
   display: block !important;
   text-align: center;
   vertical-align: middle;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #0d7377 0%, #14a3c7 100%);
+  border-radius: 9999px !important;
+  background: linear-gradient(135deg, #0d7377 0%, #14a3c7 100%) !important;
   color: #ffffff !important;
   font-weight: 700 !important;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-  border: 2px solid rgba(255, 255, 255, 0.85);
+  border: 2px solid rgba(255, 255, 255, 0.92) !important;
   box-shadow:
-    0 2px 10px rgba(0, 0, 0, 0.4),
-    0 0 0 3px rgba(20, 163, 199, 0.3);
-  user-select: none;
-  -webkit-user-select: none;
-  pointer-events: auto;
+    0 3px 14px rgba(0, 0, 0, 0.45),
+    0 0 0 3px rgba(20, 163, 199, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  pointer-events: auto !important;
+  overflow: hidden !important;
+  transform-origin: center center !important;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  -webkit-transition: box-shadow 0.2s ease, -webkit-transform 0.2s ease;
+  position: relative;
+  z-index: 1;
 }
 
-.marker-bounce-in {
-  animation: markerBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-  animation-fill-mode: both;
+.custom-marker-icon:hover {
+  box-shadow:
+    0 5px 20px rgba(0, 0, 0, 0.55),
+    0 0 0 4px rgba(245, 166, 35, 0.5) !important;
+  transform: scale(1.08);
+  -webkit-transform: scale(1.08);
+}
+
+/* 弹跳动画（作用在内层标记上，不影响外层 Leaflet 地理定位的transform）---------- */
+.custom-marker-icon.marker-bounce-in {
+  animation: markerBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both !important;
+  -webkit-animation: markerBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both !important;
+  animation-fill-mode: both !important;
+  -webkit-animation-fill-mode: both !important;
+  will-change: transform, opacity;
 }
 
 @keyframes markerBounce {
   0% {
-    transform: translate3d(0, 80px, 0) scale(0.4);
+    -webkit-transform: translate3d(0, 100px, 0) scale(0.3) rotate(-10deg);
+    transform: translate3d(0, 100px, 0) scale(0.3) rotate(-10deg);
     opacity: 0;
   }
-  40% {
+  35% {
     opacity: 1;
   }
-  70% {
-    transform: translate3d(0, -10px, 0) scale(1.08);
+  65% {
+    -webkit-transform: translate3d(0, -14px, 0) scale(1.12) rotate(3deg);
+    transform: translate3d(0, -14px, 0) scale(1.12) rotate(3deg);
+  }
+  82% {
+    -webkit-transform: translate3d(0, 4px, 0) scale(0.97) rotate(-1deg);
+    transform: translate3d(0, 4px, 0) scale(0.97) rotate(-1deg);
   }
   100% {
+    -webkit-transform: translate3d(0, 0, 0) scale(1);
     transform: translate3d(0, 0, 0) scale(1);
+    opacity: 1;
+  }
+}
+
+@-webkit-keyframes markerBounce {
+  0% {
+    -webkit-transform: translate3d(0, 100px, 0) scale(0.3) rotate(-10deg);
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
+  }
+  65% {
+    -webkit-transform: translate3d(0, -14px, 0) scale(1.12) rotate(3deg);
+  }
+  82% {
+    -webkit-transform: translate3d(0, 4px, 0) scale(0.97) rotate(-1deg);
+  }
+  100% {
+    -webkit-transform: translate3d(0, 0, 0) scale(1);
     opacity: 1;
   }
 }
@@ -508,56 +569,96 @@ body {
   }
 }
 
-.custom-popup .leaflet-popup-content-wrapper {
-  background: rgba(13, 55, 79, 0.55) !important;
-  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
-  backdrop-filter: blur(20px) saturate(180%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.25) !important;
-  border-radius: 14px !important;
-  color: var(--text-primary) !important;
+/* ---------- Popup 毛玻璃卡片 + 淡入动画 ---------- */
+div.leaflet-popup.custom-popup,
+.leaflet-popup.custom-popup,
+.custom-popup {
+  z-index: 9500 !important;
+}
+
+div.leaflet-popup.custom-popup > .leaflet-popup-content-wrapper,
+.custom-popup > .leaflet-popup-content-wrapper,
+.custom-popup .leaflet-popup-content-wrapper,
+.leaflet-popup-content-wrapper {
+  background: rgba(13, 55, 79, 0.5) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(200%) !important;
+  backdrop-filter: blur(22px) saturate(200%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+  border-radius: 16px !important;
+  color: #e8f4f8 !important;
   box-shadow:
-    0 10px 40px rgba(0, 0, 0, 0.45),
-    0 0 0 1px rgba(20, 163, 199, 0.15) inset !important;
+    0 12px 48px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(20, 163, 199, 0.22) inset !important;
   animation: popupFadeIn 0.2s ease-out both !important;
+  -webkit-animation: popupFadeIn 0.2s ease-out both !important;
+  transform-origin: bottom center;
+  -webkit-transform-origin: bottom center;
 }
 
-.leaflet-popup.custom-popup {
-  z-index: 9000 !important;
-}
-
-.custom-popup .leaflet-popup-tip {
-  background: rgba(13, 55, 79, 0.6) !important;
-  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
-  backdrop-filter: blur(20px) saturate(180%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+div.leaflet-popup.custom-popup > .leaflet-popup-tip-container > .leaflet-popup-tip,
+.custom-popup > .leaflet-popup-tip-container > .leaflet-popup-tip,
+.custom-popup .leaflet-popup-tip,
+.leaflet-popup-tip {
+  background: rgba(13, 55, 79, 0.58) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(200%) !important;
+  backdrop-filter: blur(22px) saturate(200%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
   border-top: none !important;
   border-left: none !important;
+  box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.35) !important;
 }
 
-.custom-popup .leaflet-popup-close-button {
-  color: var(--text-secondary) !important;
-  width: 26px !important;
-  height: 26px !important;
+div.leaflet-popup.custom-popup a.leaflet-popup-close-button,
+.custom-popup a.leaflet-popup-close-button,
+.leaflet-popup-close-button {
+  color: #9ec5d0 !important;
+  width: 28px !important;
+  height: 28px !important;
   line-height: 26px !important;
-  border-radius: 50% !important;
-  margin-top: 6px !important;
-  margin-right: 6px !important;
-  transition: background 0.15s, color 0.15s !important;
+  border-radius: 9999px !important;
+  margin-top: 8px !important;
+  margin-right: 8px !important;
+  font-size: 18px !important;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease !important;
+  -webkit-transition: background 0.18s ease, color 0.18s ease, -webkit-transform 0.18s ease !important;
 }
 
-.custom-popup .leaflet-popup-close-button:hover {
-  color: #fff !important;
-  background: rgba(255, 255, 255, 0.1) !important;
+div.leaflet-popup.custom-popup a.leaflet-popup-close-button:hover,
+.custom-popup a.leaflet-popup-close-button:hover,
+.leaflet-popup-close-button:hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.16) !important;
+  transform: scale(1.1) rotate(90deg);
+  -webkit-transform: scale(1.1) rotate(90deg);
 }
 
 @keyframes popupFadeIn {
-  from {
+  0% {
     opacity: 0;
-    transform: scale(0.92);
+    -webkit-transform: scale(0.85) translateY(10px);
+    transform: scale(0.85) translateY(10px);
+    filter: blur(4px);
+    -webkit-filter: blur(4px);
   }
-  to {
+  100% {
     opacity: 1;
-    transform: scale(1);
+    -webkit-transform: scale(1) translateY(0);
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+    -webkit-filter: blur(0);
+  }
+}
+
+@-webkit-keyframes popupFadeIn {
+  0% {
+    opacity: 0;
+    -webkit-transform: scale(0.85) translateY(10px);
+    -webkit-filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    -webkit-transform: scale(1) translateY(0);
+    -webkit-filter: blur(0);
   }
 }
 

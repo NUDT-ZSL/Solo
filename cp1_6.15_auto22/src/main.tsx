@@ -15,69 +15,75 @@ import {
 import './main.css';
 
 function AnimatedNumber({ value }: { value: string | number }) {
-  const [display, setDisplay] = useState(value);
-  const [progress, setProgress] = useState(1);
+  const valueRef = useRef<HTMLSpanElement>(null);
   const rafRef = useRef<number | null>(null);
-  const prevValueRef = useRef<string | number>(value);
+  const prevDisplayRef = useRef<string | number>(value);
+  const startTimeRef = useRef<number>(0);
+
+  const isNumeric = (v: string | number): v is number => typeof v === 'number';
 
   useEffect(() => {
-    const prev = prevValueRef.current;
-    if (prev === value) return;
+    const from = prevDisplayRef.current;
+    const to = value;
+    if (from === to) return;
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
 
-    const isPrevNumber =
-      typeof prev === 'number' && typeof value === 'number';
-    const start = performance.now();
+    const fromNum = isNumeric(from);
+    const toNum = isNumeric(to);
+    const bothNumeric = fromNum && toNum;
+
+    const el = valueRef.current;
+    if (el) {
+      el.classList.remove('stat-animating');
+      void el.offsetWidth;
+      el.classList.add('stat-animating');
+    }
+
+    startTimeRef.current = performance.now();
     const duration = 300;
 
-    const fromVal = prev;
-    const toVal = value;
-    let canceled = false;
-
     const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / duration);
+      const t = Math.min(1, (now - startTimeRef.current) / duration);
       const eased = 1 - Math.pow(1 - t, 3);
-      setProgress(1 - Math.sin(eased * Math.PI));
-      if (isPrevNumber) {
-        const from = fromVal as number;
-        const to = toVal as number;
-        const current = from + (to - from) * eased;
-        const rounded = Number.isInteger(to)
-          ? Math.round(current)
-          : Math.round(current * 100) / 100;
-        setDisplay(rounded as any);
+      if (el) {
+        el.style.transform = `translateY(${(1 - eased) * -10}px) rotateX(${(1 - eased) * 90}deg)`;
+        el.style.opacity = String(0.3 + eased * 0.7);
+      }
+      if (bothNumeric) {
+        const fromN = from as number;
+        const toN = to as number;
+        const cur = fromN + (toN - fromN) * eased;
+        const display = Number.isInteger(toN)
+          ? Math.round(cur)
+          : Math.round(cur * 10) / 10;
+        if (el) el.textContent = String(display);
       } else {
-        if (t < 0.5) {
-          setDisplay(fromVal);
-        } else {
-          setDisplay(toVal);
+        if (el) {
+          el.textContent = t < 0.5 ? String(from) : String(to);
         }
       }
-      if (t < 1 && !canceled) {
+      if (t < 1) {
         rafRef.current = requestAnimationFrame(tick);
       } else {
-        setDisplay(toVal);
-        setProgress(1);
-        prevValueRef.current = toVal;
+        if (el) {
+          el.style.transform = '';
+          el.style.opacity = '';
+          el.textContent = String(to);
+          el.classList.remove('stat-animating');
+        }
+        prevDisplayRef.current = to;
       }
     };
 
     rafRef.current = requestAnimationFrame(tick);
     return () => {
-      canceled = true;
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
   }, [value]);
 
-  const translateY = (1 - progress) * -6;
   return (
-    <span
-      className="stat-value"
-      style={{
-        transform: `translateY(${translateY}px) rotateX(${(1 - progress) * 60}deg)`,
-        opacity: 0.4 + progress * 0.6,
-      }}
-    >
-      {display}
+    <span ref={valueRef} className="stat-value">
+      {value}
     </span>
   );
 }
@@ -178,6 +184,28 @@ function App() {
               <span className="stat-label">日均移动距离</span>
               <AnimatedNumber value={stats.avgDailyDist} />
               <span className="stat-unit">km</span>
+            </div>
+            <div style={{ marginTop: 12, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <button
+                className="export-btn"
+                style={{ flex: 1, padding: '6px 8px', fontSize: 11 }}
+                onClick={() => {
+                  if (sorted.length === 0) return;
+                  setCutoffDate(sorted[0].arriveTime.slice(0, 10));
+                }}
+              >
+                ⏮ 起点
+              </button>
+              <button
+                className="export-btn"
+                style={{ flex: 1, padding: '6px 8px', fontSize: 11 }}
+                onClick={() => {
+                  if (sorted.length === 0) return;
+                  setCutoffDate(sorted[sorted.length - 1].leaveTime.slice(0, 10));
+                }}
+              >
+                ▶ 播放
+              </button>
             </div>
           </div>
 
