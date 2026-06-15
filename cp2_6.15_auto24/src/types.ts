@@ -2,6 +2,7 @@ export type TokenType = 'color' | 'font' | 'spacing' | 'shadow' | 'other';
 
 export interface BaseToken {
   name: string;
+  path: string;
   type: TokenType;
   value: string;
   description?: string;
@@ -52,4 +53,10 @@ export interface TokenSelection {
 
 export interface CategoryState {
   [category: string]: boolean;
+}
+
+export interface CSSLine {
+  token: DesignToken | null;
+  content: string;
+  isVariable: boolean;
 }

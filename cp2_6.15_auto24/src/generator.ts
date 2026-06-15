@@ -1,10 +1,19 @@
 import { saveAs } from 'file-saver';
 import * as clipboard from 'clipboard-polyfill';
-import type { DesignToken, NormalizedTokens, TokenSelection } from './types';
+import type { NormalizedTokens, TokenSelection, CSSLine } from './types';
 import { getAllTokens } from './parser';
 
 function toCSSVariableName(name: string): string {
-  return `--${name.replace(/\s+/g, '-').toLowerCase()}`;
+  let normalized = name
+    .replace(/\./g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/_/g, '-')
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/--+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
+  normalized = `--${normalized}`;
+  return normalized;
 }
 
 export function generateCSSVariables(
@@ -31,11 +40,11 @@ export function generateCSSVariables(
 export function generateCSSLines(
   tokens: NormalizedTokens,
   selection: TokenSelection
-): Array<{ token: DesignToken | null; content: string; isVariable: boolean }> {
+): CSSLine[] {
   const allTokens = getAllTokens(tokens);
   const selectedTokens = allTokens.filter((token) => selection[token.name] !== false);
 
-  const lines: Array<{ token: DesignToken | null; content: string; isVariable: boolean }> = [];
+  const lines: CSSLine[] = [];
 
   lines.push({ token: null, content: ':root {', isVariable: false });
 
@@ -80,16 +89,18 @@ export function downloadCSS(css: string, filename: string = 'tokens.css'): void 
 }
 
 export function highlightCSS(line: string): string {
-  let highlighted = line
+  let result = line;
+
+  result = result.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  result = result
     .replace(/(:root)/g, '<span style="color:#c586c0">$1</span>')
     .replace(/(--[\w-]+)/g, '<span style="color:#9cdcfe">$1</span>')
-    .replace(/(#[0-9a-fA-F]{3,8})/g, '<span style="color:#ce9178">$1</span>')
-    .replace(/(\d+\.?\d*(px|rem|em|vh|vw|%))/g, '<span style="color:#b5cea8">$1</span>')
+    .replace(/(#[0-9a-fA-F]{3,8})\b/g, '<span style="color:#ce9178">$1</span>')
+    .replace(/(\d+\.?\d*)(px|rem|em|vh|vw|%|ch|ms|s|deg)\b/g, '<span style="color:#b5cea8">$1$2</span>')
     .replace(/(rgba?\([^)]+\))/gi, '<span style="color:#ce9178">$1</span>')
     .replace(/(hsla?\([^)]+\))/gi, '<span style="color:#ce9178">$1</span>')
-    .replace(/(:\s*)/g, '<span style="color:#d4d4d4">$1</span>')
-    .replace(/(;)/g, '<span style="color:#d4d4d4">$1</span>')
     .replace(/([{}])/g, '<span style="color:#ffd700">$1</span>');
 
-  return highlighted;
+  return result;
 }

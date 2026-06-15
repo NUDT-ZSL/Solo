@@ -11,167 +11,191 @@ import type {
 
 const COLOR_PATTERNS = [
   /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i,
-  /^rgb/i,
-  /^rgba/i,
-  /^hsl/i,
-  /^hsla/i,
+  /^rgb\(/i,
+  /^rgba\(/i,
+  /^hsl\(/i,
+  /^hsla\(/i,
 ];
 
-const FONT_KEYWORDS = ['font', 'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'typography'];
-const SPACING_KEYWORDS = ['spacing', 'space', 'gap', 'padding', 'margin', 'p-', 'm-'];
-const SHADOW_KEYWORDS = ['shadow', 'boxShadow'];
+const FONT_KEYWORDS = ['font', 'fontfamily', 'fontsize', 'fontweight', 'lineheight', 'typography', 'letter-spacing'];
+const SPACING_KEYWORDS = ['spacing', 'space', 'gap', 'padding', 'margin', 'radius', 'width', 'height', 'size'];
+const SHADOW_KEYWORDS = ['shadow', 'boxshadow'];
+
+function inferTokenTypeFromName(name: string): TokenType | null {
+  const lower = name.toLowerCase();
+  const segments = lower.split(/[.\-_/]/);
+
+  for (const seg of segments) {
+    if (FONT_KEYWORDS.includes(seg)) return 'font';
+    if (SPACING_KEYWORDS.includes(seg)) return 'spacing';
+    if (SHADOW_KEYWORDS.includes(seg)) return 'shadow';
+  }
+
+  return null;
+}
 
 function inferTokenType(name: string, value: string): TokenType {
-  const lowerName = name.toLowerCase();
+  const nameHint = inferTokenTypeFromName(name);
+  if (nameHint) return nameHint;
 
-  if (COLOR_PATTERNS.some((p) => p.test(value.trim()))) {
+  const trimmed = value.trim();
+
+  if (COLOR_PATTERNS.some((p) => p.test(trimmed))) {
     return 'color';
   }
 
-  if (FONT_KEYWORDS.some((k) => lowerName.includes(k.toLowerCase()))) {
-    return 'font';
-  }
-
-  if (SPACING_KEYWORDS.some((k) => lowerName.includes(k.toLowerCase()))) {
+  if (/^\d+(\.\d+)?(px|rem|em|vh|vw|%|ch)$/.test(trimmed)) {
     return 'spacing';
   }
 
-  if (SHADOW_KEYWORDS.some((k) => lowerName.includes(k.toLowerCase()))) {
-    return 'shadow';
-  }
-
-  if (/^-?\d+(\.\d+)?(px|rem|em|vh|vw|%)?$/.test(value.trim())) {
+  if (/^0$/.test(trimmed)) {
     return 'spacing';
-  }
-
-  if (/^['"]?[\w\s,-]+['"]?$/.test(value.trim()) && lowerName.includes('font')) {
-    return 'font';
   }
 
   return 'other';
 }
 
-function isValidColor(value: string): boolean {
-  return COLOR_PATTERNS.some((p) => p.test(value.trim()));
-}
-
 function parsePixelValue(value: string): number | undefined {
-  const match = value.match(/^-?(\d+\.?\d*)px$/);
-  if (match) {
-    return parseFloat(match[1]);
-  }
-  const remMatch = value.match(/^-?(\d+\.?\d*)rem$/);
-  if (remMatch) {
-    return parseFloat(remMatch[1]) * 16;
-  }
+  const pxMatch = value.match(/^(\d+\.?\d*)px$/);
+  if (pxMatch) return parseFloat(pxMatch[1]);
+  const remMatch = value.match(/^(\d+\.?\d*)rem$/);
+  if (remMatch) return parseFloat(remMatch[1]) * 16;
+  const emMatch = value.match(/^(\d+\.?\d*)em$/);
+  if (emMatch) return parseFloat(emMatch[1]) * 16;
+  const numMatch = value.match(/^(\d+\.?\d*)$/);
+  if (numMatch) return parseFloat(numMatch[1]);
   return undefined;
 }
 
-function createToken(name: string, value: string, type?: TokenType): DesignToken {
-  const tokenType = type || inferTokenType(name, value);
+function createToken(path: string, value: string, type?: TokenType): DesignToken {
+  const tokenType = type || inferTokenType(path, value);
+  const name = path;
 
   switch (tokenType) {
     case 'color':
-      return {
-        name,
-        type: 'color',
-        value: isValidColor(value) ? value : value,
-      } as ColorToken;
-
+      return { name, path, type: 'color', value } as ColorToken;
     case 'font':
       return {
         name,
+        path,
         type: 'font',
         value,
         fontFamily: value,
         fontSize: value,
       } as FontToken;
-
     case 'spacing':
       return {
         name,
+        path,
         type: 'spacing',
         value,
         pixelValue: parsePixelValue(value),
       } as SpacingToken;
-
     case 'shadow':
-      return {
-        name,
-        type: 'shadow',
-        value,
-      } as ShadowToken;
-
+      return { name, path, type: 'shadow', value } as ShadowToken;
     default:
-      return {
-        name,
-        type: 'other',
-        value,
-      } as OtherToken;
+      return { name, path, type: 'other', value } as OtherToken;
   }
 }
 
-function traverseObject(
+function isLeafValue(val: unknown): val is string | number | boolean {
+  return typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean';
+}
+
+function traverseDeep(
   obj: unknown,
-  path: string,
+  parentPath: string[],
   tokens: DesignToken[],
-  typeHint?: TokenType
+  parentTypeHint?: TokenType
 ): void {
   if (obj === null || obj === undefined) return;
 
-  if (typeof obj === 'string' || typeof obj === 'number' || typeof obj === 'boolean') {
+  if (isLeafValue(obj)) {
+    const fullPath = parentPath.join('.');
     const value = String(obj);
-    const type = typeHint || inferTokenType(path, value);
-    tokens.push(createToken(path, value, type));
+    const type = parentTypeHint || inferTokenType(fullPath, value);
+    tokens.push(createToken(fullPath, value, type));
     return;
   }
 
   if (Array.isArray(obj)) {
-    if (path && typeof obj[0] === 'object' && obj[0] !== null) {
-      obj.forEach((item, index) => {
-        traverseObject(item, `${path}-${index}`, tokens);
-      });
-    }
+    obj.forEach((item, index) => {
+      if (item !== null && item !== undefined) {
+        const segKey = String(index);
+        if (isLeafValue(item)) {
+          const fullPath = [...parentPath, segKey].join('.');
+          const value = String(item);
+          const type = parentTypeHint || inferTokenType(fullPath, value);
+          tokens.push(createToken(fullPath, value, type));
+        } else {
+          traverseDeep(item, [...parentPath, segKey], tokens, parentTypeHint);
+        }
+      }
+    });
     return;
   }
 
   if (typeof obj === 'object') {
     const record = obj as Record<string, unknown>;
 
-    if ('name' in record && 'value' in record) {
-      const type = ('type' in record ? (record.type as TokenType) : undefined) ||
-        inferTokenType(String(record.name), String(record.value));
-      tokens.push(createToken(String(record.name), String(record.value), type));
+    if ('name' in record && 'value' in record && typeof record.value !== 'object') {
+      const tokenName = String(record.name);
+      const tokenValue = String(record.value);
+      const type = ('type' in record && typeof record.type === 'string')
+        ? (record.type as TokenType)
+        : inferTokenType(tokenName, tokenValue);
+      const fullPath = parentPath.length > 0
+        ? [...parentPath, tokenName].join('.')
+        : tokenName;
+      tokens.push(createToken(fullPath, tokenValue, type));
       return;
     }
 
     if ('tokens' in record && Array.isArray(record.tokens)) {
-      record.tokens.forEach((token) => {
+      for (const token of record.tokens) {
         if (token && typeof token === 'object') {
           const t = token as Record<string, unknown>;
-          if ('name' in t && 'value' in t) {
-            const type = ('type' in t ? (t.type as TokenType) : undefined) ||
-              inferTokenType(String(t.name), String(t.value));
-            tokens.push(createToken(String(t.name), String(t.value), type));
+          if ('name' in t && 'value' in t && typeof t.value !== 'object') {
+            const tokenName = String(t.name);
+            const tokenValue = String(t.value);
+            const type = ('type' in t && typeof t.type === 'string')
+              ? (t.type as TokenType)
+              : inferTokenType(tokenName, tokenValue);
+            const fullPath = [...parentPath, tokenName].join('.');
+            tokens.push(createToken(fullPath, tokenValue, type));
+          } else {
+            traverseDeep(token, parentPath, tokens, parentTypeHint);
           }
         }
-      });
+      }
+      return;
+    }
+
+    if ('value' in record && typeof record.value !== 'object') {
+      const key = parentPath[parentPath.length - 1] || '';
+      const tokenValue = String(record.value);
+      const type = ('type' in record && typeof record.type === 'string')
+        ? (record.type as TokenType)
+        : inferTokenType(key, tokenValue);
+      const fullPath = parentPath.join('.');
+      tokens.push(createToken(fullPath, tokenValue, type));
       return;
     }
 
     for (const key of Object.keys(record)) {
-      const newPath = path ? `${path}-${key}` : key;
-      const value = record[key];
-      const keyType = inferTokenType(key, '');
-      const childType = keyType !== 'other' ? keyType : typeHint;
-      traverseObject(value, newPath, tokens, childType);
+      const val = record[key];
+      const childPath = [...parentPath, key];
+      const keyTypeHint = inferTokenTypeFromName(key);
+      const childTypeHint = keyTypeHint || parentTypeHint;
+
+      traverseDeep(val, childPath, tokens, childTypeHint || undefined);
     }
   }
 }
 
 export function parseDesignTokens(rawData: unknown): NormalizedTokens {
   const tokens: DesignToken[] = [];
-  traverseObject(rawData, '', tokens);
+  traverseDeep(rawData, [], tokens);
 
   const normalized: NormalizedTokens = {
     color: [],

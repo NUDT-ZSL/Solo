@@ -608,10 +608,22 @@ body {
 
 .editable-value:hover {
   border-bottom-color: #00d4ff;
+  background: rgba(0, 212, 255, 0.1);
+  border-radius: 3px;
 }
 
 .css-line.editing {
   background: transparent;
+}
+
+.css-line.editable-line {
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+}
+
+.css-line.editable-line:hover {
+  background: rgba(0, 212, 255, 0.05);
 }
 
 .edit-input {
@@ -816,9 +828,10 @@ body {
 }
 
 .spacing-ruler {
-  width: 60px;
+  border: 2px dashed #505060;
   border-radius: 4px;
-  transition: height 0.3s ease;
+  transition: width 0.3s ease, height 0.3s ease;
+  background: rgba(80, 80, 96, 0.1);
 }
 
 .shadow-preview-list {

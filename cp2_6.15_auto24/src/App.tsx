@@ -74,7 +74,7 @@ const App: React.FC = () => {
         });
         setSelection(newSelection);
         setParseError(null);
-      } catch (err) {
+      } catch {
         setParseError('JSON解析失败，请检查文件格式');
       }
     };
@@ -98,7 +98,7 @@ const App: React.FC = () => {
       });
       setSelection(newSelection);
       setParseError(null);
-    } catch (err) {
+    } catch {
       setParseError('JSON解析失败，请检查格式');
     }
   }, [pasteText]);
@@ -125,7 +125,7 @@ const App: React.FC = () => {
   const handleToggleSelection = useCallback((tokenName: string) => {
     setSelection((prev) => ({
       ...prev,
-      [tokenName]: !prev[tokenName],
+      [tokenName]: prev[tokenName] === false ? true : false,
     }));
   }, []);
 
@@ -159,20 +159,23 @@ const App: React.FC = () => {
     setEditValue(e.target.value);
   }, []);
 
-  const handleEditBlur = useCallback(() => {
+  const handleCommitEdit = useCallback(() => {
     if (editingToken) {
-      setTokens((prev) => updateTokenValue(prev, editingToken, editValue.trim() || editValue));
+      const trimmed = editValue.trim() || editValue;
+      setTokens((prev) => updateTokenValue(prev, editingToken, trimmed));
       setEditingToken(null);
+      setEditValue('');
     }
   }, [editingToken, editValue]);
 
   const handleEditKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
-      handleEditBlur();
+      handleCommitEdit();
     } else if (e.key === 'Escape') {
       setEditingToken(null);
+      setEditValue('');
     }
-  }, [handleEditBlur]);
+  }, [handleCommitEdit]);
 
   const handleCopy = useCallback(async () => {
     const success = await copyToClipboard(cssVariables);
@@ -192,7 +195,7 @@ const App: React.FC = () => {
 
   const renderTokenCard = (token: DesignToken) => {
     const isSelected = selection[token.name] !== false;
-    let cardContent = null;
+    let cardContent: React.ReactNode = null;
 
     switch (token.type) {
       case 'color':
@@ -213,19 +216,21 @@ const App: React.FC = () => {
           </>
         );
         break;
-      case 'spacing':
+      case 'spacing': {
+        const spacingToken = token as DesignToken & { pixelValue?: number };
         cardContent = (
           <>
             <div className="token-spacing-preview">
               <div
                 className="spacing-dash"
-                style={{ width: `${Math.min(Math.max(token.pixelValue || 16, 8), 60)}px` }}
+                style={{ width: `${Math.min(Math.max(spacingToken.pixelValue || 16, 8), 60)}px` }}
               />
             </div>
             <div className="token-value">{token.value}</div>
           </>
         );
         break;
+      }
       default:
         cardContent = <div className="token-value">{token.value}</div>;
     }
@@ -235,7 +240,7 @@ const App: React.FC = () => {
         key={token.name}
         className={`token-card ${isSelected ? 'selected' : ''}`}
       >
-        <label className="token-checkbox">
+        <label className="token-checkbox" onClick={(e) => e.stopPropagation()}>
           <input
             type="checkbox"
             checked={isSelected}
@@ -244,7 +249,7 @@ const App: React.FC = () => {
           <span className="checkbox-custom" />
         </label>
         <div className="token-content">
-          <div className="token-name">{token.name}</div>
+          <div className="token-name" title={token.name}>{token.name}</div>
           {cardContent}
         </div>
       </div>
@@ -294,46 +299,58 @@ const App: React.FC = () => {
     );
   };
 
-  const renderEditableValue = (token: DesignToken, content: string) => {
+  const renderEditableLine = (token: DesignToken, content: string) => {
     const isEditing = editingToken === token.name;
-    const valueMatch = content.match(/:\s*(.+);$/);
-    const valuePart = valueMatch ? valueMatch[1] : '';
-    const beforeValue = content.slice(0, content.indexOf(':') + 1);
-    const afterValue = content.slice(content.indexOf(';'));
+    const colonIdx = content.indexOf(':');
+    const semiIdx = content.lastIndexOf(';');
+
+    if (colonIdx === -1) {
+      return (
+        <div className="css-line">
+          <span
+            className="line-content"
+            dangerouslySetInnerHTML={{ __html: highlightCSS(content) }}
+          />
+        </div>
+      );
+    }
+
+    const beforePart = content.slice(0, colonIdx + 1) + ' ';
+    const valuePart = content.slice(colonIdx + 1, semiIdx).trim();
+    const afterPart = content.slice(semiIdx);
 
     if (isEditing) {
       return (
         <div className="css-line editing">
           <span className="line-content">
-            <span dangerouslySetInnerHTML={{ __html: highlightCSS(beforeValue + ' ') }} />
+            <span dangerouslySetInnerHTML={{ __html: highlightCSS(beforePart) }} />
             <input
               ref={editInputRef}
               type="text"
               value={editValue}
               onChange={handleEditChange}
-              onBlur={handleEditBlur}
+              onBlur={handleCommitEdit}
               onKeyDown={handleEditKeyDown}
               className="edit-input"
             />
-            <span dangerouslySetInnerHTML={{ __html: highlightCSS(afterValue) }} />
+            <span dangerouslySetInnerHTML={{ __html: highlightCSS(afterPart) }} />
           </span>
         </div>
       );
     }
 
-    const beforeValueHtml = highlightCSS(beforeValue + ' ');
-    const valueHtml = `<span class="editable-value" data-token="${token.name}">${highlightCSS(valuePart)}</span>`;
-    const afterValueHtml = highlightCSS(afterValue);
-
     return (
       <div
-        className="css-line"
+        className="css-line editable-line"
         onClick={() => handleStartEdit(token)}
+        title="点击编辑此值"
       >
         <span
           className="line-content"
           dangerouslySetInnerHTML={{
-            __html: beforeValueHtml + valueHtml + afterValueHtml,
+            __html: highlightCSS(beforePart) +
+              `<span class="editable-value">${highlightCSS(valuePart)}</span>` +
+              highlightCSS(afterPart),
           }}
         />
       </div>
@@ -386,13 +403,13 @@ const App: React.FC = () => {
               <Upload size={48} className="drop-icon" />
               <p className="drop-text">拖拽JSON文件到此处</p>
               <p className="drop-subtext">或点击选择文件</p>
-              <p className="drop-hint">支持多种设计令牌JSON格式</p>
+              <p className="drop-hint">支持扁平、嵌套及标准设计令牌JSON格式</p>
             </div>
           ) : (
             <div className="paste-section">
               <textarea
                 className="paste-textarea"
-                placeholder='请粘贴JSON格式的设计令牌数据，例如：&#10;{&#10;  "color-primary": "#4a90d9",&#10;  "spacing-md": "16px"&#10;}'
+                placeholder={'请粘贴JSON格式的设计令牌数据，例如：\n{\n  "color-primary": "#4a90d9",\n  "spacing-md": "16px"\n}'}
                 value={pasteText}
                 onChange={(e) => setPasteText(e.target.value)}
               />
@@ -474,7 +491,7 @@ const App: React.FC = () => {
                   {cssLines.map((line, index) => (
                     <div key={index} className="code-line">
                       {line.isVariable && line.token ? (
-                        renderEditableValue(line.token, line.content)
+                        renderEditableLine(line.token, line.content)
                       ) : (
                         <div className="css-line">
                           <span
