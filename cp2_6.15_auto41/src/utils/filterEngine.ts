@@ -196,20 +196,28 @@ export function applySingleFilter(
   filterType: keyof FilterParams,
   value: number
 ): ImageData {
-  switch (filterType) {
-    case 'oilPaint':
-      return applyOilPaint(imageData, value);
-    case 'watercolor':
-      return applyWatercolor(imageData, value);
-    case 'sketch':
-      return applySketch(imageData, value);
-    case 'mosaic':
-      return applyMosaic(imageData, value);
-    case 'filmGrain':
-      return applyFilmGrain(imageData, value);
-    default:
-      return imageData;
-  }
+  const config = filterConfigs[filterType];
+  
+  return measurePerformance(
+    config.name,
+    imageData,
+    () => {
+      switch (filterType) {
+        case 'oilPaint':
+          return applyOilPaint(imageData, value);
+        case 'watercolor':
+          return applyWatercolor(imageData, value);
+        case 'sketch':
+          return applySketch(imageData, value);
+        case 'mosaic':
+          return applyMosaic(imageData, value);
+        case 'filmGrain':
+          return applyFilmGrain(imageData, value);
+        default:
+          return imageData;
+      }
+    }
+  ).result;
 }
 
 export function applyFilters(
@@ -292,3 +300,84 @@ export const filterConfigs: Record<keyof FilterParams, FilterConfig> = {
     unit: ''
   }
 };
+
+export interface PerformanceMetrics {
+  filterName: string;
+  durationMs: number;
+  imageSize: { width: number; height: number };
+  timestamp: number;
+  fps?: number;
+}
+
+const performanceHistory: PerformanceMetrics[] = [];
+let lastFrameTime = performance.now();
+let frameCount = 0;
+
+export function measurePerformance(
+  filterName: string,
+  imageData: ImageData,
+  callback: () => ImageData
+): { result: ImageData; metrics: PerformanceMetrics } {
+  const startTime = performance.now();
+  const result = callback();
+  const durationMs = performance.now() - startTime;
+
+  frameCount++;
+  const now = performance.now();
+  const fps = 1000 / (now - lastFrameTime);
+  lastFrameTime = now;
+
+  const metrics: PerformanceMetrics = {
+    filterName,
+    durationMs,
+    imageSize: { width: imageData.width, height: imageData.height },
+    timestamp: Date.now(),
+    fps
+  };
+
+  performanceHistory.push(metrics);
+  
+  if (performanceHistory.length > 100) {
+    performanceHistory.shift();
+  }
+
+  console.group(`🎨 滤镜性能测试 - ${filterName}`);
+  console.log(`  处理耗时: ${durationMs.toFixed(2)}ms`);
+  console.log(`  图片尺寸: ${imageData.width} × ${imageData.height}`);
+  console.log(`  当前帧率: ${fps.toFixed(1)}fps`);
+  console.log(`  性能目标: ≤75ms, ≥30fps`);
+  
+  if (durationMs <= 75 && fps >= 30) {
+    console.log(`  ✅ 性能达标`);
+  } else {
+    console.warn(`  ⚠️  性能未达标: ${durationMs > 75 ? '处理时间过长' : ''} ${fps < 30 ? '帧率过低' : ''}`);
+  }
+  
+  console.groupEnd();
+
+  return { result, metrics };
+}
+
+export function getPerformanceHistory(): PerformanceMetrics[] {
+  return [...performanceHistory];
+}
+
+export function getAveragePerformance(): { avgDuration: number; avgFps: number } {
+  if (performanceHistory.length === 0) {
+    return { avgDuration: 0, avgFps: 0 };
+  }
+  
+  const totalDuration = performanceHistory.reduce((sum, m) => sum + m.durationMs, 0);
+  const totalFps = performanceHistory.reduce((sum, m) => sum + (m.fps || 0), 0);
+  
+  return {
+    avgDuration: totalDuration / performanceHistory.length,
+    avgFps: totalFps / performanceHistory.length
+  };
+}
+
+export function resetPerformanceHistory(): void {
+  performanceHistory.length = 0;
+  frameCount = 0;
+  lastFrameTime = performance.now();
+}

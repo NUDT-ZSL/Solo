@@ -18,11 +18,11 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
-  const formatFileSize = (bytes: number): string => {
+  const formatFileSize = useCallback((bytes: number): string => {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  };
+  }, []);
 
   const processFile = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -51,7 +51,8 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
-        const ctx = canvas.getContext('2d')!;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
         ctx.drawImage(img, 0, 0, width, height);
         const imageData = ctx.getImageData(0, 0, width, height);
         onImageUpload(file, imageData);
@@ -61,41 +62,52 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
     reader.readAsDataURL(file);
   }, [onImageUpload]);
 
-  const handleClick = () => {
+  const handleClick = useCallback(() => {
     if (!imageUrl && inputRef.current) {
+      inputRef.current.value = '';
+    }
+    if (inputRef.current) {
       inputRef.current.click();
     }
-  };
+  }, [imageUrl]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       processFile(file);
     }
-  };
+  }, [processFile]);
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    if (!imageUrl) {
-      setIsDragOver(true);
-    }
-  };
+    e.stopPropagation();
+    setIsDragOver(true);
+  }, []);
 
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragOver(false);
-  };
+  }, []);
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragOver(false);
-    if (!imageUrl) {
-      const file = e.dataTransfer.files?.[0];
-      if (file) {
-        processFile(file);
-      }
+    
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      processFile(file);
     }
-  };
+  }, [processFile]);
+
+  const handleReset = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (inputRef.current) {
+      inputRef.current.value = '';
+    }
+    onReset();
+  }, [onReset]);
 
   return (
     <div className="upload-section">
@@ -104,11 +116,12 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
         className={`upload-area ${isDragOver ? 'drag-over' : ''} ${imageUrl ? 'has-image' : ''}`}
         onClick={handleClick}
         onDragOver={handleDragOver}
+        onDragEnter={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
         {imageUrl ? (
-          <img src={imageUrl} alt="上传的图片" className="thumbnail" />
+          <img src={imageUrl} alt="上传的图片" className="thumbnail" style={{ pointerEvents: 'none' }} />
         ) : (
           <div className="upload-placeholder">
             <div className="upload-icon">🖼️</div>
@@ -127,10 +140,16 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
       {fileName && (
         <div className="file-info">
           <div className="file-details">
-            <div className="file-name">{fileName}</div>
-            <div className="file-size">{formatFileSize(fileSize)}</div>
+            <div className="file-name" title={fileName}>{fileName}</div>
+            <div className="file-size">
+              {formatFileSize(fileSize)}
+            </div>
           </div>
-          <button className="btn-reset-small" onClick={onReset}>
+          <button
+            className="btn-reset-small"
+            onClick={handleReset}
+            type="button"
+          >
             重置
           </button>
         </div>
