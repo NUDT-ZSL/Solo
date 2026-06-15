@@ -1,5 +1,5 @@
-import { useRef, useState, useEffect } from 'react';
-import { Canvas, useFrame, ThreeEvent } from '@react-three/fiber';
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import { Canvas, useFrame, ThreeEvent, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { useVoxelStore, Voxel } from './store';
@@ -19,6 +19,7 @@ function VoxelMesh({ voxel, isDay, isClearing, onRemove }: VoxelMeshProps) {
   const [scale, setScale] = useState(0);
   const [opacity, setOpacity] = useState(1);
   const startTime = useRef(voxel.createdAt);
+  const materialRef = useRef<THREE.MeshStandardMaterial>(null);
 
   useEffect(() => {
     startTime.current = Date.now();
@@ -39,26 +40,38 @@ function VoxelMesh({ voxel, isDay, isClearing, onRemove }: VoxelMeshProps) {
       const eased = 1 - Math.pow(1 - growProgress, 3);
       setScale(eased);
     }
+
+    if (materialRef.current) {
+      const targetColor = isDay ? voxel.color : '#333355';
+      const targetEmissive = isDay ? '#000000' : '#4488ff';
+      const targetEmissiveIntensity = isDay ? 0 : 0.15;
+
+      materialRef.current.color.lerp(
+        new THREE.Color(targetColor),
+        0.1
+      );
+      materialRef.current.emissive.lerp(
+        new THREE.Color(targetEmissive),
+        0.1
+      );
+      materialRef.current.emissiveIntensity +=
+        (targetEmissiveIntensity - materialRef.current.emissiveIntensity) * 0.1;
+      materialRef.current.opacity += (opacity - materialRef.current.opacity) * 0.2;
+    }
   });
-
-  const dayColor = voxel.color;
-  const nightColor = '#333355';
-
-  const materialProps = isDay
-    ? {
-        color: dayColor,
-        emissive: '#000000',
-        emissiveIntensity: 0,
-      }
-    : {
-        color: nightColor,
-        emissive: '#4488ff',
-        emissiveIntensity: 0.15,
-      };
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     onRemove(voxel.id);
+  };
+
+  const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation();
+    const canvas = (e.target as any).ownerDocument?.querySelector('canvas');
+    if (canvas) {
+      const event = new CustomEvent('voxelpointerdown', { bubbles: true });
+      canvas.dispatchEvent(event);
+    }
   };
 
   return (
@@ -67,10 +80,14 @@ function VoxelMesh({ voxel, isDay, isClearing, onRemove }: VoxelMeshProps) {
       position={[voxel.x + 0.5, voxel.y + 0.5, voxel.z + 0.5]}
       scale={scale}
       onClick={handleClick}
+      onPointerDown={handlePointerDown}
     >
       <boxGeometry args={[0.95, 0.95, 0.95]} />
       <meshStandardMaterial
-        {...materialProps}
+        ref={materialRef}
+        color={isDay ? voxel.color : '#333355'}
+        emissive={isDay ? '#000000' : '#4488ff'}
+        emissiveIntensity={isDay ? 0 : 0.15}
         transparent
         opacity={opacity}
         roughness={0.5}
@@ -80,24 +97,34 @@ function VoxelMesh({ voxel, isDay, isClearing, onRemove }: VoxelMeshProps) {
   );
 }
 
-function GridFloor() {
-  const gridRef = useRef<THREE.GridHelper>(null);
+function CustomGrid() {
+  const gridLines = useMemo(() => {
+    const points: THREE.Vector3[] = [];
+    const step = GRID_SIZE / GRID_DIVISIONS;
 
-  useFrame(() => {
-    if (gridRef.current) {
-      const material = gridRef.current.material as THREE.Material;
-      material.transparent = true;
-      material.opacity = 0.3;
+    for (let i = 0; i <= GRID_DIVISIONS; i++) {
+      const pos = i * step;
+
+      points.push(new THREE.Vector3(pos, 0.005, 0));
+      points.push(new THREE.Vector3(pos, 0.005, GRID_SIZE));
+
+      points.push(new THREE.Vector3(0, 0.005, pos));
+      points.push(new THREE.Vector3(GRID_SIZE, 0.005, pos));
     }
-  });
+
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    return geometry;
+  }, []);
 
   return (
-    <group>
-      <gridHelper
-        ref={gridRef}
-        args={[GRID_SIZE, GRID_DIVISIONS, '#555555', '#555555']}
-        position={[GRID_SIZE / 2, 0, GRID_SIZE / 2]}
-      />
+    <group position={[0, 0, 0]}>
+      <lineSegments geometry={gridLines}>
+        <lineBasicMaterial
+          color="#555555"
+          transparent
+          opacity={0.3}
+        />
+      </lineSegments>
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
         position={[GRID_SIZE / 2, -0.01, GRID_SIZE / 2]}
@@ -175,7 +202,8 @@ function SceneContent({ onAddVoxel }: SceneContentProps) {
   const lastDragPos = useRef<{ x: number; z: number } | null>(null);
   const raycaster = useRef(new THREE.Raycaster());
   const mouse = useRef(new THREE.Vector2());
-  const containerRef = useRef<HTMLDivElement>(null);
+  const { camera, gl } = useThree();
+  const isVoxelClickRef = useRef(false);
 
   useEffect(() => {
     if (isClearing) {
@@ -186,87 +214,128 @@ function SceneContent({ onAddVoxel }: SceneContentProps) {
     }
   }, [isClearing, finishClearing]);
 
-  const getGridPosition = (e: React.MouseEvent) => {
-    if (!containerRef.current) return null;
+  const getGridPosition = useCallback(
+    (clientX: number, clientY: number) => {
+      const rect = gl.domElement.getBoundingClientRect();
+      mouse.current.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.current.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
-    const rect = containerRef.current.getBoundingClientRect();
-    mouse.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    mouse.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.current.setFromCamera(mouse.current, camera);
 
-    const camera = (e as any).camera as THREE.Camera;
-    raycaster.current.setFromCamera(mouse.current, camera);
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+      const intersect = new THREE.Vector3();
+      raycaster.current.ray.intersectPlane(plane, intersect);
 
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-    const intersect = new THREE.Vector3();
-    raycaster.current.ray.intersectPlane(plane, intersect);
-
-    if (intersect) {
-      const x = Math.floor(intersect.x);
-      const z = Math.floor(intersect.z);
-      if (x >= 0 && x < GRID_SIZE && z >= 0 && z < GRID_SIZE) {
-        return { x, z };
+      if (intersect) {
+        const x = Math.floor(intersect.x);
+        const z = Math.floor(intersect.z);
+        if (x >= 0 && x < GRID_SIZE && z >= 0 && z < GRID_SIZE) {
+          return { x, z };
+        }
       }
-    }
-    return null;
-  };
+      return null;
+    },
+    [camera, gl.domElement]
+  );
 
-  const handlePointerDown = (e: React.MouseEvent) => {
-    if (e.button !== 0) return;
-    setIsDragging(true);
-    lastDragPos.current = null;
-
-    const pos = getGridPosition(e);
-    if (pos) {
-      onAddVoxel(pos.x, 0, pos.z);
-      lastDragPos.current = pos;
-    }
-  };
-
-  const handlePointerMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-
-    const pos = getGridPosition(e);
-    if (!pos) return;
-
-    if (lastDragPos.current) {
-      const dx = pos.x - lastDragPos.current.x;
-      const dz = pos.z - lastDragPos.current.z;
+  const placeVoxelsAlongPath = useCallback(
+    (from: { x: number; z: number }, to: { x: number; z: number }) => {
+      const dx = to.x - from.x;
+      const dz = to.z - from.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
 
-      if (dist >= 0.5) {
-        const steps = Math.ceil(dist / 0.5);
-        for (let i = 1; i <= steps; i++) {
-          const t = i / steps;
-          const ix = Math.round(lastDragPos.current.x + dx * t);
-          const iz = Math.round(lastDragPos.current.z + dz * t);
-          if (ix >= 0 && ix < GRID_SIZE && iz >= 0 && iz < GRID_SIZE) {
-            onAddVoxel(ix, 0, iz);
-          }
+      if (dist < 0.5) {
+        onAddVoxel(to.x, 0, to.z);
+        return;
+      }
+
+      const stepCount = Math.ceil(dist / 0.5);
+      for (let i = 0; i <= stepCount; i++) {
+        const t = i / stepCount;
+        const ix = Math.round(from.x + dx * t);
+        const iz = Math.round(from.z + dz * t);
+        if (ix >= 0 && ix < GRID_SIZE && iz >= 0 && iz < GRID_SIZE) {
+          onAddVoxel(ix, 0, iz);
         }
+      }
+    },
+    [onAddVoxel]
+  );
+
+  const handlePointerDown = useCallback(
+    (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      if (isVoxelClickRef.current) {
+        isVoxelClickRef.current = false;
+        return;
+      }
+
+      setIsDragging(true);
+      lastDragPos.current = null;
+
+      const pos = getGridPosition(e.clientX, e.clientY);
+      if (pos) {
+        onAddVoxel(pos.x, 0, pos.z);
         lastDragPos.current = pos;
       }
-    } else {
-      onAddVoxel(pos.x, 0, pos.z);
-      lastDragPos.current = pos;
-    }
-  };
+    },
+    [getGridPosition, onAddVoxel]
+  );
 
-  const handlePointerUp = () => {
+  const handlePointerMove = useCallback(
+    (e: PointerEvent) => {
+      if (!isDragging) return;
+
+      const pos = getGridPosition(e.clientX, e.clientY);
+      if (!pos) return;
+
+      if (lastDragPos.current) {
+        placeVoxelsAlongPath(lastDragPos.current, pos);
+        lastDragPos.current = pos;
+      } else {
+        onAddVoxel(pos.x, 0, pos.z);
+        lastDragPos.current = pos;
+      }
+    },
+    [isDragging, getGridPosition, placeVoxelsAlongPath, onAddVoxel]
+  );
+
+  const handlePointerUp = useCallback(() => {
     setIsDragging(false);
     lastDragPos.current = null;
-  };
+  }, []);
+
+  useEffect(() => {
+    const canvas = gl.domElement;
+    canvas.style.cursor = 'crosshair';
+    canvas.addEventListener('pointerdown', handlePointerDown);
+    canvas.addEventListener('pointermove', handlePointerMove);
+    canvas.addEventListener('pointerup', handlePointerUp);
+    canvas.addEventListener('pointerleave', handlePointerUp);
+
+    return () => {
+      canvas.removeEventListener('pointerdown', handlePointerDown);
+      canvas.removeEventListener('pointermove', handlePointerMove);
+      canvas.removeEventListener('pointerup', handlePointerUp);
+      canvas.removeEventListener('pointerleave', handlePointerUp);
+    };
+  }, [gl.domElement, handlePointerDown, handlePointerMove, handlePointerUp]);
+
+  useEffect(() => {
+    const canvas = gl.domElement;
+    const handleVoxelPointerDown = () => {
+      isVoxelClickRef.current = true;
+    };
+    canvas.addEventListener('voxelpointerdown', handleVoxelPointerDown as any);
+    return () => {
+      canvas.removeEventListener('voxelpointerdown', handleVoxelPointerDown as any);
+    };
+  }, [gl.domElement]);
 
   return (
-    <div
-      ref={containerRef}
-      style={{ width: '100%', height: '100%', cursor: 'crosshair' }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
-    >
+    <>
       <Lighting isDay={isDay} />
-      <GridFloor />
+      <CustomGrid />
 
       {voxels.map((voxel) => (
         <VoxelMesh
@@ -285,8 +354,13 @@ function SceneContent({ onAddVoxel }: SceneContentProps) {
         maxDistance={30}
         maxPolarAngle={Math.PI / 2.1}
         target={[GRID_SIZE / 2, 1, GRID_SIZE / 2]}
+        mouseButtons={{
+          LEFT: null as any,
+          MIDDLE: THREE.MOUSE.DOLLY,
+          RIGHT: THREE.MOUSE.ROTATE,
+        }}
       />
-    </div>
+    </>
   );
 }
 
