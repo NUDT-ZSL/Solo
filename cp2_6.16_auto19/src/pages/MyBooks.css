@@ -1,0 +1,44 @@
+.my-books-empty {
+  padding: 100px 20px;
+}
+
+.my-books-empty .btn {
+  margin-top: 24px;
+}
+
+.fab-btn {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: var(--primary-color);
+  color: white;
+  font-size: 24px;
+  box-shadow: 0 4px 16px rgba(255, 107, 53, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  z-index: 50;
+}
+
+.fab-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 24px rgba(255, 107, 53, 0.5);
+}
+
+.fab-btn:active {
+  transform: scale(0.95);
+}
+
+@media (max-width: 768px) {
+  .fab-btn {
+    bottom: 24px;
+    right: 24px;
+    width: 56px;
+    height: 56px;
+    font-size: 22px;
+  }
+}
