@@ -23,22 +23,25 @@ export interface TransformParams {
 }
 
 export interface WorkerMessage {
-  type: 'crop' | 'transform' | 'exportGIF' | 'exportPNG';
+  type: 'crop' | 'transform' | 'transformAnimate' | 'exportGIF' | 'exportPNG';
   imageData?: ImageData;
   width?: number;
   height?: number;
   emotion?: EmotionType;
   params?: TransformParams;
+  faceRegion?: FaceRegion | null;
+  frameCount?: number;
   frames?: ImageData[];
 }
 
 export interface WorkerResponse {
-  type: 'cropComplete' | 'transformComplete' | 'gifComplete' | 'pngComplete' | 'error' | 'progress';
+  type: 'cropComplete' | 'transformComplete' | 'animateFrames' | 'gifComplete' | 'pngComplete' | 'error' | 'progress';
   imageData?: ImageData;
-  blob?: Blob;
+  frames?: ImageData[];
+  blob?: ArrayBuffer;
   error?: string;
   progress?: number;
-  faceRegion?: FaceRegion;
+  faceRegion?: FaceRegion | null;
 }
 
 const ctx: Worker = self as unknown as Worker;
@@ -46,154 +49,13 @@ const ctx: Worker = self as unknown as Worker;
 const offscreenCanvas = new OffscreenCanvas(200, 200);
 const offscreenCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true })!;
 
-function rgbToYCrCb(r: number, g: number, b: number): { y: number; cr: number; cb: number } {
-  const y = 0.299 * r + 0.587 * g + 0.114 * b;
-  const cr = (r - y) * 0.713 + 128;
-  const cb = (b - y) * 0.564 + 128;
-  return { y, cr, cb };
+function cubicBezier(t: number, p1: number, p2: number, p3: number, p4: number): number {
+  const mt = 1 - t;
+  return mt * mt * mt * p1 + 3 * mt * mt * t * p2 + 3 * mt * t * t * p3 + t * t * t * p4;
 }
 
-function isSkinPixel(r: number, g: number, b: number): boolean {
-  const { cr, cb } = rgbToYCrCb(r, g, b);
-  return cr >= 133 && cr <= 173 && cb >= 77 && cb <= 127;
-}
-
-interface Point {
-  x: number;
-  y: number;
-}
-
-function findLargestConnectedRegion(skinMask: boolean[][], width: number, height: number): { points: Point[]; bbox: { x: number; y: number; width: number; height: number } } | null {
-  const visited = Array.from({ length: height }, () => Array(width).fill(false));
-  let largestRegion: Point[] = [];
-
-  const directions = [
-    [-1, -1], [-1, 0], [-1, 1],
-    [0, -1], [0, 1],
-    [1, -1], [1, 0], [1, 1]
-  ];
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      if (skinMask[y][x] && !visited[y][x]) {
-        const queue: Point[] = [{ x, y }];
-        const region: Point[] = [];
-        visited[y][x] = true;
-
-        while (queue.length > 0) {
-          const current = queue.shift()!;
-          region.push(current);
-
-          for (const [dy, dx] of directions) {
-            const ny = current.y + dy;
-            const nx = current.x + dx;
-            if (nx >= 0 && nx < width && ny >= 0 && ny < height && skinMask[ny][nx] && !visited[ny][nx]) {
-              visited[ny][nx] = true;
-              queue.push({ x: nx, y: ny });
-            }
-          }
-        }
-
-        if (region.length > largestRegion.length) {
-          largestRegion = region;
-        }
-      }
-    }
-  }
-
-  if (largestRegion.length < 50) return null;
-
-  let minX = width, minY = height, maxX = 0, maxY = 0;
-  for (const p of largestRegion) {
-    minX = Math.min(minX, p.x);
-    minY = Math.min(minY, p.y);
-    maxX = Math.max(maxX, p.x);
-    maxY = Math.max(maxY, p.y);
-  }
-
-  return {
-    points: largestRegion,
-    bbox: {
-      x: minX,
-      y: minY,
-      width: maxX - minX + 1,
-      height: maxY - minY + 1
-    }
-  };
-}
-
-function detectFace(imageData: ImageData): FaceRegion | null {
-  const { data, width, height } = imageData;
-  const skinMask: boolean[][] = Array.from({ length: height }, () => Array(width).fill(false));
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const i = (y * width + x) * 4;
-      skinMask[y][x] = isSkinPixel(data[i], data[i + 1], data[i + 2]);
-    }
-  }
-
-  const result = findLargestConnectedRegion(skinMask, width, height);
-  if (!result) return null;
-
-  const { bbox } = result;
-
-  const faceWidth = bbox.width;
-  const faceHeight = bbox.height;
-  const faceX = bbox.x;
-  const faceY = bbox.y;
-
-  const eyeY = faceY + faceHeight * 0.35;
-  const eyeHeight = faceHeight * 0.12;
-  const eyeWidth = faceWidth * 0.22;
-  const eyeYOffset = faceHeight * 0.05;
-
-  const browY = eyeY - eyeHeight * 0.8;
-  const browHeight = faceHeight * 0.06;
-  const browWidth = faceWidth * 0.25;
-
-  return {
-    x: faceX,
-    y: faceY,
-    width: faceWidth,
-    height: faceHeight,
-    leftEye: {
-      x: faceX + faceWidth * 0.15,
-      y: eyeY - eyeHeight / 2 + eyeYOffset,
-      width: eyeWidth,
-      height: eyeHeight
-    },
-    rightEye: {
-      x: faceX + faceWidth * 0.63,
-      y: eyeY - eyeHeight / 2 + eyeYOffset,
-      width: eyeWidth,
-      height: eyeHeight
-    },
-    leftBrow: {
-      x: faceX + faceWidth * 0.12,
-      y: browY,
-      width: browWidth,
-      height: browHeight
-    },
-    rightBrow: {
-      x: faceX + faceWidth * 0.63,
-      y: browY,
-      width: browWidth,
-      height: browHeight
-    },
-    nose: {
-      x: faceX + faceWidth * 0.4,
-      y: faceY + faceHeight * 0.45,
-      width: faceWidth * 0.2,
-      height: faceHeight * 0.25
-    },
-    mouth: {
-      x: faceX + faceWidth * 0.25,
-      y: faceY + faceHeight * 0.7,
-      width: faceWidth * 0.5,
-      height: faceHeight * 0.15
-    }
-  };
+function easeInOutCubic(t: number): number {
+  return cubicBezier(t, 0, 0.25, 0.25, 1);
 }
 
 function cropImage(imageData: ImageData, faceRegion: FaceRegion | null, targetSize: number = 200): ImageData {
@@ -230,15 +92,6 @@ function cropImage(imageData: ImageData, faceRegion: FaceRegion | null, targetSi
   );
 
   return offscreenCtx.getImageData(0, 0, targetSize, targetSize);
-}
-
-function cubicBezier(t: number, p1: number, p2: number, p3: number, p4: number): number {
-  const mt = 1 - t;
-  return mt * mt * mt * p1 + 3 * mt * mt * t * p2 + 3 * mt * t * t * p3 + t * t * t * p4;
-}
-
-function easeInOutCubic(t: number): number {
-  return cubicBezier(t, 0, 0.25, 0.25, 1);
 }
 
 function createGrid(faceRegion: FaceRegion, cols: number = 10, rows: number = 10): { x: number; y: number }[][] {
@@ -281,8 +134,8 @@ function transformGrid(
     case 'happy': {
       const mouthUp = faceRegion.height * 0.2 * intensity;
       for (let col = 0; col < cols; col++) {
-        if (col >= Math.floor(cols * 0.25) && col <= Math.floor(cols * 0.75)) {
-          const t = (col - cols * 0.25) / (cols * 0.5);
+        if (col >= Math.floor(cols * 0.2) && col <= Math.floor(cols * 0.8)) {
+          const t = (col - cols * 0.2) / (cols * 0.6);
           const curve = Math.sin(t * Math.PI) * mouthUp;
           for (let row = mouthRow; row < rows; row++) {
             const rowFactor = 1 - (row - mouthRow) / (rows - mouthRow);
@@ -290,12 +143,15 @@ function transformGrid(
           }
         }
       }
-      const eyeSquint = intensity * 0.15;
+      const eyeSquint = intensity * 0.2;
       for (let col = 0; col < cols; col++) {
         const distFromCenter = Math.abs(col - centerCol) / (cols / 2);
-        if (distFromCenter > 0.2 && distFromCenter < 0.8) {
+        if (distFromCenter > 0.15 && distFromCenter < 0.85) {
           const factor = 1 - Math.abs(distFromCenter - 0.5) * 2;
           transformed[eyeRow][col].y += faceRegion.height * eyeSquint * factor;
+          if (eyeRow + 1 < rows) {
+            transformed[eyeRow + 1][col].y += faceRegion.height * eyeSquint * factor * 0.5;
+          }
           transformed[eyeRow - 1][col].y -= faceRegion.height * eyeSquint * factor * 0.5;
         }
       }
@@ -309,14 +165,27 @@ function transformGrid(
           transformed[row][col].y -= browUp * distFromBrow;
         }
       }
+      const eyeWide = intensity * 0.12;
+      for (let col = 0; col < cols; col++) {
+        const distFromCenter = Math.abs(col - centerCol) / (cols / 2);
+        if (distFromCenter > 0.15 && distFromCenter < 0.85) {
+          const factor = 1 - Math.abs(distFromCenter - 0.5) * 2;
+          transformed[eyeRow][col].y -= faceRegion.height * eyeWide * factor;
+          if (eyeRow + 1 < rows) {
+            transformed[eyeRow + 1][col].y += faceRegion.height * eyeWide * factor * 0.5;
+          }
+        }
+      }
       const mouthOpen = faceRegion.height * 0.3 * intensity;
       for (let row = mouthRow; row < rows; row++) {
         for (let col = Math.floor(cols * 0.3); col <= Math.floor(cols * 0.7); col++) {
-          const colFactor = 1 - Math.abs(col - centerCol) / (cols * 0.4);
+          const colFactor = 1 - Math.abs(col - centerCol) / (cols * 0.35);
           if (colFactor > 0) {
             const rowFactor = (row - mouthRow) / (rows - mouthRow);
             transformed[row][col].y += mouthOpen * colFactor * rowFactor;
-            transformed[row][col].x += (col - centerCol) * faceRegion.width * 0.002 * intensity * colFactor;
+            const horizontalShrink = 1 - intensity * 0.15 * colFactor;
+            transformed[row][col].x = centerCol * (faceRegion.width / (cols - 1)) + faceRegion.x +
+              (transformed[row][col].x - (centerCol * (faceRegion.width / (cols - 1)) + faceRegion.x)) * horizontalShrink;
           }
         }
       }
@@ -334,12 +203,15 @@ function transformGrid(
           }
         }
       }
-      const eyeClose = intensity * 0.12;
+      const eyeClose = intensity * 0.15;
       for (let col = 0; col < cols; col++) {
         const distFromCenter = Math.abs(col - centerCol) / (cols / 2);
         if (distFromCenter > 0.2 && distFromCenter < 0.8) {
           const factor = 1 - Math.abs(distFromCenter - 0.5) * 2;
           transformed[eyeRow][col].y += faceRegion.height * eyeClose * factor;
+          if (eyeRow - 1 >= 0) {
+            transformed[eyeRow - 1][col].y -= faceRegion.height * eyeClose * factor * 0.3;
+          }
         }
       }
       const innerBrowUp = faceRegion.height * 0.1 * intensity;
@@ -362,7 +234,7 @@ function transformGrid(
           const distFromBrow = (browRow + 2 - row) / (browRow + 3);
           transformed[row][col].y += browDown * factor * distFromBrow;
           if (isInner) {
-            transformed[row][col].x += (col < centerCol ? -1 : 1) * faceRegion.width * 0.02 * intensity * distFromBrow;
+            transformed[row][col].x += (col < centerCol ? -1 : 1) * faceRegion.width * 0.025 * intensity * distFromBrow;
           }
         }
       }
@@ -518,95 +390,97 @@ function sampleAndSet(
   }
 }
 
-function drawGlasses(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, faceRegion: FaceRegion, color: string, intensity: number) {
+function drawGlasses(canvasCtx: OffscreenCanvasRenderingContext2D, faceRegion: FaceRegion, color: string, intensity: number) {
   const { leftEye, rightEye } = faceRegion;
   const rotation = (15 * Math.PI / 180) * intensity;
 
-  ctx.save();
+  canvasCtx.save();
 
   const cx = (leftEye.x + leftEye.width / 2 + rightEye.x + rightEye.width / 2) / 2;
   const cy = (leftEye.y + leftEye.height / 2 + rightEye.y + rightEye.height / 2) / 2;
-  ctx.translate(cx, cy);
-  ctx.rotate(rotation);
-  ctx.translate(-cx, -cy);
+  canvasCtx.translate(cx, cy);
+  canvasCtx.rotate(rotation);
+  canvasCtx.translate(-cx, -cy);
 
   const lensRadius = Math.max(leftEye.width, rightEye.width) * 0.6;
-  const bridgeWidth = Math.abs(rightEye.x - leftEye.x - leftEye.width) * 0.8;
   const bridgeY = cy;
 
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 3 * intensity;
-  ctx.fillStyle = `${color}40`;
+  canvasCtx.strokeStyle = color;
+  canvasCtx.lineWidth = 3 * intensity;
+  canvasCtx.fillStyle = `${color}40`;
 
-  ctx.beginPath();
-  ctx.arc(leftEye.x + leftEye.width / 2, leftEye.y + leftEye.height / 2, lensRadius, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
+  canvasCtx.beginPath();
+  canvasCtx.arc(leftEye.x + leftEye.width / 2, leftEye.y + leftEye.height / 2, lensRadius, 0, Math.PI * 2);
+  canvasCtx.fill();
+  canvasCtx.stroke();
 
-  ctx.beginPath();
-  ctx.arc(rightEye.x + rightEye.width / 2, rightEye.y + rightEye.height / 2, lensRadius, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
+  canvasCtx.beginPath();
+  canvasCtx.arc(rightEye.x + rightEye.width / 2, rightEye.y + rightEye.height / 2, lensRadius, 0, Math.PI * 2);
+  canvasCtx.fill();
+  canvasCtx.stroke();
 
-  ctx.beginPath();
-  ctx.moveTo(leftEye.x + leftEye.width / 2 + lensRadius, bridgeY);
-  ctx.lineTo(rightEye.x + rightEye.width / 2 - lensRadius, bridgeY);
-  ctx.stroke();
+  canvasCtx.beginPath();
+  canvasCtx.moveTo(leftEye.x + leftEye.width / 2 + lensRadius, bridgeY);
+  canvasCtx.lineTo(rightEye.x + rightEye.width / 2 - lensRadius, bridgeY);
+  canvasCtx.stroke();
 
-  ctx.beginPath();
-  ctx.moveTo(leftEye.x + leftEye.width / 2 - lensRadius, leftEye.y + leftEye.height / 2);
-  ctx.lineTo(leftEye.x + leftEye.width / 2 - lensRadius - 20 * intensity, leftEye.y + leftEye.height / 2 - 5 * intensity);
-  ctx.stroke();
+  canvasCtx.beginPath();
+  canvasCtx.moveTo(leftEye.x + leftEye.width / 2 - lensRadius, leftEye.y + leftEye.height / 2);
+  canvasCtx.lineTo(leftEye.x + leftEye.width / 2 - lensRadius - 20 * intensity, leftEye.y + leftEye.height / 2 - 5 * intensity);
+  canvasCtx.stroke();
 
-  ctx.beginPath();
-  ctx.moveTo(rightEye.x + rightEye.width / 2 + lensRadius, rightEye.y + rightEye.height / 2);
-  ctx.lineTo(rightEye.x + rightEye.width / 2 + lensRadius + 20 * intensity, rightEye.y + rightEye.height / 2 - 5 * intensity);
-  ctx.stroke();
+  canvasCtx.beginPath();
+  canvasCtx.moveTo(rightEye.x + rightEye.width / 2 + lensRadius, rightEye.y + rightEye.height / 2);
+  canvasCtx.lineTo(rightEye.x + rightEye.width / 2 + lensRadius + 20 * intensity, rightEye.y + rightEye.height / 2 - 5 * intensity);
+  canvasCtx.stroke();
 
-  ctx.restore();
+  canvasCtx.restore();
 }
 
-function drawBlush(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, faceRegion: FaceRegion, intensity: number) {
+function drawBlush(canvasCtx: OffscreenCanvasRenderingContext2D, faceRegion: FaceRegion, intensity: number) {
   const { leftEye, rightEye, mouth } = faceRegion;
 
   const blushY = (leftEye.y + leftEye.height + mouth.y) / 2;
   const blushRadius = faceRegion.width * 0.12;
 
-  const gradient1 = ctx.createRadialGradient(
+  const gradient1 = canvasCtx.createRadialGradient(
     leftEye.x + leftEye.width * 0.3, blushY, 0,
     leftEye.x + leftEye.width * 0.3, blushY, blushRadius
   );
   gradient1.addColorStop(0, `rgba(255, 100, 100, ${0.5 * intensity})`);
   gradient1.addColorStop(1, 'rgba(255, 100, 100, 0)');
 
-  ctx.fillStyle = gradient1;
-  ctx.beginPath();
-  ctx.arc(leftEye.x + leftEye.width * 0.3, blushY, blushRadius, 0, Math.PI * 2);
-  ctx.fill();
+  canvasCtx.fillStyle = gradient1;
+  canvasCtx.beginPath();
+  canvasCtx.arc(leftEye.x + leftEye.width * 0.3, blushY, blushRadius, 0, Math.PI * 2);
+  canvasCtx.fill();
 
-  const gradient2 = ctx.createRadialGradient(
+  const gradient2 = canvasCtx.createRadialGradient(
     rightEye.x + rightEye.width * 0.7, blushY, 0,
     rightEye.x + rightEye.width * 0.7, blushY, blushRadius
   );
   gradient2.addColorStop(0, `rgba(255, 100, 100, ${0.5 * intensity})`);
   gradient2.addColorStop(1, 'rgba(255, 100, 100, 0)');
 
-  ctx.fillStyle = gradient2;
-  ctx.beginPath();
-  ctx.arc(rightEye.x + rightEye.width * 0.7, blushY, blushRadius, 0, Math.PI * 2);
-  ctx.fill();
+  canvasCtx.fillStyle = gradient2;
+  canvasCtx.beginPath();
+  canvasCtx.arc(rightEye.x + rightEye.width * 0.7, blushY, blushRadius, 0, Math.PI * 2);
+  canvasCtx.fill();
 }
 
 function transformImage(
   imageData: ImageData,
   emotion: EmotionType,
-  params: TransformParams = {},
-  progress: number = 1
-): { imageData: ImageData; faceRegion: FaceRegion | null } {
-  const faceRegion = detectFace(imageData);
-
+  params: TransformParams,
+  faceRegion: FaceRegion | null,
+  progress: number
+): ImageData {
   if (!faceRegion) {
-    return { imageData, faceRegion: null };
+    return new ImageData(
+      new Uint8ClampedArray(imageData.data),
+      imageData.width,
+      imageData.height
+    );
   }
 
   const originalGrid = createGrid(faceRegion);
@@ -626,55 +500,50 @@ function transformImage(
     result = tempCtx.getImageData(0, 0, imageData.width, imageData.height);
   }
 
-  return { imageData: result, faceRegion };
+  return result;
 }
 
 function generateAnimationFrames(
   imageData: ImageData,
   emotion: EmotionType,
-  params: TransformParams = {},
-  duration: number = 0.4,
-  fps: number = 8
+  params: TransformParams,
+  faceRegion: FaceRegion | null,
+  frameCount: number
 ): ImageData[] {
-  const frameCount = Math.ceil(duration * fps);
   const frames: ImageData[] = [];
 
-  for (let i = 0; i <= frameCount; i++) {
-    const t = i / frameCount;
-    const easedT = easeInOutCubic(t);
-    const { imageData: transformed } = transformImage(imageData, emotion, params, easedT);
+  for (let i = 0; i < frameCount; i++) {
+    const progress = frameCount > 1 ? i / (frameCount - 1) : 1;
+    const easedProgress = easeInOutCubic(progress);
+    const transformed = transformImage(imageData, emotion, params, faceRegion, easedProgress);
     frames.push(transformed);
   }
 
   return frames;
 }
 
-async function exportGIF(frames: ImageData[]): Promise<Blob> {
+async function exportGIF(originalFrame: ImageData, transformedFrame: ImageData): Promise<Blob> {
   return new Promise((resolve, reject) => {
+    const workerScriptUrl = new URL('/gif.worker.js', self.location.href).href;
+
     const gif = new GIF({
       workers: 2,
       quality: 10,
       width: 200,
       height: 200,
       repeat: 3,
-      workerScript: '/gif.worker.js'
+      workerScript: workerScriptUrl
     });
 
-    const displayFrames: ImageData[] = [];
-    if (frames.length >= 2) {
-      displayFrames.push(frames[0]);
-      displayFrames.push(frames[Math.floor(frames.length / 2)]);
-      displayFrames.push(frames[0]);
-    } else {
-      displayFrames.push(...frames);
-    }
+    const delay = 125;
 
-    const delay = 1000 / 8;
+    const displayFrames = [originalFrame, transformedFrame, originalFrame];
+
     for (const frame of displayFrames) {
       const canvas = new OffscreenCanvas(frame.width, frame.height);
-      const ctx = canvas.getContext('2d')!;
-      ctx.putImageData(frame, 0, 0);
-      gif.addFrame(ctx as unknown as CanvasRenderingContext2D, { delay, copy: true });
+      const canvasCtx = canvas.getContext('2d')!;
+      canvasCtx.putImageData(frame, 0, 0);
+      gif.addFrame(canvasCtx as unknown as CanvasRenderingContext2D, { delay, copy: true });
     }
 
     gif.on('progress', (p: number) => {
@@ -695,9 +564,14 @@ async function exportGIF(frames: ImageData[]): Promise<Blob> {
 
 async function exportPNG(imageData: ImageData): Promise<Blob> {
   const canvas = new OffscreenCanvas(imageData.width, imageData.height);
-  const ctx = canvas.getContext('2d')!;
-  ctx.putImageData(imageData, 0, 0);
+  const canvasCtx = canvas.getContext('2d')!;
+  canvasCtx.putImageData(imageData, 0, 0);
   return canvas.convertToBlob({ type: 'image/png' });
+}
+
+function transferImageData(imageData: ImageData): { data: Uint8ClampedArray; width: number; height: number } {
+  const copy = new Uint8ClampedArray(imageData.data);
+  return { data: copy, width: imageData.width, height: imageData.height };
 }
 
 ctx.addEventListener('message', async (e: MessageEvent<WorkerMessage>) => {
@@ -706,7 +580,7 @@ ctx.addEventListener('message', async (e: MessageEvent<WorkerMessage>) => {
   try {
     switch (type) {
       case 'crop': {
-        const { imageData, width, height } = e.data;
+        const { imageData, width, height, faceRegion } = e.data;
         if (!imageData) throw new Error('缺少imageData');
 
         const imgData = new ImageData(
@@ -715,19 +589,22 @@ ctx.addEventListener('message', async (e: MessageEvent<WorkerMessage>) => {
           imageData.height || height!
         );
 
-        const faceRegion = detectFace(imgData);
-        const cropped = cropImage(imgData, faceRegion);
+        const cropped = cropImage(imgData, faceRegion ?? null);
+
+        const transferred = transferImageData(cropped);
+        const cropResult = new ImageData(transferred.data, transferred.width, transferred.height);
 
         ctx.postMessage({
           type: 'cropComplete',
-          imageData: cropped,
-          faceRegion
-        } as WorkerResponse);
+          imageData: cropResult,
+          faceRegion: faceRegion ?? null
+        } as WorkerResponse, [transferred.data.buffer]);
+
         break;
       }
 
       case 'transform': {
-        const { imageData, emotion, params } = e.data;
+        const { imageData, emotion, params, faceRegion } = e.data;
         if (!imageData || !emotion) throw new Error('缺少必要参数');
 
         const imgData = new ImageData(
@@ -736,33 +613,71 @@ ctx.addEventListener('message', async (e: MessageEvent<WorkerMessage>) => {
           imageData.height
         );
 
-        const { imageData: transformed, faceRegion } = transformImage(imgData, emotion, params);
+        const transformed = transformImage(imgData, emotion, params ?? {}, faceRegion ?? null, 1);
+
+        const transferred = transferImageData(transformed);
+        const transformResult = new ImageData(transferred.data, transferred.width, transferred.height);
 
         ctx.postMessage({
           type: 'transformComplete',
-          imageData: transformed,
-          faceRegion
-        } as WorkerResponse);
+          imageData: transformResult,
+          faceRegion: faceRegion ?? null
+        } as WorkerResponse, [transferred.data.buffer]);
+
+        break;
+      }
+
+      case 'transformAnimate': {
+        const { imageData, emotion, params, faceRegion, frameCount } = e.data;
+        if (!imageData || !emotion) throw new Error('缺少必要参数');
+
+        const imgData = new ImageData(
+          new Uint8ClampedArray(imageData.data),
+          imageData.width,
+          imageData.height
+        );
+
+        const count = frameCount ?? 10;
+        const frames = generateAnimationFrames(imgData, emotion, params ?? {}, faceRegion ?? null, count);
+
+        const transferableBuffers: ArrayBuffer[] = [];
+        const framesForTransfer: ImageData[] = frames.map(frame => {
+          const transferred = transferImageData(frame);
+          transferableBuffers.push(transferred.data.buffer);
+          return new ImageData(transferred.data, transferred.width, transferred.height);
+        });
+
+        ctx.postMessage({
+          type: 'animateFrames',
+          frames: framesForTransfer
+        } as WorkerResponse, transferableBuffers);
+
         break;
       }
 
       case 'exportGIF': {
         const { frames } = e.data;
-        if (!frames || frames.length === 0) throw new Error('缺少frames');
+        if (!frames || frames.length < 2) throw new Error('缺少frames或帧数不足');
 
-        const imgFrames = frames.map(f => new ImageData(
-          new Uint8ClampedArray(f.data),
-          f.width,
-          f.height
-        ));
+        const originalFrame = new ImageData(
+          new Uint8ClampedArray(frames[0].data),
+          frames[0].width,
+          frames[0].height
+        );
+        const transformedFrame = new ImageData(
+          new Uint8ClampedArray(frames[1].data),
+          frames[1].width,
+          frames[1].height
+        );
 
-        const blob = await exportGIF(imgFrames);
+        const blob = await exportGIF(originalFrame, transformedFrame);
         const arrayBuffer = await blob.arrayBuffer();
 
         ctx.postMessage({
           type: 'gifComplete',
           blob: arrayBuffer
         } as unknown as WorkerResponse, [arrayBuffer]);
+
         break;
       }
 
@@ -783,6 +698,7 @@ ctx.addEventListener('message', async (e: MessageEvent<WorkerMessage>) => {
           type: 'pngComplete',
           blob: arrayBuffer
         } as unknown as WorkerResponse, [arrayBuffer]);
+
         break;
       }
 
