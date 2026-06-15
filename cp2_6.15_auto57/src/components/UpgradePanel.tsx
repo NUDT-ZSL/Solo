@@ -126,11 +126,13 @@ export default function UpgradePanel() {
                   style={{
                     marginTop: 4, padding: '4px 16px',
                     border: 'none', borderRadius: 6,
-                    background: (!canAfford || isMaxed) ? '#555' : '#00bcd4',
-                    color: (!canAfford || isMaxed) ? '#888' : '#fff',
+                    background: (!canAfford || isMaxed) ? '#3a3a3a' : '#00bcd4',
+                    color: (!canAfford || isMaxed) ? '#666' : '#fff',
                     fontSize: 12, fontWeight: 600,
-                    cursor: (!canAfford || isMaxed) ? 'default' : 'pointer',
+                    cursor: (!canAfford || isMaxed) ? 'not-allowed' : 'pointer',
+                    opacity: (!canAfford || isMaxed) ? 0.6 : 1,
                     transition: 'all 0.2s ease-out',
+                    filter: (!canAfford || isMaxed) ? 'grayscale(0.5)' : 'none',
                   }}
                   onMouseEnter={(e) => {
                     if (canAfford && !isMaxed) {

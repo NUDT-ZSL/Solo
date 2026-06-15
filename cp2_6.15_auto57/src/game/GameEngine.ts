@@ -53,6 +53,8 @@ export class GameEngine {
   private gameTime = 0
 
   private audioCtx: AudioContext | null = null
+  private isPlayingSound = false
+  private activeOscillators: Set<OscillatorNode> = new Set()
   private difficulty: number = 1
 
   private boundKeyDown: (e: KeyboardEvent) => void
@@ -267,47 +269,74 @@ export class GameEngine {
 
   private cleanupAudio() {
     try {
+      this.activeOscillators.forEach((osc) => {
+        try {
+          osc.onended = null
+          osc.stop(0)
+          osc.disconnect()
+        } catch {
+          // ignore
+        }
+      })
+      this.activeOscillators.clear()
+      this.isPlayingSound = false
+
       if (this.audioCtx) {
-        this.audioCtx.close()
+        if (this.audioCtx.state !== 'closed') {
+          this.audioCtx.close().catch(() => {})
+        }
         this.audioCtx = null
       }
     } catch {
+      this.activeOscillators.clear()
+      this.isPlayingSound = false
       this.audioCtx = null
     }
   }
 
   private playPickupSound() {
+    if (this.isPlayingSound) return
+    if (!this.running) return
+
     const ctx = this.ensureAudioContext()
     if (!ctx) return
 
     try {
+      this.isPlayingSound = true
+
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
 
       osc.frequency.value = 800
       osc.type = 'sine'
 
-      gain.gain.setValueAtTime(0.0001, ctx.currentTime)
-      gain.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.005)
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.1)
+      const now = ctx.currentTime
+      gain.gain.setValueAtTime(0.0001, now)
+      gain.gain.exponentialRampToValueAtTime(0.15, now + 0.005)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.1)
 
       osc.connect(gain)
       gain.connect(ctx.destination)
 
-      const stopTime = ctx.currentTime + 0.11
-      osc.start(ctx.currentTime)
+      this.activeOscillators.add(osc)
+
+      const stopTime = now + 0.11
+      osc.start(now)
       osc.stop(stopTime)
 
       osc.onended = () => {
         try {
+          this.activeOscillators.delete(osc)
           osc.disconnect()
           gain.disconnect()
         } catch {
           // ignore
+        } finally {
+          this.isPlayingSound = false
         }
       }
     } catch {
-      // Audio not available
+      this.isPlayingSound = false
     }
   }
 
@@ -751,12 +780,25 @@ export class GameEngine {
     ctx.lineTo(x, y + size)
     ctx.stroke()
 
-    const dotAlpha = 0.4 + Math.sin(this.gameTime * 8) * 0.4
-    ctx.globalAlpha = Math.max(0.15, Math.min(1, dotAlpha))
+    const dotPulse = 0.3 + Math.sin(this.gameTime * 10) * 0.4
+    const dotAlpha = Math.max(0.2, Math.min(1, dotPulse))
+    const dotRadius = 2.5 + Math.sin(this.gameTime * 8) * 0.8
+
+    ctx.globalAlpha = dotAlpha
     ctx.fillStyle = '#ff1744'
+    ctx.shadowColor = '#ff1744'
+    ctx.shadowBlur = 8 * dotAlpha
     ctx.beginPath()
-    ctx.arc(x, y, 3, 0, Math.PI * 2)
+    ctx.arc(x, y, Math.max(1.5, dotRadius), 0, Math.PI * 2)
     ctx.fill()
+
+    ctx.globalAlpha = dotAlpha * 0.4
+    ctx.fillStyle = '#ff5252'
+    ctx.beginPath()
+    ctx.arc(x, y, Math.max(3, dotRadius + 1.5), 0, Math.PI * 2)
+    ctx.fill()
+
+    ctx.shadowBlur = 0
     ctx.globalAlpha = 1
   }
 }
