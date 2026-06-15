@@ -3,31 +3,39 @@ import { useEditorStore, Tool } from '../store/editorStore'
 import { saveAs } from 'file-saver'
 import { Shape } from '../utils/geometry'
 
+function formatNumber(n: number): string {
+  const rounded = Math.round(n * 100) / 100
+  if (Number.isInteger(rounded)) {
+    return rounded.toString()
+  }
+  return rounded.toFixed(rounded % 1 === 0 ? 0 : rounded * 10 % 1 === 0 ? 1 : 2)
+}
+
 function shapesToSVG(shapes: Shape[], width: number, height: number): string {
   const parts: string[] = []
   parts.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${formatNumber(width)}" height="${formatNumber(height)}" viewBox="0 0 ${formatNumber(width)} ${formatNumber(height)}">`
   )
   for (const shape of shapes) {
     const cx = shape.x + shape.width / 2
     const cy = shape.y + shape.height / 2
-    const transform = `translate(${cx} ${cy}) rotate(${shape.rotation}) translate(${-cx} ${-cy})`
+    const transform = `rotate(${formatNumber(shape.rotation)} ${formatNumber(cx)} ${formatNumber(cy)})`
     if (shape.type === 'rect') {
       parts.push(
-        `<rect x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}" fill="${shape.fill}" transform="${transform}"/>`
+        `  <rect x="${formatNumber(shape.x)}" y="${formatNumber(shape.y)}" width="${formatNumber(shape.width)}" height="${formatNumber(shape.height)}" fill="${shape.fill}" transform="${transform}"/>`
       )
     } else if (shape.type === 'circle') {
       const rx = shape.width / 2
       const ry = shape.height / 2
       parts.push(
-        `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${shape.fill}" transform="${transform}"/>`
+        `  <ellipse cx="${formatNumber(cx)}" cy="${formatNumber(cy)}" rx="${formatNumber(rx)}" ry="${formatNumber(ry)}" fill="${shape.fill}" transform="${transform}"/>`
       )
     } else if (shape.type === 'triangle') {
-      const p1 = `${cx},${shape.y}`
-      const p2 = `${shape.x},${shape.y + shape.height}`
-      const p3 = `${shape.x + shape.width},${shape.y + shape.height}`
+      const p1 = `${formatNumber(cx)},${formatNumber(shape.y)}`
+      const p2 = `${formatNumber(shape.x)},${formatNumber(shape.y + shape.height)}`
+      const p3 = `${formatNumber(shape.x + shape.width)},${formatNumber(shape.y + shape.height)}`
       parts.push(
-        `<polygon points="${p1} ${p2} ${p3}" fill="${shape.fill}" transform="${transform}"/>`
+        `  <polygon points="${p1} ${p2} ${p3}" fill="${shape.fill}" transform="${transform}"/>`
       )
     }
   }

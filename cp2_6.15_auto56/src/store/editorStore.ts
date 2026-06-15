@@ -28,7 +28,7 @@ interface EditorState {
 }
 
 function cloneShapes(shapes: Shape[]): Shape[] {
-  return shapes.map((s) => ({ ...s }))
+  return structuredClone(shapes)
 }
 
 const defaultColors: Record<ShapeType, string> = {
