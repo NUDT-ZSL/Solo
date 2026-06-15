@@ -30,11 +30,13 @@ const getDbPath = (): string => {
 const dbPath = getDbPath();
 
 interface Element {
+  id: string;
   type: 'photo' | 'text';
   x: number;
   y: number;
   width: number;
   height: number;
+  zIndex: number;
   content: string;
   fontSize?: number;
   color?: string;
@@ -48,12 +50,11 @@ interface Element {
 }
 
 interface Effects {
-  sparkle: boolean;
-  petal: boolean;
-  glow: boolean;
-  rotate: boolean;
-  textBlink: boolean;
-  [key: string]: any;
+  isSparkleEnabled: boolean;
+  isPetalEnabled: boolean;
+  isGlowEnabled: boolean;
+  isRotateEnabled: boolean;
+  isTextBlinkEnabled: boolean;
 }
 
 interface User {
