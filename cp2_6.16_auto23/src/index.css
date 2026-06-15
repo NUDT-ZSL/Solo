@@ -248,16 +248,31 @@ body {
 }
 
 .status-icon {
-  font-size: 20px;
+  font-size: 22px;
+  font-weight: 700;
   line-height: 1;
 }
 
 .status-icon.success {
-  color: #fff;
+  color: #ffffff;
+  background: #66BB6A;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
 }
 
 .status-icon.error {
-  color: #fff;
+  color: #ffffff;
+  background: #EF5350;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
 }
 
 /* Report */

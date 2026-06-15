@@ -1,4 +1,4 @@
-import { useToastStore } from '../store/toast'
+import { useToast } from '../context/ToastContext'
 
 const TOAST_ICONS: Record<string, string> = {
   success: '✓',
@@ -6,7 +6,7 @@ const TOAST_ICONS: Record<string, string> = {
 }
 
 export default function ToastContainer() {
-  const { toasts } = useToastStore()
+  const { toasts } = useToast()
 
   return (
     <div className="toast-container">

@@ -1,5 +1,5 @@
 import { useState, type FC, type FormEvent } from 'react'
-import { useToastStore } from '../store/toast'
+import { useToast } from '../context/ToastContext'
 
 export type MoodType = 'happy' | 'calm' | 'neutral' | 'down' | 'anxious'
 
@@ -24,7 +24,7 @@ const MoodSubmit: FC = () => {
   const [selectedMood, setSelectedMood] = useState<MoodType | null>(null)
   const [text, setText] = useState<string>('')
   const [status, setStatus] = useState<SubmitStatus>('idle')
-  const showToast = useToastStore((s) => s.showToast)
+  const { showToast } = useToast()
 
   const MAX_LEN = 200
   const remaining = MAX_LEN - text.length
