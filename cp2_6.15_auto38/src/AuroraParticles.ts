@@ -20,7 +20,7 @@ export interface ExplosionState {
   isExploding: boolean
   isRecovering: boolean
   explosionStartTime: number
-  explodedPosition: THREE.Vector3 | null
+  explodedOffset: THREE.Vector3 | null
   explodedColor: THREE.Color | null
   originalPosition: THREE.Vector3
   originalColor: THREE.Color
@@ -42,6 +42,7 @@ export interface AuroraData {
   colorTransitionStart: number
   isTransitioningColor: boolean
   transitionStartColors: Float32Array | null
+  transitionStartPhases: Float32Array | null
   newParticleIndices: Map<number, number>
   lastUpdateTime: number
 }
@@ -104,12 +105,12 @@ function generateRandomBrightColor(): THREE.Color {
   return color
 }
 
-function easeOut(t: number): number {
+function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3)
 }
 
-function easeOutCubic(t: number): number {
-  return 1 - Math.pow(1 - t, 3)
+function easeOutQuadratic(t: number): number {
+  return t * (2 - t)
 }
 
 export function createAuroraParticles(count: number): AuroraData {
@@ -212,6 +213,7 @@ export function createAuroraParticles(count: number): AuroraData {
     colorTransitionStart: 0,
     isTransitioningColor: false,
     transitionStartColors: null,
+    transitionStartPhases: null,
     newParticleIndices: new Map(),
     lastUpdateTime: 0,
   }
@@ -222,8 +224,9 @@ export function triggerExplosion(
   clickedIndex: number,
   currentTime: number
 ) {
-  const { geometry, basePositions, explosionStates, originalColors } = auroraData
+  const { geometry, basePositions, explosionStates } = auroraData
   const positions = geometry.attributes.position.array as Float32Array
+  const colors = geometry.attributes.color.array as Float32Array
 
   const clickedPos = new THREE.Vector3(
     positions[clickedIndex * 3],
@@ -234,10 +237,11 @@ export function triggerExplosion(
   const count = positions.length / 3
 
   for (let i = 0; i < count; i++) {
+    const i3 = i * 3
     const pos = new THREE.Vector3(
-      positions[i * 3],
-      positions[i * 3 + 1],
-      positions[i * 3 + 2]
+      positions[i3],
+      positions[i3 + 1],
+      positions[i3 + 2]
     )
 
     const distance = pos.distanceTo(clickedPos)
@@ -258,45 +262,32 @@ export function triggerExplosion(
 
       const brightColor = generateRandomBrightColor()
 
-      const i3 = i * 3
-      const currentPos = new THREE.Vector3(
-        positions[i3],
-        positions[i3 + 1],
-        positions[i3 + 2]
-      )
-      const currentCol = new THREE.Color(
-        brightColor.r,
-        brightColor.g,
-        brightColor.b
-      )
-
       explosionStates.set(i, {
         isExploding: true,
         isRecovering: false,
         explosionStartTime: currentTime,
-        explodedPosition: currentPos,
-        explodedColor: currentCol,
+        explodedOffset: null,
+        explodedColor: brightColor.clone(),
         originalPosition: new THREE.Vector3(
           basePositions[i3],
           basePositions[i3 + 1],
           basePositions[i3 + 2]
         ),
         originalColor: new THREE.Color(
-          originalColors[i3],
-          originalColors[i3 + 1],
-          originalColors[i3 + 2]
+          auroraData.originalColors[i3],
+          auroraData.originalColors[i3 + 1],
+          auroraData.originalColors[i3 + 2]
         ),
         explosionVelocity: velocity,
       } as ExplosionState & { explosionVelocity: THREE.Vector3 })
 
-      const colors = geometry.attributes.color.array as Float32Array
       colors[i3] = brightColor.r
       colors[i3 + 1] = brightColor.g
       colors[i3 + 2] = brightColor.b
     }
   }
 
-  ;(geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true
+  geometry.attributes.color.needsUpdate = true
 }
 
 export function updateColorMode(
@@ -306,11 +297,12 @@ export function updateColorMode(
 ) {
   if (auroraData.currentColorMode === newMode) return
 
-  const palette = getColorPalette(newMode)
   const count = auroraData.basePositions.length / 3
 
   auroraData.transitionStartColors = new Float32Array(auroraData.currentColors)
+  auroraData.transitionStartPhases = new Float32Array(auroraData.colorPhases)
 
+  const palette = getColorPalette(newMode)
   for (let i = 0; i < count; i++) {
     const t = i / count
     const color = lerpColor(t, palette)
@@ -412,6 +404,14 @@ export function updateParticleCount(
       }
       auroraData.transitionStartColors = newTransitionColors
     }
+    if (auroraData.transitionStartPhases) {
+      const newTransitionPhases = new Float32Array(newCount)
+      newTransitionPhases.set(auroraData.transitionStartPhases)
+      for (let i = currentCount; i < newCount; i++) {
+        newTransitionPhases[i] = newColorPhases[i]
+      }
+      auroraData.transitionStartPhases = newTransitionPhases
+    }
 
     auroraData.geometry.dispose()
     const newGeometry = new THREE.BufferGeometry()
@@ -440,6 +440,9 @@ export function updateParticleCount(
 
     if (auroraData.transitionStartColors) {
       auroraData.transitionStartColors = auroraData.transitionStartColors.slice(0, newCount * 3)
+    }
+    if (auroraData.transitionStartPhases) {
+      auroraData.transitionStartPhases = auroraData.transitionStartPhases.slice(0, newCount)
     }
 
     const newExplosionStates = new Map<number, ExplosionState>()
@@ -486,7 +489,6 @@ export function updateAuroraParticles(
     basePositions,
     colorPhases,
     currentColors,
-    targetColors,
     explosionStates,
     newParticleIndices,
   } = auroraData
@@ -497,6 +499,7 @@ export function updateAuroraParticles(
   auroraData.baseAngle += ROTATION_SPEED * deltaTime
   const rotationAngle = auroraData.baseAngle
   const waveOffset = Math.sin(currentTime * WAVE_FREQUENCY * Math.PI * 2) * WAVE_AMPLITUDE
+  const waveOffset2 = Math.cos(currentTime * WAVE_FREQUENCY * 1.3 * Math.PI * 2) * WAVE_AMPLITUDE * 0.4
 
   const cosR = Math.cos(rotationAngle)
   const sinR = Math.sin(rotationAngle)
@@ -507,12 +510,13 @@ export function updateAuroraParticles(
     const i3 = i * 3
 
     let baseX = basePositions[i3]
-    let baseY = basePositions[i3 + 1] + waveOffset
+    let baseY = basePositions[i3 + 1] + waveOffset + waveOffset2
     let baseZ = basePositions[i3 + 2]
 
-    let x = baseX * cosR - baseZ * sinR
-    let z = baseX * sinR + baseZ * cosR
-    let y = baseY
+    let offsetX = 0
+    let offsetY = 0
+    let offsetZ = 0
+    let overrideColor = false
 
     const explosion = explosionStates.get(i)
     if (explosion) {
@@ -521,88 +525,121 @@ export function updateAuroraParticles(
         if (elapsed < EXPLOSION_DURATION) {
           const velocity = (explosion as ExplosionState & { explosionVelocity: THREE.Vector3 }).explosionVelocity
           const t = elapsed / EXPLOSION_DURATION
-          const easedT = easeOut(t)
+          const easedT = easeOutCubic(t)
           const dist = easedT * EXPLOSION_SPEED * EXPLOSION_DURATION
           const dir = velocity.clone().normalize()
-          x = baseX * cosR - baseZ * sinR + dir.x * dist
-          z = baseX * sinR + baseZ * cosR + dir.z * dist
-          y = baseY + dir.y * dist
+          offsetX = dir.x * dist
+          offsetY = dir.y * dist
+          offsetZ = dir.z * dist
+          overrideColor = true
         } else {
           explosion.isExploding = false
           explosion.isRecovering = true
-          explosion.explodedPosition = new THREE.Vector3(x, y, z)
-          const cArr = geometry.attributes.color.array as Float32Array
-          explosion.explodedColor = new THREE.Color(
-            cArr[i3],
-            cArr[i3 + 1],
-            cArr[i3 + 2]
+          const velocity = (explosion as ExplosionState & { explosionVelocity: THREE.Vector3 }).explosionVelocity
+          const dir = velocity.clone().normalize()
+          const dist = EXPLOSION_SPEED * EXPLOSION_DURATION
+          explosion.explodedOffset = new THREE.Vector3(
+            dir.x * dist,
+            dir.y * dist,
+            dir.z * dist
           )
         }
       }
 
-      if (explosion.isRecovering && explosion.explodedPosition && explosion.explodedColor) {
+      if (explosion.isRecovering && explosion.explodedOffset) {
         const timeSinceExplosion = currentTime - explosion.explosionStartTime
-        if (timeSinceExplosion >= RECOVERY_DELAY) {
+
+        if (timeSinceExplosion < RECOVERY_DELAY) {
+          offsetX = explosion.explodedOffset.x
+          offsetY = explosion.explodedOffset.y
+          offsetZ = explosion.explodedOffset.z
+          overrideColor = true
+        } else if (timeSinceExplosion < RECOVERY_DELAY + RECOVERY_DURATION) {
           const recoveryElapsed = timeSinceExplosion - RECOVERY_DELAY
-          if (recoveryElapsed < RECOVERY_DURATION) {
-            const rawT = recoveryElapsed / RECOVERY_DURATION
-            const t = easeOutCubic(rawT)
+          const rawT = recoveryElapsed / RECOVERY_DURATION
+          const t = easeOutCubic(rawT)
 
-            const finalX =
-              explosion.originalPosition.x * cosR - explosion.originalPosition.z * sinR
-            const finalZ =
-              explosion.originalPosition.x * sinR + explosion.originalPosition.z * cosR
-            const finalY = explosion.originalPosition.y + waveOffset
+          offsetX = explosion.explodedOffset.x * (1 - t)
+          offsetY = explosion.explodedOffset.y * (1 - t)
+          offsetZ = explosion.explodedOffset.z * (1 - t)
 
-            x = explosion.explodedPosition.x + (finalX - explosion.explodedPosition.x) * t
-            y = explosion.explodedPosition.y + (finalY - explosion.explodedPosition.y) * t
-            z = explosion.explodedPosition.z + (finalZ - explosion.explodedPosition.z) * t
+          if (explosion.explodedColor) {
+            const cycleT = (colorPhases[i] + currentTime * COLOR_CYCLE_SPEED) % 1
+            const targetCol = lerpColor(cycleT, palette)
 
-            colors[i3] = explosion.explodedColor.r + (explosion.originalColor.r - explosion.explodedColor.r) * t
-            colors[i3 + 1] = explosion.explodedColor.g + (explosion.originalColor.g - explosion.explodedColor.g) * t
-            colors[i3 + 2] = explosion.explodedColor.b + (explosion.originalColor.b - explosion.explodedColor.b) * t
-          } else {
-            explosionStates.delete(i)
+            colors[i3] = explosion.explodedColor.r + (targetCol.r - explosion.explodedColor.r) * t
+            colors[i3 + 1] = explosion.explodedColor.g + (targetCol.g - explosion.explodedColor.g) * t
+            colors[i3 + 2] = explosion.explodedColor.b + (targetCol.b - explosion.explodedColor.b) * t
+            overrideColor = true
           }
         } else {
-          x = explosion.explodedPosition.x
-          y = explosion.explodedPosition.y
-          z = explosion.explodedPosition.z
+          explosionStates.delete(i)
         }
       }
     }
-
-    positions[i3] = x
-    positions[i3 + 1] = y
-    positions[i3 + 2] = z
 
     const newParticleSpawn = newParticleIndices.get(i)
     if (newParticleSpawn !== undefined) {
       const spawnElapsed = currentTime - newParticleSpawn
       if (spawnElapsed < PARTICLE_SPAWN_DURATION) {
         const rawT = spawnElapsed / PARTICLE_SPAWN_DURATION
-        const t = easeOut(rawT)
-        const centerX = 0
-        const centerY = -10
-        const centerZ = 0
-
-        const finalX = positions[i3]
-        const finalY = positions[i3 + 1]
-        const finalZ = positions[i3 + 2]
-
-        positions[i3] = centerX + (finalX - centerX) * t
-        positions[i3 + 1] = centerY + (finalY - centerY) * t
-        positions[i3 + 2] = centerZ + (finalZ - centerZ) * t
+        const t = easeOutCubic(rawT)
+        baseX = baseX * t
+        baseY = -10 + (baseY - (-10)) * t
+        baseZ = baseZ * t
       } else {
         newParticleIndices.delete(i)
       }
     }
 
-    if (!explosion || (!explosion.isExploding && !explosion.isRecovering)) {
-      const cycleT = (colorPhases[i] + currentTime * COLOR_CYCLE_SPEED) % 1
-      const cycleColor = lerpColor(cycleT, palette)
+    const finalX = baseX * cosR - baseZ * sinR + offsetX
+    const finalZ = baseX * sinR + baseZ * cosR + offsetZ
+    const finalY = baseY + offsetY
 
-      if (!auroraData.isTransitioningColor) {
+    positions[i3] = finalX
+    positions[i3 + 1] = finalY
+    positions[i3 + 2] = finalZ
+
+    if (!overrideColor) {
+      if (auroraData.isTransitioningColor && auroraData.transitionStartColors && auroraData.transitionStartPhases) {
+        const transitionElapsed = currentTime - auroraData.colorTransitionStart
+        if (transitionElapsed < COLOR_TRANSITION_DURATION) {
+          const rawT = transitionElapsed / COLOR_TRANSITION_DURATION
+          const t = easeOutCubic(rawT)
+
+          const startCycleT = (auroraData.transitionStartPhases[i] + currentTime * COLOR_CYCLE_SPEED) % 1
+          const startCol = lerpColor(startCycleT, getColorPalette(auroraData.currentColorMode))
+          // 用初始颜色作为起点
+          startCol.r = auroraData.transitionStartColors[i3]
+          startCol.g = auroraData.transitionStartColors[i3 + 1]
+          startCol.b = auroraData.transitionStartColors[i3 + 2]
+
+          const targetCycleT = (colorPhases[i] + currentTime * COLOR_CYCLE_SPEED) % 1
+          const targetCol = lerpColor(targetCycleT, palette)
+
+          colors[i3] = startCol.r + (targetCol.r - startCol.r) * t
+          colors[i3 + 1] = startCol.g + (targetCol.g - startCol.g) * t
+          colors[i3 + 2] = startCol.b + (targetCol.b - startCol.b) * t
+          currentColors[i3] = colors[i3]
+          currentColors[i3 + 1] = colors[i3 + 1]
+          currentColors[i3 + 2] = colors[i3 + 2]
+        } else {
+          auroraData.isTransitioningColor = false
+          auroraData.transitionStartColors = null
+          auroraData.transitionStartPhases = null
+
+          const cycleT = (colorPhases[i] + currentTime * COLOR_CYCLE_SPEED) % 1
+          const cycleColor = lerpColor(cycleT, palette)
+          colors[i3] = cycleColor.r
+          colors[i3 + 1] = cycleColor.g
+          colors[i3 + 2] = cycleColor.b
+          currentColors[i3] = cycleColor.r
+          currentColors[i3 + 1] = cycleColor.g
+          currentColors[i3 + 2] = cycleColor.b
+        }
+      } else {
+        const cycleT = (colorPhases[i] + currentTime * COLOR_CYCLE_SPEED) % 1
+        const cycleColor = lerpColor(cycleT, palette)
         colors[i3] = cycleColor.r
         colors[i3 + 1] = cycleColor.g
         colors[i3 + 2] = cycleColor.b
@@ -610,33 +647,6 @@ export function updateAuroraParticles(
         currentColors[i3 + 1] = cycleColor.g
         currentColors[i3 + 2] = cycleColor.b
       }
-    }
-  }
-
-  if (auroraData.isTransitioningColor && auroraData.transitionStartColors) {
-    const transitionElapsed = currentTime - auroraData.colorTransitionStart
-    if (transitionElapsed < COLOR_TRANSITION_DURATION) {
-      const rawT = transitionElapsed / COLOR_TRANSITION_DURATION
-      const t = easeOut(rawT)
-      for (let i = 0; i < count; i++) {
-        const i3 = i * 3
-        const explosion = explosionStates.get(i)
-        if (!explosion || (!explosion.isExploding && !explosion.isRecovering)) {
-          const cycleT = (colorPhases[i] + currentTime * COLOR_CYCLE_SPEED) % 1
-          const targetCol = lerpColor(cycleT, palette)
-          const startCol = auroraData.transitionStartColors
-
-          colors[i3] = startCol[i3] + (targetCol.r - startCol[i3]) * t
-          colors[i3 + 1] = startCol[i3 + 1] + (targetCol.g - startCol[i3 + 1]) * t
-          colors[i3 + 2] = startCol[i3 + 2] + (targetCol.b - startCol[i3 + 2]) * t
-          currentColors[i3] = colors[i3]
-          currentColors[i3 + 1] = colors[i3 + 1]
-          currentColors[i3 + 2] = colors[i3 + 2]
-        }
-      }
-    } else {
-      auroraData.isTransitioningColor = false
-      auroraData.transitionStartColors = null
     }
   }
 

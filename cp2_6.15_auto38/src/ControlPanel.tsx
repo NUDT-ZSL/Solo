@@ -21,17 +21,25 @@ export default function ControlPanel() {
           width: 240px;
           padding: 20px;
           border-radius: 12px;
-          background: rgba(20, 20, 40, 0.75);
+          background-color: rgba(20, 20, 40, 0.8);
+          background: rgba(20, 20, 40, 0.8);
+          background: linear-gradient(
+            135deg,
+            rgba(20, 20, 40, 0.85) 0%,
+            rgba(30, 30, 60, 0.75) 50%,
+            rgba(20, 20, 40, 0.85) 100%
+          );
           backdrop-filter: blur(10px) saturate(180%);
           -webkit-backdrop-filter: blur(10px) saturate(180%);
           -moz-backdrop-filter: blur(10px) saturate(180%);
           -ms-backdrop-filter: blur(10px) saturate(180%);
-          background-color: rgba(20, 20, 40, 0.75);
+          background-clip: padding-box;
           color: #ffffff;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           z-index: 1000;
           box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3),
-                      0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+                      0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+                      0 0 40px rgba(68, 136, 255, 0.1);
           border: 1px solid rgba(255, 255, 255, 0.12);
           user-select: none;
         }
