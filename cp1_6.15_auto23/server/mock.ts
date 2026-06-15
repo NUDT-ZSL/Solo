@@ -32,8 +32,8 @@ const activities: Activity[] = [
     maxParticipants: 30,
     supplies: [
       { name: '登山杖', total: 15 },
-      { name: '头灯', total: 10 },
-      { name: '急救包', total: 5 },
+      { name: '头灯', total: 5 },
+      { name: '急救包', total: 2 },
     ],
   },
   {
