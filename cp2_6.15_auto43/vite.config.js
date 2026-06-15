@@ -24,6 +24,13 @@ export default defineConfig({
     }), 
     tsconfigPaths(),
   ],
+  build: {
+    outDir: 'dist'
+  },
+  worker: {
+    format: 'es',
+    plugins: () => [react()]
+  },
   server: {
     proxy: {
       '/api': {

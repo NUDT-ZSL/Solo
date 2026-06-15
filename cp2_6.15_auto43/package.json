@@ -23,7 +23,7 @@
     "tailwind-merge": "^3.0.2",
     "zustand": "^5.0.3",
     "express": "^4.21.2",
-    "sqlite3": "^5.1.7",
+    "better-sqlite3": "^11.3.0",
     "uuid": "^9.0.1",
     "gif.js": "^0.2.0"
   },
@@ -34,7 +34,7 @@
     "@types/node": "^22.15.30",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
-    "@types/sqlite3": "^3.1.11",
+    "@types/better-sqlite3": "^7.6.11",
     "@types/uuid": "^9.0.8",
     "@vitejs/plugin-react": "^4.4.1",
     "@vercel/node": "^5.3.6",
