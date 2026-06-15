@@ -1,0 +1,117 @@
+import { useRef, useState, useCallback, useEffect } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
+import * as THREE from 'three'
+import { latLonToVec3, getWind } from '@/sim/WindSimulator'
+import { useStore } from '@/store/useStore'
+
+const EARTH_RADIUS = 3
+
+interface CityData {
+  name: string
+  nameEn: string
+  lat: number
+  lon: number
+}
+
+const CITIES: CityData[] = [
+  { name: '北京', nameEn: 'Beijing', lat: 39.9, lon: 116.4 },
+  { name: '东京', nameEn: 'Tokyo', lat: 35.7, lon: 139.7 },
+  { name: '上海', nameEn: 'Shanghai', lat: 31.2, lon: 121.5 },
+  { name: '首尔', nameEn: 'Seoul', lat: 37.6, lon: 127.0 },
+  { name: '新德里', nameEn: 'New Delhi', lat: 28.6, lon: 77.2 },
+  { name: '孟买', nameEn: 'Mumbai', lat: 19.1, lon: 72.9 },
+  { name: '莫斯科', nameEn: 'Moscow', lat: 55.8, lon: 37.6 },
+  { name: '伦敦', nameEn: 'London', lat: 51.5, lon: -0.1 },
+  { name: '巴黎', nameEn: 'Paris', lat: 48.9, lon: 2.3 },
+  { name: '柏林', nameEn: 'Berlin', lat: 52.5, lon: 13.4 },
+  { name: '开罗', nameEn: 'Cairo', lat: 30.0, lon: 31.2 },
+  { name: '纽约', nameEn: 'New York', lat: 40.7, lon: -74.0 },
+  { name: '洛杉矶', nameEn: 'Los Angeles', lat: 34.1, lon: -118.2 },
+  { name: '多伦多', nameEn: 'Toronto', lat: 43.7, lon: -79.4 },
+  { name: '墨西哥城', nameEn: 'Mexico City', lat: 19.4, lon: -99.1 },
+  { name: '圣保罗', nameEn: 'São Paulo', lat: -23.6, lon: -46.6 },
+  { name: '布宜诺斯艾利斯', nameEn: 'Buenos Aires', lat: -34.6, lon: -58.4 },
+  { name: '悉尼', nameEn: 'Sydney', lat: -33.9, lon: 151.2 },
+  { name: '开普敦', nameEn: 'Cape Town', lat: -33.9, lon: 18.4 },
+  { name: '迪拜', nameEn: 'Dubai', lat: 25.2, lon: 55.3 },
+]
+
+function CityMarker({
+  city,
+  onClick,
+  seed,
+}: {
+  city: CityData
+  onClick: (city: CityData, windSpeed: number) => void
+  seed: number
+}) {
+  const meshRef = useRef<THREE.Mesh>(null)
+  const glowRef = useRef<THREE.Mesh>(null)
+  const position = useMemo(() => latLonToVec3(city.lat, city.lon, EARTH_RADIUS + 0.02), [city.lat, city.lon])
+
+  useFrame((state) => {
+    if (!meshRef.current) return
+    const pulse = 0.9 + 0.1 * Math.sin(state.clock.getElapsedTime() * 3 + city.lat)
+    meshRef.current.scale.setScalar(pulse)
+    if (glowRef.current) {
+      glowRef.current.scale.setScalar(pulse * 2.2)
+    }
+  })
+
+  const handleClick = useCallback(
+    (e: THREE.Event) => {
+      e.stopPropagation()
+      const wind = getWind(city.lat, city.lon, seed)
+      onClick(city, wind.speed)
+    },
+    [city, onClick, seed],
+  )
+
+  return (
+    <group position={position}>
+      <mesh ref={meshRef} onClick={handleClick}>
+        <sphereGeometry args={[0.05, 12, 8]} />
+        <meshBasicMaterial color="#ffeb3b" transparent opacity={0.95} />
+      </mesh>
+      <mesh ref={glowRef}>
+        <sphereGeometry args={[0.05, 12, 8]} />
+        <meshBasicMaterial color="#ffeb3b" transparent opacity={0.2} depthWrite={false} />
+      </mesh>
+    </group>
+  )
+}
+
+export { CITIES }
+export type { CityData }
+
+export default function CityMarkers() {
+  const [seed, setSeed] = useState(Date.now())
+  const selectedCity = useStore((s) => s.selectedCity)
+  const selectCity = useStore((s) => s.selectCity)
+
+  useEffect(() => {
+    const id = setInterval(() => setSeed(Date.now()), 2000)
+    return () => clearInterval(id)
+  }, [])
+
+  const handleCityClick = useCallback(
+    (city: CityData, windSpeed: number) => {
+      selectCity({ name: city.name, lat: city.lat, lon: city.lon, windSpeed: Math.round(windSpeed * 10) / 10 })
+    },
+    [selectCity],
+  )
+
+  useEffect(() => {
+    if (!selectedCity) return
+    const timer = setTimeout(() => selectCity(null), 3000)
+    return () => clearTimeout(timer)
+  }, [selectedCity, selectCity])
+
+  return (
+    <group>
+      {CITIES.map((city) => (
+        <CityMarker key={city.nameEn} city={city} onClick={handleCityClick} seed={seed} />
+      ))}
+    </group>
+  )
+}
