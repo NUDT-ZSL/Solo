@@ -1,0 +1,41 @@
+:root {
+  --bg-dark-primary: #18181b;
+  --bg-dark-secondary: #3f3f46;
+  --accent-dark: #a78bfa;
+  
+  --bg-warm-primary: #fef3c7;
+  --bg-warm-secondary: #fde68a;
+  --accent-warm: #f97316;
+  
+  --gradient-start: #0f0c29;
+  --gradient-middle: #302b63;
+  --gradient-end: #24243e;
+  
+  --particle-color-start: #c471ed;
+  --particle-color-end: #f7797d;
+  
+  --wave-color-start: #4fc3f7;
+  --wave-color-end: #0288d1;
+  
+  --spectrum-start: #00e676;
+  --spectrum-end: #00bcd4;
+}
+
+* {
+  transition: background-color 0.6s ease, color 0.6s ease, border-color 0.6s ease, fill 0.6s ease, stroke 0.6s ease;
+}
+
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  transform: scale(0);
+  animation: ripple-animation 0.4s linear;
+  pointer-events: none;
+}
+
+@keyframes ripple-animation {
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
