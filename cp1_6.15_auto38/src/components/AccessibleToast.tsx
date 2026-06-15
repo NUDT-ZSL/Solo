@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useCallback } from 'react';
+import { focusManager } from '../engine/focusManager';
 
 export interface ToastItem {
   id: string;
@@ -9,11 +10,13 @@ export interface ToastItem {
 interface AccessibleToastProps {
   messages: ToastItem[];
   onRemove: (id: string) => void;
+  triggerRef?: React.RefObject<HTMLElement | null>;
 }
 
-export const AccessibleToast: React.FC<AccessibleToastProps> = ({ messages, onRemove }) => {
+export const AccessibleToast: React.FC<AccessibleToastProps> = ({ messages, onRemove, triggerRef }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const timersRef = useRef<Map<string, number>>(new Map());
+  const prevMessageCountRef = useRef(0);
 
   const handleRemove = useCallback(
     (id: string) => {
@@ -38,18 +41,25 @@ export const AccessibleToast: React.FC<AccessibleToastProps> = ({ messages, onRe
       }
     });
 
-    return () => {
-      // Cleanup timers for removed messages
-      const activeIds = new Set(messages.map((m) => m.id));
-      timersRef.current.forEach((_, id) => {
-        if (!activeIds.has(id)) {
-          const timer = timersRef.current.get(id);
-          if (timer) window.clearTimeout(timer);
-          timersRef.current.delete(id);
-        }
-      });
-    };
+    const activeIds = new Set(messages.map((m) => m.id));
+    timersRef.current.forEach((_, id) => {
+      if (!activeIds.has(id)) {
+        const timer = timersRef.current.get(id);
+        if (timer) window.clearTimeout(timer);
+        timersRef.current.delete(id);
+      }
+    });
   }, [messages, handleRemove]);
+
+  useEffect(() => {
+    if (prevMessageCountRef.current > 0 && messages.length === 0) {
+      if (triggerRef?.current) {
+        focusManager.pushFocus(triggerRef.current);
+        focusManager.restoreFocus();
+      }
+    }
+    prevMessageCountRef.current = messages.length;
+  }, [messages.length, triggerRef]);
 
   const handleKeyDown = (e: React.KeyboardEvent, id: string) => {
     if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {

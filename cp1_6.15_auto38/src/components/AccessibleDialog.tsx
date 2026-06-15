@@ -24,42 +24,65 @@ export const AccessibleDialog: React.FC<AccessibleDialogProps> = ({
 
   const getFocusableElements = useCallback((container: HTMLElement): HTMLElement[] => {
     const focusableSelectors = [
-      'button:not([disabled])',
-      '[href]',
-      'input:not([disabled])',
+      'a[href]',
+      'button:not([disabled]):not([aria-hidden])',
+      'input:not([disabled]):not([type="hidden"])',
       'select:not([disabled])',
       'textarea:not([disabled])',
       '[tabindex]:not([tabindex="-1"])',
+      '[contenteditable]',
+      'details summary',
     ];
     return Array.from(
       container.querySelectorAll(focusableSelectors.join(', '))
-    ) as HTMLElement[];
+    ).filter((el) => {
+      if (el.getAttribute('aria-hidden') === 'true') return false;
+      const style = window.getComputedStyle(el);
+      return style.display !== 'none' && style.visibility !== 'hidden' && !el.hasAttribute('disabled');
+    }) as HTMLElement[];
   }, []);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (!open) return;
+      if (!open || !dialogRef.current) return;
+
       if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
         return;
       }
-      if (e.key === 'Tab' && dialogRef.current) {
+
+      if (e.key === 'Tab') {
+        e.preventDefault();
+
         const focusableElements = getFocusableElements(dialogRef.current);
+
         if (focusableElements.length === 0) {
-          e.preventDefault();
+          dialogRef.current.focus();
           return;
         }
+
         const firstElement = focusableElements[0];
         const lastElement = focusableElements[focusableElements.length - 1];
         const activeElement = document.activeElement as HTMLElement;
 
-        if (e.shiftKey && activeElement === firstElement) {
-          e.preventDefault();
-          lastElement.focus();
-        } else if (!e.shiftKey && activeElement === lastElement) {
-          e.preventDefault();
-          firstElement.focus();
+        const isInsideDialog = dialogRef.current.contains(activeElement);
+        const focusIndex = isInsideDialog
+          ? focusableElements.indexOf(activeElement)
+          : -1;
+
+        if (e.shiftKey) {
+          if (!isInsideDialog || focusIndex <= 0) {
+            lastElement.focus();
+          } else {
+            focusableElements[focusIndex - 1].focus();
+          }
+        } else {
+          if (!isInsideDialog || focusIndex === focusableElements.length - 1) {
+            firstElement.focus();
+          } else {
+            focusableElements[focusIndex + 1].focus();
+          }
         }
       }
     },
@@ -69,20 +92,28 @@ export const AccessibleDialog: React.FC<AccessibleDialogProps> = ({
   useEffect(() => {
     if (open) {
       previouslyFocusedRef.current = document.activeElement as HTMLElement;
-      focusManager.pushFocus(previouslyFocusedRef.current);
 
-      if (focusPolicy && dialogRef.current) {
-        const focusableElements = getFocusableElements(dialogRef.current);
-        if (focusableElements.length > 0) {
-          setTimeout(() => focusableElements[0].focus(), 0);
+      if (focusPolicy) {
+        focusManager.pushFocus(previouslyFocusedRef.current);
+
+        if (dialogRef.current) {
+          requestAnimationFrame(() => {
+            if (!dialogRef.current) return;
+            const focusableElements = getFocusableElements(dialogRef.current);
+            if (focusableElements.length > 0) {
+              focusableElements[0].focus();
+            } else {
+              dialogRef.current!.focus();
+            }
+          });
         }
       }
 
-      document.addEventListener('keydown', handleKeyDown);
+      document.addEventListener('keydown', handleKeyDown, true);
       document.body.style.overflow = 'hidden';
 
       return () => {
-        document.removeEventListener('keydown', handleKeyDown);
+        document.removeEventListener('keydown', handleKeyDown, true);
         document.body.style.overflow = '';
       };
     }
@@ -91,6 +122,7 @@ export const AccessibleDialog: React.FC<AccessibleDialogProps> = ({
   useEffect(() => {
     if (!open && previouslyFocusedRef.current && focusPolicy) {
       focusManager.restoreFocus();
+      previouslyFocusedRef.current = null;
     }
   }, [open, focusPolicy]);
 
@@ -105,6 +137,7 @@ export const AccessibleDialog: React.FC<AccessibleDialogProps> = ({
         aria-modal="true"
         aria-labelledby={ariaLabel ? undefined : titleId.current}
         aria-label={ariaLabel}
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id={titleId.current} className="dialog-title">

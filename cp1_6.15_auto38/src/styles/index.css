@@ -362,6 +362,7 @@ button:focus-visible {
 .reports-list {
   flex: 1;
   overflow-y: auto;
+  overflow-anchor: none;
   padding: 16px 24px;
   display: flex;
   flex-direction: column;
@@ -373,19 +374,20 @@ button:focus-visible {
   border-radius: 8px;
   border: 1px solid var(--border-color);
   padding: 16px;
-  animation: fadeInUp var(--transition-normal) ease-out forwards;
+  contain: layout style paint;
+  will-change: transform, opacity;
+  animation: cardFadeIn var(--transition-normal) ease-out forwards;
   opacity: 0;
-  transform: translateY(10px);
 }
 
-@keyframes fadeInUp {
+@keyframes cardFadeIn {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: scale(0.98);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: scale(1);
   }
 }
 

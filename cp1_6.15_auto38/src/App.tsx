@@ -389,7 +389,7 @@ const App: React.FC = () => {
         <button className="demo-button secondary">示例操作按钮</button>
       </AccessibleDialog>
 
-      <AccessibleToast messages={toastMessages} onRemove={handleRemoveToast} />
+      <AccessibleToast messages={toastMessages} onRemove={handleRemoveToast} triggerRef={toastTriggerRef} />
     </div>
   );
 };
