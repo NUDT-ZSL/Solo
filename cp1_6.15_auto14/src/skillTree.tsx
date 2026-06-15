@@ -9,6 +9,7 @@ import {
   findNodeById,
   flattenTree,
   collectEdges,
+  deepCloneTree,
 } from './nodeData';
 import { NodePanel } from './nodePanel';
 
@@ -63,7 +64,7 @@ export const SkillTree: React.FC = () => {
   const handleToggleExpand = useCallback(
     (e: React.MouseEvent, node: SkillNode) => {
       e.stopPropagation();
-      const newRoot = { ...root };
+      const newRoot = deepCloneTree(root);
       const target = findNodeById(newRoot, node.id);
       if (!target || target.children.length === 0) return;
       target.expanded = !target.expanded;
@@ -75,7 +76,7 @@ export const SkillTree: React.FC = () => {
 
   const handleSubmit = useCallback(
     (nodeId: string, passed: boolean) => {
-      const newRoot = { ...root };
+      const newRoot = deepCloneTree(root);
       const target = findNodeById(newRoot, nodeId);
       if (!target) return;
 
@@ -85,23 +86,26 @@ export const SkillTree: React.FC = () => {
         setPulseNodeId(nodeId);
         setTimeout(() => setPulseNodeId(null), 800);
         triggerBarrage();
+        recalcLayout(newRoot);
+        setRoot(newRoot);
+        setSelectedNode(null);
       } else {
         target.status = 'failed';
+        recalcLayout(newRoot);
+        setRoot(newRoot);
         setShakeNodeId(nodeId);
         setTimeout(() => {
           setShakeNodeId(null);
-          const revertRoot = { ...root };
+          const revertRoot = deepCloneTree(root);
           const revertTarget = findNodeById(revertRoot, nodeId);
-          if (revertTarget && revertTarget.status === 'failed') {
+          if (revertTarget) {
             revertTarget.status = 'active';
+            recalcLayout(revertRoot);
             setRoot(revertRoot);
           }
         }, 500);
+        setSelectedNode(null);
       }
-
-      recalcLayout(newRoot);
-      setRoot(newRoot);
-      setSelectedNode(null);
     },
     [root, triggerBarrage]
   );
@@ -171,10 +175,11 @@ export const SkillTree: React.FC = () => {
   const edges = collectEdges(root);
 
   const statusClass = (status: NodeStatus, nodeId: string): string => {
-    let cls = status;
-    if (status === 'completed' && pulseNodeId === nodeId) cls += ' pulse-success';
-    if (status === 'failed' && shakeNodeId === nodeId) cls += ' failed';
-    return cls;
+    const classes: string[] = [status];
+    if (status === 'completed' && pulseNodeId === nodeId) classes.push('pulse-success');
+    if (status === 'failed' && shakeNodeId === nodeId) classes.push('shake-animation');
+    if (shakeNodeId === nodeId && status === 'failed') classes.push('flash-red');
+    return classes.join(' ');
   };
 
   const svgW = Math.max(...nodes.map((n) => n.x)) + NODE_W + PAD * 2;

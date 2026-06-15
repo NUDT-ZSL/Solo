@@ -144,24 +144,27 @@ body {
   left: 0;
   pointer-events: none;
   overflow: visible;
+  transition: left 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .edge-path {
   fill: none;
-  stroke: var(--glass-border);
-  stroke-width: 2;
-  transition: stroke 0.3s ease;
+  stroke: var(--gray);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  transition: stroke 0.5s ease, stroke-width 0.3s ease, filter 0.5s ease;
 }
 
 .edge-path.active {
   stroke: var(--orange);
-  stroke-width: 2.5;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 6px var(--orange-glow));
 }
 
 .edge-path.completed {
   stroke: var(--green);
-  stroke-width: 2.5;
-  filter: drop-shadow(0 0 4px var(--green-glow));
+  stroke-width: 3;
+  filter: drop-shadow(0 0 6px var(--green-glow));
 }
 
 .skill-node {
@@ -175,12 +178,16 @@ body {
   border-radius: 12px;
   cursor: pointer;
   transition:
+    left 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    top 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
     transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 0.3s ease,
     border-color 0.3s ease,
     background 0.3s ease;
   user-select: none;
   transform-origin: center center;
+  opacity: 1;
 }
 
 .skill-node:hover {
@@ -213,6 +220,10 @@ body {
 
 .skill-node.failed {
   border-color: var(--accent);
+  box-shadow: 0 0 16px var(--accent-glow);
+}
+
+.skill-node.shake-animation {
   animation: node-shake 0.3s ease;
 }
 
@@ -222,6 +233,17 @@ body {
   40% { transform: translateX(6px); }
   60% { transform: translateX(-4px); }
   80% { transform: translateX(4px); }
+}
+
+.skill-node.flash-red {
+  animation: flash-red 0.6s ease;
+}
+
+@keyframes flash-red {
+  0%, 100% { box-shadow: 0 0 16px var(--accent-glow); }
+  25% { box-shadow: 0 0 30px var(--accent-glow), 0 0 60px rgba(233, 69, 96, 0.3); }
+  50% { box-shadow: 0 0 16px var(--accent-glow); }
+  75% { box-shadow: 0 0 30px var(--accent-glow), 0 0 60px rgba(233, 69, 96, 0.3); }
 }
 
 .skill-node.pulse-success {

@@ -218,3 +218,10 @@ export function collectEdges(node: SkillNode): [SkillNode, SkillNode][] {
   }
   return edges;
 }
+
+export function deepCloneTree(node: SkillNode): SkillNode {
+  return {
+    ...node,
+    children: node.children.map(deepCloneTree),
+  };
+}
