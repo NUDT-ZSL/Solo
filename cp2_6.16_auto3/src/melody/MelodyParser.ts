@@ -2,29 +2,37 @@ import { Note, useMusicStore } from '../store';
 
 const NOTE_BASE = 60;
 
+const SEMITONE_MAP: Record<number, number> = {
+  1: 0,
+  2: 2,
+  3: 4,
+  4: 5,
+  5: 7,
+  6: 9,
+  7: 11,
+};
+
+const TOKEN_REGEX = /([#b]?[1-7]-*)/g;
+
+export function tokenizeMelody(input: string): string[] {
+  const compact = input.replace(/\s+/g, '');
+  if (!compact) return [];
+  const matches = compact.match(TOKEN_REGEX);
+  return matches || [];
+}
+
 export function parseMelody(input: string): Note[] {
-  const tokens = input.trim().split(/\s+/).filter(Boolean);
+  const tokens = tokenizeMelody(input);
   const notes: Note[] = [];
 
   for (const token of tokens) {
-    const match = token.match(/^([1-7])([#b]?)(-*)$/);
+    const match = token.match(/^([#b]?)([1-7])(-*)$/);
     if (!match) continue;
 
-    const [, numStr, accidental, dashes] = match;
-    let num = parseInt(numStr, 10);
+    const [, accidental, numStr, dashes] = match;
+    const num = parseInt(numStr, 10);
 
-    const semitoneMap: Record<number, number> = {
-      1: 0,
-      2: 2,
-      3: 4,
-      4: 5,
-      5: 7,
-      6: 9,
-      7: 11,
-    };
-
-    let semitone = semitoneMap[num];
-
+    let semitone = SEMITONE_MAP[num];
     if (accidental === '#') semitone += 1;
     if (accidental === 'b') semitone -= 1;
 
