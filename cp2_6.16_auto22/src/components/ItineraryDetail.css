@@ -1,0 +1,232 @@
+.itinerary-detail {
+  flex: 1;
+  height: 100%;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.detail-header {
+  padding-bottom: 20px;
+  border-bottom: 2px solid #f0f0f0;
+  margin-bottom: 20px;
+}
+
+.day-title-section {
+  margin-bottom: 16px;
+}
+
+.day-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #00897b;
+  margin: 0 0 4px 0;
+}
+
+.day-subtitle {
+  font-size: 14px;
+  color: #888;
+  margin: 0;
+}
+
+.day-stats {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-item.total {
+  margin-left: auto;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #999;
+}
+
+.stat-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.stat-item.total .stat-value {
+  color: #ff6f00;
+  font-size: 20px;
+}
+
+.activities-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.activities-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.activities-list::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-radius: 3px;
+}
+
+.activities-list::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid #e0e0e0;
+  transition: all 0.3s ease-in;
+  animation: slideInFromLeft 0.3s ease-out both;
+}
+
+.activity-item:last-child {
+  border-bottom: none;
+}
+
+.activity-item.deleting {
+  transform: translateX(-100%);
+  opacity: 0;
+}
+
+.activity-time-badge {
+  min-width: 90px;
+  background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%);
+  border-radius: 8px;
+  padding: 8px 12px;
+  text-align: center;
+}
+
+.time-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: #00897b;
+  line-height: 1.4;
+}
+
+.activity-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-name {
+  font-size: 16px;
+  font-weight: 500;
+  color: #333;
+  margin: 0 0 4px 0;
+}
+
+.activity-location {
+  font-size: 13px;
+  color: #888;
+  margin: 0;
+}
+
+.activity-cost {
+  min-width: 80px;
+  text-align: right;
+}
+
+.cost-amount {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ff6f00;
+}
+
+.delete-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 82, 82, 0.8);
+  color: white;
+  font-size: 20px;
+  font-weight: 300;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  line-height: 1;
+  padding-bottom: 2px;
+}
+
+.delete-btn:hover {
+  background: rgba(255, 82, 82, 1);
+  transform: scale(1.1);
+}
+
+.empty-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #999;
+}
+
+.detail-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #999;
+}
+
+@keyframes slideInFromLeft {
+  from {
+    transform: translateX(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .itinerary-detail {
+    padding: 16px;
+  }
+
+  .day-stats {
+    gap: 16px;
+  }
+
+  .stat-item.total {
+    margin-left: 0;
+    width: 100%;
+    text-align: center;
+    padding-top: 12px;
+    border-top: 1px solid #f0f0f0;
+  }
+
+  .activity-item {
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .activity-time-badge {
+    min-width: 70px;
+  }
+
+  .delete-btn {
+    order: 4;
+  }
+}

@@ -1,0 +1,228 @@
+.itinerary-panel {
+  width: 280px;
+  height: 100%;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-header {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.panel-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.panel-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.summary-label {
+  font-size: 13px;
+  color: #888;
+}
+
+.summary-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ff6f00;
+}
+
+.days-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 4px;
+}
+
+.days-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.days-list::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-radius: 2px;
+}
+
+.days-list::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 2px;
+}
+
+.day-card {
+  position: relative;
+  background: #fafafa;
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+  overflow: hidden;
+}
+
+.day-card:hover {
+  background: #f0f7f6;
+}
+
+.day-card.selected {
+  border-color: #00897b;
+  background: #e8f5f3;
+}
+
+.day-card.dragging {
+  opacity: 0.5;
+  transform: scale(0.98);
+}
+
+.day-card.drag-over {
+  border-color: #ff6f00;
+  background: #fff3e0;
+}
+
+.day-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.day-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.day-number {
+  font-size: 14px;
+  font-weight: 700;
+  color: #00897b;
+}
+
+.day-date {
+  font-size: 12px;
+  color: #888;
+}
+
+.day-budget {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.budget-label {
+  font-size: 11px;
+  color: #999;
+}
+
+.budget-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #ff6f00;
+}
+
+.day-activities-preview {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: fadeIn 0.3s ease;
+}
+
+.activity-preview-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.activity-time {
+  color: #00897b;
+  font-weight: 500;
+  min-width: 45px;
+}
+
+.activity-name {
+  flex: 1;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-cost {
+  color: #ff6f00;
+  font-weight: 500;
+}
+
+.more-activities {
+  font-size: 11px;
+  color: #999;
+  text-align: center;
+  padding-top: 4px;
+}
+
+.drag-handle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #ccc;
+  font-size: 10px;
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.day-card:hover .drag-handle {
+  opacity: 1;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 1024px) and (min-width: 768px) {
+  .itinerary-panel {
+    width: 240px;
+  }
+}
+
+@media (max-width: 768px) {
+  .itinerary-panel {
+    width: 100%;
+    height: auto;
+    max-height: 60px;
+    border-radius: 0 0 16px 16px;
+  }
+
+  .itinerary-panel.expanded {
+    max-height: 400px;
+  }
+}

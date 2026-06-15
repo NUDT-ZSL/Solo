@@ -1,0 +1,122 @@
+.share-button-container {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 1000;
+}
+
+.share-fab {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: #ff6f00;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(255, 111, 0, 0.4);
+  transition: all 0.2s ease;
+}
+
+.share-fab:hover {
+  width: 64px;
+  height: 64px;
+  transform: rotate(30deg);
+  box-shadow: 0 6px 16px rgba(255, 111, 0, 0.5);
+}
+
+.share-fab.open {
+  background: #ff5252;
+  transform: rotate(45deg);
+}
+
+.fab-icon {
+  font-size: 24px;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.share-panel {
+  position: absolute;
+  top: 72px;
+  right: 0;
+  width: 200px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  animation: slideDown 0.2s ease-out;
+}
+
+.share-panel-header {
+  padding: 16px;
+  background: linear-gradient(135deg, #ff6f00 0%, #ff8f00 100%);
+  color: white;
+}
+
+.share-panel-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.share-options {
+  padding: 8px 0;
+}
+
+.share-option {
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: background 0.2s ease;
+}
+
+.share-option:hover {
+  background: #f5f5f5;
+}
+
+.share-icon {
+  font-size: 20px;
+}
+
+.share-text {
+  font-size: 14px;
+  color: #333;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 768px) {
+  .share-button-container {
+    top: 16px;
+    right: 16px;
+  }
+
+  .share-fab {
+    width: 48px;
+    height: 48px;
+    font-size: 20px;
+  }
+
+  .share-fab:hover {
+    width: 56px;
+    height: 56px;
+  }
+}
