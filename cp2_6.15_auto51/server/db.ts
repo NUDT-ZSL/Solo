@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 const DB_PATH = path.join(__dirname, '..', 'data.db');
 const WASM_PATH = path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
 
@@ -67,9 +66,7 @@ export async function initDB(): Promise<void> {
 }
 
 export function saveConfig(platformId: string, token: string): void {
-  if (!db) {
-    throw new Error('Database not initialized. Call initDB() first.');
-  }
+  if (!db) throw new Error('Database not initialized. Call initDB() first.');
 
   const existing = db.exec('SELECT id FROM configs WHERE platform_id = ?', [platformId]);
 
@@ -89,17 +86,13 @@ export function saveConfig(platformId: string, token: string): void {
 }
 
 export function getConfigs(): ConfigRow[] {
-  if (!db) {
-    throw new Error('Database not initialized. Call initDB() first.');
-  }
+  if (!db) throw new Error('Database not initialized. Call initDB() first.');
 
   const results = db.exec(
     'SELECT id, platform_id, token, created_at, updated_at FROM configs ORDER BY id'
   );
 
-  if (results.length === 0) {
-    return [];
-  }
+  if (results.length === 0) return [];
 
   const { columns, values } = results[0];
   return values.map((row) => {
@@ -109,39 +102,6 @@ export function getConfigs(): ConfigRow[] {
     });
     return obj as ConfigRow;
   });
-}
-
-export function getConfigByPlatformId(platformId: string): ConfigRow | null {
-  if (!db) {
-    throw new Error('Database not initialized. Call initDB() first.');
-  }
-
-  const results = db.exec(
-    'SELECT id, platform_id, token, created_at, updated_at FROM configs WHERE platform_id = ?',
-    [platformId]
-  );
-
-  if (results.length === 0 || results[0].values.length === 0) {
-    return null;
-  }
-
-  const { columns, values } = results[0];
-  const row = values[0];
-  const obj: Record<string, unknown> = {};
-  columns.forEach((col, idx) => {
-    obj[col] = row[idx];
-  });
-  return obj as ConfigRow;
-}
-
-export function deleteConfig(platformId: string): boolean {
-  if (!db) {
-    throw new Error('Database not initialized. Call initDB() first.');
-  }
-
-  db.run('DELETE FROM configs WHERE platform_id = ?', [platformId]);
-  saveDBToFile();
-  return db.getRowsModified() > 0;
 }
 
 export function closeDB(): void {

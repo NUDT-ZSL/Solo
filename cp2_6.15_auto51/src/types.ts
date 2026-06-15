@@ -17,27 +17,37 @@ export interface SongRecord {
   coverColor?: string;
 }
 
+export interface MergedSong extends SongRecord {
+  platforms: string[];
+}
+
+export interface TopSong {
+  id: string;
+  title: string;
+  artist: string;
+  playCount: number;
+  firstPlayDate: string;
+  platformDistribution: Record<string, number>;
+  coverColor: string;
+}
+
+export interface TopArtist {
+  name: string;
+  playCount: number;
+  avatarColor: string;
+}
+
+export interface GenreItem {
+  genre: string;
+  percentage: number;
+  color: string;
+}
+
 export interface YearlyReport {
   totalPlays: number;
-  topSongs: Array<{
-    id: string;
-    title: string;
-    artist: string;
-    playCount: number;
-    firstPlayDate: string;
-    platformDistribution: Record<string, number>;
-    coverColor: string;
-  }>;
-  topArtists: Array<{
-    name: string;
-    playCount: number;
-    avatarColor: string;
-  }>;
-  genreDistribution: Array<{
-    genre: string;
-    percentage: number;
-    color: string;
-  }>;
+  topSongs: TopSong[];
+  topArtists: TopArtist[];
+  genreDistribution: GenreItem[];
 }
 
 export interface Config {
