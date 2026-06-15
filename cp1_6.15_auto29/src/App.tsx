@@ -14,7 +14,16 @@ import {
   adjustChildrenPositions,
   serializeToJSON,
   downloadJSON,
+  snapPointToGrid,
+  CANVAS_HEIGHT,
 } from './LayoutEngine';
+
+interface ExternalDragState {
+  isDragging: boolean;
+  type: LayoutBlockType | null;
+  mouseX: number;
+  mouseY: number;
+}
 
 function App() {
   const [blocks, setBlocks] = useState<Map<string, LayoutBlock>>(new Map());
@@ -25,36 +34,100 @@ function App() {
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [deletingBlockIds, setDeletingBlockIds] = useState<Set<string>>(new Set());
   const [deletingConnectionIds, setDeletingConnectionIds] = useState<Set<string>>(new Set());
+  const [externalDragState, setExternalDragState] = useState<ExternalDragState>({
+    isDragging: false,
+    type: null,
+    mouseX: 0,
+    mouseY: 0,
+  });
+
   const appRef = useRef<HTMLDivElement>(null);
+  const canvasInnerRef = useRef<HTMLDivElement | null>(null);
 
-  const handleDragStart = useCallback((_type: LayoutBlockType) => {
+  const setCanvasInnerRef = useCallback((ref: HTMLDivElement | null) => {
+    canvasInnerRef.current = ref;
   }, []);
 
-  const handleBlockDrop = useCallback((type: LayoutBlockType, x: number, y: number) => {
-    const dims = DEFAULT_BLOCK_DIMENSIONS[type];
-    const id = uuidv4();
-    const newBlock: LayoutBlock = {
-      id,
+  const handlePanelDragStart = useCallback((type: LayoutBlockType, e: React.MouseEvent) => {
+    setExternalDragState({
+      isDragging: true,
       type,
-      x,
-      y,
-      width: dims.width,
-      height: dims.height,
-      backgroundColor: DEFAULT_BACKGROUND_COLORS[type],
-      borderRadius: 4,
-      widthPercent: 100,
-      parentId: null,
-      children: [],
-    };
-
-    setBlocks((prev) => {
-      const updated = new Map(prev);
-      updated.set(id, newBlock);
-      return updated;
+      mouseX: e.clientX,
+      mouseY: e.clientY,
     });
-    setSelectedBlockId(id);
-    setSelectedConnectionId(null);
   }, []);
+
+  const handleExternalMouseMove = useCallback((e: MouseEvent) => {
+    if (externalDragState.isDragging) {
+      setExternalDragState((prev) => ({
+        ...prev,
+        mouseX: e.clientX,
+        mouseY: e.clientY,
+      }));
+    }
+  }, [externalDragState.isDragging]);
+
+  const handleExternalDragEnd = useCallback((e: MouseEvent) => {
+    if (!externalDragState.isDragging || !externalDragState.type || !canvasInnerRef.current) {
+      setExternalDragState({
+        isDragging: false,
+        type: null,
+        mouseX: 0,
+        mouseY: 0,
+      });
+      return;
+    }
+
+    const rect = canvasInnerRef.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / zoom;
+    const y = (e.clientY - rect.top) / zoom;
+
+    if (x >= 0 && x <= CANVAS_WIDTH && y >= 0 && y <= CANVAS_HEIGHT) {
+      const dims = DEFAULT_BLOCK_DIMENSIONS[externalDragState.type];
+      const snapped = snapPointToGrid(x - dims.width / 2, y - dims.height / 2);
+      const finalX = Math.max(0, Math.min(snapped.x, CANVAS_WIDTH - dims.width));
+      const finalY = Math.max(0, Math.min(snapped.y, CANVAS_HEIGHT - dims.height));
+
+      const id = uuidv4();
+      const newBlock: LayoutBlock = {
+        id,
+        type: externalDragState.type,
+        x: finalX,
+        y: finalY,
+        width: dims.width,
+        height: dims.height,
+        backgroundColor: DEFAULT_BACKGROUND_COLORS[externalDragState.type],
+        borderRadius: 4,
+        widthPercent: 100,
+        parentId: null,
+        children: [],
+      };
+
+      setBlocks((prev) => {
+        const updated = new Map(prev);
+        updated.set(id, newBlock);
+        return updated;
+      });
+      setSelectedBlockId(id);
+      setSelectedConnectionId(null);
+    }
+
+    setExternalDragState({
+      isDragging: false,
+      type: null,
+      mouseX: 0,
+      mouseY: 0,
+    });
+  }, [externalDragState, zoom]);
+
+  useEffect(() => {
+    if (externalDragState.isDragging) {
+      window.addEventListener('mousemove', handleExternalMouseMove);
+      return () => {
+        window.removeEventListener('mousemove', handleExternalMouseMove);
+      };
+    }
+  }, [externalDragState.isDragging, handleExternalMouseMove]);
 
   const handleBlockMove = useCallback((id: string, x: number, y: number) => {
     setBlocks((prev) => {
@@ -129,17 +202,27 @@ function App() {
   const handleConnectionCreate = useCallback((fromId: string, toId: string) => {
     if (fromId === toId) return;
 
+    let shouldCreate = true;
     setBlocks((prev) => {
       const updated = new Map(prev);
       const fromBlock = updated.get(fromId);
       const toBlock = updated.get(toId);
-      if (!fromBlock || !toBlock) return prev;
+      if (!fromBlock || !toBlock) {
+        shouldCreate = false;
+        return prev;
+      }
 
-      if (toBlock.parentId) return prev;
+      if (toBlock.parentId) {
+        shouldCreate = false;
+        return prev;
+      }
 
       let parent = fromBlock;
       while (parent.parentId) {
-        if (parent.parentId === toId) return prev;
+        if (parent.parentId === toId) {
+          shouldCreate = false;
+          return prev;
+        }
         const p = updated.get(parent.parentId);
         if (!p) break;
         parent = p;
@@ -156,6 +239,8 @@ function App() {
 
       return adjustChildrenPositions(fromId, updated);
     });
+
+    if (!shouldCreate) return;
 
     const existingConn = connections.find(
       (c) => (c.fromId === fromId && c.toId === toId) || (c.fromId === toId && c.toId === fromId)
@@ -183,18 +268,15 @@ function App() {
         const block = updated.get(blockId);
         if (!block) return prev;
 
+        const idsToDelete = new Set<string>();
+
         const deleteRecursive = (id: string) => {
           const b = updated.get(id);
           if (!b) return;
+          idsToDelete.add(id);
           for (const childId of b.children) {
             deleteRecursive(childId);
           }
-          updated.delete(id);
-          setDeletingBlockIds((prevSet) => {
-            const newSet = new Set(prevSet);
-            newSet.add(id);
-            return newSet;
-          });
         };
 
         if (block.parentId) {
@@ -209,20 +291,34 @@ function App() {
 
         deleteRecursive(blockId);
 
+        for (const id of idsToDelete) {
+          updated.delete(id);
+        }
+
+        setDeletingBlockIds((prevSet) => {
+          const newSet = new Set(prevSet);
+          for (const id of idsToDelete) {
+            newSet.add(id);
+          }
+          return newSet;
+        });
+
+        setTimeout(() => {
+          setDeletingBlockIds((prevSet) => {
+            const newSet = new Set(prevSet);
+            for (const id of idsToDelete) {
+              newSet.delete(id);
+            }
+            return newSet;
+          });
+        }, 200);
+
         return updated;
       });
 
       setConnections((prev) =>
         prev.filter((c) => c.fromId !== blockId && c.toId !== blockId)
       );
-
-      setTimeout(() => {
-        setDeletingBlockIds((prev) => {
-          const updated = new Set(prev);
-          updated.delete(blockId);
-          return updated;
-        });
-      }, 200);
     }, 50);
 
     if (selectedBlockId === blockId) {
@@ -306,9 +402,10 @@ function App() {
         gap: 16,
         backgroundColor: '#e5e7eb',
         position: 'relative',
+        cursor: externalDragState.isDragging ? 'grabbing' : 'default',
       }}
     >
-      <ComponentPanel onDragStart={handleDragStart} />
+      <ComponentPanel onDragStart={handlePanelDragStart} />
 
       <div
         style={{
@@ -413,6 +510,7 @@ function App() {
         </div>
 
         <Canvas
+          ref={setCanvasInnerRef}
           blocks={blocks}
           connections={connections}
           selectedBlockId={selectedBlockId}
@@ -420,12 +518,14 @@ function App() {
           onBlockSelect={handleBlockSelect}
           onConnectionSelect={handleConnectionSelect}
           onBlockMove={handleBlockMove}
-          onBlockDrop={handleBlockDrop}
+          onBlockDrop={() => {}}
           onConnectionCreate={handleConnectionCreate}
           zoom={zoom}
           onZoomChange={setZoom}
           deletingBlockIds={deletingBlockIds}
           deletingConnectionIds={deletingConnectionIds}
+          externalDragState={externalDragState}
+          onExternalDragEnd={handleExternalDragEnd}
         />
       </div>
 
@@ -435,6 +535,29 @@ function App() {
         onBackgroundColorChange={handleBackgroundColorChange}
         onBorderRadiusChange={handleBorderRadiusChange}
       />
+
+      {externalDragState.isDragging && externalDragState.type && (
+        <div
+          style={{
+            position: 'fixed',
+            left: externalDragState.mouseX + 10,
+            top: externalDragState.mouseY + 10,
+            pointerEvents: 'none',
+            zIndex: 9999,
+            opacity: 0.7,
+          }}
+        >
+          <div
+            style={{
+              width: DEFAULT_BLOCK_DIMENSIONS[externalDragState.type].width * 0.3,
+              height: DEFAULT_BLOCK_DIMENSIONS[externalDragState.type].height * 0.3,
+              border: '2px solid #93c5fd',
+              backgroundColor: 'rgba(147, 197, 253, 0.4)',
+              borderRadius: 4,
+            }}
+          />
+        </div>
+      )}
 
       {showExportDialog && (
         <div className="modal-overlay" onClick={() => setShowExportDialog(false)}>

@@ -2,7 +2,7 @@ import React from 'react';
 import { LayoutBlockType, BLOCK_LABELS, DEFAULT_BLOCK_DIMENSIONS, DEFAULT_BACKGROUND_COLORS } from './LayoutEngine';
 
 interface ComponentPanelProps {
-  onDragStart: (type: LayoutBlockType) => void;
+  onDragStart: (type: LayoutBlockType, e: React.MouseEvent) => void;
 }
 
 const COMPONENT_TYPES: LayoutBlockType[] = ['header', 'sidebar', 'main', 'card', 'footer'];
@@ -19,7 +19,7 @@ function BlockThumbnail({ type }: { type: LayoutBlockType }) {
       width={scaledWidth}
       height={scaledHeight}
       viewBox={`0 0 ${dims.width} ${dims.height}`}
-      style={{ flexShrink: 0 }}
+      style={{ flexShrink: 0, pointerEvents: 'none' }}
     >
       <rect
         x={0}
@@ -72,17 +72,10 @@ function BlockThumbnail({ type }: { type: LayoutBlockType }) {
   );
 }
 
-function DraggableItem({ type, onDragStart }: { type: LayoutBlockType; onDragStart: (type: LayoutBlockType) => void }) {
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
-    e.dataTransfer.setData('blockType', type);
-    e.dataTransfer.effectAllowed = 'copy';
-    onDragStart(type);
-  };
-
+function DraggableItem({ type, onDragStart }: { type: LayoutBlockType; onDragStart: (type: LayoutBlockType, e: React.MouseEvent) => void }) {
   return (
     <div
-      draggable
-      onDragStart={handleDragStart}
+      onMouseDown={(e) => onDragStart(type, e)}
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -104,15 +97,9 @@ function DraggableItem({ type, onDragStart }: { type: LayoutBlockType; onDragSta
         e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
         e.currentTarget.style.transform = 'translateY(0)';
       }}
-      onMouseDown={(e) => {
-        e.currentTarget.style.cursor = 'grabbing';
-      }}
-      onMouseUp={(e) => {
-        e.currentTarget.style.cursor = 'grab';
-      }}
     >
       <BlockThumbnail type={type} />
-      <span style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>
+      <span style={{ fontSize: 13, fontWeight: 500, color: '#374151', pointerEvents: 'none' }}>
         {BLOCK_LABELS[type]}
       </span>
     </div>
