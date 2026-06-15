@@ -95,6 +95,7 @@ export interface GameState {
   particles: Particle[];
   gameOver: boolean;
   visitedTiles: Set<string>;
+  exploredRoomIds: Set<number>;
 }
 
 export const MAP_SIZE = 30;

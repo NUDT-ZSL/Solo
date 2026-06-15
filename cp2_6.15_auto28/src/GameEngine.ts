@@ -63,6 +63,7 @@ export class GameEngine {
       particles: [],
       gameOver: false,
       visitedTiles: new Set<string>(),
+      exploredRoomIds: new Set<number>(),
     };
 
     for (let dy = -player.torchRadius; dy <= player.torchRadius; dy++) {
@@ -93,6 +94,10 @@ export class GameEngine {
 
   restart(): void {
     this.state = this.createInitialState();
+  }
+
+  getExploredRoomCount(): number {
+    return this.state.exploredRoomIds.size;
   }
 
   tryMovePlayer(direction: Direction): void {
@@ -189,6 +194,23 @@ export class GameEngine {
         }
       }
     }
+
+    for (const room of state.rooms) {
+      if (state.exploredRoomIds.has(room.id)) continue;
+      let roomExplored = false;
+      for (let ry = room.y; ry < room.y + room.height && !roomExplored; ry++) {
+        for (let rx = room.x; rx < room.x + room.width && !roomExplored; rx++) {
+          if (rx >= 0 && rx < MAP_SIZE && ry >= 0 && ry < MAP_SIZE) {
+            if (state.map[ry][rx].explored && state.map[ry][rx].roomId >= 0) {
+              roomExplored = true;
+            }
+          }
+        }
+      }
+      if (roomExplored) {
+        state.exploredRoomIds.add(room.id);
+      }
+    }
   }
 
   private spawnParticles(x: number, y: number, color: string, count: number): void {
@@ -276,23 +298,34 @@ export class GameEngine {
     const state = this.state;
     const { player, map, doors, monsters } = state;
 
+    const occupiedSet = new Set<string>();
+    for (const m of monsters) {
+      occupiedSet.add(`${m.x},${m.y}`);
+    }
+
     for (const monster of monsters) {
       monster.blinkTimer += deltaTime;
       monster.moveCooldown -= deltaTime;
 
       if (monster.moveCooldown <= 0) {
-        monster.moveCooldown = MONSTER_MOVE_INTERVAL;
+        monster.moveCooldown += MONSTER_MOVE_INTERVAL;
+
+        const oldKey = `${monster.x},${monster.y}`;
+        occupiedSet.delete(oldKey);
 
         const path = findPath(map, doors, monster.x, monster.y, player.x, player.y);
         if (path && path.length > 0) {
           const next = path[0];
-          const occupied = monsters.some(
-            (m) => m.id !== monster.id && m.x === next.x && m.y === next.y
-          );
-          if (!occupied) {
+          const nextKey = `${next.x},${next.y}`;
+          if (!occupiedSet.has(nextKey)) {
             monster.x = next.x;
             monster.y = next.y;
+            occupiedSet.add(nextKey);
+          } else {
+            occupiedSet.add(oldKey);
           }
+        } else {
+          occupiedSet.add(oldKey);
         }
       }
     }

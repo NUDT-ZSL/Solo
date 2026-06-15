@@ -14,8 +14,6 @@ export class Renderer {
   private lightCanvas: HTMLCanvasElement;
   private lightCtx: CanvasRenderingContext2D;
   private lightVisibility: number[][];
-  private cachedImageData: ImageData | null = null;
-  private cachedLightCanvasSize: { w: number; h: number } = { w: 0, h: 0 };
 
   constructor(canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -72,6 +70,8 @@ export class Renderer {
       let currentDist = 0;
       const step = 0.05;
       let blocked = false;
+      let lightMultiplier = 1.0;
+      let lastLowWallTile = '';
 
       while (currentDist <= radius && !blocked) {
         const sampleX = px + dx * currentDist;
@@ -85,14 +85,23 @@ export class Renderer {
         }
 
         const tile = map[tileY][tileX];
+        const tileKey = `${tileX},${tileY}`;
         const attenuation = Math.max(0, 1 - currentDist / radius);
+        const door = doors.find((d) => d.x === tileX && d.y === tileY);
 
-        if (this.lightVisibility[tileY][tileX] < attenuation) {
-          this.lightVisibility[tileY][tileX] = attenuation;
+        if (tile.type === TileType.LOW_WALL && !door) {
+          if (tileKey !== lastLowWallTile) {
+            lightMultiplier *= 0.3;
+            lastLowWallTile = tileKey;
+          }
+        }
+
+        const finalAttenuation = attenuation * lightMultiplier;
+        if (this.lightVisibility[tileY][tileX] < finalAttenuation) {
+          this.lightVisibility[tileY][tileX] = finalAttenuation;
         }
 
         if (tile.type === TileType.HIGH_WALL) {
-          const door = doors.find((d) => d.x === tileX && d.y === tileY);
           if (!door || !door.open) {
             blocked = true;
           }
@@ -139,19 +148,39 @@ export class Renderer {
           this.ctx.globalAlpha = 1;
         }
 
-        this.ctx.fillStyle = color;
-        this.ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
-
         if (tile.type === TileType.DOOR) {
           const door = doors.find((d) => d.x === x && d.y === y);
-          if (door && door.rotation > 0) {
-            this.ctx.save();
-            this.ctx.translate(screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2);
-            this.ctx.rotate((door.rotation * Math.PI) / 180);
-            this.ctx.fillStyle = '#8B4513';
-            this.ctx.fillRect(-TILE_SIZE / 2, -2, TILE_SIZE, 4);
-            this.ctx.restore();
+
+          this.ctx.fillStyle = '#5a3513';
+          this.ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+
+          this.ctx.fillStyle = '#8B4513';
+          this.ctx.fillRect(screenX + 2, screenY + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+
+          if (door) {
+            if (!door.open) {
+              this.ctx.fillStyle = '#6b3410';
+              this.ctx.fillRect(
+                screenX + Math.floor(TILE_SIZE / 2) - 1,
+                screenY + 4,
+                2,
+                TILE_SIZE - 8
+              );
+
+              this.ctx.fillStyle = '#FFD700';
+              this.ctx.fillRect(screenX + TILE_SIZE - 6, screenY + 4, 2, 2);
+            } else {
+              this.ctx.save();
+              this.ctx.translate(screenX + 2, screenY + 2);
+              this.ctx.rotate((door.rotation * Math.PI) / 180);
+              this.ctx.fillStyle = '#8B4513';
+              this.ctx.fillRect(0, 0, TILE_SIZE - 4, 3);
+              this.ctx.restore();
+            }
           }
+        } else {
+          this.ctx.fillStyle = color;
+          this.ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
         }
 
         if (tile.type === TileType.HIGH_WALL) {
@@ -343,16 +372,7 @@ export class Renderer {
     const h = y1 - y0;
 
     if (w > 0 && h > 0) {
-      if (
-        !this.cachedImageData ||
-        this.cachedLightCanvasSize.w !== w ||
-        this.cachedLightCanvasSize.h !== h
-      ) {
-        this.cachedImageData = this.lightCtx.createImageData(w, h);
-        this.cachedLightCanvasSize = { w, h };
-      }
-
-      const imageData = this.cachedImageData;
+      const imageData = this.lightCtx.createImageData(w, h);
       const data = imageData.data;
 
       const centerR = 255;
@@ -526,5 +546,30 @@ export class Renderer {
       tileSize + 2,
       tileSize + 2
     );
+
+    this.ctx.font = 'bold 10px "Courier New", monospace';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillStyle = '#e8d8a0';
+
+    const currentRoom = state.rooms.find(
+      (r) =>
+        state.player.x >= r.x &&
+        state.player.x < r.x + r.width &&
+        state.player.y >= r.y &&
+        state.player.y < r.y + r.height
+    );
+    const roomText = currentRoom ? `房间 ${currentRoom.id + 1}` : '走廊';
+    this.ctx.fillText(roomText, offsetX + minimapSize / 2, offsetY + 12);
+
+    const explorePercent = state.totalFloorCount > 0
+      ? Math.round((state.exploredCount / state.totalFloorCount) * 100)
+      : 0;
+    this.ctx.fillText(
+      `探索: ${explorePercent}%`,
+      offsetX + minimapSize / 2,
+      offsetY + minimapSize + 12
+    );
+
+    this.ctx.textAlign = 'start';
   }
 }

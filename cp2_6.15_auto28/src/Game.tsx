@@ -117,6 +117,7 @@ export default function Game(): React.ReactElement {
 
   const state = engine.getState();
   const { player, rooms, exploredCount, totalFloorCount } = state;
+  const exploredRoomCount = engine.getExploredRoomCount();
 
   let currentRoomId = -1;
   for (const room of rooms) {
@@ -211,6 +212,10 @@ export default function Game(): React.ReactElement {
 
         <div style={{ marginBottom: '12px' }}>
           <div>探索进度: {explorePercent}%</div>
+        </div>
+
+        <div style={{ marginBottom: '12px' }}>
+          <div>已探索房间: {exploredRoomCount} / {rooms.length}</div>
         </div>
 
         <div style={{ marginTop: '24px', fontSize: '11px', color: '#888', lineHeight: '1.6' }}>
