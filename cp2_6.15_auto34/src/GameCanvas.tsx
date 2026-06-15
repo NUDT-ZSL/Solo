@@ -89,7 +89,7 @@ function Ship() {
 
 function AsteroidMesh({ asteroid, shipPosition }: { asteroid: Asteroid; shipPosition: Vector3 }) {
   const meshRef = useRef<THREE.Mesh>(null);
-  const outlineRef = useRef<THREE.LineSegments>(null);
+  const outlineRef = useRef<THREE.Mesh>(null);
 
   const geometry = useMemo(
     () => generateBumpySphere(asteroid.radius, asteroid.seed),
@@ -97,7 +97,7 @@ function AsteroidMesh({ asteroid, shipPosition }: { asteroid: Asteroid; shipPosi
   );
 
   const outlineGeometry = useMemo(() => {
-    return new THREE.EdgesGeometry(new THREE.SphereGeometry(asteroid.radius * 1.02, 16, 16));
+    return new THREE.SphereGeometry(asteroid.radius * 1.08, 20, 20);
   }, [asteroid.radius]);
 
   useFrame(() => {
@@ -108,6 +108,7 @@ function AsteroidMesh({ asteroid, shipPosition }: { asteroid: Asteroid; shipPosi
     const dist = Math.sqrt(v3.distSq(asteroid.position, shipPosition));
     if (outlineRef.current) {
       outlineRef.current.position.set(asteroid.position.x, asteroid.position.y, asteroid.position.z);
+      outlineRef.current.rotation.copy(meshRef.current.rotation);
       outlineRef.current.visible = dist < 5;
     }
   });
@@ -122,9 +123,14 @@ function AsteroidMesh({ asteroid, shipPosition }: { asteroid: Asteroid; shipPosi
           flatShading
         />
       </mesh>
-      <lineSegments ref={outlineRef} geometry={outlineGeometry}>
-        <lineBasicMaterial color="#ff2222" linewidth={2} />
-      </lineSegments>
+      <mesh ref={outlineRef} geometry={outlineGeometry} visible={false}>
+        <meshBasicMaterial
+          color="#ff2222"
+          side={THREE.BackSide}
+          transparent
+          opacity={0.7}
+        />
+      </mesh>
     </>
   );
 }

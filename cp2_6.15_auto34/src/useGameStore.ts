@@ -172,21 +172,28 @@ export const useGameStore = create<GameState>((set, get) => ({
   setShipRotation: (r) => set({ shipRotation: r }),
   setShipTargetRoll: (r) => {
     const clamped = Math.max(-30, Math.min(30, r));
-    set({ shipTargetRoll: clamped, shipRollTransition: 0 });
+    const currentRoll = get().shipRoll;
+    set({
+      shipTargetRoll: clamped,
+      shipRollTransition: 0,
+      _startRoll: currentRoll,
+    });
   },
   updateShipRoll: (delta) => {
-    const { shipRoll, shipTargetRoll, shipRollTransition } = get();
-    if (Math.abs(shipRoll - shipTargetRoll) < 0.01 && shipRollTransition >= ROLL_TRANSITION_TIME) {
+    const s = get();
+    if (s.shipRollTransition >= ROLL_TRANSITION_TIME) {
+      if (Math.abs(s.shipRoll - s.shipTargetRoll) > 0.01) {
+        set({ shipRoll: s.shipTargetRoll });
+      }
       return;
     }
-    const t = Math.min(1, (shipRollTransition + delta) / ROLL_TRANSITION_TIME);
+    const newTransition = Math.min(ROLL_TRANSITION_TIME, s.shipRollTransition + delta);
+    const t = newTransition / ROLL_TRANSITION_TIME;
     const easeT = 1 - Math.pow(1 - t, 3);
-    const startRoll = shipRollTransition === 0 ? shipRoll : (get() as any)._startRoll ?? 0;
-    const newRoll = startRoll + (shipTargetRoll - startRoll) * easeT;
+    const newRoll = s._startRoll + (s.shipTargetRoll - s._startRoll) * easeT;
     set({
       shipRoll: newRoll,
-      shipRollTransition: shipRollTransition + delta,
-      _startRoll: shipRollTransition === 0 ? shipRoll : (get() as any)._startRoll ?? shipRoll,
+      shipRollTransition: newTransition,
     });
   },
   setCameraAngles: (pitch, yaw) => {
