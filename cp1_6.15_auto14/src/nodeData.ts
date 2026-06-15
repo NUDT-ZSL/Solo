@@ -42,6 +42,41 @@ function makeNode(
   };
 }
 
+function parseHtml(html: string): Document | null {
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    if (doc.querySelector('parsererror')) return null;
+    return doc;
+  } catch {
+    return null;
+  }
+}
+
+function validateHtmlTagExists(html: string, tagName: string, requireClosing = true): boolean {
+  const lower = html.toLowerCase();
+  const open = `<${tagName.toLowerCase()}`;
+  const close = `</${tagName.toLowerCase()}>`;
+  if (!lower.includes(open)) return false;
+  if (requireClosing && !lower.includes(close)) return false;
+  const doc = parseHtml(html);
+  if (!doc) return false;
+  return doc.querySelectorAll(tagName.toLowerCase()).length > 0;
+}
+
+function validateCssProperty(code: string, property: string, valuePattern?: RegExp): boolean {
+  if (!code.includes(property)) return false;
+  if (valuePattern) {
+    const block = code.substring(code.indexOf(property));
+    return valuePattern.test(block);
+  }
+  return true;
+}
+
+function validateJsContains(code: string, ...tokens: string[]): boolean {
+  return tokens.every((t) => code.includes(t));
+}
+
 function layoutTree(node: SkillNode, depth: number, yOffset: { val: number }): void {
   node.x = depth * H_GAP;
   if (node.children.length === 0 || !node.expanded) {
@@ -62,28 +97,46 @@ export function buildSkillTree(): SkillNode {
     '编写一个包含 h1 标题的 HTML 页面',
     'html',
     '<!DOCTYPE html>\n<html>\n<head>\n  <title>My Page</title>\n</head>\n<body>\n  \n</body>\n</html>',
-    (code) => code.includes('<h1>') && code.includes('</h1>'),
+    (code) => {
+      if (!validateHtmlTagExists(code, 'h1')) return false;
+      const doc = parseHtml(code);
+      if (!doc) return false;
+      const h1 = doc.querySelector('h1');
+      return !!h1 && h1.textContent!.trim().length > 0;
+    },
     [
       makeNode(
         'CSS 基础',
         '为 h1 添加红色文字样式',
         'css',
         'h1 {\n  \n}',
-        (code) => code.includes('color') && (code.includes('red') || code.includes('#ff0000') || code.includes('#f00')),
+        (code) => {
+          if (!validateCssProperty(code, 'color')) return false;
+          const propMatch = code.match(/color\s*:\s*([^;]+)/i);
+          if (!propMatch) return false;
+          const val = propMatch[1].toLowerCase();
+          return val.includes('red') || val.includes('#f00') || val.includes('ff0000') || val.includes('rgb(255') || val.includes('hsl(0');
+        },
         [
           makeNode(
             'Flexbox 布局',
             '使用 display:flex 将子元素水平居中',
             'css',
             '.container {\n  display: flex;\n  \n}',
-            (code) => code.includes('justify-content') && code.includes('center'),
+            (code) => {
+              if (!code.includes('display') || !code.includes('flex')) return false;
+              return validateCssProperty(code, 'justify-content') && code.toLowerCase().includes('center');
+            },
           ),
           makeNode(
             'CSS Grid',
             '创建一个 3 列等宽网格布局',
             'css',
             '.grid {\n  display: grid;\n  \n}',
-            (code) => code.includes('grid-template-columns') && code.includes('1fr'),
+            (code) => {
+              if (!code.includes('display') || !code.includes('grid')) return false;
+              return validateCssProperty(code, 'grid-template-columns') && code.includes('1fr');
+            },
           ),
         ]
       ),
@@ -92,14 +145,28 @@ export function buildSkillTree(): SkillNode {
         '创建一个包含两行数据的 HTML 表格',
         'html',
         '<table>\n  \n</table>',
-        (code) => code.includes('<tr>') && code.includes('<td>'),
+        (code) => {
+          if (!validateHtmlTagExists(code, 'table')) return false;
+          const doc = parseHtml(code);
+          if (!doc) return false;
+          const trs = doc.querySelectorAll('tr');
+          const tds = doc.querySelectorAll('td');
+          return trs.length >= 2 && tds.length >= 2;
+        },
         [
           makeNode(
             '表单元素',
             '创建一个包含输入框和提交按钮的表单',
             'html',
             '<form>\n  \n</form>',
-            (code) => code.includes('<input') && code.includes('type="submit"'),
+            (code) => {
+              if (!validateHtmlTagExists(code, 'form')) return false;
+              const doc = parseHtml(code);
+              if (!doc) return false;
+              const input = doc.querySelector('input');
+              const submitBtn = doc.querySelector('input[type="submit"], button[type="submit"]');
+              return !!input && !!submitBtn;
+            },
           ),
         ]
       ),
@@ -108,21 +175,39 @@ export function buildSkillTree(): SkillNode {
         '使用 console.log 输出 Hello World',
         'javascript',
         '// 在下方输出 Hello World\n',
-        (code) => code.includes('console.log') && code.includes('Hello'),
+        (code) => {
+          if (!validateJsContains(code, 'console', '.log(')) return false;
+          const logMatch = code.match(/console\.log\s*\(\s*["'`]([^"'`]*)/);
+          if (!logMatch) return false;
+          return logMatch[1].includes('Hello') || logMatch[1].includes('hello');
+        },
         [
           makeNode(
             '变量与类型',
             '声明一个 const 变量并赋值为数字 42',
             'javascript',
             '// 声明一个 const 变量\n',
-            (code) => code.includes('const') && code.includes('42'),
+            (code) => {
+              if (!code.includes('const')) return false;
+              const constMatch = code.match(/const\s+[A-Za-z_$][\w$]*\s*=\s*(\d+)/);
+              return !!constMatch && constMatch[1].trim() === '42';
+            },
             [
               makeNode(
                 '函数基础',
                 '编写一个返回两数之和的 add 函数',
                 'javascript',
                 'function add(a, b) {\n  \n}\n',
-                (code) => code.includes('return') && code.includes('a') && code.includes('b'),
+                (code) => {
+                  if (!validateJsContains(code, 'function', 'add', 'return')) return false;
+                  const fnMatch = code.match(/function\s+add\s*\(\s*(\w+)\s*,\s*(\w+)\s*\)/);
+                  if (!fnMatch) return false;
+                  const [, p1, p2] = fnMatch;
+                  const returnMatch = code.match(/return\s+([^;]+)/);
+                  if (!returnMatch) return false;
+                  const retExpr = returnMatch[1];
+                  return retExpr.includes(p1) && retExpr.includes(p2) && retExpr.includes('+');
+                },
               ),
             ]
           ),
@@ -131,21 +216,21 @@ export function buildSkillTree(): SkillNode {
             '使用 querySelector 选中一个元素',
             'javascript',
             '// 使用 querySelector 选中 .box 元素\n',
-            (code) => code.includes('querySelector'),
+            (code) => validateJsContains(code, 'document', 'querySelector'),
             [
               makeNode(
                 '事件监听',
                 '为按钮添加 click 事件监听器',
                 'javascript',
                 'const btn = document.querySelector("button");\n// 为 btn 添加 click 事件\n',
-                (code) => code.includes('addEventListener') && code.includes('click'),
+                (code) => validateJsContains(code, 'addEventListener', 'click') && validateJsContains(code, 'btn'),
               ),
               makeNode(
                 '异步编程',
                 '使用 async/await 获取数据',
                 'javascript',
                 'async function fetchData() {\n  // 使用 fetch 获取数据\n}\n',
-                (code) => code.includes('await') && code.includes('fetch'),
+                (code) => validateJsContains(code, 'async') && validateJsContains(code, 'await') && validateJsContains(code, 'fetch'),
               ),
             ]
           ),

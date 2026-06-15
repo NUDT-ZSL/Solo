@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import type { SkillNode, NodeStatus } from './nodeData';
 import {
   buildSkillTree,
@@ -26,37 +26,53 @@ function bezierPath(x1: number, y1: number, x2: number, y2: number): string {
 
 function edgeStatus(parent: SkillNode, child: SkillNode): string {
   if (parent.status === 'completed' && child.status === 'completed') return 'completed';
-  if (parent.status === 'completed' && child.status === 'active') return 'active';
-  if (parent.status === 'completed' && child.status === 'failed') return 'active';
+  if (parent.status === 'completed' && (child.status === 'active' || child.status === 'failed')) return 'active';
   return '';
 }
 
 export const SkillTree: React.FC = () => {
-  const [root, setRoot] = useState<SkillNode>(() => buildSkillTree());
-  const [selectedNode, setSelectedNode] = useState<SkillNode | null>(null);
+  const [root, setRoot] = useState<SkillNode>(() => {
+    const t = buildSkillTree();
+    return t;
+  });
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(0.85);
   const [pan, setPan] = useState({ x: 80, y: 0 });
   const [barrageKey, setBarrageKey] = useState(0);
   const [pulseNodeId, setPulseNodeId] = useState<string | null>(null);
   const [shakeNodeId, setShakeNodeId] = useState<string | null>(null);
+  const [renderKey, setRenderKey] = useState(0);
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const dragStart = useRef({ x: 0, y: 0 });
   const panStart = useRef({ x: 0, y: 0 });
 
-  const totalNodes = countNodes(root);
-  const completedNodes = countByStatus(root, 'completed');
+  const totalNodes = useMemo(() => countNodes(root), [root]);
+  const completedNodes = useMemo(() => countByStatus(root, 'completed'), [root]);
   const progressPercent = totalNodes > 0 ? (completedNodes / totalNodes) * 100 : 0;
+
+  const selectedNode = useMemo(() => {
+    if (!selectedNodeId) return null;
+    return findNodeById(root, selectedNodeId);
+  }, [root, selectedNodeId]);
+
+  const nodes = useMemo(() => flattenTree(root), [root]);
+  const edges = useMemo(() => collectEdges(root), [root]);
 
   const triggerBarrage = useCallback(() => {
     setBarrageKey((k) => k + 1);
   }, []);
 
+  const forceRender = useCallback(() => {
+    setRenderKey((k) => k + 1);
+  }, []);
+
   const handleNodeClick = useCallback(
     (node: SkillNode) => {
       if (node.status === 'locked') return;
-      setSelectedNode(node);
+      setSelectedNodeId(node.id);
     },
     []
   );
@@ -67,47 +83,66 @@ export const SkillTree: React.FC = () => {
       const newRoot = deepCloneTree(root);
       const target = findNodeById(newRoot, node.id);
       if (!target || target.children.length === 0) return;
-      target.expanded = !target.expanded;
+
+      if (target.expanded) {
+        target.expanded = false;
+        setCollapsedIds((prev) => new Set(prev).add(target.id));
+      } else {
+        target.expanded = true;
+        setCollapsedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(target.id);
+          return next;
+        });
+      }
       recalcLayout(newRoot);
       setRoot(newRoot);
+      forceRender();
     },
-    [root]
+    [root, forceRender]
   );
 
   const handleSubmit = useCallback(
     (nodeId: string, passed: boolean) => {
-      const newRoot = deepCloneTree(root);
-      const target = findNodeById(newRoot, nodeId);
-      if (!target) return;
-
       if (passed) {
+        const newRoot = deepCloneTree(root);
+        const target = findNodeById(newRoot, nodeId);
+        if (!target) return;
         target.status = 'completed';
         unlockChildren(target);
+        recalcLayout(newRoot);
+
+        setRoot(newRoot);
+        setSelectedNodeId(null);
         setPulseNodeId(nodeId);
-        setTimeout(() => setPulseNodeId(null), 800);
         triggerBarrage();
-        recalcLayout(newRoot);
-        setRoot(newRoot);
-        setSelectedNode(null);
+        setTimeout(() => setPulseNodeId(null), 800);
+        forceRender();
       } else {
-        target.status = 'failed';
-        recalcLayout(newRoot);
-        setRoot(newRoot);
+        const failedRoot = deepCloneTree(root);
+        const failedTarget = findNodeById(failedRoot, nodeId);
+        if (!failedTarget) return;
+        failedTarget.status = 'failed';
+        recalcLayout(failedRoot);
+        setRoot(failedRoot);
+        setSelectedNodeId(null);
         setShakeNodeId(nodeId);
+        forceRender();
+
         setTimeout(() => {
-          setShakeNodeId(null);
-          const revertRoot = deepCloneTree(root);
+          const revertRoot = deepCloneTree(failedRoot);
           const revertTarget = findNodeById(revertRoot, nodeId);
-          if (revertTarget) {
+          if (revertTarget && revertTarget.status === 'failed') {
             revertTarget.status = 'active';
             recalcLayout(revertRoot);
             setRoot(revertRoot);
+            setShakeNodeId(null);
+            forceRender();
           }
         }, 500);
-        setSelectedNode(null);
       }
     },
-    [root, triggerBarrage]
+    [root, triggerBarrage, forceRender]
   );
 
   const handleWheel = useCallback(
@@ -150,12 +185,12 @@ export const SkillTree: React.FC = () => {
     const vp = viewportRef.current;
     if (!vp) return;
     const rect = vp.getBoundingClientRect();
-    const nodes = flattenTree(root);
-    if (nodes.length === 0) return;
-    const minX = Math.min(...nodes.map((n) => n.x));
-    const maxX = Math.max(...nodes.map((n) => n.x)) + NODE_W;
-    const minY = Math.min(...nodes.map((n) => n.y));
-    const maxY = Math.max(...nodes.map((n) => n.y)) + NODE_H;
+    const allNodes = flattenTree(root);
+    if (allNodes.length === 0) return;
+    const minX = Math.min(...allNodes.map((n) => n.x));
+    const maxX = Math.max(...allNodes.map((n) => n.x)) + NODE_W;
+    const minY = Math.min(...allNodes.map((n) => n.y));
+    const maxY = Math.max(...allNodes.map((n) => n.y)) + NODE_H;
     const treeW = maxX - minX + PAD * 2;
     const treeH = maxY - minY + PAD * 2;
     const scaleX = rect.width / treeW;
@@ -171,14 +206,10 @@ export const SkillTree: React.FC = () => {
     });
   }, []);
 
-  const nodes = flattenTree(root);
-  const edges = collectEdges(root);
-
   const statusClass = (status: NodeStatus, nodeId: string): string => {
     const classes: string[] = [status];
     if (status === 'completed' && pulseNodeId === nodeId) classes.push('pulse-success');
-    if (status === 'failed' && shakeNodeId === nodeId) classes.push('shake-animation');
-    if (shakeNodeId === nodeId && status === 'failed') classes.push('flash-red');
+    if (shakeNodeId === nodeId) classes.push('shake-animation flash-red');
     return classes.join(' ');
   };
 
@@ -187,10 +218,16 @@ export const SkillTree: React.FC = () => {
 
   return (
     <>
-      <div className="progress-bar-container">
+      <div className="progress-bar-container" key={`bar-${renderKey}`}>
         <span className="progress-label">闯关进度</span>
         <div className="progress-track">
-          <div className="progress-fill" style={{ width: `${progressPercent}%` }} />
+          <div
+            className="progress-fill"
+            style={{
+              width: `${progressPercent}%`,
+              transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+            }}
+          />
         </div>
         <span className="node-count">{completedNodes}/{totalNodes}</span>
         {barrageKey > 0 && (
@@ -232,37 +269,43 @@ export const SkillTree: React.FC = () => {
                   key={`${parent.id}-${child.id}`}
                   d={bezierPath(x1, y1, x2, y2)}
                   className={`edge-path ${es}`}
+                  style={{
+                    transition: 'd 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), stroke 0.4s ease, stroke-width 0.3s ease, filter 0.4s ease',
+                  }}
                 />
               );
             })}
           </svg>
 
-          {nodes.map((node) => (
-            <div
-              key={node.id}
-              className={`skill-node ${statusClass(node.status, node.id)}`}
-              style={{
-                left: node.x,
-                top: node.y,
-                width: NODE_W,
-              }}
-              onClick={() => handleNodeClick(node)}
-            >
-              <div className="node-header">
-                <span className={`node-status-dot ${node.status}`} />
-                <span className="node-title">{node.title}</span>
-              </div>
-              <div className="node-desc">{node.description}</div>
-              {node.children.length > 0 && (
-                <div
-                  className={`node-toggle ${node.expanded ? '' : 'collapsed'}`}
-                  onClick={(e) => handleToggleExpand(e, node)}
-                >
-                  ▼
+          {nodes.map((node) => {
+            const isNewlyVisible = collapsedIds.has(node.id) ? false : true;
+            return (
+              <div
+                key={`${node.id}-${renderKey}-${node.expanded}`}
+                className={`skill-node ${statusClass(node.status, node.id)}`}
+                style={{
+                  left: node.x,
+                  top: node.y,
+                  width: NODE_W,
+                }}
+                onClick={() => handleNodeClick(node)}
+              >
+                <div className="node-header">
+                  <span className={`node-status-dot ${node.status}`} />
+                  <span className="node-title">{node.title}</span>
                 </div>
-              )}
-            </div>
-          ))}
+                <div className="node-desc">{node.description}</div>
+                {node.children.length > 0 && (
+                  <div
+                    className={`node-toggle ${node.expanded ? '' : 'collapsed'}`}
+                    onClick={(e) => handleToggleExpand(e, node)}
+                  >
+                    ▼
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         <div className="zoom-controls">
@@ -276,7 +319,7 @@ export const SkillTree: React.FC = () => {
       {selectedNode && (
         <NodePanel
           node={selectedNode}
-          onClose={() => setSelectedNode(null)}
+          onClose={() => setSelectedNodeId(null)}
           onSubmit={handleSubmit}
         />
       )}
