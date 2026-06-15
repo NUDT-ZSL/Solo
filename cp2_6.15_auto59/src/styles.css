@@ -1,0 +1,255 @@
+.app-container {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #f0f0f0;
+}
+
+.main-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.nav-panel {
+  width: 220px;
+  background: #2c3e50;
+  color: white;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  flex-shrink: 0;
+  transition: width 0.3s ease, opacity 0.3s ease;
+}
+
+.nav-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #b0bec5;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #37474f;
+}
+
+.canvas-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.note-panel {
+  width: 320px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  margin: 8px;
+  overflow-y: auto;
+  flex-shrink: 0;
+  transition: width 0.3s ease, opacity 0.3s ease;
+}
+
+.mobile-note-drawer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: #ffffff;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  overflow-y: auto;
+  animation: slideUp 0.4s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.toolbar {
+  height: 60px;
+  background: #ffffff;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 8px;
+  z-index: 100;
+  flex-shrink: 0;
+}
+
+.toolbar-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #333333;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.toolbar-btn:hover {
+  background: #f0f0f0;
+  border-color: #00bcd4;
+}
+
+.toolbar-btn.active {
+  background: #e0f7fa;
+  border-color: #00bcd4;
+  color: #00838f;
+}
+
+.toolbar-btn.primary {
+  background: #00bcd4;
+  color: white;
+  border-color: #00bcd4;
+}
+
+.toolbar-btn.primary:hover {
+  background: #00acc1;
+}
+
+.toolbar-btn.danger {
+  color: #e53935;
+  border-color: #ef9a9a;
+}
+
+.toolbar-btn.danger:hover {
+  background: #ffebee;
+}
+
+.search-container {
+  position: relative;
+  margin-left: auto;
+}
+
+.search-input {
+  width: 300px;
+  height: 36px;
+  border-radius: 20px;
+  border: 1px solid #e0e0e0;
+  background: #f5f5f5;
+  padding: 0 36px 0 16px;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.search-input:focus {
+  border-color: #00bcd4;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 188, 212, 0.15);
+}
+
+.search-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #999999;
+  font-size: 16px;
+  pointer-events: none;
+}
+
+.search-results {
+  position: absolute;
+  top: 42px;
+  left: 0;
+  width: 400px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  z-index: 200;
+}
+
+.search-result-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f5f5f5;
+  transition: background 0.15s ease;
+}
+
+.search-result-item:hover {
+  background: #f0f0f0;
+}
+
+.search-result-item .path {
+  font-size: 12px;
+  color: #999999;
+}
+
+.search-result-item .preview {
+  font-size: 13px;
+  color: #333333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-highlight {
+  background: #ffff00;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.node-text-input {
+  width: 200px;
+  border-radius: 8px;
+  border: 2px solid #00bcd4;
+  font-size: 14px;
+  padding: 6px 10px;
+  outline: none;
+  position: absolute;
+  z-index: 50;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.color-selector {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.color-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.color-dot:hover, .color-dot.active {
+  border-color: #333333;
+  transform: scale(1.15);
+}
+
+.align-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+@media (max-width: 768px) {
+  .nav-panel { display: none; }
+  .note-panel { display: none; }
+  .search-input { width: 180px; }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  .nav-panel { width: 60px; }
+  .nav-title { display: none; }
+}
