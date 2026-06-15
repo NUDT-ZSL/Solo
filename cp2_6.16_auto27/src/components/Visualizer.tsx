@@ -3,108 +3,139 @@ import './Visualizer.css'
 
 interface VisualizerProps {
   frequencyDataRef: React.MutableRefObject<Uint8Array>
+  frequencyVersionRef: React.MutableRefObject<number>
 }
 
-const Visualizer: React.FC<VisualizerProps> = ({ frequencyDataRef }) => {
+const BAR_COUNT = 128
+
+const Visualizer: React.FC<VisualizerProps> = ({ frequencyDataRef, frequencyVersionRef }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const offscreenCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const historyCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const animationFrameRef = useRef<number | null>(null)
+  const lastVersionRef = useRef<number>(0)
+  const paletteRef = useRef<{ r: number; g: number; b: number }[]>([])
 
-  const getGradientColor = useCallback(
-    (ctx: CanvasRenderingContext2D, index: number, total: number, height: number): CanvasGradient => {
-      const ratio = index / total
-      const gradient = ctx.createLinearGradient(0, 0, 0, height)
-
+  const buildPalette = useCallback(() => {
+    const palette: { r: number; g: number; b: number }[] = []
+    for (let i = 0; i < BAR_COUNT; i++) {
+      const ratio = i / BAR_COUNT
+      let r: number, g: number, b: number
       if (ratio < 0.25) {
-        gradient.addColorStop(0, '#ff1744')
-        gradient.addColorStop(1, '#ff6e40')
+        const t = ratio / 0.25
+        r = 255
+        g = Math.floor(23 + t * 150)
+        b = Math.floor(68 - t * 68)
       } else if (ratio < 0.5) {
-        gradient.addColorStop(0, '#ffab00')
-        gradient.addColorStop(1, '#ffea00')
+        const t = (ratio - 0.25) / 0.25
+        r = Math.floor(255 - t * 100)
+        g = Math.floor(173 + t * 82)
+        b = 0
       } else if (ratio < 0.75) {
-        gradient.addColorStop(0, '#76ff03')
-        gradient.addColorStop(1, '#00e676')
+        const t = (ratio - 0.5) / 0.25
+        r = Math.floor(155 - t * 110)
+        g = 255
+        b = Math.floor(t * 150)
       } else {
-        gradient.addColorStop(0, '#2979ff')
-        gradient.addColorStop(1, '#9c27b0')
+        const t = (ratio - 0.75) / 0.25
+        r = Math.floor(45 + t * 111)
+        g = Math.floor(255 - t * 216)
+        b = Math.floor(100 + t * 76)
       }
-
-      return gradient
-    },
-    []
-  )
+      palette.push({ r, g, b })
+    }
+    paletteRef.current = palette
+  }, [])
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current
-    const offscreen = offscreenCanvasRef.current
-    if (!canvas || !offscreen) return
+    const historyCanvas = historyCanvasRef.current
+    if (!canvas || !historyCanvas) {
+      animationFrameRef.current = requestAnimationFrame(draw)
+      return
+    }
 
-    const ctx = canvas.getContext('2d')
-    const offCtx = offscreen.getContext('2d')
-    if (!ctx || !offCtx) return
+    const ctx = canvas.getContext('2d', { alpha: false })
+    const historyCtx = historyCanvas.getContext('2d', { alpha: false })
+    if (!ctx || !historyCtx) {
+      animationFrameRef.current = requestAnimationFrame(draw)
+      return
+    }
 
     const width = canvas.width
     const height = canvas.height
-
-    offCtx.clearRect(0, 0, width, height)
-    offCtx.drawImage(canvas, 0, 1)
-
-    ctx.fillStyle = 'rgba(5, 5, 5, 0.02)'
-    ctx.fillRect(0, 0, width, height)
-
-    ctx.globalCompositeOperation = 'source-over'
+    const dpr = window.devicePixelRatio || 1
+    const barWidth = Math.max(2 * dpr, Math.min(6 * dpr, width / BAR_COUNT))
 
     const frequencyData = frequencyDataRef.current
-    const barCount = 128
-    const dpr = window.devicePixelRatio || 1
-    const barWidth = Math.max(2 * dpr, Math.min(6 * dpr, width / barCount))
+    const hasNewData = frequencyVersionRef.current !== lastVersionRef.current
+    lastVersionRef.current = frequencyVersionRef.current
 
-    for (let i = 0; i < barCount; i++) {
-      const value = frequencyData[i] || 0
-      const barHeight = Math.max(1, (value / 255) * 80 * dpr)
-      const x = i * barWidth
+    if (hasNewData && frequencyData && frequencyData.length >= BAR_COUNT) {
+      historyCtx.clearRect(0, 0, width, height)
+      historyCtx.drawImage(canvas, 0, 1 * dpr)
 
-      const gradient = getGradientColor(ctx, i, barCount, barHeight)
-      ctx.fillStyle = gradient
-      ctx.globalAlpha = value / 255
-      ctx.fillRect(x, 0, barWidth - 0.5 * dpr, barHeight)
+      const palette = paletteRef.current
+
+      for (let i = 0; i < BAR_COUNT; i++) {
+        const value = frequencyData[i]
+        if (value <= 10) continue
+
+        const barHeight = Math.max(1, (value / 255) * 60 * dpr)
+        const color = palette[i]
+        const alpha = Math.min(1, value / 200)
+        const x = i * barWidth
+
+        historyCtx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`
+        historyCtx.fillRect(x, 0, barWidth - 0.5 * dpr, barHeight)
+      }
     }
 
-    ctx.globalAlpha = 1
-    ctx.globalCompositeOperation = 'destination-over'
-    ctx.drawImage(offscreen, 0, 0)
     ctx.globalCompositeOperation = 'source-over'
+    ctx.fillStyle = '#050505'
+    ctx.fillRect(0, 0, width, height)
+
+    ctx.globalAlpha = 0.96
+    ctx.drawImage(historyCanvas, 0, 0)
+    ctx.globalAlpha = 1
 
     animationFrameRef.current = requestAnimationFrame(draw)
-  }, [frequencyDataRef, getGradientColor])
+  }, [frequencyDataRef, frequencyVersionRef])
 
   useEffect(() => {
+    buildPalette()
+
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const offscreen = document.createElement('canvas')
-    offscreenCanvasRef.current = offscreen
+    const historyCanvas = document.createElement('canvas')
+    historyCanvasRef.current = historyCanvas
 
     const resizeCanvas = () => {
       const container = canvas.parentElement
-      if (container) {
-        const dpr = window.devicePixelRatio || 1
-        const cssWidth = container.clientWidth
-        const cssHeight = 300
+      if (!container) return
 
-        canvas.width = cssWidth * dpr
-        canvas.height = cssHeight * dpr
-        canvas.style.width = cssWidth + 'px'
-        canvas.style.height = cssHeight + 'px'
+      const dpr = window.devicePixelRatio || 1
+      const cssWidth = container.clientWidth
+      const cssHeight = 300
 
-        offscreen.width = cssWidth * dpr
-        offscreen.height = cssHeight * dpr
+      canvas.width = cssWidth * dpr
+      canvas.height = cssHeight * dpr
+      canvas.style.width = cssWidth + 'px'
+      canvas.style.height = cssHeight + 'px'
 
-        const ctx = canvas.getContext('2d')
-        if (ctx) {
-          ctx.fillStyle = '#050505'
-          ctx.fillRect(0, 0, canvas.width, canvas.height)
-        }
+      historyCanvas.width = cssWidth * dpr
+      historyCanvas.height = cssHeight * dpr
+
+      const ctx = canvas.getContext('2d', { alpha: false })
+      if (ctx) {
+        ctx.fillStyle = '#050505'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+      }
+
+      const hctx = historyCanvas.getContext('2d', { alpha: false })
+      if (hctx) {
+        hctx.fillStyle = '#050505'
+        hctx.fillRect(0, 0, historyCanvas.width, historyCanvas.height)
       }
     }
 
@@ -114,7 +145,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ frequencyDataRef }) => {
     return () => {
       window.removeEventListener('resize', resizeCanvas)
     }
-  }, [])
+  }, [buildPalette])
 
   useEffect(() => {
     animationFrameRef.current = requestAnimationFrame(draw)
@@ -122,6 +153,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ frequencyDataRef }) => {
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
+        animationFrameRef.current = null
       }
     }
   }, [draw])

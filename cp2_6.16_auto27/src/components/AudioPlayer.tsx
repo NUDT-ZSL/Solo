@@ -11,6 +11,7 @@ export interface Track {
 
 interface AudioPlayerProps {
   frequencyDataRef: React.MutableRefObject<Uint8Array>
+  frequencyVersionRef: React.MutableRefObject<number>
   onTrackChange?: (track: Track | null) => void
   onTimeUpdate: (currentTime: number, duration: number) => void
   onPlayStateChange: (isPlaying: boolean) => void
@@ -26,8 +27,30 @@ interface AudioPlayerProps {
   onUploadClick?: () => void
 }
 
+const FFT_SIZE = 256
+const FREQUENCY_BIN_COUNT = FFT_SIZE / 2
+
+type WebAudioAnalyser = {
+  getByteFrequencyData(array: Uint8Array): void
+  fftSize: number
+  frequencyBinCount: number
+  smoothingTimeConstant: number
+  connect(destination: AudioNode): void
+  disconnect(): void
+}
+
+function isAnalyserNode(node: unknown): node is AnalyserNode {
+  return (
+    typeof node === 'object' &&
+    node !== null &&
+    'getByteFrequencyData' in node &&
+    typeof (node as AnalyserNode).getByteFrequencyData === 'function'
+  )
+}
+
 const AudioPlayer: React.FC<AudioPlayerProps> = ({
   frequencyDataRef,
+  frequencyVersionRef,
   volume,
   isPlaying,
   currentTrack,
@@ -45,17 +68,25 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null)
   const gainNodeRef = useRef<GainNode | null>(null)
   const animationFrameRef = useRef<number | null>(null)
-  const frequencyBufferRef = useRef<Uint8Array | null>(null)
+  const backBufferRef = useRef<Uint8Array | null>(null)
+
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
 
   const initAudioContext = useCallback(() => {
     if (!audioRef.current || audioContextRef.current) return
 
-    const AudioContext = window.AudioContext || (window as any).webkitAudioContext
-    const audioContext = new AudioContext()
+    const AudioContextCtor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    if (!AudioContextCtor) {
+      console.error('Web Audio API is not supported in this browser')
+      return
+    }
+
+    const audioContext = new AudioContextCtor()
     const analyser = audioContext.createAnalyser()
     const gainNode = audioContext.createGain()
 
-    analyser.fftSize = 256
+    analyser.fftSize = FFT_SIZE
     analyser.smoothingTimeConstant = 0.8
 
     const source = audioContext.createMediaElementSource(audioRef.current)
@@ -68,32 +99,43 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     sourceRef.current = source
     gainNodeRef.current = gainNode
 
-    frequencyBufferRef.current = new Uint8Array(analyser.frequencyBinCount)
-  }, [])
+    backBufferRef.current = new Uint8Array(FREQUENCY_BIN_COUNT)
+
+    if (!frequencyDataRef.current || frequencyDataRef.current.length !== FREQUENCY_BIN_COUNT) {
+      frequencyDataRef.current = new Uint8Array(FREQUENCY_BIN_COUNT)
+    }
+  }, [frequencyDataRef])
 
   const analyze = useCallback(() => {
-    if (!analyserRef.current || !frequencyBufferRef.current) return
+    const analyser = analyserRef.current
+    const backBuffer = backBufferRef.current
+    const frontBuffer = frequencyDataRef.current
 
-    analyserRef.current.getByteFrequencyData(frequencyBufferRef.current as any)
-
-    if (frequencyDataRef.current && frequencyBufferRef.current) {
-      for (let i = 0; i < frequencyBufferRef.current.length; i++) {
-        frequencyDataRef.current[i] = frequencyBufferRef.current[i]
-      }
+    if (!isAnalyserNode(analyser) || !backBuffer || !frontBuffer) {
+      animationFrameRef.current = requestAnimationFrame(analyze)
+      return
     }
 
+    analyser.getByteFrequencyData(backBuffer)
+
+    frontBuffer.set(backBuffer)
+    frequencyVersionRef.current += 1
+
     animationFrameRef.current = requestAnimationFrame(analyze)
-  }, [frequencyDataRef])
+  }, [frequencyDataRef, frequencyVersionRef])
 
   useEffect(() => {
     if (isPlaying) {
       initAudioContext()
+
       if (audioContextRef.current?.state === 'suspended') {
-        audioContextRef.current.resume()
+        audioContextRef.current.resume().catch(() => {})
       }
+
       if (audioRef.current) {
         audioRef.current.play().catch(() => {})
       }
+
       animationFrameRef.current = requestAnimationFrame(analyze)
     } else {
       if (audioRef.current) {
@@ -108,15 +150,39 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
+        animationFrameRef.current = null
       }
     }
   }, [isPlaying, analyze, initAudioContext])
 
   useEffect(() => {
     if (gainNodeRef.current && audioContextRef.current) {
-      gainNodeRef.current.gain.setValueAtTime(volume, audioContextRef.current.currentTime)
+      try {
+        gainNodeRef.current.gain.setValueAtTime(volume, audioContextRef.current.currentTime)
+      } catch {
+      }
     }
   }, [volume])
+
+  useEffect(() => {
+    return () => {
+      if (sourceRef.current) {
+        try { sourceRef.current.disconnect() } catch {}
+      }
+      if (analyserRef.current) {
+        try { analyserRef.current.disconnect() } catch {}
+      }
+      if (gainNodeRef.current) {
+        try { gainNodeRef.current.disconnect() } catch {}
+      }
+      if (audioContextRef.current) {
+        try { audioContextRef.current.close() } catch {}
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+      }
+    }
+  }, [])
 
   const handleTimeUpdate = useCallback(() => {
     if (audioRef.current) {
@@ -154,18 +220,19 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     [onSelectTrack, onCurrentTrackChange, onIsPlayingChange]
   )
 
-  const [dragIndex, setDragIndex] = useState<number | null>(null)
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
-
-  const handleDragStart = useCallback((index: number) => {
+  const handleDragStart = useCallback((index: number, e: React.DragEvent) => {
     setDragIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', String(index))
   }, [])
 
   const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
-    setDragOverIndex(index)
-  }, [])
+    if (dragOverIndex !== index) {
+      setDragOverIndex(index)
+    }
+  }, [dragOverIndex])
 
   const handleDragLeave = useCallback(() => {
     setDragOverIndex(null)
@@ -174,14 +241,19 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const handleDrop = useCallback(
     (e: React.DragEvent, dropIndex: number) => {
       e.preventDefault()
-      if (dragIndex === null || dragIndex === dropIndex) {
+      e.stopPropagation()
+
+      const rawIndex = e.dataTransfer.getData('text/plain')
+      const srcIndex = rawIndex !== '' ? parseInt(rawIndex, 10) : dragIndex
+
+      if (srcIndex === null || isNaN(srcIndex) || srcIndex === dropIndex) {
         setDragIndex(null)
         setDragOverIndex(null)
         return
       }
 
       const newPlaylist = [...playlist]
-      const [draggedItem] = newPlaylist.splice(dragIndex, 1)
+      const [draggedItem] = newPlaylist.splice(srcIndex, 1)
       newPlaylist.splice(dropIndex, 0, draggedItem)
 
       onPlaylistChange(newPlaylist)
@@ -212,6 +284,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={handleEnded}
         crossOrigin="anonymous"
+        preload="metadata"
       />
 
       <div className="upload-section">
@@ -237,15 +310,25 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
                 key={track.id}
                 className={`playlist-item ${currentTrack?.id === track.id ? 'active' : ''} ${
                   dragOverIndex === index ? 'drag-over' : ''
-                }`}
+                } ${dragIndex === index ? 'dragging' : ''}`}
                 onClick={() => handleSelectTrack(track)}
                 draggable
-                onDragStart={() => handleDragStart(index)}
+                onDragStart={(e) => handleDragStart(index, e)}
                 onDragOver={(e) => handleDragOver(e, index)}
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, index)}
                 onDragEnd={handleDragEnd}
               >
+                <div className="drag-handle" onMouseDown={(e) => e.stopPropagation()}>
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="9" cy="6" r="1.5" />
+                    <circle cx="9" cy="12" r="1.5" />
+                    <circle cx="9" cy="18" r="1.5" />
+                    <circle cx="15" cy="6" r="1.5" />
+                    <circle cx="15" cy="12" r="1.5" />
+                    <circle cx="15" cy="18" r="1.5" />
+                  </svg>
+                </div>
                 <div className="track-index">{index + 1}</div>
                 <div className="track-info">
                   <div className="track-name">{track.name}</div>
