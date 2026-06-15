@@ -1,222 +1,12 @@
 import React, { useState, useRef } from 'react';
 import * as THREE from 'three';
 import { usePartsStore, PartType, PART_DEFINITIONS, MATERIAL_COLORS } from '../store/partsStore';
+import { PartThumbnail3D } from './PartThumbnail3D';
 
 interface PartCardProps {
   type: PartType;
   onClick: () => void;
   onDragStart: (e: React.DragEvent) => void;
-}
-
-function PartThumbnail({ type }: { type: PartType }) {
-  const def = PART_DEFINITIONS[type];
-  const isTenon = type.includes('tenon');
-  const color = '#8b5e3c';
-  const accentColor = '#d4a76a';
-
-  const width = 100;
-  const height = 60;
-  const scale = 28;
-  const w = def.dimensions.width * scale;
-  const h = def.dimensions.height * scale;
-  const d = def.dimensions.depth * scale * 0.4;
-
-  const renderShape = () => {
-    const cx = width / 2;
-    const cy = height / 2;
-
-    switch (type) {
-      case 'tenon': {
-        const baseW = w;
-        const baseH = h;
-        const tenonW = w * 0.6;
-        const tenonH = h * 0.85;
-        const tenonExtend = d;
-        return (
-          <g>
-            <rect
-              x={cx - baseW / 2 - tenonExtend / 2}
-              y={cy - baseH / 2}
-              width={baseW - tenonExtend}
-              height={baseH}
-              fill={color}
-              rx="3"
-            />
-            <rect
-              x={cx - tenonW / 2 + (baseW - tenonExtend) / 2 - 1}
-              y={cy - tenonH / 2}
-              width={tenonExtend + tenonW * 0.3}
-              height={tenonH}
-              fill={accentColor}
-              rx="2"
-            />
-          </g>
-        );
-      }
-      case 'mortise': {
-        const baseW = w;
-        const baseH = h;
-        const holeW = w * 0.6;
-        const holeH = h * 0.8;
-        return (
-          <g>
-            <rect
-              x={cx - baseW / 2}
-              y={cy - baseH / 2}
-              width={baseW}
-              height={baseH}
-              fill={color}
-              rx="3"
-            />
-            <rect
-              x={cx - holeW / 2}
-              y={cy - holeH / 2}
-              width={holeW}
-              height={holeH}
-              fill="#2c1a0e"
-              rx="2"
-            />
-          </g>
-        );
-      }
-      case 'dovetail_tenon': {
-        const baseW = w * 0.45;
-        const baseH = h;
-        const tailTopW = w * 0.7;
-        const tailBotW = w * 0.5;
-        const tailExtend = d;
-        return (
-          <g>
-            <rect
-              x={cx - w / 2}
-              y={cy - baseH / 2}
-              width={baseW + tailExtend * 0.2}
-              height={baseH}
-              fill={color}
-              rx="3"
-            />
-            <polygon
-              points={`
-                ${cx - tailBotW / 2 + tailExtend * 0.6},${cy + baseH / 2}
-                ${cx + tailBotW / 2 + tailExtend * 0.6},${cy + baseH / 2}
-                ${cx + tailTopW / 2 + tailExtend * 0.6},${cy - baseH / 2}
-                ${cx - tailTopW / 2 + tailExtend * 0.6},${cy - baseH / 2}
-              `}
-              fill={accentColor}
-            />
-          </g>
-        );
-      }
-      case 'dovetail_mortise': {
-        const baseW = w;
-        const baseH = h;
-        const slotTopW = w * 0.74;
-        const slotBotW = w * 0.54;
-        const slotH = h * 0.88;
-        return (
-          <g>
-            <rect
-              x={cx - baseW / 2}
-              y={cy - baseH / 2}
-              width={baseW}
-              height={baseH}
-              fill={color}
-              rx="3"
-            />
-            <polygon
-              points={`
-                ${cx - slotBotW / 2},${cy + slotH / 2}
-                ${cx + slotBotW / 2},${cy + slotH / 2}
-                ${cx + slotTopW / 2},${cy - slotH / 2}
-                ${cx - slotTopW / 2},${cy - slotH / 2}
-              `}
-              fill="#2c1a0e"
-            />
-          </g>
-        );
-      }
-      case 'l_tenon': {
-        const armW = w * 0.9;
-        const armH = h;
-        const tenonExt = d * 0.8;
-        return (
-          <g>
-            <rect
-              x={cx - armW / 2}
-              y={cy - armH / 2}
-              width={armW * 0.55}
-              height={armH}
-              fill={color}
-              rx="3"
-            />
-            <rect
-              x={cx - armW / 2}
-              y={cy - armH / 2}
-              width={armW * 0.45}
-              height={armH * 0.55}
-              fill={color}
-              rx="3"
-            />
-            <rect
-              x={cx + armW * 0.05}
-              y={cy - armH * 0.42}
-              width={tenonExt}
-              height={armH * 0.84}
-              fill={accentColor}
-              rx="2"
-            />
-            <rect
-              x={cx - armW * 0.38}
-              y={cy + armH * 0.05}
-              width={armW * 0.42}
-              height={tenonExt * 0.5}
-              fill={accentColor}
-              rx="2"
-            />
-          </g>
-        );
-      }
-      case 'l_mortise': {
-        const armW = w;
-        const armH = h;
-        const thick = w * 0.42;
-        return (
-          <g>
-            <rect
-              x={cx - armW / 2}
-              y={cy - armH / 2}
-              width={armW}
-              height={thick * 0.95}
-              fill={color}
-              rx="3"
-            />
-            <rect
-              x={cx + armW / 2 - thick}
-              y={cy - armH / 2 + thick * 0.95}
-              width={thick}
-              height={armH - thick * 0.95 + thick * 0.3}
-              fill={color}
-              rx="3"
-            />
-          </g>
-        );
-      }
-      default:
-        return <circle cx={cx} cy={cy} r={20} fill={color} />;
-    }
-  };
-
-  return (
-    <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', display: 'block' }}>
-      <defs>
-        <linearGradient id={`grad-${type}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.18" />
-          <stop offset="100%" stopColor="#000000" stopOpacity="0.1" />
-        </linearGradient>
-      </defs>
-      {renderShape()}
-    </svg>
-  );
 }
 
 function PartCard({ type, onClick, onDragStart }: PartCardProps) {
@@ -232,7 +22,7 @@ function PartCard({ type, onClick, onDragStart }: PartCardProps) {
       onMouseLeave={() => setHovered(false)}
       style={{
         width: '120px',
-        height: '80px',
+        height: '120px',
         borderRadius: '8px',
         background: hovered ? '#3e3e3e' : '#363636',
         boxShadow: hovered
@@ -244,15 +34,15 @@ function PartCard({ type, onClick, onDragStart }: PartCardProps) {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'center',
+        justifyContent: 'flex-start',
         padding: '6px',
         overflow: 'hidden',
         userSelect: 'none',
         border: hovered ? '1px solid #666' : '1px solid #3a3a3a',
       }}
     >
-      <div style={{ width: '100%', height: '54px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <PartThumbnail type={type} />
+      <div style={{ width: '100%', height: '92px', display: 'block' }}>
+        <PartThumbnail3D type={type} />
       </div>
       <div style={{
         fontSize: '11px',

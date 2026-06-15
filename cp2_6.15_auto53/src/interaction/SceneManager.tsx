@@ -84,7 +84,7 @@ function DraggablePart({ part, onPointerDown, onPointerUp, onPointerOver, onPoin
         onWheel(e.nativeEvent, part.id);
       }}
     >
-      <PartMesh part={part} selected={part.isSelected} opacity={part.isDragging ? 0.8 : 1} />
+      <PartMesh part={part} selected={part.isSelected} opacity={part.isDragging ? 0.55 : 1} />
     </group>
   );
 }
@@ -358,22 +358,41 @@ function SceneContent({ onContextMenu, closeContextMenu, contextMenuOpen }: Scen
 }
 
 function ConnectionHighlight({ mid }: { mid: THREE.Vector3 }) {
-  const ref = useRef<THREE.Mesh>(null);
+  const boxRef = useRef<THREE.LineSegments>(null);
   const timeRef = useRef(0);
+  const baseSize = 0.55;
+
+  const geometry = useMemo(() => {
+    const boxGeo = new THREE.BoxGeometry(baseSize, baseSize, baseSize);
+    const edges = new THREE.EdgesGeometry(boxGeo);
+    return edges;
+  }, []);
+
+  const material = useMemo(() => {
+    return new THREE.LineDashedMaterial({
+      color: '#ffdd44',
+      dashSize: 0.08,
+      gapSize: 0.05,
+      linewidth: 2,
+      transparent: true,
+      opacity: 1,
+    });
+  }, []);
 
   useFrame((_, delta) => {
     timeRef.current += delta;
-    if (ref.current) {
-      const scale = 1 + Math.sin(timeRef.current * Math.PI * 2) * 0.15;
-      ref.current.scale.setScalar(scale);
+    if (boxRef.current) {
+      const pulse = 1 + Math.sin(timeRef.current * Math.PI * 2) * 0.18;
+      boxRef.current.scale.setScalar(pulse);
+      (boxRef.current.material as THREE.LineDashedMaterial).opacity = 0.6 + Math.sin(timeRef.current * Math.PI * 2) * 0.4;
+      boxRef.current.computeLineDistances();
     }
   });
 
   return (
-    <mesh ref={ref} position={mid.toArray()}>
-      <sphereGeometry args={[0.15, 16, 16]} />
-      <meshBasicMaterial color="#ffdd44" transparent opacity={0.35} />
-    </mesh>
+    <group position={mid.toArray()}>
+      <lineSegments ref={boxRef} geometry={geometry} material={material} />
+    </group>
   );
 }
 
