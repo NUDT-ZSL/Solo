@@ -1,603 +1,225 @@
-import React, {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { useState, memo } from 'react';
+import { useAppContext, ConfirmDialog } from '../App';
 import type { Task, Member, Difficulty } from '../api/taskApi';
 
-export type SortMode = 'status' | 'difficulty';
+const DIFFICULTY_CONFIG: Record<Difficulty, { color: string; label: string }> = {
+  easy: { color: '#4caf50', label: '简单' },
+  medium: { color: '#ff9800', label: '中等' },
+  hard: { color: '#f44336', label: '困难' },
+};
 
-interface TaskListProps {
-  tasks: Task[];
-  currentMemberId: string | null;
-  members: Member[];
-  onClaim: (taskId: string) => Promise<void>;
-  onComplete: (taskId: string) => void;
-  familyId: string;
-  sortMode?: SortMode;
-  loading?: boolean;
-  error?: string | null;
-}
-
-interface TaskItemProps {
+interface TaskCardProps {
   task: Task;
-  currentMemberId: string | null;
-  members: Member[];
-  onClaim: (taskId: string) => Promise<void>;
-  onComplete: (taskId: string) => void;
+  claimer?: Member;
+  isCurrentUser: boolean;
+  onClaim: () => void;
+  onComplete: () => void;
+  canClaim: boolean;
 }
 
-const DIFFICULTY_CONFIG: Record<
-  Difficulty,
-  { color: string; label: string; order: number }
-> = {
-  easy: { color: '#4caf50', label: '简单', order: 0 },
-  medium: { color: '#ff9800', label: '中等', order: 1 },
-  hard: { color: '#f44336', label: '困难', order: 2 },
-};
-
-const getMemberName = (
-  memberId: string | null,
-  members: Member[]
-): string => {
-  if (!memberId) return '';
-  const member = members.find((m) => m.id === memberId);
-  return member?.name ?? '';
-};
-
-interface RippleData {
-  x: number;
-  y: number;
-  id: number;
-}
-
-const RippleButton: React.FC<{
-  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
-  disabled?: boolean;
-  backgroundColor: string;
-  children: React.ReactNode;
-  loading?: boolean;
-  style?: React.CSSProperties;
-}> = memo(function RippleButton({
-  onClick,
-  disabled,
-  backgroundColor,
-  children,
-  loading,
-  style,
-}) {
-  const [ripples, setRipples] = useState<RippleData[]>([]);
-  const rippleIdRef = useRef(0);
-
-  const handleClick = useCallback(
-    (e: React.MouseEvent<HTMLButtonElement>) => {
-      if (disabled || loading) return;
-      const button = e.currentTarget;
-      const rect = button.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const id = ++rippleIdRef.current;
-
-      setRipples((prev) => [...prev, { x, y, id }]);
-      setTimeout(() => {
-        setRipples((prev) => prev.filter((r) => r.id !== id));
-      }, 600);
-
-      onClick(e);
-    },
-    [onClick, disabled, loading]
-  );
-
-  return (
-    <button
-      onClick={handleClick}
-      disabled={disabled || loading}
-      style={{
-        position: 'relative',
-        overflow: 'hidden',
-        backgroundColor,
-        color: '#ffffff',
-        border: 'none',
-        borderRadius: '8px',
-        padding: '6px 16px',
-        fontSize: '14px',
-        fontWeight: 500,
-        cursor: disabled || loading ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.5 : 1,
-        transition: 'opacity 0.2s, transform 0.1s',
-        whiteSpace: 'nowrap',
-        ...style,
-      }}
-      onMouseDown={(e) => {
-        if (!disabled && !loading) {
-          e.currentTarget.style.transform = 'scale(0.97)';
-        }
-      }}
-      onMouseUp={(e) => {
-        e.currentTarget.style.transform = 'scale(1)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = 'scale(1)';
-      }}
-    >
-      {loading ? '处理中...' : children}
-      {ripples.map((ripple) => (
-        <span
-          key={ripple.id}
-          style={{
-            position: 'absolute',
-            left: ripple.x,
-            top: ripple.y,
-            width: 0,
-            height: 0,
-            borderRadius: '50%',
-            backgroundColor: 'rgba(255, 255, 255, 0.4)',
-            transform: 'translate(-50%, -50%)',
-            animation: 'ripple 0.6s ease-out forwards',
-            pointerEvents: 'none',
-          }}
-        />
-      ))}
-    </button>
-  );
-});
-
-const TaskItem: React.FC<TaskItemProps> = memo(function TaskItem({
+const TaskCard: React.FC<TaskCardProps> = memo(function TaskCard({
   task,
-  currentMemberId,
-  members,
+  claimer,
+  isCurrentUser,
   onClaim,
   onComplete,
+  canClaim,
 }) {
-  const [claiming, setClaiming] = useState(false);
-  const difficultyConfig = DIFFICULTY_CONFIG[task.difficulty];
-  const isClaimed = !!task.claimed_by;
-  const isCompleted = task.completed;
-  const isCurrentUserClaimed = task.claimed_by === currentMemberId;
-  const claimerName = getMemberName(task.claimed_by, members);
-
-  const handleClaim = useCallback(async () => {
-    if (isClaimed || isCompleted || claiming) return;
-    setClaiming(true);
-    try {
-      await onClaim(task.id);
-    } finally {
-      setClaiming(false);
-    }
-  }, [isClaimed, isCompleted, claiming, onClaim, task.id]);
-
-  const handleComplete = useCallback(() => {
-    if (!isCurrentUserClaimed || isCompleted) return;
-    onComplete(task.id);
-  }, [isCurrentUserClaimed, isCompleted, onComplete, task.id]);
+  const config = DIFFICULTY_CONFIG[task.difficulty];
 
   return (
-    <div
-      style={{
-        position: 'relative',
-        width: '100%',
-        height: '80px',
-        borderRadius: '12px',
-        backgroundColor: '#ffffff',
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-        borderLeft: `5px solid ${difficultyConfig.color}`,
-        display: 'flex',
-        alignItems: 'center',
-        padding: '12px 16px',
-        boxSizing: 'border-box',
-        marginBottom: '12px',
-        transition: 'box-shadow 0.2s',
-      }}
-      onMouseEnter={(e) => {
-        if (!isCompleted) {
-          e.currentTarget.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.12)';
-        }
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.08)';
-      }}
-    >
-      {isCompleted && (
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            backgroundColor: 'rgba(158, 158, 158, 0.35)',
-            borderRadius: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10,
-            pointerEvents: 'none',
-          }}
-        >
-          <span
-            style={{
-              backgroundColor: '#9e9e9e',
-              color: '#ffffff',
-              padding: '4px 16px',
-              borderRadius: '20px',
-              fontSize: '14px',
-              fontWeight: 600,
-            }}
-          >
-            已完成
-          </span>
-        </div>
-      )}
-
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          minWidth: 0,
-          gap: '4px',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            flexWrap: 'wrap',
-          }}
-        >
-          <span
-            style={{
-              fontSize: '16px',
-              fontWeight: 600,
-              color: '#212121',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              maxWidth: '40%',
-            }}
-            title={task.title}
-          >
-            {task.title}
-          </span>
-          <span
-            style={{
-              backgroundColor: difficultyConfig.color + '20',
-              color: difficultyConfig.color,
-              padding: '2px 10px',
-              borderRadius: '12px',
-              fontSize: '12px',
-              fontWeight: 500,
-            }}
-          >
-            {difficultyConfig.label}
-          </span>
-          <span
-            style={{
-              backgroundColor: '#fff3e0',
-              color: '#ef6c00',
-              padding: '2px 10px',
-              borderRadius: '12px',
-              fontSize: '12px',
-              fontWeight: 600,
-            }}
-          >
-            +{task.points} 积分
-          </span>
-          {isClaimed && !isCompleted && (
-            <span
-              style={{
-                backgroundColor: '#e3f2fd',
-                color: '#1565c0',
-                padding: '2px 10px',
-                borderRadius: '12px',
-                fontSize: '12px',
-                fontWeight: 500,
-              }}
-              title={`认领者: ${claimerName}`}
-            >
-              👤 {claimerName}
-            </span>
+    <div className={`task-card ${task.difficulty} ${task.completed ? 'completed' : ''}`}>
+      <div className="task-info">
+        <div className="task-title">
+          {task.title}
+          {task.completed && (
+            <span style={{ marginLeft: 8, color: '#4caf50' }}>✓ 已完成</span>
           )}
         </div>
+        <div className="task-desc">{task.description}</div>
+      </div>
+      <div className="task-meta">
         <span
-          style={{
-            fontSize: '13px',
-            color: '#757575',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-          title={task.description}
+          className={`task-difficulty-tag ${task.difficulty}`}
+          style={{ backgroundColor: config.color }}
         >
-          {task.description}
+          {config.label}
         </span>
-      </div>
-
-      <div
-        style={{
-          marginLeft: '16px',
-          display: 'flex',
-          alignItems: 'center',
-          flexShrink: 0,
-        }}
-      >
-        {!isCompleted && !isClaimed && (
-          <RippleButton
-            onClick={handleClaim}
-            backgroundColor="#1976d2"
-            disabled={!currentMemberId || claiming}
-            loading={claiming}
-          >
-            认领
-          </RippleButton>
+        <span className="task-points">+{task.points}分</span>
+        {task.claimed_by && !task.completed && claimer && (
+          <div className="task-claimer">
+            <div className="task-claimer-avatar">{claimer.avatar}</div>
+            <span>{claimer.name}</span>
+          </div>
         )}
-        {!isCompleted && isCurrentUserClaimed && (
-          <RippleButton
-            onClick={handleComplete}
-            backgroundColor="#2e7d32"
-            disabled={claiming}
-          >
-            完成
-          </RippleButton>
+        {!task.completed && (
+          <div className="task-actions">
+            {!task.claimed_by && (
+              <button
+                className="btn btn-claim"
+                onClick={onClaim}
+                disabled={!canClaim}
+              >
+                认领
+              </button>
+            )}
+            {task.claimed_by && isCurrentUser && (
+              <button className="btn btn-complete" onClick={onComplete}>
+                完成
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>
   );
 });
 
-const VirtualizedList: React.FC<{
-  items: Task[];
-  renderItem: (task: Task) => React.ReactNode;
-  itemHeight: number;
-  gap: number;
-}> = memo(function VirtualizedList({ items, renderItem, itemHeight, gap }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [containerHeight, setContainerHeight] = useState(600);
+const TaskList: React.FC = memo(function TaskList() {
+  const {
+    tasks,
+    members,
+    currentMemberId,
+    claimTask,
+    completeTask,
+    showToast,
+  } = useAppContext();
 
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+  const [dialog, setDialog] = useState<{
+    open: boolean;
+    taskId: string | null;
+    title: string;
+    content: string;
+    isComplete: boolean;
+  }>({ open: false, taskId: null, title: '', content: '', isComplete: false });
 
-    const updateHeight = () => {
-      setContainerHeight(container.clientHeight);
-    };
+  const memberMap = new Map(members.map(m => [m.id, m]));
 
-    updateHeight();
-    const resizeObserver = new ResizeObserver(updateHeight);
-    resizeObserver.observe(container);
-    return () => resizeObserver.disconnect();
-  }, []);
-
-  const totalHeight = items.length * (itemHeight + gap);
-  const rowHeightWithGap = itemHeight + gap;
-  const startIndex = Math.max(0, Math.floor(scrollTop / rowHeightWithGap) - 5);
-  const endIndex = Math.min(
-    items.length,
-    Math.ceil((scrollTop + containerHeight) / rowHeightWithGap) + 5
-  );
-
-  const visibleItems = items.slice(startIndex, endIndex);
-  const offsetY = startIndex * rowHeightWithGap;
-
-  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    setScrollTop(e.currentTarget.scrollTop);
-  }, []);
-
-  if (items.length <= 50) {
-    return (
-      <div style={{ overflowY: 'auto', flex: 1, padding: '4px 0' }}>
-        {items.map(renderItem)}
-      </div>
-    );
-  }
-
-  return (
-    <div
-      ref={containerRef}
-      onScroll={handleScroll}
-      style={{
-        overflowY: 'auto',
-        flex: 1,
-        padding: '4px 0',
-      }}
-    >
-      <div style={{ height: totalHeight, position: 'relative' }}>
-        <div style={{ transform: `translateY(${offsetY}px)` }}>
-          {visibleItems.map(renderItem)}
-        </div>
-      </div>
-    </div>
-  );
-});
-
-const TaskList: React.FC<TaskListProps> = memo(function TaskList({
-  tasks,
-  currentMemberId,
-  members,
-  onClaim,
-  onComplete,
-  sortMode = 'status',
-  loading = false,
-  error = null,
-}) {
-  const sortedTasks = useMemo(() => {
-    const tasksCopy = [...tasks];
-    if (sortMode === 'difficulty') {
-      tasksCopy.sort(
-        (a, b) =>
-          DIFFICULTY_CONFIG[a.difficulty].order -
-          DIFFICULTY_CONFIG[b.difficulty].order
-      );
-    } else {
-      const statusOrder = (task: Task): number => {
-        if (task.completed) return 2;
-        if (task.claimed_by) return 1;
-        return 0;
-      };
-      tasksCopy.sort((a, b) => statusOrder(a) - statusOrder(b));
+  const handleClaimClick = (taskId: string) => {
+    if (!currentMemberId) {
+      showToast('请先在上方选择一名成员', 'error');
+      return;
     }
-    return tasksCopy;
-  }, [tasks, sortMode]);
-
-  const groupedTasks = useMemo(() => {
-    if (sortMode !== 'status') return null;
-    return {
-      pending: sortedTasks.filter((t) => !t.claimed_by && !t.completed),
-      claimed: sortedTasks.filter((t) => t.claimed_by && !t.completed),
-      completed: sortedTasks.filter((t) => t.completed),
-    };
-  }, [sortedTasks, sortMode]);
-
-  const renderTask = useCallback(
-    (task: Task) => (
-      <TaskItem
-        key={task.id}
-        task={task}
-        currentMemberId={currentMemberId}
-        members={members}
-        onClaim={onClaim}
-        onComplete={onComplete}
-      />
-    ),
-    [currentMemberId, members, onClaim, onComplete]
-  );
-
-  const groupTitleStyle: React.CSSProperties = {
-    fontSize: '14px',
-    fontWeight: 600,
-    color: '#616161',
-    margin: '8px 0',
-    paddingLeft: '4px',
+    const member = memberMap.get(currentMemberId);
+    setDialog({
+      open: true,
+      taskId,
+      title: '确认认领任务',
+      content: `确定要由「${member?.name ?? '当前成员'}」认领此任务吗？`,
+      isComplete: false,
+    });
   };
 
-  if (loading) {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '40px 20px',
-          gap: '12px',
-        }}
-      >
-        <div
-          style={{
-            width: '36px',
-            height: '36px',
-            border: '3px solid #e0e0e0',
-            borderTop: '3px solid #1976d2',
-            borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite',
-          }}
-        />
-        <span style={{ color: '#757575', fontSize: '14px' }}>加载任务列表...</span>
-      </div>
-    );
-  }
+  const handleCompleteClick = (task: Task) => {
+    const claimer = task.claimed_by ? memberMap.get(task.claimed_by) : undefined;
+    setDialog({
+      open: true,
+      taskId: task.id,
+      title: '确认完成任务',
+      content: `确定「${claimer?.name ?? '成员'}」已完成此任务？将获得 ${task.points} 积分。`,
+      isComplete: true,
+    });
+  };
 
-  if (error) {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '40px 20px',
-          gap: '12px',
-          backgroundColor: '#ffebee',
-          borderRadius: '12px',
-          margin: '8px',
-        }}
-      >
-        <span style={{ fontSize: '28px' }}>⚠️</span>
-        <span style={{ color: '#c62828', fontSize: '14px' }}>{error}</span>
-      </div>
-    );
-  }
+  const handleConfirm = async () => {
+    const taskId = dialog.taskId;
+    if (!taskId) return;
+    try {
+      if (dialog.isComplete) {
+        await completeTask(taskId);
+      } else {
+        await claimTask(taskId);
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '操作失败', 'error');
+    }
+    setDialog({ open: false, taskId: null, title: '', content: '', isComplete: false });
+  };
 
-  if (sortedTasks.length === 0) {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '40px 20px',
-          gap: '12px',
-        }}
-      >
-        <span style={{ fontSize: '48px' }}>📋</span>
-        <span style={{ color: '#9e9e9e', fontSize: '14px' }}>暂无任务</span>
-      </div>
-    );
-  }
+  const pendingTasks = tasks.filter(t => !t.claimed_by && !t.completed);
+  const claimedTasks = tasks.filter(t => t.claimed_by && !t.completed);
+  const completedTasks = tasks.filter(t => t.completed);
 
   return (
-    <>
-      <style>{`
-        @keyframes ripple {
-          to {
-            width: 300px;
-            height: 300px;
-            opacity: 0;
-          }
-        }
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
-      {groupedTasks ? (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            flex: 1,
-            minHeight: 0,
-          }}
-        >
-          {groupedTasks.pending.length > 0 && (
+    <div className="tasks-section">
+      <h2 className="section-title">📋 任务列表</h2>
+      {tasks.length === 0 ? (
+        <div className="empty-state card">
+          <div className="empty-state-icon">📝</div>
+          <div className="empty-state-text">暂无任务</div>
+        </div>
+      ) : (
+        <div className="tasks-list">
+          {pendingTasks.length > 0 && (
             <>
-              <div style={groupTitleStyle}>
-                待认领 ({groupedTasks.pending.length})
-              </div>
-              {groupedTasks.pending.map(renderTask)}
+              <div className="task-group-title">待认领 ({pendingTasks.length})</div>
+              {pendingTasks.map(task => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  isCurrentUser={false}
+                  onClaim={() => handleClaimClick(task.id)}
+                  onComplete={() => {}}
+                  canClaim={!!currentMemberId}
+                />
+              ))}
             </>
           )}
-          {groupedTasks.claimed.length > 0 && (
+          {claimedTasks.length > 0 && (
             <>
-              <div style={groupTitleStyle}>
-                已认领 ({groupedTasks.claimed.length})
-              </div>
-              {groupedTasks.claimed.map(renderTask)}
+              <div className="task-group-title">已认领 ({claimedTasks.length})</div>
+              {claimedTasks.map(task => {
+                const claimer = task.claimed_by ? memberMap.get(task.claimed_by) : undefined;
+                return (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    claimer={claimer}
+                    isCurrentUser={task.claimed_by === currentMemberId}
+                    onClaim={() => {}}
+                    onComplete={() => handleCompleteClick(task)}
+                    canClaim={!!currentMemberId}
+                  />
+                );
+              })}
             </>
           )}
-          {groupedTasks.completed.length > 0 && (
+          {completedTasks.length > 0 && (
             <>
-              <div style={groupTitleStyle}>
-                已完成 ({groupedTasks.completed.length})
-              </div>
-              {groupedTasks.completed.map(renderTask)}
+              <div className="task-group-title">已完成 ({completedTasks.length})</div>
+              {completedTasks.map(task => {
+                const claimer = task.claimed_by ? memberMap.get(task.claimed_by) : undefined;
+                return (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    claimer={claimer}
+                    isCurrentUser={task.claimed_by === currentMemberId}
+                    onClaim={() => {}}
+                    onComplete={() => {}}
+                    canClaim={false}
+                  />
+                );
+              })}
             </>
           )}
         </div>
-      ) : (
-        <VirtualizedList
-          items={sortedTasks}
-          renderItem={renderTask}
-          itemHeight={80}
-          gap={12}
-        />
       )}
-    </>
+
+      <ConfirmDialog
+        open={dialog.open}
+        title={dialog.title}
+        content={dialog.content}
+        confirmText={dialog.isComplete ? '确认完成' : '确认认领'}
+        cancelText="取消"
+        confirmBtnClass={dialog.isComplete ? 'btn-complete' : 'btn-claim'}
+        onConfirm={handleConfirm}
+        onCancel={() =>
+          setDialog({ open: false, taskId: null, title: '', content: '', isComplete: false })
+        }
+      />
+    </div>
   );
 });
 
 export default TaskList;
-export { TaskItem, RippleButton };

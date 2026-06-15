@@ -923,6 +923,103 @@ body {
   font-size: 1.1rem;
 }
 
+.member-claimed-count {
+  font-size: 0.75rem;
+  color: #1976d2;
+  background-color: #e3f2fd;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.task-group-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #757575;
+  margin: 16px 0 8px;
+  padding-left: 4px;
+}
+
+.task-group-title:first-child {
+  margin-top: 0;
+}
+
+.claimed-tasks-section {
+  margin-bottom: 24px;
+}
+
+.claimed-tasks-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.claimed-task-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background-color: white;
+  box-shadow: var(--shadow);
+  border-left: 4px solid var(--easy);
+  font-size: 0.85rem;
+  transition: var(--transition);
+}
+
+.claimed-task-item.medium {
+  border-left-color: var(--medium);
+}
+
+.claimed-task-item.hard {
+  border-left-color: var(--hard);
+}
+
+.claimed-task-title {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.claimed-task-points {
+  font-weight: 600;
+  color: var(--primary-dark);
+  font-size: 0.8rem;
+}
+
+.reward-member-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.reward-member-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.reward-member-right {
+  text-align: right;
+}
+
+.reward-member-points {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #f57c00;
+}
+
+.reward-member-hint {
+  padding: 16px 24px;
+  margin-bottom: 24px;
+  text-align: center;
+  color: #888;
+  font-size: 0.95rem;
+}
+
 @media (max-width: 768px) {
   .navbar {
     padding: 0 16px;
@@ -980,6 +1077,24 @@ body {
 
   .dialog {
     padding: 20px;
+  }
+
+  .claimed-tasks-list {
+    flex-direction: column;
+  }
+
+  .reward-member-info {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 12px 16px;
+  }
+
+  .reward-member-right {
+    text-align: left;
+  }
+
+  .task-group-title {
+    font-size: 0.85rem;
   }
 }
 
