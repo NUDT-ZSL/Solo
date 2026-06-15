@@ -78,10 +78,10 @@ function clamp(v: number, min: number, max: number): number {
 
 function circleRectCollide(
   cx: number, cy: number, cr: number,
-  rx: number, ry: number, rw: number, rh: number
+  rectLeft: number, rectTop: number, rectWidth: number, rectHeight: number
 ): boolean {
-  const closestX = clamp(cx, rx - rw / 2, rx + rw / 2);
-  const closestY = clamp(cy, ry - rh / 2, ry + rh / 2);
+  const closestX = clamp(cx, rectLeft, rectLeft + rectWidth);
+  const closestY = clamp(cy, rectTop, rectTop + rectHeight);
   const dx = cx - closestX;
   const dy = cy - closestY;
   return dx * dx + dy * dy < cr * cr;
@@ -321,9 +321,11 @@ export class GameEngine {
             const angle2 = angle1 + Math.PI / 2 + rand(-0.3, 0.3);
             const speed1 = newDiameter >= 50 ? rand(40, 80) : rand(80, 140);
             const speed2 = newDiameter >= 50 ? rand(40, 80) : rand(80, 140);
+            const hitX = a.x;
+            const hitY = a.y;
             newAsteroids.push(
-              { x: a.x, y: a.y, vx: Math.cos(angle1) * speed1, vy: Math.sin(angle1) * speed1, diameter: newDiameter },
-              { x: a.x, y: a.y, vx: Math.cos(angle2) * speed2, vy: Math.sin(angle2) * speed2, diameter: newDiameter },
+              { x: hitX, y: hitY, vx: Math.cos(angle1) * speed1, vy: Math.sin(angle1) * speed1, diameter: newDiameter },
+              { x: hitX, y: hitY, vx: Math.cos(angle2) * speed2, vy: Math.sin(angle2) * speed2, diameter: newDiameter },
             );
           }
           this.state.score += a.diameter >= 50 ? 10 : 20;
@@ -342,17 +344,21 @@ export class GameEngine {
     const ship = this.state.ship;
     const shipWidth = ship.size * 1.4;
     const shipHeight = ship.size * 1.6;
+    const shipLeft = ship.x - shipWidth / 2;
+    const shipTop = ship.y - shipHeight / 2;
     for (const a of this.state.asteroids) {
       const asteroidRadius = a.diameter / 2;
-      if (circleRectCollide(a.x, a.y, asteroidRadius, ship.x, ship.y, shipWidth, shipHeight)) {
+      if (circleRectCollide(a.x, a.y, asteroidRadius, shipLeft, shipTop, shipWidth, shipHeight)) {
         ship.exploding = true;
         ship.explodeTimer = 0;
+        const explodeX = ship.x;
+        const explodeY = ship.y;
         for (let i = 0; i < EXPLODE_PARTICLE_COUNT; i++) {
           const angle = rand(0, Math.PI * 2);
           const speed = rand(50, 100);
           this.state.explosionParticles.push({
-            x: ship.x,
-            y: ship.y,
+            x: explodeX,
+            y: explodeY,
             vx: Math.cos(angle) * speed,
             vy: Math.sin(angle) * speed,
             alpha: 1,

@@ -32,11 +32,6 @@ export default function App() {
     return arr;
   }, []);
 
-  const handleGameOver = useCallback((score: number, kills: number, duration: number) => {
-    const nickname = '匿名玩家';
-    addScore(nickname, score, duration, kills);
-  }, []);
-
   const handleGameOverWithNickname = useCallback((nickname: string, score: number, kills: number, duration: number) => {
     addScore(nickname, score, duration, kills);
   }, []);

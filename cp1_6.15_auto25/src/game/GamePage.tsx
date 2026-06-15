@@ -17,6 +17,7 @@ export default function GamePage({ onGameOver, onBack }: GamePageProps) {
   const [finalKills, setFinalKills] = useState(0);
   const [finalDuration, setFinalDuration] = useState(0);
   const rafRef = useRef<number>(0);
+  const lastScoreRef = useRef(0);
 
   const handleGameOver = useCallback((score: number, kills: number, duration: number) => {
     setFinalScore(score);
@@ -25,34 +26,53 @@ export default function GamePage({ onGameOver, onBack }: GamePageProps) {
     setGameEnded(true);
   }, []);
 
-  useEffect(() => {
+  const triggerScoreBounce = useCallback(() => {
+    setScoreBounce(false);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setScoreBounce(true);
+        setTimeout(() => setScoreBounce(false), 200);
+      });
+    });
+  }, []);
+
+  const startGame = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
+    if (engineRef.current) {
+      engineRef.current.stop();
+    }
+    cancelAnimationFrame(rafRef.current);
 
     const engine = new GameEngine(canvas);
     engineRef.current = engine;
     engine.start(handleGameOver);
+    lastScoreRef.current = 0;
 
     const scoreTicker = () => {
       if (engine.getState() && !engine.getState().gameOver) {
         const newScore = engine.getState().score;
-        setDisplayScore((prev) => {
-          if (newScore !== prev) {
-            setScoreBounce(true);
-            setTimeout(() => setScoreBounce(false), 200);
-          }
-          return newScore;
-        });
+        if (newScore !== lastScoreRef.current) {
+          lastScoreRef.current = newScore;
+          setDisplayScore(newScore);
+          triggerScoreBounce();
+        }
       }
       rafRef.current = requestAnimationFrame(scoreTicker);
     };
     rafRef.current = requestAnimationFrame(scoreTicker);
+  }, [handleGameOver, triggerScoreBounce]);
 
+  useEffect(() => {
+    startGame();
     return () => {
-      engine.stop();
+      if (engineRef.current) {
+        engineRef.current.stop();
+      }
       cancelAnimationFrame(rafRef.current);
     };
-  }, [handleGameOver]);
+  }, [startGame]);
 
   const handleSaveAndBack = () => {
     onGameOver(nickname, finalScore, finalKills, finalDuration);
@@ -63,30 +83,7 @@ export default function GamePage({ onGameOver, onBack }: GamePageProps) {
     setGameEnded(false);
     setDisplayScore(0);
     setNickname('');
-    if (engineRef.current) {
-      engineRef.current.stop();
-    }
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const engine = new GameEngine(canvas);
-    engineRef.current = engine;
-    engine.start(handleGameOver);
-
-    cancelAnimationFrame(rafRef.current);
-    const scoreTicker = () => {
-      if (engine.getState() && !engine.getState().gameOver) {
-        const newScore = engine.getState().score;
-        setDisplayScore((prev) => {
-          if (newScore !== prev) {
-            setScoreBounce(true);
-            setTimeout(() => setScoreBounce(false), 200);
-          }
-          return newScore;
-        });
-      }
-      rafRef.current = requestAnimationFrame(scoreTicker);
-    };
-    rafRef.current = requestAnimationFrame(scoreTicker);
+    startGame();
   };
 
   return (
