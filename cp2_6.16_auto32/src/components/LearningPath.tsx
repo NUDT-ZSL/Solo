@@ -213,27 +213,18 @@ export default function LearningPath({ nodes, progress, targetNodeId, onProgress
                   </div>
 
                   {index < pathNodes.length - 1 && (
-                    <svg width="60" height="40" style={{ flexShrink: 0 }}>
-                      <defs>
-                        <marker
-                          id={`arrowhead-${node.id}`}
-                          markerWidth="12"
-                          markerHeight="12"
-                          refX="10"
-                          refY="6"
-                          orient="auto"
-                        >
-                          <polygon points="0 0, 12 6, 0 12" fill="#757575" />
-                        </marker>
-                      </defs>
+                    <svg width="60" height="40" style={{ flexShrink: 0, overflow: 'visible' }}>
                       <line
                         x1="0"
                         y1="20"
-                        x2="48"
+                        x2="44"
                         y2="20"
                         stroke="#757575"
                         strokeWidth="2"
-                        markerEnd={`url(#arrowhead-${node.id})`}
+                      />
+                      <polygon
+                        points="44,14 56,20 44,26"
+                        fill="#757575"
                       />
                     </svg>
                   )}

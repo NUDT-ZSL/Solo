@@ -1,5 +1,4 @@
-import { Low } from 'lowdb';
-import { JSONFile } from 'lowdb/node';
+import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 
@@ -27,39 +26,52 @@ export interface ProgressRecord {
   completedAt: string | null;
 }
 
-interface DatabaseData {
-  knowledge_nodes: KnowledgeNode[];
-  learning_paths: LearningPath[];
-  progress_records: ProgressRecord[];
-}
+let db: Database.Database;
 
-const defaultData: DatabaseData = {
-  knowledge_nodes: [],
-  learning_paths: [],
-  progress_records: [],
-};
-
-let db: Low<DatabaseData>;
-
-export async function initDatabase() {
+export function initDatabase() {
   const dbDir = path.join(__dirname, '..');
   if (!fs.existsSync(dbDir)) {
     fs.mkdirSync(dbDir, { recursive: true });
   }
-  const dbPath = path.join(dbDir, 'learning.json');
-  const adapter = new JSONFile<DatabaseData>(dbPath);
-  db = new Low(adapter, defaultData);
+  const dbPath = path.join(dbDir, 'learning.db');
+  db = new Database(dbPath);
 
-  await db.read();
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS knowledge_nodes (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL,
+      prerequisites TEXT NOT NULL,
+      x REAL DEFAULT 0,
+      y REAL DEFAULT 0
+    );
 
-  if (db.data.knowledge_nodes.length === 0) {
-    await seedData();
+    CREATE TABLE IF NOT EXISTS learning_paths (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      nodeIds TEXT NOT NULL,
+      progress REAL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS progress_records (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      nodeId TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'not_started',
+      completedAt TEXT,
+      UNIQUE(userId, nodeId)
+    );
+  `);
+
+  const existing = db.prepare('SELECT COUNT(*) as count FROM knowledge_nodes').get() as { count: number };
+  if (existing.count === 0) {
+    seedData();
   }
 
   return db;
 }
 
-async function seedData() {
+function seedData() {
   const nodes: Omit<KnowledgeNode, 'x' | 'y'>[] = [
     { id: 'js', name: 'JavaScript', category: '编程', prerequisites: [] },
     { id: 'html', name: 'HTML', category: '编程', prerequisites: [] },
@@ -78,69 +90,73 @@ async function seedData() {
   const radius = 200;
 
   const userId = 'user_1';
-  const progressRecords: ProgressRecord[] = [];
 
-  for (let i = 0; i < nodes.length; i++) {
-    const angle = (i / nodes.length) * Math.PI * 2;
-    const x = centerX + Math.cos(angle) * radius;
-    const y = centerY + Math.sin(angle) * radius;
-    db.data.knowledge_nodes.push({
-      ...nodes[i],
-      x,
-      y,
-    });
-    progressRecords.push({
-      id: `pr_${userId}_${nodes[i].id}`,
-      userId,
-      nodeId: nodes[i].id,
-      status: 'not_started',
-      completedAt: null,
-    });
+  const insertNode = db.prepare(
+    'INSERT INTO knowledge_nodes (id, name, category, prerequisites, x, y) VALUES (?, ?, ?, ?, ?, ?)'
+  );
+  const insertProgress = db.prepare(
+    'INSERT OR IGNORE INTO progress_records (id, userId, nodeId, status) VALUES (?, ?, ?, ?)'
+  );
+
+  const insertMany = db.transaction(() => {
+    for (let i = 0; i < nodes.length; i++) {
+      const angle = (i / nodes.length) * Math.PI * 2;
+      const x = centerX + Math.cos(angle) * radius;
+      const y = centerY + Math.sin(angle) * radius;
+      insertNode.run(
+        nodes[i].id,
+        nodes[i].name,
+        nodes[i].category,
+        JSON.stringify(nodes[i].prerequisites),
+        x,
+        y
+      );
+    }
+
+    for (const node of nodes) {
+      insertProgress.run(`pr_${userId}_${node.id}`, userId, node.id, 'not_started');
+    }
+  });
+
+  insertMany();
+}
+
+export function getAllNodes(): KnowledgeNode[] {
+  const rows = db.prepare('SELECT * FROM knowledge_nodes').all() as any[];
+  return rows.map((row) => ({
+    ...row,
+    prerequisites: JSON.parse(row.prerequisites),
+  }));
+}
+
+export function updateNodePosition(id: string, x: number, y: number) {
+  db.prepare('UPDATE knowledge_nodes SET x = ?, y = ? WHERE id = ?').run(x, y, id);
+}
+
+export function createNode(node: KnowledgeNode) {
+  db.prepare(
+    'INSERT INTO knowledge_nodes (id, name, category, prerequisites, x, y) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(node.id, node.name, node.category, JSON.stringify(node.prerequisites), node.x, node.y);
+}
+
+export function updateNode(id: string, updates: Partial<KnowledgeNode>) {
+  const fields: string[] = [];
+  const values: any[] = [];
+  for (const [key, value] of Object.entries(updates)) {
+    if (key === 'id') continue;
+    fields.push(`${key} = ?`);
+    values.push(key === 'prerequisites' ? JSON.stringify(value) : value);
   }
-
-  db.data.progress_records.push(...progressRecords);
-  await db.write();
+  values.push(id);
+  db.prepare(`UPDATE knowledge_nodes SET ${fields.join(', ')} WHERE id = ?`).run(values as any);
 }
 
-export async function getAllNodes(): Promise<KnowledgeNode[]> {
-  await db.read();
-  return db.data.knowledge_nodes;
+export function deleteNode(id: string) {
+  db.prepare('DELETE FROM knowledge_nodes WHERE id = ?').run(id);
 }
 
-export async function updateNodePosition(id: string, x: number, y: number) {
-  await db.read();
-  const node = db.data.knowledge_nodes.find(n => n.id === id);
-  if (node) {
-    node.x = x;
-    node.y = y;
-    await db.write();
-  }
-}
-
-export async function createNode(node: KnowledgeNode) {
-  await db.read();
-  db.data.knowledge_nodes.push(node);
-  await db.write();
-}
-
-export async function updateNode(id: string, updates: Partial<KnowledgeNode>) {
-  await db.read();
-  const node = db.data.knowledge_nodes.find(n => n.id === id);
-  if (node) {
-    Object.assign(node, updates);
-    await db.write();
-  }
-}
-
-export async function deleteNode(id: string) {
-  await db.read();
-  db.data.knowledge_nodes = db.data.knowledge_nodes.filter(n => n.id !== id);
-  await db.write();
-}
-
-export async function findShortestPath(startId: string | null, targetId: string): Promise<string[]> {
-  await db.read();
-  const nodes = db.data.knowledge_nodes;
+export function findShortestPath(startId: string | null, targetId: string): string[] {
+  const nodes = getAllNodes();
   const nodeMap = new Map(nodes.map(n => [n.id, n]));
   const target = nodeMap.get(targetId);
   if (!target) return [];
@@ -197,77 +213,55 @@ export async function findShortestPath(startId: string | null, targetId: string)
   return [];
 }
 
-export async function getProgressByUser(userId: string): Promise<ProgressRecord[]> {
-  await db.read();
-  return db.data.progress_records.filter(p => p.userId === userId);
+export function getProgressByUser(userId: string): ProgressRecord[] {
+  return db.prepare('SELECT * FROM progress_records WHERE userId = ?').all(userId) as ProgressRecord[];
 }
 
-export async function updateProgress(userId: string, nodeId: string, status: 'completed' | 'in_progress' | 'not_started') {
-  await db.read();
-  const record = db.data.progress_records.find(p => p.userId === userId && p.nodeId === nodeId);
+export function updateProgress(userId: string, nodeId: string, status: 'completed' | 'in_progress' | 'not_started') {
   const completedAt = status === 'completed' ? new Date().toISOString() : null;
-  if (record) {
-    record.status = status;
-    record.completedAt = completedAt;
-  } else {
-    db.data.progress_records.push({
-      id: `pr_${userId}_${nodeId}`,
-      userId,
-      nodeId,
-      status,
-      completedAt,
-    });
-  }
-  await db.write();
-  await updatePathProgress(userId);
+  db.prepare(
+    'INSERT INTO progress_records (id, userId, nodeId, status, completedAt) VALUES (?, ?, ?, ?, ?) ' +
+    'ON CONFLICT(userId, nodeId) DO UPDATE SET status = excluded.status, completedAt = excluded.completedAt'
+  ).run(`pr_${userId}_${nodeId}`, userId, nodeId, status, completedAt);
+
+  updatePathProgress(userId);
 }
 
-async function updatePathProgress(userId: string) {
-  await db.read();
-  const paths = db.data.learning_paths.filter(p => p.userId === userId);
+function updatePathProgress(userId: string) {
+  const paths = db.prepare('SELECT * FROM learning_paths WHERE userId = ?').all(userId) as any[];
   for (const path of paths) {
-    const progress = db.data.progress_records.filter(
-      p => p.userId === userId && path.nodeIds.includes(p.nodeId)
-    );
-    const completed = progress.filter(p => p.status === 'completed').length;
-    const progressPercent = path.nodeIds.length > 0 ? (completed / path.nodeIds.length) * 100 : 0;
-    path.progress = progressPercent;
+    const nodeIds = JSON.parse(path.nodeIds);
+    const placeholders = nodeIds.map(() => '?').join(',');
+    const progress = db.prepare(
+      `SELECT status FROM progress_records WHERE userId = ? AND nodeId IN (${placeholders})`
+    ).all(userId, ...nodeIds) as { status: string }[];
+    const completed = progress.filter((p) => p.status === 'completed').length;
+    const progressPercent = nodeIds.length > 0 ? (completed / nodeIds.length) * 100 : 0;
+    db.prepare('UPDATE learning_paths SET progress = ? WHERE id = ?').run(progressPercent, path.id);
   }
-  await db.write();
 }
 
-export async function createLearningPath(userId: string, nodeIds: string[]) {
-  await db.read();
+export function createLearningPath(userId: string, nodeIds: string[]) {
   const id = `path_${userId}_${Date.now()}`;
-  const learningPath: LearningPath = {
-    id,
-    userId,
-    nodeIds,
-    progress: 0,
-  };
-  db.data.learning_paths.push(learningPath);
-  await db.write();
-  return learningPath;
+  db.prepare(
+    'INSERT INTO learning_paths (id, userId, nodeIds, progress) VALUES (?, ?, ?, ?)'
+  ).run(id, userId, JSON.stringify(nodeIds), 0);
+  return { id, userId, nodeIds, progress: 0 };
 }
 
-export async function getLearningPaths(userId: string): Promise<LearningPath[]> {
-  await db.read();
-  return db.data.learning_paths.filter(p => p.userId === userId);
+export function getLearningPaths(userId: string): LearningPath[] {
+  const rows = db.prepare('SELECT * FROM learning_paths WHERE userId = ?').all(userId) as any[];
+  return rows.map((row) => ({
+    ...row,
+    nodeIds: JSON.parse(row.nodeIds),
+  }));
 }
 
-export async function getRecentCompleted(userId: string, limit: number = 5) {
-  await db.read();
-  const progress = db.data.progress_records
-    .filter(p => p.userId === userId && p.status === 'completed')
-    .sort((a, b) => new Date(b.completedAt!).getTime() - new Date(a.completedAt!).getTime())
-    .slice(0, limit);
-
-  return progress.map(p => {
-    const node = db.data.knowledge_nodes.find(n => n.id === p.nodeId);
-    return {
-      ...p,
-    name: node?.name || '',
-    category: node?.category || '',
-    };
-  });
+export function getRecentCompleted(userId: string, limit: number = 5) {
+  return db.prepare(
+    'SELECT pr.*, kn.name, kn.category FROM progress_records pr ' +
+    'JOIN knowledge_nodes kn ON pr.nodeId = kn.id ' +
+    'WHERE pr.userId = ? AND pr.status = ? ' +
+    'ORDER BY pr.completedAt DESC LIMIT ?'
+  ).all(userId, 'completed', limit);
 }

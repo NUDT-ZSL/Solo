@@ -33,6 +33,8 @@ export default function MapGraph({ nodes, progress, onNodeClick, onNodesChange }
   const animationRef = useRef<number>(0);
   const lastPositionRef = useRef<{ x: number; y: number } | null>(null);
   const progressMap = useRef<Map<string, string>>(new Map());
+  const dragStartPos = useRef<{ x: number; y: number } | null>(null);
+  const hasMoved = useRef(false);
 
   useEffect(() => {
     progressMap.current = new Map(progress.map(p => [p.nodeId, p.status]));
@@ -59,12 +61,13 @@ export default function MapGraph({ nodes, progress, onNodeClick, onNodesChange }
       if (!state) continue;
       const dx = x - state.x;
       const dy = y - state.y;
-      if (dx * dx + dy * dy <= NODE_RADIUS * NODE_RADIUS) {
+      const radius = hoveredNode === node.id ? NODE_RADIUS * HOVER_SCALE : NODE_RADIUS;
+      if (dx * dx + dy * dy <= radius * radius) {
         return node;
       }
     }
     return null;
-  }, [nodes]);
+  }, [nodes, hoveredNode]);
 
   const savePosition = useCallback((nodeId: string, x: number, y: number) => {
     fetch(`/api/nodes/${nodeId}/position`, {
@@ -191,14 +194,26 @@ export default function MapGraph({ nodes, progress, onNodeClick, onNodesChange }
         if (!state) continue;
 
         const isHovered = hoveredNode === node.id;
-        const radius = isHovered ? NODE_RADIUS * HOVER_SCALE : NODE_RADIUS;
+        const isDragging = draggingNode === node.id;
+        const radius = (isHovered || isDragging) ? NODE_RADIUS * HOVER_SCALE : NODE_RADIUS;
         const color = CATEGORY_COLORS[node.category] || '#64b5f6';
         const status = progressMap.current.get(node.id);
 
-        if (isHovered) {
+        if (isHovered || isDragging) {
+          const gradient = ctx.createRadialGradient(
+            state.x, state.y, radius,
+            state.x, state.y, radius + 18
+          );
+          gradient.addColorStop(0, 'rgba(100, 181, 246, 0.6)');
+          gradient.addColorStop(1, 'rgba(100, 181, 246, 0)');
+          ctx.beginPath();
+          ctx.fillStyle = gradient;
+          ctx.arc(state.x, state.y, radius + 18, 0, Math.PI * 2);
+          ctx.fill();
+
           ctx.beginPath();
           ctx.fillStyle = 'rgba(100, 181, 246, 0.3)';
-          ctx.arc(state.x, state.y, radius + 12, 0, Math.PI * 2);
+          ctx.arc(state.x, state.y, radius + 10, 0, Math.PI * 2);
           ctx.fill();
         }
 
@@ -248,6 +263,14 @@ export default function MapGraph({ nodes, progress, onNodeClick, onNodesChange }
         state.vy = 0;
       }
       lastPositionRef.current = { x, y };
+
+      if (dragStartPos.current) {
+        const dx = Math.abs(x - dragStartPos.current.x);
+        const dy = Math.abs(y - dragStartPos.current.y);
+        if (dx > 3 || dy > 3) {
+          hasMoved.current = true;
+        }
+      }
     } else {
       const node = getNodeAt(x, y);
       setHoveredNode(node ? node.id : null);
@@ -264,19 +287,34 @@ export default function MapGraph({ nodes, progress, onNodeClick, onNodesChange }
     if (node) {
       setDraggingNode(node.id);
       lastPositionRef.current = { x, y };
+      dragStartPos.current = { x, y };
+      hasMoved.current = false;
     }
   }, [getNodeAt]);
 
   const handleMouseUp = useCallback(() => {
-    if (draggingNode && lastPositionRef.current) {
+    if (draggingNode && lastPositionRef.current && hasMoved.current) {
       savePosition(draggingNode, lastPositionRef.current.x, lastPositionRef.current.y);
     }
     setDraggingNode(null);
     lastPositionRef.current = null;
+    dragStartPos.current = null;
+    hasMoved.current = false;
+  }, [draggingNode, savePosition]);
+
+  const handleMouseLeave = useCallback(() => {
+    if (draggingNode && lastPositionRef.current && hasMoved.current) {
+      savePosition(draggingNode, lastPositionRef.current.x, lastPositionRef.current.y);
+    }
+    setDraggingNode(null);
+    setHoveredNode(null);
+    lastPositionRef.current = null;
+    dragStartPos.current = null;
+    hasMoved.current = false;
   }, [draggingNode, savePosition]);
 
   const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (draggingNode) return;
+    if (hasMoved.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -286,7 +324,7 @@ export default function MapGraph({ nodes, progress, onNodeClick, onNodesChange }
     if (node) {
       onNodeClick(node.id);
     }
-  }, [draggingNode, getNodeAt, onNodeClick]);
+  }, [getNodeAt, onNodeClick]);
 
   return (
     <div>
@@ -326,7 +364,7 @@ export default function MapGraph({ nodes, progress, onNodeClick, onNodesChange }
           onMouseMove={handleMouseMove}
           onMouseDown={handleMouseDown}
           onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
           onClick={handleClick}
           style={{ display: 'block' }}
         />

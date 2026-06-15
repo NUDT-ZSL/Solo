@@ -168,10 +168,11 @@ app.get('/api/report', async (req, res) => {
   }
 });
 
-initDatabase().then(() => {
+try {
+  initDatabase();
   app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
   });
-}).catch((error) => {
+} catch (error: any) {
   console.error('Failed to initialize database:', error);
-});
+}
