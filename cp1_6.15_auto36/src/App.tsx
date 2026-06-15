@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { v4 as uuidv4 } from 'uuid';
 import Canvas from './components/Canvas';
 import Toolbar from './components/Toolbar';
-import { Tool, Shape, User, Point, HistoryState, Toast, ToastType } from './types';
+import { Tool, Shape, User, Point, HistoryState, Toast, ToastType, RectangleShape, CircleShape, StickyShape } from './types';
 import { mockUsers, colorPalette } from './mock/data';
+import { TrashIcon, UndoIcon, RedoIcon, DownloadIcon } from './components/Icons';
 
 const App: React.FC = () => {
   const [tool, setTool] = useState<Tool>('select');
@@ -22,13 +23,20 @@ const App: React.FC = () => {
   const [nextZIndex, setNextZIndex] = useState(10);
   const [animating, setAnimating] = useState(false);
   const [clearAnimating, setClearAnimating] = useState(false);
+  const [exportMode, setExportMode] = useState(false);
 
   const socketRef = useRef<Socket | null>(null);
   const currentUserRef = useRef<User>(mockUsers[0]);
+  const historyIndexRef = useRef(-1);
+  const initializedRef = useRef(false);
 
   const [history, setHistory] = useState<HistoryState[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const MAX_HISTORY = 50;
+
+  useEffect(() => {
+    historyIndexRef.current = historyIndex;
+  }, [historyIndex]);
 
   const showToast = useCallback((message: string, type: ToastType = 'info') => {
     const id = uuidv4();
@@ -42,17 +50,21 @@ const App: React.FC = () => {
   }, []);
 
   const pushHistory = useCallback((newShapes: Shape[]) => {
+    const currentIndex = historyIndexRef.current;
     setHistory((prev) => {
-      const trimmed = prev.slice(0, historyIndex + 1);
+      const trimmed = prev.slice(0, currentIndex + 1);
       const next = [...trimmed, { shapes: JSON.parse(JSON.stringify(newShapes)) }];
-      if (next.length > MAX_HISTORY) {
+      while (next.length > MAX_HISTORY) {
         next.shift();
-        return next;
       }
       return next;
     });
-    setHistoryIndex((prev) => Math.min(prev + 1, MAX_HISTORY - 1));
-  }, [historyIndex]);
+    setHistoryIndex((prev) => {
+      const newIdx = Math.min(prev + 1, MAX_HISTORY - 1);
+      historyIndexRef.current = newIdx;
+      return newIdx;
+    });
+  }, []);
 
   const undo = useCallback(() => {
     if (historyIndex <= 0) {
@@ -96,9 +108,11 @@ const App: React.FC = () => {
     setShowClearModal(false);
     setClearAnimating(true);
     setTimeout(() => {
-      handleShapesChange([]);
+      const newShapes: Shape[] = [];
+      handleShapesChange(newShapes);
       setClearAnimating(false);
       setSelectedIds([]);
+      setNextZIndex(1);
       if (socketRef.current) {
         socketRef.current.emit('clear-canvas', { userId: currentUserRef.current.id });
       }
@@ -112,7 +126,7 @@ const App: React.FC = () => {
         e.preventDefault();
         undo();
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'z' && e.shiftKey)) {
         e.preventDefault();
         redo();
       }
@@ -120,8 +134,9 @@ const App: React.FC = () => {
         e.preventDefault();
         redo();
       }
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedIds.length > 0 && document.activeElement?.tagName !== 'TEXTAREA' && document.activeElement?.tagName !== 'INPUT') {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0) {
+        const tag = (document.activeElement?.tagName || '').toLowerCase();
+        if (tag !== 'textarea' && tag !== 'input') {
           e.preventDefault();
           const newShapes = shapes.filter((s) => !selectedIds.includes(s.id));
           handleShapesChange(newShapes);
@@ -131,12 +146,37 @@ const App: React.FC = () => {
           setSelectedIds([]);
         }
       }
+      const tag = (document.activeElement?.tagName || '').toLowerCase();
+      if (tag === 'textarea' || tag === 'input') return;
+      switch (e.key.toLowerCase()) {
+        case 'v':
+          setTool('select');
+          break;
+        case 'p':
+          setTool('pen');
+          break;
+        case 'r':
+          setTool('rectangle');
+          break;
+        case 'c':
+          setTool('circle');
+          break;
+        case 't':
+          setTool('sticky');
+          break;
+        case 'e':
+          setTool('eraser');
+          break;
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [undo, redo, selectedIds, shapes, handleShapesChange]);
 
   useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
     fetch('/api/shapes')
       .then((r) => r.json())
       .then((data) => {
@@ -155,24 +195,32 @@ const App: React.FC = () => {
 
   useEffect(() => {
     try {
-      const socket = io('http://localhost:3001', {
+      const socket = io('http://localhost:3002', {
         transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionDelay: 1000,
       });
       socketRef.current = socket;
 
       socket.on('connect', () => {
-        console.log('Connected to socket server');
+        console.log('[Socket] Connected to collaboration server');
+      });
+
+      socket.on('user-joined', (data: { user: User; allUsers: User[] }) => {
+        currentUserRef.current = data.user;
+        setUsers(data.allUsers);
       });
 
       socket.on('shape-drawn', (data: { shape: Shape }) => {
         setShapes((prev) => {
           const idx = prev.findIndex((s) => s.id === data.shape.id);
+          const remoteShape = { ...data.shape, isRemote: true };
           if (idx >= 0) {
             const next = [...prev];
-            next[idx] = { ...data.shape, isRemote: true };
+            next[idx] = remoteShape;
             return next;
           }
-          return [...prev, { ...data.shape, isRemote: true }];
+          return [...prev, remoteShape];
         });
       });
 
@@ -184,8 +232,8 @@ const App: React.FC = () => {
 
       socket.on('batch-updated', (data: { updates: { id: string; updates: Partial<Shape> }[] }) => {
         setShapes((prev) => {
-          const map = new Map(data.updates.map((u) => [u.id, u.updates]));
-          return prev.map((s) => (map.has(s.id) ? { ...s, ...(map.get(s.id) as Partial<Shape>), isRemote: true } : s));
+          const updateMap = new Map(data.updates.map((u) => [u.id, u.updates]));
+          return prev.map((s) => (updateMap.has(s.id) ? { ...s, ...(updateMap.get(s.id) as Partial<Shape>), isRemote: true } : s));
         });
       });
 
@@ -199,6 +247,7 @@ const App: React.FC = () => {
           setShapes([]);
           setClearAnimating(false);
           setSelectedIds([]);
+          setNextZIndex(1);
         }, 300);
       });
 
@@ -213,55 +262,48 @@ const App: React.FC = () => {
       });
 
       socket.on('disconnect', () => {
-        console.log('Disconnected from socket server');
+        console.log('[Socket] Disconnected from server');
       });
 
-      const interval = setInterval(() => {
-        const onlineUsers = users.filter((u) => u.isOnline && u.id !== 'user-1');
-        if (onlineUsers.length > 0) {
-          setUsers((prev) =>
-            prev.map((u) => {
-              if (u.id !== 'user-1' && u.isOnline) {
-                return {
-                  ...u,
-                  cursor: {
-                    x: u.cursor.x + (Math.random() - 0.5) * 60,
-                    y: u.cursor.y + (Math.random() - 0.5) * 60,
-                  },
-                };
-              }
-              return u;
-            })
-          );
-        }
-      }, 100);
+      const simulateInterval = setInterval(() => {
+        setUsers((prev) =>
+          prev.map((u) => {
+            if (u.id === 'user-1') return u;
+            if (!u.isOnline) return u;
+            return {
+              ...u,
+              cursor: {
+                x: Math.max(50, Math.min(1500, u.cursor.x + (Math.random() - 0.5) * 50)),
+                y: Math.max(50, Math.min(1000, u.cursor.y + (Math.random() - 0.5) * 50)),
+              },
+            };
+          })
+        );
+      }, 90);
 
       return () => {
-        clearInterval(interval);
+        clearInterval(simulateInterval);
         socket.disconnect();
       };
     } catch (e) {
-      console.log('Socket connection failed, running in local mode');
+      console.log('[Socket] Running in local-only mode');
     }
-  }, [users]);
+  }, []);
 
-  const emitShape = useCallback(
-    (shape: Shape) => {
-      if (socketRef.current) {
-        socketRef.current.emit('draw', { shape, userId: currentUserRef.current.id });
-      }
-    },
-    []
-  );
+  const emitShape = useCallback((shape: Shape) => {
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('draw', { shape, userId: currentUserRef.current.id });
+    }
+  }, []);
 
   const emitUpdate = useCallback((id: string, updates: Partial<Shape>) => {
-    if (socketRef.current) {
+    if (socketRef.current?.connected) {
       socketRef.current.emit('update-shape', { id, updates, userId: currentUserRef.current.id });
     }
   }, []);
 
   const emitBatchUpdate = useCallback((updates: { id: string; updates: Partial<Shape> }[]) => {
-    if (socketRef.current) {
+    if (socketRef.current?.connected) {
       socketRef.current.emit('batch-update', {
         updates: updates.map((u) => ({ ...u, userId: currentUserRef.current.id })),
       });
@@ -269,13 +311,13 @@ const App: React.FC = () => {
   }, []);
 
   const emitDelete = useCallback((ids: string[]) => {
-    if (socketRef.current) {
+    if (socketRef.current?.connected) {
       socketRef.current.emit('delete-shapes', { ids, userId: currentUserRef.current.id });
     }
   }, []);
 
   const emitCursorMove = useCallback((position: Point) => {
-    if (socketRef.current) {
+    if (socketRef.current?.connected) {
       socketRef.current.emit('cursor-move', { userId: currentUserRef.current.id, position });
     }
   }, []);
@@ -285,6 +327,193 @@ const App: React.FC = () => {
     setNextZIndex((n) => n + 1);
     return z;
   }, [nextZIndex]);
+
+  const handleUpdateShape = useCallback(
+    (id: string, updates: Partial<Shape>) => {
+      const newShapes = shapes.map((s) => (s.id === id ? { ...s, ...updates } : s));
+      handleShapesChange(newShapes);
+      emitUpdate(id, updates);
+    },
+    [shapes, handleShapesChange, emitUpdate]
+  );
+
+  const handleLayerMoveUp = useCallback(() => {
+    if (selectedIds.length === 0) return;
+    const sorted = [...shapes].sort((a, b) => a.zIndex - b.zIndex);
+    const newShapes = [...shapes];
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      if (selectedIds.includes(sorted[i].id)) {
+        if (i < sorted.length - 1) {
+          const swapId = sorted[i + 1].id;
+          const i1 = newShapes.findIndex((s) => s.id === sorted[i].id);
+          const i2 = newShapes.findIndex((s) => s.id === swapId);
+          if (i1 >= 0 && i2 >= 0) {
+            const tmp = newShapes[i1].zIndex;
+            newShapes[i1] = { ...newShapes[i1], zIndex: newShapes[i2].zIndex };
+            newShapes[i2] = { ...newShapes[i2], zIndex: tmp };
+          }
+        }
+      }
+    }
+    handleShapesChange(newShapes);
+    emitBatchUpdate(
+      newShapes
+        .filter((s) => selectedIds.includes(s.id))
+        .map((s) => ({ id: s.id, updates: { zIndex: s.zIndex } }))
+    );
+    showToast('图层已上移', 'success');
+  }, [shapes, selectedIds, handleShapesChange, emitBatchUpdate, showToast]);
+
+  const handleLayerMoveDown = useCallback(() => {
+    if (selectedIds.length === 0) return;
+    const sorted = [...shapes].sort((a, b) => a.zIndex - b.zIndex);
+    const newShapes = [...shapes];
+    for (let i = 0; i < sorted.length; i++) {
+      if (selectedIds.includes(sorted[i].id)) {
+        if (i > 0) {
+          const swapId = sorted[i - 1].id;
+          const i1 = newShapes.findIndex((s) => s.id === sorted[i].id);
+          const i2 = newShapes.findIndex((s) => s.id === swapId);
+          if (i1 >= 0 && i2 >= 0) {
+            const tmp = newShapes[i1].zIndex;
+            newShapes[i1] = { ...newShapes[i1], zIndex: newShapes[i2].zIndex };
+            newShapes[i2] = { ...newShapes[i2], zIndex: tmp };
+          }
+        }
+      }
+    }
+    handleShapesChange(newShapes);
+    emitBatchUpdate(
+      newShapes
+        .filter((s) => selectedIds.includes(s.id))
+        .map((s) => ({ id: s.id, updates: { zIndex: s.zIndex } }))
+    );
+    showToast('图层已下移', 'success');
+  }, [shapes, selectedIds, handleShapesChange, emitBatchUpdate, showToast]);
+
+  const handleLayerBringToFront = useCallback(() => {
+    if (selectedIds.length === 0) return;
+    let z = nextZIndex;
+    const newShapes = shapes.map((s) => {
+      if (selectedIds.includes(s.id)) {
+        return { ...s, zIndex: z++ };
+      }
+      return s;
+    });
+    setNextZIndex(z);
+    handleShapesChange(newShapes);
+    emitBatchUpdate(
+      newShapes
+        .filter((s) => selectedIds.includes(s.id))
+        .map((s) => ({ id: s.id, updates: { zIndex: s.zIndex } }))
+    );
+    showToast('图层已置顶', 'success');
+  }, [shapes, selectedIds, nextZIndex, handleShapesChange, emitBatchUpdate, showToast]);
+
+  const handleLayerSendToBack = useCallback(() => {
+    if (selectedIds.length === 0) return;
+    let z = -selectedIds.length;
+    const newShapes = shapes.map((s) => {
+      if (selectedIds.includes(s.id)) {
+        return { ...s, zIndex: z++ };
+      }
+      return s;
+    });
+    handleShapesChange(newShapes);
+    emitBatchUpdate(
+      newShapes
+        .filter((s) => selectedIds.includes(s.id))
+        .map((s) => ({ id: s.id, updates: { zIndex: s.zIndex } }))
+    );
+    showToast('图层已置底', 'success');
+  }, [shapes, selectedIds, handleShapesChange, emitBatchUpdate, showToast]);
+
+  const handleExport = useCallback(
+    (bgType: 'transparent' | 'white') => {
+      setExportMode(true);
+
+      setTimeout(() => {
+        try {
+          const svg = document.querySelector('.svg-canvas') as SVGSVGElement | null;
+          if (!svg || shapes.length === 0) {
+            showToast('画布为空，无需导出', 'info');
+            setExportMode(false);
+            return;
+          }
+
+          const bounds = getShapesBounds(shapes);
+          const padding = 40;
+          const totalW = Math.max(bounds.maxX - bounds.minX + padding * 2, 400);
+          const totalH = Math.max(bounds.maxY - bounds.minY + padding * 2, 300);
+
+          const svgClone = svg.cloneNode(true) as SVGSVGElement;
+          const selectionBoxes = svgClone.querySelectorAll('.selection-box, .selection-handle');
+          selectionBoxes.forEach((el) => el.remove());
+          svgClone.setAttribute('width', String(10000));
+          svgClone.setAttribute('height', String(10000));
+          svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+
+          const serializer = new XMLSerializer();
+          const svgString = serializer.serializeToString(svgClone);
+          const svgBlob = new Blob(['<?xml version="1.0" standalone="no"?>\r\n' + svgString], {
+            type: 'image/svg+xml;charset=utf-8',
+          });
+          const url = URL.createObjectURL(svgBlob);
+
+          const canvas = document.createElement('canvas');
+          const dpr = window.devicePixelRatio || 2;
+          canvas.width = Math.ceil(totalW * dpr);
+          canvas.height = Math.ceil(totalH * dpr);
+          const ctx = canvas.getContext('2d')!;
+          ctx.scale(dpr, dpr);
+
+          if (bgType === 'white') {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, totalW, totalH);
+          }
+
+          const img = new Image();
+          img.onload = () => {
+            try {
+              ctx.drawImage(img, -bounds.minX + padding, -bounds.minY + padding);
+              URL.revokeObjectURL(url);
+
+              const dataUrl = canvas.toDataURL('image/png');
+              const a = document.createElement('a');
+              a.href = dataUrl;
+              a.download = `whiteboard-${Date.now()}.png`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+
+              setShowExportModal(false);
+              setExportMode(false);
+              showToast('导出成功！', 'success');
+            } catch (err) {
+              console.error('Export draw failed:', err);
+              URL.revokeObjectURL(url);
+              setExportMode(false);
+              showToast('导出失败，请重试', 'error');
+            }
+          };
+          img.onerror = () => {
+            console.error('Image load failed');
+            URL.revokeObjectURL(url);
+            setExportMode(false);
+            showToast('导出失败，浏览器不支持该格式', 'error');
+          };
+          img.src = url;
+        } catch (err) {
+          console.error('Export error:', err);
+          setExportMode(false);
+          showToast('导出过程发生错误', 'error');
+        }
+      }, 150);
+    },
+    [shapes, showToast]
+  );
+
+  const onlineUsers = useMemo(() => users.filter((u) => u.isOnline && u.id !== 'user-1'), [users]);
 
   return (
     <div className="app">
@@ -317,7 +546,7 @@ const App: React.FC = () => {
             fillColor={fillColor}
             strokeColor={strokeColor}
             strokeWidth={strokeWidth}
-            users={users.filter((u) => u.isOnline && u.id !== 'user-1')}
+            users={onlineUsers}
             onCursorMove={emitCursorMove}
             onShapeCreated={emitShape}
             onShapeUpdated={emitUpdate}
@@ -327,34 +556,40 @@ const App: React.FC = () => {
             animating={animating}
             clearAnimating={clearAnimating}
             showToast={showToast}
-            exportMode={showExportModal}
+            exportMode={exportMode}
           />
         </div>
 
         <button
           className={`sidebar-toggle ${sidebarCollapsed ? 'hidden' : ''}`}
           onClick={() => setSidebarCollapsed((c) => !c)}
+          title={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
         >
           {sidebarCollapsed ? '◀' : '▶'}
         </button>
 
-        <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''} ${mobileSidebarOpen ? 'mobile-open' : ''}`}>
+        <aside
+          className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''} ${
+            mobileSidebarOpen ? 'mobile-open' : ''
+          }`}
+        >
           <div className="sidebar-header">
-            <span>用户与属性</span>
+            <span>协作面板</span>
             <button
               className="tool-btn"
-              style={{ width: 28, height: 28, fontSize: 14 }}
+              style={{ width: 28, height: 28, fontSize: 18 }}
               onClick={() => {
                 setSidebarCollapsed(true);
                 setMobileSidebarOpen(false);
               }}
+              title="关闭"
             >
               ×
             </button>
           </div>
 
           <div className="user-list">
-            <div className="prop-label" style={{ marginBottom: 8 }}>
+            <div className="prop-label" style={{ marginBottom: 8, fontWeight: 600 }}>
               在线用户 ({users.filter((u) => u.isOnline).length})
             </div>
             {users.map((user) => (
@@ -374,82 +609,23 @@ const App: React.FC = () => {
           </div>
 
           <div className="properties-panel">
-            <div className="prop-label" style={{ marginBottom: 8 }}>
+            <div className="prop-label" style={{ marginBottom: 8, fontWeight: 600 }}>
               属性编辑
             </div>
             {selectedIds.length === 0 ? (
-              <div className="empty-prop">请选择一个图形进行编辑</div>
+              <div className="empty-prop">
+                <div style={{ fontSize: 32, marginBottom: 8, opacity: 0.4 }}>🎨</div>
+                请选择一个图形<br />进行属性编辑
+              </div>
             ) : (
               <PropertiesEditor
                 shapes={shapes}
                 selectedIds={selectedIds}
-                onUpdate={(id, updates) => {
-                  const newShapes = shapes.map((s) => (s.id === id ? { ...s, ...updates } : s));
-                  handleShapesChange(newShapes);
-                  emitUpdate(id, updates);
-                }}
-                onMoveUp={() => {
-                  const sorted = [...shapes].sort((a, b) => a.zIndex - b.zIndex);
-                  const newShapes = [...shapes];
-                  selectedIds.forEach((id) => {
-                    const idx = sorted.findIndex((s) => s.id === id);
-                    if (idx < sorted.length - 1) {
-                      const swap = sorted[idx + 1];
-                      const si = newShapes.findIndex((s) => s.id === id);
-                      const sw = newShapes.findIndex((s) => s.id === swap.id);
-                      if (si >= 0 && sw >= 0) {
-                        const temp = newShapes[si].zIndex;
-                        newShapes[si] = { ...newShapes[si], zIndex: newShapes[sw].zIndex };
-                        newShapes[sw] = { ...newShapes[sw], zIndex: temp };
-                      }
-                    }
-                  });
-                  handleShapesChange(newShapes);
-                  emitBatchUpdate(
-                    newShapes
-                      .filter((s) => selectedIds.includes(s.id))
-                      .map((s) => ({ id: s.id, updates: { zIndex: s.zIndex } }))
-                  );
-                }}
-                onMoveDown={() => {
-                  const sorted = [...shapes].sort((a, b) => a.zIndex - b.zIndex);
-                  const newShapes = [...shapes];
-                  [...selectedIds].reverse().forEach((id) => {
-                    const idx = sorted.findIndex((s) => s.id === id);
-                    if (idx > 0) {
-                      const swap = sorted[idx - 1];
-                      const si = newShapes.findIndex((s) => s.id === id);
-                      const sw = newShapes.findIndex((s) => s.id === swap.id);
-                      if (si >= 0 && sw >= 0) {
-                        const temp = newShapes[si].zIndex;
-                        newShapes[si] = { ...newShapes[si], zIndex: newShapes[sw].zIndex };
-                        newShapes[sw] = { ...newShapes[sw], zIndex: temp };
-                      }
-                    }
-                  });
-                  handleShapesChange(newShapes);
-                  emitBatchUpdate(
-                    newShapes
-                      .filter((s) => selectedIds.includes(s.id))
-                      .map((s) => ({ id: s.id, updates: { zIndex: s.zIndex } }))
-                  );
-                }}
-                onBringToFront={() => {
-                  let z = nextZIndex;
-                  const newShapes = shapes.map((s) => {
-                    if (selectedIds.includes(s.id)) {
-                      return { ...s, zIndex: z++ };
-                    }
-                    return s;
-                  });
-                  setNextZIndex(z);
-                  handleShapesChange(newShapes);
-                  emitBatchUpdate(
-                    newShapes
-                      .filter((s) => selectedIds.includes(s.id))
-                      .map((s) => ({ id: s.id, updates: { zIndex: s.zIndex } }))
-                  );
-                }}
+                onUpdate={handleUpdateShape}
+                onMoveUp={handleLayerMoveUp}
+                onMoveDown={handleLayerMoveDown}
+                onBringToFront={handleLayerBringToFront}
+                onSendToBack={handleLayerSendToBack}
               />
             )}
           </div>
@@ -459,7 +635,7 @@ const App: React.FC = () => {
       <div className="toast-container">
         {toasts.map((toast) => (
           <div key={toast.id} className={`toast ${toast.type} ${!toast.message ? 'leaving' : ''}`}>
-            {toast.message || ' '}
+            {toast.message || '\u00A0'}
           </div>
         ))}
       </div>
@@ -467,8 +643,13 @@ const App: React.FC = () => {
       {showClearModal && (
         <div className="modal-overlay" onClick={() => setShowClearModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-title">确认清空画布</div>
-            <div className="modal-message">此操作将删除画布上所有图形，且无法撤销。确定要继续吗？</div>
+            <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <TrashIcon size={20} />
+              确认清空画布
+            </div>
+            <div className="modal-message">
+              此操作将永久删除画布上所有图形（包含 {shapes.length} 个元素），且不能通过撤销恢复。确定要继续吗？
+            </div>
             <div className="modal-actions">
               <button className="modal-btn cancel" onClick={() => setShowClearModal(false)}>
                 取消
@@ -482,68 +663,30 @@ const App: React.FC = () => {
       )}
 
       {showExportModal && (
-        <ExportModal
-          onClose={() => setShowExportModal(false)}
-          onExport={(bgType) => {
-            const svg = document.querySelector('.svg-canvas') as SVGSVGElement;
-            if (!svg) return;
-
-            const rect = getBoundingRect(shapes);
-            const padding = 40;
-            const w = Math.max(rect.maxX - rect.minX + padding * 2, 400);
-            const h = Math.max(rect.maxY - rect.minY + padding * 2, 300);
-
-            const canvas = document.createElement('canvas');
-            canvas.width = w;
-            canvas.height = h;
-            const ctx = canvas.getContext('2d')!;
-
-            if (bgType === 'white') {
-              ctx.fillStyle = '#ffffff';
-              ctx.fillRect(0, 0, w, h);
-            }
-
-            const svgData = new XMLSerializer().serializeToString(svg);
-            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-            const url = URL.createObjectURL(svgBlob);
-
-            const img = new Image();
-            img.onload = () => {
-              ctx.drawImage(img, -rect.minX + padding, -rect.minY + padding);
-              URL.revokeObjectURL(url);
-
-              const link = document.createElement('a');
-              link.download = `whiteboard-${Date.now()}.png`;
-              link.href = canvas.toDataURL('image/png');
-              link.click();
-
-              setShowExportModal(false);
-              showToast('导出成功', 'success');
-            };
-            img.src = url;
-          }}
-        />
+        <ExportModal onClose={() => setShowExportModal(false)} onExport={handleExport} />
       )}
     </div>
   );
 };
 
-function getBoundingRect(shapes: Shape[]) {
+function getShapesBounds(shapes: Shape[]) {
   let minX = Infinity,
     minY = Infinity,
     maxX = -Infinity,
     maxY = -Infinity;
   shapes.forEach((s) => {
     if (s.type === 'rectangle' || s.type === 'sticky') {
-      minX = Math.min(minX, s.x);
-      minY = Math.min(minY, s.y);
-      maxX = Math.max(maxX, s.x + s.width);
-      maxY = Math.max(maxY, s.y + s.height);
+      const b = { x: s.x, y: s.y, w: s.width, h: s.height };
+      minX = Math.min(minX, b.x);
+      minY = Math.min(minY, b.y);
+      maxX = Math.max(maxX, b.x + b.w);
+      maxY = Math.max(maxY, b.y + b.h);
     } else if (s.type === 'circle') {
-      minX = Math.min(minX, s.x - s.radiusX);
-      minY = Math.min(minY, s.y - s.radiusY);
-      maxX = Math.max(maxX, s.x + s.radiusX);
-      maxY = Math.max(maxY, s.y + s.radiusY);
+      const b = { x: s.x - s.radiusX, y: s.y - s.radiusY, w: s.radiusX * 2, h: s.radiusY * 2 };
+      minX = Math.min(minX, b.x);
+      minY = Math.min(minY, b.y);
+      maxX = Math.max(maxX, b.x + b.w);
+      maxY = Math.max(maxY, b.y + b.h);
     } else if (s.type === 'pen') {
       s.points.forEach((p) => {
         minX = Math.min(minX, p.x);
@@ -566,32 +709,57 @@ interface ExportModalProps {
 
 const ExportModal: React.FC<ExportModalProps> = ({ onClose, onExport }) => {
   const [bgType, setBgType] = useState<'transparent' | 'white'>('transparent');
+  const [exporting, setExporting] = useState(false);
+
+  const doExport = () => {
+    setExporting(true);
+    setTimeout(() => {
+      onExport(bgType);
+    }, 50);
+  };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={!exporting ? onClose : undefined}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-title">导出画布为PNG</div>
-        <div className="prop-label">背景选项</div>
+        <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <DownloadIcon size={20} />
+          导出画布为 PNG 图片
+        </div>
+        <div className="prop-label" style={{ marginTop: 4 }}>
+          选择背景选项
+        </div>
         <div className="export-options">
           <button
             className={`export-option ${bgType === 'transparent' ? 'selected' : ''}`}
             onClick={() => setBgType('transparent')}
+            disabled={exporting}
           >
+            <div style={{ fontSize: 24, marginBottom: 6 }}>🪟</div>
             透明背景
           </button>
           <button
             className={`export-option ${bgType === 'white' ? 'selected' : ''}`}
             onClick={() => setBgType('white')}
+            disabled={exporting}
           >
+            <div style={{ fontSize: 24, marginBottom: 6 }}>⬜</div>
             白色背景
           </button>
         </div>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
+          导出的图片将包含画布上所有可见图形，并自动裁剪到内容区域。
+        </div>
         <div className="modal-actions">
-          <button className="modal-btn cancel" onClick={onClose}>
+          <button className="modal-btn cancel" onClick={onClose} disabled={exporting}>
             取消
           </button>
-          <button className="modal-btn confirm" style={{ backgroundColor: 'var(--primary-color)', color: '#121212' }} onClick={() => onExport(bgType)}>
-            开始导出
+          <button
+            className="modal-btn confirm"
+            style={{ backgroundColor: 'var(--primary-color)', color: '#121212' }}
+            onClick={doExport}
+            disabled={exporting}
+          >
+            {exporting ? '导出中...' : '开始导出'}
           </button>
         </div>
       </div>
@@ -606,6 +774,7 @@ interface PropertiesEditorProps {
   onMoveUp: () => void;
   onMoveDown: () => void;
   onBringToFront: () => void;
+  onSendToBack: () => void;
 }
 
 const PropertiesEditor: React.FC<PropertiesEditorProps> = ({
@@ -615,6 +784,7 @@ const PropertiesEditor: React.FC<PropertiesEditorProps> = ({
   onMoveUp,
   onMoveDown,
   onBringToFront,
+  onSendToBack,
 }) => {
   const selectedShapes = shapes.filter((s) => selectedIds.includes(s.id));
   if (selectedShapes.length === 0) return null;
@@ -638,14 +808,34 @@ const PropertiesEditor: React.FC<PropertiesEditorProps> = ({
             <div
               key={color}
               className="color-swatch"
-              style={{ backgroundColor: color, borderColor: allSameFill && first.fillColor === color ? 'var(--primary-color)' : undefined }}
+              style={{
+                backgroundColor: color,
+                borderColor: allSameFill && first.fillColor === color ? 'var(--primary-color)' : undefined,
+              }}
               onClick={() => applyAll({ fillColor: color })}
             />
           ))}
-          <label className="color-swatch custom" style={{ background: 'linear-gradient(45deg, #f44336, #2196f3, #4caf50)' }}>
+          <label
+            className="color-swatch custom"
+            style={{
+              background: 'linear-gradient(135deg, #ff6b6b 0%, #4ecdc4 50%, #45b7d1 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            title="自定义颜色"
+          >
+            <span style={{ fontSize: 14, color: '#fff', fontWeight: 600, textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>+</span>
             <input
               type="color"
-              style={{ width: 0, height: 0, opacity: 0, position: 'absolute' }}
+              style={{
+                width: 0,
+                height: 0,
+                opacity: 0,
+                position: 'absolute',
+                padding: 0,
+                border: 0,
+              }}
               value={allSameFill && first.fillColor !== 'transparent' ? first.fillColor : '#ffffff'}
               onChange={(e) => applyAll({ fillColor: e.target.value })}
             />
@@ -653,14 +843,15 @@ const PropertiesEditor: React.FC<PropertiesEditorProps> = ({
           <div
             className="color-swatch"
             style={{
-              backgroundColor: 'transparent',
-              backgroundImage: 'linear-gradient(45deg, #555 25%, transparent 25%), linear-gradient(-45deg, #555 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #555 75%), linear-gradient(-45deg, transparent 75%, #555 75%)',
+              backgroundColor: '#fff',
+              backgroundImage:
+                'linear-gradient(45deg, #888 25%, transparent 25%), linear-gradient(-45deg, #888 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #888 75%), linear-gradient(-45deg, transparent 75%, #888 75%)',
               backgroundSize: '8px 8px',
               backgroundPosition: '0 0, 0 4px, 4px -4px, -4px 0px',
               borderColor: first.fillColor === 'transparent' ? 'var(--primary-color)' : undefined,
             }}
             onClick={() => applyAll({ fillColor: 'transparent' })}
-            title="无填充"
+            title="无填充 (透明)"
           />
         </div>
       </div>
@@ -672,14 +863,27 @@ const PropertiesEditor: React.FC<PropertiesEditorProps> = ({
             <div
               key={color}
               className="color-swatch"
-              style={{ backgroundColor: color, borderColor: allSameStroke && first.strokeColor === color ? 'var(--primary-color)' : undefined }}
+              style={{
+                backgroundColor: color,
+                borderColor: allSameStroke && first.strokeColor === color ? 'var(--primary-color)' : undefined,
+              }}
               onClick={() => applyAll({ strokeColor: color })}
             />
           ))}
-          <label className="color-swatch custom" style={{ background: 'linear-gradient(45deg, #f44336, #2196f3, #4caf50)' }}>
+          <label
+            className="color-swatch custom"
+            style={{
+              background: 'linear-gradient(135deg, #ff6b6b 0%, #4ecdc4 50%, #45b7d1 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            title="自定义边框颜色"
+          >
+            <span style={{ fontSize: 14, color: '#fff', fontWeight: 600, textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>+</span>
             <input
               type="color"
-              style={{ width: 0, height: 0, opacity: 0, position: 'absolute' }}
+              style={{ width: 0, height: 0, opacity: 0, position: 'absolute', padding: 0, border: 0 }}
               value={allSameStroke ? first.strokeColor : '#ffffff'}
               onChange={(e) => applyAll({ strokeColor: e.target.value })}
             />
@@ -688,8 +892,9 @@ const PropertiesEditor: React.FC<PropertiesEditorProps> = ({
       </div>
 
       <div className="prop-section">
-        <div className="prop-label">
-          边框粗细 <span className="slider-value">{allSameStrokeW ? first.strokeWidth : '-'}</span>
+        <div className="prop-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span>边框粗细</span>
+          <span className="slider-value">{allSameStrokeW ? first.strokeWidth : '-'}px</span>
         </div>
         <div className="slider-wrapper" style={{ padding: 0 }}>
           <input
@@ -705,8 +910,9 @@ const PropertiesEditor: React.FC<PropertiesEditorProps> = ({
       </div>
 
       <div className="prop-section">
-        <div className="prop-label">
-          透明度 <span className="slider-value">{allSameOpacity ? Math.round(first.opacity * 100) : '-'}%</span>
+        <div className="prop-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span>透明度</span>
+          <span className="slider-value">{allSameOpacity ? Math.round(first.opacity * 100) : '-'}%</span>
         </div>
         <div className="slider-wrapper" style={{ padding: 0 }}>
           <input
@@ -723,10 +929,32 @@ const PropertiesEditor: React.FC<PropertiesEditorProps> = ({
 
       <div className="prop-section">
         <div className="prop-label">图层顺序</div>
+        <div className="layer-buttons" style={{ marginBottom: 6 }}>
+          <button className="layer-btn" onClick={onSendToBack} title="置底">
+            ⇊ 置底
+          </button>
+          <button className="layer-btn" onClick={onMoveDown} title="下移一层">
+            ↓ 下移
+          </button>
+        </div>
         <div className="layer-buttons">
-          <button className="layer-btn" onClick={onMoveDown}>下移</button>
-          <button className="layer-btn" onClick={onMoveUp}>上移</button>
-          <button className="layer-btn" onClick={onBringToFront}>置顶</button>
+          <button className="layer-btn" onClick={onMoveUp} title="上移一层">
+            ↑ 上移
+          </button>
+          <button className="layer-btn" onClick={onBringToFront} title="置顶">
+            ⇈ 置顶
+          </button>
+        </div>
+      </div>
+
+      <div className="prop-section" style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border-color)' }}>
+        <div className="prop-label">快捷操作</div>
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+          <div>• 拖拽移动图形位置</div>
+          <div>• 控制点调整图形大小</div>
+          <div>• Delete 键删除图形</div>
+          <div>• Ctrl+Z 撤销操作</div>
+          <div>• 双击便签编辑文字</div>
         </div>
       </div>
     </div>

@@ -1,6 +1,17 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Tool, Shape, User, Point, PenShape, RectangleShape, CircleShape, StickyShape, ToastType } from '../types';
+import {
+  Tool,
+  Shape,
+  User,
+  Point,
+  PenShape,
+  RectangleShape,
+  CircleShape,
+  StickyShape,
+  ToastType,
+  ShapeType,
+} from '../types';
 import { CursorIcon } from './Icons';
 
 interface CanvasProps {
@@ -29,13 +40,15 @@ type HandleType = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'move';
 
 interface TransformData {
   startShapes: Shape[];
-  startPoints: { id: string; x: number; y: number; w: number; h: number }[];
+  startBounds: Map<string, { x: number; y: number; w: number; h: number }>;
   startMouse: Point;
   handle: HandleType;
+  activeId: string;
 }
 
 const MIN_SCALE = 0.1;
 const MAX_SCALE = 5;
+const HANDLE_SIZE = 8;
 
 const Canvas: React.FC<CanvasProps> = ({
   tool,
@@ -59,7 +72,7 @@ const Canvas: React.FC<CanvasProps> = ({
   exportMode,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [offset, setOffset] = useState<Point>({ x: 0, y: 0 });
+  const [offset, setOffset] = useState<Point>({ x: 100, y: 60 });
   const [scale, setScale] = useState(1);
   const [drawing, setDrawing] = useState(false);
   const [tempShape, setTempShape] = useState<Shape | null>(null);
@@ -67,8 +80,8 @@ const Canvas: React.FC<CanvasProps> = ({
   const [panning, setPanning] = useState(false);
   const [panStart, setPanStart] = useState<{ mouse: Point; offset: Point } | null>(null);
   const [editingStickyId, setEditingStickyId] = useState<string | null>(null);
-  const cursorPosRef = useRef<Point | null>(null);
-  const [, forceUpdate] = useState(0);
+  const [hoveredHandle, setHoveredHandle] = useState<HandleType | null>(null);
+  const lastCursorEmitRef = useRef<number>(0);
 
   const screenToWorld = useCallback(
     (clientX: number, clientY: number): Point => {
@@ -84,9 +97,18 @@ const Canvas: React.FC<CanvasProps> = ({
 
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
-    const delta = -e.deltaY * 0.001;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
     setScale((prev) => {
+      const delta = -e.deltaY * 0.0015;
       const next = Math.min(Math.max(prev + prev * delta, MIN_SCALE), MAX_SCALE);
+      const ratio = next / prev;
+      setOffset((off) => ({
+        x: mouseX - (mouseX - off.x) * ratio,
+        y: mouseY - (mouseY - off.y) * ratio,
+      }));
       return next;
     });
   }, []);
@@ -98,23 +120,16 @@ const Canvas: React.FC<CanvasProps> = ({
     return () => el.removeEventListener('wheel', handleWheel);
   }, [handleWheel]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'v' || e.key === 'V') {
-        if (document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
-          // Tool change handled by App via keyboard if needed
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
   const getShapeBounds = useCallback((shape: Shape) => {
     if (shape.type === 'rectangle' || shape.type === 'sticky') {
       return { x: shape.x, y: shape.y, w: shape.width, h: shape.height };
     } else if (shape.type === 'circle') {
-      return { x: shape.x - shape.radiusX, y: shape.y - shape.radiusY, w: shape.radiusX * 2, h: shape.radiusY * 2 };
+      return {
+        x: shape.x - shape.radiusX,
+        y: shape.y - shape.radiusY,
+        w: shape.radiusX * 2,
+        h: shape.radiusY * 2,
+      };
     } else {
       let minX = Infinity,
         minY = Infinity,
@@ -126,15 +141,21 @@ const Canvas: React.FC<CanvasProps> = ({
         maxX = Math.max(maxX, p.x);
         maxY = Math.max(maxY, p.y);
       });
-      const padding = shape.strokeWidth;
-      return { x: minX - padding, y: minY - padding, w: maxX - minX + padding * 2, h: maxY - minY + padding * 2 };
+      const padding = shape.strokeWidth / 2 + 2;
+      return {
+        x: minX - padding,
+        y: minY - padding,
+        w: maxX - minX + padding * 2,
+        h: maxY - minY + padding * 2,
+      };
     }
   }, []);
 
   const hitTest = useCallback(
     (point: Point): string | null => {
-      for (let i = shapes.length - 1; i >= 0; i--) {
-        const s = shapes[i];
+      const sorted = [...shapes].sort((a, b) => a.zIndex - b.zIndex);
+      for (let i = sorted.length - 1; i >= 0; i--) {
+        const s = sorted[i];
         const b = getShapeBounds(s);
         if (point.x >= b.x && point.x <= b.x + b.w && point.y >= b.y && point.y <= b.y + b.h) {
           return s.id;
@@ -145,148 +166,132 @@ const Canvas: React.FC<CanvasProps> = ({
     [shapes, getShapeBounds]
   );
 
+  const getHandlePositions = useCallback(
+    (b: { x: number; y: number; w: number; h: number }) => {
+      const h = HANDLE_SIZE / scale;
+      return {
+        nw: { x: b.x - h, y: b.y - h },
+        n: { x: b.x + b.w / 2 - h, y: b.y - h },
+        ne: { x: b.x + b.w - h, y: b.y - h },
+        e: { x: b.x + b.w - h, y: b.y + b.h / 2 - h },
+        se: { x: b.x + b.w - h, y: b.y + b.h - h },
+        s: { x: b.x + b.w / 2 - h, y: b.y + b.h - h },
+        sw: { x: b.x - h, y: b.y + b.h - h },
+        w: { x: b.x - h, y: b.y + b.h / 2 - h },
+      };
+    },
+    [scale]
+  );
+
   const getHandleAt = useCallback(
     (point: Point): { id: string; handle: HandleType } | null => {
+      const h = (HANDLE_SIZE / scale) * 2;
+      const hitBox = (x: number, y: number) =>
+        point.x >= x && point.x <= x + h && point.y >= y && point.y <= y + h;
+
       for (let i = selectedIds.length - 1; i >= 0; i--) {
         const id = selectedIds[i];
         const s = shapes.find((sh) => sh.id === id);
         if (!s) continue;
         const b = getShapeBounds(s);
-        const handleSize = 8 / scale;
-        const hb = {
-          x: b.x - handleSize,
-          y: b.y - handleSize,
-          w: handleSize * 2,
-          h: handleSize * 2,
-        };
-        const inH = (x: number, y: number) =>
-          point.x >= x && point.x <= x + handleSize * 2 && point.y >= y && point.y <= y + handleSize * 2;
+        const hp = getHandlePositions(b);
 
         if (selectedIds.length === 1) {
-          if (inH(b.x - handleSize, b.y - handleSize)) return { id, handle: 'nw' };
-          if (inH(b.x + b.w - handleSize, b.y - handleSize)) return { id, handle: 'ne' };
-          if (inH(b.x - handleSize, b.y + b.h - handleSize)) return { id, handle: 'sw' };
-          if (inH(b.x + b.w - handleSize, b.y + b.h - handleSize)) return { id, handle: 'se' };
-          if (inH(b.x + b.w / 2 - handleSize, b.y - handleSize)) return { id, handle: 'n' };
-          if (inH(b.x + b.w / 2 - handleSize, b.y + b.h - handleSize)) return { id, handle: 's' };
-          if (inH(b.x - handleSize, b.y + b.h / 2 - handleSize)) return { id, handle: 'w' };
-          if (inH(b.x + b.w - handleSize, b.y + b.h / 2 - handleSize)) return { id, handle: 'e' };
+          if (hitBox(hp.nw.x, hp.nw.y)) return { id, handle: 'nw' };
+          if (hitBox(hp.ne.x, hp.ne.y)) return { id, handle: 'ne' };
+          if (hitBox(hp.sw.x, hp.sw.y)) return { id, handle: 'sw' };
+          if (hitBox(hp.se.x, hp.se.y)) return { id, handle: 'se' };
+          if (hitBox(hp.n.x, hp.n.y)) return { id, handle: 'n' };
+          if (hitBox(hp.s.x, hp.s.y)) return { id, handle: 's' };
+          if (hitBox(hp.w.x, hp.w.y)) return { id, handle: 'w' };
+          if (hitBox(hp.e.x, hp.e.y)) return { id, handle: 'e' };
         }
+
         if (point.x >= b.x && point.x <= b.x + b.w && point.y >= b.y && point.y <= b.y + b.h) {
           return { id, handle: 'move' };
         }
       }
       return null;
     },
-    [selectedIds, shapes, getShapeBounds, scale]
+    [selectedIds, shapes, getShapeBounds, getHandlePositions, scale]
   );
 
-  const applyHandleTransform = useCallback(
-    (shape: Shape, handle: HandleType, deltaX: number, deltaY: number, start: { x: number; y: number; w: number; h: number }) => {
-      const { x: sx, y: sy, w: sw, h: sh } = start;
-      let x = sx,
-        y = sy,
-        w = sw,
-        h = sh;
+  const applyTransformToBounds = useCallback(
+    (b: { x: number; y: number; w: number; h: number }, handle: HandleType, dx: number, dy: number) => {
+      let { x, y, w, h } = b;
 
       switch (handle) {
         case 'nw':
-          x = sx + deltaX;
-          y = sy + deltaY;
-          w = sw - deltaX;
-          h = sh - deltaY;
+          x = b.x + dx;
+          y = b.y + dy;
+          w = b.w - dx;
+          h = b.h - dy;
           break;
         case 'ne':
-          y = sy + deltaY;
-          w = sw + deltaX;
-          h = sh - deltaY;
+          y = b.y + dy;
+          w = b.w + dx;
+          h = b.h - dy;
           break;
         case 'sw':
-          x = sx + deltaX;
-          w = sw - deltaX;
-          h = sh + deltaY;
+          x = b.x + dx;
+          w = b.w - dx;
+          h = b.h + dy;
           break;
         case 'se':
-          w = sw + deltaX;
-          h = sh + deltaY;
+          w = b.w + dx;
+          h = b.h + dy;
           break;
         case 'n':
-          y = sy + deltaY;
-          h = sh - deltaY;
+          y = b.y + dy;
+          h = b.h - dy;
           break;
         case 's':
-          h = sh + deltaY;
+          h = b.h + dy;
           break;
         case 'w':
-          x = sx + deltaX;
-          w = sw - deltaX;
+          x = b.x + dx;
+          w = b.w - dx;
           break;
         case 'e':
-          w = sw + deltaX;
+          w = b.w + dx;
           break;
         case 'move':
-          x = sx + deltaX;
-          y = sy + deltaY;
+          x = b.x + dx;
+          y = b.y + dy;
           break;
       }
       w = Math.max(10, w);
       h = Math.max(10, h);
+      return { x, y, w, h };
+    },
+    []
+  );
 
+  const boundsToShapeUpdates = useCallback(
+    (shape: Shape, nb: { x: number; y: number; w: number; h: number }, origBounds: { x: number; y: number; w: number; h: number }) => {
       const updates: Partial<Shape> = {};
+
       if (shape.type === 'rectangle' || shape.type === 'sticky') {
-        updates.x = x;
-        updates.y = y;
-        updates.width = w;
-        updates.height = h;
+        updates.x = nb.x;
+        updates.y = nb.y;
+        updates.width = nb.w;
+        updates.height = nb.h;
       } else if (shape.type === 'circle') {
-        const cx = shape.x;
-        const cy = shape.y;
-        const rx = shape.radiusX;
-        const ry = shape.radiusY;
-        const origX = cx - rx;
-        const origY = cy - ry;
-        const origW = rx * 2;
-        const origH = ry * 2;
-        let nx = origX,
-          ny = origY,
-          nw = origW,
-          nh = origH;
-        if (handle.includes('w')) {
-          nx = origX + deltaX;
-          nw = origW - deltaX;
-        }
-        if (handle.includes('e')) {
-          nw = origW + deltaX;
-        }
-        if (handle.includes('n')) {
-          ny = origY + deltaY;
-          nh = origH - deltaY;
-        }
-        if (handle.includes('s')) {
-          nh = origH + deltaY;
-        }
-        if (handle === 'move') {
-          nx = origX + deltaX;
-          ny = origY + deltaY;
-        }
-        nw = Math.max(10, nw);
-        nh = Math.max(10, nh);
-        updates.x = nx + nw / 2;
-        updates.y = ny + nh / 2;
-        updates.radiusX = nw / 2;
-        updates.radiusY = nh / 2;
+        updates.x = nb.x + nb.w / 2;
+        updates.y = nb.y + nb.h / 2;
+        updates.radiusX = nb.w / 2;
+        updates.radiusY = nb.h / 2;
       } else if (shape.type === 'pen') {
-        if (handle === 'move') {
-          updates.points = shape.points.map((p) => ({ x: p.x + deltaX, y: p.y + deltaY }));
-        } else {
-          const origB = { x: sx, y: sy, w: sw, h: sh };
-          const scaleX = w / Math.max(origB.w, 1);
-          const scaleY = h / Math.max(origB.h, 1);
-          updates.points = shape.points.map((p) => ({
-            x: origB.x + (p.x - origB.x) * scaleX + (x - origB.x),
-            y: origB.y + (p.y - origB.y) * scaleY + (y - origB.y),
-          }));
-        }
+        const ox = origBounds.x;
+        const oy = origBounds.y;
+        const ow = Math.max(origBounds.w, 1);
+        const oh = Math.max(origBounds.h, 1);
+        const sx = nb.w / ow;
+        const sy = nb.h / oh;
+        updates.points = shape.points.map((p) => ({
+          x: nb.x + (p.x - ox) * sx,
+          y: nb.y + (p.y - oy) * sy,
+        }));
       }
       return updates;
     },
@@ -295,9 +300,15 @@ const Canvas: React.FC<CanvasProps> = ({
 
   const onMouseDown = (e: React.MouseEvent) => {
     const world = screenToWorld(e.clientX, e.clientY);
-    cursorPosRef.current = world;
 
-    if (e.button === 1 || (e.button === 0 && e.altKey)) {
+    if (e.button === 1) {
+      e.preventDefault();
+      setPanning(true);
+      setPanStart({ mouse: { x: e.clientX, y: e.clientY }, offset: { ...offset } });
+      return;
+    }
+
+    if (e.button === 0 && (e.altKey || e.ctrlKey || e.metaKey)) {
       setPanning(true);
       setPanStart({ mouse: { x: e.clientX, y: e.clientY }, offset: { ...offset } });
       return;
@@ -305,50 +316,61 @@ const Canvas: React.FC<CanvasProps> = ({
 
     if (e.button !== 0) return;
 
+    if (editingStickyId) {
+      setEditingStickyId(null);
+    }
+
     if (tool === 'select') {
       const hitHandle = getHandleAt(world);
       if (hitHandle) {
-        if (hitHandle.handle === 'move') {
-          if (!selectedIds.includes(hitHandle.id)) {
-            onSelectedIdsChange([hitHandle.id]);
-            return;
-          }
+        if (hitHandle.handle === 'move' && !selectedIds.includes(hitHandle.id)) {
+          onSelectedIdsChange([hitHandle.id]);
         }
+        const boundMap = new Map<string, { x: number; y: number; w: number; h: number }>();
+        selectedIds.forEach((id) => {
+          const s = shapes.find((sh) => sh.id === id);
+          if (s) boundMap.set(id, getShapeBounds(s));
+        });
+        if (!boundMap.has(hitHandle.id)) {
+          const s = shapes.find((sh) => sh.id === hitHandle.id);
+          if (s) boundMap.set(hitHandle.id, getShapeBounds(s));
+        }
+
         setTransform({
           startShapes: JSON.parse(JSON.stringify(shapes)),
-          startPoints: selectedIds.map((id) => {
-            const s = shapes.find((sh) => sh.id === id)!;
-            const b = getShapeBounds(s);
-            return { id, x: b.x, y: b.y, w: b.w, h: b.h };
-          }),
+          startBounds: boundMap,
           startMouse: world,
           handle: hitHandle.handle,
+          activeId: hitHandle.id,
         });
         return;
       }
+
       const hit = hitTest(world);
       if (hit) {
+        let newSelection: string[];
         if (e.shiftKey) {
           if (selectedIds.includes(hit)) {
-            onSelectedIdsChange(selectedIds.filter((i) => i !== hit));
+            newSelection = selectedIds.filter((i) => i !== hit);
           } else {
-            onSelectedIdsChange([...selectedIds, hit]);
+            newSelection = [...selectedIds, hit];
           }
         } else {
-          if (!selectedIds.includes(hit)) {
-            onSelectedIdsChange([hit]);
-          }
+          newSelection = selectedIds.includes(hit) ? selectedIds : [hit];
         }
-        const handle = 'move';
+        onSelectedIdsChange(newSelection);
+
+        const boundMap = new Map<string, { x: number; y: number; w: number; h: number }>();
+        newSelection.forEach((id) => {
+          const s = shapes.find((sh) => sh.id === id);
+          if (s) boundMap.set(id, getShapeBounds(s));
+        });
         setTransform({
           startShapes: JSON.parse(JSON.stringify(shapes)),
-          startPoints: selectedIds.map((id) => {
-            const s = shapes.find((sh) => sh.id === id)!;
-            const b = getShapeBounds(s);
-            return { id, x: b.x, y: b.y, w: b.w, h: b.h };
-          }),
+          startBounds: boundMap,
           startMouse: world,
-          handle,
+          handle: 'move',
+          activeId: hit,
         });
       } else {
         onSelectedIdsChange([]);
@@ -371,7 +393,7 @@ const Canvas: React.FC<CanvasProps> = ({
       const newShape: PenShape = {
         id: uuidv4(),
         type: 'pen',
-        points: [world],
+        points: [{ ...world }],
         fillColor: 'transparent',
         strokeColor,
         strokeWidth,
@@ -389,8 +411,8 @@ const Canvas: React.FC<CanvasProps> = ({
         type: 'rectangle',
         x: world.x,
         y: world.y,
-        width: 0,
-        height: 0,
+        width: 0.01,
+        height: 0.01,
         fillColor,
         strokeColor,
         strokeWidth,
@@ -406,10 +428,10 @@ const Canvas: React.FC<CanvasProps> = ({
       const newShape: CircleShape = {
         id: uuidv4(),
         type: 'circle',
-        x: world.x,
-        y: world.y,
-        radiusX: 0,
-        radiusY: 0,
+        x: world.x + 0.01,
+        y: world.y + 0.01,
+        radiusX: 0.01,
+        radiusY: 0.01,
         fillColor,
         strokeColor,
         strokeWidth,
@@ -429,7 +451,7 @@ const Canvas: React.FC<CanvasProps> = ({
         y: world.y,
         width: 180,
         height: 140,
-        fillColor,
+        fillColor: fillColor === 'transparent' ? '#fff59d' : fillColor,
         strokeColor,
         strokeWidth: 2,
         opacity: 0.95,
@@ -441,16 +463,19 @@ const Canvas: React.FC<CanvasProps> = ({
       onShapesChange(newShapes);
       onShapeCreated(newShape);
       onSelectedIdsChange([newShape.id]);
-      setEditingStickyId(newShape.id);
-      showToast('便签已添加，点击编辑内容', 'info');
+      setTimeout(() => setEditingStickyId(newShape.id), 50);
+      showToast('便签已添加，双击可编辑内容', 'info');
     }
   };
 
   const onMouseMove = (e: React.MouseEvent) => {
     const world = screenToWorld(e.clientX, e.clientY);
-    cursorPosRef.current = world;
 
-    onCursorMove(world);
+    const now = Date.now();
+    if (now - lastCursorEmitRef.current > 80) {
+      onCursorMove(world);
+      lastCursorEmitRef.current = now;
+    }
 
     if (panning && panStart) {
       const dx = e.clientX - panStart.mouse.x;
@@ -462,15 +487,20 @@ const Canvas: React.FC<CanvasProps> = ({
     if (transform) {
       const dx = world.x - transform.startMouse.x;
       const dy = world.y - transform.startMouse.y;
-
       const newShapes = shapes.map((s) => {
-        const sp = transform.startPoints.find((p) => p.id === s.id);
-        if (!sp) return s;
-        const updates = applyHandleTransform(s, transform.handle, dx, dy, { x: sp.x, y: sp.y, w: sp.w, h: sp.h });
+        const orig = transform.startBounds.get(s.id);
+        if (!orig) return s;
+        const nb = applyTransformToBounds(orig, transform.handle, dx, dy);
+        const updates = boundsToShapeUpdates(s, nb, orig);
         return { ...s, ...updates };
       });
       onShapesChange(newShapes, false);
       return;
+    }
+
+    if (tool === 'select' && selectedIds.length === 1 && !drawing) {
+      const hh = getHandleAt(world);
+      setHoveredHandle(hh?.handle || null);
     }
 
     if (!drawing) return;
@@ -488,31 +518,34 @@ const Canvas: React.FC<CanvasProps> = ({
     }
 
     if (tempShape && tempShape.type === 'pen') {
-      const pts = [...tempShape.points, world];
+      const pts = [...tempShape.points, { x: world.x, y: world.y }];
       setTempShape({ ...tempShape, points: pts });
     } else if (tempShape && tempShape.type === 'rectangle') {
-      const start = (tempShape as RectangleShape);
-      const x = Math.min(start.x + 0.001, world.x);
-      const y = Math.min(start.y + 0.001, world.y);
-      const w = Math.abs(world.x - (start.x + 0.001));
-      const h = Math.abs(world.y - (start.y + 0.001));
-      // Keep original start point
+      const start = tempShape as RectangleShape;
+      const x = Math.min(start.x, world.x);
+      const y = Math.min(start.y, world.y);
+      const w = Math.abs(world.x - start.x);
+      const h = Math.abs(world.y - start.y);
       setTempShape({ ...tempShape, x, y, width: w, height: h });
     } else if (tempShape && tempShape.type === 'circle') {
-      const start = (tempShape as CircleShape);
-      const sx = start.x + 0.001;
-      const sy = start.y + 0.001;
-      const cx = (sx + world.x) / 2;
-      const cy = (sy + world.y) / 2;
-      const rx = Math.abs(world.x - sx) / 2;
-      const ry = Math.abs(world.y - sy) / 2;
-      setTempShape({ ...tempShape, x: cx, y: cy, radiusX: rx, radiusY: ry });
+      const start = tempShape as CircleShape;
+      const sx = start.x - 0.01;
+      const sy = start.y - 0.01;
+      const x = Math.min(sx, world.x);
+      const y = Math.min(sy, world.y);
+      const w = Math.abs(world.x - sx);
+      const h = Math.abs(world.y - sy);
+      setTempShape({
+        ...tempShape,
+        x: x + w / 2,
+        y: y + h / 2,
+        radiusX: w / 2,
+        radiusY: h / 2,
+      });
     }
   };
 
   const onMouseUp = (e: React.MouseEvent) => {
-    const world = screenToWorld(e.clientX, e.clientY);
-
     if (panning) {
       setPanning(false);
       setPanStart(null);
@@ -520,24 +553,25 @@ const Canvas: React.FC<CanvasProps> = ({
     }
 
     if (transform) {
-      const updated = transform.startPoints
-        .map((sp) => {
-          const orig = transform.startShapes.find((s) => s.id === sp.id)!;
-          const current = shapes.find((s) => s.id === sp.id)!;
-          const changes: Partial<Shape> = {};
-          (Object.keys(current) as (keyof Shape)[]).forEach((k) => {
-            if (JSON.stringify(orig[k]) !== JSON.stringify(current[k])) {
-              (changes as any)[k] = current[k];
-            }
-          });
-          return { id: sp.id, updates: changes };
-        })
-        .filter((u) => Object.keys(u.updates).length > 0);
+      const updatesList: { id: string; updates: Partial<Shape> }[] = [];
+      transform.startBounds.forEach((orig, id) => {
+        const origShape = transform.startShapes.find((s) => s.id === id);
+        const curShape = shapes.find((s) => s.id === id);
+        if (!origShape || !curShape) return;
+        const changes: Partial<Shape> = {};
+        (Object.keys(curShape) as (keyof Shape)[]).forEach((k) => {
+          if (JSON.stringify(origShape[k]) !== JSON.stringify(curShape[k])) {
+            (changes as any)[k] = (curShape as any)[k];
+          }
+        });
+        if (Object.keys(changes).length > 0) {
+          updatesList.push({ id, updates: changes });
+        }
+      });
 
-      if (updated.length > 0) {
-        onBatchUpdate(updated);
-        const historyShapes = shapes;
-        onShapesChange(historyShapes, true);
+      if (updatesList.length > 0) {
+        onBatchUpdate(updatesList);
+        onShapesChange(shapes, true);
       }
       setTransform(null);
       return;
@@ -546,10 +580,7 @@ const Canvas: React.FC<CanvasProps> = ({
     if (!drawing) return;
     setDrawing(false);
 
-    if (tool === 'eraser') {
-      // history already recorded via onShapesChange
-      return;
-    }
+    if (tool === 'eraser') return;
 
     if (tempShape) {
       let valid = true;
@@ -566,6 +597,28 @@ const Canvas: React.FC<CanvasProps> = ({
         onShapesChange(newShapes);
         onShapeCreated(tempShape);
         onSelectedIdsChange([tempShape.id]);
+      } else if (tempShape.type === 'rectangle' || tempShape.type === 'circle') {
+        if (tool === 'rectangle') {
+          const fixed: RectangleShape = {
+            ...(tempShape as RectangleShape),
+            width: 120,
+            height: 80,
+          };
+          const newShapes = [...shapes, fixed];
+          onShapesChange(newShapes);
+          onShapeCreated(fixed);
+          onSelectedIdsChange([fixed.id]);
+        } else if (tool === 'circle') {
+          const fixed: CircleShape = {
+            ...(tempShape as CircleShape),
+            radiusX: 60,
+            radiusY: 50,
+          };
+          const newShapes = [...shapes, fixed];
+          onShapesChange(newShapes);
+          onShapeCreated(fixed);
+          onSelectedIdsChange([fixed.id]);
+        }
       }
       setTempShape(null);
     }
@@ -576,15 +629,17 @@ const Canvas: React.FC<CanvasProps> = ({
       setPanning(false);
       setPanStart(null);
     }
-    if (drawing && tool === 'eraser') {
-      setDrawing(false);
+    if (transform) {
+      if (tool === 'eraser') {
+        setDrawing(false);
+      }
     }
   };
 
-  const getCursor = () => {
+  const getCursor = (): React.CSSProperties['cursor'] => {
     if (panning) return 'grabbing';
-    if (tool === 'select' && selectedIds.length > 0 && transform?.handle && transform.handle !== 'move') {
-      switch (transform?.handle) {
+    if (hoveredHandle) {
+      switch (hoveredHandle) {
         case 'nw':
         case 'se':
           return 'nwse-resize';
@@ -597,6 +652,8 @@ const Canvas: React.FC<CanvasProps> = ({
         case 'e':
         case 'w':
           return 'ew-resize';
+        case 'move':
+          return 'move';
       }
     }
     switch (tool) {
@@ -615,33 +672,35 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   };
 
-  const sortedShapes = [...shapes].sort((a, b) => a.zIndex - b.zIndex);
-  const displayShapes = tempShape ? [...sortedShapes, tempShape] : sortedShapes;
+  const sortedShapes = useMemo(() => [...shapes].sort((a, b) => a.zIndex - b.zIndex), [shapes]);
+  const displayShapes = useMemo(
+    () => (tempShape ? [...sortedShapes, tempShape] : sortedShapes),
+    [sortedShapes, tempShape]
+  );
+
+  const renderPathD = (points: Point[]) => {
+    if (points.length === 0) return '';
+    if (points.length === 1) return `M ${points[0].x} ${points[0].y} L ${points[0].x + 0.01} ${points[0].y + 0.01}`;
+    if (points.length === 2) return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 1; i < points.length - 1; i++) {
+      const xc = (points[i].x + points[i + 1].x) / 2;
+      const yc = (points[i].y + points[i + 1].y) / 2;
+      d += ` Q ${points[i].x} ${points[i].y} ${xc} ${yc}`;
+    }
+    const last = points[points.length - 1];
+    d += ` L ${last.x} ${last.y}`;
+    return d;
+  };
 
   const renderShape = (s: Shape, isTemp = false) => {
-    const selected = selectedIds.includes(s.id);
-    const commonProps = {
-      className: `svg-shape ${animating ? 'animating' : ''} ${!isTemp && clearAnimating ? 'scale-out' : ''} ${isTemp ? '' : 'fade-shape'}`,
-      opacity: s.opacity,
-    };
-    const remoteColor = s.isRemote ? '#ff7043' : null;
-    const remoteStroke = remoteColor ? { stroke: remoteColor, strokeWidth: Math.max(2, s.strokeWidth + 1), strokeDasharray: '6,4' } : null;
+    const animClass = `${animating ? 'animating' : ''} ${!isTemp && clearAnimating ? 'scale-out' : ''} ${isTemp ? '' : 'fade-shape'}`;
+    const remoteOutline = s.isRemote ? '#ff7043' : null;
 
     if (s.type === 'pen') {
-      let d = '';
-      if (s.points.length > 0) {
-        d = `M ${s.points[0].x} ${s.points[0].y}`;
-        for (let i = 1; i < s.points.length - 1; i++) {
-          const xc = (s.points[i].x + s.points[i + 1].x) / 2;
-          const yc = (s.points[i].y + s.points[i + 1].y) / 2;
-          d += ` Q ${s.points[i].x} ${s.points[i].y} ${xc} ${yc}`;
-        }
-        if (s.points.length > 1) {
-          d += ` L ${s.points[s.points.length - 1].x} ${s.points[s.points.length - 1].y}`;
-        }
-      }
+      const d = renderPathD(s.points);
       return (
-        <g key={s.id}>
+        <g key={s.id} style={{ pointerEvents: isTemp ? 'none' : 'all' }}>
           <path
             d={d}
             fill="none"
@@ -649,17 +708,19 @@ const Canvas: React.FC<CanvasProps> = ({
             strokeWidth={s.strokeWidth}
             strokeLinecap="round"
             strokeLinejoin="round"
-            {...commonProps}
-            style={{ pointerEvents: isTemp ? 'none' : 'stroke' }}
+            className={`svg-shape ${animClass}`}
+            opacity={s.opacity}
           />
-          {remoteStroke && (
+          {remoteOutline && (
             <path
               d={d}
               fill="none"
-              {...remoteStroke}
+              stroke={remoteOutline}
+              strokeWidth={Math.max(2, s.strokeWidth + 2)}
+              strokeDasharray="8,6"
               strokeLinecap="round"
-              strokeLinejoin="round"
               className="remote-outline"
+              opacity={0.8}
               style={{ pointerEvents: 'none' }}
             />
           )}
@@ -669,31 +730,34 @@ const Canvas: React.FC<CanvasProps> = ({
 
     if (s.type === 'rectangle') {
       return (
-        <g key={s.id}>
+        <g key={s.id} style={{ pointerEvents: isTemp ? 'none' : 'all' }}>
           <rect
             x={s.x}
             y={s.y}
-            width={s.width}
-            height={s.height}
-            rx={2}
-            ry={2}
+            width={Math.max(s.width, 0.1)}
+            height={Math.max(s.height, 0.1)}
+            rx={3}
+            ry={3}
             fill={s.fillColor === 'transparent' ? 'none' : s.fillColor}
             stroke={s.strokeColor}
             strokeWidth={s.strokeWidth}
-            {...commonProps}
-            style={{ pointerEvents: isTemp ? 'none' : 'all' }}
+            className={`svg-shape ${animClass}`}
+            opacity={s.opacity}
           />
-          {remoteStroke && (
+          {remoteOutline && (
             <rect
               x={s.x}
               y={s.y}
-              width={s.width}
-              height={s.height}
-              rx={2}
-              ry={2}
+              width={Math.max(s.width, 0.1)}
+              height={Math.max(s.height, 0.1)}
+              rx={3}
+              ry={3}
               fill="none"
-              {...remoteStroke}
+              stroke={remoteOutline}
+              strokeWidth={3}
+              strokeDasharray="8,6"
               className="remote-outline"
+              opacity={0.85}
               style={{ pointerEvents: 'none' }}
             />
           )}
@@ -703,27 +767,30 @@ const Canvas: React.FC<CanvasProps> = ({
 
     if (s.type === 'circle') {
       return (
-        <g key={s.id}>
+        <g key={s.id} style={{ pointerEvents: isTemp ? 'none' : 'all' }}>
           <ellipse
             cx={s.x}
             cy={s.y}
-            rx={s.radiusX}
-            ry={s.radiusY}
+            rx={Math.max(s.radiusX, 0.05)}
+            ry={Math.max(s.radiusY, 0.05)}
             fill={s.fillColor === 'transparent' ? 'none' : s.fillColor}
             stroke={s.strokeColor}
             strokeWidth={s.strokeWidth}
-            {...commonProps}
-            style={{ pointerEvents: isTemp ? 'none' : 'all' }}
+            className={`svg-shape ${animClass}`}
+            opacity={s.opacity}
           />
-          {remoteStroke && (
+          {remoteOutline && (
             <ellipse
               cx={s.x}
               cy={s.y}
-              rx={s.radiusX}
-              ry={s.radiusY}
+              rx={Math.max(s.radiusX, 0.05)}
+              ry={Math.max(s.radiusY, 0.05)}
               fill="none"
-              {...remoteStroke}
+              stroke={remoteOutline}
+              strokeWidth={3}
+              strokeDasharray="8,6"
               className="remote-outline"
+              opacity={0.85}
               style={{ pointerEvents: 'none' }}
             />
           )}
@@ -738,10 +805,10 @@ const Canvas: React.FC<CanvasProps> = ({
           <foreignObject
             x={s.x}
             y={s.y}
-            width={s.width}
-            height={s.height}
+            width={Math.max(s.width, 10)}
+            height={Math.max(s.height, 10)}
             opacity={s.opacity}
-            className={`${animating ? 'animating' : ''} ${clearAnimating ? 'scale-out' : ''}`}
+            className={animClass}
             style={{ pointerEvents: isTemp ? 'none' : 'all' }}
           >
             <div
@@ -749,11 +816,12 @@ const Canvas: React.FC<CanvasProps> = ({
               style={{
                 width: '100%',
                 height: '100%',
-                backgroundColor: s.fillColor === 'transparent' ? 'transparent' : s.fillColor,
+                backgroundColor: s.fillColor === 'transparent' ? 'rgba(255,245,157,0.95)' : s.fillColor,
                 border: `${s.strokeWidth}px solid ${s.strokeColor}`,
-                borderRadius: 4,
+                borderRadius: 6,
                 overflow: 'hidden',
                 boxSizing: 'border-box',
+                boxShadow: '2px 3px 8px rgba(0,0,0,0.2)',
               }}
             >
               {isEditing ? (
@@ -772,11 +840,12 @@ const Canvas: React.FC<CanvasProps> = ({
                   onKeyDown={(e) => {
                     if (e.key === 'Escape') (e.target as HTMLTextAreaElement).blur();
                   }}
+                  style={{ color: '#333' }}
                 />
               ) : (
                 <div
                   style={{
-                    padding: 12,
+                    padding: 14,
                     fontSize: s.fontSize,
                     lineHeight: 1.5,
                     color: '#333',
@@ -787,27 +856,34 @@ const Canvas: React.FC<CanvasProps> = ({
                     overflow: 'hidden',
                     cursor: tool === 'select' ? 'pointer' : 'default',
                     whiteSpace: 'pre-wrap',
+                    userSelect: 'none',
                   }}
                   onDoubleClick={(e) => {
                     e.stopPropagation();
                     if (tool === 'select') setEditingStickyId(s.id);
                   }}
                 >
-                  {s.text || <span style={{ color: '#999' }}>双击编辑...</span>}
+                  {s.text || (
+                    <span style={{ color: '#999', fontStyle: 'italic' }}>双击编辑便签内容...</span>
+                  )}
                 </div>
               )}
             </div>
           </foreignObject>
-          {remoteStroke && (
+          {remoteOutline && (
             <rect
               x={s.x}
               y={s.y}
-              width={s.width}
-              height={s.height}
+              width={Math.max(s.width, 10)}
+              height={Math.max(s.height, 10)}
               fill="none"
-              {...remoteStroke}
+              stroke={remoteOutline}
+              strokeWidth={3}
+              strokeDasharray="8,6"
               className="remote-outline"
+              opacity={0.85}
               style={{ pointerEvents: 'none' }}
+              rx={6}
             />
           )}
         </g>
@@ -816,47 +892,65 @@ const Canvas: React.FC<CanvasProps> = ({
     return null;
   };
 
-  const renderSelectionUI = () => {
+  const renderSelectionHandles = () => {
+    if (exportMode || selectedIds.length === 0) return null;
+    const h = HANDLE_SIZE / scale;
+
     return selectedIds.map((id) => {
       const s = shapes.find((sh) => sh.id === id);
       if (!s) return null;
       const b = getShapeBounds(s);
-      const handleSize = 8 / scale;
-
-      const handles =
-        selectedIds.length === 1
-          ? [
-              { x: b.x, y: b.y, type: 'nw' },
-              { x: b.x + b.w, y: b.y, type: 'ne' },
-              { x: b.x, y: b.y + b.h, type: 'sw' },
-              { x: b.x + b.w, y: b.y + b.h, type: 'se' },
-              { x: b.x + b.w / 2, y: b.y, type: 'n' },
-              { x: b.x + b.w / 2, y: b.y + b.h, type: 's' },
-              { x: b.x, y: b.y + b.h / 2, type: 'w' },
-              { x: b.x + b.w, y: b.y + b.h / 2, type: 'e' },
-            ]
-          : [];
 
       return (
         <g key={`sel-${id}`}>
           <rect
             className="selection-box"
-            x={b.x - 2}
-            y={b.y - 2}
-            width={b.w + 4}
-            height={b.h + 4}
+            x={b.x - 3}
+            y={b.y - 3}
+            width={b.w + 6}
+            height={b.h + 6}
+            style={{ pointerEvents: 'none' }}
           />
-          {handles.map((h) => (
-            <rect
-              key={h.type}
-              className="selection-handle"
-              x={h.x - handleSize}
-              y={h.y - handleSize}
-              width={handleSize * 2}
-              height={handleSize * 2}
-              rx={2}
-            />
-          ))}
+          {selectedIds.length === 1 && (
+            <>
+              <rect className="selection-handle" x={b.x - h} y={b.y - h} width={h * 2} height={h * 2} rx={2} />
+              <rect
+                className="selection-handle"
+                x={b.x + b.w / 2 - h}
+                y={b.y - h}
+                width={h * 2}
+                height={h * 2}
+                rx={2}
+              />
+              <rect className="selection-handle" x={b.x + b.w - h} y={b.y - h} width={h * 2} height={h * 2} rx={2} />
+              <rect
+                className="selection-handle"
+                x={b.x + b.w - h}
+                y={b.y + b.h / 2 - h}
+                width={h * 2}
+                height={h * 2}
+                rx={2}
+              />
+              <rect className="selection-handle" x={b.x + b.w - h} y={b.y + b.h - h} width={h * 2} height={h * 2} rx={2} />
+              <rect
+                className="selection-handle"
+                x={b.x + b.w / 2 - h}
+                y={b.y + b.h - h}
+                width={h * 2}
+                height={h * 2}
+                rx={2}
+              />
+              <rect className="selection-handle" x={b.x - h} y={b.y + b.h - h} width={h * 2} height={h * 2} rx={2} />
+              <rect
+                className="selection-handle"
+                x={b.x - h}
+                y={b.y + b.h / 2 - h}
+                width={h * 2}
+                height={h * 2}
+                rx={2}
+              />
+            </>
+          )}
         </g>
       );
     });
@@ -869,15 +963,16 @@ const Canvas: React.FC<CanvasProps> = ({
       if (!rect) return null;
       const screenX = user.cursor.x * scale + offset.x;
       const screenY = user.cursor.y * scale + offset.y;
+      if (screenX < -200 || screenX > rect.width + 200 || screenY < -200 || screenY > rect.height + 200) return null;
 
       return (
         <div
           key={user.id}
           className="cursor-indicator"
           style={{
-            left: screenX,
-            top: screenY,
-            display: screenX > -100 && screenX < rect.width + 100 && screenY > -100 && screenY < rect.height + 100 ? 'block' : 'none',
+            transform: `translate(${screenX}px, ${screenY}px)`,
+            left: 0,
+            top: 0,
           }}
         >
           <CursorIcon color={user.color} />
@@ -888,8 +983,6 @@ const Canvas: React.FC<CanvasProps> = ({
       );
     });
   };
-
-  const svgViewTransform = `translate(${offset.x}px, ${offset.y}px) scale(${scale})`;
 
   return (
     <div
@@ -902,19 +995,44 @@ const Canvas: React.FC<CanvasProps> = ({
       style={{ cursor: getCursor() }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      <div className="canvas-wrapper" style={{ transform: svgViewTransform }}>
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+          transformOrigin: '0 0',
+          transition: panning || transform || drawing ? 'none' : 'transform 0.2s ease-out',
+        }}
+      >
         <svg
           className="svg-canvas"
           xmlns="http://www.w3.org/2000/svg"
           width={10000}
           height={10000}
-          style={{ transformOrigin: '0 0' }}
+          style={{ display: 'block', overflow: 'visible' }}
         >
           {displayShapes.map((s) => renderShape(s, s === tempShape))}
-          {!exportMode && renderSelectionUI()}
+          {renderSelectionHandles()}
         </svg>
       </div>
       {renderCursors()}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 12,
+          right: 16,
+          fontSize: 11,
+          color: 'var(--text-secondary)',
+          backgroundColor: 'rgba(45,45,45,0.8)',
+          padding: '4px 10px',
+          borderRadius: 4,
+          pointerEvents: 'none',
+          userSelect: 'none',
+        }}
+      >
+        缩放: {Math.round(scale * 100)}% | 中键平移 | 滚轮缩放
+      </div>
     </div>
   );
 };

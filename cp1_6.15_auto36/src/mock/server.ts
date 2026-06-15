@@ -170,7 +170,7 @@ io.on('connection', (socket: Socket) => {
   });
 });
 
-const PORT = 3001;
+const PORT = process.env.PORT ? Number(process.env.PORT) : 3002;
 httpServer.listen(PORT, () => {
   console.log(`Mock server running on port ${PORT}`);
   console.log(`  - API: http://localhost:${PORT}/api`);
