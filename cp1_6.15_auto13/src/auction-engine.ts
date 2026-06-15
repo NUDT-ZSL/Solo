@@ -1,10 +1,23 @@
 import { v4 as uuidv4 } from 'uuid';
 import { AuctionState, AuctionAction, BidRecord } from './types';
 
+function computeRankByAmount(validBids: BidRecord[], targetAmount: number): number {
+  const uniqueAmounts = [...new Set(validBids.map((b) => b.amount))].sort((a, b) => b - a);
+  const idx = uniqueAmounts.findIndex((a) => a === targetAmount);
+  return idx === -1 ? 0 : idx + 1;
+}
+
+function recomputeRanksForItem(bidHistory: BidRecord[]): BidRecord[] {
+  const valid = bidHistory.filter((b) => b.valid);
+  return bidHistory.map((b) => {
+    if (!b.valid) return b;
+    return { ...b, rank: computeRankByAmount(valid, b.amount) };
+  });
+}
+
 export function auctionReducer(state: AuctionState, action: AuctionAction): AuctionState {
   switch (action.type) {
     case 'TICK': {
-      const now = Date.now();
       const items = state.items.map((item, idx) => {
         if (idx !== state.currentActiveIndex || item.status !== 'active') return item;
         const newCountdown = item.countdown - action.payload;
@@ -44,8 +57,9 @@ export function auctionReducer(state: AuctionState, action: AuctionAction): Auct
 
       const isValid = amount > item.currentHighestBid && user.balance >= amount;
 
-      const validBids = item.bidHistory.filter((b) => b.valid);
-      const rank = isValid ? validBids.length + 1 : 0;
+      const tempValidBids = [...item.bidHistory.filter((b) => b.valid)];
+      if (isValid) tempValidBids.push({ id: 'tmp', itemId, userId, userName: user.name, amount, timestamp: 0, valid: true, rank: 0 });
+      const rank = isValid ? computeRankByAmount(tempValidBids, amount) : 0;
 
       const bidRecord: BidRecord = {
         id: uuidv4(),
@@ -59,19 +73,29 @@ export function auctionReducer(state: AuctionState, action: AuctionAction): Auct
       };
 
       const newItems = [...state.items];
+      const newHistory = [...item.bidHistory, bidRecord];
+      const recomputedHistory = recomputeRanksForItem(newHistory);
+
       if (isValid) {
         newItems[itemIndex] = {
           ...item,
           currentHighestBid: amount,
           currentHighestBidder: userId,
-          bidHistory: [...item.bidHistory, bidRecord],
+          bidHistory: recomputedHistory,
         };
       } else {
         newItems[itemIndex] = {
           ...item,
-          bidHistory: [...item.bidHistory, bidRecord],
+          bidHistory: recomputedHistory,
         };
       }
+
+      const recomputedFeed = state.bidFeed.map((f) => {
+        if (f.itemId !== itemId || !f.valid) return f;
+        const allItemValid = recomputedHistory.filter((b) => b.valid);
+        return { ...f, rank: computeRankByAmount(allItemValid, f.amount) };
+      });
+      const newFeed = [bidRecord, ...recomputedFeed];
 
       const newUsers = state.users.map((u) => {
         if (u.id !== userId || !isValid) return u;
@@ -82,7 +106,7 @@ export function auctionReducer(state: AuctionState, action: AuctionAction): Auct
         ...state,
         items: newItems,
         users: newUsers,
-        bidFeed: [bidRecord, ...state.bidFeed],
+        bidFeed: newFeed,
       };
     }
 
@@ -94,8 +118,10 @@ export function auctionReducer(state: AuctionState, action: AuctionAction): Auct
       if (item.status !== 'active') return state;
 
       const isValid = amount > item.currentHighestBid;
-      const validBids = item.bidHistory.filter((b) => b.valid);
-      const rank = isValid ? validBids.length + 1 : 0;
+
+      const tempValidBids = [...item.bidHistory.filter((b) => b.valid)];
+      if (isValid) tempValidBids.push({ id: 'tmp', itemId, userId: 'manual', userName: 'You', amount, timestamp: 0, valid: true, rank: 0 });
+      const rank = isValid ? computeRankByAmount(tempValidBids, amount) : 0;
 
       const bidRecord: BidRecord = {
         id: uuidv4(),
@@ -109,24 +135,34 @@ export function auctionReducer(state: AuctionState, action: AuctionAction): Auct
       };
 
       const newItems = [...state.items];
+      const newHistory = [...item.bidHistory, bidRecord];
+      const recomputedHistory = recomputeRanksForItem(newHistory);
+
       if (isValid) {
         newItems[itemIndex] = {
           ...item,
           currentHighestBid: amount,
           currentHighestBidder: 'manual',
-          bidHistory: [...item.bidHistory, bidRecord],
+          bidHistory: recomputedHistory,
         };
       } else {
         newItems[itemIndex] = {
           ...item,
-          bidHistory: [...item.bidHistory, bidRecord],
+          bidHistory: recomputedHistory,
         };
       }
+
+      const recomputedFeed = state.bidFeed.map((f) => {
+        if (f.itemId !== itemId || !f.valid) return f;
+        const allItemValid = recomputedHistory.filter((b) => b.valid);
+        return { ...f, rank: computeRankByAmount(allItemValid, f.amount) };
+      });
+      const newFeed = [bidRecord, ...recomputedFeed];
 
       return {
         ...state,
         items: newItems,
-        bidFeed: [bidRecord, ...state.bidFeed],
+        bidFeed: newFeed,
         manualPauseUntil: Date.now() + 2000,
       };
     }

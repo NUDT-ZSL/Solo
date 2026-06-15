@@ -85,6 +85,11 @@ style.textContent = `
     50% { box-shadow: 0 0 30px rgba(251,191,36,0.5), 0 0 60px rgba(251,191,36,0.2); }
   }
 
+  @keyframes pulseWarn {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.05); opacity: 0.8; }
+  }
+
   .glow-card {
     animation: glowPulse 2s ease-in-out infinite;
   }

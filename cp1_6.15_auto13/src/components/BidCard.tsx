@@ -8,11 +8,19 @@ interface BidCardProps {
   onManualBid: (itemId: string, amount: number) => void;
 }
 
+function getPriceColor(ratio: number): string {
+  const r = Math.round(59 + (239 - 59) * ratio);
+  const g = Math.round(130 + (68 - 130) * ratio);
+  const b = Math.round(246 + (68 - 246) * ratio);
+  return `rgb(${r},${g},${b})`;
+}
+
 function WaveformChart({ bids, startingPrice }: { bids: { amount: number; valid: boolean }[]; startingPrice: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number>(0);
-  const prevLengthRef = useRef(0);
+  const prevSnapshotRef = useRef<{ x: number; y: number }[]>([]);
   const transitionStartRef = useRef(0);
+  const transitionDuration = 300;
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -23,14 +31,15 @@ function WaveformChart({ bids, startingPrice }: { bids: { amount: number; valid:
     const dpr = window.devicePixelRatio || 1;
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-    ctx.scale(dpr, dpr);
-
+    if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
     const validBids = bids.filter((b) => b.valid);
-    if (validBids.length < 2) {
+    if (validBids.length === 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.1)';
       ctx.font = '11px system-ui';
       ctx.textAlign = 'center';
@@ -43,41 +52,59 @@ function WaveformChart({ bids, startingPrice }: { bids: { amount: number; valid:
     const maxAmt = Math.max(...amounts) * 1.05;
     const range = maxAmt - minAmt || 1;
 
+    const stepX = validBids.length <= 1 ? w / 2 : w / (validBids.length - 1);
+
+    const targetPoints = validBids.map((b, i) => ({
+      x: validBids.length <= 1 ? w / 2 : stepX * i,
+      y: h - ((b.amount - minAmt) / range) * (h - 16) - 8,
+      amount: b.amount,
+      ratio: (b.amount - minAmt) / range,
+    }));
+
     const elapsed = Date.now() - transitionStartRef.current;
-    const progress = Math.min(1, elapsed / 300);
+    const progress = Math.min(1, elapsed / transitionDuration);
     const ease = 1 - Math.pow(1 - progress, 3);
 
-    const lastIdx = validBids.length - 1;
-    const drawCount = prevLengthRef.current > 0 && lastIdx >= prevLengthRef.current
-      ? prevLengthRef.current + Math.ceil((lastIdx - prevLengthRef.current) * ease) + 1
-      : validBids.length;
+    const prev = prevSnapshotRef.current;
+    const displayPoints = targetPoints.map((tp, i) => {
+      const pp = prev[i];
+      const sx = pp ? pp.x + (tp.x - pp.x) * ease : tp.x;
+      const sy = pp ? pp.y + (tp.y - pp.y) * ease : tp.y;
+      return { x: sx, y: sy, ratio: tp.ratio, amount: tp.amount };
+    });
 
-    const stepX = w / (validBids.length + 1);
-
-    ctx.beginPath();
-    ctx.lineWidth = 2;
-
-    for (let i = 0; i < Math.min(drawCount, validBids.length); i++) {
-      const x = stepX * (i + 1);
-      const y = h - ((validBids[i].amount - minAmt) / range) * (h - 10) - 5;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-
-    const gradient = ctx.createLinearGradient(0, 0, w, 0);
-    gradient.addColorStop(0, '#3b82f6');
-    gradient.addColorStop(0.5, '#8b5cf6');
-    gradient.addColorStop(1, '#ef4444');
-    ctx.strokeStyle = gradient;
-    ctx.stroke();
-
-    for (let i = 0; i < Math.min(drawCount, validBids.length); i++) {
-      const x = stepX * (i + 1);
-      const y = h - ((validBids[i].amount - minAmt) / range) * (h - 10) - 5;
+    if (displayPoints.length === 1) {
+      const p = displayPoints[0];
       ctx.beginPath();
-      ctx.arc(x, y, 3, 0, Math.PI * 2);
-      ctx.fillStyle = i === validBids.length - 1 ? '#ef4444' : '#60a5fa';
+      ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = getPriceColor(p.ratio);
       ctx.fill();
+    } else {
+      for (let i = 1; i < displayPoints.length; i++) {
+        const p0 = displayPoints[i - 1];
+        const p1 = displayPoints[i];
+        const ratio = (p0.ratio + p1.ratio) / 2;
+        ctx.beginPath();
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = getPriceColor(ratio);
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        ctx.stroke();
+      }
+
+      displayPoints.forEach((p, i) => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, i === displayPoints.length - 1 ? 4 : 3, 0, Math.PI * 2);
+        ctx.fillStyle = getPriceColor(p.ratio);
+        ctx.fill();
+        if (i === displayPoints.length - 1) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+          ctx.strokeStyle = getPriceColor(p.ratio) + '66';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      });
     }
 
     if (progress < 1) {
@@ -86,19 +113,32 @@ function WaveformChart({ bids, startingPrice }: { bids: { amount: number; valid:
   }, [bids, startingPrice]);
 
   useEffect(() => {
-    const validCount = bids.filter((b) => b.valid).length;
-    if (validCount !== prevLengthRef.current) {
-      transitionStartRef.current = Date.now();
-      prevLengthRef.current = validCount;
+    transitionStartRef.current = Date.now();
+
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      const validBids = bids.filter((b) => b.valid);
+      const amounts = validBids.map((b) => b.amount);
+      const minAmt = Math.min(...amounts, startingPrice) * 0.95;
+      const maxAmt = Math.max(...amounts) * 1.05;
+      const range = maxAmt - minAmt || 1;
+      const stepX = validBids.length <= 1 ? w / 2 : w / (validBids.length - 1);
+      prevSnapshotRef.current = validBids.map((b, i) => ({
+        x: validBids.length <= 1 ? w / 2 : stepX * i,
+        y: h - ((b.amount - minAmt) / range) * (h - 16) - 8,
+      }));
     }
+
     animRef.current = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(animRef.current);
-  }, [bids, draw]);
+  }, [bids, draw, startingPrice]);
 
   return (
     <canvas
       ref={canvasRef}
-      style={{ width: '100%', height: 80, borderRadius: 6, background: 'rgba(0,0,0,0.25)' }}
+      style={{ width: '100%', height: 80, borderRadius: 6, background: 'rgba(0,0,0,0.25)', display: 'block' }}
     />
   );
 }
@@ -132,7 +172,9 @@ function AnimatedPrice({ value }: { value: number }) {
 
 export default function BidCard({ item, isActive, users, onManualBid }: BidCardProps) {
   const [imgError, setImgError] = useState(false);
-  const bidder = users.find((u) => u.id === item.currentHighestBidder);
+  const bidder = item.currentHighestBidder === 'manual'
+    ? { name: 'You', avatarColor: '#f59e0b', id: 'manual' }
+    : users.find((u) => u.id === item.currentHighestBidder);
 
   const handleBid = () => {
     const amount = Math.round(item.currentHighestBid * 1.1 * 100) / 100;
@@ -172,7 +214,10 @@ export default function BidCard({ item, isActive, users, onManualBid }: BidCardP
           <div style={styles.imagePlaceholder}>{item.name[0]}</div>
         )}
         {isActive && item.status === 'active' && (
-          <div style={styles.countdownBadge}>{countdownStr}</div>
+          <div style={{
+            ...styles.countdownBadge,
+            color: item.countdown <= 10 ? '#ef4444' : '#fbbf24',
+          }}>{countdownStr}</div>
         )}
         {statusLabel()}
       </div>
@@ -265,13 +310,13 @@ const styles: Record<string, React.CSSProperties> = {
     top: 8,
     right: 8,
     background: 'rgba(0,0,0,0.7)',
-    color: '#fbbf24',
     padding: '4px 10px',
     borderRadius: 8,
     fontSize: 14,
     fontWeight: 700,
     fontFamily: 'monospace',
     border: '1px solid rgba(251,191,36,0.3)',
+    transition: 'color 0.3s ease',
   },
   soldStamp: {
     position: 'absolute',
@@ -285,8 +330,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 22,
     fontWeight: 900,
     letterSpacing: 4,
-    animation: 'stampIn 0.5s ease',
+    animation: 'stampIn 0.5s cubic-bezier(0.34,1.56,0.64,1)',
     border: '3px solid #fff',
+    zIndex: 10,
   },
   passedStamp: {
     position: 'absolute',
@@ -300,8 +346,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 22,
     fontWeight: 900,
     letterSpacing: 4,
-    animation: 'stampIn 0.5s ease',
+    animation: 'stampIn 0.5s cubic-bezier(0.34,1.56,0.64,1)',
     border: '3px solid #fff',
+    zIndex: 10,
   },
   info: {
     padding: 14,
@@ -366,5 +413,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     cursor: 'pointer',
     transition: 'transform 0.15s ease, box-shadow 0.2s ease',
+    marginTop: 10,
   },
 };
