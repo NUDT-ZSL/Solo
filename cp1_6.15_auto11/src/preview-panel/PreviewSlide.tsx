@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Slide, parseSplitContent, renderMarkdownToHtml } from '@/markdown-parser/parse';
+import { Slide } from '@/markdown-parser/parse';
 import './PreviewSlide.css';
 
 interface PreviewSlideProps {
@@ -34,18 +34,14 @@ export default function PreviewSlide({ slides, currentSlide, theme, isFullscreen
   }
 
   const renderSlideContent = () => {
-    if (currentSlideData.hasSplit) {
-      const { left, right } = parseSplitContent(currentSlideData.rawContent);
-      const leftHtml = renderMarkdownToHtml(left);
-      const rightHtml = renderMarkdownToHtml(right);
-
+    if (currentSlideData.hasSplit && currentSlideData.leftHtml && currentSlideData.rightHtml) {
       return (
         <div className="split-layout">
           <div className="split-left">
-            <div dangerouslySetInnerHTML={{ __html: leftHtml }} />
+            <div dangerouslySetInnerHTML={{ __html: currentSlideData.leftHtml }} />
           </div>
           <div className="split-right">
-            <div dangerouslySetInnerHTML={{ __html: rightHtml }} />
+            <div dangerouslySetInnerHTML={{ __html: currentSlideData.rightHtml }} />
           </div>
         </div>
       );

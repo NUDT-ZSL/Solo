@@ -371,6 +371,19 @@ body {
   background: rgba(255, 255, 255, 0.05);
 }
 
+.share-error {
+  padding: 16px;
+  background: rgba(243, 108, 108, 0.1);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.error-text {
+  color: #f38ba8;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
 .mobile-layout {
   flex: 1;
   display: flex;
@@ -419,6 +432,21 @@ body {
   flex: 1;
   padding: 12px;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.mobile-panel {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  display: none;
+}
+
+.mobile-panel.active {
   display: flex;
   flex-direction: column;
 }

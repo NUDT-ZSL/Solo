@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import Editor from '@/editor-panel/Editor';
+import Editor, { EditorRef } from '@/editor-panel/Editor';
 import PreviewSlide from '@/preview-panel/PreviewSlide';
 import { parseMarkdown, Slide } from '@/markdown-parser/parse';
+import LZString from 'lz-string';
 import './App.css';
 
 const DEFAULT_MARKDOWN = `# Markdown 幻灯片 🎯
@@ -110,6 +111,8 @@ export default function App() {
   const [shareLink, setShareLink] = useState('');
   const [showShareModal, setShowShareModal] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [shareError, setShareError] = useState('');
+  const editorRef = useRef<EditorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -165,7 +168,17 @@ export default function App() {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const shared = urlParams.get('s');
-    if (shared) {
+    const sharedV2 = urlParams.get('s2');
+    if (sharedV2) {
+      try {
+        const decompressed = LZString.decompressFromEncodedURIComponent(sharedV2);
+        if (decompressed) {
+          setMarkdown(decompressed);
+        }
+      } catch {
+        console.error('Failed to decode shared content v2');
+      }
+    } else if (shared) {
       try {
         const decoded = atob(shared);
         setMarkdown(decoded);
@@ -213,9 +226,40 @@ export default function App() {
     };
   }, [isDragging]);
 
+  const handleTabChange = useCallback((tab: Tab) => {
+    if (tab === 'preview' && editorRef.current) {
+      const selection = editorRef.current.getSelection();
+      sessionStorage.setItem('editor-selection-start', String(selection.start));
+      sessionStorage.setItem('editor-selection-end', String(selection.end));
+    }
+    setActiveTab(tab);
+    if (tab === 'editor' && editorRef.current) {
+      setTimeout(() => {
+        const start = parseInt(sessionStorage.getItem('editor-selection-start') || '0', 10);
+        const end = parseInt(sessionStorage.getItem('editor-selection-end') || '0', 10);
+        if (editorRef.current) {
+          editorRef.current.setSelection(start, end);
+          editorRef.current.focus();
+        }
+      }, 100);
+    }
+  }, []);
+
   const generateShareLink = useCallback(() => {
-    const encoded = btoa(unescape(encodeURIComponent(markdown)));
-    const url = `${window.location.origin}${window.location.pathname}?s=${encoded}`;
+    const MAX_URL_LENGTH = 2000;
+    const baseUrl = `${window.location.origin}${window.location.pathname}`;
+    
+    const compressed = LZString.compressToEncodedURIComponent(markdown);
+    const url = `${baseUrl}?s2=${compressed}`;
+
+    if (url.length > MAX_URL_LENGTH) {
+      setShareError(`内容过长（${url.length}字符），超过URL限制${MAX_URL_LENGTH}字符，无法生成分享链接。请导出HTML文件分享。`);
+      setShareLink(url);
+      setShowShareModal(true);
+      return;
+    }
+
+    setShareError('');
     setShareLink(url);
     setShowShareModal(true);
   }, [markdown]);
@@ -230,14 +274,53 @@ export default function App() {
     }
   }, [shareLink]);
 
+  const collectStyles = useCallback((): string => {
+    const styles: string[] = [];
+
+    for (let i = 0; i < document.styleSheets.length; i++) {
+      const styleSheet = document.styleSheets[i];
+      try {
+        const rules = styleSheet.cssRules || styleSheet.rules;
+        if (!rules) continue;
+
+        let sheetCss = '';
+        for (let j = 0; j < rules.length; j++) {
+          const rule = rules[j];
+          sheetCss += rule.cssText + '\n';
+        }
+        styles.push(sheetCss);
+      } catch (e) {
+        console.warn('Cannot access stylesheet:', styleSheet.href);
+      }
+    }
+
+    const styleElements = document.querySelectorAll('style');
+    styleElements.forEach((styleEl) => {
+      styles.push(styleEl.textContent || '');
+    });
+
+    return styles.join('\n');
+  }, []);
+
   const exportHtml = useCallback(() => {
+    const allStyles = collectStyles();
+
+    const slidesExportData = slides.map((slide) => ({
+      content: slide.content,
+      hasSplit: slide.hasSplit,
+      leftHtml: slide.leftHtml || '',
+      rightHtml: slide.rightHtml || '',
+    }));
+
     const htmlContent = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Markdown Slides</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <style>
+    ${allStyles}
+  </style>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -248,54 +331,74 @@ export default function App() {
       justify-content: center;
       overflow: hidden;
     }
-    .slide-container {
+    .preview-container {
+      position: relative;
       width: 100vw;
       height: 100vh;
+      display: flex;
+      flex-direction: column;
+      border-radius: 0;
+      box-shadow: none;
+    }
+    .slide-wrapper {
+      flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 40px;
-      transition: background-color 0.4s, color 0.4s;
+      overflow: hidden;
     }
-    .slide {
-      max-width: 900px;
+    .slide-content {
       width: 100%;
-      animation: fadeIn 0.3s ease;
+      max-width: 900px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateX(20px); }
+    .slide-content.slide-enter {
+      animation: slideIn 0.2s ease-out;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(30px); }
       to { opacity: 1; transform: translateX(0); }
     }
-    .slide h1 { font-size: 2.5rem; margin-bottom: 1rem; }
-    .slide h2 { font-size: 2rem; margin-bottom: 0.8rem; }
-    .slide h3 { font-size: 1.5rem; margin-bottom: 0.6rem; }
-    .slide p { font-size: 1.1rem; line-height: 1.8; margin-bottom: 1rem; }
-    .slide ul, .slide ol { font-size: 1.1rem; line-height: 1.8; margin-bottom: 1rem; padding-left: 2rem; }
-    .slide li { margin-bottom: 0.5rem; }
-    .slide code { padding: 2px 6px; border-radius: 4px; font-size: 0.95em; }
-    .slide pre { border-radius: 8px; padding: 16px; overflow-x: auto; margin: 1rem 0; }
-    .slide pre code { padding: 0; }
-    .slide blockquote { border-left: 4px solid; padding-left: 16px; margin: 16px 0; opacity: 0.9; }
-    .slide table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
-    .slide th, .slide td { border: 1px solid; padding: 8px 12px; text-align: left; }
-    .indicator {
-      position: fixed;
+    .slide-content h1 { font-size: 2.5rem; margin-bottom: 1rem; }
+    .slide-content h2 { font-size: 2rem; margin-bottom: 0.8rem; }
+    .slide-content h3 { font-size: 1.5rem; margin-bottom: 0.6rem; }
+    .slide-content p { font-size: 1.1rem; line-height: 1.8; margin-bottom: 1rem; }
+    .slide-content ul, .slide-content ol { font-size: 1.1rem; line-height: 1.8; margin-bottom: 1rem; padding-left: 2rem; }
+    .slide-content li { margin-bottom: 0.5rem; }
+    .slide-content strong { font-weight: 700; }
+    .slide-content em { font-style: italic; }
+    .slide-content img { max-width: 100%; border-radius: 8px; }
+    .slide-content hr { border: none; border-top: 1px solid rgba(255,255,255,0.2); margin: 1.5rem 0; }
+    .slide-indicator {
+      position: absolute;
       bottom: 20px;
       left: 50%;
       transform: translateX(-50%);
       padding: 6px 14px;
-      background: rgba(0,0,0,0.4);
-      color: #fff;
+      background: rgba(0, 0, 0, 0.4);
+      color: #cdd6f4;
       font-size: 13px;
+      font-weight: 500;
       border-radius: 20px;
       backdrop-filter: blur(8px);
     }
+    .pulse { animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+    .split-layout { display: flex; gap: 40px; height: 100%; align-items: flex-start; }
+    .split-left, .split-right { flex: 1; min-width: 0; }
     .nav-btn {
       position: fixed;
       top: 50%;
       transform: translateY(-50%);
-      width: 40px;
-      height: 40px;
+      width: 50px;
+      height: 50px;
       border-radius: 50%;
       background: rgba(0,0,0,0.4);
       color: #fff;
@@ -303,74 +406,72 @@ export default function App() {
       cursor: pointer;
       font-size: 18px;
       backdrop-filter: blur(8px);
-      transition: background 0.2s;
+      transition: all 0.2s ease;
+      z-index: 100;
     }
-    .nav-btn:hover { background: rgba(0,0,0,0.6); }
-    .nav-prev { left: 20px; }
-    .nav-next { right: 20px; }
-    .split-layout { display: flex; gap: 40px; }
-    .split-left, .split-right { flex: 1; min-width: 0; }
-    .theme-dark { background: linear-gradient(135deg, #1e1e2e, #2d2d44); color: #cdd6f4; }
-    .theme-dark h1, .theme-dark h2, .theme-dark h3 { color: #f5c2e7; }
-    .theme-dark code { background: rgba(0,0,0,0.6); color: #a6e3a1; }
-    .theme-dark pre { background: rgba(0,0,0,0.6) !important; }
-    .theme-dark blockquote { border-color: #89b4fa; color: #a6adc8; }
-    .theme-dark th, .theme-dark td { border-color: #45475a; }
-    .theme-dark th { background: rgba(137,180,250,0.2); }
-    .theme-tech { background: linear-gradient(135deg, #0f172a, #1e3a5f); color: #e2e8f0; }
-    .theme-tech h1, .theme-tech h2, .theme-tech h3 { color: #38bdf8; }
-    .theme-tech code { background: rgba(0,0,0,0.6); color: #4ade80; }
-    .theme-tech pre { background: rgba(0,0,0,0.6) !important; border: 1px solid rgba(56,189,248,0.3); }
-    .theme-tech blockquote { border-color: #38bdf8; color: #94a3b8; }
-    .theme-tech th, .theme-tech td { border-color: #334155; }
-    .theme-tech th { background: rgba(56,189,248,0.2); }
-    .theme-warm { background: linear-gradient(135deg, #2d2419, #4a3728); color: #f5f0e6; }
-    .theme-warm h1, .theme-warm h2, .theme-warm h3 { color: #fbbf24; }
-    .theme-warm code { background: rgba(0,0,0,0.6); color: #86efac; }
-    .theme-warm pre { background: rgba(0,0,0,0.6) !important; }
-    .theme-warm blockquote { border-color: #fbbf24; color: #d6d3d1; }
-    .theme-warm th, .theme-warm td { border-color: #57534e; }
-    .theme-warm th { background: rgba(251,191,36,0.2); }
+    .nav-btn:hover:not(:disabled) { background: rgba(0,0,0,0.6); transform: translateY(-50%) scale(1.1); }
+    .nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .nav-prev { left: 30px; }
+    .nav-next { right: 30px; }
+    .fullscreen-exit {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      cursor: pointer;
+      font-size: 18px;
+      z-index: 101;
+      transition: all 0.2s ease;
+    }
+    .fullscreen-exit:hover { background: rgba(255, 255, 255, 0.2); }
     @media (max-width: 768px) {
-      .slide h1 { font-size: 1.8rem; }
-      .slide h2 { font-size: 1.4rem; }
+      .slide-wrapper { padding: 20px; }
+      .slide-content h1 { font-size: 1.8rem; }
+      .slide-content h2 { font-size: 1.4rem; }
       .split-layout { flex-direction: column; gap: 20px; }
       .nav-btn { display: none; }
     }
   </style>
 </head>
 <body class="theme-${theme}">
-  <div class="slide-container">
-    <div class="slide" id="slide"></div>
+  <div class="preview-container theme-${theme} fullscreen">
+    <div class="slide-wrapper">
+      <div id="slide-content" class="slide-content"></div>
+    </div>
+    <div id="indicator" class="slide-indicator pulse">1 / 1</div>
   </div>
-  <button class="nav-btn nav-prev" onclick="prevSlide()">◀</button>
-  <button class="nav-btn nav-next" onclick="nextSlide()">▶</button>
-  <div class="indicator" id="indicator"></div>
+  <button class="nav-btn nav-prev" id="prevBtn" onclick="prevSlide()">◀</button>
+  <button class="nav-btn nav-next" id="nextBtn" onclick="nextSlide()">▶</button>
 
   <script>
-    const slidesData = ${JSON.stringify(slides)};
+    const slidesData = ${JSON.stringify(slidesExportData)};
     let current = 0;
 
     function renderSlide() {
       const slide = slidesData[current];
       if (!slide) return;
       
-      const slideEl = document.getElementById('slide');
+      const slideEl = document.getElementById('slide-content');
+      slideEl.classList.remove('slide-enter');
+      void slideEl.offsetWidth;
+      slideEl.classList.add('slide-enter');
       
-      if (slide.hasSplit) {
-        const parts = slide.rawContent.split(':split');
+      if (slide.hasSplit && slide.leftHtml && slide.rightHtml) {
         slideEl.innerHTML = '<div class="split-layout"><div class="split-left">' + 
-          marked.parse(parts[0].trim()) + '</div><div class="split-right">' + 
-          marked.parse(parts.slice(1).join(':split').trim()) + '</div></div>';
+          slide.leftHtml + '</div><div class="split-right">' + 
+          slide.rightHtml + '</div></div>';
       } else {
         slideEl.innerHTML = slide.content;
       }
       
-      document.querySelectorAll('pre code').forEach(block => {
-        hljs.highlightElement(block);
-      });
-      
       document.getElementById('indicator').textContent = (current + 1) + ' / ' + slidesData.length;
+      document.getElementById('prevBtn').disabled = current === 0;
+      document.getElementById('nextBtn').disabled = current === slidesData.length - 1;
     }
 
     function nextSlide() {
@@ -399,8 +500,6 @@ export default function App() {
 
     renderSlide();
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 </body>
 </html>`;
 
@@ -413,7 +512,7 @@ export default function App() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [slides, theme]);
+  }, [slides, theme, collectStyles]);
 
   const themeOptions: { value: Theme; label: string; color: string }[] = [
     { value: 'dark', label: '深色极简', color: '#1e1e2e' },
@@ -463,20 +562,22 @@ export default function App() {
           <div className="mobile-tabs">
             <button
               className={`tab-btn ${activeTab === 'editor' ? 'active' : ''}`}
-              onClick={() => setActiveTab('editor')}
+              onClick={() => handleTabChange('editor')}
             >
               编辑器
             </button>
             <button
               className={`tab-btn ${activeTab === 'preview' ? 'active' : ''}`}
-              onClick={() => setActiveTab('preview')}
+              onClick={() => handleTabChange('preview')}
             >
               预览
             </button>
           </div>
           <div className="mobile-content">
-            {activeTab === 'editor' && <Editor value={markdown} onChange={handleMarkdownChange} />}
-            {activeTab === 'preview' && (
+            <div className={`mobile-panel ${activeTab === 'editor' ? 'active' : ''}`}>
+              <Editor ref={editorRef} value={markdown} onChange={handleMarkdownChange} />
+            </div>
+            <div className={`mobile-panel ${activeTab === 'preview' ? 'active' : ''}`}>
               <div className="mobile-preview-wrapper">
                 <PreviewSlide
                   slides={slides}
@@ -504,13 +605,13 @@ export default function App() {
                   </button>
                 </div>
               </div>
-            )}
+            </div>
           </div>
         </div>
       ) : (
         <div className="main-content" ref={containerRef}>
           <div className="panel editor-panel" style={{ width: `${splitRatio * 100}%` }}>
-            <Editor value={markdown} onChange={handleMarkdownChange} />
+            <Editor ref={editorRef} value={markdown} onChange={handleMarkdownChange} />
           </div>
           <div
             className={`splitter ${isDragging ? 'dragging' : ''}`}
@@ -579,14 +680,22 @@ export default function App() {
         <div className="modal-overlay" onClick={() => setShowShareModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h3>分享幻灯片</h3>
-            <p className="modal-desc">复制以下链接分享给他人：</p>
-            <div className="share-link-input">
-              <input type="text" value={shareLink} readOnly />
-              <button className="copy-btn" onClick={copyToClipboard}>
-                {copySuccess ? '✓ 已复制' : '复制'}
-              </button>
-            </div>
-            <p className="modal-tip">提示：链接中包含编码后的 Markdown 内容，可直接打开查看。</p>
+            {shareError ? (
+              <div className="share-error">
+                <p className="error-text">⚠️ {shareError}</p>
+              </div>
+            ) : (
+              <>
+                <p className="modal-desc">复制以下链接分享给他人：</p>
+                <div className="share-link-input">
+                  <input type="text" value={shareLink} readOnly />
+                  <button className="copy-btn" onClick={copyToClipboard}>
+                    {copySuccess ? '✓ 已复制' : '复制'}
+                  </button>
+                </div>
+                <p className="modal-tip">提示：链接中包含编码后的 Markdown 内容，可直接打开查看。</p>
+              </>
+            )}
             <button className="modal-close" onClick={() => setShowShareModal(false)}>
               关闭
             </button>
