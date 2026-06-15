@@ -12,6 +12,7 @@ export default function RankList() {
   const prevRanksRef = useRef<Map<string, number>>(new Map())
   const [flashingIds, setFlashingIds] = useState<Set<string>>(new Set())
   const [changedIds, setChangedIds] = useState<Set<string>>(new Set())
+  const flashVersionRef = useRef<Map<string, number>>(new Map())
 
   useEffect(() => {
     let cancelled = false
@@ -37,8 +38,12 @@ export default function RankList() {
         prevRanksRef.current = prev
 
         if (!isInitial && changed.size > 0) {
-          setChangedIds(changed)
-          setFlashingIds(flash)
+          changed.forEach(id => {
+            const current = flashVersionRef.current.get(id) || 0
+            flashVersionRef.current.set(id, current + 1)
+          })
+          setChangedIds(new Set(changed))
+          setFlashingIds(new Set(changed))
           setTimeout(() => {
             setFlashingIds(new Set())
           }, 1500)
@@ -106,41 +111,48 @@ export default function RankList() {
   }
 
   const getRowBgStyle = (rank: number, id: string): React.CSSProperties => {
+    const isFlashing = flashingIds.has(id)
     const base: React.CSSProperties = {
-      transition: 'all 0.5s ease',
-      animation: flashingIds.has(id) ? 'rankFlash 0.8s ease' : undefined
+      transition: 'all 0.5s ease'
     }
 
+    let bgStyle: React.CSSProperties
+
     if (rank === 1) {
-      return {
-        ...base,
+      bgStyle = {
         background: 'linear-gradient(90deg, rgba(255, 215, 0, 0.12), rgba(255, 215, 0, 0.02)',
         border: '1px solid rgba(255, 215, 0, 0.25)'
       }
-    }
-    if (rank === 2) {
-      return {
-        ...base,
+    } else if (rank === 2) {
+      bgStyle = {
         background: 'linear-gradient(90deg, rgba(232, 232, 232, 0.08), rgba(232, 232, 232, 0.02)',
         border: '1px solid rgba(232, 232, 232, 0.2)'
       }
-    }
-    if (rank === 3) {
-      return {
-        ...base,
+    } else if (rank === 3) {
+      bgStyle = {
         background: 'linear-gradient(90deg, rgba(205, 127, 50, 0.08), rgba(205, 127, 50, 0.02)',
         border: '1px solid rgba(205, 127, 50, 0.2)'
       }
+    } else {
+      bgStyle = {
+        background: changedIds.has(id)
+          ? 'linear-gradient(90deg, rgba(255, 215, 0, 0.04), transparent)'
+          : 'rgba(255, 255, 255, 0.02)',
+        border: changedIds.has(id)
+          ? '1px solid rgba(255, 215, 0, 0.15)'
+          : '1px solid rgba(255, 255, 255, 0.05)'
+      }
     }
-    return {
-      ...base,
-      background: changedIds.has(id)
-        ? 'linear-gradient(90deg, rgba(255, 215, 0, 0.04), transparent)'
-        : 'rgba(255, 255, 255, 0.02)',
-      border: changedIds.has(id)
-        ? '1px solid rgba(255, 215, 0, 0.15)'
-        : '1px solid rgba(255, 255, 255, 0.05)'
+
+    if (isFlashing) {
+      return {
+        ...base,
+        ...bgStyle,
+        animation: 'rankFlash 1.5s ease-in-out, rankFlashGlow 0.8s ease-in-out 2'
+      }
     }
+
+    return { ...base, ...bgStyle }
   }
 
   const getTrendIndicator = (id: string) => {
@@ -197,16 +209,18 @@ export default function RankList() {
           </div>
 
           <div style={styles.rankList}>
-            {ranking.map((movie) => (
-              <div
-                key={movie.id}
-                onClick={() => navigate(`/movie/${movie.id}`)}
-                style={{
-                  ...styles.rankRow,
-                  ...getRowBgStyle(movie.rank, movie.id)
-                }}
-                className="rank-row"
-              >
+            {ranking.map((movie) => {
+              const flashVersion = flashVersionRef.current.get(movie.id) || 0
+              return (
+                <div
+                  key={`${movie.id}-${flashVersion}`}
+                  onClick={() => navigate(`/movie/${movie.id}`)}
+                  style={{
+                    ...styles.rankRow,
+                    ...getRowBgStyle(movie.rank, movie.id)
+                  }}
+                  className="rank-row"
+                >
                 <div style={{ width: '80px' }}>
                   <div style={{
                     ...styles.rankBadge,

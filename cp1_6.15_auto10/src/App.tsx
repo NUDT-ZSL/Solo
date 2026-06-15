@@ -5,23 +5,44 @@ import MovieDetail from './components/MovieDetail'
 import RankList from './components/RankList'
 
 export default function App() {
-  const [scrolled, setScrolled] = useState(false)
+  const [scrollY, setScrollY] = useState(0)
   const location = useLocation()
 
   useEffect(() => {
+    let ticking = false
     const handleScroll = () => {
-      setScrolled(window.scrollY > 20)
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          setScrollY(window.scrollY)
+          ticking = false
+        })
+        ticking = true
+      }
     }
-    window.addEventListener('scroll', handleScroll)
+    window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
+
+  const maxScroll = 120
+  const scrollProgress = Math.min(scrollY / maxScroll, 1)
+  const bgAlpha = scrollProgress * 0.85
+  const borderAlpha = scrollProgress * 0.15
+  const shadowAlpha = scrollProgress * 0.3
+
+  const navDynamicStyle: React.CSSProperties = {
+    background: `rgba(10, 10, 31, ${bgAlpha})`,
+    backdropFilter: `blur(${scrollProgress * 16}px)`,
+    WebkitBackdropFilter: `blur(${scrollProgress * 16}px)`,
+    borderBottom: `1px solid rgba(255, 215, 0, ${borderAlpha})`,
+    boxShadow: `0 4px 30px rgba(0, 0, 0, ${shadowAlpha})`
+  }
 
   return (
     <div style={styles.app}>
       <style>{globalStyles}</style>
       <nav style={{
         ...styles.nav,
-        ...(scrolled ? styles.navScrolled : {})
+        ...navDynamicStyle
       }}>
         <div style={styles.navContent}>
           <Link to="/" style={styles.logo} className="logo">
@@ -131,8 +152,17 @@ const globalStyles = `
     50% { background-position: 200% 0; }
   }
   @keyframes rankFlash {
-    0%, 100% { background-color: transparent; }
-    50% { background-color: rgba(255, 215, 0, 0.25); }
+    0% { background-color: transparent; box-shadow: none; }
+    15% { background-color: rgba(255, 215, 0, 0.35); box-shadow: 0 0 20px rgba(255, 215, 0, 0.4); }
+    30% { background-color: transparent; box-shadow: none; }
+    45% { background-color: rgba(255, 215, 0, 0.3); box-shadow: 0 0 15px rgba(255, 215, 0, 0.3); }
+    60% { background-color: transparent; box-shadow: none; }
+    75% { background-color: rgba(255, 215, 0, 0.25); box-shadow: 0 0 10px rgba(255, 215, 0, 0.2); }
+    100% { background-color: transparent; box-shadow: none; }
+  }
+  @keyframes rankFlashGlow {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.4) drop-shadow(0 0 8px rgba(255, 215, 0, 0.6)); }
   }
   @keyframes spin {
     to { transform: rotate(360deg); }

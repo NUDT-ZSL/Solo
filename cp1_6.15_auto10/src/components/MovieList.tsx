@@ -29,18 +29,21 @@ export default function MovieList() {
 
     const loadMovies = async () => {
       setFadeState('out')
+
       await new Promise(r => setTimeout(r, 300))
       if (cancelled) return
 
       setLoading(true)
+
       try {
         const data = await fetchMovies(filtersRef.current)
-        if (!cancelled) {
-          setMovies(data)
-          setFadeState('in')
-        }
+        if (cancelled) return
+        setMovies(data)
+        setFadeState('in')
       } catch (err) {
         console.error('Failed to load movies:', err)
+        if (cancelled) return
+        setFadeState('in')
       } finally {
         if (!cancelled) {
           setLoading(false)
@@ -121,21 +124,12 @@ export default function MovieList() {
         style={{
           ...styles.grid,
           opacity: fadeState === 'in' ? 1 : 0,
-          transition: 'opacity 0.3s ease-in-out'
+          transition: 'opacity 0.3s ease-in-out',
+          display: loading ? 'none' : undefined
         }}
         className="grid"
       >
-        {loading ? (
-          Array.from({ length: 8 }).map((_, i) => (
-            <div key={`skeleton-${i}`} style={styles.cardSkeleton}>
-              <div style={styles.posterSkeleton} />
-              <div style={styles.infoSkeleton}>
-                <div style={styles.titleLineSkeleton} />
-                <div style={styles.metaLineSkeleton} />
-              </div>
-            </div>
-          ))
-        ) : movies.length === 0 ? (
+        {movies.length === 0 ? (
           <div style={styles.emptyState}>
             <div style={styles.emptyIcon}>🎬</div>
             <p style={styles.emptyText}>没有符合条件的电影</p>
@@ -173,6 +167,20 @@ export default function MovieList() {
           ))
         )}
       </div>
+
+      {loading && (
+        <div style={styles.grid} className="grid">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={`skeleton-${i}`} style={styles.cardSkeleton}>
+              <div style={styles.posterSkeleton} />
+              <div style={styles.infoSkeleton}>
+                <div style={styles.titleLineSkeleton} />
+                <div style={styles.metaLineSkeleton} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

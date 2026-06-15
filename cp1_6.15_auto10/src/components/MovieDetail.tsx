@@ -6,29 +6,53 @@ import { Movie } from '../types'
 function AnimatedNumber({ value, decimals = 0, duration = 600 }: { value: number; decimals?: number; duration?: number }) {
   const [display, setDisplay] = useState(value)
   const prevRef = useRef(value)
-  const rafRef = useRef<number>()
+  const rafRef = useRef<number | null>(null)
+  const mountedRef = useRef(true)
 
   useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!mountedRef.current) return
+
     const start = prevRef.current
     const end = value
     const startTime = performance.now()
 
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+
     const animate = (now: number) => {
+      if (!mountedRef.current) return
       const elapsed = now - startTime
       const progress = Math.min(elapsed / duration, 1)
       const eased = 1 - Math.pow(1 - progress, 3)
       const current = start + (end - start) * eased
       setDisplay(current)
-      if (progress < 1) {
+      if (progress < 1 && mountedRef.current) {
         rafRef.current = requestAnimationFrame(animate)
       } else {
         prevRef.current = value
+        rafRef.current = null
       }
     }
 
     rafRef.current = requestAnimationFrame(animate)
     return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
+      }
     }
   }, [value, duration])
 
