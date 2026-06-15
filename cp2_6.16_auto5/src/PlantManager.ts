@@ -119,9 +119,14 @@ class PlantManager {
     if (wateredLogs.length === 0) return -1;
     
     const todayStr = this.getTodayDate();
-    const todayDate = new Date(todayStr + 'T00:00:00');
-    const lastWatered = new Date(wateredLogs[0].date + 'T00:00:00');
-    const diffTime = todayDate.getTime() - lastWatered.getTime();
+    const [ty, tm, td] = todayStr.split('-').map(Number);
+    const todayDate = new Date(ty, tm - 1, td);
+    
+    const lastWaterStr = wateredLogs[0].date;
+    const [ly, lm, ld] = lastWaterStr.split('-').map(Number);
+    const lastWaterDate = new Date(ly, lm - 1, ld);
+    
+    const diffTime = todayDate.getTime() - lastWaterDate.getTime();
     const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
   }
@@ -132,11 +137,31 @@ class PlantManager {
     return '#f44336';
   }
 
+  private getLocalDateParts(date: Date): { year: number; month: number; day: number; weekday: number } {
+    const formatter = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      weekday: 'short'
+    });
+    const parts = formatter.formatToParts(date);
+    const partMap: Record<string, string> = {};
+    parts.forEach(p => { partMap[p.type] = p.value; });
+    const weekdayMap: Record<string, number> = {
+      '周一': 1, '周二': 2, '周三': 3, '周四': 4, '周五': 5, '周六': 6, '周日': 0
+    };
+    return {
+      year: parseInt(partMap.year, 10),
+      month: parseInt(partMap.month, 10) - 1,
+      day: parseInt(partMap.day, 10),
+      weekday: weekdayMap[partMap.weekday || '周日'] ?? 0
+    };
+  }
+
   formatDate(date: Date): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    const { year, month, day } = this.getLocalDateParts(date);
+    return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   }
 
   getTodayDate(): string {
@@ -155,15 +180,18 @@ class PlantManager {
   }
 
   getDateLabel(dateStr: string): string {
-    const date = new Date(dateStr + 'T00:00:00');
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    const { weekday } = this.getLocalDateParts(date);
     const days = ['日', '一', '二', '三', '四', '五', '六'];
-    return `周${days[date.getDay()]} ${date.getMonth() + 1}/${date.getDate()}`;
+    return `周${days[weekday]} ${m}/${d}`;
   }
 
   isWeekend(dateStr: string): boolean {
-    const date = new Date(dateStr + 'T00:00:00');
-    const day = date.getDay();
-    return day === 0 || day === 6;
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    const { weekday } = this.getLocalDateParts(date);
+    return weekday === 0 || weekday === 6;
   }
 
   isToday(dateStr: string): boolean {

@@ -5,14 +5,23 @@ interface LightChartProps {
   logs: PlantLog[];
 }
 
+interface ChartBar {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  value: number;
+  date: string;
+}
+
 const LightChart: React.FC<LightChartProps> = ({ logs }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [hoveredBar, setHoveredBar] = useState<{ x: number; y: number; value: number; date: string } | null>(null);
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string } | null>(null);
+  const barsRef = useRef<ChartBar[]>([]);
+  const [hoveredBar, setHoveredBar] = useState<ChartBar | null>(null);
 
   useEffect(() => {
     drawChart();
-  }, [logs]);
+  }, [logs, hoveredBar]);
 
   const drawChart = () => {
     const canvas = canvasRef.current;
@@ -23,7 +32,7 @@ const LightChart: React.FC<LightChartProps> = ({ logs }) => {
 
     const width = canvas.width;
     const height = canvas.height;
-    const padding = { top: 30, right: 20, bottom: 50, left: 50 };
+    const padding = { top: 30, right: 40, bottom: 50, left: 50 };
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
 
@@ -36,7 +45,10 @@ const LightChart: React.FC<LightChartProps> = ({ logs }) => {
     for (let i = 29; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(today.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
       const log = sortedLogs.find(l => l.date === dateStr);
       last30Days.push({
         date: dateStr,
@@ -47,7 +59,7 @@ const LightChart: React.FC<LightChartProps> = ({ logs }) => {
     const maxLight = 12;
     
     ctx.strokeStyle = '#7cb342';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(padding.left, padding.top);
     ctx.lineTo(padding.left, height - padding.bottom);
@@ -57,87 +69,153 @@ const LightChart: React.FC<LightChartProps> = ({ logs }) => {
     ctx.fillStyle = '#666';
     ctx.font = '12px sans-serif';
     ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
     for (let i = 0; i <= maxLight; i += 3) {
       const y = height - padding.bottom - (i / maxLight) * chartHeight;
-      ctx.fillText(`${i}h`, padding.left - 10, y + 4);
+      ctx.fillText(`${i}h`, padding.left - 10, y);
       
-      ctx.strokeStyle = '#e0e0e0';
+      ctx.strokeStyle = '#e8f5e9';
       ctx.lineWidth = 0.5;
+      ctx.setLineDash([4, 4]);
       ctx.beginPath();
       ctx.moveTo(padding.left, y);
       ctx.lineTo(width - padding.right, y);
       ctx.stroke();
+      ctx.setLineDash([]);
     }
 
-    const barWidth = chartWidth / last30Days.length - 2;
-    const bars: { x: number; y: number; width: number; height: number; value: number; date: string }[] = [];
+    const slotWidth = chartWidth / last30Days.length;
+    const barWidth = slotWidth - 3;
+    const bars: ChartBar[] = [];
     
     last30Days.forEach((day, index) => {
-      const x = padding.left + index * (chartWidth / last30Days.length) + 1;
-      const barHeight = (day.lightHours / maxLight) * chartHeight;
+      const x = padding.left + index * slotWidth + 1.5;
+      const barHeight = Math.max(1, (day.lightHours / maxLight) * chartHeight);
       const y = height - padding.bottom - barHeight;
       bars.push({ x, y, width: barWidth, height: barHeight, value: day.lightHours, date: day.date });
 
-      const isHovered = hoveredBar && 
-        hoveredBar.x === x && 
+      const isHovered = hoveredBar &&
+        hoveredBar.x === x &&
         hoveredBar.y === y;
 
       const gradient = ctx.createLinearGradient(x, y, x, height - padding.bottom);
-      gradient.addColorStop(0, '#ffc107');
-      gradient.addColorStop(1, '#ff9800');
       
-      ctx.fillStyle = isHovered ? '#ffeb3b' : gradient;
-      ctx.fillRect(x, y, barWidth, barHeight);
+      if (isHovered) {
+        gradient.addColorStop(0, '#ffeb3b');
+        gradient.addColorStop(1, '#ffc107');
+      } else {
+        gradient.addColorStop(0, '#ffc107');
+        gradient.addColorStop(1, '#ff9800');
+      }
       
-      ctx.strokeStyle = '#f57c00';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(x, y, barWidth, barHeight);
-    });
+      const drawX = isHovered ? x - 1 : x;
+      const drawY = isHovered ? y - 2 : y;
+      const drawWidth = isHovered ? barWidth + 2 : barWidth;
+      const drawHeight = isHovered ? barHeight + 2 : barHeight;
+      
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      const r = isHovered ? 4 : 2;
+      ctx.moveTo(drawX + r, drawY);
+      ctx.lineTo(drawX + drawWidth - r, drawY);
+      ctx.quadraticCurveTo(drawX + drawWidth, drawY, drawX + drawWidth, drawY + r);
+      ctx.lineTo(drawX + drawWidth, drawY + drawHeight);
+      ctx.lineTo(drawX, drawY + drawHeight);
+      ctx.lineTo(drawX, drawY + r);
+      ctx.quadraticCurveTo(drawX, drawY, drawX + r, drawY);
+      ctx.fill();
+      
+      ctx.strokeStyle = isHovered ? '#f57c00' : '#ff9800';
+      ctx.lineWidth = isHovered ? 1.5 : 1;
+      ctx.stroke();
 
-    ctx.fillStyle = '#666';
-    ctx.font = '10px sans-serif';
+      if (isHovered) {
+        const lineX = x + barWidth / 2;
+        ctx.strokeStyle = 'rgba(255, 152, 0, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(lineX, padding.top);
+        ctx.lineTo(lineX, height - padding.bottom);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        const lineY = y;
+        ctx.strokeStyle = 'rgba(255, 152, 0, 0.4)';
+        ctx.beginPath();
+        ctx.moveTo(padding.left, lineY);
+        ctx.lineTo(width - padding.right, lineY);
+        ctx.stroke();
+
+        const labelText = `${day.date}  ${day.lightHours.toFixed(1)}小时`;
+        ctx.font = 'bold 12px sans-serif';
+        const metrics = ctx.measureText(labelText);
+        const labelWidth = metrics.width + 16;
+        const labelHeight = 28;
+        let labelX = lineX - labelWidth / 2;
+        let labelY = y - labelHeight - 12;
+
+        if (labelX < padding.left) labelX = padding.left;
+        if (labelX + labelWidth > width - padding.right) labelX = width - padding.right - labelWidth;
+        if (labelY < 0) labelY = y + 16;
+
+        ctx.fillStyle = 'rgba(33, 33, 33, 0.9)';
+        ctx.beginPath();
+        const lr = 6;
+        ctx.moveTo(labelX + lr, labelY);
+        ctx.lineTo(labelX + labelWidth - lr, labelY);
+        ctx.quadraticCurveTo(labelX + labelWidth, labelY, labelX + labelWidth, labelY + lr);
+        ctx.lineTo(labelX + labelWidth, labelY + labelHeight - lr);
+        ctx.quadraticCurveTo(labelX + labelWidth, labelY + labelHeight, labelX + labelWidth - lr, labelY + labelHeight);
+        ctx.lineTo(labelX + lr, labelY + labelHeight);
+        ctx.quadraticCurveTo(labelX, labelY + labelHeight, labelX, labelY + labelHeight - lr);
+        ctx.lineTo(labelX, labelY + lr);
+        ctx.quadraticCurveTo(labelX, labelY, labelX + lr, labelY);
+        ctx.fill();
+
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(labelText, labelX + labelWidth / 2, labelY + labelHeight / 2);
+      }
+    });
+    barsRef.current = bars;
+
+    ctx.fillStyle = '#888';
+    ctx.font = '11px sans-serif';
     ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
     for (let i = 0; i < last30Days.length; i += 5) {
-      const x = padding.left + i * (chartWidth / last30Days.length) + barWidth / 2;
-      const date = new Date(last30Days[i].date);
+      const x = padding.left + i * slotWidth + slotWidth / 2;
+      const dateParts = last30Days[i].date.split('-');
       ctx.fillText(
-        `${date.getMonth() + 1}/${date.getDate()}`,
+        `${parseInt(dateParts[1])}/${parseInt(dateParts[2])}`,
         x,
-        height - padding.bottom + 20
+        height - padding.bottom + 10
       );
     }
 
     canvas.onmousemove = (e) => {
       const rect = canvas.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const mouseX = (e.clientX - rect.left) * scaleX;
+      const mouseY = (e.clientY - rect.top) * scaleY;
 
-      let foundBar = null;
-      for (const bar of bars) {
+      let foundBar: ChartBar | null = null;
+      for (const bar of barsRef.current) {
         if (mouseX >= bar.x && mouseX <= bar.x + bar.width &&
-            mouseY >= bar.y && mouseY <= bar.y + bar.height) {
+            mouseY >= bar.y - 5 && mouseY <= bar.y + bar.height + 5) {
           foundBar = bar;
           break;
         }
       }
 
       setHoveredBar(foundBar);
-      if (foundBar) {
-        setTooltip({
-          x: e.clientX,
-          y: e.clientY,
-          text: `${foundBar.date}: ${foundBar.value}小时`
-        });
-      } else {
-        setTooltip(null);
-      }
-      drawChart();
     };
 
     canvas.onmouseleave = () => {
       setHoveredBar(null);
-      setTooltip(null);
-      drawChart();
     };
   };
 
@@ -150,17 +228,6 @@ const LightChart: React.FC<LightChartProps> = ({ logs }) => {
         height={250}
         className="chart-canvas"
       />
-      {tooltip && (
-        <div
-          className="chart-tooltip"
-          style={{
-            left: tooltip.x + 10,
-            top: tooltip.y - 30
-          }}
-        >
-          {tooltip.text}
-        </div>
-      )}
     </div>
   );
 };
