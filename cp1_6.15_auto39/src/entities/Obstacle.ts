@@ -16,67 +16,77 @@ export enum ObstacleType {
 export class Obstacle {
   scene: Phaser.Scene;
   type: ObstacleType;
-  container: Phaser.GameObjects.Container;
+  height: number;
   isActive: boolean = false;
-  private body: Phaser.GameObjects.Rectangle;
+
+  physicsRect: Phaser.GameObjects.Rectangle;
+  body: Phaser.Physics.Arcade.Body;
+
+  private visualContainer: Phaser.GameObjects.Container;
+  private bodyRect: Phaser.GameObjects.Rectangle;
   private stripe1: Phaser.GameObjects.Rectangle;
   private stripe2: Phaser.GameObjects.Rectangle;
 
   constructor(scene: Phaser.Scene, type: ObstacleType) {
     this.scene = scene;
     this.type = type;
-
-    const height = type === ObstacleType.HIGH ? OBSTACLE_HIGH_HEIGHT : OBSTACLE_LOW_HEIGHT;
+    this.height = type === ObstacleType.HIGH ? OBSTACLE_HIGH_HEIGHT : OBSTACLE_LOW_HEIGHT;
     const color = type === ObstacleType.HIGH ? 0xe74c3c : 0xe67e22;
 
-    this.body = scene.add.rectangle(0, 0, OBSTACLE_WIDTH, height, color);
-    this.stripe1 = scene.add.rectangle(0, -height / 2 + 4, OBSTACLE_WIDTH, 4, 0xffffff, 0.4);
-    this.stripe2 = scene.add.rectangle(0, height / 2 - 4, OBSTACLE_WIDTH, 4, 0x000000, 0.2);
+    const y = GROUND_Y - this.height / 2;
+    this.physicsRect = scene.add.rectangle(
+      GAME_WIDTH + OBSTACLE_WIDTH,
+      y,
+      OBSTACLE_WIDTH,
+      this.height,
+      0x000000,
+      0,
+    );
+    scene.physics.add.existing(this.physicsRect);
+    this.body = this.physicsRect.body as Phaser.Physics.Arcade.Body;
+    this.body.setAllowGravity(false);
+    this.body.setImmovable(true);
+    this.body.setSize(OBSTACLE_WIDTH, this.height);
 
-    const y = type === ObstacleType.HIGH
-      ? GROUND_Y - height / 2
-      : GROUND_Y - height / 2;
+    this.bodyRect = scene.add.rectangle(0, 0, OBSTACLE_WIDTH, this.height, color);
+    this.stripe1 = scene.add.rectangle(0, -this.height / 2 + 4, OBSTACLE_WIDTH, 4, 0xffffff, 0.4);
+    this.stripe2 = scene.add.rectangle(0, this.height / 2 - 4, OBSTACLE_WIDTH, 4, 0x000000, 0.2);
 
-    this.container = scene.add.container(GAME_WIDTH + OBSTACLE_WIDTH, y, [
-      this.body,
+    this.visualContainer = scene.add.container(GAME_WIDTH + OBSTACLE_WIDTH, y, [
+      this.bodyRect,
       this.stripe1,
       this.stripe2,
     ]);
-    this.container.setDepth(5);
-    this.container.setVisible(false);
+    this.visualContainer.setDepth(5);
+    this.deactivate();
   }
 
   spawn(x: number) {
-    const height = this.type === ObstacleType.HIGH ? OBSTACLE_HIGH_HEIGHT : OBSTACLE_LOW_HEIGHT;
-    const y = this.type === ObstacleType.HIGH
-      ? GROUND_Y - height / 2
-      : GROUND_Y - height / 2;
-    this.container.setPosition(x, y);
-    this.container.setVisible(true);
+    const y = GROUND_Y - this.height / 2;
+    this.body.reset(x, y);
+    this.visualContainer.setPosition(x, y);
+    this.visualContainer.setVisible(true);
+    this.physicsRect.setVisible(false);
+    this.physicsRect.setActive(true);
+    this.body.enable = true;
     this.isActive = true;
   }
 
   update(speed: number, delta: number) {
     if (!this.isActive) return;
-    this.container.x -= (speed * delta) / 1000;
-    if (this.container.x < -OBSTACLE_WIDTH * 2) {
+    const move = (speed * delta) / 1000;
+    this.body.position.x -= move;
+    this.visualContainer.x = this.body.position.x + this.body.width / 2;
+    if (this.body.position.x < -OBSTACLE_WIDTH * 2) {
       this.deactivate();
     }
   }
 
   deactivate() {
     this.isActive = false;
-    this.container.setVisible(false);
-  }
-
-  getBounds(): Phaser.Geom.Rectangle {
-    const height = this.type === ObstacleType.HIGH ? OBSTACLE_HIGH_HEIGHT : OBSTACLE_LOW_HEIGHT;
-    return new Phaser.Geom.Rectangle(
-      this.container.x - OBSTACLE_WIDTH / 2,
-      this.container.y - height / 2,
-      OBSTACLE_WIDTH,
-      height,
-    );
+    this.visualContainer.setVisible(false);
+    this.body.enable = false;
+    this.physicsRect.setActive(false);
   }
 }
 
@@ -94,15 +104,15 @@ export class ObstaclePool {
   }
 
   spawn(type: ObstacleType, x: number): Obstacle {
-    let obstacle = this.pool.find(
-      (o) => !o.isActive && o.type === type,
-    );
+    let obstacle = this.pool.find((o) => !o.isActive && o.type === type);
     if (!obstacle) {
       obstacle = new Obstacle(this.scene, type);
       this.pool.push(obstacle);
     }
     obstacle.spawn(x);
-    this.activeObstacles.push(obstacle);
+    if (!this.activeObstacles.includes(obstacle)) {
+      this.activeObstacles.push(obstacle);
+    }
     return obstacle;
   }
 
@@ -125,5 +135,9 @@ export class ObstaclePool {
 
   getRandomType(): ObstacleType {
     return Math.random() < OBSTACLE_HIGH_RATIO ? ObstacleType.HIGH : ObstacleType.LOW;
+  }
+
+  getActivePhysicsObjects(): Phaser.GameObjects.GameObject[] {
+    return this.activeObstacles.map((o) => o.physicsRect);
   }
 }

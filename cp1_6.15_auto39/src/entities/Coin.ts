@@ -8,8 +8,12 @@ import {
 
 export class Coin {
   scene: Phaser.Scene;
-  container: Phaser.GameObjects.Container;
   isActive: boolean = false;
+
+  physicsCircle: Phaser.GameObjects.Arc;
+  body: Phaser.Physics.Arcade.Body;
+
+  private visualContainer: Phaser.GameObjects.Container;
   private coinCircle: Phaser.GameObjects.Ellipse;
   private coinInner: Phaser.GameObjects.Ellipse;
   private glow: Phaser.GameObjects.Ellipse;
@@ -19,56 +23,80 @@ export class Coin {
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
 
+    this.physicsCircle = scene.add.circle(
+      GAME_WIDTH + COIN_SIZE,
+      COIN_Y_MIN,
+      COIN_SIZE / 2,
+      0x000000,
+      0,
+    );
+    scene.physics.add.existing(this.physicsCircle);
+    this.body = this.physicsCircle.body as Phaser.Physics.Arcade.Body;
+    this.body.setAllowGravity(false);
+    this.body.setImmovable(true);
+    this.body.setSize(COIN_SIZE, COIN_SIZE);
+
     this.glow = scene.add.ellipse(0, 0, COIN_SIZE + 8, COIN_SIZE + 8, 0xffd700, 0.3);
     this.coinCircle = scene.add.ellipse(0, 0, COIN_SIZE, COIN_SIZE, 0xffd700);
     this.coinInner = scene.add.ellipse(0, 0, COIN_SIZE * 0.5, COIN_SIZE * 0.5, 0xffec8b);
 
-    this.container = scene.add.container(GAME_WIDTH + COIN_SIZE, 0, [
+    this.visualContainer = scene.add.container(GAME_WIDTH + COIN_SIZE, 0, [
       this.glow,
       this.coinCircle,
       this.coinInner,
     ]);
-    this.container.setDepth(8);
-    this.container.setVisible(false);
+    this.visualContainer.setDepth(8);
+    this.deactivate();
   }
 
   spawn(x: number, y: number) {
     this.baseY = y;
-    this.container.setPosition(x, y);
-    this.container.setVisible(true);
-    this.container.setScale(1);
-    this.container.setAlpha(1);
+    this.body.reset(x, y);
+    this.visualContainer.setPosition(x, y);
+    this.visualContainer.setVisible(true);
+    this.visualContainer.setScale(1, 1);
+    this.visualContainer.setAlpha(1);
+    this.physicsCircle.setActive(true);
+    this.body.enable = true;
     this.isActive = true;
     this.floatOffset = 0;
   }
 
   update(speed: number, delta: number) {
     if (!this.isActive) return;
-    this.container.x -= (speed * delta) / 1000;
+    const move = (speed * delta) / 1000;
+    this.body.position.x -= move;
     this.floatOffset += delta * 0.005;
-    this.container.y = this.baseY + Math.sin(this.floatOffset) * 5;
+    const fy = this.baseY + Math.sin(this.floatOffset) * 5;
+    this.body.position.y = fy;
+    this.visualContainer.setPosition(
+      this.body.position.x + this.body.width / 2,
+      this.body.position.y + this.body.height / 2,
+    );
     const scaleX = Math.abs(Math.cos(this.floatOffset * 2));
-    this.container.setScale(Math.max(0.3, scaleX), 1);
+    this.visualContainer.setScale(Math.max(0.3, scaleX), 1);
     this.glow.setAlpha(0.2 + Math.sin(this.floatOffset * 3) * 0.15);
 
-    if (this.container.x < -COIN_SIZE * 2) {
+    if (this.body.position.x < -COIN_SIZE * 2) {
       this.deactivate();
     }
   }
 
   collect(onComplete?: () => void) {
     this.isActive = false;
+    this.body.enable = false;
+    this.physicsCircle.setActive(false);
     this.scene.tweens.add({
-      targets: this.container,
+      targets: this.visualContainer,
       scaleX: 2,
       scaleY: 2,
       alpha: 0,
       duration: 300,
       ease: 'Back.easeOut',
       onComplete: () => {
-        this.container.setVisible(false);
-        this.container.setScale(1);
-        this.container.setAlpha(1);
+        this.visualContainer.setVisible(false);
+        this.visualContainer.setScale(1, 1);
+        this.visualContainer.setAlpha(1);
         if (onComplete) onComplete();
       },
     });
@@ -76,18 +104,11 @@ export class Coin {
 
   deactivate() {
     this.isActive = false;
-    this.container.setVisible(false);
-    this.container.setScale(1);
-    this.container.setAlpha(1);
-  }
-
-  getBounds(): Phaser.Geom.Rectangle {
-    return new Phaser.Geom.Rectangle(
-      this.container.x - COIN_SIZE / 2,
-      this.container.y - COIN_SIZE / 2,
-      COIN_SIZE,
-      COIN_SIZE,
-    );
+    this.visualContainer.setVisible(false);
+    this.visualContainer.setScale(1, 1);
+    this.visualContainer.setAlpha(1);
+    this.body.enable = false;
+    this.physicsCircle.setActive(false);
   }
 }
 
@@ -111,7 +132,9 @@ export class CoinPool {
     }
     const y = COIN_Y_MIN + Math.random() * (COIN_Y_MAX - COIN_Y_MIN);
     coin.spawn(x, y);
-    this.activeCoins.push(coin);
+    if (!this.activeCoins.includes(coin)) {
+      this.activeCoins.push(coin);
+    }
     return coin;
   }
 
@@ -130,5 +153,9 @@ export class CoinPool {
       c.deactivate();
     }
     this.activeCoins = [];
+  }
+
+  getActivePhysicsObjects(): Phaser.GameObjects.GameObject[] {
+    return this.activeCoins.map((c) => c.physicsCircle);
   }
 }
