@@ -1,0 +1,121 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: #37474f;
+  background: #ffffff;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #b0bec5;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #90a4ae;
+}
+
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: #ffffff;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 0 24px;
+}
+
+.navbar-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #37474f;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.navbar-select {
+  position: absolute;
+  left: 24px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #bdbdbd;
+  font-size: 14px;
+  color: #37474f;
+  background: #ffffff;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.navbar-select:hover {
+  border-color: #ff7043;
+}
+
+.navbar-select:focus {
+  border-color: #ff7043;
+}
+
+.main-content {
+  margin-top: 56px;
+}
+
+.photo-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px 24px 40px;
+  transition: opacity 0.4s ease;
+}
+
+.photo-grid.transitioning {
+  opacity: 0;
+}
+
+@media (min-width: 1200px) {
+  .photo-grid {
+    max-width: 1296px;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 767px) {
+  .navbar-title {
+    font-size: 18px;
+  }
+  .navbar-select {
+    left: 12px;
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+  .photo-grid {
+    padding: 16px 12px 32px;
+    gap: 12px;
+  }
+}
