@@ -5,8 +5,7 @@ import {
   createDispatchTask,
   calculateGlobalStats,
   type BikeStation,
-  type DispatchTask,
-  type GlobalStats
+  type DispatchTask
 } from './data-generator';
 
 const SIMULATION_INTERVAL = 5000;
@@ -20,10 +19,12 @@ class App {
   private dispatchMode: boolean = false;
   private heatmapVisible: boolean = false;
   private currentPopupStationId: string | null = null;
+  private drawerOpen: boolean = false;
   private animatedValues = {
     totalBikes: 0,
     avgOccupancy: 0
   };
+  private animationFrameIds = new Map<string, number>();
 
   constructor() {
     this.mapManager = new MapManager('map', {
@@ -40,8 +41,8 @@ class App {
 
     this.updateStatsPanel();
     this.setupEventListeners();
+    this.setupDrawerTouch();
     this.startSimulation();
-    this.setupResponsive();
   }
 
   private setupEventListeners(): void {
@@ -50,7 +51,6 @@ class App {
     const heatmapToggle = document.getElementById('heatmapToggle');
     const dispatchModeBtn = document.getElementById('dispatchModeBtn');
     const drawerHandle = document.getElementById('drawerHandle');
-    const statsPanel = document.getElementById('statsPanel');
 
     popupClose?.addEventListener('click', () => this.closePopup());
     overlay?.addEventListener('click', () => this.closePopup());
@@ -64,19 +64,79 @@ class App {
     });
 
     drawerHandle?.addEventListener('click', () => {
-      statsPanel?.classList.toggle('open');
-      drawerHandle.classList.toggle('open');
+      this.toggleDrawer();
     });
   }
 
-  private setupResponsive(): void {
-    const handleResize = () => {
-      if (window.innerWidth <= 768) {
-        const drawerHandle = document.getElementById('drawerHandle');
-        drawerHandle?.classList.remove('open');
+  private setupDrawerTouch(): void {
+    const drawer = document.getElementById('statsPanel');
+    const handle = document.getElementById('drawerHandle');
+    if (!drawer || !handle) return;
+
+    let startY = 0;
+    let startTranslateY = 0;
+    let isDragging = false;
+
+    handle.addEventListener('touchstart', (e: TouchEvent) => {
+      isDragging = true;
+      startY = e.touches[0].clientY;
+      const style = window.getComputedStyle(drawer);
+      const matrix = new DOMMatrix(style.transform);
+      startTranslateY = matrix.m42;
+      drawer.style.transition = 'none';
+    }, { passive: true });
+
+    handle.addEventListener('touchmove', (e: TouchEvent) => {
+      if (!isDragging) return;
+      const currentY = e.touches[0].clientY;
+      const deltaY = currentY - startY;
+      const newTranslateY = startTranslateY + deltaY;
+      const maxTranslateY = drawer.offsetHeight - 28;
+
+      const clampedY = Math.max(0, Math.min(maxTranslateY, newTranslateY));
+      drawer.style.transform = `translateY(${clampedY}px)`;
+    }, { passive: true });
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (!isDragging) return;
+      isDragging = false;
+      drawer.style.transition = '';
+
+      const currentY = e.changedTouches[0].clientY;
+      const deltaY = currentY - startY;
+
+      if (deltaY < -50) {
+        this.drawerOpen = true;
+        drawer.classList.add('open');
+        drawer.style.transform = '';
+      } else if (deltaY > 50) {
+        this.drawerOpen = false;
+        drawer.classList.remove('open');
+        drawer.style.transform = '';
+      } else {
+        if (this.drawerOpen) {
+          drawer.classList.add('open');
+        }
+        drawer.style.transform = '';
       }
     };
-    window.addEventListener('resize', handleResize);
+
+    handle.addEventListener('touchend', onTouchEnd);
+    handle.addEventListener('touchcancel', onTouchEnd);
+  }
+
+  private toggleDrawer(): void {
+    const drawer = document.getElementById('statsPanel');
+    if (!drawer) return;
+
+    this.drawerOpen = !this.drawerOpen;
+    drawer.style.transition = '';
+
+    if (this.drawerOpen) {
+      drawer.classList.add('open');
+    } else {
+      drawer.classList.remove('open');
+    }
   }
 
   private startSimulation(): void {
@@ -132,9 +192,11 @@ class App {
     popup?.classList.add('show');
     overlay?.classList.add('show');
 
-    setTimeout(() => {
-      this.mapManager.drawHistoryChart('historyChart', station.hourlyHistory);
-    }, 100);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        this.mapManager.drawHistoryChart('historyChart', station.hourlyHistory);
+      });
+    });
   }
 
   private updatePopupContent(stationId: string): void {
@@ -270,6 +332,16 @@ class App {
     const element = document.getElementById(elementId);
     if (!element) return;
 
+    const existingAnim = this.animationFrameIds.get(elementId);
+    if (existingAnim) {
+      cancelAnimationFrame(existingAnim);
+    }
+
+    if (from === to) {
+      element.textContent = isPercent ? `${to}%` : String(to);
+      return;
+    }
+
     const duration = 600;
     const startTime = performance.now();
     const diff = to - from;
@@ -283,17 +355,23 @@ class App {
       element.textContent = isPercent ? `${current}%` : String(current);
 
       if (progress < 1) {
-        requestAnimationFrame(step);
+        const id = requestAnimationFrame(step);
+        this.animationFrameIds.set(elementId, id);
+      } else {
+        this.animationFrameIds.delete(elementId);
       }
     };
 
-    requestAnimationFrame(step);
+    const id = requestAnimationFrame(step);
+    this.animationFrameIds.set(elementId, id);
   }
 
   destroy(): void {
     if (this.simulationTimer) {
       clearInterval(this.simulationTimer);
     }
+    this.animationFrameIds.forEach(id => cancelAnimationFrame(id));
+    this.animationFrameIds.clear();
     this.mapManager.destroy();
   }
 }
