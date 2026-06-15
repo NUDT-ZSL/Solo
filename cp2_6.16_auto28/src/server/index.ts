@@ -4,9 +4,9 @@ import { createServer } from 'http'
 import { WebSocketServer } from 'ws'
 import crypto from 'crypto'
 import { v4 as uuidv4 } from 'uuid'
-import { initDB, getAllStages, getStageById, createTicket } from './db'
-import { initSocketManager } from './socketManager'
-import type { Ticket } from './db'
+import { initDB, getAllStages, getStageById, createTicket } from './db.ts'
+import { initSocketManager } from './socketManager.ts'
+import type { Ticket } from './db.ts'
 
 const app = express()
 const server = createServer(app)
@@ -35,9 +35,9 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' })
 })
 
-app.get('/api/stages', async (_req, res) => {
+app.get('/api/stages', (_req, res) => {
   try {
-    const stages = await getAllStages()
+    const stages = getAllStages()
     res.json(stages)
   } catch (error) {
     console.error('Error fetching stages:', error)
@@ -45,9 +45,9 @@ app.get('/api/stages', async (_req, res) => {
   }
 })
 
-app.get('/api/stages/:id', async (req, res) => {
+app.get('/api/stages/:id', (req, res) => {
   try {
-    const stage = await getStageById(req.params.id)
+    const stage = getStageById(req.params.id)
     if (!stage) {
       res.status(404).json({ error: 'Stage not found' })
       return
@@ -59,7 +59,7 @@ app.get('/api/stages/:id', async (req, res) => {
   }
 })
 
-app.post('/api/tickets', async (req, res) => {
+app.post('/api/tickets', (req, res) => {
   try {
     const { userId, stageId, nickname } = req.body
     
@@ -68,7 +68,7 @@ app.post('/api/tickets', async (req, res) => {
       return
     }
 
-    const stage = await getStageById(stageId)
+    const stage = getStageById(stageId)
     if (!stage) {
       res.status(404).json({ error: 'Stage not found' })
       return
@@ -76,7 +76,7 @@ app.post('/api/tickets', async (req, res) => {
 
     const ticketId = uuidv4()
     const seatNumber = generateSeatNumber()
-    const hashData = `${userId}-${stageId}-${ticketId}-${Date.now()}`
+    const hashData = `${userId}-${stageId}-${ticketId}-${Date.now()}-${Math.random().toString(36).slice(2)}`
     const hash = generateSHA256(hashData)
 
     const ticketData: Omit<Ticket, 'createdAt'> = {
@@ -88,7 +88,7 @@ app.post('/api/tickets', async (req, res) => {
       seatNumber
     }
 
-    const ticket = await createTicket(ticketData)
+    const ticket = createTicket(ticketData)
     res.json(ticket)
   } catch (error) {
     console.error('Error creating ticket:', error)

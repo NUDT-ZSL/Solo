@@ -77,7 +77,7 @@ const handleJoin = (ws: ExtendedWebSocket, stageId: string, userId: string, nick
   broadcastOnlineCount()
 }
 
-const handleLeave = (ws: ExtendedWebSocket, stageId: string, userId: string) => {
+const handleLeave = (_ws: ExtendedWebSocket, stageId: string, userId: string) => {
   const room = rooms.get(stageId)
   if (room) {
     room.users.delete(userId)
@@ -104,7 +104,7 @@ const handleChat = (message: ChatMessage) => {
     data: { message }
   }
 
-  userSockets.forEach((socket, userId) => {
+  userSockets.forEach((socket, _userId) => {
     if (socket.stageId === message.stageId && socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify(response))
     }

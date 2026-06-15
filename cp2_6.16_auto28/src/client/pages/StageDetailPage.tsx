@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Calendar, Clock, Users, Ticket, Download, Play, Pause } from 'lucide-react'
+import { useParams, Link } from 'react-router-dom'
+import { ArrowLeft, Calendar, Clock, Users, Ticket, Play, Pause } from 'lucide-react'
 import SpectrumVisualizer from '../components/SpectrumVisualizer'
 import TicketSVG from '../components/TicketSVG'
 import ParticleBackground from '../components/ParticleBackground'
@@ -11,7 +11,6 @@ import type { Stage, Ticket as TicketType } from '../../shared/types'
 
 const StageDetailPage = () => {
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
   const [stage, setStage] = useState<Stage | null>(null)
   const [ticket, setTicket] = useState<TicketType | null>(null)
   const [loading, setLoading] = useState(true)
@@ -139,7 +138,11 @@ const StageDetailPage = () => {
   if (isPerformanceMode && ticket) {
     return (
       <div className="w-full h-full relative overflow-hidden">
-        <ParticleBackground color={stage.backgroundColor} />
+        <ParticleBackground 
+          color={stage.backgroundColor}
+          gradientStart={stage.backgroundColor}
+          gradientEnd="#00e5ff"
+        />
         <audio ref={audioRef} src={stage.audioUrl} loop />
         
         <div className="absolute top-0 left-0 right-0 z-10 p-6">
@@ -311,28 +314,6 @@ const StageDetailPage = () => {
               date={formatDate(stage.performanceTime)}
               seatNumber={ticket.seatNumber}
               hash={ticket.hash}
-              onDownload={() => {
-                const svg = document.getElementById('ticket-svg')
-                if (!svg) return
-                
-                const canvas = document.createElement('canvas')
-                const ctx = canvas.getContext('2d')
-                const svgData = new XMLSerializer().serializeToString(svg)
-                const img = new Image()
-                
-                canvas.width = 1000
-                canvas.height = 560
-                
-                img.onload = () => {
-                  ctx?.drawImage(img, 0, 0, 1000, 560)
-                  const link = document.createElement('a')
-                  link.download = `ticket-${ticket.id}.png`
-                  link.href = canvas.toDataURL('image/png')
-                  link.click()
-                }
-                
-                img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)))
-              }}
             />
           </div>
         </div>

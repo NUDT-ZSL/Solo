@@ -1,13 +1,17 @@
-import Database from 'better-sqlite3'
+import initSqlJs from 'sql.js'
+import type { SqlJsStatic, Database as SqlJsDatabase } from 'sql.js'
 import { fileURLToPath } from 'url'
 import path from 'path'
+import fs from 'fs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 const dbPath = path.join(__dirname, '..', '..', 'festival.db')
 
-const db = new Database(dbPath)
+type Database = SqlJsDatabase
+
+let db: Database | null = null
 
 export interface Stage {
   id: string
@@ -31,8 +35,36 @@ export interface Ticket {
   createdAt: string
 }
 
-export const initDB = (): void => {
-  db.exec(`
+const saveDatabase = (database: Database) => {
+  try {
+    const data = database.export()
+    const buffer = Buffer.from(data)
+    fs.writeFileSync(dbPath, buffer)
+  } catch (error) {
+    console.warn('Warning: Failed to save database to file, using in-memory only:', error)
+  }
+}
+
+export const initDB = async (): Promise<void> => {
+  const SQL: SqlJsStatic = await initSqlJs()
+  
+  let existingData: Uint8Array | null = null
+  try {
+    if (fs.existsSync(dbPath)) {
+      const fileBuffer = fs.readFileSync(dbPath)
+      existingData = new Uint8Array(fileBuffer)
+    }
+  } catch (error) {
+    console.warn('Warning: Could not load existing database:', error)
+  }
+  
+  if (existingData) {
+    db = new SQL.Database(existingData)
+  } else {
+    db = new SQL.Database()
+  }
+
+  db.run(`
     CREATE TABLE IF NOT EXISTS stages (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -46,7 +78,7 @@ export const initDB = (): void => {
     )
   `)
 
-  db.exec(`
+  db.run(`
     CREATE TABLE IF NOT EXISTS tickets (
       id TEXT PRIMARY KEY,
       userId TEXT NOT NULL,
@@ -59,14 +91,10 @@ export const initDB = (): void => {
     )
   `)
 
-  const count = db.prepare('SELECT COUNT(*) as count FROM stages').get() as { count: number }
+  const countResult = db.exec('SELECT COUNT(*) as count FROM stages')
+  const count = countResult.length > 0 ? (countResult[0].values[0][0] as number) : 0
   
-  if (count.count === 0) {
-    const stmt = db.prepare(`
-      INSERT INTO stages (id, name, artistName, artistAvatar, performanceTime, audioUrl, backgroundColor, particlePreset)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `)
-
+  if (count === 0) {
     const stages = [
       ['1', 'Electric Dreams', 'Neon Pulse', 'https://api.dicebear.com/7.x/avataaars/svg?seed=neon', '2026-06-20T20:00:00', 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', '#6a1b9a', 'nebula'],
       ['2', 'Synthwave Nights', 'RetroWave', 'https://api.dicebear.com/7.x/avataaars/svg?seed=retro', '2026-06-20T21:30:00', 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3', '#006064', 'cosmic'],
@@ -74,33 +102,108 @@ export const initDB = (): void => {
       ['4', 'Ambient Space', 'Echo Chamber', 'https://api.dicebear.com/7.x/avataaars/svg?seed=echo', '2026-06-21T20:00:00', 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3', '#1a237e', 'stars']
     ]
 
+    const stmt = db.prepare(`
+      INSERT INTO stages (id, name, artistName, artistAvatar, performanceTime, audioUrl, backgroundColor, particlePreset)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
     stages.forEach(stage => {
-      stmt.run(stage)
+      stmt.bind(stage)
+      stmt.step()
+      stmt.reset()
     })
+    
+    stmt.free()
   }
+
+  saveDatabase(db)
 }
 
+const rowToStage = (row: any[]): Stage => ({
+  id: row[0] as string,
+  name: row[1] as string,
+  artistName: row[2] as string,
+  artistAvatar: row[3] as string,
+  performanceTime: row[4] as string,
+  audioUrl: row[5] as string,
+  backgroundColor: row[6] as string,
+  particlePreset: row[7] as string,
+  createdAt: row[8] as string
+})
+
+const rowToTicket = (row: any[]): Ticket => ({
+  id: row[0] as string,
+  userId: row[1] as string,
+  stageId: row[2] as string,
+  nickname: row[3] as string,
+  hash: row[4] as string,
+  seatNumber: row[5] as string,
+  createdAt: row[6] as string
+})
+
 export const getAllStages = (): Stage[] => {
-  return db.prepare('SELECT * FROM stages ORDER BY performanceTime ASC').all() as Stage[]
+  if (!db) return []
+  
+  const results = db.exec('SELECT * FROM stages ORDER BY performanceTime ASC')
+  if (results.length === 0) return []
+  
+  return results[0].values.map(rowToStage)
 }
 
 export const getStageById = (id: string): Stage | undefined => {
-  return db.prepare('SELECT * FROM stages WHERE id = ?').get(id) as Stage | undefined
+  if (!db) return undefined
+  
+  const stmt = db.prepare('SELECT * FROM stages WHERE id = ?')
+  stmt.bind([id])
+  
+  if (stmt.step()) {
+    const row = stmt.getAsObject() as any
+    stmt.free()
+    return {
+      id: row.id,
+      name: row.name,
+      artistName: row.artistName,
+      artistAvatar: row.artistAvatar,
+      performanceTime: row.performanceTime,
+      audioUrl: row.audioUrl,
+      backgroundColor: row.backgroundColor,
+      particlePreset: row.particlePreset,
+      createdAt: row.createdAt
+    }
+  }
+  
+  stmt.free()
+  return undefined
 }
 
 export const createTicket = (ticket: Omit<Ticket, 'createdAt'>): Ticket => {
-  const stmt = db.prepare(`
-    INSERT INTO tickets (id, userId, stageId, nickname, hash, seatNumber)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `)
+  if (!db) throw new Error('Database not initialized')
   
-  stmt.run(ticket.id, ticket.userId, ticket.stageId, ticket.nickname, ticket.hash, ticket.seatNumber)
+  const createdAt = new Date().toISOString()
   
-  return db.prepare('SELECT * FROM tickets WHERE id = ?').get(ticket.id) as Ticket
+  db.run(
+    `INSERT INTO tickets (id, userId, stageId, nickname, hash, seatNumber, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [ticket.id, ticket.userId, ticket.stageId, ticket.nickname, ticket.hash, ticket.seatNumber, createdAt]
+  )
+
+  saveDatabase(db)
+
+  return {
+    ...ticket,
+    createdAt
+  }
 }
 
 export const getTicketsByUserId = (userId: string): Ticket[] => {
-  return db.prepare('SELECT * FROM tickets WHERE userId = ? ORDER BY createdAt DESC').all(userId) as Ticket[]
+  if (!db) return []
+  
+  const results = db.exec(
+    `SELECT * FROM tickets WHERE userId = '${userId.replace(/'/g, "''")}' ORDER BY createdAt DESC`
+  )
+  if (results.length === 0) return []
+  
+  return results[0].values.map(rowToTicket)
 }
 
 export default db

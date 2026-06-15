@@ -61,10 +61,26 @@ graph TD
 
 ### 核心依赖：
 - react, react-dom
-- express, sqlite3, cors, uuid, ws
+- express, sql.js, cors, uuid, ws
 - typescript, vite, @vitejs/plugin-react
-- @types/react, @types/react-dom, @types/express, @types/sqlite3, @types/cors, @types/uuid, @types/ws
+- @types/react, @types/react-dom, @types/express, @types/sql.js, @types/cors, @types/uuid, @types/ws
 - concurrently
+
+### 数据库依赖替换说明：
+原需求指定使用 `sqlite3` 库，但由于 `sqlite3` 在 Windows 环境下需要完整编译工具链（Python + C++ Build Tools），且 `better-sqlite3` 在 Node 24 环境下也存在预编译二进制下载超时和本地编译失败的问题，实际实现中替换为 `sql.js`。
+
+**替换原因：**
+1. **纯 WebAssembly 实现**：`sql.js` 基于 Emscripten 编译 SQLite 为 WebAssembly，完全不需要任何本地编译工具链
+2. **零配置开箱即用**：无需安装 Visual Studio、Python 或任何 C++ 构建工具，npm install 即可使用
+3. **跨平台一致性**：WASM 在所有平台行为完全一致，不存在平台特定的编译问题
+4. **持久化支持**：支持将数据库导出为二进制 Buffer 保存到本地文件，启动时重新加载
+5. **TypeScript 支持**：官方维护的 `@types/sql.js` 类型定义完善
+
+**性能和兼容性说明：**
+- **性能差异**：WASM 版比原生版慢约 20-30%，对于小型项目（舞台/门票数据量极少）完全无感知
+- **SQL 兼容性**：完全兼容标准 SQLite 语法，底层就是编译后的 SQLite 引擎
+- **数据格式**：可导出为标准 SQLite 数据库文件，使用任何 SQLite 客户端均可打开读取
+- **迁移说明**：如需要换回 `sqlite3` 或 `better-sqlite3`，只需修改 `src/server/db.ts` 中具体的 API 调用方式，表结构和 SQL 语句无需改动
 
 ## 3. 路由定义
 

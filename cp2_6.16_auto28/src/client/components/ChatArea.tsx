@@ -46,7 +46,7 @@ const ChatArea = ({ stageId, compact = false }: ChatAreaProps) => {
   if (compact) {
     return (
       <div className="flex flex-col h-80">
-        <div className="flex-1 overflow-y-auto scrollbar-hide space-y-2 mb-4">
+        <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3 mb-4 px-1">
           {stageMessages.length === 0 ? (
             <div className="flex items-center justify-center h-full text-white/40 text-sm">
               暂无消息，发送第一条消息吧！
@@ -55,23 +55,28 @@ const ChatArea = ({ stageId, compact = false }: ChatAreaProps) => {
             stageMessages.map((msg: ChatMessage) => (
               <div
                 key={msg.id}
-                className="flex items-start gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors"
+                className="flex items-start gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
               >
                 <img
                   src={msg.avatar}
                   alt={msg.nickname}
-                  className="w-8 h-8 rounded-full flex-shrink-0"
+                  className="w-10 h-10 rounded-full flex-shrink-0 border-2 border-white/10"
                 />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className={`text-sm font-medium ${msg.userId === userId ? 'text-cyan-400' : 'text-white'}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-sm font-semibold ${msg.userId === userId ? 'text-cyan-400' : 'text-white'}`}>
                       {msg.nickname}
+                      {msg.userId === userId && (
+                        <span className="ml-2 text-xs text-cyan-400/60">(我)</span>
+                      )}
                     </span>
                     <span className="text-xs text-white/40">
                       {formatTime(msg.timestamp)}
                     </span>
                   </div>
-                  <p className="text-white/70 text-sm break-words">{msg.content}</p>
+                  <p className="text-white/80 text-sm leading-relaxed break-words">
+                    {msg.content}
+                  </p>
                 </div>
               </div>
             ))
@@ -91,7 +96,7 @@ const ChatArea = ({ stageId, compact = false }: ChatAreaProps) => {
           <button
             onClick={handleSend}
             disabled={!message.trim()}
-            className="btn-gradient px-4 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-gradient px-5 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send className="w-5 h-5" />
           </button>
@@ -111,21 +116,22 @@ const ChatArea = ({ stageId, compact = false }: ChatAreaProps) => {
           stageMessages.map((msg: ChatMessage) => (
             <div
               key={msg.id}
-              className="flex items-center gap-3 h-10 px-3 rounded-lg bg-white/10"
+              className="flex items-center h-10 px-3 rounded-lg bg-white/10 hover:bg-white/15 transition-colors"
+              style={{ minHeight: '40px', height: 'auto', paddingTop: '8px', paddingBottom: '8px' }}
             >
               <img
                 src={msg.avatar}
                 alt={msg.nickname}
-                className="w-7 h-7 rounded-full flex-shrink-0"
+                className="w-7 h-7 rounded-full flex-shrink-0 mr-3 border border-white/10"
               />
-              <div className="flex-1 flex items-center justify-between min-w-0">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className={`text-sm font-medium flex-shrink-0 ${msg.userId === userId ? 'text-cyan-400' : 'text-white'}`}>
-                    {msg.nickname}
-                  </span>
-                  <span className="text-white/70 text-sm truncate">{msg.content}</span>
-                </div>
-                <span className="text-xs text-white/40 flex-shrink-0 ml-2">
+              <div className="flex-1 flex items-center gap-3 min-w-0 overflow-hidden">
+                <span className={`text-sm font-medium flex-shrink-0 ${msg.userId === userId ? 'text-cyan-400' : 'text-white/90'}`}>
+                  {msg.nickname}
+                </span>
+                <span className="text-white/70 text-sm truncate flex-1 min-w-0">
+                  {msg.content}
+                </span>
+                <span className="text-xs text-white/40 flex-shrink-0 ml-auto pl-2">
                   {formatTime(msg.timestamp)}
                 </span>
               </div>

@@ -13,6 +13,7 @@ const SpectrumVisualizer = ({ audioUrl }: SpectrumVisualizerProps) => {
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null)
   const animationRef = useRef<number>(0)
   const [isPlaying, setIsPlaying] = useState(false)
+  const isPlayingRef = useRef(false)
 
   useEffect(() => {
     const audio = new Audio(audioUrl)
@@ -20,33 +21,63 @@ const SpectrumVisualizer = ({ audioUrl }: SpectrumVisualizerProps) => {
     audio.volume = 0.3
     audioRef.current = audio
 
+    const handleEnded = () => {
+      setIsPlaying(false)
+      isPlayingRef.current = false
+    }
+    audio.addEventListener('ended', handleEnded)
+
     return () => {
+      audio.removeEventListener('ended', handleEnded)
       audio.pause()
+      audio.src = ''
+      
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current)
+        animationRef.current = 0
       }
+      
+      if (sourceRef.current) {
+        try {
+          sourceRef.current.disconnect()
+        } catch (e) {
+          console.warn('Failed to disconnect source:', e)
+        }
+        sourceRef.current = null
+      }
+      
       if (audioContextRef.current) {
-        audioContextRef.current.close()
+        audioContextRef.current.close().catch(e => {
+          console.warn('Failed to close AudioContext:', e)
+        })
+        audioContextRef.current = null
       }
+      
+      analyserRef.current = null
+      audioRef.current = null
     }
   }, [audioUrl])
 
   const initAudioContext = () => {
     if (!audioRef.current || audioContextRef.current) return
 
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-    const analyser = audioContext.createAnalyser()
-    const source = audioContext.createMediaElementSource(audioRef.current)
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const analyser = audioContext.createAnalyser()
+      const source = audioContext.createMediaElementSource(audioRef.current)
 
-    analyser.fftSize = 256
-    analyser.smoothingTimeConstant = 0.8
+      analyser.fftSize = 256
+      analyser.smoothingTimeConstant = 0.8
 
-    source.connect(analyser)
-    analyser.connect(audioContext.destination)
+      source.connect(analyser)
+      analyser.connect(audioContext.destination)
 
-    audioContextRef.current = audioContext
-    analyserRef.current = analyser
-    sourceRef.current = source
+      audioContextRef.current = audioContext
+      analyserRef.current = analyser
+      sourceRef.current = source
+    } catch (error) {
+      console.error('Failed to init AudioContext:', error)
+    }
   }
 
   const draw = () => {
@@ -60,9 +91,13 @@ const SpectrumVisualizer = ({ audioUrl }: SpectrumVisualizerProps) => {
     const dataArray = new Uint8Array(bufferLength)
 
     const renderFrame = () => {
+      if (!analyserRef.current || !isPlayingRef.current) {
+        return
+      }
+
       animationRef.current = requestAnimationFrame(renderFrame)
 
-      analyserRef.current!.getByteFrequencyData(dataArray)
+      analyserRef.current.getByteFrequencyData(dataArray)
 
       const gradient = ctx.createLinearGradient(0, canvas.height, 0, 0)
       gradient.addColorStop(0, '#e040fb')
@@ -92,20 +127,44 @@ const SpectrumVisualizer = ({ audioUrl }: SpectrumVisualizerProps) => {
     renderFrame()
   }
 
+  const stopDrawing = () => {
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current)
+      animationRef.current = 0
+    }
+    
+    if (canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d')
+      if (ctx) {
+        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+      }
+    }
+  }
+
   const togglePlay = async () => {
     if (!audioRef.current) return
 
     if (isPlaying) {
       audioRef.current.pause()
+      isPlayingRef.current = false
       setIsPlaying(false)
+      stopDrawing()
     } else {
-      initAudioContext()
       try {
+        initAudioContext()
+        
+        if (audioContextRef.current?.state === 'suspended') {
+          await audioContextRef.current.resume()
+        }
+        
         await audioRef.current.play()
+        isPlayingRef.current = true
         setIsPlaying(true)
         draw()
       } catch (error) {
         console.error('Playback failed:', error)
+        isPlayingRef.current = false
+        setIsPlaying(false)
       }
     }
   }
