@@ -280,8 +280,8 @@ function CaptureOverlay({
               }}
             />
 
-            {/* 四角手柄 */}
-            {showHandles && !isDragging && (['tl', 'tr', 'bl', 'br'] as HandleType[]).map((handle) => (
+            {/* 四角手柄 - 直径10px白色圆点 */}
+            {showHandles && !isDragging && !activeHandle && (['tl', 'tr', 'bl', 'br'] as HandleType[]).map((handle) => (
               <div
                 key={handle}
                 data-handle={handle}
@@ -291,21 +291,20 @@ function CaptureOverlay({
                   width: '10px',
                   height: '10px',
                   backgroundColor: '#ffffff',
-                  border: '2px solid #2196f3',
                   borderRadius: '50%',
-                  boxShadow: '0 1px 4px rgba(0, 0, 0, 0.3)',
+                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(33, 150, 243, 0.5)',
                   ...getHandlePosition(handle),
                   zIndex: 9999,
                   cursor: 'pointer',
                   transition: 'transform 0.15s ease, box-shadow 0.15s ease'
                 } as React.CSSProperties}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'scale(1.2)'
-                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(33, 150, 243, 0.5)'
+                  e.currentTarget.style.transform = 'scale(1.3)'
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(33, 150, 243, 0.6), 0 0 0 1px rgba(33, 150, 243, 0.8)'
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.transform = 'scale(1)'
-                  e.currentTarget.style.boxShadow = '0 1px 4px rgba(0, 0, 0, 0.3)'
+                  e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(33, 150, 243, 0.5)'
                 }}
               />
             ))}

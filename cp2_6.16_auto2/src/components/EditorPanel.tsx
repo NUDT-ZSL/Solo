@@ -24,21 +24,23 @@ const PRESET_COLORS = [
 ]
 
 const DOWNLOAD_FORMATS: DownloadFormat[] = [
-  { id: 'png', name: 'PNG 4x', type: 'image/png', quality: 1, icon: '🖼️' },
-  { id: 'jpg', name: 'JPG 4x', type: 'image/jpeg', quality: 0.95, icon: '📷' },
-  { id: 'webp', name: 'WebP 4x', type: 'image/webp', quality: 0.95, icon: '🎨' }
+  { id: 'png', name: 'PNG 400%', type: 'image/png', quality: 1, icon: '🖼️' },
+  { id: 'jpg', name: 'JPG 400%', type: 'image/jpeg', quality: 0.95, icon: '📷' },
+  { id: 'webp', name: 'WebP 400%', type: 'image/webp', quality: 0.95, icon: '🎨' }
 ]
 
 function EditorPanel({ imageDataUrl, onClose }: EditorPanelProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
   const rafRef = useRef<number | null>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const bounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const [imageLoaded, setImageLoaded] = useState(false)
   const [originalSize, setOriginalSize] = useState({ width: 0, height: 0 })
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 })
   const [showDownloadModal, setShowDownloadModal] = useState(false)
   const [previewBounce, setPreviewBounce] = useState(false)
-  const bounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [watermarkText, setWatermarkText] = useState('')
   const [watermarkPosition, setWatermarkPosition] = useState<WatermarkPosition>('bottom-right')
@@ -48,83 +50,112 @@ function EditorPanel({ imageDataUrl, onClose }: EditorPanelProps) {
   const [borderRadius, setBorderRadius] = useState(0)
   const [customColorInput, setCustomColorInput] = useState(false)
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const paramsRef = useRef({
+    watermarkText: '',
+    watermarkPosition: 'bottom-right' as WatermarkPosition,
+    watermarkOpacity: 0.5,
+    borderWidth: 0,
+    borderColor: '#2196f3',
+    borderRadius: 0,
+    originalWidth: 0,
+    originalHeight: 0,
+    imageLoaded: false
+  })
 
-  const triggerRedraw = useCallback(() => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current)
+  const updateParams = useCallback(() => {
+    paramsRef.current = {
+      watermarkText,
+      watermarkPosition,
+      watermarkOpacity,
+      borderWidth,
+      borderColor,
+      borderRadius,
+      originalWidth: originalSize.width,
+      originalHeight: originalSize.height,
+      imageLoaded
     }
-    debounceRef.current = setTimeout(() => {
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current)
-      }
-      rafRef.current = requestAnimationFrame(drawCanvas)
-      setPreviewBounce(true)
-      if (bounceTimeoutRef.current) {
-        clearTimeout(bounceTimeoutRef.current)
-      }
-      bounceTimeoutRef.current = setTimeout(() => {
-        setPreviewBounce(false)
-      }, 150)
-    }, 16)
-  }, [])
+  }, [watermarkText, watermarkPosition, watermarkOpacity, borderWidth, borderColor, borderRadius, originalSize, imageLoaded])
+
+  updateParams()
+
+  const roundRect = (
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number
+  ) => {
+    const r = Math.min(radius, width / 2, height / 2)
+    ctx.moveTo(x + r, y)
+    ctx.lineTo(x + width - r, y)
+    ctx.quadraticCurveTo(x + width, y, x + width, y + r)
+    ctx.lineTo(x + width, y + height - r)
+    ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height)
+    ctx.lineTo(x + r, y + height)
+    ctx.quadraticCurveTo(x, y + height, x, y + height - r)
+    ctx.lineTo(x, y + r)
+    ctx.quadraticCurveTo(x, y, x + r, y)
+    ctx.closePath()
+  }
 
   const drawCanvas = useCallback(() => {
     const canvas = canvasRef.current
     const img = imageRef.current
-    if (!canvas || !img || !imageLoaded) return
+    const p = paramsRef.current
+    if (!canvas || !img || !p.imageLoaded) return
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const totalBorderWidth = borderWidth * 2
-    const outputWidth = originalSize.width + totalBorderWidth
-    const outputHeight = originalSize.height + totalBorderWidth
+    const totalBorderWidth = p.borderWidth * 2
+    const outputWidth = p.originalWidth + totalBorderWidth
+    const outputHeight = p.originalHeight + totalBorderWidth
 
     canvas.width = outputWidth
     canvas.height = outputHeight
 
     ctx.clearRect(0, 0, outputWidth, outputHeight)
 
-    if (borderWidth > 0 && borderRadius > 0) {
+    if (p.borderWidth > 0 && p.borderRadius > 0) {
       ctx.save()
-      ctx.fillStyle = borderColor
-      roundRect(ctx, 0, 0, outputWidth, outputHeight, borderRadius + borderWidth / 2)
+      ctx.fillStyle = p.borderColor
+      roundRect(ctx, 0, 0, outputWidth, outputHeight, p.borderRadius + p.borderWidth / 2)
       ctx.fill()
       ctx.restore()
 
       ctx.save()
       ctx.beginPath()
-      roundRect(ctx, borderWidth, borderWidth, originalSize.width, originalSize.height, borderRadius)
+      roundRect(ctx, p.borderWidth, p.borderWidth, p.originalWidth, p.originalHeight, p.borderRadius)
       ctx.clip()
-      ctx.drawImage(img, borderWidth, borderWidth, originalSize.width, originalSize.height)
+      ctx.drawImage(img, p.borderWidth, p.borderWidth, p.originalWidth, p.originalHeight)
       ctx.restore()
-    } else if (borderWidth > 0) {
-      ctx.fillStyle = borderColor
+    } else if (p.borderWidth > 0) {
+      ctx.fillStyle = p.borderColor
       ctx.fillRect(0, 0, outputWidth, outputHeight)
-      ctx.drawImage(img, borderWidth, borderWidth, originalSize.width, originalSize.height)
+      ctx.drawImage(img, p.borderWidth, p.borderWidth, p.originalWidth, p.originalHeight)
     } else {
-      ctx.drawImage(img, 0, 0, originalSize.width, originalSize.height)
+      ctx.drawImage(img, 0, 0, p.originalWidth, p.originalHeight)
     }
 
-    if (watermarkText.trim()) {
+    if (p.watermarkText.trim()) {
       ctx.save()
-      ctx.globalAlpha = watermarkOpacity
-      ctx.font = `${Math.max(14, originalSize.width * 0.03)}px Arial, sans-serif`
+      ctx.globalAlpha = p.watermarkOpacity
+      ctx.font = `${Math.max(14, p.originalWidth * 0.03)}px Arial, sans-serif`
       ctx.fillStyle = '#ffffff'
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)'
-      ctx.lineWidth = Math.max(2, originalSize.width * 0.004)
+      ctx.lineWidth = Math.max(2, p.originalWidth * 0.004)
       ctx.textBaseline = 'top'
 
-      const text = watermarkText
+      const text = p.watermarkText
       const textWidth = ctx.measureText(text).width
       const textHeight = parseInt(ctx.font) * 1.2
-      const padding = Math.max(10, originalSize.width * 0.02)
+      const padding = Math.max(10, p.originalWidth * 0.02)
 
       let x = padding
       let y = padding
 
-      switch (watermarkPosition) {
+      switch (p.watermarkPosition) {
         case 'top-left':
           x = padding
           y = padding
@@ -147,18 +178,18 @@ function EditorPanel({ imageDataUrl, onClose }: EditorPanelProps) {
           break
       }
 
-      if (borderWidth > 0) {
-        if (watermarkPosition === 'top-left' || watermarkPosition === 'bottom-left') {
-          x += borderWidth
+      if (p.borderWidth > 0) {
+        if (p.watermarkPosition === 'top-left' || p.watermarkPosition === 'bottom-left') {
+          x += p.borderWidth
         }
-        if (watermarkPosition === 'top-right' || watermarkPosition === 'bottom-right') {
-          x -= borderWidth
+        if (p.watermarkPosition === 'top-right' || p.watermarkPosition === 'bottom-right') {
+          x -= p.borderWidth
         }
-        if (watermarkPosition === 'top-left' || watermarkPosition === 'top-right') {
-          y += borderWidth
+        if (p.watermarkPosition === 'top-left' || p.watermarkPosition === 'top-right') {
+          y += p.borderWidth
         }
-        if (watermarkPosition === 'bottom-left' || watermarkPosition === 'bottom-right') {
-          y -= borderWidth
+        if (p.watermarkPosition === 'bottom-left' || p.watermarkPosition === 'bottom-right') {
+          y -= p.borderWidth
         }
       }
 
@@ -179,28 +210,33 @@ function EditorPanel({ imageDataUrl, onClose }: EditorPanelProps) {
     }
 
     rafRef.current = null
-  }, [imageLoaded, watermarkText, watermarkPosition, watermarkOpacity, borderWidth, borderColor, borderRadius, originalSize])
+  }, [])
 
-  const roundRect = (
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    radius: number
-  ) => {
-    const r = Math.min(radius, width / 2, height / 2)
-    ctx.moveTo(x + r, y)
-    ctx.lineTo(x + width - r, y)
-    ctx.quadraticCurveTo(x + width, y, x + width, y + r)
-    ctx.lineTo(x + width, y + height - r)
-    ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height)
-    ctx.lineTo(x + r, y + height)
-    ctx.quadraticCurveTo(x, y + height, x, y + height - r)
-    ctx.lineTo(x, y + r)
-    ctx.quadraticCurveTo(x, y, x + r, y)
-    ctx.closePath()
-  }
+  const triggerRedraw = useCallback(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current)
+    }
+    debounceRef.current = setTimeout(() => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current)
+      }
+      rafRef.current = requestAnimationFrame(() => {
+        const startTime = performance.now()
+        drawCanvas()
+        const elapsed = performance.now() - startTime
+        if (elapsed > 200) {
+          console.warn(`Canvas redraw took ${elapsed.toFixed(2)}ms, exceeds 200ms target`)
+        }
+      })
+      setPreviewBounce(true)
+      if (bounceTimeoutRef.current) {
+        clearTimeout(bounceTimeoutRef.current)
+      }
+      bounceTimeoutRef.current = setTimeout(() => {
+        setPreviewBounce(false)
+      }, 150)
+    }, 12)
+  }, [drawCanvas])
 
   useEffect(() => {
     const img = new Image()
@@ -600,21 +636,21 @@ function EditorPanel({ imageDataUrl, onClose }: EditorPanelProps) {
                       height: '20px',
                       borderRadius: '50%',
                       backgroundColor: color,
-                      border: borderColor === color && !customColorInput
-                        ? '2px solid #000000'
-                        : '2px solid transparent',
+                      border: 'none',
                       outline: borderColor === color && !customColorInput
-                        ? 'none'
-                        : '1px solid rgba(0,0,0,0.1)',
-                      outlineOffset: '-1px',
+                        ? '2px solid #000000'
+                        : '1px solid rgba(0,0,0,0.15)',
+                      outlineOffset: borderColor === color && !customColorInput
+                        ? '2px'
+                        : '0px',
                       cursor: 'pointer',
                       padding: 0,
                       justifySelf: 'center',
-                      transition: 'transform 0.15s ease, box-shadow 0.15s ease'
+                      transition: 'all 0.15s ease'
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'scale(1.15)'
-                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)'
+                      e.currentTarget.style.transform = 'scale(1.05)'
+                      e.currentTarget.style.boxShadow = '0 2px 6px rgba(0,0,0,0.25)'
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.transform = 'scale(1)'
