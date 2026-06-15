@@ -114,20 +114,24 @@ export default function BookModal({
 
           <div className="form-group">
             <label>
-              标签 * <span className="hint">（最多3个）</span>
+              标签 * <span className="hint">（最多3个，已选 {selectedTags.length}/3）</span>
             </label>
             <div className="tags-selector">
-              {TAGS.map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  className={`tag-option ${selectedTags.includes(tag) ? 'selected' : ''}`}
-                  onClick={() => handleTagToggle(tag)}
-                  disabled={!selectedTags.includes(tag) && selectedTags.length >= 3}
-                >
-                  {tag}
-                </button>
-              ))}
+              {TAGS.map((tag) => {
+                const isAtLimit = selectedTags.length >= 3;
+                const isSelected = selectedTags.includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    className={`tag-option ${isSelected ? 'selected' : ''} ${!isSelected && isAtLimit ? 'disabled' : ''}`}
+                    onClick={() => handleTagToggle(tag)}
+                    disabled={!isSelected && isAtLimit}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
             </div>
             {errors.tags && <span className="error-text">{errors.tags}</span>}
           </div>

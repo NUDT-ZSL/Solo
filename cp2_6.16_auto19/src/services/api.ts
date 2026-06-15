@@ -80,10 +80,10 @@ function getNotificationTitle(type: string): string {
 }
 
 export const authAPI = {
-  login: (email: string, password: string) =>
+  login: (username: string, password: string) =>
     request<{ user: any; token: string }>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ username, password }),
     }).then((res) => ({
       user: parseUserFromApi(res.user),
       token: res.token,

@@ -1,7 +1,6 @@
-import initSqlJs, { Database } from 'sql.js';
+import sqlite3 from 'sqlite3';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import fs from 'fs';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -10,96 +9,101 @@ const __dirname = dirname(__filename);
 
 const dbPath = join(__dirname, 'database.sqlite');
 
-let db: Database;
+const sqliteDb = new sqlite3.Database(dbPath, (err) => {
+  if (err) {
+    console.error('Failed to connect to SQLite database:', err.message);
+  } else {
+    console.log('Connected to SQLite database at', dbPath);
+  }
+});
 
-const TAGS = [
-  '文学', '科幻', '悬疑', '历史', '哲学', '经济', '心理', '编程', '设计', '艺术',
-  '旅行', '美食', '健康', '教育', '儿童', '漫画', '诗歌', '传记', '商业', '科技'
-];
+sqliteDb.serialize();
+
+export function all(sql: string, params: any[] = []): Promise<any[]> {
+  return new Promise((resolve, reject) => {
+    sqliteDb.all(sql, params, (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows || []);
+    });
+  });
+}
+
+export function get(sql: string, params: any[] = []): Promise<any | undefined> {
+  return new Promise((resolve, reject) => {
+    sqliteDb.get(sql, params, (err, row) => {
+      if (err) reject(err);
+      else resolve(row);
+    });
+  });
+}
+
+export function run(sql: string, params: any[] = []): Promise<{ lastID: number | bigint; changes: number }> {
+  return new Promise((resolve, reject) => {
+    sqliteDb.run(sql, params, function (err) {
+      if (err) reject(err);
+      else resolve({ lastID: this.lastID, changes: this.changes });
+    });
+  });
+}
 
 export async function initDb(): Promise<void> {
-  const SQL = await initSqlJs();
+  await run(`CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    latitude REAL,
+    longitude REAL,
+    reputation REAL DEFAULT 5.0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
 
-  if (fs.existsSync(dbPath)) {
-    const fileBuffer = fs.readFileSync(dbPath);
-    db = new SQL.Database(fileBuffer);
-  } else {
-    db = new SQL.Database();
+  await run(`CREATE TABLE IF NOT EXISTS books (
+    id TEXT PRIMARY KEY,
+    owner_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    author TEXT NOT NULL,
+    tags TEXT NOT NULL,
+    condition TEXT NOT NULL,
+    image_url TEXT,
+    gradient_colors TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (owner_id) REFERENCES users(id)
+  )`);
+
+  await run(`CREATE TABLE IF NOT EXISTS exchanges (
+    id TEXT PRIMARY KEY,
+    from_user_id TEXT NOT NULL,
+    to_user_id TEXT NOT NULL,
+    from_book_id TEXT NOT NULL,
+    to_book_id TEXT NOT NULL,
+    status TEXT DEFAULT 'pending',
+    created_at TEXT DEFAULT (datetime('now')),
+    completed_at TEXT,
+    FOREIGN KEY (from_user_id) REFERENCES users(id),
+    FOREIGN KEY (to_user_id) REFERENCES users(id),
+    FOREIGN KEY (from_book_id) REFERENCES books(id),
+    FOREIGN KEY (to_book_id) REFERENCES books(id)
+  )`);
+
+  await run(`CREATE TABLE IF NOT EXISTS notifications (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    content TEXT NOT NULL,
+    is_read INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    related_id TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )`);
+
+  const row = await get('SELECT COUNT(*) as count FROM users');
+  if (!row || row.count === 0) {
+    await seedData();
   }
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      username TEXT NOT NULL UNIQUE,
-      email TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
-      latitude REAL,
-      longitude REAL,
-      reputation REAL DEFAULT 5.0,
-      created_at TEXT DEFAULT (datetime('now'))
-    )
-  `);
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS books (
-      id TEXT PRIMARY KEY,
-      owner_id TEXT NOT NULL,
-      title TEXT NOT NULL,
-      author TEXT NOT NULL,
-      tags TEXT NOT NULL,
-      condition TEXT NOT NULL,
-      image_url TEXT,
-      gradient_colors TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (owner_id) REFERENCES users(id)
-    )
-  `);
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS exchanges (
-      id TEXT PRIMARY KEY,
-      from_user_id TEXT NOT NULL,
-      to_user_id TEXT NOT NULL,
-      from_book_id TEXT NOT NULL,
-      to_book_id TEXT NOT NULL,
-      status TEXT DEFAULT 'pending',
-      created_at TEXT DEFAULT (datetime('now')),
-      completed_at TEXT,
-      FOREIGN KEY (from_user_id) REFERENCES users(id),
-      FOREIGN KEY (to_user_id) REFERENCES users(id),
-      FOREIGN KEY (from_book_id) REFERENCES books(id),
-      FOREIGN KEY (to_book_id) REFERENCES books(id)
-    )
-  `);
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS notifications (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      type TEXT NOT NULL,
-      content TEXT NOT NULL,
-      is_read INTEGER DEFAULT 0,
-      created_at TEXT DEFAULT (datetime('now')),
-      related_id TEXT,
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    )
-  `);
-
-  const row: any = db.exec('SELECT COUNT(*) as count FROM users')[0];
-  if (!row || !row.values || row.values[0][0] === 0) {
-    seedData();
-  }
-
-  saveDb();
 }
 
-function saveDb(): void {
-  const data = db.export();
-  const buffer = Buffer.from(data);
-  fs.writeFileSync(dbPath, buffer);
-}
-
-function seedData(): void {
+async function seedData(): Promise<void> {
   const users = [
     { id: uuidv4(), username: '张三', email: 'zhangsan@example.com', password: '123456', latitude: 31.2304, longitude: 121.4737 },
     { id: uuidv4(), username: '李四', email: 'lisi@example.com', password: '123456', latitude: 31.2350, longitude: 121.4800 },
@@ -108,7 +112,7 @@ function seedData(): void {
 
   for (const user of users) {
     const passwordHash = bcrypt.hashSync(user.password, 10);
-    db.run(
+    await run(
       'INSERT INTO users (id, username, email, password_hash, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?)',
       [user.id, user.username, user.email, passwordHash, user.latitude, user.longitude]
     );
@@ -128,36 +132,11 @@ function seedData(): void {
   ];
 
   for (const book of books) {
-    db.run(
+    await run(
       'INSERT INTO books (id, owner_id, title, author, tags, condition, gradient_colors) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [book.id, book.owner_id, book.title, book.author, JSON.stringify(book.tags), book.condition, JSON.stringify(book.gradient_colors)]
     );
   }
-}
 
-function rowToObject(columns: string[], values: any[]): any {
-  const obj: any = {};
-  columns.forEach((col, i) => {
-    obj[col] = values[i];
-  });
-  return obj;
-}
-
-export function all(sql: string, params: any[] = []): any[] {
-  const result = db.exec(sql, params);
-  if (!result.length) return [];
-  const { columns, values } = result[0];
-  return values.map(row => rowToObject(columns, row));
-}
-
-export function get(sql: string, params: any[] = []): any {
-  const result = all(sql, params);
-  return result.length ? result[0] : undefined;
-}
-
-export function run(sql: string, params: any[] = []): { lastID: any; changes: number } {
-  db.run(sql, params);
-  saveDb();
-  const lastId: any = db.exec('SELECT last_insert_rowid() as id')[0]?.values?.[0]?.[0];
-  return { lastID: lastId, changes: db.getRowsModified() };
+  console.log('Seed data inserted successfully');
 }

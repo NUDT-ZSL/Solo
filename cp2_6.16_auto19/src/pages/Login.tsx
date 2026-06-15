@@ -7,7 +7,7 @@ import './Auth.css';
 export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -18,11 +18,11 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const result = await authAPI.login(email, password);
+      const result = await authAPI.login(username, password);
       login(result.user);
       navigate('/');
     } catch (err: any) {
-      setError(err.message || '登录失败，请检查邮箱和密码');
+      setError(err.message || '登录失败，请检查用户名和密码');
     } finally {
       setLoading(false);
     }
@@ -48,15 +48,15 @@ export default function Login() {
           )}
 
           <div className="form-group">
-            <label>邮箱</label>
+            <label>用户名</label>
             <div className="input-wrapper">
-              <i className="fas fa-envelope"></i>
+              <i className="fas fa-user"></i>
               <input
-                type="email"
+                type="text"
                 className="input"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="请输入邮箱"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="请输入用户名"
                 required
               />
             </div>

@@ -95,9 +95,13 @@
   border-color: var(--primary-color);
 }
 
-.tag-option:disabled {
-  opacity: 0.4;
+.tag-option:disabled,
+.tag-option.disabled {
+  opacity: 0.35;
   cursor: not-allowed;
+  background: #e8e6e1;
+  color: #999;
+  border: 2px dashed #ccc;
 }
 
 .condition-selector {
