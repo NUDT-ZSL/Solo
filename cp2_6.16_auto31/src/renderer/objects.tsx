@@ -91,36 +91,55 @@ function getArtifactRadius(type: string): number {
 export function SeabedTerrain() {
   const meshRef = useRef<THREE.Mesh>(null);
   const geometry = useMemo(() => {
-    const geo = new THREE.PlaneGeometry(60, 60, 80, 80);
+    const geo = new THREE.PlaneGeometry(80, 80, 120, 120);
     geo.rotateX(-Math.PI / 2);
 
     const positions = geo.attributes.position;
     const colors: number[] = [];
 
-    const shallowColor = new THREE.Color('#c2b280');
+    const sandColor = new THREE.Color('#c2b280');
+    const shallowSandColor = new THREE.Color('#d4c59a');
+    const midColor = new THREE.Color('#3d5a6e');
     const deepColor = new THREE.Color('#0a2a4a');
 
     for (let i = 0; i < positions.count; i++) {
       const x = positions.getX(i);
       const z = positions.getZ(i);
 
-      const distance = Math.sqrt(x * x + z * z);
-      const maxDist = 25;
-      const depthFactor = Math.min(distance / maxDist, 1);
+      const distFromCenter = Math.sqrt(x * x + z * z);
+      const maxDist = 35;
+      const t = Math.min(distFromCenter / maxDist, 1);
 
-      const noise = 
-        Math.sin(x * 0.3) * Math.cos(z * 0.3) * 0.3 +
-        Math.sin(x * 0.1 + 1) * Math.cos(z * 0.15) * 0.5 +
-        Math.sin(x * 0.05) * Math.cos(z * 0.05) * 0.8;
+      const noise1 = Math.sin(x * 0.25) * Math.cos(z * 0.25) * 0.4;
+      const noise2 = Math.sin(x * 0.08 + 0.5) * Math.cos(z * 0.12) * 0.8;
+      const noise3 = Math.sin(x * 0.03) * Math.cos(z * 0.04) * 1.5;
+      const noise4 = (Math.sin(x * 0.6 + z * 0.4) + Math.cos(x * 0.5 - z * 0.3)) * 0.15;
+      const totalNoise = noise1 + noise2 + noise3 + noise4;
 
-      const y = -2 + noise * 0.5 - depthFactor * 1.5;
+      const baseY = -0.5 - t * 3;
+      const y = baseY + totalNoise;
       positions.setY(i, y);
 
-      const sandFactor = Math.max(0, 1 - depthFactor * 1.5);
-      const finalColor = shallowColor.clone().lerp(deepColor, 1 - sandFactor * 0.7);
+      let finalColor: THREE.Color;
+      if (t < 0.15) {
+        finalColor = shallowSandColor.clone();
+      } else if (t < 0.35) {
+        const localT = (t - 0.15) / 0.2;
+        finalColor = shallowSandColor.clone().lerp(sandColor, localT);
+      } else if (t < 0.6) {
+        const localT = (t - 0.35) / 0.25;
+        finalColor = sandColor.clone().lerp(midColor, localT);
+      } else {
+        const localT = (t - 0.6) / 0.4;
+        finalColor = midColor.clone().lerp(deepColor, Math.min(localT, 1));
+      }
 
-      if (y > -1.5) {
-        finalColor.lerp(shallowColor, 0.5);
+      if (y > -0.5 && t < 0.4) {
+        finalColor.lerp(shallowSandColor, 0.4);
+      }
+
+      if (y < -2.5) {
+        finalColor.lerp(deepColor, 0.5);
       }
 
       colors.push(finalColor.r, finalColor.g, finalColor.b);
@@ -135,8 +154,9 @@ export function SeabedTerrain() {
     <mesh ref={meshRef} geometry={geometry} receiveShadow>
       <meshStandardMaterial
         vertexColors
-        roughness={0.9}
-        metalness={0.05}
+        roughness={1}
+        metalness={0.02}
+        flatShading
       />
     </mesh>
   );
