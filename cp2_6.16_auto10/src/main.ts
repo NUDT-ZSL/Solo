@@ -17,6 +17,7 @@ class App {
   private minPointInterval: number = 5;
   private maxPointsPerFrame: number = 16;
   private framePoints: Point[] = [];
+  private lastRenderTime: number = 0;
 
   private animationFrameId: number | null = null;
   private lastFpsUpdateTime: number = 0;
@@ -24,6 +25,8 @@ class App {
   private fps: number = 0;
   private showFps: boolean = true;
   private fpsDisplay: HTMLDivElement | null = null;
+
+  private dpr: number = 1;
 
   private strokeButtons: NodeListOf<HTMLButtonElement>;
   private colorSwatches: NodeListOf<HTMLDivElement>;
@@ -54,6 +57,7 @@ class App {
   }
 
   private init(): void {
+    this.dpr = window.devicePixelRatio || 1;
     this.resizeCanvas();
     this.renderer.clear();
     this.bindEvents();
@@ -63,7 +67,6 @@ class App {
 
     if (this.showFps) {
       this.createFpsDisplay();
-      this.startFpsCounter();
       this.startFpsUpdateLoop();
     }
   }
@@ -95,30 +98,30 @@ class App {
     if (!container) return;
 
     const rect = container.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
+    const width = rect.width * this.dpr;
+    const height = rect.height * this.dpr;
 
-    this.renderer.resize(rect.width * dpr, rect.height * dpr);
-
-    const ctx = this.canvas.getContext('2d');
-    if (ctx) {
-      ctx.scale(dpr, dpr);
-    }
+    this.renderer.resize(width, height);
 
     this.renderer.clear();
     this.redrawAllStrokes();
   }
 
   private handleResize(): void {
+    this.dpr = window.devicePixelRatio || 1;
     const strokes = this.strokeManager.getStrokes();
     this.resizeCanvas();
-    this.renderer.redrawAll(strokes, false);
+    this.renderer.redrawAll(strokes);
   }
 
   private bindEvents(): void {
     this.strokeButtons.forEach(btn => {
+      btn.addEventListener('mousedown', (e) => {
+        const target = e.currentTarget as HTMLButtonElement;
+        this.addClickScale(target);
+      });
       btn.addEventListener('click', (e) => {
         const target = e.currentTarget as HTMLButtonElement;
-        this.addClickAnimation(target);
         const strokeType = target.dataset.stroke as StrokeType;
         if (strokeType) {
           this.setStrokeType(strokeType);
@@ -127,9 +130,12 @@ class App {
     });
 
     this.colorSwatches.forEach(swatch => {
+      swatch.addEventListener('mousedown', (e) => {
+        const target = e.currentTarget as HTMLDivElement;
+        this.addClickScale(target);
+      });
       swatch.addEventListener('click', (e) => {
         const target = e.currentTarget as HTMLDivElement;
-        this.addClickAnimation(target);
         const color = target.dataset.color;
         if (color) {
           this.setColor(color);
@@ -142,18 +148,28 @@ class App {
       this.thicknessValue.textContent = this.currentThickness.toString();
     });
 
+    this.undoBtn.addEventListener('mousedown', () => {
+      if (!this.undoBtn.disabled) {
+        this.addClickScale(this.undoBtn);
+      }
+    });
     this.undoBtn.addEventListener('click', () => {
-      this.addClickAnimation(this.undoBtn);
       this.undo();
     });
 
+    this.clearBtn.addEventListener('mousedown', () => {
+      if (!this.clearBtn.disabled) {
+        this.addClickScale(this.clearBtn);
+      }
+    });
     this.clearBtn.addEventListener('click', () => {
-      this.addClickAnimation(this.clearBtn);
       this.clear();
     });
 
+    this.exportBtn.addEventListener('mousedown', () => {
+      this.addClickScale(this.exportBtn);
+    });
     this.exportBtn.addEventListener('click', () => {
-      this.addClickAnimation(this.exportBtn);
       this.export();
     });
 
@@ -185,20 +201,31 @@ class App {
     }, { passive: false });
   }
 
-  private addClickAnimation(element: HTMLElement): void {
+  private addClickScale(element: HTMLElement): void {
     element.style.transform = 'scale(0.95)';
     element.style.transition = 'transform 0.1s ease';
 
-    setTimeout(() => {
+    const resetScale = () => {
       element.style.transform = '';
-    }, 100);
+      element.removeEventListener('mouseup', resetScale);
+      element.removeEventListener('mouseleave', resetScale);
+    };
+
+    element.addEventListener('mouseup', resetScale);
+    element.addEventListener('mouseleave', resetScale);
+
+    setTimeout(() => {
+      if (element.style.transform === 'scale(0.95)') {
+        element.style.transform = '';
+      }
+    }, 150);
   }
 
   private getCanvasCoordinates(clientX: number, clientY: number): { x: number; y: number } {
     const rect = this.canvas.getBoundingClientRect();
     return {
-      x: clientX - rect.left,
-      y: clientY - rect.top
+      x: (clientX - rect.left) * this.dpr,
+      y: (clientY - rect.top) * this.dpr
     };
   }
 
@@ -222,30 +249,23 @@ class App {
 
     const { x, y } = this.getCanvasCoordinates(clientX, clientY);
     const point: Point = { x, y, timestamp: now };
-    
+
     this.currentPoints.push(point);
     this.framePoints.push(point);
     this.lastPointTime = now;
 
     if (this.framePoints.length >= this.maxPointsPerFrame) {
-      this.flushFramePoints();
+      this.requestRender();
     }
-
-    this.scheduleRender();
   }
 
-  private flushFramePoints(): void {
-    if (this.framePoints.length === 0) return;
-    this.framePoints = [];
-  }
-
-  private scheduleRender(): void {
+  private requestRender(): void {
     if (this.animationFrameId !== null) return;
 
     this.animationFrameId = requestAnimationFrame((timestamp) => {
       this.animationFrameId = null;
 
-      if (this.currentPoints.length > 1) {
+      if (this.isDrawing && this.currentPoints.length > 1) {
         this.renderer.drawPreview(
           this.currentPoints,
           this.currentStrokeType,
@@ -264,18 +284,24 @@ class App {
     this.isDrawing = false;
 
     if (this.currentPoints.length > 1) {
-      this.strokeManager.addStroke({
+      const newStroke = {
         type: this.currentStrokeType,
         color: this.currentColor,
         thickness: this.currentThickness,
         points: [...this.currentPoints]
-      });
+      };
+      this.strokeManager.addStroke(newStroke);
+      
+      this.renderer.drawStroke({
+        id: 0,
+        ...newStroke
+      }, false);
+      
       this.updateButtonStates();
     }
 
     this.currentPoints = [];
     this.framePoints = [];
-    this.renderer.clearPendingPoints();
   }
 
   private setStrokeType(type: StrokeType): void {
@@ -292,7 +318,7 @@ class App {
     });
   }
 
-  private async undo(): Promise<void> {
+  private undo(): void {
     if (!this.strokeManager.canUndo()) return;
 
     const removedStroke = this.strokeManager.undo();
@@ -304,7 +330,7 @@ class App {
     const startTime = performance.now();
     const totalPoints = removedStroke.points.length;
 
-    this.renderer.redrawAll(remainingStrokes, false);
+    this.renderer.redrawAll(remainingStrokes);
 
     const animateUndo = (currentTime: number) => {
       const elapsed = currentTime - startTime;
@@ -314,12 +340,13 @@ class App {
 
       const ctx = this.renderer.getMainContext();
       ctx.fillStyle = '#ece8df';
-      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      ctx.fillRect(0, 0, this.renderer.getWidth(), this.renderer.getHeight());
       ctx.drawImage(this.renderer.getOffscreenCanvas(), 0, 0);
 
       if (pointsToRender > 1) {
         const partialStroke = {
           ...removedStroke,
+          id: 0,
           points: removedStroke.points.slice(0, pointsToRender)
         };
         this.renderer.drawStroke(partialStroke, false);
@@ -328,7 +355,7 @@ class App {
       if (progress < 1) {
         requestAnimationFrame(animateUndo);
       } else {
-        this.renderer.redrawAll(remainingStrokes, false);
+        this.renderer.redrawAll(remainingStrokes);
       }
     };
 
@@ -348,11 +375,11 @@ class App {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
       const strokesToRemove = Math.floor(totalStrokes * progress);
-      const strokesToRender = totalStrokes - strokesToRemove;
+      const strokesToRender = strokes.slice(0, totalStrokes - strokesToRemove);
 
       this.renderer.clear();
-      for (let i = 0; i < strokesToRender; i++) {
-        this.renderer.drawStroke(strokes[i], false);
+      for (const stroke of strokesToRender) {
+        this.renderer.drawStroke(stroke, false);
       }
 
       if (progress < 1) {
@@ -377,15 +404,9 @@ class App {
     this.clearBtn.disabled = !canUndo;
   }
 
-  private async redrawAllStrokes(): Promise<void> {
+  private redrawAllStrokes(): void {
     const strokes = this.strokeManager.getStrokes();
-    await this.renderer.redrawAll(strokes, false);
-  }
-
-  private startFpsCounter(): void {
-    setInterval(() => {
-      console.log(`FPS: ${this.fps}`);
-    }, 1000);
+    this.renderer.redrawAll(strokes);
   }
 
   private updateFps(timestamp: number): void {
@@ -394,13 +415,13 @@ class App {
       this.lastFpsUpdateTime = timestamp;
       return;
     }
-    
+
     const elapsed = timestamp - this.lastFpsUpdateTime;
     if (elapsed >= 1000) {
       this.fps = Math.round((this.frameCount * 1000) / elapsed);
       this.frameCount = 0;
       this.lastFpsUpdateTime = timestamp;
-      
+
       if (this.fpsDisplay) {
         const color = this.fps >= 45 ? '#4CAF50' : this.fps >= 30 ? '#FF9800' : '#F44336';
         this.fpsDisplay.style.color = color;

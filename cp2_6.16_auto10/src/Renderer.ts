@@ -5,10 +5,8 @@ export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private offscreenCanvas: HTMLCanvasElement;
   private offscreenCtx: CanvasRenderingContext2D;
-  private pendingPoints: Point[] = [];
-  private lastFrameTime: number = 0;
   private maxPointsPerFrame: number = 16;
-  private cachedStrokesHash: string = '';
+  private cachedStrokeCount: number = -1;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -31,7 +29,7 @@ export class Renderer {
     this.canvas.height = height;
     this.offscreenCanvas.width = width;
     this.offscreenCanvas.height = height;
-    this.cachedStrokesHash = '';
+    this.cachedStrokeCount = -1;
   }
 
   getWidth(): number {
@@ -47,7 +45,7 @@ export class Renderer {
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     this.offscreenCtx.fillStyle = '#ece8df';
     this.offscreenCtx.fillRect(0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height);
-    this.cachedStrokesHash = '';
+    this.cachedStrokeCount = 0;
   }
 
   drawStroke(stroke: Stroke, animated: boolean = false): Promise<void> {
@@ -93,26 +91,20 @@ export class Renderer {
     requestAnimationFrame(animate);
   }
 
-  async redrawAll(strokes: Stroke[], animateLast: boolean = false): Promise<void> {
-    const strokesHash = strokes.map(s => s.id).join(',');
-    
-    if (strokesHash !== this.cachedStrokesHash) {
+  redrawAll(strokes: Stroke[]): void {
+    if (strokes.length !== this.cachedStrokeCount) {
       this.offscreenCtx.fillStyle = '#ece8df';
       this.offscreenCtx.fillRect(0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height);
       
       for (let i = 0; i < strokes.length; i++) {
         this.renderStrokeToContext(this.offscreenCtx, strokes[i]);
       }
-      this.cachedStrokesHash = strokesHash;
+      this.cachedStrokeCount = strokes.length;
     }
 
     this.ctx.fillStyle = '#ece8df';
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     this.ctx.drawImage(this.offscreenCanvas, 0, 0);
-  }
-
-  private renderStroke(stroke: Stroke): void {
-    this.renderStrokeToContext(this.ctx, stroke);
   }
 
   private renderStrokeToContext(ctx: CanvasRenderingContext2D, stroke: Stroke): void {
@@ -160,82 +152,35 @@ export class Renderer {
     if (points.length < 2) return;
 
     ctx.fillStyle = color;
-    ctx.strokeStyle = color;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
 
-    const totalDuration = points[points.length - 1].timestamp - points[0].timestamp;
-    let maxSpeed = 0;
-    const speeds: number[] = [];
+    const totalPoints = points.length;
+    const widths: number[] = new Array(totalPoints);
 
-    for (let i = 1; i < points.length; i++) {
-      const dx = points[i].x - points[i - 1].x;
-      const dy = points[i].y - points[i - 1].y;
-      const dt = points[i].timestamp - points[i - 1].timestamp;
-      const speed = dt > 0 ? Math.sqrt(dx * dx + dy * dy) / dt : 0;
-      speeds.push(speed);
-      if (speed > maxSpeed) maxSpeed = speed;
-    }
-
-    const widths: number[] = [];
-    for (let i = 0; i < points.length; i++) {
-      const point = points[i];
-      const progress = totalDuration > 0 
-        ? (point.timestamp - points[0].timestamp) / totalDuration 
-        : 0;
-      
-      const baseSpeedFactor = i > 0 && maxSpeed > 0 ? speeds[i - 1] / maxSpeed : 0;
+    for (let i = 0; i < totalPoints; i++) {
+      const progress = i / (totalPoints - 1);
       const progressFactor = 1 - progress * 0.2;
-      const speedFactor = 1 - baseSpeedFactor * 0.2;
-      const widthFactor = progressFactor * speedFactor;
-      const currentWidth = baseThickness * widthFactor;
-      widths.push(currentWidth);
+      widths[i] = baseThickness * progressFactor;
     }
-
-    const pathPoints: { x: number; y: number; w: number }[] = [];
-    
-    pathPoints.push({ x: points[0].x, y: points[0].y, w: widths[0] });
-    
-    for (let i = 1; i < points.length; i++) {
-      const p0 = points[i - 1];
-      const p1 = points[i];
-      const w0 = widths[i - 1];
-      const w1 = widths[i];
-      
-      const steps = Math.max(2, Math.min(8, Math.ceil(Math.abs(w1 - w0) / 0.5) + 2));
-      for (let s = 1; s <= steps; s++) {
-        const t = s / steps;
-        const x = p0.x + (p1.x - p0.x) * t;
-        const y = p0.y + (p1.y - p0.y) * t;
-        const w = w0 + (w1 - w0) * t;
-        pathPoints.push({ x, y, w });
-      }
-    }
-
-    if (pathPoints.length < 2) return;
 
     ctx.beginPath();
-    
-    const first = pathPoints[0];
-    ctx.arc(first.x, first.y, first.w / 2, 0, Math.PI * 2);
+    ctx.arc(points[0].x, points[0].y, widths[0] / 2, 0, Math.PI * 2);
     ctx.fill();
 
-    for (let i = 1; i < pathPoints.length; i++) {
-      const prev = pathPoints[i - 1];
-      const curr = pathPoints[i];
-      
+    for (let i = 1; i < totalPoints; i++) {
+      const prev = points[i - 1];
+      const curr = points[i];
+      const w0 = widths[i - 1] / 2;
+      const w1 = widths[i] / 2;
+
       const dx = curr.x - prev.x;
       const dy = curr.y - prev.y;
       const len = Math.sqrt(dx * dx + dy * dy);
-      
+
       if (len === 0) continue;
-      
+
       const nx = -dy / len;
       const ny = dx / len;
-      
-      const w0 = prev.w / 2;
-      const w1 = curr.w / 2;
-      
+
       ctx.beginPath();
       ctx.moveTo(prev.x + nx * w0, prev.y + ny * w0);
       ctx.lineTo(curr.x + nx * w1, curr.y + ny * w1);
@@ -243,7 +188,7 @@ export class Renderer {
       ctx.lineTo(prev.x - nx * w0, prev.y - ny * w0);
       ctx.closePath();
       ctx.fill();
-      
+
       ctx.beginPath();
       ctx.arc(curr.x, curr.y, w1, 0, Math.PI * 2);
       ctx.fill();
@@ -271,60 +216,12 @@ export class Renderer {
     ctx.stroke();
   }
 
-  queuePoint(point: Point): void {
-    this.pendingPoints.push(point);
-  }
-
-  flushPoints(
-    type: string,
-    color: string,
-    thickness: number,
-    onFlush: (points: Point[]) => void
-  ): void {
-    if (this.pendingPoints.length === 0) return;
-
-    const now = performance.now();
-    const elapsed = now - this.lastFrameTime;
-
-    if (elapsed >= 16) {
-      const pointsToRender = this.pendingPoints.splice(0, this.maxPointsPerFrame);
-      onFlush(pointsToRender);
-      this.lastFrameTime = now;
-    }
-  }
-
-  getPendingPoints(): Point[] {
-    return [...this.pendingPoints];
-  }
-
-  clearPendingPoints(): void {
-    this.pendingPoints = [];
-  }
-
   getMainContext(): CanvasRenderingContext2D {
     return this.ctx;
   }
 
   getOffscreenCanvas(): HTMLCanvasElement {
     return this.offscreenCanvas;
-  }
-
-  renderPartialStroke(
-    points: Point[],
-    type: string,
-    color: string,
-    thickness: number,
-    allPoints: Point[]
-  ): void {
-    if (points.length === 0) return;
-
-    this.renderStrokeToContext(this.ctx, {
-      id: 0,
-      type: type as 'pen' | 'brush' | 'highlighter',
-      color,
-      thickness,
-      points: allPoints
-    });
   }
 
   drawPreview(
@@ -334,16 +231,14 @@ export class Renderer {
     thickness: number,
     strokes: Stroke[]
   ): void {
-    const strokesHash = strokes.map(s => s.id).join(',');
-    
-    if (strokesHash !== this.cachedStrokesHash) {
+    if (strokes.length !== this.cachedStrokeCount) {
       this.offscreenCtx.fillStyle = '#ece8df';
       this.offscreenCtx.fillRect(0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height);
       
       for (const stroke of strokes) {
         this.renderStrokeToContext(this.offscreenCtx, stroke);
       }
-      this.cachedStrokesHash = strokesHash;
+      this.cachedStrokeCount = strokes.length;
     }
 
     this.ctx.fillStyle = '#ece8df';
@@ -359,5 +254,9 @@ export class Renderer {
         points: currentPoints
       });
     }
+  }
+
+  getMaxPointsPerFrame(): number {
+    return this.maxPointsPerFrame;
   }
 }
