@@ -30,13 +30,14 @@ const ParticleField: React.FC<ParticleFieldProps> = ({ frequencyDataRef, frequen
   const lastVersionRef = useRef(0)
   const cachedEnergyRef = useRef(0)
 
-  const spawnOnBoundary = useCallback((centerX: number, centerY: number, radius: number): Particle => {
+  const spawnInCircle = useCallback((centerX: number, centerY: number, radius: number): Particle => {
     const angle = Math.random() * Math.PI * 2
-    const startDistance = radius * (0.9 + Math.random() * 0.1)
+    const uniformRand = Math.random()
+    const startDistance = radius * Math.sqrt(uniformRand) * (0.1 + 0.9 * Math.random())
     const x = centerX + Math.cos(angle) * startDistance
     const y = centerY + Math.sin(angle) * startDistance
 
-    const inwardAngle = angle + Math.PI + (Math.random() - 0.5) * 0.5
+    const inwardAngle = angle + Math.PI + (Math.random() - 0.5) * 0.8
     const speed = 0.3 + Math.random() * 0.5
 
     return {
@@ -180,7 +181,7 @@ const ParticleField: React.FC<ParticleFieldProps> = ({ frequencyDataRef, frequen
       }
 
       if (p.life <= 0 || distFromCenter > boundaryRadius * 1.15) {
-        particles[i] = spawnOnBoundary(centerX, centerY, boundaryRadius)
+        particles[i] = spawnInCircle(centerX, centerY, boundaryRadius)
       }
     }
 
@@ -202,7 +203,7 @@ const ParticleField: React.FC<ParticleFieldProps> = ({ frequencyDataRef, frequen
     ctx.stroke()
 
     animationFrameRef.current = requestAnimationFrame(draw)
-  }, [computeEnergy, getParticleColor, spawnOnBoundary])
+  }, [computeEnergy, getParticleColor, spawnInCircle])
 
   useEffect(() => {
     const canvas = canvasRef.current

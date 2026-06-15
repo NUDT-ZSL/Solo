@@ -27,6 +27,7 @@ const GestureControls: React.FC<GestureControlsProps> = ({ onGesture }) => {
   const [cameraAuthorized, setCameraAuthorized] = useState<boolean | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const isLoadingRef = useRef(true)
 
   const handsRef = useRef<MediaPipeHands | null>(null)
   const cameraRef = useRef<MediaPipeCamera | null>(null)
@@ -342,13 +343,21 @@ const GestureControls: React.FC<GestureControlsProps> = ({ onGesture }) => {
 
   useEffect(() => {
     mountedRef.current = true
+    isLoadingRef.current = true
     setIsLoading(true)
     setLoadError(null)
 
+    const syncLoading = (val: boolean) => {
+      isLoadingRef.current = val
+      if (mountedRef.current) {
+        setIsLoading(val)
+      }
+    }
+
     loadTimeoutRef.current = window.setTimeout(() => {
-      if (mountedRef.current && isLoading) {
+      if (mountedRef.current && isLoadingRef.current) {
         setLoadError('手势识别加载超时')
-        setIsLoading(false)
+        syncLoading(false)
       }
     }, LOAD_TIMEOUT_MS)
 
@@ -362,11 +371,11 @@ const GestureControls: React.FC<GestureControlsProps> = ({ onGesture }) => {
       }
 
       if (!loaded) {
-        setIsLoading(false)
+        syncLoading(false)
         return
       }
 
-      setIsLoading(false)
+      syncLoading(false)
       await requestAndStartCamera()
     }
 
@@ -404,7 +413,9 @@ const GestureControls: React.FC<GestureControlsProps> = ({ onGesture }) => {
       if (videoRef.current) {
         try {
           videoRef.current.pause()
+          videoRef.current.removeAttribute('src')
           videoRef.current.srcObject = null
+          videoRef.current.load()
         } catch {
         }
       }
@@ -412,6 +423,7 @@ const GestureControls: React.FC<GestureControlsProps> = ({ onGesture }) => {
       if (mediaStreamRef.current) {
         mediaStreamRef.current.getTracks().forEach((track) => {
           try {
+            track.enabled = false
             track.stop()
           } catch {
           }

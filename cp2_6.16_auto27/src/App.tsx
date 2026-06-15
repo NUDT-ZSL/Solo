@@ -7,6 +7,7 @@ import './App.css'
 
 const App: React.FC = () => {
   const frequencyDataRef = useRef<Uint8Array>(new Uint8Array(128))
+  const frequencyVersionRef = useRef<number>(0)
   const [playlist, setPlaylist] = useState<Track[]>([])
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -198,6 +199,7 @@ const App: React.FC = () => {
         <div className="playlist-sidebar">
           <AudioPlayer
             frequencyDataRef={frequencyDataRef}
+            frequencyVersionRef={frequencyVersionRef}
             onTimeUpdate={handleTimeUpdate}
             onPlayStateChange={handlePlayStateChange}
             volume={volume}
@@ -215,10 +217,10 @@ const App: React.FC = () => {
 
         <div className="visualization-area">
           <div className="particle-section">
-            <ParticleField frequencyDataRef={frequencyDataRef} />
+            <ParticleField frequencyDataRef={frequencyDataRef} frequencyVersionRef={frequencyVersionRef} />
           </div>
           <div className="visualizer-section">
-            <Visualizer frequencyDataRef={frequencyDataRef} />
+            <Visualizer frequencyDataRef={frequencyDataRef} frequencyVersionRef={frequencyVersionRef} />
           </div>
         </div>
       </div>

@@ -68,7 +68,9 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null)
   const gainNodeRef = useRef<GainNode | null>(null)
   const animationFrameRef = useRef<number | null>(null)
-  const backBufferRef = useRef<Uint8Array | null>(null)
+  const buffer0Ref = useRef<Uint8Array | null>(null)
+  const buffer1Ref = useRef<Uint8Array | null>(null)
+  const activeIndexRef = useRef<0 | 1>(0)
 
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
@@ -99,26 +101,32 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     sourceRef.current = source
     gainNodeRef.current = gainNode
 
-    backBufferRef.current = new Uint8Array(FREQUENCY_BIN_COUNT)
+    buffer0Ref.current = new Uint8Array(FREQUENCY_BIN_COUNT)
+    buffer1Ref.current = new Uint8Array(FREQUENCY_BIN_COUNT)
+    activeIndexRef.current = 0
 
     if (!frequencyDataRef.current || frequencyDataRef.current.length !== FREQUENCY_BIN_COUNT) {
-      frequencyDataRef.current = new Uint8Array(FREQUENCY_BIN_COUNT)
+      frequencyDataRef.current = buffer0Ref.current
     }
   }, [frequencyDataRef])
 
   const analyze = useCallback(() => {
     const analyser = analyserRef.current
-    const backBuffer = backBufferRef.current
-    const frontBuffer = frequencyDataRef.current
+    const buffer0 = buffer0Ref.current
+    const buffer1 = buffer1Ref.current
 
-    if (!isAnalyserNode(analyser) || !backBuffer || !frontBuffer) {
+    if (!isAnalyserNode(analyser) || !buffer0 || !buffer1) {
       animationFrameRef.current = requestAnimationFrame(analyze)
       return
     }
 
-    analyser.getByteFrequencyData(backBuffer)
+    const writeIndex = (1 - activeIndexRef.current) as 0 | 1
+    const writeBuffer = writeIndex === 0 ? buffer0 : buffer1
 
-    frontBuffer.set(backBuffer)
+    analyser.getByteFrequencyData(writeBuffer)
+
+    activeIndexRef.current = writeIndex
+    frequencyDataRef.current = writeBuffer
     frequencyVersionRef.current += 1
 
     animationFrameRef.current = requestAnimationFrame(analyze)
