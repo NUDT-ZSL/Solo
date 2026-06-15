@@ -1,37 +1,55 @@
-import { usePerfumeStore } from '@/stores/perfumeStore'
-import { FlaskConical, Trash2, Minus, Plus } from 'lucide-react'
+import type { SelectedAroma } from '@/types'
+import './MixPanel.css'
 
-export default function MixPanel() {
-  const { selectedAromas, updateRatio, removeAroma, mix, reset } = usePerfumeStore()
+interface MixPanelProps {
+  selectedAromas: SelectedAroma[]
+  onUpdateRatio: (aromaId: number, ratio: number) => void
+  onRemoveAroma: (aromaId: number) => void
+  onMix: () => void
+  onReset: () => void
+}
 
+export default function MixPanel({
+  selectedAromas,
+  onUpdateRatio,
+  onRemoveAroma,
+  onMix,
+  onReset,
+}: MixPanelProps) {
   const totalRatio = selectedAromas.reduce((sum, s) => sum + s.ratio, 0)
 
   const handleSliderChange = (aromaId: number, value: number) => {
-    updateRatio(aromaId, value / 100)
+    onUpdateRatio(aromaId, value / 100)
   }
 
   return (
-    <div
-      className="flex flex-col h-full"
-      style={{ width: 300, minHeight: '100%' }}
-    >
-      <h2 className="text-2xl font-serif mb-4 text-amber-800 tracking-wider">调香配方</h2>
+    <div className="mix-panel" style={{ width: 300 }}>
+      <h2 className="mix-panel-title">调香配方</h2>
 
       {selectedAromas.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-amber-600/60 py-12">
-          <FlaskConical size={48} strokeWidth={1} className="mb-3 opacity-40" />
-          <p className="text-sm">点击轮盘中的香味添加到配方</p>
+        <div className="mix-panel-empty">
+          <svg
+            width="48"
+            height="48"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="mix-panel-empty-icon"
+          >
+            <path d="M9 3h6l-1 5h2a1 1 0 0 1 1 1v10a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V9a1 1 0 0 1 1-1h2L9 3z" />
+          </svg>
+          <p className="mix-panel-empty-text">点击轮盘中的香味添加到配方</p>
         </div>
       ) : (
         <>
-          <div
-            className="w-full h-6 rounded-full overflow-hidden mb-4 flex"
-            style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}
-          >
+          <div className="mix-gradient-bar">
             {selectedAromas.map((s) => (
               <div
                 key={s.aroma.id}
-                className="h-full transition-all duration-300"
+                className="mix-gradient-segment"
                 style={{
                   width: `${(s.ratio / totalRatio) * 100}%`,
                   background: s.aroma.color,
@@ -40,90 +58,101 @@ export default function MixPanel() {
             ))}
           </div>
 
-          <div className="flex-1 space-y-3 overflow-y-auto pr-1">
-            {selectedAromas.map((s) => (
-              <div
-                key={s.aroma.id}
-                className="p-3 rounded-xl"
-                style={{
-                  background: '#fff',
-                  border: '1px solid #e0c8a0',
-                }}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-4 h-4 rounded-full"
-                      style={{ background: s.aroma.color }}
-                    />
-                    <span className="text-sm font-medium text-amber-900">
-                      {s.aroma.name}
-                    </span>
+          <div className="mix-aroma-list">
+            {selectedAromas.map((s) => {
+              const percentage = Math.round((s.ratio / totalRatio) * 100)
+              return (
+                <div key={s.aroma.id} className="mix-aroma-item">
+                  <div className="mix-aroma-header">
+                    <div className="mix-aroma-info">
+                      <div
+                        className="mix-aroma-color-dot"
+                        style={{ background: s.aroma.color }}
+                      />
+                      <span className="mix-aroma-name">{s.aroma.name}</span>
+                    </div>
+                    <div className="mix-aroma-actions">
+                      <span className="mix-aroma-percentage">{percentage}%</span>
+                      <button
+                        onClick={() => onRemoveAroma(s.aroma.id)}
+                        className="mix-aroma-remove"
+                        aria-label="删除"
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-amber-600">
-                      {Math.round((s.ratio / totalRatio) * 100)}%
-                    </span>
+
+                  <div className="mix-aroma-controls">
                     <button
-                      onClick={() => removeAroma(s.aroma.id)}
-                      className="text-amber-400 hover:text-red-400 transition-colors p-0.5"
+                      onClick={() => handleSliderChange(s.aroma.id, Math.max(1, percentage - 5))}
+                      className="mix-aroma-btn"
                     >
-                      <Trash2 size={14} />
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                    </button>
+                    <input
+                      type="range"
+                      min={1}
+                      max={100}
+                      value={percentage}
+                      onChange={(e) => handleSliderChange(s.aroma.id, Number(e.target.value))}
+                      className="mix-aroma-slider"
+                      style={{
+                        background: `linear-gradient(to right, ${s.aroma.color} 0%, ${s.aroma.color} ${percentage}%, #e0c8a0 ${percentage}%, #e0c8a0 100%)`,
+                      }}
+                    />
+                    <button
+                      onClick={() => handleSliderChange(s.aroma.id, Math.min(100, percentage + 5))}
+                      className="mix-aroma-btn"
+                    >
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
                     </button>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() =>
-                      handleSliderChange(s.aroma.id, Math.max(1, (s.ratio / totalRatio) * 100 - 5) * (totalRatio / s.ratio > 0 ? 1 : 1))
-                    }
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-amber-600 hover:bg-amber-50 transition-colors"
-                    style={{ border: '1px solid #e0c8a0' }}
-                  >
-                    <Minus size={12} />
-                  </button>
-                  <input
-                    type="range"
-                    min={1}
-                    max={100}
-                    value={Math.round((s.ratio / totalRatio) * 100)}
-                    onChange={(e) => handleSliderChange(s.aroma.id, Number(e.target.value))}
-                    className="flex-1 h-1.5 appearance-none rounded-full cursor-pointer"
-                    style={{
-                      background: `linear-gradient(to right, ${s.aroma.color} 0%, ${s.aroma.color} ${Math.round((s.ratio / totalRatio) * 100)}%, #e0c8a0 ${Math.round((s.ratio / totalRatio) * 100)}%, #e0c8a0 100%)`,
-                    }}
-                  />
-                  <button
-                    onClick={() =>
-                      handleSliderChange(s.aroma.id, Math.min(100, (s.ratio / totalRatio) * 100 + 5) * (totalRatio / s.ratio > 0 ? 1 : 1))
-                    }
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-amber-600 hover:bg-amber-50 transition-colors"
-                    style={{ border: '1px solid #e0c8a0' }}
-                  >
-                    <Plus size={12} />
-                  </button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
-          <div className="mt-4 space-y-2">
-            <button
-              onClick={mix}
-              className="perfume-btn w-full py-3 rounded-xl text-white font-medium text-base tracking-wider transition-all duration-200 active:scale-95"
-              style={{
-                background: 'linear-gradient(135deg, #ff9933, #ff6600)',
-                boxShadow: '0 4px 12px rgba(255,102,0,0.3)',
-              }}
-            >
+          <div className="mix-actions">
+            <button onClick={onMix} className="mix-btn-primary">
               🧪 混合调香
             </button>
-            <button
-              onClick={reset}
-              className="w-full py-2 rounded-xl text-amber-600 text-sm transition-all duration-200 hover:bg-amber-50"
-              style={{ border: '1px solid #e0c8a0' }}
-            >
+            <button onClick={onReset} className="mix-btn-secondary">
               清空配方
             </button>
           </div>

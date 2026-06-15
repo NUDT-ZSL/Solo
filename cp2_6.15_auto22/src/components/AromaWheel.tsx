@@ -1,6 +1,12 @@
 import { useState, useCallback } from 'react'
-import { usePerfumeStore } from '@/stores/perfumeStore'
-import type { Aroma } from '@/stores/perfumeStore'
+import type { Aroma } from '@/types'
+import './AromaWheel.css'
+
+interface AromaWheelProps {
+  aromas: Aroma[]
+  selectedAromas: Aroma[]
+  onSelectAroma: (aroma: Aroma) => void
+}
 
 const CATEGORY_LABELS: Record<string, string> = {
   floral: '花香',
@@ -28,12 +34,15 @@ function polarToCartesian(cx: number, cy: number, radius: number, angleDeg: numb
   }
 }
 
-export default function AromaWheel() {
-  const { aromas, addAroma, selectedAromas } = usePerfumeStore()
+export default function AromaWheel({
+  aromas,
+  selectedAromas,
+  onSelectAroma,
+}: AromaWheelProps) {
   const [hoveredId, setHoveredId] = useState<number>(-1)
 
   const isSelected = useCallback(
-    (id: number) => selectedAromas.some((s) => s.aroma.id === id),
+    (id: number) => selectedAromas.some((a) => a.id === id),
     [selectedAromas]
   )
 
@@ -69,17 +78,10 @@ export default function AromaWheel() {
   const hoveredAroma = aromas.find((a) => a.id === hoveredId)
 
   return (
-    <div className="relative flex flex-col items-center">
-      <h2 className="text-2xl font-serif mb-4 text-amber-800 tracking-wider">香味轮盘</h2>
-      <div className="relative" style={{ width: size, height: size }}>
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: 'radial-gradient(circle, #fff5e6 0%, #ffe0b2 100%)',
-            boxShadow:
-              '0 4px 24px rgba(224, 200, 160, 0.4), inset 0 0 30px rgba(255,255,255,0.5)',
-          }}
-        />
+    <div className="aroma-wheel-container">
+      <h2 className="aroma-wheel-title">香味轮盘</h2>
+      <div className="aroma-wheel" style={{ width: size, height: size }}>
+        <div className="aroma-wheel-bg" />
 
         {categories.map((cat) => {
           const angle = CATEGORY_ANGLES[cat] ?? 0
@@ -88,7 +90,7 @@ export default function AromaWheel() {
           return (
             <svg
               key={cat}
-              className="absolute inset-0 pointer-events-none"
+              className="aroma-wheel-svg"
               width={size}
               height={size}
             >
@@ -112,19 +114,17 @@ export default function AromaWheel() {
           return (
             <div
               key={aroma.id}
-              className="absolute flex items-center justify-center cursor-pointer transition-transform duration-200"
+              className={`aroma-tag ${isHovered ? 'hovered' : ''} ${selected ? 'selected' : ''}`}
               style={{
                 left: x - 32,
                 top: y - 16,
-                transform: isHovered ? 'scale(1.1)' : 'scale(1)',
-                zIndex: isHovered ? 20 : selected ? 10 : 5,
               }}
-              onClick={() => addAroma(aroma)}
+              onClick={() => onSelectAroma(aroma)}
               onMouseEnter={() => setHoveredId(aroma.id)}
               onMouseLeave={() => setHoveredId(-1)}
             >
               <div
-                className="flex items-center justify-center px-3 py-1.5 text-sm font-medium whitespace-nowrap select-none"
+                className="aroma-tag-inner"
                 style={{
                   background: aroma.color,
                   borderRadius: 10,
@@ -143,17 +143,15 @@ export default function AromaWheel() {
         })}
 
         <div
-          className="absolute flex items-center justify-center rounded-full"
+          className="aroma-wheel-center"
           style={{
             left: cx - 36,
             top: cy - 36,
             width: 72,
             height: 72,
-            background: 'radial-gradient(circle, #fff 0%, #ffe0b2 100%)',
-            boxShadow: '0 2px 12px rgba(224,200,160,0.3)',
           }}
         >
-          <span className="text-xs text-amber-800 font-serif tracking-wider">调香盘</span>
+          <span className="aroma-wheel-center-text">调香盘</span>
         </div>
 
         {categories.map((cat) => {
@@ -162,7 +160,7 @@ export default function AromaWheel() {
           return (
             <div
               key={`label-${cat}`}
-              className="absolute text-[10px] text-amber-700/60 font-serif pointer-events-none"
+              className="aroma-category-label"
               style={{ left: pos.x - 14, top: pos.y - 6 }}
             >
               {CATEGORY_LABELS[cat]}
@@ -172,31 +170,26 @@ export default function AromaWheel() {
       </div>
 
       {hoveredAroma && hoveredId !== -1 && (
-        <div
-          className="absolute z-30 px-3 py-2 rounded-lg text-sm max-w-[200px] pointer-events-none"
-          style={{
-            background: 'rgba(255,255,255,0.95)',
-            border: '1px solid #e0c8a0',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            left: '50%',
-            bottom: -10,
-            transform: 'translateX(-50%) translateY(100%)',
-          }}
-        >
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-3 h-3 rounded-full" style={{ background: hoveredAroma.color }} />
-            <span className="font-medium text-amber-900">{hoveredAroma.name}</span>
-            <span className="text-xs text-amber-600">{CATEGORY_LABELS[hoveredAroma.category]}</span>
+        <div className="aroma-tooltip">
+          <div className="aroma-tooltip-header">
+            <div
+              className="aroma-tooltip-color"
+              style={{ background: hoveredAroma.color }}
+            />
+            <span className="aroma-tooltip-name">{hoveredAroma.name}</span>
+            <span className="aroma-tooltip-category">
+              {CATEGORY_LABELS[hoveredAroma.category]}
+            </span>
           </div>
-          <p className="text-xs text-amber-700 leading-relaxed">{hoveredAroma.description}</p>
+          <p className="aroma-tooltip-desc">{hoveredAroma.description}</p>
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2 mt-4 justify-center max-w-[400px]">
+      <div className="aroma-legend">
         {categories.map((cat) => (
-          <div key={cat} className="flex items-center gap-1 text-xs text-amber-700">
+          <div key={cat} className="aroma-legend-item">
             <div
-              className="w-2.5 h-2.5 rounded-full"
+              className="aroma-legend-dot"
               style={{
                 background:
                   cat === 'floral'

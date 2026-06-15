@@ -1,44 +1,13 @@
 import { useEffect, useRef } from 'react'
-import { usePerfumeStore } from '@/stores/perfumeStore'
-import { Droplets, Save, X } from 'lucide-react'
+import type { MixResult, SelectedAroma } from '@/types'
+import { playLiquidSound } from '@/utils/audio'
+import './PerfumeCard.css'
 
-function playLiquidSound() {
-  try {
-    const ctx = new AudioContext()
-    const duration = 1.5
-
-    const bufferSize = ctx.sampleRate * duration
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
-    const data = buffer.getChannelData(0)
-
-    for (let i = 0; i < bufferSize; i++) {
-      const t = i / ctx.sampleRate
-      const envelope = Math.exp(-t * 2.5)
-      const noise = (Math.random() * 2 - 1) * 0.15
-      const bubble = Math.sin(2 * Math.PI * (200 + Math.sin(t * 8) * 100) * t) * 0.1
-      const pour = Math.sin(2 * Math.PI * 120 * t) * 0.08 * (1 - t / duration)
-      data[i] = (noise + bubble + pour) * envelope
-    }
-
-    const source = ctx.createBufferSource()
-    source.buffer = buffer
-
-    const filter = ctx.createBiquadFilter()
-    filter.type = 'lowpass'
-    filter.frequency.value = 800
-
-    const gain = ctx.createGain()
-    gain.gain.value = 0.4
-
-    source.connect(filter)
-    filter.connect(gain)
-    gain.connect(ctx.destination)
-
-    source.start()
-    source.onended = () => ctx.close()
-  } catch {
-    // Web Audio not available
-  }
+interface PerfumeCardProps {
+  mixResult: MixResult | null
+  showModal: boolean
+  onClose: () => void
+  selectedAromas: SelectedAroma[]
 }
 
 function LiquidCanvas({ rgb }: { rgb: [number, number, number] }) {
@@ -54,8 +23,19 @@ function LiquidCanvas({ rgb }: { rgb: [number, number, number] }) {
     const w = canvas.width
     const h = canvas.height
     let phase = 0
+    let frameCount = 0
+    let startTime = performance.now()
+    let lastFrameTime = startTime
 
-    const draw = () => {
+    const draw = (currentTime: number) => {
+      const deltaTime = currentTime - lastFrameTime
+      lastFrameTime = currentTime
+
+      if (deltaTime < 16) {
+        animRef.current = requestAnimationFrame(draw)
+        return
+      }
+
       ctx.clearRect(0, 0, w, h)
 
       const tubeWidth = 40
@@ -72,10 +52,10 @@ function LiquidCanvas({ rgb }: { rgb: [number, number, number] }) {
       ctx.lineWidth = 2
       ctx.stroke()
 
-      const grad = ctx.createLinearGradient(0, liquidTop, 0, tubeBottom)
-      grad.addColorStop(0, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.3)`)
-      grad.addColorStop(0.3, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.7)`)
-      grad.addColorStop(1, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.95)`)
+      const grad = ctx.createLinearGradient(0, tubeBottom, 0, liquidTop)
+      grad.addColorStop(0, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.95)`)
+      grad.addColorStop(0.7, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.7)`)
+      grad.addColorStop(1, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0)`)
       ctx.fillStyle = grad
 
       ctx.beginPath()
@@ -85,7 +65,7 @@ function LiquidCanvas({ rgb }: { rgb: [number, number, number] }) {
       ctx.lineTo(tubeX + tubeWidth, tubeBottom)
       ctx.lineTo(tubeX + tubeWidth, liquidTop)
       for (let x = tubeX + tubeWidth; x >= tubeX; x -= 1) {
-        const wave = Math.sin((x * waveFreq) + phase) * waveAmplitude
+        const wave = Math.sin(x * waveFreq + phase) * waveAmplitude
         ctx.lineTo(x, liquidTop + wave)
       }
       ctx.closePath()
@@ -100,7 +80,7 @@ function LiquidCanvas({ rgb }: { rgb: [number, number, number] }) {
           const radius = Math.max(1, 1.5 + Math.sin(i) * 0.8)
           ctx.beginPath()
           ctx.arc(bx, by, radius, 0, Math.PI * 2)
-          ctx.fillStyle = `rgba(255,255,255,0.4)`
+          ctx.fillStyle = 'rgba(255,255,255,0.4)'
           ctx.fill()
         }
       }
@@ -113,10 +93,20 @@ function LiquidCanvas({ rgb }: { rgb: [number, number, number] }) {
       ctx.fillRect(tubeX, liquidTop, tubeWidth, liquidHeight)
 
       phase += 0.06
+      frameCount++
+
+      if (frameCount % 60 === 0) {
+        const elapsed = (currentTime - startTime) / 1000
+        const fps = frameCount / elapsed
+        if (fps < 50) {
+          phase += 0.01
+        }
+      }
+
       animRef.current = requestAnimationFrame(draw)
     }
 
-    draw()
+    draw(performance.now())
     return () => cancelAnimationFrame(animRef.current)
   }, [rgb])
 
@@ -125,55 +115,51 @@ function LiquidCanvas({ rgb }: { rgb: [number, number, number] }) {
       ref={canvasRef}
       width={120}
       height={200}
-      className="mx-auto"
+      className="perfume-liquid-canvas"
     />
   )
 }
 
-function PerfumeLabelCard({ color, name, rgb }: { color: string; name: string; rgb: [number, number, number] }) {
-  const today = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
+function PerfumeLabelCard({
+  color,
+  name,
+  rgb,
+}: {
+  color: string
+  name: string
+  rgb: [number, number, number]
+}) {
+  const today = new Date().toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
 
   return (
     <div
-      className="flex flex-col items-center justify-between p-4"
+      className="perfume-label-card"
       style={{
         width: 200,
         height: 300,
         borderRadius: 8,
-        background: `linear-gradient(180deg, ${color}33 0%, #fff 60%)`,
-        border: '1px solid #e0c8a0',
-        boxShadow: '0 4px 16px rgba(224,200,160,0.2)',
+        background: `linear-gradient(180deg, ${color} 0%, #ffffff 100%)`,
       }}
     >
-      <div className="text-center">
-        <div
-          className="w-10 h-10 rounded-full mx-auto mb-2"
-          style={{
-            background: `linear-gradient(135deg, ${color}, rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.5))`,
-            boxShadow: `0 2px 8px ${color}44`,
-          }}
-        />
-        <h3 className="font-serif text-amber-900 text-base font-medium leading-tight">
-          {name}
-        </h3>
+      <div className="perfume-label-top">
+        <h3 className="perfume-label-name">{name}</h3>
+        <p className="perfume-label-date">{today}</p>
       </div>
 
-      <div className="flex items-center gap-1 text-amber-600/60 text-xs">
-        <Droplets size={12} />
-        <span>虚拟调香师</span>
-      </div>
-
-      <div className="text-center">
-        <div className="text-xs text-amber-500 mb-2">{today}</div>
+      <div className="perfume-label-bottom">
         <svg
           width="32"
           height="40"
           viewBox="0 0 32 40"
           fill="none"
-          className="mx-auto opacity-60"
+          className="perfume-bottle-icon"
         >
           <path
-            d="M12 4h8v6l4 4v20a2 2 0 01-2 2H10a2 2 0 01-2-2V14l4-4V4z"
+            d="M12 4h8v6l4 4v20a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2V14l4-4V4z"
             fill={color}
             stroke="#e0c8a0"
             strokeWidth="1"
@@ -186,14 +172,17 @@ function PerfumeLabelCard({ color, name, rgb }: { color: string; name: string; r
   )
 }
 
-export default function PerfumeCard() {
-  const { mixResult, showModal, closeModal, selectedAromas } = usePerfumeStore()
-
+export default function PerfumeCard({
+  mixResult,
+  showModal,
+  onClose,
+  selectedAromas,
+}: PerfumeCardProps) {
   useEffect(() => {
-    if (showModal) {
+    if (showModal && mixResult) {
       playLiquidSound()
     }
-  }, [showModal])
+  }, [showModal, mixResult])
 
   if (!showModal || !mixResult) return null
 
@@ -217,41 +206,30 @@ export default function PerfumeCard() {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.5)' }}
-      onClick={closeModal}
-    >
-      <div
-        className="flex flex-col items-center p-8 relative"
-        style={{
-          background: '#fff',
-          borderRadius: 12,
-          border: '1px solid #e0c8a0',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
-          maxWidth: 480,
-          width: '90%',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          onClick={closeModal}
-          className="absolute top-4 right-4 text-amber-400 hover:text-amber-600 transition-colors"
-        >
-          <X size={20} />
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose} aria-label="关闭">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
         </button>
 
-        <h3 className="font-serif text-xl text-amber-800 mb-6 tracking-wider">调香完成</h3>
+        <h3 className="modal-title">调香完成</h3>
 
-        <div className="flex flex-col md:flex-row items-center gap-6 mb-6">
+        <div className="modal-body">
           <LiquidCanvas rgb={mixResult.rgb} />
-          <div className="flex flex-col items-center gap-4">
-            <div
-              className="text-2xl font-serif font-medium text-amber-900 text-center leading-snug"
-              style={{ maxWidth: 160 }}
-            >
-              「{mixResult.name}」
-            </div>
+          <div className="modal-info">
+            <div className="perfume-generated-name">「{mixResult.name}」</div>
             <PerfumeLabelCard
               color={mixResult.color}
               name={mixResult.name}
@@ -260,23 +238,25 @@ export default function PerfumeCard() {
           </div>
         </div>
 
-        <div className="flex gap-3">
-          <button
-            onClick={handleSave}
-            className="perfume-btn flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-medium transition-all duration-200 active:scale-95"
-            style={{
-              background: 'linear-gradient(135deg, #ff9933, #ff6600)',
-              boxShadow: '0 4px 12px rgba(255,102,0,0.3)',
-            }}
-          >
-            <Save size={16} />
+        <div className="modal-actions">
+          <button onClick={handleSave} className="modal-btn-primary">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+              <polyline points="17 21 17 13 7 13 7 21" />
+              <polyline points="7 3 7 8 15 8" />
+            </svg>
             保存配方
           </button>
-          <button
-            onClick={closeModal}
-            className="px-5 py-2.5 rounded-xl text-amber-600 transition-all duration-200 hover:bg-amber-50"
-            style={{ border: '1px solid #e0c8a0' }}
-          >
+          <button onClick={onClose} className="modal-btn-secondary">
             继续调香
           </button>
         </div>

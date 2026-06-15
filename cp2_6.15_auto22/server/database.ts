@@ -7,7 +7,7 @@ const __dirname = path.dirname(__filename)
 
 const DB_PATH = path.join(__dirname, 'perfume.db')
 
-let db: Database.Database
+let db: Database.Database | null = null
 
 export function getDb(): Database.Database {
   if (!db) {
