@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/board/components/kanbanboard.tsx","./src/board/components/taskcard.tsx","./src/board/logic/boardlogic.ts","./src/load/components/workloadchart.tsx","./src/load/logic/loadlogic.ts","./src/types/index.ts"],"version":"5.8.3"}
