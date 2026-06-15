@@ -14,6 +14,7 @@ const PhotoCard: React.FC<PhotoCardProps> = ({ photo, onSelect, onDelete, isSele
   const [hover, setHover] = useState(false);
   const [error, setError] = useState(false);
   const [nearVisible, setNearVisible] = useState(false);
+  const [cardWidth, setCardWidth] = useState(344);
   const imgRef = useRef<HTMLImageElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const hasBeenVisible = useRef(false);
@@ -30,8 +31,11 @@ const PhotoCard: React.FC<PhotoCardProps> = ({ photo, onSelect, onDelete, isSele
   useEffect(() => {
     const el = cardRef.current;
     if (!el) return;
+    const width = el.offsetWidth || 344;
+    setCardWidth(width);
+    const preloadMargin = width * 3;
     const observer = new IntersectionObserver(handleIntersection, {
-      rootMargin: '300px 344px 300px 344px',
+      rootMargin: `300px ${preloadMargin}px 300px ${preloadMargin}px`,
       threshold: 0,
     });
     observer.observe(el);

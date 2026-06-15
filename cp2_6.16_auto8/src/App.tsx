@@ -24,7 +24,6 @@ const App: React.FC = () => {
   const [musicSrc, setMusicSrc] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(60);
-  const [showVolume, setShowVolume] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -376,6 +375,7 @@ const App: React.FC = () => {
           <button
             onClick={exportHtml}
             disabled={exporting || photos.length === 0}
+            title={photos.length === 0 ? '请先上传至少1张照片才能导出' : '导出为独立HTML文件'}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '8px 18px', borderRadius: 8,
@@ -398,6 +398,11 @@ const App: React.FC = () => {
             {exporting ? <Loader2 size={14} className="spin" /> : <Download size={14} />}
             {exporting ? '导出中...' : '导出 HTML'}
           </button>
+          {photos.length === 0 && (
+            <span style={{ fontSize: 11, color: '#ffb74d', marginLeft: 4 }}>
+              ⚠️ 需先上传照片
+            </span>
+          )}
         </div>
       </header>
 
@@ -409,11 +414,10 @@ const App: React.FC = () => {
               position: 'fixed', top: 72, right: 24, zIndex: 90,
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
             }}
-            onMouseEnter={() => setShowVolume(true)}
-            onMouseLeave={() => setShowVolume(false)}
           >
             <button
               onClick={() => setIsPlaying((p) => !p)}
+              title={isPlaying ? '暂停' : '播放'}
               style={{
                 width: 56, height: 56, borderRadius: '50%',
                 background: '#1e88e5', color: '#fff',
@@ -428,25 +432,30 @@ const App: React.FC = () => {
               {isPlaying ? <Pause size={22} fill="#fff" /> : <Play size={22} fill="#fff" style={{ marginLeft: 3 }} />}
             </button>
             <div style={{
-              background: '#fff', borderRadius: 12, padding: showVolume ? '8px 12px' : '4px 10px',
+              background: '#fff', borderRadius: 12, padding: '8px 12px',
               boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
               display: 'flex', alignItems: 'center', gap: 8,
-              transition: 'all 0.3s',
-              overflow: 'hidden',
-              maxHeight: showVolume ? 40 : 30,
             }}>
-              <button onClick={() => setVolume((v) => (v > 0 ? 0 : 60))} style={{ display: 'flex', color: '#666' }}>
+              <button
+                onClick={() => setVolume((v) => (v > 0 ? 0 : 60))}
+                title={volume === 0 ? '取消静音' : '静音'}
+                style={{ display: 'flex', color: '#666', padding: '4px', borderRadius: '50%', transition: 'background 0.2s' }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = '#f5f5f5')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+              >
                 {volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
               </button>
               <input
                 type="range" min={0} max={100} value={volume}
                 onChange={(e) => setVolume(Number(e.target.value))}
                 style={{
-                  width: showVolume ? 80 : 0, transition: 'width 0.3s',
-                  opacity: showVolume ? 1 : 0, accentColor: '#1e88e5',
+                  width: 80,
+                  accentColor: '#1e88e5',
+                  cursor: 'pointer',
                 }}
+                title={`音量: ${volume}%`}
               />
-              <span style={{ fontSize: 11, color: '#999', minWidth: 24, textAlign: 'right' }}>{volume}%</span>
+              <span style={{ fontSize: 11, color: '#999', minWidth: 28, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{volume}%</span>
             </div>
           </div>
         </>

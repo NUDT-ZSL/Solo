@@ -19,10 +19,12 @@ app.use(express.urlencoded({ extended: true }));
 
 const uploadsDir = path.resolve(__dirname, '../../uploads');
 const thumbnailsDir = path.resolve(__dirname, '../../uploads/thumbnails');
-const dbPath = path.resolve(__dirname, '../../data.sqlite');
+const dataDir = path.resolve(__dirname, '../../data');
+const dbPath = path.resolve(dataDir, 'data.sqlite');
 
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 if (!fs.existsSync(thumbnailsDir)) fs.mkdirSync(thumbnailsDir, { recursive: true });
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
 app.use('/uploads', express.static(uploadsDir));
 
