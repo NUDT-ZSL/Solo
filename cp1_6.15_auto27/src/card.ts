@@ -1,5 +1,5 @@
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
-export type CardState = 'inHand' | 'inBattle' | 'attacking' | 'damaged' | 'dead';
+export type CardState = 'inHand' | 'inBattle' | 'attacking' | 'dead';
 export type EffectType = 'attack' | 'heal' | 'shield' | 'charge' | 'taunt';
 
 export interface CardData {
@@ -29,15 +29,6 @@ export class Card {
   owner: number;
   currentHealth: number;
   currentAttack: number;
-  isDragging: boolean;
-  dragOffset: { x: number; y: number };
-  animationTime: number;
-  animationProgress: number;
-  attackTarget: Card | null;
-  attackStartTime: number;
-  shakeTime: number;
-  flashTime: number;
-  pulseTime: number;
   hasAttacked: boolean;
   battlefieldSlot: { row: number; col: number } | null;
 
@@ -63,15 +54,6 @@ export class Card {
     this.owner = owner;
     this.currentHealth = data.health;
     this.currentAttack = data.attack;
-    this.isDragging = false;
-    this.dragOffset = { x: 0, y: 0 };
-    this.animationTime = 0;
-    this.animationProgress = 0;
-    this.attackTarget = null;
-    this.attackStartTime = 0;
-    this.shakeTime = 0;
-    this.flashTime = 0;
-    this.pulseTime = this.data.attack >= 5 ? 0.3 : 0;
     this.hasAttacked = false;
     this.battlefieldSlot = null;
   }
@@ -89,8 +71,8 @@ export class Card {
     return hand;
   }
 
-  getRarityColor(): string {
-    switch (this.data.rarity) {
+  static getRarityColor(rarity: Rarity): string {
+    switch (rarity) {
       case 'common': return '#ffffff';
       case 'rare': return '#4a90e2';
       case 'epic': return '#a855f7';
@@ -98,8 +80,8 @@ export class Card {
     }
   }
 
-  getEffectIcon(): string {
-    switch (this.data.effect) {
+  static getEffectIcon(effect: EffectType): string {
+    switch (effect) {
       case 'attack': return '⚔️';
       case 'heal': return '💚';
       case 'shield': return '🛡️';
@@ -119,43 +101,13 @@ export class Card {
 
   takeDamage(amount: number): void {
     this.currentHealth -= amount;
-    this.flashTime = 0.2;
-    this.shakeTime = 0.1;
     if (this.currentHealth <= 0) {
+      this.currentHealth = 0;
       this.state = 'dead';
     }
   }
 
-  update(deltaTime: number): void {
-    if (this.attackStartTime > 0) {
-      this.animationTime += deltaTime;
-      this.animationProgress = Math.min(this.animationTime / 0.4, 1);
-    }
-    if (this.shakeTime > 0) {
-      this.shakeTime -= deltaTime;
-    }
-    if (this.flashTime > 0) {
-      this.flashTime -= deltaTime;
-    }
-    if (this.pulseTime > 0) {
-      this.pulseTime -= deltaTime;
-    }
-  }
-
-  startAttack(target: Card): void {
-    this.state = 'attacking';
-    this.attackTarget = target;
-    this.attackStartTime = performance.now();
-    this.animationTime = 0;
-    this.animationProgress = 0;
-    this.hasAttacked = true;
-  }
-
   resetAttack(): void {
     this.state = 'inBattle';
-    this.attackTarget = null;
-    this.attackStartTime = 0;
-    this.animationTime = 0;
-    this.animationProgress = 0;
   }
 }

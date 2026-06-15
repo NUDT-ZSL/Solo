@@ -1,9 +1,9 @@
 import { Card } from './card';
 import { Player } from './player';
 import { Renderer } from './renderer';
-import { InputHandler, GameAction } from './input';
+import { InputHandler } from './input';
 
-type GameState = 'waiting' | 'playing' | 'animating' | 'gameOver';
+type GameState = 'playing' | 'animating' | 'gameOver';
 
 class GameLoop {
   private renderer: Renderer;
@@ -13,12 +13,9 @@ class GameLoop {
   private turnNumber: number;
   private gameState: GameState;
   private selectedCard: Card | null;
-  private draggingCard: Card | null;
   private lastFrameTime: number;
   private isGameOver: boolean;
-  private pendingAttack: { attacker: Card; target: Card } | null;
-  private attackAnimationComplete: boolean;
-  private pendingDragStart: { card: Card; pos: { x: number; y: number } } | null;
+  private attackAnimating: boolean;
 
   constructor() {
     const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
@@ -31,12 +28,9 @@ class GameLoop {
     this.turnNumber = 1;
     this.gameState = 'playing';
     this.selectedCard = null;
-    this.draggingCard = null;
     this.lastFrameTime = 0;
     this.isGameOver = false;
-    this.pendingAttack = null;
-    this.attackAnimationComplete = true;
-    this.pendingDragStart = null;
+    this.attackAnimating = false;
 
     this.players.forEach((p) => p.initializeHand());
     this.players[0].startTurn();
@@ -46,250 +40,160 @@ class GameLoop {
   }
 
   private setupInputHandlers(): void {
-    this.inputHandler.addListener((action: GameAction) => {
-      if (this.isGameOver) {
-        if (action.type === 'dragEnd' || action.type === 'keyPress' || action.type === 'clickTurnButton') {
-          this.restartGame();
+    this.inputHandler.onDragEnd = (pos, card) => {
+      if (this.isGameOver || this.gameState !== 'playing') return;
+      const player = this.players[this.currentTurn];
+      if (this.inputHandler.isInBattlefield(pos)) {
+        const slot = this.inputHandler.findBattlefieldSlot(pos, this.currentTurn);
+        if (slot) {
+          const success = player.playCardToBattlefield(card, slot.row, slot.col);
+          if (success && card.data.attack >= 5) {
+            this.renderer.startPulseAnimation(card);
+          }
         }
+      }
+    };
+
+    this.inputHandler.onClickCard = (card, pos) => {
+      if (this.isGameOver || this.gameState !== 'playing') return;
+      if (card.owner === this.currentTurn) {
+        if (card.state === 'inBattle' && !card.hasAttacked && !this.attackAnimating) {
+          this.selectedCard = this.selectedCard === card ? null : card;
+        }
+      } else {
+        if (this.selectedCard && this.selectedCard.state === 'inBattle' && !this.selectedCard.hasAttacked && !this.attackAnimating) {
+          this.executeAttack(this.selectedCard, card);
+        }
+      }
+    };
+
+    this.inputHandler.onClickEmpty = (pos) => {
+      if (this.isGameOver || this.gameState !== 'playing') return;
+      if (this.selectedCard && this.selectedCard.state === 'inBattle') {
+        if (this.inputHandler.isOnHero(pos, 1 - this.currentTurn)) {
+          this.executeHeroAttack(this.selectedCard);
+          return;
+        }
+      }
+      this.selectedCard = null;
+    };
+
+    this.inputHandler.onTurnButton = () => {
+      if (!this.isGameOver && this.gameState === 'playing') {
+        this.endTurn();
+      }
+    };
+
+    this.inputHandler.onGameOverClick = () => {
+      if (this.isGameOver) {
+        this.restartGame();
+      }
+    };
+
+    this.inputHandler.onKeyPress = (key) => {
+      if (this.isGameOver) {
+        this.restartGame();
         return;
       }
-
-      if (this.gameState !== 'playing') {
-        return;
+      if (this.gameState !== 'playing') return;
+      if (key === ' ' || key === 'Enter') {
+        this.endTurn();
       }
-
-      switch (action.type) {
-        case 'dragMove':
-          break;
-
-        case 'dragEnd':
-          this.handleDragEnd(action.position);
-          break;
-
-        case 'keyPress':
-          if (action.key === ' ' || action.key === 'Enter') {
-            this.endTurn();
-          }
-          if (action.key === 'Escape') {
-            this.selectedCard = null;
-          }
-          break;
+      if (key === 'Escape') {
+        this.selectedCard = null;
       }
-    });
+    };
 
     window.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
-
-      const mousePos = this.inputHandler.getMousePos();
-
-      if (this.isGameOver) {
-        this.restartGame();
-        return;
-      }
-
-      if (this.gameState !== 'playing') return;
-
-      if (this.inputHandler.isOnTurnButton(mousePos)) {
-        this.endTurn();
-        return;
-      }
-
-      if (this.draggingCard && this.draggingCard.isDragging) {
-        return;
-      }
-
-      const card = this.inputHandler.findCardAtPosition(
-        mousePos,
-        this.players,
-        this.currentTurn
-      );
-
-      if (card && card.owner === this.currentTurn && card.state === 'inHand') {
-        this.pendingDragStart = { card, pos: { ...mousePos } };
-        return;
-      }
-
-      if (card) {
-        this.handleCardClick(card, mousePos);
-      } else {
-        if (this.selectedCard && this.selectedCard.state === 'inBattle') {
-          if (this.inputHandler.isOnHero(mousePos, 1 - this.currentTurn)) {
-            this.attackHero(this.selectedCard);
-            return;
-          }
-        }
-        this.selectedCard = null;
-      }
-    });
-
-    window.addEventListener('mousemove', () => {
-      if (this.pendingDragStart) {
-        const currentPos = this.inputHandler.getMousePos();
-        const dx = currentPos.x - this.pendingDragStart.pos.x;
-        const dy = currentPos.y - this.pendingDragStart.pos.y;
-        if (Math.sqrt(dx * dx + dy * dy) > 5) {
-          this.startDrag(this.pendingDragStart.card, this.pendingDragStart.pos);
-          this.pendingDragStart = null;
-        }
-      }
-    });
-
-    window.addEventListener('mouseup', () => {
-      if (this.pendingDragStart) {
-        this.pendingDragStart = null;
-      }
-    });
-
-    window.addEventListener('click', (_e) => {
-      if (this.isGameOver) {
-        this.restartGame();
-        return;
-      }
-
-      const mousePos = this.inputHandler.getMousePos();
-      const rect = this.renderer.getCanvasRect();
-      if (
-        mousePos.x < 0 ||
-        mousePos.x > rect.width ||
-        mousePos.y < 0 ||
-        mousePos.y > rect.height
-      ) {
-        return;
-      }
+      this.inputHandler.handleMouseDown(this.players, this.currentTurn, this.isGameOver);
     });
   }
 
-  private startDrag(card: Card, mousePos: { x: number; y: number }): void {
-    card.isDragging = true;
-    this.draggingCard = card;
-    card.dragOffset = {
-      x: card.position.x + card.position.width / 2 - mousePos.x,
-      y: card.position.y + card.position.height / 2 - mousePos.y,
-    };
-  }
-
-  private handleDragEnd(position: { x: number; y: number }): void {
-    if (!this.draggingCard) return;
-
-    const card = this.draggingCard;
-    card.isDragging = false;
-
-    const player = this.players[this.currentTurn];
-
-    if (this.inputHandler.isInBattlefield(position)) {
-      const slot = this.inputHandler.findBattlefieldSlot(position, this.currentTurn);
-      if (slot) {
-        player.playCardToBattlefield(card, slot.row, slot.col);
-      }
-    }
-
-    this.draggingCard = null;
-  }
-
-  private handleCardClick(
-    card: Card,
-    _mousePos: { x: number; y: number }
-  ): void {
-    if (card.owner === this.currentTurn) {
-      if (card.state === 'inBattle') {
-        if (!card.hasAttacked && card.attackStartTime === 0) {
-          if (this.selectedCard === card) {
-            this.selectedCard = null;
-          } else {
-            this.selectedCard = card;
-          }
-        }
-      } else if (card.state === 'inHand') {
-        this.selectedCard = null;
-      }
-    } else {
-      if (this.selectedCard && this.selectedCard.state === 'inBattle') {
-        if (!this.selectedCard.hasAttacked && this.selectedCard.attackStartTime === 0) {
-          this.attackCard(this.selectedCard, card);
-        }
-      }
-    }
-  }
-
-  private attackCard(attacker: Card, target: Card): void {
-    if (!this.attackAnimationComplete) return;
-
+  private executeAttack(attacker: Card, target: Card): void {
+    if (this.attackAnimating) return;
+    this.attackAnimating = true;
     this.gameState = 'animating';
-    this.attackAnimationComplete = false;
-    this.pendingAttack = { attacker, target };
 
-    attacker.startAttack(target);
+    const attackerSlot = attacker.battlefieldSlot;
+    const targetSlot = target.battlefieldSlot;
+    if (!attackerSlot || !targetSlot) {
+      this.attackAnimating = false;
+      this.gameState = 'playing';
+      return;
+    }
 
-    setTimeout(() => {
-      const attackerDamage = attacker.currentAttack;
-      const targetDamage = target.currentAttack;
+    const layout = this.renderer.getLayout();
+    const attackerCell = layout.battlefieldCells[attackerSlot.row][attackerSlot.col];
+    const targetCell = layout.battlefieldCells[targetSlot.row][targetSlot.col];
+    const cardWidth = attackerCell.width * 0.9;
+    const cardHeight = attackerCell.height * 0.9;
 
-      target.takeDamage(attackerDamage);
-      attacker.takeDamage(targetDamage);
+    const attackerX = attackerCell.x + (attackerCell.width - cardWidth) / 2;
+    const attackerY = attackerCell.y + (attackerCell.height - cardHeight) / 2;
+    const targetX = targetCell.x + (targetCell.width - cardWidth) / 2;
+    const targetY = targetCell.y + (targetCell.height - cardHeight) / 2;
 
-      setTimeout(() => {
-        this.completeAttack();
-      }, 150);
-    }, 200);
+    attacker.state = 'attacking';
+    attacker.hasAttacked = true;
+    this.selectedCard = null;
+
+    this.renderer.startAttackAnimation(
+      attacker, target,
+      attackerX, attackerY,
+      targetX, targetY,
+      () => {
+        const attackerDamage = attacker.currentAttack;
+        const targetDamage = target.currentAttack;
+
+        target.takeDamage(attackerDamage);
+        attacker.takeDamage(targetDamage);
+
+        attacker.resetAttack();
+
+        this.players[0].removeDeadCards();
+        this.players[1].removeDeadCards();
+
+        this.attackAnimating = false;
+        this.gameState = 'playing';
+        this.selectedCard = null;
+
+        this.checkGameOver();
+      }
+    );
   }
 
-  private attackHero(attacker: Card): void {
-    if (!this.attackAnimationComplete) return;
+  private executeHeroAttack(attacker: Card): void {
+    if (this.attackAnimating) return;
 
     const otherPlayer = this.players[1 - this.currentTurn];
     const enemyCards = otherPlayer.getAllBattlefieldCards();
     const hasTaunt = enemyCards.some((c) => c.data.effect === 'taunt');
-
-    if (hasTaunt) {
-      return;
-    }
+    if (hasTaunt) return;
 
     this.gameState = 'animating';
-    this.attackAnimationComplete = false;
-
+    this.attackAnimating = true;
     attacker.hasAttacked = true;
+    this.selectedCard = null;
 
     otherPlayer.takeDamage(attacker.currentAttack);
 
     setTimeout(() => {
-      this.attackAnimationComplete = true;
+      this.attackAnimating = false;
       this.gameState = 'playing';
       this.checkGameOver();
     }, 300);
   }
 
-  private completeAttack(): void {
-    if (this.pendingAttack) {
-      const { attacker } = this.pendingAttack;
-      attacker.resetAttack();
-
-      this.players[0].removeDeadCards();
-      this.players[1].removeDeadCards();
-
-      this.pendingAttack = null;
-    }
-
-    this.attackAnimationComplete = true;
-    this.gameState = 'playing';
-    this.selectedCard = null;
-
-    this.checkGameOver();
-  }
-
   private checkGameOver(): void {
     for (let i = 0; i < 2; i++) {
       if (this.players[i].isDead()) {
-        this.gameOver(1 - i);
+        this.isGameOver = true;
+        this.gameState = 'gameOver';
+        this.renderer.setGameOver(1 - i);
         return;
       }
     }
-  }
-
-  private gameOver(winnerIndex: number): void {
-    this.isGameOver = true;
-    this.winner = winnerIndex;
-    this.gameState = 'gameOver';
-    this.renderer.setGameOver(winnerIndex);
   }
 
   private restartGame(): void {
@@ -298,15 +202,12 @@ class GameLoop {
     this.turnNumber = 1;
     this.gameState = 'playing';
     this.selectedCard = null;
-    this.draggingCard = null;
     this.isGameOver = false;
-    this.pendingAttack = null;
-    this.attackAnimationComplete = true;
-    this.pendingDragStart = null;
+    this.attackAnimating = false;
+    this.inputHandler.dragState = null;
 
     this.players.forEach((p) => p.initializeHand());
     this.players[0].startTurn();
-
     this.renderer.resetGameOver();
   }
 
@@ -314,17 +215,20 @@ class GameLoop {
     if (this.gameState !== 'playing') return;
 
     this.selectedCard = null;
-    this.pendingDragStart = null;
+    this.inputHandler.dragState = null;
 
     this.gameState = 'animating';
-    this.renderer.startTurnTransition(this.currentTurn === 0 ? 1 : -1);
+    const nextPlayer = 1 - this.currentTurn;
+    this.renderer.startTurnTransition(nextPlayer);
 
     setTimeout(() => {
       this.players[this.currentTurn].endTurn();
-      this.currentTurn = 1 - this.currentTurn;
+      this.currentTurn = nextPlayer;
       this.turnNumber++;
       this.players[this.currentTurn].startTurn();
-      this.gameState = 'playing';
+      if (this.gameState === 'animating') {
+        this.gameState = 'playing';
+      }
     }, 500);
   }
 
@@ -352,9 +256,6 @@ class GameLoop {
       if (this.gameState === 'playing') {
         player.updateTurnTimer(deltaTime);
       }
-      player.getAllBattlefieldCards().forEach((card) => {
-        card.update(deltaTime);
-      });
     });
 
     if (
@@ -371,8 +272,7 @@ class GameLoop {
       this.currentTurn,
       this.turnNumber,
       this.selectedCard,
-      this.draggingCard,
-      this.inputHandler.getMousePos()
+      this.inputHandler.dragState
     );
   }
 }

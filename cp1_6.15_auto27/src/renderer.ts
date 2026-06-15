@@ -1,4 +1,4 @@
-import { Card } from './card';
+import { Card, CardData, Rarity, EffectType } from './card';
 import { Player } from './player';
 
 export interface Layout {
@@ -17,46 +17,104 @@ export interface Layout {
   turnButtonPos: { x: number; y: number; radius: number };
 }
 
+interface AttackAnim {
+  attacker: Card;
+  target: Card;
+  phase: 'lunge' | 'return' | 'impact';
+  time: number;
+  attackerOriginX: number;
+  attackerOriginY: number;
+  targetX: number;
+  targetY: number;
+  onComplete: () => void;
+}
+
+interface PulseAnim {
+  card: Card;
+  time: number;
+  duration: number;
+}
+
+interface ShakeAnim {
+  card: Card;
+  time: number;
+  duration: number;
+}
+
+interface FlashAnim {
+  card: Card;
+  time: number;
+  duration: number;
+}
+
+type TurnTransitionState = 'idle' | 'flipOut' | 'flipIn';
+
 export class Renderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private layout: Layout;
-  private turnTransitionProgress: number;
-  private isTransitioning: boolean;
+  private offscreen: HTMLCanvasElement;
+  private offCtx: CanvasRenderingContext2D;
+  private bgCacheValid: boolean;
+  private gridCacheValid: boolean;
   private gameOver: boolean;
   private winner: number;
   private winnerRotation: number;
   private pulsePhase: number;
+  private attackAnims: AttackAnim[];
+  private pulseAnims: PulseAnim[];
+  private shakeAnims: ShakeAnim[];
+  private flashAnims: FlashAnim[];
+  private transitionState: TurnTransitionState;
+  private transitionTime: number;
+  private transitionNextPlayer: number;
+  private static readonly FLIP_DURATION = 0.25;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Failed to get canvas context');
     this.ctx = ctx;
+    this.offscreen = document.createElement('canvas');
+    const offCtx = this.offscreen.getContext('2d');
+    if (!offCtx) throw new Error('Failed to create offscreen context');
+    this.offCtx = offCtx;
     this.layout = this.calculateLayout();
-    this.turnTransitionProgress = 0;
-    this.isTransitioning = false;
+    this.bgCacheValid = false;
+    this.gridCacheValid = false;
     this.gameOver = false;
     this.winner = -1;
     this.winnerRotation = 0;
     this.pulsePhase = 0;
+    this.attackAnims = [];
+    this.pulseAnims = [];
+    this.shakeAnims = [];
+    this.flashAnims = [];
+    this.transitionState = 'idle';
+    this.transitionTime = 0;
+    this.transitionNextPlayer = 0;
     this.resize();
-    window.addEventListener('resize', () => this.resize());
+    window.addEventListener('resize', () => {
+      this.resize();
+      this.bgCacheValid = false;
+      this.gridCacheValid = false;
+    });
   }
 
   resize(): void {
     this.canvas.width = window.innerWidth;
     this.canvas.height = window.innerHeight;
+    this.offscreen.width = this.canvas.width;
+    this.offscreen.height = this.canvas.height;
     this.layout = this.calculateLayout();
+    this.bgCacheValid = false;
+    this.gridCacheValid = false;
   }
 
   private calculateLayout(): Layout {
     const w = this.canvas.width;
     const h = this.canvas.height;
-    const minWidth = 1024;
-    const minHeight = 768;
-    const scale = Math.min(w / minWidth, h / minHeight, 1);
-
+    const scale = Math.min(w / 1024, h / 768, 1);
     const playerAreaWidth = w * 0.25;
     const battlefieldWidth = w * 0.5;
     const healthBarWidth = 200 * scale;
@@ -81,8 +139,7 @@ export class Renderer {
     }
 
     return {
-      width: w,
-      height: h,
+      width: w, height: h,
       player1Area: { x: 0, y: 0, width: playerAreaWidth, height: h },
       player2Area: { x: w - playerAreaWidth, y: 0, width: playerAreaWidth, height: h },
       battlefieldArea: { x: battlefieldX, y: battlefieldY, width: battlefieldTotalWidth, height: battlefieldTotalHeight },
@@ -91,19 +148,48 @@ export class Renderer {
       player2HandArea: { x: w - playerAreaWidth, y: h * 0.7, width: playerAreaWidth, height: h * 0.25 },
       player1HeroPos: { x: playerAreaWidth / 2, y: h * 0.15 },
       player2HeroPos: { x: w - playerAreaWidth / 2, y: h * 0.15 },
-      healthBarWidth,
-      healthBarHeight,
+      healthBarWidth, healthBarHeight,
       turnButtonPos: { x: w - 80, y: h - 80, radius: 50 * scale },
     };
   }
 
-  getLayout(): Layout {
-    return this.layout;
+  getLayout(): Layout { return this.layout; }
+
+  startAttackAnimation(
+    attacker: Card, target: Card,
+    attackerOriginX: number, attackerOriginY: number,
+    targetX: number, targetY: number,
+    onComplete: () => void
+  ): void {
+    this.attackAnims.push({
+      attacker, target,
+      phase: 'lunge', time: 0,
+      attackerOriginX, attackerOriginY,
+      targetX, targetY,
+      onComplete,
+    });
   }
 
-  startTurnTransition(_direction: number): void {
-    this.isTransitioning = true;
-    this.turnTransitionProgress = 0;
+  startPulseAnimation(card: Card): void {
+    this.pulseAnims.push({ card, time: 0, duration: 0.3 });
+  }
+
+  startShakeAnimation(card: Card): void {
+    this.shakeAnims.push({ card, time: 0, duration: 0.1 });
+  }
+
+  startFlashAnimation(card: Card): void {
+    this.flashAnims.push({ card, time: 0, duration: 0.15 });
+  }
+
+  startTurnTransition(nextPlayer: number): void {
+    this.transitionState = 'flipOut';
+    this.transitionTime = 0;
+    this.transitionNextPlayer = nextPlayer;
+  }
+
+  isTransitioning(): boolean {
+    return this.transitionState !== 'idle';
   }
 
   setGameOver(winner: number): void {
@@ -120,13 +206,62 @@ export class Renderer {
 
   update(deltaTime: number): void {
     this.pulsePhase += deltaTime * Math.PI * 2;
-    if (this.isTransitioning) {
-      this.turnTransitionProgress = Math.min(this.turnTransitionProgress + deltaTime / 0.5, 1);
-      if (this.turnTransitionProgress >= 1) {
-        this.isTransitioning = false;
-        this.turnTransitionProgress = 0;
+
+    for (let i = this.attackAnims.length - 1; i >= 0; i--) {
+      const anim = this.attackAnims[i];
+      anim.time += deltaTime;
+      if (anim.phase === 'lunge') {
+        if (anim.time >= 0.2) {
+          anim.phase = 'impact';
+          anim.time = 0;
+          this.startShakeAnimation(anim.target);
+          this.startFlashAnimation(anim.target);
+        }
+      } else if (anim.phase === 'impact') {
+        if (anim.time >= 0.05) {
+          anim.phase = 'return';
+          anim.time = 0;
+        }
+      } else if (anim.phase === 'return') {
+        if (anim.time >= 0.2) {
+          const cb = anim.onComplete;
+          this.attackAnims.splice(i, 1);
+          cb();
+        }
       }
     }
+
+    for (let i = this.pulseAnims.length - 1; i >= 0; i--) {
+      this.pulseAnims[i].time += deltaTime;
+      if (this.pulseAnims[i].time >= this.pulseAnims[i].duration) {
+        this.pulseAnims.splice(i, 1);
+      }
+    }
+
+    for (let i = this.shakeAnims.length - 1; i >= 0; i--) {
+      this.shakeAnims[i].time += deltaTime;
+      if (this.shakeAnims[i].time >= this.shakeAnims[i].duration) {
+        this.shakeAnims.splice(i, 1);
+      }
+    }
+
+    for (let i = this.flashAnims.length - 1; i >= 0; i--) {
+      this.flashAnims[i].time += deltaTime;
+      if (this.flashAnims[i].time >= this.flashAnims[i].duration) {
+        this.flashAnims.splice(i, 1);
+      }
+    }
+
+    if (this.transitionState !== 'idle') {
+      this.transitionTime += deltaTime;
+      if (this.transitionState === 'flipOut' && this.transitionTime >= Renderer.FLIP_DURATION) {
+        this.transitionState = 'flipIn';
+        this.transitionTime = 0;
+      } else if (this.transitionState === 'flipIn' && this.transitionTime >= Renderer.FLIP_DURATION) {
+        this.transitionState = 'idle';
+      }
+    }
+
     if (this.gameOver) {
       this.winnerRotation += deltaTime * 0.5;
     }
@@ -137,8 +272,7 @@ export class Renderer {
     currentTurn: number,
     turnNumber: number,
     selectedCard: Card | null,
-    draggingCard: Card | null,
-    mousePos: { x: number; y: number }
+    dragState: { card: Card; offsetX: number; offsetY: number; mouseX: number; mouseY: number } | null
   ): void {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -147,23 +281,23 @@ export class Renderer {
     this.drawBattlefieldGrid();
     this.drawPlayerArea(players[0], 0);
     this.drawPlayerArea(players[1], 1);
-    this.drawPlayerHand(players[0], 0);
-    this.drawPlayerHand(players[1], 1);
-    this.drawBattlefieldCards(players[0], 0);
-    this.drawBattlefieldCards(players[1], 1);
+    this.drawPlayerHand(players[0], 0, dragState);
+    this.drawPlayerHand(players[1], 1, dragState);
+    this.drawBattlefieldCards(players[0]);
+    this.drawBattlefieldCards(players[1]);
 
     if (selectedCard) {
       this.drawSelectionHighlight(selectedCard);
     }
 
-    if (draggingCard && draggingCard.isDragging) {
-      this.drawDraggingCard(draggingCard, mousePos);
+    if (dragState) {
+      this.drawDraggingCard(dragState);
     }
 
     this.drawTurnButton(currentTurn, turnNumber, players[currentTurn].turnTimer);
     this.drawTurnIndicator(currentTurn);
 
-    if (this.isTransitioning) {
+    if (this.transitionState !== 'idle') {
       this.drawTurnTransition();
     }
 
@@ -173,44 +307,46 @@ export class Renderer {
   }
 
   private drawBackground(): void {
-    const ctx = this.ctx;
-    const gradient = ctx.createLinearGradient(0, 0, 0, this.canvas.height);
-    gradient.addColorStop(0, '#0f0f1a');
-    gradient.addColorStop(0.5, '#1a1a2e');
-    gradient.addColorStop(1, '#0f0f1a');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    if (!this.bgCacheValid) {
+      const ctx = this.offCtx;
+      const gradient = ctx.createLinearGradient(0, 0, 0, this.offscreen.height);
+      gradient.addColorStop(0, '#0f0f1a');
+      gradient.addColorStop(0.5, '#1a1a2e');
+      gradient.addColorStop(1, '#0f0f1a');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, this.offscreen.width, this.offscreen.height);
 
-    ctx.strokeStyle = 'rgba(212, 175, 55, 0.1)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < this.canvas.width; i += 50) {
-      ctx.beginPath();
-      ctx.moveTo(i, 0);
-      ctx.lineTo(i, this.canvas.height);
-      ctx.stroke();
+      ctx.strokeStyle = 'rgba(212, 175, 55, 0.1)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < this.offscreen.width; i += 50) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, this.offscreen.height);
+        ctx.stroke();
+      }
+      for (let i = 0; i < this.offscreen.height; i += 50) {
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(this.offscreen.width, i);
+        ctx.stroke();
+      }
+      this.bgCacheValid = true;
     }
-    for (let i = 0; i < this.canvas.height; i += 50) {
-      ctx.beginPath();
-      ctx.moveTo(0, i);
-      ctx.lineTo(this.canvas.width, i);
-      ctx.stroke();
-    }
+    this.ctx.drawImage(this.offscreen, 0, 0);
   }
 
   private drawBattlefieldGrid(): void {
     const ctx = this.ctx;
     const { battlefieldArea, battlefieldCells } = this.layout;
-
     ctx.save();
     ctx.strokeStyle = 'rgba(212, 175, 55, 0.3)';
     ctx.lineWidth = 2;
     ctx.strokeRect(battlefieldArea.x, battlefieldArea.y, battlefieldArea.width, battlefieldArea.height);
-
+    ctx.strokeStyle = 'rgba(212, 175, 55, 0.2)';
+    ctx.lineWidth = 1;
     for (let row = 0; row < 3; row++) {
       for (let col = 0; col < 3; col++) {
         const cell = battlefieldCells[row][col];
-        ctx.strokeStyle = 'rgba(212, 175, 55, 0.2)';
-        ctx.lineWidth = 1;
         ctx.strokeRect(cell.x, cell.y, cell.width, cell.height);
       }
     }
@@ -221,9 +357,8 @@ export class Renderer {
     const ctx = this.ctx;
     const layout = this.layout;
     const heroPos = playerIndex === 0 ? layout.player1HeroPos : layout.player2HeroPos;
-    const isCurrentTurn = player.isCurrentTurn;
 
-    if (isCurrentTurn) {
+    if (player.isCurrentTurn) {
       ctx.save();
       ctx.shadowColor = 'rgba(212, 175, 55, 0.5)';
       ctx.shadowBlur = 20;
@@ -255,8 +390,7 @@ export class Renderer {
     this.drawHealthBar(
       heroPos.x - layout.healthBarWidth / 2,
       heroPos.y + 70,
-      layout.healthBarWidth,
-      layout.healthBarHeight,
+      layout.healthBarWidth, layout.healthBarHeight,
       player
     );
 
@@ -270,8 +404,7 @@ export class Renderer {
 
   private drawHealthBar(x: number, y: number, width: number, height: number, player: Player): void {
     const ctx = this.ctx;
-    const healthPercent = player.currentHealth / player.maxHealth;
-    const targetPercent = player.targetHealth / player.maxHealth;
+    const displayPercent = player.displayHealth / player.maxHealth;
 
     ctx.save();
     ctx.fillStyle = '#1a1a2e';
@@ -281,14 +414,13 @@ export class Renderer {
     ctx.fill();
     ctx.stroke();
 
+    const healthColor = this.healthColorGradient(displayPercent);
     const gradient = ctx.createLinearGradient(x, y, x + width, y);
-    const r = Math.floor(255 * (1 - targetPercent));
-    const g = Math.floor(255 * targetPercent);
-    gradient.addColorStop(0, `rgb(${r}, ${g}, 0)`);
-    gradient.addColorStop(1, `rgb(${Math.floor(r * 0.7)}, ${Math.floor(g * 0.7)}, 0)`);
+    gradient.addColorStop(0, healthColor);
+    gradient.addColorStop(1, this.darkenColor(healthColor, 0.7));
 
     ctx.fillStyle = gradient;
-    const fillWidth = width * healthPercent;
+    const fillWidth = width * displayPercent;
     if (fillWidth > 0) {
       this.roundRect(ctx, x + 2, y + 2, fillWidth - 4, height - 4, 6);
       ctx.fill();
@@ -299,21 +431,31 @@ export class Renderer {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(
-      `${Math.ceil(player.currentHealth)} / ${player.maxHealth}`,
-      x + width / 2,
-      y + height / 2
+      `${Math.ceil(player.displayHealth)} / ${player.maxHealth}`,
+      x + width / 2, y + height / 2
     );
     ctx.restore();
   }
 
-  private drawPlayerHand(player: Player, playerIndex: number): void {
+  private healthColorGradient(percent: number): string {
+    const r = Math.floor(255 * (1 - percent));
+    const g = Math.floor(255 * percent);
+    return `rgb(${r}, ${g}, 0)`;
+  }
+
+  private darkenColor(rgb: string, factor: number): string {
+    const match = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+    if (!match) return rgb;
+    return `rgb(${Math.floor(parseInt(match[1]) * factor)}, ${Math.floor(parseInt(match[2]) * factor)}, ${Math.floor(parseInt(match[3]) * factor)})`;
+  }
+
+  private drawPlayerHand(player: Player, playerIndex: number, dragState: { card: Card; offsetX: number; offsetY: number; mouseX: number; mouseY: number } | null): void {
     const ctx = this.ctx;
     const handArea = playerIndex === 0 ? this.layout.player1HandArea : this.layout.player2HandArea;
     const cardWidth = 90;
     const cardHeight = 126;
     const cards = player.hand;
     const totalCards = cards.length;
-
     if (totalCards === 0) return;
 
     const totalWidth = Math.min(totalCards * cardWidth * 0.7, handArea.width - 40);
@@ -325,32 +467,33 @@ export class Renderer {
       const cardY = handArea.y + 10;
       card.position = { x: cardX, y: cardY, width: cardWidth, height: cardHeight };
 
-      if (card.isDragging) {
+      const isDragging = dragState && dragState.card === card;
+      if (isDragging) {
         ctx.save();
         ctx.globalAlpha = 0.3;
-        this.drawCard(ctx, card, cardX, cardY, cardWidth, cardHeight);
+        this.drawCardSprite(ctx, card, cardX, cardY, cardWidth, cardHeight);
         ctx.restore();
       } else {
-        this.drawCard(ctx, card, cardX, cardY, cardWidth, cardHeight);
+        this.drawCardSprite(ctx, card, cardX, cardY, cardWidth, cardHeight);
       }
     });
   }
 
-  private drawCard(
+  private drawCardSprite(
     ctx: CanvasRenderingContext2D,
     card: Card,
-    x: number,
-    y: number,
-    width: number,
-    height: number,
+    x: number, y: number,
+    width: number, height: number,
     scale: number = 1
   ): void {
     ctx.save();
 
     let offsetX = 0, offsetY = 0;
-    if (card.shakeTime > 0) {
-      offsetX = (Math.random() - 0.5) * 8;
-      offsetY = (Math.random() - 0.5) * 8;
+    const shake = this.shakeAnims.find(s => s.card === card);
+    if (shake) {
+      const intensity = 1 - shake.time / shake.duration;
+      offsetX = (Math.random() - 0.5) * 10 * intensity;
+      offsetY = (Math.random() - 0.5) * 10 * intensity;
     }
 
     const drawX = x + offsetX;
@@ -359,8 +502,9 @@ export class Renderer {
     const drawH = height * scale;
 
     let pulseScale = 1;
-    if (card.pulseTime > 0 && card.data.attack >= 5) {
-      const progress = 1 - card.pulseTime / 0.3;
+    const pulse = this.pulseAnims.find(p => p.card === card);
+    if (pulse) {
+      const progress = pulse.time / pulse.duration;
       pulseScale = 1 + Math.sin(progress * Math.PI) * 0.2;
     }
 
@@ -381,7 +525,7 @@ export class Renderer {
     ctx.fillStyle = bgGradient;
     ctx.fill();
 
-    const rarityColor = card.getRarityColor();
+    const rarityColor = Card.getRarityColor(card.data.rarity);
     ctx.shadowColor = rarityColor;
     ctx.shadowBlur = 15;
     ctx.strokeStyle = rarityColor;
@@ -389,58 +533,21 @@ export class Renderer {
     ctx.stroke();
 
     ctx.shadowBlur = 0;
-    ctx.fillStyle = '#d4af37';
-    ctx.beginPath();
-    ctx.arc(drawX + 15, drawY + 15, 14, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.fillStyle = '#000000';
-    ctx.font = 'bold 14px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(card.data.cost.toString(), drawX + 15, drawY + 15);
+    this.drawCardCost(ctx, drawX, drawY, card.data.cost);
+    this.drawCardEmoji(ctx, drawX, drawY, drawW, drawH, card.data.emoji);
+    this.drawCardName(ctx, drawX, drawY, drawW, drawH, card.data.name);
+    this.drawCardEffect(ctx, drawX, drawY, drawW, drawH, card.data.effect);
+    this.drawCardAttack(ctx, drawX, drawY, drawH, card.currentAttack);
+    this.drawCardHealth(ctx, drawX, drawY, drawW, drawH, card.currentHealth);
 
-    ctx.font = '36px serif';
-    ctx.fillStyle = '#ffffff';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(card.data.emoji, drawX + drawW / 2, drawY + drawH * 0.35);
-
-    ctx.font = '10px sans-serif';
-    ctx.fillStyle = '#d4af37';
-    ctx.fillText(card.data.name, drawX + drawW / 2, drawY + drawH * 0.58);
-
-    ctx.font = '20px serif';
-    ctx.fillText(card.getEffectIcon(), drawX + drawW / 2, drawY + drawH * 0.72);
-
-    ctx.fillStyle = '#ef4444';
-    ctx.beginPath();
-    ctx.arc(drawX + 15, drawY + drawH - 15, 14, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 14px sans-serif';
-    ctx.fillText(card.currentAttack.toString(), drawX + 15, drawY + drawH - 15);
-
-    ctx.fillStyle = '#22c55e';
-    ctx.beginPath();
-    ctx.arc(drawX + drawW - 15, drawY + drawH - 15, 14, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(card.currentHealth.toString(), drawX + drawW - 15, drawY + drawH - 15);
-
-    if (card.flashTime > 0) {
-      ctx.globalAlpha = card.flashTime / 0.2 * 0.7;
+    const flash = this.flashAnims.find(f => f.card === card);
+    if (flash) {
+      const alpha = (1 - flash.time / flash.duration) * 0.7;
+      ctx.globalAlpha = alpha;
       ctx.fillStyle = '#ef4444';
       this.roundRect(ctx, drawX, drawY, drawW, drawH, 10);
       ctx.fill();
+      ctx.globalAlpha = 1;
     }
 
     if (card.hasAttacked && card.state === 'inBattle') {
@@ -453,49 +560,108 @@ export class Renderer {
     ctx.restore();
   }
 
-  private drawBattlefieldCards(player: Player, _playerIndex: number): void {
+  private drawCardCost(ctx: CanvasRenderingContext2D, x: number, y: number, cost: number): void {
+    ctx.fillStyle = '#d4af37';
+    ctx.beginPath();
+    ctx.arc(x + 15, y + 15, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(cost.toString(), x + 15, y + 15);
+  }
+
+  private drawCardEmoji(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, emoji: string): void {
+    ctx.font = '36px serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(emoji, x + w / 2, y + h * 0.35);
+  }
+
+  private drawCardName(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, name: string): void {
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = '#d4af37';
+    ctx.textAlign = 'center';
+    ctx.fillText(name, x + w / 2, y + h * 0.58);
+  }
+
+  private drawCardEffect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, effect: EffectType): void {
+    ctx.font = '20px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(Card.getEffectIcon(effect), x + w / 2, y + h * 0.72);
+  }
+
+  private drawCardAttack(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, attack: number): void {
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.arc(x + 15, y + h - 15, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(attack.toString(), x + 15, y + h - 15);
+  }
+
+  private drawCardHealth(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, health: number): void {
+    ctx.fillStyle = '#22c55e';
+    ctx.beginPath();
+    ctx.arc(x + w - 15, y + h - 15, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(health.toString(), x + w - 15, y + h - 15);
+  }
+
+  private drawBattlefieldCards(player: Player): void {
     const ctx = this.ctx;
     const { battlefieldCells } = this.layout;
 
     for (let row = 0; row < 3; row++) {
       for (let col = 0; col < 3; col++) {
         const card = player.battlefield[row][col];
-        if (card) {
-          const cell = battlefieldCells[row][col];
-          const cardWidth = cell.width * 0.9;
-          const cardHeight = cell.height * 0.9;
-          const cardX = cell.x + (cell.width - cardWidth) / 2;
-          const cardY = cell.y + (cell.height - cardHeight) / 2;
+        if (!card) continue;
 
-          let renderX = cardX;
-          let renderY = cardY;
+        const cell = battlefieldCells[row][col];
+        const cardWidth = cell.width * 0.9;
+        const cardHeight = cell.height * 0.9;
+        const cardX = cell.x + (cell.width - cardWidth) / 2;
+        const cardY = cell.y + (cell.height - cardHeight) / 2;
 
-          if (card.state === 'attacking' && card.attackTarget) {
-            const targetCard = card.attackTarget;
-            const targetSlot = targetCard.battlefieldSlot;
-            if (targetSlot) {
-              const targetCell = battlefieldCells[targetSlot.row][targetSlot.col];
-              const targetX = targetCell.x + (targetCell.width - cardWidth) / 2;
-              const targetY = targetCell.y + (targetCell.height - cardHeight) / 2;
+        let renderX = cardX;
+        let renderY = cardY;
 
-              let t = card.animationProgress;
-              if (t < 0.5) {
-                const progress = t * 2;
-                const easeProgress = this.easeInOutQuad(progress);
-                renderX = cardX + (targetX - cardX) * easeProgress;
-                renderY = cardY + (targetY - cardY) * easeProgress;
-              } else {
-                const progress = (t - 0.5) * 2;
-                const easeProgress = this.easeInOutQuad(progress);
-                renderX = targetX + (cardX - targetX) * easeProgress;
-                renderY = targetY + (cardY - targetY) * easeProgress;
-              }
-            }
+        const anim = this.attackAnims.find(a => a.attacker === card);
+        if (anim) {
+          if (anim.phase === 'lunge') {
+            const t = this.easeInOutQuad(anim.time / 0.2);
+            renderX = anim.attackerOriginX + (anim.targetX - anim.attackerOriginX) * t;
+            renderY = anim.attackerOriginY + (anim.targetY - anim.attackerOriginY) * t;
+          } else if (anim.phase === 'return') {
+            const t = this.easeInOutQuad(anim.time / 0.2);
+            renderX = anim.targetX + (anim.attackerOriginX - anim.targetX) * t;
+            renderY = anim.targetY + (anim.attackerOriginY - anim.targetY) * t;
+          } else {
+            renderX = anim.targetX;
+            renderY = anim.targetY;
           }
-
-          card.position = { x: cardX, y: cardY, width: cardWidth, height: cardHeight };
-          this.drawCard(ctx, card, renderX, renderY, cardWidth, cardHeight);
         }
+
+        card.position = { x: cardX, y: cardY, width: cardWidth, height: cardHeight };
+        this.drawCardSprite(ctx, card, renderX, renderY, cardWidth, cardHeight);
       }
     }
   }
@@ -513,23 +679,22 @@ export class Renderer {
     ctx.restore();
   }
 
-  private drawDraggingCard(card: Card, mousePos: { x: number; y: number }): void {
+  private drawDraggingCard(dragState: { card: Card; offsetX: number; offsetY: number; mouseX: number; mouseY: number }): void {
     const ctx = this.ctx;
+    const { card, offsetX, offsetY, mouseX, mouseY } = dragState;
     const width = card.position.width;
     const height = card.position.height;
-    const x = mousePos.x - width / 2 + card.dragOffset.x;
-    const y = mousePos.y - height / 2 + card.dragOffset.y;
-
+    const x = mouseX - width / 2 + offsetX;
+    const y = mouseY - height / 2 + offsetY;
     ctx.save();
     ctx.globalAlpha = 0.8;
-    this.drawCard(ctx, card, x, y, width, height, 1.1);
+    this.drawCardSprite(ctx, card, x, y, width, height, 1.1);
     ctx.restore();
   }
 
   private drawTurnButton(currentTurn: number, turnNumber: number, timer: number): void {
     const ctx = this.ctx;
     const { x, y, radius } = this.layout.turnButtonPos;
-
     const isUrgent = timer <= 5;
     const pulseScale = isUrgent ? 1 + Math.sin(this.pulsePhase * 4) * 0.1 : 1;
 
@@ -564,10 +729,8 @@ export class Renderer {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(`回合 ${turnNumber}`, x, y - 15);
-
     ctx.font = 'bold 24px sans-serif';
-    ctx.fillText(`${Math.ceil(timer)}s`, x, y + 10);
-
+    ctx.fillText(`${Math.ceil(Math.max(timer, 0))}s`, x, y + 10);
     ctx.font = '12px sans-serif';
     ctx.fillText(`P${currentTurn + 1}`, x, y + 30);
 
@@ -576,8 +739,6 @@ export class Renderer {
 
   private drawTurnIndicator(currentTurn: number): void {
     const ctx = this.ctx;
-    this.layout;
-
     ctx.save();
     const gradient = ctx.createLinearGradient(0, 0, this.canvas.width, 0);
     if (currentTurn === 0) {
@@ -594,39 +755,41 @@ export class Renderer {
 
   private drawTurnTransition(): void {
     const ctx = this.ctx;
-    const progress = this.turnTransitionProgress;
-
-    ctx.save();
-    ctx.globalAlpha = Math.sin(progress * Math.PI) * 0.7;
-
     const centerX = this.canvas.width / 2;
     const centerY = this.canvas.height / 2;
 
-    for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2 + progress * Math.PI * 2;
-      const distance = 100 + progress * 200;
-      const cardX = centerX + Math.cos(angle) * distance;
-      const cardY = centerY + Math.sin(angle) * distance;
+    ctx.save();
 
-      ctx.save();
-      ctx.translate(cardX, cardY);
-      ctx.rotate(angle + Math.PI / 2);
-      ctx.scale(0.5, 0.5);
+    if (this.transitionState === 'flipOut') {
+      const t = this.transitionTime / Renderer.FLIP_DURATION;
+      const scaleX = Math.abs(Math.cos(t * Math.PI / 2));
+      const alpha = 1 - t;
 
-      ctx.fillStyle = '#1a1a2e';
-      ctx.strokeStyle = '#d4af37';
-      ctx.lineWidth = 3;
-      this.roundRect(ctx, -50, -70, 100, 140, 10);
-      ctx.fill();
-      ctx.stroke();
+      ctx.globalAlpha = alpha;
+      ctx.translate(centerX, centerY);
+      ctx.scale(scaleX, 1);
+      ctx.translate(-centerX, -centerY);
 
-      ctx.font = '40px serif';
+      ctx.font = 'bold 36px sans-serif';
+      ctx.fillStyle = '#d4af37';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#d4af37';
-      ctx.fillText('🎴', 0, 0);
+      ctx.fillText(`玩家 ${this.transitionNextPlayer + 1} 的回合`, centerX, centerY);
+    } else if (this.transitionState === 'flipIn') {
+      const t = this.transitionTime / Renderer.FLIP_DURATION;
+      const scaleX = Math.abs(Math.cos((1 - t) * Math.PI / 2));
+      const alpha = t;
 
-      ctx.restore();
+      ctx.globalAlpha = alpha;
+      ctx.translate(centerX, centerY);
+      ctx.scale(scaleX, 1);
+      ctx.translate(-centerX, -centerY);
+
+      ctx.font = 'bold 36px sans-serif';
+      ctx.fillStyle = '#d4af37';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`玩家 ${this.transitionNextPlayer + 1} 的回合`, centerX, centerY);
     }
 
     ctx.restore();
@@ -663,13 +826,11 @@ export class Renderer {
     winnerCards.forEach((card, index) => {
       const cardX = startX + index * (cardWidth + 30);
       const cardY = centerY;
-
       ctx.save();
       ctx.translate(cardX + cardWidth / 2, cardY + cardHeight / 2);
       ctx.rotate(Math.sin(this.winnerRotation + index * 0.5) * 0.2);
       ctx.translate(-(cardX + cardWidth / 2), -(cardY + cardHeight / 2));
-
-      this.drawCard(ctx, card, cardX, cardY, cardWidth, cardHeight, 1.2);
+      this.drawCardSprite(ctx, card, cardX, cardY, cardWidth, cardHeight, 1.2);
       ctx.restore();
     });
 
@@ -682,11 +843,7 @@ export class Renderer {
 
   private roundRect(
     ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    radius: number
+    x: number, y: number, width: number, height: number, radius: number
   ): void {
     ctx.beginPath();
     ctx.moveTo(x + radius, y);

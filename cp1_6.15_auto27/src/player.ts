@@ -5,9 +5,10 @@ export class Player {
   name: string;
   heroEmoji: string;
   maxHealth: number;
-  currentHealth: number;
-  healthAnimationProgress: number;
+  displayHealth: number;
   targetHealth: number;
+  healthAnimStart: number;
+  healthAnimFrom: number;
   hand: Card[];
   battlefield: (Card | null)[][];
   maxHandSize: number;
@@ -16,15 +17,17 @@ export class Player {
   turnDuration: number;
 
   private static heroEmojis = ['🦸', '🧙‍♂️', '👸', '🤴', '🥷', '🧝‍♀️'];
+  private static HEALTH_ANIM_DURATION = 0.4;
 
   constructor(id: number, name: string) {
     this.id = id;
     this.name = name;
     this.heroEmoji = Player.heroEmojis[id % Player.heroEmojis.length];
     this.maxHealth = 50;
-    this.currentHealth = 50;
-    this.healthAnimationProgress = 1;
+    this.displayHealth = 50;
     this.targetHealth = 50;
+    this.healthAnimStart = -1;
+    this.healthAnimFrom = 50;
     this.hand = [];
     this.battlefield = [
       [null, null, null],
@@ -51,25 +54,34 @@ export class Player {
   }
 
   takeDamage(amount: number): void {
+    this.healthAnimFrom = this.displayHealth;
     this.targetHealth = Math.max(0, this.targetHealth - amount);
-    this.healthAnimationProgress = 0;
+    this.healthAnimStart = -1;
   }
 
   heal(amount: number): void {
+    this.healthAnimFrom = this.displayHealth;
     this.targetHealth = Math.min(this.maxHealth, this.targetHealth + amount);
-    this.healthAnimationProgress = 0;
+    this.healthAnimStart = -1;
   }
 
   updateHealthAnimation(deltaTime: number): void {
-    if (this.healthAnimationProgress < 1) {
-      this.healthAnimationProgress = Math.min(
-        this.healthAnimationProgress + deltaTime / 0.4,
-        1
-      );
-      const smoothProgress = this.easeOutCubic(this.healthAnimationProgress);
-      this.currentHealth =
-        this.currentHealth +
-        (this.targetHealth - this.currentHealth) * smoothProgress;
+    if (Math.abs(this.displayHealth - this.targetHealth) < 0.5) {
+      this.displayHealth = this.targetHealth;
+      this.healthAnimStart = -1;
+      return;
+    }
+    if (this.healthAnimStart < 0) {
+      this.healthAnimStart = 0;
+      this.healthAnimFrom = this.displayHealth;
+    }
+    this.healthAnimStart += deltaTime;
+    const t = Math.min(this.healthAnimStart / Player.HEALTH_ANIM_DURATION, 1);
+    const eased = this.easeOutCubic(t);
+    this.displayHealth = this.healthAnimFrom + (this.targetHealth - this.healthAnimFrom) * eased;
+    if (t >= 1) {
+      this.displayHealth = this.targetHealth;
+      this.healthAnimStart = -1;
     }
   }
 
