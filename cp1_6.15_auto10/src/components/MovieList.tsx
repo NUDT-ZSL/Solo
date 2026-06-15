@@ -29,10 +29,6 @@ export default function MovieList() {
 
     const loadMovies = async () => {
       setFadeState('out')
-
-      await new Promise(r => setTimeout(r, 300))
-      if (cancelled) return
-
       setLoading(true)
 
       try {
@@ -120,67 +116,72 @@ export default function MovieList() {
         </div>
       </div>
 
-      <div
-        style={{
-          ...styles.grid,
-          opacity: fadeState === 'in' ? 1 : 0,
-          transition: 'opacity 0.3s ease-in-out',
-          display: loading ? 'none' : undefined
-        }}
-        className="grid"
-      >
-        {movies.length === 0 ? (
-          <div style={styles.emptyState}>
-            <div style={styles.emptyIcon}>🎬</div>
-            <p style={styles.emptyText}>没有符合条件的电影</p>
-            <button onClick={resetFilters} style={styles.emptyBtn}>清除筛选条件</button>
+      <div style={{ position: 'relative' }}>
+        {loading && (
+          <div style={styles.grid} className="grid">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={`skeleton-${i}`} style={styles.cardSkeleton}>
+                <div style={styles.posterSkeleton} />
+                <div style={styles.infoSkeleton}>
+                  <div style={styles.titleLineSkeleton} />
+                  <div style={styles.metaLineSkeleton} />
+                </div>
+              </div>
+            ))}
           </div>
-        ) : (
-          movies.map(movie => (
-            <div
-              key={movie.id}
-              onClick={() => navigate(`/movie/${movie.id}`)}
-              style={styles.card}
-              className="movie-card"
-            >
-              <div style={styles.posterWrapper}>
-                <img src={movie.poster} alt={movie.title} style={styles.poster} className="movie-poster" loading="lazy" />
-                <div style={styles.posterOverlay} className="poster-overlay" />
-                <div style={styles.scoreBadge}>
-                  ⭐ {movie.averageScore.toFixed(1)}
-                </div>
-              </div>
-              <div style={styles.cardInfo} className="card-info">
-                <h3 style={styles.cardTitle} className="card-title" title={movie.title}>{movie.title}</h3>
-                <div style={styles.cardMeta} className="card-meta">
-                  <span>{movie.year}</span>
-                  <span style={styles.dot}>·</span>
-                  <span>{movie.voteCount} 票</span>
-                </div>
-                <div style={styles.genreTags}>
-                  {movie.genre.slice(0, 2).map(g => (
-                    <span key={g} style={styles.genreTag}>{g}</span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ))
         )}
-      </div>
 
-      {loading && (
-        <div style={styles.grid} className="grid">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={`skeleton-${i}`} style={styles.cardSkeleton}>
-              <div style={styles.posterSkeleton} />
-              <div style={styles.infoSkeleton}>
-                <div style={styles.titleLineSkeleton} />
-                <div style={styles.metaLineSkeleton} />
-              </div>
+        <div
+          style={{
+            ...styles.grid,
+            opacity: fadeState === 'in' ? 1 : 0,
+            transition: 'opacity 0.3s ease-in-out',
+            position: loading ? 'absolute' : 'relative',
+            top: 0,
+            left: 0,
+            right: 0
+          }}
+          className="grid"
+        >
+          {movies.length === 0 ? (
+            <div style={styles.emptyState}>
+              <div style={styles.emptyIcon}>🎬</div>
+              <p style={styles.emptyText}>没有符合条件的电影</p>
+              <button onClick={resetFilters} style={styles.emptyBtn}>清除筛选条件</button>
             </div>
-          ))}
+          ) : (
+            movies.map(movie => (
+              <div
+                key={movie.id}
+                onClick={() => navigate(`/movie/${movie.id}`)}
+                style={styles.card}
+                className="movie-card"
+              >
+                <div style={styles.posterWrapper}>
+                  <img src={movie.poster} alt={movie.title} style={styles.poster} className="movie-poster" loading="lazy" />
+                  <div style={styles.posterOverlay} className="poster-overlay" />
+                  <div style={styles.scoreBadge}>
+                    ⭐ {movie.averageScore.toFixed(1)}
+                  </div>
+                </div>
+                <div style={styles.cardInfo} className="card-info">
+                  <h3 style={styles.cardTitle} className="card-title" title={movie.title}>{movie.title}</h3>
+                  <div style={styles.cardMeta} className="card-meta">
+                    <span>{movie.year}</span>
+                    <span style={styles.dot}>·</span>
+                    <span>{movie.voteCount} 票</span>
+                  </div>
+                  <div style={styles.genreTags}>
+                    {movie.genre.slice(0, 2).map(g => (
+                      <span key={g} style={styles.genreTag}>{g}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }

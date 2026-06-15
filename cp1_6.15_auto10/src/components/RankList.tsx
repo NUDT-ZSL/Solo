@@ -12,7 +12,6 @@ export default function RankList() {
   const prevRanksRef = useRef<Map<string, number>>(new Map())
   const [flashingIds, setFlashingIds] = useState<Set<string>>(new Set())
   const [changedIds, setChangedIds] = useState<Set<string>>(new Set())
-  const flashVersionRef = useRef<Map<string, number>>(new Map())
 
   useEffect(() => {
     let cancelled = false
@@ -38,10 +37,6 @@ export default function RankList() {
         prevRanksRef.current = prev
 
         if (!isInitial && changed.size > 0) {
-          changed.forEach(id => {
-            const current = flashVersionRef.current.get(id) || 0
-            flashVersionRef.current.set(id, current + 1)
-          })
           setChangedIds(new Set(changed))
           setFlashingIds(new Set(changed))
           setTimeout(() => {
@@ -111,7 +106,6 @@ export default function RankList() {
   }
 
   const getRowBgStyle = (rank: number, id: string): React.CSSProperties => {
-    const isFlashing = flashingIds.has(id)
     const base: React.CSSProperties = {
       transition: 'all 0.5s ease'
     }
@@ -141,14 +135,6 @@ export default function RankList() {
         border: changedIds.has(id)
           ? '1px solid rgba(255, 215, 0, 0.15)'
           : '1px solid rgba(255, 255, 255, 0.05)'
-      }
-    }
-
-    if (isFlashing) {
-      return {
-        ...base,
-        ...bgStyle,
-        animation: 'rankFlash 1.5s ease-in-out, rankFlashGlow 0.8s ease-in-out 2'
       }
     }
 
@@ -209,18 +195,16 @@ export default function RankList() {
           </div>
 
           <div style={styles.rankList}>
-            {ranking.map((movie) => {
-              const flashVersion = flashVersionRef.current.get(movie.id) || 0
-              return (
-                <div
-                  key={`${movie.id}-${flashVersion}`}
-                  onClick={() => navigate(`/movie/${movie.id}`)}
-                  style={{
-                    ...styles.rankRow,
-                    ...getRowBgStyle(movie.rank, movie.id)
-                  }}
-                  className="rank-row"
-                >
+            {ranking.map((movie) => (
+              <div
+                key={movie.id}
+                onClick={() => navigate(`/movie/${movie.id}`)}
+                style={{
+                  ...styles.rankRow,
+                  ...getRowBgStyle(movie.rank, movie.id)
+                }}
+                className={`rank-row${flashingIds.has(movie.id) ? ' rank-flash' : ''}`}
+              >
                 <div style={{ width: '80px' }}>
                   <div style={{
                     ...styles.rankBadge,

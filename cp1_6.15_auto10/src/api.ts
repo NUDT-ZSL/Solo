@@ -1,6 +1,6 @@
 import { Movie, RankedMovie, ApiResponse, MovieFilters } from './types'
 
-const BASE_URL = 'http://localhost:3002/api'
+const BASE_URL = '/api'
 const TIMEOUT = 5000
 
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {

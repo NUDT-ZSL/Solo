@@ -10,17 +10,27 @@ export default function App() {
 
   useEffect(() => {
     let ticking = false
+    let rafId: number | null = null
+
     const handleScroll = () => {
       if (!ticking) {
-        window.requestAnimationFrame(() => {
+        rafId = window.requestAnimationFrame(() => {
           setScrollY(window.scrollY)
           ticking = false
+          rafId = null
         })
         ticking = true
       }
     }
+
     window.addEventListener('scroll', handleScroll, { passive: true })
-    return () => window.removeEventListener('scroll', handleScroll)
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+        rafId = null
+      }
+    }
   }, [])
 
   const maxScroll = 120
@@ -218,6 +228,10 @@ const globalStyles = `
   .rank-row:hover {
     background: rgba(255, 215, 0, 0.06) !important;
     transform: translateX(4px);
+  }
+
+  .rank-flash {
+    animation: rankFlash 1.5s ease-in-out, rankFlashGlow 0.8s ease-in-out 2 !important;
   }
 
   .logo:hover {
