@@ -1,0 +1,40 @@
+{
+  "name": "virtual-music-festival",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "start:frontend": "vite",
+    "start:backend": "ts-node src/server/index.ts",
+    "dev": "concurrently \"npm run start:frontend\" \"npm run start:backend\"",
+    "build": "tsc -b && vite build",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.3.0",
+    "express": "^4.21.2",
+    "better-sqlite3": "^11.5.0",
+    "cors": "^2.8.5",
+    "uuid": "^11.0.2",
+    "ws": "^8.18.0",
+    "lucide-react": "^0.511.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/express": "^4.17.21",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/cors": "^2.8.19",
+    "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.5.13",
+    "@types/node": "^22.15.30",
+    "@vitejs/plugin-react": "^4.4.1",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "vite-tsconfig-paths": "^5.1.4",
+    "concurrently": "^9.2.0",
+    "ts-node": "^10.9.2"
+  }
+}
