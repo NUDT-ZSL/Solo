@@ -109,11 +109,15 @@ const App: React.FC = () => {
   };
 
   const angleSliderGradient = useMemo(() => {
-    const hue = (angle / 360) * 360;
-    return `linear-gradient(90deg, 
-      hsl(${hue}, 70%, 50%) 0%, 
-      hsl(${(hue + 60) % 360}, 70%, 50%) 50%, 
-      hsl(${(hue + 120) % 360}, 70%, 50%) 100%)`;
+    const hue1 = (angle % 360);
+    const hue2 = ((angle + 90) % 360);
+    const hue3 = ((angle + 180) % 360);
+    const hue4 = ((angle + 270) % 360);
+    return `linear-gradient(${angle}deg, 
+      hsl(${hue1}, 75%, 55%) 0%, 
+      hsl(${hue2}, 75%, 55%) 33%, 
+      hsl(${hue3}, 75%, 55%) 66%, 
+      hsl(${hue4}, 75%, 55%) 100%)`;
   }, [angle]);
 
   return (
@@ -296,62 +300,160 @@ const App: React.FC = () => {
 };
 
 function highlightSyntax(content: string): React.ReactNode {
+  const colorRegex = /#[0-9A-Fa-f]{3,8}/g;
+  const angleRegex = /-?\d+\.?\d*deg/g;
+  const percentRegex = /\d+\.?\d*%/g;
+  const funcRegex = /linear-gradient|radial-gradient|repeating-linear-gradient|repeating-radial-gradient/g;
+  const propertyRegex = /[a-zA-Z-]+(?=:)/g;
+  const selectorRegex = /\.[\w-]+/g;
+  const braceRegex = /[{}]/g;
   const commentRegex = /\/\*[\s\S]*?\*\//g;
-  const selectorRegex = /^(\.[\w-]+)/;
-  const propertyRegex = /([\w-]+):/g;
-  const colorRegex = /(#[0-9A-Fa-f]{6})/g;
-  const valueRegex = /linear-gradient|radial-gradient|deg/g;
 
-  let result: React.ReactNode = content;
+  const tokens: Array<{ type: string; value: string }> = [];
+  let remaining = content;
 
-  result = replaceWithHighlight(result, commentRegex, (match) => (
-    <span key={match} style={{ color: '#6A9955' }}>{match}</span>
-  ));
+  while (remaining.length > 0) {
+    let matched = false;
 
-  result = replaceWithHighlight(result, selectorRegex, (match) => (
-    <span key={match} style={{ color: '#DCDCAA' }}>{match}</span>
-  ));
-
-  result = replaceWithHighlight(result, propertyRegex, (match) => (
-    <span key={match} style={{ color: '#9CDCFE' }}>{match}</span>
-  ));
-
-  result = replaceWithHighlight(result, valueRegex, (match) => (
-    <span key={match} style={{ color: '#CE9178' }}>{match}</span>
-  ));
-
-  result = replaceWithHighlight(result, colorRegex, (match) => (
-    <span key={match} style={{ color: '#C586C0' }}>{match}</span>
-  ));
-
-  return result;
-}
-
-function replaceWithHighlight(
-  node: React.ReactNode,
-  regex: RegExp,
-  highlight: (match: string) => React.ReactNode
-): React.ReactNode {
-  if (typeof node !== 'string') return node;
-
-  const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-  let match;
-
-  regex.lastIndex = 0;
-  while ((match = regex.exec(node)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(node.slice(lastIndex, match.index));
+    const commentMatch = remaining.match(commentRegex);
+    if (commentMatch && commentMatch.index === 0) {
+      tokens.push({ type: 'comment', value: commentMatch[0] });
+      remaining = remaining.slice(commentMatch[0].length);
+      matched = true;
+      continue;
     }
-    parts.push(highlight(match[0]));
-    lastIndex = regex.lastIndex;
+
+    const funcMatch = remaining.match(funcRegex);
+    if (funcMatch && funcMatch.index === 0) {
+      tokens.push({ type: 'function', value: funcMatch[0] });
+      remaining = remaining.slice(funcMatch[0].length);
+      matched = true;
+      continue;
+    }
+
+    const colorMatch = remaining.match(colorRegex);
+    if (colorMatch && colorMatch.index === 0) {
+      tokens.push({ type: 'color', value: colorMatch[0] });
+      remaining = remaining.slice(colorMatch[0].length);
+      matched = true;
+      continue;
+    }
+
+    const angleMatch = remaining.match(angleRegex);
+    if (angleMatch && angleMatch.index === 0) {
+      tokens.push({ type: 'angle', value: angleMatch[0] });
+      remaining = remaining.slice(angleMatch[0].length);
+      matched = true;
+      continue;
+    }
+
+    const percentMatch = remaining.match(percentRegex);
+    if (percentMatch && percentMatch.index === 0) {
+      tokens.push({ type: 'percent', value: percentMatch[0] });
+      remaining = remaining.slice(percentMatch[0].length);
+      matched = true;
+      continue;
+    }
+
+    const propertyMatch = remaining.match(propertyRegex);
+    if (propertyMatch && propertyMatch.index === 0) {
+      tokens.push({ type: 'property', value: propertyMatch[0] });
+      remaining = remaining.slice(propertyMatch[0].length);
+      matched = true;
+      continue;
+    }
+
+    const selectorMatch = remaining.match(selectorRegex);
+    if (selectorMatch && selectorMatch.index === 0) {
+      tokens.push({ type: 'selector', value: selectorMatch[0] });
+      remaining = remaining.slice(selectorMatch[0].length);
+      matched = true;
+      continue;
+    }
+
+    const braceMatch = remaining.match(braceRegex);
+    if (braceMatch && braceMatch.index === 0) {
+      tokens.push({ type: 'brace', value: braceMatch[0] });
+      remaining = remaining.slice(braceMatch[0].length);
+      matched = true;
+      continue;
+    }
+
+    if (!matched) {
+      tokens.push({ type: 'plain', value: remaining[0] });
+      remaining = remaining.slice(1);
+    }
   }
 
-  if (lastIndex < node.length) {
-    parts.push(node.slice(lastIndex));
-  }
-
-  return parts.length > 0 ? parts : node;
+  return tokens.map((token, index) => {
+    switch (token.type) {
+      case 'comment':
+        return (
+          <span key={index} style={{ color: '#6A9955', fontStyle: 'italic' }}>
+            {token.value}
+          </span>
+        );
+      case 'selector':
+        return (
+          <span key={index} style={{ color: '#DCDCAA', fontWeight: 700 }}>
+            {token.value}
+          </span>
+        );
+      case 'brace':
+        return (
+          <span key={index} style={{ color: '#FFD700', fontWeight: 600 }}>
+            {token.value}
+          </span>
+        );
+      case 'function':
+        return (
+          <span key={index} style={{ color: '#CE9178', fontWeight: 700 }}>
+            {token.value}
+          </span>
+        );
+      case 'property':
+        return (
+          <span key={index} style={{ color: '#9CDCFE', fontWeight: 600 }}>
+            {token.value}
+          </span>
+        );
+      case 'color':
+        return (
+          <span
+            key={index}
+            style={{
+              color: '#C586C0',
+              fontWeight: 700,
+              background: `${token.value}33`,
+              padding: '1px 4px',
+              borderRadius: '3px',
+              border: `1px solid ${token.value}77`,
+              margin: '0 1px'
+            }}
+          >
+            {token.value}
+          </span>
+        );
+      case 'angle':
+        return (
+          <span key={index} style={{ color: '#4EC9B0', fontWeight: 700 }}>
+            {token.value}
+          </span>
+        );
+      case 'percent':
+        return (
+          <span key={index} style={{ color: '#B5CEA8', fontWeight: 600 }}>
+            {token.value}
+          </span>
+        );
+      default:
+        return (
+          <span key={index} style={{ color: '#D4D4D4' }}>
+            {token.value}
+          </span>
+        );
+    }
+  });
 }
 
 const styles: { [key: string]: React.CSSProperties } = {
@@ -639,34 +741,44 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   presetItem: {
     display: 'flex',
-    alignItems: 'center',
-    gap: '16px',
+    alignItems: 'stretch',
     padding: '12px',
-    borderRadius: '10px',
-    background: 'rgba(45, 45, 48, 0.6)',
+    borderRadius: '12px',
+    background: 'rgba(37, 37, 38, 0.85)',
     cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    border: '1px solid rgba(62, 62, 62, 0.3)'
+    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+    border: '1px solid rgba(62, 62, 62, 0.5)',
+    flexDirection: 'column',
+    gap: '12px'
   },
   presetPreview: {
-    width: '80px',
-    height: '40px',
-    borderRadius: '6px',
-    flexShrink: 0
+    width: '100%',
+    height: '56px',
+    borderRadius: '8px',
+    flexShrink: 0,
+    boxShadow: 'inset 0 1px 3px rgba(0, 0, 0, 0.25), 0 2px 6px rgba(0, 0, 0, 0.2)',
+    border: '1px solid rgba(255, 255, 255, 0.1)'
   },
   presetInfo: {
-    flex: 1,
-    minWidth: 0
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '8px',
+    padding: '0 2px'
   },
   presetName: {
     fontSize: '14px',
     fontWeight: 600,
-    color: '#D4D4D4',
-    marginBottom: '4px'
+    color: '#D4D4D4'
   },
   presetMeta: {
-    fontSize: '12px',
-    color: '#858585'
+    fontSize: '11px',
+    color: '#858585',
+    background: 'rgba(62, 62, 62, 0.4)',
+    padding: '3px 8px',
+    borderRadius: '10px',
+    whiteSpace: 'nowrap',
+    fontWeight: 500
   },
   loadingText: {
     textAlign: 'center',

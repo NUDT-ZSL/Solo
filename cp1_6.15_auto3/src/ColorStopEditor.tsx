@@ -16,11 +16,13 @@ const ColorStopEditor: React.FC<ColorStopEditorProps> = ({
 }) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragStartX, setDragStartX] = useState<number>(0);
+  const [dragStartPosition, setDragStartPosition] = useState<number>(0);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [hoveringId, setHoveringId] = useState<string | null>(null);
   const [hoverRemoveId, setHoverRemoveId] = useState<string | null>(null);
   const rafRef = useRef<number | null>(null);
-  const pendingPositionRef = useRef<{ id: string; position: number } | null>(null);
+  const lastPositionRef = useRef<number>(-1);
   const colorInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
   const sortedStops = [...colorStops].sort((a, b) => a.position - b.position);
@@ -31,34 +33,7 @@ const ColorStopEditor: React.FC<ColorStopEditorProps> = ({
     'linear'
   );
 
-  const flushPendingUpdate = useCallback(() => {
-    if (pendingPositionRef.current) {
-      const { id, position } = pendingPositionRef.current;
-      onUpdateStop(id, { position });
-      pendingPositionRef.current = null;
-      rafRef.current = null;
-    }
-  }, [onUpdateStop]);
-
-  useEffect(() => {
-    const handleMouseUp = () => {
-      if (draggingId !== null) {
-        flushPendingUpdate();
-        setDraggingId(null);
-      }
-    };
-    window.addEventListener('mouseup', handleMouseUp);
-    window.addEventListener('touchend', handleMouseUp);
-    return () => {
-      window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('touchend', handleMouseUp);
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current);
-      }
-    };
-  }, [draggingId, flushPendingUpdate]);
-
-  const calculatePosition = useCallback((clientX: number) => {
+  const getPositionFromClientX = useCallback((clientX: number): number => {
     if (!trackRef.current) return 0;
     const rect = trackRef.current.getBoundingClientRect();
     const relativeX = clientX - rect.left;
@@ -69,45 +44,97 @@ const ColorStopEditor: React.FC<ColorStopEditorProps> = ({
   const handleMouseMove = useCallback((e: MouseEvent | TouchEvent) => {
     if (draggingId === null) return;
 
+    e.preventDefault();
     let clientX: number;
-    if ('touches' in e) {
+    if ('touches' in e && e.touches.length > 0) {
       clientX = e.touches[0].clientX;
+    } else if ('changedTouches' in e && e.changedTouches.length > 0) {
+      clientX = e.changedTouches[0].clientX;
     } else {
-      clientX = e.clientX;
+      clientX = (e as MouseEvent).clientX;
     }
 
-    const newPosition = calculatePosition(clientX);
+    const deltaX = clientX - dragStartX;
+    const rect = trackRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const deltaPercent = (deltaX / rect.width) * 100;
+    const rawPosition = dragStartPosition + deltaPercent;
+    const newPosition = Math.max(0, Math.min(100, rawPosition));
+
+    const rounded = Math.round(newPosition * 10) / 10;
+    if (Math.abs(rounded - lastPositionRef.current) < 0.1 && rafRef.current !== null) {
+      return;
+    }
+    lastPositionRef.current = rounded;
 
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
     }
 
-    pendingPositionRef.current = { id: draggingId, position: newPosition };
-
     rafRef.current = requestAnimationFrame(() => {
-      if (pendingPositionRef.current) {
-        const { id, position } = pendingPositionRef.current;
-        onUpdateStop(id, { position });
-        pendingPositionRef.current = null;
+      onUpdateStop(draggingId, { position: rounded });
+      rafRef.current = null;
+    });
+  }, [draggingId, dragStartX, dragStartPosition, onUpdateStop]);
+
+  const handleMouseUp = useCallback(() => {
+    if (draggingId !== null) {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
-    });
-  }, [draggingId, calculatePosition, onUpdateStop]);
+      if (lastPositionRef.current >= 0) {
+        onUpdateStop(draggingId, { position: Math.round(lastPositionRef.current * 10) / 10 });
+      }
+      lastPositionRef.current = -1;
+      setDraggingId(null);
+    }
+  }, [draggingId, onUpdateStop]);
 
   useEffect(() => {
     if (draggingId !== null) {
-      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mousemove', handleMouseMove, { passive: false });
+      window.addEventListener('mouseup', handleMouseUp);
       window.addEventListener('touchmove', handleMouseMove, { passive: false });
+      window.addEventListener('touchend', handleMouseUp);
+      window.addEventListener('touchcancel', handleMouseUp);
     }
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('touchmove', handleMouseMove);
+      window.removeEventListener('touchend', handleMouseUp);
+      window.removeEventListener('touchcancel', handleMouseUp);
     };
-  }, [draggingId, handleMouseMove]);
+  }, [draggingId, handleMouseMove, handleMouseUp]);
 
-  const handleHandleMouseDown = (e: React.MouseEvent | React.TouchEvent, stopId: string) => {
+  const handleHandleMouseDown = (e: React.MouseEvent | React.TouchEvent, stop: ColorStop) => {
     e.preventDefault();
-    setDraggingId(stopId);
+    e.stopPropagation();
+
+    let clientX: number;
+    if ('touches' in e && e.touches.length > 0) {
+      clientX = e.touches[0].clientX;
+    } else {
+      clientX = (e as React.MouseEvent).clientX;
+    }
+
+    const currentPosition = getPositionFromClientX(clientX);
+    setDragStartX(clientX);
+    setDragStartPosition(stop.position);
+    lastPositionRef.current = stop.position;
+    setDraggingId(stop.id);
+
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  };
+
+  const handleTrackClick = (e: React.MouseEvent) => {
+    if (draggingId !== null) return;
+    if (e.target !== trackRef.current) return;
   };
 
   const handleColorChange = (id: string, color: string) => {
@@ -134,6 +161,7 @@ const ColorStopEditor: React.FC<ColorStopEditorProps> = ({
     <div style={styles.container}>
       <div
         ref={trackRef}
+        onClick={handleTrackClick}
         style={{
           ...styles.track,
           background: trackGradient
@@ -147,32 +175,64 @@ const ColorStopEditor: React.FC<ColorStopEditorProps> = ({
             style={{
               ...styles.handleWrapper,
               left: `${stop.position}%`,
+              top: '50%',
               opacity: removingId === stop.id ? 0 : 1,
-              transform: `translateX(-50%) translateY(-50%) ${removingId === stop.id ? 'scale(0) translateX(-100%)' : ''}`,
-              transition: removingId === stop.id ? 'all 0.3s ease' : 'none',
-              zIndex: draggingId === stop.id ? 100 : 10
+              transform: `translate(-50%, -50%) ${removingId === stop.id ? 'scale(0.4)' : ''}`,
+              transition: removingId === stop.id
+                ? 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                : draggingId === stop.id ? 'none' : 'opacity 0.2s ease',
+              zIndex: draggingId === stop.id ? 999 : stop.position
             }}
           >
-            {(draggingId === stop.id || hoveringId === stop.id) && (
-              <div style={styles.anchorDot} className="anchor-pulse" />
-            )}
+            <div
+              className="anchor-ring"
+              style={{
+                ...styles.anchorRing,
+                opacity: (draggingId === stop.id || hoveringId === stop.id) ? 1 : 0,
+                transform: (draggingId === stop.id || hoveringId === stop.id) ? 'translate(-50%, -50%) scale(1)' : 'translate(-50%, -50%) scale(0.5)',
+                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
+              }}
+            />
 
             <div
-              onMouseDown={(e) => handleHandleMouseDown(e, stop.id)}
-              onTouchStart={(e) => handleHandleMouseDown(e, stop.id)}
+              className="anchor-pulse"
+              style={{
+                ...styles.anchorPulse,
+                opacity: draggingId === stop.id ? 1 : 0,
+                transition: 'opacity 0.2s ease'
+              }}
+            />
+
+            <div
+              onMouseDown={(e) => handleHandleMouseDown(e, stop)}
+              onTouchStart={(e) => handleHandleMouseDown(e, stop)}
               style={{
                 ...styles.handle,
                 background: stop.color,
                 boxShadow: draggingId === stop.id
-                  ? `0 0 0 3px rgba(74, 144, 217, 0.5), 0 4px 12px rgba(0,0,0,0.4)`
+                  ? `0 0 0 4px rgba(74, 144, 217, 0.4), 0 6px 20px rgba(0,0,0,0.5)`
+                  : hoveringId === stop.id
+                  ? `0 0 0 2px rgba(74, 144, 217, 0.3), 0 3px 12px rgba(0,0,0,0.35)`
                   : '0 2px 8px rgba(0,0,0,0.3)',
-                transform: draggingId === stop.id ? 'scale(1.15)' : hoveringId === stop.id ? 'scale(1.05)' : 'scale(1)',
-                border: `3px solid ${isLightColor(stop.color) ? 'rgba(0,0,0,0.2)' : '#fff'}`,
-                transition: 'transform 0.15s ease, box-shadow 0.15s ease'
+                transform: draggingId === stop.id
+                  ? 'scale(1.2)'
+                  : hoveringId === stop.id
+                  ? 'scale(1.1)'
+                  : 'scale(1)',
+                border: `3px solid ${isLightColor(stop.color) ? 'rgba(255,255,255,0.9)' : '#fff'}`,
+                transition: draggingId === stop.id
+                  ? 'transform 0.08s ease-out, box-shadow 0.15s ease'
+                  : 'transform 0.15s ease, box-shadow 0.15s ease',
+                cursor: draggingId === stop.id ? 'grabbing' : 'grab'
               }}
             />
 
-            <div style={styles.positionLabel}>
+            <div style={{
+              ...styles.positionLabel,
+              opacity: (draggingId === stop.id || hoveringId === stop.id) ? 1 : 0.7,
+              transform: (draggingId === stop.id || hoveringId === stop.id) ? 'translateY(0)' : 'translateY(2px)',
+              transition: 'all 0.15s ease'
+            }}>
               {Math.round(stop.position)}%
             </div>
           </div>
@@ -186,8 +246,8 @@ const ColorStopEditor: React.FC<ColorStopEditorProps> = ({
             style={{
               ...styles.stopItem,
               opacity: removingId === stop.id ? 0 : 1,
-              transform: removingId === stop.id ? 'translateX(-20px)' : 'translateX(0)',
-              transition: 'all 0.3s ease'
+              transform: removingId === stop.id ? 'translateX(-30px) scale(0.95)' : 'translateX(0) scale(1)',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
             }}
           >
             <div style={styles.stopIndex}>{index + 1}</div>
@@ -267,69 +327,80 @@ function isLightColor(hex: string): boolean {
   const g = parseInt(result[2], 16);
   const b = parseInt(result[3], 16);
   const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-  return brightness > 155;
+  return brightness > 160;
 }
 
 const styles: { [key: string]: React.CSSProperties } = {
   container: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '20px'
+    gap: '24px'
   },
   track: {
     position: 'relative',
-    height: '32px',
-    borderRadius: '16px',
-    boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.3)',
-    marginBottom: '8px',
+    height: '36px',
+    borderRadius: '18px',
+    boxShadow: 'inset 0 2px 10px rgba(0, 0, 0, 0.35)',
     userSelect: 'none',
-    touchAction: 'none'
+    touchAction: 'none',
+    overflow: 'visible'
   },
   handleWrapper: {
     position: 'absolute',
-    top: '50%',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    cursor: 'grab',
-    userSelect: 'none'
+    userSelect: 'none',
+    willChange: 'transform, left'
   },
   handle: {
-    width: '26px',
-    height: '26px',
+    width: '28px',
+    height: '28px',
     borderRadius: '50%',
     boxSizing: 'content-box',
-    cursor: 'grab',
-    position: 'relative'
+    position: 'relative',
+    zIndex: 2
   },
-  anchorDot: {
+  anchorRing: {
     position: 'absolute',
     top: '50%',
     left: '50%',
-    width: '8px',
-    height: '8px',
-    background: 'rgba(255, 255, 255, 0.6)',
+    width: '44px',
+    height: '44px',
     borderRadius: '50%',
-    transform: 'translate(-50%, -50%)',
+    border: '2px solid rgba(74, 144, 217, 0.5)',
     pointerEvents: 'none',
     zIndex: 1
   },
+  anchorPulse: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: '56px',
+    height: '56px',
+    borderRadius: '50%',
+    border: '2px solid rgba(74, 144, 217, 0.25)',
+    pointerEvents: 'none',
+    zIndex: 0
+  },
   positionLabel: {
     position: 'absolute',
-    top: '32px',
-    fontSize: '10px',
-    color: '#858585',
-    background: '#2D2D30',
-    padding: '2px 6px',
-    borderRadius: '4px',
+    top: '40px',
+    fontSize: '11px',
+    color: '#D4D4D4',
+    background: 'rgba(45, 45, 48, 0.95)',
+    padding: '3px 8px',
+    borderRadius: '5px',
     whiteSpace: 'nowrap',
-    fontFamily: 'monospace'
+    fontFamily: "'SF Mono', Consolas, monospace",
+    border: '1px solid #3E3E3E',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+    fontWeight: 500
   },
   stopsList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '10px',
-    marginTop: '20px'
+    gap: '10px'
   },
   stopItem: {
     display: 'flex',
@@ -337,31 +408,32 @@ const styles: { [key: string]: React.CSSProperties } = {
     gap: '10px',
     padding: '10px 12px',
     background: '#2D2D30',
-    borderRadius: '8px',
+    borderRadius: '10px',
     border: '1px solid #3E3E3E'
   },
   stopIndex: {
-    width: '22px',
-    height: '22px',
+    width: '24px',
+    height: '24px',
     borderRadius: '50%',
-    background: '#3A3D41',
+    background: 'linear-gradient(135deg, #3A3D41, #2D2D30)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: '11px',
     fontWeight: 600,
-    color: '#D4D4D4',
-    flexShrink: 0
+    color: '#858585',
+    flexShrink: 0,
+    border: '1px solid #3E3E3E'
   },
   colorSquare: {
-    width: '32px',
-    height: '32px',
-    borderRadius: '6px',
+    width: '34px',
+    height: '34px',
+    borderRadius: '8px',
     flexShrink: 0,
     position: 'relative',
     overflow: 'hidden',
     border: '2px solid #3E3E3E',
-    transition: 'border-color 0.2s ease'
+    transition: 'border-color 0.2s ease, transform 0.15s ease'
   },
   hiddenColorInput: {
     position: 'absolute',
@@ -376,16 +448,17 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   colorInput: {
     flex: 1,
-    padding: '6px 10px',
+    padding: '7px 10px',
     background: '#1E1E1E',
     border: '1px solid #3E3E3E',
-    borderRadius: '6px',
+    borderRadius: '7px',
     color: '#D4D4D4',
     fontSize: '12px',
-    fontFamily: 'monospace',
+    fontFamily: "'SF Mono', Consolas, monospace",
     outline: 'none',
     transition: 'border-color 0.2s ease',
-    minWidth: '80px'
+    minWidth: '80px',
+    letterSpacing: '0.5px'
   },
   positionInputWrapper: {
     display: 'flex',
@@ -393,14 +466,14 @@ const styles: { [key: string]: React.CSSProperties } = {
     position: 'relative'
   },
   positionInput: {
-    width: '52px',
-    padding: '6px 18px 6px 8px',
+    width: '54px',
+    padding: '7px 20px 7px 8px',
     background: '#1E1E1E',
     border: '1px solid #3E3E3E',
-    borderRadius: '6px',
+    borderRadius: '7px',
     color: '#D4D4D4',
     fontSize: '12px',
-    fontFamily: 'monospace',
+    fontFamily: "'SF Mono', Consolas, monospace",
     outline: 'none',
     textAlign: 'left',
     MozAppearance: 'textfield'
@@ -413,25 +486,26 @@ const styles: { [key: string]: React.CSSProperties } = {
     pointerEvents: 'none'
   },
   removeButton: {
-    width: '28px',
-    height: '28px',
-    borderRadius: '6px',
+    width: '30px',
+    height: '30px',
+    borderRadius: '7px',
     border: '1px solid #3E3E42',
     background: '#3A3D41',
-    color: '#D4D4D4',
-    fontSize: '18px',
+    color: '#858585',
+    fontSize: '20px',
     lineHeight: 1,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-    transition: 'all 0.2s ease',
-    fontWeight: 400
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+    fontWeight: 300
   },
   removeButtonHover: {
     background: '#E74C3C',
     borderColor: '#E74C3C',
-    color: '#fff'
+    color: '#fff',
+    transform: 'scale(1.05)'
   }
 };
 
