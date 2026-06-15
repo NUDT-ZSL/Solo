@@ -40,6 +40,10 @@ export function InputPanel({ theme, isCollapsed, onSubmit, onExpand }: InputPane
     onExpand()
   }
 
+  const handleTextareaClick = (e: React.MouseEvent<Element>) => {
+    createRipple(e, themeColors.accent + '40')
+  }
+
   const isValid = text.trim().length >= 10 && text.trim().length <= 50
 
   if (isCollapsed) {
@@ -130,6 +134,7 @@ export function InputPanel({ theme, isCollapsed, onSubmit, onExpand }: InputPane
         ref={textareaRef}
         value={text}
         onChange={(e) => setText(e.target.value)}
+        onClick={handleTextareaClick}
         placeholder="输入10-50字的冥想意图..."
         maxLength={50}
         style={{
@@ -143,7 +148,8 @@ export function InputPanel({ theme, isCollapsed, onSubmit, onExpand }: InputPane
           resize: 'none',
           outline: 'none',
           fontFamily: 'inherit',
-          transition: 'border-color 0.3s ease'
+          transition: 'border-color 0.3s ease',
+          cursor: 'text'
         }}
       />
 

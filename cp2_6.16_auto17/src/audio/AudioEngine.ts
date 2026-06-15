@@ -3,7 +3,7 @@ import { AudioState } from '../types'
 export class AudioEngine {
   private audioContext: AudioContext | null = null
   private masterGain: GainNode | null = null
-  private oceanNodes: { source: AudioBufferSourceNode; gain: GainNode }[] = []
+  private oceanNodes: { source: AudioBufferSourceNode; gain: GainNode; filter: BiquadFilterNode }[] = []
   private rainNodes: { source: AudioBufferSourceNode; gain: GainNode }[] = []
   private breathOscillator: OscillatorNode | null = null
   private breathGain: GainNode | null = null
@@ -11,6 +11,8 @@ export class AudioEngine {
   private animationFrameId: number | null = null
   private breathInterval: number | null = null
   private rainInterval: number | null = null
+  private attackTime: number = 0.5
+  private releaseTime: number = 0.5
   private state: AudioState = {
     isPlaying: false,
     volume: 0.5,
@@ -135,7 +137,7 @@ export class AudioEngine {
       gain.connect(this.masterGain)
       
       source.start()
-      this.oceanNodes.push({ source, gain })
+      this.oceanNodes.push({ source, gain, filter })
     }
   }
 
@@ -193,11 +195,23 @@ export class AudioEngine {
       
       const now = this.audioContext.currentTime
       const breathVolume = this.state.breathVolume * this.state.volume
+      const inhaleTime = 2
+      const exhaleTime = 2
       
       this.breathGain.gain.cancelScheduledValues(now)
       this.breathGain.gain.setValueAtTime(this.breathGain.gain.value, now)
-      this.breathGain.gain.linearRampToValueAtTime(breathVolume, now + 2)
-      this.breathGain.gain.linearRampToValueAtTime(0, now + 4)
+      
+      const attackEnd = now + this.attackTime
+      this.breathGain.gain.linearRampToValueAtTime(breathVolume, attackEnd)
+      
+      const sustainEnd = now + inhaleTime
+      this.breathGain.gain.linearRampToValueAtTime(breathVolume, sustainEnd)
+      
+      const releaseEnd = now + inhaleTime + this.releaseTime
+      this.breathGain.gain.linearRampToValueAtTime(0, releaseEnd)
+      
+      const exhaleEnd = now + inhaleTime + exhaleTime
+      this.breathGain.gain.linearRampToValueAtTime(0, exhaleEnd)
     }
     
     cycleBreath()
@@ -265,6 +279,22 @@ export class AudioEngine {
       try { this.breathOscillator.stop() } catch (e) {}
       this.breathOscillator = null
       this.breathGain = null
+    }
+  }
+
+  setOceanFilterFrequency(freq: number): void {
+    if (!this.audioContext) return
+    this.oceanNodes.forEach(({ filter }) => {
+      filter.frequency.linearRampToValueAtTime(freq, this.audioContext!.currentTime + 0.5)
+    })
+  }
+
+  adjustForIntent(intent: string): void {
+    const lowerIntent = intent.toLowerCase()
+    if (lowerIntent.includes('放松') || lowerIntent.includes('relax') || lowerIntent.includes('宁静') || lowerIntent.includes('平静')) {
+      this.setOceanFilterFrequency(150)
+    } else if (lowerIntent.includes('专注') || lowerIntent.includes('focus') || lowerIntent.includes('集中') || lowerIntent.includes('注意力')) {
+      this.setOceanFilterFrequency(300)
     }
   }
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { WaveLayer, Theme } from '../types'
 import { interpolateColor, withAlpha } from '../utils/color'
+import { createFPSMonitor } from '../utils/fpsMonitor'
 
 interface WaveSceneProps {
   theme: Theme
@@ -11,6 +12,7 @@ export function WaveScene({ theme }: WaveSceneProps) {
   const wavesRef = useRef<WaveLayer[]>([])
   const animationRef = useRef<number | null>(null)
   const isVisibleRef = useRef(true)
+  const fpsMonitorRef = useRef(createFPSMonitor())
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -53,7 +55,12 @@ export function WaveScene({ theme }: WaveSceneProps) {
     wavesRef.current = createWaves()
 
     const animate = () => {
-      if (!isVisibleRef.current) return
+      if (!isVisibleRef.current) {
+        animationRef.current = null
+        return
+      }
+
+      fpsMonitorRef.current.checkFPS()
 
       ctx.clearRect(0, 0, canvas.width, canvas.height)
 
@@ -102,21 +109,26 @@ export function WaveScene({ theme }: WaveSceneProps) {
     }
 
     const handleVisibilityChange = () => {
+      const wasVisible = isVisibleRef.current
       isVisibleRef.current = !document.hidden
-      if (isVisibleRef.current && animationRef.current === null) {
+
+      if (isVisibleRef.current && !wasVisible && animationRef.current === null) {
         animate()
       }
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
-    animate()
+    if (isVisibleRef.current) {
+      animate()
+    }
 
     return () => {
       window.removeEventListener('resize', resizeCanvas)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current)
+        animationRef.current = null
       }
     }
   }, [theme])
