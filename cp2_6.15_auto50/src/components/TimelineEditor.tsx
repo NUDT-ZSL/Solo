@@ -23,7 +23,7 @@ const TimelineEditor: React.FC = () => {
     setCurrentTime,
   } = useLyricStore()
 
-  const [isDragOver, setIsDragOver] = useState(false)
+  const [isFileDragOver, setIsFileDragOver] = useState(false)
   const [dragState, setDragState] = useState<DragState>({
     isDragging: false,
     lyricId: null,
@@ -34,6 +34,7 @@ const TimelineEditor: React.FC = () => {
 
   const timelineRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const dragCounterRef = useRef(0)
 
   const handleFileUpload = useCallback(
     (file: File) => {
@@ -59,7 +60,9 @@ const TimelineEditor: React.FC = () => {
   const handleDrop = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault()
-      setIsDragOver(false)
+      e.stopPropagation()
+      dragCounterRef.current = 0
+      setIsFileDragOver(false)
       const file = e.dataTransfer.files[0]
       if (file && file.name.endsWith('.txt')) {
         handleFileUpload(file)
@@ -68,14 +71,28 @@ const TimelineEditor: React.FC = () => {
     [handleFileUpload]
   )
 
+  const handleDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounterRef.current += 1
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsFileDragOver(true)
+    }
+  }, [])
+
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
-    setIsDragOver(true)
+    e.stopPropagation()
   }, [])
 
   const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
-    setIsDragOver(false)
+    e.stopPropagation()
+    dragCounterRef.current -= 1
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0
+      setIsFileDragOver(false)
+    }
   }, [])
 
   const handleFileInputChange = useCallback(
@@ -105,64 +122,27 @@ const TimelineEditor: React.FC = () => {
     [setSelectedLyricId]
   )
 
-  const handleTimelineMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!dragState.isDragging || !dragState.lyricId || !timelineRef.current) {
-        return
-      }
-
-      const rect = timelineRef.current.getBoundingClientRect()
-      const deltaX = e.clientX - dragState.startX
-      const pixelsPerSecond = rect.width / totalDuration
-      const deltaTime = deltaX / pixelsPerSecond
-
-      let newStartTime = dragState.initialStartTime + deltaTime
-      let newEndTime = dragState.initialEndTime + deltaTime
-
-      const duration = dragState.initialEndTime - dragState.initialStartTime
-
-      if (newStartTime < 0) {
-        newStartTime = 0
-        newEndTime = duration
-      }
-      if (newEndTime > totalDuration) {
-        newEndTime = totalDuration
-        newStartTime = totalDuration - duration
-      }
-
-      updateLyricTime(dragState.lyricId, newStartTime, newEndTime)
-    },
-    [dragState, totalDuration, updateLyricTime]
-  )
-
-  const handleTimelineMouseUp = useCallback(() => {
-    if (dragState.isDragging) {
-      setDragState({
-        isDragging: false,
-        lyricId: null,
-        startX: 0,
-        initialStartTime: 0,
-        initialEndTime: 0,
-      })
-      eventBus.emit(EVENT_TYPES.LYRIC_TIMELINE_UPDATED, lyrics)
-    }
-  }, [dragState.isDragging, lyrics])
-
   useEffect(() => {
+    if (!dragState.isDragging) return
+
+    const duration = dragState.initialEndTime - dragState.initialStartTime
+
     const handleGlobalMouseMove = (e: MouseEvent) => {
       if (!dragState.isDragging || !dragState.lyricId || !timelineRef.current) {
         return
       }
 
       const rect = timelineRef.current.getBoundingClientRect()
-      const deltaX = e.clientX - dragState.startX
+      const minX = rect.left
+      const maxX = rect.right
+      const clampedX = Math.min(Math.max(e.clientX, minX), maxX)
+
+      const deltaX = clampedX - dragState.startX
       const pixelsPerSecond = rect.width / totalDuration
       const deltaTime = deltaX / pixelsPerSecond
 
       let newStartTime = dragState.initialStartTime + deltaTime
       let newEndTime = dragState.initialEndTime + deltaTime
-
-      const duration = dragState.initialEndTime - dragState.initialStartTime
 
       if (newStartTime < 0) {
         newStartTime = 0
@@ -173,7 +153,7 @@ const TimelineEditor: React.FC = () => {
         newStartTime = totalDuration - duration
       }
 
-      updateLyricTime(dragState.lyricId, newStartTime, newEndTime)
+      updateLyricTime(dragState.lyricId!, newStartTime, newEndTime)
     }
 
     const handleGlobalMouseUp = () => {
@@ -185,7 +165,10 @@ const TimelineEditor: React.FC = () => {
           initialStartTime: 0,
           initialEndTime: 0,
         })
-        eventBus.emit(EVENT_TYPES.LYRIC_TIMELINE_UPDATED, lyrics)
+        setLyrics((prev) => {
+          eventBus.emit(EVENT_TYPES.LYRIC_TIMELINE_UPDATED, prev)
+          return prev
+        })
       }
     }
 
@@ -196,7 +179,7 @@ const TimelineEditor: React.FC = () => {
       window.removeEventListener('mousemove', handleGlobalMouseMove)
       window.removeEventListener('mouseup', handleGlobalMouseUp)
     }
-  }, [dragState, totalDuration, updateLyricTime, lyrics])
+  }, [dragState, totalDuration, updateLyricTime, setLyrics])
 
   const handleTimelineClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -226,14 +209,15 @@ const TimelineEditor: React.FC = () => {
       <div
         onClick={() => fileInputRef.current?.click()}
         onDrop={handleDrop}
+        onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         style={{
           width: '700px',
           height: '160px',
           borderRadius: '16px',
-          border: `2px ${isDragOver ? 'solid' : 'dashed'} #b388ff`,
-          background: isDragOver ? '#ede7f6' : '#f3e5f5',
+          border: `2px ${isFileDragOver ? 'solid' : 'dashed'} #b388ff`,
+          background: isFileDragOver ? '#ede7f6' : '#f3e5f5',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -241,6 +225,8 @@ const TimelineEditor: React.FC = () => {
           cursor: 'pointer',
           transition: 'all 0.2s ease',
           margin: '0 auto',
+          transform: isFileDragOver ? 'scale(1.01)' : 'scale(1)',
+          boxShadow: isFileDragOver ? '0 8px 24px rgba(179, 136, 255, 0.25)' : 'none',
         }}
       >
         <input
@@ -259,7 +245,11 @@ const TimelineEditor: React.FC = () => {
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          style={{ marginBottom: '12px' }}
+          style={{
+            marginBottom: '12px',
+            transform: isFileDragOver ? 'translateY(-4px)' : 'translateY(0)',
+            transition: 'transform 0.2s ease',
+          }}
         >
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
           <polyline points="17 8 12 3 7 8"></polyline>
@@ -273,7 +263,7 @@ const TimelineEditor: React.FC = () => {
             fontFamily: 'system-ui, -apple-system, sans-serif',
           }}
         >
-          {isDragOver ? '释放以上传歌词文件' : '拖拽TXT歌词文件到这里，或点击选择'}
+          {isFileDragOver ? '释放以上传歌词文件' : '拖拽TXT歌词文件到这里，或点击选择'}
         </span>
         <span
           style={{
@@ -347,9 +337,7 @@ const TimelineEditor: React.FC = () => {
             <div
               ref={timelineRef}
               onClick={handleTimelineClick}
-              onMouseMove={handleTimelineMouseMove}
-              onMouseUp={handleTimelineMouseUp}
-              onMouseLeave={handleTimelineMouseUp}
+              onMouseUp={(e) => e.preventDefault()}
               style={{
                 position: 'relative',
                 flex: 1,
@@ -439,6 +427,7 @@ const TimelineEditor: React.FC = () => {
                       ((lyric.endTime - lyric.startTime) / totalDuration) * 100
                     const isSelected = selectedLyricId === lyric.id
                     const bgColor = index % 2 === 0 ? '#4db6ac' : '#81c784'
+                    const isBeingDragged = dragState.lyricId === lyric.id
 
                     return (
                       <div
@@ -460,7 +449,7 @@ const TimelineEditor: React.FC = () => {
                             border: isSelected
                               ? '2px solid #ffb74d'
                               : '2px solid transparent',
-                            cursor: dragState.lyricId === lyric.id ? 'grabbing' : 'grab',
+                            cursor: isBeingDragged ? 'grabbing' : 'grab',
                             padding: '0 10px',
                             display: 'flex',
                             alignItems: 'center',
@@ -475,22 +464,26 @@ const TimelineEditor: React.FC = () => {
                               ? '0 4px 12px rgba(255, 183, 77, 0.3)'
                               : '0 2px 6px rgba(0,0,0,0.2)',
                             transition:
-                              'transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease',
+                              isBeingDragged
+                                ? 'box-shadow 0.2s ease, border-color 0.2s ease'
+                                : 'transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease',
                             willChange: 'transform, left',
                             userSelect: 'none',
                             boxSizing: 'border-box',
+                            transform: isBeingDragged ? 'translateY(-2px)' : undefined,
                           }}
                           className="time-bar"
                           onMouseEnter={(e) => {
                             if (!dragState.isDragging) {
-                              ;(
-                                e.currentTarget as HTMLDivElement
-                              ).style.transform = 'translateY(-2px)'
+                              ;(e.currentTarget as HTMLDivElement).style.transform =
+                                'translateY(-2px)'
                             }
                           }}
                           onMouseLeave={(e) => {
-                            ;(e.currentTarget as HTMLDivElement).style.transform =
-                              'translateY(0)'
+                            if (!isBeingDragged) {
+                              ;(e.currentTarget as HTMLDivElement).style.transform =
+                                'translateY(0)'
+                            }
                           }}
                         >
                           <span

@@ -1,16 +1,255 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { useLyricStore, LyricLine } from '../store/useLyricStore'
 import { eventBus, EVENT_TYPES } from '../utils/eventBus'
-import { exportSRT, exportASS } from '../utils/exporter'
+import {
+  exportSRT,
+  exportASS,
+  validateTimeline,
+  TimelineValidationResult,
+} from '../utils/exporter'
 
 const TYPEWRITER_INTERVAL = 0.06
 const SCROLL_DISTANCE = 30
 const SCROLL_DURATION = 0.4
 
+const PUNCTUATION_REGEX = /[\s，。！？、；：""''（）【】《》…—·,.!?;:"'()\[\]<>]/
+
 interface DisplayLyric extends LyricLine {
   displayChars: number
   scrollProgress: number
   status: 'pending' | 'playing' | 'played'
+  effectiveChars: number
+}
+
+interface ExportModalProps {
+  validation: TimelineValidationResult
+  onConfirm: () => void
+  onCancel: () => void
+}
+
+const ExportModal: React.FC<ExportModalProps> = ({ validation, onConfirm, onCancel }) => {
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.75)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+      }}
+      onClick={onCancel}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: '#1e1e1e',
+          borderRadius: '16px',
+          padding: '28px',
+          maxWidth: '500px',
+          width: '90%',
+          maxHeight: '80vh',
+          overflowY: 'auto',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+        }}
+      >
+        <h3
+          style={{
+            color: '#ffb74d',
+            fontSize: '20px',
+            fontWeight: 600,
+            margin: '0 0 16px 0',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+          }}
+        >
+          ⚠️ 时间轴存在问题
+        </h3>
+        <p
+          style={{
+            color: '#ccc',
+            fontSize: '14px',
+            margin: '0 0 20px 0',
+            lineHeight: 1.6,
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+          }}
+        >
+          检测到以下问题可能导致字幕播放错乱，建议修复后导出：
+        </p>
+
+        {validation.overlaps.length > 0 && (
+          <div style={{ marginBottom: '16px' }}>
+            <div
+              style={{
+                color: '#ef5350',
+                fontSize: '14px',
+                fontWeight: 600,
+                marginBottom: '8px',
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+              }}
+            >
+              🔴 时间重叠 ({validation.overlaps.length}处)
+            </div>
+            {validation.overlaps.slice(0, 3).map((o, i) => (
+              <div
+                key={i}
+                style={{
+                  color: '#bbb',
+                  fontSize: '13px',
+                  padding: '6px 10px',
+                  background: '#2a2a2a',
+                  borderRadius: '6px',
+                  marginBottom: '4px',
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                }}
+              >
+                第{o.lyric1Index + 1}句「{o.lyric1.slice(0, 12)}
+                {o.lyric1.length > 12 ? '...' : ''}」与第{o.lyric2Index + 1}句「
+                {o.lyric2.slice(0, 12)}
+                {o.lyric2.length > 12 ? '...' : ''}」时间重叠
+              </div>
+            ))}
+            {validation.overlaps.length > 3 && (
+              <div
+                style={{
+                  color: '#888',
+                  fontSize: '12px',
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                }}
+              >
+                还有{validation.overlaps.length - 3}处...
+              </div>
+            )}
+          </div>
+        )}
+
+        {validation.gaps.length > 0 && (
+          <div style={{ marginBottom: '16px' }}>
+            <div
+              style={{
+                color: '#ffb74d',
+                fontSize: '14px',
+                fontWeight: 600,
+                marginBottom: '8px',
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+              }}
+            >
+              🟡 时间间隙 ({validation.gaps.length}处)
+            </div>
+            {validation.gaps.slice(0, 3).map((g, i) => (
+              <div
+                key={i}
+                style={{
+                  color: '#bbb',
+                  fontSize: '13px',
+                  padding: '6px 10px',
+                  background: '#2a2a2a',
+                  borderRadius: '6px',
+                  marginBottom: '4px',
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                }}
+              >
+                第{g.afterLyricIndex + 1}句与第{g.beforeLyricIndex + 1}句之间存在
+                {g.gapDuration.toFixed(1)}秒间隙
+              </div>
+            ))}
+            {validation.gaps.length > 3 && (
+              <div
+                style={{
+                  color: '#888',
+                  fontSize: '12px',
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                }}
+              >
+                还有{validation.gaps.length - 3}处...
+              </div>
+            )}
+          </div>
+        )}
+
+        {validation.invalidRanges.length > 0 && (
+          <div style={{ marginBottom: '16px' }}>
+            <div
+              style={{
+                color: '#ef5350',
+                fontSize: '14px',
+                fontWeight: 600,
+                marginBottom: '8px',
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+              }}
+            >
+              🔴 无效时间范围 ({validation.invalidRanges.length}处)
+            </div>
+            {validation.invalidRanges.map((r, i) => (
+              <div
+                key={i}
+                style={{
+                  color: '#bbb',
+                  fontSize: '13px',
+                  padding: '6px 10px',
+                  background: '#2a2a2a',
+                  borderRadius: '6px',
+                  marginBottom: '4px',
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                }}
+              >
+                第{r.lyricIndex + 1}句「{r.lyric.slice(0, 15)}
+                {r.lyric.length > 15 ? '...' : ''}」：{r.reason}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div
+          style={{
+            display: 'flex',
+            gap: '12px',
+            marginTop: '24px',
+          }}
+        >
+          <button
+            onClick={onCancel}
+            style={{
+              flex: 1,
+              padding: '12px',
+              borderRadius: '12px',
+              border: '1px solid #424242',
+              background: '#2a2a2a',
+              color: '#e0e0e0',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 500,
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            返回修改
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{
+              flex: 1,
+              padding: '12px',
+              borderRadius: '12px',
+              border: 'none',
+              background: '#ffb74d',
+              color: '#121212',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 600,
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            仍要导出
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 const SubtitlePreview: React.FC = () => {
@@ -28,6 +267,28 @@ const SubtitlePreview: React.FC = () => {
   const [displayLyrics, setDisplayLyrics] = useState<DisplayLyric[]>([])
   const animationFrameRef = useRef<number | null>(null)
   const lastTimeRef = useRef<number>(0)
+  const [exportModal, setExportModal] = useState<{
+    visible: boolean
+    format: 'srt' | 'ass' | null
+    validation: TimelineValidationResult | null
+  }>({ visible: false, format: null, validation: null })
+
+  const calculateEffectiveChars = useCallback(
+    (text: string, rawChars: number): number => {
+      if (rawChars <= 0) return 0
+      if (rawChars >= text.length) return text.length
+
+      let effective = rawChars
+      while (
+        effective < text.length &&
+        PUNCTUATION_REGEX.test(text[effective])
+      ) {
+        effective++
+      }
+      return effective
+    },
+    []
+  )
 
   useEffect(() => {
     const unsubscribe = eventBus.on(
@@ -37,6 +298,7 @@ const SubtitlePreview: React.FC = () => {
           updatedLyrics.map((lyric) => ({
             ...lyric,
             displayChars: 0,
+            effectiveChars: 0,
             scrollProgress: 0,
             status: 'pending',
           }))
@@ -51,6 +313,7 @@ const SubtitlePreview: React.FC = () => {
       lyrics.map((lyric) => ({
         ...lyric,
         displayChars: 0,
+        effectiveChars: 0,
         scrollProgress: 0,
         status: 'pending',
       }))
@@ -62,19 +325,22 @@ const SubtitlePreview: React.FC = () => {
       setDisplayLyrics((prev) =>
         prev.map((lyric) => {
           const duration = lyric.endTime - lyric.startTime
-          const progress = Math.max(
-            0,
-            Math.min(1, (time - lyric.startTime) / Math.max(duration, 0.001))
-          )
           const typewriterDuration = Math.min(
             duration * 0.7,
             lyric.text.length * TYPEWRITER_INTERVAL
           )
           const typewriterProgress = Math.min(
             1,
-            Math.max(0, (time - lyric.startTime) / Math.max(typewriterDuration, 0.001))
+            Math.max(
+              0,
+              (time - lyric.startTime) / Math.max(typewriterDuration, 0.001)
+            )
           )
-          const displayChars = Math.ceil(typewriterProgress * lyric.text.length)
+          const rawDisplayChars = Math.ceil(typewriterProgress * lyric.text.length)
+          const displayChars = calculateEffectiveChars(
+            lyric.text,
+            rawDisplayChars
+          )
 
           let status: DisplayLyric['status'] = 'pending'
           let scrollProgress = 0
@@ -90,13 +356,14 @@ const SubtitlePreview: React.FC = () => {
           return {
             ...lyric,
             displayChars,
+            effectiveChars: displayChars,
             scrollProgress,
             status,
           }
         })
       )
     },
-    []
+    [calculateEffectiveChars]
   )
 
   useEffect(() => {
@@ -161,12 +428,34 @@ const SubtitlePreview: React.FC = () => {
     eventBus.emit(EVENT_TYPES.PLAYBACK_STATE_CHANGED, false)
   }
 
+  const doExport = useCallback(
+    (format: 'srt' | 'ass') => {
+      if (format === 'srt') {
+        exportSRT(lyrics)
+      } else {
+        exportASS(lyrics, style.fontSize)
+      }
+      setExportModal({ visible: false, format: null, validation: null })
+    },
+    [lyrics, style.fontSize]
+  )
+
   const handleExportSRT = () => {
-    exportSRT(lyrics)
+    const validation = validateTimeline(lyrics)
+    if (!validation.valid) {
+      setExportModal({ visible: true, format: 'srt', validation })
+    } else {
+      doExport('srt')
+    }
   }
 
   const handleExportASS = () => {
-    exportASS(lyrics, style.fontSize)
+    const validation = validateTimeline(lyrics)
+    if (!validation.valid) {
+      setExportModal({ visible: true, format: 'ass', validation })
+    } else {
+      doExport('ass')
+    }
   }
 
   const formatTime = (seconds: number): string => {
@@ -181,6 +470,16 @@ const SubtitlePreview: React.FC = () => {
 
   return (
     <div style={{ width: '45%', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {exportModal.visible && exportModal.validation && (
+        <ExportModal
+          validation={exportModal.validation}
+          onConfirm={() => exportModal.format && doExport(exportModal.format)}
+          onCancel={() =>
+            setExportModal({ visible: false, format: null, validation: null })
+          }
+        />
+      )}
+
       <div
         style={{
           background: '#1e1e1e',
@@ -331,9 +630,10 @@ const SubtitlePreview: React.FC = () => {
               <div
                 style={{
                   color: '#424242',
-                  fontSize: style.fontSize,
+                  fontSize: `${style.fontSize}px`,
                   fontFamily: style.fontFamily,
                   textAlign: 'center',
+                  transition: 'font-size 0.2s ease',
                 }}
               >
                 {lyrics.length === 0
@@ -356,7 +656,7 @@ const SubtitlePreview: React.FC = () => {
                 const textToShow =
                   lyric.status === 'played'
                     ? lyric.text
-                    : lyric.text.slice(0, lyric.displayChars)
+                    : lyric.text.slice(0, lyric.effectiveChars)
 
                 return (
                   <div
@@ -371,7 +671,7 @@ const SubtitlePreview: React.FC = () => {
                       transition:
                         lyric.status === 'played'
                           ? `opacity ${SCROLL_DURATION}s ease-out, transform ${SCROLL_DURATION}s ease-out`
-                          : 'none',
+                          : 'font-size 0.2s ease',
                       textAlign: 'center',
                       lineHeight: 1.5,
                       maxWidth: '90%',
@@ -391,6 +691,7 @@ const SubtitlePreview: React.FC = () => {
                             marginLeft: '2px',
                             verticalAlign: 'middle',
                             animation: 'blink 0.8s infinite',
+                            transition: 'height 0.2s ease',
                           }}
                         />
                       )}
