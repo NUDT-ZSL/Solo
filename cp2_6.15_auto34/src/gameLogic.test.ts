@@ -77,7 +77,55 @@ function runTests() {
     '对角线方向(√8≈2.83>2)不应碰撞',
   );
 
-  console.log('\n4. 零半径/极小值边界测试:');
+  console.log('\n4. 相切边界测试:');
+  assert(
+    checkSphereCollision(p0, 2, { x: 5, y: 0, z: 0 }, 3) === false,
+    '两球外切(距离=5=2+3)严格小于不成立，不算碰撞(只算重叠区域)',
+  );
+  assert(
+    checkSphereCollision(p0, 5, { x: 2, y: 0, z: 0 }, 3) === true,
+    '两球内切(距离=2，r1+r2=8，2<8)球体重叠，应碰撞',
+  );
+  assert(
+    checkSphereCollision(p0, 5, { x: 1.99, y: 0, z: 0 }, 3) === true,
+    '小球接近内切(距离1.99<8)，球体重叠，应碰撞',
+  );
+  assert(
+    checkSphereCollision(p0, 2, { x: 4.99, y: 0, z: 0 }, 3) === true,
+    '两球接近外切(距离4.99<5)，球体重叠，应碰撞',
+  );
+  assert(
+    checkSphereCollision(p0, 2, { x: 5.01, y: 0, z: 0 }, 3) === false,
+    '两球刚分离(距离5.01>半径和5)，不碰撞',
+  );
+  assert(
+    checkSphereCollision(p0, 5, { x: 2.01, y: 0, z: 0 }, 3) === true,
+    '小球部分在大球外(距离2.01<8)，两球仍重叠，应碰撞',
+  );
+  assert(
+    checkSphereCollision(p0, 5, { x: 8.1, y: 0, z: 0 }, 3) === false,
+    '小球完全分离(距离8.1>8)，不碰撞',
+  );
+
+  console.log('\n5. 包含场景测试:');
+  assert(
+    checkSphereCollision(p0, 5, { x: 0, y: 0, z: 0 }, 2) === true,
+    '小球在大球中心，完全包含应碰撞',
+  );
+  assert(
+    checkSphereCollision(p0, 10, { x: 3, y: 4, z: 0 }, 2) === true,
+    '小球距中心5，大球半径10，小球半径2，5+2=7<10，完全包含应碰撞',
+  );
+  assert(
+    checkSphereCollision(p0, 10, { x: 8, y: 0, z: 0 }, 1.5) === true,
+    '小球距中心8，大球半径10，小球半径1.5，8+1.5=9.5<10，包含应碰撞',
+  );
+  assert(
+    checkSphereCollision(p0, 5, { x: 9, y: 0, z: 0 }, 3) === false,
+    '小球距中心9，大球半径5，小球半径3，9>5+3=8，分离不碰撞',
+  );
+
+  console.log('\n6. 零半径/极小值边界测试:');
   assert(
     checkSphereCollision(p0, 0, p0, 0) === false,
     '两个半径为0的球心重合点不应碰撞',
@@ -87,12 +135,16 @@ function runTests() {
     '极小半径和距离(0.001<0.002)应碰撞',
   );
   assert(
-    checkSphereCollision({ x: 100, y: 100, z: 100 }, 5, { x: 100, y: 100, z: 105 }, 5) === false,
-    '大坐标精确测试: 距离5等于半径和应不碰撞',
+    checkSphereCollision({ x: 100, y: 100, z: 100 }, 5, { x: 100, y: 100, z: 110 }, 5) === false,
+    '大坐标精确测试: 距离10等于半径和(5+5)，严格小于不成立，不碰撞',
   );
   assert(
-    checkSphereCollision({ x: 100, y: 100, z: 100 }, 5, { x: 100, y: 100, z: 104 }, 5) === true,
-    '大坐标精确测试: 距离4小于半径和应碰撞',
+    checkSphereCollision({ x: 100, y: 100, z: 100 }, 5, { x: 100, y: 100, z: 109 }, 5) === true,
+    '大坐标精确测试: 距离9小于半径和10，应碰撞',
+  );
+  assert(
+    checkSphereCollision({ x: 100, y: 100, z: 100 }, 5, { x: 100, y: 100, z: 105 }, 5) === true,
+    '大坐标精确测试: 距离5小于半径和10，球体重叠，应碰撞',
   );
 
   console.log('\n5. 向量辅助函数测试:');

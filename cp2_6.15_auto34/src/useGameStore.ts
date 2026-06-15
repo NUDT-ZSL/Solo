@@ -171,12 +171,15 @@ export const useGameStore = create<GameState>((set, get) => ({
   setShipPosition: (p) => set({ shipPosition: p }),
   setShipRotation: (r) => set({ shipRotation: r }),
   setShipTargetRoll: (r) => {
+    const s = get();
     const clamped = Math.max(-30, Math.min(30, r));
-    const currentRoll = get().shipRoll;
+    if (clamped === s.shipTargetRoll && s.shipRollTransition > 0) {
+      return;
+    }
     set({
       shipTargetRoll: clamped,
       shipRollTransition: 0,
-      _startRoll: currentRoll,
+      _startRoll: s.shipRoll,
     });
   },
   updateShipRoll: (delta) => {
@@ -187,7 +190,14 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
       return;
     }
-    const newTransition = Math.min(ROLL_TRANSITION_TIME, s.shipRollTransition + delta);
+    const newTransition = s.shipRollTransition + delta;
+    if (newTransition >= ROLL_TRANSITION_TIME) {
+      set({
+        shipRoll: s.shipTargetRoll,
+        shipRollTransition: ROLL_TRANSITION_TIME,
+      });
+      return;
+    }
     const t = newTransition / ROLL_TRANSITION_TIME;
     const easeT = 1 - Math.pow(1 - t, 3);
     const newRoll = s._startRoll + (s.shipTargetRoll - s._startRoll) * easeT;

@@ -29,9 +29,9 @@ function computeRadarDots(
   range: number,
 ): { x: number; y: number }[] {
   const radarRadius = radarSize / 2;
-  const cos = Math.cos(shipYaw);
-  const sin = Math.sin(shipYaw);
-  const scale = radarRadius - 8;
+  const cos = Math.cos(-shipYaw);
+  const sin = Math.sin(-shipYaw);
+  const scale = radarRadius - 10;
 
   return asteroids
     .map(a => {
@@ -40,15 +40,15 @@ function computeRadarDots(
       const dist = Math.sqrt(dx * dx + dz * dz);
       if (dist > range) return null;
 
-      const localX = dx * cos + dz * sin;
-      const localZ = -dx * sin + dz * cos;
+      const localX = dx * cos - dz * sin;
+      const localZ = dx * sin + dz * cos;
 
       const normX = localX / range;
       const normZ = localZ / range;
 
       return {
         x: radarRadius + normX * scale,
-        y: radarRadius + normZ * scale,
+        y: radarRadius - normZ * scale,
       };
     })
     .filter((v): v is { x: number; y: number } => v !== null);

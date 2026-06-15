@@ -90,14 +90,19 @@ function Ship() {
 function AsteroidMesh({ asteroid, shipPosition }: { asteroid: Asteroid; shipPosition: Vector3 }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const outlineRef = useRef<THREE.Mesh>(null);
+  const outlineInnerRef = useRef<THREE.Mesh>(null);
 
   const geometry = useMemo(
     () => generateBumpySphere(asteroid.radius, asteroid.seed),
     [asteroid.radius, asteroid.seed],
   );
 
-  const outlineGeometry = useMemo(() => {
-    return new THREE.SphereGeometry(asteroid.radius * 1.08, 20, 20);
+  const outerGeo = useMemo(() => {
+    return new THREE.SphereGeometry(asteroid.radius * 1.12, 24, 24);
+  }, [asteroid.radius]);
+
+  const innerGeo = useMemo(() => {
+    return new THREE.SphereGeometry(asteroid.radius * 1.08, 24, 24);
   }, [asteroid.radius]);
 
   useFrame(() => {
@@ -106,10 +111,14 @@ function AsteroidMesh({ asteroid, shipPosition }: { asteroid: Asteroid; shipPosi
     meshRef.current.rotation.set(asteroid.rotation.x, asteroid.rotation.y, asteroid.rotation.z);
 
     const dist = Math.sqrt(v3.distSq(asteroid.position, shipPosition));
+    const highlight = dist < 5;
     if (outlineRef.current) {
-      outlineRef.current.position.set(asteroid.position.x, asteroid.position.y, asteroid.position.z);
-      outlineRef.current.rotation.copy(meshRef.current.rotation);
-      outlineRef.current.visible = dist < 5;
+      outlineRef.current.position.copy(meshRef.current.position);
+      outlineRef.current.visible = highlight;
+    }
+    if (outlineInnerRef.current) {
+      outlineInnerRef.current.position.copy(meshRef.current.position);
+      outlineInnerRef.current.visible = highlight;
     }
   });
 
@@ -123,12 +132,23 @@ function AsteroidMesh({ asteroid, shipPosition }: { asteroid: Asteroid; shipPosi
           flatShading
         />
       </mesh>
-      <mesh ref={outlineRef} geometry={outlineGeometry} visible={false}>
+      <mesh ref={outlineRef} geometry={outerGeo} visible={false}>
         <meshBasicMaterial
           color="#ff2222"
           side={THREE.BackSide}
           transparent
-          opacity={0.7}
+          opacity={0.6}
+          depthWrite={false}
+        />
+      </mesh>
+      <mesh ref={outlineInnerRef} geometry={innerGeo} visible={false}>
+        <meshBasicMaterial
+          color="#ff4444"
+          side={THREE.FrontSide}
+          transparent
+          opacity={0.3}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
         />
       </mesh>
     </>
@@ -161,11 +181,18 @@ function ParticleMesh({ particle }: { particle: Particle }) {
     if (!ref.current || !particle.active) return;
     const state = getParticleRenderState(particle);
     ref.current.position.set(particle.position.x, particle.position.y, particle.position.z);
-    const scale = Math.max(0.01, state.size * 0.05);
+    const scale = state.size * 0.05;
+    if (scale < 0.001) {
+      ref.current.visible = false;
+      return;
+    }
+    ref.current.visible = true;
     ref.current.scale.setScalar(scale);
+    const lifeT = 1 - particle.life / particle.maxLife;
+    const alpha = Math.max(0, 1 - lifeT * lifeT);
     const mat = ref.current.material as THREE.MeshBasicMaterial;
     mat.color.set(state.color);
-    mat.opacity = Math.max(0, particle.life / particle.maxLife);
+    mat.opacity = alpha;
   });
 
   if (!particle.active) return null;
