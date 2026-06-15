@@ -35,6 +35,9 @@ const WARDROBE: ClothingItem[] = [
   { id: 'acc-5', name: '手套', category: 'accessory', icon: '🧤', warmthWeight: 2, waterproof: true, windproof: true, suitableTemp: [-15, 5] }
 ];
 
+const outfitCache = new Map<string, { plan: OutfitPlan; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000;
+
 const clothingByCategory: Record<ClothingCategory, ClothingItem[]> = {
   top: WARDROBE.filter(item => item.category === 'top'),
   bottom: WARDROBE.filter(item => item.category === 'bottom'),
@@ -42,6 +45,26 @@ const clothingByCategory: Record<ClothingCategory, ClothingItem[]> = {
   shoes: WARDROBE.filter(item => item.category === 'shoes'),
   accessory: WARDROBE.filter(item => item.category === 'accessory')
 };
+
+function buildTempIndex(): Map<string, ClothingItem[]> {
+  const index = new Map<string, ClothingItem[]>();
+  for (let t = -15; t <= 35; t += 5) {
+    const key = `${t}_${t + 5}`;
+    const items = WARDROBE.filter(item => {
+      const [minT, maxT] = item.suitableTemp;
+      return !(maxT < t || minT > t + 5);
+    });
+    index.set(key, items);
+  }
+  return index;
+}
+const tempIndex = buildTempIndex();
+
+function getClothingByTempRange(feelsLike: number): ClothingItem[] {
+  const bucketStart = Math.floor(feelsLike / 5) * 5;
+  const key = `${bucketStart}_${bucketStart + 5}`;
+  return tempIndex.get(key) || WARDROBE;
+}
 
 export function calcFeelsLike(weather: DailyWeather): number {
   return weather.temp - weather.windSpeed * 0.1 + (weather.humidity > 70 ? -2 : 0);
@@ -103,8 +126,11 @@ export function matchClothing(
   feelsLike: number,
   weight: WeatherWeight
 ): ClothingItem[] {
-  const items = clothingByCategory[category];
-  const scored = items.map(item => ({
+  const tempFiltered = getClothingByTempRange(feelsLike);
+  const items = tempFiltered.filter(item => item.category === category);
+  const candidateItems = items.length > 0 ? items : clothingByCategory[category];
+
+  const scored = candidateItems.map(item => ({
     item,
     score: calculateMatchScore(item, weather, feelsLike, weight)
   }));
@@ -159,7 +185,25 @@ export function generateReason(item: ClothingItem, weather: DailyWeather): strin
   return reasons.join('，');
 }
 
+function getWeatherCacheKey(weather: DailyWeather): string {
+  return `${weather.type}-${weather.temp}-${weather.humidity}-${weather.windSpeed}-${weather.rainProb}`;
+}
+
 export function generateOutfit(weather: DailyWeather): OutfitPlan {
+  const cacheKey = getWeatherCacheKey(weather);
+  const cached = outfitCache.get(cacheKey);
+  const now = Date.now();
+
+  if (cached && now - cached.timestamp < CACHE_TTL) {
+    return {
+      ...cached.plan,
+      id: String(now),
+      timestamp: now
+    };
+  }
+
+  const startTime = performance.now();
+
   const feelsLike = calcFeelsLike(weather);
   const weight = calcWeatherWeight(weather);
   const categories: ClothingCategory[] = ['top', 'bottom', 'outerwear', 'shoes', 'accessory'];
@@ -173,15 +217,20 @@ export function generateOutfit(weather: DailyWeather): OutfitPlan {
     };
   });
 
-  const timestamp = Date.now();
-
-  return {
-    id: String(timestamp),
-    timestamp,
+  const plan: OutfitPlan = {
+    id: String(now),
+    timestamp: now,
     weatherSnapshot: { ...weather },
     items,
     modified: false
   };
+
+  outfitCache.set(cacheKey, { plan, timestamp: now });
+
+  const elapsed = performance.now() - startTime;
+  console.debug(`[outfitService] generateOutfit 耗时: ${elapsed.toFixed(2)}ms (目标≤200ms)`);
+
+  return plan;
 }
 
 export function getAllClothingByCategory(category: ClothingCategory): ClothingItem[] {
