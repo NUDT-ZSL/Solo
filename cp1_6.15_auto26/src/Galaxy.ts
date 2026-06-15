@@ -107,11 +107,11 @@ const starVertexShader = /* glsl */ `
   varying float vAlpha;
 
   void main() {
-    float twinkle = 0.7 + 0.3 * sin(uTime * 0.3 + aTwinklePhase);
-    vAlpha = 0.7 * twinkle;
+    float twinkle = 0.8 + 0.2 * sin(uTime * 0.2 + aTwinklePhase);
+    vAlpha = 0.9 * twinkle;
 
     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = aSize * uPixelRatio * (600.0 / -mvPosition.z);
+    gl_PointSize = aSize * uPixelRatio * (500.0 / -mvPosition.z);
     gl_Position = projectionMatrix * mvPosition;
   }
 `
@@ -130,6 +130,8 @@ const starFragmentShader = /* glsl */ `
 
 export class Galaxy {
   public group: THREE.Group
+  public starsGroup: THREE.Group
+  private galaxyGroup: THREE.Group
   private particles: THREE.Points
   private stars: THREE.Points
   private geometry: THREE.BufferGeometry
@@ -161,6 +163,10 @@ export class Galaxy {
     this.clock = new THREE.Clock()
     this.tmpColor = new THREE.Color()
     this.group = new THREE.Group()
+    this.galaxyGroup = new THREE.Group()
+    this.starsGroup = new THREE.Group()
+    this.group.add(this.galaxyGroup)
+    this.group.add(this.starsGroup)
 
     this.basePositions = new Float32Array(PARTICLE_COUNT * 3)
     this.radiusFactors = new Float32Array(PARTICLE_COUNT)
@@ -176,12 +182,12 @@ export class Galaxy {
     this.geometry = this.createParticleGeometry()
     this.material = this.createParticleMaterial()
     this.particles = new THREE.Points(this.geometry, this.material)
-    this.group.add(this.particles)
+    this.galaxyGroup.add(this.particles)
 
     this.starGeometry = this.createStarGeometry()
     this.starMaterial = this.createStarMaterial()
     this.stars = new THREE.Points(this.starGeometry, this.starMaterial)
-    this.group.add(this.stars)
+    this.starsGroup.add(this.stars)
 
     this.applyColorScheme(0, false)
   }
@@ -274,13 +280,13 @@ export class Galaxy {
       const i3 = i * 3
       const theta = Math.random() * Math.PI * 2
       const phi = Math.acos(2 * Math.random() - 1)
-      const r = 700 + Math.random() * 500
+      const r = 600 + Math.random() * 600
 
       positions[i3] = r * Math.sin(phi) * Math.cos(theta)
       positions[i3 + 1] = r * Math.sin(phi) * Math.sin(theta)
       positions[i3 + 2] = r * Math.cos(phi)
 
-      sizes[i] = 0.8 + Math.random() * 2.2
+      sizes[i] = 1.5 + Math.random() * 3.0
       phases[i] = Math.random() * Math.PI * 2
     }
 
@@ -374,7 +380,7 @@ export class Galaxy {
     const dt = deltaTime ?? this.clock.getDelta()
     const elapsed = this.clock.getElapsedTime()
 
-    this.group.rotation.y += this.rotationSpeed * dt
+    this.galaxyGroup.rotation.y += this.rotationSpeed * dt
 
     this.material.uniforms.uTime.value = elapsed
     this.starMaterial.uniforms.uTime.value = elapsed
