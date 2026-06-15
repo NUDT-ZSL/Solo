@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D 天文馆 - 星座识别</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000015;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(180deg, #000022 0%, #000011 100%);
+    }
+    #star-tooltip {
+      position: fixed;
+      background: #f0f0f0;
+      color: #1a1a2e;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 1000;
+      white-space: nowrap;
+    }
+    #star-tooltip.visible {
+      opacity: 1;
+    }
+    #control-panel {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      width: 260px;
+      background: rgba(20, 20, 40, 0.85);
+      border: 1px solid rgba(100, 100, 200, 0.3);
+      border-radius: 12px;
+      padding: 16px;
+      color: #e0e0ff;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+    }
+    #control-panel h3 {
+      font-size: 15px;
+      margin-bottom: 12px;
+      color: #aacdff;
+      letter-spacing: 0.5px;
+    }
+    .control-group {
+      margin-bottom: 14px;
+    }
+    .control-group label {
+      display: block;
+      font-size: 12px;
+      margin-bottom: 6px;
+      color: #8888aa;
+    }
+    .control-group select,
+    .control-group input[type="datetime-local"] {
+      width: 100%;
+      padding: 8px 10px;
+      background: rgba(40, 40, 70, 0.8);
+      border: 1px solid rgba(100, 100, 200, 0.4);
+      border-radius: 6px;
+      color: #e0e0ff;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .control-group select:focus,
+    .control-group input[type="datetime-local"]:focus {
+      border-color: #44d6ff;
+    }
+    .btn-group {
+      display: flex;
+      gap: 8px;
+    }
+    .btn {
+      flex: 1;
+      padding: 10px 12px;
+      background: #3a3a6a;
+      border: none;
+      border-radius: 6px;
+      color: #e0e0ff;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.2s;
+    }
+    .btn:hover {
+      background: #4a4a8a;
+    }
+    .btn:active {
+      background: #5a5a9a;
+      transform: scale(0.96);
+    }
+    .btn.active {
+      background: #44d6ff;
+      color: #1a1a2e;
+    }
+    #date-time-display {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      font-size: 14px;
+      color: #aaa;
+      background: rgba(20, 20, 40, 0.6);
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      z-index: 100;
+      transition: color 0.2s, background 0.2s;
+    }
+    #date-time-display:hover {
+      color: #44d6ff;
+      background: rgba(30, 30, 60, 0.8);
+    }
+    #date-time-input {
+      position: fixed;
+      bottom: 50px;
+      right: 20px;
+      display: none;
+      z-index: 101;
+    }
+    #date-time-input.visible {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  <div id="star-tooltip"></div>
+  
+  <div id="control-panel">
+    <h3>✦ 天文馆控制台</h3>
+    <div class="control-group">
+      <label for="constellation-select">选择星座</label>
+      <select id="constellation-select">
+        <option value="all">显示全部星座</option>
+        <option value="none">隐藏全部星座</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <label>视角控制</label>
+      <div class="btn-group">
+        <button id="auto-rotate-btn" class="btn">自动旋转</button>
+        <button id="reset-view-btn" class="btn">重置视角</button>
+      </div>
+    </div>
+  </div>
+  
+  <div id="date-time-display"></div>
+  <input type="datetime-local" id="date-time-input">
+  
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
