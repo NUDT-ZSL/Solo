@@ -1,0 +1,15 @@
+{
+  "name": "3d-brick-puzzle",
+  "version": "1.0.0",
+  "description": "三维立体积木拼图沙盘",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10",
+    "@types/node": "^20.10.5"
+  }
+}

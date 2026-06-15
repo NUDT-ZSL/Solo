@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>三维立体积木拼图沙盘</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      position: relative;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    #brick-library {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      width: 220px;
+      max-height: calc(100vh - 40px);
+      background: #2c3e50;
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      z-index: 10;
+    }
+
+    .library-header {
+      height: 50px;
+      background: #1a252f;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ecf0f1;
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      flex-shrink: 0;
+    }
+
+    .brick-list {
+      overflow-y: auto;
+      flex: 1;
+      padding-right: 4px;
+    }
+
+    .brick-list::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .brick-list::-webkit-scrollbar-track {
+      background: #34495e;
+      border-radius: 3px;
+    }
+
+    .brick-list::-webkit-scrollbar-thumb {
+      background: #7f8c8d;
+      border-radius: 3px;
+    }
+
+    .brick-item {
+      background: #34495e;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: 2px solid transparent;
+    }
+
+    .brick-item:hover {
+      background: #3d566e;
+      transform: translateY(-2px);
+    }
+
+    .brick-item.selected {
+      border-color: #3498db;
+      background: #3d566e;
+    }
+
+    .brick-thumbnail {
+      width: 100%;
+      height: 120px;
+      border-radius: 6px;
+      background: #1a252f;
+      margin-bottom: 8px;
+    }
+
+    .brick-name {
+      color: #ecf0f1;
+      font-size: 13px;
+      text-align: center;
+      font-weight: 500;
+    }
+
+    #toolbar {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 12px;
+      z-index: 10;
+    }
+
+    .toolbar-btn {
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: none;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-undo {
+      background: #34495e;
+    }
+
+    .btn-undo:hover {
+      background: #2c3e50;
+    }
+
+    .btn-undo:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-clear {
+      background: #e74c3c;
+    }
+
+    .btn-clear:hover {
+      background: #c0392b;
+    }
+
+    #warning-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 40px;
+      background: rgba(44, 62, 80, 0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 14px;
+      z-index: 10;
+    }
+
+    #warning-bar.visible {
+      display: flex;
+    }
+
+    #modal-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    #modal-overlay.visible {
+      display: flex;
+    }
+
+    .modal-content {
+      width: 300px;
+      background: #ecf0f1;
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .modal-title {
+      color: #2c3e50;
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .modal-message {
+      color: #7f8c8d;
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+
+    .modal-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+
+    .modal-btn {
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .modal-btn-cancel {
+      background: #95a5a6;
+      color: #fff;
+    }
+
+    .modal-btn-cancel:hover {
+      background: #7f8c8d;
+    }
+
+    .modal-btn-confirm {
+      background: #e74c3c;
+      color: #fff;
+    }
+
+    .modal-btn-confirm:hover {
+      background: #c0392b;
+    }
+
+    #hint {
+      position: absolute;
+      bottom: 50px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(44, 62, 80, 0.8);
+      color: #ecf0f1;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 12px;
+      z-index: 5;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-container"></div>
+
+    <div id="brick-library">
+      <div class="library-header">积木库</div>
+      <div class="brick-list" id="brick-list"></div>
+    </div>
+
+    <div id="toolbar">
+      <button class="toolbar-btn btn-undo" id="btn-undo" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+        撤销 (Z)
+      </button>
+      <button class="toolbar-btn btn-clear" id="btn-clear">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        清空
+      </button>
+    </div>
+
+    <div id="warning-bar">积木数量接近上限，请注意控制积木数量</div>
+
+    <div id="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-title">确认清空</div>
+        <div class="modal-message">确定要清空所有积木吗？此操作无法撤销。</div>
+        <div class="modal-buttons">
+          <button class="modal-btn modal-btn-cancel" id="modal-cancel">取消</button>
+          <button class="modal-btn modal-btn-confirm" id="modal-confirm">确认清空</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="hint">左键拖拽旋转视角 | 滚轮缩放 | 右键拖拽平移</div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
