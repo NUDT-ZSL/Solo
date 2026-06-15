@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="TrailView 3D Demo">
+  <metadata>
+    <name>示例徒步轨迹</name>
+    <desc>用于测试的示例GPX轨迹文件</desc>
+    <time>2024-01-15T08:00:00Z</time>
+  </metadata>
+  <trk>
+    <name>山间徒步路线</name>
+    <trkseg>
+      <trkpt lat="39.904200" lon="116.407400">
+        <ele>50</ele>
+        <time>2024-01-15T08:00:00Z</time>
+      </trkpt>
+      <trkpt lat="39.905000" lon="116.408200">
+        <ele>65</ele>
+        <time>2024-01-15T08:02:00Z</time>
+      </trkpt>
+      <trkpt lat="39.906000" lon="116.409000">
+        <ele>85</ele>
+        <time>2024-01-15T08:04:00Z</time>
+      </trkpt>
+      <trkpt lat="39.907200" lon="116.409800">
+        <ele>120</ele>
+        <time>2024-01-15T08:06:00Z</time>
+      </trkpt>
+      <trkpt lat="39.908500" lon="116.410500">
+        <ele>150</ele>
+        <time>2024-01-15T08:08:00Z</time>
+      </trkpt>
+      <trkpt lat="39.909800" lon="116.411200">
+        <ele>175</ele>
+        <time>2024-01-15T08:10:00Z</time>
+      </trkpt>
+      <trkpt lat="39.911000" lon="116.412000">
+        <ele>200</ele>
+        <time>2024-01-15T08:12:00Z</time>
+      </trkpt>
+      <trkpt lat="39.912500" lon="116.412800">
+        <ele>230</ele>
+        <time>2024-01-15T08:14:00Z</time>
+      </trkpt>
+      <trkpt lat="39.914000" lon="116.413500">
+        <ele>260</ele>
+        <time>2024-01-15T08:16:00Z</time>
+      </trkpt>
+      <trkpt lat="39.915500" lon="116.414000">
+        <ele>290</ele>
+        <time>2024-01-15T08:18:00Z</time>
+      </trkpt>
+      <trkpt lat="39.917000" lon="116.414500">
+        <ele>320</ele>
+        <time>2024-01-15T08:20:00Z</time>
+      </trkpt>
+      <trkpt lat="39.918500" lon="116.415000">
+        <ele>345</ele>
+        <time>2024-01-15T08:22:00Z</time>
+      </trkpt>
+      <trkpt lat="39.920000" lon="116.415500">
+        <ele>370</ele>
+        <time>2024-01-15T08:24:00Z</time>
+      </trkpt>
+      <trkpt lat="39.921500" lon="116.416000">
+        <ele>395</ele>
+        <time>2024-01-15T08:26:00Z</time>
+      </trkpt>
+      <trkpt lat="39.923000" lon="116.416500">
+        <ele>420</ele>
+        <time>2024-01-15T08:28:00Z</time>
+      </trkpt>
+      <trkpt lat="39.924500" lon="116.417000">
+        <ele>440</ele>
+        <time>2024-01-15T08:30:00Z</time>
+      </trkpt>
+      <trkpt lat="39.926000" lon="116.417500">
+        <ele>460</ele>
+        <time>2024-01-15T08:32:00Z</time>
+      </trkpt>
+      <trkpt lat="39.927500" lon="116.418000">
+        <ele>480</ele>
+        <time>2024-01-15T08:34:00Z</time>
+      </trkpt>
+      <trkpt lat="39.929000" lon="116.418500">
+        <ele>500</ele>
+        <time>2024-01-15T08:36:00Z</time>
+      </trkpt>
+      <trkpt lat="39.930500" lon="116.419000">
+        <ele>510</ele>
+        <time>2024-01-15T08:38:00Z</time>
+      </trkpt>
+      <trkpt lat="39.932000" lon="116.419500">
+        <ele>520</ele>
+        <time>2024-01-15T08:40:00Z</time>
+      </trkpt>
+      <trkpt lat="39.933500" lon="116.420000">
+        <ele>515</ele>
+        <time>2024-01-15T08:42:00Z</time>
+      </trkpt>
+      <trkpt lat="39.935000" lon="116.420500">
+        <ele>500</ele>
+        <time>2024-01-15T08:44:00Z</time>
+      </trkpt>
+      <trkpt lat="39.936500" lon="116.421000">
+        <ele>480</ele>
+        <time>2024-01-15T08:46:00Z</time>
+      </trkpt>
+      <trkpt lat="39.938000" lon="116.421500">
+        <ele>460</ele>
+        <time>2024-01-15T08:48:00Z</time>
+      </trkpt>
+      <trkpt lat="39.939500" lon="116.422000">
+        <ele>440</ele>
+        <time>2024-01-15T08:50:00Z</time>
+      </trkpt>
+      <trkpt lat="39.941000" lon="116.422500">
+        <ele>420</ele>
+        <time>2024-01-15T08:52:00Z</time>
+      </trkpt>
+      <trkpt lat="39.942500" lon="116.423000">
+        <ele>400</ele>
+        <time>2024-01-15T08:54:00Z</time>
+      </trkpt>
+      <trkpt lat="39.944000" lon="116.423500">
+        <ele>380</ele>
+        <time>2024-01-15T08:56:00Z</time>
+      </trkpt>
+      <trkpt lat="39.945500" lon="116.424000">
+        <ele>360</ele>
+        <time>2024-01-15T08:58:00Z</time>
+      </trkpt>
+    </trkseg>
+  </trk>
+</gpx>
