@@ -1,0 +1,62 @@
+{
+  "archConfigs": [
+    {
+      "id": "semicircular-default",
+      "name": "默认半圆拱",
+      "type": "semicircular",
+      "span": 400,
+      "compressiveStrength": 50,
+      "elasticModulus": 30
+    },
+    {
+      "id": "pointed-default",
+      "name": "默认尖拱",
+      "type": "pointed",
+      "span": 400,
+      "compressiveStrength": 50,
+      "elasticModulus": 30
+    },
+    {
+      "id": "horseshoe-default",
+      "name": "默认马蹄拱",
+      "type": "horseshoe",
+      "span": 400,
+      "compressiveStrength": 50,
+      "elasticModulus": 30
+    }
+  ],
+  "testRecords": [],
+  "achievements": [],
+  "quizQuestions": [
+    {
+      "id": 1,
+      "question": "在相同跨度下，半圆拱的承载能力高于尖拱",
+      "answer": false,
+      "explanation": "尖拱由于拱顶更尖锐，推力角更大，水平推力更小，实际承载能力通常优于半圆拱。"
+    },
+    {
+      "id": 2,
+      "question": "马蹄拱的水平推力比半圆拱更大",
+      "answer": true,
+      "explanation": "马蹄拱的拱脚外扩，矢高更大，导致水平推力增加。"
+    },
+    {
+      "id": 3,
+      "question": "材料抗压强度越高，拱的极限承载力越大",
+      "answer": true,
+      "explanation": "抗压强度直接决定了砌块能承受的最大压应力，强度越高承载力越大。"
+    },
+    {
+      "id": 4,
+      "question": "弹性模量越高，拱顶下沉位移越大",
+      "answer": false,
+      "explanation": "弹性模量越高表示材料越刚硬，在相同荷载下变形越小，拱顶下沉位移越小。"
+    },
+    {
+      "id": 5,
+      "question": "拱结构的破坏通常始于拱顶区域",
+      "answer": false,
+      "explanation": "拱结构的破坏通常始于拱脚或1/4跨度处，这些位置的弯矩和剪力组合最不利。"
+    }
+  ]
+}
