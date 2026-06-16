@@ -6,9 +6,11 @@ export class ControlPanel {
   private container: HTMLDivElement;
   private panel: HTMLDivElement;
   private gearBtn: HTMLDivElement | null = null;
+  private maskEl: HTMLDivElement | null = null;
   private onParamsChange: OnParamsChange;
   private currentParams: ParticleParams;
   private isOpen = true;
+  private isMobile = false;
   private sliderValues: Map<string, HTMLSpanElement> = new Map();
   private hueStartInput: HTMLInputElement | null = null;
   private hueEndInput: HTMLInputElement | null = null;
@@ -24,6 +26,7 @@ export class ControlPanel {
     this.panel = document.createElement('div');
     this.panel.className = 'panel';
 
+    this.createMask();
     this.createGearButton();
     this.createSliders();
     this.createColorPickers();
@@ -36,12 +39,47 @@ export class ControlPanel {
     window.addEventListener('resize', () => this.handleResize());
   }
 
+  private createMask(): void {
+    this.maskEl = document.createElement('div');
+    this.maskEl.className = 'panel-mask';
+    this.maskEl.addEventListener('click', () => {
+      if (this.isMobile && this.isOpen) {
+        this.closePanel();
+      }
+    });
+    this.container.appendChild(this.maskEl);
+  }
+
   private createGearButton(): void {
     this.gearBtn = document.createElement('div');
     this.gearBtn.className = 'gear-btn';
     this.gearBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E0E0E0" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
-    this.gearBtn.addEventListener('click', () => this.togglePanel());
+    this.gearBtn.addEventListener('click', () => {
+      if (this.isOpen) {
+        this.closePanel();
+      } else {
+        this.openPanel();
+      }
+    });
     this.container.appendChild(this.gearBtn);
+  }
+
+  private openPanel(): void {
+    this.isOpen = true;
+    this.panel.classList.add('panel-open');
+    this.panel.classList.remove('panel-closed');
+    if (this.isMobile && this.maskEl) {
+      this.maskEl.classList.add('mask-visible');
+    }
+  }
+
+  private closePanel(): void {
+    this.isOpen = false;
+    this.panel.classList.remove('panel-open');
+    this.panel.classList.add('panel-closed');
+    if (this.maskEl) {
+      this.maskEl.classList.remove('mask-visible');
+    }
   }
 
   private createSliders(): void {
@@ -201,32 +239,34 @@ export class ControlPanel {
     if (this.hueEndInput) this.hueEndInput.value = String(this.currentParams.colorEndHue);
   }
 
-  private togglePanel(): void {
-    this.isOpen = !this.isOpen;
-    if (this.isOpen) {
-      this.panel.classList.add('panel-open');
-      this.panel.classList.remove('panel-closed');
-    } else {
-      this.panel.classList.remove('panel-open');
-      this.panel.classList.add('panel-closed');
-    }
-  }
-
   private handleResize(): void {
-    const isMobile = window.innerWidth < 768;
-    if (isMobile) {
+    const wasMobile = this.isMobile;
+    this.isMobile = window.innerWidth < 768;
+
+    if (this.isMobile) {
       this.panel.classList.add('panel-mobile');
-      if (!this.gearBtn!.classList.contains('gear-visible')) {
-        this.gearBtn!.classList.add('gear-visible');
+      if (this.gearBtn) {
+        this.gearBtn.classList.add('gear-visible');
+      }
+      if (!wasMobile) {
         this.isOpen = false;
         this.panel.classList.add('panel-closed');
+        this.panel.classList.remove('panel-open');
+        if (this.maskEl) {
+          this.maskEl.classList.remove('mask-visible');
+        }
       }
     } else {
       this.panel.classList.remove('panel-mobile');
-      this.gearBtn!.classList.remove('gear-visible');
+      if (this.gearBtn) {
+        this.gearBtn.classList.remove('gear-visible');
+      }
       this.isOpen = true;
       this.panel.classList.add('panel-open');
       this.panel.classList.remove('panel-closed');
+      if (this.maskEl) {
+        this.maskEl.classList.remove('mask-visible');
+      }
     }
   }
 
@@ -239,6 +279,23 @@ export class ControlPanel {
         right: 0;
         z-index: 100;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+
+      .panel-mask {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0);
+        pointer-events: none;
+        transition: background 0.35s ease;
+        z-index: 99;
+      }
+
+      .panel-mask.mask-visible {
+        background: rgba(0, 0, 0, 0.55);
+        pointer-events: auto;
       }
 
       .panel {
@@ -256,6 +313,8 @@ export class ControlPanel {
         transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease;
         transform: translateX(0);
         opacity: 1;
+        position: relative;
+        z-index: 101;
       }
 
       .panel.panel-closed {
@@ -274,12 +333,14 @@ export class ControlPanel {
         position: fixed;
         top: 0;
         right: 0;
-        width: 100vw;
+        width: 85vw;
+        max-width: 360px;
         height: 100vh;
         max-height: 100vh;
         border-radius: 0;
-        border-left: none;
+        border-left: 1px solid rgba(255, 255, 255, 0.1);
         padding: 60px 20px 20px 20px;
+        box-sizing: border-box;
       }
 
       .gear-btn {
@@ -296,7 +357,7 @@ export class ControlPanel {
         cursor: pointer;
         align-items: center;
         justify-content: center;
-        z-index: 101;
+        z-index: 102;
         transition: transform 0.3s ease;
       }
 
@@ -403,16 +464,7 @@ export class ControlPanel {
         cursor: pointer;
       }
 
-      .hue-input.hue-start {
-        background: linear-gradient(to right,
-          hsl(0,80%,55%), hsl(0.08,80%,55%), hsl(0.17,80%,55%),
-          hsl(0.25,80%,55%), hsl(0.33,80%,55%), hsl(0.42,80%,55%),
-          hsl(0.5,80%,55%), hsl(0.58,80%,55%), hsl(0.67,80%,55%),
-          hsl(0.75,80%,55%), hsl(0.83,80%,55%), hsl(0.92,80%,55%),
-          hsl(1,80%,55%)
-        );
-      }
-
+      .hue-input.hue-start,
       .hue-input.hue-end {
         background: linear-gradient(to right,
           hsl(0,80%,55%), hsl(0.08,80%,55%), hsl(0.17,80%,55%),

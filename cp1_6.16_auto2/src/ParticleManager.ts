@@ -79,23 +79,35 @@ export class ParticleManager {
   private worker: Worker;
   private currentParams: ParticleParams;
   private targetParams: ParticleParams;
+
   private transitionProgress = 1;
   private transitionDuration = 0.5;
+  private prevParams: ParticleParams;
+
   private colorTransitionProgress = 1;
   private colorTransitionDuration = 1;
   private prevColorStartHue = 0;
   private prevColorEndHue = 0.47;
   private targetColorStartHue = 0;
   private targetColorEndHue = 0.47;
+  private isPresetTransition = false;
+
   private pendingPositions: Float32Array | null = null;
   private pendingBrightness: Float32Array | null = null;
   private pendingCount = 0;
   private clock: THREE.Clock;
 
+  private colorUpdateDirty = true;
+
   constructor(scene: THREE.Scene) {
     this.scene = scene;
     this.currentParams = { ...DEFAULT_PARAMS };
     this.targetParams = { ...DEFAULT_PARAMS };
+    this.prevParams = { ...DEFAULT_PARAMS };
+    this.prevColorStartHue = DEFAULT_PARAMS.colorStartHue;
+    this.prevColorEndHue = DEFAULT_PARAMS.colorEndHue;
+    this.targetColorStartHue = DEFAULT_PARAMS.colorStartHue;
+    this.targetColorEndHue = DEFAULT_PARAMS.colorEndHue;
     this.clock = new THREE.Clock();
 
     this.worker = new ParticleWorker();
@@ -124,7 +136,7 @@ export class ParticleManager {
     const geometry = new THREE.BufferGeometry();
     const positions = new Float32Array(starCount * 3);
     const colors = new Float32Array(starCount * 3);
-    const sizes = new Float32Array(starCount);
+    const _sizes = new Float32Array(starCount);
 
     for (let i = 0; i < starCount; i++) {
       const i3 = i * 3;
@@ -139,13 +151,10 @@ export class ParticleManager {
       colors[i3] = 1;
       colors[i3 + 1] = 1;
       colors[i3 + 2] = 1;
-
-      sizes[i] = 0.3 + Math.random() * 0.5;
     }
 
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
     const material = new THREE.PointsMaterial({
       size: 0.4,
@@ -171,9 +180,8 @@ export class ParticleManager {
     const geometry = new THREE.BufferGeometry();
     const positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
-    const sizes = new Float32Array(count);
 
-    this.applyColors(colors, sizes, count);
+    this.computeFullColors(colors, count);
 
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
@@ -190,19 +198,49 @@ export class ParticleManager {
 
     this.particleSystem = new THREE.Points(geometry, material);
     this.scene.add(this.particleSystem);
+    this.colorUpdateDirty = true;
   }
 
-  private applyColors(colors: Float32Array, _sizes: Float32Array, count: number): void {
-    let startHue: number, endHue: number;
+  private easeInOutCubic(t: number): number {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }
 
-    if (this.colorTransitionProgress < 1) {
-      const t = this.easeInOutCubic(this.colorTransitionProgress);
-      startHue = this.prevColorStartHue + (this.targetColorStartHue - this.prevColorStartHue) * t;
-      endHue = this.prevColorEndHue + (this.targetColorEndHue - this.prevColorEndHue) * t;
-    } else {
-      startHue = this.currentParams.colorStartHue;
-      endHue = this.currentParams.colorEndHue;
+  private getInterpolatedParams(): {
+    count: number;
+    speed: number;
+    radius: number;
+  } {
+    if (this.transitionProgress >= 1) {
+      return {
+        count: this.targetParams.count,
+        speed: this.targetParams.speed,
+        radius: this.targetParams.radius,
+      };
     }
+    const t = this.easeInOutCubic(this.transitionProgress);
+    return {
+      count: this.targetParams.count,
+      speed: this.prevParams.speed + (this.targetParams.speed - this.prevParams.speed) * t,
+      radius: this.prevParams.radius + (this.targetParams.radius - this.prevParams.radius) * t,
+    };
+  }
+
+  private getInterpolatedColors(): { startHue: number; endHue: number } {
+    if (this.colorTransitionProgress >= 1) {
+      return {
+        startHue: this.targetColorStartHue,
+        endHue: this.targetColorEndHue,
+      };
+    }
+    const t = this.easeInOutCubic(this.colorTransitionProgress);
+    return {
+      startHue: this.prevColorStartHue + (this.targetColorStartHue - this.prevColorStartHue) * t,
+      endHue: this.prevColorEndHue + (this.targetColorEndHue - this.prevColorEndHue) * t,
+    };
+  }
+
+  private computeFullColors(colors: Float32Array, count: number): void {
+    const { startHue, endHue } = this.getInterpolatedColors();
 
     for (let i = 0; i < count; i++) {
       const i3 = i * 3;
@@ -215,20 +253,24 @@ export class ParticleManager {
     }
   }
 
-  private easeInOutCubic(t: number): number {
-    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-  }
-
   updateParams(params: ParticleParams, isPreset = false): void {
+    this.prevParams = { ...this.currentParams };
+
     if (isPreset) {
-      this.prevColorStartHue = this.currentParams.colorStartHue;
-      this.prevColorEndHue = this.currentParams.colorEndHue;
+      this.prevColorStartHue = this.targetColorStartHue;
+      this.prevColorEndHue = this.targetColorEndHue;
       this.targetColorStartHue = params.colorStartHue;
       this.targetColorEndHue = params.colorEndHue;
       this.colorTransitionProgress = 0;
       this.colorTransitionDuration = 1;
+      this.isPresetTransition = true;
     } else {
       this.colorTransitionProgress = 1;
+      this.targetColorStartHue = params.colorStartHue;
+      this.targetColorEndHue = params.colorEndHue;
+      this.prevColorStartHue = params.colorStartHue;
+      this.prevColorEndHue = params.colorEndHue;
+      this.isPresetTransition = false;
     }
 
     this.targetParams = { ...params };
@@ -236,6 +278,7 @@ export class ParticleManager {
     this.transitionDuration = 0.5;
 
     this.worker.postMessage({ type: 'updateParams', params });
+    this.colorUpdateDirty = true;
   }
 
   update(): void {
@@ -244,26 +287,30 @@ export class ParticleManager {
 
     if (this.transitionProgress < 1) {
       this.transitionProgress = Math.min(1, this.transitionProgress + dt / this.transitionDuration);
-      const t = this.easeInOutCubic(this.transitionProgress);
-      this.currentParams.count = this.targetParams.count;
-      this.currentParams.speed = this.currentParams.speed + (this.targetParams.speed - this.currentParams.speed) * t;
-      this.currentParams.radius = this.currentParams.radius + (this.targetParams.radius - this.currentParams.radius) * t;
-
       if (this.transitionProgress >= 1) {
-        this.currentParams.speed = this.targetParams.speed;
-        this.currentParams.radius = this.targetParams.radius;
+        this.currentParams = { ...this.targetParams };
       }
+      this.colorUpdateDirty = true;
+    } else {
+      this.currentParams = { ...this.targetParams };
     }
 
+    const interp = this.getInterpolatedParams();
+    this.currentParams.speed = interp.speed;
+    this.currentParams.radius = interp.radius;
+    this.currentParams.count = interp.count;
+
+    let colorNeedsUpdate = false;
     if (this.colorTransitionProgress < 1) {
       this.colorTransitionProgress = Math.min(1, this.colorTransitionProgress + dt / this.colorTransitionDuration);
       if (this.colorTransitionProgress >= 1) {
         this.currentParams.colorStartHue = this.targetColorStartHue;
         this.currentParams.colorEndHue = this.targetColorEndHue;
       }
+      colorNeedsUpdate = true;
     } else {
-      this.currentParams.colorStartHue = this.targetParams.colorStartHue;
-      this.currentParams.colorEndHue = this.targetParams.colorEndHue;
+      this.currentParams.colorStartHue = this.targetColorStartHue;
+      this.currentParams.colorEndHue = this.targetColorEndHue;
     }
 
     this.worker.postMessage({ type: 'update', time, dt });
@@ -283,22 +330,32 @@ export class ParticleManager {
           positions[i3] = this.pendingPositions[i3];
           positions[i3 + 1] = this.pendingPositions[i3 + 1];
           positions[i3 + 2] = this.pendingPositions[i3 + 2];
+        }
 
-          if (this.pendingBrightness && this.pendingBrightness[i] > 0) {
+        if (colorNeedsUpdate || this.colorUpdateDirty) {
+          this.computeFullColors(colors, this.pendingCount);
+        }
+
+        if (this.pendingBrightness) {
+          const { startHue, endHue } = this.getInterpolatedColors();
+          for (let i = 0; i < this.pendingCount; i++) {
             const brightness = this.pendingBrightness[i];
-            const t = i / this.pendingCount;
-            let startHue = this.currentParams.colorStartHue;
-            let endHue = this.currentParams.colorEndHue;
-            const hue = startHue + (endHue - startHue) * t;
-            const [r, g, b] = hslToRgb(hue, 0.8, 0.55 + brightness * 0.45);
-            colors[i3] = Math.min(1, r + brightness * 0.5);
-            colors[i3 + 1] = Math.min(1, g + brightness * 0.5);
-            colors[i3 + 2] = Math.min(1, b + brightness * 0.5);
+            if (brightness > 0.001) {
+              const i3 = i * 3;
+              const t = i / this.pendingCount;
+              const hue = startHue + (endHue - startHue) * t;
+              const baseL = 0.55 + brightness * 0.4;
+              const [r, g, b] = hslToRgb(hue, 0.8, baseL);
+              colors[i3] = Math.min(1, r + brightness * 0.5);
+              colors[i3 + 1] = Math.min(1, g + brightness * 0.5);
+              colors[i3 + 2] = Math.min(1, b + brightness * 0.5);
+            }
           }
         }
 
         posAttr.needsUpdate = true;
         colAttr.needsUpdate = true;
+        this.colorUpdateDirty = false;
       }
 
       this.pendingPositions = null;

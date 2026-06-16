@@ -26,11 +26,14 @@ let params: WorkerParams = {
   colorEndHue: 0.5,
 };
 
-const CYCLE_DURATION = 8;
+const BASE_CYCLE_DURATION = 8;
 const COLLISION_BRIGHTNESS_DURATION = 0.2;
 const COLLISION_RADIUS = 0.15;
 const COLLISION_PUSH = 0.02;
 const DAMPING = 0.98;
+
+let scaledTime = 0;
+let collisionAccumulator = 0;
 
 function initParticles(count: number, radius: number): void {
   const positions = new Float32Array(count * 3);
@@ -65,10 +68,16 @@ function initParticles(count: number, radius: number): void {
   }
 
   data = { positions, prevPositions, velocities, basePositions, collisionBrightness, count };
+  scaledTime = 0;
+  collisionAccumulator = 0;
+}
+
+function hashCell(cx: number, cy: number, cz: number): number {
+  return (cx * 73856093) ^ (cy * 19349663) ^ (cz * 83492791);
 }
 
 function buildSpatialGrid(positions: Float32Array, count: number): Map<number, number[]> {
-  const cellSize = COLLISION_RADIUS * 4;
+  const cellSize = COLLISION_RADIUS * 2;
   const grid = new Map<number, number[]>();
 
   for (let i = 0; i < count; i++) {
@@ -77,7 +86,7 @@ function buildSpatialGrid(positions: Float32Array, count: number): Map<number, n
     const cy = Math.floor(positions[i3 + 1] / cellSize);
     const cz = Math.floor(positions[i3 + 2] / cellSize);
 
-    const key = (cx * 73856093) ^ (cy * 19349663) ^ (cz * 83492791);
+    const key = hashCell(cx, cy, cz);
     let cell = grid.get(key);
     if (!cell) {
       cell = [];
@@ -89,89 +98,111 @@ function buildSpatialGrid(positions: Float32Array, count: number): Map<number, n
   return grid;
 }
 
+function getCellParticles(grid: Map<number, number[]>, cx: number, cy: number, cz: number): number[] | undefined {
+  const key = hashCell(cx, cy, cz);
+  return grid.get(key);
+}
+
+function checkPairs(listA: number[], listB: number[] | undefined, positions: Float32Array, velocities: Float32Array, collisionBrightness: Float32Array): void {
+  if (!listB) return;
+  const collRadiusSq = COLLISION_RADIUS * COLLISION_RADIUS;
+
+  for (let ai = 0; ai < listA.length; ai++) {
+    const i = listA[ai];
+    const i3 = i * 3;
+    for (let bj = 0; bj < listB.length; bj++) {
+      const j = listB[bj];
+      if (i >= j) continue;
+      const j3 = j * 3;
+      const dx = positions[j3] - positions[i3];
+      const dy = positions[j3 + 1] - positions[i3 + 1];
+      const dz = positions[j3 + 2] - positions[i3 + 2];
+      const distSq = dx * dx + dy * dy + dz * dz;
+
+      if (distSq < collRadiusSq && distSq > 0.0001) {
+        const dist = Math.sqrt(distSq);
+        const nx = dx / dist;
+        const ny = dy / dist;
+        const nz = dz / dist;
+
+        const overlap = COLLISION_RADIUS - dist;
+        const pushX = nx * (overlap * 0.5 + COLLISION_PUSH);
+        const pushY = ny * (overlap * 0.5 + COLLISION_PUSH);
+        const pushZ = nz * (overlap * 0.5 + COLLISION_PUSH);
+
+        velocities[i3] -= pushX;
+        velocities[i3 + 1] -= pushY;
+        velocities[i3 + 2] -= pushZ;
+        velocities[j3] += pushX;
+        velocities[j3 + 1] += pushY;
+        velocities[j3 + 2] += pushZ;
+
+        collisionBrightness[i] = 1.0;
+        collisionBrightness[j] = 1.0;
+      }
+    }
+  }
+}
+
 function handleCollisions(): void {
   if (!data) return;
   const { positions, velocities, collisionBrightness, count } = data;
 
+  const cellSize = COLLISION_RADIUS * 2;
   const grid = buildSpatialGrid(positions, count);
-  const cellSize = COLLISION_RADIUS * 4;
 
-  const checked = new Set<number>();
+  grid.forEach((cell, _key) => {
+    checkPairs(cell, cell, positions, velocities, collisionBrightness);
 
-  grid.forEach((cell, key) => {
-    const neighbors: number[] = [];
-    for (const [nKey] of grid) {
-      if (nKey === key) continue;
-      const cell2 = grid.get(nKey);
-      if (cell2 && cell2.length > 0) {
-        neighbors.push(...cell2);
-      }
-    }
+    const sampleIdx = cell[0];
+    const si3 = sampleIdx * 3;
+    const bcx = Math.floor(positions[si3] / cellSize);
+    const bcy = Math.floor(positions[si3 + 1] / cellSize);
+    const bcz = Math.floor(positions[si3 + 2] / cellSize);
 
-    for (let ci = 0; ci < cell.length; ci++) {
-      const i = cell[ci];
-      const i3 = i * 3;
-
-      for (let cj = ci + 1; cj < cell.length; cj++) {
-        const j = cell[cj];
-        const pairKey = i * count + j;
-        if (checked.has(pairKey)) continue;
-        checked.add(pairKey);
-
-        const j3 = j * 3;
-        const dx = positions[j3] - positions[i3];
-        const dy = positions[j3 + 1] - positions[i3 + 1];
-        const dz = positions[j3 + 2] - positions[i3 + 2];
-        const distSq = dx * dx + dy * dy + dz * dz;
-
-        if (distSq < COLLISION_RADIUS * COLLISION_RADIUS && distSq > 0.0001) {
-          const dist = Math.sqrt(distSq);
-          const nx = dx / dist;
-          const ny = dy / dist;
-          const nz = dz / dist;
-
-          const pushX = nx * COLLISION_PUSH;
-          const pushY = ny * COLLISION_PUSH;
-          const pushZ = nz * COLLISION_PUSH;
-
-          velocities[i3] -= pushX;
-          velocities[i3 + 1] -= pushY;
-          velocities[i3 + 2] -= pushZ;
-          velocities[j3] += pushX;
-          velocities[j3 + 1] += pushY;
-          velocities[j3 + 2] += pushZ;
-
-          collisionBrightness[i] = 1.0;
-          collisionBrightness[j] = 1.0;
+    for (let dx = 0; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          if (dx === 0 && dy === 0 && dz === 0) continue;
+          if (dx === 0 && dy < 0) continue;
+          if (dx === 0 && dy === 0 && dz < 0) continue;
+          const other = getCellParticles(grid, bcx + dx, bcy + dy, bcz + dz);
+          if (other) {
+            checkPairs(cell, other, positions, velocities, collisionBrightness);
+          }
         }
       }
     }
   });
 }
 
-function updateParticles(time: number, dt: number): void {
+function updateParticles(_time: number, dt: number): void {
   if (!data) return;
 
   const { positions, prevPositions, velocities, basePositions, collisionBrightness, count } = data;
   const { speed, radius } = params;
 
-  const cycleTime = (time % CYCLE_DURATION) / CYCLE_DURATION;
+  scaledTime += dt * speed;
+
+  const cycleDuration = BASE_CYCLE_DURATION / speed;
+  const cycleTime = (scaledTime % cycleDuration) / cycleDuration;
   const expandFactor = Math.sin(cycleTime * Math.PI * 2) * 0.5 + 0.5;
   const targetScale = 0.3 + expandFactor * 0.7;
 
-  const maxCollisionChecks = Math.min(count, 2000);
-  const step = Math.max(1, Math.floor(count / maxCollisionChecks));
-
-  if (time % 0.1 < dt) {
+  collisionAccumulator += dt;
+  if (collisionAccumulator >= 0.05) {
+    collisionAccumulator = 0;
     handleCollisions();
   }
+
+  const radiusRatio = radius / 5;
 
   for (let i = 0; i < count; i++) {
     const i3 = i * 3;
 
-    const targetX = basePositions[i3] * targetScale * (radius / 5);
-    const targetY = basePositions[i3 + 1] * targetScale * (radius / 5);
-    const targetZ = basePositions[i3 + 2] * targetScale * (radius / 5);
+    const targetX = basePositions[i3] * targetScale * radiusRatio;
+    const targetY = basePositions[i3 + 1] * targetScale * radiusRatio;
+    const targetZ = basePositions[i3 + 2] * targetScale * radiusRatio;
 
     const verletX = 2 * positions[i3] - prevPositions[i3];
     const verletY = 2 * positions[i3 + 1] - prevPositions[i3 + 1];
@@ -181,7 +212,7 @@ function updateParticles(time: number, dt: number): void {
     prevPositions[i3 + 1] = positions[i3 + 1];
     prevPositions[i3 + 2] = positions[i3 + 2];
 
-    const springK = 0.5 * speed;
+    const springK = 2.5 * speed;
     positions[i3] = verletX + (targetX - verletX) * springK * dt + velocities[i3];
     positions[i3 + 1] = verletY + (targetY - verletY) * springK * dt + velocities[i3 + 1];
     positions[i3 + 2] = verletZ + (targetZ - verletZ) * springK * dt + velocities[i3 + 2];
@@ -214,18 +245,15 @@ ctx.onmessage = (e: MessageEvent) => {
     updateParticles(time, dt);
 
     if (data) {
-      ctx.postMessage(
-        {
-          type: 'updated',
-          positions: data.positions.buffer,
-          collisionBrightness: data.collisionBrightness.buffer,
-          count: data.count,
-        },
-        [data.positions.buffer, data.collisionBrightness.buffer] as any
-      );
+      const posCopy = new Float32Array(data.positions);
+      const brightCopy = new Float32Array(data.collisionBrightness);
 
-      data.positions = new Float32Array(data.count * 3);
-      data.collisionBrightness = new Float32Array(data.count);
+      ctx.postMessage({
+        type: 'updated',
+        positions: posCopy.buffer,
+        collisionBrightness: brightCopy.buffer,
+        count: data.count,
+      });
     }
   }
 };
