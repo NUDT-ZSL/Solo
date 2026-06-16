@@ -1,0 +1,265 @@
+.cauldron-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 20px;
+  height: 100%;
+  box-sizing: border-box;
+  background: #ECEFF1;
+  gap: 20px;
+  overflow-y: auto;
+}
+
+.cauldron-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: bold;
+  color: #3E2723;
+  font-family: 'Georgia', serif;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.cauldron-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.cauldron-svg-container {
+  position: relative;
+  width: 256px;
+  height: 256px;
+}
+
+.cauldron-svg {
+  filter: drop-shadow(4px 4px 8px rgba(0, 0, 0, 0.3));
+}
+
+.liquid-wave {
+  animation: wave 2s ease-in-out infinite;
+  transform-origin: center;
+}
+
+@keyframes wave {
+  0%, 100% {
+    transform: translateX(0) scaleY(1);
+  }
+  25% {
+    transform: translateX(-5px) scaleY(1.05);
+  }
+  75% {
+    transform: translateX(5px) scaleY(0.95);
+  }
+}
+
+.bubble {
+  animation: bubble-rise 1.5s ease-in-out infinite;
+}
+
+.bubble:nth-child(2) { animation-delay: 0.3s; }
+.bubble:nth-child(3) { animation-delay: 0.6s; }
+.bubble:nth-child(4) { animation-delay: 0.9s; }
+.bubble:nth-child(5) { animation-delay: 1.2s; }
+
+@keyframes bubble-rise {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-20px) scale(1.2);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(-40px) scale(0.5);
+    opacity: 0;
+  }
+}
+
+.particle {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 6px currentColor;
+}
+
+.burst-ring {
+  animation: burst-expand 1s ease-out forwards;
+  transform-origin: center;
+}
+
+@keyframes burst-expand {
+  0% {
+    r: 10;
+    stroke-width: 6;
+    opacity: 1;
+  }
+  100% {
+    r: 120;
+    stroke-width: 1;
+    opacity: 0;
+  }
+}
+
+.progress-container {
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 16px;
+  background: #3E2723;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid #FFD700;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.1s linear, background-color 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+  animation: progress-shine 1.5s ease-in-out infinite;
+}
+
+@keyframes progress-shine {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.progress-text {
+  font-size: 14px;
+  font-weight: bold;
+  color: #3E2723;
+  font-family: 'Georgia', serif;
+}
+
+.status-text {
+  font-size: 14px;
+  color: #5D4037;
+  font-style: italic;
+}
+
+.result-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+  animation: result-fade-in 0.3s ease-out;
+}
+
+@keyframes result-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.result-content {
+  text-align: center;
+  color: white;
+  padding: 20px;
+  animation: result-bounce 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes result-bounce {
+  0% {
+    transform: scale(0);
+  }
+  60% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.result-event {
+  font-size: 20px;
+  font-weight: bold;
+  margin-bottom: 8px;
+  font-family: 'Georgia', serif;
+}
+
+.result-potion {
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.result-quality {
+  font-size: 18px;
+  margin-bottom: 4px;
+}
+
+.result-quantity {
+  font-size: 24px;
+  font-weight: bold;
+  color: #FFD700;
+}
+
+.result-penalty {
+  font-size: 18px;
+  color: #FF5252;
+  font-weight: bold;
+}
+
+.event-success .result-event {
+  color: #81C784;
+}
+
+.event-minorBoom .result-event {
+  color: #FFB74D;
+}
+
+.event-majorBoom .result-event {
+  color: #E57373;
+}
+
+.event-perfect .result-event {
+  color: #FFD700;
+  text-shadow: 0 0 10px #FFD700;
+}
+
+@media (max-width: 900px) {
+  .cauldron-container {
+    min-height: 400px;
+  }
+}

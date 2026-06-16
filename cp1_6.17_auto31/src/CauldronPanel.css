@@ -1,0 +1,256 @@
+.cauldron-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  height: 100%;
+  box-sizing: border-box;
+  background: #4E342E;
+  color: #FFD700;
+  border-right: 2px solid #FFD700;
+  position: relative;
+  overflow-y: auto;
+}
+
+.panel-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: bold;
+  text-align: center;
+  font-family: 'Georgia', serif;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.ingredients-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.ingredient-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto;
+  background: rgba(62, 39, 35, 0.8);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.ingredient-card:hover:not(.disabled) {
+  transform: translateY(-3px);
+  box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.6);
+}
+
+.ingredient-card.selected {
+  border-color: #FFD700;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.ingredient-card.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ingredient-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.ingredient-name {
+  font-size: 11px;
+  margin-top: 4px;
+  color: #E0D0C0;
+}
+
+.recipe-section {
+  margin-top: 8px;
+}
+
+.recipe-title {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  color: #FFD700;
+  font-family: 'Georgia', serif;
+}
+
+.recipe-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recipe-slot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(62, 39, 35, 0.6);
+  border: 1px dashed #8B7355;
+  border-radius: 6px;
+  min-height: 40px;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.recipe-slot.filled {
+  border-style: solid;
+  border-color: #FFD700;
+  background: rgba(255, 215, 0, 0.1);
+}
+
+.recipe-slot.filled:hover {
+  background: rgba(255, 215, 0, 0.2);
+  cursor: pointer;
+}
+
+.slot-icon {
+  font-size: 20px;
+}
+
+.slot-name {
+  flex: 1;
+  font-size: 13px;
+  color: #E0D0C0;
+}
+
+.slot-weight {
+  font-size: 11px;
+  color: #8B7355;
+}
+
+.slot-empty {
+  color: #8B7355;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.slot-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #C62828;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.recipe-slot.filled:hover .slot-remove {
+  opacity: 1;
+}
+
+.brew-button {
+  margin-top: 8px;
+  padding: 14px 24px;
+  font-size: 16px;
+  font-weight: bold;
+  color: #FFD700;
+  background: #3E2723;
+  border: 2px solid #FFD700;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: 'Georgia', serif;
+  position: relative;
+  overflow: hidden;
+}
+
+.brew-button:hover:not(:disabled) {
+  background: #5D4037;
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+}
+
+.brew-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.brew-button.brewing {
+  background: #5D4037;
+}
+
+.brew-button::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 215, 0, 0.3);
+  transform: translate(-50%, -50%);
+  transition: width 0.15s, height 0.15s;
+}
+
+.brew-button:active::after {
+  width: 200px;
+  height: 200px;
+}
+
+.invalid-tip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 16px 24px;
+  background: rgba(198, 40, 40, 0.95);
+  color: white;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: bold;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  animation: fadeInOut 0.6s ease;
+  z-index: 100;
+  pointer-events: none;
+}
+
+@keyframes fadeInOut {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  30% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+}
+
+@media (max-width: 900px) {
+  .cauldron-panel {
+    border-right: none;
+    border-bottom: 2px solid #FFD700;
+  }
+
+  .ingredients-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .recipe-slots {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
