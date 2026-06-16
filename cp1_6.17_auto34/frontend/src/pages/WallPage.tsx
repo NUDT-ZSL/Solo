@@ -40,7 +40,7 @@ const WallPage: React.FC<WallPageProps> = ({ user, showToast, refreshTrigger }) 
       setRefreshing(false);
       setPullDistance(0);
       showToast('刷新成功');
-    }, 600);
+    }, 300);
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {

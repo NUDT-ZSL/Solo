@@ -50,36 +50,33 @@ const OrderPlaza: React.FC<OrderPlazaProps> = ({ user, showToast, onHiddenMenuUn
   useEffect(() => {
     const timer = setInterval(() => {
       setNow(Date.now());
-      setOrders((prev) => {
-        const remaining: GroupOrder[] = [];
-        const expired: string[] = [];
-        for (const o of prev) {
-          if (o.status === 'active' && o.deadline <= Date.now()) {
-            expired.push(o.id);
-          } else {
-            remaining.push(o);
-          }
-        }
-        if (expired.length > 0) {
-          setTimeoutOrderIds((s) => {
-            const next = new Set(s);
-            expired.forEach((id) => next.add(id));
-            return next;
-          });
-          setTimeout(() => {
-            setTimeoutOrderIds((s) => {
-              const next = new Set(s);
-              expired.forEach((id) => next.delete(id));
-              return next;
-            });
-            loadData();
-          }, 500);
-        }
-        return remaining;
-      });
     }, 1000);
     return () => clearInterval(timer);
-  }, [loadData]);
+  }, []);
+
+  useEffect(() => {
+    const expiredIds: string[] = [];
+    orders.forEach((o) => {
+      if (o.status === 'active' && o.deadline <= now && !timeoutOrderIds.has(o.id)) {
+        expiredIds.push(o.id);
+      }
+    });
+    if (expiredIds.length > 0) {
+      setTimeoutOrderIds((s) => {
+        const next = new Set(s);
+        expiredIds.forEach((id) => next.add(id));
+        return next;
+      });
+      setTimeout(() => {
+        setOrders((curr) => curr.filter((o) => !expiredIds.includes(o.id)));
+        setTimeoutOrderIds((s) => {
+          const next = new Set(s);
+          expiredIds.forEach((id) => next.delete(id));
+          return next;
+        });
+      }, 500);
+    }
+  }, [now, orders, timeoutOrderIds]);
 
   const handleCheckUnlock = (count: number) => {
     const unlocked = checkUnlock(user.id, count);

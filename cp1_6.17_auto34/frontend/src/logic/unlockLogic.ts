@@ -22,14 +22,14 @@ export function getHiddenMenus(): HiddenMenu[] {
 }
 
 export function checkUnlock(userId: string, orderCount: number): HiddenMenu | null {
-  if (orderCount <= 0 || orderCount % 5 !== 0) {
+  if (orderCount <= 0) {
     return null;
   }
   const countKey = `${UNLOCKED_COUNT_KEY}_${userId}`;
   const idsKey = `${UNLOCKED_IDS_KEY}_${userId}`;
-  const milestone = orderCount / 5;
+  const totalMilestones = Math.floor(orderCount / 5);
   const lastMilestone = parseInt(localStorage.getItem(countKey) || '0', 10);
-  if (milestone <= lastMilestone) {
+  if (totalMilestones <= lastMilestone) {
     return null;
   }
   let unlockedIds: string[] = [];
@@ -40,13 +40,14 @@ export function checkUnlock(userId: string, orderCount: number): HiddenMenu | nu
   }
   const available = PRESET_HIDDEN_MENUS.filter((m) => !unlockedIds.includes(m.id));
   if (available.length === 0) {
-    localStorage.setItem(countKey, String(milestone));
+    localStorage.setItem(countKey, String(totalMilestones));
     return null;
   }
+  const unlockCount = Math.min(totalMilestones - lastMilestone, available.length);
   const random = available[Math.floor(Math.random() * available.length)];
   unlockedIds.push(random.id);
   localStorage.setItem(idsKey, JSON.stringify(unlockedIds));
-  localStorage.setItem(countKey, String(milestone));
+  localStorage.setItem(countKey, String(lastMilestone + unlockCount));
   return random;
 }
 
