@@ -1,10 +1,8 @@
 import { Album, ListenRecord, RecommendTrack } from '@/types';
 
-const API_BASE = 'http://localhost:3001';
-
 export function usePlayHistory() {
   const fetchListens = async (): Promise<ListenRecord[]> => {
-    const response = await fetch(`${API_BASE}/api/listens`);
+    const response = await fetch('/api/listens');
     if (!response.ok) {
       throw new Error('Failed to fetch listens');
     }
@@ -16,7 +14,7 @@ export function usePlayHistory() {
     trackTitle: string,
     duration: number
   ): Promise<void> => {
-    const response = await fetch(`${API_BASE}/api/listen`, {
+    const response = await fetch('/api/listen', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -32,6 +30,8 @@ export function usePlayHistory() {
     albums: Album[],
     listens: ListenRecord[]
   ): RecommendTrack[] => {
+    if (listens.length === 0) return [];
+
     const listenedKeySet = new Set(
       listens.map((l) => `${l.albumId}-${l.trackTitle}`)
     );

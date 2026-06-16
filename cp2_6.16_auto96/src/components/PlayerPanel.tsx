@@ -12,6 +12,10 @@ export default function PlayerPanel({ albumId, onClose, onListen }: PlayerPanelP
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationRef = useRef<number | null>(null);
   const listenTriggeredRef = useRef<boolean>(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const frequencyDataRef = useRef<Uint8Array | null>(null);
 
   const [album, setAlbum] = useState<AlbumDetail | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -39,6 +43,7 @@ export default function PlayerPanel({ albumId, onClose, onListen }: PlayerPanelP
       setCurrentTime(0);
       setIsPlaying(false);
       listenTriggeredRef.current = false;
+      cleanupAudioContext();
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
@@ -61,10 +66,53 @@ export default function PlayerPanel({ albumId, onClose, onListen }: PlayerPanelP
     fetchAlbum();
   }, [albumId]);
 
+  const cleanupAudioContext = () => {
+    if (sourceRef.current) {
+      sourceRef.current.disconnect();
+      sourceRef.current = null;
+    }
+    if (analyserRef.current) {
+      analyserRef.current.disconnect();
+      analyserRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+    frequencyDataRef.current = null;
+  };
+
+  const setupAudioContext = useCallback(() => {
+    if (!audioRef.current) return;
+
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+
+    if (!sourceRef.current) {
+      const ctx = audioContextRef.current;
+      analyserRef.current = ctx.createAnalyser();
+      analyserRef.current.fftSize = 64;
+      analyserRef.current.smoothingTimeConstant = 0.8;
+
+      sourceRef.current = ctx.createMediaElementSource(audioRef.current);
+      sourceRef.current.connect(analyserRef.current);
+      analyserRef.current.connect(ctx.destination);
+
+      const bufferLength = analyserRef.current.frequencyBinCount;
+      frequencyDataRef.current = new Uint8Array(bufferLength);
+    }
+
+    if (audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume();
+    }
+  }, []);
+
   useEffect(() => {
     if (!album || !album.audioBase64) return;
 
     const audio = new Audio(`data:audio/mp3;base64,${album.audioBase64}`);
+    audio.crossOrigin = 'anonymous';
     audioRef.current = audio;
 
     const handleTimeUpdate = () => {
@@ -95,6 +143,7 @@ export default function PlayerPanel({ albumId, onClose, onListen }: PlayerPanelP
       audio.pause();
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('ended', handleEnded);
+      cleanupAudioContext();
       audioRef.current = null;
     };
   }, [album, duration, onListen]);
@@ -115,9 +164,28 @@ export default function PlayerPanel({ albumId, onClose, onListen }: PlayerPanelP
     const barWidth = width / barCount;
     const gap = 4;
 
+    let frequencyData: number[] = [];
+    if (analyserRef.current && frequencyDataRef.current) {
+      analyserRef.current.getByteFrequencyData(frequencyDataRef.current);
+      const data = frequencyDataRef.current;
+      const step = Math.floor(data.length / barCount);
+      for (let i = 0; i < barCount; i++) {
+        let sum = 0;
+        for (let j = 0; j < step; j++) {
+          sum += data[i * step + j] || 0;
+        }
+        frequencyData.push((sum / step) / 255);
+      }
+    }
+
     for (let i = 0; i < barCount; i++) {
-      const targetHeight = Math.random() * (height - 10) + 10;
-      barHeights.current[i] += (targetHeight - barHeights.current[i]) * 0.2;
+      let targetHeight: number;
+      if (frequencyData.length === barCount) {
+        targetHeight = Math.max(8, frequencyData[i] * (height - 10) + 5);
+      } else {
+        targetHeight = 10 + Math.random() * 15;
+      }
+      barHeights.current[i] += (targetHeight - barHeights.current[i]) * 0.25;
 
       const x = i * barWidth + gap / 2;
       const barH = barHeights.current[i];
@@ -127,8 +195,8 @@ export default function PlayerPanel({ albumId, onClose, onListen }: PlayerPanelP
       gradient.addColorStop(0, '#ff6b6b');
       gradient.addColorStop(1, '#feca57');
 
-      ctx.shadowColor = '#ff6b6b';
-      ctx.shadowBlur = 8;
+      ctx.shadowColor = 'rgba(254, 202, 87, 0.5)';
+      ctx.shadowBlur = 6;
       ctx.shadowOffsetY = 2;
 
       ctx.fillStyle = gradient;
@@ -158,13 +226,19 @@ export default function PlayerPanel({ albumId, onClose, onListen }: PlayerPanelP
     };
   }, [isPlaying, drawSpectrum]);
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     if (!audioRef.current) return;
+
+    setupAudioContext();
 
     if (isPlaying) {
       audioRef.current.pause();
     } else {
-      audioRef.current.play();
+      try {
+        await audioRef.current.play();
+      } catch (e) {
+        console.error('Play failed:', e);
+      }
     }
     setIsPlaying(!isPlaying);
   };
@@ -222,11 +296,11 @@ export default function PlayerPanel({ albumId, onClose, onListen }: PlayerPanelP
     right: 0,
     width: '400px',
     height: '100vh',
-    backgroundColor: '#1e1e2e',
+    backgroundColor: 'var(--player-bg)',
     borderRadius: '24px 0 0 24px',
     boxShadow: '-8px 0 32px rgba(0, 0, 0, 0.5)',
     transform: isVisible ? 'translateX(0)' : 'translateX(100%)',
-    transition: 'transform 0.4s ease-out',
+    transition: 'transform 0.4s ease-out, background-color 1s ease',
     zIndex: 1000,
     display: 'flex',
     flexDirection: 'column',
@@ -239,11 +313,11 @@ export default function PlayerPanel({ albumId, onClose, onListen }: PlayerPanelP
     left: 0,
     width: '100%',
     height: '60vh',
-    backgroundColor: '#1e1e2e',
+    backgroundColor: 'var(--player-bg)',
     borderRadius: '24px 24px 0 0',
     boxShadow: '0 -8px 32px rgba(0, 0, 0, 0.5)',
     transform: isVisible ? `translateY(${dragOffset}px)` : 'translateY(100%)',
-    transition: 'transform 0.4s ease-out',
+    transition: 'transform 0.4s ease-out, background-color 1s ease',
     zIndex: 1000,
     display: 'flex',
     flexDirection: 'column',
