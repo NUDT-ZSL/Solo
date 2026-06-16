@@ -45,6 +45,13 @@ body {
   background: #4A6274;
 }
 
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 @keyframes fadeInUp {
   from {
     opacity: 0;

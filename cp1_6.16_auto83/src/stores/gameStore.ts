@@ -8,6 +8,8 @@ interface GameListItem {
   developer: string
   genre: '动作' | '解谜' | '模拟' | '角色扮演'
   thumbnail: string
+  description: string
+  previewScreenshots: string[]
   rating: number
   totalScore: number
   releaseDate: string

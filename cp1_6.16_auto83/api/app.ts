@@ -20,6 +20,7 @@ interface Game {
   developer: string
   genre: '动作' | '解谜' | '模拟' | '角色扮演'
   thumbnail: string
+  description: string
   rating: number
   totalScore: number
   releaseDate: string
@@ -59,6 +60,7 @@ const games: Game[] = [
     developer: '星尘工作室',
     genre: '动作',
     thumbnail: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=dark%20fantasy%20action%20game%20cover%20art%2C%20warrior%20with%20glowing%20sword%20in%20shadow%20rift%2C%20dramatic%20lighting&image_size=landscape_4_3',
+    description: '一款黑暗幻想风格的动作游戏，在暗影裂隙中挥舞光之剑，挑战无尽的暗影怪物。',
     rating: 4.5,
     totalScore: 85,
     releaseDate: '2026-03-15',
@@ -88,6 +90,7 @@ const games: Game[] = [
     developer: '像素实验室',
     genre: '解谜',
     thumbnail: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=quantum%20puzzle%20game%20cover%20art%2C%20glowing%20cubes%20floating%20in%20space%2C%20neon%20blue&image_size=landscape_4_3',
+    description: '操控量子方块穿越维度，挑战烧脑谜题，揭开量子世界的终极奥秘。',
     rating: 4.8,
     totalScore: 96,
     releaseDate: '2026-01-22',
@@ -117,6 +120,7 @@ const games: Game[] = [
     developer: '暖阳游戏',
     genre: '模拟',
     thumbnail: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=cozy%20space%20farm%20game%20cover%2C%20cute%20alien%20plants%20on%20asteroid%2C%20warm%20colors&image_size=landscape_4_3',
+    description: '在小行星上建造你的太空农场，种植外星作物，与星际商人交易稀有资源。',
     rating: 4.2,
     totalScore: 72,
     releaseDate: '2026-05-01',
@@ -144,6 +148,7 @@ const games: Game[] = [
     developer: '古卷工作室',
     genre: '角色扮演',
     thumbnail: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=epic%20RPG%20game%20cover%2C%20dragon%20language%20runes%20glowing%2C%20medieval%20fantasy&image_size=landscape_4_3',
+    description: '掌握失落的龙语魔法，召唤远古巨龙，在中世纪奇幻世界中书写属于你的史诗。',
     rating: 4.7,
     totalScore: 92,
     releaseDate: '2025-12-10',
@@ -174,6 +179,7 @@ const games: Game[] = [
     developer: '电子猫工作室',
     genre: '动作',
     thumbnail: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=neon%20cyberpunk%20racing%20game%20cover%2C%20speed%20lines%2C%20synthwave%20colors&image_size=landscape_4_3',
+    description: '在霓虹闪烁的赛博朋克都市中极速狂飙，挑战极限速度，争夺街头王者之名。',
     rating: 4.0,
     totalScore: 65,
     releaseDate: '2026-04-18',
@@ -200,6 +206,7 @@ const games: Game[] = [
     developer: '织梦社',
     genre: '解谜',
     thumbnail: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=time%20manipulation%20puzzle%20game%20cover%2C%20clock%20gears%20floating%2C%20golden%20light&image_size=landscape_4_3',
+    description: '操控时间的流动，穿越过去与未来，在齿轮与钟表的世界中解开层层谜题。',
     rating: 4.6,
     totalScore: 88,
     releaseDate: '2026-02-14',
@@ -229,6 +236,7 @@ const games: Game[] = [
     developer: '蓝鲸团队',
     genre: '模拟',
     thumbnail: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=deep%20sea%20exploration%20simulator%20cover%2C%20bioluminescent%20creatures%2C%20submarine&image_size=landscape_4_3',
+    description: '驾驶潜水艇探索神秘深海，与发光生物相遇，建造属于你的海底基地。',
     rating: 4.3,
     totalScore: 78,
     releaseDate: '2026-06-01',
@@ -255,6 +263,7 @@ const games: Game[] = [
     developer: '北境之火',
     genre: '角色扮演',
     thumbnail: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=rune%20magic%20RPG%20cover%2C%20glowing%20runes%20floating%20around%20mage%2C%20northern%20lights&image_size=landscape_4_3',
+    description: '收集失落的符文，组合出两百种以上魔法，在北境极光下踏上冒险之旅。',
     rating: 4.1,
     totalScore: 68,
     releaseDate: '2026-03-28',
@@ -285,7 +294,10 @@ app.get('/api/games', (_req: Request, res: Response) => {
     result = result.filter(g => g.genre === genre)
   }
   result.sort((a, b) => b.rating - a.rating)
-  res.json(result.map(({ devLogs, screenshots, unlockContent, ...rest }) => rest))
+  res.json(result.map(({ devLogs, unlockContent, screenshots, ...rest }) => ({
+    ...rest,
+    previewScreenshots: screenshots.slice(0, 3),
+  })))
 })
 
 app.get('/api/games/:id', (req: Request, res: Response) => {
