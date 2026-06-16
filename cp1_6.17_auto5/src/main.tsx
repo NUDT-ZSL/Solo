@@ -44,7 +44,7 @@ const AnimatedNumber: React.FC<AnimatedNumberProps> = ({ value, suffix = '', pre
   const targetRef = useRef(value);
   const rafRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
-  const DURATION = 300;
+  const DURATION = 500;
 
   useEffect(() => {
     if (value === targetRef.current) return;
@@ -55,7 +55,7 @@ const AnimatedNumber: React.FC<AnimatedNumberProps> = ({ value, suffix = '', pre
     const animate = (t: number) => {
       const elapsed = t - startTimeRef.current;
       const progress = Math.min(1, elapsed / DURATION);
-      const eased = 1 - Math.pow(1 - progress, 3);
+      const eased = 1 - Math.pow(1 - progress, 2);
       const current = Math.round(startRef.current + (targetRef.current - startRef.current) * eased);
       setDisplay(current);
       if (progress < 1) {
@@ -77,11 +77,14 @@ const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(() => createInitialGameState());
   const [tick, setTick] = useState(0);
   const [battleFlash, setBattleFlash] = useState(false);
+  const [resetBtnFlash, setResetBtnFlash] = useState(false);
   const fogAnimRef = useRef<Map<string, { start: number; from: number; to: number }>>(new Map());
   const battleAnimRef = useRef<{ monsterId: number; start: number } | null>(null);
   const lastTurnTimeRef = useRef(0);
 
   const resetGame = useCallback(() => {
+    setResetBtnFlash(true);
+    setTimeout(() => setResetBtnFlash(false), 150);
     setGameState(createInitialGameState());
     fogAnimRef.current.clear();
     battleAnimRef.current = null;
@@ -500,7 +503,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const id = setInterval(() => {
       setBlinkTick((b) => b + 1);
-    }, 500);
+    }, 300);
     return () => clearInterval(id);
   }, []);
 
@@ -514,10 +517,13 @@ const App: React.FC = () => {
   return (
     <div className="app-root">
       <div className="top-bar">
-        <div className="turn-display">
+        <div className="turn-display turn-glow">
           回合: <AnimatedNumber value={gameState.turn} />
         </div>
-        <button className="reset-btn" onClick={resetGame}>
+        <button
+          className={`reset-btn ${resetBtnFlash ? 'btn-flash' : ''}`}
+          onClick={resetGame}
+        >
           重置地图
         </button>
       </div>
@@ -529,7 +535,7 @@ const App: React.FC = () => {
             <div className="label">生命值</div>
             <div className="hp-bar">
               <div
-                className="hp-fill"
+                className={`hp-fill ${gameState.player.hp <= 3 ? 'hp-danger' : ''}`}
                 style={{ width: `${(gameState.player.hp / PLAYER_MAX_HP) * 100}%` }}
               />
               <span className="hp-text">
