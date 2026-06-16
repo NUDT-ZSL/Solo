@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/gameengine.ts","./src/petcanvas.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/ui/bottompanel.tsx","./src/ui/statusbar.tsx"],"errors":true,"version":"5.8.3"}
