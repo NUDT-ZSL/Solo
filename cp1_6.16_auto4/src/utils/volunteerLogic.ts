@@ -29,13 +29,53 @@ const DEFAULT_SKILL_WEIGHTS: SkillWeights = {
   医疗: 1.5,
 };
 
+export function normalizeSkillWeights(weights: SkillWeights): SkillWeights {
+  const values = Object.values(weights);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+
+  if (max === min) {
+    const normalized: SkillWeights = {};
+    for (const key of Object.keys(weights)) {
+      normalized[key] = 1;
+    }
+    return normalized;
+  }
+
+  const normalized: SkillWeights = {};
+  for (const key of Object.keys(weights)) {
+    normalized[key] = 0.5 + (weights[key] - min) / (max - min) * 0.5;
+  }
+  return normalized;
+}
+
+export function getISOWeekNumber(date: Date): { year: number; week: number } {
+  const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNr = (target.getUTCDay() + 6) % 7;
+  target.setUTCDate(target.getUTCDate() - dayNr + 3);
+  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+  const weekDiff = 1 + Math.round(((target.getTime() - firstThursday.getTime()) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+
+  if (weekDiff < 1) {
+    const prevYear = target.getUTCFullYear() - 1;
+    const prevDec28 = new Date(Date.UTC(prevYear, 11, 28));
+    return getISOWeekNumber(prevDec28);
+  }
+
+  if (weekDiff > 52) {
+    const nextJan4 = new Date(Date.UTC(target.getUTCFullYear() + 1, 0, 4));
+    const nextYearWeek = getISOWeekNumber(nextJan4);
+    if (nextYearWeek.week === 1) {
+      return { year: target.getUTCFullYear() + 1, week: 1 };
+    }
+    return { year: target.getUTCFullYear(), week: weekDiff };
+  }
+
+  return { year: target.getUTCFullYear(), week: weekDiff };
+}
+
 function getWeekNumber(date: Date): { year: number; week: number } {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-  return { year: d.getUTCFullYear(), week };
+  return getISOWeekNumber(date);
 }
 
 export function isSameWeek(dateStr: string, referenceDate: Date = new Date()): boolean {
