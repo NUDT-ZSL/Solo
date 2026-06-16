@@ -15,6 +15,9 @@ export class SimulationEngine {
   private listeners: Set<Listener> = new Set();
   private isPaused: boolean = false;
   private isDataRecordingPaused: boolean = false;
+  private speed: number = 1;
+  private savedSpeed: number = 1;
+  private readonly baseTickInterval: number = 5000;
   private idCounter: number = 0;
 
   constructor(initialEnvironment: EnvironmentParams) {
@@ -85,14 +88,40 @@ export class SimulationEngine {
 
   pause() {
     this.isPaused = true;
+    this.savedSpeed = this.speed;
+    this.speed = 1;
+    this.resetTickInterval();
   }
 
   resume() {
     this.isPaused = false;
+    this.speed = this.savedSpeed;
+    this.resetTickInterval();
   }
 
   getIsPaused() {
     return this.isPaused;
+  }
+
+  getSpeed(): number {
+    return this.isPaused ? 1 : this.speed;
+  }
+
+  setSpeed(speed: number) {
+    if (this.isPaused) {
+      this.savedSpeed = speed;
+    } else {
+      this.speed = speed;
+      this.resetTickInterval();
+    }
+  }
+
+  private resetTickInterval() {
+    if (this.tickInterval !== null) {
+      clearInterval(this.tickInterval);
+    }
+    const interval = this.baseTickInterval / (this.isPaused ? 1 : this.speed);
+    this.tickInterval = window.setInterval(() => this.tick(), interval);
   }
 
   setEnvironment(env: Partial<EnvironmentParams>) {
@@ -219,8 +248,11 @@ export class SimulationEngine {
   private spawnParticles(x: number, y: number, species: SpeciesType, isSpawning: boolean) {
     const baseColor = SPECIES_COLORS[species];
     const organismCount = this.organisms.length;
-    const minCount = organismCount > 40 ? 4 : 8;
-    const maxCount = organismCount > 40 ? 6 : 12;
+    const baseMin = organismCount > 40 ? 4 : 8;
+    const baseMax = organismCount > 40 ? 6 : 12;
+    const speedFactor = 1 / this.speed;
+    const minCount = Math.max(1, Math.floor(baseMin * speedFactor));
+    const maxCount = Math.max(1, Math.floor(baseMax * speedFactor));
     const count = Math.floor(Math.random() * (maxCount - minCount + 1)) + minCount;
     
     for (let i = 0; i < count; i++) {

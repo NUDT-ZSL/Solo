@@ -20,6 +20,7 @@ const App: React.FC = () => {
   const [environment, setEnvironment] = useState<EnvironmentParams>(DEFAULT_ENVIRONMENT);
   const [isPaused, setIsPaused] = useState(false);
   const [isChartPaused, setIsChartPaused] = useState(false);
+  const [speed, setSpeed] = useState(1);
   const [showConfig, setShowConfig] = useState(false);
   const [configText, setConfigText] = useState('');
   const [dragSpecies, setDragSpecies] = useState<SpeciesType | null>(null);
@@ -196,6 +197,17 @@ const App: React.FC = () => {
         engineRef.current.pauseDataRecording();
       }
       setIsChartPaused(!isChartPaused);
+    }
+  };
+
+  const cycleSpeed = () => {
+    if (engineRef.current) {
+      const speeds = [1, 2, 5];
+      const currentIndex = speeds.indexOf(speed);
+      const nextIndex = (currentIndex + 1) % speeds.length;
+      const nextSpeed = speeds[nextIndex];
+      engineRef.current.setSpeed(nextSpeed);
+      setSpeed(nextSpeed);
     }
   };
 
@@ -684,6 +696,29 @@ const App: React.FC = () => {
           }}>
             生物: {organisms.length} / 60
           </div>
+
+          <button
+            onClick={cycleSpeed}
+            disabled={isPaused}
+            style={{
+              position: 'absolute',
+              top: 10,
+              right: 10,
+              fontSize: 11,
+              fontWeight: 600,
+              color: isPaused ? '#999' : 'white',
+              background: isPaused ? 'rgba(0,0,0,0.2)' : 'rgba(46,125,50,0.85)',
+              padding: '4px 10px',
+              borderRadius: 4,
+              border: 'none',
+              cursor: isPaused ? 'not-allowed' : 'pointer',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+              transition: 'background 0.2s'
+            }}
+            title={isPaused ? '暂停时速度为1倍' : '点击切换速度: 1x → 2x → 5x'}
+          >
+            {speed}x
+          </button>
 
           <div style={{
             position: 'relative',
