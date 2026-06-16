@@ -1,19 +1,23 @@
-import { ConstellationData } from './constellations'
+import { Constellation } from './types'
 
 export interface UIManager {
-  showConstellationInfo: (data: ConstellationData) => void
+  showConstellationInfo: (data: Constellation) => void
   hideConstellationInfo: () => void
   isVisible: () => boolean
   destroy: () => void
 }
 
+const SLIDE_IN_DURATION = 300
+const SLIDE_OUT_DURATION = 200
+
 export function createUIManager(container: HTMLElement): UIManager {
   let panel: HTMLDivElement | null = null
   let visible = false
 
-  function ensurePanel() {
+  function ensurePanel(): HTMLDivElement {
     if (panel) return panel
     panel = document.createElement('div')
+    panel.className = 'constellation-panel'
     panel.style.cssText = `
       position: fixed;
       top: 20px;
@@ -31,21 +35,22 @@ export function createUIManager(container: HTMLElement): UIManager {
       border: 1px solid rgba(255, 255, 255, 0.08);
       transform: translateX(400px);
       opacity: 0;
-      transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.3s ease-out;
+      transition: transform ${SLIDE_IN_DURATION}ms cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity ${SLIDE_IN_DURATION}ms ease-out;
       overflow-y: auto;
       z-index: 1000;
+      box-sizing: border-box;
     `
-    panel.addEventListener('wheel', (e) => {
+    panel.addEventListener('wheel', (e: Event) => {
       e.stopPropagation()
     })
-    panel.addEventListener('click', (e) => {
+    panel.addEventListener('click', (e: Event) => {
       e.stopPropagation()
     })
     container.appendChild(panel)
     return panel
   }
 
-  function renderContent(data: ConstellationData) {
+  function renderContent(data: Constellation): void {
     if (!panel) return
     const mainStarsHTML = data.mainStars && data.mainStars.length > 0
       ? `<div style="margin-top: 16px;">
@@ -62,7 +67,7 @@ export function createUIManager(container: HTMLElement): UIManager {
           <div style="font-size: 18px; color: #E0E0E0; font-weight: 600; letter-spacing: 0.5px;">${data.name}</div>
           <div style="font-size: 12px; color: #808080; margin-top: 4px; font-style: italic;">${data.nameEn}</div>
         </div>
-        <button id="closeBtn" style="background: none; border: none; color: #808080; font-size: 20px; cursor: pointer; padding: 0; line-height: 1; transition: color 0.2s;" onmouseover="this.style.color='#E0E0E0'" onmouseout="this.style.color='#808080'">&times;</button>
+        <button class="close-btn" style="background: none; border: none; color: #808080; font-size: 24px; cursor: pointer; padding: 0; line-height: 1; transition: color 0.2s;">&times;</button>
       </div>
       <div style="font-size: 14px; color: #B0B0B0; line-height: 1.6; margin-bottom: 4px;">
         ${data.description}
@@ -75,45 +80,55 @@ export function createUIManager(container: HTMLElement): UIManager {
         </div>
       </div>
     `
-    const closeBtn = panel.querySelector('#closeBtn')
+
+    const closeBtn = panel.querySelector('.close-btn')
     if (closeBtn) {
-      closeBtn.addEventListener('click', (e) => {
+      closeBtn.addEventListener('click', (e: Event) => {
         e.stopPropagation()
         hideConstellationInfo()
+      })
+      closeBtn.addEventListener('mouseenter', () => {
+        (closeBtn as HTMLElement).style.color = '#E0E0E0'
+      })
+      closeBtn.addEventListener('mouseleave', () => {
+        (closeBtn as HTMLElement).style.color = '#808080'
       })
     }
   }
 
-  function showConstellationInfo(data: ConstellationData) {
+  function showConstellationInfo(data: Constellation): void {
     const p = ensurePanel()
     renderContent(data)
+    p.style.transition = `transform ${SLIDE_IN_DURATION}ms cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity ${SLIDE_IN_DURATION}ms ease-out`
     requestAnimationFrame(() => {
-      p.style.transform = 'translateX(0)'
-      p.style.opacity = '1'
+      if (panel) {
+        panel.style.transform = 'translateX(0)'
+        panel.style.opacity = '1'
+      }
     })
     visible = true
   }
 
-  function hideConstellationInfo() {
+  function hideConstellationInfo(): void {
     if (!panel) return
+    panel.style.transition = `transform ${SLIDE_OUT_DURATION}ms cubic-bezier(0.55, 0.055, 0.675, 0.19), opacity ${SLIDE_OUT_DURATION}ms ease-in`
     panel.style.transform = 'translateX(400px)'
     panel.style.opacity = '0'
-    panel.style.transition = 'transform 0.2s cubic-bezier(0.55, 0.055, 0.675, 0.19), opacity 0.2s ease-in'
     setTimeout(() => {
       if (panel) {
-        panel.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.3s ease-out'
+        panel.style.transition = `transform ${SLIDE_IN_DURATION}ms cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity ${SLIDE_IN_DURATION}ms ease-out`
       }
-    }, 200)
+    }, SLIDE_OUT_DURATION)
     visible = false
   }
 
-  function handleKeyDown(e: KeyboardEvent) {
+  function handleKeyDown(e: KeyboardEvent): void {
     if (e.key === 'Escape' && visible) {
       hideConstellationInfo()
     }
   }
 
-  function handleClick(e: MouseEvent) {
+  function handleClick(e: MouseEvent): void {
     if (!visible || !panel) return
     if (e.target instanceof Node && panel.contains(e.target)) return
     hideConstellationInfo()

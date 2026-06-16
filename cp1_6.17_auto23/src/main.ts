@@ -1,8 +1,22 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { loadStarsData, createStarsSystem, StarsSystem } from './stars'
-import { loadConstellationData, createConstellationSystem, ConstellationSystem, ConstellationData } from './constellations'
+import { loadConstellationData, createConstellationSystem, ConstellationSystem } from './constellations'
 import { createUIManager, UIManager } from './ui'
+import { StarSystemOptions } from './types'
+
+interface AppConfig extends StarSystemOptions {
+  backgroundColor?: number
+}
+
+const DEFAULT_CONFIG: AppConfig = {
+  starCount: 3000,
+  radiusMin: 200,
+  radiusMax: 500,
+  minMagnitude: 1,
+  maxMagnitude: 6,
+  backgroundColor: 0x0A0A1E
+}
 
 class App {
   private container: HTMLElement
@@ -18,11 +32,19 @@ class App {
   private clock: THREE.Clock
   private isDragging: boolean = false
   private mouseDownPos: { x: number; y: number } = { x: 0, y: 0 }
+  private config: AppConfig
+  private animationFrameId: number | null = null
 
-  constructor() {
-    this.container = document.getElementById('app')!
+  constructor(containerId: string = 'app', config: Partial<AppConfig> = {}) {
+    this.config = { ...DEFAULT_CONFIG, ...config }
+    const container = document.getElementById(containerId)
+    if (!container) {
+      throw new Error(`Container #${containerId} not found`)
+    }
+    this.container = container
+
     this.scene = new THREE.Scene()
-    this.scene.background = new THREE.Color('#0A0A1E')
+    this.scene.background = new THREE.Color(this.config.backgroundColor!)
 
     this.camera = new THREE.PerspectiveCamera(
       60,
@@ -61,23 +83,23 @@ class App {
     this.setupEventListeners()
   }
 
-  private setupEventListeners() {
+  private setupEventListeners(): void {
     window.addEventListener('resize', this.onWindowResize.bind(this))
 
     this.renderer.domElement.addEventListener('mousedown', this.onMouseDown.bind(this))
     this.renderer.domElement.addEventListener('mouseup', this.onMouseUp.bind(this))
     this.renderer.domElement.addEventListener('mousemove', this.onMouseMove.bind(this))
-    this.renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault())
+    this.renderer.domElement.addEventListener('contextmenu', (e: Event) => e.preventDefault())
   }
 
-  private onMouseDown(e: MouseEvent) {
+  private onMouseDown(e: MouseEvent): void {
     if (e.button === 0) {
       this.isDragging = false
       this.mouseDownPos = { x: e.clientX, y: e.clientY }
     }
   }
 
-  private onMouseMove(e: MouseEvent) {
+  private onMouseMove(e: MouseEvent): void {
     if (e.button === 0) {
       const dx = Math.abs(e.clientX - this.mouseDownPos.x)
       const dy = Math.abs(e.clientY - this.mouseDownPos.y)
@@ -87,7 +109,7 @@ class App {
     }
   }
 
-  private onMouseUp(e: MouseEvent) {
+  private onMouseUp(e: MouseEvent): void {
     if (e.button !== 0) return
     const dx = Math.abs(e.clientX - this.mouseDownPos.x)
     const dy = Math.abs(e.clientY - this.mouseDownPos.y)
@@ -95,7 +117,7 @@ class App {
     this.handleClick(e)
   }
 
-  private handleClick(e: MouseEvent) {
+  private handleClick(e: MouseEvent): void {
     const rect = this.renderer.domElement.getBoundingClientRect()
     this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
     this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
@@ -122,31 +144,61 @@ class App {
     }
   }
 
-  private onWindowResize() {
+  private onWindowResize(): void {
     this.camera.aspect = window.innerWidth / window.innerHeight
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(window.innerWidth, window.innerHeight)
   }
 
-  public async init() {
-    const [starsData, constellationData] = await Promise.all([
-      loadStarsData(),
-      loadConstellationData()
-    ])
+  public async init(): Promise<void> {
+    try {
+      const [starsData, constellationData] = await Promise.all([
+        loadStarsData(this.config).catch((err: Error) => {
+          console.error('Failed to load stars data:', err)
+          throw err
+        }),
+        loadConstellationData().catch((err: Error) => {
+          console.error('Failed to load constellation data:', err)
+          throw err
+        })
+      ])
 
-    this.starsSystem = createStarsSystem(starsData)
-    this.scene.add(this.starsSystem.points)
+      this.starsSystem = createStarsSystem(starsData, this.config)
+      this.scene.add(this.starsSystem.points)
 
-    this.constellationSystem = createConstellationSystem(constellationData, starsData)
-    this.scene.add(this.constellationSystem.group)
+      this.constellationSystem = createConstellationSystem(constellationData, starsData)
+      this.scene.add(this.constellationSystem.group)
 
-    this.animate()
+      this.animate()
+    } catch (error) {
+      console.error('Failed to initialize application:', error)
+      this.showErrorMessage()
+    }
   }
 
-  private animate() {
-    requestAnimationFrame(this.animate.bind(this))
+  private showErrorMessage(): void {
+    const errorDiv = document.createElement('div')
+    errorDiv.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(200, 50, 50, 0.9);
+      color: white;
+      padding: 20px 40px;
+      border-radius: 8px;
+      font-family: sans-serif;
+      font-size: 16px;
+      z-index: 2000;
+    `
+    errorDiv.textContent = '应用初始化失败，请刷新页面重试'
+    this.container.appendChild(errorDiv)
+  }
 
-    const delta = this.clock.getDelta()
+  private animate = (): void => {
+    this.animationFrameId = requestAnimationFrame(this.animate)
+
+    const delta = Math.min(this.clock.getDelta(), 0.1)
     const cameraDistance = this.camera.position.length()
 
     this.controls.update()
@@ -154,9 +206,26 @@ class App {
     this.constellationSystem.update(delta)
     this.renderer.render(this.scene, this.camera)
   }
+
+  public destroy(): void {
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId)
+    }
+    this.uiManager.destroy()
+    this.renderer.dispose()
+    if (this.renderer.domElement.parentNode) {
+      this.renderer.domElement.parentNode.removeChild(this.renderer.domElement)
+    }
+  }
+
+  public getStarCount(): number {
+    return this.starsSystem?.starCount ?? 0
+  }
 }
 
-const app = new App()
-app.init().catch(err => {
-  console.error('Failed to initialize app:', err)
+const app = new App('app', { starCount: 3000 })
+app.init().catch((err: Error) => {
+  console.error('Failed to start app:', err)
 })
+
+export default App
