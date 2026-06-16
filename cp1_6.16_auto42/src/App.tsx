@@ -12,11 +12,14 @@ const App: React.FC = () => {
   const [currentPlayingEpId, setCurrentPlayingEpId] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
   const [displayLyrics, setDisplayLyrics] = useState('')
+  const [isAutoPlaying, setIsAutoPlaying] = useState(true)
+  const [autoPlayProgress, setAutoPlayProgress] = useState(0)
 
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const typewriterIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const fullLyricsRef = useRef('')
   const lyricsIndexRef = useRef(0)
+  const autoPlayIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   const allMoodTags = useMemo(() => {
     const tags = new Set<string>()
@@ -49,6 +52,43 @@ const App: React.FC = () => {
       typewriterIntervalRef.current = null
     }
   }, [])
+
+  const startAutoPlay = useCallback(() => {
+    if (autoPlayIntervalRef.current) {
+      clearInterval(autoPlayIntervalRef.current)
+    }
+
+    const totalDuration = 30000
+    const interval = 50
+    const increment = (100 / totalDuration) * interval
+
+    autoPlayIntervalRef.current = setInterval(() => {
+      setAutoPlayProgress(prev => {
+        if (prev >= 100) {
+          return 0
+        }
+        return prev + increment
+      })
+    }, interval)
+  }, [])
+
+  const pauseAutoPlay = useCallback(() => {
+    if (autoPlayIntervalRef.current) {
+      clearInterval(autoPlayIntervalRef.current)
+      autoPlayIntervalRef.current = null
+    }
+  }, [])
+
+  const toggleAutoPlay = useCallback(() => {
+    setIsAutoPlaying(prev => {
+      if (prev) {
+        pauseAutoPlay()
+      } else {
+        startAutoPlay()
+      }
+      return !prev
+    })
+  }, [startAutoPlay, pauseAutoPlay])
 
   const startTypewriter = useCallback((lyrics: string) => {
     if (typewriterIntervalRef.current) {
@@ -109,14 +149,21 @@ const App: React.FC = () => {
   const handleSelectEp = useCallback((epId: string | null) => {
     if (epId === null) {
       clearProgress()
+      pauseAutoPlay()
       setIsPlaying(false)
       setProgress(0)
       setCurrentTrackId(null)
       setCurrentPlayingEpId(null)
       setDisplayLyrics('')
+      setAutoPlayProgress(0)
+      setIsAutoPlaying(true)
+    } else {
+      setAutoPlayProgress(0)
+      setIsAutoPlaying(true)
+      startAutoPlay()
     }
     setSelectedEpId(epId)
-  }, [clearProgress])
+  }, [clearProgress, pauseAutoPlay, startAutoPlay])
 
   const handleTagClick = useCallback((tag: string) => {
     setActiveMoodTag(prev => prev === tag ? null : tag)
@@ -133,8 +180,9 @@ const App: React.FC = () => {
   useEffect(() => {
     return () => {
       clearProgress()
+      pauseAutoPlay()
     }
-  }, [clearProgress])
+  }, [clearProgress, pauseAutoPlay])
 
   return (
     <div className="app">
@@ -182,6 +230,9 @@ const App: React.FC = () => {
         onTagClick={handleTagClick}
         activeMoodTag={activeMoodTag}
         progressBarColor={currentEpPrimaryColor}
+        autoPlayProgress={autoPlayProgress}
+        isAutoPlaying={isAutoPlaying}
+        onToggleAutoPlay={toggleAutoPlay}
       />
     </div>
   )

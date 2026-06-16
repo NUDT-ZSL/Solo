@@ -15,6 +15,9 @@ interface TimelineProps {
   onTagClick: (tag: string) => void
   activeMoodTag: string | null
   progressBarColor: string | null
+  autoPlayProgress: number
+  isAutoPlaying: boolean
+  onToggleAutoPlay: () => void
 }
 
 const PlayIcon = () => (
@@ -61,7 +64,10 @@ const Timeline: React.FC<TimelineProps> = ({
   isPlaying,
   onTagClick,
   activeMoodTag,
-  progressBarColor
+  progressBarColor,
+  autoPlayProgress,
+  isAutoPlaying,
+  onToggleAutoPlay
 }) => {
   const [visibleCards, setVisibleCards] = useState<Set<string>>(new Set())
   const horizontalRef = useRef<HTMLDivElement>(null)
@@ -286,6 +292,37 @@ const Timeline: React.FC<TimelineProps> = ({
             <div className="lyrics-display">
               {displayLyrics}
               {isPlaying && <span className="cursor" />}
+            </div>
+
+            <div className="auto-play-section">
+              <button
+                className="auto-play-btn"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  createRipple(e)
+                  onToggleAutoPlay()
+                }}
+                aria-label={isAutoPlaying ? '暂停' : '播放'}
+              >
+                {isAutoPlaying ? (
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                )}
+              </button>
+              <div className="auto-progress-bar">
+                <div
+                  className="auto-progress-fill"
+                  style={{
+                    width: `${autoPlayProgress}%`,
+                    background: `linear-gradient(90deg, ${ep.coverColor.primary}, ${lightenColor(ep.coverColor.primary, 40)})`
+                  }}
+                />
+              </div>
             </div>
           </div>
         </div>
