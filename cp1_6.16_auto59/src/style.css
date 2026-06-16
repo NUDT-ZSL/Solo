@@ -1,0 +1,636 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --color-primary-dark: #2C3E50;
+  --color-bg-main: #FDF5E6;
+  --color-panel-bg: #F8F9FA;
+  --color-divider: #D5B89A;
+  --color-card-border: #DEE2E6;
+  --color-pin: #E74C3C;
+  --color-star: #F1C40F;
+  --color-star-empty: #D5D8DC;
+  --color-add-btn: #2ECC71;
+  --color-province-unchecked: rgba(189, 195, 199, 0.4);
+  --color-province-checked: #F39C12;
+  --color-province-hover: #E67E22;
+  --color-text-primary: #2C3E50;
+  --color-text-secondary: #7F8C8D;
+  --color-white: #FFFFFF;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background-color: var(--color-bg-main);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  user-select: none;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 顶部导航栏 */
+.navbar {
+  background-color: var(--color-primary-dark);
+  color: var(--color-white);
+  padding: 0 24px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+}
+
+.navbar-title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.navbar-subtitle {
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+/* 主内容区 */
+.main-container {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* 地图区域 */
+.map-container {
+  flex: 0 0 70%;
+  position: relative;
+  background: linear-gradient(135deg, #FDF5E6 0%, #F5DEB3 100%);
+  border-right: 2px solid var(--color-divider);
+  overflow: hidden;
+}
+
+.map-canvas {
+  display: block;
+  cursor: grab;
+}
+
+.map-canvas:active {
+  cursor: grabbing;
+}
+
+/* 地图控制按钮 */
+.map-controls {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 10;
+}
+
+.map-ctrl-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  background-color: var(--color-white);
+  color: var(--color-primary-dark);
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.map-ctrl-btn:hover {
+  background-color: #f0f0f0;
+  transform: scale(1.05);
+}
+
+.map-ctrl-btn:active {
+  transform: scale(0.95);
+}
+
+/* 添加按钮 */
+.add-btn {
+  position: absolute;
+  top: 16px;
+  right: 64px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background-color: var(--color-add-btn);
+  color: var(--color-white);
+  font-size: 28px;
+  font-weight: 300;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(46, 204, 113, 0.4);
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.add-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(46, 204, 113, 0.5);
+}
+
+.add-btn.active {
+  transform: rotate(45deg);
+  background-color: #E74C3C;
+  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4);
+}
+
+.add-btn.active:hover {
+  box-shadow: 0 6px 16px rgba(231, 76, 60, 0.5);
+}
+
+/* 面包屑导航 */
+.map-breadcrumb {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  background-color: rgba(255, 255, 255, 0.9);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--color-text-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+}
+
+.breadcrumb-link {
+  color: var(--color-add-btn);
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.breadcrumb-link:hover {
+  text-decoration: underline;
+}
+
+.breadcrumb-sep {
+  margin: 0 8px;
+  color: var(--color-text-secondary);
+}
+
+/* 图钉悬浮卡片 */
+.pin-tooltip {
+  position: absolute;
+  background: var(--color-white);
+  border-radius: 8px;
+  padding: 12px 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+  z-index: 20;
+  min-width: 160px;
+  animation: bounce-in 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.pin-tooltip-name {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--color-text-primary);
+}
+
+.pin-tooltip-rating {
+  display: flex;
+  gap: 2px;
+}
+
+/* 右侧卡片面板 */
+.card-panel {
+  flex: 0 0 30%;
+  background-color: var(--color-panel-bg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.card-panel-header {
+  padding: 20px;
+  border-bottom: 1px solid var(--color-card-border);
+  flex-shrink: 0;
+}
+
+.card-panel-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 4px;
+}
+
+.card-panel-count {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.card-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 0;
+}
+
+.card-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.card-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.card-list::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+/* 打卡卡片 */
+.checkin-card {
+  display: flex;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-card-border);
+  background-color: var(--color-white);
+  transition: background-color 0.2s ease;
+  animation: fade-in 0.5s ease;
+}
+
+.checkin-card:hover {
+  background-color: #FAFAFA;
+}
+
+.card-color-bar {
+  width: 8px;
+  background-color: var(--color-pin);
+  border-radius: 4px;
+  margin-right: 16px;
+  flex-shrink: 0;
+}
+
+.card-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.card-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 6px;
+  line-height: 1.3;
+}
+
+.card-address {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.card-rating {
+  display: flex;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+
+.card-review {
+  font-size: 14px;
+  color: var(--color-text-primary);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.card-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  border: 1px solid var(--color-card-border);
+  background-color: var(--color-white);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: all 0.2s ease;
+}
+
+.card-btn:hover {
+  border-color: var(--color-primary-dark);
+  color: var(--color-primary-dark);
+}
+
+.card-btn.delete:hover {
+  border-color: var(--color-pin);
+  color: var(--color-pin);
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--color-text-secondary);
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-text {
+  font-size: 14px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* 星级评分 */
+.star-rating {
+  display: flex;
+  gap: 4px;
+}
+
+.star {
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--color-star-empty);
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.star.filled {
+  color: var(--color-star);
+}
+
+.star.clickable:hover {
+  transform: scale(1.2);
+}
+
+.star.bounce {
+  animation: star-bounce 0.2s ease;
+}
+
+/* 模态框 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fade-in 0.3s ease;
+}
+
+.modal-content {
+  background-color: var(--color-white);
+  border-radius: 12px;
+  padding: 28px;
+  width: 90%;
+  max-width: 440px;
+  animation: slide-up 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: var(--color-text-primary);
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: var(--color-text-primary);
+}
+
+.form-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--color-card-border);
+  border-radius: 8px;
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+  font-family: inherit;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--color-add-btn);
+  box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.1);
+}
+
+.form-textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--color-card-border);
+  border-radius: 8px;
+  font-size: 14px;
+  resize: vertical;
+  min-height: 100px;
+  transition: border-color 0.2s ease;
+  font-family: inherit;
+}
+
+.form-textarea:focus {
+  outline: none;
+  border-color: var(--color-add-btn);
+  box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.1);
+}
+
+.char-count {
+  text-align: right;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-top: 4px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+.btn {
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  font-family: inherit;
+}
+
+.btn-primary {
+  background-color: var(--color-add-btn);
+  color: var(--color-white);
+}
+
+.btn-primary:hover {
+  background-color: #27AE60;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
+}
+
+.btn-secondary {
+  background-color: var(--color-white);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-card-border);
+}
+
+.btn-secondary:hover {
+  background-color: #f0f0f0;
+}
+
+/* 动画关键帧 */
+@keyframes bounce-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  60% {
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes star-bounce {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.4);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* 响应式 - 小屏幕 */
+@media (max-width: 768px) {
+  .main-container {
+    flex-direction: column;
+  }
+
+  .map-container {
+    flex: 0 0 60%;
+    border-right: none;
+    border-bottom: 2px solid var(--color-divider);
+  }
+
+  .card-panel {
+    flex: 0 0 40%;
+  }
+
+  .navbar-title {
+    font-size: 16px;
+  }
+
+  .navbar-subtitle {
+    font-size: 12px;
+  }
+
+  .add-btn {
+    width: 42px;
+    height: 42px;
+    font-size: 24px;
+    top: 12px;
+    right: 56px;
+  }
+
+  .map-controls {
+    top: 12px;
+    right: 12px;
+  }
+
+  .map-ctrl-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+
+  .map-breadcrumb {
+    top: 12px;
+    left: 12px;
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .card-panel-header {
+    padding: 14px 16px;
+  }
+
+  .card-panel-title {
+    font-size: 16px;
+  }
+
+  .checkin-card {
+    padding: 12px 16px;
+  }
+
+  .modal-content {
+    padding: 20px;
+    margin: 20px;
+    width: calc(100% - 40px);
+  }
+}
