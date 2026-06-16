@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import StarRating from '../components/StarRating';
 import Toast from '../components/Toast';
 import { fetchGameDetail, submitRating } from '../business/DataFetcher';
-import { aggregateRatings, formatDate } from '../business/RatingAggregator';
+import { aggregateRatings, formatDate, formatDateTime } from '../business/RatingAggregator';
 import type { GameDetail as GameDetailType, Tag, RatingItem } from '../business/types';
 
 interface GameDetailPageProps {
@@ -70,14 +70,15 @@ export default function GameDetailPage({ onTagClick }: GameDetailPageProps) {
     try {
       const result = await submitRating({
         gameId: id,
-        score: selectedScore,
+        rating: selectedScore,
         comment: commentText.trim(),
+        timestamp: Date.now(),
       });
       setLocalRatings((prev) => [result.rating, ...prev]);
       setAggregated(result.aggregated);
       setSelectedScore(0);
       setCommentText('');
-      showToastMessage('评分成功！感谢您的反馈');
+      showToastMessage('评分提交成功');
     } catch (e: any) {
       showToastMessage(e.message || '提交失败，请重试');
     } finally {
@@ -197,37 +198,47 @@ export default function GameDetailPage({ onTagClick }: GameDetailPageProps) {
               })}
             </div>
 
-            <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid #eee' }}>
-              <div style={{ marginBottom: 8, fontSize: 14, color: '#666' }}>
-                选择你的评分：
+            <div className="rating-form-card">
+              <div className="rating-form-title">发表评价</div>
+              <div className="rating-form-row">
+                <span className="rating-form-label">选择评分：</span>
+                <StarRating
+                  value={selectedScore}
+                  size="lg"
+                  interactive
+                  hoverValue={hoverScore}
+                  onHover={setHoverScore}
+                  onClick={setSelectedScore}
+                />
+                {selectedScore > 0 && (
+                  <span className="rating-form-hint">
+                    {selectedScore} 星
+                  </span>
+                )}
               </div>
-              <StarRating
-                value={selectedScore}
-                size="lg"
-                interactive
-                hoverValue={hoverScore}
-                onHover={setHoverScore}
-                onClick={setSelectedScore}
-              />
-              {selectedScore > 0 && (
-                <div style={{ marginTop: -4, marginBottom: 12, fontSize: 13, color: '#f39c12', fontWeight: 600 }}>
-                  你选择了 {selectedScore} 星
-                </div>
-              )}
-              <textarea
-                className="comment-input"
-                placeholder="写下你对这款游戏的短评（可选）..."
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                maxLength={500}
-              />
-              <button
-                className="submit-btn"
-                onClick={handleSubmit}
-                disabled={selectedScore === 0 || submitting}
-              >
-                {submitting ? '提交中...' : '提交评分'}
-              </button>
+              <div className="rating-form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                <span className="rating-form-label">评论内容：</span>
+                <textarea
+                  className="comment-input"
+                  placeholder="写下你对这款游戏的短评（可选）..."
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  maxLength={500}
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div className="rating-form-actions">
+                <button
+                  className="submit-btn"
+                  onClick={handleSubmit}
+                  disabled={selectedScore === 0 || submitting}
+                >
+                  {submitting ? '提交中...' : '提交评分'}
+                </button>
+                {selectedScore === 0 && (
+                  <span style={{ fontSize: 12, color: '#999' }}>请先选择星级评分</span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -249,7 +260,7 @@ export default function GameDetailPage({ onTagClick }: GameDetailPageProps) {
                         <StarRating value={rating.score} size="sm" />
                       </div>
                       <span className="comment-card-date">
-                        {formatDate(rating.createdAt)}
+                        {formatDateTime(rating.createdAt)}
                       </span>
                     </div>
                     {rating.comment && (

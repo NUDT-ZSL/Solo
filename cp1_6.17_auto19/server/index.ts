@@ -36,6 +36,7 @@ export interface Rating {
   score: number;
   comment: string;
   createdAt: string;
+  timestamp: number;
 }
 
 const PREDEFINED_TAGS: Tag[] = [
@@ -227,15 +228,17 @@ function generateInitialRatings(games: Game[]): Rating[] {
     const count = Math.floor(rand() * 15) + 3;
     for (let i = 0; i < count; i++) {
       const score = Math.floor(rand() * 3) + 3;
-      const createdAt = new Date(
+      const dateObj = new Date(
         new Date(game.releaseDate).getTime() + rand() * 1000 * 60 * 60 * 24 * 500
-      ).toISOString();
+      );
+      const createdAt = dateObj.toISOString();
       ratings.push({
         id: `r-${game.id}-${i}`,
         gameId: game.id,
         score,
         comment: commentTemplates[Math.floor(rand() * commentTemplates.length)],
         createdAt,
+        timestamp: dateObj.getTime(),
       });
     }
   });
@@ -298,8 +301,8 @@ app.get('/api/tags', (_req, res) => {
 });
 
 app.post('/api/ratings', (req, res) => {
-  const { gameId, score, comment } = req.body;
-  if (!gameId || typeof score !== 'number' || score < 1 || score > 5) {
+  const { gameId, rating, comment, timestamp } = req.body;
+  if (!gameId || typeof rating !== 'number' || rating < 1 || rating > 5) {
     res.status(400).json({ error: 'Invalid rating data' });
     return;
   }
@@ -308,12 +311,15 @@ app.post('/api/ratings', (req, res) => {
     res.status(404).json({ error: 'Game not found' });
     return;
   }
+  const now = new Date();
+  const ratingDate = timestamp ? new Date(timestamp) : now;
   const newRating: Rating = {
     id: `r-${gameId}-${Date.now()}`,
     gameId,
-    score,
+    score: rating,
     comment: comment || '',
-    createdAt: new Date().toISOString(),
+    createdAt: ratingDate.toISOString(),
+    timestamp: ratingDate.getTime(),
   };
   ratings.push(newRating);
   const aggregated = computeAggregatedRatings();

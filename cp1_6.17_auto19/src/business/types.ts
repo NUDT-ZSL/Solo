@@ -34,6 +34,7 @@ export interface RatingItem {
   score: number;
   comment: string;
   createdAt: string;
+  timestamp: number;
 }
 
 export interface GameDetail extends GameListItem {
@@ -42,8 +43,9 @@ export interface GameDetail extends GameListItem {
 
 export interface SubmitRatingPayload {
   gameId: string;
-  score: number;
+  rating: number;
   comment: string;
+  timestamp: number;
 }
 
 export interface SubmitRatingResponse {
