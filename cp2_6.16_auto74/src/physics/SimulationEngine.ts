@@ -2,7 +2,7 @@ import type { SimulationParams, ParticleState, SimulationOutput } from '../types
 
 const EARTH_CENTER = { x: 0, y: 2, z: 0 }
 const ENERGY_ATTENUATION = 0.98
-const BASE_VELOCITY = 2.0
+const BASE_VELOCITY = 3.0
 const P_WAVE_SPEED_RATIO = 1.0
 const S_WAVE_SPEED_RATIO = 0.6
 
@@ -38,12 +38,18 @@ export class SimulationEngine {
   private particleBirthTimes: Float32Array
   private particleEnergies: Float32Array
   private particleDirections: Float32Array
+  private particleAnisotropyRatios: Float32Array
   private particleState: ParticleState
   private anisotropyTensor: number[][]
   private currentTime: number = 0
-  private lastPulseTime: number = 0
   private pulseInterval: number = 1.0
   private currentAnisotropyStrength: number = 1.0
+
+  private frameCount: number = 0
+  private fpsUpdateInterval: number = 500
+  private lastFpsUpdateTime: number = 0
+  private currentFps: number = 60
+  private fpsHistory: number[] = []
 
   constructor(initialCount: number = 2000) {
     this.particleCount = initialCount
@@ -51,6 +57,7 @@ export class SimulationEngine {
     this.particleBirthTimes = new Float32Array(initialCount)
     this.particleEnergies = new Float32Array(initialCount)
     this.particleDirections = new Float32Array(initialCount * 3)
+    this.particleAnisotropyRatios = new Float32Array(initialCount)
 
     this.particleState = {
       position: new Float32Array(initialCount * 3),
@@ -76,23 +83,25 @@ export class SimulationEngine {
       const dirY = Math.sin(phi) * Math.sin(theta)
       const dirZ = Math.cos(phi)
 
-      const dir = [dirX, dirY, dirZ]
-      const transformedDir = multiplyMatrixVector(this.anisotropyTensor, dir)
-      const velocityMag = vectorLength(transformedDir) * BASE_VELOCITY
+      const baseDir = [dirX, dirY, dirZ]
+      const transformedDir = multiplyMatrixVector(this.anisotropyTensor, baseDir)
+      const anisotropyRatio = vectorLength(transformedDir)
       const normalizedDir = normalizeVector(transformedDir)
 
       this.particleDirections[i * 3] = normalizedDir[0]
       this.particleDirections[i * 3 + 1] = normalizedDir[1]
       this.particleDirections[i * 3 + 2] = normalizedDir[2]
 
-      this.particleVelocities[i * 3] = normalizedDir[0] * velocityMag
-      this.particleVelocities[i * 3 + 1] = normalizedDir[1] * velocityMag
-      this.particleVelocities[i * 3 + 2] = normalizedDir[2] * velocityMag
+      this.particleVelocities[i * 3] = normalizedDir[0] * BASE_VELOCITY * anisotropyRatio
+      this.particleVelocities[i * 3 + 1] = normalizedDir[1] * BASE_VELOCITY * anisotropyRatio
+      this.particleVelocities[i * 3 + 2] = normalizedDir[2] * BASE_VELOCITY * anisotropyRatio
+
+      this.particleAnisotropyRatios[i] = anisotropyRatio
 
       const phaseOffset = (i / this.particleCount) * this.pulseInterval
-
-      this.particleBirthTimes[i] = -this.pulseInterval + phaseOffset
+      this.particleBirthTimes[i] = -this.pulseInterval * 2 + phaseOffset
       this.particleEnergies[i] = 0
+
       this.resetParticle(i)
     }
   }
@@ -103,33 +112,36 @@ export class SimulationEngine {
     this.particleState.position[i3 + 1] = EARTH_CENTER.y
     this.particleState.position[i3 + 2] = EARTH_CENTER.z
 
-    this.particleState.color[i3] = 0
-    this.particleState.color[i3 + 1] = 0.2
-    this.particleState.color[i3 + 2] = 1.0
-
-    this.particleState.opacity[index] = 0
-    this.particleState.size[index] = 1.2 + Math.random() * 1.8
-
     const theta = Math.random() * Math.PI * 2
     const phi = Math.acos(2 * Math.random() - 1)
     const dirX = Math.sin(phi) * Math.cos(theta)
     const dirY = Math.sin(phi) * Math.sin(theta)
     const dirZ = Math.cos(phi)
 
-    const dir = [dirX, dirY, dirZ]
-    const transformedDir = multiplyMatrixVector(this.anisotropyTensor, dir)
-    const velocityMag = vectorLength(transformedDir)
+    const baseDir = [dirX, dirY, dirZ]
+    const transformedDir = multiplyMatrixVector(this.anisotropyTensor, baseDir)
+    const anisotropyRatio = vectorLength(transformedDir)
     const normalizedDir = normalizeVector(transformedDir)
 
     this.particleDirections[i3] = normalizedDir[0]
     this.particleDirections[i3 + 1] = normalizedDir[1]
     this.particleDirections[i3 + 2] = normalizedDir[2]
 
-    this.particleVelocities[i3] = normalizedDir[0] * velocityMag
-    this.particleVelocities[i3 + 1] = normalizedDir[1] * velocityMag
-    this.particleVelocities[i3 + 2] = normalizedDir[2] * velocityMag
+    this.particleVelocities[i3] = normalizedDir[0] * BASE_VELOCITY * anisotropyRatio
+    this.particleVelocities[i3 + 1] = normalizedDir[1] * BASE_VELOCITY * anisotropyRatio
+    this.particleVelocities[i3 + 2] = normalizedDir[2] * BASE_VELOCITY * anisotropyRatio
 
+    this.particleAnisotropyRatios[index] = anisotropyRatio
+
+    const color = lerpColor(anisotropyRatio)
+    this.particleState.color[i3] = color[0]
+    this.particleState.color[i3 + 1] = color[1]
+    this.particleState.color[i3 + 2] = color[2]
+
+    this.particleState.opacity[index] = 0.8
+    this.particleState.size[index] = 1.2 + Math.random() * 1.8
     this.particleEnergies[index] = 1.0
+    this.particleBirthTimes[index] = this.currentTime
   }
 
   private updateAnisotropyTensor(strength: number): void {
@@ -144,18 +156,29 @@ export class SimulationEngine {
 
     for (let i = 0; i < this.particleCount; i++) {
       const i3 = i * 3
-      const currentDir = [
+      const baseDir = [
         this.particleDirections[i3],
         this.particleDirections[i3 + 1],
         this.particleDirections[i3 + 2],
       ]
-      const transformedDir = multiplyMatrixVector(this.anisotropyTensor, currentDir)
-      const velocityMag = vectorLength(transformedDir)
+      const transformedDir = multiplyMatrixVector(this.anisotropyTensor, baseDir)
+      const anisotropyRatio = vectorLength(transformedDir)
       const normalizedDir = normalizeVector(transformedDir)
 
-      this.particleVelocities[i3] = normalizedDir[0] * velocityMag
-      this.particleVelocities[i3 + 1] = normalizedDir[1] * velocityMag
-      this.particleVelocities[i3 + 2] = normalizedDir[2] * velocityMag
+      this.particleDirections[i3] = normalizedDir[0]
+      this.particleDirections[i3 + 1] = normalizedDir[1]
+      this.particleDirections[i3 + 2] = normalizedDir[2]
+
+      this.particleVelocities[i3] = normalizedDir[0] * BASE_VELOCITY * anisotropyRatio
+      this.particleVelocities[i3 + 1] = normalizedDir[1] * BASE_VELOCITY * anisotropyRatio
+      this.particleVelocities[i3 + 2] = normalizedDir[2] * BASE_VELOCITY * anisotropyRatio
+
+      this.particleAnisotropyRatios[i] = anisotropyRatio
+
+      const color = lerpColor(anisotropyRatio)
+      this.particleState.color[i3] = color[0]
+      this.particleState.color[i3 + 1] = color[1]
+      this.particleState.color[i3 + 2] = color[2]
     }
 
     this.currentAnisotropyStrength = strength
@@ -169,6 +192,7 @@ export class SimulationEngine {
     this.particleBirthTimes = new Float32Array(count)
     this.particleEnergies = new Float32Array(count)
     this.particleDirections = new Float32Array(count * 3)
+    this.particleAnisotropyRatios = new Float32Array(count)
 
     this.particleState = {
       position: new Float32Array(count * 3),
@@ -180,7 +204,44 @@ export class SimulationEngine {
     this.initializeParticles()
   }
 
+  private updateFps(deltaTime: number): void {
+    this.frameCount++
+    this.lastFpsUpdateTime += deltaTime * 1000
+
+    if (this.lastFpsUpdateTime >= this.fpsUpdateInterval) {
+      const instantFps = this.frameCount / (this.lastFpsUpdateTime / 1000)
+      this.fpsHistory.push(instantFps)
+      if (this.fpsHistory.length > 10) {
+        this.fpsHistory.shift()
+      }
+      this.currentFps = this.fpsHistory.reduce((a, b) => a + b, 0) / this.fpsHistory.length
+      this.frameCount = 0
+      this.lastFpsUpdateTime = 0
+    }
+  }
+
+  public getOptimalParticleCount(): number {
+    if (this.currentFps < 30) {
+      return 1200
+    } else if (this.currentFps <= 50) {
+      return 2000
+    } else {
+      return 2800
+    }
+  }
+
+  public getCurrentFps(): number {
+    return this.currentFps
+  }
+
   public update(deltaTime: number, params: SimulationParams): SimulationOutput {
+    this.updateFps(deltaTime)
+
+    const optimalCount = this.getOptimalParticleCount()
+    if (optimalCount !== this.particleCount && params.isRunning) {
+      this.setParticleCount(optimalCount)
+    }
+
     if (params.anisotropyStrength !== this.currentAnisotropyStrength) {
       this.updateAnisotropyTensor(params.anisotropyStrength)
     }
@@ -191,21 +252,13 @@ export class SimulationEngine {
 
     if (params.isRunning) {
       this.currentTime += deltaTime
-
-      if (this.currentTime - this.lastPulseTime >= this.pulseInterval) {
-        this.lastPulseTime = this.currentTime
-      }
     }
 
     for (let i = 0; i < this.particleCount; i++) {
       const i3 = i * 3
-
       const age = this.currentTime - this.particleBirthTimes[i]
-      const pulsePhase = age % this.pulseInterval
 
-      if (params.isRunning && pulsePhase < deltaTime) {
-        this.particleBirthTimes[i] = this.currentTime
-        this.particleEnergies[i] = 1.0
+      if (params.isRunning && age >= this.pulseInterval) {
         this.resetParticle(i)
         continue
       }
@@ -216,7 +269,6 @@ export class SimulationEngine {
       }
 
       const velScale = speedRatio * deltaTime
-
       this.particleState.position[i3] += this.particleVelocities[i3] * velScale
       this.particleState.position[i3 + 1] += this.particleVelocities[i3 + 1] * velScale
       this.particleState.position[i3 + 2] += this.particleVelocities[i3 + 2] * velScale
@@ -226,18 +278,7 @@ export class SimulationEngine {
       }
 
       const energy = this.particleEnergies[i]
-      const opacity = 0.1 + 0.7 * energy
-      this.particleState.opacity[i] = opacity
-
-      const velocityRatio = vectorLength([
-        this.particleVelocities[i3],
-        this.particleVelocities[i3 + 1],
-      ]) / BASE_VELOCITY
-
-      const color = lerpColor(velocityRatio)
-      this.particleState.color[i3] = color[0]
-      this.particleState.color[i3 + 1] = color[1]
-      this.particleState.color[i3 + 2] = color[2]
+      this.particleState.opacity[i] = 0.1 + 0.7 * energy
     }
 
     return {

@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/controls/controlpanel.tsx","./src/physics/simulationengine.ts","./src/scene/wavescenerenderer.tsx","./src/types/index.ts","./vite.config.js"],"version":"5.8.3"}
