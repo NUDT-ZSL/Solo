@@ -1,0 +1,162 @@
+[
+  {
+    "longitude": -117.25,
+    "latitude": 35.95,
+    "magnitude": 6.2,
+    "depth": 15,
+    "timestamp": 1718236800000,
+    "region": "美国加利福尼亚州南部"
+  },
+  {
+    "longitude": 142.37,
+    "latitude": 37.32,
+    "magnitude": 7.5,
+    "depth": 45,
+    "timestamp": 1718150400000,
+    "region": "日本本州东岸近海"
+  },
+  {
+    "longitude": -71.55,
+    "latitude": -33.45,
+    "magnitude": 5.8,
+    "depth": 28,
+    "timestamp": 1718064000000,
+    "region": "智利中部"
+  },
+  {
+    "longitude": 85.25,
+    "latitude": 27.72,
+    "magnitude": 4.9,
+    "depth": 12,
+    "timestamp": 1717977600000,
+    "region": "尼泊尔东部"
+  },
+  {
+    "longitude": -155.47,
+    "latitude": 19.58,
+    "magnitude": 3.8,
+    "depth": 8,
+    "timestamp": 1717891200000,
+    "region": "夏威夷大岛南部"
+  },
+  {
+    "longitude": 72.53,
+    "latitude": 37.15,
+    "magnitude": 6.8,
+    "depth": 65,
+    "timestamp": 1717804800000,
+    "region": "塔吉克斯坦东部"
+  },
+  {
+    "longitude": 121.28,
+    "latitude": 24.96,
+    "magnitude": 5.3,
+    "depth": 35,
+    "timestamp": 1717718400000,
+    "region": "台湾花莲县海域"
+  },
+  {
+    "longitude": -69.22,
+    "latitude": 18.47,
+    "magnitude": 4.2,
+    "depth": 18,
+    "timestamp": 1717632000000,
+    "region": "多米尼加共和国北部"
+  },
+  {
+    "longitude": 168.32,
+    "latitude": -15.42,
+    "magnitude": 7.1,
+    "depth": 85,
+    "timestamp": 1717545600000,
+    "region": "瓦努阿图群岛"
+  },
+  {
+    "longitude": 34.25,
+    "latitude": 36.12,
+    "magnitude": 5.5,
+    "depth": 22,
+    "timestamp": 1717459200000,
+    "region": "土耳其南部"
+  },
+  {
+    "longitude": -122.03,
+    "latitude": 37.34,
+    "magnitude": 3.5,
+    "depth": 10,
+    "timestamp": 1717372800000,
+    "region": "美国旧金山湾区"
+  },
+  {
+    "longitude": 92.52,
+    "latitude": 26.78,
+    "magnitude": 6.0,
+    "depth": 42,
+    "timestamp": 1717286400000,
+    "region": "印度阿萨姆邦"
+  },
+  {
+    "longitude": 153.12,
+    "latitude": -4.35,
+    "magnitude": 4.7,
+    "depth": 55,
+    "timestamp": 1717200000000,
+    "region": "巴布亚新几内亚东部"
+  },
+  {
+    "longitude": -73.99,
+    "latitude": 40.73,
+    "magnitude": 2.9,
+    "depth": 5,
+    "timestamp": 1717113600000,
+    "region": "美国纽约州东部"
+  },
+  {
+    "longitude": 103.85,
+    "latitude": 36.05,
+    "magnitude": 5.1,
+    "depth": 18,
+    "timestamp": 1717027200000,
+    "region": "中国甘肃省"
+  },
+  {
+    "longitude": -105.27,
+    "latitude": 20.62,
+    "magnitude": 6.5,
+    "depth": 32,
+    "timestamp": 1716940800000,
+    "region": "墨西哥哈利斯科州"
+  },
+  {
+    "longitude": 26.58,
+    "latitude": 58.59,
+    "magnitude": 4.5,
+    "depth": 25,
+    "timestamp": 1716854400000,
+    "region": "芬兰北部"
+  },
+  {
+    "longitude": 115.18,
+    "latitude": -8.36,
+    "magnitude": 5.9,
+    "depth": 75,
+    "timestamp": 1716768000000,
+    "region": "印尼巴厘岛海域"
+  },
+  {
+    "longitude": -76.81,
+    "latitude": 39.28,
+    "magnitude": 3.2,
+    "depth": 6,
+    "timestamp": 1716681600000,
+    "region": "美国马里兰州"
+  },
+  {
+    "longitude": 178.42,
+    "latitude": -18.15,
+    "magnitude": 7.8,
+    "depth": 120,
+    "timestamp": 1716595200000,
+    "region": "斐济群岛以南"
+  }
+]
