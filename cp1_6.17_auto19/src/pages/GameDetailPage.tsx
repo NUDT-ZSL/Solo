@@ -25,9 +25,11 @@ export default function GameDetailPage({ onTagClick }: GameDetailPageProps) {
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [toastKey, setToastKey] = useState(0);
 
   const [visibleCount, setVisibleCount] = useState(COMMENTS_PAGE_SIZE);
   const [localRatings, setLocalRatings] = useState<RatingItem[]>([]);
+  const [aggregated, setAggregated] = useState({ average: 0, count: 0, distribution: [0, 0, 0, 0, 0] });
 
   useEffect(() => {
     if (!id) return;
@@ -36,6 +38,7 @@ export default function GameDetailPage({ onTagClick }: GameDetailPageProps) {
       .then((data) => {
         setGame(data);
         setLocalRatings(data.ratings);
+        setAggregated(data.rating);
         setError(null);
       })
       .catch((e) => {
@@ -51,7 +54,15 @@ export default function GameDetailPage({ onTagClick }: GameDetailPageProps) {
     setCommentText('');
   }, [id]);
 
-  const computedAggregate = aggregateRatings(localRatings);
+  const computedAggregate = localRatings.length > 0
+    ? aggregateRatings(localRatings)
+    : aggregated;
+
+  const showToastMessage = (msg: string) => {
+    setToast(null);
+    setToastKey((k) => k + 1);
+    setTimeout(() => setToast(msg), 10);
+  };
 
   const handleSubmit = useCallback(async () => {
     if (!id || selectedScore === 0 || submitting) return;
@@ -63,11 +74,12 @@ export default function GameDetailPage({ onTagClick }: GameDetailPageProps) {
         comment: commentText.trim(),
       });
       setLocalRatings((prev) => [result.rating, ...prev]);
+      setAggregated(result.aggregated);
       setSelectedScore(0);
       setCommentText('');
-      setToast('评分成功！感谢您的反馈');
+      showToastMessage('评分成功！感谢您的反馈');
     } catch (e: any) {
-      setToast(e.message || '提交失败，请重试');
+      showToastMessage(e.message || '提交失败，请重试');
     } finally {
       setSubmitting(false);
     }
@@ -260,7 +272,13 @@ export default function GameDetailPage({ onTagClick }: GameDetailPageProps) {
         </div>
       </div>
 
-      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
+      {toast && (
+        <Toast
+          key={toastKey}
+          message={toast}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }

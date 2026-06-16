@@ -121,22 +121,38 @@ export default function GalleryPage({
       ) : (
         <div key={filterKey} className="gallery-fade-wrap">
           <div className="waterfall">
-            {filteredGames.map((game) => (
-              <div key={game.id} className="waterfall-item">
+            {filteredGames.map((game, index) => (
+              <div
+                key={game.id}
+                className="waterfall-item"
+                style={{
+                  animationDelay: `${Math.min(index * 30, 300)}ms`,
+                }}
+              >
                 <div
                   className="game-card"
                   onClick={() => handleCardClick(game.id)}
                 >
-                  <img
-                    src={game.coverUrl}
-                    alt={game.title}
-                    className="game-card-cover"
-                    loading="lazy"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.background =
-                        '#f0f0f0';
-                    }}
-                  />
+                  <div className="game-card-cover-wrap">
+                    <img
+                      src={game.coverUrl}
+                      alt={game.title}
+                      className="game-card-cover"
+                      loading="lazy"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const parent = target.parentElement;
+                        if (parent) {
+                          const placeholder = document.createElement('div');
+                          placeholder.className = 'game-card-cover-placeholder';
+                          placeholder.innerHTML =
+                            '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+                          parent.appendChild(placeholder);
+                        }
+                      }}
+                    />
+                  </div>
                   <div className="game-card-body">
                     <h3 className="game-card-title">{game.title}</h3>
                     <div className="game-card-tags">

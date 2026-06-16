@@ -1,6 +1,6 @@
 import type { GameListItem, GameDetail, SubmitRatingPayload, SubmitRatingResponse, Tag } from './types';
 
-const API_BASE = 'http://localhost:3005/api';
+const API_BASE = '/api';
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
