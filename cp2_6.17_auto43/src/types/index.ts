@@ -48,6 +48,12 @@ export interface SelectedTime {
   startMinute: number;
 }
 
+export interface SelectedTimeRange {
+  day: number;
+  startMinute: number;
+  endMinute: number;
+}
+
 export type GridCellInfo = {
   day: number;
   startMinute: number;

@@ -4,7 +4,7 @@ import TimeRecommender from '@/modules/scheduler/TimeRecommender';
 import EventForm from '@/modules/events/EventForm';
 import CalendarExport from '@/modules/events/CalendarExport';
 import { useToast } from '@/hooks/useToast';
-import type { User, SelectedTime, Event, TimeSlot } from '@/types';
+import type { User, SelectedTime, SelectedTimeRange, Event, TimeSlot } from '@/types';
 import { TIMEZONE_OPTIONS, DAYS, minuteToTimeString, getTimezoneAbbr } from '@/utils/timezone';
 import dayjs from 'dayjs';
 
@@ -21,9 +21,9 @@ const App: React.FC = () => {
   const [userName, setUserName] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [userTimezone, setUserTimezone] = useState('UTC+8');
-  const [userAvailability, setUserAvailability] = useState<SelectedTime[]>([]);
+  const [userAvailability, setUserAvailability] = useState<SelectedTimeRange[]>([]);
 
-  const [selectedEventTime, setSelectedEventTime] = useState<SelectedTime | null>(null);
+  const [selectedEventTimeRanges, setSelectedEventTimeRanges] = useState<SelectedTimeRange[]>([]);
   const [recommendKey, setRecommendKey] = useState(0);
 
   const fetchData = useCallback(async () => {
@@ -46,14 +46,8 @@ const App: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
-  const handleSelectAvailability = (time: SelectedTime) => {
-    setUserAvailability(prev => {
-      const exists = prev.findIndex(t => t.day === time.day && t.startMinute === time.startMinute);
-      if (exists >= 0) {
-        return prev.filter((_, i) => i !== exists);
-      }
-      return [...prev, time];
-    });
+  const handleSelectAvailability = (ranges: SelectedTimeRange[]) => {
+    setUserAvailability(ranges);
   };
 
   const handleSaveUser = async () => {
@@ -66,16 +60,9 @@ const App: React.FC = () => {
       return;
     }
 
-    const mergedSlots: TimeSlot[] = [];
-    const sorted = [...userAvailability].sort((a, b) => a.day * 1440 + a.startMinute - (b.day * 1440 + b.startMinute));
-    for (const t of sorted) {
-      const last = mergedSlots[mergedSlots.length - 1];
-      if (last && last.day === t.day && last.endMinute === t.startMinute) {
-        last.endMinute = t.startMinute + 30;
-      } else {
-        mergedSlots.push({ day: t.day, startMinute: t.startMinute, endMinute: t.startMinute + 30 });
-      }
-    }
+    const mergedSlots: TimeSlot[] = [...userAvailability]
+      .sort((a, b) => a.day * 1440 + a.startMinute - (b.day * 1440 + b.startMinute))
+      .map(r => ({ day: r.day, startMinute: r.startMinute, endMinute: r.endMinute }));
 
     try {
       const res = await fetch('/api/users', {
@@ -104,8 +91,8 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSelectRecommendedTime = (time: SelectedTime) => {
-    setSelectedEventTime(time);
+  const handleSelectRecommendedTime = (ranges: SelectedTimeRange[]) => {
+    setSelectedEventTimeRanges(ranges);
     const element = document.getElementById('event-form-section');
     if (element) {
       element.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -257,32 +244,19 @@ const App: React.FC = () => {
               <label style={{ fontSize: '13px', fontWeight: 500, color: '#374151' }}>
                 可用时间段（点击选择）
               </label>
-              {userAvailability.length > 0 && (
-                <button
-                  onClick={() => setUserAvailability([])}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#6b7280',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    textDecoration: 'underline'
-                  }}
-                >
-                  清空
-                </button>
-              )}
+
             </div>
             <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px' }}>
               <TimeGrid
                 users={[]}
-                selectedTimes={userAvailability}
-                onSelectTime={handleSelectAvailability}
+                selectedRanges={userAvailability}
+                onSelectRanges={handleSelectAvailability}
                 mode="selector"
               />
             </div>
             <div style={{ marginTop: '8px', fontSize: '12px', color: '#6b7280' }}>
-              已选 {userAvailability.length} 个时段
+              已选 {userAvailability.length} 个时段区域，
+              共 {userAvailability.reduce((s, r) => s + (r.endMinute - r.startMinute) / 60, 0)} 小时
             </div>
           </div>
 
@@ -351,8 +325,8 @@ const App: React.FC = () => {
               <div style={{ overflowX: 'auto' }}>
                 <TimeGrid
                   users={users}
-                  selectedTimes={selectedEventTime ? [selectedEventTime] : []}
-                  onSelectTime={handleSelectRecommendedTime}
+                  selectedRanges={selectedEventTimeRanges}
+                  onSelectRanges={handleSelectRecommendedTime}
                   mode="heatmap"
                 />
               </div>
@@ -374,7 +348,7 @@ const App: React.FC = () => {
 
             <section id="event-form-section">
               <EventForm
-                selectedTime={selectedEventTime}
+                selectedRanges={selectedEventTimeRanges}
                 users={users}
                 onCreated={fetchData}
                 showToast={showToast}

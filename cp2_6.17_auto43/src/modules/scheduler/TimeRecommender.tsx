@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import type { Recommendation, SelectedTime } from '@/types';
+import type { Recommendation, SelectedTimeRange } from '@/types';
 import { DAYS } from '@/utils/timezone';
 
 interface TimeRecommenderProps {
-  onSelect: (time: SelectedTime) => void;
+  onSelect: (ranges: SelectedTimeRange[]) => void;
 }
 
 const RANK_COLORS = ['#f59e0b', '#a3e635', '#38bdf8'];
@@ -30,8 +30,14 @@ const TimeRecommender: React.FC<TimeRecommenderProps> = ({ onSelect }) => {
   }, []);
 
   const handleSelect = (rec: Recommendation) => {
-    const [h, m] = rec.startTime.split(':').map(Number);
-    onSelect({ day: rec.day, startMinute: h * 60 + m });
+    const [sh, sm] = rec.startTime.split(':').map(Number);
+    const [eh, em] = rec.endTime.split(':').map(Number);
+    const range: SelectedTimeRange = {
+      day: rec.day,
+      startMinute: sh * 60 + sm,
+      endMinute: eh * 60 + em
+    };
+    onSelect([range]);
   };
 
   if (loading) {

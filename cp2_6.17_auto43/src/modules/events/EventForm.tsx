@@ -1,12 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import type { Attendee, SelectedTime, TimezoneTableRow, User } from '@/types';
+import type { Attendee, SelectedTimeRange, TimezoneTableRow, User } from '@/types';
 import { TIMEZONE_OPTIONS, getTimezoneAbbr, minuteToTimeString, parseTimezoneOffset } from '@/utils/timezone';
 import dayjs from 'dayjs';
 import CalendarExport from './CalendarExport';
 import type { Event } from '@/types';
 
 interface EventFormProps {
-  selectedTime: SelectedTime | null;
+  selectedRanges: SelectedTimeRange[];
   users: User[];
   onCreated: () => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
@@ -21,7 +21,7 @@ const DURATION_OPTIONS = [
 
 const DAYS = ['周一', '周二', '周三', '周四', '周五'];
 
-const EventForm: React.FC<EventFormProps> = ({ selectedTime, users, onCreated, showToast }) => {
+const EventForm: React.FC<EventFormProps> = ({ selectedRanges, users, onCreated, showToast }) => {
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
   const [startTime, setStartTime] = useState('09:00');
@@ -30,13 +30,15 @@ const EventForm: React.FC<EventFormProps> = ({ selectedTime, users, onCreated, s
   const [createdEvent, setCreatedEvent] = useState<Event | null>(null);
 
   useEffect(() => {
-    if (selectedTime) {
-      setStartTime(minuteToTimeString(selectedTime.startMinute));
+    if (selectedRanges.length > 0) {
+      const firstRange = selectedRanges[0];
+      setStartTime(minuteToTimeString(firstRange.startMinute));
+      setDuration(firstRange.endMinute - firstRange.startMinute);
       const today = dayjs();
-      const targetDate = today.add((selectedTime.day - today.day() + 1 + 7) % 7, 'day');
+      const targetDate = today.add((firstRange.day - today.day() + 1 + 7) % 7, 'day');
       setDate(targetDate.format('YYYY-MM-DD'));
     }
-  }, [selectedTime]);
+  }, [selectedRanges]);
 
   const attendees = useMemo<Attendee[]>(() => {
     if (!attendeeEmails.trim()) return [];
@@ -204,9 +206,16 @@ const EventForm: React.FC<EventFormProps> = ({ selectedTime, users, onCreated, s
           </div>
         </div>
 
-        {selectedTime && (
+        {selectedRanges.length > 0 && (
           <div style={{ padding: '8px 12px', background: '#dbeafe', borderRadius: '8px', fontSize: '13px', color: '#1e40af' }}>
-            已选择：{DAYS[selectedTime.day]} {minuteToTimeString(selectedTime.startMinute)}
+            已选择：
+            {selectedRanges.map((r, i) => (
+              <span key={i}>
+                {i > 0 && '，'}
+                {DAYS[r.day]} {minuteToTimeString(r.startMinute)}-{minuteToTimeString(r.endMinute)}
+                ({Math.round((r.endMinute - r.startMinute) / 60 * 10) / 10}h)
+              </span>
+            ))}
           </div>
         )}
 
