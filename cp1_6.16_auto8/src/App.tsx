@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import PlanForm from './components/PlanForm';
 import ProgressChart from './components/ProgressChart';
+import TrackList from './components/TrackList';
 import type { Track, Feedback, Student } from './api/backend';
 import { fetchTracks, fetchStudents, fetchFeedback, instrumentLabels, instrumentColors } from './api/backend';
 import type { WeeklyPlan, WeeklyStats, DifficultyPreference } from './logic/planGenerator';
@@ -13,6 +14,7 @@ import {
   saveWeeklyPlan,
   markFeedbackViewed,
 } from './logic/dataStore';
+import { useDebounce, useMediaQuery } from './hooks/useDebounce';
 
 type NavKey = 'tracks' | 'plan' | 'stats' | 'feedback';
 
@@ -66,6 +68,7 @@ function Stars({ count }: { count: number }) {
 export default function App() {
   const [activeNav, setActiveNav] = useState<NavKey>('plan');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const [tracks, setTracks] = useState<Track[]>([]);
   const [selectedTrackIds, setSelectedTrackIds] = useState<string[]>([]);
   const [dailyMinutes, setDailyMinutes] = useState<number>(30);
@@ -79,6 +82,7 @@ export default function App() {
   const [newFeedbackBar, setNewFeedbackBar] = useState<Feedback | null>(null);
   const [feedbackExpanded, setFeedbackExpanded] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
+  const debouncedSearch = useDebounce(searchKeyword, 200);
   const [filterInstrument, setFilterInstrument] = useState<string>('all');
   const feedbackTimerRef = useRef<number | null>(null);
   const pollRef = useRef<number | null>(null);
@@ -185,7 +189,7 @@ export default function App() {
   }, [plan, completedIds]);
 
   const filteredTracks = useMemo(() => {
-    const kw = searchKeyword.trim().toLowerCase();
+    const kw = debouncedSearch.trim().toLowerCase();
     return tracks.filter(t => {
       if (filterInstrument !== 'all' && t.instrument !== filterInstrument) return false;
       if (kw) {
@@ -195,7 +199,7 @@ export default function App() {
       }
       return true;
     });
-  }, [tracks, searchKeyword, filterInstrument]);
+  }, [tracks, debouncedSearch, filterInstrument]);
 
   const groupedTracks = useMemo(() => {
     const groups: Record<string, Track[]> = {};
@@ -290,51 +294,18 @@ export default function App() {
                 已选择 <strong>{selectedTrackIds.length}</strong> 首曲目
               </div>
             )}
-            <div className="tracks-container virtual-scroll">
-              {Object.entries(groupedTracks).map(([inst, instTracks]) => (
-                <div key={inst} className="track-group">
-                  <div
-                    className="track-group-label"
-                    style={{ backgroundColor: instrumentColors[inst as keyof typeof instrumentColors] }}
-                  >
-                    {instrumentLabels[inst as keyof typeof instrumentLabels]}
-                  </div>
-                  {instTracks.map(track => (
-                    <div
-                      key={track.id}
-                      className={`track-card ${selectedTrackIds.includes(track.id) ? 'selected' : ''}`}
-                      onClick={() => {
-                        setSelectedTrackIds(prev =>
-                          prev.includes(track.id)
-                            ? prev.filter(id => id !== track.id)
-                            : [...prev, track.id]
-                        );
-                      }}
-                    >
-                      <div className="track-main">
-                        <div className="track-title">{track.title}</div>
-                        <div className="track-sub">
-                          <span className="track-composer">{track.composer}</span>
-                          <span
-                            className="instrument-tag"
-                            style={{ backgroundColor: instrumentColors[track.instrument] }}
-                          >
-                            {instrumentLabels[track.instrument]}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="track-stats">
-                        <div className="track-stat"><span className="stat-label">时长</span>{track.duration}分钟</div>
-                        <div className="track-stat"><span className="stat-label">难度</span><Stars count={track.difficulty} /></div>
-                      </div>
-                      <div className="track-desc">{track.description}</div>
-                    </div>
-                  ))}
-                </div>
-              ))}
-              {filteredTracks.length === 0 && (
-                <div className="empty-state">未找到匹配的曲目</div>
-              )}
+            <div className="tracks-container">
+              <TrackList
+                tracks={filteredTracks}
+                selectedTrackIds={selectedTrackIds}
+                onToggleTrack={(trackId) => {
+                  setSelectedTrackIds(prev =>
+                    prev.includes(trackId)
+                      ? prev.filter(id => id !== trackId)
+                      : [...prev, trackId]
+                  );
+                }}
+              />
             </div>
           </div>
         )}

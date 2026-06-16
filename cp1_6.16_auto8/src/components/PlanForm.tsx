@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { FixedSizeList as List } from 'react-window';
 import type { Track } from '../api/backend';
 import { instrumentLabels, instrumentColors } from '../api/backend';
 import type { DifficultyPreference } from '../logic/planGenerator';
+import { useDebounce } from '../hooks/useDebounce';
 
 interface PlanFormProps {
   tracks: Track[];
@@ -39,7 +41,13 @@ const preferenceIcons: Record<DifficultyPreference, string> = {
   challenge: '🚀',
 };
 
-const VISIBLE_ITEMS = 15;
+const VISIBLE_ITEMS = 7;
+const ITEM_HEIGHT = 56;
+const LIST_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
+
+type ListItem =
+  | { type: 'group'; group: string; label: string }
+  | { type: 'track'; track: Track; group: string };
 
 export default function PlanForm({
   tracks,
@@ -54,21 +62,10 @@ export default function PlanForm({
   onGenerate,
 }: PlanFormProps) {
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [debouncedKeyword, setDebouncedKeyword] = useState('');
+  const debouncedKeyword = useDebounce(searchKeyword, 200);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [scrollOffset, setScrollOffset] = useState(0);
-  const searchRef = useRef<number | null>(null);
+  const listRef = useRef<List>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (searchRef.current) clearTimeout(searchRef.current);
-    searchRef.current = window.setTimeout(() => {
-      setDebouncedKeyword(searchKeyword);
-    }, 200);
-    return () => {
-      if (searchRef.current) clearTimeout(searchRef.current);
-    };
-  }, [searchKeyword]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -80,33 +77,43 @@ export default function PlanForm({
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const filteredTracks = useMemo(() => {
+  useEffect(() => {
+    if (listRef.current) {
+      listRef.current.scrollTo(0);
+    }
+  }, [debouncedKeyword]);
+
+  const flatListItems = useMemo((): ListItem[] => {
     const kw = debouncedKeyword.trim().toLowerCase();
-    const list = tracks.filter(t => {
+    const filtered = tracks.filter(t => {
       const isSelected = selectedTrackIds.includes(t.id);
-      if (kw === '') return !isSelected;
-      return !isSelected && (
+      if (isSelected) return false;
+      if (kw === '') return true;
+      return (
         t.title.toLowerCase().includes(kw) ||
         t.composer.toLowerCase().includes(kw) ||
         t.description.toLowerCase().includes(kw)
       );
     });
+
     const groups: Record<string, Track[]> = {};
-    list.forEach(t => {
+    filtered.forEach(t => {
       if (!groups[t.instrument]) groups[t.instrument] = [];
       groups[t.instrument].push(t);
     });
-    const result: { track: Track; group: string }[] = [];
-    Object.entries(groups).forEach(([g, items]) => {
-      items.forEach(t => result.push({ track: t, group: g }));
+
+    const items: ListItem[] = [];
+    Object.entries(groups).forEach(([g, groupTracks]) => {
+      items.push({ type: 'group', group: g, label: instrumentLabels[g as keyof typeof instrumentLabels] });
+      groupTracks.forEach(t => items.push({ type: 'track', track: t, group: g }));
     });
-    return result;
+    return items;
   }, [tracks, selectedTrackIds, debouncedKeyword]);
 
-  const visibleTracks = useMemo(() => {
-    const start = Math.max(0, scrollOffset);
-    return filteredTracks.slice(start, start + VISIBLE_ITEMS);
-  }, [filteredTracks, scrollOffset]);
+  const trackCount = useMemo(
+    () => flatListItems.filter(i => i.type === 'track').length,
+    [flatListItems]
+  );
 
   const selectedTracks = useMemo(
     () => tracks.filter(t => selectedTrackIds.includes(t.id)),
@@ -115,21 +122,53 @@ export default function PlanForm({
 
   const handleTrackSelect = (trackId: string) => {
     setSelectedTrackIds([...selectedTrackIds, trackId]);
-    setSearchKeyword('');
-    setDebouncedKeyword('');
   };
 
   const handleTrackRemove = (trackId: string) => {
     setSelectedTrackIds(selectedTrackIds.filter(id => id !== trackId));
   };
 
-  const handleDropdownScroll = (e: React.WheelEvent<HTMLDivElement>) => {
-    const maxScroll = Math.max(0, filteredTracks.length - VISIBLE_ITEMS);
-    if (e.deltaY > 0) {
-      setScrollOffset(prev => Math.min(maxScroll, prev + 3));
-    } else {
-      setScrollOffset(prev => Math.max(0, prev - 3));
+  const Row = ({ index, style }: { index: number; style: React.CSSProperties }) => {
+    const item = flatListItems[index];
+    if (!item) return null;
+
+    if (item.type === 'group') {
+      return (
+        <div style={style} className="dropdown-group-header">
+          <span
+            className="dropdown-group-tag"
+            style={{ backgroundColor: instrumentColors[item.group as keyof typeof instrumentColors] }}
+          >
+            {item.label}
+          </span>
+        </div>
+      );
     }
+
+    return (
+      <div
+        style={style}
+        className="dropdown-item"
+        onClick={() => handleTrackSelect(item.track.id)}
+      >
+        <div className="dropdown-item-main">
+          <div className="dropdown-item-title">{item.track.title}</div>
+          <div className="dropdown-item-sub">
+            <span>{item.track.composer}</span>
+            <span
+              className="instrument-tag-sm"
+              style={{ backgroundColor: instrumentColors[item.group as keyof typeof instrumentColors] }}
+            >
+              {instrumentLabels[item.group as keyof typeof instrumentLabels]}
+            </span>
+          </div>
+        </div>
+        <div className="dropdown-item-stats">
+          <span>{item.track.duration}分</span>
+          <Stars count={item.track.difficulty} />
+        </div>
+      </div>
+    );
   };
 
   const totalEstimatedDuration = selectedTracks.length > 0
@@ -161,56 +200,32 @@ export default function PlanForm({
                 value={searchKeyword}
                 onChange={(e) => {
                   setSearchKeyword(e.target.value);
-                  setScrollOffset(0);
                 }}
                 autoFocus
               />
               {debouncedKeyword && (
                 <div className="search-hint">
-                  搜索 "{debouncedKeyword}"，找到 {filteredTracks.length} 个结果
+                  搜索 "{debouncedKeyword}"，找到 {trackCount} 个结果
                 </div>
               )}
               <div
-                className="dropdown-list virtual-scroll"
-                onWheel={handleDropdownScroll}
+                className="dropdown-list"
               >
-                {filteredTracks.length === 0 ? (
+                {flatListItems.length === 0 ? (
                   <div className="dropdown-empty">
                     {selectedTracks.length === tracks.length ? '已选择全部曲目' : '没有匹配的曲目'}
                   </div>
                 ) : (
-                  <>
-                    {Array.from({ length: scrollOffset }).map((_, i) => (
-                      <div key={`pad-${i}`} className="dropdown-spacer" style={{ height: 56 }} />
-                    ))}
-                    {visibleTracks.map(({ track, group }) => (
-                      <div
-                        key={track.id}
-                        className="dropdown-item"
-                        onClick={() => handleTrackSelect(track.id)}
-                      >
-                        <div className="dropdown-item-main">
-                          <div className="dropdown-item-title">{track.title}</div>
-                          <div className="dropdown-item-sub">
-                            <span>{track.composer}</span>
-                            <span
-                              className="instrument-tag-sm"
-                              style={{ backgroundColor: instrumentColors[group as keyof typeof instrumentColors] }}
-                            >
-                              {instrumentLabels[group as keyof typeof instrumentLabels]}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="dropdown-item-stats">
-                          <span>{track.duration}分</span>
-                          <Stars count={track.difficulty} />
-                        </div>
-                      </div>
-                    ))}
-                    {Array.from({ length: Math.max(0, filteredTracks.length - scrollOffset - VISIBLE_ITEMS) }).map((_, i) => (
-                      <div key={`pad-b-${i}`} className="dropdown-spacer" style={{ height: 56 }} />
-                    ))}
-                  </>
+                  <List
+                    ref={listRef}
+                    height={LIST_HEIGHT}
+                    itemCount={flatListItems.length}
+                    itemSize={ITEM_HEIGHT}
+                    width="100%"
+                    className="virtual-list"
+                  >
+                    {Row}
+                  </List>
                 )}
               </div>
             </div>
