@@ -99,7 +99,7 @@ const Card: React.FC<CardProps> = ({
 
   const bgColor = themeBg || '#FFFFFF';
   const borderColor = selected ? '#1565C0' : (themeBorder || 'transparent');
-  const opacity = isDragging ? 0.7 : 1;
+  const opacity = 1;
   const transform = isDragging ? 'scale(1.05)' : 'scale(1)';
   const zIndex = isDragging ? 1000 : (selected ? 10 : 1);
 
@@ -120,13 +120,12 @@ const Card: React.FC<CardProps> = ({
           : '0 2px 8px rgba(0,0,0,0.08)',
         opacity,
         transform,
-        transition: isDragging ? 'none' : 'transform 0.3s ease, box-shadow 0.2s ease, opacity 0.3s ease',
+        transition: isDragging ? 'none' : 'transform 0.3s ease, box-shadow 0.2s ease',
         zIndex,
         overflow: 'hidden',
         userSelect: 'none',
         cursor: onMouseDown ? 'grab' : 'default'
-      }}
-    >
+      }}>
       <div style={{
         width: '100%',
         aspectRatio: '4 / 3',
@@ -180,8 +179,8 @@ const Card: React.FC<CardProps> = ({
             <span
               key={idx}
               style={{
-                background: themeBg ? themeBorder : '#ECEFF1',
-                color: themeBorder ? '#333' : '#546E7A',
+                background: themeBg ? `${themeBorder}CC` : '#ECEFF1',
+                color: themeBorder ? '#37474F' : '#546E7A',
                 padding: '3px 10px',
                 borderRadius: 12,
                 fontSize: 12,
@@ -354,6 +353,17 @@ const Card: React.FC<CardProps> = ({
           </div>
         )}
       </div>
+
+      {isDragging && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          background: '#B0BEC5',
+          opacity: 0.5,
+          pointerEvents: 'none',
+          transition: 'opacity 0.3s ease'
+        }} />
+      )}
     </div>
   );
 };

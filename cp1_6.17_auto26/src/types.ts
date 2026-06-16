@@ -28,9 +28,13 @@ export type ThemeColor = 'warm' | 'cool' | 'nature' | 'soft' | 'dark' | 'vintage
 
 export interface ThemeConfig {
   main: string;
+  tone300: string;
   light: string;
   lighter: string;
   lightest: string;
+  cardBg: string;
+  cardBorder: string;
+  tagBg: string;
 }
 
 export interface MoodBoardData {

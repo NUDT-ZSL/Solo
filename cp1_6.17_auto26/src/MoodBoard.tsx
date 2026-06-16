@@ -12,6 +12,7 @@ interface MoodBoardProps {
   onAddRating: (cardId: string, score: 1 | 2 | 3 | 4 | 5) => void;
   onAddComment: (cardId: string, content: string) => void;
   onBack: () => void;
+  isExporting?: boolean;
 }
 
 const RatingChart: React.FC<{
@@ -83,7 +84,7 @@ const RatingChart: React.FC<{
                 style={{
                   width: '100%',
                   height: mounted ? `${heightPercent}%` : '0%',
-                  background: `linear-gradient(to top, ${barColor}, ${barColor}CC)`,
+                  background: `linear-gradient(to top, ${barColor}, ${barColor}DD)`,
                   borderRadius: 4,
                   transition: 'height 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                   boxShadow: avg > 0 ? `0 -1px 4px ${barColor}40` : 'none'
@@ -110,20 +111,29 @@ const MoodBoard: React.FC<MoodBoardProps> = ({
   onThemeChange,
   onAddRating,
   onAddComment,
-  onBack
+  onBack,
+  isExporting = false
 }) => {
   const exportRef = useRef<HTMLDivElement>(null);
-  const [isExporting, setIsExporting] = useState(false);
+  const [isExportingLocal, setIsExportingLocal] = useState(false);
   const [exportingMode, setExportingMode] = useState(false);
 
   const theme = THEMES[themeColor];
 
   const themeColors = Object.keys(THEMES) as ThemeColor[];
 
+  const gridCards = useMemo(() => {
+    const result: (CardData | null)[] = [...cards];
+    while (result.length < 9) {
+      result.push(null);
+    }
+    return result.slice(0, 9);
+  }, [cards]);
+
   const handleExport = useCallback(async () => {
     if (!exportRef.current) return;
     try {
-      setIsExporting(true);
+      setIsExportingLocal(true);
       setExportingMode(true);
       await new Promise(r => setTimeout(r, 100));
       const canvas = await html2canvas(exportRef.current, {
@@ -139,7 +149,7 @@ const MoodBoard: React.FC<MoodBoardProps> = ({
     } catch (e) {
       console.error('Export failed:', e);
     } finally {
-      setIsExporting(false);
+      setIsExportingLocal(false);
       setExportingMode(false);
     }
   }, [themeColor, theme.lightest]);
@@ -149,8 +159,12 @@ const MoodBoard: React.FC<MoodBoardProps> = ({
     gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
     gridTemplateRows: 'repeat(3, minmax(0, 1fr))',
     gap: 16,
-    padding: 24
+    padding: 24,
+    width: '100%',
+    aspectRatio: 'auto'
   }), []);
+
+  const showControls = !exportingMode && !isExporting;
 
   return (
     <div style={{
@@ -162,84 +176,84 @@ const MoodBoard: React.FC<MoodBoardProps> = ({
       transition: 'background 0.3s ease'
     }}>
       {/* Header */}
-      <div style={{
-        padding: '16px 24px',
-        background: '#fff',
-        borderBottom: `1px solid ${theme.lighter}40`,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 16,
-        flexWrap: 'wrap',
-        boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-        zIndex: 10,
-        position: 'sticky',
-        top: 0
-      }}>
+      {showControls && (
         <div style={{
+          padding: '16px 24px',
+          background: '#fff',
+          borderBottom: `1px solid ${theme.cardBorder}`,
           display: 'flex',
           alignItems: 'center',
+          justifyContent: 'space-between',
           gap: 16,
-          minWidth: 0
+          flexWrap: 'wrap',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+          zIndex: 10,
+          position: 'sticky',
+          top: 0
         }}>
-          <button
-            onClick={onBack}
-            style={{
-              padding: '8px 12px',
-              borderRadius: 8,
-              background: '#F5F5F5',
-              color: '#546E7A',
-              fontSize: 14,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              fontWeight: 500,
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = '#ECEFF1';
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = '#F5F5F5';
-            }}
-          >
-            ← 返回画布
-          </button>
           <div style={{
-            borderLeft: '1px solid #ECEFF1',
-            height: 28,
-            margin: '0 4px',
-            display: window.innerWidth <= 768 ? 'none' : 'block'
-          }} />
-          <h1 style={{
-            fontSize: 18,
-            fontWeight: 700,
-            color: '#263238',
             display: 'flex',
             alignItems: 'center',
-            gap: 10,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis'
+            gap: 16,
+            minWidth: 0
           }}>
-            <span style={{
-              width: 10,
-              height: 10,
-              borderRadius: '50%',
-              background: theme.main,
-              boxShadow: `0 0 0 4px ${theme.lightest}`
+            <button
+              onClick={onBack}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 8,
+                background: '#F5F5F5',
+                color: '#546E7A',
+                fontSize: 14,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontWeight: 500,
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = '#ECEFF1';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = '#F5F5F5';
+              }}
+            >
+              ← 返回画布
+            </button>
+            <div style={{
+              borderLeft: '1px solid #ECEFF1',
+              height: 28,
+              margin: '0 4px',
+              display: window.innerWidth <= 768 ? 'none' : 'block'
             }} />
-            情绪板 · {THEME_LABELS[themeColor]}
-          </h1>
-        </div>
+            <h1 style={{
+              fontSize: 18,
+              fontWeight: 700,
+              color: '#263238',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}>
+              <span style={{
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
+                background: theme.main,
+                boxShadow: `0 0 0 4px ${theme.lightest}`
+              }} />
+              情绪板 · {THEME_LABELS[themeColor]}
+            </h1>
+          </div>
 
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          flexWrap: 'wrap'
-        }}>
-          {!exportingMode && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            flexWrap: 'wrap'
+          }}>
             <>
               <div style={{
                 display: 'flex',
@@ -276,7 +290,7 @@ const MoodBoard: React.FC<MoodBoardProps> = ({
 
               <button
                 onClick={handleExport}
-                disabled={isExporting}
+                disabled={isExportingLocal}
                 style={{
                   padding: '8px 18px',
                   borderRadius: 8,
@@ -289,10 +303,10 @@ const MoodBoard: React.FC<MoodBoardProps> = ({
                   gap: 6,
                   boxShadow: `0 2px 8px ${theme.main}40`,
                   transition: 'all 0.2s ease',
-                  opacity: isExporting ? 0.7 : 1
+                  opacity: isExportingLocal ? 0.7 : 1
                 }}
                 onMouseEnter={(e) => {
-                  if (!isExporting) {
+                  if (!isExportingLocal) {
                     (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)';
                     (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 4px 12px ${theme.main}50`;
                   }
@@ -302,7 +316,7 @@ const MoodBoard: React.FC<MoodBoardProps> = ({
                   (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 2px 8px ${theme.main}40`;
                 }}
               >
-                {isExporting ? (
+                {isExportingLocal ? (
                   <>
                     <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⟳</span>
                     导出中...
@@ -312,14 +326,14 @@ const MoodBoard: React.FC<MoodBoardProps> = ({
                 )}
               </button>
             </>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Scrollable content */}
       <div style={{
         flex: 1,
-        overflow: 'auto',
+        overflow: showControls ? 'auto' : 'visible',
         padding: 0
       }}>
         <div ref={exportRef} style={{
@@ -328,15 +342,15 @@ const MoodBoard: React.FC<MoodBoardProps> = ({
           minHeight: '100%',
           transition: 'background 0.3s ease'
         }}>
-          {/* Rating chart section - only visible in non-export mode or always */}
-          {!exportingMode && (
+          {/* Rating chart section */}
+          {showControls && cards.length > 0 && (
             <div style={{
               background: '#fff',
               margin: 24,
               marginBottom: 0,
               borderRadius: 12,
               padding: '0 20px',
-              border: `1px solid ${theme.lighter}40`
+              border: `1px solid ${theme.cardBorder}60`
             }}>
               <div style={{
                 padding: '16px 0 4px',
@@ -365,35 +379,35 @@ const MoodBoard: React.FC<MoodBoardProps> = ({
               </div>
               <RatingChart
                 cards={cards}
-                barColor={theme.light}
+                barColor={theme.tone300}
                 labelColor={theme.main}
               />
             </div>
           )}
 
-          {/* Moodboard grid */}
+          {/* Moodboard grid - 3x3 fixed */}
           <div style={{
             maxWidth: 1200,
             margin: '0 auto'
           }}>
             <div style={gridStyle}>
-              {Array.from({ length: 9 }).map((_, idx) => {
-                const card = cards[idx];
+              {gridCards.map((card, idx) => {
                 if (!card) {
                   return (
                     <div
                       key={`empty-${idx}`}
                       style={{
                         aspectRatio: '1 / 1.1',
-                        border: `2px dashed ${theme.lighter}80`,
+                        border: `2px dashed ${theme.cardBorder}`,
                         borderRadius: 12,
-                        background: `${theme.main}05`,
+                        background: `${theme.cardBg}80`,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         color: theme.light,
                         fontSize: 14,
-                        fontWeight: 500
+                        fontWeight: 500,
+                        transition: 'all 0.2s ease'
                       }}
                     >
                       + 空位 {idx + 1}
@@ -411,7 +425,7 @@ const MoodBoard: React.FC<MoodBoardProps> = ({
                       transition: 'transform 0.2s ease'
                     }}
                     onMouseEnter={(e) => {
-                      if (!exportingMode) {
+                      if (showControls) {
                         (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-4px)';
                       }
                     }}
@@ -427,9 +441,9 @@ const MoodBoard: React.FC<MoodBoardProps> = ({
                         width: '100%' as any,
                         height: '100%' as any
                       }}
-                      themeBg={theme.lightest}
-                      themeBorder={theme.light}
-                      showControls={!exportingMode}
+                      themeBg={theme.cardBg}
+                      themeBorder={theme.cardBorder}
+                      showControls={showControls}
                       onAddRating={score => onAddRating(card.id, score)}
                       onAddComment={content => onAddComment(card.id, content)}
                     />
@@ -444,7 +458,7 @@ const MoodBoard: React.FC<MoodBoardProps> = ({
             <div style={{
               textAlign: 'center',
               padding: '20px 24px 32px',
-              color: theme.light,
+              color: theme.tone300,
               fontSize: 13,
               fontWeight: 500
             }}>

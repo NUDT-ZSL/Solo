@@ -3,7 +3,6 @@ import Board from './Board';
 import MoodBoard from './MoodBoard';
 import type { CardData, MoodBoardData, ViewType, ThemeColor, Rating, Comment } from './types';
 import { generateId } from './utils';
-import type { SelectionBox } from './types';
 
 const DEMO_IMAGES = [
   'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400',
@@ -34,6 +33,7 @@ const App: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [moodBoard, setMoodBoard] = useState<MoodBoardData | null>(null);
   const [ratingFilter, setRatingFilter] = useState<number>(0);
+  const [isExporting, setIsExporting] = useState(false);
 
   const addCard = useCallback((imageUrl: string, x: number, y: number) => {
     const newCard: CardData = {
@@ -107,6 +107,7 @@ const App: React.FC = () => {
 
   const backToBoard = useCallback(() => {
     setView('board');
+    setIsExporting(false);
   }, []);
 
   const filteredCards = useMemo(() => {
@@ -141,6 +142,7 @@ const App: React.FC = () => {
           ratingFilter={ratingFilter}
           onRatingFilterChange={setRatingFilter}
           hasSelection={selectedIds.size > 0}
+          isExporting={isExporting}
         />
       ) : (
         moodBoard && (
@@ -151,6 +153,7 @@ const App: React.FC = () => {
             onAddRating={addRating}
             onAddComment={addComment}
             onBack={backToBoard}
+            isExporting={isExporting}
           />
         )
       )}

@@ -17,11 +17,40 @@ interface BoardProps {
   ratingFilter: number;
   onRatingFilterChange: (v: number) => void;
   hasSelection: boolean;
+  isExporting?: boolean;
 }
 
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 4;
 const ZOOM_DAMPING = 0.85;
+
+const useFPSMonitor = () => {
+  const fpsRef = useRef({
+    frames: 0,
+    lastTime: performance.now(),
+    currentFPS: 60,
+    frameTimes: [] as number[]
+  });
+
+  useEffect(() => {
+    let rafId: number;
+    const measure = () => {
+      fpsRef.current.frames++;
+      const now = performance.now();
+      const delta = now - fpsRef.current.lastTime;
+      if (delta >= 1000) {
+        fpsRef.current.currentFPS = Math.round((fpsRef.current.frames * 1000) / delta);
+        fpsRef.current.frames = 0;
+        fpsRef.current.lastTime = now;
+      }
+      rafId = requestAnimationFrame(measure);
+    };
+    rafId = requestAnimationFrame(measure);
+    return () => cancelAnimationFrame(rafId);
+  }, []);
+
+  return fpsRef;
+};
 
 const ToolButton: React.FC<{
   icon: string;
@@ -44,7 +73,8 @@ const ToolButton: React.FC<{
       color: active ? '#1565C0' : '#455A64',
       fontSize: 14,
       whiteSpace: 'nowrap',
-      transition: 'background 0.2s ease, color 0.2s ease'
+      transition: 'background 0.2s ease, color 0.2s ease',
+      flexShrink: 0
     }}
     onMouseEnter={(e) => {
       if (!active) {
@@ -81,7 +111,8 @@ const Board: React.FC<BoardProps> = ({
   onCreateMoodBoard,
   ratingFilter,
   onRatingFilterChange,
-  hasSelection
+  hasSelection,
+  isExporting = false
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [toolbarExpanded, setToolbarExpanded] = useState(false);
@@ -108,6 +139,8 @@ const Board: React.FC<BoardProps> = ({
   const [urlInput, setUrlInput] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeTheme: ThemeColor = 'cool';
+
+  const fpsRef = useFPSMonitor();
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth <= 768);
@@ -275,11 +308,13 @@ const Board: React.FC<BoardProps> = ({
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, [onAddCard, screenToWorld]);
 
+  const showToolbar = !isExporting;
+
   const toolbarContent = useMemo(() => (
     <>
       <ToolButton
         icon="🖼"
-        label="URL添加图片"
+        label="URL添加"
         expanded={!isMobile ? toolbarExpanded : true}
         active={showUrlInput}
         activeColor={THEMES[activeTheme].lightest}
@@ -287,30 +322,35 @@ const Board: React.FC<BoardProps> = ({
       />
       <ToolButton
         icon="📁"
-        label="上传本地图片"
+        label="上传图片"
         expanded={!isMobile ? toolbarExpanded : true}
         onClick={() => fileInputRef.current?.click()}
       />
-      <div style={{
-        height: 1,
-        background: '#ECEFF1',
-        margin: '8px 12px'
-      }} />
+      {!isMobile && (
+        <div style={{
+          height: 1,
+          background: '#ECEFF1',
+          margin: '8px 12px'
+        }} />
+      )}
       <ToolButton
         icon="🎨"
-        label="创建情绪板"
+        label="情绪板"
         expanded={!isMobile ? toolbarExpanded : true}
         active={hasSelection}
         activeColor={THEMES[activeTheme].lightest}
         onClick={onCreateMoodBoard}
       />
+      {!isMobile && (
+        <div style={{
+          height: 1,
+          background: '#ECEFF1',
+          margin: '8px 12px'
+        }} />
+      )}
       <div style={{
-        height: 1,
-        background: '#ECEFF1',
-        margin: '8px 12px'
-      }} />
-      <div style={{
-        padding: toolbarExpanded || isMobile ? '8px 16px' : '8px 8px'
+        padding: toolbarExpanded || isMobile ? '8px 16px' : '8px 8px',
+        flexShrink: 0
       }}>
         {(toolbarExpanded || isMobile) && (
           <div style={{ fontSize: 12, color: '#78909C', marginBottom: 6 }}>评分筛选</div>
@@ -332,7 +372,8 @@ const Board: React.FC<BoardProps> = ({
                 color: ratingFilter === n ? '#fff' : '#607D8B',
                 fontSize: 12,
                 fontWeight: ratingFilter === n ? 600 : 400,
-                transition: 'all 0.2s'
+                transition: 'all 0.2s',
+                flexShrink: 0
               }}
             >
               {n === 0 ? '全部' : `${n}★+`}
@@ -352,41 +393,67 @@ const Board: React.FC<BoardProps> = ({
       background: '#F5F5F5',
       position: 'relative'
     }}>
-      {/* Toolbar */}
-      <div
-        onMouseEnter={() => !isMobile && setToolbarExpanded(true)}
-        onMouseLeave={() => !isMobile && setToolbarExpanded(false)}
-        style={{
-          position: isMobile ? 'fixed' : 'relative',
-          bottom: isMobile ? 0 : 'auto',
-          left: 0,
-          right: isMobile ? 0 : 'auto',
-          zIndex: 100,
-          width: isMobile ? '100%' : (toolbarExpanded ? 200 : 48),
-          height: isMobile ? 'auto' : '100%',
-          background: '#FFFFFF',
-          borderRight: isMobile ? 'none' : '1px solid #ECEFF1',
-          borderTop: isMobile ? '1px solid #ECEFF1' : 'none',
-          boxShadow: isMobile ? '0 -4px 16px rgba(0,0,0,0.06)' : 'none',
-          padding: isMobile ? '8px 12px' : '12px 4px',
-          transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: isMobile ? 'row' : 'column',
-          gap: isMobile ? 4 : 2,
-          alignItems: isMobile ? 'center' : 'stretch',
-          overflowX: isMobile ? 'auto' : 'visible'
-        }}
-      >
-        {toolbarContent}
-      </div>
+      {/* Desktop Toolbar */}
+      {showToolbar && !isMobile && (
+        <div
+          onMouseEnter={() => setToolbarExpanded(true)}
+          onMouseLeave={() => setToolbarExpanded(false)}
+          style={{
+            position: 'relative',
+            zIndex: 100,
+            width: toolbarExpanded ? 200 : 48,
+            height: '100%',
+            background: '#FFFFFF',
+            borderRight: '1px solid #ECEFF1',
+            padding: '12px 4px',
+            transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+            alignItems: 'stretch',
+            flexShrink: 0
+          }}
+        >
+          {toolbarContent}
+        </div>
+      )}
+
+      {/* Mobile Bottom Navigation */}
+      {showToolbar && isMobile && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 100,
+            height: 'auto',
+            minHeight: 64,
+            background: '#FFFFFF',
+            borderTop: '1px solid #ECEFF1',
+            boxShadow: '0 -4px 16px rgba(0,0,0,0.06)',
+            padding: '8px 12px',
+            display: 'flex',
+            flexDirection: 'row',
+            gap: 6,
+            alignItems: 'center',
+            overflowX: 'auto',
+            flexShrink: 0,
+            WebkitOverflowScrolling: 'touch'
+          }}
+        >
+          {toolbarContent}
+        </div>
+      )}
 
       {/* URL Input Modal */}
-      {showUrlInput && (
+      {showToolbar && showUrlInput && (
         <div style={{
           position: 'fixed',
-          top: isMobile ? 60 : 16,
+          top: isMobile ? 16 : 16,
           left: isMobile ? 16 : (toolbarExpanded ? 216 : 64),
+          right: isMobile ? 16 : 'auto',
           zIndex: 200,
           background: '#fff',
           padding: 12,
@@ -449,12 +516,13 @@ const Board: React.FC<BoardProps> = ({
           position: 'relative',
           overflow: 'hidden',
           cursor: isPanningRef.current ? 'grabbing' : (isSelectingRef.current ? 'crosshair' : 'grab'),
-          marginBottom: isMobile ? 72 : 0,
+          marginBottom: isMobile && showToolbar ? 72 : 0,
           background: `
             radial-gradient(circle, rgba(0,0,0,0.04) 1px, transparent 1px)
           `,
           backgroundSize: `${20 * scaleRef.current}px ${20 * scaleRef.current}px`,
-          backgroundPosition: `${panRef.current.x * scaleRef.current + viewportRef.current.x}px ${panRef.current.y * scaleRef.current + viewportRef.current.y}px`
+          backgroundPosition: `${panRef.current.x * scaleRef.current + viewportRef.current.x}px ${panRef.current.y * scaleRef.current + viewportRef.current.y}px`,
+          transition: 'marginBottom 0.3s ease'
         }}
       >
         <div style={{
@@ -495,24 +563,32 @@ const Board: React.FC<BoardProps> = ({
         </div>
 
         {/* Scale indicator */}
-        <div style={{
-          position: 'absolute',
-          bottom: isMobile ? 80 : 16,
-          right: 16,
-          background: 'rgba(255,255,255,0.9)',
-          padding: '6px 12px',
-          borderRadius: 6,
-          fontSize: 12,
-          color: '#546E7A',
-          fontWeight: 500,
-          boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-          backdropFilter: 'blur(4px)'
-        }}>
-          {Math.round(scaleRef.current * 100)}%
-        </div>
+        {showToolbar && (
+          <div style={{
+            position: 'absolute',
+            bottom: isMobile ? 80 : 16,
+            right: 16,
+            background: 'rgba(255,255,255,0.9)',
+            padding: '6px 12px',
+            borderRadius: 6,
+            fontSize: 12,
+            color: '#546E7A',
+            fontWeight: 500,
+            boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8
+          }}>
+            <span>{Math.round(scaleRef.current * 100)}%</span>
+            <span style={{ color: fpsRef.current.currentFPS >= 45 ? '#4CAF50' : '#F44336' }}>
+              | {fpsRef.current.currentFPS} FPS
+            </span>
+          </div>
+        )}
 
         {/* Selection indicator */}
-        {hasSelection && (
+        {showToolbar && hasSelection && (
           <div style={{
             position: 'absolute',
             top: 16,
@@ -527,7 +603,7 @@ const Board: React.FC<BoardProps> = ({
             alignItems: 'center',
             gap: 10
           }}>
-            <span>已选 {selectedIds.size} 张卡片</span>
+            <span>已选 {selectedIds.size} 张</span>
             <button
               onClick={onCreateMoodBoard}
               style={{
