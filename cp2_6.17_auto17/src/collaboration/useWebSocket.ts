@@ -162,6 +162,9 @@ export function useWebSocket(options?: UseWebSocketOptions): UseWebSocketReturn 
           case 'studentMetrics':
             setStudentMetrics(message.metrics);
             break;
+          case 'usersList':
+            setUsers(message.users.map(userInfoToInternal));
+            break;
         }
 
         onMessage?.(message);

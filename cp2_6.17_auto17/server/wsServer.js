@@ -231,16 +231,22 @@ function createWsServer(server) {
           studentMetrics: roomManager.getStudentMetrics(roomId)
         });
 
+        const joinedUser = {
+          userId: user.userId,
+          username: user.username,
+          role: user.role,
+          color: user.color,
+          connectedAt: user.connectedAt
+        };
         roomManager.broadcastToRoom(roomId, {
           type: 'userJoin',
-          user: {
-            userId: user.userId,
-            username: user.username,
-            role: user.role,
-            color: user.color,
-            connectedAt: user.connectedAt
-          }
+          user: joinedUser
         }, userId);
+
+        roomManager.broadcastToRoom(roomId, {
+          type: 'usersList',
+          users: roomManager.getUsersList(roomId)
+        });
 
         roomManager.startMetricsBroadcast(roomId);
         return;
@@ -290,11 +296,16 @@ function createWsServer(server) {
 
     function handleLeave() {
       if (!currentRoomId || !currentUserId) return;
+      const leavingUserId = currentUserId;
       roomManager.broadcastToRoom(currentRoomId, {
         type: 'userLeave',
-        userId: currentUserId
+        userId: leavingUserId
       });
       roomManager.removeUser(currentRoomId, currentUserId);
+      roomManager.broadcastToRoom(currentRoomId, {
+        type: 'usersList',
+        users: roomManager.getUsersList(currentRoomId)
+      });
       currentRoomId = null;
       currentUserId = null;
     }

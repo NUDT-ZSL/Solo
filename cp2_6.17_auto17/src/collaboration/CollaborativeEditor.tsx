@@ -101,6 +101,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
 
   const [internalLanguage, setInternalLanguage] = useState<Language>(externalLanguage || 'javascript');
   const [theme] = useState<Theme>('monokai');
+  const [showUserList, setShowUserList] = useState(false);
 
   const language = externalLanguage || internalLanguage;
 
@@ -109,6 +110,19 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
       setInternalLanguage(externalLanguage);
     }
   }, [externalLanguage, internalLanguage]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined' || !document.addEventListener) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showUserList && !target.closest('[data-user-list-container]')) {
+        setShowUserList(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showUserList]);
   const editorRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const prevDocumentRef = useRef<string>('');
@@ -338,6 +352,9 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
       <div
         style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -348,7 +365,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
           flexWrap: 'wrap',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           <div
             style={{
               display: 'inline-flex',
@@ -357,11 +374,11 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
               backgroundColor: '#374151',
               borderRadius: '6px',
               color: '#d1d5db',
-              fontSize: '14px',
+              fontSize: '13px',
             }}
           >
             <span style={{ marginRight: '6px', opacity: 0.7 }}>房间:</span>
-            <span style={{ fontWeight: 600, color: '#f3f4f6' }}>{roomId}</span>
+            <span style={{ fontWeight: 600, color: '#f3f4f6', fontFamily: 'monospace' }}>{roomId}</span>
           </div>
           <div
             style={{
@@ -371,7 +388,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
               backgroundColor: isConnected ? '#064e3b' : '#7f1d1d',
               borderRadius: '6px',
               color: isConnected ? '#86efac' : '#fca5a5',
-              fontSize: '14px',
+              fontSize: '13px',
             }}
           >
             <span
@@ -381,29 +398,161 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
                 borderRadius: '50%',
                 backgroundColor: isConnected ? '#22c55e' : '#ef4444',
                 marginRight: '8px',
+                boxShadow: isConnected ? '0 0 8px rgba(34, 197, 94, 0.6)' : '0 0 8px rgba(239, 68, 68, 0.6)',
+                animation: isConnected ? 'pulse-green 2s ease-in-out infinite' : 'pulse-red 2s ease-in-out infinite',
               }}
             />
             {isConnected ? '已连接' : '未连接'}
           </div>
           <div
+            data-user-list-container
             style={{
+              position: 'relative',
               display: 'inline-flex',
               alignItems: 'center',
               padding: '4px 12px',
               backgroundColor: '#1e3a8a',
               borderRadius: '6px',
               color: '#93c5fd',
-              fontSize: '14px',
+              fontSize: '13px',
+              cursor: 'pointer',
+              userSelect: 'none',
             }}
+            onClick={() => setShowUserList(!showUserList)}
           >
-            <span style={{ marginRight: '6px', opacity: 0.7 }}>在线:</span>
-            <span style={{ fontWeight: 600 }}>{users.length} 人</span>
+            <svg style={{ width: '14px', height: '14px', marginRight: '6px' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            <span style={{ fontWeight: 600 }}>{users.length} 人在线</span>
+            <svg style={{ width: '12px', height: '12px', marginLeft: '4px' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d={showUserList ? 'M18 15l-6-6-6 6' : 'M6 9l6 6 6-6'} />
+            </svg>
+
+            {showUserList && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  marginTop: '6px',
+                  minWidth: '240px',
+                  backgroundColor: '#1f2937',
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                  boxShadow: '0 10px 40px rgba(0,0,0,0.4)',
+                  overflow: 'hidden',
+                  zIndex: 1000,
+                }}
+              >
+                <div
+                  style={{
+                    padding: '10px 14px',
+                    backgroundColor: '#111827',
+                    borderBottom: '1px solid #374151',
+                    fontSize: '12px',
+                    color: '#9ca3af',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  协作成员 ({users.length})
+                </div>
+                <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
+                  {users.map((u, idx) => {
+                    const userColor = u.color || pickColor(u.id);
+                    return (
+                      <div
+                        key={u.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          padding: '10px 14px',
+                          borderBottom: idx < users.length - 1 ? '1px solid #374151' : 'none',
+                          backgroundColor: u.id === userId ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: '30px',
+                            height: '30px',
+                            borderRadius: '50%',
+                            backgroundColor: userColor,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '13px',
+                            color: 'white',
+                            fontWeight: 600,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {u.username.charAt(0).toUpperCase()}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            color: '#f3f4f6',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                          }}>
+                            {u.username}
+                            {u.id === userId && (
+                              <span style={{
+                                fontSize: '10px',
+                                padding: '1px 5px',
+                                backgroundColor: '#3b82f6',
+                                color: 'white',
+                                borderRadius: '4px',
+                                fontWeight: 500,
+                              }}>
+                                你
+                              </span>
+                            )}
+                          </div>
+                          <div style={{
+                            fontSize: '11px',
+                            color: '#6b7280',
+                            fontFamily: 'monospace',
+                            marginTop: '2px',
+                          }}>
+                            ID: {u.id.slice(0, 10)}...
+                          </div>
+                        </div>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}>
+                          <span
+                            style={{
+                              width: '6px',
+                              height: '6px',
+                              borderRadius: '50%',
+                              backgroundColor: '#22c55e',
+                              boxShadow: '0 0 6px rgba(34, 197, 94, 0.8)',
+                            }}
+                          />
+                          <span style={{ fontSize: '11px', color: '#22c55e' }}>在线</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <label style={{ color: '#9ca3af', fontSize: '14px' }}>语言:</label>
+            <label style={{ color: '#9ca3af', fontSize: '13px' }}>语言:</label>
             <select
               value={language}
               onChange={(e) => {
@@ -421,7 +570,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
                 color: '#f3f4f6',
                 border: '1px solid #4b5563',
                 borderRadius: '6px',
-                fontSize: '14px',
+                fontSize: '13px',
                 cursor: 'pointer',
                 outline: 'none',
               }}
@@ -431,27 +580,54 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
             </select>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            {users.map((u) => (
+            {users.slice(0, 6).map((u) => (
               <div
                 key={u.id}
                 title={u.username}
                 style={{
-                  width: '24px',
-                  height: '24px',
+                  width: '22px',
+                  height: '22px',
                   borderRadius: '50%',
                   backgroundColor: u.color || pickColor(u.id),
-                  border: u.id === userId ? '2px solid white' : 'none',
+                  border: u.id === userId ? '2px solid white' : '1px solid rgba(255,255,255,0.2)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '11px',
+                  fontSize: '10px',
                   color: 'white',
                   fontWeight: 600,
+                  transition: 'transform 0.15s',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'scale(1.15)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'scale(1)';
                 }}
               >
                 {u.username.charAt(0).toUpperCase()}
               </div>
             ))}
+            {users.length > 6 && (
+              <div
+                style={{
+                  width: '22px',
+                  height: '22px',
+                  borderRadius: '50%',
+                  backgroundColor: '#4b5563',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '10px',
+                  color: 'white',
+                  fontWeight: 600,
+                }}
+                title={`还有 ${users.length - 6} 人`}
+              >
+                +{users.length - 6}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -470,7 +646,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
           setOptions={{
             enableBasicAutocompletion: true,
             enableLiveAutocompletion: true,
-            enableSnippets: true,
+            enableSnippets: false,
             showLineNumbers: true,
             tabSize: 2,
             useWorker: false,
@@ -481,6 +657,17 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
         />
         {renderRemoteCursors()}
       </div>
+
+      <style>{`
+        @keyframes pulse-green {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+        @keyframes pulse-red {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      `}</style>
     </div>
   );
 };

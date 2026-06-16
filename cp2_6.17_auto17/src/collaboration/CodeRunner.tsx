@@ -21,6 +21,7 @@ export const CodeRunner: React.FC<CodeRunnerProps> = ({ code, language }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [executionTime, setExecutionTime] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   const handleRun = useCallback(async () => {
     setIsLoading(true);
@@ -65,6 +66,30 @@ export const CodeRunner: React.FC<CodeRunnerProps> = ({ code, language }) => {
       setIsLoading(false);
     }
   }, [code, language]);
+
+  const handleClear = useCallback(() => {
+    setOutput({ stdout: '', stderr: '' });
+    setError(null);
+    setExecutionTime(null);
+  }, []);
+
+  const handleCopy = useCallback(async () => {
+    const textToCopy = [
+      error ? `[错误] ${error}` : '',
+      output.stderr ? `[stderr] ${output.stderr}` : '',
+      output.stdout ? `[stdout] ${output.stdout}` : '',
+    ].filter(Boolean).join('\n');
+
+    if (textToCopy) {
+      try {
+        await navigator.clipboard.writeText(textToCopy);
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2000);
+      } catch (e) {
+        console.error('复制失败:', e);
+      }
+    }
+  }, [output, error]);
 
   const combinedOutput = (output.stdout + output.stderr).trim();
   const hasOutput = combinedOutput.length > 0 || error;
@@ -126,6 +151,91 @@ export const CodeRunner: React.FC<CodeRunnerProps> = ({ code, language }) => {
               执行时间: {executionTime}ms
             </span>
           )}
+
+          <button
+            onClick={handleCopy}
+            disabled={!hasOutput || isLoading}
+            title="复制输出"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '6px 10px',
+              backgroundColor: hasOutput && !isLoading ? '#374151' : '#1f2937',
+              color: hasOutput && !isLoading ? '#d1d5db' : '#6b7280',
+              border: '1px solid #4b5563',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: 500,
+              cursor: hasOutput && !isLoading ? 'pointer' : 'not-allowed',
+              transition: 'all 0.2s',
+              outline: 'none',
+            }}
+            onMouseEnter={(e) => {
+              if (hasOutput && !isLoading) {
+                e.currentTarget.style.backgroundColor = '#4b5563';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (hasOutput && !isLoading) {
+                e.currentTarget.style.backgroundColor = '#374151';
+              }
+            }}
+          >
+            {copySuccess ? (
+              <>
+                <svg style={{ width: '14px', height: '14px' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+                已复制
+              </>
+            ) : (
+              <>
+                <svg style={{ width: '14px', height: '14px' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" />
+                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                </svg>
+                复制
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={handleClear}
+            disabled={!hasOutput || isLoading}
+            title="清空控制台"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '6px 10px',
+              backgroundColor: hasOutput && !isLoading ? '#374151' : '#1f2937',
+              color: hasOutput && !isLoading ? '#d1d5db' : '#6b7280',
+              border: '1px solid #4b5563',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: 500,
+              cursor: hasOutput && !isLoading ? 'pointer' : 'not-allowed',
+              transition: 'all 0.2s',
+              outline: 'none',
+            }}
+            onMouseEnter={(e) => {
+              if (hasOutput && !isLoading) {
+                e.currentTarget.style.backgroundColor = '#4b5563';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (hasOutput && !isLoading) {
+                e.currentTarget.style.backgroundColor = '#374151';
+              }
+            }}
+          >
+            <svg style={{ width: '14px', height: '14px' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 6h18" />
+              <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+            </svg>
+            清空
+          </button>
 
           <button
             onClick={handleRun}

@@ -97,13 +97,19 @@ export interface ServerStudentMetricsMessage {
   metrics: StudentMetrics[];
 }
 
+export interface ServerUsersListMessage {
+  type: 'usersList';
+  users: UserInfo[];
+}
+
 export type ServerMessage =
   | ServerInitMessage
   | ServerOpMessage
   | ServerCursorMessage
   | ServerUserJoinMessage
   | ServerUserLeaveMessage
-  | ServerStudentMetricsMessage;
+  | ServerStudentMetricsMessage
+  | ServerUsersListMessage;
 
 export interface RunCodeRequest {
   language: 'javascript' | 'python';
