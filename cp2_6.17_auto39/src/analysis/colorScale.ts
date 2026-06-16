@@ -32,7 +32,11 @@ export function lerpColor(hexA: string, hexB: string, t: number): string {
 }
 
 export function interpolateRouteColor(t: number): string {
-  return lerpColor('#4ecdc4', '#ff6b6b', t);
+  const clamped = Math.max(0, Math.min(1, t));
+  if (clamped < 0.5) {
+    return lerpColor('#00cc66', '#ffcc00', clamped * 2);
+  }
+  return lerpColor('#ffcc00', '#ff3300', (clamped - 0.5) * 2);
 }
 
 export function interpolateHeatColor(t: number): string {

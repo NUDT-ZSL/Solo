@@ -53,8 +53,10 @@ function RouteArc({
     return colorArr;
   }, [points, emissionT]);
 
-  const lineWidth = isHovered || isSelected ? 2.5 : 1.2;
-  const opacity = isHovered || isSelected ? 1 : 0.8;
+  const lineWidth = isHovered || isSelected 
+    ? 2.5 + emissionT * 1.5
+    : 0.8 + emissionT * 2.0;
+  const opacity = isHovered || isSelected ? 1 : 0.7 + emissionT * 0.2;
 
   return (
     <group>

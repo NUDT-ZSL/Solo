@@ -19,7 +19,12 @@ export function Globe({ onDoubleClick }: { onDoubleClick?: (p: RoutePoint, route
   const routes = useGlobalStore(s => s.routes);
   const setFocusedRegion = useGlobalStore(s => s.setFocusedRegion);
   const setPanelCollapsed = useGlobalStore(s => s.setPanelCollapsed);
-  const autoRotateRef = useRef(true);
+  const autoRotateStore = useGlobalStore(s => s.autoRotate);
+  const rotateSpeed = useGlobalStore(s => s.rotateSpeed);
+  const setAutoRotate = useGlobalStore(s => s.setRotateSpeed);
+  const toggleAutoRotate = useGlobalStore(s => s.toggleAutoRotate);
+  const autoRotateRef = useRef(autoRotateStore);
+  const interactTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const textureLoader = useMemo(() => new THREE.TextureLoader(), []);
 
@@ -32,8 +37,9 @@ export function Globe({ onDoubleClick }: { onDoubleClick?: (p: RoutePoint, route
   }, [textureLoader]);
 
   useFrame((_, delta) => {
+    autoRotateRef.current = autoRotateStore;
     if (groupRef.current && autoRotateRef.current) {
-      groupRef.current.rotation.y += delta * 0.08;
+      groupRef.current.rotation.y += delta * rotateSpeed;
     }
   });
 

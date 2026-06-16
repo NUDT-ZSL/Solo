@@ -30,6 +30,9 @@ interface GlobalState {
   focusedRegion: FocusedRegion | null;
   tooltip: { visible: boolean; x: number; y: number; routeId: string | null };
 
+  autoRotate: boolean;
+  rotateSpeed: number;
+
   setRoutes: (routes: ShippingRoute[], lastUpdated: string) => void;
   setRoutesLoading: (v: boolean) => void;
   setRoutesError: (e: string | null) => void;
@@ -48,6 +51,9 @@ interface GlobalState {
 
   setFocusedRegion: (region: FocusedRegion | null) => void;
   setTooltip: (t: Partial<GlobalState['tooltip']>) => void;
+
+  toggleAutoRotate: () => void;
+  setRotateSpeed: (speed: number) => void;
 }
 
 export const useGlobalStore = create<GlobalState>((set, get) => ({
@@ -67,6 +73,9 @@ export const useGlobalStore = create<GlobalState>((set, get) => ({
 
   focusedRegion: null,
   tooltip: { visible: false, x: 0, y: 0, routeId: null },
+
+  autoRotate: true,
+  rotateSpeed: 0.08,
 
   setRoutes: (routes, lastUpdated) => set({ routes, routesLoading: false, lastUpdated }),
   setRoutesLoading: v => set({ routesLoading: v }),
@@ -90,7 +99,10 @@ export const useGlobalStore = create<GlobalState>((set, get) => ({
   setPanelCollapsed: v => set({ panelCollapsed: v }),
 
   setFocusedRegion: region => set({ focusedRegion: region }),
-  setTooltip: t => set(s => ({ tooltip: { ...s.tooltip, ...t } }))
+  setTooltip: t => set(s => ({ tooltip: { ...s.tooltip, ...t } })),
+
+  toggleAutoRotate: () => set(s => ({ autoRotate: !s.autoRotate })),
+  setRotateSpeed: speed => set({ rotateSpeed: Math.max(0, Math.min(0.5, speed)) })
 }));
 
 export function selectRouteById(id: string | null): ShippingRoute | null {

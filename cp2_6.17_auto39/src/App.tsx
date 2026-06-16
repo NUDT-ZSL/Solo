@@ -12,6 +12,7 @@ import { HeatmapToggle } from './ui/heatmapToggle';
 import { RouteTooltip } from './ui/routeTooltip';
 import { Header } from './ui/header';
 import { StatusBar } from './ui/statusBar';
+import { RotationControls } from './ui/rotationControls';
 import { useFetchRoutes } from './hooks/useFetchRoutes';
 import { useGlobalStore, FocusedRegion } from './store/useGlobalStore';
 import type { RoutePoint, ShippingRoute } from './types';
@@ -230,6 +231,7 @@ export default function App() {
       <HeatmapToggle />
       <InfoPanel />
       <Timeline />
+      <RotationControls />
       <StatusBar />
       <RouteTooltip />
       {loading && <LoadingOverlay />}
