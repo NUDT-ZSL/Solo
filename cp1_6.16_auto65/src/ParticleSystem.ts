@@ -1,6 +1,10 @@
 export interface Particle {
   x: number;
   y: number;
+  startX: number;
+  startY: number;
+  centerX: number;
+  centerY: number;
   vx: number;
   vy: number;
   size: number;
@@ -9,9 +13,13 @@ export interface Particle {
   life: number;
   maxLife: number;
   active: boolean;
-  type: 'default' | 'ring';
+  type: 'default' | 'ring' | 'summon_ring' | 'implode_explode';
   ringRadius?: number;
   ringMaxRadius?: number;
+  ringStartAlpha?: number;
+  implodeDuration?: number;
+  explodeSpeed?: number;
+  angle?: number;
 }
 
 const PARTICLE_LIMIT = 800;
@@ -28,7 +36,8 @@ export class ParticleSystem {
 
   private createEmptyParticle(): Particle {
     return {
-      x: 0, y: 0, vx: 0, vy: 0, size: 0, color: '#FFFFFF',
+      x: 0, y: 0, startX: 0, startY: 0, centerX: 0, centerY: 0,
+      vx: 0, vy: 0, size: 0, color: '#FFFFFF',
       alpha: 0, life: 0, maxLife: 1, active: false, type: 'default'
     };
   }
