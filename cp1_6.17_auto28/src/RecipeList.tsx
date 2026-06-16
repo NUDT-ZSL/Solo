@@ -159,9 +159,14 @@ export const RecipeList: React.FC<RecipeListProps> = ({
   onToggleFavorite,
 }) => {
   const [activeCategory, setActiveCategory] = useState<RecipeCategory | 'all'>('all');
-  const [isAnimating, setIsAnimating] = useState(false);
+  const [animationKey, setAnimationKey] = useState(0);
 
-  const favoriteRecipes = useMemo(() => recipes.filter((r) => r.isFavorite), [recipes]);
+  const favoriteRecipes = useMemo(() => {
+    if (activeCategory === 'all') {
+      return recipes.filter((r) => r.isFavorite);
+    }
+    return recipes.filter((r) => r.isFavorite && r.category === activeCategory);
+  }, [recipes, activeCategory]);
 
   const filteredRecipes = useMemo(() => {
     if (activeCategory === 'all') return recipes.filter((r) => !r.isFavorite);
@@ -170,11 +175,8 @@ export const RecipeList: React.FC<RecipeListProps> = ({
 
   const handleCategoryChange = (category: RecipeCategory | 'all') => {
     if (category === activeCategory) return;
-    setIsAnimating(true);
-    setTimeout(() => {
-      setActiveCategory(category);
-      setIsAnimating(false);
-    }, 150);
+    setActiveCategory(category);
+    setAnimationKey((prev) => prev + 1);
   };
 
   const categories: Array<{ key: RecipeCategory | 'all'; label: string }> = [
@@ -257,13 +259,7 @@ export const RecipeList: React.FC<RecipeListProps> = ({
         </div>
       )}
 
-      <div
-        className="recipe-grid-wrapper"
-        style={{
-          opacity: isAnimating ? 0 : 1,
-          transition: 'opacity 0.3s ease-in-out',
-        }}
-      >
+      <div key={animationKey} className="fade-transition">
         <div
           className="recipe-grid"
           style={{

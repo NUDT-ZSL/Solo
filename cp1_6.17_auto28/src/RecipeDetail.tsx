@@ -33,7 +33,7 @@ interface TimerDisplayProps {
 const TimerDisplay: React.FC<TimerDisplayProps> = ({ stepId, durationSeconds, onExpire }) => {
   const [remaining, setRemaining] = useState(durationSeconds);
   const [status, setStatus] = useState<'idle' | 'running' | 'paused' | 'expired'>('idle');
-  const [isAnimating, setIsAnimating] = useState(false);
+  const [pulseKey, setPulseKey] = useState(0);
   const initialized = useRef(false);
 
   useEffect(() => {
@@ -48,8 +48,7 @@ const TimerDisplay: React.FC<TimerDisplayProps> = ({ stepId, durationSeconds, on
         },
         (r) => {
           setRemaining(r);
-          setIsAnimating(true);
-          setTimeout(() => setIsAnimating(false), 200);
+          setPulseKey((prev) => prev + 1);
         }
       );
       initialized.current = true;
@@ -90,13 +89,15 @@ const TimerDisplay: React.FC<TimerDisplayProps> = ({ stepId, durationSeconds, on
       }}
     >
       <span
+        key={pulseKey}
+        className="timer-pulse"
         style={{
-          fontSize: isAnimating ? '26px' : '24px',
+          fontSize: '24px',
           fontWeight: 600,
           color: '#424242',
           fontFamily: 'monospace',
-          transition: 'font-size 0.2s ease',
           minWidth: '80px',
+          display: 'inline-block',
         }}
       >
         {displayTime}
@@ -184,8 +185,7 @@ interface StepCardProps {
 }
 
 const StepCard: React.FC<StepCardProps> = ({ step, index, status, onTimerExpire }) => {
-  const [isFlashing, setIsFlashing] = useState(false);
-  const flashCount = useRef(0);
+  const [shouldFlash, setShouldFlash] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
   const getStepNumberBg = () => {
@@ -200,30 +200,26 @@ const StepCard: React.FC<StepCardProps> = ({ step, index, status, onTimerExpire 
   };
 
   useEffect(() => {
-    if (status === 'completed' && flashCount.current === 0) {
-      flashCount.current = 1;
-      let flashes = 0;
-      const flashInterval = setInterval(() => {
-        setIsFlashing((prev) => !prev);
-        flashes++;
-        if (flashes >= 6) {
-          clearInterval(flashInterval);
-          setIsFlashing(false);
-        }
-      }, 500);
+    if (status === 'completed' && !shouldFlash) {
+      setShouldFlash(true);
+      const timer = setTimeout(() => {
+        setShouldFlash(false);
+      }, 1500);
+      return () => clearTimeout(timer);
     }
-  }, [status]);
+  }, [status, shouldFlash]);
 
   return (
     <div
       ref={cardRef}
+      className={shouldFlash ? 'flash-animation' : ''}
       style={{
         background: '#FFFFFF',
         borderRadius: '12px',
         padding: '24px',
         boxShadow: '0 1px 3px rgba(224, 224, 224, 1)',
-        border: isFlashing ? '2px solid #FF5252' : '2px solid transparent',
-        transition: 'border 0.5s ease, box-shadow 0.2s ease',
+        border: '2px solid transparent',
+        transition: 'box-shadow 0.2s ease',
       }}
     >
       <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>

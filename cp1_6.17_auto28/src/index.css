@@ -84,3 +84,46 @@ button:focus {
 .recipe-card {
   animation: fadeIn 0.3s ease-out;
 }
+
+@keyframes flashBorder {
+  0%, 100% {
+    border-color: transparent;
+  }
+  50% {
+    border-color: #FF5252;
+  }
+}
+
+.flash-animation {
+  animation: flashBorder 0.5s ease-in-out 3;
+  border: 2px solid transparent;
+}
+
+@keyframes timerPulse {
+  0% {
+    font-size: 24px;
+  }
+  50% {
+    font-size: 26px;
+  }
+  100% {
+    font-size: 24px;
+  }
+}
+
+.timer-pulse {
+  animation: timerPulse 0.2s ease-in-out;
+}
+
+@keyframes fadeInOut {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.fade-transition {
+  animation: fadeInOut 0.3s ease-in-out;
+}

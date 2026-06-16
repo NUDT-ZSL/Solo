@@ -33,21 +33,19 @@ export const App: React.FC = () => {
       prev.map((r) => {
         if (r.id !== recipeId) return r;
         const existingRating = r.ratings.find((rating) => rating.userId === 'current-user');
-        if (existingRating) {
-          return {
-            ...r,
-            ratings: r.ratings.map((rating) =>
+        const updatedRatings = existingRating
+          ? r.ratings.map((rating) =>
               rating.userId === 'current-user' ? { ...rating, score } : rating
-            ),
-          };
+            )
+          : [...r.ratings, { userId: 'current-user', score }];
+        const updatedRecipe = { ...r, ratings: updatedRatings };
+        if (selectedRecipe?.id === recipeId) {
+          setSelectedRecipe(updatedRecipe);
         }
-        return {
-          ...r,
-          ratings: [...r.ratings, { userId: 'current-user', score }],
-        };
+        return updatedRecipe;
       })
     );
-  }, []);
+  }, [selectedRecipe]);
 
   return (
     <div className="app" style={{ minHeight: '100vh', background: '#FFF8E1' }}>
