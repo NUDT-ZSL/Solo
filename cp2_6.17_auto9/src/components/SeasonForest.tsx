@@ -299,8 +299,8 @@ export function SeasonForest({
         const child = rocksGroupRef.current.children[i];
         const r = rocks[i];
         if (!r) continue;
-        child.position.x = r.position[0] + Math.sin(r.seed) * parallax * 0.05;
-        child.position.z = r.position[2] + Math.cos(r.seed) * parallax * 0.05;
+        child.position.x = r.position[0] + Math.sin(r.seed) * parallax;
+        child.position.z = r.position[2] + Math.cos(r.seed) * parallax;
       }
     }
 
@@ -309,8 +309,8 @@ export function SeasonForest({
         const child = grassesGroupRef.current.children[i];
         const g = grasses[i];
         if (!g) continue;
-        child.position.x = g.position[0] + Math.sin(g.seed * 0.01) * parallax * 0.03;
-        child.position.z = g.position[2] + Math.cos(g.seed * 0.01) * parallax * 0.03;
+        child.position.x = g.position[0] + Math.sin(g.seed * 0.01) * parallax;
+        child.position.z = g.position[2] + Math.cos(g.seed * 0.01) * parallax;
       }
     }
 
@@ -319,8 +319,8 @@ export function SeasonForest({
         const child = treesGroupRef.current.children[i];
         const t = trees[i];
         if (!t) continue;
-        child.position.x = t.position[0] + Math.sin(t.seed) * parallax * 0.04;
-        child.position.z = t.position[2] + Math.cos(t.seed) * parallax * 0.04;
+        child.position.x = t.position[0] + Math.sin(t.seed) * parallax;
+        child.position.z = t.position[2] + Math.cos(t.seed) * parallax;
       }
     }
 

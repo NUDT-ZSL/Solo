@@ -33,7 +33,6 @@ function App() {
         setTransitionProgress(eased);
       },
       () => {
-        console.log('[App] Transition complete, target:', target);
         animHandleRef.current = null;
         setIsTransitioning(false);
         setTransitionProgress(1);
