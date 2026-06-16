@@ -15,6 +15,77 @@ interface Shape {
   sides?: number;
 }
 
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  color: string;
+  alpha: number;
+  life: number;
+  decay: number;
+  type?: 'sparkle' | 'glow' | 'trail';
+}
+
+interface ParticleBehavior {
+  speedRange: [number, number];
+  hueRange: [number, number];
+  sizeRange: [number, number];
+  decayRange: [number, number];
+  particleType: 'sparkle' | 'glow' | 'trail';
+  spawnMode: 'center' | 'random' | 'top';
+  colorBase: string;
+}
+
+const emotionParticleBehaviors: Record<Emotion, ParticleBehavior> = {
+  happy: {
+    speedRange: [2, 4],
+    hueRange: [-30, 30],
+    sizeRange: [2, 6],
+    decayRange: [0.01, 0.02],
+    particleType: 'glow',
+    spawnMode: 'center',
+    colorBase: '#FFD700',
+  },
+  sad: {
+    speedRange: [0.5, 1.5],
+    hueRange: [-20, 20],
+    sizeRange: [3, 8],
+    decayRange: [0.005, 0.01],
+    particleType: 'trail',
+    spawnMode: 'top',
+    colorBase: '#4A90D9',
+  },
+  angry: {
+    speedRange: [4, 8],
+    hueRange: [-15, 15],
+    sizeRange: [2, 10],
+    decayRange: [0.02, 0.04],
+    particleType: 'sparkle',
+    spawnMode: 'random',
+    colorBase: '#E74C3C',
+  },
+  calm: {
+    speedRange: [0.3, 0.8],
+    hueRange: [-10, 10],
+    sizeRange: [4, 8],
+    decayRange: [0.003, 0.008],
+    particleType: 'glow',
+    spawnMode: 'random',
+    colorBase: '#2ECC71',
+  },
+  anxious: {
+    speedRange: [3, 6],
+    hueRange: [-25, 25],
+    sizeRange: [2, 5],
+    decayRange: [0.015, 0.03],
+    particleType: 'sparkle',
+    spawnMode: 'random',
+    colorBase: '#9B59B6',
+  },
+};
+
 function hexToHsl(hex: string): { h: number; s: number; l: number } {
   const r = parseInt(hex.slice(1, 3), 16) / 255;
   const g = parseInt(hex.slice(3, 5), 16) / 255;
@@ -85,6 +156,7 @@ export function useCanvasAnimation(
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const shapesRef = useRef<Shape[]>([]);
+  const particlesRef = useRef<Particle[]>([]);
   const animationFrameRef = useRef<number | null>(null);
   const lastFpsTimeRef = useRef<number>(performance.now());
   const frameCountRef = useRef<number>(0);
@@ -136,6 +208,85 @@ export function useCanvasAnimation(
       };
     };
 
+    const createParticle = (
+      complexityVal: number,
+      baseColor: string,
+      emotionVal: Emotion,
+      canvasRect: DOMRect
+    ): Particle => {
+      const behavior = emotionParticleBehaviors[emotionVal];
+      const t = (complexityVal - 1) / 9;
+
+      const size = lerp(
+        behavior.sizeRange[0],
+        behavior.sizeRange[1],
+        t
+      ) * (0.5 + Math.random() * 1);
+
+      const baseHsl = hexToHsl(baseColor);
+      const hueVariation = lerp(
+        behavior.hueRange[0],
+        behavior.hueRange[1],
+        Math.random()
+      );
+      const color = hslToHex(
+        baseHsl.h + hueVariation,
+        baseHsl.s,
+        baseHsl.l
+      );
+
+      const speed = lerp(
+        behavior.speedRange[0],
+        behavior.speedRange[1],
+        t
+      ) * (0.8 + Math.random() * 0.4);
+
+      const decay = lerp(
+        behavior.decayRange[0],
+        behavior.decayRange[1],
+        Math.random()
+      );
+
+      let x: number, y: number, vx: number, vy: number;
+
+      switch (behavior.spawnMode) {
+        case 'center':
+          x = canvasRect.width / 2;
+          y = canvasRect.height / 2;
+          const angle = Math.random() * Math.PI * 2;
+          vx = Math.cos(angle) * speed;
+          vy = Math.sin(angle) * speed;
+          break;
+        case 'top':
+          x = Math.random() * canvasRect.width;
+          y = 0;
+          vx = (Math.random() - 0.5) * speed * 0.5;
+          vy = speed;
+          break;
+        case 'random':
+        default:
+          x = Math.random() * canvasRect.width;
+          y = Math.random() * canvasRect.height;
+          const randomAngle = Math.random() * Math.PI * 2;
+          vx = Math.cos(randomAngle) * speed;
+          vy = Math.sin(randomAngle) * speed;
+          break;
+      }
+
+      return {
+        x,
+        y,
+        vx,
+        vy,
+        size,
+        color,
+        alpha: 1,
+        life: 1,
+        decay,
+        type: behavior.particleType,
+      };
+    };
+
     const drawShape = (ctx: CanvasRenderingContext2D, shape: Shape, offset: number) => {
       ctx.save();
       ctx.translate(shape.x, shape.y);
@@ -184,16 +335,110 @@ export function useCanvasAnimation(
       ctx.restore();
     };
 
+    const drawParticle = (ctx: CanvasRenderingContext2D, particle: Particle, offset: number) => {
+      const color = applyHueOffset(particle.color, offset);
+      const hsl = hexToHsl(color);
+
+      ctx.save();
+      ctx.globalAlpha = particle.alpha;
+
+      switch (particle.type) {
+        case 'glow': {
+          const gradient = ctx.createRadialGradient(
+            particle.x, particle.y, 0,
+            particle.x, particle.y, particle.size
+          );
+          gradient.addColorStop(0, `hsla(${hsl.h}, ${hsl.s}%, ${hsl.l}%, 1)`);
+          gradient.addColorStop(0.4, `hsla(${hsl.h}, ${hsl.s}%, ${hsl.l}%, 0.6)`);
+          gradient.addColorStop(1, `hsla(${hsl.h}, ${hsl.s}%, ${hsl.l}%, 0)`);
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        }
+        case 'sparkle': {
+          const sparkleAlpha = Math.sin(particle.life * Math.PI * 4) * 0.5 + 0.5;
+          ctx.globalAlpha = particle.alpha * sparkleAlpha;
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(particle.x, particle.y, particle.size * 0.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(particle.x - particle.size, particle.y);
+          ctx.lineTo(particle.x + particle.size, particle.y);
+          ctx.moveTo(particle.x, particle.y - particle.size);
+          ctx.lineTo(particle.x, particle.y + particle.size);
+          ctx.stroke();
+          break;
+        }
+        case 'trail': {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(particle.x, particle.y, particle.size * 0.3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = particle.alpha * 0.3;
+          ctx.beginPath();
+          ctx.arc(particle.x - particle.vx * 3, particle.y - particle.vy * 3, particle.size * 0.25, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = particle.alpha * 0.15;
+          ctx.beginPath();
+          ctx.arc(particle.x - particle.vx * 6, particle.y - particle.vy * 6, particle.size * 0.2, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        }
+        default: {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(particle.x, particle.y, particle.size * 0.5, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        }
+      }
+
+      ctx.restore();
+    };
+
     const animate = () => {
       const rect = canvas.getBoundingClientRect();
       ctx.clearRect(0, 0, rect.width, rect.height);
 
       const t = (complexity - 1) / 9;
       const shapesPerFrame = Math.round(lerp(1, 8, t));
+      const particlesPerFrame = Math.round(lerp(5, 30, t));
 
       for (let i = 0; i < shapesPerFrame; i++) {
         shapesRef.current.push(createShape(complexity, emotionColor));
       }
+
+      for (let i = 0; i < particlesPerFrame; i++) {
+        particlesRef.current.push(createParticle(complexity, emotionColor, emotion, rect));
+      }
+
+      particlesRef.current = particlesRef.current.filter(particle => {
+        particle.x += particle.vx * speed;
+        particle.y += particle.vy * speed;
+        particle.life -= particle.decay;
+        particle.alpha = particle.life;
+
+        if (emotion === 'anxious') {
+          particle.vx += (Math.random() - 0.5) * 0.5;
+          particle.vy += (Math.random() - 0.5) * 0.5;
+        }
+
+        if (emotion === 'sad') {
+          particle.vy += 0.02;
+        }
+
+        if (emotion === 'calm') {
+          particle.vx += Math.sin(particle.life * 10) * 0.02;
+          particle.vy += Math.cos(particle.life * 8) * 0.02;
+        }
+
+        return particle.life > 0;
+      });
 
       shapesRef.current = shapesRef.current.filter(shape => {
         shape.x += shape.vx * speed;
@@ -201,6 +446,10 @@ export function useCanvasAnimation(
         shape.rotation += shape.rotationSpeed;
         shape.alpha -= 0.005;
         return shape.alpha > 0;
+      });
+
+      particlesRef.current.forEach(particle => {
+        drawParticle(ctx, particle, hueOffset);
       });
 
       shapesRef.current.forEach(shape => {
