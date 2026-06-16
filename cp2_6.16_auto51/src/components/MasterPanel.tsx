@@ -8,6 +8,10 @@ interface MasterPanelProps {
   isExporting: boolean;
 }
 
+const VU_WIDTH = 180;
+const VU_HEIGHT = 20;
+const BAR_COUNT = 32;
+
 export const MasterPanel: React.FC<MasterPanelProps> = ({
   masterVolume,
   onMasterVolumeChange,
@@ -17,82 +21,99 @@ export const MasterPanel: React.FC<MasterPanelProps> = ({
 }) => {
   const vuCanvasRef = useRef<HTMLCanvasElement>(null);
   const [isHovering, setIsHovering] = useState(false);
+  const animationIdRef = useRef<number>(0);
+  const dataArrayRef = useRef<Uint8Array | null>(null);
 
-  useEffect(() => {
+  const drawVUMeter = useCallback(() => {
     if (!analyser || !vuCanvasRef.current) return;
 
     const canvas = vuCanvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    if (!dataArrayRef.current || dataArrayRef.current.length !== analyser.frequencyBinCount) {
+      dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount);
+    }
+
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = 180 * dpr;
-    canvas.height = 20 * dpr;
+    canvas.width = VU_WIDTH * dpr;
+    canvas.height = VU_HEIGHT * dpr;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(dpr, dpr);
 
-    const width = 180;
-    const height = 20;
-    const barCount = 32;
-    const barWidth = (width - (barCount - 1) * 1) / barCount;
+    const width = VU_WIDTH;
+    const height = VU_HEIGHT;
+    const barWidth = (width - (BAR_COUNT - 1) * 1) / BAR_COUNT;
 
-    let animationId: number;
+    analyser.getByteTimeDomainData(dataArrayRef.current);
 
-    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = '#0a0a14';
+    ctx.fillRect(0, 0, width, height);
 
-    const draw = () => {
-      analyser.getByteFrequencyData(dataArray);
+    const step = Math.floor(dataArrayRef.current.length / BAR_COUNT);
 
-      ctx.clearRect(0, 0, width, height);
-
-      const gradient = ctx.createLinearGradient(0, 0, width, 0);
-      gradient.addColorStop(0, '#00e676');
-      gradient.addColorStop(0.5, '#ffeb3b');
-      gradient.addColorStop(1, '#ff5252');
-
-      const step = Math.floor(dataArray.length / barCount);
-
-      for (let i = 0; i < barCount; i++) {
-        let sum = 0;
-        for (let j = 0; j < step; j++) {
-          sum += dataArray[i * step + j];
-        }
-        const average = sum / step;
-        const normalizedValue = average / 255;
-        const barHeight = Math.max(2, normalizedValue * height);
-
-        const y = height - barHeight;
-
-        const colorStop = i / barCount;
-        let barColor: string;
-        if (colorStop < 0.5) {
-          barColor = `rgb(${Math.floor(0 + colorStop * 2 * 255)}, ${Math.floor(230 - colorStop * 2 * (230 - 235))}, ${Math.floor(118 - colorStop * 2 * 118)})`;
-        } else {
-          barColor = `rgb(255, ${Math.floor(235 - (colorStop - 0.5) * 2 * (235 - 82))}, ${Math.floor(59 + (colorStop - 0.5) * 2 * (82 - 59))})`;
-        }
-
-        ctx.fillStyle = barColor;
-        ctx.fillRect(i * (barWidth + 1), y, barWidth, barHeight);
-
-        if (normalizedValue > 0.1) {
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-          ctx.fillRect(i * (barWidth + 1), y, barWidth, 2);
+    for (let i = 0; i < BAR_COUNT; i++) {
+      let sum = 0;
+      let peak = 0;
+      for (let j = 0; j < step; j++) {
+        const idx = i * step + j;
+        if (idx < dataArrayRef.current.length) {
+          const v = (dataArrayRef.current[idx] - 128) / 128;
+          const abs = Math.abs(v);
+          sum += abs;
+          if (abs > peak) peak = abs;
         }
       }
+      const avg = sum / step;
+      const level = Math.max(avg * 1.5, peak * 0.7);
+      const normalizedValue = Math.max(0.05, Math.min(1, level));
+      const barHeight = Math.max(2, normalizedValue * height);
+      const y = height - barHeight;
 
-      ctx.fillStyle = '#2a2a3e';
-      for (let i = 0; i < barCount; i++) {
-        ctx.fillRect(i * (barWidth + 1), 0, barWidth, 1);
+      const colorT = i / (BAR_COUNT - 1);
+      const r = Math.round(0 + colorT * 255);
+      let g: number;
+      if (colorT < 0.5) {
+        g = Math.round(230 - colorT * 2 * (230 - 235));
+      } else {
+        g = Math.round(235 - (colorT - 0.5) * 2 * (235 - 82));
+      }
+      const b = Math.round(118 - colorT * 66);
+
+      ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+      ctx.fillRect(i * (barWidth + 1), y, barWidth, barHeight);
+
+      if (normalizedValue > 0.15) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.fillRect(i * (barWidth + 1), y, barWidth, Math.min(3, barHeight));
       }
 
-      animationId = requestAnimationFrame(draw);
+      ctx.fillStyle = '#1a1a2a';
+      ctx.fillRect(i * (barWidth + 1), height - 1, barWidth, 1);
+    }
+  }, [analyser]);
+
+  useEffect(() => {
+    if (!analyser) {
+      return;
+    }
+
+    drawVUMeter();
+
+    const animate = () => {
+      drawVUMeter();
+      animationIdRef.current = requestAnimationFrame(animate);
     };
 
-    draw();
+    animationIdRef.current = requestAnimationFrame(animate);
 
     return () => {
-      cancelAnimationFrame(animationId);
+      if (animationIdRef.current) {
+        cancelAnimationFrame(animationIdRef.current);
+      }
     };
-  }, [analyser]);
+  }, [analyser, drawVUMeter]);
 
   const handleMixdownClick = useCallback(() => {
     onMixdown();
@@ -101,6 +122,8 @@ export const MasterPanel: React.FC<MasterPanelProps> = ({
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onMasterVolumeChange(parseFloat(e.target.value));
   };
+
+  const vuPercent = Math.round(masterVolume * 100);
 
   return (
     <div
@@ -129,12 +152,12 @@ export const MasterPanel: React.FC<MasterPanelProps> = ({
           width: '100%'
         }}
       >
-        主控
+        主控 MASTER
       </div>
 
       <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <div style={{ color: '#888', fontSize: '11px', textAlign: 'left' }}>
-          总音量
+        <div style={{ color: '#888', fontSize: '11px', textAlign: 'left', fontWeight: 500 }}>
+          总音量 MASTER VOL
         </div>
         <input
           type="range"
@@ -147,34 +170,45 @@ export const MasterPanel: React.FC<MasterPanelProps> = ({
             width: '100%',
             height: '8px',
             borderRadius: '4px',
-            background: 'linear-gradient(90deg, #6c63ff, #8b5cf6)',
+            background: `linear-gradient(90deg, #6c63ff 0%, #8b5cf6 ${vuPercent}%, #3e4a6e ${vuPercent}%)`,
             outline: 'none',
             WebkitAppearance: 'none',
             appearance: 'none',
             cursor: 'pointer'
           }}
         />
-        <div style={{ color: '#666', fontSize: '10px', textAlign: 'right' }}>
-          {Math.round(masterVolume * 100)}%
+        <div style={{ color: '#6c63ff', fontSize: '10px', textAlign: 'right', fontWeight: 700 }}>
+          {vuPercent}%
         </div>
       </div>
 
       <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <div style={{ color: '#888', fontSize: '11px', textAlign: 'left' }}>
-          输出电平
+        <div style={{ color: '#888', fontSize: '11px', textAlign: 'left', fontWeight: 500 }}>
+          输出电平 OUTPUT LEVEL
         </div>
         <canvas
           ref={vuCanvasRef}
+          width={VU_WIDTH}
+          height={VU_HEIGHT}
           style={{
-            width: '100%',
-            height: '20px',
+            width: `${VU_WIDTH}px`,
+            height: `${VU_HEIGHT}px`,
             borderRadius: '4px',
-            background: '#121212'
+            background: '#0a0a14',
+            display: 'block'
           }}
         />
       </div>
 
-      <div style={{ width: '100%', height: '2px', background: '#2a2a3e' }} />
+      <div style={{ width: '100%', height: '2px', background: 'linear-gradient(90deg, transparent, #2a2a3e, transparent)' }} />
+
+      <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#666', fontSize: '10px' }}>
+          <span>44.1kHz</span>
+          <span>16-bit</span>
+          <span>STEREO</span>
+        </div>
+      </div>
 
       <button
         onClick={handleMixdownClick}
@@ -195,11 +229,12 @@ export const MasterPanel: React.FC<MasterPanelProps> = ({
           alignItems: 'center',
           justifyContent: 'center',
           gap: '8px',
-          transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+          transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out, filter 0.2s ease-in-out',
           transform: isHovering && !isExporting ? 'scale(1.05)' : 'scale(1)',
+          filter: isExporting ? 'brightness(0.7)' : 'brightness(1)',
           boxShadow: isHovering && !isExporting
-            ? '0 8px 25px rgba(108, 99, 255, 0.4)'
-            : '0 4px 15px rgba(108, 99, 255, 0.2)',
+            ? '0 8px 25px rgba(108, 99, 255, 0.45), 0 0 0 1px rgba(255,255,255,0.1) inset'
+            : '0 4px 15px rgba(108, 99, 255, 0.25)',
           marginTop: 'auto'
         }}
       >
@@ -212,16 +247,17 @@ export const MasterPanel: React.FC<MasterPanelProps> = ({
                 border: '2px solid rgba(255,255,255,0.3)',
                 borderTop: '2px solid #fff',
                 borderRadius: '50%',
-                animation: 'spin 1s linear infinite'
+                animation: 'spin 0.8s linear infinite'
               }}
             />
-            <span>导出中...</span>
+            <span>渲染中...</span>
           </>
         ) : (
           <>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M8 1L8 10M8 10L5 7M8 10L11 7" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M1 14L15 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M8 1L8 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M5 7L8 10L11 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M1 13H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
             <span>一键混音</span>
           </>
@@ -236,21 +272,28 @@ export const MasterPanel: React.FC<MasterPanelProps> = ({
         input[type="range"]::-webkit-slider-thumb {
           -webkit-appearance: none;
           appearance: none;
-          width: 16px;
-          height: 16px;
+          width: 18px;
+          height: 18px;
           border-radius: 50%;
-          background: #fff;
+          background: #ffffff;
           cursor: pointer;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.4), 0 0 0 2px #6c63ff;
+          transition: transform 0.15s ease-in-out;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+          transform: scale(1.15);
+        }
+        input[type="range"]::-webkit-slider-thumb:active {
+          transform: scale(0.95);
         }
         input[type="range"]::-moz-range-thumb {
-          width: 16px;
-          height: 16px;
+          width: 18px;
+          height: 18px;
           border-radius: 50%;
-          background: #fff;
+          background: #ffffff;
           cursor: pointer;
-          border: none;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+          border: 2px solid #6c63ff;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.4);
         }
       `}</style>
     </div>

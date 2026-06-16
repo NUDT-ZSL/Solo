@@ -1,54 +1,77 @@
 import type { AudioTrack } from '../audio/AudioEngine';
 
-function writeString(view: DataView, offset: number, str: string): void {
-  for (let i = 0; i < str.length; i++) {
-    view.setUint8(offset + i, str.charCodeAt(i));
-  }
-}
-
-function writeWavHeader(
-  view: DataView,
-  sampleRate: number,
-  bitsPerSample: number,
-  numChannels: number,
-  dataLength: number
-): void {
+function encodeWAV(
+  samplesLeft: Float32Array,
+  samplesRight: Float32Array,
+  sampleRate: number
+): ArrayBuffer {
+  const numChannels = 2;
+  const bitsPerSample = 16;
   const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
   const blockAlign = numChannels * (bitsPerSample / 8);
-  const chunkSize = 36 + dataLength;
 
-  writeString(view, 0, 'RIFF');
-  view.setUint32(4, chunkSize, true);
-  writeString(view, 8, 'WAVE');
-  writeString(view, 12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, numChannels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, byteRate, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, bitsPerSample, true);
-  writeString(view, 36, 'data');
-  view.setUint32(40, dataLength, true);
-}
+  const numSamples = samplesLeft.length;
+  const dataSize = numSamples * numChannels * (bitsPerSample / 8);
+  const bufferSize = 44 + dataSize;
 
-function floatTo16BitPCM(
-  view: DataView,
-  offset: number,
-  left: Float32Array,
-  right: Float32Array,
-  length: number
-): void {
-  for (let i = 0; i < length; i++) {
-    const leftSample = Math.max(-1, Math.min(1, left[i]));
-    const rightSample = Math.max(-1, Math.min(1, right[i]));
+  const buffer = new ArrayBuffer(bufferSize);
+  const view = new DataView(buffer);
 
-    const leftInt = Math.round(leftSample * 32767);
-    const rightInt = Math.round(rightSample * 32767);
+  let offset = 0;
 
-    view.setInt16(offset + i * 4, leftInt, true);
-    view.setInt16(offset + i * 4 + 2, rightInt, true);
+  function writeString(str: string): void {
+    for (let i = 0; i < str.length; i++) {
+      view.setUint8(offset + i, str.charCodeAt(i));
+    }
+    offset += str.length;
   }
+
+  function writeUint32(value: number): void {
+    view.setUint32(offset, value, true);
+    offset += 4;
+  }
+
+  function writeUint16(value: number): void {
+    view.setUint16(offset, value, true);
+    offset += 2;
+  }
+
+  writeString('RIFF');
+  writeUint32(36 + dataSize);
+  writeString('WAVE');
+  writeString('fmt ');
+  writeUint32(16);
+  writeUint16(1);
+  writeUint16(numChannels);
+  writeUint32(sampleRate);
+  writeUint32(byteRate);
+  writeUint16(blockAlign);
+  writeUint16(bitsPerSample);
+  writeString('data');
+  writeUint32(dataSize);
+
+  const pcmLeft = new Int16Array(numSamples);
+  const pcmRight = new Int16Array(numSamples);
+
+  for (let i = 0; i < numSamples; i++) {
+    let s1 = Math.max(-1, Math.min(1, samplesLeft[i]));
+    let s2 = Math.max(-1, Math.min(1, samplesRight[i]));
+
+    s1 = s1 < 0 ? s1 * 0x8000 : s1 * 0x7FFF;
+    s2 = s2 < 0 ? s2 * 0x8000 : s2 * 0x7FFF;
+
+    pcmLeft[i] = Math.round(s1);
+    pcmRight[i] = Math.round(s2);
+  }
+
+  for (let i = 0; i < numSamples; i++) {
+    view.setInt16(offset, pcmLeft[i], true);
+    offset += 2;
+    view.setInt16(offset, pcmRight[i], true);
+    offset += 2;
+  }
+
+  return buffer;
 }
 
 export interface MixdownOptions {
@@ -62,8 +85,6 @@ export function mixdownToWav(
   options: MixdownOptions
 ): Blob {
   const { sampleRate, duration, masterVolume } = options;
-  const numChannels = 2;
-  const bitsPerSample = 16;
   const totalSamples = Math.floor(sampleRate * duration);
 
   const mixedLeft = new Float32Array(totalSamples);
@@ -78,6 +99,8 @@ export function mixdownToWav(
     if (track.state.muted) trackGain = 0;
     if (hasSolo && !track.state.solo) trackGain = 0;
 
+    if (trackGain === 0) continue;
+
     const trackLeft = track.buffer.getChannelData(0);
     const trackRight = track.buffer.numberOfChannels > 1
       ? track.buffer.getChannelData(1)
@@ -85,33 +108,46 @@ export function mixdownToWav(
 
     const bufferLength = track.buffer.length;
     const pan = track.state.pan;
-    const panLeft = Math.max(0, Math.min(1, pan <= 0 ? 1 : 1 - pan * 0.7));
-    const panRight = Math.max(0, Math.min(1, pan >= 0 ? 1 : 1 + pan * 0.7));
+
+    let leftGain: number;
+    let rightGain: number;
+
+    if (pan <= 0) {
+      leftGain = 1;
+      rightGain = 1 + pan;
+    } else {
+      leftGain = 1 - pan;
+      rightGain = 1;
+    }
+
+    const finalLeftGain = trackGain * leftGain;
+    const finalRightGain = trackGain * rightGain;
 
     for (let i = 0; i < totalSamples; i++) {
       const bufferIndex = i % bufferLength;
 
-      mixedLeft[i] += trackLeft[bufferIndex] * trackGain * panLeft;
-      mixedRight[i] += trackRight[bufferIndex] * trackGain * panRight;
+      mixedLeft[i] += trackLeft[bufferIndex] * finalLeftGain;
+      mixedRight[i] += trackRight[bufferIndex] * finalRightGain;
     }
   }
 
+  let peak = 0;
   for (let i = 0; i < totalSamples; i++) {
-    mixedLeft[i] *= masterVolume;
-    mixedRight[i] *= masterVolume;
-
-    mixedLeft[i] = Math.max(-1, Math.min(1, mixedLeft[i]));
-    mixedRight[i] = Math.max(-1, Math.min(1, mixedRight[i]));
+    const absL = Math.abs(mixedLeft[i] * masterVolume);
+    const absR = Math.abs(mixedRight[i] * masterVolume);
+    if (absL > peak) peak = absL;
+    if (absR > peak) peak = absR;
   }
 
-  const dataLength = totalSamples * numChannels * (bitsPerSample / 8);
-  const buffer = new ArrayBuffer(44 + dataLength);
-  const view = new DataView(buffer);
+  const normalize = peak > 1 ? 1 / peak : 1;
 
-  writeWavHeader(view, sampleRate, bitsPerSample, numChannels, dataLength);
-  floatTo16BitPCM(view, 44, mixedLeft, mixedRight, totalSamples);
+  for (let i = 0; i < totalSamples; i++) {
+    mixedLeft[i] = mixedLeft[i] * masterVolume * normalize;
+    mixedRight[i] = mixedRight[i] * masterVolume * normalize;
+  }
 
-  return new Blob([buffer], { type: 'audio/wav' });
+  const wavBuffer = encodeWAV(mixedLeft, mixedRight, sampleRate);
+  return new Blob([wavBuffer], { type: 'audio/wav' });
 }
 
 export function generateFileName(): string {
@@ -131,13 +167,20 @@ export function downloadBlob(blob: Blob, fileName: string): void {
   const link = document.createElement('a');
   link.href = url;
   link.download = fileName;
-  link.style.display = 'none';
+  link.rel = 'noopener';
   document.body.appendChild(link);
+
+  const clickHandler = () => {
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      if (link.parentNode) {
+        document.body.removeChild(link);
+      }
+    }, 1500);
+  };
+
+  link.addEventListener('click', clickHandler, { once: true });
   link.click();
-  document.body.removeChild(link);
-  setTimeout(() => {
-    URL.revokeObjectURL(url);
-  }, 1000);
 }
 
 export interface MixdownResult {
@@ -155,13 +198,18 @@ export async function performMixdown(
     ? Math.max(...playingTracks.map(t => t.buffer?.duration ?? 0))
     : 8;
 
-  const blob = mixdownToWav(tracks, {
-    sampleRate,
-    duration,
-    masterVolume
+  return new Promise((resolve, reject) => {
+    try {
+      const blob = mixdownToWav(tracks, {
+        sampleRate,
+        duration,
+        masterVolume
+      });
+
+      const fileName = generateFileName();
+      resolve({ blob, fileName });
+    } catch (err) {
+      reject(err);
+    }
   });
-
-  const fileName = generateFileName();
-
-  return { blob, fileName };
 }

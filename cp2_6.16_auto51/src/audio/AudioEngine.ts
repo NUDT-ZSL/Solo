@@ -136,7 +136,10 @@ export class AudioEngine {
     const track = this.tracks.get(trackId);
     if (track?.panNode && this.audioContext) {
       const clampedValue = Math.max(-1, Math.min(1, value));
-      track.panNode.pan.setValueAtTime(clampedValue, this.audioContext.currentTime);
+      const now = this.audioContext.currentTime;
+      track.panNode.pan.cancelScheduledValues(now);
+      track.panNode.pan.setValueAtTime(clampedValue, now);
+      track.panNode.pan.linearRampToValueAtTime(clampedValue, now + 0.02);
       track.state.pan = clampedValue;
     }
   }

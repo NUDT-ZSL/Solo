@@ -11,6 +11,10 @@ interface MixerChannelProps {
   onEffectToggle: (id: string) => void;
 }
 
+const CANVAS_WIDTH = 216;
+const CANVAS_HEIGHT = 80;
+const KNOB_SIZE = 60;
+
 export const MixerChannel: React.FC<MixerChannelProps> = ({
   track,
   onTogglePlay,
@@ -22,16 +26,18 @@ export const MixerChannel: React.FC<MixerChannelProps> = ({
 }) => {
   const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
   const knobCanvasRef = useRef<HTMLCanvasElement>(null);
+  const isDraggingRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const [knobAngle, setKnobAngle] = useState(0);
   const [playAnimating, setPlayAnimating] = useState(false);
+  const animationRef = useRef<number>(0);
 
   useEffect(() => {
     const angle = (track.state.pan + 1) * 135 - 135;
     setKnobAngle(angle);
   }, [track.state.pan]);
 
-  useEffect(() => {
+  const drawWaveform = useCallback((showPlayhead: boolean) => {
     const canvas = waveformCanvasRef.current;
     if (!canvas || !track.buffer) return;
 
@@ -39,13 +45,12 @@ export const MixerChannel: React.FC<MixerChannelProps> = ({
     if (!ctx) return;
 
     const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
+    canvas.width = CANVAS_WIDTH * dpr;
+    canvas.height = CANVAS_HEIGHT * dpr;
     ctx.scale(dpr, dpr);
 
-    const width = rect.width;
-    const height = rect.height;
+    const width = CANVAS_WIDTH;
+    const height = CANVAS_HEIGHT;
 
     ctx.clearRect(0, 0, width, height);
 
@@ -65,9 +70,12 @@ export const MixerChannel: React.FC<MixerChannelProps> = ({
       let max = -1.0;
 
       for (let j = 0; j < step; j++) {
-        const datum = data[(i * step) + j];
-        if (datum < min) min = datum;
-        if (datum > max) max = datum;
+        const idx = (i * step) + j;
+        if (idx < data.length) {
+          const datum = data[idx];
+          if (datum < min) min = datum;
+          if (datum > max) max = datum;
+        }
       }
 
       const y1 = (1 + min) * amp;
@@ -80,133 +88,75 @@ export const MixerChannel: React.FC<MixerChannelProps> = ({
     ctx.lineTo(width, amp);
     ctx.closePath();
     ctx.fillStyle = gradient;
-    ctx.globalAlpha = 0.8;
+    ctx.globalAlpha = 0.85;
     ctx.fill();
     ctx.globalAlpha = 1;
-
     ctx.strokeStyle = gradient;
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    if (track.state.playing && track.buffer) {
+    if (showPlayhead && track.state.playing) {
       const audioCtx = track.sourceNode?.context;
-      if (audioCtx) {
+      if (audioCtx && track.buffer) {
         const elapsed = (audioCtx.currentTime - track.startTime) % track.buffer.duration;
-        const progress = elapsed / track.buffer.duration;
-        const playheadX = width * progress;
+        const progress = Math.max(0, Math.min(1, elapsed / track.buffer.duration));
+        const playheadX = Math.floor(width * progress);
 
-        ctx.fillStyle = '#e2b714';
+        ctx.fillStyle = 'rgba(226, 183, 20, 0.9)';
         ctx.fillRect(playheadX - 1, 0, 2, height);
       }
     }
-  }, [track.buffer, track.state.playing, track.sourceNode, track.startTime]);
+  }, [track.buffer, track.sourceNode, track.startTime, track.state.playing]);
 
   useEffect(() => {
+    drawWaveform(true);
+
     if (track.state.playing) {
-      let animationId: number;
       const animate = () => {
-        const canvas = waveformCanvasRef.current;
-        if (!canvas || !track.buffer) return;
-
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        const rect = canvas.getBoundingClientRect();
-        const width = rect.width;
-        const height = rect.height;
-        const audioCtx = track.sourceNode?.context;
-        if (!audioCtx) return;
-
-        const elapsed = (audioCtx.currentTime - track.startTime) % track.buffer.duration;
-        const progress = elapsed / track.buffer.duration;
-        const playheadX = width * progress;
-
-        ctx.clearRect(0, 0, width, height);
-
-        const gradient = ctx.createLinearGradient(0, 0, width, 0);
-        gradient.addColorStop(0, '#6c63ff');
-        gradient.addColorStop(1, '#8b5cf6');
-
-        const data = track.buffer.getChannelData(0);
-        const step = Math.ceil(data.length / width);
-        const amp = height / 2;
-
-        ctx.beginPath();
-        ctx.moveTo(0, amp);
-
-        for (let i = 0; i < width; i++) {
-          let min = 1.0;
-          let max = -1.0;
-
-          for (let j = 0; j < step; j++) {
-            const datum = data[(i * step) + j];
-            if (datum < min) min = datum;
-            if (datum > max) max = datum;
-          }
-
-          const y1 = (1 + min) * amp;
-          const y2 = (1 + max) * amp;
-
-          ctx.lineTo(i, y1);
-          ctx.lineTo(i, y2);
-        }
-
-        ctx.lineTo(width, amp);
-        ctx.closePath();
-        ctx.fillStyle = gradient;
-        ctx.globalAlpha = 0.8;
-        ctx.fill();
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = gradient;
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        ctx.fillStyle = '#e2b714';
-        ctx.fillRect(playheadX - 1, 0, 2, height);
-
-        animationId = requestAnimationFrame(animate);
+        drawWaveform(true);
+        animationRef.current = requestAnimationFrame(animate);
       };
-
-      animationId = requestAnimationFrame(animate);
-
-      return () => {
-        cancelAnimationFrame(animationId);
-      };
+      animationRef.current = requestAnimationFrame(animate);
     }
-  }, [track.state.playing, track.buffer, track.sourceNode, track.startTime]);
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [track.state.playing, track.buffer, drawWaveform]);
 
   useEffect(() => {
     const canvas = knobCanvasRef.current;
     if (!canvas) return;
 
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = 60 * dpr;
-    canvas.height = 60 * dpr;
+    canvas.width = KNOB_SIZE * dpr;
+    canvas.height = KNOB_SIZE * dpr;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.scale(dpr, dpr);
 
-    const cx = 30;
-    const cy = 30;
+    const cx = KNOB_SIZE / 2;
+    const cy = KNOB_SIZE / 2;
     const radius = 28;
 
-    ctx.clearRect(0, 0, 60, 60);
+    ctx.clearRect(0, 0, KNOB_SIZE, KNOB_SIZE);
 
     if (isDragging) {
       ctx.shadowColor = '#6c63ff';
-      ctx.shadowBlur = 15;
+      ctx.shadowBlur = 18;
     }
 
-    const bgGradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    const bgGradient = ctx.createRadialGradient(cx, cy, 2, cx, cy, radius);
     bgGradient.addColorStop(0, '#3a3a5e');
-    bgGradient.addColorStop(1, '#2a2a3e');
+    bgGradient.addColorStop(1, '#202032');
 
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
     ctx.fillStyle = bgGradient;
     ctx.fill();
-
     ctx.shadowBlur = 0;
 
     ctx.beginPath();
@@ -232,17 +182,18 @@ export const MixerChannel: React.FC<MixerChannelProps> = ({
       ctx.lineTo(x2, y2);
       ctx.strokeStyle = isMajor ? '#8b5cf6' : '#4a4a5e';
       ctx.lineWidth = tickWidth;
+      ctx.lineCap = 'round';
       ctx.stroke();
     }
 
-    const pointerAngle = (knobAngle * Math.PI) / 180;
+    const pointerAngle = (knobAngle * Math.PI) / 180 - Math.PI / 2;
     const pointerLength = 18;
 
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.lineTo(
-      cx + Math.cos(pointerAngle - Math.PI / 2) * pointerLength,
-      cy + Math.sin(pointerAngle - Math.PI / 2) * pointerLength
+      cx + Math.cos(pointerAngle) * pointerLength,
+      cy + Math.sin(pointerAngle) * pointerLength
     );
     ctx.strokeStyle = '#e2b714';
     ctx.lineWidth = 3;
@@ -250,13 +201,20 @@ export const MixerChannel: React.FC<MixerChannelProps> = ({
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 4.5, 0, Math.PI * 2);
     ctx.fillStyle = '#e2b714';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+    ctx.fillStyle = '#1a1a2e';
     ctx.fill();
   }, [knobAngle, isDragging]);
 
   const handleKnobMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     e.preventDefault();
+    e.stopPropagation();
+    isDraggingRef.current = true;
     setIsDragging(true);
 
     const canvas = knobCanvasRef.current;
@@ -267,6 +225,9 @@ export const MixerChannel: React.FC<MixerChannelProps> = ({
     const cy = rect.top + rect.height / 2;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      moveEvent.preventDefault();
+
       const dx = moveEvent.clientX - cx;
       const dy = moveEvent.clientY - cy;
 
@@ -279,13 +240,16 @@ export const MixerChannel: React.FC<MixerChannelProps> = ({
     };
 
     const handleMouseUp = () => {
+      isDraggingRef.current = false;
       setIsDragging(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mousemove', handleMouseMove, true);
+      document.removeEventListener('mouseup', handleMouseUp, true);
+      document.removeEventListener('mousemove', handleMouseMove, false);
+      document.removeEventListener('mouseup', handleMouseUp, false);
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('mousemove', handleMouseMove, true);
+    document.addEventListener('mouseup', handleMouseUp, true);
   }, [track.state.id, onPanChange]);
 
   const handlePlayClick = () => {
@@ -322,8 +286,7 @@ export const MixerChannel: React.FC<MixerChannelProps> = ({
           fontSize: '14px',
           fontWeight: 600,
           textAlign: 'center',
-          width: '100%',
-          marginTop: '0'
+          width: '100%'
         }}
       >
         {track.state.name}
@@ -331,11 +294,14 @@ export const MixerChannel: React.FC<MixerChannelProps> = ({
 
       <canvas
         ref={waveformCanvasRef}
+        width={CANVAS_WIDTH}
+        height={CANVAS_HEIGHT}
         style={{
-          width: '100%',
-          height: '80px',
+          width: `${CANVAS_WIDTH}px`,
+          height: `${CANVAS_HEIGHT}px`,
           borderRadius: '6px',
-          background: '#121212'
+          background: '#121212',
+          display: 'block'
         }}
       />
 
@@ -343,10 +309,10 @@ export const MixerChannel: React.FC<MixerChannelProps> = ({
         <div
           style={{
             height: '100px',
+            width: '32px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            padding: '0 8px'
+            justifyContent: 'center'
           }}
         >
           <input
@@ -366,7 +332,8 @@ export const MixerChannel: React.FC<MixerChannelProps> = ({
               appearance: 'none',
               cursor: 'pointer',
               transform: 'rotate(-90deg)',
-              transformOrigin: 'center'
+              transformOrigin: 'center center',
+              margin: '0'
             }}
           />
         </div>
@@ -374,16 +341,18 @@ export const MixerChannel: React.FC<MixerChannelProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
           <canvas
             ref={knobCanvasRef}
-            width={60}
-            height={60}
+            width={KNOB_SIZE}
+            height={KNOB_SIZE}
             onMouseDown={handleKnobMouseDown}
             style={{
               cursor: isDragging ? 'grabbing' : 'grab',
-              transition: 'box-shadow 0.2s ease-in-out'
+              userSelect: 'none',
+              touchAction: 'none'
             }}
           />
-          <div style={{ fontSize: '10px', color: '#888', textAlign: 'center' }}>
-            {track.state.pan < -0.1 ? 'L' : track.state.pan > 0.1 ? 'R' : 'C'}
+          <div style={{ fontSize: '10px', color: '#888', textAlign: 'center', fontWeight: 500 }}>
+            {track.state.pan < -0.1 ? `L${Math.round(Math.abs(track.state.pan) * 100)}` :
+             track.state.pan > 0.1 ? `R${Math.round(track.state.pan * 100)}` : 'CENTER'}
           </div>
         </div>
 
@@ -398,7 +367,7 @@ export const MixerChannel: React.FC<MixerChannelProps> = ({
               cursor: 'pointer',
               background: track.state.muted ? '#ff4d4d' : '#4a4a5e',
               color: '#fff',
-              fontWeight: 600,
+              fontWeight: 700,
               fontSize: '12px',
               transition: 'background-color 0.2s ease-in-out, transform 0.2s ease-in-out'
             }}
@@ -414,8 +383,8 @@ export const MixerChannel: React.FC<MixerChannelProps> = ({
               border: 'none',
               cursor: 'pointer',
               background: track.state.solo ? '#ffd700' : '#4a4a5e',
-              color: track.state.solo ? '#000' : '#fff',
-              fontWeight: 600,
+              color: track.state.solo ? '#1a1a1a' : '#fff',
+              fontWeight: 700,
               fontSize: '12px',
               transition: 'background-color 0.2s ease-in-out, transform 0.2s ease-in-out'
             }}
@@ -434,7 +403,7 @@ export const MixerChannel: React.FC<MixerChannelProps> = ({
               color: '#fff',
               fontWeight: 600,
               fontSize: '10px',
-              transition: 'background-color 0.2s ease-in-out'
+              transition: 'background-color 0.2s ease-in-out, transform 0.2s ease-in-out'
             }}
           >
             FX
@@ -455,16 +424,17 @@ export const MixerChannel: React.FC<MixerChannelProps> = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          transition: 'background-color 0.2s ease-in-out, transform 0.2s ease-in-out',
+          transition: 'background-color 0.2s ease-in-out, transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
           transform: playAnimating ? 'scale(0.95)' : 'scale(1)',
+          boxShadow: track.state.playing ? '0 0 12px rgba(108, 99, 255, 0.5)' : 'none',
           marginTop: 'auto',
           marginBottom: '4px'
         }}
       >
         {track.state.playing ? (
           <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-            <rect x="2" y="1" width="3" height="10" />
-            <rect x="7" y="1" width="3" height="10" />
+            <rect x="2" y="1" width="3" height="10" rx="1" />
+            <rect x="7" y="1" width="3" height="10" rx="1" />
           </svg>
         ) : (
           <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
