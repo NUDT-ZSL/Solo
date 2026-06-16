@@ -7,19 +7,17 @@ import {
   selectDice,
   getSelectedDice,
   mergeDice,
-  placeGuard,
   spawnWave,
+  startCountdown,
   updateGame,
   clearDiceMergeFlags,
   calculateScore,
+  getWaveCountdownNumber,
   type GameState,
-  type DiceType,
 } from './GameLogic';
-import './App.css';
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(createInitialState());
-  const [placementDice, setPlacementDice] = useState<DiceType | null>(null);
   const [showGameOver, setShowGameOver] = useState(false);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const animationFrameRef = useRef<number>();
@@ -30,7 +28,7 @@ const App: React.FC = () => {
     fetch('/api/leaderboard')
       .then(res => res.json())
       .then(data => setLeaderboard(data))
-      .catch(err => console.error('Failed to fetch leaderboard:', err));
+      .catch(() => {});
   }, []);
 
   const gameLoop = useCallback((currentTime: number) => {
@@ -45,11 +43,11 @@ const App: React.FC = () => {
 
       const updated = updateGame(prev, deltaTime, currentTime);
 
-      if (!updated.waveInProgress && updated.wave > 0 && updated.enemies.length === 0) {
+      if (!updated.waveInProgress && !updated.isCountingDown && updated.wave > 0 && updated.enemies.length === 0) {
         waveTimerRef.current += deltaTime;
-        if (waveTimerRef.current >= 8000) {
+        if (waveTimerRef.current >= 5000) {
           waveTimerRef.current = 0;
-          return spawnWave(updated);
+          return startCountdown(updated);
         }
       }
 
@@ -76,7 +74,7 @@ const App: React.FC = () => {
   }, [gameState.isGameOver]);
 
   useEffect(() => {
-    if (gameState.dice.some(d => d.isNew || d.isMerging)) {
+    if (gameState.dice.some(d => d.isNew)) {
       const timer = setTimeout(() => {
         setGameState(prev => clearDiceMergeFlags(prev));
       }, 500);
@@ -89,9 +87,7 @@ const App: React.FC = () => {
       const score = calculateScore(gameState);
       const response = await fetch('/api/score', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: '玩家',
           score,
@@ -111,7 +107,6 @@ const App: React.FC = () => {
   };
 
   const handleDiceClick = (diceId: string) => {
-    if (placementDice) return;
     setGameState(prev => selectDice(prev, diceId));
   };
 
@@ -122,37 +117,18 @@ const App: React.FC = () => {
     setGameState(prev => mergeDice(prev, selected[0].id, selected[1].id));
   };
 
-  const handlePlaceGuard = () => {
-    const selected = getSelectedDice(gameState);
-    if (selected.length !== 1) return;
-
-    setPlacementDice(selected[0]);
-    setGameState(prev => ({
-      ...prev,
-      dice: prev.dice.map(d => d.id === selected[0].id ? { ...d, isSelected: false } : d),
-    }));
-  };
-
-  const handleCellClick = (row: number, col: number) => {
-    if (!placementDice) return;
-
-    setGameState(prev => {
-      const newState = placeGuard(prev, row, col, placementDice.value);
-      const newDice = newState.dice.filter(d => d.id !== placementDice.id);
-      return { ...newState, dice: newDice };
-    });
-    setPlacementDice(null);
-  };
-
   const handleStartWave = () => {
-    if (gameState.waveInProgress) return;
+    if (gameState.waveInProgress || gameState.isCountingDown) return;
     waveTimerRef.current = 0;
-    setGameState(prev => spawnWave(prev));
+    if (gameState.wave === 0) {
+      setGameState(prev => spawnWave(prev));
+    } else {
+      setGameState(prev => startCountdown(prev));
+    }
   };
 
   const handleRestart = () => {
     setGameState(createInitialState());
-    setPlacementDice(null);
     setShowGameOver(false);
     waveTimerRef.current = 0;
     lastTimeRef.current = 0;
@@ -160,7 +136,8 @@ const App: React.FC = () => {
 
   const selectedDice = getSelectedDice(gameState);
   const canMerge = selectedDice.length === 2;
-  const canPlace = selectedDice.length === 1 && !placementDice;
+
+  const countdownNumber = getWaveCountdownNumber(gameState);
 
   return (
     <div className="app-container">
@@ -171,19 +148,18 @@ const App: React.FC = () => {
         luck={gameState.luck}
         lives={gameState.lives}
         wave={gameState.wave}
-        selectedDice={placementDice}
-        onCellClick={handleCellClick}
+        onCellClick={() => {}}
         waveInProgress={gameState.waveInProgress}
+        isCountingDown={gameState.isCountingDown}
+        countdownNumber={countdownNumber}
         onStartWave={handleStartWave}
       />
       <DicePanel
         dice={gameState.dice}
         onDiceClick={handleDiceClick}
         onMerge={handleMerge}
-        onPlaceGuard={handlePlaceGuard}
         selectedCount={selectedDice.length}
         canMerge={canMerge}
-        canPlace={canPlace}
       />
       {showGameOver && (
         <GameOverModal
@@ -194,12 +170,6 @@ const App: React.FC = () => {
           leaderboard={leaderboard}
           onRestart={handleRestart}
         />
-      )}
-      {placementDice && (
-        <div className="placement-hint">
-          点击棋盘放置 {placementDice.value} 点守卫
-          <button onClick={() => setPlacementDice(null)}>取消</button>
-        </div>
       )}
     </div>
   );

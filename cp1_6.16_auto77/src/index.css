@@ -14,3 +14,218 @@ body {
 #root {
   min-height: 100vh;
 }
+
+@keyframes dice-roll {
+  0% {
+    transform: rotate(0deg) scale(0.5);
+    opacity: 0;
+  }
+  50% {
+    transform: rotate(180deg) scale(1.1);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes fly-right {
+  0% {
+    left: 20px;
+    opacity: 1;
+  }
+  80% {
+    left: calc(50% - 30px);
+    opacity: 1;
+  }
+  100% {
+    left: calc(50% - 30px);
+    opacity: 0;
+    transform: translateY(-50%) scale(0.3);
+  }
+}
+
+@keyframes fly-left {
+  0% {
+    right: 20px;
+    opacity: 1;
+  }
+  80% {
+    right: calc(50% - 30px);
+    opacity: 1;
+  }
+  100% {
+    right: calc(50% - 30px);
+    opacity: 0;
+    transform: translateY(-50%) scale(0.3);
+  }
+}
+
+@keyframes merge-flash {
+  0% {
+    width: 0;
+    height: 0;
+    opacity: 1;
+  }
+  50% {
+    width: 150px;
+    height: 150px;
+    opacity: 0.9;
+  }
+  100% {
+    width: 200px;
+    height: 200px;
+    opacity: 0;
+  }
+}
+
+@keyframes luck-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+@keyframes ring-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes crystal-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.6), 0 0 40px rgba(0, 102, 255, 0.4);
+  }
+  50% {
+    transform: scale(1.1);
+    box-shadow: 0 0 30px rgba(0, 255, 255, 0.8), 0 0 60px rgba(0, 102, 255, 0.6);
+  }
+}
+
+@keyframes guard-attack-flash {
+  0% { filter: brightness(1); }
+  50% { filter: brightness(2.5); }
+  100% { filter: brightness(1); }
+}
+
+@keyframes orb-float {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-5px); }
+}
+
+@keyframes countdown-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.05); }
+}
+
+@keyframes modal-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.app-container {
+  max-width: 1200px;
+  min-width: 800px;
+  margin: 0 auto;
+  padding-bottom: 140px;
+  position: relative;
+}
+
+.game-title {
+  text-align: center;
+  font-size: 36px;
+  color: #FFD700;
+  text-shadow: 0 0 20px rgba(255, 215, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.5);
+  padding: 20px 0;
+  margin: 0;
+  letter-spacing: 4px;
+}
+
+.game-board-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 100%);
+}
+
+.start-wave-btn {
+  padding: 12px 30px;
+  font-size: 16px;
+  font-weight: bold;
+  color: white;
+  background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+}
+
+.start-wave-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(76, 175, 80, 0.5);
+}
+
+.start-wave-btn.start-game {
+  background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+  color: #1A1A2E;
+}
+
+.board-layout {
+  display: flex;
+  gap: 40px;
+  align-items: flex-start;
+}
+
+.game-board {
+  position: relative;
+  background: linear-gradient(135deg, #1A1A2E 0%, #16213E 100%);
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), inset 0 0 60px rgba(74, 14, 78, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.grid-cell {
+  position: absolute;
+  border-radius: 8px;
+  margin: 2px;
+  cursor: pointer;
+  transition: border 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.grid-cell.hovered {
+  border: 2px solid #FFD700;
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+}
+
+.guard-attack-flash {
+  animation: guard-attack-flash 0.1s ease-out;
+}
+
+@media (max-width: 900px) {
+  .app-container {
+    min-width: auto;
+    max-width: 100%;
+    padding: 0 10px 140px 10px;
+  }
+
+  .game-title {
+    font-size: 24px;
+    padding: 15px 0;
+  }
+
+  .board-layout {
+    flex-direction: column;
+    align-items: center;
+  }
+}

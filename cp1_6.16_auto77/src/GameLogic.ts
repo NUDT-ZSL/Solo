@@ -44,16 +44,20 @@ export type GameState = {
   isGameOver: boolean;
   waveInProgress: boolean;
   waveTimer: number;
+  waveCountdown: number;
+  isCountingDown: boolean;
 };
 
 export const BOARD_ROWS = 6;
 export const BOARD_COLS = 8;
 export const MAX_DICE = 6;
 export const INITIAL_LUCK = 100;
+export const MAX_LUCK = 150;
 export const INITIAL_LIVES = 20;
 export const LUCK_MERGE_BONUS = 5;
 export const LUCK_ENEMY_PENALTY = 10;
 export const WAVE_INTERVAL = 8000;
+export const WAVE_COUNTDOWN_DURATION = 3000;
 export const ENEMY_BASE_SPEED = 0.02;
 export const GUARD_ATTACK_INTERVAL = 1500;
 
@@ -84,6 +88,8 @@ export const createInitialState = (): GameState => {
     isGameOver: false,
     waveInProgress: false,
     waveTimer: 0,
+    waveCountdown: 0,
+    isCountingDown: false,
   };
 };
 
@@ -137,14 +143,12 @@ export const findEmptyCell = (guards: Guard[]): { row: number; col: number } | n
   const centerRow = Math.floor(BOARD_ROWS / 2);
   const centerCol = Math.floor(BOARD_COLS / 2);
 
-  for (let distance = 1; distance < Math.max(BOARD_ROWS, BOARD_COLS); distance++) {
-    for (let row = 0; row < BOARD_ROWS; row++) {
-      for (let col = 0; col < BOARD_COLS; col++) {
-        if (row === centerRow && col === centerCol) continue;
-        const occupied = guards.some(g => g.row === row && g.col === col);
-        if (!occupied) {
-          return { row, col };
-        }
+  for (let row = 0; row < BOARD_ROWS; row++) {
+    for (let col = 0; col < BOARD_COLS; col++) {
+      if (row === centerRow && col === centerCol) continue;
+      const occupied = guards.some(g => g.row === row && g.col === col);
+      if (!occupied) {
+        return { row, col };
       }
     }
   }
@@ -176,7 +180,7 @@ export const mergeDice = (state: GameState, diceId1: string, diceId2: string): G
   let newState: GameState = {
     ...state,
     dice: newDice,
-    luck: Math.min(150, state.luck + LUCK_MERGE_BONUS),
+    luck: Math.min(MAX_LUCK, state.luck + LUCK_MERGE_BONUS),
     mergeCount: state.mergeCount + 1,
   };
 
@@ -253,6 +257,14 @@ export const placeGuard = (state: GameState, row: number, col: number, diceValue
   };
 };
 
+export const startCountdown = (state: GameState): GameState => {
+  return {
+    ...state,
+    isCountingDown: true,
+    waveCountdown: WAVE_COUNTDOWN_DURATION,
+  };
+};
+
 export const spawnWave = (state: GameState): GameState => {
   const wave = state.wave + 1;
   const enemyCount = Math.min(3 + wave - 1, 15);
@@ -291,13 +303,28 @@ export const spawnWave = (state: GameState): GameState => {
     wave,
     enemies: [...state.enemies, ...enemies],
     waveInProgress: true,
+    isCountingDown: false,
+    waveCountdown: 0,
   };
+};
+
+export const getWaveCountdownNumber = (state: GameState): number => {
+  if (!state.isCountingDown) return 0;
+  return Math.ceil(state.waveCountdown / 1000);
 };
 
 export const updateGame = (state: GameState, deltaTime: number, currentTime: number): GameState => {
   if (state.isGameOver) return state;
 
   let newState = { ...state };
+
+  if (state.isCountingDown) {
+    newState.waveCountdown = state.waveCountdown - deltaTime;
+    if (newState.waveCountdown <= 0) {
+      return spawnWave(newState);
+    }
+    return { ...newState, isCountingDown: true };
+  }
 
   newState.enemies = state.enemies.map(enemy => {
     const centerX = BOARD_COLS / 2;
