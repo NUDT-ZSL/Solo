@@ -45,6 +45,13 @@ export interface BorrowStats {
   total: number;
 }
 
+export interface BookshelfItem {
+  bookId: string;
+  bookTitle: string;
+  bookAuthor: string;
+  addedAt: string;
+}
+
 export interface User {
   id: string;
   nickname: string;
@@ -54,6 +61,7 @@ export interface User {
   borrowStats: BorrowStats;
   reservations: Reservation[];
   borrowed: BorrowedBook[];
+  bookshelf: BookshelfItem[];
 }
 
 export interface Activity {

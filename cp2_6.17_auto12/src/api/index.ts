@@ -84,3 +84,16 @@ export function register(
 export function getUser(id: string): Promise<User> {
   return request<User>(`/users/${id}`);
 }
+
+export function addToBookshelf(userId: string, bookId: string): Promise<{ message: string; user: User }> {
+  return request(`/users/${userId}/bookshelf`, {
+    method: 'POST',
+    body: JSON.stringify({ bookId })
+  });
+}
+
+export function removeFromBookshelf(userId: string, bookId: string): Promise<{ message: string; user: User }> {
+  return request(`/users/${userId}/bookshelf/${bookId}`, {
+    method: 'DELETE'
+  });
+}

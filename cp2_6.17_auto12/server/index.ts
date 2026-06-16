@@ -206,7 +206,8 @@ app.post('/api/users/register', (req, res) => {
     registeredAt: new Date().toISOString(),
     borrowStats: { reserved: 0, borrowed: 0, total: 0 },
     reservations: [],
-    borrowed: []
+    borrowed: [],
+    bookshelf: []
   };
   users.push(newUser);
   writeJSON('users.json', users);
@@ -223,6 +224,60 @@ app.get('/api/users/:id', (req, res) => {
   }
   const { password: _, ...safeUser } = user;
   res.json(safeUser);
+});
+
+app.post('/api/users/:id/bookshelf', (req, res) => {
+  const { bookId } = req.body;
+  const users = readJSON<any[]>('users.json');
+  const books = readJSON<any[]>('books.json');
+  const userIndex = users.findIndex((u) => u.id === req.params.id);
+  if (userIndex === -1) {
+    res.status(404).json({ error: '用户不存在' });
+    return;
+  }
+  const book = books.find((b) => b.id === bookId);
+  if (!book) {
+    res.status(404).json({ error: '图书不存在' });
+    return;
+  }
+  const user = users[userIndex];
+  if (!user.bookshelf) {
+    user.bookshelf = [];
+  }
+  const alreadyExists = user.bookshelf.some((item: any) => item.bookId === bookId);
+  if (alreadyExists) {
+    res.status(400).json({ error: '图书已在书架中' });
+    return;
+  }
+  const shelfItem = {
+    bookId: book.id,
+    bookTitle: book.title,
+    bookAuthor: book.author,
+    addedAt: new Date().toISOString()
+  };
+  users[userIndex].bookshelf.unshift(shelfItem);
+  writeJSON('users.json', users);
+  const { password: _, ...safeUser } = users[userIndex];
+  res.json({ message: '已加入书架', user: safeUser });
+});
+
+app.delete('/api/users/:id/bookshelf/:bookId', (req, res) => {
+  const users = readJSON<any[]>('users.json');
+  const userIndex = users.findIndex((u) => u.id === req.params.id);
+  if (userIndex === -1) {
+    res.status(404).json({ error: '用户不存在' });
+    return;
+  }
+  const user = users[userIndex];
+  if (!user.bookshelf) {
+    user.bookshelf = [];
+  }
+  users[userIndex].bookshelf = user.bookshelf.filter(
+    (item: any) => item.bookId !== req.params.bookId
+  );
+  writeJSON('users.json', users);
+  const { password: _, ...safeUser } = users[userIndex];
+  res.json({ message: '已从书架移除', user: safeUser });
 });
 
 app.listen(PORT, () => {

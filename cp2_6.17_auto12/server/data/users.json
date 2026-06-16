@@ -11,7 +11,15 @@
       "total": 45
     },
     "reservations": [],
-    "borrowed": []
+    "borrowed": [],
+    "bookshelf": [
+      {
+        "bookId": "1",
+        "bookTitle": "活着",
+        "bookAuthor": "余华",
+        "addedAt": "2026-06-16T18:10:42.297Z"
+      }
+    ]
   },
   {
     "id": "u2",
@@ -25,7 +33,8 @@
       "total": 20
     },
     "reservations": [],
-    "borrowed": []
+    "borrowed": [],
+    "bookshelf": []
   },
   {
     "id": "admin",
@@ -40,6 +49,7 @@
       "total": 0
     },
     "reservations": [],
-    "borrowed": []
+    "borrowed": [],
+    "bookshelf": []
   }
 ]

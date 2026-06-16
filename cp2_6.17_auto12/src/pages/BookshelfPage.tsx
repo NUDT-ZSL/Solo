@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
+import { removeFromBookshelf } from '../api';
 import dayjs from 'dayjs';
 
-type Tab = 'reserved' | 'borrowed' | 'history';
+type Tab = 'shelf' | 'reserved' | 'borrowed' | 'history';
 
 function getCountdown(expireAt: string): string {
   const diff = dayjs(expireAt).diff(dayjs(), 'second');
@@ -17,10 +18,11 @@ function getCountdown(expireAt: string): string {
 }
 
 export function BookshelfPage() {
-  const { user } = useUser();
+  const { user, refresh } = useUser();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>('reserved');
+  const [tab, setTab] = useState<Tab>('shelf');
   const [, forceUpdate] = useState(0);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -33,12 +35,33 @@ export function BookshelfPage() {
 
   if (!user) return null;
 
+  const bookshelf = user.bookshelf ?? [];
   const activeReservations = user.reservations.filter(
     (r) => dayjs(r.expireAt) > dayjs()
   );
   const expiredReservations = user.reservations.filter(
     (r) => dayjs(r.expireAt) <= dayjs()
   );
+
+  const handleRemoveFromShelf = async (bookId: string) => {
+    if (!user) return;
+    setRemovingId(bookId);
+    try {
+      const result = await removeFromBookshelf(user.id, bookId);
+      if (result.user) {
+        localStorage.setItem(
+          'bookstore_user',
+          JSON.stringify(result.user)
+        );
+        refresh();
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '移除失败';
+      alert(msg);
+    } finally {
+      setRemovingId(null);
+    }
+  };
 
   const styles = `
     .bookshelf-page {
@@ -101,8 +124,8 @@ export function BookshelfPage() {
       margin-bottom: 12px;
     }
     .profile-stats {
-      display: flex;
-      justify-content: space-between;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
       gap: 8px;
     }
     .profile-stat {
@@ -253,6 +276,10 @@ export function BookshelfPage() {
             <div className="profile-stats-title">借阅统计</div>
             <div className="profile-stats">
               <div className="profile-stat">
+                <div className="profile-stat-num">{bookshelf.length}</div>
+                <div className="profile-stat-label">书架收藏</div>
+              </div>
+              <div className="profile-stat">
                 <div className="profile-stat-num">{user.borrowStats.reserved}</div>
                 <div className="profile-stat-label">预约中</div>
               </div>
@@ -275,6 +302,12 @@ export function BookshelfPage() {
           <div className="tabs-card">
             <div className="tabs-header">
               <div
+                className={`tabs-item ${tab === 'shelf' ? 'active' : ''}`}
+                onClick={() => setTab('shelf')}
+              >
+                我的书架（{bookshelf.length}）
+              </div>
+              <div
                 className={`tabs-item ${tab === 'reserved' ? 'active' : ''}`}
                 onClick={() => setTab('reserved')}
               >
@@ -294,6 +327,41 @@ export function BookshelfPage() {
               </div>
             </div>
             <div className="tabs-content">
+              {tab === 'shelf' && (
+                <>
+                  {bookshelf.length === 0 ? (
+                    <div className="book-list-empty">
+                      书架为空，快去添加喜欢的图书吧～
+                    </div>
+                  ) : (
+                    bookshelf.map((item) => (
+                      <div className="book-list-item" key={item.bookId}>
+                        <div className="book-list-info">
+                          <div className="book-list-title">{item.bookTitle}</div>
+                          <div className="book-list-author">{item.bookAuthor}</div>
+                          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>
+                            加入于 {dayjs(item.addedAt).format('YYYY-MM-DD')}
+                          </div>
+                        </div>
+                        <div className="book-list-meta">
+                          <button
+                            className="action-btn"
+                            style={{
+                              background: '#fee2e2',
+                              color: '#b91c1c'
+                            }}
+                            onClick={() => handleRemoveFromShelf(item.bookId)}
+                            disabled={removingId === item.bookId}
+                          >
+                            <span>{removingId === item.bookId ? '...' : '✕'}</span>
+                            <span>移除</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </>
+              )}
               {tab === 'reserved' && (
                 <>
                   {activeReservations.length === 0 ? (
