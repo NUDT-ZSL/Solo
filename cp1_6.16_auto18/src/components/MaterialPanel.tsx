@@ -49,33 +49,41 @@ const MaterialPanel: React.FC<MaterialPanelProps> = () => {
     const materials = getMaterialsByCategory(activeCategory);
     const category = categories.find((c) => c.id === activeCategory);
 
+    const gradientStyle = category
+      ? `linear-gradient(135deg, ${category.gradientStart} 0%, ${category.gradientEnd} 100%)`
+      : '#ccc';
+
     return (
       <div className="materials-grid">
         {materials.map((material) => (
+        <div
+          key={material.id}
+          className="material-card"
+          draggable
+          onDragStart={(e) => handleDragStart(e, material)}
+          style={{
+            background: gradientStyle,
+          }}
+          title={`拖拽到画布: ${material.name}`}
+        >
           <div
-            key={material.id}
-            className="material-card"
-            draggable
-            onDragStart={(e) => handleDragStart(e, material)}
+            className="material-thumb"
             style={{
-              background: `linear-gradient(135deg, ${category?.gradientStart}, ${category?.gradientEnd})`,
+              background: gradientStyle,
+              width: Math.min(material.defaultWidth * 0.7, 56),
+              height: Math.min(material.defaultHeight * 0.7, 56),
             }}
-            title={`拖拽到画布: ${material.name}`}
           >
-            <div
-              className="material-thumb"
-              style={{
-                backgroundColor: material.color,
-                width: Math.min(material.defaultWidth * 0.7, 56),
-                height: Math.min(material.defaultHeight * 0.7, 56),
-              }}
-            />
-            <div className="material-name">{material.name}</div>
-            <div className="material-size">
-              {material.defaultWidth}×{material.defaultHeight}
-            </div>
+            <span className="material-thumb-icon">
+              {getMaterialIcon(material.id)}
+            </span>
           </div>
-        ))}
+          <div className="material-name">{material.name}</div>
+          <div className="material-size">
+            {material.defaultWidth}×{material.defaultHeight}
+          </div>
+        </div>
+      ))}
       </div>
     );
   };
@@ -115,6 +123,31 @@ function getCategoryIcon(categoryId: string): string {
     default:
       return '📦';
   }
+}
+
+function getMaterialIcon(materialId: string): string {
+  const iconMap: Record<string, string> = {
+    'tree-1': '🌳',
+    'tree-2': '🌲',
+    'grass-1': '🌿',
+    'flower-1': '🌸',
+    'flower-2': '🌻',
+    'bush-1': '🌳',
+    'house-1': '🏠',
+    'pavilion-1': '⛩️',
+    'fence-1': '🚧',
+    'house-2': '🏡',
+    'tower-1': '🗼',
+    'bridge-1': '🌉',
+    'pond-1': '🏞️',
+    'stream-1': '🏞️',
+    'waterfall-1': '💦',
+    'rockery-1': '🪨',
+    'lamp-1': '🏮',
+    'bench-1': '🪑',
+    'statue-1': '🗿',
+  };
+  return iconMap[materialId] || '📦';
 }
 
 export default MaterialPanel;

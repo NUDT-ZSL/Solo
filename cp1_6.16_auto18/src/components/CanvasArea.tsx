@@ -10,6 +10,7 @@ interface CanvasAreaProps {
 
 const GRID_SIZE = 50;
 const GRID_LINE_WIDTH = 2;
+const GRID_COLOR = '#B0B0B0';
 
 const CanvasArea: React.FC<CanvasAreaProps> = ({ onStateChange, onError }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -22,35 +23,38 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({ onStateChange, onError }) => {
     const width = canvas.getWidth();
     const height = canvas.getHeight();
 
-    const gridLines: fabric.Object[] = [];
+    const lineCount = Math.ceil(width / GRID_SIZE) + Math.ceil(height / GRID_SIZE);
+    const gridLines: fabric.Line[] = new Array(lineCount);
+    let lineIndex = 0;
 
     for (let x = 0; x <= width; x += GRID_SIZE) {
       const line = new fabric.Line([x, 0, x, height], {
-        stroke: '#D2B48C',
+        stroke: GRID_COLOR,
         strokeWidth: GRID_LINE_WIDTH,
         selectable: false,
         evented: false,
-        strokeDashArray: [4, 4],
+        excludeFromExport: false,
       });
       (line as any).isGrid = true;
-      gridLines.push(line);
+      gridLines[lineIndex++] = line;
     }
 
     for (let y = 0; y <= height; y += GRID_SIZE) {
       const line = new fabric.Line([0, y, width, y], {
-        stroke: '#D2B48C',
+        stroke: GRID_COLOR,
         strokeWidth: GRID_LINE_WIDTH,
         selectable: false,
         evented: false,
-        strokeDashArray: [4, 4],
+        excludeFromExport: false,
       });
       (line as any).isGrid = true;
-      gridLines.push(line);
+      gridLines[lineIndex++] = line;
     }
 
-    gridLines.forEach((line) => canvas.add(line));
-    canvas.sendToBack(gridLines[0]);
-    gridLines.forEach((line) => canvas.sendToBack(line));
+    for (let i = 0; i < lineIndex; i++) {
+      canvas.add(gridLines[i]);
+      canvas.sendToBack(gridLines[i]);
+    }
 
     canvas.renderAll();
   }, []);
