@@ -46,7 +46,19 @@ export const iceTheme: ColorTheme = {
 };
 
 const PARTICLE_COUNT = 4000;
+const LAYER_COUNT = 4;
+const PARTICLES_PER_LAYER = PARTICLE_COUNT / LAYER_COUNT;
 const SPHERE_RADIUS = 10;
+
+const LAYER_CONFIGS = [
+  { zRange: 1, alpha: 0.9 },
+  { zRange: 1.5, alpha: 0.85 },
+  { zRange: 2, alpha: 0.8 },
+  { zRange: 2.5, alpha: 0.75 },
+];
+
+const COLOR_LERP_FACTOR = 0.12;
+const POS_LERP_FACTOR = 0.15;
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
@@ -64,6 +76,16 @@ function hexToColor(hex: string): THREE.Color {
   return new THREE.Color(hex);
 }
 
+function shuffleArray<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const temp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = temp;
+  }
+  return arr;
+}
+
 export class ParticleSystem {
   private geometry: THREE.BufferGeometry;
   private material: THREE.ShaderMaterial;
@@ -73,6 +95,8 @@ export class ParticleSystem {
   private targetSizes: Float32Array;
   private currentColors: Float32Array;
   private targetColors: Float32Array;
+  private alphaValues: Float32Array;
+  private layerIndexMap: Uint8Array;
   private frequencyIndexMap: Uint16Array;
   private currentTheme: ColorTheme;
   private speedMultiplier = 1;
@@ -87,12 +111,33 @@ export class ParticleSystem {
     this.targetSizes = new Float32Array(PARTICLE_COUNT);
     this.currentColors = new Float32Array(PARTICLE_COUNT * 3);
     this.targetColors = new Float32Array(PARTICLE_COUNT * 3);
+    this.alphaValues = new Float32Array(PARTICLE_COUNT);
+    this.layerIndexMap = new Uint8Array(PARTICLE_COUNT);
     this.frequencyIndexMap = new Uint16Array(PARTICLE_COUNT);
 
+    this.initLayers();
     this.initParticles();
 
     this.material = this.createShaderMaterial();
     this.points = new THREE.Points(this.geometry, this.material);
+  }
+
+  private initLayers(): void {
+    const indices: number[] = [];
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      indices.push(i);
+    }
+    shuffleArray(indices);
+
+    for (let layer = 0; layer < LAYER_COUNT; layer++) {
+      const start = layer * PARTICLES_PER_LAYER;
+      const end = start + PARTICLES_PER_LAYER;
+      for (let k = start; k < end; k++) {
+        const particleIdx = indices[k];
+        this.layerIndexMap[particleIdx] = layer;
+        this.alphaValues[particleIdx] = LAYER_CONFIGS[layer].alpha;
+      }
+    }
   }
 
   private initParticles(): void {
@@ -130,6 +175,7 @@ export class ParticleSystem {
     this.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     this.geometry.setAttribute('color', new THREE.BufferAttribute(this.currentColors, 3));
     this.geometry.setAttribute('aSize', new THREE.BufferAttribute(this.currentSizes, 1));
+    this.geometry.setAttribute('aAlpha', new THREE.BufferAttribute(this.alphaValues, 1));
   }
 
   private createShaderMaterial(): THREE.ShaderMaterial {
@@ -139,9 +185,12 @@ export class ParticleSystem {
       },
       vertexShader: `
         attribute float aSize;
+        attribute float aAlpha;
         varying vec3 vColor;
+        varying float vAlpha;
         void main() {
           vColor = color;
+          vAlpha = aAlpha;
           vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
           gl_PointSize = aSize * (300.0 / -mvPosition.z);
           gl_Position = projectionMatrix * mvPosition;
@@ -149,12 +198,13 @@ export class ParticleSystem {
       `,
       fragmentShader: `
         varying vec3 vColor;
+        varying float vAlpha;
         void main() {
           vec2 center = gl_PointCoord - vec2(0.5);
           float dist = length(center);
           if (dist > 0.5) discard;
           float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
-          alpha *= 0.8;
+          alpha *= vAlpha;
           gl_FragColor = vec4(vColor, alpha);
         }
       `,
@@ -219,20 +269,24 @@ export class ParticleSystem {
     const sizes = this.geometry.attributes.aSize.array as Float32Array;
 
     const speedFactor = this.speedMultiplier;
+    const posLerp = POS_LERP_FACTOR * speedFactor;
+    const colorLerp = COLOR_LERP_FACTOR * speedFactor;
 
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const i3 = i * 3;
+      const layer = this.layerIndexMap[i];
+      const zRange = LAYER_CONFIGS[layer].zRange;
 
-      const targetZ = this.basePositions[i3 + 2] + (this.targetSizes[i] - 12) / 8 * 2;
+      const targetZ = this.basePositions[i3 + 2] + (this.targetSizes[i] - 12) / 8 * zRange;
       positions[i3] = this.basePositions[i3];
       positions[i3 + 1] = this.basePositions[i3 + 1];
-      positions[i3 + 2] = lerp(positions[i3 + 2], targetZ, 0.15 * speedFactor);
+      positions[i3 + 2] = lerp(positions[i3 + 2], targetZ, posLerp);
 
-      sizes[i] = lerp(sizes[i], this.targetSizes[i], 0.15 * speedFactor);
+      sizes[i] = lerp(sizes[i], this.targetSizes[i], posLerp);
 
-      colors[i3] = lerp(colors[i3], this.targetColors[i3], 0.1 * speedFactor);
-      colors[i3 + 1] = lerp(colors[i3 + 1], this.targetColors[i3 + 1], 0.1 * speedFactor);
-      colors[i3 + 2] = lerp(colors[i3 + 2], this.targetColors[i3 + 2], 0.1 * speedFactor);
+      colors[i3] = lerp(colors[i3], this.targetColors[i3], colorLerp);
+      colors[i3 + 1] = lerp(colors[i3 + 1], this.targetColors[i3 + 1], colorLerp);
+      colors[i3 + 2] = lerp(colors[i3 + 2], this.targetColors[i3 + 2], colorLerp);
     }
 
     this.geometry.attributes.position.needsUpdate = true;
