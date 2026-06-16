@@ -116,12 +116,14 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, onLike }) => {
   const [showTrend, setShowTrend] = useState(false);
   const [trendData, setTrendData] = useState<TrendData | null>(null);
   const [trendLoading, setTrendLoading] = useState(false);
+  const [likesHighlight, setLikesHighlight] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const totalContribution = member.prCount + member.issueCount;
 
   const handleLikeClick = () => {
     setLiked(true);
+    setLikesHighlight(true);
     const newBubble: Bubble = { id: Date.now() };
     setBubbles((prev) => [...prev, newBubble]);
     onLike(member.id);
@@ -129,6 +131,10 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, onLike }) => {
     setTimeout(() => {
       setBubbles((prev) => prev.filter((b) => b.id !== newBubble.id));
     }, 800);
+
+    setTimeout(() => {
+      setLikesHighlight(false);
+    }, 1500);
   };
 
   const handleTrendToggle = async () => {
@@ -190,20 +196,22 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, onLike }) => {
         e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.08)';
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <Avatar initial={member.avatarInitial} color={member.avatarColor} size={48} />
-        <div style={{ flex: 1 }}>
-          <div
-            style={{
-              fontSize: 16,
-              fontWeight: 600,
-              color: '#1e293b',
-              marginBottom: 4,
-            }}
-          >
-            {member.name}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, position: 'relative' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, flex: 1 }}>
+          <Avatar initial={member.avatarInitial} color={member.avatarColor} size={56} />
+          <div style={{ textAlign: 'center' }}>
+            <div
+              style={{
+                fontSize: 16,
+                fontWeight: 700,
+                color: '#1e293b',
+                marginBottom: 2,
+              }}
+            >
+              {member.name}
+            </div>
+            <div style={{ fontSize: 12, color: '#64748b' }}>团队成员</div>
           </div>
-          <div style={{ fontSize: 13, color: '#94a3b8' }}>团队成员</div>
         </div>
         <button
           onClick={handleTrendToggle}
@@ -218,6 +226,7 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, onLike }) => {
             justifyContent: 'center',
             transition: 'all 0.2s ease-out',
             color: showTrend ? '#0ea5e9' : '#94a3b8',
+            flexShrink: 0,
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = '#e0f2fe';
@@ -240,7 +249,6 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, onLike }) => {
             strokeLinecap="round"
             strokeLinejoin="round"
             style={{
-              transform: showTrend ? 'rotate(0deg)' : 'rotate(0deg)',
               transition: 'transform 0.3s ease-out',
             }}
           >
@@ -258,16 +266,32 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, onLike }) => {
           alignItems: 'center',
         }}
       >
-        <div style={{ textAlign: 'center' }}>
+        <div style={{ textAlign: 'center', position: 'relative' }}>
           <div
             style={{
               fontSize: 28,
               fontWeight: 700,
               color: '#38bdf8',
               lineHeight: 1.2,
+              display: 'inline-block',
+              position: 'relative',
             }}
           >
             {totalContribution}
+            <span
+              style={{
+                position: 'absolute',
+                top: -6,
+                right: -20,
+                fontSize: 12,
+                fontWeight: 600,
+                color: likesHighlight ? '#ef4444' : '#94a3b8',
+                transition: 'color 0.3s ease-out',
+                transform: likesHighlight ? 'scale(1.15)' : 'scale(1)',
+              }}
+            >
+              ♥{member.likes}
+            </span>
           </div>
           <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
             当月贡献
@@ -301,12 +325,44 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, onLike }) => {
           justifyContent: 'space-between',
           borderTop: '1px solid #f1f5f9',
           paddingTop: 16,
+          marginTop: 12,
         }}
       >
-        <div style={{ fontSize: 14, color: '#64748b' }}>
-          收到点赞：
-          <span style={{ fontWeight: 600, color: '#1e293b', marginLeft: 4 }}>
-            {member.likes}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill={likesHighlight ? '#ef4444' : 'none'}
+            stroke={likesHighlight ? '#ef4444' : '#94a3b8'}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ transition: 'all 0.3s ease-out' }}
+          >
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+          </svg>
+          <span
+            style={{
+              fontSize: 14,
+              color: likesHighlight ? '#ef4444' : '#64748b',
+              fontWeight: likesHighlight ? 600 : 400,
+              transition: 'all 0.3s ease-out',
+            }}
+          >
+            共收到
+            <span
+              style={{
+                fontWeight: 700,
+                margin: '0 4px',
+                fontSize: 15,
+                color: likesHighlight ? '#ef4444' : '#1e293b',
+                transition: 'color 0.3s ease-out',
+              }}
+            >
+              {member.likes}
+            </span>
+            次点赞
           </span>
         </div>
         <div style={{ position: 'relative' }}>

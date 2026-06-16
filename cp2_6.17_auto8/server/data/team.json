@@ -6,8 +6,16 @@
     "avatarColor": "#3b82f6",
     "prCount": 15,
     "issueCount": 9,
-    "likes": 42,
-    "dailyContributions": [2, 4, 3, 5, 2, 6, 4]
+    "likes": 43,
+    "dailyContributions": [
+      2,
+      4,
+      3,
+      5,
+      2,
+      6,
+      4
+    ]
   },
   {
     "id": "member-002",
@@ -17,7 +25,15 @@
     "prCount": 22,
     "issueCount": 14,
     "likes": 68,
-    "dailyContributions": [5, 7, 4, 8, 6, 9, 7]
+    "dailyContributions": [
+      5,
+      7,
+      4,
+      8,
+      6,
+      9,
+      7
+    ]
   },
   {
     "id": "member-003",
@@ -27,7 +43,15 @@
     "prCount": 18,
     "issueCount": 7,
     "likes": 35,
-    "dailyContributions": [3, 5, 2, 4, 7, 3, 1]
+    "dailyContributions": [
+      3,
+      5,
+      2,
+      4,
+      7,
+      3,
+      1
+    ]
   },
   {
     "id": "member-004",
@@ -37,7 +61,15 @@
     "prCount": 8,
     "issueCount": 12,
     "likes": 29,
-    "dailyContributions": [1, 2, 3, 2, 4, 3, 5]
+    "dailyContributions": [
+      1,
+      2,
+      3,
+      2,
+      4,
+      3,
+      5
+    ]
   },
   {
     "id": "member-005",
@@ -47,7 +79,15 @@
     "prCount": 12,
     "issueCount": 5,
     "likes": 21,
-    "dailyContributions": [2, 3, 1, 4, 2, 3, 2]
+    "dailyContributions": [
+      2,
+      3,
+      1,
+      4,
+      2,
+      3,
+      2
+    ]
   },
   {
     "id": "member-006",
@@ -57,6 +97,14 @@
     "prCount": 5,
     "issueCount": 3,
     "likes": 14,
-    "dailyContributions": [1, 0, 2, 1, 0, 1, 1]
+    "dailyContributions": [
+      1,
+      0,
+      2,
+      1,
+      0,
+      1,
+      1
+    ]
   }
 ]
