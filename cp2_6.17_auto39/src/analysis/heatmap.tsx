@@ -50,8 +50,8 @@ export function Heatmap({ visible, routes, year }: HeatmapProps) {
   useFrame(() => {
     if (!visible || !ctxRef.current || !canvasRef.current || !textureRef.current || !imageDataRef.current || !gridRef.current) return;
 
-    frameCountRef.current++;
-    if (frameCountRef.current % REFRESH_EVERY_N_FRAMES !== 0) return;
+    frameCountRef.current += 1;
+    if (frameCountRef.current < REFRESH_EVERY_N_FRAMES) return;
     frameCountRef.current = 0;
 
     const grid = gridRef.current;

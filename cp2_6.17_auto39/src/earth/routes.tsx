@@ -1,5 +1,6 @@
 import { useMemo, useRef, useEffect } from 'react';
 import { useThree, ThreeEvent } from '@react-three/fiber';
+import { Line } from '@react-three/drei';
 import * as THREE from 'three';
 import type { ShippingRoute } from '../types';
 import { createBezierCurve, computeArcHeight, pointToVec3, GLOBE_RADIUS } from '../utils/geoMath';
@@ -31,97 +32,57 @@ function RouteArc({
   onPointerOver,
   onPointerOut
 }: RouteArcProps) {
-  const lineRef = useRef<THREE.Line>(null);
+  const lineRef = useRef<any>(null);
   const points = useMemo(() => {
     const h = computeArcHeight(route.distanceKm);
     return createBezierCurve(route.from, route.to, h, 64);
   }, [route]);
 
-  const { position, color } = useMemo(() => {
-    const positions = new Float32Array(points.length * 3);
-    const colors = new Float32Array(points.length * 3);
+  const colors = useMemo(() => {
     const baseColor = interpolateRouteColor(emissionT);
     const rgb = hexToRgb(baseColor);
+    const colorArr: [number, number, number][] = [];
     for (let i = 0; i < points.length; i++) {
-      positions[i * 3] = points[i].x;
-      positions[i * 3 + 1] = points[i].y;
-      positions[i * 3 + 2] = points[i].z;
       const fade = i < 6 ? i / 6 : i > points.length - 7 ? (points.length - 1 - i) / 6 : 1;
-      colors[i * 3] = (rgb.r / 255) * fade;
-      colors[i * 3 + 1] = (rgb.g / 255) * fade;
-      colors[i * 3 + 2] = (rgb.b / 255) * fade;
+      colorArr.push([
+        (rgb.r / 255) * fade,
+        (rgb.g / 255) * fade,
+        (rgb.b / 255) * fade
+      ]);
     }
-    return { position: positions, color: colors };
+    return colorArr;
   }, [points, emissionT]);
 
-  const geometry = useMemo(() => {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(position, 3));
-    g.setAttribute('color', new THREE.BufferAttribute(color, 3));
-    return g;
-  }, [position, color]);
-
-  const lineWidth = isHovered || isSelected ? 0.06 : 0.03;
-  const opacity = isHovered || isSelected ? 1 : 0.78;
+  const lineWidth = isHovered || isSelected ? 2.5 : 1.2;
+  const opacity = isHovered || isSelected ? 1 : 0.8;
 
   return (
     <group>
-      <line
+      <Line
         ref={lineRef}
-        geometry={geometry}
-        onClick={e => {
+        points={points}
+        color={interpolateRouteColor(emissionT)}
+        lineWidth={lineWidth}
+        transparent
+        opacity={opacity}
+        vertexColors={colors}
+        onClick={(e: any) => {
           e.stopPropagation();
           onClick(route.id);
         }}
-        onPointerOver={e => {
+        onPointerOver={(e: any) => {
           e.stopPropagation();
           document.body.style.cursor = 'pointer';
           onPointerOver(e, route.id);
         }}
-        onPointerOut={e => {
+        onPointerOut={(e: any) => {
           e.stopPropagation();
           document.body.style.cursor = '';
           onPointerOut();
         }}
-      >
-        <lineBasicMaterial
-          vertexColors
-          transparent
-          opacity={opacity}
-          linewidth={1}
-        />
-      </line>
-      <GlowTube
-        points={points}
-        color={interpolateRouteColor(emissionT)}
-        width={lineWidth}
-        opacity={opacity * 0.5}
       />
       {isHovered && <EndpointMarkers route={route} />}
     </group>
-  );
-}
-
-function GlowTube({
-  points,
-  color,
-  width,
-  opacity
-}: {
-  points: THREE.Vector3[];
-  color: string;
-  width: number;
-  opacity: number;
-}) {
-  const curve = useMemo(() => {
-    return new THREE.CatmullRomCurve3(points);
-  }, [points]);
-
-  return (
-    <mesh>
-      <tubeGeometry args={[curve, 80, width * 0.5, 6, false]} />
-      <meshBasicMaterial color={color} transparent opacity={opacity} blending={THREE.AdditiveBlending} depthWrite={false} />
-    </mesh>
   );
 }
 
@@ -152,14 +113,12 @@ export function RoutesLayer() {
   const setTooltip = useGlobalStore(s => s.setTooltip);
   const setPanelCollapsed = useGlobalStore(s => s.setPanelCollapsed);
 
-  const { size } = useThree();
-
   const { min, max } = useMemo(() => getEmissionMinMax(currentYear), [routes, currentYear]);
 
-  function handlePointerOver(e: ThreeEvent<PointerEvent>, id: string) {
+  function handlePointerOver(e: any, id: string) {
     setHovered(id);
-    const x = e.nativeEvent.clientX;
-    const y = e.nativeEvent.clientY;
+    const x = e?.nativeEvent?.clientX ?? 0;
+    const y = e?.nativeEvent?.clientY ?? 0;
     setTooltip({ visible: true, x, y, routeId: id });
   }
 

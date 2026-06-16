@@ -1,25 +1,36 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import { Play, Pause, SkipBack, SkipForward, RotateCcw } from 'lucide-react';
-import { useTimeline } from '../hooks/useTimeline';
-import { TOTAL_YEARS, START_YEAR } from '../store/useGlobalStore';
+import { useGlobalStore, TOTAL_YEARS, START_YEAR } from '../store/useGlobalStore';
+
+const TICK_INTERVAL_MS = 1000;
 
 export function Timeline() {
-  const {
-    currentYear,
-    isPlaying,
-    startYear,
-    endYear,
-    toggle,
-    reset,
-    goToYear,
-    stepForward,
-    stepBackward
-  } = useTimeline();
+  const currentYear = useGlobalStore(s => s.currentYear);
+  const isPlaying = useGlobalStore(s => s.isPlaying);
+  const setIsPlaying = useGlobalStore(s => s.setIsPlaying);
+  const setCurrentYear = useGlobalStore(s => s.setCurrentYear);
+  const tickYear = useGlobalStore(s => s.tickYear);
 
   const trackRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
+  const playIntervalRef = useRef<number | null>(null);
 
-  const progress = (currentYear - startYear) / (endYear - startYear);
+  const endYear = START_YEAR + TOTAL_YEARS - 1;
+  const progress = (currentYear - START_YEAR) / (endYear - START_YEAR);
+
+  useEffect(() => {
+    if (isPlaying) {
+      playIntervalRef.current = window.setInterval(() => {
+        tickYear();
+      }, TICK_INTERVAL_MS);
+    }
+    return () => {
+      if (playIntervalRef.current !== null) {
+        clearInterval(playIntervalRef.current);
+        playIntervalRef.current = null;
+      }
+    };
+  }, [isPlaying, tickYear]);
 
   const handleSeek = useCallback(
     (clientX: number) => {
@@ -27,36 +38,83 @@ export function Timeline() {
       const rect = trackRef.current.getBoundingClientRect();
       const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
       const ratio = x / rect.width;
-      const year = Math.round(startYear + ratio * (endYear - startYear));
-      goToYear(year);
+      const year = Math.round(START_YEAR + ratio * (endYear - START_YEAR));
+      setCurrentYear(Math.max(START_YEAR, Math.min(endYear, year)));
     },
-    [goToYear, startYear, endYear]
+    [setCurrentYear, endYear]
   );
 
-  useEffect(() => {
-    function onMove(e: MouseEvent) {
-      if (draggingRef.current) handleSeek(e.clientX);
+  const handlePointerDown = useCallback((clientX: number) => {
+    draggingRef.current = true;
+    setIsPlaying(false);
+    handleSeek(clientX);
+  }, [handleSeek, setIsPlaying]);
+
+  const handlePointerUp = useCallback(() => {
+    draggingRef.current = false;
+  }, []);
+
+  const handlePointerMove = useCallback((clientX: number) => {
+    if (draggingRef.current) {
+      handleSeek(clientX);
     }
-    function onTouchMove(e: TouchEvent) {
-      if (draggingRef.current && e.touches[0]) handleSeek(e.touches[0].clientX);
-    }
-    function onUp() {
-      draggingRef.current = false;
-    }
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    window.addEventListener('touchmove', onTouchMove, { passive: false });
-    window.addEventListener('touchend', onUp);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('touchend', onUp);
-    };
   }, [handleSeek]);
 
+  useEffect(() => {
+    function onMouseMove(e: MouseEvent) {
+      handlePointerMove(e.clientX);
+    }
+    function onMouseUp() {
+      handlePointerUp();
+    }
+    function onTouchMove(e: TouchEvent) {
+      if (e.touches[0]) {
+        e.preventDefault();
+        handlePointerMove(e.touches[0].clientX);
+      }
+    }
+    function onTouchEnd() {
+      handlePointerUp();
+    }
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('touchcancel', onTouchEnd);
+
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
+      if (playIntervalRef.current !== null) {
+        clearInterval(playIntervalRef.current);
+        playIntervalRef.current = null;
+      }
+    };
+  }, [handlePointerMove, handlePointerUp]);
+
+  const toggle = useCallback(() => {
+    setIsPlaying(!isPlaying);
+  }, [isPlaying, setIsPlaying]);
+
+  const reset = useCallback(() => {
+    setIsPlaying(false);
+    setCurrentYear(START_YEAR);
+  }, [setCurrentYear, setIsPlaying]);
+
+  const stepForward = useCallback(() => {
+    if (currentYear < endYear) setCurrentYear(currentYear + 1);
+  }, [currentYear, endYear, setCurrentYear]);
+
+  const stepBackward = useCallback(() => {
+    if (currentYear > START_YEAR) setCurrentYear(currentYear - 1);
+  }, [currentYear, setCurrentYear]);
+
   const yearLabels: number[] = [];
-  for (let y = startYear; y <= endYear; y++) yearLabels.push(y);
+  for (let y = START_YEAR; y <= endYear; y++) yearLabels.push(y);
 
   return (
     <div style={styles.wrapper}>
@@ -66,6 +124,7 @@ export function Timeline() {
             aria-label="重置"
             style={styles.iconBtn}
             onTouchStart={e => { e.preventDefault(); reset(); }}
+            onTouchEnd={e => e.preventDefault()}
             onClick={reset}
             title="重置到2020年"
           >
@@ -75,14 +134,20 @@ export function Timeline() {
             aria-label="上一年"
             style={styles.iconBtn}
             onTouchStart={e => { e.preventDefault(); stepBackward(); }}
+            onTouchEnd={e => e.preventDefault()}
             onClick={stepBackward}
           >
             <SkipBack size={16} />
           </button>
           <button
             aria-label={isPlaying ? '暂停' : '播放'}
-            style={{ ...styles.iconBtn, ...styles.playBtn, background: isPlaying ? '#ff6b6b' : '#4ecdc4' }}
+            style={{
+              ...styles.iconBtn,
+              ...styles.playBtn,
+              background: isPlaying ? '#ff6b6b' : '#4ecdc4'
+            }}
             onTouchStart={e => { e.preventDefault(); toggle(); }}
+            onTouchEnd={e => e.preventDefault()}
             onClick={toggle}
           >
             {isPlaying ? <Pause size={18} color="#fff" /> : <Play size={18} color="#fff" />}
@@ -91,6 +156,7 @@ export function Timeline() {
             aria-label="下一年"
             style={styles.iconBtn}
             onTouchStart={e => { e.preventDefault(); stepForward(); }}
+            onTouchEnd={e => e.preventDefault()}
             onClick={stepForward}
           >
             <SkipForward size={16} />
@@ -101,20 +167,17 @@ export function Timeline() {
           <div
             ref={trackRef}
             style={styles.track}
-            onMouseDown={e => {
-              draggingRef.current = true;
-              handleSeek(e.clientX);
-            }}
+            onMouseDown={e => handlePointerDown(e.clientX)}
             onTouchStart={e => {
               if (e.touches[0]) {
-                draggingRef.current = true;
-                handleSeek(e.touches[0].clientX);
+                e.preventDefault();
+                handlePointerDown(e.touches[0].clientX);
               }
             }}
           >
             <div style={{ ...styles.fill, width: `${progress * 100}%` }} />
             {yearLabels.map(y => {
-              const left = ((y - startYear) / (endYear - startYear)) * 100;
+              const left = ((y - START_YEAR) / (endYear - START_YEAR)) * 100;
               const active = y === currentYear;
               return (
                 <div
@@ -143,7 +206,7 @@ export function Timeline() {
                 key={y}
                 style={{
                   ...styles.yearLabel,
-                  left: `${((y - startYear) / (endYear - startYear)) * 100}%`,
+                  left: `${((y - START_YEAR) / (endYear - START_YEAR)) * 100}%`,
                   color: y === currentYear ? currentYearColor(currentYear) : '#8b949e',
                   fontWeight: y === currentYear ? 700 : 400
                 }}
@@ -200,8 +263,8 @@ const styles: Record<string, React.CSSProperties> = {
     flexShrink: 0
   },
   iconBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     minWidth: 44,
     minHeight: 44,
     display: 'flex',
@@ -212,13 +275,15 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#161b22',
     color: '#c9d1d9',
     cursor: 'pointer',
-    transition: 'all 0.2s ease'
+    transition: 'all 0.2s ease',
+    touchAction: 'manipulation',
+    padding: 0
   },
   playBtn: {
-    width: 44,
-    height: 44,
-    minWidth: 44,
-    minHeight: 44
+    width: 48,
+    height: 48,
+    minWidth: 48,
+    minHeight: 48
   },
   sliderArea: {
     flex: 1,
@@ -230,17 +295,19 @@ const styles: Record<string, React.CSSProperties> = {
   track: {
     position: 'relative',
     width: '100%',
-    height: 10,
+    height: 14,
     background: '#161b22',
-    borderRadius: 5,
+    borderRadius: 7,
     cursor: 'pointer',
-    touchAction: 'none'
+    touchAction: 'none',
+    padding: '2px 0'
   },
   fill: {
     position: 'absolute',
-    top: 0,
+    top: '50%',
     left: 0,
-    height: '100%',
+    height: 10,
+    transform: 'translateY(-50%)',
     background: 'linear-gradient(90deg, #4ecdc4, #ff6b6b)',
     borderRadius: 5,
     transition: 'width 0.15s ease'
@@ -252,18 +319,20 @@ const styles: Record<string, React.CSSProperties> = {
     height: 6,
     borderRadius: '50%',
     transition: 'all 0.2s ease',
-    pointerEvents: 'none'
+    pointerEvents: 'none',
+    zIndex: 2
   },
   thumb: {
     position: 'absolute',
     top: '50%',
-    width: 16,
-    height: 16,
+    width: 20,
+    height: 20,
     borderRadius: '50%',
     transform: 'translate(-50%, -50%)',
     boxShadow: '0 0 12px rgba(255,255,255,0.3), 0 2px 6px rgba(0,0,0,0.4)',
     transition: 'left 0.15s ease',
-    pointerEvents: 'none'
+    pointerEvents: 'none',
+    zIndex: 3
   },
   yearLabels: {
     position: 'relative',
@@ -284,6 +353,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#161b22',
     borderRadius: 6,
     fontFamily: "'SF Mono', Menlo, monospace",
-    lineHeight: 1.2
+    lineHeight: 1.2,
+    minWidth: 64
   }
 };

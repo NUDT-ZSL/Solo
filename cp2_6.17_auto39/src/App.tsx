@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useRef } from 'react';
+import { Suspense, useRef, useCallback } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Stars } from '@react-three/drei';
 import * as THREE from 'three';
@@ -13,7 +13,8 @@ import { RouteTooltip } from './ui/routeTooltip';
 import { Header } from './ui/header';
 import { StatusBar } from './ui/statusBar';
 import { useFetchRoutes } from './hooks/useFetchRoutes';
-import { useGlobalStore } from './store/useGlobalStore';
+import { useGlobalStore, FocusedRegion } from './store/useGlobalStore';
+import type { RoutePoint, ShippingRoute } from './types';
 
 function SceneLights() {
   return (
@@ -109,13 +110,8 @@ function ErrorOverlay({ message, onRetry }: { message: string; onRetry: () => vo
 
 function CameraSetup() {
   const { camera } = useThree();
-  useEffect(() => {
-    camera.position.set(0, 2.5, 12);
-    camera.lookAt(0, 0, 0);
-  }, [camera]);
 
   useFrame(() => {
-    // 轻微相机浮动呼吸效果
     const t = performance.now() * 0.00015;
     camera.position.y = 2.5 + Math.sin(t) * 0.08;
   });
@@ -123,7 +119,7 @@ function CameraSetup() {
   return null;
 }
 
-function Scene3D() {
+function Scene3D({ onGlobeDoubleClick }: { onGlobeDoubleClick?: (p: RoutePoint, routes: ShippingRoute[]) => void }) {
   return (
     <Canvas
       camera={{ fov: 45, near: 0.1, far: 200, position: [0, 2.5, 12] }}
@@ -154,7 +150,7 @@ function Scene3D() {
           speed={0.3}
         />
         <Atmosphere />
-        <Globe />
+        <Globe onDoubleClick={onGlobeDoubleClick} />
         <RoutesLayer />
         <HeatmapLayer />
       </Suspense>
@@ -166,7 +162,6 @@ function Scene3D() {
         minDistance={2}
         maxDistance={20}
         enablePan={false}
-        enableTouch
         touches={{
           ONE: THREE.TOUCH.ROTATE,
           TWO: THREE.TOUCH.DOLLY_PAN
@@ -182,6 +177,8 @@ export default function App() {
   const error = useGlobalStore(s => s.routesError);
   const setError = useGlobalStore(s => s.setRoutesError);
   const setLoading = useGlobalStore(s => s.setRoutesLoading);
+  const setFocusedRegion = useGlobalStore(s => s.setFocusedRegion);
+  const setPanelCollapsed = useGlobalStore(s => s.setPanelCollapsed);
   const retryKeyRef = useRef(0);
 
   function retryLoad() {
@@ -190,6 +187,20 @@ export default function App() {
     retryKeyRef.current++;
     window.location.reload();
   }
+
+  const handleGlobeDoubleClick = useCallback((point: RoutePoint, nearbyRoutes: ShippingRoute[]) => {
+    const latLabel = point.lat >= 0 ? `${point.lat.toFixed(1)}°N` : `${Math.abs(point.lat).toFixed(1)}°S`;
+    const lngLabel = point.lng >= 0 ? `${point.lng.toFixed(1)}°E` : `${Math.abs(point.lng).toFixed(1)}°W`;
+
+    const region: FocusedRegion = {
+      lat: point.lat,
+      lng: point.lng,
+      routes: nearbyRoutes,
+      label: `${latLabel}, ${lngLabel}`
+    };
+    setFocusedRegion(region);
+    setPanelCollapsed(false);
+  }, [setFocusedRegion, setPanelCollapsed]);
 
   return (
     <div
@@ -213,7 +224,7 @@ export default function App() {
         }}
       />
       <div style={{ position: 'absolute', inset: 0 }}>
-        <Scene3D key={retryKeyRef.current} />
+        <Scene3D key={retryKeyRef.current} onGlobeDoubleClick={handleGlobeDoubleClick} />
       </div>
       <Header />
       <HeatmapToggle />

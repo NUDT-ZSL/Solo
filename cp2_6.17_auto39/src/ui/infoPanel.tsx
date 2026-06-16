@@ -240,13 +240,16 @@ function RouteDetail({ route, currentYear }: { route: ShippingRoute; currentYear
 
 function BarChart({ yearly, min, max }: { yearly: { year: number; emission: number }[]; min: number; max: number }) {
   const chartHeight = 110;
+  const firstYear = yearly[0]?.year || 2020;
+  const lastYear = yearly[yearly.length - 1]?.year || 2030;
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: chartHeight }}>
         {yearly.map(y => {
           const t = normalize(y.emission, min, max || 1);
+          const yearT = normalize(y.year, firstYear, lastYear);
           const h = Math.max(8, t * (chartHeight - 20));
-          const color = interpolateRouteColor(t);
+          const color = interpolateRouteColor(yearT);
           return (
             <div key={y.year} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
               <div
@@ -258,7 +261,7 @@ function BarChart({ yearly, min, max }: { yearly: { year: number; emission: numb
                   background: `linear-gradient(180deg, ${color}, ${color}88)`,
                   borderRadius: '4px 4px 2px 2px',
                   boxShadow: `0 0 10px ${color}44`,
-                  transition: 'height 0.4s ease'
+                  transition: 'height 0.4s ease, background 0.3s ease'
                 }}
               />
               <div

@@ -20,6 +20,7 @@ app.get('/api/routes', (_req, res) => {
     res.json({
       success: true,
       data,
+      count: data.length,
       timestamp: getTimestamp()
     });
   } catch (err) {
@@ -102,4 +103,9 @@ app.get('/api/health', (_req, res) => {
 
 app.listen(PORT, () => {
   console.log(`[server] Shipping emissions API running on http://localhost:${PORT}`);
+  console.log(`[server] Available endpoints:`);
+  console.log(`[server]   GET /api/routes    - 所有航线数据`);
+  console.log(`[server]   GET /api/routes/:id - 单条航线详情`);
+  console.log(`[server]   GET /api/emissions  - 碳排放聚合`);
+  console.log(`[server]   GET /api/ships      - 船舶统计`);
 });

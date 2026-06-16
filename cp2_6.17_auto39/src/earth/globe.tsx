@@ -2,7 +2,7 @@ import { useRef, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { GLOBE_RADIUS, latLngToVector3 } from '../utils/geoMath';
-import { useGlobalStore, FocusedRegion } from '../store/useGlobalStore';
+import { useGlobalStore } from '../store/useGlobalStore';
 import type { RoutePoint, ShippingRoute } from '../types';
 
 const EARTH_TEXTURE_URL =
@@ -18,7 +18,7 @@ export function Globe({ onDoubleClick }: { onDoubleClick?: (p: RoutePoint, route
   const { camera } = useThree();
   const routes = useGlobalStore(s => s.routes);
   const setFocusedRegion = useGlobalStore(s => s.setFocusedRegion);
-  const controlsActiveRef = useRef(true);
+  const setPanelCollapsed = useGlobalStore(s => s.setPanelCollapsed);
   const autoRotateRef = useRef(true);
 
   const textureLoader = useMemo(() => new THREE.TextureLoader(), []);
@@ -42,24 +42,23 @@ export function Globe({ onDoubleClick }: { onDoubleClick?: (p: RoutePoint, route
 
   function handlePointerDown() {
     autoRotateRef.current = false;
-    controlsActiveRef.current = true;
   }
 
   function handleDoubleClick(event: { point: THREE.Vector3; nativeEvent: MouseEvent }) {
     event?.nativeEvent?.stopPropagation?.();
     const dir = event.point.clone().normalize();
-    const lat = 90 - Math.acos(dir.y) * (180 / Math.PI);
+    const lat = 90 - Math.acos(Math.max(-1, Math.min(1, dir.y))) * (180 / Math.PI);
     const lng = Math.atan2(dir.z, -dir.x) * (180 / Math.PI) - 180;
     const lngNorm = ((lng + 540) % 360) - 180;
 
-    const targetPos = dir.multiplyScalar(GLOBE_RADIUS * 2.2);
+    const targetPos = dir.clone().multiplyScalar(GLOBE_RADIUS * 2.2);
     const startPos = camera.position.clone();
     const duration = 800;
-    const start = performance.now();
+    const startTime = performance.now();
     autoRotateRef.current = false;
 
     function animate() {
-      const t = Math.min(1, (performance.now() - start) / duration);
+      const t = Math.min(1, (performance.now() - startTime) / duration);
       const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
       camera.position.lerpVectors(startPos, targetPos, ease);
       camera.lookAt(0, 0, 0);
@@ -77,14 +76,18 @@ export function Globe({ onDoubleClick }: { onDoubleClick?: (p: RoutePoint, route
       return dLat < 35 && dLng < 50;
     });
 
-    const region: FocusedRegion = {
+    const point: RoutePoint = { lat, lng: lngNorm };
+    onDoubleClick?.(point, nearbyRoutes);
+
+    const latLabel = lat >= 0 ? `${lat.toFixed(1)}°N` : `${Math.abs(lat).toFixed(1)}°S`;
+    const lngLabel = lngNorm >= 0 ? `${lngNorm.toFixed(1)}°E` : `${Math.abs(lngNorm).toFixed(1)}°W`;
+    setFocusedRegion({
       lat,
       lng: lngNorm,
       routes: nearbyRoutes,
-      label: formatRegionLabel(lat, lngNorm)
-    };
-    setFocusedRegion(region);
-    onDoubleClick?.({ lat, lng: lngNorm }, nearbyRoutes);
+      label: `${latLabel}, ${lngLabel}`
+    });
+    setPanelCollapsed(false);
   }
 
   function formatRegionLabel(lat: number, lng: number): string {
