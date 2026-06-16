@@ -770,4 +770,223 @@ body {
     80% { font-size: 44px; opacity: 0.8; transform: translate(-50%, -160px); }
     100% { opacity: 0; font-size: 28px; transform: translate(-50%, -200px); }
   }
+  .aiHandCard { width: 84px; height: 119px; }
+}
+
+/* ==================== 斩击光线特效 ==================== */
+.slashLine {
+  position: fixed;
+  height: 4px;
+  transform-origin: left center;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(255, 255, 255, 0.3) 10%,
+    rgba(255, 255, 255, 0.95) 40%,
+    #ffffff 50%,
+    rgba(255, 255, 255, 0.95) 60%,
+    rgba(255, 255, 255, 0.3) 90%,
+    transparent 100%
+  );
+  box-shadow:
+    0 0 6px rgba(255, 255, 255, 0.9),
+    0 0 16px rgba(200, 220, 255, 0.8),
+    0 0 30px rgba(150, 180, 255, 0.5);
+  pointer-events: none;
+  z-index: 800;
+  animation: slashFlash 0.15s ease-out forwards;
+}
+@keyframes slashFlash {
+  0% { opacity: 0; filter: blur(4px); }
+  30% { opacity: 1; filter: blur(0); }
+  100% { opacity: 0; filter: blur(2px); }
+}
+.slashLine::before,
+.slashLine::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 10px #fff, 0 0 20px #aaccff;
+}
+.slashLine::before { left: -6px; }
+.slashLine::after { right: -6px; }
+
+/* ==================== 伤害/治疗飘字 ==================== */
+.floatingNumber {
+  position: fixed;
+  font-size: 36px;
+  font-weight: 900;
+  pointer-events: none;
+  z-index: 900;
+  text-shadow:
+    0 0 10px currentColor,
+    0 0 20px currentColor,
+    0 2px 8px rgba(0, 0, 0, 0.9);
+  transform: translate(-50%, -50%);
+  animation: floatUp 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  letter-spacing: -1px;
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+}
+.floatingNumber-damage {
+  color: #ff4444;
+  text-shadow:
+    0 0 10px #ff4444,
+    0 0 20px #ff0000,
+    0 0 30px rgba(255, 0, 0, 0.6),
+    0 2px 8px rgba(0, 0, 0, 0.9);
+}
+.floatingNumber-heal {
+  color: #44ff44;
+  text-shadow:
+    0 0 10px #44ff44,
+    0 0 20px #00ff00,
+    0 0 30px rgba(0, 255, 0, 0.6),
+    0 2px 8px rgba(0, 0, 0, 0.9);
+}
+@keyframes floatUp {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -60%) scale(1.25);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -80%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -110%) scale(0.9);
+  }
+}
+
+/* ==================== 英雄低血量呼吸灯 ==================== */
+.heroPanel.hero-lowHealth {
+  position: relative;
+}
+.hero-dangerAura {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 0, 0, 0.25) 0%, rgba(255, 0, 0, 0.1) 40%, transparent 70%);
+  pointer-events: none;
+  animation: dangerPulse 2s ease-in-out infinite;
+  z-index: 0;
+}
+@keyframes dangerPulse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: translate(-50%, -50%) scale(0.85);
+  }
+  50% {
+    opacity: 0.85;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+}
+.heroPanel.hero-lowHealth .heroAvatar {
+  animation: dangerShake 2s ease-in-out infinite;
+}
+@keyframes dangerShake {
+  0%, 90%, 100% { filter: none; }
+  92%, 96% { filter: brightness(1.4) hue-rotate(-15deg) saturate(2); }
+  94% { filter: brightness(0.9); }
+}
+.heroPanel.hero-lowHealth .avatarRing {
+  animation: ringPulse 2s ease-in-out infinite;
+}
+@keyframes ringPulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(201, 169, 78, 0.6); }
+  50% { box-shadow: 0 0 20px rgba(255, 50, 50, 0.8), 0 0 40px rgba(255, 0, 0, 0.4); }
+}
+
+/* ==================== 对手手牌区 ==================== */
+.aiHandArea {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 140px;
+  height: 200px;
+  z-index: 15;
+  pointer-events: none;
+}
+.aiHandArea > * {
+  pointer-events: auto;
+}
+.aiHandCard {
+  position: absolute;
+  width: 96px;
+  height: 136px;
+  transform-origin: top center;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
+  cursor: default;
+}
+.aiHandCard:hover {
+  transform: translate(-50%, 20px) scale(1.15) !important;
+  z-index: 999 !important;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7), 0 0 24px rgba(201, 169, 78, 0.35);
+}
+.aiCardBack {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(145deg, #3D2B1F, #2a1a0e);
+  border: 3px solid var(--card-border);
+  border-radius: 10px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  position: relative;
+}
+.aiCardBack::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 2px solid rgba(201, 169, 78, 0.4);
+  border-radius: 6px;
+  background:
+    linear-gradient(135deg, transparent 40%, rgba(201, 169, 78, 0.1) 50%, transparent 60%);
+}
+.aiCardBackInner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.aiCardLogo {
+  font-size: 56px;
+  color: var(--card-border);
+  text-shadow: 0 0 15px rgba(201, 169, 78, 0.6);
+  opacity: 0.9;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
+}
+
+/* ==================== 响应式:对手手牌 ==================== */
+@media (max-width: 1600px) {
+  .aiHandCard { width: 84px; height: 119px; }
+  .aiCardLogo { font-size: 48px; }
+}
+@media (max-width: 1366px) {
+  .aiHandCard { width: 72px; height: 102px; }
+  .aiCardLogo { font-size: 40px; }
+  .aiHandArea { height: 170px; top: 120px; }
+}
+
+/* ==================== 响应式:其他元素 ==================== */
+@media (max-width: 1600px) {
+  .hero-dangerAura { width: 120px; height: 120px; }
+  .floatingNumber { font-size: 30px; }
+}
+@media (max-width: 1366px) {
+  .hero-dangerAura { width: 100px; height: 100px; }
+  .floatingNumber { font-size: 26px; }
+  .slashLine { height: 3px; }
 }
