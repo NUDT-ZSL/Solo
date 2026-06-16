@@ -12,9 +12,15 @@ function App() {
   const [exportCount, setExportCount] = useState(0);
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
+  const [iconSizes, setIconSizes] = useState<Record<string, number>>({});
 
   const handleGenerate = useCallback((newIcons: Icon[]) => {
     setIcons(prev => [...prev, ...newIcons]);
+    const newSizes: Record<string, number> = {};
+    newIcons.forEach(icon => {
+      newSizes[icon.id] = 48;
+    });
+    setIconSizes(prev => ({ ...prev, ...newSizes }));
   }, []);
 
   const handleToggleSelect = useCallback((id: string) => {
@@ -44,6 +50,11 @@ function App() {
       next.delete(id);
       return next;
     });
+    setIconSizes(prev => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   }, []);
 
   const handleEdit = useCallback((icon: Icon) => {
@@ -66,6 +77,10 @@ function App() {
       result.splice(endIndex, 0, removed);
       return result;
     });
+  }, []);
+
+  const handleSizeChange = useCallback((id: string, size: number) => {
+    setIconSizes(prev => ({ ...prev, [id]: size }));
   }, []);
 
   const handleExportSuccess = useCallback(() => {
@@ -105,11 +120,13 @@ function App() {
         <IconGrid
           icons={icons}
           selectedIds={selectedIds}
+          iconSizes={iconSizes}
           onToggleSelect={handleToggleSelect}
           onSelectAll={handleSelectAll}
           onDelete={handleDelete}
           onEdit={handleEdit}
           onReorder={handleReorder}
+          onSizeChange={handleSizeChange}
           selectedIcons={selectedIcons}
           onExportSuccess={handleExportSuccess}
         />

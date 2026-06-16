@@ -9,9 +9,9 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
-const iconTemplates = {
-  cat: [
-    { name: 'cat-glasses', paths: [
+const shapeGenerators = {
+  cat: (variant = 0) => {
+    const basePaths = [
       'M24 18 C20 10, 8 10, 6 18',
       'M24 18 C28 10, 40 10, 42 18',
       'M14 20 L14 30',
@@ -21,157 +21,257 @@ const iconTemplates = {
       'M30 24 Q34 26 32 30',
       'M16 36 Q24 42 32 36',
       'M12 14 Q14 12 16 14',
-      'M32 14 Q34 12 36 14',
-      'M10 18 Q18 16 22 18',
-      'M26 18 Q30 16 38 18'
-    ]},
-    { name: 'cat-sleeping', paths: [
-      'M14 20 Q12 12 8 10',
-      'M34 20 Q36 12 40 10',
-      'M24 16 Q18 14 14 18',
-      'M24 16 Q30 14 34 18',
-      'M18 24 Q20 26 22 24',
-      'M26 24 Q28 26 30 24',
-      'M24 28 L24 32',
-      'M20 34 Q24 38 28 34',
-      'M10 36 Q24 44 38 36',
-      'M30 14 Q34 13 36 15'
-    ]},
-    { name: 'cat-playful', paths: [
-      'M12 18 Q8 8 4 6',
-      'M36 18 Q40 8 44 6',
-      'M24 20 Q18 16 14 20',
-      'M24 20 Q30 16 34 20',
-      'M18 26 Q20 28 22 26',
-      'M26 26 Q28 28 30 26',
-      'M24 30 Q22 34 24 36 Q26 34 24 30',
-      'M14 38 Q24 44 34 38',
-      'M36 38 L40 42',
-      'M38 36 L42 34'
-    ]},
-    { name: 'cat-sitting', paths: [
-      'M16 16 Q12 8 10 6',
-      'M32 16 Q36 8 38 6',
-      'M24 14 Q18 12 14 16',
-      'M24 14 Q30 12 34 16',
-      'M18 22 L18 26',
-      'M30 22 L30 26',
-      'M24 20 L24 30',
-      'M20 32 L20 40',
-      'M28 32 L28 40',
-      'M16 40 Q24 44 32 40',
-      'M34 20 L42 18',
-      'M40 22 L44 24'
-    ]}
-  ],
-  star: [
-    { name: 'star-bright', paths: [
-      'M24 4 L29 18 L44 18 L32 27 L37 42 L24 33 L11 42 L16 27 L4 18 L19 18 Z',
-      'M24 10 L27 20 L38 20 L29 26 L32 36 L24 30 L16 36 L19 26 L10 20 L21 20 Z'
-    ]},
-    { name: 'star-sparkle', paths: [
-      'M24 6 L27 20 L42 20 L30 29 L34 44 L24 35 L14 44 L18 29 L6 20 L21 20 Z',
-      'M24 14 L26 20 L32 20 L27 24 L29 30 L24 27 L19 30 L21 24 L16 20 L22 20 Z',
-      'M8 10 L10 14 L14 14 L11 16 L12 20 L9 18 L6 20 L7 16 L4 14 L8 14 Z',
-      'M40 28 L41 31 L44 31 L42 33 L43 36 L40 35 L37 36 L38 33 L36 31 L39 31 Z'
-    ]},
-    { name: 'star-twinkle', paths: [
-      'M24 8 Q26 16 34 18 Q26 20 24 28 Q22 20 14 18 Q22 16 24 8',
-      'M24 4 L26 16 L38 18 L26 20 L24 32 L22 20 L10 18 L22 16 Z',
-      'M12 12 L14 18 L20 20 L14 22 L12 28 L10 22 L4 20 L10 18 Z'
-    ]},
-    { name: 'star-outlined', paths: [
-      'M24 6 L28 18 L42 18 L31 26 L35 40 L24 31 L13 40 L17 26 L6 18 L20 18 Z',
-      'M24 12 L26 19 L34 19 L28 24 L30 31 L24 27 L18 31 L20 24 L14 19 L22 19 Z'
-    ]}
-  ],
-  heart: [
-    { name: 'heart-love', paths: [
-      'M24 42 Q10 32 6 20 Q6 10 16 8 Q24 8 24 16 Q24 8 32 8 Q42 10 42 20 Q38 32 24 42'
-    ]},
-    { name: 'heart-beat', paths: [
-      'M24 40 Q12 30 8 20 Q8 12 16 10 Q22 10 24 16 Q26 10 32 10 Q40 12 40 20 Q36 30 24 40',
-      'M16 24 L20 24 L22 20 L26 28 L28 24 L32 24'
-    ]},
-    { name: 'heart-lock', paths: [
-      'M24 40 Q10 30 6 18 Q6 10 16 8 Q22 8 24 14 Q26 8 32 8 Q42 10 42 18 Q38 30 24 40',
-      'M20 20 L20 16 Q20 12 24 12 Q28 12 28 16 L28 20',
-      'M20 20 L28 20 L28 28 L20 28 Z',
-      'M24 23 L24 26'
-    ]},
-    { name: 'heart-arrow', paths: [
-      'M20 36 Q8 26 6 16 Q6 8 14 6 Q20 6 24 12 Q28 6 34 6 Q42 8 42 16 Q40 26 28 36',
-      'M4 30 L30 4',
-      'M28 6 L34 6 L30 12',
-      'M6 28 L6 34 L12 34'
-    ]}
-  ],
-  default: [
-    { name: 'icon-1', paths: [
-      'M24 8 L24 40',
-      'M8 24 L40 24',
-      'M12 12 L36 36',
-      'M36 12 L12 36'
-    ]},
-    { name: 'icon-2', paths: [
-      'M24 8 L40 24 L24 40 L8 24 Z',
-      'M24 14 L34 24 L24 34 L14 24 Z'
-    ]},
-    { name: 'icon-3', paths: [
-      'M24 6 A18 18 0 1 1 24 42 A18 18 0 1 1 24 6',
-      'M24 12 A12 12 0 1 1 24 36 A12 12 0 1 1 24 12',
-      'M24 18 A6 6 0 1 1 24 30 A6 6 0 1 1 24 18'
-    ]},
-    { name: 'icon-4', paths: [
-      'M8 16 L40 16',
-      'M8 24 L40 24',
-      'M8 32 L40 32',
-      'M16 8 L16 40',
-      'M32 8 L32 40'
-    ]}
-  ]
+      'M32 14 Q34 12 36 14'
+    ];
+    
+    if (variant === 1) {
+      basePaths.push('M10 18 Q18 16 22 18');
+      basePaths.push('M26 18 Q30 16 38 18');
+    }
+    if (variant === 2) {
+      basePaths.push('M18 28 Q20 30 22 28');
+      basePaths.push('M26 28 Q28 30 30 28');
+    }
+    
+    return basePaths;
+  },
+  
+  sunglasses: (variant = 0) => {
+    const offsetY = variant * 2;
+    return [
+      `M6 ${14 + offsetY} L18 ${14 + offsetY}`,
+      `M30 ${14 + offsetY} L42 ${14 + offsetY}`,
+      `M12 ${10 + offsetY} Q12 ${18 + offsetY} 18 ${18 + offsetY} Q24 ${18 + offsetY} 24 ${14 + offsetY} Q24 ${10 + offsetY} 18 ${10 + offsetY} Q12 ${10 + offsetY} 12 ${14 + offsetY}`,
+      `M30 ${10 + offsetY} Q30 ${18 + offsetY} 36 ${18 + offsetY} Q42 ${18 + offsetY} 42 ${14 + offsetY} Q42 ${10 + offsetY} 36 ${10 + offsetY} Q30 ${10 + offsetY} 30 ${14 + offsetY}`,
+      `M18 ${14 + offsetY} L30 ${14 + offsetY}`
+    ];
+  },
+  
+  star: (variant = 0) => {
+    const cx = 24 + (variant - 1) * 3;
+    const cy = 24 + (variant - 1) * 3;
+    const outerR = 20;
+    const innerR = 8;
+    const points = [];
+    
+    for (let i = 0; i < 10; i++) {
+      const r = i % 2 === 0 ? outerR : innerR;
+      const angle = (Math.PI / 5) * i - Math.PI / 2;
+      points.push(`${cx + r * Math.cos(angle)} ${cy + r * Math.sin(angle)}`);
+    }
+    
+    return [`M${points.join(' L')} Z`];
+  },
+  
+  heart: (variant = 0) => {
+    const scale = 1 + variant * 0.15;
+    const s = scale;
+    const cx = 24;
+    const cy = 26;
+    return [
+      `M${cx} ${cy + 16 * s} Q${cx - 14 * s} ${cy + 6 * s} ${cx - 18 * s} ${cy - 6 * s} Q${cx - 18 * s} ${cy - 16 * s} ${cx - 8 * s} ${cy - 18 * s} Q${cx - 2 * s} ${cy - 18 * s} ${cx} ${cy - 10 * s} Q${cx + 2 * s} ${cy - 18 * s} ${cx + 8 * s} ${cy - 18 * s} Q${cx + 18 * s} ${cy - 16 * s} ${cx + 18 * s} ${cy - 6 * s} Q${cx + 14 * s} ${cy + 6 * s} ${cx} ${cy + 16 * s}`
+    ];
+  },
+  
+  circle: (variant = 0) => {
+    const cx = 24 + variant * 2;
+    const cy = 24;
+    const r = 16 - variant * 3;
+    return [
+      `M${cx - r} ${cy} A${r} ${r} 0 1 0 ${cx + r} ${cy} A${r} ${r} 0 1 0 ${cx - r} ${cy}`
+    ];
+  },
+  
+  square: (variant = 0) => {
+    const size = 24 - variant * 4;
+    const x1 = 24 - size / 2;
+    const y1 = 24 - size / 2;
+    const x2 = 24 + size / 2;
+    const y2 = 24 + size / 2;
+    return [
+      `M${x1} ${y1} L${x2} ${y1} L${x2} ${y2} L${x1} ${y2} Z`
+    ];
+  },
+  
+  triangle: (variant = 0) => {
+    const size = 20 + variant * 2;
+    const cx = 24;
+    const cy = 24;
+    return [
+      `M${cx} ${cy - size} L${cx + size} ${cy + size * 0.7} L${cx - size} ${cy + size * 0.7} Z`
+    ];
+  },
+  
+  house: (variant = 0) => {
+    const offset = variant * 2;
+    return [
+      `M${8 + offset} ${42 - offset} L${8 + offset} ${24 - offset} L${24} ${8 + offset} L${40 - offset} ${24 - offset} L${40 - offset} ${42 - offset} Z`,
+      `M${18 + offset} ${42 - offset} L${18 + offset} ${32 - offset} L${30 - offset} ${32 - offset} L${30 - offset} ${42 - offset} Z`,
+      `M${24} ${8 + offset} L${24} ${8 + offset}`
+    ];
+  },
+  
+  tree: (variant = 0) => {
+    const scale = 1 + variant * 0.15;
+    const s = scale;
+    return [
+      `M${24} ${6 * s} L${36 * s} ${24} L${12 * (2 - s)} ${24} Z`,
+      `M${24} ${14 * s} L${38 * s} ${32} L${10 * (2 - s)} ${32} Z`,
+      `M${24} ${22 * s} L${40 * s} ${40} L${8 * (2 - s)} ${40} Z`,
+      `M${20} ${40} L${20} ${44} L${28} ${44} L${28} ${40} Z`
+    ];
+  },
+  
+  sun: (variant = 0) => {
+    const paths = [];
+    const cx = 24;
+    const cy = 24;
+    const r = 10 - variant * 2;
+    paths.push(`M${cx - r} ${cy} A${r} ${r} 0 1 0 ${cx + r} ${cy} A${r} ${r} 0 1 0 ${cx - r} ${cy}`);
+    for (let i = 0; i < 8; i++) {
+      const angle = (Math.PI / 4) * i;
+      const r1 = r + 4;
+      const r2 = r + 10;
+      paths.push(`M${cx + r1 * Math.cos(angle)} ${cy + r1 * Math.sin(angle)} L${cx + r2 * Math.cos(angle)} ${cy + r2 * Math.sin(angle)}`);
+    }
+    return paths;
+  },
+  
+  moon: (variant = 0) => {
+    const offset = variant * 3;
+    return [
+      `M${30 + offset} 10 A16 16 0 1 0 ${30 + offset} 38 A12 12 0 1 1 ${30 + offset} 10`
+    ];
+  },
+  
+  cloud: (variant = 0) => {
+    const offset = variant * 2;
+    return [
+      `M${10 + offset} 32 A8 8 0 0 1 ${18 + offset} 24 Q${18 + offset} 18 ${24 + offset} 18 Q${30 + offset} 18 ${30 + offset} 24 Q${38 + offset} 24 ${38 + offset} 30 Q${38 + offset} 36 ${32 + offset} 36 L${16 + offset} 36 Q${10 + offset} 36 ${10 + offset} 32`
+    ];
+  },
+  
+  music: (variant = 0) => {
+    const offset = variant * 4;
+    return [
+      `M${16 + offset} 16 L${16 + offset} 32`,
+      `M${16 + offset} 32 A4 4 0 1 1 ${12 + offset} 32`,
+      `M${16 + offset} 16 L${32 + offset} 10 L${32 + offset} 28`,
+      `M${32 + offset} 28 A4 4 0 1 1 ${28 + offset} 28`
+    ];
+  },
+  
+  lightning: (variant = 0) => {
+    const offset = variant * 2;
+    return [
+      `M${26 + offset} 4 L${14 + offset} 24 L${22 + offset} 24 L${18 + offset} 44 L${34 + offset} 20 L${26 + offset} 20 L${30 + offset} 4 Z`
+    ];
+  },
+  
+  gear: (variant = 0) => {
+    const paths = [];
+    const cx = 24;
+    const cy = 24;
+    const outerR = 18;
+    const innerR = 10;
+    const teeth = 8;
+    
+    for (let i = 0; i < teeth * 2; i++) {
+      const r = i % 2 === 0 ? outerR : outerR - 4;
+      const angle = (Math.PI / teeth) * i - Math.PI / 2;
+      paths.push(`${cx + r * Math.cos(angle)} ${cy + r * Math.sin(angle)}`);
+    }
+    paths.push(paths[0]);
+    
+    return [
+      `M${paths.join(' L')}`,
+      `M${cx - innerR} ${cy} A${innerR} ${innerR} 0 1 0 ${cx + innerR} ${cy} A${innerR} ${innerR} 0 1 0 ${cx - innerR} ${cy}`
+    ];
+  }
 };
 
-function detectCategory(prompt) {
-  const lower = prompt.toLowerCase();
-  if (lower.includes('cat') || lower.includes('猫')) return 'cat';
-  if (lower.includes('star') || lower.includes('星')) return 'star';
-  if (lower.includes('heart') || lower.includes('心') || lower.includes('爱')) return 'heart';
-  return 'default';
-}
+const keywordMappings = [
+  { keywords: ['猫', 'cat', 'kitty', '猫咪'], shapes: ['cat'], name: 'cat' },
+  { keywords: ['太阳镜', 'sunglass', '眼镜', 'glasses'], shapes: ['sunglasses'], name: 'sunglasses' },
+  { keywords: ['星星', 'star', '星'], shapes: ['star'], name: 'star' },
+  { keywords: ['心', '爱心', 'heart', 'love'], shapes: ['heart'], name: 'heart' },
+  { keywords: ['圆', 'circle', '球', '球'], shapes: ['circle'], name: 'circle' },
+  { keywords: ['方', 'square', '正方形', '方块'], shapes: ['square'], name: 'square' },
+  { keywords: ['三角', 'triangle'], shapes: ['triangle'], name: 'triangle' },
+  { keywords: ['房子', 'house', '家', 'home'], shapes: ['house'], name: 'house' },
+  { keywords: ['树', 'tree', '树木'], shapes: ['tree'], name: 'tree' },
+  { keywords: ['太阳', 'sun', '日'], shapes: ['sun'], name: 'sun' },
+  { keywords: ['月亮', 'moon', '月'], shapes: ['moon'], name: 'moon' },
+  { keywords: ['云', 'cloud', '云朵'], shapes: ['cloud'], name: 'cloud' },
+  { keywords: ['音乐', 'music', '音符', 'note'], shapes: ['music'], name: 'music' },
+  { keywords: ['闪电', 'lightning', '雷电', '雷'], shapes: ['lightning'], name: 'lightning' },
+  { keywords: ['齿轮', 'gear', '设置', 'setting'], shapes: ['gear'], name: 'gear' }
+];
 
-function generateRandomPaths() {
-  const paths = [];
-  const numPaths = 3 + Math.floor(Math.random() * 4);
+function detectShapes(prompt) {
+  const lower = prompt.toLowerCase();
+  const detectedShapes = [];
+  const detectedNames = [];
   
-  for (let i = 0; i < numPaths; i++) {
-    const type = Math.random();
-    if (type < 0.3) {
-      const x1 = 8 + Math.random() * 32;
-      const y1 = 8 + Math.random() * 32;
-      const x2 = 8 + Math.random() * 32;
-      const y2 = 8 + Math.random() * 32;
-      paths.push(`M${x1.toFixed(1)} ${y1.toFixed(1)} L${x2.toFixed(1)} ${y2.toFixed(1)}`);
-    } else if (type < 0.6) {
-      const cx = 12 + Math.random() * 24;
-      const cy = 12 + Math.random() * 24;
-      const rx = 4 + Math.random() * 12;
-      const ry = 4 + Math.random() * 12;
-      paths.push(`M${(cx - rx).toFixed(1)} ${cy.toFixed(1)} A${rx.toFixed(1)} ${ry.toFixed(1)} 0 1 0 ${(cx + rx).toFixed(1)} ${cy.toFixed(1)} A${rx.toFixed(1)} ${ry.toFixed(1)} 0 1 0 ${(cx - rx).toFixed(1)} ${cy.toFixed(1)}`);
-    } else {
-      const x1 = 8 + Math.random() * 10;
-      const y1 = 20 + Math.random() * 20;
-      const x2 = 30 + Math.random() * 10;
-      const y2 = 20 + Math.random() * 20;
-      const cx1 = 16 + Math.random() * 8;
-      const cy1 = 8 + Math.random() * 12;
-      const cx2 = 24 + Math.random() * 8;
-      const cy2 = 8 + Math.random() * 12;
-      paths.push(`M${x1.toFixed(1)} ${y1.toFixed(1)} C${cx1.toFixed(1)} ${cy1.toFixed(1)}, ${cx2.toFixed(1)} ${cy2.toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}`);
+  for (const mapping of keywordMappings) {
+    for (const keyword of mapping.keywords) {
+      if (lower.includes(keyword.toLowerCase())) {
+        for (const shape of mapping.shapes) {
+          if (!detectedShapes.includes(shape)) {
+            detectedShapes.push(shape);
+            detectedNames.push(mapping.name);
+          }
+        }
+        break;
+      }
     }
   }
   
+  if (detectedShapes.length === 0) {
+    detectedShapes.push('circle', 'square', 'triangle', 'star');
+    detectedNames.push('default');
+  }
+  
+  return { shapes: detectedShapes, names: detectedNames };
+}
+
+function generateIconPaths(shapeNames, variant) {
+  const paths = [];
+  
+  for (let i = 0; i < shapeNames.length; i++) {
+    const shapeName = shapeNames[i];
+    const gen = shapeGenerators[shapeName];
+    if (gen) {
+      const shapePaths = gen(variant + i);
+      paths.push(...shapePaths);
+    }
+  }
+  
+  if (paths.length === 0) {
+    paths.push('M24 8 L24 40', 'M8 24 L40 24');
+  }
+  
   return paths;
+}
+
+function generateIcons(prompt, count = 4) {
+  const { shapes, names } = detectShapes(prompt);
+  const icons = [];
+  
+  for (let i = 0; i < count; i++) {
+    const variant = i;
+    const paths = generateIconPaths(shapes, variant);
+    const baseName = names.join('-') || 'icon';
+    
+    icons.push({
+      id: uuidv4(),
+      name: `${baseName}-${Date.now()}-${i}`,
+      paths: paths,
+      viewBox: '0 0 48 48'
+    });
+  }
+  
+  return icons;
 }
 
 app.post('/api/generate', (req, res) => {
@@ -181,15 +281,7 @@ app.post('/api/generate', (req, res) => {
     return res.status(400).json({ error: 'Prompt is required' });
   }
   
-  const category = detectCategory(prompt);
-  const templates = iconTemplates[category] || iconTemplates.default;
-  
-  const icons = templates.map((template, index) => ({
-    id: uuidv4(),
-    name: `${template.name}-${Date.now()}-${index}`,
-    paths: template.paths,
-    viewBox: '0 0 48 48'
-  }));
+  const icons = generateIcons(prompt, 4);
   
   setTimeout(() => {
     res.json({ icons });
@@ -213,17 +305,17 @@ app.post('/api/export', (req, res) => {
   archive.pipe(res);
   
   icons.forEach((icon) => {
-    if (format === 'svg') {
-      const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   ${icon.paths.map(p => `<path d="${p}"/>`).join('\n  ')}
 </svg>`;
+    
+    if (format === 'svg') {
       archive.append(svgContent, { name: `${icon.name}.svg` });
     } else if (format === 'png') {
-      const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  ${icon.paths.map(p => `<path d="${p}"/>`).join('\n  ')}
-</svg>`;
-      archive.append(Buffer.from(svgContent), { name: `${icon.name}.svg` });
+      archive.append(svgContent, { name: `${icon.name}.svg` });
+      const pngNote = `PNG export - convert SVG to PNG using external tool\n\nSVG source included for reference.`;
+      archive.append(pngNote, { name: 'README.txt' });
     }
   });
   

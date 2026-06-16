@@ -41,16 +41,20 @@ function IconEditor({ icon, onSave, onClose }: IconEditorProps) {
     });
   };
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
+  const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    setScale(prev => Math.max(0.5, Math.min(3, prev + delta)));
+    setScale(prev => Math.max(0.2, Math.min(5, prev + delta)));
   }, []);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragging(true);
-    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+    setDragStart({
+      x: e.clientX - position.x,
+      y: e.clientY - position.y,
+    });
   };
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -64,6 +68,23 @@ function IconEditor({ icon, onSave, onClose }: IconEditorProps) {
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
   }, []);
+
+  const handleDoubleClick = () => {
+    setScale(1);
+    setPosition({ x: 0, y: 0 });
+  };
+
+  useEffect(() => {
+    const previewEl = previewRef.current;
+    if (previewEl) {
+      previewEl.addEventListener('wheel', handleWheel, { passive: false });
+    }
+    return () => {
+      if (previewEl) {
+        previewEl.removeEventListener('wheel', handleWheel);
+      }
+    };
+  }, [handleWheel]);
 
   useEffect(() => {
     if (isDragging) {
@@ -82,14 +103,16 @@ function IconEditor({ icon, onSave, onClose }: IconEditorProps) {
     }
   };
 
-  const highlightedCode = codeText.split('\n').map((line, index) => {
-    const isPath = line.trim().startsWith('M') || line.trim().startsWith('m');
-    return (
-      <span key={index} className={isPath ? 'path-line' : ''}>
-        {line}
-      </span>
-    );
-  });
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      onClose();
+    }
+  }, [onClose]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
 
   return (
     <div className="editor-overlay" onClick={handleOverlayClick}>
@@ -104,34 +127,65 @@ function IconEditor({ icon, onSave, onClose }: IconEditorProps) {
           <div
             className="preview-section"
             ref={previewRef}
-            onWheel={handleWheel}
             onMouseDown={handleMouseDown}
+            onDoubleClick={handleDoubleClick}
             style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
           >
-            <div className="preview-info">
-              缩放: {(scale * 100).toFixed(0)}%
-            </div>
-            <div
-              className="preview-content"
-              style={{
-                transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-              }}
-            >
-              <svg
-                viewBox={icon.viewBox}
-                fill="none"
-                stroke="#e94560"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                width="120"
-                height="120"
+            <div className="preview-toolbar">
+              <span className="preview-info">缩放: {(scale * 100).toFixed(0)}%</span>
+              <button
+                className="zoom-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setScale(prev => Math.max(0.2, prev - 0.2));
+                }}
               >
-                {paths.map((path, i) => (
-                  <path key={i} d={path} />
-                ))}
-              </svg>
+                -
+              </button>
+              <button
+                className="zoom-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setScale(prev => Math.min(5, prev + 0.2));
+                }}
+              >
+                +
+              </button>
+              <button
+                className="zoom-btn reset-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setScale(1);
+                  setPosition({ x: 0, y: 0 });
+                }}
+              >
+                1:1
+              </button>
             </div>
+            <div className="preview-canvas">
+              <div
+                className="preview-content"
+                style={{
+                  transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
+                }}
+              >
+                <svg
+                  viewBox={icon.viewBox}
+                  fill="none"
+                  stroke="#e94560"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  width="120"
+                  height="120"
+                >
+                  {paths.map((path, i) => (
+                    <path key={i} d={path} />
+                  ))}
+                </svg>
+              </div>
+            </div>
+            <div className="preview-hint">滚轮缩放 · 拖拽平移 · 双击重置</div>
           </div>
           <div className="code-section">
             <label className="code-label">SVG 路径代码</label>

@@ -13,6 +13,7 @@
   padding: 12px 20px;
   background-color: #1a1a2e;
   border-radius: 12px;
+  flex-shrink: 0;
 }
 
 .toolbar-left {
@@ -43,45 +44,10 @@
   gap: 12px;
 }
 
-.size-label {
-  font-size: 13px;
-  color: #8892b0;
-  min-width: 100px;
-}
-
-.size-slider {
-  width: 150px;
-  height: 6px;
-  -webkit-appearance: none;
-  appearance: none;
-  background: #0f3460;
-  border-radius: 3px;
-  outline: none;
-  cursor: pointer;
-}
-
-.size-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  background: #e94560;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: transform 0.2s ease;
-}
-
-.size-slider::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
-}
-
-.size-slider::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  background: #e94560;
-  border-radius: 50%;
-  cursor: pointer;
-  border: none;
+.toolbar-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
 }
 
 .toolbar-right {
@@ -143,9 +109,14 @@
   background-color: #0f3460;
 }
 
-.icon-grid {
+.icon-grid-wrapper {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+}
+
+.icon-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 20px;
@@ -169,6 +140,7 @@
   cursor: grab;
   user-select: none;
   border: 2px solid transparent;
+  box-sizing: border-box;
 }
 
 .icon-card:hover {
@@ -181,13 +153,15 @@
 }
 
 .icon-card.dragging {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: grabbing;
+  transform: scale(1.02);
 }
 
-.icon-card.drag-over {
-  border-color: #e94560;
-  background-color: rgba(233, 69, 96, 0.1);
+.icon-card.drag-overlay {
+  box-shadow: 0 12px 40px rgba(233, 69, 96, 0.3);
+  cursor: grabbing;
+  transform: rotate(2deg);
 }
 
 .card-checkbox {
@@ -210,6 +184,7 @@
   justify-content: center;
   margin: auto 0;
   transition: all 0.3s ease;
+  flex-shrink: 0;
 }
 
 .icon-name {
@@ -220,13 +195,66 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-top: 12px;
+  margin-top: 8px;
+  flex-shrink: 0;
+}
+
+.card-size-slider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+  flex-shrink: 0;
+}
+
+.card-slider {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #0f3460;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.card-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: #e94560;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.card-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.card-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: #e94560;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+.card-size-label {
+  font-size: 10px;
+  color: #8892b0;
+  min-width: 32px;
+  text-align: right;
 }
 
 .card-actions {
   display: flex;
   gap: 12px;
-  margin-top: 12px;
+  margin-top: 8px;
+  flex-shrink: 0;
 }
 
 .action-btn {
@@ -239,6 +267,8 @@
   font-size: 12px;
   transition: all 0.3s ease;
   color: #ffffff;
+  cursor: pointer;
+  padding: 0;
 }
 
 .edit-btn {
@@ -267,6 +297,7 @@
   justify-content: center;
   padding: 60px 20px;
   color: #4a5568;
+  height: 100%;
 }
 
 .empty-icon {
@@ -286,5 +317,18 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (max-width: 900px) {
+  .icon-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .icon-grid {
+    grid-template-columns: 1fr;
+    justify-items: center;
   }
 }
