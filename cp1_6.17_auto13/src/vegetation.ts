@@ -17,6 +17,9 @@ export interface PlantData {
   flashTime: number
   flashing: boolean
   shrubHeight?: number
+  treeTrunkHeight?: number
+  treeTrunkRadius?: number
+  treeCrownRadius?: number
   visible: boolean
   growAnimation?: {
     startTime: number
@@ -39,7 +42,6 @@ export class VegetationSystem {
   private readonly SHRUB_MIN_HEIGHT = 0.5
   private readonly SHRUB_MAX_HEIGHT = 1
   private readonly TREE_TRUNK_HEIGHT = 2
-  private readonly TREE_CROWN_DIAMETER = 1
 
   private seedLightColor = new THREE.Color(0xFFFFAA)
   private youngColor = new THREE.Color(0x90EE90)
@@ -152,7 +154,7 @@ export class VegetationSystem {
     this.climate = climate
   }
 
-  public generateTree(x?: number, z?: number): PlantData | null {
+  public generateTree(x?: number, z?: number, type: PlantType = 'tree'): PlantData | null {
     if (this.plants.length >= this.MAX_PLANTS) return null
 
     const width = this.terrainGeometry.parameters.width
@@ -162,13 +164,15 @@ export class VegetationSystem {
     if (z === undefined) z = (Math.random() - 0.5) * height * 0.9
 
     const slope = calculateSlope(this.terrainGeometry, x, z)
-    if (slope > 30) return null
+    if (type === 'grass' && slope >= 15) return null
+    if (type === 'shrub' && (slope < 15 || slope >= 30)) return null
+    if (type === 'tree' && slope >= 10) return null
 
     const y = getTerrainHeight(this.terrainGeometry, x, z)
 
     const plant: PlantData = {
       id: this.nextPlantId++,
-      type: 'tree',
+      type,
       x, z, y,
       rotationY: Math.random() * Math.PI * 2,
       growth: 0,
@@ -177,6 +181,14 @@ export class VegetationSystem {
       flashTime: 0,
       flashing: false,
       visible: true
+    }
+
+    if (type === 'shrub') {
+      plant.shrubHeight = this.SHRUB_MIN_HEIGHT + Math.random() * (this.SHRUB_MAX_HEIGHT - this.SHRUB_MIN_HEIGHT)
+    } else if (type === 'tree') {
+      plant.treeTrunkHeight = 1 + Math.random() * 1
+      plant.treeTrunkRadius = 0.05 + Math.random() * 0.05
+      plant.treeCrownRadius = 0.3 + Math.random() * 0.2
     }
 
     this.plants.push(plant)
@@ -276,9 +288,11 @@ export class VegetationSystem {
         plant.growAnimation = {
           startTime: now,
           duration: 2000,
-          startGrowth: plant.growth,
+          startGrowth: 0,
           endGrowth: 1
         }
+        plant.stage = 'seed'
+        plant.growth = 0
       }
     }
   }
@@ -320,7 +334,20 @@ export class VegetationSystem {
         const slope = calculateSlope(this.terrainGeometry, px, pz)
         if (slope > 30) continue
 
-        if (slope < 15) {
+        if (slope < 10) {
+          const treeDensity = 0.3 * rainMultiplier
+          if (Math.random() < treeDensity * step * step && this.plants.length < this.MAX_PLANTS) {
+            const tx = px + (Math.random() - 0.5) * step
+            const tz = pz + (Math.random() - 0.5) * step
+            this.addPlantData(tx, tz, 'tree')
+          }
+          const grassDensity = Math.floor(3 * rainMultiplier)
+          for (let g = 0; g < grassDensity && this.plants.length < this.MAX_PLANTS; g++) {
+            const gx = px + (Math.random() - 0.5) * step
+            const gz = pz + (Math.random() - 0.5) * step
+            if (Math.random() < 0.6) this.addPlantData(gx, gz, 'grass')
+          }
+        } else if (slope < 15) {
           const grassDensity = Math.floor(3 * rainMultiplier)
           for (let g = 0; g < grassDensity && this.plants.length < this.MAX_PLANTS; g++) {
             const gx = px + (Math.random() - 0.5) * step
@@ -343,6 +370,7 @@ export class VegetationSystem {
     const slope = calculateSlope(this.terrainGeometry, x, z)
     if (type === 'grass' && slope >= 15) return
     if (type === 'shrub' && (slope < 15 || slope >= 30)) return
+    if (type === 'tree' && slope >= 10) return
 
     const y = getTerrainHeight(this.terrainGeometry, x, z)
     const growth = 0.3 + Math.random() * 0.7
@@ -362,6 +390,10 @@ export class VegetationSystem {
 
     if (type === 'shrub') {
       data.shrubHeight = this.SHRUB_MIN_HEIGHT + Math.random() * (this.SHRUB_MAX_HEIGHT - this.SHRUB_MIN_HEIGHT)
+    } else if (type === 'tree') {
+      data.treeTrunkHeight = 1 + Math.random() * 1
+      data.treeTrunkRadius = 0.05 + Math.random() * 0.05
+      data.treeCrownRadius = 0.3 + Math.random() * 0.2
     }
 
     this.plants.push(data)
@@ -376,7 +408,7 @@ export class VegetationSystem {
       const x = (Math.random() - 0.5) * width * 0.8
       const z = (Math.random() - 0.5) * height * 0.8
       const slope = calculateSlope(this.terrainGeometry, x, z)
-      if (slope < 15) {
+      if (slope < 10) {
         const y = getTerrainHeight(this.terrainGeometry, x, z)
         this.plants.push({
           id: this.nextPlantId++,
@@ -388,6 +420,9 @@ export class VegetationSystem {
           stage: 'young',
           flashTime: 0,
           flashing: false,
+          treeTrunkHeight: 1 + Math.random() * 1,
+          treeTrunkRadius: 0.05 + Math.random() * 0.05,
+          treeCrownRadius: 0.3 + Math.random() * 0.2,
           visible: true
         })
         return true
@@ -419,7 +454,8 @@ export class VegetationSystem {
 
       if (p.type === 'grass' && this.grassInst) {
         this.tmpPos.set(p.x, p.y, p.z)
-        this.tmpScale.set(1, g, 1)
+        const scaleY = 0.1 + (1.5 - 0.1) * g
+        this.tmpScale.set(1, scaleY, 1)
         this.tmpQuat.setFromEuler(new THREE.Euler(0, p.rotationY, 0))
         this.tmpMat.compose(this.tmpPos, this.tmpQuat, this.tmpScale)
         this.grassInst.setMatrixAt(gIdx, this.tmpMat)
@@ -429,7 +465,8 @@ export class VegetationSystem {
         const h = p.shrubHeight || 0.75
         if (this.shrubTrunkInst) {
           this.tmpPos.set(p.x, p.y + h * 0.2 * g, p.z)
-          this.tmpScale.set(g, g * h * 0.4, g)
+          const cylScale = 0.1 + (1 - 0.1) * g
+          this.tmpScale.set(cylScale, cylScale * h * 0.4, cylScale)
           this.tmpQuat.setFromEuler(new THREE.Euler(0, p.rotationY, 0))
           this.tmpMat.compose(this.tmpPos, this.tmpQuat, this.tmpScale)
           this.shrubTrunkInst.setMatrixAt(sIdx, this.tmpMat)
@@ -447,30 +484,31 @@ export class VegetationSystem {
         }
         sIdx++
       } else if (p.type === 'tree') {
-        const cylGrow = 0.1 + (1 - 0.1) * g
-        const crownGrow = 0.05 + (1 - 0.05) * g
-        const trunkScaled = this.TREE_TRUNK_HEIGHT * cylGrow
+        const trunkH = p.treeTrunkHeight || this.TREE_TRUNK_HEIGHT
+        const trunkR = p.treeTrunkRadius || 0.07
+        const crownR = p.treeCrownRadius || 0.4
+        const seedScale = Math.max(0.001, g)
+        const cylScale = seedScale
+        const trunkScaled = trunkH * cylScale
+        const crownScale = seedScale
         if (this.treeTrunkInst) {
           this.tmpPos.set(p.x, p.y + trunkScaled / 2, p.z)
-          this.tmpScale.set(cylGrow, trunkScaled, cylGrow)
+          this.tmpScale.set(trunkR / 0.07 * cylScale, trunkScaled, trunkR / 0.07 * cylScale)
           this.tmpQuat.setFromEuler(new THREE.Euler(0, p.rotationY, 0))
           this.tmpMat.compose(this.tmpPos, this.tmpQuat, this.tmpScale)
           this.treeTrunkInst.setMatrixAt(tIdx, this.tmpMat)
           this.setInstanceColor(this.treeTrunkInst, tIdx, this.trunkColor)
         }
         if (this.treeCrownInst) {
-          const crownR = this.TREE_CROWN_DIAMETER / 2 * 0.7
-          this.tmpPos.set(p.x, p.y + trunkScaled + crownR * crownGrow, p.z)
-          this.tmpScale.set(crownGrow * this.TREE_CROWN_DIAMETER / 2, crownGrow * this.TREE_CROWN_DIAMETER / 2, crownGrow * this.TREE_CROWN_DIAMETER / 2)
+          this.tmpPos.set(p.x, p.y + trunkScaled + crownR * crownScale * 0.7, p.z)
+          this.tmpScale.set(crownR / 0.5 * crownScale, crownR / 0.5 * crownScale, crownR / 0.5 * crownScale)
           this.tmpQuat.setFromEuler(new THREE.Euler(0, p.rotationY, 0))
           this.tmpMat.compose(this.tmpPos, this.tmpQuat, this.tmpScale)
           this.treeCrownInst.setMatrixAt(tIdx, this.tmpMat)
           if (p.stage === 'seed') {
             this.setInstanceColor(this.treeCrownInst, tIdx, this.seedLightColor)
-            this.setInstanceEmissive(this.treeCrownInst, tIdx, this.seedLightColor.clone().multiplyScalar(0.8))
           } else {
             this.setInstanceColor(this.treeCrownInst, tIdx, this.getPlantColor(p, this.youngColor, this.matureColor, false))
-            this.setInstanceEmissive(this.treeCrownInst, tIdx, new THREE.Color(0x000000))
           }
         }
         tIdx++
@@ -506,14 +544,6 @@ export class VegetationSystem {
       mesh.instanceColor = new THREE.InstancedBufferAttribute(colors, 3)
     }
     mesh.setColorAt(idx, color)
-  }
-
-  private setInstanceEmissive(mesh: THREE.InstancedMesh, idx: number, color: THREE.Color): void {
-    const mat = mesh.material as THREE.MeshLambertMaterial
-    if (idx === 0) {
-      mat.emissive.copy(color)
-    }
-    void mat
   }
 
   private easeInOutCubic(t: number): number {
