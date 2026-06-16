@@ -69,6 +69,7 @@ export default function App() {
             scores={scores}
             favorites={favorites}
             onScoreAdded={handleScoreAdded}
+            onFavoriteToggle={handleFavoriteToggle}
           />
         }
       />

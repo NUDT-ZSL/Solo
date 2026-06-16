@@ -2,6 +2,10 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import type { Score, Favorite } from '../types';
 
+const formatPrice = (price: number): string => {
+  return `¥${price.toFixed(2)}`;
+};
+
 interface DetailPageProps {
   scores: Score[];
   favorites: Favorite[];
@@ -225,7 +229,7 @@ export default function DetailPage({
                   fontFamily: "'Playfair Display', serif",
                 }}
               >
-                ¥{score.price}
+                {formatPrice(score.price)}
               </span>
             </div>
 
