@@ -1,0 +1,126 @@
+{
+  "records": [
+    {
+      "id": "record-001",
+      "userId": "user-001",
+      "beanOrigin": "埃塞俄比亚 耶加雪菲",
+      "processMethod": "水洗",
+      "roastLevel": "浅烘",
+      "flavorTags": ["花香", "柑橘", "蜂蜜", "红茶"],
+      "notes": "非常干净的风味，茉莉花香气明显，柑橘酸质明亮，尾韵有红茶感。",
+      "controlPoints": [
+        { "time": 0, "temperature": 150 },
+        { "time": 2, "temperature": 175 },
+        { "time": 5, "temperature": 195 },
+        { "time": 8, "temperature": 210 },
+        { "time": 12, "temperature": 225 }
+      ],
+      "curveImage": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=coffee%20roasting%20temperature%20curve%20graph%20on%20dark%20background&image_size=square",
+      "likes": 24,
+      "likedBy": ["user-002", "user-003"],
+      "createdAt": "2026-06-15T10:30:00.000Z"
+    },
+    {
+      "id": "record-002",
+      "userId": "user-002",
+      "beanOrigin": "哥伦比亚 慧兰",
+      "processMethod": "水洗",
+      "roastLevel": "中烘",
+      "flavorTags": ["焦糖", "坚果", "巧克力", "柑橘"],
+      "notes": "甜度很好，焦糖和坚果风味明显，醇厚度适中，日常口粮豆首选。",
+      "controlPoints": [
+        { "time": 0, "temperature": 150 },
+        { "time": 3, "temperature": 180 },
+        { "time": 6, "temperature": 200 },
+        { "time": 10, "temperature": 220 },
+        { "time": 14, "temperature": 232 }
+      ],
+      "curveImage": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=medium%20roast%20coffee%20temperature%20curve&image_size=square",
+      "likes": 18,
+      "likedBy": ["user-001"],
+      "createdAt": "2026-06-14T15:45:00.000Z"
+    },
+    {
+      "id": "record-003",
+      "userId": "user-003",
+      "beanOrigin": "危地马拉 安提瓜",
+      "processMethod": "水洗",
+      "roastLevel": "中深烘",
+      "flavorTags": ["可可", "焦糖", "坚果", "香料"],
+      "notes": "传统的危地马拉风味，可可和焦糖为主，带有轻微的香料气息，适合做意式浓缩。",
+      "controlPoints": [
+        { "time": 0, "temperature": 150 },
+        { "time": 2, "temperature": 170 },
+        { "time": 4, "temperature": 190 },
+        { "time": 7, "temperature": 205 },
+        { "time": 11, "temperature": 225 },
+        { "time": 15, "temperature": 238 }
+      ],
+      "curveImage": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=dark%20roast%20coffee%20profile%20curve%20chart&image_size=square",
+      "likes": 42,
+      "likedBy": ["user-001", "user-002"],
+      "createdAt": "2026-06-13T09:20:00.000Z"
+    },
+    {
+      "id": "record-004",
+      "userId": "user-001",
+      "beanOrigin": "肯尼亚 AA",
+      "processMethod": "水洗",
+      "roastLevel": "浅烘",
+      "flavorTags": ["黑醋栗", "番茄", "蓝莓", "明亮酸"],
+      "notes": "典型的肯尼亚风味，黑醋栗和番茄的酸质非常有特点，复杂且层次分明。",
+      "controlPoints": [
+        { "time": 0, "temperature": 150 },
+        { "time": 3, "temperature": 182 },
+        { "time": 6, "temperature": 202 },
+        { "time": 9, "temperature": 215 },
+        { "time": 11, "temperature": 222 }
+      ],
+      "curveImage": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=light%20roast%20kenya%20coffee%20roast%20curve&image_size=square",
+      "likes": 56,
+      "likedBy": ["user-002", "user-003"],
+      "createdAt": "2026-06-12T14:10:00.000Z"
+    },
+    {
+      "id": "record-005",
+      "userId": "user-002",
+      "beanOrigin": "巴西 喜拉多",
+      "processMethod": "日晒",
+      "roastLevel": "中烘",
+      "flavorTags": ["坚果", "巧克力", "焦糖", "低酸"],
+      "notes": "非常适合新手的豆子，酸度低，坚果和巧克力风味浓郁，容错率很高。",
+      "controlPoints": [
+        { "time": 0, "temperature": 150 },
+        { "time": 2, "temperature": 178 },
+        { "time": 5, "temperature": 198 },
+        { "time": 8, "temperature": 212 },
+        { "time": 12, "temperature": 228 }
+      ],
+      "curveImage": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=brazil%20coffee%20roasting%20profile%20graph&image_size=square",
+      "likes": 31,
+      "likedBy": ["user-003"],
+      "createdAt": "2026-06-11T16:30:00.000Z"
+    },
+    {
+      "id": "record-006",
+      "userId": "user-003",
+      "beanOrigin": "巴拿马 瑰夏",
+      "processMethod": "水洗",
+      "roastLevel": "极浅烘",
+      "flavorTags": ["茉莉", "玫瑰", "柑橘", "蜂蜜", "白葡萄"],
+      "notes": "顶级瑰夏的表现，花香扑鼻，入口有白葡萄和蜂蜜的甜感，尾韵悠长。",
+      "controlPoints": [
+        { "time": 0, "temperature": 150 },
+        { "time": 1, "temperature": 165 },
+        { "time": 3, "temperature": 185 },
+        { "time": 5, "temperature": 200 },
+        { "time": 7, "temperature": 212 },
+        { "time": 9, "temperature": 218 }
+      ],
+      "curveImage": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=panama%20geisha%20coffee%20light%20roast%20curve&image_size=square",
+      "likes": 89,
+      "likedBy": ["user-001", "user-002"],
+      "createdAt": "2026-06-10T11:00:00.000Z"
+    }
+  ]
+}

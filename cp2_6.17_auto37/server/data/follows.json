@@ -1,0 +1,28 @@
+{
+  "follows": [
+    {
+      "id": "follow-001",
+      "followerId": "user-002",
+      "followingId": "user-001",
+      "createdAt": "2026-06-01T10:00:00.000Z"
+    },
+    {
+      "id": "follow-002",
+      "followerId": "user-002",
+      "followingId": "user-003",
+      "createdAt": "2026-06-02T14:30:00.000Z"
+    },
+    {
+      "id": "follow-003",
+      "followerId": "user-001",
+      "followingId": "user-003",
+      "createdAt": "2026-06-03T09:15:00.000Z"
+    },
+    {
+      "id": "follow-004",
+      "followerId": "user-003",
+      "followingId": "user-001",
+      "createdAt": "2026-06-05T16:45:00.000Z"
+    }
+  ]
+}

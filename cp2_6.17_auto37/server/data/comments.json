@@ -1,0 +1,53 @@
+{
+  "comments": [
+    {
+      "id": "comment-001",
+      "recordId": "record-001",
+      "userId": "user-002",
+      "content": "这个曲线很标准，一爆时间点控制得很好，学习了！",
+      "createdAt": "2026-06-15T11:20:00.000Z"
+    },
+    {
+      "id": "comment-002",
+      "recordId": "record-001",
+      "userId": "user-003",
+      "content": "耶加雪菲的风味描述很到位，我也很喜欢这种干净的水洗豆。",
+      "createdAt": "2026-06-15T12:05:00.000Z"
+    },
+    {
+      "id": "comment-003",
+      "recordId": "record-002",
+      "userId": "user-001",
+      "content": "哥伦比亚慧兰做中烘确实很稳，日常口粮绝佳选择。",
+      "createdAt": "2026-06-14T16:30:00.000Z"
+    },
+    {
+      "id": "comment-004",
+      "recordId": "record-003",
+      "userId": "user-002",
+      "content": "危地马拉安提瓜的可可风味真的很迷人，请问下豆温是多少？",
+      "createdAt": "2026-06-13T10:15:00.000Z"
+    },
+    {
+      "id": "comment-005",
+      "recordId": "record-004",
+      "userId": "user-003",
+      "content": "肯尼亚AA的酸质真的太棒了，黑醋栗的风味太有辨识度了！",
+      "createdAt": "2026-06-12T15:00:00.000Z"
+    },
+    {
+      "id": "comment-006",
+      "recordId": "record-006",
+      "userId": "user-001",
+      "content": "瑰夏的极浅烘太考验技术了，这个曲线保存了非常好的花香！",
+      "createdAt": "2026-06-10T12:30:00.000Z"
+    },
+    {
+      "id": "comment-007",
+      "recordId": "record-006",
+      "userId": "user-002",
+      "content": "太羡慕了，什么时候我也能烘出这样的瑰夏！",
+      "createdAt": "2026-06-10T14:20:00.000Z"
+    }
+  ]
+}

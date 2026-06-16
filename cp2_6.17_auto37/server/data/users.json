@@ -1,0 +1,28 @@
+{
+  "users": [
+    {
+      "id": "user-001",
+      "username": "咖啡大师",
+      "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=coffee1",
+      "bio": "热爱咖啡烘焙，专注精品咖啡豆10年",
+      "followers": 128,
+      "following": 45
+    },
+    {
+      "id": "user-002",
+      "username": "烘焙小白",
+      "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=coffee2",
+      "bio": "咖啡爱好者，正在学习烘焙技术",
+      "followers": 36,
+      "following": 78
+    },
+    {
+      "id": "user-003",
+      "username": "咖啡豆收藏家",
+      "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=coffee3",
+      "bio": "收集世界各地的精品咖啡豆，分享烘焙心得",
+      "followers": 256,
+      "following": 32
+    }
+  ]
+}
