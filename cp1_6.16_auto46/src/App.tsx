@@ -102,8 +102,8 @@ const App: React.FC = () => {
   const historicalTrajectories = selectedYears.map((year, index) => {
     const baseEpoch = selectedComet?.perihelionEpoch || 2061;
     const points = interpolateHistorical(orbitPoints, year, baseEpoch);
-    const opacity = 0.3 + (index / Math.max(selectedYears.length - 1, 1)) * 0.4;
-    return { year, points, opacity: Math.min(0.7, opacity) };
+    const opacity = 0.3 + index * 0.1;
+    return { year, points, opacity };
   });
 
   useEffect(() => {

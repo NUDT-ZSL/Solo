@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useEffect, useState } from 'react';
+import React, { useRef, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Stars } from '@react-three/drei';
 import * as THREE from 'three';
@@ -132,46 +132,61 @@ interface TailParticlesProps {
 
 const TailParticles: React.FC<TailParticlesProps> = ({ cometPosition, sunPosition, distanceToSun }) => {
   const particlesRef = useRef<THREE.Points>(null);
-  const [particleData, setParticleData] = useState<{
-    positions: Float32Array;
-    colors: Float32Array;
-    sizes: Float32Array;
-  }>({
-    positions: new Float32Array(0),
-    colors: new Float32Array(0),
-    sizes: new Float32Array(0)
-  });
+  const positionsRef = useRef<Float32Array>(new Float32Array(0));
+  const colorsRef = useRef<Float32Array>(new Float32Array(0));
 
-  useEffect(() => {
+  const { positions, colors, count } = useMemo(() => {
     const particles = generateTailParticles(
       { x: cometPosition[0], y: cometPosition[1], z: cometPosition[2] },
       { x: sunPosition[0], y: sunPosition[1], z: sunPosition[2] },
       distanceToSun
     );
 
-    const positions = new Float32Array(particles.length * 3);
-    const colors = new Float32Array(particles.length * 3);
-    const sizes = new Float32Array(particles.length);
+    const maxParticles = 3000;
+    const positions = new Float32Array(maxParticles * 3);
+    const colors = new Float32Array(maxParticles * 3);
+    const count = Math.min(particles.length, maxParticles);
 
-    particles.forEach((p, i) => {
+    for (let i = 0; i < count; i++) {
+      const p = particles[i];
       positions[i * 3] = p.x;
       positions[i * 3 + 1] = p.y;
       positions[i * 3 + 2] = p.z;
       colors[i * 3] = p.color.r;
       colors[i * 3 + 1] = p.color.g;
       colors[i * 3 + 2] = p.color.b;
-      sizes[i] = p.size;
-    });
+    }
 
-    setParticleData({ positions, colors, sizes });
+    positionsRef.current = positions;
+    colorsRef.current = colors;
+
+    return { positions, colors, count };
   }, [cometPosition[0], cometPosition[1], cometPosition[2], distanceToSun]);
 
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(particleData.positions, 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(particleData.colors, 3));
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geo.setDrawRange(0, count);
     return geo;
-  }, [particleData.positions, particleData.colors]);
+  }, [positions, colors, count]);
+
+  useFrame(() => {
+    if (particlesRef.current) {
+      const posAttr = particlesRef.current.geometry.getAttribute('position') as THREE.BufferAttribute;
+      const colAttr = particlesRef.current.geometry.getAttribute('color') as THREE.BufferAttribute;
+      
+      if (posAttr.array !== positionsRef.current) {
+        posAttr.array = positionsRef.current;
+        posAttr.needsUpdate = true;
+      }
+      if (colAttr.array !== colorsRef.current) {
+        colAttr.array = colorsRef.current;
+        colAttr.needsUpdate = true;
+      }
+      particlesRef.current.geometry.setDrawRange(0, count);
+    }
+  });
 
   return (
     <points ref={particlesRef} geometry={geometry}>
@@ -182,6 +197,7 @@ const TailParticles: React.FC<TailParticlesProps> = ({ cometPosition, sunPositio
         opacity={0.8}
         sizeAttenuation
         blending={THREE.AdditiveBlending}
+        depthWrite={false}
       />
     </points>
   );
