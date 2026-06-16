@@ -1,0 +1,32 @@
+[
+  {
+    "id": "sichuan",
+    "name": "川菜",
+    "icon": "🌶️"
+  },
+  {
+    "id": "cantonese",
+    "name": "粤菜",
+    "icon": "🥢"
+  },
+  {
+    "id": "japanese",
+    "name": "日料",
+    "icon": "🍣"
+  },
+  {
+    "id": "italian",
+    "name": "意餐",
+    "icon": "🍝"
+  },
+  {
+    "id": "french",
+    "name": "法餐",
+    "icon": "🥐"
+  },
+  {
+    "id": "chinese-home",
+    "name": "家常菜",
+    "icon": "🍳"
+  }
+]

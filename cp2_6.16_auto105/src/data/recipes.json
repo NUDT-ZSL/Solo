@@ -1,0 +1,398 @@
+[
+  {
+    "id": "mapo-tofu",
+    "category": "sichuan",
+    "name": "麻婆豆腐",
+    "thumbnail": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=mapo%20tofu%20sichuan%20spicy%20tofu%20dish&image_size=square",
+    "steps": [
+      {
+        "id": 1,
+        "audio": "/audio/chop.mp3",
+        "description": "将豆腐切成2厘米见方的小块"
+      },
+      {
+        "id": 2,
+        "audio": "/audio/fry.mp3",
+        "description": "热油炒香豆瓣酱和花椒"
+      },
+      {
+        "id": 3,
+        "audio": "/audio/boil.mp3",
+        "description": "加入高汤煮沸，放入豆腐炖煮"
+      },
+      {
+        "id": 4,
+        "audio": "/audio/stir.mp3",
+        "description": "勾芡翻炒均匀，撒葱花出锅"
+      }
+    ],
+    "funFacts": [
+      "麻婆豆腐创立于清朝同治年间，由一位叫陈麻婆的老奶奶发明",
+      "正宗麻婆豆腐有麻辣鲜香烫酥嫩活八字特点",
+      "这道菜在日本也非常受欢迎，被翻译成マーボードーフ"
+    ]
+  },
+  {
+    "id": "kung-pao-chicken",
+    "category": "sichuan",
+    "name": "宫保鸡丁",
+    "thumbnail": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=kung%20pao%20chicken%20sichuan%20dish%20with%20peanuts&image_size=square",
+    "steps": [
+      {
+        "id": 1,
+        "audio": "/audio/chop.mp3",
+        "description": "鸡胸肉切丁，干辣椒切段"
+      },
+      {
+        "id": 2,
+        "audio": "/audio/fry.mp3",
+        "description": "热油爆香干辣椒和花椒"
+      },
+      {
+        "id": 3,
+        "audio": "/audio/stir.mp3",
+        "description": "放入鸡丁快速翻炒至变色"
+      },
+      {
+        "id": 4,
+        "audio": "/audio/mix.mp3",
+        "description": "加入花生和调味汁翻炒均匀"
+      }
+    ],
+    "funFacts": [
+      "宫保鸡丁因清朝官员丁宝桢而得名，他官衔宫保",
+      "这道菜的酸甜辣平衡堪称川菜经典",
+      "花生要最后放才能保持香脆口感"
+    ]
+  },
+  {
+    "id": "dim-sum",
+    "category": "cantonese",
+    "name": "广式点心",
+    "thumbnail": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=cantonese%20dim%20sum%20dumplings%20in%20bamboo%20steamer&image_size=square",
+    "steps": [
+      {
+        "id": 1,
+        "audio": "/audio/chop.mp3",
+        "description": "准备馅料，虾仁猪肉切丁调味"
+      },
+      {
+        "id": 2,
+        "audio": "/audio/knead.mp3",
+        "description": "揉面擀皮，包成虾饺烧麦形状"
+      },
+      {
+        "id": 3,
+        "audio": "/audio/steam.mp3",
+        "description": "放入蒸笼大火蒸8-10分钟"
+      },
+      {
+        "id": 4,
+        "audio": "/audio/serve.mp3",
+        "description": "配蘸料上桌，趁热享用"
+      }
+    ],
+    "funFacts": [
+      "广式点心有超过1000种不同品种",
+      "传统上是在早茶时间享用，配普洱茶",
+      "虾饺皮要求薄到能看到里面的虾肉颜色"
+    ]
+  },
+  {
+    "id": "roast-duck",
+    "category": "cantonese",
+    "name": "北京烤鸭",
+    "thumbnail": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=peking%20duck%20roasted%20crispy%20skin&image_size=square",
+    "steps": [
+      {
+        "id": 1,
+        "audio": "/audio/prepare.mp3",
+        "description": "鸭子吹气使皮肉分离，烫皮挂色"
+      },
+      {
+        "id": 2,
+        "audio": "/audio/dry.mp3",
+        "description": "挂在通风处晾干6-12小时"
+      },
+      {
+        "id": 3,
+        "audio": "/audio/roast.mp3",
+        "description": "挂炉烤制45分钟至皮脆肉嫩"
+      },
+      {
+        "id": 4,
+        "audio": "/audio/slice.mp3",
+        "description": "片皮装盘，配薄饼甜面酱葱丝"
+      }
+    ],
+    "funFacts": [
+      "正宗北京烤鸭要片108片，每片都带皮带肉",
+      "挂炉烤鸭用枣木桃木烤制，有特殊果香味",
+      "全聚德创建于1864年，是最著名的烤鸭店"
+    ]
+  },
+  {
+    "id": "sushi",
+    "category": "japanese",
+    "name": "寿司",
+    "thumbnail": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=japanese%20sushi%20platter%20nigiri%20maki&image_size=square",
+    "steps": [
+      {
+        "id": 1,
+        "audio": "/audio/cook.mp3",
+        "description": "寿司米加醋糖盐调味，煮至软糯"
+      },
+      {
+        "id": 2,
+        "audio": "/audio/chop.mp3",
+        "description": "新鲜鱼片切成合适大小"
+      },
+      {
+        "id": 3,
+        "audio": "/audio/shape.mp3",
+        "description": "手捏饭团，盖上鱼片轻压成型"
+      },
+      {
+        "id": 4,
+        "audio": "/audio/serve.mp3",
+        "description": "配芥末酱油姜片上桌"
+      }
+    ],
+    "funFacts": [
+      "寿司最早是东南亚的发酵食品，经中国传入日本",
+      "江户前寿司要求鱼材在江户湾（东京湾）捕获",
+      "寿司师傅要学习5-10年才能独立制作"
+    ]
+  },
+  {
+    "id": "ramen",
+    "category": "japanese",
+    "name": "日式拉面",
+    "thumbnail": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=japanese%20ramen%20noodles%20pork%20broth%20soft%20egg&image_size=square",
+    "steps": [
+      {
+        "id": 1,
+        "audio": "/audio/boil.mp3",
+        "description": "猪骨熬煮8小时成浓郁白汤"
+      },
+      {
+        "id": 2,
+        "audio": "/audio/cook.mp3",
+        "description": "煮面条2-3分钟，保持弹牙口感"
+      },
+      {
+        "id": 3,
+        "audio": "/audio/prepare.mp3",
+        "description": "叉烧肉、溏心蛋、笋干准备就绪"
+      },
+      {
+        "id": 4,
+        "audio": "/audio/serve.mp3",
+        "description": "装碗摆料，撒葱花海苔"
+      }
+    ],
+    "funFacts": [
+      "拉面虽然是日本国民美食，但起源于中国",
+      "豚骨拉面的白汤是猪骨熬煮乳化的结果",
+      "日本各地拉面风格迥异：札幌味噌、东京酱油、博多豚骨"
+    ]
+  },
+  {
+    "id": "pasta",
+    "category": "italian",
+    "name": "意大利面",
+    "thumbnail": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=spaghetti%20bolognese%20italian%20pasta%20parmesan&image_size=square",
+    "steps": [
+      {
+        "id": 1,
+        "audio": "/audio/chop.mp3",
+        "description": "洋葱胡萝卜芹菜切碎成蔬菜丁"
+      },
+      {
+        "id": 2,
+        "audio": "/audio/fry.mp3",
+        "description": "炒香蔬菜，加入牛肉馅炒散"
+      },
+      {
+        "id": 3,
+        "audio": "/audio/boil.mp3",
+        "description": "加番茄和红酒，小火炖煮2小时"
+      },
+      {
+        "id": 4,
+        "audio": "/audio/mix.mp3",
+        "description": "煮好的意面与肉酱拌匀，撒帕玛森芝士"
+      }
+    ],
+    "funFacts": [
+      "正宗博洛尼亚肉酱不用意大利面，而是配宽面",
+      "意大利面要煮到al dente，即有嚼劲",
+      "帕玛森芝士要现磨才香，瓶装的味道差很多"
+    ]
+  },
+  {
+    "id": "pizza",
+    "category": "italian",
+    "name": "披萨",
+    "thumbnail": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=italian%20pizza%20margherita%20fresh%20basil&image_size=square",
+    "steps": [
+      {
+        "id": 1,
+        "audio": "/audio/knead.mp3",
+        "description": "高筋面粉揉面，发酵24小时"
+      },
+      {
+        "id": 2,
+        "audio": "/audio/shape.mp3",
+        "description": "手擀成薄饼，边缘留厚边"
+      },
+      {
+        "id": 3,
+        "audio": "/audio/prepare.mp3",
+        "description": "抹番茄酱，撒马苏里拉芝士和罗勒叶"
+      },
+      {
+        "id": 4,
+        "audio": "/audio/bake.mp3",
+        "description": "450度高温烤6-8分钟至边缘焦脆"
+      }
+    ],
+    "funFacts": [
+      "玛格丽特披萨代表意大利国旗：红番茄、白芝士、绿罗勒",
+      "正宗那不勒斯披萨必须用砖窑柴火烘烤",
+      "意大利人认为菠萝披萨是对美食的犯罪"
+    ]
+  },
+  {
+    "id": "croissant",
+    "category": "french",
+    "name": "可颂",
+    "thumbnail": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=french%20croissant%20golden%20flaky%20buttery&image_size=square",
+    "steps": [
+      {
+        "id": 1,
+        "audio": "/audio/knead.mp3",
+        "description": "面团裹入黄油，反复折叠擀开"
+      },
+      {
+        "id": 2,
+        "audio": "/audio/shape.mp3",
+        "description": "切成三角形，从底边卷起"
+      },
+      {
+        "id": 3,
+        "audio": "/audio/proof.mp3",
+        "description": "温暖湿润处发酵至两倍大"
+      },
+      {
+        "id": 4,
+        "audio": "/audio/bake.mp3",
+        "description": "刷蛋液，200度烤15分钟"
+      }
+    ],
+    "funFacts": [
+      "可颂虽然是法国标志，但起源于奥地利的kipferl",
+      "好的可颂要有超过200层酥皮",
+      "正宗可颂只用黄油，不能用人造黄油"
+    ]
+  },
+  {
+    "id": "steak",
+    "category": "french",
+    "name": "法式牛排",
+    "thumbnail": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=french%20steak%20frites%20medium%20rare&image_size=square",
+    "steps": [
+      {
+        "id": 1,
+        "audio": "/audio/prepare.mp3",
+        "description": "牛排室温放置，撒盐和黑胡椒"
+      },
+      {
+        "id": 2,
+        "audio": "/audio/sear.mp3",
+        "description": "高温平底锅两面各煎2分钟"
+      },
+      {
+        "id": 3,
+        "audio": "/audio/rest.mp3",
+        "description": "煎好后醒肉5分钟，锁住肉汁"
+      },
+      {
+        "id": 4,
+        "audio": "/audio/serve.mp3",
+        "description": "配黄油香草酱汁和薯条上桌"
+      }
+    ],
+    "funFacts": [
+      "三分熟牛排内部温度约52-55度，中心是粉色",
+      "醒肉和煎制同样重要，否则肉汁会流失",
+      "法国顶级牛肉来自夏洛莱和利木赞品种"
+    ]
+  },
+  {
+    "id": "tomato-egg",
+    "category": "chinese-home",
+    "name": "番茄炒蛋",
+    "thumbnail": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=chinese%20tomato%20egg%20stir%20fry%20home%20cooking&image_size=square",
+    "steps": [
+      {
+        "id": 1,
+        "audio": "/audio/chop.mp3",
+        "description": "番茄切块，鸡蛋打散加少许盐"
+      },
+      {
+        "id": 2,
+        "audio": "/audio/fry.mp3",
+        "description": "热油炒蛋，凝固后盛出"
+      },
+      {
+        "id": 3,
+        "audio": "/audio/stir.mp3",
+        "description": "炒番茄出沙，加糖调味"
+      },
+      {
+        "id": 4,
+        "audio": "/audio/mix.mp3",
+        "description": "倒入鸡蛋翻炒均匀，出锅"
+      }
+    ],
+    "funFacts": [
+      "番茄炒蛋是中国家庭最常见的家常菜，几乎人人会做",
+      "加糖可以中和番茄的酸味，更加美味",
+      "鸡蛋要先炒嫩，最后和番茄混合，保持嫩滑"
+    ]
+  },
+  {
+    "id": "braised-pork",
+    "category": "chinese-home",
+    "name": "红烧肉",
+    "thumbnail": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=chinese%20braised%20pork%20belly%20red%20cooked&image_size=square",
+    "steps": [
+      {
+        "id": 1,
+        "audio": "/audio/chop.mp3",
+        "description": "五花肉切成3厘米见方的块"
+      },
+      {
+        "id": 2,
+        "audio": "/audio/blanch.mp3",
+        "description": "冷水下锅焯水，去除血沫"
+      },
+      {
+        "id": 3,
+        "audio": "/audio/sugar.mp3",
+        "description": "炒糖色至琥珀色，加入肉块翻炒"
+      },
+      {
+        "id": 4,
+        "audio": "/audio/simmer.mp3",
+        "description": "加酱油料酒香料，小火慢炖1小时"
+      }
+    ],
+    "funFacts": [
+      "红烧肉是苏东坡推广的，又叫东坡肉",
+      "好的红烧肉要做到肥而不腻，入口即化",
+      "糖色是红烧肉红亮色泽的关键，不能用酱油代替"
+    ]
+  }
+]
