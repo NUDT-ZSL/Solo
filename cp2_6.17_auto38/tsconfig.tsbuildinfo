@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/modules/imageprocessor/colorfiller.ts","./src/modules/imageprocessor/colorutils.ts","./src/modules/imageprocessor/lineartparser.ts","./src/modules/imageprocessor/presetpalettes.ts","./src/modules/imageprocessor/types.ts","./src/modules/ui/canvasarea.tsx","./src/modules/ui/colorpalettepanel.tsx"],"version":"5.8.3"}
