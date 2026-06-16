@@ -87,10 +87,10 @@ export function calculateTowerOutput(
 }
 
 export function getAdjacentKeys(row: number, col: number): string[] {
-  const isEven = row % 2 === 0;
-  const offsets = isEven
-    ? [[-1, -1], [-1, 0], [0, -1], [0, 1], [1, -1], [1, 0]]
-    : [[-1, 0], [-1, 1], [0, -1], [0, 1], [1, 0], [1, 1]];
+  const isOdd = row % 2 === 1;
+  const offsets = isOdd
+    ? [[-1, 0], [-1, 1], [0, -1], [0, 1], [1, 0], [1, 1]]
+    : [[-1, -1], [-1, 0], [0, -1], [0, 1], [1, -1], [1, 0]];
   return offsets.map(([dr, dc]) => `${row + dr},${col + dc}`);
 }
 

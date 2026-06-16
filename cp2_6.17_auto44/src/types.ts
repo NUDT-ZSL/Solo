@@ -40,7 +40,7 @@ export interface GameState {
 
 export const GRID_ROWS = 8;
 export const GRID_COLS = 8;
-export const HEX_SIZE = 30;
+export const HEX_SIZE = 52 / 1.5;
 export const HEX_HORIZONTAL_SPACING = 60;
 export const HEX_VERTICAL_SPACING = 52;
 export const TOWER_RADIUS = 12.5;

@@ -26,7 +26,7 @@ interface GameGridProps {
 }
 
 function hexCorner(cx: number, cy: number, size: number, i: number): [number, number] {
-  const angleDeg = 60 * i;
+  const angleDeg = 60 * i - 30;
   const angleRad = (Math.PI / 180) * angleDeg;
   return [cx + size * Math.cos(angleRad), cy + size * Math.sin(angleRad)];
 }
@@ -150,10 +150,12 @@ const HEX_COORDS = buildHexCoords();
 function pointInHex(px: number, py: number, cx: number, cy: number, size: number): boolean {
   const dx = Math.abs(px - cx);
   const dy = Math.abs(py - cy);
-  const h = size * Math.sqrt(3) / 2;
-  if (dx > size || dy > h) return false;
-  if (dx <= size / 2) return true;
-  return dy <= Math.sqrt(3) * (size - dx);
+  const w = (size * Math.sqrt(3)) / 2;
+  const h = size;
+  if (dy > h) return false;
+  if (dx > w) return false;
+  if (dx <= w / 2) return true;
+  return dy <= h - (dx * h) / w;
 }
 
 const MENU_ICON_SIZE = 36;
@@ -209,12 +211,14 @@ const TowerMenu: React.FC<{
       {types.map((t) => {
         const info = TOWER_INFO[t];
         return (
-          <div
+          <button
             key={t}
             onClick={(e) => {
+              e.preventDefault();
               e.stopPropagation();
               onPlace(t);
             }}
+            onMouseDown={(e) => e.stopPropagation()}
             style={{
               display: 'flex',
               flexDirection: 'column',
@@ -223,17 +227,23 @@ const TowerMenu: React.FC<{
               padding: '4px 6px',
               borderRadius: 8,
               transition: 'background 0.2s ease',
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+              color: 'inherit',
+              fontFamily: 'inherit',
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLDivElement).style.background = '#2a2a4e';
+              (e.currentTarget as HTMLButtonElement).style.background = '#2a2a4e';
             }}
             onMouseLeave={(e) => {
-              (e.currentTarget as HTMLDivElement).style.background = 'transparent';
+              (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
             }}
           >
             <canvas
               width={MENU_ICON_SIZE}
               height={MENU_ICON_SIZE}
+              style={{ pointerEvents: 'none' }}
               ref={(canvas) => {
                 if (!canvas) return;
                 const ctx = canvas.getContext('2d');
@@ -246,10 +256,10 @@ const TowerMenu: React.FC<{
                 drawTowerIcon(ctx, t, MENU_ICON_SIZE / 2, MENU_ICON_SIZE / 2);
               }}
             />
-            <span style={{ color: '#ccc', fontSize: 10, marginTop: 2, whiteSpace: 'nowrap' }}>
+            <span style={{ color: '#ccc', fontSize: 10, marginTop: 2, whiteSpace: 'nowrap', pointerEvents: 'none' }}>
               {info.name}
             </span>
-          </div>
+          </button>
         );
       })}
     </div>

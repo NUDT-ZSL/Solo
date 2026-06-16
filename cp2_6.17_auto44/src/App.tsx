@@ -395,9 +395,6 @@ const App: React.FC = () => {
 
   const handleTowerClick = useCallback((towerId: string) => {
     setSelectedTowerId(towerId);
-    if (window.innerWidth < 900) {
-      setMobilePanelOpen(true);
-    }
   }, []);
 
   const handleTowerHover = useCallback((towerId: string | null, mx: number, my: number) => {
@@ -472,9 +469,12 @@ const App: React.FC = () => {
 
   const energyBarPercent = Math.min(100, (totalEnergy / 500) * 100);
 
-  const closePanel = () => {
-    setSelectedTowerId(null);
+  const closeMobilePanel = () => {
     setMobilePanelOpen(false);
+  };
+
+  const closeDesktopPanel = () => {
+    setSelectedTowerId(null);
   };
 
   return (
@@ -597,7 +597,7 @@ const App: React.FC = () => {
             energyCoins={energyCoins}
             onUpgrade={handleUpgrade}
             onDemolish={handleDemolish}
-            onClose={closePanel}
+            onClose={closeDesktopPanel}
           />
         )}
 
@@ -609,7 +609,7 @@ const App: React.FC = () => {
             energyCoins={energyCoins}
             onUpgrade={handleUpgrade}
             onDemolish={handleDemolish}
-            onClose={closePanel}
+            onClose={closeMobilePanel}
             isMobile
           />
         )}
