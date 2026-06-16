@@ -273,6 +273,24 @@ function injectStyles(): void {
       overflow: visible;
     }
 
+    .character-breath-wrapper {
+      transform-origin: center center;
+      will-change: transform;
+    }
+
+    .character-breath {
+      animation: breath 2s ease-in-out infinite;
+    }
+
+    .character-breath-paused {
+      animation-play-state: paused;
+    }
+
+    @keyframes breath {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-3px); }
+    }
+
     .character-group {
       transform-origin: center center;
       will-change: transform;
@@ -639,9 +657,14 @@ function buildUI(app: HTMLElement): void {
     preserveAspectRatio: 'xMidYMid meet'
   });
 
+  const breathWrapper = createSVGElement('g', {
+    class: 'character-breath-wrapper character-breath',
+    transform: 'translate(150, 200)',
+    id: 'breath-wrapper'
+  });
+
   const characterGroup = createSVGElement('g', {
-    class: 'character-group character-sway',
-    transform: 'translate(150, 200)'
+    class: 'character-group character-sway'
   });
 
   const head = createSVGElement('circle', {
@@ -705,7 +728,8 @@ function buildUI(app: HTMLElement): void {
   mouthGroup.id = 'mouth-group';
   characterGroup.appendChild(mouthGroup);
 
-  characterSVG.appendChild(characterGroup);
+  breathWrapper.appendChild(characterGroup);
+  characterSVG.appendChild(breathWrapper);
   previewArea.appendChild(characterSVG);
 
   const feedbackContainer = document.createElement('div');
@@ -916,6 +940,7 @@ function startDrag(card: HTMLElement, clientX: number, clientY: number): void {
   animationState.isDragging = true;
   animationState.dragPartType = partType;
   animationState.dragPartId = partId;
+  setBreathing(true);
 
   const ghostSVGWrapper = createSVGElement('svg', {
     width: '100',
@@ -981,6 +1006,12 @@ function endDrag(clientX: number, clientY: number): void {
   animationState.isDragging = false;
   animationState.dragPartType = null;
   animationState.dragPartId = null;
+
+  setTimeout(() => {
+    if (!isAnimating) {
+      setBreathing(false);
+    }
+  }, 500);
 }
 
 function handleDragStart(e: DragEvent): void {
@@ -1010,6 +1041,7 @@ function startKnobDrag(e: Event): void {
   e.preventDefault();
   isDraggingKnob = true;
   knobHandle?.classList.add('knob-pulse');
+  setBreathing(true);
 }
 
 let lastKnobMoodUpdate = 0;
@@ -1044,6 +1076,11 @@ function updateKnobFromPointer(clientX: number, clientY: number): void {
 function endKnobDrag(): void {
   isDraggingKnob = false;
   knobHandle?.classList.remove('knob-pulse');
+  setTimeout(() => {
+    if (!isAnimating) {
+      setBreathing(false);
+    }
+  }, 500);
 }
 
 function updateKnobPosition(): void {
@@ -1116,6 +1153,7 @@ function updateCharacter(withAnimation: boolean = true): void {
 function triggerReassembleAnimation(): void {
   if (isAnimating) return;
   isAnimating = true;
+  setBreathing(true);
 
   const partTypes: PartType[] = ['hair', 'eyes', 'mouth', 'arm'];
   const delays = [0, 80, 160, 240];
@@ -1138,12 +1176,16 @@ function triggerReassembleAnimation(): void {
 
   setTimeout(() => {
     isAnimating = false;
+    if (!animationState.isDragging) {
+      setBreathing(false);
+    }
   }, 700);
 }
 
 function triggerRandomCharacter(): void {
   if (isAnimating) return;
   isAnimating = true;
+  setBreathing(true);
 
   const partTypes: PartType[] = ['hair', 'eyes', 'mouth', 'arm'];
   const newParts = getRandomParts(PARTS);
@@ -1185,6 +1227,9 @@ function triggerRandomCharacter(): void {
           updateExpressionDisplay();
           updateCardSelection();
           showFeedback();
+          if (!animationState.isDragging) {
+            setBreathing(false);
+          }
         }, 400);
       }
     }, inDelay);
@@ -1251,8 +1296,19 @@ function showFeedback(): void {
   }, 1100);
 }
 
+function setBreathing(paused: boolean): void {
+  const breathWrapper = document.getElementById('breath-wrapper');
+  if (!breathWrapper) return;
+  if (paused) {
+    breathWrapper.classList.add('character-breath-paused');
+  } else {
+    breathWrapper.classList.remove('character-breath-paused');
+  }
+}
+
 function startDefaultAnimation(): void {
   scheduleBlink();
+  setBreathing(false);
 }
 
 function scheduleBlink(): void {
