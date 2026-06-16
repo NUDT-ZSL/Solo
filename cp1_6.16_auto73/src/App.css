@@ -1,0 +1,137 @@
+.arrow-button:active,
+.back-button:active {
+  transform: scale(0.95);
+}
+
+.arrow-button:hover {
+  background: #F0F3F5;
+}
+
+.back-button:hover {
+  background: #F0F3F5;
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.preview-bubble {
+  animation: slideInUp 0.3s ease forwards;
+}
+
+@keyframes slideHorizontal {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.emoji-panel-slide {
+  animation: slideHorizontal 0.4s ease forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.context-menu {
+  animation: fadeIn 0.2s ease forwards;
+}
+
+.dragging {
+  cursor: grabbing;
+}
+
+.canvas-grid {
+  background-image:
+    linear-gradient(to right, #f0f0f0 1px, transparent 1px),
+    linear-gradient(to bottom, #f0f0f0 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.emoji-btn:hover {
+  background: #E8EAED !important;
+}
+
+.emoji-btn:active {
+  transform: scale(0.9);
+}
+
+.category-tab:hover {
+  opacity: 0.8;
+}
+
+.save-btn:active {
+  transform: scale(0.95);
+}
+
+.save-btn:hover {
+  opacity: 0.9;
+}
+
+.calendar-cell:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.note-input:focus {
+  border-color: #667eea !important;
+}
+
+.context-menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: #FFE082;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: #FFE082;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #F5F7FA;
+}
+
+#root {
+  min-height: 100vh;
+}
