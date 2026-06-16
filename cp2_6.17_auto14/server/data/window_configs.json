@@ -1,0 +1,24 @@
+{
+  "id": "a6ed9210-e011-4062-87c5-4907a8f524cc",
+  "windows": {
+    "circle": {
+      "radius": 1,
+      "position": "wall"
+    },
+    "arch": {
+      "width": 1.5,
+      "height": 2,
+      "position": "wall"
+    },
+    "fullLength": {
+      "width": 2,
+      "height": 2.8,
+      "position": "floor"
+    },
+    "skylight": {
+      "width": 1.2,
+      "height": 1.2,
+      "position": "ceiling"
+    }
+  }
+}
