@@ -289,7 +289,7 @@ class StarLegendApp {
     this.progressBar = document.createElement('div');
     this.progressBar.className = 'progress-bar-container';
     this.progressBar.innerHTML = `
-      <div class="progress-label">已收集 <span class="progress-count">0</span>/12</div>
+      <div class="progress-label">已收集 <span class="progress-count">0</span>/${this.totalConstellations}</div>
       <div class="progress-track">
         <div class="progress-fill" style="width: 0%"></div>
       </div>
@@ -347,6 +347,12 @@ class StarLegendApp {
 
   private bindEvents() {
     window.addEventListener('resize', () => this.onResize());
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 't' || e.key === 'T') {
+        this.uiPanel.show('leo');
+      }
+    });
 
     this.renderer.domElement.addEventListener('click', (e) => {
       this.zodiacManager.handleClick(e, this.renderer.domElement);

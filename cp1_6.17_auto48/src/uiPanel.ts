@@ -10,6 +10,18 @@ export class UIPanel {
   private zodiacManager: ZodiacManager;
   private onCollect: ((id: string) => void) | null = null;
 
+  private isSpeaking = false;
+  private speechUtterance: SpeechSynthesisUtterance | null = null;
+  private cnSentences: string[] = [];
+  private enSentences: string[] = [];
+  private currentSentenceIndex = 0;
+  private mythCnEl: HTMLElement | null = null;
+  private mythEnEl: HTMLElement | null = null;
+  private readBtn: HTMLElement | null = null;
+  private useChineseVoice = true;
+
+  private toastEl: HTMLElement | null = null;
+
   constructor(container: HTMLElement, zodiacManager: ZodiacManager) {
     this.container = container;
     this.zodiacManager = zodiacManager;
@@ -20,10 +32,15 @@ export class UIPanel {
   }
 
   show(constellationId: string) {
+    this.stopSpeaking();
     this.hide();
 
     const data = this.zodiacManager.getConstellationData(constellationId);
     if (!data) return;
+
+    this.cnSentences = this.splitSentences(data.mythology.chinese);
+    this.enSentences = this.splitSentences(data.mythology.greek);
+    this.currentSentenceIndex = 0;
 
     this.panel = document.createElement('div');
     this.panel.className = 'info-panel';
@@ -58,11 +75,17 @@ export class UIPanel {
           <canvas class="line-art-canvas" width="280" height="200"></canvas>
         </div>
         <div class="panel-section">
-          <h3 class="section-title">神话传说</h3>
+          <div class="section-header">
+            <h3 class="section-title">神话传说</h3>
+            <button class="btn-read" aria-label="朗读">
+              <span class="read-icon">🔊</span>
+              <span class="read-text">朗读</span>
+            </button>
+          </div>
           <div class="mythology-text">
-            <p class="myth-cn">${data.mythology.chinese}</p>
+            <p class="myth-cn">${this.buildSentenceHtml(this.cnSentences, 'cn')}</p>
             <hr class="myth-divider">
-            <p class="myth-en">${data.mythology.greek}</p>
+            <p class="myth-en">${this.buildSentenceHtml(this.enSentences, 'en')}</p>
           </div>
         </div>
         <div class="panel-actions">
@@ -70,6 +93,9 @@ export class UIPanel {
             ${this.zodiacManager.isCollected(data.id) ? '✓ 已收集' : '收集星图碎片'}
           </button>
           <button class="btn btn-anim">播放今日视运动</button>
+          <button class="btn btn-share">
+            <span style="margin-right: 6px;">📤</span>分享
+          </button>
         </div>
       </div>
     `;
@@ -136,15 +162,54 @@ export class UIPanel {
       }
       .panel-body { display: flex; flex-direction: column; gap: 20px; }
       .panel-section { }
+      .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid rgba(129, 212, 250, 0.3);
+      }
       .section-title {
         font-family: 'Noto Serif SC', serif;
         font-size: 16px;
         font-weight: 700;
         color: #FFFFFF;
-        margin: 0 0 12px 0;
-        padding-bottom: 6px;
-        border-bottom: 1px solid rgba(129, 212, 250, 0.3);
+        margin: 0;
+        padding: 0;
+        border: none;
       }
+      .section-header .section-title {
+        margin: 0;
+        padding: 0;
+        border: none;
+      }
+      .btn-read {
+        background: rgba(255,255,255,0.1);
+        border: 1px solid rgba(255,255,255,0.2);
+        color: #B0C4DE;
+        font-size: 12px;
+        padding: 4px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        transition: all 0.2s;
+        font-family: 'Noto Sans SC', sans-serif;
+      }
+      .btn-read:hover {
+        background: rgba(255,255,255,0.2);
+        border-color: #81D4FA;
+        color: #FFFFFF;
+      }
+      .btn-read.speaking {
+        background: rgba(255, 215, 0, 0.15);
+        border-color: rgba(255, 215, 0, 0.5);
+        color: #FFD700;
+      }
+      .read-icon { font-size: 14px; }
+      .read-text { font-size: 12px; }
       .star-info { display: flex; flex-direction: column; gap: 8px; }
       .star-info-row { display: flex; justify-content: space-between; align-items: center; }
       .info-label { color: #81D4FA; font-size: 13px; }
@@ -163,6 +228,16 @@ export class UIPanel {
         border: none;
         border-top: 1px solid rgba(129,212,250,0.2);
         margin: 12px 0;
+      }
+      .sentence {
+        transition: background-color 0.3s, color 0.3s;
+        border-radius: 3px;
+        padding: 0 2px;
+      }
+      .sentence.highlight {
+        background-color: rgba(255, 215, 0, 0.15);
+        color: #FFD700;
+        text-shadow: 0 0 8px rgba(255, 215, 0, 0.3);
       }
       .panel-actions { display: flex; flex-direction: column; gap: 10px; }
       .btn {
@@ -187,7 +262,35 @@ export class UIPanel {
         border-color: rgba(255, 213, 79, 0.4);
         color: #FFD54F;
       }
-      .btn-anim { }
+      .btn-share { }
+      .toast {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(20, 20, 40, 0.9);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 215, 0, 0.4);
+        color: #FFD700;
+        padding: 16px 28px;
+        border-radius: 10px;
+        font-family: 'Noto Sans SC', sans-serif;
+        font-size: 14px;
+        z-index: 1000;
+        animation: toastIn 0.3s ease-out;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      }
+      @keyframes toastIn {
+        from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+        to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      }
+      .toast.out {
+        animation: toastOut 0.3s ease-in forwards;
+      }
+      @keyframes toastOut {
+        from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        to { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+      }
       @media (max-width: 768px) {
         .info-panel {
           width: 100%;
@@ -200,6 +303,9 @@ export class UIPanel {
     this.panel.prepend(style);
 
     this.drawLineArt(constellationId);
+
+    this.mythCnEl = this.panel.querySelector('.myth-cn');
+    this.mythEnEl = this.panel.querySelector('.myth-en');
 
     const closeBtn = this.panel.querySelector('.panel-close');
     closeBtn?.addEventListener('click', () => this.hide());
@@ -218,6 +324,20 @@ export class UIPanel {
       this.dispatchEvent('startApparentMotion');
     });
 
+    this.readBtn = this.panel.querySelector('.btn-read');
+    this.readBtn?.addEventListener('click', () => {
+      if (this.isSpeaking) {
+        this.stopSpeaking();
+      } else {
+        this.startSpeaking();
+      }
+    });
+
+    const shareBtn = this.panel.querySelector('.btn-share');
+    shareBtn?.addEventListener('click', () => {
+      this.shareConstellation(constellationId);
+    });
+
     this.container.appendChild(this.panel);
     this.isVisible = true;
 
@@ -231,6 +351,251 @@ export class UIPanel {
       };
       document.addEventListener('click', onClickOutside);
     }, 100);
+  }
+
+  private buildSentenceHtml(sentences: string[], lang: string): string {
+    return sentences.map((s, i) =>
+      `<span class="sentence" data-lang="${lang}" data-index="${i}">${s}</span>`
+    ).join('');
+  }
+
+  private splitSentences(text: string): string[] {
+    const result: string[] = [];
+    let current = '';
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      current += char;
+      if (char === '。' || char === '！' || char === '？' || char === '.' || char === '!' || char === '?') {
+        if (current.trim()) {
+          result.push(current.trim());
+        }
+        current = '';
+      }
+    }
+    if (current.trim()) {
+      result.push(current.trim());
+    }
+    return result;
+  }
+
+  private startSpeaking() {
+    if (!window.speechSynthesis) return;
+
+    const text = this.cnSentences.join(' ');
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
+
+    const voices = window.speechSynthesis.getVoices();
+    let zhVoice = voices.find(v => v.lang.includes('zh'));
+    if (!zhVoice) {
+      zhVoice = voices.find(v => v.lang.includes('en'));
+      this.useChineseVoice = false;
+    } else {
+      this.useChineseVoice = true;
+    }
+    if (zhVoice) {
+      utterance.voice = zhVoice;
+      utterance.lang = zhVoice.lang;
+    }
+
+    this.currentSentenceIndex = 0;
+    this.highlightSentence(0);
+
+    utterance.onboundary = (event) => {
+      if (event.name === 'sentence') {
+        this.updateHighlightByCharIndex(event.charIndex);
+      }
+    };
+
+    utterance.onend = () => {
+      this.isSpeaking = false;
+      this.clearHighlights();
+      this.updateReadButton();
+    };
+
+    utterance.onerror = () => {
+      this.isSpeaking = false;
+      this.clearHighlights();
+      this.updateReadButton();
+    };
+
+    this.speechUtterance = utterance;
+    this.isSpeaking = true;
+    this.updateReadButton();
+    window.speechSynthesis.speak(utterance);
+
+    this.startSentenceTimer();
+  }
+
+  private sentenceTimer: number | null = null;
+  private sentenceStartTime = 0;
+  private totalEstimatedTime = 0;
+  private sentenceDurations: number[] = [];
+
+  private startSentenceTimer() {
+    if (this.sentenceTimer) {
+      clearInterval(this.sentenceTimer);
+    }
+
+    const sentences = this.useChineseVoice ? this.cnSentences : this.enSentences;
+    const totalChars = sentences.reduce((sum, s) => sum + s.length, 0);
+    const estimatedTotal = totalChars * 200;
+    this.sentenceDurations = sentences.map(s => s.length * 200);
+
+    this.sentenceStartTime = Date.now();
+    let elapsed = 0;
+
+    this.sentenceTimer = window.setInterval(() => {
+      if (!this.isSpeaking) {
+        if (this.sentenceTimer) clearInterval(this.sentenceTimer);
+        return;
+      }
+
+      elapsed = Date.now() - this.sentenceStartTime;
+      let cumulative = 0;
+      for (let i = 0; i < sentences.length; i++) {
+        cumulative += this.sentenceDurations[i];
+        if (elapsed < cumulative) {
+          if (this.currentSentenceIndex !== i) {
+            this.currentSentenceIndex = i;
+            this.highlightSentence(i);
+          }
+          break;
+        }
+      }
+
+      if (elapsed > estimatedTotal + 1000) {
+        if (this.sentenceTimer) clearInterval(this.sentenceTimer);
+      }
+    }, 100);
+  }
+
+  private updateHighlightByCharIndex(charIndex: number) {
+    const sentences = this.useChineseVoice ? this.cnSentences : this.enSentences;
+    let cumulative = 0;
+    for (let i = 0; i < sentences.length; i++) {
+      const sentenceLen = sentences[i].length;
+      if (charIndex >= cumulative && charIndex < cumulative + sentenceLen) {
+        if (this.currentSentenceIndex !== i) {
+          this.currentSentenceIndex = i;
+          this.highlightSentence(i);
+        }
+        break;
+      }
+      cumulative += sentenceLen + 1;
+    }
+  }
+
+  private highlightSentence(index: number) {
+    if (!this.mythCnEl || !this.mythEnEl) return;
+
+    const cnSpans = this.mythCnEl.querySelectorAll('.sentence');
+    const enSpans = this.mythEnEl.querySelectorAll('.sentence');
+
+    cnSpans.forEach(s => s.classList.remove('highlight'));
+    enSpans.forEach(s => s.classList.remove('highlight'));
+
+    if (cnSpans[index]) {
+      cnSpans[index].classList.add('highlight');
+      cnSpans[index].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    if (enSpans[index]) {
+      enSpans[index].classList.add('highlight');
+    }
+  }
+
+  private clearHighlights() {
+    if (!this.mythCnEl || !this.mythEnEl) return;
+    this.mythCnEl.querySelectorAll('.sentence').forEach(s => s.classList.remove('highlight'));
+    this.mythEnEl.querySelectorAll('.sentence').forEach(s => s.classList.remove('highlight'));
+  }
+
+  private stopSpeaking() {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    if (this.sentenceTimer) {
+      clearInterval(this.sentenceTimer);
+      this.sentenceTimer = null;
+    }
+    this.isSpeaking = false;
+    this.speechUtterance = null;
+    this.clearHighlights();
+    this.updateReadButton();
+  }
+
+  private updateReadButton() {
+    if (!this.readBtn) return;
+    const textSpan = this.readBtn.querySelector('.read-text');
+    const iconSpan = this.readBtn.querySelector('.read-icon');
+    if (this.isSpeaking) {
+      this.readBtn.classList.add('speaking');
+      if (textSpan) textSpan.textContent = '停止';
+      if (iconSpan) iconSpan.textContent = '⏹';
+    } else {
+      this.readBtn.classList.remove('speaking');
+      if (textSpan) textSpan.textContent = '朗读';
+      if (iconSpan) iconSpan.textContent = '🔊';
+    }
+  }
+
+  private shareConstellation(constellationId: string) {
+    const data = this.zodiacManager.getConstellationData(constellationId);
+    if (!data) return;
+
+    const shareText = `${data.nameCN} (${data.nameEN})\n\n【神话传说】\n${data.mythology.chinese}\n\n—— 星图传说 · 探索星空的奥秘`;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(shareText).then(() => {
+        this.showToast('✓ 已复制到剪贴板');
+      }).catch(() => {
+        this.fallbackCopy(shareText);
+      });
+    } else {
+      this.fallbackCopy(shareText);
+    }
+  }
+
+  private fallbackCopy(text: string) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    textarea.style.pointerEvents = 'none';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      document.execCommand('copy');
+      this.showToast('✓ 已复制到剪贴板');
+    } catch {
+      this.showToast('✗ 复制失败');
+    }
+    document.body.removeChild(textarea);
+  }
+
+  private showToast(message: string) {
+    if (this.toastEl) {
+      this.toastEl.remove();
+      this.toastEl = null;
+    }
+
+    this.toastEl = document.createElement('div');
+    this.toastEl.className = 'toast';
+    this.toastEl.textContent = message;
+    document.body.appendChild(this.toastEl);
+
+    setTimeout(() => {
+      if (this.toastEl) {
+        this.toastEl.classList.add('out');
+        setTimeout(() => {
+          if (this.toastEl) {
+            this.toastEl.remove();
+            this.toastEl = null;
+          }
+        }, 300);
+      }
+    }, 2000);
   }
 
   private drawLineArt(constellationId: string) {
@@ -373,6 +738,7 @@ export class UIPanel {
   }
 
   hide() {
+    this.stopSpeaking();
     if (this.panel) {
       this.panel.style.animation = 'panelSlideOut 0.3s ease-in forwards';
       const styleEl = document.createElement('style');
