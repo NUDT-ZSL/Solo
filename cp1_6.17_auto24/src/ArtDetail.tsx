@@ -137,6 +137,37 @@ export default function ArtDetail({
           <div
             style={{
               position: 'absolute',
+              top: '20px',
+              right: '20px',
+              width: '60px',
+              height: '60px',
+              borderRadius: '50%',
+              border: '2px solid #8B0000',
+              background: 'rgba(139, 0, 0, 0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transform: 'rotate(15deg)',
+              zIndex: 2,
+              pointerEvents: 'none',
+            }}
+          >
+            <span
+              style={{
+                color: '#8B0000',
+                fontSize: '20px',
+                fontWeight: 700,
+                letterSpacing: '1px',
+                fontFamily: 'Georgia, serif',
+                fontStyle: 'italic',
+              }}
+            >
+              VG
+            </span>
+          </div>
+          <div
+            style={{
+              position: 'absolute',
               top: '50%',
               left: '50%',
               transform: 'translate(-50%, -50%)',
@@ -268,7 +299,7 @@ export default function ArtDetail({
                     )}
                   </button>
                 </div>
-                <div style={{ fontSize: '12px', color: '#8D6E63' }}>
+                <div style={{ fontSize: '10px', color: '#666' }}>
                   {EMOTION_LABELS[emotion]}
                 </div>
                 <div

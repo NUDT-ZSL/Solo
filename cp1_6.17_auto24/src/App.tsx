@@ -10,6 +10,7 @@ import {
 
 export interface Artwork {
   id: string
+  artNumber: string
   title: string
   author: string
   year: number
@@ -59,14 +60,24 @@ const DESCRIPTIONS = [
   '金黄与赭红交织的画面，记录了落叶纷飞的秋日，温暖中带着一丝淡淡的离愁，是时光最温柔的注脚。',
 ]
 
+const generateRandomSuffix = (): string => {
+  const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  let result = ''
+  for (let i = 0; i < 4; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return result
+}
+
 const generateArtworks = (): Artwork[] => {
   return TITLES.map((title, i) => {
     const gradientIndex = i % GRADIENTS.length
     return {
       id: `art-${i + 1}`,
+      artNumber: `#ART-2024-${generateRandomSuffix()}`,
       title,
       author: AUTHORS[i % AUTHORS.length],
-      year: 1980 + Math.floor(Math.random() * 45),
+      year: 1900 + Math.floor(Math.random() * 125),
       description: DESCRIPTIONS[i % DESCRIPTIONS.length],
       gradientFrom: GRADIENTS[gradientIndex][0],
       gradientTo: GRADIENTS[gradientIndex][1],

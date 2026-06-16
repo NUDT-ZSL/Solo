@@ -317,6 +317,22 @@ export default function Gallery({
                       background: `linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.05) 100%)`,
                     }}
                   />
+                  <div
+                    style={{
+                      position: 'absolute',
+                      right: '10px',
+                      bottom: '8px',
+                      fontSize: '12px',
+                      color: '#FFFFFF',
+                      opacity: 0.3,
+                      fontFamily: 'monospace',
+                      letterSpacing: '0.5px',
+                      userSelect: 'none',
+                      textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                    }}
+                  >
+                    {art.artNumber}
+                  </div>
                 </div>
 
                 <div style={{ marginTop: '16px', textAlign: 'center', width: '240px' }}>
@@ -346,6 +362,15 @@ export default function Gallery({
                   >
                     {art.author}
                   </div>
+                  <div
+                    style={{
+                      fontSize: '11px',
+                      color: '#999',
+                      marginTop: '4px',
+                    }}
+                  >
+                    创作于 {art.year}年
+                  </div>
                 </div>
 
                 <div
@@ -368,7 +393,7 @@ export default function Gallery({
                           display: 'flex',
                           flexDirection: 'column',
                           alignItems: 'center',
-                          gap: '4px',
+                          gap: '3px',
                         }}
                       >
                         <div style={{ position: 'relative' }}>
@@ -430,6 +455,15 @@ export default function Gallery({
                               />
                             )}
                           </button>
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '10px',
+                            color: '#666',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {EMOTION_LABELS[emotion]}
                         </div>
                         <span
                           key={bounceKey.get(art.id + emotion) || 'static'}
