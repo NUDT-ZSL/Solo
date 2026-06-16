@@ -42,9 +42,12 @@ export function getWeeklyFrequencyConfig(data: { date: string; count: number }[]
       {
         type: 'line',
         smooth: true,
+        symbol: 'circle',
+        symbolSize: 6,
+        showSymbol: true,
         data: data.map(d => d.count),
         itemStyle: { color: '#FF6F00' },
-        lineStyle: { color: '#FF6F00' },
+        lineStyle: { color: '#FF6F00', width: 2 },
         areaStyle: {
           color: {
             type: 'linear',
