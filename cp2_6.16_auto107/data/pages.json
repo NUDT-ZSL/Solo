@@ -1,0 +1,3897 @@
+{
+  "a1b2c3d4-e5f6-7890-abcd-ef1234567890": [
+    [
+      {
+        "type": "image",
+        "content": "/images/page-1.jpg",
+        "position": {
+          "x": 0.029,
+          "y": 0.025,
+          "width": 0.287,
+          "height": 0.439
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-2.jpg",
+        "position": {
+          "x": 0.36,
+          "y": 0.04,
+          "width": 0.268,
+          "height": 0.46
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "关关雎鸠，在河之洲。窈窕淑女，君子好逑。",
+        "position": {
+          "x": 0.7,
+          "y": 0.04,
+          "width": 0.288,
+          "height": 0.437
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "蒹葭苍苍，白露为霜。所谓伊人，在水一方。",
+        "position": {
+          "x": 0.031,
+          "y": 0.521,
+          "width": 0.269,
+          "height": 0.436
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "昔我往矣，杨柳依依。今我来思，雨雪霏霏。",
+        "position": {
+          "x": 0.367,
+          "y": 0.527,
+          "width": 0.279,
+          "height": 0.451
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "桃之夭夭，灼灼其华。之子于归，宜其室家。",
+        "position": {
+          "x": 0.699,
+          "y": 0.538,
+          "width": 0.272,
+          "height": 0.44
+        },
+        "animation": "slide"
+      }
+    ],
+    [
+      {
+        "type": "text",
+        "content": "毛氏传云：此诗言后妃之德，所以风天下而正夫妇也。",
+        "position": {
+          "x": 0.032,
+          "y": 0.023,
+          "width": 0.207,
+          "height": 0.277
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "郑笺曰：诗人因所见而起兴，以喻君子求淑女之意。",
+        "position": {
+          "x": 0.271,
+          "y": 0.039,
+          "width": 0.196,
+          "height": 0.269
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "疏：此章言文王之化行于江汉之间，女子能守贞正。",
+        "position": {
+          "x": 0.527,
+          "y": 0.026,
+          "width": 0.206,
+          "height": 0.292
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "注：古文经传多异文，此从鲁诗说，与齐韩不同。",
+        "position": {
+          "x": 0.774,
+          "y": 0.021,
+          "width": 0.208,
+          "height": 0.283
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-3.jpg",
+        "position": {
+          "x": 0.037,
+          "y": 0.371,
+          "width": 0.206,
+          "height": 0.266
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "采薇采薇，薇亦作止。曰归曰归，岁亦莫止。",
+        "position": {
+          "x": 0.284,
+          "y": 0.363,
+          "width": 0.197,
+          "height": 0.284
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-4.jpg",
+        "position": {
+          "x": 0.529,
+          "y": 0.355,
+          "width": 0.193,
+          "height": 0.272
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-5.jpg",
+        "position": {
+          "x": 0.776,
+          "y": 0.36,
+          "width": 0.185,
+          "height": 0.275
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-6.jpg",
+        "position": {
+          "x": 0.035,
+          "y": 0.694,
+          "width": 0.195,
+          "height": 0.267
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "投我以木桃，报之以琼瑶。匪报也，永以为好也。",
+        "position": {
+          "x": 0.282,
+          "y": 0.689,
+          "width": 0.207,
+          "height": 0.273
+        },
+        "animation": "zoom"
+      }
+    ],
+    [
+      {
+        "type": "text",
+        "content": "风雨如晦，鸡鸣不已。既见君子，云胡不喜。",
+        "position": {
+          "x": 0.035,
+          "y": 0.027,
+          "width": 0.273,
+          "height": 0.292
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-7.jpg",
+        "position": {
+          "x": 0.366,
+          "y": 0.022,
+          "width": 0.267,
+          "height": 0.267
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "青青子衿，悠悠我心。纵我不往，子宁不嗣音。",
+        "position": {
+          "x": 0.695,
+          "y": 0.03,
+          "width": 0.293,
+          "height": 0.283
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-8.jpg",
+        "position": {
+          "x": 0.032,
+          "y": 0.353,
+          "width": 0.271,
+          "height": 0.28
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "毛传：兴也，言后妃有关雎之德，乃能共荇菜以事宗庙。",
+        "position": {
+          "x": 0.357,
+          "y": 0.362,
+          "width": 0.269,
+          "height": 0.287
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-9.jpg",
+        "position": {
+          "x": 0.703,
+          "y": 0.357,
+          "width": 0.269,
+          "height": 0.275
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "郑玄笺：言贤女能幽闲贞专，非关雎之鸟亦不能匹。",
+        "position": {
+          "x": 0.024,
+          "y": 0.697,
+          "width": 0.285,
+          "height": 0.291
+        },
+        "animation": "fade"
+      }
+    ],
+    [
+      {
+        "type": "text",
+        "content": "疏曰：此章言文王之德，能使人修身齐家。",
+        "position": {
+          "x": 0.031,
+          "y": 0.033,
+          "width": 0.264,
+          "height": 0.442
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "南有樛木，葛藟累之。乐只君子，福履绥之。",
+        "position": {
+          "x": 0.362,
+          "y": 0.033,
+          "width": 0.293,
+          "height": 0.448
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-10.jpg",
+        "position": {
+          "x": 0.697,
+          "y": 0.02,
+          "width": 0.264,
+          "height": 0.449
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-1.jpg",
+        "position": {
+          "x": 0.039,
+          "y": 0.526,
+          "width": 0.274,
+          "height": 0.437
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "螽斯羽，诜诜兮。宜尔子孙，振振兮。",
+        "position": {
+          "x": 0.361,
+          "y": 0.53,
+          "width": 0.277,
+          "height": 0.456
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "淇奥之诗，美武公之德也。有文章，又能听其规谏。",
+        "position": {
+          "x": 0.697,
+          "y": 0.538,
+          "width": 0.276,
+          "height": 0.435
+        },
+        "animation": "fade"
+      }
+    ],
+    [
+      {
+        "type": "text",
+        "content": "硕人其颀，衣锦褧衣。齐侯之子，卫侯之妻。",
+        "position": {
+          "x": 0.03,
+          "y": 0.039,
+          "width": 0.288,
+          "height": 0.275
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "七月流火，九月授衣。一之日觱发，二之日栗烈。",
+        "position": {
+          "x": 0.371,
+          "y": 0.038,
+          "width": 0.283,
+          "height": 0.274
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "毛亨曰：诗者，志之所之也，在心为志，发言为诗。",
+        "position": {
+          "x": 0.704,
+          "y": 0.026,
+          "width": 0.283,
+          "height": 0.266
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-2.jpg",
+        "position": {
+          "x": 0.025,
+          "y": 0.373,
+          "width": 0.273,
+          "height": 0.28
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-3.jpg",
+        "position": {
+          "x": 0.361,
+          "y": 0.361,
+          "width": 0.266,
+          "height": 0.289
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-4.jpg",
+        "position": {
+          "x": 0.704,
+          "y": 0.37,
+          "width": 0.285,
+          "height": 0.284
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "疏：风雅颂者，诗之体也；赋比兴者，诗之用也。",
+        "position": {
+          "x": 0.024,
+          "y": 0.689,
+          "width": 0.27,
+          "height": 0.29
+        },
+        "animation": "slide"
+      }
+    ],
+    [
+      {
+        "type": "text",
+        "content": "呦呦鹿鸣，食野之苹。我有嘉宾，鼓瑟吹笙。",
+        "position": {
+          "x": 0.026,
+          "y": 0.02,
+          "width": 0.275,
+          "height": 0.276
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "如切如磋，如琢如磨。瑟兮僩兮，赫兮咺兮。",
+        "position": {
+          "x": 0.371,
+          "y": 0.025,
+          "width": 0.279,
+          "height": 0.273
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "关关雎鸠，在河之洲。窈窕淑女，君子好逑。",
+        "position": {
+          "x": 0.688,
+          "y": 0.029,
+          "width": 0.276,
+          "height": 0.269
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-5.jpg",
+        "position": {
+          "x": 0.037,
+          "y": 0.364,
+          "width": 0.271,
+          "height": 0.287
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "蒹葭苍苍，白露为霜。所谓伊人，在水一方。",
+        "position": {
+          "x": 0.363,
+          "y": 0.373,
+          "width": 0.286,
+          "height": 0.291
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-6.jpg",
+        "position": {
+          "x": 0.703,
+          "y": 0.356,
+          "width": 0.272,
+          "height": 0.289
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-7.jpg",
+        "position": {
+          "x": 0.036,
+          "y": 0.697,
+          "width": 0.271,
+          "height": 0.292
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "昔我往矣，杨柳依依。今我来思，雨雪霏霏。",
+        "position": {
+          "x": 0.364,
+          "y": 0.705,
+          "width": 0.289,
+          "height": 0.275
+        },
+        "animation": "zoom"
+      }
+    ],
+    [
+      {
+        "type": "text",
+        "content": "桃之夭夭，灼灼其华。之子于归，宜其室家。",
+        "position": {
+          "x": 0.034,
+          "y": 0.034,
+          "width": 0.274,
+          "height": 0.284
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-8.jpg",
+        "position": {
+          "x": 0.364,
+          "y": 0.032,
+          "width": 0.273,
+          "height": 0.293
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-9.jpg",
+        "position": {
+          "x": 0.688,
+          "y": 0.023,
+          "width": 0.286,
+          "height": 0.265
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-10.jpg",
+        "position": {
+          "x": 0.037,
+          "y": 0.367,
+          "width": 0.288,
+          "height": 0.265
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "毛氏传云：此诗言后妃之德，所以风天下而正夫妇也。",
+        "position": {
+          "x": 0.368,
+          "y": 0.356,
+          "width": 0.293,
+          "height": 0.291
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "郑笺曰：诗人因所见而起兴，以喻君子求淑女之意。",
+        "position": {
+          "x": 0.7,
+          "y": 0.355,
+          "width": 0.271,
+          "height": 0.284
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "疏：此章言文王之化行于江汉之间，女子能守贞正。",
+        "position": {
+          "x": 0.029,
+          "y": 0.702,
+          "width": 0.283,
+          "height": 0.279
+        },
+        "animation": "fade"
+      }
+    ],
+    [
+      {
+        "type": "image",
+        "content": "/images/page-1.jpg",
+        "position": {
+          "x": 0.022,
+          "y": 0.022,
+          "width": 0.265,
+          "height": 0.268
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "注：古文经传多异文，此从鲁诗说，与齐韩不同。",
+        "position": {
+          "x": 0.367,
+          "y": 0.023,
+          "width": 0.287,
+          "height": 0.283
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-2.jpg",
+        "position": {
+          "x": 0.698,
+          "y": 0.039,
+          "width": 0.273,
+          "height": 0.269
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-3.jpg",
+        "position": {
+          "x": 0.028,
+          "y": 0.358,
+          "width": 0.282,
+          "height": 0.269
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "采薇采薇，薇亦作止。曰归曰归，岁亦莫止。",
+        "position": {
+          "x": 0.363,
+          "y": 0.364,
+          "width": 0.278,
+          "height": 0.267
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "投我以木桃，报之以琼瑶。匪报也，永以为好也。",
+        "position": {
+          "x": 0.703,
+          "y": 0.364,
+          "width": 0.275,
+          "height": 0.292
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-4.jpg",
+        "position": {
+          "x": 0.025,
+          "y": 0.702,
+          "width": 0.281,
+          "height": 0.27
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "风雨如晦，鸡鸣不已。既见君子，云胡不喜。",
+        "position": {
+          "x": 0.36,
+          "y": 0.697,
+          "width": 0.281,
+          "height": 0.286
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "青青子衿，悠悠我心。纵我不往，子宁不嗣音。",
+        "position": {
+          "x": 0.694,
+          "y": 0.706,
+          "width": 0.279,
+          "height": 0.272
+        },
+        "animation": "slide"
+      }
+    ]
+  ],
+  "a1b2c3d4-e5f6-7890-abcd-ef1234567891": [
+    [
+      {
+        "type": "image",
+        "content": "/images/page-1.jpg",
+        "position": {
+          "x": 0.031,
+          "y": 0.035,
+          "width": 0.264,
+          "height": 0.441
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-2.jpg",
+        "position": {
+          "x": 0.358,
+          "y": 0.028,
+          "width": 0.29,
+          "height": 0.433
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "路漫漫其修远兮，吾将上下而求索。",
+        "position": {
+          "x": 0.696,
+          "y": 0.03,
+          "width": 0.279,
+          "height": 0.433
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "长太息以掩涕兮，哀民生之多艰。",
+        "position": {
+          "x": 0.021,
+          "y": 0.536,
+          "width": 0.272,
+          "height": 0.432
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "亦余心之所善兮，虽九死其犹未悔。",
+        "position": {
+          "x": 0.359,
+          "y": 0.538,
+          "width": 0.292,
+          "height": 0.447
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "王逸注：屈原忠而被谤，信而见疑，故发愤以作辞。",
+        "position": {
+          "x": 0.702,
+          "y": 0.523,
+          "width": 0.277,
+          "height": 0.443
+        },
+        "animation": "zoom"
+      }
+    ],
+    [
+      {
+        "type": "image",
+        "content": "/images/page-3.jpg",
+        "position": {
+          "x": 0.039,
+          "y": 0.038,
+          "width": 0.289,
+          "height": 0.285
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "朱熹集注：此章言己之志不可夺，虽九死犹不悔也。",
+        "position": {
+          "x": 0.361,
+          "y": 0.026,
+          "width": 0.267,
+          "height": 0.282
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "九歌者，屈原所作祭祀之乐歌也，凡十一篇。",
+        "position": {
+          "x": 0.698,
+          "y": 0.024,
+          "width": 0.284,
+          "height": 0.269
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "帝子降兮北渚，目眇眇兮愁予。袅袅兮秋风，洞庭波兮木叶下。",
+        "position": {
+          "x": 0.02,
+          "y": 0.36,
+          "width": 0.27,
+          "height": 0.289
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "与天地兮同寿，与日月兮齐光。",
+        "position": {
+          "x": 0.363,
+          "y": 0.36,
+          "width": 0.283,
+          "height": 0.272
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-4.jpg",
+        "position": {
+          "x": 0.689,
+          "y": 0.368,
+          "width": 0.266,
+          "height": 0.273
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "悲哉秋之为气也！萧瑟兮草木摇落而变衰。",
+        "position": {
+          "x": 0.032,
+          "y": 0.692,
+          "width": 0.267,
+          "height": 0.282
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-5.jpg",
+        "position": {
+          "x": 0.363,
+          "y": 0.703,
+          "width": 0.276,
+          "height": 0.275
+        },
+        "animation": "slide"
+      }
+    ],
+    [
+      {
+        "type": "image",
+        "content": "/images/page-6.jpg",
+        "position": {
+          "x": 0.021,
+          "y": 0.028,
+          "width": 0.291,
+          "height": 0.456
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "王逸曰：离骚者，犹离忧也。屈原之作离骚，盖自怨生也。",
+        "position": {
+          "x": 0.363,
+          "y": 0.021,
+          "width": 0.275,
+          "height": 0.459
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-7.jpg",
+        "position": {
+          "x": 0.705,
+          "y": 0.04,
+          "width": 0.281,
+          "height": 0.454
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "朝饮木兰之坠露兮，夕餐秋菊之落英。",
+        "position": {
+          "x": 0.035,
+          "y": 0.535,
+          "width": 0.269,
+          "height": 0.45
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "朱熹云：楚辞之体，源于巫祝，成于屈子，文采华茂。",
+        "position": {
+          "x": 0.354,
+          "y": 0.535,
+          "width": 0.287,
+          "height": 0.439
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "乘骐骥以驰骋兮，来吾道夫先路。",
+        "position": {
+          "x": 0.695,
+          "y": 0.537,
+          "width": 0.275,
+          "height": 0.438
+        },
+        "animation": "zoom"
+      }
+    ],
+    [
+      {
+        "type": "image",
+        "content": "/images/page-8.jpg",
+        "position": {
+          "x": 0.021,
+          "y": 0.025,
+          "width": 0.208,
+          "height": 0.292
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "日月忽其不淹兮，春与秋其代序。",
+        "position": {
+          "x": 0.289,
+          "y": 0.023,
+          "width": 0.207,
+          "height": 0.284
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-9.jpg",
+        "position": {
+          "x": 0.523,
+          "y": 0.03,
+          "width": 0.188,
+          "height": 0.29
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-10.jpg",
+        "position": {
+          "x": 0.788,
+          "y": 0.034,
+          "width": 0.188,
+          "height": 0.271
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "惟草木之零落兮，恐美人之迟暮。",
+        "position": {
+          "x": 0.035,
+          "y": 0.366,
+          "width": 0.197,
+          "height": 0.277
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "制芰荷以为衣兮，集芙蓉以为裳。",
+        "position": {
+          "x": 0.287,
+          "y": 0.367,
+          "width": 0.181,
+          "height": 0.268
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "不吾知其亦已兮，苟余情其信芳。",
+        "position": {
+          "x": 0.529,
+          "y": 0.356,
+          "width": 0.21,
+          "height": 0.276
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-1.jpg",
+        "position": {
+          "x": 0.77,
+          "y": 0.365,
+          "width": 0.181,
+          "height": 0.274
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "疏：九章者，屈原既放，思君念国，随事感触而作。",
+        "position": {
+          "x": 0.031,
+          "y": 0.703,
+          "width": 0.209,
+          "height": 0.288
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "湘夫人降于北渚，望夫君兮未来，吹参差兮谁思。",
+        "position": {
+          "x": 0.289,
+          "y": 0.705,
+          "width": 0.205,
+          "height": 0.267
+        },
+        "animation": "zoom"
+      }
+    ],
+    [
+      {
+        "type": "text",
+        "content": "魂兮归来！东方不可以托些。",
+        "position": {
+          "x": 0.026,
+          "y": 0.032,
+          "width": 0.288,
+          "height": 0.439
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-2.jpg",
+        "position": {
+          "x": 0.369,
+          "y": 0.038,
+          "width": 0.287,
+          "height": 0.453
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-3.jpg",
+        "position": {
+          "x": 0.693,
+          "y": 0.028,
+          "width": 0.272,
+          "height": 0.46
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "朱熹曰：远游一篇，体仿离骚，而文意深远。",
+        "position": {
+          "x": 0.027,
+          "y": 0.535,
+          "width": 0.275,
+          "height": 0.437
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "余处幽篁兮终不见天，路险难兮独后来。",
+        "position": {
+          "x": 0.371,
+          "y": 0.54,
+          "width": 0.291,
+          "height": 0.446
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "风飒飒兮木萧萧，思公子兮徒离忧。",
+        "position": {
+          "x": 0.699,
+          "y": 0.524,
+          "width": 0.265,
+          "height": 0.451
+        },
+        "animation": "zoom"
+      }
+    ],
+    [
+      {
+        "type": "image",
+        "content": "/images/page-4.jpg",
+        "position": {
+          "x": 0.034,
+          "y": 0.025,
+          "width": 0.275,
+          "height": 0.288
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "举世皆浊我独清，众人皆醉我独醒。",
+        "position": {
+          "x": 0.363,
+          "y": 0.032,
+          "width": 0.277,
+          "height": 0.287
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-5.jpg",
+        "position": {
+          "x": 0.694,
+          "y": 0.027,
+          "width": 0.285,
+          "height": 0.267
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "路漫漫其修远兮，吾将上下而求索。",
+        "position": {
+          "x": 0.023,
+          "y": 0.369,
+          "width": 0.264,
+          "height": 0.271
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "长太息以掩涕兮，哀民生之多艰。",
+        "position": {
+          "x": 0.359,
+          "y": 0.355,
+          "width": 0.29,
+          "height": 0.287
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "亦余心之所善兮，虽九死其犹未悔。",
+        "position": {
+          "x": 0.695,
+          "y": 0.355,
+          "width": 0.292,
+          "height": 0.291
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-6.jpg",
+        "position": {
+          "x": 0.032,
+          "y": 0.695,
+          "width": 0.269,
+          "height": 0.273
+        },
+        "animation": "zoom"
+      }
+    ],
+    [
+      {
+        "type": "text",
+        "content": "王逸注：屈原忠而被谤，信而见疑，故发愤以作辞。",
+        "position": {
+          "x": 0.025,
+          "y": 0.033,
+          "width": 0.283,
+          "height": 0.292
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "朱熹集注：此章言己之志不可夺，虽九死犹不悔也。",
+        "position": {
+          "x": 0.365,
+          "y": 0.021,
+          "width": 0.283,
+          "height": 0.28
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "九歌者，屈原所作祭祀之乐歌也，凡十一篇。",
+        "position": {
+          "x": 0.702,
+          "y": 0.033,
+          "width": 0.277,
+          "height": 0.27
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-7.jpg",
+        "position": {
+          "x": 0.021,
+          "y": 0.356,
+          "width": 0.29,
+          "height": 0.276
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "帝子降兮北渚，目眇眇兮愁予。袅袅兮秋风，洞庭波兮木叶下。",
+        "position": {
+          "x": 0.363,
+          "y": 0.365,
+          "width": 0.292,
+          "height": 0.264
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-8.jpg",
+        "position": {
+          "x": 0.691,
+          "y": 0.361,
+          "width": 0.273,
+          "height": 0.287
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-9.jpg",
+        "position": {
+          "x": 0.032,
+          "y": 0.702,
+          "width": 0.287,
+          "height": 0.286
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "与天地兮同寿，与日月兮齐光。",
+        "position": {
+          "x": 0.366,
+          "y": 0.692,
+          "width": 0.272,
+          "height": 0.269
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-10.jpg",
+        "position": {
+          "x": 0.705,
+          "y": 0.701,
+          "width": 0.28,
+          "height": 0.277
+        },
+        "animation": "fade"
+      }
+    ],
+    [
+      {
+        "type": "text",
+        "content": "悲哉秋之为气也！萧瑟兮草木摇落而变衰。",
+        "position": {
+          "x": 0.029,
+          "y": 0.033,
+          "width": 0.278,
+          "height": 0.448
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-1.jpg",
+        "position": {
+          "x": 0.355,
+          "y": 0.036,
+          "width": 0.279,
+          "height": 0.455
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "王逸曰：离骚者，犹离忧也。屈原之作离骚，盖自怨生也。",
+        "position": {
+          "x": 0.705,
+          "y": 0.03,
+          "width": 0.272,
+          "height": 0.456
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "朝饮木兰之坠露兮，夕餐秋菊之落英。",
+        "position": {
+          "x": 0.033,
+          "y": 0.527,
+          "width": 0.275,
+          "height": 0.438
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-2.jpg",
+        "position": {
+          "x": 0.354,
+          "y": 0.537,
+          "width": 0.281,
+          "height": 0.437
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "朱熹云：楚辞之体，源于巫祝，成于屈子，文采华茂。",
+        "position": {
+          "x": 0.7,
+          "y": 0.529,
+          "width": 0.27,
+          "height": 0.437
+        },
+        "animation": "fade"
+      }
+    ],
+    [
+      {
+        "type": "text",
+        "content": "乘骐骥以驰骋兮，来吾道夫先路。",
+        "position": {
+          "x": 0.022,
+          "y": 0.03,
+          "width": 0.276,
+          "height": 0.267
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "日月忽其不淹兮，春与秋其代序。",
+        "position": {
+          "x": 0.354,
+          "y": 0.033,
+          "width": 0.27,
+          "height": 0.271
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "惟草木之零落兮，恐美人之迟暮。",
+        "position": {
+          "x": 0.704,
+          "y": 0.036,
+          "width": 0.284,
+          "height": 0.277
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-3.jpg",
+        "position": {
+          "x": 0.021,
+          "y": 0.363,
+          "width": 0.283,
+          "height": 0.285
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "制芰荷以为衣兮，集芙蓉以为裳。",
+        "position": {
+          "x": 0.37,
+          "y": 0.371,
+          "width": 0.271,
+          "height": 0.268
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-4.jpg",
+        "position": {
+          "x": 0.704,
+          "y": 0.357,
+          "width": 0.283,
+          "height": 0.285
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "不吾知其亦已兮，苟余情其信芳。",
+        "position": {
+          "x": 0.021,
+          "y": 0.704,
+          "width": 0.284,
+          "height": 0.268
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-5.jpg",
+        "position": {
+          "x": 0.373,
+          "y": 0.691,
+          "width": 0.264,
+          "height": 0.267
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-6.jpg",
+        "position": {
+          "x": 0.701,
+          "y": 0.705,
+          "width": 0.272,
+          "height": 0.279
+        },
+        "animation": "zoom"
+      }
+    ],
+    [
+      {
+        "type": "text",
+        "content": "疏：九章者，屈原既放，思君念国，随事感触而作。",
+        "position": {
+          "x": 0.03,
+          "y": 0.024,
+          "width": 0.29,
+          "height": 0.27
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-7.jpg",
+        "position": {
+          "x": 0.362,
+          "y": 0.027,
+          "width": 0.267,
+          "height": 0.268
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-8.jpg",
+        "position": {
+          "x": 0.69,
+          "y": 0.036,
+          "width": 0.288,
+          "height": 0.293
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-9.jpg",
+        "position": {
+          "x": 0.034,
+          "y": 0.369,
+          "width": 0.288,
+          "height": 0.288
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "湘夫人降于北渚，望夫君兮未来，吹参差兮谁思。",
+        "position": {
+          "x": 0.364,
+          "y": 0.363,
+          "width": 0.277,
+          "height": 0.268
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "魂兮归来！东方不可以托些。",
+        "position": {
+          "x": 0.688,
+          "y": 0.361,
+          "width": 0.278,
+          "height": 0.292
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "朱熹曰：远游一篇，体仿离骚，而文意深远。",
+        "position": {
+          "x": 0.037,
+          "y": 0.689,
+          "width": 0.267,
+          "height": 0.279
+        },
+        "animation": "zoom"
+      }
+    ]
+  ],
+  "a1b2c3d4-e5f6-7890-abcd-ef1234567892": [
+    [
+      {
+        "type": "text",
+        "content": "子曰：学而时习之，不亦说乎？有朋自远方来，不亦乐乎？",
+        "position": {
+          "x": 0.033,
+          "y": 0.039,
+          "width": 0.264,
+          "height": 0.435
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "子曰：巧言令色，鲜矣仁。",
+        "position": {
+          "x": 0.355,
+          "y": 0.038,
+          "width": 0.291,
+          "height": 0.459
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "何晏集解：此章言君子务本，本立而道生。",
+        "position": {
+          "x": 0.689,
+          "y": 0.036,
+          "width": 0.267,
+          "height": 0.453
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-1.jpg",
+        "position": {
+          "x": 0.027,
+          "y": 0.527,
+          "width": 0.284,
+          "height": 0.456
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-2.jpg",
+        "position": {
+          "x": 0.371,
+          "y": 0.54,
+          "width": 0.265,
+          "height": 0.437
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "邢昺疏：仁者爱之理，心之德也，为众善之长。",
+        "position": {
+          "x": 0.695,
+          "y": 0.525,
+          "width": 0.275,
+          "height": 0.442
+        },
+        "animation": "fade"
+      }
+    ],
+    [
+      {
+        "type": "image",
+        "content": "/images/page-3.jpg",
+        "position": {
+          "x": 0.021,
+          "y": 0.022,
+          "width": 0.279,
+          "height": 0.436
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "子曰：为政以德，譬如北辰，居其所而众星共之。",
+        "position": {
+          "x": 0.357,
+          "y": 0.035,
+          "width": 0.283,
+          "height": 0.455
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-4.jpg",
+        "position": {
+          "x": 0.696,
+          "y": 0.033,
+          "width": 0.29,
+          "height": 0.441
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "子曰：吾十有五而志于学，三十而立，四十而不惑。",
+        "position": {
+          "x": 0.028,
+          "y": 0.532,
+          "width": 0.28,
+          "height": 0.441
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "何晏曰：仁者自处于厚，故能爱人。",
+        "position": {
+          "x": 0.373,
+          "y": 0.522,
+          "width": 0.271,
+          "height": 0.446
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "邢昺曰：学之为言效也，人性皆善而觉有先后。",
+        "position": {
+          "x": 0.696,
+          "y": 0.526,
+          "width": 0.275,
+          "height": 0.436
+        },
+        "animation": "slide"
+      }
+    ],
+    [
+      {
+        "type": "text",
+        "content": "子曰：温故而知新，可以为师矣。",
+        "position": {
+          "x": 0.026,
+          "y": 0.022,
+          "width": 0.185,
+          "height": 0.279
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "子曰：君子不重则不威，学则不固。",
+        "position": {
+          "x": 0.276,
+          "y": 0.021,
+          "width": 0.182,
+          "height": 0.266
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-5.jpg",
+        "position": {
+          "x": 0.536,
+          "y": 0.04,
+          "width": 0.194,
+          "height": 0.27
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "曾子曰：吾日三省吾身，为人谋而不忠乎？",
+        "position": {
+          "x": 0.779,
+          "y": 0.036,
+          "width": 0.192,
+          "height": 0.272
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "子曰：弟子入则孝，出则弟，谨而信，泛爱众。",
+        "position": {
+          "x": 0.028,
+          "y": 0.362,
+          "width": 0.206,
+          "height": 0.291
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-6.jpg",
+        "position": {
+          "x": 0.279,
+          "y": 0.373,
+          "width": 0.193,
+          "height": 0.273
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-7.jpg",
+        "position": {
+          "x": 0.538,
+          "y": 0.372,
+          "width": 0.199,
+          "height": 0.269
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "何晏注：孝弟也者，其为仁之本与！",
+        "position": {
+          "x": 0.789,
+          "y": 0.371,
+          "width": 0.183,
+          "height": 0.284
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-8.jpg",
+        "position": {
+          "x": 0.031,
+          "y": 0.692,
+          "width": 0.197,
+          "height": 0.292
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "子曰：诗三百，一言以蔽之，曰思无邪。",
+        "position": {
+          "x": 0.285,
+          "y": 0.703,
+          "width": 0.186,
+          "height": 0.273
+        },
+        "animation": "fade"
+      }
+    ],
+    [
+      {
+        "type": "image",
+        "content": "/images/page-9.jpg",
+        "position": {
+          "x": 0.021,
+          "y": 0.035,
+          "width": 0.202,
+          "height": 0.281
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "疏：此章论为政之道，当以德化民。",
+        "position": {
+          "x": 0.271,
+          "y": 0.023,
+          "width": 0.209,
+          "height": 0.287
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "子曰：三人行，必有我师焉。择其善者而从之，其不善者而改之。",
+        "position": {
+          "x": 0.53,
+          "y": 0.028,
+          "width": 0.195,
+          "height": 0.264
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-10.jpg",
+        "position": {
+          "x": 0.785,
+          "y": 0.022,
+          "width": 0.202,
+          "height": 0.273
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-1.jpg",
+        "position": {
+          "x": 0.036,
+          "y": 0.359,
+          "width": 0.184,
+          "height": 0.274
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "子贡问曰：有一言而可以终身行之者乎？子曰：其恕乎！",
+        "position": {
+          "x": 0.29,
+          "y": 0.356,
+          "width": 0.207,
+          "height": 0.285
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "子曰：默而识之，学而不厌，诲人不倦，何有于我哉？",
+        "position": {
+          "x": 0.529,
+          "y": 0.36,
+          "width": 0.188,
+          "height": 0.291
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-2.jpg",
+        "position": {
+          "x": 0.782,
+          "y": 0.36,
+          "width": 0.204,
+          "height": 0.272
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "邢昺疏：此篇首言学道，次言修德，终言为政之要。",
+        "position": {
+          "x": 0.027,
+          "y": 0.691,
+          "width": 0.198,
+          "height": 0.278
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "子曰：知之为知之，不知为不知，是知也。",
+        "position": {
+          "x": 0.28,
+          "y": 0.698,
+          "width": 0.192,
+          "height": 0.286
+        },
+        "animation": "slide"
+      }
+    ],
+    [
+      {
+        "type": "text",
+        "content": "有子曰：礼之用，和为贵。先王之道，斯为美。",
+        "position": {
+          "x": 0.022,
+          "y": 0.033,
+          "width": 0.275,
+          "height": 0.266
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "子曰：见贤思齐焉，见不贤而内自省也。",
+        "position": {
+          "x": 0.354,
+          "y": 0.023,
+          "width": 0.283,
+          "height": 0.268
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-3.jpg",
+        "position": {
+          "x": 0.706,
+          "y": 0.031,
+          "width": 0.288,
+          "height": 0.288
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-4.jpg",
+        "position": {
+          "x": 0.039,
+          "y": 0.364,
+          "width": 0.269,
+          "height": 0.273
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "子曰：学而时习之，不亦说乎？有朋自远方来，不亦乐乎？",
+        "position": {
+          "x": 0.366,
+          "y": 0.361,
+          "width": 0.292,
+          "height": 0.287
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-5.jpg",
+        "position": {
+          "x": 0.705,
+          "y": 0.36,
+          "width": 0.277,
+          "height": 0.263
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "子曰：巧言令色，鲜矣仁。",
+        "position": {
+          "x": 0.03,
+          "y": 0.699,
+          "width": 0.281,
+          "height": 0.293
+        },
+        "animation": "slide"
+      }
+    ],
+    [
+      {
+        "type": "text",
+        "content": "何晏集解：此章言君子务本，本立而道生。",
+        "position": {
+          "x": 0.024,
+          "y": 0.023,
+          "width": 0.277,
+          "height": 0.274
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-6.jpg",
+        "position": {
+          "x": 0.362,
+          "y": 0.04,
+          "width": 0.291,
+          "height": 0.291
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "邢昺疏：仁者爱之理，心之德也，为众善之长。",
+        "position": {
+          "x": 0.699,
+          "y": 0.028,
+          "width": 0.284,
+          "height": 0.283
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-7.jpg",
+        "position": {
+          "x": 0.024,
+          "y": 0.365,
+          "width": 0.288,
+          "height": 0.278
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "子曰：为政以德，譬如北辰，居其所而众星共之。",
+        "position": {
+          "x": 0.367,
+          "y": 0.36,
+          "width": 0.278,
+          "height": 0.278
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "子曰：吾十有五而志于学，三十而立，四十而不惑。",
+        "position": {
+          "x": 0.692,
+          "y": 0.359,
+          "width": 0.283,
+          "height": 0.292
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-8.jpg",
+        "position": {
+          "x": 0.027,
+          "y": 0.692,
+          "width": 0.288,
+          "height": 0.29
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "何晏曰：仁者自处于厚，故能爱人。",
+        "position": {
+          "x": 0.362,
+          "y": 0.705,
+          "width": 0.27,
+          "height": 0.264
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-9.jpg",
+        "position": {
+          "x": 0.696,
+          "y": 0.693,
+          "width": 0.291,
+          "height": 0.278
+        },
+        "animation": "slide"
+      }
+    ],
+    [
+      {
+        "type": "image",
+        "content": "/images/page-10.jpg",
+        "position": {
+          "x": 0.04,
+          "y": 0.025,
+          "width": 0.27,
+          "height": 0.274
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "邢昺曰：学之为言效也，人性皆善而觉有先后。",
+        "position": {
+          "x": 0.373,
+          "y": 0.031,
+          "width": 0.265,
+          "height": 0.288
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "子曰：温故而知新，可以为师矣。",
+        "position": {
+          "x": 0.704,
+          "y": 0.031,
+          "width": 0.285,
+          "height": 0.27
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-1.jpg",
+        "position": {
+          "x": 0.039,
+          "y": 0.356,
+          "width": 0.271,
+          "height": 0.292
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "子曰：君子不重则不威，学则不固。",
+        "position": {
+          "x": 0.367,
+          "y": 0.366,
+          "width": 0.264,
+          "height": 0.288
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-2.jpg",
+        "position": {
+          "x": 0.696,
+          "y": 0.368,
+          "width": 0.282,
+          "height": 0.274
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "曾子曰：吾日三省吾身，为人谋而不忠乎？",
+        "position": {
+          "x": 0.038,
+          "y": 0.706,
+          "width": 0.282,
+          "height": 0.286
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "子曰：弟子入则孝，出则弟，谨而信，泛爱众。",
+        "position": {
+          "x": 0.356,
+          "y": 0.699,
+          "width": 0.273,
+          "height": 0.275
+        },
+        "animation": "fade"
+      }
+    ]
+  ],
+  "a1b2c3d4-e5f6-7890-abcd-ef1234567893": [
+    [
+      {
+        "type": "text",
+        "content": "道可道，非常道。名可名，非常名。",
+        "position": {
+          "x": 0.039,
+          "y": 0.024,
+          "width": 0.276,
+          "height": 0.432
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "上善若水，水善利万物而不争。",
+        "position": {
+          "x": 0.357,
+          "y": 0.03,
+          "width": 0.269,
+          "height": 0.452
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "河上公注：道谓经术政教之道也，非自然长生之道。",
+        "position": {
+          "x": 0.704,
+          "y": 0.025,
+          "width": 0.285,
+          "height": 0.456
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "无名天地之始，有名万物之母。",
+        "position": {
+          "x": 0.024,
+          "y": 0.525,
+          "width": 0.271,
+          "height": 0.431
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-1.jpg",
+        "position": {
+          "x": 0.36,
+          "y": 0.527,
+          "width": 0.271,
+          "height": 0.439
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-2.jpg",
+        "position": {
+          "x": 0.69,
+          "y": 0.521,
+          "width": 0.287,
+          "height": 0.437
+        },
+        "animation": "fade"
+      }
+    ],
+    [
+      {
+        "type": "image",
+        "content": "/images/page-3.jpg",
+        "position": {
+          "x": 0.024,
+          "y": 0.035,
+          "width": 0.206,
+          "height": 0.269
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-4.jpg",
+        "position": {
+          "x": 0.272,
+          "y": 0.038,
+          "width": 0.208,
+          "height": 0.277
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "天下皆知美之为美，斯恶已。皆知善之为善，斯不善已。",
+        "position": {
+          "x": 0.524,
+          "y": 0.024,
+          "width": 0.188,
+          "height": 0.291
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "注：此章明道之体用，有无相生之理。",
+        "position": {
+          "x": 0.777,
+          "y": 0.024,
+          "width": 0.192,
+          "height": 0.28
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-5.jpg",
+        "position": {
+          "x": 0.039,
+          "y": 0.371,
+          "width": 0.205,
+          "height": 0.273
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "道生一，一生二，二生三，三生万物。",
+        "position": {
+          "x": 0.288,
+          "y": 0.36,
+          "width": 0.191,
+          "height": 0.276
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "河上公曰：道以无为化，以自然成。",
+        "position": {
+          "x": 0.521,
+          "y": 0.367,
+          "width": 0.204,
+          "height": 0.265
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "大方无隅，大器晚成，大音希声，大象无形。",
+        "position": {
+          "x": 0.776,
+          "y": 0.359,
+          "width": 0.181,
+          "height": 0.284
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-6.jpg",
+        "position": {
+          "x": 0.024,
+          "y": 0.695,
+          "width": 0.187,
+          "height": 0.284
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "知人者智，自知者明。胜人者有力，自胜者强。",
+        "position": {
+          "x": 0.285,
+          "y": 0.69,
+          "width": 0.184,
+          "height": 0.28
+        },
+        "animation": "slide"
+      }
+    ],
+    [
+      {
+        "type": "image",
+        "content": "/images/page-7.jpg",
+        "position": {
+          "x": 0.024,
+          "y": 0.025,
+          "width": 0.181,
+          "height": 0.29
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "天之道，不争而善胜，不言而善应。",
+        "position": {
+          "x": 0.286,
+          "y": 0.028,
+          "width": 0.197,
+          "height": 0.281
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "河上公注：治国当如烹小鲜，不可烦扰。",
+        "position": {
+          "x": 0.53,
+          "y": 0.022,
+          "width": 0.183,
+          "height": 0.29
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "致虚极，守静笃。万物并作，吾以观复。",
+        "position": {
+          "x": 0.777,
+          "y": 0.03,
+          "width": 0.202,
+          "height": 0.293
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-8.jpg",
+        "position": {
+          "x": 0.022,
+          "y": 0.37,
+          "width": 0.186,
+          "height": 0.271
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-9.jpg",
+        "position": {
+          "x": 0.272,
+          "y": 0.36,
+          "width": 0.184,
+          "height": 0.276
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "祸兮福之所倚，福兮祸之所伏。",
+        "position": {
+          "x": 0.538,
+          "y": 0.358,
+          "width": 0.195,
+          "height": 0.27
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "人法地，地法天，天法道，道法自然。",
+        "position": {
+          "x": 0.781,
+          "y": 0.361,
+          "width": 0.196,
+          "height": 0.273
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-10.jpg",
+        "position": {
+          "x": 0.036,
+          "y": 0.703,
+          "width": 0.203,
+          "height": 0.289
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "河上公曰：道性自然，无所法也。",
+        "position": {
+          "x": 0.282,
+          "y": 0.687,
+          "width": 0.182,
+          "height": 0.275
+        },
+        "animation": "fade"
+      }
+    ],
+    [
+      {
+        "type": "text",
+        "content": "将欲翕之，必固张之。将欲弱之，必固强之。",
+        "position": {
+          "x": 0.029,
+          "y": 0.039,
+          "width": 0.271,
+          "height": 0.292
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-1.jpg",
+        "position": {
+          "x": 0.354,
+          "y": 0.03,
+          "width": 0.279,
+          "height": 0.292
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "柔弱胜刚强。鱼不可脱于渊，国之利器不可以示人。",
+        "position": {
+          "x": 0.704,
+          "y": 0.038,
+          "width": 0.279,
+          "height": 0.271
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-2.jpg",
+        "position": {
+          "x": 0.04,
+          "y": 0.368,
+          "width": 0.271,
+          "height": 0.269
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "注：此言守柔处下之道，乃长生久视之术。",
+        "position": {
+          "x": 0.369,
+          "y": 0.366,
+          "width": 0.291,
+          "height": 0.271
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "合抱之木，生于毫末；九层之台，起于累土。",
+        "position": {
+          "x": 0.689,
+          "y": 0.354,
+          "width": 0.272,
+          "height": 0.279
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-3.jpg",
+        "position": {
+          "x": 0.026,
+          "y": 0.698,
+          "width": 0.29,
+          "height": 0.27
+        },
+        "animation": "slide"
+      }
+    ],
+    [
+      {
+        "type": "image",
+        "content": "/images/page-4.jpg",
+        "position": {
+          "x": 0.025,
+          "y": 0.028,
+          "width": 0.209,
+          "height": 0.285
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-5.jpg",
+        "position": {
+          "x": 0.286,
+          "y": 0.03,
+          "width": 0.187,
+          "height": 0.275
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "信言不美，美言不信。善者不辩，辩者不善。",
+        "position": {
+          "x": 0.524,
+          "y": 0.033,
+          "width": 0.182,
+          "height": 0.269
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "河上公注：上德不德，是以有德；下德不失德，是以无德。",
+        "position": {
+          "x": 0.782,
+          "y": 0.021,
+          "width": 0.205,
+          "height": 0.269
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-6.jpg",
+        "position": {
+          "x": 0.034,
+          "y": 0.365,
+          "width": 0.203,
+          "height": 0.282
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-7.jpg",
+        "position": {
+          "x": 0.274,
+          "y": 0.355,
+          "width": 0.199,
+          "height": 0.28
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "道可道，非常道。名可名，非常名。",
+        "position": {
+          "x": 0.522,
+          "y": 0.364,
+          "width": 0.199,
+          "height": 0.292
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "上善若水，水善利万物而不争。",
+        "position": {
+          "x": 0.777,
+          "y": 0.362,
+          "width": 0.199,
+          "height": 0.271
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "河上公注：道谓经术政教之道也，非自然长生之道。",
+        "position": {
+          "x": 0.021,
+          "y": 0.698,
+          "width": 0.203,
+          "height": 0.291
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "无名天地之始，有名万物之母。",
+        "position": {
+          "x": 0.277,
+          "y": 0.703,
+          "width": 0.206,
+          "height": 0.291
+        },
+        "animation": "zoom"
+      }
+    ],
+    [
+      {
+        "type": "image",
+        "content": "/images/page-8.jpg",
+        "position": {
+          "x": 0.025,
+          "y": 0.037,
+          "width": 0.203,
+          "height": 0.273
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "天下皆知美之为美，斯恶已。皆知善之为善，斯不善已。",
+        "position": {
+          "x": 0.276,
+          "y": 0.025,
+          "width": 0.205,
+          "height": 0.279
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "注：此章明道之体用，有无相生之理。",
+        "position": {
+          "x": 0.534,
+          "y": 0.025,
+          "width": 0.199,
+          "height": 0.286
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-9.jpg",
+        "position": {
+          "x": 0.785,
+          "y": 0.025,
+          "width": 0.2,
+          "height": 0.266
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-10.jpg",
+        "position": {
+          "x": 0.033,
+          "y": 0.367,
+          "width": 0.191,
+          "height": 0.269
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-1.jpg",
+        "position": {
+          "x": 0.282,
+          "y": 0.368,
+          "width": 0.2,
+          "height": 0.279
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "道生一，一生二，二生三，三生万物。",
+        "position": {
+          "x": 0.531,
+          "y": 0.367,
+          "width": 0.203,
+          "height": 0.267
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "河上公曰：道以无为化，以自然成。",
+        "position": {
+          "x": 0.77,
+          "y": 0.37,
+          "width": 0.199,
+          "height": 0.28
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "大方无隅，大器晚成，大音希声，大象无形。",
+        "position": {
+          "x": 0.024,
+          "y": 0.704,
+          "width": 0.199,
+          "height": 0.288
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "知人者智，自知者明。胜人者有力，自胜者强。",
+        "position": {
+          "x": 0.281,
+          "y": 0.697,
+          "width": 0.186,
+          "height": 0.287
+        },
+        "animation": "zoom"
+      }
+    ],
+    [
+      {
+        "type": "text",
+        "content": "天之道，不争而善胜，不言而善应。",
+        "position": {
+          "x": 0.033,
+          "y": 0.036,
+          "width": 0.283,
+          "height": 0.43
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-2.jpg",
+        "position": {
+          "x": 0.354,
+          "y": 0.032,
+          "width": 0.264,
+          "height": 0.439
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-3.jpg",
+        "position": {
+          "x": 0.693,
+          "y": 0.033,
+          "width": 0.266,
+          "height": 0.442
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "河上公注：治国当如烹小鲜，不可烦扰。",
+        "position": {
+          "x": 0.021,
+          "y": 0.521,
+          "width": 0.288,
+          "height": 0.457
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "致虚极，守静笃。万物并作，吾以观复。",
+        "position": {
+          "x": 0.359,
+          "y": 0.524,
+          "width": 0.268,
+          "height": 0.452
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "祸兮福之所倚，福兮祸之所伏。",
+        "position": {
+          "x": 0.705,
+          "y": 0.524,
+          "width": 0.264,
+          "height": 0.45
+        },
+        "animation": "fade"
+      }
+    ],
+    [
+      {
+        "type": "image",
+        "content": "/images/page-4.jpg",
+        "position": {
+          "x": 0.034,
+          "y": 0.027,
+          "width": 0.273,
+          "height": 0.264
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "人法地，地法天，天法道，道法自然。",
+        "position": {
+          "x": 0.367,
+          "y": 0.032,
+          "width": 0.28,
+          "height": 0.276
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-5.jpg",
+        "position": {
+          "x": 0.7,
+          "y": 0.022,
+          "width": 0.289,
+          "height": 0.269
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "河上公曰：道性自然，无所法也。",
+        "position": {
+          "x": 0.025,
+          "y": 0.363,
+          "width": 0.275,
+          "height": 0.287
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "将欲翕之，必固张之。将欲弱之，必固强之。",
+        "position": {
+          "x": 0.368,
+          "y": 0.355,
+          "width": 0.275,
+          "height": 0.277
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-6.jpg",
+        "position": {
+          "x": 0.703,
+          "y": 0.363,
+          "width": 0.278,
+          "height": 0.268
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "柔弱胜刚强。鱼不可脱于渊，国之利器不可以示人。",
+        "position": {
+          "x": 0.02,
+          "y": 0.689,
+          "width": 0.277,
+          "height": 0.27
+        },
+        "animation": "zoom"
+      }
+    ],
+    [
+      {
+        "type": "text",
+        "content": "注：此言守柔处下之道，乃长生久视之术。",
+        "position": {
+          "x": 0.034,
+          "y": 0.025,
+          "width": 0.293,
+          "height": 0.438
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "合抱之木，生于毫末；九层之台，起于累土。",
+        "position": {
+          "x": 0.362,
+          "y": 0.031,
+          "width": 0.277,
+          "height": 0.448
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "信言不美，美言不信。善者不辩，辩者不善。",
+        "position": {
+          "x": 0.687,
+          "y": 0.032,
+          "width": 0.279,
+          "height": 0.433
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "河上公注：上德不德，是以有德；下德不失德，是以无德。",
+        "position": {
+          "x": 0.029,
+          "y": 0.528,
+          "width": 0.283,
+          "height": 0.454
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-7.jpg",
+        "position": {
+          "x": 0.357,
+          "y": 0.53,
+          "width": 0.273,
+          "height": 0.457
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-8.jpg",
+        "position": {
+          "x": 0.705,
+          "y": 0.524,
+          "width": 0.28,
+          "height": 0.447
+        },
+        "animation": "slide"
+      }
+    ]
+  ],
+  "a1b2c3d4-e5f6-7890-abcd-ef1234567894": [
+    [
+      {
+        "type": "text",
+        "content": "又东三百里，曰基山，其阳多玉，其阴多怪木。",
+        "position": {
+          "x": 0.038,
+          "y": 0.037,
+          "width": 0.279,
+          "height": 0.453
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "郭璞注：此经所记山川，多不可考，然存古之名。",
+        "position": {
+          "x": 0.357,
+          "y": 0.037,
+          "width": 0.267,
+          "height": 0.439
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-1.jpg",
+        "position": {
+          "x": 0.694,
+          "y": 0.03,
+          "width": 0.274,
+          "height": 0.434
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "有兽焉，其状如狐而九尾，其音如婴儿，能食人。",
+        "position": {
+          "x": 0.036,
+          "y": 0.532,
+          "width": 0.288,
+          "height": 0.446
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-2.jpg",
+        "position": {
+          "x": 0.357,
+          "y": 0.528,
+          "width": 0.279,
+          "height": 0.442
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "南山经之首曰鹊山，其首曰招摇之山，临于西海之上。",
+        "position": {
+          "x": 0.696,
+          "y": 0.528,
+          "width": 0.271,
+          "height": 0.45
+        },
+        "animation": "slide"
+      }
+    ],
+    [
+      {
+        "type": "image",
+        "content": "/images/page-3.jpg",
+        "position": {
+          "x": 0.035,
+          "y": 0.023,
+          "width": 0.284,
+          "height": 0.279
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "注：古之巫书，记四海异物，博物者所珍。",
+        "position": {
+          "x": 0.366,
+          "y": 0.023,
+          "width": 0.268,
+          "height": 0.269
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "又西三百五十里，曰玉山，是西王母所居也。",
+        "position": {
+          "x": 0.697,
+          "y": 0.03,
+          "width": 0.264,
+          "height": 0.275
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-4.jpg",
+        "position": {
+          "x": 0.034,
+          "y": 0.371,
+          "width": 0.264,
+          "height": 0.275
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "郭璞曰：山海经所载，虽多怪诞，亦有地理可征者。",
+        "position": {
+          "x": 0.362,
+          "y": 0.368,
+          "width": 0.287,
+          "height": 0.266
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "有鸟焉，其状如鸡，五采而文，名曰凤皇。",
+        "position": {
+          "x": 0.698,
+          "y": 0.356,
+          "width": 0.276,
+          "height": 0.288
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-5.jpg",
+        "position": {
+          "x": 0.027,
+          "y": 0.694,
+          "width": 0.29,
+          "height": 0.284
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "又北二百里，曰发鸠之山，其上多柘木。有鸟焉，名曰精卫。",
+        "position": {
+          "x": 0.37,
+          "y": 0.705,
+          "width": 0.274,
+          "height": 0.279
+        },
+        "animation": "zoom"
+      }
+    ],
+    [
+      {
+        "type": "text",
+        "content": "袁珂校注：此经文多讹夺，今据他本校正。",
+        "position": {
+          "x": 0.023,
+          "y": 0.022,
+          "width": 0.266,
+          "height": 0.443
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-6.jpg",
+        "position": {
+          "x": 0.361,
+          "y": 0.035,
+          "width": 0.274,
+          "height": 0.446
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-7.jpg",
+        "position": {
+          "x": 0.694,
+          "y": 0.026,
+          "width": 0.277,
+          "height": 0.458
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "东海之外大壑，少昊之国。少昊孺帝颛顼于此。",
+        "position": {
+          "x": 0.023,
+          "y": 0.538,
+          "width": 0.283,
+          "height": 0.442
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "郭璞注：精卫常衔西山木石以填东海，志在不屈。",
+        "position": {
+          "x": 0.355,
+          "y": 0.524,
+          "width": 0.28,
+          "height": 0.456
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "有木焉，其状如牛，引之有皮，若缨黄蛇。",
+        "position": {
+          "x": 0.694,
+          "y": 0.537,
+          "width": 0.271,
+          "height": 0.446
+        },
+        "animation": "slide"
+      }
+    ],
+    [
+      {
+        "type": "image",
+        "content": "/images/page-8.jpg",
+        "position": {
+          "x": 0.037,
+          "y": 0.038,
+          "width": 0.279,
+          "height": 0.277
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-9.jpg",
+        "position": {
+          "x": 0.364,
+          "y": 0.021,
+          "width": 0.268,
+          "height": 0.269
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-10.jpg",
+        "position": {
+          "x": 0.688,
+          "y": 0.027,
+          "width": 0.28,
+          "height": 0.281
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "又东四百里，曰亶爰之山，多水，无草木，不可以上。",
+        "position": {
+          "x": 0.023,
+          "y": 0.363,
+          "width": 0.281,
+          "height": 0.291
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "注：山经叙五方山川，虽间出异闻，实地理之祖。",
+        "position": {
+          "x": 0.357,
+          "y": 0.357,
+          "width": 0.285,
+          "height": 0.292
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "西王母其状如人，豹尾虎齿而善啸，蓬发戴胜。",
+        "position": {
+          "x": 0.695,
+          "y": 0.365,
+          "width": 0.289,
+          "height": 0.284
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-1.jpg",
+        "position": {
+          "x": 0.035,
+          "y": 0.706,
+          "width": 0.267,
+          "height": 0.28
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "又西北四百二十里，曰钟山，其子曰鼓，其状如人面龙身。",
+        "position": {
+          "x": 0.364,
+          "y": 0.701,
+          "width": 0.269,
+          "height": 0.264
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "郭璞曰：此盖古之图腾遗说，非尽无据。",
+        "position": {
+          "x": 0.703,
+          "y": 0.705,
+          "width": 0.274,
+          "height": 0.277
+        },
+        "animation": "slide"
+      }
+    ],
+    [
+      {
+        "type": "image",
+        "content": "/images/page-2.jpg",
+        "position": {
+          "x": 0.025,
+          "y": 0.035,
+          "width": 0.291,
+          "height": 0.437
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "氐人国在建木西，其为人人面而鱼身，无足。",
+        "position": {
+          "x": 0.368,
+          "y": 0.021,
+          "width": 0.271,
+          "height": 0.444
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "袁珂按：山海经所记异国，或即远古部族之传说。",
+        "position": {
+          "x": 0.692,
+          "y": 0.029,
+          "width": 0.278,
+          "height": 0.439
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-3.jpg",
+        "position": {
+          "x": 0.026,
+          "y": 0.525,
+          "width": 0.265,
+          "height": 0.441
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "又南三百里，曰天帝之山，多棕枏，多犀象。",
+        "position": {
+          "x": 0.361,
+          "y": 0.538,
+          "width": 0.267,
+          "height": 0.456
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "有草焉，其状如葵而臭，名曰薰草，可以已疠。",
+        "position": {
+          "x": 0.697,
+          "y": 0.531,
+          "width": 0.291,
+          "height": 0.434
+        },
+        "animation": "zoom"
+      }
+    ],
+    [
+      {
+        "type": "image",
+        "content": "/images/page-4.jpg",
+        "position": {
+          "x": 0.04,
+          "y": 0.03,
+          "width": 0.284,
+          "height": 0.276
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "又东三百里，曰基山，其阳多玉，其阴多怪木。",
+        "position": {
+          "x": 0.37,
+          "y": 0.024,
+          "width": 0.27,
+          "height": 0.272
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "郭璞注：此经所记山川，多不可考，然存古之名。",
+        "position": {
+          "x": 0.7,
+          "y": 0.031,
+          "width": 0.269,
+          "height": 0.271
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "有兽焉，其状如狐而九尾，其音如婴儿，能食人。",
+        "position": {
+          "x": 0.037,
+          "y": 0.365,
+          "width": 0.272,
+          "height": 0.273
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "南山经之首曰鹊山，其首曰招摇之山，临于西海之上。",
+        "position": {
+          "x": 0.357,
+          "y": 0.356,
+          "width": 0.27,
+          "height": 0.285
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-5.jpg",
+        "position": {
+          "x": 0.691,
+          "y": 0.358,
+          "width": 0.283,
+          "height": 0.282
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-6.jpg",
+        "position": {
+          "x": 0.037,
+          "y": 0.696,
+          "width": 0.279,
+          "height": 0.282
+        },
+        "animation": "zoom"
+      }
+    ],
+    [
+      {
+        "type": "text",
+        "content": "注：古之巫书，记四海异物，博物者所珍。",
+        "position": {
+          "x": 0.037,
+          "y": 0.032,
+          "width": 0.271,
+          "height": 0.28
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "又西三百五十里，曰玉山，是西王母所居也。",
+        "position": {
+          "x": 0.367,
+          "y": 0.036,
+          "width": 0.268,
+          "height": 0.278
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-7.jpg",
+        "position": {
+          "x": 0.695,
+          "y": 0.023,
+          "width": 0.292,
+          "height": 0.271
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-8.jpg",
+        "position": {
+          "x": 0.02,
+          "y": 0.359,
+          "width": 0.285,
+          "height": 0.265
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "郭璞曰：山海经所载，虽多怪诞，亦有地理可征者。",
+        "position": {
+          "x": 0.362,
+          "y": 0.37,
+          "width": 0.275,
+          "height": 0.269
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "有鸟焉，其状如鸡，五采而文，名曰凤皇。",
+        "position": {
+          "x": 0.688,
+          "y": 0.369,
+          "width": 0.293,
+          "height": 0.272
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-9.jpg",
+        "position": {
+          "x": 0.031,
+          "y": 0.705,
+          "width": 0.281,
+          "height": 0.288
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "又北二百里，曰发鸠之山，其上多柘木。有鸟焉，名曰精卫。",
+        "position": {
+          "x": 0.366,
+          "y": 0.698,
+          "width": 0.279,
+          "height": 0.277
+        },
+        "animation": "fade"
+      }
+    ],
+    [
+      {
+        "type": "image",
+        "content": "/images/page-10.jpg",
+        "position": {
+          "x": 0.021,
+          "y": 0.039,
+          "width": 0.27,
+          "height": 0.439
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "袁珂校注：此经文多讹夺，今据他本校正。",
+        "position": {
+          "x": 0.365,
+          "y": 0.026,
+          "width": 0.28,
+          "height": 0.449
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "东海之外大壑，少昊之国。少昊孺帝颛顼于此。",
+        "position": {
+          "x": 0.694,
+          "y": 0.029,
+          "width": 0.269,
+          "height": 0.455
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "郭璞注：精卫常衔西山木石以填东海，志在不屈。",
+        "position": {
+          "x": 0.032,
+          "y": 0.537,
+          "width": 0.286,
+          "height": 0.448
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-1.jpg",
+        "position": {
+          "x": 0.359,
+          "y": 0.536,
+          "width": 0.285,
+          "height": 0.439
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "有木焉，其状如牛，引之有皮，若缨黄蛇。",
+        "position": {
+          "x": 0.691,
+          "y": 0.532,
+          "width": 0.269,
+          "height": 0.435
+        },
+        "animation": "zoom"
+      }
+    ],
+    [
+      {
+        "type": "image",
+        "content": "/images/page-2.jpg",
+        "position": {
+          "x": 0.031,
+          "y": 0.022,
+          "width": 0.264,
+          "height": 0.27
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "又东四百里，曰亶爰之山，多水，无草木，不可以上。",
+        "position": {
+          "x": 0.354,
+          "y": 0.026,
+          "width": 0.288,
+          "height": 0.268
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-3.jpg",
+        "position": {
+          "x": 0.698,
+          "y": 0.034,
+          "width": 0.273,
+          "height": 0.288
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-4.jpg",
+        "position": {
+          "x": 0.025,
+          "y": 0.367,
+          "width": 0.286,
+          "height": 0.289
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "注：山经叙五方山川，虽间出异闻，实地理之祖。",
+        "position": {
+          "x": 0.366,
+          "y": 0.361,
+          "width": 0.278,
+          "height": 0.277
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-5.jpg",
+        "position": {
+          "x": 0.694,
+          "y": 0.356,
+          "width": 0.289,
+          "height": 0.27
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "西王母其状如人，豹尾虎齿而善啸，蓬发戴胜。",
+        "position": {
+          "x": 0.03,
+          "y": 0.697,
+          "width": 0.29,
+          "height": 0.278
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "又西北四百二十里，曰钟山，其子曰鼓，其状如人面龙身。",
+        "position": {
+          "x": 0.359,
+          "y": 0.7,
+          "width": 0.265,
+          "height": 0.277
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "郭璞曰：此盖古之图腾遗说，非尽无据。",
+        "position": {
+          "x": 0.705,
+          "y": 0.698,
+          "width": 0.287,
+          "height": 0.285
+        },
+        "animation": "zoom"
+      }
+    ],
+    [
+      {
+        "type": "image",
+        "content": "/images/page-6.jpg",
+        "position": {
+          "x": 0.036,
+          "y": 0.02,
+          "width": 0.288,
+          "height": 0.28
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-7.jpg",
+        "position": {
+          "x": 0.354,
+          "y": 0.022,
+          "width": 0.268,
+          "height": 0.27
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "氐人国在建木西，其为人人面而鱼身，无足。",
+        "position": {
+          "x": 0.69,
+          "y": 0.031,
+          "width": 0.292,
+          "height": 0.283
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-8.jpg",
+        "position": {
+          "x": 0.04,
+          "y": 0.363,
+          "width": 0.291,
+          "height": 0.284
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "袁珂按：山海经所记异国，或即远古部族之传说。",
+        "position": {
+          "x": 0.355,
+          "y": 0.367,
+          "width": 0.279,
+          "height": 0.276
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-9.jpg",
+        "position": {
+          "x": 0.701,
+          "y": 0.358,
+          "width": 0.289,
+          "height": 0.283
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "又南三百里，曰天帝之山，多棕枏，多犀象。",
+        "position": {
+          "x": 0.039,
+          "y": 0.693,
+          "width": 0.281,
+          "height": 0.271
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "text",
+        "content": "有草焉，其状如葵而臭，名曰薰草，可以已疠。",
+        "position": {
+          "x": 0.362,
+          "y": 0.687,
+          "width": 0.264,
+          "height": 0.279
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "又东三百里，曰基山，其阳多玉，其阴多怪木。",
+        "position": {
+          "x": 0.695,
+          "y": 0.701,
+          "width": 0.289,
+          "height": 0.287
+        },
+        "animation": "fade"
+      }
+    ],
+    [
+      {
+        "type": "text",
+        "content": "郭璞注：此经所记山川，多不可考，然存古之名。",
+        "position": {
+          "x": 0.038,
+          "y": 0.032,
+          "width": 0.281,
+          "height": 0.264
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-10.jpg",
+        "position": {
+          "x": 0.356,
+          "y": 0.024,
+          "width": 0.283,
+          "height": 0.268
+        },
+        "animation": "slide"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-1.jpg",
+        "position": {
+          "x": 0.701,
+          "y": 0.036,
+          "width": 0.276,
+          "height": 0.29
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-2.jpg",
+        "position": {
+          "x": 0.022,
+          "y": 0.361,
+          "width": 0.27,
+          "height": 0.285
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "有兽焉，其状如狐而九尾，其音如婴儿，能食人。",
+        "position": {
+          "x": 0.359,
+          "y": 0.365,
+          "width": 0.274,
+          "height": 0.291
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "南山经之首曰鹊山，其首曰招摇之山，临于西海之上。",
+        "position": {
+          "x": 0.7,
+          "y": 0.37,
+          "width": 0.277,
+          "height": 0.278
+        },
+        "animation": "zoom"
+      },
+      {
+        "type": "text",
+        "content": "注：古之巫书，记四海异物，博物者所珍。",
+        "position": {
+          "x": 0.04,
+          "y": 0.698,
+          "width": 0.278,
+          "height": 0.289
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "text",
+        "content": "又西三百五十里，曰玉山，是西王母所居也。",
+        "position": {
+          "x": 0.371,
+          "y": 0.692,
+          "width": 0.267,
+          "height": 0.28
+        },
+        "animation": "fade"
+      },
+      {
+        "type": "image",
+        "content": "/images/page-3.jpg",
+        "position": {
+          "x": 0.704,
+          "y": 0.702,
+          "width": 0.279,
+          "height": 0.281
+        },
+        "animation": "zoom"
+      }
+    ]
+  ]
+}

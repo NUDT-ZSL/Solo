@@ -1,0 +1,47 @@
+[
+  {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "title": "诗经注疏",
+    "author": "毛亨 郑玄",
+    "era": "先秦",
+    "description": "《诗经注疏》为汉代毛亨传、郑玄笺之经典注本，汇集先秦诗歌三百余篇，为儒家经典之首。其注疏详备，为后世治诗者所宗。",
+    "coverUrl": "/images/cover-1.jpg",
+    "pageCount": 8
+  },
+  {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567891",
+    "title": "楚辞集注",
+    "author": "王逸 朱熹",
+    "era": "西汉",
+    "description": "《楚辞集注》收录屈原及后世仿作之辞赋，王逸章句与朱熹集注并行，为楚辞学研究之双璧。",
+    "coverUrl": "/images/cover-2.jpg",
+    "pageCount": 10
+  },
+  {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567892",
+    "title": "论语正义",
+    "author": "何晏 邢昺",
+    "era": "东汉",
+    "description": "《论语正义》以何晏集解为本，邢昺疏义辅之，阐发孔门言行微旨，为经学要籍。",
+    "coverUrl": "/images/cover-3.jpg",
+    "pageCount": 7
+  },
+  {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567893",
+    "title": "道德经河上公注",
+    "author": "河上公",
+    "era": "魏晋",
+    "description": "河上公注《道德经》，以修身治国为旨，分八十一章，言简意深，为道家注疏之鼻祖。",
+    "coverUrl": "/images/cover-4.jpg",
+    "pageCount": 9
+  },
+  {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567894",
+    "title": "山海经校注",
+    "author": "郭璞 袁珂",
+    "era": "唐代",
+    "description": "《山海经校注》以郭璞古注为基，袁珂详加校勘，记载山川异物、神话传说，为上古地理奇书。",
+    "coverUrl": "/images/cover-5.jpg",
+    "pageCount": 11
+  }
+]
