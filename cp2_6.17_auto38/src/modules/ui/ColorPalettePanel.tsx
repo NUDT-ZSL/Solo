@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { Region, HSV } from '../imageProcessor/types';
 import { PRESET_PALETTES } from '../imageProcessor/presetPalettes';
 import { ColorFiller } from '../imageProcessor/colorFiller';
@@ -22,6 +22,24 @@ interface ColorPalettePanelProps {
 
 const WHEEL_SIZE = 140;
 const HSV_SIZE = 200;
+const WHEEL_COLOR_COUNT = 16;
+
+const generateWheelColors = (): { h: number; s: number; hex: string }[] => {
+  const colors: { h: number; s: number; hex: string }[] = [];
+  const sValues = [0.9, 0.7];
+  for (let ring = 0; ring < 2; ring++) {
+    for (let i = 0; i < WHEEL_COLOR_COUNT / 2; i++) {
+      const h = (i / (WHEEL_COLOR_COUNT / 2));
+      const s = sValues[ring];
+      colors.push({
+        h,
+        s,
+        hex: hsvToHex(h, s, 1),
+      });
+    }
+  }
+  return colors;
+};
 
 export default function ColorPalettePanel({
   regions,
@@ -32,51 +50,41 @@ export default function ColorPalettePanel({
   activePaletteName,
   onPaletteApply,
 }: ColorPalettePanelProps) {
-  const wheelCanvasRef = useRef<HTMLCanvasElement>(null);
   const hsvCanvasRef = useRef<HTMLCanvasElement>(null);
   const hsvSliderRef = useRef<HTMLDivElement>(null);
 
-  const [wheelIndicator, setWheelIndicator] = useState({ x: WHEEL_SIZE / 2, y: WHEEL_SIZE / 2 });
+  const [selectedWheelIndex, setSelectedWheelIndex] = useState<number | null>(null);
   const [hsvIndicator, setHsvIndicator] = useState({ x: HSV_SIZE / 2, y: HSV_SIZE / 2 });
   const [hsvValue, setHsvValue] = useState(1);
   const [currentHSV, setCurrentHSV] = useState<HSV>({ h: 0, s: 1, v: 1 });
   const [currentColor, setCurrentColor] = useState('#ff0000');
 
-  const isDraggingWheelRef = useRef(false);
+  const wheelColors = useMemo(() => generateWheelColors(), []);
   const isDraggingHsvRef = useRef(false);
   const isDraggingSliderRef = useRef(false);
 
-  useEffect(() => {
-    const canvas = wheelCanvasRef.current;
-    if (!canvas) return;
+  const handleColorUpdate = useCallback(
+    (h: number, s: number, v: number) => {
+      const color = hsvToHex(h, s, v);
+      setCurrentHSV({ h, s, v });
+      setCurrentColor(color);
 
-    canvas.width = WHEEL_SIZE;
-    canvas.height = WHEEL_SIZE;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const cx = WHEEL_SIZE / 2;
-    const cy = WHEEL_SIZE / 2;
-    const radius = WHEEL_SIZE / 2;
-
-    for (let y = 0; y < WHEEL_SIZE; y++) {
-      for (let x = 0; x < WHEEL_SIZE; x++) {
-        const dx = x - cx;
-        const dy = y - cy;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > radius) continue;
-
-        const angle = Math.atan2(dy, dx);
-        const h = (angle + Math.PI) / (2 * Math.PI);
-        const s = dist / radius;
-        const v = 1;
-        const { r, g, b } = hsvToRgb(h, s, v);
-
-        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-        ctx.fillRect(x, y, 1, 1);
+      if (selectedRegion && colorFiller) {
+        colorFiller.fillRegion(selectedRegion.id, color, false);
+        onPaletteApply(null);
       }
-    }
-  }, []);
+    },
+    [selectedRegion, colorFiller, onPaletteApply],
+  );
+
+  const handleColorSwatchClick = useCallback(
+    (h: number, s: number, index: number) => {
+      if (!isImageLoaded) return;
+      setSelectedWheelIndex(index);
+      handleColorUpdate(h, s, hsvValue);
+    },
+    [isImageLoaded, hsvValue, handleColorUpdate],
+  );
 
   const drawHsvCircle = useCallback((v: number) => {
     const canvas = hsvCanvasRef.current;
@@ -131,31 +139,19 @@ export default function ColorPalettePanel({
         y: cy + Math.sin(angle) * dist,
       });
 
-      const wcx = WHEEL_SIZE / 2;
-      const wcy = WHEEL_SIZE / 2;
-      const wradius = WHEEL_SIZE / 2;
-      const wangle = hsv.h * 2 * Math.PI - Math.PI;
-      const wdist = Math.min(hsv.s * wradius, wradius);
-      setWheelIndicator({
-        x: wcx + Math.cos(wangle) * wdist,
-        y: wcy + Math.sin(wangle) * wdist,
+      let closestIndex = 0;
+      let closestDist = Infinity;
+      wheelColors.forEach((c, i) => {
+        const d = Math.abs(c.h - hsv.h);
+        const normDist = Math.min(d, 1 - d) + Math.abs(c.s - hsv.s) * 0.5;
+        if (normDist < closestDist) {
+          closestDist = normDist;
+          closestIndex = i;
+        }
       });
+      setSelectedWheelIndex(closestIndex);
     }
-  }, [selectedRegion, drawHsvCircle]);
-
-  const handleColorUpdate = useCallback(
-    (h: number, s: number, v: number) => {
-      const color = hsvToHex(h, s, v);
-      setCurrentHSV({ h, s, v });
-      setCurrentColor(color);
-
-      if (selectedRegion && colorFiller) {
-        colorFiller.fillRegion(selectedRegion.id, color, false);
-        onPaletteApply(null);
-      }
-    },
-    [selectedRegion, colorFiller, onPaletteApply],
-  );
+  }, [selectedRegion, drawHsvCircle, wheelColors]);
 
   const getHsvFromPos = (x: number, y: number, size: number) => {
     const cx = size / 2;
@@ -168,46 +164,6 @@ export default function ColorPalettePanel({
     const h = (angle + Math.PI) / (2 * Math.PI);
     const s = dist / radius;
     return { h, s, cx, cy, dist };
-  };
-
-  const handleWheelClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isImageLoaded) return;
-    const canvas = wheelCanvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-
-    const cx = WHEEL_SIZE / 2;
-    const cy = WHEEL_SIZE / 2;
-    const radius = WHEEL_SIZE / 2;
-    const dx = x - cx;
-    const dy = y - cy;
-    const dist = Math.min(Math.sqrt(dx * dx + dy * dy), radius);
-    if (dist === 0) return;
-
-    const { h, s } = getHsvFromPos(x, y, WHEEL_SIZE);
-    setWheelIndicator({
-      x: cx + (dx / Math.sqrt(dx * dx + dy * dy)) * dist,
-      y: cy + (dy / Math.sqrt(dx * dx + dy * dy)) * dist,
-    });
-    handleColorUpdate(h, s, hsvValue);
-  };
-
-  const handleWheelMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isImageLoaded) return;
-    isDraggingWheelRef.current = true;
-    handleWheelClick(e);
-  };
-
-  const handleWheelMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDraggingWheelRef.current) return;
-    handleWheelClick(e);
-  };
-
-  const handleWheelMouseUp = () => {
-    isDraggingWheelRef.current = false;
   };
 
   const handleHsvClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -277,7 +233,6 @@ export default function ColorPalettePanel({
 
   useEffect(() => {
     const handleUp = () => {
-      isDraggingWheelRef.current = false;
       isDraggingHsvRef.current = false;
       isDraggingSliderRef.current = false;
     };
@@ -348,45 +303,27 @@ export default function ColorPalettePanel({
   };
 
   return (
-    <div
-      className="panel-wrapper"
-      onMouseUp={handleWheelMouseUp}
-      onMouseLeave={handleWheelMouseUp}
-    >
+    <div className="panel-wrapper">
       <div className="panel-section">
         <div className="panel-title">配色轮盘</div>
-        <div className="color-wheel-container">
-          <div
-            className="color-wheel"
-            style={{ opacity: isImageLoaded ? 1 : 0.4 }}
-          >
-            <canvas
-              ref={wheelCanvasRef}
-              onClick={handleWheelClick}
-              onMouseDown={handleWheelMouseDown}
-              onMouseMove={handleWheelMouseMove}
-              onMouseUp={handleWheelMouseUp}
-            />
-            <div
-              className="color-wheel-indicator"
-              style={{
-                left: wheelIndicator.x,
-                top: wheelIndicator.y,
-                backgroundColor: currentColor,
-              }}
-            />
-          </div>
-          <div
-            className="color-wheel-hex-label"
-            style={{
-              backgroundColor: currentColor,
-              color: (() => {
-                const { r, g, b } = hexToRgb(currentColor);
-                return getLuminance(r, g, b) > 0.5 ? 'rgba(30, 30, 30, 0.9)' : 'rgba(255, 255, 255, 0.9)';
-              })(),
-            }}
-          >
-            {currentColor.toUpperCase()}
+        <div className="color-wheel-container" style={{ opacity: isImageLoaded ? 1 : 0.4 }}>
+          <div className="color-swatch-grid">
+            {wheelColors.map((colorInfo, index) => {
+              const { r, g, b } = hexToRgb(colorInfo.hex);
+              const textColor = getLuminance(r, g, b) > 0.5 ? 'rgba(30, 30, 30, 0.9)' : 'rgba(255, 255, 255, 0.9)';
+              return (
+                <div
+                  key={index}
+                  className={`color-swatch-item ${selectedWheelIndex === index ? 'selected' : ''}`}
+                  style={{ backgroundColor: colorInfo.hex }}
+                  onClick={() => handleColorSwatchClick(colorInfo.h, colorInfo.s, index)}
+                >
+                  <span className="color-swatch-label" style={{ color: textColor }}>
+                    {colorInfo.hex.toUpperCase()}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -404,21 +341,13 @@ export default function ColorPalettePanel({
             >
               <div className="palette-name">{palette.name}</div>
               <div className="palette-grid">
-                {palette.colors.map((color, i) => {
-                  const { r, g, b } = hexToRgb(color);
-                  const textColor = getLuminance(r, g, b) > 0.5 ? 'rgba(30, 30, 30, 0.85)' : 'rgba(255, 255, 255, 0.85)';
-                  return (
-                    <div
-                      key={i}
-                      className="palette-swatch"
-                      style={{ backgroundColor: color }}
-                    >
-                      <span className="palette-swatch-label" style={{ color: textColor }}>
-                        {color.substring(1).toUpperCase()}
-                      </span>
-                    </div>
-                  );
-                })}
+                {palette.colors.map((color, i) => (
+                  <div
+                    key={i}
+                    className="palette-swatch"
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
               </div>
             </div>
           ))}
