@@ -1,0 +1,279 @@
+.gallery-detail-page {
+  min-height: 100vh;
+  background-color: #EDE8E2;
+}
+
+.gallery-detail-page .app-header {
+  background: #F9F6F0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.gallery-detail-page .app-header__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+}
+
+.gallery-detail-page .app-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 20px;
+  color: #3B3A36;
+}
+
+.gallery-detail-page .app-logo__icon {
+  font-size: 24px;
+  color: #D4AF37;
+}
+
+.gallery-detail-page .app-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gallery-detail-page .app-nav__link {
+  position: relative;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #8B7D6B;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.gallery-detail-page .app-nav__link:hover {
+  background: #F2EDE8;
+  color: #3B3A36;
+}
+
+.gallery-detail-page .notification-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: #D4AF37;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: badgePulse 2s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.back-button {
+  background: none;
+  border: none;
+  color: #8B7D6B;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 0;
+  margin-bottom: 24px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.back-button:hover {
+  color: #3B3A36;
+  filter: none !important;
+  transform: translateX(-4px);
+}
+
+.gallery-header {
+  background: #F9F6F0;
+  border-radius: 20px;
+  padding: 32px;
+  margin-bottom: 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.gallery-header__info {
+  flex: 1;
+}
+
+.gallery-header__title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #3B3A36;
+  margin-bottom: 20px;
+}
+
+.gallery-header__meta {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.gallery-curator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.gallery-curator__avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.gallery-curator__label {
+  display: block;
+  font-size: 12px;
+  color: #A89F91;
+  margin-bottom: 2px;
+  font-weight: 500;
+}
+
+.gallery-curator__name {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  color: #3B3A36;
+}
+
+.gallery-stats {
+  display: flex;
+  gap: 24px;
+}
+
+.gallery-stat {
+  text-align: center;
+}
+
+.gallery-stat__value {
+  display: block;
+  font-size: 24px;
+  font-weight: 700;
+  color: #3B3A36;
+  margin-bottom: 2px;
+}
+
+.gallery-stat__label {
+  display: block;
+  font-size: 12px;
+  color: #A89F91;
+  font-weight: 500;
+}
+
+.gallery-stat--highlight .gallery-stat__value {
+  color: #D4AF37;
+}
+
+.gallery-header__tags {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.gallery-tag {
+  background: #EDE8E2;
+  color: #8B7D6B;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.gallery-exhibition {
+  background: #F9F6F0;
+  border-radius: 20px;
+  padding: 32px;
+}
+
+.section-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #3B3A36;
+  margin-bottom: 4px;
+}
+
+.section-desc {
+  font-size: 13px;
+  color: #8B7D6B;
+  margin-bottom: 24px;
+  font-weight: 500;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 80px 20px;
+}
+
+.empty-state__icon {
+  display: block;
+  font-size: 48px;
+  color: #D4C9C0;
+  margin-bottom: 16px;
+}
+
+.empty-state__text {
+  font-size: 15px;
+  color: #A89F91;
+  margin-bottom: 24px;
+}
+
+.back-btn {
+  display: inline-block;
+  padding: 10px 24px;
+  background: #D4AF37;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.back-btn:hover {
+  background: #B8962C;
+  filter: none !important;
+}
+
+@media (max-width: 768px) {
+  .gallery-header {
+    flex-direction: column;
+    padding: 24px;
+  }
+
+  .gallery-header__tags {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .gallery-header__title {
+    font-size: 22px;
+  }
+
+  .gallery-exhibition {
+    padding: 24px 16px;
+  }
+}

@@ -1,0 +1,177 @@
+.gallery-card {
+  background-color: #F9F6F0;
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.gallery-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.gallery-card__carousel {
+  position: relative;
+  width: 100%;
+  padding-top: 75%;
+  overflow: hidden;
+}
+
+.gallery-card__artwork {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.3s ease;
+  opacity: 1;
+}
+
+.gallery-card__artwork.fading {
+  opacity: 0;
+}
+
+.gallery-card__artwork-title {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  font-weight: 600;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  max-width: 80%;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gallery-card__artwork--empty {
+  background-color: #EDE8E2 !important;
+  color: #A89F91;
+}
+
+.gallery-card__arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  color: #3B3A36;
+  font-size: 20px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.3s ease;
+  z-index: 2;
+}
+
+.gallery-card:hover .gallery-card__arrow {
+  opacity: 1;
+}
+
+.gallery-card__arrow:hover {
+  background: #fff;
+  filter: none !important;
+}
+
+.gallery-card__arrow--left {
+  left: 12px;
+}
+
+.gallery-card__arrow--right {
+  right: 12px;
+}
+
+.gallery-card__dots {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  z-index: 2;
+}
+
+.gallery-card__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  transition: all 0.3s ease;
+}
+
+.gallery-card__dot.active {
+  background: #fff;
+  width: 18px;
+  border-radius: 3px;
+}
+
+.gallery-card__info {
+  padding: 16px;
+}
+
+.gallery-card__name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #3B3A36;
+  margin-bottom: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gallery-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.gallery-card__curator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gallery-card__avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.gallery-card__curator-name {
+  font-size: 13px;
+  color: #8B7D6B;
+  font-weight: 500;
+}
+
+.gallery-card__auction-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(212, 175, 55, 0.15);
+  color: #B8962C;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.gallery-card__auction-icon {
+  font-size: 10px;
+}
