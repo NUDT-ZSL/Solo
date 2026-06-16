@@ -1,0 +1,12 @@
+{
+  "task_name": "auto38",
+  "round": 1,
+  "folder_name": "cp1_6.17_auto38",
+  "uploaded_at": "2026-06-16T21:14:03Z",
+  "note": "placeholder metadata to ensure every round has a verifiable commit",
+  "empty_fields": {
+    "github_url": "",
+    "branch_folder": "",
+    "commit_id": ""
+  }
+}
