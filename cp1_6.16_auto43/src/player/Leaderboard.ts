@@ -1,10 +1,16 @@
 import { LeaderboardEntry } from '../game/GameEngine';
 
+export interface LeaderboardDisplayEntry extends LeaderboardEntry {
+  isLocalPlayer: boolean;
+  rank: number;
+}
+
 export class Leaderboard {
   private entries: LeaderboardEntry[] = [];
   private fetchInterval: number | null = null;
-  private onUpdateCallback: ((entries: LeaderboardEntry[]) => void) | null = null;
+  private onUpdateCallback: ((entries: LeaderboardDisplayEntry[]) => void) | null = null;
   private fallbackEntries: LeaderboardEntry[] = [];
+  private localPlayerId: string = '';
 
   public async fetchLeaderboard(): Promise<LeaderboardEntry[]> {
     try {
@@ -39,6 +45,10 @@ export class Leaderboard {
     }
   }
 
+  public setLocalPlayerId(playerId: string): void {
+    this.localPlayerId = playerId;
+  }
+
   public setFallbackData(entries: LeaderboardEntry[]): void {
     this.fallbackEntries = [...entries].sort((a, b) => b.mineralCount - a.mineralCount);
   }
@@ -54,17 +64,27 @@ export class Leaderboard {
     return this.entries.length > 0 ? this.entries : this.fallbackEntries;
   }
 
-  public getTopN(n: number): LeaderboardEntry[] {
-    return this.getEntries().slice(0, n);
+  public getTopN(n: number): LeaderboardDisplayEntry[] {
+    return this.getDisplayEntries().slice(0, n);
   }
 
-  public onUpdate(callback: (entries: LeaderboardEntry[]) => void): void {
+  private getDisplayEntries(): LeaderboardDisplayEntry[] {
+    const sortedEntries = [...this.getEntries()].sort((a, b) => b.mineralCount - a.mineralCount);
+    return sortedEntries.map((entry, index) => ({
+      ...entry,
+      isLocalPlayer: entry.playerId === this.localPlayerId,
+      rank: index + 1,
+    }));
+  }
+
+  public onUpdate(callback: (entries: LeaderboardDisplayEntry[]) => void): void {
     this.onUpdateCallback = callback;
   }
 
   private notifyUpdate(entries: LeaderboardEntry[]): void {
     if (this.onUpdateCallback) {
-      this.onUpdateCallback([...entries]);
+      const displayEntries = this.getDisplayEntries();
+      this.onUpdateCallback([...displayEntries]);
     }
   }
 

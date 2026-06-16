@@ -36,6 +36,25 @@ export interface Mineral {
   y: number;
   opacity: number;
   spawnTime: number;
+  initialValue: number;
+  currentValue: number;
+}
+
+export interface CollisionParticle {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  startTime: number;
+  duration: number;
+}
+
+export interface CollisionEvent {
+  playerId: string;
+  x: number;
+  y: number;
+  time: number;
 }
 
 export interface Pirate {
@@ -81,6 +100,7 @@ export class GameEngine {
   private minerals: Mineral[] = [];
   private pirates: Pirate[] = [];
   private pickupEffects: PickupEffect[] = [];
+  private collisionParticles: CollisionParticle[] = [];
   private stars: Star[] = [];
   private playerInputs: Map<string, PlayerInput> = new Map();
   private status: GameStatus = 'idle';
@@ -91,9 +111,12 @@ export class GameEngine {
   private lastMineralSpawn: number = 0;
   private lastPirateSpawn: number = 0;
   private lastStateSync: number = 0;
+  private lastCollisionTime: number = 0;
   private animationFrameId: number | null = null;
   private onUpdateCallback: ((state: GameState) => void) | null = null;
+  private onCollisionCallback: ((event: CollisionEvent) => void) | null = null;
   private lastFrameTime: number = 0;
+  private localPlayerId: string = '';
 
   constructor() {
     this.generateStars();
@@ -146,6 +169,10 @@ export class GameEngine {
       flashUntil: 0,
     }));
 
+    if (this.players.length > 0) {
+      this.localPlayerId = this.players[0].id;
+    }
+
     this.players.forEach(player => {
       this.playerInputs.set(player.id, { up: false, down: false, left: false, right: false });
     });
@@ -192,10 +219,12 @@ export class GameEngine {
     this.minerals = [];
     this.pirates = [];
     this.pickupEffects = [];
+    this.collisionParticles = [];
     this.winner = null;
     this.status = 'idle';
     this.lastMineralSpawn = 0;
     this.lastPirateSpawn = 0;
+    this.lastCollisionTime = 0;
   }
 
   private startGameLoop(): void {
@@ -222,19 +251,20 @@ export class GameEngine {
     }
 
     if (this.status === 'playing') {
-      this.updatePlayers(deltaTime);
+      this.updatePlayers(deltaTime, currentTime);
       this.spawnMinerals(currentTime);
       this.updateMinerals(currentTime);
       this.spawnPirates(currentTime);
       this.updatePirates(deltaTime);
       this.checkCollisions(currentTime);
       this.updatePickupEffects(currentTime);
+      this.updateCollisionParticles(currentTime);
       this.checkWinCondition();
       this.syncState(currentTime);
     }
   }
 
-  private updatePlayers(deltaTime: number): void {
+  private updatePlayers(deltaTime: number, currentTime: number): void {
     this.players.forEach(player => {
       const input = this.playerInputs.get(player.id);
       if (!input) return;
@@ -263,17 +293,21 @@ export class GameEngine {
       if (player.x <= 20) {
         player.x = 20;
         player.vx = Math.abs(player.vx) * BOUNCE_DAMPING;
+        this.triggerBoundaryCollision(player, currentTime);
       } else if (player.x >= MAP_WIDTH - 20) {
         player.x = MAP_WIDTH - 20;
         player.vx = -Math.abs(player.vx) * BOUNCE_DAMPING;
+        this.triggerBoundaryCollision(player, currentTime);
       }
 
       if (player.y <= 20) {
         player.y = 20;
         player.vy = Math.abs(player.vy) * BOUNCE_DAMPING;
+        this.triggerBoundaryCollision(player, currentTime);
       } else if (player.y >= MAP_HEIGHT - 20) {
         player.y = MAP_HEIGHT - 20;
         player.vy = -Math.abs(player.vy) * BOUNCE_DAMPING;
+        this.triggerBoundaryCollision(player, currentTime);
       }
     });
   }
@@ -282,15 +316,61 @@ export class GameEngine {
     if (currentTime - this.lastMineralSpawn >= MINERAL_SPAWN_INTERVAL) {
       this.lastMineralSpawn = currentTime;
       for (let i = 0; i < MINERAL_SPAWN_COUNT; i++) {
+        const initialValue = 80 + Math.floor(Math.random() * 21);
         this.minerals.push({
           id: uuidv4(),
           x: 50 + Math.random() * (MAP_WIDTH - 100),
           y: 50 + Math.random() * (MAP_HEIGHT - 100),
           opacity: 0,
           spawnTime: currentTime,
+          initialValue,
+          currentValue: initialValue,
         });
       }
     }
+  }
+
+  private triggerBoundaryCollision(player: Player, currentTime: number): void {
+    if (currentTime - this.lastCollisionTime < 16.67) return;
+    this.lastCollisionTime = currentTime;
+
+    const particleCount = Math.min(20, this.collisionParticles.length + 20);
+    const particlesToAdd = particleCount - this.collisionParticles.length;
+
+    for (let i = 0; i < particlesToAdd; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 2 + Math.random() * 3;
+      this.collisionParticles.push({
+        id: uuidv4(),
+        x: player.x,
+        y: player.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        startTime: currentTime,
+        duration: 300,
+      });
+    }
+
+    if (this.onCollisionCallback) {
+      this.onCollisionCallback({
+        playerId: player.id,
+        x: player.x,
+        y: player.y,
+        time: currentTime,
+      });
+    }
+  }
+
+  private updateCollisionParticles(currentTime: number): void {
+    this.collisionParticles = this.collisionParticles.filter(
+      particle => currentTime - particle.startTime < particle.duration
+    );
+    this.collisionParticles.forEach(particle => {
+      particle.x += particle.vx;
+      particle.y += particle.vy;
+      particle.vx *= 0.98;
+      particle.vy *= 0.98;
+    });
   }
 
   private updateMinerals(currentTime: number): void {
@@ -506,8 +586,20 @@ export class GameEngine {
     return this.roomId;
   }
 
+  public getLocalPlayerId(): string {
+    return this.localPlayerId;
+  }
+
+  public getCollisionParticles(): CollisionParticle[] {
+    return this.collisionParticles;
+  }
+
   public onUpdate(callback: (state: GameState) => void): void {
     this.onUpdateCallback = callback;
+  }
+
+  public onCollision(callback: (event: CollisionEvent) => void): void {
+    this.onCollisionCallback = callback;
   }
 
   private notifyUpdate(): void {
@@ -523,10 +615,12 @@ export class GameEngine {
       pirates: this.pirates.map(p => ({ ...p })),
       stars: this.stars.map(s => ({ ...s })),
       pickupEffects: this.pickupEffects.map(e => ({ ...e })),
+      collisionParticles: this.collisionParticles.map(p => ({ ...p })),
       status: this.status,
       countdown: this.countdown,
       winner: this.winner ? { ...this.winner } : null,
       currentTime: performance.now(),
+      localPlayerId: this.localPlayerId,
     };
   }
 
@@ -544,8 +638,10 @@ export interface GameState {
   pirates: Pirate[];
   stars: Star[];
   pickupEffects: PickupEffect[];
+  collisionParticles: CollisionParticle[];
   status: GameStatus;
   countdown: number;
   winner: Player | null;
   currentTime: number;
+  localPlayerId: string;
 }
