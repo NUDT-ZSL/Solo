@@ -329,6 +329,7 @@ function PublishForm({ user }: { user: AuthUser }) {
       </div>
 
       <div className="publish-content">
+        <div className="publish-grid">
         {step === 1 && (
           <div className="step-content" style={stepAnimation}>
             <div className="type-selector">
@@ -486,6 +487,7 @@ function PublishForm({ user }: { user: AuthUser }) {
             </div>
           </div>
         )}
+        </div>
       </div>
 
       <div className="publish-footer">
@@ -570,11 +572,49 @@ function PublishForm({ user }: { user: AuthUser }) {
         
         .publish-content {
           flex: 1;
-          padding: 24px 20px;
+          padding: 24px 16px;
+          width: 100%;
+          max-width: 1440px;
+          margin: 0 auto;
+          overflow-y: auto;
+        }
+        
+        .publish-grid {
+          display: grid;
+          grid-template-columns: repeat(12, 1fr);
+          gap: 16px;
+        }
+        
+        .publish-grid > .step-content {
+          grid-column: span 12;
           max-width: 600px;
           width: 100%;
           margin: 0 auto;
-          overflow-y: auto;
+        }
+        
+        @media (min-width: 768px) {
+          .publish-content {
+            padding: 32px 24px;
+          }
+          
+          .publish-grid {
+            gap: 20px;
+          }
+        }
+        
+        @media (min-width: 1024px) {
+          .publish-content {
+            padding: 40px 32px;
+          }
+          
+          .publish-grid {
+            gap: 24px;
+          }
+          
+          .publish-grid > .step-content {
+            grid-column: 3 / span 8;
+            max-width: none;
+          }
         }
         
         @keyframes slideIn {
@@ -735,6 +775,12 @@ function PublishForm({ user }: { user: AuthUser }) {
           border-radius: 12px;
           overflow: hidden;
           box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .preview-card:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 6px 24px rgba(0,0,0,0.12);
         }
         
         .preview-image {
@@ -1525,6 +1571,134 @@ function AppContent() {
           font-family: inherit;
         }
         
+        .container {
+          width: 100%;
+          max-width: 1440px;
+          margin: 0 auto;
+          padding: 0 16px;
+        }
+        
+        @media (min-width: 768px) {
+          .container {
+            padding: 0 24px;
+          }
+        }
+        
+        @media (min-width: 1024px) {
+          .container {
+            padding: 0 32px;
+          }
+        }
+        
+        .grid {
+          display: grid;
+          grid-template-columns: repeat(12, 1fr);
+          gap: 16px;
+        }
+        
+        @media (min-width: 768px) {
+          .grid {
+            gap: 20px;
+          }
+        }
+        
+        @media (min-width: 1024px) {
+          .grid {
+            gap: 24px;
+          }
+        }
+        
+        .col-12 { grid-column: span 12; }
+        .col-11 { grid-column: span 11; }
+        .col-10 { grid-column: span 10; }
+        .col-9 { grid-column: span 9; }
+        .col-8 { grid-column: span 8; }
+        .col-7 { grid-column: span 7; }
+        .col-6 { grid-column: span 6; }
+        .col-5 { grid-column: span 5; }
+        .col-4 { grid-column: span 4; }
+        .col-3 { grid-column: span 3; }
+        .col-2 { grid-column: span 2; }
+        .col-1 { grid-column: span 1; }
+        
+        @media (min-width: 768px) {
+          .col-md-12 { grid-column: span 12; }
+          .col-md-11 { grid-column: span 11; }
+          .col-md-10 { grid-column: span 10; }
+          .col-md-9 { grid-column: span 9; }
+          .col-md-8 { grid-column: span 8; }
+          .col-md-7 { grid-column: span 7; }
+          .col-md-6 { grid-column: span 6; }
+          .col-md-5 { grid-column: span 5; }
+          .col-md-4 { grid-column: span 4; }
+          .col-md-3 { grid-column: span 3; }
+          .col-md-2 { grid-column: span 2; }
+          .col-md-1 { grid-column: span 1; }
+        }
+        
+        @media (min-width: 1024px) {
+          .col-lg-12 { grid-column: span 12; }
+          .col-lg-11 { grid-column: span 11; }
+          .col-lg-10 { grid-column: span 10; }
+          .col-lg-9 { grid-column: span 9; }
+          .col-lg-8 { grid-column: span 8; }
+          .col-lg-7 { grid-column: span 7; }
+          .col-lg-6 { grid-column: span 6; }
+          .col-lg-5 { grid-column: span 5; }
+          .col-lg-4 { grid-column: span 4; }
+          .col-lg-3 { grid-column: span 3; }
+          .col-lg-2 { grid-column: span 2; }
+          .col-lg-1 { grid-column: span 1; }
+        }
+        
+        .btn-primary {
+          background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+          color: #ffffff;
+          border: none;
+          border-radius: 8px;
+          padding: 10px 20px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: filter 0.2s ease, transform 0.2s ease;
+        }
+        
+        .btn-primary:hover {
+          filter: brightness(1.1);
+        }
+        
+        .btn-primary:active {
+          transform: scale(0.98);
+        }
+        
+        .btn-secondary {
+          background: #f3f4f6;
+          color: #374151;
+          border: none;
+          border-radius: 8px;
+          padding: 10px 20px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: background 0.2s ease;
+        }
+        
+        .btn-secondary:hover {
+          background: #e5e7eb;
+        }
+        
+        .card {
+          background: #ffffff;
+          border-radius: 12px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .card:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 6px 24px rgba(0,0,0,0.12);
+        }
+        
         .ripple {
           position: relative;
           overflow: hidden;
@@ -1546,6 +1720,38 @@ function AppContent() {
         .ripple:active::after {
           width: 200px;
           height: 200px;
+        }
+        
+        .flex {
+          display: flex;
+        }
+        
+        .flex-col {
+          flex-direction: column;
+        }
+        
+        .items-center {
+          align-items: center;
+        }
+        
+        .justify-center {
+          justify-content: center;
+        }
+        
+        .justify-between {
+          justify-content: space-between;
+        }
+        
+        .gap-2 { gap: 8px; }
+        .gap-3 { gap: 12px; }
+        .gap-4 { gap: 16px; }
+        
+        .w-full {
+          width: 100%;
+        }
+        
+        .text-center {
+          text-align: center;
         }
       `}</style>
     </div>

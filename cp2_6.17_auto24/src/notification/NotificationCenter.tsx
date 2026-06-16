@@ -89,65 +89,67 @@ export default function NotificationCenter({ userId }: NotificationCenterProps) 
       </div>
 
       <div className="notification-content">
-        {loading && messages.length === 0 ? (
-          <div className="loading-state">
-            <div className="spinner" />
-            <span>加载中...</span>
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon">📭</div>
-            <p className="empty-text">暂无通知消息</p>
-            <p className="empty-subtext">系统会在匹配到物品时通知您</p>
-          </div>
-        ) : (
-          <div className="timeline">
-            {Object.entries(groupedMessages).map(([date, dateMessages]) => (
-              <div key={date} className="timeline-group">
-                <div className="timeline-date">
-                  <span className="date-text">{formatDate(date)}</span>
-                  <div className="date-line" />
-                </div>
-                
-                <div className="timeline-items">
-                  {dateMessages.map((message, index) => {
-                    const iconInfo = messageIcons[message.type] || messageIcons.system;
-                    const isLast = index === dateMessages.length - 1;
-                    
-                    return (
-                      <div
-                        key={message.id}
-                        className={`timeline-item ${message.read ? 'read' : 'unread'}`}
-                        onClick={() => handleMessageClick(message)}
-                      >
-                        <div className="timeline-connector">
-                          <div
-                            className="timeline-dot"
-                            style={{ backgroundColor: iconInfo.color }}
-                          >
-                            {iconInfo.icon}
+        <div className="notification-content-inner">
+          {loading && messages.length === 0 ? (
+            <div className="loading-state">
+              <div className="spinner" />
+              <span>加载中...</span>
+            </div>
+          ) : messages.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">📭</div>
+              <p className="empty-text">暂无通知消息</p>
+              <p className="empty-subtext">系统会在匹配到物品时通知您</p>
+            </div>
+          ) : (
+            <div className="timeline">
+              {Object.entries(groupedMessages).map(([date, dateMessages]) => (
+                <div key={date} className="timeline-group">
+                  <div className="timeline-date">
+                    <span className="date-text">{formatDate(date)}</span>
+                    <div className="date-line" />
+                  </div>
+                  
+                  <div className="timeline-items">
+                    {dateMessages.map((message, index) => {
+                      const iconInfo = messageIcons[message.type] || messageIcons.system;
+                      const isLast = index === dateMessages.length - 1;
+                      const dotClass = message.type === 'match_success' ? 'success' 
+                        : message.type === 'match_possible' ? 'possible' 
+                        : 'system';
+                      
+                      return (
+                        <div
+                          key={message.id}
+                          className={`timeline-item ${message.read ? 'read' : 'unread'}`}
+                          onClick={() => handleMessageClick(message)}
+                        >
+                          <div className="timeline-connector">
+                            <div className={`timeline-dot ${dotClass}`}>
+                              {iconInfo.icon}
+                            </div>
+                            {!isLast && <div className="timeline-line" />}
                           </div>
-                          {!isLast && <div className="timeline-line" />}
-                        </div>
-                        
-                        <div className="timeline-content">
-                          <div className="message-header">
-                            <h4 className="message-title">{message.title}</h4>
-                            {!message.read && <span className="new-dot" />}
+                          
+                          <div className="timeline-content">
+                            <div className="message-header">
+                              <h4 className="message-title">{message.title}</h4>
+                              {!message.read && <span className="new-dot" />}
+                            </div>
+                            <p className="message-content-text">{message.content}</p>
+                            <span className="message-time">
+                              {dayjs(message.createdAt).format('HH:mm')}
+                            </span>
                           </div>
-                          <p className="message-content-text">{message.content}</p>
-                          <span className="message-time">
-                            {dayjs(message.createdAt).format('HH:mm')}
-                          </span>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <style>{`
@@ -206,6 +208,34 @@ export default function NotificationCenter({ userId }: NotificationCenterProps) 
           flex: 1;
           overflow-y: auto;
           padding: 20px;
+        }
+        
+        .notification-content-inner {
+          display: grid;
+          grid-template-columns: repeat(12, 1fr);
+          gap: 16px;
+          max-width: 1000px;
+          margin: 0 auto;
+        }
+        
+        .notification-content-inner > * {
+          grid-column: span 12;
+        }
+        
+        @media (min-width: 768px) {
+          .notification-content {
+            padding: 24px;
+          }
+        }
+        
+        @media (min-width: 1024px) {
+          .notification-content {
+            padding: 32px;
+          }
+          
+          .notification-content-inner > * {
+            grid-column: 2 / span 10;
+          }
         }
         
         .loading-state {
@@ -323,17 +353,37 @@ export default function NotificationCenter({ userId }: NotificationCenterProps) 
         }
         
         .timeline-dot {
-          width: 32px;
-          height: 32px;
+          width: 36px;
+          height: 36px;
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
           color: #ffffff;
-          font-weight: bold;
-          font-size: 16px;
+          font-weight: 700;
+          font-size: 18px;
           flex-shrink: 0;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+          border: 3px solid #ffffff;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .timeline-item:hover .timeline-dot {
+          transform: scale(1.1);
+        }
+        
+        .timeline-dot.success {
+          background: #10b981;
+          box-shadow: 0 2px 12px rgba(16, 185, 129, 0.4);
+        }
+        
+        .timeline-dot.possible {
+          background: #f59e0b;
+          box-shadow: 0 2px 12px rgba(245, 158, 11, 0.4);
+        }
+        
+        .timeline-dot.system {
+          background: #6366f1;
+          box-shadow: 0 2px 12px rgba(99, 102, 241, 0.4);
         }
         
         .timeline-line {

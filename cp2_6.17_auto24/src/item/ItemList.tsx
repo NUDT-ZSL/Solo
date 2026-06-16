@@ -115,30 +115,45 @@ export default function ItemList({ stationId, type }: ItemListProps) {
       <style>{`
         .item-list-wrapper {
           width: 100%;
+          max-width: 100%;
         }
         
         .item-list {
-          column-count: 1;
-          column-gap: 16px;
+          display: grid;
+          grid-template-columns: repeat(12, 1fr);
+          gap: 16px;
           padding: 16px;
+          grid-auto-flow: dense;
+        }
+        
+        .item-list > * {
+          grid-column: span 12;
+          width: 100% !important;
+          min-width: 0 !important;
+          max-width: 100% !important;
+          flex: 1 1 auto;
         }
         
         @media (min-width: 768px) {
-          .item-list {
-            column-count: 2;
+          .item-list > * {
+            grid-column: span 6;
           }
         }
         
         @media (min-width: 1024px) {
-          .item-list {
-            column-count: 3;
+          .item-list > * {
+            grid-column: span 4;
           }
         }
         
         @media (min-width: 1280px) {
-          .item-list {
-            column-count: 4;
+          .item-list > * {
+            grid-column: span 3;
           }
+        }
+        
+        .item-list > div {
+          justify-self: center;
         }
         
         .load-more {

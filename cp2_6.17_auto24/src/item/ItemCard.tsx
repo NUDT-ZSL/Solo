@@ -88,19 +88,22 @@ export default function ItemCard({ item }: ItemCardProps) {
       
       <style>{`
         .item-card {
-          width: 200px;
+          width: 100%;
+          min-width: 0;
+          max-width: 100%;
           background: #ffffff;
           border-radius: 12px;
           box-shadow: 0 2px 10px rgba(0,0,0,0.08);
           overflow: hidden;
           cursor: pointer;
           transition: transform 0.2s ease, box-shadow 0.2s ease;
-          margin-bottom: 16px;
-          break-inside: avoid;
+          margin-bottom: 0;
+          display: flex;
+          flex-direction: column;
         }
         
         .item-card:hover {
-          transform: translateY(-3px);
+          transform: translateY(-3px) translateZ(0);
           box-shadow: 0 6px 24px rgba(0,0,0,0.12);
         }
         

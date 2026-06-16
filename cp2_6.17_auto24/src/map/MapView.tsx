@@ -107,18 +107,32 @@ export default function MapView({ onStationSelect }: MapViewProps) {
 
       const count = stationItemCount[station.id] || 0;
       if (count > 0) {
-        const badgeX = x + radius - 2;
-        const badgeY = y - radius + 2;
-        const badgeRadius = 10;
         const text = count > 99 ? '99+' : String(count);
+        const fontSize = 10;
+        const textPaddingX = text.length > 2 ? 6 : 4;
+        const badgeHeight = 18;
+        const textWidth = ctx.measureText(text).width;
+        const badgeWidth = Math.max(badgeHeight, textWidth + textPaddingX * 2);
+        const badgeRadius = badgeHeight / 2;
+        const badgeX = x + radius - 4;
+        const badgeY = y - radius - 4;
 
+        ctx.shadowColor = 'rgba(239, 68, 68, 0.4)';
+        ctx.shadowBlur = 4;
         ctx.beginPath();
-        ctx.roundRect(badgeX - badgeRadius, badgeY - badgeRadius, badgeRadius * 2, badgeRadius * 2, badgeRadius);
+        ctx.roundRect(
+          badgeX - badgeWidth / 2,
+          badgeY - badgeHeight / 2,
+          badgeWidth,
+          badgeHeight,
+          badgeRadius
+        );
         ctx.fillStyle = '#ef4444';
         ctx.fill();
+        ctx.shadowBlur = 0;
 
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 10px sans-serif';
+        ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(text, badgeX, badgeY);
