@@ -6,26 +6,61 @@ import ConfirmModal from '@/components/ConfirmModal'
 import LogHoursModal from '@/components/LogHoursModal'
 import Toast from '@/components/Toast'
 import { useStore } from '@/store/useStore'
-import { Plus } from 'lucide-react'
+import { Plus, RefreshCw } from 'lucide-react'
 
 export default function App() {
-  const { fetchActivities, fetchUsers, showCreateForm, setShowCreateForm, users, setCurrentUser, currentUser, loading } = useStore()
+  const {
+    fetchActivities,
+    fetchUsers,
+    showCreateForm,
+    setShowCreateForm,
+    users,
+    setCurrentUser,
+    currentUser,
+    loading,
+    error,
+    authToken,
+    clearError,
+  } = useStore()
 
   useEffect(() => {
-    fetchUsers()
-    fetchActivities()
+    const init = async () => {
+      const [usersSuccess] = await Promise.all([fetchUsers(), fetchActivities()])
+      if (usersSuccess && !authToken) {
+        const defaultUser = users.length > 1 ? users[1] : users[0]
+        if (defaultUser) {
+          await setCurrentUser(defaultUser)
+        }
+      }
+    }
+    init()
   }, [])
 
-  useEffect(() => {
-    if (users.length > 0 && !currentUser) {
-      setCurrentUser(users[1])
-    }
-  }, [users])
+  const handleRetry = () => {
+    clearError()
+    fetchActivities()
+  }
 
   return (
     <div className="min-h-screen" style={{ background: '#0a1929' }}>
       <Header />
       <main className="max-w-[720px] mx-auto px-6 pt-24 pb-20">
+        {error && (
+          <div
+            className="mb-6 p-4 rounded-lg flex items-center justify-between"
+            style={{ background: '#3e1a1a', border: '1px solid #ef5350' }}
+          >
+            <span className="text-red-300">{error}</span>
+            <button
+              onClick={handleRetry}
+              className="flex items-center gap-1 px-3 py-1 rounded text-sm"
+              style={{ background: '#ef5350', color: '#fff' }}
+            >
+              <RefreshCw size={14} />
+              重试
+            </button>
+          </div>
+        )}
         <ActivityList />
       </main>
       <button

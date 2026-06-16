@@ -1,23 +1,36 @@
 import { useState } from 'react'
 import { useStore } from '@/store/useStore'
-import { X } from 'lucide-react'
+import { X, Loader2 } from 'lucide-react'
 
 export default function ActivityForm() {
-  const { createActivity, setShowCreateForm } = useStore()
+  const { createActivity, setShowCreateForm, currentUser } = useStore()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [date, setDate] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   const today = new Date().toISOString().split('T')[0]
+  const oneYearLater = new Date()
+  oneYearLater.setFullYear(oneYearLater.getFullYear() + 1)
+  const maxDate = oneYearLater.toISOString().split('T')[0]
+
   const titleValid = title.length >= 5
   const descValid = description.length >= 20
-  const dateValid = date >= today && date !== ''
-  const formValid = titleValid && descValid && dateValid
+  const dateValid = date >= today && date <= maxDate && date !== ''
+  const isAdmin = currentUser?.role === '管理员'
+  const formValid = titleValid && descValid && dateValid && isAdmin && !submitting
 
   const handleSubmit = async () => {
     if (!formValid) return
-    await createActivity(title, description, date)
-    setShowCreateForm(false)
+    setSubmitting(true)
+    try {
+      const success = await createActivity(title, description, date)
+      if (success) {
+        setShowCreateForm(false)
+      }
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const inputStyle = {
@@ -31,6 +44,36 @@ export default function ActivityForm() {
     outline: 'none',
   } as React.CSSProperties
 
+  if (!isAdmin) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-start justify-center animate-fadeIn"
+        style={{ background: '#00000080' }}
+        onClick={(e) => e.target === e.currentTarget && setShowCreateForm(false)}
+      >
+        <div
+          className="rounded-2xl p-8 mt-[10vh] text-center"
+          style={{ maxWidth: 400, width: '100%', background: '#1e1e2e' }}
+        >
+          <button
+            onClick={() => setShowCreateForm(false)}
+            className="absolute top-4 right-4 text-[#78909c] hover:text-white transition"
+          >
+            <X size={20} />
+          </button>
+          <h2 className="text-white text-xl font-bold mb-4">权限不足</h2>
+          <p className="text-[#b0bec5] mb-6">只有管理员可以创建活动</p>
+          <button
+            onClick={() => setShowCreateForm(false)}
+            className="px-6 py-2 rounded-full bg-[#64ffda] text-black font-bold"
+          >
+            确定
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center animate-fadeIn"
@@ -38,12 +81,13 @@ export default function ActivityForm() {
       onClick={(e) => e.target === e.currentTarget && setShowCreateForm(false)}
     >
       <div
-        className="rounded-2xl p-8 mt-[10vh]"
-        style={{ maxWidth: 480, width: '100%', height: 400, background: '#1e1e2e' }}
+        className="rounded-2xl p-8 mt-[10vh] relative"
+        style={{ maxWidth: 480, width: '100%', height: 420, background: '#1e1e2e' }}
       >
         <button
           onClick={() => setShowCreateForm(false)}
           className="absolute top-4 right-4 text-[#78909c] hover:text-white transition"
+          disabled={submitting}
         >
           <X size={20} />
         </button>
@@ -60,6 +104,7 @@ export default function ActivityForm() {
               style={inputStyle}
               onFocus={(e) => (e.currentTarget.style.borderColor = '#64ffda')}
               onBlur={(e) => (e.currentTarget.style.borderColor = '#4a4a5e')}
+              disabled={submitting}
             />
             {title && !titleValid && (
               <p className="text-xs text-red-400 mt-1">标题至少5个字符</p>
@@ -79,6 +124,7 @@ export default function ActivityForm() {
               }}
               onFocus={(e) => (e.currentTarget.style.borderColor = '#64ffda')}
               onBlur={(e) => (e.currentTarget.style.borderColor = '#4a4a5e')}
+              disabled={submitting}
             />
             {description && !descValid && (
               <p className="text-xs text-red-400 mt-1">描述至少20个字符</p>
@@ -91,19 +137,24 @@ export default function ActivityForm() {
               value={date}
               onChange={(e) => setDate(e.target.value)}
               min={today}
+              max={maxDate}
               style={inputStyle}
               onFocus={(e) => (e.currentTarget.style.borderColor = '#64ffda')}
               onBlur={(e) => (e.currentTarget.style.borderColor = '#4a4a5e')}
+              disabled={submitting}
             />
             {date && !dateValid && (
-              <p className="text-xs text-red-400 mt-1">日期不能早于今天</p>
+              <p className="text-xs text-red-400 mt-1">日期需在今天到一年内</p>
+            )}
+            {!date && (
+              <p className="text-xs text-[#78909c] mt-1">活动日期（不早于今天，不超过一年）</p>
             )}
           </div>
 
           <button
             onClick={handleSubmit}
             disabled={!formValid}
-            className="w-full h-12 rounded-full font-bold transition-all duration-200"
+            className="w-full h-12 rounded-full font-bold transition-all duration-200 flex items-center justify-center gap-2"
             style={{
               background: formValid ? '#64ffda' : '#2a2a3e',
               color: formValid ? '#000' : '#757575',
@@ -112,7 +163,8 @@ export default function ActivityForm() {
             onMouseEnter={(e) => formValid && (e.currentTarget.style.filter = 'brightness(1.1)')}
             onMouseLeave={(e) => (e.currentTarget.style.filter = 'none')}
           >
-            创建活动
+            {submitting && <Loader2 size={16} className="animate-spin" />}
+            {submitting ? '创建中...' : '创建活动'}
           </button>
         </div>
       </div>

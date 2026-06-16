@@ -4,45 +4,181 @@ import path from 'path'
 import fs from 'fs'
 import { v4 as uuidv4 } from 'uuid'
 import { fileURLToPath } from 'url'
+import crypto from 'crypto'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 const activitiesPath = path.resolve(__dirname, '../../data/activities.json')
 const usersPath = path.resolve(__dirname, '../../data/users.json')
+const tokensPath = path.resolve(__dirname, '../../data/tokens.json')
 
-function readActivities() {
-  const data = fs.readFileSync(activitiesPath, 'utf-8')
+interface Lock {
+  isLocked: boolean
+  queue: (() => void)[]
+}
+
+const fileLock: Record<string, Lock> = {}
+
+function getLock(filePath: string): Lock {
+  if (!fileLock[filePath]) {
+    fileLock[filePath] = { isLocked: false, queue: [] }
+  }
+  return fileLock[filePath]
+}
+
+async function acquireLock(filePath: string): Promise<void> {
+  const lock = getLock(filePath)
+  return new Promise((resolve) => {
+    if (!lock.isLocked) {
+      lock.isLocked = true
+      resolve()
+    } else {
+      lock.queue.push(() => {
+        lock.isLocked = true
+        resolve()
+      })
+    }
+  })
+}
+
+function releaseLock(filePath: string): void {
+  const lock = getLock(filePath)
+  lock.isLocked = false
+  const next = lock.queue.shift()
+  if (next) next()
+}
+
+async function readActivities() {
+  await acquireLock(activitiesPath)
+  try {
+    const data = fs.readFileSync(activitiesPath, 'utf-8')
+    return JSON.parse(data)
+  } finally {
+    releaseLock(activitiesPath)
+  }
+}
+
+async function writeActivities(data: any[]) {
+  await acquireLock(activitiesPath)
+  try {
+    fs.writeFileSync(activitiesPath, JSON.stringify(data, null, 2), 'utf-8')
+  } finally {
+    releaseLock(activitiesPath)
+  }
+}
+
+async function readUsers() {
+  await acquireLock(usersPath)
+  try {
+    const data = fs.readFileSync(usersPath, 'utf-8')
+    return JSON.parse(data)
+  } finally {
+    releaseLock(usersPath)
+  }
+}
+
+async function writeUsers(data: any[]) {
+  await acquireLock(usersPath)
+  try {
+    fs.writeFileSync(usersPath, JSON.stringify(data, null, 2), 'utf-8')
+  } finally {
+    releaseLock(usersPath)
+  }
+}
+
+function readTokens() {
+  if (!fs.existsSync(tokensPath)) {
+    fs.writeFileSync(tokensPath, JSON.stringify({}, null, 2), 'utf-8')
+    return {}
+  }
+  const data = fs.readFileSync(tokensPath, 'utf-8')
   return JSON.parse(data)
 }
 
-function writeActivities(data: any[]) {
-  fs.writeFileSync(activitiesPath, JSON.stringify(data, null, 2), 'utf-8')
+function writeTokens(data: Record<string, string>) {
+  fs.writeFileSync(tokensPath, JSON.stringify(data, null, 2), 'utf-8')
 }
 
-function readUsers() {
-  const data = fs.readFileSync(usersPath, 'utf-8')
-  return JSON.parse(data)
+function generateToken(userId: string): string {
+  const token = crypto.randomBytes(32).toString('hex')
+  const tokens = readTokens()
+  tokens[token] = userId
+  writeTokens(tokens)
+  return token
 }
 
-function writeUsers(data: any[]) {
-  fs.writeFileSync(usersPath, JSON.stringify(data, null, 2), 'utf-8')
+function verifyToken(token: string): string | null {
+  const tokens = readTokens()
+  return tokens[token] || null
+}
+
+function authenticate(req: Request, res: Response): string | null {
+  const authHeader = req.headers.authorization
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    res.status(401).json({ error: '未提供认证令牌' })
+    return null
+  }
+  const token = authHeader.replace('Bearer ', '')
+  const userId = verifyToken(token)
+  if (!userId) {
+    res.status(401).json({ error: '认证令牌无效或已过期' })
+    return null
+  }
+  return userId
+}
+
+function checkActivityStatus(activity: any, res: Response): boolean {
+  if (activity.status === '已结束') {
+    res.status(400).json({ error: '该活动已结束，无法进行此操作' })
+    return false
+  }
+  return true
 }
 
 const router = express.Router()
 router.use(cors())
 
-router.get('/', (req: Request, res: Response) => {
+router.get('/auth/token', (req: Request, res: Response) => {
+  const { userId } = req.query
+  if (!userId) {
+    res.status(400).json({ error: '请提供用户ID' })
+    return
+  }
+  const token = generateToken(userId as string)
+  res.json({ token, userId })
+})
+
+router.get('/', async (req: Request, res: Response) => {
   try {
-    const activities = readActivities()
+    const activities = await readActivities()
     res.json({ activities })
   } catch (error) {
     res.status(500).json({ error: '读取活动数据失败' })
   }
 })
 
-router.post('/', (req: Request, res: Response) => {
+router.get('/users', async (req: Request, res: Response) => {
   try {
+    const users = await readUsers()
+    res.json({ users })
+  } catch (error) {
+    res.status(500).json({ error: '读取用户数据失败' })
+  }
+})
+
+router.post('/', async (req: Request, res: Response) => {
+  try {
+    const userId = authenticate(req, res)
+    if (!userId) return
+
+    const users = await readUsers()
+    const user = users.find((u: any) => u.id === userId)
+    if (!user || user.role !== '管理员') {
+      res.status(403).json({ error: '只有管理员可以创建活动' })
+      return
+    }
+
     const { title, description, date } = req.body
 
     if (!title || title.length < 5) {
@@ -70,6 +206,14 @@ router.post('/', (req: Request, res: Response) => {
       return
     }
 
+    const oneYearLater = new Date()
+    oneYearLater.setFullYear(oneYearLater.getFullYear() + 1)
+    oneYearLater.setHours(0, 0, 0, 0)
+    if (activityDate > oneYearLater) {
+      res.status(400).json({ error: '活动日期不能超过一年后' })
+      return
+    }
+
     const newActivity = {
       id: uuidv4(),
       title,
@@ -82,9 +226,9 @@ router.post('/', (req: Request, res: Response) => {
       createdAt: new Date().toISOString(),
     }
 
-    const activities = readActivities()
+    const activities = await readActivities()
     activities.unshift(newActivity)
-    writeActivities(activities)
+    await writeActivities(activities)
 
     res.status(201).json({ activity: newActivity })
   } catch (error) {
@@ -92,23 +236,28 @@ router.post('/', (req: Request, res: Response) => {
   }
 })
 
-router.post('/:id/register', (req: Request, res: Response) => {
+router.post('/:id/register', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params
-    const { userId } = req.body
+    const userId = authenticate(req, res)
+    if (!userId) return
 
-    if (!userId) {
-      res.status(400).json({ error: '请提供用户ID' })
+    const { id } = req.params
+
+    if (req.body.userId && req.body.userId !== userId) {
+      res.status(403).json({ error: '认证用户与请求用户不一致' })
       return
     }
 
-    const activities = readActivities()
-    const activity = activities.find((a: any) => a.id === id)
+    const activities = await readActivities()
+    const activityIndex = activities.findIndex((a: any) => a.id === id)
+    const activity = activities[activityIndex]
 
     if (!activity) {
       res.status(404).json({ error: '活动不存在' })
       return
     }
+
+    if (!checkActivityStatus(activity, res)) return
 
     if (activity.registrations.includes(userId)) {
       res.status(400).json({ error: '该用户已报名此活动' })
@@ -116,34 +265,43 @@ router.post('/:id/register', (req: Request, res: Response) => {
     }
 
     activity.registrations.push(userId)
-    writeActivities(activities)
+    await writeActivities(activities)
 
-    const users = readUsers()
+    const users = await readUsers()
     const user = users.find((u: any) => u.id === userId)
     if (user) {
       if (!user.registeredActivities.includes(id)) {
         user.registeredActivities.push(id)
       }
-      writeUsers(users)
+      await writeUsers(users)
     }
 
-    res.json({ activity })
+    res.json({ activity, user })
   } catch (error) {
     res.status(500).json({ error: '报名失败' })
   }
 })
 
-router.post('/:id/claim', (req: Request, res: Response) => {
+router.post('/:id/claim', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params
-    const { userId } = req.body
+    const userId = authenticate(req, res)
+    if (!userId) return
 
-    if (!userId) {
-      res.status(400).json({ error: '请提供用户ID' })
+    const { id } = req.params
+
+    if (req.body.userId && req.body.userId !== userId) {
+      res.status(403).json({ error: '认证用户与请求用户不一致' })
       return
     }
 
-    const activities = readActivities()
+    const users = await readUsers()
+    const user = users.find((u: any) => u.id === userId)
+    if (!user || user.role !== '志愿者') {
+      res.status(403).json({ error: '只有志愿者可以认领任务' })
+      return
+    }
+
+    const activities = await readActivities()
     const activity = activities.find((a: any) => a.id === id)
 
     if (!activity) {
@@ -151,36 +309,46 @@ router.post('/:id/claim', (req: Request, res: Response) => {
       return
     }
 
+    if (!checkActivityStatus(activity, res)) return
+
     if (activity.claimedBy.includes(userId)) {
       res.status(400).json({ error: '该用户已认领此任务' })
       return
     }
 
     activity.claimedBy.push(userId)
-    writeActivities(activities)
+    await writeActivities(activities)
 
-    const users = readUsers()
-    const user = users.find((u: any) => u.id === userId)
     if (user) {
       if (!user.claimedTasks.includes(id)) {
         user.claimedTasks.push(id)
       }
-      writeUsers(users)
+      await writeUsers(users)
     }
 
-    res.json({ activity })
+    res.json({ activity, user })
   } catch (error) {
     res.status(500).json({ error: '认领任务失败' })
   }
 })
 
-router.post('/:id/logHours', (req: Request, res: Response) => {
+router.post('/:id/logHours', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params
-    const { userId, hours } = req.body
+    const userId = authenticate(req, res)
+    if (!userId) return
 
-    if (!userId) {
-      res.status(400).json({ error: '请提供用户ID' })
+    const { id } = req.params
+    const { hours } = req.body
+
+    if (req.body.userId && req.body.userId !== userId) {
+      res.status(403).json({ error: '认证用户与请求用户不一致' })
+      return
+    }
+
+    const users = await readUsers()
+    const user = users.find((u: any) => u.id === userId)
+    if (!user || user.role !== '志愿者') {
+      res.status(403).json({ error: '只有志愿者可以记录服务时长' })
       return
     }
 
@@ -195,7 +363,7 @@ router.post('/:id/logHours', (req: Request, res: Response) => {
       return
     }
 
-    const activities = readActivities()
+    const activities = await readActivities()
     const activity = activities.find((a: any) => a.id === id)
 
     if (!activity) {
@@ -203,17 +371,20 @@ router.post('/:id/logHours', (req: Request, res: Response) => {
       return
     }
 
-    activity.hoursLogged.push({ userId, hours: numericHours })
-    writeActivities(activities)
-
-    const users = readUsers()
-    const user = users.find((u: any) => u.id === userId)
-    if (user) {
-      user.totalHours = (user.totalHours || 0) + numericHours
-      writeUsers(users)
+    if (!activity.claimedBy.includes(userId)) {
+      res.status(400).json({ error: '请先认领此任务再记录时长' })
+      return
     }
 
-    res.json({ activity })
+    activity.hoursLogged.push({ userId, hours: numericHours })
+    await writeActivities(activities)
+
+    if (user) {
+      user.totalHours = (user.totalHours || 0) + numericHours
+      await writeUsers(users)
+    }
+
+    res.json({ activity, user })
   } catch (error) {
     res.status(500).json({ error: '记录时长失败' })
   }
