@@ -10,8 +10,14 @@ export interface Block {
   height: number;
   angle: number;
   originalAngle: number;
-  stress: number;
+  axialForce: number;
+  bendingMoment: number;
+  shearForce: number;
+  stressTop: number;
+  stressBottom: number;
+  maxStress: number;
   stressAngle: number;
+  frictionForce: number;
   displacementX: number;
   displacementY: number;
   rotation: number;
@@ -69,6 +75,7 @@ export interface SimulationState {
   displayRotation: number;
   displaySafetyFactor: number;
   testStartTime: number;
+  theoreticalLimitLoad: number;
 }
 
 export interface SimulationSnapshot {
@@ -91,6 +98,9 @@ const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
 const BASE_Y = 520;
 const BLOCK_COUNT_BASE = 25;
+const GRAVITY = 9.81;
+const BLOCK_DENSITY = 2400;
+const FRICTION_COEFFICIENT = 0.6;
 
 export class SimulationEngine {
   private state: SimulationState;
@@ -119,7 +129,8 @@ export class SimulationEngine {
       displayDisplacement: 0,
       displayRotation: 0,
       displaySafetyFactor: 1,
-      testStartTime: 0
+      testStartTime: 0,
+      theoreticalLimitLoad: 0
     };
   }
 
@@ -127,30 +138,35 @@ export class SimulationEngine {
     this.state.archType = type;
     this.resetLoadAndState();
     this.generateBlocks();
+    this.calculateTheoreticalLimit();
   }
 
   setSpan(span: number): void {
     this.state.span = span;
     this.resetLoadAndState();
     this.generateBlocks();
+    this.calculateTheoreticalLimit();
   }
 
   setCompressiveStrength(strength: number): void {
     this.state.compressiveStrength = strength;
     this.resetLoadAndState();
     this.generateBlocks();
+    this.calculateTheoreticalLimit();
   }
 
   setElasticModulus(modulus: number): void {
     this.state.elasticModulus = modulus;
     this.resetLoadAndState();
     this.generateBlocks();
+    this.calculateTheoreticalLimit();
   }
 
   setCanvasSize(width: number, height: number): void {
     this.canvasWidth = width;
     this.canvasHeight = height;
     this.generateBlocks();
+    this.calculateTheoreticalLimit();
   }
 
   private resetLoadAndState(): void {
@@ -160,12 +176,13 @@ export class SimulationEngine {
     this.state.consecutiveCracked = 0;
     this.state.firstCrackedBlocks = [];
     this.state.dustParticles = [];
-    this.state.testStartTime = performance.now();
+    this.state.testStartTime = 0;
   }
 
   reset(): void {
     this.resetLoadAndState();
     this.generateBlocks();
+    this.calculateTheoreticalLimit();
   }
 
   addLoad(amount: number): void {
@@ -176,6 +193,38 @@ export class SimulationEngine {
       this.state.testStartTime = performance.now();
     }
     this.state.load += amount;
+  }
+
+  private calculateTheoreticalLimit(): void {
+    const halfSpan = this.state.span / 2000;
+    const rise = this.calculateRise() / 1000;
+    const strengthPa = this.state.compressiveStrength * 1e6;
+    const blockArea = 0.035 * 0.05;
+    const blockCount = BLOCK_COUNT_BASE;
+
+    let archFactor: number;
+    switch (this.state.archType) {
+      case 'semicircular':
+        archFactor = 1.0;
+        break;
+      case 'pointed':
+        archFactor = 1.25;
+        break;
+      case 'horseshoe':
+        archFactor = 0.85;
+        break;
+      default:
+        archFactor = 1.0;
+    }
+
+    const totalBlockStrength = strengthPa * blockArea * blockCount * 0.3;
+    const momentResistance = (strengthPa * blockArea * blockCount * 0.05) / halfSpan;
+    const geometricFactor = rise / halfSpan;
+
+    this.state.theoreticalLimitLoad =
+      (totalBlockStrength * 0.4 + momentResistance * 0.6) *
+      archFactor *
+      (0.5 + geometricFactor * 0.5);
   }
 
   private generateBlocks(): void {
@@ -205,8 +254,8 @@ export class SimulationEngine {
       const cy = archPoint.y + normalY * centerOffset;
       const angle = Math.atan2(tangentY, tangentX);
 
-      const archWidth = this.calculateArchLength(halfSpan, rise);
-      const blockWidth = archWidth / blockCount + 2;
+      const archLength = this.calculateArchLength(halfSpan, rise);
+      const blockWidth = archLength / blockCount + 2;
 
       blocks.push({
         id: i,
@@ -218,8 +267,14 @@ export class SimulationEngine {
         height: blockHeight,
         angle: angle,
         originalAngle: angle,
-        stress: 0,
+        axialForce: 0,
+        bendingMoment: 0,
+        shearForce: 0,
+        stressTop: 0,
+        stressBottom: 0,
+        maxStress: 0,
         stressAngle: angle,
+        frictionForce: 0,
         displacementX: 0,
         displacementY: 0,
         rotation: 0,
@@ -257,38 +312,39 @@ export class SimulationEngine {
     halfSpan: number,
     rise: number
   ): { x: number; y: number } {
-    const angle = Math.PI * t;
     switch (this.state.archType) {
       case 'semicircular': {
         const r = halfSpan;
+        const theta = Math.PI * t;
         return {
-          x: centerX - r * Math.cos(angle),
-          y: baseY - r * Math.sin(angle)
+          x: centerX - r * Math.cos(theta),
+          y: baseY - r * Math.sin(theta)
         };
       }
       case 'pointed': {
-        const r1 = halfSpan * 1.1;
-        const offsetX = halfSpan * 0.2;
-        if (t < 0.5) {
-          const localAngle = Math.PI * 0.5 + (angle - Math.PI * 0.5);
+        const theta = Math.PI * t;
+        if (t <= 0.5) {
+          const r = halfSpan * 1.2071;
+          const cx = centerX - halfSpan * 0.2071;
           return {
-            x: centerX + offsetX - r1 * Math.cos(localAngle + Math.PI * 0.3),
-            y: baseY - r1 * Math.sin(localAngle + Math.PI * 0.3) + (r1 - rise) * 0.3
+            x: cx - r * Math.cos(Math.PI * 0.5 + (theta - Math.PI * 0.25)),
+            y: baseY + halfSpan * 0.2071 - r * Math.sin(Math.PI * 0.5 + (theta - Math.PI * 0.25))
           };
         } else {
-          const localAngle = Math.PI * 0.5 + (angle - Math.PI * 0.5);
+          const r = halfSpan * 1.2071;
+          const cx = centerX + halfSpan * 0.2071;
           return {
-            x: centerX - offsetX + r1 * Math.cos(localAngle - Math.PI * 1.3),
-            y: baseY - r1 * Math.sin(localAngle - Math.PI * 1.3) + (r1 - rise) * 0.3
+            x: cx - r * Math.cos(Math.PI * 0.5 - (Math.PI - theta - Math.PI * 0.25)),
+            y: baseY + halfSpan * 0.2071 - r * Math.sin(Math.PI * 0.5 - (Math.PI - theta - Math.PI * 0.25))
           };
         }
       }
       case 'horseshoe': {
         const r = halfSpan * 1.1;
-        const centerOffset = halfSpan * 0.3;
+        const theta = Math.PI * t;
         return {
-          x: centerX - r * Math.cos(angle) * 0.9,
-          y: baseY - centerOffset - r * Math.sin(angle) + centerOffset
+          x: centerX - r * Math.cos(theta) * 0.88,
+          y: baseY - r * Math.sin(theta) - halfSpan * 0.12
         };
       }
       default:
@@ -296,14 +352,14 @@ export class SimulationEngine {
     }
   }
 
-  private calculateArchLength(halfSpan: number, rise: number): number {
+  private calculateArchLength(halfSpan: number, _rise: number): number {
     switch (this.state.archType) {
       case 'semicircular':
         return Math.PI * halfSpan;
       case 'pointed':
-        return Math.PI * halfSpan * 1.15;
+        return Math.PI * halfSpan * 1.18;
       case 'horseshoe':
-        return Math.PI * halfSpan * 0.95;
+        return Math.PI * halfSpan * 0.97;
       default:
         return Math.PI * halfSpan;
     }
@@ -313,16 +369,12 @@ export class SimulationEngine {
     const smoothFactor = 1 - Math.exp(-deltaTime / 0.1);
     this.state.displayLoad += (this.state.load - this.state.displayLoad) * smoothFactor;
 
-    if (this.state.collapseState === 'collapsing') {
+    if (this.state.collapseState === 'collapsing' || this.state.collapseState === 'collapsed') {
       this.updateCollapse(deltaTime);
       return;
     }
 
-    if (this.state.collapseState === 'collapsed') {
-      this.updateCollapse(deltaTime);
-      return;
-    }
-
+    this.calculateForces();
     this.calculateStress();
     this.calculateDeformation();
     this.checkCracks();
@@ -333,31 +385,87 @@ export class SimulationEngine {
     this.state.displaySafetyFactor += (safetyFactor - this.state.displaySafetyFactor) * smoothFactor;
   }
 
-  private calculateStress(): void {
+  private calculateForces(): void {
     const blocks = this.state.blocks;
-    if (blocks.length === 0) return;
+    const n = blocks.length;
+    if (n === 0) return;
 
     const load = this.state.load;
-    const midIndex = Math.floor(blocks.length / 2);
-    const totalStrength = this.state.compressiveStrength * 1e6;
+    const midIndex = Math.floor(n / 2);
+    const rise = this.calculateRise();
+    const halfSpan = this.state.span / 2;
+    const spanRatio = rise / halfSpan;
 
-    for (let i = 0; i < blocks.length; i++) {
-      const distFromTop = Math.abs(i - midIndex);
-      const normalizedDist = distFromTop / (blocks.length / 2);
+    const totalBlockWeight = blocks.length * BLOCK_DENSITY * GRAVITY * 0.035 * 0.05 * 0.05;
+    const verticalReaction = (load + totalBlockWeight) / 2;
+    const horizontalThrust = verticalReaction / (2 * spanRatio + 0.5);
 
-      const edgeFactor = Math.max(0.2, 1 - normalizedDist * 0.5);
-      const quarterFactor = 1 + Math.sin(normalizedDist * Math.PI) * 0.8;
+    let verticalShear = verticalReaction;
+    let axialCompression = horizontalThrust;
 
-      const stressPa = (load * 2.5) / (blocks[i].width * blocks[i].height * 0.001) * edgeFactor * quarterFactor;
-      blocks[i].stress = Math.min(stressPa / totalStrength, 2.5);
-      blocks[i].stressAngle = blocks[i].originalAngle;
+    for (let i = 0; i < n; i++) {
+      const normalizedPos = i / (n - 1);
+      const localAngle = blocks[i].originalAngle;
+
+      const blockWeight = BLOCK_DENSITY * GRAVITY * blocks[i].width * blocks[i].height * 0.0001;
+      const localLoad = i === midIndex ? load * 0.6 : load * (0.4 / (n - 1));
+      const totalVertical = blockWeight + localLoad;
+
+      const cosA = Math.cos(localAngle);
+      const sinA = Math.sin(localAngle);
+
+      const shearComponent = verticalShear * sinA;
+      const axialComponent = verticalShear * cosA;
+      const thrustAxial = horizontalThrust * sinA;
+
+      blocks[i].axialForce = Math.abs(axialCompression + axialComponent + thrustAxial);
+      blocks[i].shearForce = Math.abs(shearComponent - horizontalThrust * cosA);
+
+      const distanceRatio = Math.sin(normalizedPos * Math.PI);
+      blocks[i].bendingMoment = verticalShear * halfSpan * 0.05 * distanceRatio * (1 - normalizedPos) * 2;
+
+      const maxFriction = FRICTION_COEFFICIENT * blocks[i].axialForce;
+      blocks[i].frictionForce = Math.min(maxFriction, Math.abs(blocks[i].shearForce));
+
+      if (normalizedPos < 0.5) {
+        verticalShear -= totalVertical * 0.9;
+        axialCompression += blockWeight * 0.1;
+      } else {
+        verticalShear -= totalVertical * 0.9;
+        if (i === n - 1) verticalShear = -verticalReaction;
+      }
     }
 
-    const endIndices = [0, blocks.length - 1, Math.floor(blocks.length * 0.25), Math.floor(blocks.length * 0.75)];
-    for (const idx of endIndices) {
-      if (idx >= 0 && idx < blocks.length) {
-        blocks[idx].stress *= 1.3;
-      }
+    const quarterPoints = [Math.floor(n * 0.25), Math.floor(n * 0.75)];
+    for (const qp of quarterPoints) {
+      blocks[qp].bendingMoment *= 1.4;
+    }
+    blocks[0].bendingMoment *= 1.2;
+    blocks[n - 1].bendingMoment *= 1.2;
+  }
+
+  private calculateStress(): void {
+    const blocks = this.state.blocks;
+    const strengthPa = this.state.compressiveStrength * 1e6;
+
+    for (let i = 0; i < blocks.length; i++) {
+      const block = blocks[i];
+      const blockArea = block.width * block.height * 0.0001;
+      const sectionModulus = (block.width * block.height * block.height) * 0.000001 / 6;
+
+      const axialStress = block.axialForce / blockArea;
+      const bendingStress = sectionModulus > 0 ? Math.abs(block.bendingMoment) / sectionModulus : 0;
+      const shearStress = 1.5 * block.shearForce / blockArea;
+
+      block.stressTop = axialStress + bendingStress;
+      block.stressBottom = axialStress - bendingStress;
+      block.maxStress = Math.max(Math.abs(block.stressTop), Math.abs(block.stressBottom), shearStress);
+
+      block.stressAngle = block.originalAngle + (block.stressTop > block.stressBottom ? Math.PI / 2 : -Math.PI / 2);
+
+      blocks[i].stressTop = block.stressTop / strengthPa;
+      blocks[i].stressBottom = block.stressBottom / strengthPa;
+      blocks[i].maxStress = block.maxStress / strengthPa;
     }
   }
 
@@ -366,18 +474,24 @@ export class SimulationEngine {
     if (blocks.length === 0) return;
 
     const modulusFactor = 30 / this.state.elasticModulus;
-    const loadFactor = this.state.load / 50000;
+    const loadFactor = this.state.theoreticalLimitLoad > 0
+      ? this.state.load / this.state.theoreticalLimitLoad
+      : this.state.load / 50000;
     const midIndex = Math.floor(blocks.length / 2);
+
+    const archTypeFactor = this.getArchTypeFactor();
 
     for (let i = 0; i < blocks.length; i++) {
       const normalizedPos = Math.abs(i - midIndex) / (blocks.length / 2);
-      const deflectionCurve = Math.cos(normalizedPos * Math.PI * 0.5);
-      const archFactor = this.getArchTypeFactor();
+      const deflectionCurve = Math.pow(Math.cos(normalizedPos * Math.PI * 0.5), 1.5);
+      const sideSign = i < midIndex ? -1 : 1;
 
-      const dy = loadFactor * modulusFactor * 30 * deflectionCurve * archFactor;
-      const sideFactor = (i - midIndex) / (blocks.length / 2);
-      const dx = loadFactor * modulusFactor * 8 * sideFactor * (1 - normalizedPos) * archFactor;
-      const rotation = loadFactor * modulusFactor * 3 * sideFactor * (1 - normalizedPos * 0.5);
+      const stressDeformation = blocks[i].maxStress * 0.5;
+      const axialDeformation = (blocks[i].axialForce / (this.state.elasticModulus * 1e9)) * 1000;
+
+      const dy = (loadFactor * modulusFactor * 35 * deflectionCurve + stressDeformation * 8 + axialDeformation * 0.3) * archTypeFactor;
+      const dx = sideSign * loadFactor * modulusFactor * 10 * normalizedPos * (1 - normalizedPos) * archTypeFactor;
+      const rotation = sideSign * (loadFactor * modulusFactor * 4 * (1 - normalizedPos * 0.7) + blocks[i].bendingMoment * 0.002);
 
       blocks[i].displacementX = dx;
       blocks[i].displacementY = dy;
@@ -388,8 +502,8 @@ export class SimulationEngine {
       blocks[i].angle = blocks[i].originalAngle + rotation;
 
       if (blocks[i].cracked) {
-        blocks[i].displacementX *= 1.5;
-        blocks[i].displacementY *= 1.5;
+        blocks[i].displacementX *= 1.6;
+        blocks[i].displacementY *= 1.6;
       }
     }
   }
@@ -399,9 +513,9 @@ export class SimulationEngine {
       case 'semicircular':
         return 1.0;
       case 'pointed':
-        return 0.85;
+        return 0.82;
       case 'horseshoe':
-        return 1.15;
+        return 1.18;
       default:
         return 1.0;
     }
@@ -412,16 +526,16 @@ export class SimulationEngine {
     let crackedThisFrame = 0;
 
     for (let i = 0; i < blocks.length; i++) {
-      if (!blocks[i].cracked && blocks[i].stress >= 1.0) {
+      if (!blocks[i].cracked && blocks[i].maxStress >= 1.0) {
         blocks[i].cracked = true;
         crackedThisFrame++;
 
         const crackCount = 1 + Math.floor(Math.random() * 3);
         for (let c = 0; c < crackCount; c++) {
-          const crackAngle = blocks[i].stressAngle + Math.PI / 2 + (Math.random() - 0.5) * 0.5;
+          const crackAngle = blocks[i].stressAngle + (Math.random() - 0.5) * 0.6;
           blocks[i].crackList.push({
-            x: (Math.random() - 0.5) * blocks[i].width * 0.6,
-            y: (Math.random() - 0.5) * blocks[i].height * 0.6,
+            x: (Math.random() - 0.5) * blocks[i].width * 0.7,
+            y: (Math.random() - 0.5) * blocks[i].height * 0.7,
             length: 10 + Math.random() * 10,
             angle: crackAngle
           });
@@ -448,37 +562,44 @@ export class SimulationEngine {
     this.state.collapseTimer = 0;
 
     const blocks = this.state.blocks;
+    const midIndex = Math.floor(blocks.length / 2);
+
     for (let i = 0; i < blocks.length; i++) {
-      const side = i < blocks.length / 2 ? -1 : 1;
-      blocks[i].velocityX = side * (30 + Math.random() * 50);
-      blocks[i].velocityY = -20 - Math.random() * 40;
-      blocks[i].angularVelocity = side * (1 + Math.random() * 3);
+      const distFromMid = Math.abs(i - midIndex) / (blocks.length / 2);
+      const side = i < midIndex ? -1 : 1;
+      const collapseWave = 1 - distFromMid * 0.4;
+
+      blocks[i].velocityX = side * (20 + Math.random() * 60) * collapseWave;
+      blocks[i].velocityY = -30 - Math.random() * 50 - (1 - collapseWave) * 30;
+      blocks[i].angularVelocity = side * (1.5 + Math.random() * 4);
       blocks[i].failed = true;
 
-      const debrisCount = 3 + Math.floor(Math.random() * 4);
+      const debrisCount = 3 + Math.floor(Math.random() * 5);
       for (let d = 0; d < debrisCount; d++) {
+        const dSide = Math.random() < 0.5 ? -1 : 1;
         blocks[i].debris.push({
-          x: blocks[i].centerX,
-          y: blocks[i].centerY,
-          vx: side * (20 + Math.random() * 80),
-          vy: -50 - Math.random() * 80,
-          size: 3 + Math.random() * 6,
+          x: blocks[i].centerX + (Math.random() - 0.5) * blocks[i].width * 0.5,
+          y: blocks[i].centerY + (Math.random() - 0.5) * blocks[i].height * 0.5,
+          vx: dSide * (30 + Math.random() * 100) * collapseWave,
+          vy: -40 - Math.random() * 100,
+          size: 2 + Math.random() * 7,
           rotation: Math.random() * Math.PI * 2,
-          angularVel: (Math.random() - 0.5) * 8
+          angularVel: (Math.random() - 0.5) * 12
         });
       }
     }
 
-    for (let p = 0; p < 50; p++) {
+    const rise = this.calculateRise();
+    for (let p = 0; p < 80; p++) {
       this.state.dustParticles.push({
-        x: this.canvasWidth / 2 + (Math.random() - 0.5) * this.state.span,
-        y: BASE_Y - this.calculateRise() * 0.5 + (Math.random() - 0.5) * 100,
-        vx: (Math.random() - 0.5) * 60,
-        vy: -20 - Math.random() * 40,
-        size: 8 + Math.random() * 15,
+        x: this.canvasWidth / 2 + (Math.random() - 0.5) * this.state.span * 1.2,
+        y: BASE_Y - rise * 0.4 + (Math.random() - 0.5) * rise,
+        vx: (Math.random() - 0.5) * 80,
+        vy: -10 - Math.random() * 50,
+        size: 6 + Math.random() * 20,
         life: 0,
-        maxLife: 1.5 + Math.random(),
-        alpha: 0.5 + Math.random() * 0.3
+        maxLife: 1.2 + Math.random() * 1.5,
+        alpha: 0.4 + Math.random() * 0.4
       });
     }
   }
@@ -490,24 +611,43 @@ export class SimulationEngine {
       this.state.collapseState = 'collapsed';
     }
 
-    const gravity = 400;
+    const gravity = 450;
     const blocks = this.state.blocks;
 
     for (let i = 0; i < blocks.length; i++) {
       blocks[i].velocityY += gravity * deltaTime;
+      blocks[i].velocityX *= 0.995;
       blocks[i].centerX += blocks[i].velocityX * deltaTime;
       blocks[i].centerY += blocks[i].velocityY * deltaTime;
       blocks[i].angle += blocks[i].angularVelocity * deltaTime;
       blocks[i].rotation = blocks[i].angle - blocks[i].originalAngle;
 
-      if (blocks[i].centerY > BASE_Y + 50) {
-        blocks[i].velocityY *= -0.3;
-        blocks[i].velocityX *= 0.8;
-        blocks[i].centerY = BASE_Y + 50;
+      if (blocks[i].centerY > BASE_Y + 40) {
+        const impactVel = Math.abs(blocks[i].velocityY);
+        blocks[i].velocityY *= -0.25;
+        blocks[i].velocityX *= 0.7;
+        blocks[i].angularVelocity *= 0.5;
+        blocks[i].centerY = BASE_Y + 40;
+
+        if (impactVel > 100) {
+          for (let d = 0; d < 3; d++) {
+            this.state.dustParticles.push({
+              x: blocks[i].centerX + (Math.random() - 0.5) * 30,
+              y: BASE_Y + 30,
+              vx: (Math.random() - 0.5) * 40,
+              vy: -20 - Math.random() * 30,
+              size: 4 + Math.random() * 10,
+              life: 0,
+              maxLife: 0.8 + Math.random(),
+              alpha: 0.3 + Math.random() * 0.3
+            });
+          }
+        }
       }
 
       for (const d of blocks[i].debris) {
-        d.vy += gravity * 1.2 * deltaTime;
+        d.vy += gravity * 1.3 * deltaTime;
+        d.vx *= 0.99;
         d.x += d.vx * deltaTime;
         d.y += d.vy * deltaTime;
         d.rotation += d.angularVel * deltaTime;
@@ -517,14 +657,15 @@ export class SimulationEngine {
     for (let i = this.state.dustParticles.length - 1; i >= 0; i--) {
       const p = this.state.dustParticles[i];
       p.life += deltaTime;
-      p.vy += 30 * deltaTime;
+      p.vy += 20 * deltaTime;
       p.x += p.vx * deltaTime;
       p.y += p.vy * deltaTime;
-      p.vx *= 0.98;
-      p.vy *= 0.98;
+      p.vx *= 0.97;
+      p.vy *= 0.97;
+      p.size += deltaTime * 15;
       p.alpha = Math.max(0, p.alpha * (1 - p.life / p.maxLife));
 
-      if (p.life >= p.maxLife) {
+      if (p.life >= p.maxLife || p.alpha <= 0.01) {
         this.state.dustParticles.splice(i, 1);
       }
     }
@@ -547,7 +688,7 @@ export class SimulationEngine {
     let maxStress = 0;
     for (const b of blocks) {
       maxRotation = Math.max(maxRotation, Math.abs(b.rotation * 180 / Math.PI));
-      maxStress = Math.max(maxStress, b.stress);
+      maxStress = Math.max(maxStress, b.maxStress);
     }
 
     const safetyFactor = maxStress > 0 ? Math.max(0, 1 / maxStress) : 999;
@@ -565,15 +706,16 @@ export class SimulationEngine {
         this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
       const ctx = this.audioContext;
-      const duration = 0.15;
+      const duration = 0.18;
       const sampleRate = ctx.sampleRate;
       const buffer = ctx.createBuffer(1, Math.floor(sampleRate * duration), sampleRate);
       const data = buffer.getChannelData(0);
 
       for (let i = 0; i < data.length; i++) {
         const t = i / sampleRate;
-        const envelope = Math.exp(-t * 30) * (1 - t / duration);
-        data[i] = (Math.random() * 2 - 1) * envelope * 0.3;
+        const envelope = (Math.exp(-t * 25) * 0.6 + Math.exp(-t * 60) * 0.4) * (1 - t / duration);
+        const crackle = (Math.random() * 2 - 1) * (Math.random() > 0.92 ? 1.5 : 1);
+        data[i] = crackle * envelope * 0.35;
       }
 
       const source = ctx.createBufferSource();
@@ -581,12 +723,12 @@ export class SimulationEngine {
 
       const filter = ctx.createBiquadFilter();
       filter.type = 'bandpass';
-      filter.frequency.value = 1500 + Math.random() * 1000;
-      filter.Q.value = 2;
+      filter.frequency.value = 1200 + Math.random() * 1500;
+      filter.Q.value = 2.5;
 
       const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.4, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+      gain.gain.setValueAtTime(0.5, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.005, ctx.currentTime + duration);
 
       source.connect(filter);
       filter.connect(gain);
@@ -634,6 +776,10 @@ export class SimulationEngine {
     ctx.fillRect(0, BASE_Y + 20, this.canvasWidth, this.canvasHeight - BASE_Y - 20);
     ctx.fillStyle = '#3d444d';
     ctx.fillRect(0, BASE_Y + 15, this.canvasWidth, 8);
+
+    const centerX = this.canvasWidth / 2;
+    ctx.fillStyle = 'rgba(88, 166, 255, 0.08)';
+    ctx.fillRect(centerX - this.state.span / 2, BASE_Y + 8, this.state.span, 10);
   }
 
   private getBlockColor(strength: number, modulus: number, cracked: boolean): string {
@@ -708,23 +854,23 @@ export class SimulationEngine {
     const blocks = this.state.blocks;
 
     for (const block of blocks) {
-      if (block.stress <= 0.05) continue;
+      if (block.maxStress <= 0.05) continue;
 
       ctx.save();
       ctx.translate(block.centerX, block.centerY);
       ctx.rotate(block.angle);
 
-      const stressNorm = Math.min(block.stress, 1.5);
+      const stressNorm = Math.min(block.maxStress, 1.5);
       let color: string;
       if (stressNorm < 0.33) {
         const t = stressNorm / 0.33;
-        color = `rgba(100, 150, 255, ${0.1 + t * 0.2})`;
+        color = `rgba(80, 140, 255, ${0.12 + t * 0.2})`;
       } else if (stressNorm < 0.66) {
         const t = (stressNorm - 0.33) / 0.33;
-        color = `rgba(100, ${Math.floor(200 + t * 55)}, 100, ${0.2 + t * 0.15})`;
+        color = `rgba(${Math.floor(80 + t * 120)}, ${Math.floor(180 + t * 50)}, ${Math.floor(140 - t * 80)}, ${0.22 + t * 0.18})`;
       } else {
         const t = (stressNorm - 0.66) / 0.34;
-        color = `rgba(${Math.floor(200 + t * 55)}, ${Math.floor(200 - t * 150)}, 80, ${0.25 + t * 0.2})`;
+        color = `rgba(${Math.floor(200 + t * 55)}, ${Math.floor(180 - t * 130)}, ${Math.floor(60 - t * 20)}, ${0.28 + t * 0.25})`;
       }
 
       const w = block.width;
@@ -753,7 +899,7 @@ export class SimulationEngine {
     const arrowY = topBlock.centerY - topBlock.height / 2 - 30;
 
     if (this.state.displayLoad > 0) {
-      const arrowSize = Math.min(40, 15 + this.state.displayLoad / 2000);
+      const arrowSize = Math.min(45, 12 + this.state.displayLoad / 1500);
 
       ctx.strokeStyle = '#58a6ff';
       ctx.fillStyle = '#58a6ff';
@@ -761,20 +907,28 @@ export class SimulationEngine {
 
       ctx.beginPath();
       ctx.moveTo(arrowX, arrowY - arrowSize);
-      ctx.lineTo(arrowX, arrowY + 10);
+      ctx.lineTo(arrowX, arrowY + 12);
       ctx.stroke();
 
       ctx.beginPath();
-      ctx.moveTo(arrowX, arrowY + 18);
-      ctx.lineTo(arrowX - 10, arrowY + 5);
-      ctx.lineTo(arrowX + 10, arrowY + 5);
+      ctx.moveTo(arrowX, arrowY + 20);
+      ctx.lineTo(arrowX - 11, arrowY + 5);
+      ctx.lineTo(arrowX + 11, arrowY + 5);
       ctx.closePath();
       ctx.fill();
 
-      ctx.font = 'bold 16px -apple-system, sans-serif';
+      ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillStyle = '#e6edf3';
-      ctx.fillText(`${Math.round(this.state.displayLoad)} N`, arrowX, arrowY - arrowSize - 10);
+      const loadText = `${Math.round(this.state.displayLoad)} N`;
+      ctx.fillText(loadText, arrowX, arrowY - arrowSize - 12);
+
+      if (this.state.theoreticalLimitLoad > 0) {
+        const ratio = this.state.displayLoad / this.state.theoreticalLimitLoad;
+        ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillStyle = ratio > 1 ? '#f85149' : '#8b949e';
+        ctx.fillText(`极限: ${Math.round(this.state.theoreticalLimitLoad)}N`, arrowX, arrowY - arrowSize - 28);
+      }
     }
   }
 
@@ -790,6 +944,7 @@ export class SimulationEngine {
 
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
 
       for (const crack of block.crackList) {
         ctx.save();
@@ -797,7 +952,8 @@ export class SimulationEngine {
         ctx.rotate(crack.angle - block.angle);
         ctx.beginPath();
         ctx.moveTo(-crack.length / 2, 0);
-        ctx.lineTo(crack.length / 2, 0);
+        const midX = crack.length * (0.3 + Math.random() * 0.4) - crack.length / 2;
+        ctx.quadraticCurveTo(midX, (Math.random() - 0.5) * 4, crack.length / 2, 0);
         ctx.stroke();
         ctx.restore();
       }
@@ -821,7 +977,7 @@ export class SimulationEngine {
         ctx.rotate(d.rotation);
         ctx.fillStyle = block.cracked ? '#cc5555' : baseColor;
         ctx.fillRect(-d.size / 2, -d.size / 2, d.size, d.size);
-        ctx.strokeStyle = '#0d1117';
+        ctx.strokeStyle = 'rgba(13, 17, 23, 0.8)';
         ctx.lineWidth = 0.5;
         ctx.strokeRect(-d.size / 2, -d.size / 2, d.size, d.size);
         ctx.restore();
@@ -833,7 +989,7 @@ export class SimulationEngine {
     for (const p of this.state.dustParticles) {
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(180, 170, 160, ${p.alpha * 0.5})`;
+      ctx.fillStyle = `rgba(180, 170, 155, ${p.alpha * 0.55})`;
       ctx.fill();
     }
   }
@@ -853,14 +1009,16 @@ export class SimulationEngine {
         const firstId = this.state.firstCrackedBlocks[0];
         const totalBlocks = blocks.length;
         const position = Math.round((firstId / (totalBlocks - 1)) * 100);
-        if (position < 20) {
+        if (position < 15) {
           failureMode = '左拱脚处砌块开裂导致连锁破坏';
-        } else if (position > 80) {
+        } else if (position > 85) {
           failureMode = '右拱脚处砌块开裂导致连锁破坏';
         } else if (position >= 40 && position <= 60) {
-          failureMode = '拱顶区域砌块开裂导致连锁破坏';
+          failureMode = '拱顶区域砌块压溃导致连锁破坏';
+        } else if (position >= 20 && position < 40) {
+          failureMode = `左${100 - position}%处（约四分之一跨）砌块开裂导致连锁破坏`;
         } else {
-          failureMode = `约${position}%位置砌块开裂导致连锁破坏`;
+          failureMode = `右${position}%处（约四分之三跨）砌块开裂导致连锁破坏`;
         }
       }
     } else if (crackedIds.length > 0) {
@@ -890,6 +1048,10 @@ export class SimulationEngine {
 
   isCollapsed(): boolean {
     return this.state.collapseState === 'collapsed' || this.state.collapseState === 'collapsing';
+  }
+
+  isCollapsing(): boolean {
+    return this.state.collapseState === 'collapsing';
   }
 
   getCollapseProgress(): number {
