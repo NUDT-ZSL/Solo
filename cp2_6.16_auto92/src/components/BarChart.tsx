@@ -1,34 +1,34 @@
-import { useMemo } from 'react';
-import type { VoteResult, Movie } from '@/types';
+import { useMemo } from 'react'
+import type { VoteResult, Movie } from '@/types'
 
 interface BarChartProps {
-  data: VoteResult[];
-  movies: Movie[];
-  isClosed?: boolean;
+  data: VoteResult[]
+  movies: Movie[]
+  isClosed?: boolean
 }
 
 export default function BarChart({ data, movies, isClosed = false }: BarChartProps) {
   const sortedData = useMemo(() => {
-    if (!isClosed) return data;
-    return [...data].sort((a, b) => b.count - a.count);
-  }, [data, isClosed]);
+    if (!isClosed) return data
+    return [...data].sort((a, b) => b.count - a.count)
+  }, [data, isClosed])
 
   const maxCount = useMemo(() => {
-    if (sortedData.length === 0) return 1;
-    return Math.max(...sortedData.map((d) => d.count), 1);
-  }, [sortedData]);
+    if (sortedData.length === 0) return 1
+    return Math.max(...sortedData.map((d) => d.count), 1)
+  }, [sortedData])
 
   const topThreeIds = useMemo(() => {
-    if (!isClosed) return new Set<string>();
-    return new Set(sortedData.slice(0, 3).map((d) => d.movieId));
-  }, [sortedData, isClosed]);
+    if (!isClosed) return new Set<string>()
+    return new Set(sortedData.slice(0, 3).map((d) => d.movieId))
+  }, [sortedData, isClosed])
 
   const getMovieById = (movieId: string) => {
-    return movies.find((m) => m.id === movieId);
-  };
+    return movies.find((m) => m.id === movieId)
+  }
 
-  const chartHeight = 280;
-  const maxBarHeight = chartHeight - 60;
+  const chartHeight = 280
+  const maxBarHeight = chartHeight - 60
 
   return (
     <div
@@ -36,10 +36,10 @@ export default function BarChart({ data, movies, isClosed = false }: BarChartPro
       style={{
         padding: '24px',
         borderRadius: '16px',
+        width: '100%',
       }}
     >
       <h3
-        className="chart-title"
         style={{
           color: '#fff',
           fontSize: '18px',
@@ -52,7 +52,6 @@ export default function BarChart({ data, movies, isClosed = false }: BarChartPro
       </h3>
 
       <div
-        className="bars-wrapper"
         style={{
           display: 'flex',
           alignItems: 'flex-end',
@@ -60,29 +59,31 @@ export default function BarChart({ data, movies, isClosed = false }: BarChartPro
           gap: '20px',
           height: `${chartHeight}px`,
           paddingBottom: '20px',
+          overflowX: 'auto',
         }}
       >
         {sortedData.map((item) => {
-          const movie = getMovieById(item.movieId);
-          const heightPercentage = maxCount > 0 ? item.count / maxCount : 0;
-          const barHeight = Math.max(heightPercentage * maxBarHeight, item.count > 0 ? 20 : 4);
-          const isTopThree = topThreeIds.has(item.movieId);
+          const movie = getMovieById(item.movieId)
+          const heightPercentage = maxCount > 0 ? item.count / maxCount : 0
+          const barHeight = Math.max(
+            heightPercentage * maxBarHeight,
+            item.count > 0 ? 20 : 4,
+          )
+          const isTopThree = topThreeIds.has(item.movieId)
 
           return (
             <div
               key={item.movieId}
-              className="bar-item"
               style={{
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                flex: 1,
+                flex: '1 1 0',
                 maxWidth: '80px',
                 minWidth: '40px',
               }}
             >
               <div
-                className="bar-count-label"
                 style={{
                   color: '#fff',
                   fontSize: '14px',
@@ -95,32 +96,32 @@ export default function BarChart({ data, movies, isClosed = false }: BarChartPro
               </div>
 
               <div
-                className={isTopThree ? 'bar bar-top-three' : 'bar'}
                 style={{
                   width: '100%',
                   height: `${barHeight}px`,
-                  backgroundColor: '#c084fc',
+                  backgroundColor: isTopThree ? '#f59e0b' : '#c084fc',
                   borderRadius: '8px 8px 4px 4px',
                   transition: 'height 0.3s ease-out',
                   cursor: 'pointer',
-                  animation: isTopThree ? 'goldGlow 1s ease-in-out infinite' : undefined,
                   boxShadow: isTopThree
-                    ? '0 0 20px rgba(245,158,11,0.6)'
+                    ? '0 0 20px rgba(245, 158, 11, 0.6)'
+                    : undefined,
+                  animation: isTopThree
+                    ? 'goldGlow 1s ease-in-out infinite'
                     : undefined,
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.filter = 'brightness(1.2)';
-                  e.currentTarget.style.transform = 'scaleY(1.02)';
-                  e.currentTarget.style.transformOrigin = 'bottom';
+                  e.currentTarget.style.filter = 'brightness(1.2)'
+                  e.currentTarget.style.transform = 'scaleY(1.02)'
+                  e.currentTarget.style.transformOrigin = 'bottom'
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.filter = 'brightness(1)';
-                  e.currentTarget.style.transform = 'scaleY(1)';
+                  e.currentTarget.style.filter = 'brightness(1)'
+                  e.currentTarget.style.transform = 'scaleY(1)'
                 }}
               />
 
               <div
-                className="bar-label"
                 style={{
                   marginTop: '8px',
                   fontSize: '20px',
@@ -133,7 +134,6 @@ export default function BarChart({ data, movies, isClosed = false }: BarChartPro
               </div>
 
               <div
-                className="bar-title"
                 style={{
                   marginTop: '4px',
                   fontSize: '11px',
@@ -149,13 +149,12 @@ export default function BarChart({ data, movies, isClosed = false }: BarChartPro
                 {movie?.title || '未知'}
               </div>
             </div>
-          );
+          )
         })}
       </div>
 
       {sortedData.length === 0 && (
         <div
-          className="empty-chart"
           style={{
             textAlign: 'center',
             color: '#a78bfa',
@@ -166,5 +165,5 @@ export default function BarChart({ data, movies, isClosed = false }: BarChartPro
         </div>
       )}
     </div>
-  );
+  )
 }

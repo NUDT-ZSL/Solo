@@ -7,10 +7,11 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
     headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
   })
-  if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-  const json = await response.json()
-  if (json.success) return json.data as T
-  throw new Error(json.error || 'Request failed')
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}))
+    throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
+  }
+  return response.json() as Promise<T>
 }
 
 export function fetchMovies(): Promise<Movie[]> {
@@ -43,9 +44,13 @@ export function getVotes(scheduleId: string): Promise<VoteResult[]> {
   return request<VoteResult[]>(`/schedules/${scheduleId}/votes`)
 }
 
-export function submitVote(scheduleId: string, voterId: string, movieIds: string[]): Promise<void> {
-  return request<void>(`/schedules/${scheduleId}/votes`, {
+export function submitVote(
+  scheduleId: string,
+  voterId: string,
+  movieIds: string[],
+): Promise<{ success: boolean; results: VoteResult[] }> {
+  return request<{ success: boolean; results: VoteResult[] }>(`/schedules/${scheduleId}/votes`, {
     method: 'POST',
-    body: JSON.stringify({ scheduleId, voterId, movieIds }),
+    body: JSON.stringify({ voterId, movieIds }),
   })
 }

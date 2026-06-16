@@ -9,7 +9,6 @@ import dotenv from 'dotenv'
 import { fileURLToPath } from 'url'
 import moviesRoutes from './routes/movies.js'
 import schedulesRoutes from './routes/schedules.js'
-import votesRoutes from './routes/votes.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -24,11 +23,10 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
 app.use('/api/movies', moviesRoutes)
 app.use('/api/schedules', schedulesRoutes)
-app.use('/api/schedules', votesRoutes)
 
 app.use(
   '/api/health',
-  (req: Request, res: Response, next: NextFunction): void => {
+  (req: Request, res: Response, _next: NextFunction): void => {
     res.status(200).json({
       success: true,
       message: 'ok',
@@ -36,14 +34,15 @@ app.use(
   },
 )
 
-app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
+app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
+  console.error('Server error:', error)
   res.status(500).json({
     success: false,
     error: 'Server internal error',
   })
 })
 
-app.use((req: Request, res: Response) => {
+app.use((_req: Request, res: Response) => {
   res.status(404).json({
     success: false,
     error: 'API not found',
