@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useMemo } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 import { City } from '../data/cities';
 import {
   getSkyColor,
@@ -97,6 +97,9 @@ function generateClouds(): Cloud[] {
   return clouds;
 }
 
+const initialBuildings = generateBuildings();
+const initialClouds = generateClouds();
+
 export default function SkyCanvas({
   city,
   time,
@@ -104,8 +107,8 @@ export default function SkyCanvas({
   selectedBuildingIndex
 }: SkyCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const buildingsRef = useRef<Building[]>(useMemo(() => generateBuildings(), []));
-  const cloudsRef = useRef<Cloud[]>(useMemo(() => generateClouds(), []));
+  const buildingsRef = useRef<Building[]>(initialBuildings);
+  const cloudsRef = useRef<Cloud[]>(initialClouds);
   const timeRef = useRef<number>(time);
   const cityRef = useRef<City>(city);
   const selectedIndexRef = useRef<number | null>(selectedBuildingIndex);
@@ -138,7 +141,7 @@ export default function SkyCanvas({
       const b = buildings[i];
       const buildingTop = GROUND_Y - b.height;
       if (x >= b.x && x <= b.x + b.width && y >= buildingTop && y <= GROUND_Y) {
-        const sunAlt = getSunAltitude(timeRef.current, cityRef.current.latitude);
+        const sunAlt = getSunAltitude(timeRef.current, cityRef.current.latitude, cityRef.current.longitude);
         const temp = calculateTemperature(sunAlt);
         onBuildingClick({
           index: i,
@@ -164,13 +167,13 @@ export default function SkyCanvas({
 
       ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-      const skyColor = getSkyColor(currentTime);
+      const skyColor = getSkyColor(currentTime, currentCity.latitude, currentCity.longitude);
       ctx.fillStyle = skyColor;
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-      const sun = calculateSunPosition(currentTime, CANVAS_WIDTH, CANVAS_HEIGHT, currentCity.latitude);
+      const sun = calculateSunPosition(currentTime, CANVAS_WIDTH, CANVAS_HEIGHT, currentCity.latitude, currentCity.longitude);
       if (sun.visible) {
-        const sunColor = getSunColor(currentTime);
+        const sunColor = getSunColor(currentTime, currentCity.latitude, currentCity.longitude);
         const gradient = ctx.createRadialGradient(sun.x, sun.y, 0, sun.x, sun.y, 60);
         gradient.addColorStop(0, sunColor);
         gradient.addColorStop(0.4, sunColor + '88');
@@ -186,14 +189,14 @@ export default function SkyCanvas({
         ctx.fill();
       }
 
-      const showClouds = isTwilight(currentTime);
+      const showClouds = isTwilight(currentTime, currentCity.latitude, currentCity.longitude);
       if (showClouds) {
         const clouds = cloudsRef.current;
         ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
         clouds.forEach(cloud => {
-          cloud.x += cloud.speed;
-          if (cloud.x > CANVAS_WIDTH + 60) {
-            cloud.x = -60;
+          cloud.x -= cloud.speed;
+          if (cloud.x < -60) {
+            cloud.x = CANVAS_WIDTH + 60;
           }
           cloud.circles.forEach(circle => {
             ctx.beginPath();

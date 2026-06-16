@@ -202,6 +202,9 @@ canvas {
 .speed-button.active {
   background-color: #e94560;
   color: #ffffff;
+  border: 2px solid #ff6b8a;
+  box-shadow: 0 0 8px rgba(233, 69, 96, 0.6);
+  transform: scale(1.05);
 }
 
 .info-bubble {

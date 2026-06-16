@@ -31,7 +31,7 @@ export default function App() {
     lastTimeRef.current = timestamp;
 
     setCurrentTime(prev => {
-      let next = prev + delta * speed * 0.05;
+      let next = prev + delta * speed * 0.005;
       if (next >= 24) {
         next = next - 24;
       }

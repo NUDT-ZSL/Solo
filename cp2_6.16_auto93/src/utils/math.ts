@@ -33,23 +33,83 @@ export const lerpColor = (color1: string, color2: string, t: number): string => 
   );
 };
 
-export const getSkyColor = (time: number): string => {
-  const sunrise = 5.5;
-  const sunset = 18.5;
+const degToRad = (deg: number): number => deg * (Math.PI / 180);
+const radToDeg = (rad: number): number => rad * (180 / Math.PI);
+
+const getDayOfYear = (): number => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 0);
+  const diff = now.getTime() - start.getTime();
+  const oneDay = 1000 * 60 * 60 * 24;
+  return Math.floor(diff / oneDay);
+};
+
+export const getSunriseTime = (latitude: number, longitude: number): number => {
+  const dayOfYear = getDayOfYear();
+  const lat = Math.max(-66, Math.min(66, latitude));
+
+  const declination = 23.45 * Math.sin(degToRad((360 / 365) * (dayOfYear - 81)));
+  const cosHourAngle = -Math.tan(degToRad(lat)) * Math.tan(degToRad(declination));
+  const clampedCos = Math.max(-0.9999, Math.min(0.9999, cosHourAngle));
+  const hourAngle = radToDeg(Math.acos(clampedCos));
+
+  const sunriseHour = 12 - hourAngle / 15 - longitude / 360 * 24;
+
+  let adjusted = sunriseHour;
+  while (adjusted < 0) adjusted += 24;
+  while (adjusted >= 24) adjusted -= 24;
+
+  const latitudeFactor = Math.abs(latitude) / 66;
+  if (latitude > 0) {
+    adjusted -= latitudeFactor * 1.5;
+  } else {
+    adjusted += latitudeFactor * 1.5;
+  }
+
+  return Math.max(4.5, Math.min(7.5, adjusted));
+};
+
+export const getSunsetTime = (latitude: number, longitude: number): number => {
+  const dayOfYear = getDayOfYear();
+  const lat = Math.max(-66, Math.min(66, latitude));
+
+  const declination = 23.45 * Math.sin(degToRad((360 / 365) * (dayOfYear - 81)));
+  const cosHourAngle = -Math.tan(degToRad(lat)) * Math.tan(degToRad(declination));
+  const clampedCos = Math.max(-0.9999, Math.min(0.9999, cosHourAngle));
+  const hourAngle = radToDeg(Math.acos(clampedCos));
+
+  const sunsetHour = 12 + hourAngle / 15 - longitude / 360 * 24;
+
+  let adjusted = sunsetHour;
+  while (adjusted < 0) adjusted += 24;
+  while (adjusted >= 24) adjusted -= 24;
+
+  const latitudeFactor = Math.abs(latitude) / 66;
+  if (latitude > 0) {
+    adjusted += latitudeFactor * 2;
+  } else {
+    adjusted -= latitudeFactor * 2;
+  }
+
+  return Math.max(16.5, Math.min(21, adjusted));
+};
+
+export const getSkyColor = (time: number, latitude: number, longitude: number): string => {
+  const sunrise = getSunriseTime(latitude, longitude);
+  const sunset = getSunsetTime(latitude, longitude);
   const midnight = 24;
+  const midday = (sunrise + sunset) / 2;
 
   if (time < sunrise - 1) {
     return '#0a0e27';
   } else if (time < sunrise + 1) {
     const t = (time - (sunrise - 1)) / 2;
     return lerpColor('#0a0e27', '#ff6b35', t);
-  } else if (time < 8) {
-    const t = (time - (sunrise + 1)) / (8 - (sunrise + 1));
+  } else if (time < midday) {
+    const t = (time - (sunrise + 1)) / (midday - (sunrise + 1));
     return lerpColor('#ff6b35', '#87ceeb', t);
-  } else if (time < 16) {
-    return '#87ceeb';
   } else if (time < sunset - 1) {
-    const t = (time - 16) / ((sunset - 1) - 16);
+    const t = (time - midday) / ((sunset - 1) - midday);
     return lerpColor('#87ceeb', '#ff6b35', t);
   } else if (time < sunset + 1) {
     const t = (time - (sunset - 1)) / 2;
@@ -60,10 +120,10 @@ export const getSkyColor = (time: number): string => {
   }
 };
 
-export const getSunColor = (time: number): string => {
-  const sunrise = 5.5;
-  const noon = 12;
-  const sunset = 18.5;
+export const getSunColor = (time: number, latitude: number, longitude: number): string => {
+  const sunrise = getSunriseTime(latitude, longitude);
+  const sunset = getSunsetTime(latitude, longitude);
+  const noon = (sunrise + sunset) / 2;
 
   if (time < sunrise - 0.5 || time > sunset + 0.5) {
     return '#ff6b6b';
@@ -80,10 +140,11 @@ export const calculateSunPosition = (
   time: number,
   canvasWidth: number,
   canvasHeight: number,
-  latitude: number
+  latitude: number,
+  longitude: number
 ): { x: number; y: number; visible: boolean; angle: number } => {
-  const sunrise = 5.5;
-  const sunset = 18.5;
+  const sunrise = getSunriseTime(latitude, longitude);
+  const sunset = getSunsetTime(latitude, longitude);
   const totalDayHours = sunset - sunrise;
 
   const normalizedTime = (time - sunrise) / totalDayHours;
@@ -108,10 +169,10 @@ export const calculateSunPosition = (
   return { x, y, visible, angle };
 };
 
-export const getSunAltitude = (time: number, latitude: number): number => {
-  const sunrise = 5.5;
-  const sunset = 18.5;
-  const noon = 12;
+export const getSunAltitude = (time: number, latitude: number, longitude: number): number => {
+  const sunrise = getSunriseTime(latitude, longitude);
+  const sunset = getSunsetTime(latitude, longitude);
+  const noon = (sunrise + sunset) / 2;
 
   if (time < sunrise || time > sunset) {
     return 0;
@@ -139,17 +200,9 @@ export const formatTime = (hours: number): string => {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 };
 
-export const getSunriseTime = (_latitude: number, _longitude: number): number => {
-  return 5.5;
-};
-
-export const getSunsetTime = (_latitude: number, _longitude: number): number => {
-  return 18.5;
-};
-
-export const isTwilight = (time: number): boolean => {
-  const sunrise = 5.5;
-  const sunset = 18.5;
+export const isTwilight = (time: number, latitude: number, longitude: number): boolean => {
+  const sunrise = getSunriseTime(latitude, longitude);
+  const sunset = getSunsetTime(latitude, longitude);
   return (time >= sunrise - 0.5 && time <= sunrise + 0.5) ||
          (time >= sunset - 0.5 && time <= sunset + 0.5);
 };
