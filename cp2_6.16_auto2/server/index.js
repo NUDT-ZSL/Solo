@@ -14,20 +14,33 @@ const DATA_FILE = path.join(__dirname, 'data', 'photos.json');
 app.use(cors());
 app.use(express.json());
 
-const readPhotosData = () => {
+const readPhotosData = (): Array<{
+  id: string;
+  date: string;
+  imageUrl: string;
+  mood: string;
+  text: string;
+}> => {
   try {
-    const data = fs.readFileSync(DATA_FILE, 'utf-8');
-    return JSON.parse(data);
+    const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data)) {
+      console.error('photos.json is not an array, returning empty list');
+      return [];
+    }
+    return data;
   } catch (err) {
     console.error('Error reading photos data:', err);
     return [];
   }
 };
 
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
 app.get('/api/photos', (_req, res) => {
   try {
     const photos = readPhotosData();
-    photos.sort((a, b) => new Date(a.date) - new Date(b.date));
+    photos.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     res.json(photos);
   } catch (err) {
     console.error('Error in GET /api/photos:', err);
@@ -38,6 +51,13 @@ app.get('/api/photos', (_req, res) => {
 app.get('/api/photos/:date', (req, res) => {
   try {
     const { date } = req.params;
+
+    if (!DATE_REGEX.test(date)) {
+      return res.status(400).json({
+        error: 'Invalid date format, expected YYYY-MM-DD',
+      });
+    }
+
     const photos = readPhotosData();
     const photo = photos.find((p) => p.date === date);
 

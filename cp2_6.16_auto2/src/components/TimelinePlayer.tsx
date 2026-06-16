@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X, Loader2, Pause, Play, SkipBack, SkipForward } from 'lucide-react';
 import { Photo, MOOD_COLORS, MOOD_LABELS, getAllPhotos } from '../services/dataService';
@@ -17,8 +17,11 @@ const TimelinePlayer = () => {
   const [progress, setProgress] = useState(0);
 
   const rafRef = useRef<number | null>(null);
-  const startTimeRef = useRef<number | null>(null);
-  const cycleOffsetRef = useRef<number>(0);
+  const playStartRealTimeRef = useRef<number>(0);
+  const playStartProgressRef = useRef<number>(0);
+
+  const totalPhotos = photos.length;
+  const totalDuration = useMemo(() => totalPhotos * TOTAL_CYCLE, [totalPhotos]);
 
   useEffect(() => {
     const loadPhotos = async () => {
@@ -40,39 +43,32 @@ const TimelinePlayer = () => {
     loadPhotos();
   }, []);
 
-  const totalPhotos = photos.length;
-  const totalDuration = useMemo(() => totalPhotos * TOTAL_CYCLE, [totalPhotos]);
-
-  const preloadImages = useMemo(() => {
-    return photos.map((p) => {
-      const img = new Image();
-      img.src = p.imageUrl;
-      return img;
-    });
-  }, [photos]);
+  const computeIndexFromProgress = useCallback(
+    (prog: number) => {
+      if (totalPhotos === 0) return 0;
+      return Math.min(Math.floor((prog / 100) * totalDuration / TOTAL_CYCLE), totalPhotos - 1);
+    },
+    [totalPhotos, totalDuration],
+  );
 
   useEffect(() => {
-    if (totalPhotos === 0 || !isPlaying) return;
+    if (!isPlaying || totalDuration === 0) return;
 
-    const animate = (timestamp: number) => {
-      if (startTimeRef.current === null) {
-        startTimeRef.current = timestamp - cycleOffsetRef.current;
-      }
+    playStartRealTimeRef.current = performance.now();
+    playStartProgressRef.current = progress;
 
-      const elapsed = timestamp - startTimeRef.current;
-      const overallProgress = Math.min(elapsed / totalDuration, 1);
-      setProgress(overallProgress * 100);
+    const animate = (now: number) => {
+      const realElapsed = now - playStartRealTimeRef.current;
+      const startProg = playStartProgressRef.current;
+      const progressDelta = (realElapsed / totalDuration) * 100;
+      const newProgress = Math.min(startProg + progressDelta, 100);
 
-      if (overallProgress >= 1) {
+      setProgress(newProgress);
+      setCurrentIndex(computeIndexFromProgress(newProgress));
+
+      if (newProgress >= 100) {
         setIsPlaying(false);
-        setCurrentIndex(totalPhotos - 1);
         return;
-      }
-
-      const currentCycle = Math.floor(elapsed / TOTAL_CYCLE);
-      const nextIndex = Math.min(currentCycle, totalPhotos - 1);
-      if (nextIndex !== currentIndex) {
-        setCurrentIndex(nextIndex);
       }
 
       rafRef.current = requestAnimationFrame(animate);
@@ -83,60 +79,52 @@ const TimelinePlayer = () => {
     return () => {
       if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
       }
     };
-  }, [totalPhotos, totalDuration, isPlaying, currentIndex]);
+  }, [isPlaying, totalDuration, computeIndexFromProgress]);
 
   const handlePlayPause = () => {
     if (isPlaying) {
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
-      const elapsed = (progress / 100) * totalDuration;
-      cycleOffsetRef.current = elapsed;
-      startTimeRef.current = null;
+      setIsPlaying(false);
     } else {
       if (progress >= 100) {
-        setCurrentIndex(0);
         setProgress(0);
-        cycleOffsetRef.current = 0;
+        setCurrentIndex(0);
       }
-      startTimeRef.current = null;
+      setIsPlaying(true);
     }
-    setIsPlaying(!isPlaying);
   };
 
+  const seekToIndex = useCallback(
+    (newIndex: number) => {
+      const clamped = Math.max(0, Math.min(newIndex, totalPhotos - 1));
+      const newProgress = totalPhotos > 1 ? (clamped / (totalPhotos - 1)) * 100 : 0;
+      setProgress(newProgress);
+      setCurrentIndex(clamped);
+
+      if (isPlaying) {
+        playStartRealTimeRef.current = performance.now();
+        playStartProgressRef.current = newProgress;
+      }
+    },
+    [totalPhotos, isPlaying],
+  );
+
   const handlePrev = () => {
-    const newIndex = Math.max(0, currentIndex - 1);
-    setCurrentIndex(newIndex);
-    setProgress((newIndex / Math.max(totalPhotos - 1, 1)) * 100);
-    cycleOffsetRef.current = newIndex * TOTAL_CYCLE;
-    startTimeRef.current = null;
-    if (isPlaying) {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
+    seekToIndex(currentIndex - 1);
   };
 
   const handleNext = () => {
-    const newIndex = Math.min(totalPhotos - 1, currentIndex + 1);
-    setCurrentIndex(newIndex);
-    setProgress((newIndex / Math.max(totalPhotos - 1, 1)) * 100);
-    cycleOffsetRef.current = newIndex * TOTAL_CYCLE;
-    startTimeRef.current = null;
-    if (isPlaying) {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
+    seekToIndex(currentIndex + 1);
   };
 
-  const getTransitionProgress = () => {
+  const getTransitionProgress = useCallback(() => {
     const elapsed = (progress / 100) * totalDuration;
     const cycleTime = elapsed % TOTAL_CYCLE;
     if (cycleTime < FRAME_DURATION) return 0;
     return (cycleTime - FRAME_DURATION) / TRANSITION_DURATION;
-  };
+  }, [progress, totalDuration]);
 
   const transitionProgress = isPlaying ? getTransitionProgress() : 0;
 
@@ -310,16 +298,28 @@ const TimelinePlayer = () => {
           >
             <div className="mb-3">
               <div
-                className="h-2 rounded-full overflow-hidden"
+                className="h-2 rounded-full overflow-hidden cursor-pointer"
                 style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const clickX = e.clientX - rect.left;
+                  const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+                  const newProgress = ratio * 100;
+                  setProgress(newProgress);
+                  setCurrentIndex(computeIndexFromProgress(newProgress));
+                  if (isPlaying) {
+                    playStartRealTimeRef.current = performance.now();
+                    playStartProgressRef.current = newProgress;
+                  }
+                }}
               >
                 <div
-                  className="h-full rounded-full transition-all"
+                  className="h-full rounded-full"
                   style={{
                     width: `${progress}%`,
-                    backgroundColor: 'linear-gradient(90deg, #fbbf24, #f59e0b)',
+                    backgroundColor: '#fbbf24',
                     boxShadow: '0 0 10px rgba(251,191,36,0.5)',
-                    transitionDuration: '100ms',
+                    transition: isPlaying ? 'none' : 'width 0.15s ease',
                   }}
                 />
               </div>
@@ -340,7 +340,7 @@ const TimelinePlayer = () => {
                 onClick={handlePlayPause}
                 className="p-4 rounded-full text-white transition-all duration-200 hover:scale-110 shadow-lg"
                 style={{
-                  backgroundColor: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
+                  backgroundColor: '#fbbf24',
                   boxShadow: '0 4px 15px rgba(251,191,36,0.4)',
                 }}
                 aria-label={isPlaying ? '暂停' : '播放'}

@@ -113,6 +113,39 @@ const PhotoDetail = () => {
           transform: scale(1.3);
           box-shadow: 0 0 0 4px rgba(0,0,0,0.08);
         }
+        .photo-container {
+          max-width: 800px;
+          width: 100%;
+          max-height: 600px;
+          border-radius: 16px;
+          border: 3px solid #e4d5c0;
+          box-shadow: 0 0 30px rgba(228, 213, 192, 0.4), 0 10px 40px rgba(0,0,0,0.08);
+          overflow: hidden;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background-color: #f5ece0;
+        }
+        .photo-container img {
+          width: 100%;
+          max-height: 600px;
+          object-fit: contain;
+          display: block;
+        }
+        @media (max-width: 1024px) {
+          .photo-container {
+            max-width: 90%;
+          }
+        }
+        @media (max-width: 640px) {
+          .photo-container {
+            max-width: 100%;
+            max-height: 400px;
+          }
+          .photo-container img {
+            max-height: 400px;
+          }
+        }
       `}</style>
 
       <div className="max-w-4xl mx-auto">
@@ -179,22 +212,10 @@ const PhotoDetail = () => {
             </div>
 
             <div className="flex justify-center mb-6">
-              <div
-                className="overflow-hidden"
-                style={{
-                  maxWidth: '800px',
-                  width: '100%',
-                  borderRadius: '16px',
-                  border: '3px solid #e4d5c0',
-                  boxShadow:
-                    '0 0 30px rgba(228, 213, 192, 0.4), 0 10px 40px rgba(0,0,0,0.08)',
-                }}
-              >
+              <div className="photo-container">
                 <img
                   src={photo.imageUrl}
                   alt={`植物照片 ${photo.date}`}
-                  className="w-full h-auto block"
-                  style={{ display: 'block' }}
                   loading="lazy"
                 />
               </div>
@@ -313,19 +334,6 @@ const PhotoDetail = () => {
           </div>
         )}
       </div>
-
-      <style>{`
-        @media (max-width: 1024px) {
-          div[style*="max-width: 800px"] {
-            max-width: 90% !important;
-          }
-        }
-        @media (max-width: 640px) {
-          div[style*="max-width: 800px"] {
-            max-width: 100% !important;
-          }
-        }
-      `}</style>
     </div>
   );
 };

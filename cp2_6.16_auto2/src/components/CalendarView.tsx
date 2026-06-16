@@ -3,6 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Photo, MOOD_COLORS, getAllPhotos } from '../services/dataService';
 
+const MOOD_LABEL_MAP: Record<string, string> = {
+  happy: '开心',
+  calm: '平静',
+  sad: '忧伤',
+  angry: '生气',
+};
+
 const CalendarView = () => {
   const navigate = useNavigate();
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -105,6 +112,39 @@ const CalendarView = () => {
         .today-ring {
           box-shadow: 0 0 0 3px rgba(134, 239, 172, 0.4), inset 0 0 0 2px #86efac;
         }
+        .calendar-grid {
+          display: grid;
+          grid-template-columns: repeat(7, 1fr);
+          gap: 12px;
+        }
+        .calendar-grid-mobile {
+          gap: 6px;
+        }
+        .calendar-cell-btn {
+          width: 100%;
+          aspect-ratio: 1;
+          position: relative;
+          cursor: pointer;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+          will-change: transform, opacity;
+        }
+        .calendar-cell-btn:hover {
+          transform: scale(1.03);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        @media (max-width: 840px) {
+          .calendar-grid {
+            gap: 8px;
+          }
+        }
+        @media (max-width: 640px) {
+          .calendar-grid {
+            gap: 4px;
+          }
+          .calendar-cell-btn {
+            border-radius: 6px !important;
+          }
+        }
       `}</style>
 
       <div className="max-w-5xl mx-auto">
@@ -167,10 +207,7 @@ const CalendarView = () => {
 
         {!loading && !error && (
           <>
-            <div
-              className="grid grid-cols-7 mb-3"
-              style={{ gap: '12px' }}
-            >
+            <div className="calendar-grid mb-3">
               {weekdays.map((w) => (
                 <div
                   key={w}
@@ -182,10 +219,7 @@ const CalendarView = () => {
               ))}
             </div>
 
-            <div
-              className="grid grid-cols-7"
-              style={{ gap: '12px' }}
-            >
+            <div className="calendar-grid">
               {daysInMonth.map((date, idx) => {
                 if (!date) {
                   return <div key={`empty-${idx}`} />;
@@ -199,23 +233,20 @@ const CalendarView = () => {
                   <button
                     key={dateKey}
                     onClick={() => handleCellClick(date)}
-                    className={`calendar-cell relative cursor-pointer transition-all duration-200 hover:scale-[1.03] hover:shadow-md ${
+                    className={`calendar-cell calendar-cell-btn ${
                       isAnimating ? 'calendar-cell-animate' : ''
                     }`}
                     style={{
-                      width: '120px',
-                      height: '120px',
                       backgroundColor: photo ? '#f5ece0' : '#faf5ef',
                       borderRadius: '8px',
                       border: `1px solid ${photo ? '#d4c4a8' : '#e4d5c0'}`,
                       padding: '10px',
                       animationDelay: `${Math.min(idx * 15, 300)}ms`,
-                      willChange: 'transform, opacity',
                     }}
                   >
                     {isToday && (
                       <div
-                        className="absolute inset-1 rounded-lg today-ring pointer-events-none"
+                        className="absolute inset-1 today-ring pointer-events-none"
                         style={{ borderRadius: '6px' }}
                       />
                     )}
@@ -223,7 +254,7 @@ const CalendarView = () => {
                     <span
                       className="block text-left font-semibold"
                       style={{
-                        fontSize: '16px',
+                        fontSize: 'clamp(12px, 2vw, 16px)',
                         color: isToday ? '#16a34a' : '#4a3a2a',
                       }}
                     >
@@ -236,8 +267,8 @@ const CalendarView = () => {
                         style={{
                           left: '10px',
                           bottom: '10px',
-                          width: '10px',
-                          height: '10px',
+                          width: 'clamp(8px, 1.5vw, 10px)',
+                          height: 'clamp(8px, 1.5vw, 10px)',
                           borderRadius: '50%',
                           backgroundColor: MOOD_COLORS[photo.mood],
                         }}
@@ -260,13 +291,7 @@ const CalendarView = () => {
                     }}
                   />
                   <span className="text-sm" style={{ color: '#6b5a47' }}>
-                    {mood === 'happy'
-                      ? '开心'
-                      : mood === 'calm'
-                        ? '平静'
-                        : mood === 'sad'
-                          ? '忧伤'
-                          : '生气'}
+                    {MOOD_LABEL_MAP[mood] || mood}
                   </span>
                 </div>
               ))}
@@ -274,15 +299,6 @@ const CalendarView = () => {
           </>
         )}
       </div>
-
-      <style>{`
-        @media (max-width: 768px) {
-          button[style*="width: 120px"] {
-            width: 90px !important;
-            height: 90px !important;
-          }
-        }
-      `}</style>
     </div>
   );
 };
