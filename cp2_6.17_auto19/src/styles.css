@@ -756,6 +756,12 @@ input[type='range']::-moz-range-thumb {
   margin-left: 4px;
   line-height: 1;
 }
+.tooltip-wrap.no-hover {
+  cursor: pointer;
+}
+.tooltip-wrap.no-hover:active {
+  opacity: 0.7;
+}
 .tooltip {
   position: absolute;
   left: 0;
@@ -793,10 +799,25 @@ input[type='range']::-moz-range-thumb {
   opacity: 1;
   transform: translateY(0);
 }
+.tooltip-wrap.tip-open .tooltip {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+}
 .tooltip-title {
   font-weight: 700;
   color: #fbbf24;
   margin-bottom: 4px;
+}
+
+@media (hover: none) {
+  .tooltip-wrap:hover .tooltip {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  .tooltip-wrap.tip-open .tooltip {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Responsive */
