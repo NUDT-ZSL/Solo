@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import type { StagePosition, HitResult } from '../types';
 
 interface StageProps {
@@ -10,6 +10,9 @@ interface StageProps {
   hitJudgement?: HitResult['judgement'] | null;
   hitTrackIndex?: number;
 }
+
+const DEFAULT_LIGHT_COLORS = ['#FF6B6B', '#4CAF50', '#FFD93D', '#9B59B6'];
+const ALL_COLORS = ['#FF6B6B', '#4CAF50', '#FFD93D', '#9B59B6', '#3498DB', '#E74C3C'];
 
 const JUDGEMENT_TO_GLOW_CLASS: Record<HitResult['judgement'], string> = {
   Perfect: 'stage-glow-perfect',
@@ -27,28 +30,42 @@ const JUDGEMENT_TO_COLOR: Record<HitResult['judgement'], string> = {
 
 export default function Stage({ positions, onRemoveCharacter, lightFlash, jumpingTracks, hitJudgement, hitTrackIndex }: StageProps) {
   const [hoveredPosition, setHoveredPosition] = useState<string | null>(null);
-  const [lightColors, setLightColors] = useState(['#FF6B6B', '#4CAF50', '#FFD93D', '#9B59B6']);
+  const [lightColors, setLightColors] = useState(DEFAULT_LIGHT_COLORS);
   const [glowKey, setGlowKey] = useState(0);
+  const lightResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (lightResetTimerRef.current) {
+        clearTimeout(lightResetTimerRef.current);
+        lightResetTimerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (lightFlash && hitJudgement) {
       setGlowKey(prev => prev + 1);
       
       if (hitTrackIndex !== undefined && hitTrackIndex >= 0 && hitTrackIndex < 4) {
+        if (lightResetTimerRef.current) {
+          clearTimeout(lightResetTimerRef.current);
+        }
+        
         const newColors = [...lightColors];
         newColors[hitTrackIndex] = JUDGEMENT_TO_COLOR[hitJudgement];
         setLightColors(newColors);
         
-        setTimeout(() => {
+        lightResetTimerRef.current = setTimeout(() => {
           setLightColors(prev => {
             const reset = [...prev];
-            reset[hitTrackIndex] = ['#FF6B6B', '#4CAF50', '#FFD93D', '#9B59B6'][hitTrackIndex];
+            reset[hitTrackIndex] = DEFAULT_LIGHT_COLORS[hitTrackIndex];
             return reset;
           });
+          lightResetTimerRef.current = null;
         }, 300);
       } else {
-        const colors = ['#FF6B6B', '#4CAF50', '#FFD93D', '#9B59B6'];
-        const newColors = lightColors.map(() => colors[Math.floor(Math.random() * colors.length)]);
+        const newColors = lightColors.map(() => ALL_COLORS[Math.floor(Math.random() * ALL_COLORS.length)]);
         setLightColors(newColors);
       }
     }
@@ -225,12 +242,12 @@ export default function Stage({ positions, onRemoveCharacter, lightFlash, jumpin
                   justifyContent: 'center',
                   fontSize: '28px',
                   animation: isJumping 
-                    ? (hitJudgement === 'Perfect' || hitJudgement === 'Good' ? 'bounceHit 0.3s ease-out' : 'swingHit 0.3s ease-out')
+                    ? (hitJudgement === 'Perfect' || hitJudgement === 'Good' ? 'bounceHit 0.3s ease-out forwards' : 'swingHit 0.3s ease-out forwards')
                     : 'breathe 1.5s ease-in-out infinite',
                   boxShadow: isJumping && hitJudgement
                     ? `0 0 25px ${JUDGEMENT_TO_COLOR[hitJudgement]}, 0 0 40px ${JUDGEMENT_TO_COLOR[hitJudgement]}50`
                     : `0 0 20px ${position.character.color}50`,
-                  transition: 'box-shadow 0.15s ease-out'
+                  transition: 'transform 0.3s ease-out, box-shadow 0.15s ease-out'
                 }}
               >
                 {position.character.icon}
@@ -263,27 +280,25 @@ export default function Stage({ positions, onRemoveCharacter, lightFlash, jumpin
       })}
 
       {hitJudgement && lightFlash && hitTrackIndex !== undefined && (
-        <div style={{
-          position: 'absolute',
-          left: positions.find((_, i) => {
-            const posId = Object.keys(positionToTrackMap).find(k => positionToTrackMap[k] === hitTrackIndex);
-            const pos = positions.find(p => p.id === posId);
-            return pos !== undefined;
-          })?.x ?? 400,
-          top: positions.find((_, i) => {
-            const posId = Object.keys(positionToTrackMap).find(k => positionToTrackMap[k] === hitTrackIndex);
-            const pos = positions.find(p => p.id === posId);
-            return pos !== undefined;
-          })?.y ?? 250,
-          width: '100px',
-          height: '100px',
-          borderRadius: '50%',
-          background: `radial-gradient(circle, ${JUDGEMENT_TO_COLOR[hitJudgement]}40 0%, transparent 70%)`,
-          transform: 'translate(-50%, -50%)',
-          pointerEvents: 'none',
-          animation: 'particleBurst 0.3s ease-out forwards',
-          zIndex: 15
-        }} />
+        (() => {
+          const posId = Object.keys(positionToTrackMap).find(k => positionToTrackMap[k] === hitTrackIndex);
+          const pos = positions.find(p => p.id === posId);
+          return (
+            <div style={{
+              position: 'absolute',
+              left: pos?.x ?? 400,
+              top: pos?.y ?? 250,
+              width: '100px',
+              height: '100px',
+              borderRadius: '50%',
+              background: `radial-gradient(circle, ${JUDGEMENT_TO_COLOR[hitJudgement]}40 0%, transparent 70%)`,
+              transform: 'translate(-50%, -50%)',
+              pointerEvents: 'none',
+              animation: 'particleBurst 0.3s ease-out forwards',
+              zIndex: 15
+            }} />
+          );
+        })()
       )}
 
       <div style={{

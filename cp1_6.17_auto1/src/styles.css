@@ -222,27 +222,27 @@ body {
 }
 
 .stage-glow-perfect {
-  animation: stageGlowPerfect 0.3s ease-out;
+  animation: stageGlowPerfect 0.3s ease-out forwards;
 }
 
 .stage-glow-good {
-  animation: stageGlowGood 0.3s ease-out;
+  animation: stageGlowGood 0.3s ease-out forwards;
 }
 
 .stage-glow-ok {
-  animation: stageGlowOK 0.3s ease-out;
+  animation: stageGlowOK 0.3s ease-out forwards;
 }
 
 .stage-glow-miss {
-  animation: stageGlowMiss 0.3s ease-out;
+  animation: stageGlowMiss 0.3s ease-out forwards;
 }
 
 .character-bounce {
-  animation: bounceHit 0.3s ease-out !important;
+  animation: bounceHit 0.3s ease-out forwards !important;
 }
 
 .character-swing {
-  animation: swingHit 0.3s ease-out !important;
+  animation: swingHit 0.3s ease-out forwards !important;
 }
 
 .app-container {

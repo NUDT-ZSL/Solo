@@ -1,20 +1,23 @@
 import { useMemo } from 'react';
 import type { Note, StagePosition, HitResult } from '../types';
 import { JUDGEMENT_COLORS } from '../modules/scoreCalculator';
+import { calculateFallDuration } from '../modules/noteGenerator';
 
 interface NotePanelProps {
   notes: Note[];
   currentTime: number;
   fallDuration: number;
+  bpm?: number;
   positions: StagePosition[];
   hitEffects: Array<{ id: string; judgement: HitResult['judgement']; trackIndex: number }>;
 }
 
-export default function NotePanel({ notes, currentTime, fallDuration, positions, hitEffects }: NotePanelProps) {
+export default function NotePanel({ notes, currentTime, fallDuration, bpm, positions, hitEffects }: NotePanelProps) {
   const trackHeight = 400;
   const trackWidth = 50;
   const noteRadius = 15;
-  const fallTime = fallDuration * 1000;
+  const actualFallDuration = bpm ? calculateFallDuration(bpm) : fallDuration;
+  const fallTime = actualFallDuration * 1000;
 
   const trackColors = useMemo(() => {
     return positions.map(p => p.character?.color || ['#FF6B6B', '#4CAF50', '#FFD93D', '#9B59B6'][positions.indexOf(p)]);

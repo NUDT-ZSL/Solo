@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Character, StagePosition, Song, GameView, HitResult, ScoreRecord, GameState } from './types';
 import { generateNotes, calculateFallDuration } from './modules/noteGenerator';
 import { calculateHit, findClosestNote, calculateRating, calculateAccuracy, JUDGEMENT_WINDOWS } from './modules/scoreCalculator';
@@ -40,6 +40,12 @@ export default function App() {
   const [jumpingTracks, setJumpingTracks] = useState<Set<number>>(new Set());
   const [lastHitJudgement, setLastHitJudgement] = useState<HitResult['judgement'] | null>(null);
   const [lastHitTrackIndex, setLastHitTrackIndex] = useState<number>(-1);
+  const [, setActiveHitEffects] = useState<Array<{ id: string; judgement: HitResult['judgement']; trackIndex: number }>>([]);
+  
+  const hitResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const jumpTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  const hitQueueRef = useRef<Array<{ id: string; judgement: HitResult['judgement']; trackIndex: number }>>([]);
+  const isProcessingHitRef = useRef(false);
   const [scores, setScores] = useState<ScoreRecord[]>([]);
   const [playerName] = useState('玩家');
   const [fallDuration, setFallDuration] = useState(2);
@@ -62,6 +68,20 @@ export default function App() {
       .then(data => setScores(data))
       .catch(err => console.error('Failed to fetch scores:', err));
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (hitResetTimerRef.current) {
+        clearTimeout(hitResetTimerRef.current);
+        hitResetTimerRef.current = null;
+      }
+      jumpTimersRef.current.forEach(timer => clearTimeout(timer));
+      jumpTimersRef.current.clear();
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [animationFrameId]);
 
   const handleDrop = useCallback((character: Character, positionId: string) => {
     setPositions(prev => {
@@ -98,37 +118,71 @@ export default function App() {
     setCurrentView('game');
   }, []);
 
-  const triggerHitEffect = useCallback((judgement: HitResult['judgement'], trackIndex: number) => {
-    const effectId = Date.now().toString() + Math.random();
-    setHitEffects(prev => [...prev, { id: effectId, judgement, trackIndex }]);
+  const processHitQueue = useCallback(() => {
+    if (isProcessingHitRef.current || hitQueueRef.current.length === 0) {
+      return;
+    }
     
-    setLastHitJudgement(judgement);
-    setLastHitTrackIndex(trackIndex);
+    isProcessingHitRef.current = true;
+    const hit = hitQueueRef.current.shift()!;
     
+    setActiveHitEffects(prev => [...prev, hit]);
+    setHitEffects(prev => [...prev, hit]);
+    setLastHitJudgement(hit.judgement);
+    setLastHitTrackIndex(hit.trackIndex);
     setLightFlash(true);
-    setTimeout(() => {
-      setLightFlash(false);
-      setLastHitJudgement(null);
-      setLastHitTrackIndex(-1);
-    }, 300);
     
     setJumpingTracks(prev => {
       const newSet = new Set(prev);
-      newSet.add(trackIndex);
+      newSet.add(hit.trackIndex);
       return newSet;
     });
-    setTimeout(() => {
+    
+    const existingJumpTimer = jumpTimersRef.current.get(hit.trackIndex);
+    if (existingJumpTimer) {
+      clearTimeout(existingJumpTimer);
+    }
+    
+    const jumpTimer = setTimeout(() => {
       setJumpingTracks(prev => {
         const newSet = new Set(prev);
-        newSet.delete(trackIndex);
+        newSet.delete(hit.trackIndex);
         return newSet;
       });
+      jumpTimersRef.current.delete(hit.trackIndex);
+    }, 300);
+    jumpTimersRef.current.set(hit.trackIndex, jumpTimer);
+    
+    if (hitResetTimerRef.current) {
+      clearTimeout(hitResetTimerRef.current);
+    }
+    
+    hitResetTimerRef.current = setTimeout(() => {
+      setLightFlash(false);
+      setLastHitJudgement(null);
+      setLastHitTrackIndex(-1);
+      setActiveHitEffects(prev => prev.filter(e => e.id !== hit.id));
+      hitResetTimerRef.current = null;
+      
+      isProcessingHitRef.current = false;
+      if (hitQueueRef.current.length > 0) {
+        setTimeout(() => processHitQueue(), 50);
+      }
     }, 300);
     
     setTimeout(() => {
-      setHitEffects(prev => prev.filter(e => e.id !== effectId));
+      setHitEffects(prev => prev.filter(e => e.id !== hit.id));
     }, 500);
   }, []);
+
+  const triggerHitEffect = useCallback((judgement: HitResult['judgement'], trackIndex: number) => {
+    const effectId = Date.now().toString() + Math.random() + '-' + Date.now();
+    hitQueueRef.current.push({ id: effectId, judgement, trackIndex });
+    
+    if (!isProcessingHitRef.current) {
+      processHitQueue();
+    }
+  }, [processHitQueue]);
 
   const handleKeyPress = useCallback((_key: string, trackIndex: number) => {
     if (!gameState.isPlaying) return;
@@ -375,6 +429,7 @@ export default function App() {
               notes={gameState.notes}
               currentTime={gameState.currentTime}
               fallDuration={fallDuration}
+              bpm={gameState.currentSong?.bpm}
               positions={positions}
               hitEffects={hitEffects}
             />
