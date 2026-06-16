@@ -1,0 +1,188 @@
+.profile-page {
+  padding: 24px 0;
+}
+
+.profile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: white;
+  border-radius: 12px;
+  padding: 32px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  margin-bottom: 24px;
+}
+
+.profile-info {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.profile-avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 2px solid #e5e7eb;
+}
+
+.profile-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-name {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.profile-role {
+  margin: 0;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.credit-ring-container {
+  position: relative;
+  width: 100px;
+  height: 100px;
+}
+
+.credit-ring {
+  transform: rotate(-90deg);
+}
+
+.ring-bg {
+  fill: none;
+}
+
+.ring-progress {
+  fill: none;
+  transition: stroke-dashoffset 0.5s ease;
+}
+
+.credit-score-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.score-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.score-label {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.records-section {
+  background-color: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.records-section h2 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  color: #1e293b;
+}
+
+.records-table-container {
+  overflow-x: auto;
+}
+
+.records-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.records-table th,
+.records-table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.records-table th {
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.records-table td {
+  font-size: 14px;
+  color: #334155;
+}
+
+.records-table tbody tr:hover {
+  background-color: #f8fafc;
+}
+
+.status-tag {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  color: white;
+}
+
+.status-borrowing {
+  background-color: #eab308;
+}
+
+.status-returned {
+  background-color: #22c55e;
+}
+
+.status-overdue {
+  background-color: #ef4444;
+}
+
+.loading-state,
+.error-state,
+.no-records {
+  text-align: center;
+  padding: 40px 0;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.error-state {
+  color: #ef4444;
+}
+
+@media (max-width: 768px) {
+  .profile-header {
+    flex-direction: column;
+    gap: 20px;
+    text-align: center;
+  }
+
+  .profile-info {
+    flex-direction: column;
+  }
+
+  .records-table {
+    font-size: 12px;
+  }
+
+  .records-table th,
+  .records-table td {
+    padding: 10px 8px;
+  }
+}

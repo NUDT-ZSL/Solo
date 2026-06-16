@@ -1,0 +1,42 @@
+[
+  {
+    "id": "r1",
+    "deviceId": "d2",
+    "userId": "u1",
+    "borrowTime": "2026-06-15T10:00:00Z",
+    "returnTime": null,
+    "status": "borrowing"
+  },
+  {
+    "id": "r2",
+    "deviceId": "d8",
+    "userId": "u4",
+    "borrowTime": "2026-06-16T14:30:00Z",
+    "returnTime": null,
+    "status": "borrowing"
+  },
+  {
+    "id": "r3",
+    "deviceId": "d1",
+    "userId": "u2",
+    "borrowTime": "2026-06-10T09:00:00Z",
+    "returnTime": "2026-06-11T08:30:00Z",
+    "status": "returned_on_time"
+  },
+  {
+    "id": "r4",
+    "deviceId": "d3",
+    "userId": "u1",
+    "borrowTime": "2026-06-05T11:00:00Z",
+    "returnTime": "2026-06-07T15:00:00Z",
+    "status": "overdue_returned"
+  },
+  {
+    "id": "r5",
+    "deviceId": "d6",
+    "userId": "u2",
+    "borrowTime": "2026-06-12T16:00:00Z",
+    "returnTime": "2026-06-13T10:00:00Z",
+    "status": "returned_on_time"
+  }
+]

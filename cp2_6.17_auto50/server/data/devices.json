@@ -1,0 +1,122 @@
+[
+  {
+    "id": "d1",
+    "name": "4K高清显示器",
+    "type": "显示器",
+    "imageUrl": "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=400&h=300&fit=crop",
+    "status": "available",
+    "minCreditScore": 80,
+    "specs": {
+      "分辨率": "3840 x 2160",
+      "尺寸": "27英寸",
+      "刷新率": "60Hz",
+      "接口": "HDMI, DP, USB-C"
+    },
+    "description": "专业级4K显示器，适合设计和视频编辑工作"
+  },
+  {
+    "id": "d2",
+    "name": "无线降噪耳机",
+    "type": "耳机",
+    "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=300&fit=crop",
+    "status": "borrowed",
+    "minCreditScore": 60,
+    "specs": {
+      "类型": "头戴式",
+      "降噪": "主动降噪",
+      "续航": "30小时",
+      "连接": "蓝牙5.0"
+    },
+    "description": "高品质无线耳机，专注工作时的最佳伴侣"
+  },
+  {
+    "id": "d3",
+    "name": "便携式投影仪",
+    "type": "投影仪",
+    "imageUrl": "https://images.unsplash.com/photo-1478720568477-152d9b164e26?w=400&h=300&fit=crop",
+    "status": "available",
+    "minCreditScore": 90,
+    "specs": {
+      "亮度": "3000流明",
+      "分辨率": "1920 x 1080",
+      "投射比": "1.2:1",
+      "重量": "1.5kg"
+    },
+    "description": "便携高清投影仪，团队会议和演示的理想选择"
+  },
+  {
+    "id": "d4",
+    "name": "机械键盘",
+    "type": "输入设备",
+    "imageUrl": "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=400&h=300&fit=crop",
+    "status": "available",
+    "minCreditScore": 70,
+    "specs": {
+      "轴体": "红轴",
+      "键数": "87键",
+      "连接": "有线/无线双模",
+      "背光": "RGB"
+    },
+    "description": "舒适手感的机械键盘，提升打字效率"
+  },
+  {
+    "id": "d5",
+    "name": "27寸曲面显示器",
+    "type": "显示器",
+    "imageUrl": "https://images.unsplash.com/photo-1593062096033-9a26b09da705?w=400&h=300&fit=crop",
+    "status": "maintenance",
+    "minCreditScore": 75,
+    "specs": {
+      "分辨率": "2560 x 1440",
+      "尺寸": "27英寸",
+      "刷新率": "144Hz",
+      "曲率": "1500R"
+    },
+    "description": "高刷新率曲面显示器，游戏和设计两相宜（维修中）"
+  },
+  {
+    "id": "d6",
+    "name": "高清摄像头",
+    "type": "视频设备",
+    "imageUrl": "https://images.unsplash.com/photo-1587826080692-f439cd0b70da?w=400&h=300&fit=crop",
+    "status": "available",
+    "minCreditScore": 65,
+    "specs": {
+      "分辨率": "1080p",
+      "帧率": "60fps",
+      "对焦": "自动对焦",
+      "麦克风": "内置双麦"
+    },
+    "description": "高清网络摄像头，视频会议必备"
+  },
+  {
+    "id": "d7",
+    "name": "蓝牙鼠标",
+    "type": "输入设备",
+    "imageUrl": "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=400&h=300&fit=crop",
+    "status": "available",
+    "minCreditScore": 50,
+    "specs": {
+      "类型": "人体工学",
+      "连接": "蓝牙5.0",
+      "续航": "12个月",
+      "DPI": "4000"
+    },
+    "description": "舒适精准的蓝牙鼠标，办公首选"
+  },
+  {
+    "id": "d8",
+    "name": "移动电源",
+    "type": "充电设备",
+    "imageUrl": "https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?w=400&h=300&fit=crop",
+    "status": "borrowed",
+    "minCreditScore": 60,
+    "specs": {
+      "容量": "20000mAh",
+      "输出": "65W PD快充",
+      "端口": "USB-A x2, USB-C x1",
+      "重量": "350g"
+    },
+    "description": "大容量移动电源，外出办公不断电"
+  }
+]

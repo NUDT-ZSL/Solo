@@ -1,0 +1,30 @@
+[
+  {
+    "id": "u1",
+    "name": "张三",
+    "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=zhangsan",
+    "creditScore": 95,
+    "role": "user"
+  },
+  {
+    "id": "u2",
+    "name": "李四",
+    "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=lisi",
+    "creditScore": 78,
+    "role": "user"
+  },
+  {
+    "id": "u3",
+    "name": "王五",
+    "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=wangwu",
+    "creditScore": 100,
+    "role": "admin"
+  },
+  {
+    "id": "u4",
+    "name": "赵六",
+    "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=zhaoliu",
+    "creditScore": 85,
+    "role": "user"
+  }
+]
