@@ -219,7 +219,7 @@ export class WhiteboardCanvas {
         newEl.createdAt = new Date().toISOString();
         newEl.updatedAt = new Date().toISOString();
         if (newEl.type === 'path') {
-          newEl.points = newEl.points.map((p) => ({ x: p.x + 20, y: p.y + 20 });
+          newEl.points = newEl.points.map((p) => ({ x: p.x + 20, y: p.y + 20 }));
         }
         newElements.push(newEl);
         newIds.push(newEl.id);
@@ -240,16 +240,20 @@ export class WhiteboardCanvas {
 
   undo() {
     if (this.undoStack.length === 0) return;
-    this.redoStack.push(JSON.parse(JSON.stringify(this.elements)));
-    this.elements = this.undoStack.pop()!;
+    const prev = JSON.parse(JSON.stringify(this.elements));
+    this.redoStack.push(prev);
+    const restored = this.undoStack.pop()!;
+    this.elements = JSON.parse(JSON.stringify(restored));
     this.selectedIds = [];
     this.notifyUpdate();
   }
 
   redo() {
     if (this.redoStack.length === 0) return;
-    this.undoStack.push(JSON.parse(JSON.stringify(this.elements)));
-    this.elements = this.redoStack.pop()!;
+    const current = JSON.parse(JSON.stringify(this.elements));
+    this.undoStack.push(current);
+    const restored = this.redoStack.pop()!;
+    this.elements = JSON.parse(JSON.stringify(restored));
     this.selectedIds = [];
     this.notifyUpdate();
   }
@@ -615,6 +619,7 @@ export class WhiteboardCanvas {
     if (this.isDragging) {
       this.isDragging = false;
       this.dragOffset.clear();
+      this.saveState();
       return;
     }
 
@@ -655,7 +660,7 @@ export class WhiteboardCanvas {
     element.y += dy;
 
     if (element.type === 'path') {
-      element.points = element.points.map((p) => ({ x: p.x + dx, y: p.y + dy });
+      element.points = element.points.map((p) => ({ x: p.x + dx, y: p.y + dy }));
     } else if (element.type === 'line') {
       element.x2 += dx;
       element.y2 += dy;

@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 3001;
+const PORT = 3002;
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const CANVAS_FILE = path.join(DATA_DIR, 'canvas.json');
@@ -79,6 +79,16 @@ app.get('/api/canvas', (req, res) => {
 app.post('/api/canvas', (req, res) => {
   try {
     const { elements } = req.body;
+    if (!Array.isArray(elements)) {
+      res.status(400).json({ error: 'elements must be an array' });
+      return;
+    }
+    for (const el of elements) {
+      if (!el || typeof el !== 'object' || typeof el.id !== 'string' || typeof el.type !== 'string') {
+        res.status(400).json({ error: 'each element must have id (string) and type (string)' });
+        return;
+      }
+    }
     const existingData = readCanvasData();
     const newData: CanvasData = {
       elements,
@@ -107,6 +117,10 @@ app.get('/api/history', (req, res) => {
 app.post('/api/history', (req, res) => {
   try {
     const { elements } = req.body;
+    if (!Array.isArray(elements)) {
+      res.status(400).json({ error: 'elements must be an array' });
+      return;
+    }
     const history = readHistory();
     const entry: HistoryEntry = {
       id: uuidv4(),
