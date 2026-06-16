@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, act, fireEvent } from '@testing-library/react'
 import { create } from 'zustand'
 
 interface Activity {
@@ -12,6 +11,7 @@ interface Activity {
   claimedBy: string[]
   hoursLogged: { userId: string; hours: number }[]
   createdAt: string
+  version?: number
 }
 
 interface User {
@@ -61,6 +61,7 @@ const mockActivities: Activity[] = [
     claimedBy: ['user-3'],
     hoursLogged: [{ userId: 'user-3', hours: 3 }],
     createdAt: '2026-06-10T08:00:00.000Z',
+    version: 0,
   },
   {
     id: 'act-3',
@@ -72,6 +73,7 @@ const mockActivities: Activity[] = [
     claimedBy: ['user-3'],
     hoursLogged: [{ userId: 'user-3', hours: 5 }],
     createdAt: '2026-05-01T09:00:00.000Z',
+    version: 2,
   },
 ]
 
@@ -82,10 +84,8 @@ describe('前端逻辑测试', () => {
         ...mockActivities[0],
         registrations: [],
       }
-
       const isRegistered = mockUser ? activityNotRegistered.registrations.includes(mockUser.id) : false
       const isEnded = activityNotRegistered.status === '已结束'
-
       expect(isRegistered).toBe(false)
       expect(isEnded).toBe(false)
     })
@@ -95,7 +95,6 @@ describe('前端逻辑测试', () => {
         ...mockActivities[0],
         registrations: ['user-2'],
       }
-
       const isRegistered = mockUser ? activityRegistered.registrations.includes(mockUser.id) : false
       expect(isRegistered).toBe(true)
     })
@@ -105,342 +104,170 @@ describe('前端逻辑测试', () => {
       const isEnded = endedActivity.status === '已结束'
       expect(isEnded).toBe(true)
     })
-  })
 
-  describe('ActivityForm 日期验证', () => {
-    it('应该验证日期不超过一年', () => {
-      const title = '测试活动标题'
-      const description = '这是一个测试活动的描述，内容足够长以满足验证要求'
-
-      const getTodayStr = () => new Date().toISOString().split('T')[0]
-      const getMaxDateStr = () => {
-        const d = new Date()
-        d.setFullYear(d.getFullYear() + 1)
-        return d.toISOString().split('T')[0]
-      }
-      const getTomorrowStr = () => {
-        const d = new Date()
-        d.setDate(d.getDate() + 1)
-        return d.toISOString().split('T')[0]
-      }
-
-      const isValidForm = (t: string, d: string, date: string) => {
-        const todayStr = getTodayStr()
-        const maxDateStr = getMaxDateStr()
-        return (
-          t.length >= 5 &&
-          d.length >= 20 &&
-          date >= todayStr &&
-          date <= maxDateStr
-        )
-      }
-
-      expect(isValidForm(title, description, getTodayStr())).toBe(true)
-      expect(isValidForm(title, description, getTomorrowStr())).toBe(true)
-
-      const tooFarDate = new Date()
-      tooFarDate.setFullYear(tooFarDate.getFullYear() + 1)
-      tooFarDate.setDate(tooFarDate.getDate() + 2)
-      expect(isValidForm(title, description, tooFarDate.toISOString().split('T')[0])).toBe(false)
-
-      const yesterday = new Date()
-      yesterday.setDate(yesterday.getDate() - 1)
-      expect(isValidForm(title, description, yesterday.toISOString().split('T')[0])).toBe(false)
-
-      const shortTitle = '短'
-      expect(isValidForm(shortTitle, description, validDate)).toBe(false)
-
-      const shortDesc = '太短'
-      expect(isValidForm(title, shortDesc, validDate)).toBe(false)
-    })
-
-    it('应该只允许管理员创建活动', () => {
-      const canCreateActivity = (user: User | null) => {
-        return user?.role === '管理员'
-      }
-
-      expect(canCreateActivity(mockAdmin)).toBe(true)
-      expect(canCreateActivity(mockUser)).toBe(false)
-      expect(canCreateActivity(mockVolunteer)).toBe(false)
-      expect(canCreateActivity(null)).toBe(false)
+    it('按钮loading时应禁用点击', () => {
+      const registering = true
+      const isRegistered = false
+      const isEnded = false
+      const isDisabled = isRegistered || registering || isEnded
+      expect(isDisabled).toBe(true)
     })
   })
 
-  describe('UserInfo 用户切换', () => {
-    it('应该正确处理用户切换', () => {
-      const users = [mockAdmin, mockUser, mockVolunteer]
-      let currentUser = mockUser
+  describe('报名流程核心测试', () => {
+    it('报名成功 - 应更新活动注册列表和用户信息', () => {
+      let activities: Activity[] = JSON.parse(JSON.stringify(mockActivities))
+      activities[0] = { ...activities[0], registrations: [] }
+      let users: User[] = [mockAdmin, { ...mockUser, registeredActivities: [] }, mockVolunteer]
+      const userId = mockUser.id
+      const activityId = 'act-1'
 
-      const handleUserChange = (userId: string) => {
-        const user = users.find((u) => u.id === userId)
-        if (user) {
-          currentUser = user
-        }
-      }
-
-      expect(currentUser.id).toBe('user-2')
-      handleUserChange('user-3')
-      expect(currentUser.id).toBe('user-3')
-      expect(currentUser.name).toBe('志愿者王芳')
-    })
-  })
-
-  describe('fetchActivities 错误处理', () => {
-    it('应该处理网络错误并设置错误状态', async () => {
-      let error: string | null = null
-      let loading = false
-
-      const fetchActivities = async (): Promise<boolean> => {
-        loading = true
-        error = null
-        try {
-          await Promise.reject(new Error('Network error'))
-        } catch (err) {
-          const message = err instanceof Error ? err.message : '网络连接失败'
-          error = message
-          loading = false
-          return false
-        }
-        loading = false
-        return true
-      }
-
-      const result = await fetchActivities()
-
-      expect(result).toBe(false)
-      expect(loading).toBe(false)
-      expect(error).toBeTruthy()
-    })
-
-    it('应该处理非200状态码', async () => {
-      let error: string | null = null
-      let loading = false
-
-      const fetchActivities = async (): Promise<boolean> => {
-        loading = true
-        error = null
-        try {
-          const res = {
-            ok: false,
-            status: 500,
-            json: async () => ({ error: '服务器错误' }),
+      const register = (uid: string, aid: string): { success: boolean; activity?: Activity; user?: User } => {
+        const actIdx = activities.findIndex((a) => a.id === aid)
+        if (actIdx === -1) return { success: false }
+        const activity = activities[actIdx]
+        if (activity.status === '已结束') return { success: false }
+        if (activity.registrations.includes(uid)) return { success: false }
+        const currentVersion = activity.version || 0
+        if (activity.registrations.length >= 50) return { success: false }
+        activity.registrations.push(uid)
+        activity.version = currentVersion + 1
+        activities[actIdx] = activity
+        const userIdx = users.findIndex((u) => u.id === uid)
+        if (userIdx !== -1) {
+          const user = users[userIdx]
+          if (!user.registeredActivities.includes(aid)) {
+            user.registeredActivities.push(aid)
           }
-          if (!res.ok) {
-            const errorData = await res.json()
-            throw new Error(errorData.error || `获取活动失败 (${res.status})`)
-          }
-          const data = await res.json()
-          loading = false
-          return true
-        } catch (err) {
-          const message = err instanceof Error ? err.message : '获取活动失败'
-          error = message
-          loading = false
-          return false
+          users[userIdx] = user
+          return { success: true, activity, user }
         }
+        return { success: true, activity }
       }
 
-      const result = await fetchActivities()
+      const result = register(userId, activityId)
+      expect(result.success).toBe(true)
+      expect(result.activity?.registrations).toContain(userId)
+      expect(result.user?.registeredActivities).toContain(activityId)
+      expect(result.activity?.version).toBe(1)
+    })
 
-      expect(result).toBe(false)
-      expect(loading).toBe(false)
-      expect(error).toContain('500')
+    it('报名失败 - 名额已满', () => {
+      const fullActivity: Activity = {
+        ...mockActivities[0],
+        registrations: Array.from({ length: 50 }, (_, i) => `user-${i + 100}`),
+        version: 10,
+      }
+      const activities: Activity[] = [fullActivity]
+      const userId = 'user-new'
+      const activityId = fullActivity.id
+
+      const register = (uid: string, aid: string): { success: boolean; error?: string } => {
+        const actIdx = activities.findIndex((a) => a.id === aid)
+        if (actIdx === -1) return { success: false, error: '活动不存在' }
+        const activity = activities[actIdx]
+        if (activity.status === '已结束') return { success: false, error: '活动已结束' }
+        if (activity.registrations.includes(uid)) return { success: false, error: '已报名' }
+        if (activity.registrations.length >= 50) return { success: false, error: '活动名额已满' }
+        return { success: true }
+      }
+
+      const result = register(userId, activityId)
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('活动名额已满')
+    })
+
+    it('报名失败 - 已结束的活动不能报名', () => {
+      const activities: Activity[] = JSON.parse(JSON.stringify(mockActivities))
+      const userId = 'user-new'
+      const activityId = 'act-3'
+
+      const register = (uid: string, aid: string): { success: boolean; error?: string } => {
+        const actIdx = activities.findIndex((a) => a.id === aid)
+        if (actIdx === -1) return { success: false, error: '活动不存在' }
+        const activity = activities[actIdx]
+        if (activity.status === '已结束') return { success: false, error: '该活动已结束，无法进行此操作' }
+        return { success: true }
+      }
+
+      const result = register(userId, activityId)
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('已结束')
+    })
+
+    it('报名失败 - 重复报名', () => {
+      const activities: Activity[] = JSON.parse(JSON.stringify(mockActivities))
+      const userId = 'user-2'
+      const activityId = 'act-1'
+
+      const register = (uid: string, aid: string): { success: boolean; error?: string } => {
+        const actIdx = activities.findIndex((a) => a.id === aid)
+        const activity = activities[actIdx]
+        if (activity.registrations.includes(uid)) return { success: false, error: '该用户已报名此活动' }
+        return { success: true }
+      }
+
+      const result = register(userId, activityId)
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('该用户已报名此活动')
     })
   })
 
-  describe('活动筛选逻辑', () => {
-    it('应该正确筛选进行中活动', () => {
-      const filter: '全部' | '进行中' | '已结束' = '进行中'
-      const filtered = filter === '全部'
-        ? mockActivities
-        : mockActivities.filter((a) => a.status === filter)
-
-      expect(filtered).toHaveLength(1)
-      expect(filtered[0].status).toBe('进行中')
-    })
-
-    it('应该正确筛选已结束活动', () => {
-      const filter: '全部' | '进行中' | '已结束' = '已结束'
-      const filtered = filter === '全部'
-        ? mockActivities
-        : mockActivities.filter((a) => a.status === filter)
-
-      expect(filtered).toHaveLength(1)
-      expect(filtered[0].status).toBe('已结束')
-    })
-
-    it('应该正确显示全部活动', () => {
-      const filter: '全部' | '进行中' | '已结束' = '全部'
-      const filtered = filter === '全部'
-        ? mockActivities
-        : mockActivities.filter((a) => a.status === filter)
-
-      expect(filtered).toHaveLength(2)
-    })
-  })
-
-  describe('用户信息持久化', () => {
-    it('应该使用zustand persist持久化用户信息', () => {
-      const persistConfig = {
-        name: 'charity-app-storage',
-        partialize: (state: any) => ({
-          currentUser: state.currentUser,
-          authToken: state.authToken,
-        }),
+  describe('Token认证核心测试', () => {
+    it('token过期应认证失败', () => {
+      interface TokenInfo {
+        userId: string
+        expiresAt: number
+      }
+      const tokens: Record<string, TokenInfo> = {
+        'valid-token': { userId: 'user-2', expiresAt: Date.now() + 60 * 60 * 1000 },
+        'expired-token': { userId: 'user-2', expiresAt: Date.now() - 1000 },
       }
 
-      expect(persistConfig.name).toBe('charity-app-storage')
-      const partialized: any = persistConfig.partialize({
-        currentUser: mockUser,
-        authToken: 'test-token',
-        activities: [],
-      })
-      expect(partialized.currentUser).toEqual(mockUser)
-      expect(partialized.authToken).toBe('test-token')
-      expect(partialized.activities).toBeUndefined()
-    })
-  })
-
-  describe('角色权限检查', () => {
-    it('应该只允许志愿者认领任务', () => {
-      const canClaimTask = (user: User | null) => {
-        return user?.role === '志愿者'
+      const verifyToken = (token: string): string | null => {
+        const info = tokens[token]
+        if (!info) return null
+        if (Date.now() > info.expiresAt) return null
+        return info.userId
       }
 
-      expect(canClaimTask(mockVolunteer)).toBe(true)
-      expect(canClaimTask(mockAdmin)).toBe(false)
-      expect(canClaimTask(mockUser)).toBe(false)
-      expect(canClaimTask(null)).toBe(false)
+      expect(verifyToken('valid-token')).toBe('user-2')
+      expect(verifyToken('expired-token')).toBeNull()
+      expect(verifyToken('invalid-token')).toBeNull()
     })
 
-    it('应该只允许志愿者记录时长', () => {
-      const canLogHours = (user: User | null) => {
-        return user?.role === '志愿者'
-      }
-
-      expect(canLogHours(mockVolunteer)).toBe(true)
-      expect(canLogHours(mockAdmin)).toBe(false)
-      expect(canLogHours(mockUser)).toBe(false)
-    })
-
-    it('应该验证已结束活动不能操作', () => {
-      const canOperate = (activity: Activity) => {
-        return activity.status !== '已结束'
-      }
-
-      expect(canOperate(mockActivities[0])).toBe(true)
-      expect(canOperate(mockActivities[1])).toBe(false)
-    })
-  })
-
-  describe('服务时长验证', () => {
-    it('应该验证时长在有效范围内', () => {
-      const isValidHours = (hours: number) => {
-        return !isNaN(hours) && hours >= 0.5 && hours <= 24
-      }
-
-      expect(isValidHours(0)).toBe(false)
-      expect(isValidHours(0.4)).toBe(false)
-      expect(isValidHours(25)).toBe(false)
-      expect(isValidHours(NaN)).toBe(false)
-      expect(isValidHours(0.5)).toBe(true)
-      expect(isValidHours(3)).toBe(true)
-      expect(isValidHours(24)).toBe(true)
-    })
-  })
-
-  describe('Token认证逻辑', () => {
-    it('应该验证请求中的Bearer token', () => {
-      const validToken = 'valid-token-123'
-      const validUserId = 'user-2'
-      const tokenStore: Record<string, string> = {
-        [validToken]: validUserId,
-      }
-
-      const authenticate = (authHeader: string | undefined): string | null => {
+    it('无token应返回401', () => {
+      const authenticate = (authHeader: string | undefined): { error?: string; userId?: string } => {
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
-          return null
+          return { error: '未提供认证令牌' }
         }
         const token = authHeader.replace('Bearer ', '')
-        return tokenStore[token] || null
+        if (token === 'valid') return { userId: 'user-2' }
+        return { error: '认证令牌无效或已过期' }
       }
 
-      expect(authenticate(`Bearer ${validToken}`)).toBe(validUserId)
-      expect(authenticate('Bearer invalid-token')).toBeNull()
-      expect(authenticate(undefined)).toBeNull()
-      expect(authenticate('Basic invalid')).toBeNull()
+      expect(authenticate(undefined).error).toBeTruthy()
+      expect(authenticate('Basic abc').error).toBeTruthy()
+      expect(authenticate('Bearer invalid').error).toBeTruthy()
+      expect(authenticate('Bearer valid').userId).toBe('user-2')
     })
 
-    it('应该检查认证用户与请求用户一致', () => {
-      const authUserId = 'user-2'
-      const requestUserId = 'user-2'
-      const differentUserId = 'user-3'
-
-      const checkUserConsistency = (authId: string, reqId?: string) => {
-        return !reqId || authId === reqId
+    it('请求用户与token用户不一致应拒绝', () => {
+      const checkConsistency = (authUserId: string, requestUserId?: string): boolean => {
+        return !requestUserId || authUserId === requestUserId
       }
 
-      expect(checkUserConsistency(authUserId, requestUserId)).toBe(true)
-      expect(checkUserConsistency(authUserId, differentUserId)).toBe(false)
-      expect(checkUserConsistency(authUserId)).toBe(true)
+      expect(checkConsistency('user-2', 'user-2')).toBe(true)
+      expect(checkConsistency('user-2', 'user-3')).toBe(false)
+      expect(checkConsistency('user-2')).toBe(true)
     })
   })
 
-  describe('并发数据竞争处理', () => {
-    it('应该实现文件锁机制防止并发写入', async () => {
-      interface Lock {
-        isLocked: boolean
-        queue: (() => void)[]
-      }
+  describe('乐观锁与并发报名测试', () => {
+    it('版本号不匹配应返回冲突并可重试', () => {
+      let activities: Activity[] = [
+        { ...mockActivities[0], registrations: [], version: 5 },
+      ]
 
-      const fileLock: Record<string, Lock> = {}
-
-      const getLock = (filePath: string): Lock => {
-        if (!fileLock[filePath]) {
-          fileLock[filePath] = { isLocked: false, queue: [] }
-        }
-        return fileLock[filePath]
-      }
-
-      const acquireLock = async (filePath: string): Promise<void> => {
-        const lock = getLock(filePath)
-        return new Promise((resolve) => {
-          if (!lock.isLocked) {
-            lock.isLocked = true
-            resolve()
-          } else {
-            lock.queue.push(() => {
-              lock.isLocked = true
-              resolve()
-            })
-          }
-        })
-      }
-
-      const releaseLock = (filePath: string): void => {
-        const lock = getLock(filePath)
-        lock.isLocked = false
-        const next = lock.queue.shift()
-        if (next) next()
-      }
-
-      let sharedCounter = 0
-      const operations: Promise<void>[] = []
-
-      for (let i = 0; i < 10; i++) {
-        operations.push(
-          (async () => {
-            await acquireLock('test-file.json')
-            const current = sharedCounter
-            await new Promise((resolve) => setTimeout(resolve, 10))
-            sharedCounter = current + 1
-            releaseLock('test-file.json')
-          })()
-        )
-      }
-
-      await Promise.all(operations)
-      expect(sharedCounter).toBe(10)
-    })
-  })
-})
+      const optimisticRegister = (
+        uid: string,

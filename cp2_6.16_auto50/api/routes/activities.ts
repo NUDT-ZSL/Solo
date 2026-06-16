@@ -87,7 +87,12 @@ async function writeUsers(data: any[]) {
   }
 }
 
-function readTokens() {
+interface TokenInfo {
+  userId: string
+  expiresAt: number
+}
+
+function readTokens(): Record<string, TokenInfo> {
   if (!fs.existsSync(tokensPath)) {
     fs.writeFileSync(tokensPath, JSON.stringify({}, null, 2), 'utf-8')
     return {}
@@ -96,21 +101,33 @@ function readTokens() {
   return JSON.parse(data)
 }
 
-function writeTokens(data: Record<string, string>) {
+function writeTokens(data: Record<string, TokenInfo>) {
   fs.writeFileSync(tokensPath, JSON.stringify(data, null, 2), 'utf-8')
 }
+
+const TOKEN_EXPIRES_HOURS = 24
 
 function generateToken(userId: string): string {
   const token = crypto.randomBytes(32).toString('hex')
   const tokens = readTokens()
-  tokens[token] = userId
+  tokens[token] = {
+    userId,
+    expiresAt: Date.now() + TOKEN_EXPIRES_HOURS * 60 * 60 * 1000,
+  }
   writeTokens(tokens)
   return token
 }
 
 function verifyToken(token: string): string | null {
   const tokens = readTokens()
-  return tokens[token] || null
+  const info = tokens[token]
+  if (!info) return null
+  if (Date.now() > info.expiresAt) {
+    delete tokens[token]
+    writeTokens(tokens)
+    return null
+  }
+  return info.userId
 }
 
 function authenticate(req: Request, res: Response): string | null {
@@ -146,7 +163,7 @@ router.get('/auth/token', (req: Request, res: Response) => {
     return
   }
   const token = generateToken(userId as string)
-  res.json({ token, userId })
+  res.json({ token, userId, expiresIn: TOKEN_EXPIRES_HOURS * 60 * 60 })
 })
 
 router.get('/', async (req: Request, res: Response) => {
@@ -224,6 +241,7 @@ router.post('/', async (req: Request, res: Response) => {
       claimedBy: [],
       hoursLogged: [],
       createdAt: new Date().toISOString(),
+      version: 0,
     }
 
     const activities = await readActivities()
@@ -242,41 +260,71 @@ router.post('/:id/register', async (req: Request, res: Response) => {
     if (!userId) return
 
     const { id } = req.params
+    const { expectedVersion } = req.body
 
     if (req.body.userId && req.body.userId !== userId) {
       res.status(403).json({ error: '认证用户与请求用户不一致' })
       return
     }
 
-    const activities = await readActivities()
-    const activityIndex = activities.findIndex((a: any) => a.id === id)
-    const activity = activities[activityIndex]
+    const MAX_ATTEMPTS = 5
+    let attempt = 0
+    let lastError: any = null
 
-    if (!activity) {
-      res.status(404).json({ error: '活动不存在' })
-      return
-    }
+    while (attempt < MAX_ATTEMPTS) {
+      attempt++
+      const activities = await readActivities()
+      const activityIndex = activities.findIndex((a: any) => a.id === id)
+      const activity = activities[activityIndex]
 
-    if (!checkActivityStatus(activity, res)) return
-
-    if (activity.registrations.includes(userId)) {
-      res.status(400).json({ error: '该用户已报名此活动' })
-      return
-    }
-
-    activity.registrations.push(userId)
-    await writeActivities(activities)
-
-    const users = await readUsers()
-    const user = users.find((u: any) => u.id === userId)
-    if (user) {
-      if (!user.registeredActivities.includes(id)) {
-        user.registeredActivities.push(id)
+      if (!activity) {
+        res.status(404).json({ error: '活动不存在' })
+        return
       }
-      await writeUsers(users)
+
+      if (!checkActivityStatus(activity, res)) return
+
+      if (activity.registrations.includes(userId)) {
+        res.status(400).json({ error: '该用户已报名此活动' })
+        return
+      }
+
+      const MAX_REGISTRATIONS = 50
+      if (activity.registrations.length >= MAX_REGISTRATIONS) {
+        res.status(400).json({ error: '活动名额已满' })
+        return
+      }
+
+      const currentVersion = activity.version || 0
+      if (expectedVersion !== undefined && expectedVersion !== currentVersion) {
+        lastError = { status: 409, error: '数据已被修改，请重试' }
+        await new Promise((r) => setTimeout(r, attempt * 50))
+        continue
+      }
+
+      activity.registrations.push(userId)
+      activity.version = currentVersion + 1
+      activities[activityIndex] = activity
+      await writeActivities(activities)
+
+      const users = await readUsers()
+      const user = users.find((u: any) => u.id === userId)
+      if (user) {
+        if (!user.registeredActivities.includes(id)) {
+          user.registeredActivities.push(id)
+        }
+        await writeUsers(users)
+      }
+
+      res.json({ activity, user, version: activity.version })
+      return
     }
 
-    res.json({ activity, user })
+    if (lastError) {
+      res.status(lastError.status).json({ error: lastError.error })
+    } else {
+      res.status(500).json({ error: '报名失败，请重试' })
+    }
   } catch (error) {
     res.status(500).json({ error: '报名失败' })
   }
@@ -301,32 +349,46 @@ router.post('/:id/claim', async (req: Request, res: Response) => {
       return
     }
 
-    const activities = await readActivities()
-    const activity = activities.find((a: any) => a.id === id)
+    const MAX_ATTEMPTS = 5
+    let attempt = 0
+    let lastError: any = null
 
-    if (!activity) {
-      res.status(404).json({ error: '活动不存在' })
-      return
-    }
+    while (attempt < MAX_ATTEMPTS) {
+      attempt++
+      const activities = await readActivities()
+      const activityIndex = activities.findIndex((a: any) => a.id === id)
+      const activity = activities[activityIndex]
 
-    if (!checkActivityStatus(activity, res)) return
-
-    if (activity.claimedBy.includes(userId)) {
-      res.status(400).json({ error: '该用户已认领此任务' })
-      return
-    }
-
-    activity.claimedBy.push(userId)
-    await writeActivities(activities)
-
-    if (user) {
-      if (!user.claimedTasks.includes(id)) {
-        user.claimedTasks.push(id)
+      if (!activity) {
+        res.status(404).json({ error: '活动不存在' })
+        return
       }
-      await writeUsers(users)
+
+      if (!checkActivityStatus(activity, res)) return
+
+      if (activity.claimedBy.includes(userId)) {
+        res.status(400).json({ error: '该用户已认领此任务' })
+        return
+      }
+
+      const currentVersion = activity.version || 0
+      activity.claimedBy.push(userId)
+      activity.version = currentVersion + 1
+      activities[activityIndex] = activity
+      await writeActivities(activities)
+
+      if (user) {
+        if (!user.claimedTasks.includes(id)) {
+          user.claimedTasks.push(id)
+        }
+        await writeUsers(users)
+      }
+
+      res.json({ activity, user, version: activity.version })
+      return
     }
 
-    res.json({ activity, user })
+    res.status(500).json({ error: '认领任务失败，请重试' })
   } catch (error) {
     res.status(500).json({ error: '认领任务失败' })
   }
@@ -363,28 +425,41 @@ router.post('/:id/logHours', async (req: Request, res: Response) => {
       return
     }
 
-    const activities = await readActivities()
-    const activity = activities.find((a: any) => a.id === id)
+    const MAX_ATTEMPTS = 5
+    let attempt = 0
 
-    if (!activity) {
-      res.status(404).json({ error: '活动不存在' })
+    while (attempt < MAX_ATTEMPTS) {
+      attempt++
+      const activities = await readActivities()
+      const activityIndex = activities.findIndex((a: any) => a.id === id)
+      const activity = activities[activityIndex]
+
+      if (!activity) {
+        res.status(404).json({ error: '活动不存在' })
+        return
+      }
+
+      if (!activity.claimedBy.includes(userId)) {
+        res.status(400).json({ error: '请先认领此任务再记录时长' })
+        return
+      }
+
+      const currentVersion = activity.version || 0
+      activity.hoursLogged.push({ userId, hours: numericHours })
+      activity.version = currentVersion + 1
+      activities[activityIndex] = activity
+      await writeActivities(activities)
+
+      if (user) {
+        user.totalHours = (user.totalHours || 0) + numericHours
+        await writeUsers(users)
+      }
+
+      res.json({ activity, user, version: activity.version })
       return
     }
 
-    if (!activity.claimedBy.includes(userId)) {
-      res.status(400).json({ error: '请先认领此任务再记录时长' })
-      return
-    }
-
-    activity.hoursLogged.push({ userId, hours: numericHours })
-    await writeActivities(activities)
-
-    if (user) {
-      user.totalHours = (user.totalHours || 0) + numericHours
-      await writeUsers(users)
-    }
-
-    res.json({ activity, user })
+    res.status(500).json({ error: '记录时长失败，请重试' })
   } catch (error) {
     res.status(500).json({ error: '记录时长失败' })
   }

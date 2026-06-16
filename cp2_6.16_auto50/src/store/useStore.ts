@@ -169,11 +169,14 @@ export const useStore = create<AppState>()(
       },
 
       registerActivity: async (activityId) => {
-        const { authToken, currentUser } = get()
+        const { authToken, currentUser, activities } = get()
         if (!authToken || !currentUser) {
           get().showToast('请先登录', 'error')
           return false
         }
+
+        const activity = activities.find((a) => a.id === activityId)
+        const expectedVersion = activity ? (activity as any).version : undefined
 
         try {
           const res = await fetch(`/api/activities/${activityId}/register`, {
@@ -182,8 +185,14 @@ export const useStore = create<AppState>()(
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${authToken}`,
             },
-            body: JSON.stringify({ userId: currentUser.id }),
+            body: JSON.stringify({ userId: currentUser.id, expectedVersion }),
           })
+
+          if (res.status === 401) {
+            set({ authToken: null, currentUser: null })
+            get().showToast('登录已过期，请重新登录', 'error')
+            return false
+          }
 
           const data = await res.json().catch(() => ({}))
           if (!res.ok) {
@@ -225,6 +234,12 @@ export const useStore = create<AppState>()(
             },
             body: JSON.stringify({ userId: currentUser.id }),
           })
+
+          if (res.status === 401) {
+            set({ authToken: null, currentUser: null })
+            get().showToast('登录已过期，请重新登录', 'error')
+            return false
+          }
 
           const data = await res.json().catch(() => ({}))
           if (!res.ok) {
