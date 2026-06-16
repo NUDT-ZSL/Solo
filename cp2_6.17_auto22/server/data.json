@@ -1,0 +1,169 @@
+{
+  "artists": [
+    {
+      "id": "a1",
+      "name": "星河乐队",
+      "avatar": "https://i.pravatar.cc/150?img=1",
+      "bio": "来自成都的独立摇滚乐队，融合电子与后摇元素，以浩瀚宇宙为创作主题。",
+      "genre": ["摇滚", "后摇", "电子"]
+    },
+    {
+      "id": "a2",
+      "name": "林小雨",
+      "avatar": "https://i.pravatar.cc/150?img=5",
+      "bio": "独立民谣歌手，用温暖的嗓音讲述城市里的故事。",
+      "genre": ["民谣", "流行"]
+    },
+    {
+      "id": "a3",
+      "name": "Neon Pulse",
+      "avatar": "https://i.pravatar.cc/150?img=12",
+      "bio": "上海合成器流行二人组，80年代复古未来主义风格。",
+      "genre": ["电子", "合成器流行", "Synthwave"]
+    },
+    {
+      "id": "a4",
+      "name": "北窗",
+      "avatar": "https://i.pravatar.cc/150?img=33",
+      "bio": "北京独立摇滚乐队，关注城市变迁与个体情感。",
+      "genre": ["摇滚", "独立"]
+    },
+    {
+      "id": "a5",
+      "name": "Aria Chen",
+      "avatar": "https://i.pravatar.cc/150?img=47",
+      "bio": "爵士与灵魂乐歌手，游走于古典与现代之间。",
+      "genre": ["爵士", "灵魂", "R&B"]
+    },
+    {
+      "id": "a6",
+      "name": "雾港",
+      "avatar": "https://i.pravatar.cc/150?img=52",
+      "bio": "来自重庆的后朋克乐队，用冷硬的节拍切割浓雾。",
+      "genre": ["后朋克", "哥特", "摇滚"]
+    }
+  ],
+  "songs": [
+    {
+      "id": "s1",
+      "artistId": "a1",
+      "title": "猎户座的眼泪",
+      "lyrics": "在无尽的星海中漂泊\n寻找那束属于我的光\n猎户座的眼泪划过天际\n照亮了沉睡的梦想\n\n星辰在夜空中低语\n告诉我远方的方向\n就算宇宙终将沉寂\n此刻的闪耀就是永恒",
+      "genre": ["后摇", "摇滚"],
+      "createdAt": "2024-01-15T10:30:00Z"
+    },
+    {
+      "id": "s2",
+      "artistId": "a1",
+      "title": "深空漫游",
+      "lyrics": "引擎启动的那一刻\n我告别了蓝色的星球\n穿过陨石带和星云\n在黑暗中寻找温柔\n\n时间变得缓慢而轻盈\n重力不再束缚我的心\n深空漫游永不停止\n直到遇见另一个自己",
+      "genre": ["电子", "摇滚"],
+      "createdAt": "2024-02-20T08:15:00Z"
+    },
+    {
+      "id": "s3",
+      "artistId": "a1",
+      "title": "光年之外",
+      "lyrics": "光年之外的信号\n穿越时空向我传来\n那是你曾说过的话\n在宇宙中永远存在",
+      "genre": ["后摇"],
+      "createdAt": "2024-03-10T14:45:00Z"
+    },
+    {
+      "id": "s4",
+      "artistId": "a2",
+      "title": "成都的雨",
+      "lyrics": "成都的雨总是下得很慢\n像你说话的语速一样\n我在春熙路的街头\n看着霓虹灯慢慢点亮\n\n你说要去很远的地方\n我只是默默撑开了伞\n雨水顺着伞沿落下\n像那句没说出口的晚安",
+      "genre": ["民谣"],
+      "createdAt": "2024-01-05T09:00:00Z"
+    },
+    {
+      "id": "s5",
+      "artistId": "a2",
+      "title": "旧时光",
+      "lyrics": "抽屉里的旧照片\n已经泛黄了边缘\n那时候我们笑得很甜\n不知道什么是明天",
+      "genre": ["民谣", "流行"],
+      "createdAt": "2024-02-18T16:20:00Z"
+    },
+    {
+      "id": "s6",
+      "artistId": "a3",
+      "title": "Midnight Drive",
+      "lyrics": "霓虹划过车窗边缘\n城市入睡我却无眠\n收音机播放80年代的歌\n这条路好像没有终点",
+      "genre": ["Synthwave", "电子"],
+      "createdAt": "2024-03-01T23:30:00Z"
+    },
+    {
+      "id": "s7",
+      "artistId": "a3",
+      "title": "Electric Dreams",
+      "lyrics": "I close my eyes and see the lights\nColors dancing in the night\nElectric dreams come alive\nWhen I'm with you under neon skies",
+      "genre": ["合成器流行"],
+      "createdAt": "2024-03-15T21:00:00Z"
+    },
+    {
+      "id": "s8",
+      "artistId": "a4",
+      "title": "三环路上",
+      "lyrics": "三环路上的车流\n像一条凝固的河\n我在桥洞下面\n唱着没人听的歌\n\n这个城市太大了\n大到容不下一个我\n可北京的夜晚啊\n让我舍不得走",
+      "genre": ["摇滚", "独立"],
+      "createdAt": "2024-02-01T19:45:00Z"
+    },
+    {
+      "id": "s9",
+      "artistId": "a5",
+      "title": "Moonlight Serenade",
+      "lyrics": "The moon is high and so are we\nDancing slow in harmony\nYour voice is like a velvet sea\nMoonlight serenade, just you and me",
+      "genre": ["爵士", "灵魂"],
+      "createdAt": "2024-01-25T22:10:00Z"
+    },
+    {
+      "id": "s10",
+      "artistId": "a6",
+      "title": "雾中列车",
+      "lyrics": "列车穿过浓雾\n鸣笛声像远方的哭\n我坐在靠窗的位置\n看不清前方的路",
+      "genre": ["后朋克", "摇滚"],
+      "createdAt": "2024-02-28T05:30:00Z"
+    }
+  ],
+  "tourCities": [
+    { "id": "t1", "artistId": "a1", "name": "北京", "lat": 39.9042, "lng": 116.4074, "popularity": 95, "date": "2024-07-15" },
+    { "id": "t2", "artistId": "a1", "name": "上海", "lat": 31.2304, "lng": 121.4737, "popularity": 92, "date": "2024-07-18" },
+    { "id": "t3", "artistId": "a1", "name": "广州", "lat": 23.1291, "lng": 113.2644, "popularity": 78, "date": "2024-07-22" },
+    { "id": "t4", "artistId": "a1", "name": "成都", "lat": 30.5728, "lng": 104.0668, "popularity": 88, "date": "2024-07-26" },
+    { "id": "t5", "artistId": "a1", "name": "武汉", "lat": 30.5928, "lng": 114.3055, "popularity": 65, "date": "2024-07-30" },
+    { "id": "t6", "artistId": "a1", "name": "西安", "lat": 34.3416, "lng": 108.9398, "popularity": 72, "date": "2024-08-03" },
+    { "id": "t7", "artistId": "a2", "name": "成都", "lat": 30.5728, "lng": 104.0668, "popularity": 90, "date": "2024-08-10" },
+    { "id": "t8", "artistId": "a2", "name": "重庆", "lat": 29.4316, "lng": 106.9123, "popularity": 75, "date": "2024-08-14" },
+    { "id": "t9", "artistId": "a2", "name": "杭州", "lat": 30.2741, "lng": 120.1551, "popularity": 82, "date": "2024-08-18" },
+    { "id": "t10", "artistId": "a3", "name": "上海", "lat": 31.2304, "lng": 121.4737, "popularity": 88, "date": "2024-09-01" },
+    { "id": "t11", "artistId": "a3", "name": "深圳", "lat": 22.5431, "lng": 114.0579, "popularity": 70, "date": "2024-09-05" },
+    { "id": "t12", "artistId": "a4", "name": "北京", "lat": 39.9042, "lng": 116.4074, "popularity": 98, "date": "2024-09-15" },
+    { "id": "t13", "artistId": "a4", "name": "天津", "lat": 39.0842, "lng": 117.2010, "popularity": 60, "date": "2024-09-18" },
+    { "id": "t14", "artistId": "a4", "name": "郑州", "lat": 34.7466, "lng": 113.6254, "popularity": 55, "date": "2024-09-22" },
+    { "id": "t15", "artistId": "a6", "name": "重庆", "lat": 29.4316, "lng": 106.9123, "popularity": 85, "date": "2024-10-01" },
+    { "id": "t16", "artistId": "a6", "name": "长沙", "lat": 28.2282, "lng": 112.9388, "popularity": 68, "date": "2024-10-05" }
+  ],
+  "favorites": [],
+  "cities": [
+    { "name": "北京", "lat": 39.9042, "lng": 116.4074 },
+    { "name": "上海", "lat": 31.2304, "lng": 121.4737 },
+    { "name": "广州", "lat": 23.1291, "lng": 113.2644 },
+    { "name": "深圳", "lat": 22.5431, "lng": 114.0579 },
+    { "name": "成都", "lat": 30.5728, "lng": 104.0668 },
+    { "name": "重庆", "lat": 29.4316, "lng": 106.9123 },
+    { "name": "杭州", "lat": 30.2741, "lng": 120.1551 },
+    { "name": "武汉", "lat": 30.5928, "lng": 114.3055 },
+    { "name": "西安", "lat": 34.3416, "lng": 108.9398 },
+    { "name": "南京", "lat": 32.0603, "lng": 118.7969 },
+    { "name": "长沙", "lat": 28.2282, "lng": 112.9388 },
+    { "name": "天津", "lat": 39.0842, "lng": 117.2010 },
+    { "name": "郑州", "lat": 34.7466, "lng": 113.6254 },
+    { "name": "青岛", "lat": 36.0671, "lng": 120.3826 },
+    { "name": "厦门", "lat": 24.4798, "lng": 118.0894 },
+    { "name": "昆明", "lat": 24.8801, "lng": 102.8329 },
+    { "name": "哈尔滨", "lat": 45.8038, "lng": 126.5350 },
+    { "name": "沈阳", "lat": 41.8057, "lng": 123.4315 },
+    { "name": "大连", "lat": 38.9140, "lng": 121.6147 },
+    { "name": "济南", "lat": 36.6512, "lng": 117.1201 }
+  ]
+}
