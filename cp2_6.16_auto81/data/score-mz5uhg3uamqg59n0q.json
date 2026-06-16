@@ -1,0 +1,32 @@
+{
+  "id": "score-mz5uhg3uamqg59n0q",
+  "title": "未命名乐曲",
+  "composer": "未知",
+  "tracks": [
+    {
+      "id": "track-1",
+      "name": "钢琴",
+      "color": "#e94560",
+      "solo": false,
+      "mute": false,
+      "visible": true
+    },
+    {
+      "id": "track-2",
+      "name": "小提琴",
+      "color": "#00d4ff",
+      "solo": false,
+      "mute": false,
+      "visible": true
+    },
+    {
+      "id": "track-3",
+      "name": "大提琴",
+      "color": "#533483",
+      "solo": false,
+      "mute": false,
+      "visible": true
+    }
+  ],
+  "notes": []
+}
