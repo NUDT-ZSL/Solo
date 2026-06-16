@@ -20,6 +20,8 @@ interface PulseAnimation {
   startTime: number;
   duration: number;
   originalEmissive: THREE.Color;
+  cancelled: boolean;
+  animationFrameId: number | null;
 }
 
 export class SceneManager {
