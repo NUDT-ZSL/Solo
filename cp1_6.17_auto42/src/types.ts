@@ -4,9 +4,12 @@ export type EventType =
   | 'cauldron_smoke' 
   | 'spark_splash' 
   | 'price_fluctuation' 
-  | 'apprentice_gift'
-  | 'quality_mutation'
-  | 'cauldron_explosion';
+  | 'apprentice_gift';
+
+export interface MaterialFluctuation {
+  materialId: string;
+  multiplier: number;
+}
 
 export interface Material {
   id: string;
@@ -96,6 +99,8 @@ export interface WorkshopState {
   itemsPerPage: number;
   lastWorkshopEventCount: number;
   lastEventCheckTime: number;
+  activeMaterialFluctuation: MaterialFluctuation | null;
+  guaranteedHighQuality: boolean;
 }
 
 export type AlchemyAction =
@@ -124,7 +129,9 @@ export type AlchemyAction =
   | { type: 'SET_PAGE'; page: number }
   | { type: 'ADD_GOLD'; amount: number }
   | { type: 'ADD_MATERIAL_BONUS'; materialId: string; quantity: number }
-  | { type: 'UPDATE_LAST_EVENT_CHECK'; time: number };
+  | { type: 'UPDATE_LAST_EVENT_CHECK'; time: number }
+  | { type: 'SET_MATERIAL_FLUCTUATION'; fluctuation: MaterialFluctuation | null }
+  | { type: 'SET_GUARANTEED_HIGH_QUALITY'; value: boolean };
 
 export const QUALITY_COLORS: Record<Quality, string> = {
   common: '#9E9E9E',

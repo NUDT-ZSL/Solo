@@ -179,15 +179,20 @@ export function validateRatioDeviation(
   };
 }
 
-export function validateRecipe(recipe: Recipe, cauldron: CauldronIngredient[]): boolean {
+export function validateRecipe(
+  recipe: Recipe,
+  cauldron: CauldronIngredient[],
+  fluctuation: { materialId: string; multiplier: number } | null = null
+): boolean {
   if (cauldron.length === 0) return false;
   
   const totalInCauldron = cauldron.reduce((sum, c) => sum + c.quantity, 0);
   if (totalInCauldron === 0) return false;
 
   for (const ingredient of recipe.ingredients) {
+    const required = getAdjustedRequiredAmount(ingredient.required, ingredient.materialId, fluctuation);
     const inCauldron = cauldron.find(c => c.materialId === ingredient.materialId)?.quantity || 0;
-    if (inCauldron < ingredient.required) return false;
+    if (inCauldron < required) return false;
   }
 
   const ratioCheck = validateRatioDeviation(recipe, cauldron);
@@ -262,22 +267,12 @@ export function generateRandomEvent(
     const events: Omit<ActiveEvent, 'id' | 'createdAt'>[] = [
       {
         type: 'price_fluctuation',
-        message: '市场价格波动！所有商品售价调整30%',
+        message: '材料价格波动！下一次炼金某种材料需求数量变化',
         timeoutAt: now + 3000
       },
       {
         type: 'apprentice_gift',
-        message: '学徒送来意外收获！获得随机材料',
-        timeoutAt: now + 3000
-      },
-      {
-        type: 'quality_mutation',
-        message: '魔法能量异常！下一瓶药水品质提升',
-        timeoutAt: now + 3000
-      },
-      {
-        type: 'cauldron_explosion',
-        message: '坩埚压力过大！下一次炼金材料损耗增加',
+        message: '学徒送来神秘祝福！下一次炼金必定产出高品质药水',
         timeoutAt: now + 3000
       }
     ];
@@ -364,10 +359,11 @@ export function runAlchemy(
   cauldron: CauldronIngredient[],
   qualityPenalty: number,
   materialLossMultiplier: number,
-  isFailed: boolean
+  isFailed: boolean,
+  guaranteedHighQuality: boolean = false,
+  materialFluctuation: { materialId: string; multiplier: number } | null = null
 ): { success: boolean; potion?: Potion; waste?: CauldronIngredient[] } {
-  const ratioValidation = validateRatioDeviation(recipe, cauldron);
-  if (!ratioValidation.valid) {
+  if (!validateRecipe(recipe, cauldron, materialFluctuation)) {
     const waste = cauldron.map(c => ({
       ...c,
       quantity: Math.ceil(c.quantity * materialLossMultiplier)
@@ -392,7 +388,8 @@ export function runAlchemy(
     return { success: false, waste };
   }
 
-  const quality = calculateQuality(accuracy, qualityPenalty);
+  const baseQuality = calculateQuality(accuracy, qualityPenalty);
+  const quality = getFinalQuality(baseQuality, guaranteedHighQuality);
   const potion: Potion = {
     id: generateId(),
     recipeId: recipe.id,
@@ -497,34 +494,53 @@ export function listForSale(
   };
 }
 
+export function generateMaterialFluctuation(): { materialId: string; multiplier: number } {
+  const randomMaterial = MATERIALS[Math.floor(Math.random() * MATERIALS.length)];
+  const multiplier = Math.random() > 0.5 ? 2 : 0.5;
+  return { materialId: randomMaterial.id, multiplier };
+}
+
 export function applyWorkshopEvent(
   event: ActiveEvent,
   state: WorkshopState
 ): Partial<WorkshopState> {
   switch (event.type) {
     case 'price_fluctuation': {
-      const change = (Math.random() - 0.5) * 0.6;
-      return { priceMultiplier: Math.max(0.5, Math.min(1.5, 1 + change)) };
+      const fluctuation = generateMaterialFluctuation();
+      return {
+        activeMaterialFluctuation: fluctuation
+      };
     }
     case 'apprentice_gift': {
-      const randomMaterial = MATERIALS[Math.floor(Math.random() * MATERIALS.length)];
-      const bonusAmount = Math.floor(Math.random() * 5) + 1;
-      const newMaterials = state.materials.map(m =>
-        m.id === randomMaterial.id
-          ? { ...m, quantity: m.quantity + bonusAmount }
-          : m
-      );
-      return { materials: newMaterials };
-    }
-    case 'quality_mutation': {
-      return { qualityPenalty: Math.max(0, state.qualityPenalty - 0.2) };
-    }
-    case 'cauldron_explosion': {
-      return { materialLossMultiplier: Math.min(1.5, state.materialLossMultiplier + 0.2) };
+      return {
+        guaranteedHighQuality: true
+      };
     }
     default:
       return {};
   }
+}
+
+export function getAdjustedRequiredAmount(
+  baseRequired: number,
+  materialId: string,
+  fluctuation: { materialId: string; multiplier: number } | null
+): number {
+  if (!fluctuation || fluctuation.materialId !== materialId) {
+    return baseRequired;
+  }
+  return Math.max(1, Math.round(baseRequired * fluctuation.multiplier));
+}
+
+export function getFinalQuality(
+  baseQuality: Quality,
+  guaranteedHigh: boolean
+): Quality {
+  if (!guaranteedHigh) return baseQuality;
+  const qualityOrder: Quality[] = ['common', 'fine', 'excellent', 'perfect'];
+  const baseIndex = qualityOrder.indexOf(baseQuality);
+  const minHighIndex = qualityOrder.indexOf('fine');
+  return qualityOrder[Math.max(baseIndex, minHighIndex)];
 }
 
 export function logEvent(event: ActiveEvent): LoggedEvent {
@@ -591,7 +607,9 @@ export function getInitialState(): WorkshopState {
     currentPage: 1,
     itemsPerPage: 6,
     lastWorkshopEventCount: 0,
-    lastEventCheckTime: 0
+    lastEventCheckTime: 0,
+    activeMaterialFluctuation: null,
+    guaranteedHighQuality: false
   };
 }
 

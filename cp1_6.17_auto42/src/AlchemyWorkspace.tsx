@@ -7,6 +7,7 @@ import {
   calculateAccuracy,
   validateRatioDeviation,
   getRemainingEventTime,
+  getAdjustedRequiredAmount,
   ALCHEMY_EVENT_TIMEOUT_MS
 } from './gameLoop';
 
@@ -298,25 +299,34 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = React.memo(({ s
   const canStartAlchemy = useCallback(() => {
     if (!selectedRecipe) return false;
     if (state.isAlchemizing) return false;
-    return validateRecipe(selectedRecipe, state.cauldron);
-  }, [selectedRecipe, state.isAlchemizing, state.cauldron]);
+    return validateRecipe(selectedRecipe, state.cauldron, state.activeMaterialFluctuation);
+  }, [selectedRecipe, state.isAlchemizing, state.cauldron, state.activeMaterialFluctuation]);
 
   const getMaterialDeficit = useCallback((recipe: Recipe) => {
     const ratioValidation = validateRatioDeviation(recipe, state.cauldron);
     return recipe.ingredients.map((ing, idx) => {
       const material = getMaterialById(ing.materialId);
       const inCauldron = state.cauldron.find(c => c.materialId === ing.materialId)?.quantity || 0;
+      const adjustedRequired = getAdjustedRequiredAmount(
+        ing.required,
+        ing.materialId,
+        state.activeMaterialFluctuation
+      );
       const devInfo = ratioValidation.deviations[idx];
       return {
         ...ing,
         material,
         inCauldron,
-        deficit: Math.max(0, ing.required - inCauldron),
+        required: adjustedRequired,
+        baseRequired: ing.required,
+        deficit: Math.max(0, adjustedRequired - inCauldron),
         deviation: devInfo?.deviation || 0,
-        outOfRange: devInfo?.outOfRange || false
+        outOfRange: devInfo?.outOfRange || false,
+        isFluctuating: state.activeMaterialFluctuation?.materialId === ing.materialId,
+        fluctuationMultiplier: state.activeMaterialFluctuation?.multiplier || 1
       };
     });
-  }, [getMaterialById, state.cauldron]);
+  }, [getMaterialById, state.cauldron, state.activeMaterialFluctuation]);
 
   const handleDragStart = (e: React.DragEvent, material: Material) => {
     if (state.isAlchemizing) return;
@@ -456,6 +466,8 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = React.memo(({ s
             {state.materials.map(material => {
               const inCauldron = state.cauldron.find(c => c.materialId === material.id)?.quantity || 0;
               const available = material.quantity - inCauldron;
+              const isFluctuating = state.activeMaterialFluctuation?.materialId === material.id;
+              const fluctuationMultiplier = state.activeMaterialFluctuation?.multiplier || 1;
               return (
                 <div
                   key={material.id}
@@ -466,13 +478,21 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = React.memo(({ s
                     alignItems: 'center',
                     gap: '10px',
                     padding: '10px',
-                    backgroundColor: available > 0
-                      ? 'rgba(255, 255, 255, 0.05)'
-                      : 'rgba(0, 0, 0, 0.2)',
+                    backgroundColor: isFluctuating
+                      ? fluctuationMultiplier > 1
+                        ? 'rgba(244, 67, 54, 0.15)'
+                        : 'rgba(76, 175, 80, 0.15)'
+                      : available > 0
+                        ? 'rgba(255, 255, 255, 0.05)'
+                        : 'rgba(0, 0, 0, 0.2)',
                     borderRadius: '8px',
                     cursor: available > 0 && !state.isAlchemizing ? 'grab' : 'not-allowed',
                     opacity: available > 0 ? 1 : 0.5,
-                    transition: 'all 0.2s ease'
+                    transition: 'all 0.2s ease',
+                    border: isFluctuating
+                      ? `2px solid ${fluctuationMultiplier > 1 ? '#f44336' : '#4CAF50'}`
+                      : '2px solid transparent',
+                    position: 'relative'
                   }}
                   className={available > 0 ? 'interactive-element' : ''}
                 >
@@ -481,9 +501,22 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = React.memo(({ s
                     <div style={{
                       fontFamily: "'Josefin Sans', sans-serif",
                       fontSize: '13px',
-                      color: '#fff'
+                      color: '#fff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
                     }}>
                       {material.name}
+                      {isFluctuating && (
+                        <span style={{
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          color: fluctuationMultiplier > 1 ? '#f44336' : '#4CAF50',
+                          animation: 'pulse 1s ease-in-out infinite'
+                        }}>
+                          {fluctuationMultiplier > 1 ? '↑需求↑' : '↓需求↓'}
+                        </span>
+                      )}
                     </div>
                     <div style={{
                       fontFamily: "'Josefin Sans', sans-serif",
@@ -509,6 +542,57 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = React.memo(({ s
           position: 'relative'
         }}>
           <Particles isFailed={state.isBrewFailed} />
+
+          {(state.guaranteedHighQuality || state.activeMaterialFluctuation) && (
+            <div style={{
+              position: 'absolute',
+              top: '50px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              display: 'flex',
+              gap: '8px',
+              zIndex: 5
+            }}>
+              {state.guaranteedHighQuality && (
+                <div style={{
+                  padding: '4px 10px',
+                  backgroundColor: 'rgba(255, 215, 0, 0.2)',
+                  border: '1px solid #FFD700',
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontFamily: "'Josefin Sans', sans-serif",
+                  color: '#FFD700',
+                  fontWeight: 600,
+                  animation: 'pulse 1.5s ease-in-out infinite',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}>
+                  ✨ 必出高品质
+                </div>
+              )}
+              {state.activeMaterialFluctuation && (
+                <div style={{
+                  padding: '4px 10px',
+                  backgroundColor: state.activeMaterialFluctuation.multiplier > 1
+                    ? 'rgba(244, 67, 54, 0.2)'
+                    : 'rgba(76, 175, 80, 0.2)',
+                  border: `1px solid ${state.activeMaterialFluctuation.multiplier > 1 ? '#f44336' : '#4CAF50'}`,
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontFamily: "'Josefin Sans', sans-serif",
+                  color: state.activeMaterialFluctuation.multiplier > 1 ? '#f44336' : '#4CAF50',
+                  fontWeight: 600,
+                  animation: 'pulse 1.5s ease-in-out infinite',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}>
+                  {state.activeMaterialFluctuation.multiplier > 1 ? '📈' : '📉'} 需求波动
+                </div>
+              )}
+            </div>
+          )}
 
           {showRecipeToggle && (
             <button
@@ -884,11 +968,26 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = React.memo(({ s
                             borderRadius: '8px',
                             backgroundColor: d.deficit > 0 || d.outOfRange
                               ? 'rgba(244, 67, 54, 0.2)'
-                              : 'rgba(76, 175, 80, 0.2)',
-                            color: d.deficit > 0 || d.outOfRange ? '#f44336' : '#4CAF50'
+                              : d.isFluctuating
+                                ? d.fluctuationMultiplier > 1
+                                  ? 'rgba(244, 67, 54, 0.15)'
+                                  : 'rgba(76, 175, 80, 0.15)'
+                                : 'rgba(76, 175, 80, 0.2)',
+                            color: d.deficit > 0 || d.outOfRange ? '#f44336' : d.isFluctuating ? (d.fluctuationMultiplier > 1 ? '#f44336' : '#4CAF50') : '#4CAF50',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '2px'
                           }}
                         >
-                          {d.material?.icon} {d.required}
+                          {d.material?.icon}
+                          {d.isFluctuating && d.baseRequired !== d.required && (
+                            <span style={{ textDecoration: 'line-through', opacity: 0.5, fontSize: '9px' }}>
+                              {d.baseRequired}
+                            </span>
+                          )}
+                          <span style={{ fontWeight: d.isFluctuating ? 700 : 500 }}>
+                            {d.required}
+                          </span>
                           {d.deficit > 0 && ` (-${d.deficit})`}
                           {d.outOfRange && ' ⚠️'}
                         </span>

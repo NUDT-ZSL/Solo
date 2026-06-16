@@ -15,6 +15,7 @@ import {
   shouldTriggerWorkshopEvent,
   addPotionToInventory,
   consumeMaterials,
+  getAdjustedRequiredAmount,
   logEvent as createLogEvent
 } from './gameLoop';
 import { AlchemyWorkspace } from './AlchemyWorkspace';
@@ -89,7 +90,9 @@ function reducer(state: WorkshopState, action: AlchemyAction): WorkshopState {
             state.cauldron,
             state.qualityPenalty,
             state.materialLossMultiplier,
-            state.isBrewFailed
+            state.isBrewFailed,
+            state.guaranteedHighQuality,
+            state.activeMaterialFluctuation
           );
 
           const wasteMul = result.waste ? state.materialLossMultiplier : 1;
@@ -113,7 +116,9 @@ function reducer(state: WorkshopState, action: AlchemyAction): WorkshopState {
             inventory: newInventory,
             successfulAlchemies: newSuccessCount,
             qualityPenalty: 0,
-            isBrewFailed: false
+            isBrewFailed: false,
+            activeMaterialFluctuation: null,
+            guaranteedHighQuality: false
           };
         }
         return {
@@ -122,7 +127,9 @@ function reducer(state: WorkshopState, action: AlchemyAction): WorkshopState {
           alchemyStartTime: null,
           alchemyProgress: 0,
           activeEvent: null,
-          cauldron: []
+          cauldron: [],
+          activeMaterialFluctuation: null,
+          guaranteedHighQuality: false
         };
       }
       
@@ -131,6 +138,12 @@ function reducer(state: WorkshopState, action: AlchemyAction): WorkshopState {
 
     case 'UPDATE_LAST_EVENT_CHECK':
       return { ...state, lastEventCheckTime: action.time };
+
+    case 'SET_MATERIAL_FLUCTUATION':
+      return { ...state, activeMaterialFluctuation: action.fluctuation };
+
+    case 'SET_GUARANTEED_HIGH_QUALITY':
+      return { ...state, guaranteedHighQuality: action.value };
 
     case 'TRIGGER_EVENT':
       return { ...state, activeEvent: action.event };
@@ -329,6 +342,12 @@ const App: React.FC = () => {
               break;
             case 'materialLossMultiplier':
               dispatch({ type: 'UPDATE_MATERIAL_LOSS', multiplier: value as number });
+              break;
+            case 'activeMaterialFluctuation':
+              dispatch({ type: 'SET_MATERIAL_FLUCTUATION', fluctuation: value as typeof state.activeMaterialFluctuation });
+              break;
+            case 'guaranteedHighQuality':
+              dispatch({ type: 'SET_GUARANTEED_HIGH_QUALITY', value: value as boolean });
               break;
           }
         });
