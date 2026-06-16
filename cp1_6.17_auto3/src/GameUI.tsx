@@ -20,6 +20,7 @@ export const GameUI: React.FC = () => {
   const engineRef = useRef<GameEngine | null>(null);
   const animFrameRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
+  const lastUiUpdateRef = useRef<number>(0);
   const [, forceUpdate] = useState(0);
   const [viewport, setViewport] = useState({ w: 1024, h: 768 });
   const [message, setMessage] = useState('');
@@ -64,7 +65,11 @@ export const GameUI: React.FC = () => {
 
       engine.update(dt);
       drawScene(ctx, engine, time, gridPhaseRef.current, viewport);
-      forceUpdate((x) => (x + 1) % 1000000);
+
+      if (time - lastUiUpdateRef.current > 100) {
+        lastUiUpdateRef.current = time;
+        forceUpdate((x) => x + 1);
+      }
       animFrameRef.current = requestAnimationFrame(render);
     };
     animFrameRef.current = requestAnimationFrame(render);
@@ -156,11 +161,11 @@ export const GameUI: React.FC = () => {
     gridPhase: number,
     time: number,
   ) => {
-    const spacing = 40;
+    const spacing = 35;
+    const t = time * 0.0005;
     ctx.lineWidth = 1;
-    const t = time * 0.001;
     for (let x = 0; x <= vp.w; x += spacing) {
-      const flicker = 0.15 + 0.1 * Math.sin(t * 2 + x * 0.05);
+      const flicker = 0.05 + 0.1 * (0.5 + 0.5 * Math.sin(t + x * 0.03));
       ctx.strokeStyle = `rgba(0, 220, 255, ${flicker})`;
       ctx.beginPath();
       ctx.moveTo(x, 0);
@@ -168,7 +173,7 @@ export const GameUI: React.FC = () => {
       ctx.stroke();
     }
     for (let y = 0; y <= vp.h; y += spacing) {
-      const flicker = 0.15 + 0.1 * Math.sin(t * 2 + y * 0.05 + 1.5);
+      const flicker = 0.05 + 0.1 * (0.5 + 0.5 * Math.sin(t + y * 0.03 + 1.5));
       ctx.strokeStyle = `rgba(0, 220, 255, ${flicker})`;
       ctx.beginPath();
       ctx.moveTo(0, y);
@@ -182,57 +187,99 @@ export const GameUI: React.FC = () => {
       const a = nodes[edge.from];
       const b = nodes[edge.to];
       if (!a || !b) continue;
+      const engine = engineRef.current;
       const isHighlighted =
-        (a.type === 'encrypted' && b.id === engineRef.current?.state.playerNode) ||
-        (b.type === 'encrypted' && a.id === engineRef.current?.state.playerNode);
+        (a.id === engine?.state.playerNode || b.id === engine?.state.playerNode);
 
-      ctx.lineWidth = 2;
+      ctx.lineWidth = isHighlighted ? 2.5 : 1.5;
       ctx.strokeStyle = isHighlighted ? '#00DCFF' : '#333355';
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
       ctx.stroke();
 
-      const packetCount = 3;
+      if (isHighlighted) {
+        ctx.strokeStyle = 'rgba(0, 220, 255, 0.15)';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const edgeLen = Math.sqrt(dx * dx + dy * dy);
+      const speed = 0.0004;
+      const packetCount = Math.max(2, Math.floor(edgeLen / 80));
+      const baseColor = isHighlighted ? [0, 220, 255] : [0, 170, 255];
+
       for (let i = 0; i < packetCount; i++) {
         const offset = (i / packetCount + edge.dataFlowOffset) % 1;
-        const t = ((time * 0.0003) + offset) % 1;
-        const px = a.x + (b.x - a.x) * t;
-        const py = a.y + (b.y - a.y) * t;
-        const color = isHighlighted ? '#00DCFF' : '#00AAFF';
-        ctx.fillStyle = color;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 8;
+        const t = ((time * speed) + offset) % 1;
+        const px = a.x + dx * t;
+        const py = a.y + dy * t;
+        const size = 2 + 2 * (0.5 + 0.5 * Math.sin(time * 0.005 + i * 1.2));
+
+        const trailCount = 4;
+        for (let tr = trailCount; tr >= 0; tr--) {
+          const tt = Math.max(0, t - tr * 0.012);
+          const tpx = a.x + dx * tt;
+          const tpy = a.y + dy * tt;
+          const trAlpha = (1 - tr / (trailCount + 1)) * 0.7;
+          const trSize = size * (1 - tr * 0.12);
+          ctx.fillStyle = `rgba(${baseColor[0]}, ${baseColor[1]}, ${baseColor[2]}, ${trAlpha})`;
+          ctx.beginPath();
+          ctx.arc(tpx, tpy, trSize, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.save();
+        ctx.shadowColor = `rgba(${baseColor[0]}, ${baseColor[1]}, ${baseColor[2]}, 0.8)`;
+        ctx.shadowBlur = 10;
+        ctx.fillStyle = `rgba(${baseColor[0]}, ${baseColor[1]}, ${baseColor[2]}, 0.9)`;
         ctx.beginPath();
-        ctx.arc(px, py, 3, 0, Math.PI * 2);
+        ctx.arc(px, py, size, 0, Math.PI * 2);
         ctx.fill();
-        ctx.shadowBlur = 0;
+        ctx.restore();
       }
     }
   };
 
   const drawNodeGlow = (ctx: CanvasRenderingContext2D, node: Node, time: number) => {
     const color = NODE_COLORS[node.type];
-    const pulse = 0.5 + 0.3 * Math.sin(time * 0.003 + node.pulsePhase);
+    const breathCycle = Math.sin(time * 0.003 + node.pulsePhase);
+    const pulse = 0.4 + 0.6 * (0.5 + 0.5 * breathCycle);
     const engine = engineRef.current;
     const isPlayerNode = engine && engine.state.playerNode === node.id;
-    let pulseScale = 1;
-    if (engine && engine.state.pulseNodes.has(node.id)) {
-      const p = engine.state.pulseNodes.get(node.id)!;
-      pulseScale = 1 + (1 - p / 0.5) * 0.5;
-    }
-    const baseR = 30 * pulseScale;
-
-    for (let i = 3; i >= 0; i--) {
-      const r = baseR + i * 15;
-      const alpha = (isPlayerNode ? 0.35 : 0.15) * pulse * (1 - i / 4);
-      const gradient = ctx.createRadialGradient(node.x, node.y, baseR * 0.5, node.x, node.y, r);
+    const baseR = 22;
+    const glowLayers = [
+      { radiusMul: 1.8, alphaBase: 0.35, alphaPlayer: 0.55 },
+      { radiusMul: 2.6, alphaBase: 0.2, alphaPlayer: 0.35 },
+      { radiusMul: 3.4, alphaBase: 0.1, alphaPlayer: 0.2 },
+      { radiusMul: 4.2, alphaBase: 0.04, alphaPlayer: 0.1 },
+    ];
+    for (const layer of glowLayers) {
+      const r = baseR * layer.radiusMul;
+      const alpha = (isPlayerNode ? layer.alphaPlayer : layer.alphaBase) * pulse;
+      const gradient = ctx.createRadialGradient(node.x, node.y, baseR * 0.3, node.x, node.y, r);
       gradient.addColorStop(0, hexToRgba(color, alpha));
+      gradient.addColorStop(0.4, hexToRgba(color, alpha * 0.6));
+      gradient.addColorStop(0.7, hexToRgba(color, alpha * 0.25));
       gradient.addColorStop(1, hexToRgba(color, 0));
       ctx.fillStyle = gradient;
       ctx.beginPath();
       ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
       ctx.fill();
+    }
+    if (isPlayerNode) {
+      const ringPulse = 0.5 + 0.5 * Math.sin(time * 0.006);
+      const ringR = baseR + 6 + ringPulse * 12;
+      ctx.strokeStyle = hexToRgba(color, 0.4 * pulse);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, ringR, 0, Math.PI * 2);
+      ctx.stroke();
     }
   };
 
@@ -242,11 +289,15 @@ export const GameUI: React.FC = () => {
     const radius = 20;
     let pulseScale = 1;
     if (state.pulseNodes.has(node.id)) {
-      const p = state.pulseNodes.get(node.id)!;
-      pulseScale = 1 + (1 - p / 0.5) * 0.3;
+      const remaining = state.pulseNodes.get(node.id)!;
+      const elapsed = 0.3 - remaining;
+      const progress = Math.min(1, elapsed / 0.3);
+      const easeOut = 1 - Math.pow(1 - progress, 3);
+      pulseScale = 1 + 0.2 * (1 - easeOut);
     }
     const r = radius * pulseScale;
 
+    ctx.save();
     ctx.shadowColor = color;
     ctx.shadowBlur = isPlayerNode ? 20 + 10 * Math.sin(time * 0.008) : 10;
 
@@ -258,7 +309,7 @@ export const GameUI: React.FC = () => {
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
     ctx.stroke();
-    ctx.shadowBlur = 0;
+    ctx.restore();
 
     if (isPlayerNode) {
       for (let i = 0; i < 2; i++) {
@@ -310,13 +361,14 @@ export const GameUI: React.FC = () => {
 
   const drawAI = (ctx: CanvasRenderingContext2D, x: number, y: number, time: number) => {
     const pulse = 0.7 + 0.3 * Math.sin(time * 0.006);
+    ctx.save();
     ctx.shadowColor = '#FFD700';
     ctx.shadowBlur = 15 * pulse;
     ctx.fillStyle = '#FFD700';
     ctx.beginPath();
     ctx.arc(x, y, 14, 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowBlur = 0;
+    ctx.restore();
     ctx.fillStyle = '#0A0A1A';
     ctx.font = 'bold 14px Consolas';
     ctx.textAlign = 'center';
@@ -326,13 +378,14 @@ export const GameUI: React.FC = () => {
 
   const drawPlayer = (ctx: CanvasRenderingContext2D, x: number, y: number, time: number) => {
     const pulse = 0.7 + 0.3 * Math.sin(time * 0.01);
+    ctx.save();
     ctx.shadowColor = '#00DCFF';
     ctx.shadowBlur = 25 * pulse;
     ctx.fillStyle = '#00DCFF';
     ctx.beginPath();
     ctx.arc(x, y, 12, 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowBlur = 0;
+    ctx.restore();
     ctx.fillStyle = '#0A0A1A';
     ctx.font = 'bold 14px Consolas';
     ctx.textAlign = 'center';

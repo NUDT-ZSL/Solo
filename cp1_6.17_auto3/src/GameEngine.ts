@@ -359,7 +359,7 @@ export class GameEngine {
     this.state.playerNode = toId;
     this.state.stealProgress = 0;
     this.state.stealNodeId = null;
-    this.state.pulseNodes.set(toId, 0.5);
+    this.state.pulseNodes.set(toId, 0.3);
 
     if (this.state.escapeMode && target.type === 'exit') {
       this.state.score += 1000 + this.state.round * 500;
