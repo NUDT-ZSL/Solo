@@ -43,11 +43,15 @@ export function animateValue(
   easing: EasingFunction = easeInOutCubic,
 ): AnimationHandle {
   const start = performance.now();
+  console.log('[interpolate] animation started, duration:', duration);
   let rafId: number | null = null;
   let cancelled = false;
 
   const step = (now: number) => {
-    if (cancelled) return;
+    if (cancelled) {
+      console.log('[interpolate] step cancelled');
+      return;
+    }
     const elapsed = now - start;
     const progress = Math.min(elapsed / duration, 1);
     const eased = easing(progress);
@@ -55,6 +59,7 @@ export function animateValue(
     if (progress < 1) {
       rafId = requestAnimationFrame(step);
     } else if (onComplete) {
+      console.log('[interpolate] animation complete, progress:', progress);
       onComplete();
     }
   };

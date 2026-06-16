@@ -7,18 +7,23 @@ import { animateValue, easeInOutCubic } from './utils/interpolate';
 
 function App() {
   const [currentSeason, setCurrentSeason] = useState<SeasonName>('summer');
+  const [previousSeason, setPreviousSeason] = useState<SeasonName>('summer');
   const [transitionProgress, setTransitionProgress] = useState(1);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [transitionKey, setTransitionKey] = useState(0);
   const animHandleRef = useRef<{ cancel: () => void } | null>(null);
   const pendingSeasonRef = useRef<SeasonName | null>(null);
+  const currentSeasonRef = useRef<SeasonName>('summer');
 
   const startTransition = useCallback((target: SeasonName) => {
     if (animHandleRef.current) {
       animHandleRef.current.cancel();
     }
+    const prev = currentSeasonRef.current;
+    setPreviousSeason(prev);
     setIsTransitioning(true);
     setCurrentSeason(target);
+    currentSeasonRef.current = target;
     setTransitionProgress(0);
     setTransitionKey((k) => k + 1);
 
@@ -28,6 +33,8 @@ function App() {
         setTransitionProgress(eased);
       },
       () => {
+        console.log('[App] Transition complete, target:', target);
+        animHandleRef.current = null;
         setIsTransitioning(false);
         setTransitionProgress(1);
         if (pendingSeasonRef.current && pendingSeasonRef.current !== target) {
@@ -42,14 +49,14 @@ function App() {
 
   const handleSeasonChange = useCallback(
     (season: SeasonName) => {
-      if (season === currentSeason && !isTransitioning) return;
-      if (isTransitioning) {
+      if (season === currentSeasonRef.current && !animHandleRef.current) return;
+      if (animHandleRef.current) {
         pendingSeasonRef.current = season;
         return;
       }
       startTransition(season);
     },
-    [currentSeason, isTransitioning, startTransition],
+    [startTransition],
   );
 
   useEffect(() => {
@@ -125,6 +132,7 @@ function App() {
         >
           <SeasonForest
             currentSeason={currentSeason}
+            previousSeason={previousSeason}
             transitionProgress={transitionProgress}
           />
         </Canvas>

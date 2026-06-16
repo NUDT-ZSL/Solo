@@ -8,9 +8,10 @@ interface TreeParticlesProps {
   position: [number, number, number];
   height: number;
   particleCount: number;
+  prevConfig: SeasonConfig;
   targetConfig: SeasonConfig;
   transitionProgress: number;
-  rotationAngularVel: number;
+  rotVelRef: { current: number };
   seed: number;
 }
 
@@ -26,9 +27,10 @@ export function TreeParticles({
   position,
   height,
   particleCount,
+  prevConfig,
   targetConfig,
   transitionProgress,
-  rotationAngularVel,
+  rotVelRef,
   seed,
 }: TreeParticlesProps) {
   const pointsRef = useRef<THREE.Points>(null);
@@ -72,8 +74,8 @@ export function TreeParticles({
     const sizes = new Float32Array(baseSizes);
 
     for (let i = 0; i < particleCount; i++) {
-      const colorIdx = colorSeeds[i] % targetConfig.particleColors.length;
-      const hex = targetConfig.particleColors[colorIdx];
+      const colorIdx = colorSeeds[i] % prevConfig.particleColors.length;
+      const hex = prevConfig.particleColors[colorIdx];
       const [r, g, b] = hexToRgb(hex);
       colors[i * 3] = r / 255;
       colors[i * 3 + 1] = g / 255;
@@ -83,20 +85,20 @@ export function TreeParticles({
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-    geometry.attributes.position.needsUpdate = true;
-    geometry.attributes.color.needsUpdate = true;
-    geometry.attributes.size.needsUpdate = true;
-  }, [basePositions, baseSizes, colorSeeds, particleCount, targetConfig]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  useFrame((_, delta) => {
+  useFrame(() => {
     if (!pointsRef.current) return;
     const posAttr = pointsRef.current.geometry.attributes.position as THREE.BufferAttribute;
     const colorAttr = pointsRef.current.geometry.attributes.color as THREE.BufferAttribute;
     const sizeAttr = pointsRef.current.geometry.attributes.size as THREE.BufferAttribute;
 
-    const parallaxFactor = rotationAngularVel * 0.1;
-    const targetRadiusScale = 1 + transitionProgress * 0.08;
-    const targetSizeScale = 0.9 + transitionProgress * 0.2;
+    const angularVel = rotVelRef.current;
+    const parallaxFactor = angularVel * 0.1;
+    const t = transitionProgress;
+    const radiusScale = 1 + Math.sin(t * Math.PI) * 0.12;
+    const sizeScale = 0.85 + t * 0.3;
 
     for (let i = 0; i < particleCount; i++) {
       const ox = offsetSeeds[i] * 0.15;
@@ -106,38 +108,39 @@ export function TreeParticles({
       const by = basePositions[i * 3 + 1];
       const bz = basePositions[i * 3 + 2];
 
-      posAttr.array[i * 3] = bx * targetRadiusScale + Math.sin(ox * 10) * parallaxFactor;
+      posAttr.array[i * 3] = bx * radiusScale + Math.sin(ox * 10) * parallaxFactor;
       posAttr.array[i * 3 + 1] = by + Math.cos(oz * 10) * parallaxFactor * 0.5;
-      posAttr.array[i * 3 + 2] = bz * targetRadiusScale + Math.sin(oz * 10) * parallaxFactor;
+      posAttr.array[i * 3 + 2] = bz * radiusScale + Math.sin(oz * 10) * parallaxFactor;
 
-      const origIdx = colorSeeds[i] % targetConfig.particleColors.length;
-      const origHex = targetConfig.particleColors[origIdx];
-      const shadeIdx = (origIdx + 3) % targetConfig.particleColors.length;
-      const shadeHex = targetConfig.particleColors[shadeIdx];
-      const lerpedHex = lerpColor(origHex, shadeHex, transitionProgress);
+      const idx = colorSeeds[i] % targetConfig.particleColors.length;
+      const prevHex = prevConfig.particleColors[idx];
+      const nextHex = targetConfig.particleColors[idx];
+      const lerpedHex = lerpColor(prevHex, nextHex, t);
       const [r, g, b] = hexToRgb(lerpedHex);
       colorAttr.array[i * 3] = r / 255;
       colorAttr.array[i * 3 + 1] = g / 255;
       colorAttr.array[i * 3 + 2] = b / 255;
 
-      sizeAttr.array[i] = baseSizes[i] * targetSizeScale;
+      sizeAttr.array[i] = baseSizes[i] * sizeScale;
     }
 
     posAttr.needsUpdate = true;
     colorAttr.needsUpdate = true;
     sizeAttr.needsUpdate = true;
-
-    void delta;
   });
 
   const trunkHeight = height * 0.5;
   const trunkRadius = height * 0.05;
 
+  const trunkColor = transitionProgress > 0.5
+    ? lerpColor('#6b4423', '#5d3a1a', (transitionProgress - 0.5) * 2)
+    : '#6b4423';
+
   return (
     <group position={position}>
       <mesh position={[0, trunkHeight / 2, 0]}>
         <cylinderGeometry args={[trunkRadius, trunkRadius * 1.2, trunkHeight, 8]} />
-        <meshStandardMaterial color="#6b4423" roughness={0.9} />
+        <meshStandardMaterial color={trunkColor} roughness={0.9} />
       </mesh>
       <points ref={pointsRef}>
         <bufferGeometry />

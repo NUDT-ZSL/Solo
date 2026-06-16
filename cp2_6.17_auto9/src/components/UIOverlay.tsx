@@ -62,7 +62,7 @@ export function UIOverlay({
     right: 24,
     width: 200,
     padding: 16,
-    background: 'rgba(255, 255, 255, 0.5)',
+    background: '#ffffff80',
     backdropFilter: 'blur(10px)',
     WebkitBackdropFilter: 'blur(10px)',
     borderRadius: 8,

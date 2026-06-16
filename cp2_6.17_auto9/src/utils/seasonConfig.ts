@@ -54,7 +54,7 @@ export const SEASON_CONFIGS: Record<SeasonName, SeasonConfig> = {
     skyColor: '#f5a623',
     ambientIntensity: 0.6,
     particleColors: generateParticleVariants('#d97706'),
-    grassColor: '#b8860b',
+    grassColor: '#a67c52',
   },
   winter: {
     name: '冬季',
@@ -63,7 +63,7 @@ export const SEASON_CONFIGS: Record<SeasonName, SeasonConfig> = {
     skyColor: '#d1d5db',
     ambientIntensity: 0.4,
     particleColors: generateParticleVariants('#6b7280'),
-    grassColor: '#9ca3af',
+    grassColor: '#8b7355',
   },
 };
 

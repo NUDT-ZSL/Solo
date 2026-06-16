@@ -1,4 +1,4 @@
-import { useRef, useMemo, useState, useEffect } from 'react';
+import { useRef, useMemo, useEffect } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
@@ -6,10 +6,11 @@ import { OrbitControls } from '@react-three/drei';
 import { TreeParticles } from './TreeParticles';
 import type { SeasonName, SeasonConfig } from '../utils/seasonConfig';
 import { SEASON_CONFIGS, TREE_COUNT, PARTICLES_PER_TREE } from '../utils/seasonConfig';
-import { lerp, lerpColor } from '../utils/interpolate';
+import { lerp, lerpColor, hexToRgb } from '../utils/interpolate';
 
 interface SeasonForestProps {
   currentSeason: SeasonName;
+  previousSeason: SeasonName;
   transitionProgress: number;
 }
 
@@ -31,6 +32,7 @@ interface RockData {
   position: [number, number, number];
   size: number;
   seed: number;
+  baseY: number;
 }
 
 interface GrassData {
@@ -38,6 +40,12 @@ interface GrassData {
   rotation: number;
   bladeCount: number;
   seed: number;
+  blades: {
+    angle: number;
+    height: number;
+    tilt: number;
+    tiltDir: number;
+  }[];
 }
 
 interface PathPoint {
@@ -45,18 +53,23 @@ interface PathPoint {
   z: number;
 }
 
+function getPathPoints(): PathPoint[] {
+  const pts: PathPoint[] = [];
+  for (let t = 0; t <= 1; t += 0.02) {
+    pts.push({
+      x: Math.sin(t * Math.PI * 2) * 1.8 + t * 3 - 1.5,
+      z: -3 + t * 6,
+    });
+  }
+  return pts;
+}
+
 function generateTrees(count: number): TreeData[] {
   const rand = seededRandom(42);
   const trees: TreeData[] = [];
   const minDist = 0.9;
   const pathWidth = 0.5;
-  const pathPoints: PathPoint[] = [];
-  for (let t = 0; t <= 1; t += 0.05) {
-    pathPoints.push({
-      x: Math.sin(t * Math.PI * 2) * 1.8 + t * 3 - 1.5,
-      z: -3 + t * 6,
-    });
-  }
+  const pathPoints = getPathPoints();
 
   for (let i = 0; i < count; i++) {
     let attempts = 0;
@@ -101,15 +114,36 @@ function generateTrees(count: number): TreeData[] {
 function generateRocks(count: number): RockData[] {
   const rand = seededRandom(1337);
   const rocks: RockData[] = [];
-  for (let t = 0.05; t < 1; t += 1 / count) {
-    const baseX = Math.sin(t * Math.PI * 2) * 1.8 + t * 3 - 1.5;
-    const baseZ = -3 + t * 6;
-    const offset = (rand() - 0.5) * 0.8;
+  const pathPoints = getPathPoints();
+
+  for (let i = 0; i < count; i++) {
+    const t = rand();
+    const pathIdx = Math.min(
+      pathPoints.length - 1,
+      Math.floor(t * (pathPoints.length - 1)),
+    );
+    const pp = pathPoints[pathIdx];
+    const nextPp = pathPoints[Math.min(pathPoints.length - 1, pathIdx + 1)];
+    const dx = nextPp.x - pp.x;
+    const dz = nextPp.z - pp.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const nx = -dz / len;
+    const nz = dx / len;
     const side = rand() > 0.5 ? 1 : -1;
+    const offsetDist = 0.5 + rand() * 1.5;
+    const alongOffset = (rand() - 0.5) * 0.6;
+
+    const size = 0.2 + rand() * 0.3;
+
     rocks.push({
-      position: [baseX + offset * side, 0, baseZ + (0.45 + Math.abs(offset)) * side],
-      size: 0.2 + rand() * 0.3,
+      position: [
+        pp.x + dx * alongOffset + nx * offsetDist * side,
+        0,
+        pp.z + dz * alongOffset + nz * offsetDist * side,
+      ],
+      size,
       seed: Math.floor(rand() * 100000),
+      baseY: size * 0.4,
     });
   }
   return rocks;
@@ -118,14 +152,42 @@ function generateRocks(count: number): RockData[] {
 function generateGrass(count: number): GrassData[] {
   const rand = seededRandom(7777);
   const grasses: GrassData[] = [];
+  const pathPoints = getPathPoints();
+
   for (let i = 0; i < count; i++) {
-    const x = (rand() - 0.5) * 9;
-    const z = (rand() - 0.5) * 9;
+    let x: number, z: number;
+    let attempts = 0;
+    do {
+      x = (rand() - 0.5) * 9;
+      z = (rand() - 0.5) * 9;
+      attempts++;
+      let nearPath = false;
+      for (const pp of pathPoints) {
+        if (Math.hypot(x - pp.x, z - pp.z) < 0.5) {
+          nearPath = true;
+          break;
+        }
+      }
+      if (!nearPath) break;
+    } while (attempts < 10);
+
+    const bladeCount = 3 + Math.floor(rand() * 3);
+    const blades: GrassData['blades'] = [];
+    for (let b = 0; b < bladeCount; b++) {
+      blades.push({
+        angle: (b / bladeCount) * Math.PI + rand() * 0.4 - 0.2,
+        height: 0.12 + rand() * 0.1,
+        tilt: 0.25 + rand() * 0.25,
+        tiltDir: rand() > 0.5 ? 1 : -1,
+      });
+    }
+
     grasses.push({
       position: [x, 0, z],
       rotation: rand() * Math.PI * 2,
-      bladeCount: 3 + Math.floor(rand() * 3),
+      bladeCount,
       seed: Math.floor(rand() * 100000),
+      blades,
     });
   }
   return grasses;
@@ -170,59 +232,108 @@ function generatePathGeometry(): THREE.BufferGeometry {
   return geo;
 }
 
-export function SeasonForest({ currentSeason, transitionProgress }: SeasonForestProps) {
+export function SeasonForest({
+  currentSeason,
+  previousSeason,
+  transitionProgress,
+}: SeasonForestProps) {
   const { scene } = useThree();
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const groundMatRef = useRef<THREE.MeshStandardMaterial>(null);
   const pathMatRef = useRef<THREE.MeshBasicMaterial>(null);
   const ambientRef = useRef<THREE.AmbientLight>(null);
-  const angularVelRef = useRef(0);
-  const lastAzimuthRef = useRef(0);
-  const [rotVel, setRotVel] = useState(0);
+  const rotVelRef = useRef(0);
+  const lastAzimuthRef = useRef<number | null>(null);
+  const treesGroupRef = useRef<THREE.Group>(null);
+  const rocksGroupRef = useRef<THREE.Group>(null);
+  const grassesGroupRef = useRef<THREE.Group>(null);
 
   const targetConfig: SeasonConfig = SEASON_CONFIGS[currentSeason];
+  const prevConfig: SeasonConfig = SEASON_CONFIGS[previousSeason];
 
   const trees = useMemo(() => generateTrees(TREE_COUNT), []);
-  const rocks = useMemo(() => generateRocks(16), []);
+  const rocks = useMemo(() => generateRocks(18), []);
   const grasses = useMemo(() => generateGrass(60), []);
   const pathGeometry = useMemo(() => generatePathGeometry(), []);
 
-  const prevSeasonRef = useRef<SeasonName>(currentSeason);
-  useEffect(() => {
-    prevSeasonRef.current = currentSeason;
-  }, [currentSeason]);
+  const grassColorsRef = useRef<{ prev: THREE.Color; next: THREE.Color } | null>(null);
 
   useEffect(() => {
-    scene.background = new THREE.Color(targetConfig.skyColor);
-  }, [scene, targetConfig.skyColor]);
+    grassColorsRef.current = {
+      prev: new THREE.Color(prevConfig.grassColor),
+      next: new THREE.Color(targetConfig.grassColor),
+    };
+  }, [prevConfig.grassColor, targetConfig.grassColor]);
+
+  useEffect(() => {
+    scene.background = new THREE.Color(prevConfig.skyColor);
+  }, [scene, prevConfig.skyColor]);
 
   useFrame((_, delta) => {
     if (controlsRef.current) {
       const az = controlsRef.current.getAzimuthalAngle();
-      const vel = (az - lastAzimuthRef.current) / Math.max(delta, 0.001);
-      angularVelRef.current = angularVelRef.current * 0.85 + vel * 0.15;
+      if (lastAzimuthRef.current !== null) {
+        const vel = (az - lastAzimuthRef.current) / Math.max(delta, 0.001);
+        rotVelRef.current = rotVelRef.current * 0.85 + vel * 0.15;
+      }
       lastAzimuthRef.current = az;
-      setRotVel(angularVelRef.current);
     }
 
+    const parallax = rotVelRef.current * 0.1;
+
     if (groundMatRef.current) {
-      const prevConfig = SEASON_CONFIGS[prevSeasonRef.current];
       const col = lerpColor(prevConfig.groundColor, targetConfig.groundColor, transitionProgress);
       groundMatRef.current.color.set(col);
     }
+
     if (ambientRef.current) {
-      const prevConfig = SEASON_CONFIGS[prevSeasonRef.current];
       const intensity = lerp(prevConfig.ambientIntensity, targetConfig.ambientIntensity, transitionProgress);
       ambientRef.current.intensity = intensity;
     }
+
+    const skyColor = lerpColor(prevConfig.skyColor, targetConfig.skyColor, transitionProgress);
+    scene.background = new THREE.Color(skyColor);
+
+    if (rocksGroupRef.current) {
+      for (let i = 0; i < rocksGroupRef.current.children.length; i++) {
+        const child = rocksGroupRef.current.children[i];
+        const r = rocks[i];
+        if (!r) continue;
+        child.position.x = r.position[0] + Math.sin(r.seed) * parallax * 0.05;
+        child.position.z = r.position[2] + Math.cos(r.seed) * parallax * 0.05;
+      }
+    }
+
+    if (grassesGroupRef.current) {
+      for (let i = 0; i < grassesGroupRef.current.children.length; i++) {
+        const child = grassesGroupRef.current.children[i];
+        const g = grasses[i];
+        if (!g) continue;
+        child.position.x = g.position[0] + Math.sin(g.seed * 0.01) * parallax * 0.03;
+        child.position.z = g.position[2] + Math.cos(g.seed * 0.01) * parallax * 0.03;
+      }
+    }
+
+    if (treesGroupRef.current) {
+      for (let i = 0; i < treesGroupRef.current.children.length; i++) {
+        const child = treesGroupRef.current.children[i];
+        const t = trees[i];
+        if (!t) continue;
+        child.position.x = t.position[0] + Math.sin(t.seed) * parallax * 0.04;
+        child.position.z = t.position[2] + Math.cos(t.seed) * parallax * 0.04;
+      }
+    }
+
     void pathMatRef;
   });
 
-  const parallax = rotVel * 0.1;
+  const lerpedGrassColor = lerpColor(prevConfig.grassColor, targetConfig.grassColor, transitionProgress);
+  const [grassR, grassG, grassB] = hexToRgb(lerpedGrassColor);
+  const grassColor3 = new THREE.Color(grassR / 255, grassG / 255, grassB / 255);
 
   return (
     <>
-      <ambientLight ref={ambientRef} intensity={targetConfig.ambientIntensity} />
+      <ambientLight ref={ambientRef} intensity={prevConfig.ambientIntensity} />
       <directionalLight
         position={[5, 8, 5]}
         intensity={0.6}
@@ -234,96 +345,78 @@ export function SeasonForest({ currentSeason, transitionProgress }: SeasonForest
 
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[12, 12, 1, 1]} />
-        <meshStandardMaterial ref={groundMatRef} color={targetConfig.groundColor} roughness={0.95} />
+        <meshStandardMaterial ref={groundMatRef} color={prevConfig.groundColor} roughness={0.95} />
       </mesh>
 
-      <mesh geometry={pathGeometry} position={[parallax * 0.02, 0, 0]}>
+      <mesh geometry={pathGeometry}>
         <meshBasicMaterial ref={pathMatRef} color="#8b5a2b" />
       </mesh>
 
-      {rocks.map((r, i) => (
-        <mesh
-          key={`rock-${i}`}
-          position={[
-            r.position[0] + Math.sin(r.seed) * parallax * 0.05,
-            r.size * 0.4,
-            r.position[2] + Math.cos(r.seed) * parallax * 0.05,
-          ]}
-          scale={r.size}
-        >
-          <dodecahedronGeometry args={[1, 0]} />
-          <meshStandardMaterial
-            color="#8a8a8a"
-            roughness={0.85}
-            transparent
-            opacity={0.82}
-            flatShading
-          />
-        </mesh>
-      ))}
+      <group ref={rocksGroupRef}>
+        {rocks.map((r, i) => (
+          <mesh
+            key={`rock-${i}`}
+            position={[r.position[0], r.baseY, r.position[2]]}
+            scale={r.size}
+          >
+            <dodecahedronGeometry args={[1, 0]} />
+            <meshStandardMaterial
+              color="#8a8a8a"
+              roughness={0.85}
+              transparent
+              opacity={0.82}
+              flatShading
+            />
+          </mesh>
+        ))}
+      </group>
 
-      {grasses.map((g, i) => {
-        const rand = seededRandom(g.seed);
-        const blades = [];
-        for (let b = 0; b < g.bladeCount; b++) {
-          const bAngle = (b / g.bladeCount) * Math.PI + rand() * 0.4 - 0.2;
-          const bHeight = 0.12 + rand() * 0.1;
-          const bTilt = 0.25 + rand() * 0.25;
-          blades.push(
-            <mesh
-              key={b}
-              position={[
-                Math.cos(bAngle) * 0.03,
-                bHeight / 2,
-                Math.sin(bAngle) * 0.03,
-              ]}
-              rotation={[0, 0, bTilt * (rand() > 0.5 ? 1 : -1)]}
-            >
-              <planeGeometry args={[0.02, bHeight]} />
-              <meshBasicMaterial
-                color={lerpColor('#6a8f3a', targetConfig.grassColor, transitionProgress)}
-                side={THREE.DoubleSide}
-                transparent
-                opacity={0.9}
-              />
-            </mesh>,
-          );
-        }
-        return (
+      <group ref={grassesGroupRef}>
+        {grasses.map((g, i) => (
           <group
             key={`grass-${i}`}
-            position={[
-              g.position[0] + Math.sin(g.seed * 0.01) * parallax * 0.03,
-              0,
-              g.position[2] + Math.cos(g.seed * 0.01) * parallax * 0.03,
-            ]}
+            position={g.position}
             rotation={[0, g.rotation, 0]}
           >
-            {blades}
+            {g.blades.map((b, bi) => (
+              <mesh
+                key={bi}
+                position={[
+                  Math.cos(b.angle) * 0.03,
+                  b.height / 2,
+                  Math.sin(b.angle) * 0.03,
+                ]}
+                rotation={[0, 0, b.tilt * b.tiltDir]}
+              >
+                <planeGeometry args={[0.02, b.height]} />
+                <meshBasicMaterial
+                  color={grassColor3}
+                  side={THREE.DoubleSide}
+                  transparent
+                  opacity={0.9}
+                />
+              </mesh>
+            ))}
           </group>
-        );
-      })}
+        ))}
+      </group>
 
-      {trees.map((t, i) => (
-        <group
-          key={`tree-grp-${i}`}
-          position={[
-            t.position[0] + Math.sin(t.seed) * parallax * 0.04,
-            0,
-            t.position[2] + Math.cos(t.seed) * parallax * 0.04,
-          ]}
-        >
-          <TreeParticles
-            position={[0, 0, 0]}
-            height={t.height}
-            particleCount={PARTICLES_PER_TREE}
-            targetConfig={targetConfig}
-            transitionProgress={transitionProgress}
-            rotationAngularVel={rotVel}
-            seed={t.seed}
-          />
-        </group>
-      ))}
+      <group ref={treesGroupRef}>
+        {trees.map((t, i) => (
+          <group key={`tree-grp-${i}`} position={t.position}>
+            <TreeParticles
+              position={[0, 0, 0]}
+              height={t.height}
+              particleCount={PARTICLES_PER_TREE}
+              prevConfig={prevConfig}
+              targetConfig={targetConfig}
+              transitionProgress={transitionProgress}
+              rotVelRef={rotVelRef}
+              seed={t.seed}
+            />
+          </group>
+        ))}
+      </group>
 
       <OrbitControls
         ref={controlsRef}
