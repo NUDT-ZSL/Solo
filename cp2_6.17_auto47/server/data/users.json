@@ -1,0 +1,32 @@
+[
+  {
+    "id": "8229d3d5-be0c-4710-ae30-1a5517a39864",
+    "nickname": "管理员",
+    "email": "admin@example.com",
+    "password": "admin123",
+    "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=admin",
+    "points": 0,
+    "isAdmin": true,
+    "createdAt": "2026-06-16T22:37:58.916Z"
+  },
+  {
+    "id": "f9e32fa6-8c75-4f89-8b93-6b94b687f200",
+    "nickname": "书虫小明",
+    "email": "xiaoming@example.com",
+    "password": "123456",
+    "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=xiaoming",
+    "points": 30,
+    "isAdmin": false,
+    "createdAt": "2026-06-16T22:37:58.917Z"
+  },
+  {
+    "id": "be3f04b8-a02a-4087-9c90-418fe1aa78f9",
+    "nickname": "文艺青年",
+    "email": "wenyi@example.com",
+    "password": "123456",
+    "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=wenyi",
+    "points": 20,
+    "isAdmin": false,
+    "createdAt": "2026-06-16T22:37:58.917Z"
+  }
+]

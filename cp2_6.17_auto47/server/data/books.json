@@ -1,0 +1,102 @@
+[
+  {
+    "id": "be8ecd6e-2599-4a85-b19a-7f7d9b59dcc9",
+    "title": "百年孤独",
+    "author": "加西亚·马尔克斯",
+    "isbn": "9787544253994",
+    "coverUrl": "https://picsum.photos/seed/book1/300/420",
+    "condition": "九成新，无笔记划痕",
+    "ownerId": "f9e32fa6-8c75-4f89-8b93-6b94b687f200",
+    "createdAt": "2026-06-15T22:37:58.919Z"
+  },
+  {
+    "id": "0741fa44-326a-4d7b-97de-4f59bfa86515",
+    "title": "三体",
+    "author": "刘慈欣",
+    "isbn": "9787536692930",
+    "coverUrl": "https://picsum.photos/seed/book2/300/420",
+    "condition": "八成新，扉页有签名",
+    "ownerId": "be3f04b8-a02a-4087-9c90-418fe1aa78f9",
+    "createdAt": "2026-06-14T22:37:58.919Z"
+  },
+  {
+    "id": "9ab473c2-a1b0-4d44-9c28-626484164546",
+    "title": "活着",
+    "author": "余华",
+    "isbn": "9787506365437",
+    "coverUrl": "https://picsum.photos/seed/book3/300/420",
+    "condition": "十成新，刚拆封",
+    "ownerId": "f9e32fa6-8c75-4f89-8b93-6b94b687f200",
+    "createdAt": "2026-06-13T22:37:58.919Z"
+  },
+  {
+    "id": "e1e28557-f399-46b1-9daf-b45d9dd19690",
+    "title": "围城",
+    "author": "钱钟书",
+    "isbn": "9787020024759",
+    "coverUrl": "https://picsum.photos/seed/book4/300/420",
+    "condition": "七成新，略有泛黄",
+    "ownerId": "be3f04b8-a02a-4087-9c90-418fe1aa78f9",
+    "createdAt": "2026-06-12T22:37:58.919Z"
+  },
+  {
+    "id": "cbe552c3-baff-49a9-a4a7-1dc72297e517",
+    "title": "小王子",
+    "author": "圣埃克苏佩里",
+    "isbn": "9787020042494",
+    "coverUrl": "https://picsum.photos/seed/book5/300/420",
+    "condition": "九成新，精装版",
+    "ownerId": "f9e32fa6-8c75-4f89-8b93-6b94b687f200",
+    "createdAt": "2026-06-11T22:37:58.919Z"
+  },
+  {
+    "id": "1a737851-34ac-4266-ba8f-480425adae8f",
+    "title": "1984",
+    "author": "乔治·奥威尔",
+    "isbn": "9787540426125",
+    "coverUrl": "https://picsum.photos/seed/book6/300/420",
+    "condition": "八成新",
+    "ownerId": "be3f04b8-a02a-4087-9c90-418fe1aa78f9",
+    "createdAt": "2026-06-10T22:37:58.919Z"
+  },
+  {
+    "id": "43ca0c7c-5b71-4510-bbc2-8c17cca61bda",
+    "title": "平凡的世界",
+    "author": "路遥",
+    "isbn": "9787530212004",
+    "coverUrl": "https://picsum.photos/seed/book7/300/420",
+    "condition": "九成新，三册全套",
+    "ownerId": "f9e32fa6-8c75-4f89-8b93-6b94b687f200",
+    "createdAt": "2026-06-09T22:37:58.919Z"
+  },
+  {
+    "id": "4ef3f20a-c5ea-4d34-aeab-7ebd0ed288a8",
+    "title": "红楼梦",
+    "author": "曹雪芹",
+    "isbn": "9787020002207",
+    "coverUrl": "https://picsum.photos/seed/book8/300/420",
+    "condition": "精装典藏版，全新",
+    "ownerId": "be3f04b8-a02a-4087-9c90-418fe1aa78f9",
+    "createdAt": "2026-06-08T22:37:58.919Z"
+  },
+  {
+    "id": "5cce0845-0ece-40b6-9ac9-2c9e879e8dfa",
+    "title": "人类简史",
+    "author": "尤瓦尔·赫拉利",
+    "isbn": "9787508647357",
+    "coverUrl": "https://picsum.photos/seed/book9/300/420",
+    "condition": "八成新，略有批注",
+    "ownerId": "f9e32fa6-8c75-4f89-8b93-6b94b687f200",
+    "createdAt": "2026-06-07T22:37:58.919Z"
+  },
+  {
+    "id": "14954188-4532-4b9d-aa9e-62a553e2b9d6",
+    "title": "挪威的森林",
+    "author": "村上春树",
+    "isbn": "9787532732968",
+    "coverUrl": "https://picsum.photos/seed/book10/300/420",
+    "condition": "九成新",
+    "ownerId": "be3f04b8-a02a-4087-9c90-418fe1aa78f9",
+    "createdAt": "2026-06-06T22:37:58.919Z"
+  }
+]

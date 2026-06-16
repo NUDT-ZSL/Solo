@@ -1,7 +1,13 @@
-import fs from 'fs';
-import path from 'path';
+const fs = require('fs');
+const path = require('path');
 
 const dataDir = path.join(__dirname, '..', 'data');
+
+const defaultData = {
+  'users.json': [],
+  'books.json': [],
+  'exchanges.json': { requests: [], records: [] },
+};
 
 function ensureDir() {
   if (!fs.existsSync(dataDir)) {
@@ -9,18 +15,20 @@ function ensureDir() {
   }
 }
 
-export function readData<T>(filename: string): T {
+function readData(filename) {
   ensureDir();
   const filePath = path.join(dataDir, filename);
   if (!fs.existsSync(filePath)) {
-    return [] as unknown as T;
+    return defaultData[filename] || [];
   }
   const content = fs.readFileSync(filePath, 'utf-8');
-  return JSON.parse(content) as T;
+  return JSON.parse(content);
 }
 
-export function writeData<T>(filename: string, data: T): void {
+function writeData(filename, data) {
   ensureDir();
   const filePath = path.join(dataDir, filename);
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
 }
+
+module.exports = { readData, writeData };

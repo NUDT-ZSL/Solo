@@ -5,7 +5,7 @@
   "type": "commonjs",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "server": "ts-node server/index.ts",
+    "server": "node server/index.js",
     "client": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview"

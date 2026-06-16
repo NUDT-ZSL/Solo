@@ -7,12 +7,23 @@ import { booksApi, usersApi } from '../api';
 import type { AdminStats, ExchangeRecord, Book, User } from '../types';
 import { formatDate } from '../utils';
 
+const tableHeaderStyle: React.CSSProperties = {
+  padding: '12px 12px',
+  textAlign: 'left',
+  fontSize: 12,
+  fontWeight: 600,
+  color: '#78716c',
+  background: '#fafaf9',
+};
+
 export function AdminPage() {
   const { user } = useAuth();
   const exchange = useExchange();
   const navigate = useNavigate();
   const [stats, setStats] = useState<AdminStats | null>(null);
-  const [records, setRecords] = useState<(ExchangeRecord & { book?: Book; currentHolder?: User })[]>([]);
+  const [records, setRecords] = useState<
+    (ExchangeRecord & { book?: Book; currentHolder?: User })[]
+  >([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -91,7 +102,7 @@ export function AdminPage() {
         {[
           {
             label: '图书总数',
-          value: stats?.totalBooks ?? 0,
+            value: stats?.totalBooks ?? 0,
             icon: BookOpen,
             color: '#d97706',
             bg: '#fef3c7',
@@ -174,7 +185,14 @@ export function AdminPage() {
             <div className="loading-spinner" />
           </div>
         ) : records.length === 0 ? (
-          <p style={{ color: '#a8a29e', fontSize: 14, textAlign: 'center', padding: 20 }}>
+          <p
+            style={{
+              color: '#a8a29e',
+              fontSize: 14,
+              textAlign: 'center',
+              padding: 20,
+            }}
+          >
             暂无漂流记录
           </p>
         ) : (
@@ -187,11 +205,7 @@ export function AdminPage() {
             >
               <thead>
                 <tr style={{ borderBottom: '1px solid #e7e5e4' }}>
-                  <th
-                    style={tableHeaderStyle}
-                  >
-                    图书名称
-                  </th>
+                  <th style={tableHeaderStyle}>图书名称</th>
                   <th style={tableHeaderStyle}>当前持有者</th>
                   <th style={tableHeaderStyle}>开始日期</th>
                   <th style={tableHeaderStyle}>状态</th>
@@ -208,4 +222,68 @@ export function AdminPage() {
                       style={{
                         padding: '12px 12px',
                         fontSize: 14,
-                        color: '#292
+                        color: '#292524',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {rec.book?.title || '未知图书'}
+                    </td>
+                    <td style={{ padding: '12px 12px', fontSize: 14, color: '#57534e' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {rec.currentHolder && (
+                          <>
+                            <img
+                              src={rec.currentHolder.avatar}
+                              alt=""
+                              style={{
+                                width: 24,
+                                height: 24,
+                                borderRadius: '50%',
+                              }}
+                            />
+                            <span>{rec.currentHolder.nickname}</span>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                    <td style={{ padding: '12px 12px', fontSize: 14, color: '#57534e' }}>
+                      {formatDate(rec.lentAt)}
+                    </td>
+                    <td style={{ padding: '12px 12px' }}>
+                      <span
+                        className={`status-tag ${
+                          rec.status === 'active' ? 'active' : 'completed'
+                        }`}
+                      >
+                        {rec.status === 'active' ? '进行中' : '已结束'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px 12px' }}>
+                      {rec.status === 'active' && (
+                        <button
+                          className="btn-danger"
+                          onClick={() => handleClose(rec.id)}
+                          style={{ padding: '4px 12px', fontSize: 12 }}
+                        >
+                          关闭
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @media (max-width: 768px) {
+          .container > div:nth-child(2) {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
