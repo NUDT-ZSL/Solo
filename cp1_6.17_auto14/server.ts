@@ -274,44 +274,47 @@ app.post('/api/mixtapes/:id/comments', (req: Request, res: Response) => {
 });
 
 app.post('/api/mixtapes/:id/stickers', (req: Request, res: Response) => {
-  const { id } = req.params;
-  const { type, timestamp } = req.body;
+    const { id } = req.params;
+    const { type, timestamp, position } = req.body;
 
-  const validTypes: StickerType[] = ['heart', 'fire', 'lightning', 'star', 'moon', 'note'];
-  if (!type || !validTypes.includes(type as StickerType) || timestamp === undefined) {
-    res.status(400).json({ error: 'Invalid sticker data' });
-    return;
-  }
+    const validTypes: StickerType[] = ['heart', 'fire', 'lightning', 'star', 'moon', 'note'];
+    if (!type || !validTypes.includes(type as StickerType) || timestamp === undefined) {
+      res.status(400).json({ error: 'Invalid sticker data' });
+      return;
+    }
 
-  const mixtape = mockMixtapes.find(m => m.id === id);
-  if (!mixtape) {
-    res.status(404).json({ error: 'Mixtape not found' });
-    return;
-  }
+    const mixtape = mockMixtapes.find(m => m.id === id);
+    if (!mixtape) {
+      res.status(404).json({ error: 'Mixtape not found' });
+      return;
+    }
 
-  if (!mockStickers[id]) {
-    mockStickers[id] = [];
-  }
+    if (!mockStickers[id]) {
+      mockStickers[id] = [];
+    }
 
-  const existingSticker = mockStickers[id].find(
-    s => s.type === type && Math.abs(s.timestamp - Number(timestamp)) < 5
-  );
+    const existingSticker = mockStickers[id].find(
+      s => s.type === type && Math.abs(s.timestamp - Number(timestamp)) < 5
+    );
 
-  if (existingSticker) {
-    existingSticker.count += 1;
-  } else {
-    const newSticker: Sticker = {
-      id: generateId(),
-      type: type as StickerType,
-      timestamp: Number(timestamp),
-      position: { x: Math.random() * 80 + 10, y: Math.random() * 60 + 20 },
-      count: 1
-    };
-    mockStickers[id].push(newSticker);
-  }
+    if (existingSticker) {
+      existingSticker.count += 1;
+    } else {
+      const defaultPosition = { x: Math.random() * 80 + 10, y: Math.random() * 60 + 20 };
+      const newSticker: Sticker = {
+        id: generateId(),
+        type: type as StickerType,
+        timestamp: Number(timestamp),
+        position: position && position.x !== undefined && position.y !== undefined
+          ? { x: Number(position.x), y: Number(position.y) }
+          : defaultPosition,
+        count: 1
+      };
+      mockStickers[id].push(newSticker);
+    }
 
-  res.json(mockStickers[id]);
-});
+    res.json(mockStickers[id]);
+  });
 
 app.post('/api/mixtapes', (req: Request, res: Response) => {
   const { title, description, songs, theme } = req.body;

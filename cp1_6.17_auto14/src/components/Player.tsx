@@ -27,9 +27,11 @@ const Player: React.FC<PlayerProps> = ({ mixtape, initialComments, initialSticke
   const [commentContent, setCommentContent] = useState('');
   const [commentTimestamp, setCommentTimestamp] = useState(0);
   const [hoveredComment, setHoveredComment] = useState<string | null>(null);
-  const [frequencyData, setFrequencyData] = useState<Uint8Array>(new Uint8Array(128));
+  const [, setFrequencyData] = useState<Uint8Array>(new Uint8Array(128));
   const [draggedSticker, setDraggedSticker] = useState<StickerType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
 
   const currentSong = mixtape.songs[currentSongIndex];
   const totalDuration = mixtape.totalDuration;
@@ -103,7 +105,6 @@ const Player: React.FC<PlayerProps> = ({ mixtape, initialComments, initialSticke
       setFrequencyData(freqData);
 
       const avgFreq = getAverageFrequency(freqData);
-      const baseColor = frequencyToColor(avgFreq);
 
       ctx.clearRect(0, 0, width, height);
 
@@ -271,24 +272,78 @@ const Player: React.FC<PlayerProps> = ({ mixtape, initialComments, initialSticke
     }
   };
 
-  const handleStickerDragStart = (type: StickerType) => {
+  const handleStickerDragStart = (e: React.DragEvent<HTMLDivElement>, type: StickerType) => {
+    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.setData('text/plain', type);
     setDraggedSticker(type);
+
+    const dragImage = e.currentTarget.cloneNode(true) as HTMLElement;
+    dragImage.style.position = 'absolute';
+    dragImage.style.top = '-1000px';
+    dragImage.style.opacity = '0.8';
+    dragImage.style.transform = 'scale(1.2)';
+    document.body.appendChild(dragImage);
+    e.dataTransfer.setDragImage(dragImage, 30, 30);
+    setTimeout(() => document.body.removeChild(dragImage), 0);
+  };
+
+  const handleStickerDragLeave = () => {
+    setIsDragOver(false);
+    setDragPosition(null);
   };
 
   const handleStickerDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    if (!draggedSticker || !waveformContainerRef.current || !id) return;
+    setIsDragOver(false);
+    setDragPosition(null);
+
+    if (!draggedSticker || !waveformContainerRef.current || !id) {
+      setDraggedSticker(null);
+      return;
+    }
 
     const rect = waveformContainerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
     const percentage = x / rect.width;
     const timestamp = percentage * totalDuration;
+
+    const newX = percentage * 100;
+    const newY = (y / rect.height) * 100;
+
+    const existingStickers = stickers;
+    const threshold = 15;
+    let finalX = newX;
+    let finalY = newY;
+    let attempts = 0;
+
+    while (attempts < 15) {
+      const overlapping = existingStickers.some(s => {
+        const dx = s.position.x - finalX;
+        const dy = s.position.y - finalY;
+        return Math.sqrt(dx * dx + dy * dy) < threshold;
+      });
+
+      if (!overlapping) break;
+
+      const angle = Math.random() * Math.PI * 2;
+      const distance = 10 + Math.random() * 10;
+      finalX = newX + Math.cos(angle) * distance;
+      finalY = newY + Math.sin(angle) * distance;
+      finalX = Math.max(5, Math.min(95, finalX));
+      finalY = Math.max(10, Math.min(90, finalY));
+      attempts++;
+    }
 
     try {
       const response = await fetch(`/api/mixtapes/${id}/stickers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: draggedSticker, timestamp })
+        body: JSON.stringify({
+          type: draggedSticker,
+          timestamp,
+          position: { x: finalX, y: finalY }
+        })
       });
 
       if (response.ok) {
@@ -297,6 +352,7 @@ const Player: React.FC<PlayerProps> = ({ mixtape, initialComments, initialSticke
       }
     } catch (error) {
       console.error('Failed to add sticker:', error);
+      addStickerLocally(draggedSticker, timestamp, finalX, finalY);
     }
 
     setDraggedSticker(null);
@@ -304,15 +360,39 @@ const Player: React.FC<PlayerProps> = ({ mixtape, initialComments, initialSticke
 
   const handleStickerDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+
+    if (!waveformContainerRef.current) return;
+    const rect = waveformContainerRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setIsDragOver(true);
+    setDragPosition({
+      x: (x / rect.width) * 100,
+      y: (y / rect.height) * 100
+    });
+  };
+
+  const addStickerLocally = (type: StickerType, timestamp: number, x: number, y: number) => {
+    const newSticker: Sticker = {
+      id: `local-${Date.now()}`,
+      type,
+      timestamp,
+      position: { x, y },
+      count: 1
+    };
+    setStickers(prev => [...prev, newSticker]);
   };
 
   const adjustStickerPosition = (stickers: Sticker[], newSticker: Sticker): { x: number; y: number } => {
-    const threshold = 30;
+    const threshold = 15;
     let { x, y } = newSticker.position;
     let attempts = 0;
 
-    while (attempts < 10) {
+    while (attempts < 15) {
       const overlapping = stickers.some(s => {
+        if (s.id === newSticker.id) return false;
         const dx = s.position.x - x;
         const dy = s.position.y - y;
         return Math.sqrt(dx * dx + dy * dy) < threshold;
@@ -320,9 +400,11 @@ const Player: React.FC<PlayerProps> = ({ mixtape, initialComments, initialSticke
 
       if (!overlapping) break;
 
-      x += (Math.random() - 0.5) * 20;
-      y += (Math.random() - 0.5) * 20;
-      x = Math.max(10, Math.min(90, x));
+      const angle = Math.random() * Math.PI * 2;
+      const distance = 10 + Math.random() * 10;
+      x = newSticker.position.x + Math.cos(angle) * distance;
+      y = newSticker.position.y + Math.sin(angle) * distance;
+      x = Math.max(5, Math.min(95, x));
       y = Math.max(10, Math.min(90, y));
       attempts++;
     }
@@ -427,13 +509,14 @@ const Player: React.FC<PlayerProps> = ({ mixtape, initialComments, initialSticke
             <div
               key={type}
               draggable
-              onDragStart={() => handleStickerDragStart(type)}
+              onDragStart={(e) => handleStickerDragStart(e, type)}
+              onDragEnd={() => setDraggedSticker(null)}
               style={{
                 width: '60px',
                 height: '60px',
                 borderRadius: '50%',
                 background: STICKER_COLORS[type],
-                opacity: 0.7,
+                opacity: draggedSticker === type ? 0.3 : 0.7,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -441,15 +524,27 @@ const Player: React.FC<PlayerProps> = ({ mixtape, initialComments, initialSticke
                 cursor: 'grab',
                 transition: 'all var(--transition-fast)',
                 margin: '0 auto',
-                userSelect: 'none'
+                userSelect: 'none',
+                boxShadow: draggedSticker === type ? '0 0 20px rgba(255, 255, 255, 0.3)' : 'none'
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.opacity = '1';
-                e.currentTarget.style.transform = 'scale(1.1)';
+                if (draggedSticker !== type) {
+                  e.currentTarget.style.opacity = '1';
+                  e.currentTarget.style.transform = 'scale(1.1)';
+                  e.currentTarget.style.boxShadow = `0 4px 15px ${STICKER_COLORS[type]}40`;
+                }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.opacity = '0.7';
-                e.currentTarget.style.transform = 'scale(1)';
+                if (draggedSticker !== type) {
+                  e.currentTarget.style.opacity = '0.7';
+                  e.currentTarget.style.transform = 'scale(1)';
+                  e.currentTarget.style.boxShadow = 'none';
+                }
+              }}
+              onDrag={(e) => {
+                if (e.clientX > 0 && e.clientY > 0) {
+                  e.currentTarget.style.opacity = '0.5';
+                }
               }}
             >
               {STICKER_EMOJIS[type]}
@@ -563,16 +658,69 @@ const Player: React.FC<PlayerProps> = ({ mixtape, initialComments, initialSticke
               onClick={handleWaveformClick}
               onDrop={handleStickerDrop}
               onDragOver={handleStickerDragOver}
+              onDragLeave={handleStickerDragLeave}
               style={{
                 position: 'relative',
                 height: '120px',
                 borderRadius: 'var(--border-radius)',
                 overflow: 'hidden',
                 cursor: 'pointer',
-                background: 'rgba(0, 0, 0, 0.3)'
+                background: isDragOver
+                  ? 'linear-gradient(135deg, rgba(255, 107, 107, 0.2) 0%, rgba(255, 200, 0, 0.2) 100%)'
+                  : 'rgba(0, 0, 0, 0.3)',
+                border: isDragOver ? '2px dashed var(--accent)' : '2px solid transparent',
+                transition: 'all var(--transition-fast)'
               }}
             >
               <canvas ref={canvasRef} style={{ display: 'block' }} />
+
+              {isDragOver && dragPosition && draggedSticker && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: `${dragPosition.x}%`,
+                    top: `${dragPosition.y}%`,
+                    transform: 'translate(-50%, -50%)',
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
+                    background: STICKER_COLORS[draggedSticker],
+                    opacity: 0.5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '16px',
+                    pointerEvents: 'none',
+                    zIndex: 100,
+                    animation: 'pulse 0.5s infinite'
+                  }}
+                >
+                  {STICKER_EMOJIS[draggedSticker]}
+                </div>
+              )}
+
+              {isDragOver && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(0, 0, 0, 0.5)',
+                    pointerEvents: 'none',
+                    zIndex: 50,
+                    animation: 'fadeIn 0.2s ease'
+                  }}
+                >
+                  <span style={{ fontSize: '14px', color: '#fff' }}>
+                    释放贴纸到这里 ✨
+                  </span>
+                </div>
+              )}
 
               {comments.map(comment => {
                 const position = (comment.timestamp / totalDuration) * 100;

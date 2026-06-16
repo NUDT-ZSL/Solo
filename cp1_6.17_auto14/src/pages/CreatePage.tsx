@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AudioEngine } from '../business/audio-engine';
-import type { Song, ThemeType } from '../types';
+import type { ThemeType } from '../types';
 import { THEMES } from '../types';
 
 interface UploadedSong {
@@ -172,7 +172,7 @@ const CreatePage: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      const songData: Omit<Song, 'id'>[] = songs.map(song => ({
+      const songData = songs.map(song => ({
         title: song.title,
         artist: song.artist,
         duration: song.duration,

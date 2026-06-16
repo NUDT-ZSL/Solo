@@ -1,7 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import MixCard from '../components/MixCard';
 import type { Mixtape } from '../types';
+
+const CARD_WIDTH = 280;
+const CARD_GAP = 20;
+const CARD_BASE_HEIGHT = 380;
 
 const HomePage: React.FC = () => {
   const [mixtapes, setMixtapes] = useState<Mixtape[]>([]);
@@ -9,6 +13,20 @@ const HomePage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const updateWidth = () => {
+      if (containerRef.current) {
+        setContainerWidth(containerRef.current.offsetWidth);
+      }
+    };
+
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -57,18 +75,31 @@ const HomePage: React.FC = () => {
     );
   }, [mixtapes, debouncedQuery]);
 
-  const waterfallColumns = useMemo(() => {
-    const columns: Mixtape[][] = [[], [], [], []];
-    const columnHeights = [0, 0, 0, 0];
+  const columnCount = useMemo(() => {
+    if (containerWidth === 0) return 4;
+    return Math.max(1, Math.floor((containerWidth + CARD_GAP) / (CARD_WIDTH + CARD_GAP)));
+  }, [containerWidth]);
 
-    filteredMixtapes.forEach(mixtape => {
+  const cardPositions = useMemo(() => {
+    const positions: Array<{ top: number; left: number; height: number }> = [];
+    const columnHeights = new Array(columnCount).fill(0);
+
+    filteredMixtapes.forEach((mixtape) => {
       const shortestColumn = columnHeights.indexOf(Math.min(...columnHeights));
-      columns[shortestColumn].push(mixtape);
-      columnHeights[shortestColumn] += 380;
+      const descriptionLines = Math.min(3, Math.ceil(mixtape.description.length / 30));
+      const cardHeight = CARD_BASE_HEIGHT + (descriptionLines - 2) * 20;
+
+      positions.push({
+        top: columnHeights[shortestColumn],
+        left: shortestColumn * (CARD_WIDTH + CARD_GAP),
+        height: cardHeight
+      });
+
+      columnHeights[shortestColumn] += cardHeight + CARD_GAP;
     });
 
-    return columns;
-  }, [filteredMixtapes]);
+    return { positions, totalHeight: Math.max(...columnHeights, 0) };
+  }, [filteredMixtapes, columnCount]);
 
   return (
     <div style={{
@@ -208,25 +239,38 @@ const HomePage: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, 280px)',
-            gap: '20px',
-            justifyContent: 'center'
-          }}>
-            {waterfallColumns.map((column, columnIndex) => (
-              <div key={columnIndex} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                {column.map((mixtape, index) => (
+          <div
+            ref={containerRef}
+            style={{
+              position: 'relative',
+              width: '100%',
+              height: cardPositions.totalHeight,
+              margin: '0 auto',
+              maxWidth: columnCount * (CARD_WIDTH + CARD_GAP) - CARD_GAP
+            }}
+          >
+            {filteredMixtapes.map((mixtape, index) => {
+              const pos = cardPositions.positions[index];
+              if (!pos) return null;
+              return (
+                <div
+                  key={mixtape.id}
+                  style={{
+                    position: 'absolute',
+                    top: pos.top,
+                    left: pos.left,
+                    width: CARD_WIDTH,
+                    animation: `fadeIn 0.3s ease ${index * 0.05}s both`
+                  }}
+                >
                   <MixCard
-                    key={mixtape.id}
                     mixtape={mixtape}
                     stickerCount={stickerCounts[mixtape.id] || 0}
                     searchQuery={debouncedQuery}
-                    style={{ animation: `fadeIn 0.3s ease ${(columnIndex * 3 + index) * 0.05}s both` }}
                   />
-                ))}
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
