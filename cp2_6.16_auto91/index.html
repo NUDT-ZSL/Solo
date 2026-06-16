@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>魔法学院植物园</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background: #0f0e17;
+      overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+      cursor: pointer;
+    }
+    .controls {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      display: flex;
+      gap: 10px;
+      z-index: 100;
+    }
+    .plant-btn {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      color: white;
+      font-size: 14px;
+      font-weight: 300;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .plant-btn:hover {
+      transform: scale(1.08);
+      filter: brightness(1.2);
+    }
+    .plant-btn.active {
+      box-shadow: 0 0 20px currentColor;
+      transform: scale(1.05);
+    }
+    .plant-btn .color-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    .btn-fire {
+      background: linear-gradient(135deg, #ff6b6b, #ee5a5a);
+    }
+    .btn-ice {
+      background: linear-gradient(135deg, #48dbfb, #0abde3);
+    }
+    .btn-thunder {
+      background: linear-gradient(135deg, #feca57, #ff9f43);
+    }
+    .info {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 12px;
+      font-weight: 300;
+    }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <button class="plant-btn btn-fire active" data-element="fire">
+      <span class="color-dot" style="background: #ff6b6b;"></span>
+      火焰花
+    </button>
+    <button class="plant-btn btn-ice" data-element="ice">
+      <span class="color-dot" style="background: #48dbfb;"></span>
+      冰晶草
+    </button>
+    <button class="plant-btn btn-thunder" data-element="thunder">
+      <span class="color-dot" style="background: #feca57;"></span>
+      雷击藤
+    </button>
+  </div>
+  <canvas id="gameCanvas"></canvas>
+  <div class="info">点击网格种植植物 · 拖拽精灵到植物上进行喂养</div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
