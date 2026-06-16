@@ -1,0 +1,214 @@
+{
+  "projects": [
+    {
+      "id": "p1",
+      "name": "星际迷航：未知边界",
+      "description": "一款开放世界太空探索RPG游戏。玩家将扮演一名星际探险家，驾驶飞船穿越未知星系，发现新的星球和文明。游戏包含丰富的剧情、战斗系统和基地建设玩法。",
+      "developer": "星辰工作室",
+      "screenshots": [
+        "https://images.unsplash.com/photo-1614728263952-84ea256f9679?w=800",
+        "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=800",
+        "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800"
+      ],
+      "demoLink": "https://demo.example.com/star-trek",
+      "progress": 65,
+      "likes": 1281,
+      "fundedAmount": 52020,
+      "fundingGoal": 100000,
+      "createdAt": "2024-01-15T10:30:00Z"
+    },
+    {
+      "id": "p2",
+      "name": "像素冒险家",
+      "description": "复古风格的2D横版动作冒险游戏。玩家扮演一名勇敢的冒险家，探索神秘的地下城，击败怪物，收集宝物。游戏包含丰富的关卡设计和隐藏要素。",
+      "developer": "Pixel Dream",
+      "screenshots": [
+        "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800",
+        "https://images.unsplash.com/photo-1493711662062-fa541adb3fc8?w=800",
+        "https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800"
+      ],
+      "demoLink": "https://demo.example.com/pixel-adventurer",
+      "progress": 40,
+      "likes": 856,
+      "fundedAmount": 28000,
+      "fundingGoal": 50000,
+      "createdAt": "2024-02-20T14:00:00Z"
+    },
+    {
+      "id": "p3",
+      "name": "废土求生",
+      "description": "末日生存类沙盒游戏。在核战后的废土世界中，玩家需要收集资源、建造基地、招募幸存者，并与其他势力进行交易或战斗。",
+      "developer": "末日科技",
+      "screenshots": [
+        "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800",
+        "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800",
+        "https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=800"
+      ],
+      "demoLink": "https://demo.example.com/wasteland-survival",
+      "progress": 80,
+      "likes": 2100,
+      "fundedAmount": 89000,
+      "fundingGoal": 80000,
+      "createdAt": "2023-11-10T09:00:00Z"
+    },
+    {
+      "id": "p4",
+      "name": "魔法学院",
+      "description": "角色扮演类养成游戏。玩家扮演一名魔法学徒，在魔法学院中学习各种魔法，结交朋友，参与学院活动，并揭开隐藏在学院深处的秘密。",
+      "developer": "魔法工坊",
+      "screenshots": [
+        "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800",
+        "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800",
+        "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=800"
+      ],
+      "demoLink": "https://demo.example.com/magic-academy",
+      "progress": 55,
+      "likes": 1560,
+      "fundedAmount": 45000,
+      "fundingGoal": 60000,
+      "createdAt": "2024-03-05T16:30:00Z"
+    },
+    {
+      "id": "p5",
+      "name": "赛博朋克：霓虹都市",
+      "description": "赛博朋克风格的动作冒险游戏。在未来的霓虹都市中，玩家扮演一名黑客，接受各种任务，升级义体，与巨型企业对抗。",
+      "developer": "Neon Studio",
+      "screenshots": [
+        "https://images.unsplash.com/photo-1542751110-97427bbecf20?w=800",
+        "https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=800",
+        "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800"
+      ],
+      "demoLink": "https://demo.example.com/cyberpunk-neon",
+      "progress": 45,
+      "likes": 1890,
+      "fundedAmount": 72000,
+      "fundingGoal": 120000,
+      "createdAt": "2024-01-28T11:00:00Z"
+    },
+    {
+      "id": "p6",
+      "name": "田园牧歌",
+      "description": "治愈系农场模拟游戏。玩家可以在乡村小镇中种植作物、饲养动物、钓鱼采矿，并与镇上的居民建立友谊。",
+      "developer": "悠闲时光",
+      "screenshots": [
+        "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800",
+        "https://images.unsplash.com/photo-1500595046743-cd271d694d30?w=800",
+        "https://images.unsplash.com/photo-1464226184884-fa280b87c399?w=800"
+      ],
+      "demoLink": "https://demo.example.com/pastoral-life",
+      "progress": 70,
+      "likes": 980,
+      "fundedAmount": 35000,
+      "fundingGoal": 40000,
+      "createdAt": "2024-02-14T08:00:00Z"
+    },
+    {
+      "id": "p7",
+      "name": "深海恐惧",
+      "description": "第一人称心理恐怖游戏。玩家扮演一名深海研究员，在海底科考站遭遇神秘事件，需要在恐惧中求生并揭开真相。",
+      "developer": "深渊工作室",
+      "screenshots": [
+        "https://images.unsplash.com/photo-1551244072-5d12893278ab?w=800",
+        "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800",
+        "https://images.unsplash.com/photo-1582967788606-a171c1080cb0?w=800"
+      ],
+      "demoLink": "https://demo.example.com/deep-sea-fear",
+      "progress": 30,
+      "likes": 720,
+      "fundedAmount": 18000,
+      "fundingGoal": 45000,
+      "createdAt": "2024-04-01T13:00:00Z"
+    },
+    {
+      "id": "p8",
+      "name": "机甲风暴",
+      "description": "快节奏机甲对战游戏。玩家可以自定义自己的机甲，参与各种对战模式，与全球玩家一较高下。",
+      "developer": "钢铁意志",
+      "screenshots": [
+        "https://images.unsplash.com/photo-1535223289827-42f1e9919769?w=800",
+        "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=800",
+        "https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=800"
+      ],
+      "demoLink": "https://demo.example.com/mecha-storm",
+      "progress": 50,
+      "likes": 1340,
+      "fundedAmount": 58000,
+      "fundingGoal": 90000,
+      "createdAt": "2024-03-20T15:00:00Z"
+    }
+  ],
+  "comments": [
+    {
+      "id": "c1",
+      "projectId": "p1",
+      "nickname": "星际迷",
+      "content": "太期待了！画面看起来超棒，希望能早日玩到完整版。",
+      "createdAt": "2024-06-10T08:30:00Z"
+    },
+    {
+      "id": "c2",
+      "projectId": "p1",
+      "nickname": "太空探索者",
+      "content": "支持一下！独立游戏不容易，加油！",
+      "createdAt": "2024-06-12T14:20:00Z"
+    },
+    {
+      "id": "c3",
+      "projectId": "p2",
+      "nickname": "像素控",
+      "content": "像素风格大爱！希望能有多结局设定。",
+      "createdAt": "2024-06-15T10:00:00Z"
+    }
+  ],
+  "fundingRecords": [
+    {
+      "id": "f1",
+      "projectId": "p1",
+      "nickname": "热心玩家",
+      "amount": 100,
+      "createdAt": "2024-06-10T09:00:00Z"
+    },
+    {
+      "id": "f2",
+      "projectId": "p1",
+      "nickname": "",
+      "amount": 50,
+      "createdAt": "2024-06-11T11:30:00Z"
+    },
+    {
+      "id": "f3",
+      "projectId": "p1",
+      "nickname": "游戏爱好者",
+      "amount": 200,
+      "createdAt": "2024-06-12T16:00:00Z"
+    },
+    {
+      "id": "f4",
+      "projectId": "p1",
+      "nickname": "",
+      "amount": 30,
+      "createdAt": "2024-06-13T08:45:00Z"
+    },
+    {
+      "id": "f5",
+      "projectId": "p1",
+      "nickname": "独立游戏支持者",
+      "amount": 500,
+      "createdAt": "2024-06-14T19:20:00Z"
+    },
+    {
+      "id": "a7fe62d3-97cc-4c8e-b2ea-3c09b74e3da6",
+      "projectId": "p1",
+      "nickname": "测试用户",
+      "amount": 10,
+      "createdAt": "2026-06-16T21:00:30.559Z"
+    },
+    {
+      "id": "31ebf585-cbd3-4fa2-b4ef-d57320cbea86",
+      "projectId": "p1",
+      "nickname": "测试用户",
+      "amount": 10,
+      "createdAt": "2026-06-16T21:02:35.409Z"
+    }
+  ]
+}
