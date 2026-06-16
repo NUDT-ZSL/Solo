@@ -19,30 +19,30 @@ export const defaultTheme: ColorTheme = {
 };
 
 export const auroraTheme: ColorTheme = {
-  lowStart: '#065f46',
-  lowEnd: '#10b981',
-  midStart: '#0e7490',
-  midEnd: '#22d3ee',
-  highStart: '#059669',
-  highEnd: '#6ee7b7',
+  lowStart: '#00ff87',
+  lowEnd: '#60efff',
+  midStart: '#00b4d8',
+  midEnd: '#90e0ef',
+  highStart: '#0077b6',
+  highEnd: '#00b4d8',
 };
 
 export const sunsetTheme: ColorTheme = {
-  lowStart: '#c2410c',
-  lowEnd: '#fb923c',
-  midStart: '#dc2626',
-  midEnd: '#f87171',
-  highStart: '#ea580c',
-  highEnd: '#fdba74',
+  lowStart: '#ff6b35',
+  lowEnd: '#f7c59f',
+  midStart: '#ff4500',
+  midEnd: '#ff8c00',
+  highStart: '#8b0000',
+  highEnd: '#ff4500',
 };
 
 export const iceTheme: ColorTheme = {
-  lowStart: '#1e3a8a',
-  lowEnd: '#60a5fa',
-  midStart: '#0c4a6e',
-  midEnd: '#7dd3fc',
-  highStart: '#e0f2fe',
-  highEnd: '#ffffff',
+  lowStart: '#e0f7fa',
+  lowEnd: '#b2ebf2',
+  midStart: '#80deea',
+  midEnd: '#4dd0e1',
+  highStart: '#26c6da',
+  highEnd: '#00bcd4',
 };
 
 const PARTICLE_COUNT = 4000;
@@ -76,9 +76,11 @@ export class ParticleSystem {
   private frequencyIndexMap: Uint16Array;
   private currentTheme: ColorTheme;
   private speedMultiplier = 1;
+  private cachedFrequencyData: Uint8Array;
 
   constructor() {
     this.currentTheme = defaultTheme;
+    this.cachedFrequencyData = new Uint8Array(1024);
     this.geometry = new THREE.BufferGeometry();
     this.basePositions = new Float32Array(PARTICLE_COUNT * 3);
     this.currentSizes = new Float32Array(PARTICLE_COUNT);
@@ -163,13 +165,13 @@ export class ParticleSystem {
     });
   }
 
-  setAudioData(frequencyData: Uint8Array): void {
-    const lowStart = hexToColor(this.currentTheme.lowStart);
-    const lowEnd = hexToColor(this.currentTheme.lowEnd);
-    const midStart = hexToColor(this.currentTheme.midStart);
-    const midEnd = hexToColor(this.currentTheme.midEnd);
-    const highStart = hexToColor(this.currentTheme.highStart);
-    const highEnd = hexToColor(this.currentTheme.highEnd);
+  private recalculateTargetsWithTheme(frequencyData: Uint8Array, theme: ColorTheme): void {
+    const lowStart = hexToColor(theme.lowStart);
+    const lowEnd = hexToColor(theme.lowEnd);
+    const midStart = hexToColor(theme.midStart);
+    const midEnd = hexToColor(theme.midEnd);
+    const highStart = hexToColor(theme.highStart);
+    const highEnd = hexToColor(theme.highEnd);
 
     const lowBandEnd = 341;
     const midBandEnd = 682;
@@ -206,6 +208,11 @@ export class ParticleSystem {
     }
   }
 
+  setAudioData(frequencyData: Uint8Array): void {
+    this.cachedFrequencyData.set(frequencyData);
+    this.recalculateTargetsWithTheme(frequencyData, this.currentTheme);
+  }
+
   update(delta: number): void {
     const positions = this.geometry.attributes.position.array as Float32Array;
     const colors = this.geometry.attributes.color.array as Float32Array;
@@ -239,6 +246,7 @@ export class ParticleSystem {
 
   setTheme(theme: ColorTheme): void {
     this.currentTheme = theme;
+    this.recalculateTargetsWithTheme(this.cachedFrequencyData, theme);
   }
 
   setSpeedMultiplier(multiplier: number): void {

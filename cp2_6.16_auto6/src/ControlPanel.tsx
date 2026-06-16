@@ -17,9 +17,9 @@ interface ControlPanelProps {
 
 const themes = [
   { name: '默认主题', theme: defaultTheme, gradient: 'linear-gradient(135deg, #8b5cf6 0%, #3b82f6 50%, #ec4899 100%)' },
-  { name: '极光绿蓝', theme: auroraTheme, gradient: 'linear-gradient(135deg, #065f46 0%, #0e7490 50%, #059669 100%)' },
-  { name: '落日橙红', theme: sunsetTheme, gradient: 'linear-gradient(135deg, #c2410c 0%, #dc2626 50%, #ea580c 100%)' },
-  { name: '冰雪蓝白', theme: iceTheme, gradient: 'linear-gradient(135deg, #1e3a8a 0%, #0c4a6e 50%, #ffffff 100%)' },
+  { name: '极光绿蓝', theme: auroraTheme, gradient: 'linear-gradient(135deg, #00ff87 0%, #00b4d8 50%, #0077b6 100%)' },
+  { name: '落日橙红', theme: sunsetTheme, gradient: 'linear-gradient(135deg, #ff6b35 0%, #ff4500 50%, #8b0000 100%)' },
+  { name: '冰雪蓝白', theme: iceTheme, gradient: 'linear-gradient(135deg, #e0f7fa 0%, #80deea 50%, #00bcd4 100%)' },
 ];
 
 const fileInputStyle: CSSProperties = {
@@ -84,10 +84,13 @@ const themeButtonStyle = (isActive: boolean): CSSProperties => ({
   width: '40px',
   height: '40px',
   borderRadius: '8px',
-  border: isActive ? '2px solid #a78bfa' : '2px solid transparent',
+  border: isActive ? '2px solid #ffffff' : '2px solid rgba(255,255,255,0.15)',
   cursor: 'pointer',
   transition: 'all 0.2s ease',
-  boxShadow: isActive ? '0 0 12px rgba(167, 139, 250, 0.5)' : 'none',
+  boxShadow: isActive
+    ? '0 0 0 1px rgba(255,255,255,0.4), 0 0 16px rgba(255,255,255,0.35), 0 2px 8px rgba(0,0,0,0.4)'
+    : '0 1px 4px rgba(0,0,0,0.3)',
+  transform: isActive ? 'scale(1.05)' : 'scale(1)',
 });
 
 const resetButtonStyle: CSSProperties = {
@@ -276,10 +279,13 @@ export default function ControlPanel({
               onMouseEnter={(e) => {
                 if (!isThemeActive(item.theme)) {
                   e.currentTarget.style.transform = 'scale(1.08)';
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.5)';
                 }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
+                const active = isThemeActive(item.theme);
+                e.currentTarget.style.transform = active ? 'scale(1.05)' : 'scale(1)';
+                e.currentTarget.style.borderColor = active ? '#ffffff' : 'rgba(255,255,255,0.15)';
               }}
             />
           ))}
