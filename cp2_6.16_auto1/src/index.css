@@ -207,7 +207,7 @@ html, body, #root {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.3s ease-in-out;
+  transition: background-color 0.3s ease-in-out;
 }
 
 .reset-button:hover {
@@ -219,7 +219,7 @@ html, body, #root {
 }
 
 .reset-button-anim {
-  animation: resetBounce 0.1s ease-in-out;
+  animation: resetBounce 0.1s ease-in-out forwards;
 }
 
 @keyframes resetBounce {
@@ -228,18 +228,43 @@ html, body, #root {
   100% { transform: scale(1.0); }
 }
 
+.app-container {
+  display: grid;
+  grid-template-rows: 60% 20% 20%;
+}
+
+.waveform-section {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
 @media (max-width: 768px) {
+  html, body, #root {
+    overflow: auto;
+    height: auto;
+    min-height: 100vh;
+  }
+
   .app-container {
+    display: flex;
     flex-direction: column;
+    height: auto;
+    min-height: 100vh;
   }
 
   .scene-section {
-    flex: 0 0 50%;
+    flex: 0 0 auto;
+    height: 50vh;
+    min-height: 300px;
   }
 
   .waveform-section {
     flex: 0 0 auto;
+    display: flex;
     flex-direction: column;
+    gap: 8px;
+    padding: 12px 16px;
     overflow-x: hidden;
     overflow-y: auto;
   }
@@ -248,8 +273,19 @@ html, body, #root {
     flex-direction: column;
   }
 
+  .waveform-panel canvas {
+    width: 100% !important;
+    max-width: 400px;
+    height: auto !important;
+  }
+
   .interference-section {
     flex: 0 0 auto;
+    padding: 12px 16px;
+  }
+
+  .interference-panel canvas {
+    height: auto !important;
   }
 
   .control-panel-wrapper {
@@ -257,7 +293,7 @@ html, body, #root {
     top: 0;
     right: 0;
     max-height: none;
-    padding: 8px 16px;
+    padding: 12px 16px;
   }
 
   .control-panel {
@@ -267,5 +303,6 @@ html, body, #root {
   .reset-button {
     position: static;
     margin-top: 8px;
+    margin-left: auto;
   }
 }

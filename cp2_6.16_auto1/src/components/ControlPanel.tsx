@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { SoundSource as SoundSourceType, DEFAULT_COLORS, DEFAULT_POSITIONS, DEFAULT_FREQUENCY, DEFAULT_AMPLITUDE } from '@/types';
 
@@ -10,14 +10,27 @@ interface ControlPanelProps {
 
 export function ControlPanel({ sources, onSourceUpdate, onReset }: ControlPanelProps) {
   const [resetAnim, setResetAnim] = useState(false);
+  const resetTimeoutRef = useRef<number | null>(null);
 
   const handleReset = useCallback(() => {
+    if (resetTimeoutRef.current) {
+      clearTimeout(resetTimeoutRef.current);
+    }
     setResetAnim(true);
-    setTimeout(() => {
+    resetTimeoutRef.current = window.setTimeout(() => {
       onReset();
       setResetAnim(false);
-    }, 100);
+      resetTimeoutRef.current = null;
+    }, 120);
   }, [onReset]);
+
+  useEffect(() => {
+    return () => {
+      if (resetTimeoutRef.current) {
+        clearTimeout(resetTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="control-panel">

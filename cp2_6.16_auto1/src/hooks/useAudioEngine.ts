@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { SoundSource as SoundSourceType, WaveformData, InterferenceData, SAMPLE_RATE, SAMPLE_COUNT } from '@/types';
+import { SoundSource as SoundSourceType, WaveformData, InterferenceData, SAMPLE_COUNT } from '@/types';
 
 export function useAudioEngine(sources: SoundSourceType[]) {
   const [waveformData, setWaveformData] = useState<WaveformData[]>(
@@ -15,15 +15,22 @@ export function useAudioEngine(sources: SoundSourceType[]) {
   const oscillatorsRef = useRef<OscillatorNode[]>([]);
   const gainNodesRef = useRef<GainNode[]>([]);
   const analyzersRef = useRef<AnalyserNode[]>([]);
+  const dataBuffersRef = useRef<Float32Array[]>([]);
+  const masterGainRef = useRef<GainNode | null>(null);
   const animFrameRef = useRef<number>(0);
-  const startTimeRef = useRef(performance.now());
+  const phaseRef = useRef<number[]>(sources.map(() => 0));
 
   const initAudioContext = useCallback(() => {
     if (audioCtxRef.current) return;
-    const ctx = new AudioContext();
+    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
     audioCtxRef.current = ctx;
 
-    sources.forEach((source) => {
+    const masterGain = ctx.createGain();
+    masterGain.gain.setValueAtTime(0.15, ctx.currentTime);
+    masterGain.connect(ctx.destination);
+    masterGainRef.current = masterGain;
+
+    sources.forEach((source, i) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       const analyzer = ctx.createAnalyser();
@@ -32,16 +39,18 @@ export function useAudioEngine(sources: SoundSourceType[]) {
       osc.frequency.setValueAtTime(source.frequency, ctx.currentTime);
       gain.gain.setValueAtTime(source.amplitude, ctx.currentTime);
       analyzer.fftSize = 512;
+      analyzer.smoothingTimeConstant = 0;
 
       osc.connect(gain);
       gain.connect(analyzer);
-      analyzer.connect(ctx.destination);
+      analyzer.connect(masterGain);
 
       osc.start();
 
       oscillatorsRef.current.push(osc);
       gainNodesRef.current.push(gain);
       analyzersRef.current.push(analyzer);
+      dataBuffersRef.current.push(new Float32Array(analyzer.frequencyBinCount));
     });
   }, [sources]);
 
@@ -57,18 +66,30 @@ export function useAudioEngine(sources: SoundSourceType[]) {
       }
       if (gainNodesRef.current[i]) {
         gainNodesRef.current[i].gain.setValueAtTime(
-          source.amplitude * 0.1,
+          source.amplitude,
           ctx.currentTime
         );
       }
     });
   }, [sources]);
 
-  const generateSampleFromMath = useCallback(
-    (source: SoundSourceType, time: number, sampleIndex: number) => {
-      const t = time / 1000 + sampleIndex / SAMPLE_RATE;
-      const phase = 2 * Math.PI * source.frequency * t;
-      return source.amplitude * Math.sin(phase);
+  const getSampleFromAnalyser = useCallback(
+    (sourceIdx: number, sampleIndex: number, time: number, source: SoundSourceType): number => {
+      const analyzer = analyzersRef.current[sourceIdx];
+      if (!analyzer || !audioCtxRef.current) {
+        const t = time / 1000 + sampleIndex / 60;
+        const phase = 2 * Math.PI * source.frequency * t;
+        return source.amplitude * Math.sin(phase);
+      }
+
+      const buffer = dataBuffersRef.current[sourceIdx];
+      analyzer.getFloatTimeDomainData(buffer);
+
+      const effectiveIdx = sampleIndex % buffer.length;
+      const rawSample = buffer[effectiveIdx];
+
+      const normalized = rawSample * source.amplitude * 2;
+      return normalized;
     },
     []
   );
@@ -116,17 +137,36 @@ export function useAudioEngine(sources: SoundSourceType[]) {
     [sources]
   );
 
+  const generateMathSample = useCallback(
+    (source: SoundSourceType, time: number, sampleIndex: number, phaseOffset: number): number => {
+      const sampleRate = 60;
+      const t = time / 1000 + sampleIndex / sampleRate;
+      const phase = 2 * Math.PI * source.frequency * t + phaseOffset;
+      return source.amplitude * Math.sin(phase);
+    },
+    []
+  );
+
   useEffect(() => {
-    startTimeRef.current = performance.now();
+    const startTime = performance.now();
 
     const update = () => {
-      const now = performance.now() - startTimeRef.current;
+      const now = performance.now() - startTime;
       const allSamples: number[][] = [];
 
-      const newWaveformData: WaveformData[] = sources.map((source) => {
+      const newWaveformData: WaveformData[] = sources.map((source, sourceIdx) => {
         const samples: number[] = [];
+        phaseRef.current[sourceIdx] += (2 * Math.PI * source.frequency) / 60;
+        const phaseOffset = phaseRef.current[sourceIdx];
+
         for (let i = 0; i < SAMPLE_COUNT; i++) {
-          samples.push(generateSampleFromMath(source, now, i));
+          let sample: number;
+          if (analyzersRef.current[sourceIdx] && audioCtxRef.current) {
+            sample = getSampleFromAnalyser(sourceIdx, i, now, source);
+          } else {
+            sample = generateMathSample(source, now, i, phaseOffset);
+          }
+          samples.push(sample);
         }
         allSamples.push(samples);
         return { sourceId: source.id, samples };
@@ -143,7 +183,7 @@ export function useAudioEngine(sources: SoundSourceType[]) {
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [sources, generateSampleFromMath, computeInterference]);
+  }, [sources, getSampleFromAnalyser, generateMathSample, computeInterference]);
 
   useEffect(() => {
     updateOscillators();
@@ -157,6 +197,7 @@ export function useAudioEngine(sources: SoundSourceType[]) {
       oscillatorsRef.current = [];
       gainNodesRef.current = [];
       analyzersRef.current = [];
+      dataBuffersRef.current = [];
       if (audioCtxRef.current) {
         audioCtxRef.current.close();
         audioCtxRef.current = null;

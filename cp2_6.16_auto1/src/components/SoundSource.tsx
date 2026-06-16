@@ -11,14 +11,18 @@ interface SoundSourceProps {
 
 interface Ripple {
   id: number;
-  birthTime: number;
+  elapsed: number;
 }
 
-const RIPPLE_LIFETIME = 1500;
-const RIPPLE_SPAWN_INTERVAL = 1500;
+const RIPPLE_LIFETIME = 1.5;
+const RIPPLE_SPAWN_INTERVAL = 1.5;
 const RIPPLE_SPEED = 2;
-const RIPPLE_MAX_RADIUS = RIPPLE_SPEED * (RIPPLE_LIFETIME / 1000);
+const RIPPLE_START_RADIUS = 0.8;
+const RIPPLE_MAX_RADIUS = RIPPLE_START_RADIUS + RIPPLE_SPEED * RIPPLE_LIFETIME;
+const RIPPLE_START_OPACITY = 0.8;
 const SPHERE_RADIUS = 0.8;
+const RING_INNER_RADIUS = 0.95;
+const RING_OUTER_RADIUS = 1.05;
 
 export function SoundSource({ id, position, color, onPositionChange }: SoundSourceProps) {
   const groupRef = useRef<THREE.Group>(null);
@@ -29,12 +33,7 @@ export function SoundSource({ id, position, color, onPositionChange }: SoundSour
   const lastSpawnRef = useRef(0);
   const dragPlaneRef = useRef<THREE.Plane>(new THREE.Plane());
   const dragOffsetRef = useRef<THREE.Vector3>(new THREE.Vector3());
-  const dragStartRef = useRef<THREE.Vector3>(new THREE.Vector3());
-
-  const rippleGeometry = useMemo(() => {
-    const geo = new THREE.RingGeometry(0.9, 1.0, 64);
-    return geo;
-  }, []);
+  const rippleMeshesRef = useRef<Map<number, THREE.Mesh>>(new Map());
 
   const threeColor = useMemo(() => new THREE.Color(color), [color]);
   const displayColor = useMemo(
@@ -42,24 +41,52 @@ export function SoundSource({ id, position, color, onPositionChange }: SoundSour
     [isDragging, threeColor]
   );
 
-  useFrame((state) => {
-    const now = state.clock.getElapsedTime() * 1000;
-
+  useFrame((_, delta) => {
     if (groupRef.current) {
       groupRef.current.position.set(position.x, position.y, position.z);
     }
 
-    if (now - lastSpawnRef.current > RIPPLE_SPAWN_INTERVAL) {
+    lastSpawnRef.current += delta;
+    if (lastSpawnRef.current > RIPPLE_SPAWN_INTERVAL) {
       ripplesRef.current.push({
         id: rippleIdRef.current++,
-        birthTime: now,
+        elapsed: 0,
       });
-      lastSpawnRef.current = now;
+      lastSpawnRef.current = 0;
     }
 
-    ripplesRef.current = ripplesRef.current.filter(
-      (r) => now - r.birthTime < RIPPLE_LIFETIME
-    );
+    const toRemove: number[] = [];
+    ripplesRef.current.forEach((ripple) => {
+      ripple.elapsed += delta;
+      if (ripple.elapsed >= RIPPLE_LIFETIME) {
+        toRemove.push(ripple.id);
+        const mesh = rippleMeshesRef.current.get(ripple.id);
+        if (mesh) {
+          mesh.geometry.dispose();
+          if (Array.isArray(mesh.material)) {
+            mesh.material.forEach((m) => m.dispose());
+          } else {
+            mesh.material.dispose();
+          }
+          rippleMeshesRef.current.delete(ripple.id);
+        }
+        return;
+      }
+
+      const currentRadius = RIPPLE_START_RADIUS + ripple.elapsed * RIPPLE_SPEED;
+      const progress = ripple.elapsed / RIPPLE_LIFETIME;
+      const opacity = RIPPLE_START_OPACITY * (1 - progress);
+      const scale = currentRadius;
+
+      const mesh = rippleMeshesRef.current.get(ripple.id);
+      if (mesh) {
+        mesh.scale.setScalar(scale);
+        const mat = mesh.material as THREE.MeshBasicMaterial;
+        mat.opacity = opacity;
+      }
+    });
+
+    ripplesRef.current = ripplesRef.current.filter((r) => !toRemove.includes(r.id));
   });
 
   const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
@@ -73,7 +100,6 @@ export function SoundSource({ id, position, color, onPositionChange }: SoundSour
       e.ray.intersectPlane(dragPlaneRef.current, intersection);
       if (intersection) {
         dragOffsetRef.current.copy(groupRef.current.position).sub(intersection);
-        dragStartRef.current.copy(groupRef.current.position);
       }
     }
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -116,24 +142,23 @@ export function SoundSource({ id, position, color, onPositionChange }: SoundSour
       </mesh>
 
       {ripplesRef.current.map((ripple) => {
-        const elapsed = (performance.now() / 1000 - ripple.birthTime / 1000);
-        const radius = elapsed * RIPPLE_SPEED;
-        if (radius <= 0 || radius > RIPPLE_MAX_RADIUS) return null;
-        const progress = radius / RIPPLE_MAX_RADIUS;
-        const opacity = 0.8 * (1 - progress);
-        const scale = radius;
+        const initialScale = RIPPLE_START_RADIUS;
+        const initialOpacity = RIPPLE_START_OPACITY;
 
         return (
           <mesh
             key={ripple.id}
+            ref={(el) => {
+              if (el) rippleMeshesRef.current.set(ripple.id, el);
+            }}
             rotation={[-Math.PI / 2, 0, 0]}
-            scale={[scale, scale, scale]}
+            scale={[initialScale, initialScale, initialScale]}
           >
-            <ringGeometry args={[0.9, 1.0, 64]} />
+            <ringGeometry args={[RING_INNER_RADIUS, RING_OUTER_RADIUS, 64]} />
             <meshBasicMaterial
               color={threeColor}
               transparent
-              opacity={opacity}
+              opacity={initialOpacity}
               side={THREE.DoubleSide}
               depthWrite={false}
             />

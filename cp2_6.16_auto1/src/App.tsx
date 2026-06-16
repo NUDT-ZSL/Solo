@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { ScenePanel } from '@/components/ScenePanel';
 import { WaveformPanel } from '@/components/WaveformPanel';
 import { InterferencePanel } from '@/components/InterferencePanel';
@@ -25,28 +25,54 @@ function createInitialSources(): SoundSource[] {
 export default function App() {
   const [sources, setSources] = useState<SoundSource[]>(createInitialSources);
   const { waveformData, interferenceData, startAudio } = useAudioEngine(sources);
+  const [audioStarted, setAudioStarted] = useState(false);
 
   const handlePositionChange = useCallback(
     (id: number, pos: { x: number; y: number; z: number }) => {
+      if (!audioStarted) {
+        startAudio();
+        setAudioStarted(true);
+      }
       setSources((prev) =>
         prev.map((s) => (s.id === id ? { ...s, position: pos } : s))
       );
     },
-    []
+    [audioStarted, startAudio]
   );
 
   const handleSourceUpdate = useCallback(
     (id: number, updates: Partial<SoundSource>) => {
+      if (!audioStarted) {
+        startAudio();
+        setAudioStarted(true);
+      }
       setSources((prev) =>
         prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
       );
     },
-    []
+    [audioStarted, startAudio]
   );
 
   const handleReset = useCallback(() => {
     setSources(createInitialSources());
   }, []);
+
+  useEffect(() => {
+    const handleInteraction = () => {
+      if (!audioStarted) {
+        startAudio();
+        setAudioStarted(true);
+      }
+    };
+
+    document.addEventListener('click', handleInteraction, { once: true });
+    document.addEventListener('keydown', handleInteraction, { once: true });
+
+    return () => {
+      document.removeEventListener('click', handleInteraction);
+      document.removeEventListener('keydown', handleInteraction);
+    };
+  }, [audioStarted, startAudio]);
 
   return (
     <div className="app-container">
