@@ -23,7 +23,7 @@ export function PlantCard({ plant, onClick, showBadge = false, className = '' }:
   return (
     <div
       onClick={onClick}
-      className={`group w-[220px] h-[320px] bg-white rounded-[12px] shadow-[0_2px_12px_rgba(0,0,0,0.10)] overflow-hidden cursor-pointer card-hover relative ${className}`}
+      className={`group w-[220px] h-[320px] bg-white rounded-[12px] shadow-[0_2px_12px_rgba(0,0,0,0.10)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.15)] overflow-hidden cursor-pointer relative transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-1 ${className}`}
       style={showBadge && showBadgeAnim ? { animation: 'slide-in-right 0.4s ease-out' } : undefined}
     >
       {showBadge && (
@@ -45,7 +45,7 @@ export function PlantCard({ plant, onClick, showBadge = false, className = '' }:
           alt={plant.name}
           loading="lazy"
           onLoad={() => setImgLoaded(true)}
-          className={`w-full h-full object-cover transition-all duration-300 ease-out ${imgLoaded ? 'opacity-100 group-hover:scale-105' : 'opacity-0 absolute inset-0'}`}
+          className={`w-full h-full object-cover origin-center transition-transform duration-300 ease-out transition-opacity duration-300 ${imgLoaded ? 'opacity-100 group-hover:scale-105' : 'opacity-0 absolute inset-0'}`}
         />
       </div>
       <div className="p-4 flex flex-col gap-1.5 relative">
@@ -54,6 +54,7 @@ export function PlantCard({ plant, onClick, showBadge = false, className = '' }:
         <span
           className="absolute right-4 bottom-4 text-[12px] font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-out"
           style={{ color: '#4ade80' }}
+          aria-hidden={false}
         >
           查看详情 →
         </span>
