@@ -119,6 +119,14 @@ export default function ParentDashboard() {
               </h3>
 
               <div className="flex items-end gap-2 justify-between" style={{ height: '180px' }}>
+                <svg width="100%" height="100%" style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}>
+                  <defs>
+                    <linearGradient id="barGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor="#6C63FF" />
+                      <stop offset="100%" stopColor="#4A90D9" />
+                    </linearGradient>
+                  </defs>
+                </svg>
                 {weeklyLogs.map((log, index) => {
                   const height = log.totalMinutes > 0
                     ? Math.max((log.totalMinutes / maxMinutes) * 140, 8)
@@ -135,20 +143,19 @@ export default function ParentDashboard() {
                             style={{
                               height: `${height}px`,
                               maxWidth: '36px',
-                              background: `linear-gradient(180deg, #6C63FF 0%, #4A90D9 100%)`,
+                              background: 'linear-gradient(180deg, #6C63FF 0%, #4A90D9 100%)',
                               animation: `fadeIn 0.3s ease-out ${index * 0.05}s both`,
                             }}
                           />
                         ) : (
                           <div
-                            className="w-full rounded-t-md"
+                            className="w-full"
                             style={{
-                              height: '8px',
+                              height: '140px',
                               maxWidth: '36px',
                               border: '2px dashed #D0D5DD',
-                              borderTop: 'none',
-                              borderLeft: 'none',
-                              borderRight: 'none',
+                              borderRadius: '6px 6px 0 0',
+                              background: 'transparent',
                             }}
                           />
                         )}

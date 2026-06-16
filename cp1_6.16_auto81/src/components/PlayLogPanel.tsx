@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import type { Course, PlayLog, PieceItem } from '@/types'
-import { ChevronDown, ChevronUp, Clock, Music, Send, FileText } from 'lucide-react'
+import type { Course, PlayLog } from '@/types'
+import { ChevronDown, ChevronUp, Clock, Send, FileText } from 'lucide-react'
+import { pieces } from '@/data/pieces'
 
 interface PlayLogPanelProps {
   course: Course
@@ -9,7 +10,6 @@ interface PlayLogPanelProps {
 export default function PlayLogPanel({ course }: PlayLogPanelProps) {
   const [expanded, setExpanded] = useState(false)
   const [logs, setLogs] = useState<PlayLog[]>([])
-  const [pieces, setPieces] = useState<PieceItem[]>([])
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -23,7 +23,6 @@ export default function PlayLogPanel({ course }: PlayLogPanelProps) {
   useEffect(() => {
     if (expanded) {
       fetchLogs()
-      fetchPieces()
     }
   }, [expanded])
 
@@ -37,16 +36,6 @@ export default function PlayLogPanel({ course }: PlayLogPanelProps) {
       setLogs([])
     }
     setLoading(false)
-  }
-
-  async function fetchPieces() {
-    try {
-      const res = await fetch('/api/pieces')
-      const data = await res.json()
-      setPieces(data.pieces || [])
-    } catch {
-      setPieces([])
-    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -89,7 +78,7 @@ export default function PlayLogPanel({ course }: PlayLogPanelProps) {
     <div>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1 text-sm transition-colors"
+        className="flex items-center gap-1 text-sm transition-colors hover:opacity-80"
         style={{ color: '#4A90D9' }}
       >
         {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -175,7 +164,7 @@ export default function PlayLogPanel({ course }: PlayLogPanelProps) {
                   value={form.piece}
                   onChange={(e) => setForm({ ...form, piece: e.target.value })}
                   className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none focus:ring-2"
-                  style={{ borderColor: '#E0E6ED', focusRingColor: '#4A90D9' }}
+                  style={{ borderColor: '#E0E6ED' }}
                   required
                 >
                   <option value="">请选择曲目</option>

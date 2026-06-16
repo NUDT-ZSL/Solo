@@ -89,8 +89,19 @@ body {
   transition: transform 0.15s ease;
 }
 
+.page-container {
+  max-width: 80%;
+  margin: 0 auto;
+  padding: 24px 0;
+}
+
 @media (max-width: 767px) {
   .course-card {
     border-left: none !important;
+  }
+
+  .page-container {
+    max-width: 100% !important;
+    padding: 16px !important;
   }
 }

@@ -11,8 +11,16 @@ export default function AttendanceRing({ rate, size = 160 }: AttendanceRingProps
   const center = size / 2
 
   return (
-    <div className="relative inline-flex items-center justify-center">
-      <svg width={size} height={size}>
+    <div
+      className="relative flex items-center justify-center"
+      style={{ width: size, height: size }}
+    >
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="absolute top-0 left-0"
+      >
         <circle
           cx={center}
           cy={center}
@@ -36,10 +44,10 @@ export default function AttendanceRing({ rate, size = 160 }: AttendanceRingProps
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span style={{ fontSize: '28px', fontWeight: 700, color: '#333' }}>
+        <span style={{ fontSize: '28px', fontWeight: 700, color: '#333', lineHeight: 1 }}>
           {rate}%
         </span>
-        <span style={{ fontSize: '12px', color: '#999' }}>出勤率</span>
+        <span style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>出勤率</span>
       </div>
     </div>
   )

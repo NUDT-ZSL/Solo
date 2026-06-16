@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import type { Course, PieceItem } from '@/types'
+import type { Course } from '@/types'
 import { Clock, Music, Send, Calendar } from 'lucide-react'
+import { pieces } from '@/data/pieces'
 
 export default function StudentDashboard() {
   const [courses, setCourses] = useState<Course[]>([])
-  const [pieces, setPieces] = useState<PieceItem[]>([])
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -18,7 +18,7 @@ export default function StudentDashboard() {
   })
 
   useEffect(() => {
-    Promise.all([fetchSchedule(), fetchPieces()]).finally(() => setLoading(false))
+    fetchSchedule().finally(() => setLoading(false))
   }, [])
 
   async function fetchSchedule() {
@@ -28,16 +28,6 @@ export default function StudentDashboard() {
       setCourses((data.courses || []).filter((c: Course) => c.studentId === studentId))
     } catch {
       setCourses([])
-    }
-  }
-
-  async function fetchPieces() {
-    try {
-      const res = await fetch('/api/pieces')
-      const data = await res.json()
-      setPieces(data.pieces || [])
-    } catch {
-      setPieces([])
     }
   }
 
