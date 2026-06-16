@@ -61,6 +61,16 @@ export class GameEngine {
     this.running = false;
   }
 
+  pause(): void {
+    if (this.gameState !== 'playing') return;
+    this.gameState = 'paused';
+  }
+
+  resume(): void {
+    if (this.gameState !== 'paused') return;
+    this.gameState = 'playing';
+  }
+
   private reset(): void {
     this.notes = [];
     this.score = 0;
@@ -89,6 +99,8 @@ export class GameEngine {
       this.start();
       return;
     }
+
+    if (this.gameState === 'paused') return;
 
     if (this.gameState !== 'playing') return;
 
@@ -237,6 +249,8 @@ export class GameEngine {
 
   update(deltaTime: number): void {
     if (!this.running) return;
+
+    if (this.gameState === 'paused') return;
 
     particleSystem.update(deltaTime);
 

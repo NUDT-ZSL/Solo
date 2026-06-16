@@ -1,4 +1,4 @@
-export type GameState = 'idle' | 'playing' | 'victory' | 'defeat' | 'transition';
+export type GameState = 'idle' | 'playing' | 'paused' | 'victory' | 'defeat' | 'transition';
 
 export type TrackId = 'Q' | 'W' | 'E';
 

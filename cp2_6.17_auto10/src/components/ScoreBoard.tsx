@@ -6,7 +6,7 @@ interface ScoreBoardProps {
 }
 
 export const ScoreBoard: React.FC<ScoreBoardProps> = ({ gameState }) => {
-  const { score, combo, comboMultiplier, offeringProgress } = gameState;
+  const { score, combo, comboMultiplier, offeringProgress, gameState: state } = gameState;
 
   const comboColor = combo >= 5 ? '#ffaa00' : '#bb9944';
   const comboShadow = combo >= 5 ? '0 0 0.5px #ffaa00, 0 0 1px #ffaa00' : 'none';
@@ -18,6 +18,22 @@ export const ScoreBoard: React.FC<ScoreBoardProps> = ({ gameState }) => {
   const displayScore = gameState.gameState === 'victory' || gameState.gameState === 'defeat'
     ? gameState.finalScore
     : score;
+
+  let statusText = '';
+  let statusColor = '#8b7355';
+  if (state === 'playing') {
+    statusText = '运行中';
+    statusColor = '#44bb44';
+  } else if (state === 'paused') {
+    statusText = '暂停中';
+    statusColor = '#ffbb33';
+  } else if (state === 'victory') {
+    statusText = '胜利';
+    statusColor = '#ffd700';
+  } else if (state === 'defeat') {
+    statusText = '失败';
+    statusColor = '#ff4444';
+  }
 
   return (
     <div
@@ -38,6 +54,31 @@ export const ScoreBoard: React.FC<ScoreBoardProps> = ({ gameState }) => {
         zIndex: 10,
       }}
     >
+      {statusText && (
+        <div style={{ textAlign: 'center' }}>
+          <div
+            style={{
+              fontSize: '12px',
+              color: '#8b7355',
+              marginBottom: '4px',
+              letterSpacing: '2px',
+            }}
+          >
+            状态
+          </div>
+          <div
+            style={{
+              fontSize: '18px',
+              fontWeight: 'bold',
+              color: statusColor,
+              minWidth: '60px',
+            }}
+          >
+            {statusText}
+          </div>
+        </div>
+      )}
+
       <div style={{ textAlign: 'center' }}>
         <div
           style={{

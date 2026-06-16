@@ -269,6 +269,27 @@ export const GameBoard: React.FC<GameBoardProps> = ({ gameState, onRender }) => 
     ctx.fillText('点击任意键重新祭祀', centerX, centerY + 30);
   }, []);
 
+  const drawPausedEffect = useCallback((ctx: CanvasRenderingContext2D) => {
+    const centerX = CONFIG.CANVAS_SIZE / 2;
+    const centerY = CONFIG.CANVAS_SIZE / 2;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.fillRect(0, 0, CONFIG.CANVAS_SIZE, CONFIG.CANVAS_SIZE);
+
+    ctx.fillStyle = '#ffbb33';
+    ctx.font = "bold 56px 'ZCOOL KuaiLe', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = '#ffaa00';
+    ctx.shadowBlur = 20;
+    ctx.fillText('暂停', centerX, centerY - 20);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#bb9944';
+    ctx.font = "20px 'Noto Sans SC', sans-serif";
+    ctx.fillText('游戏已暂停，点击继续恢复游戏', centerX, centerY + 40);
+  }, []);
+
   const drawIdleEffect = useCallback((ctx: CanvasRenderingContext2D) => {
     const centerX = CONFIG.CANVAS_SIZE / 2;
     const centerY = CONFIG.CANVAS_SIZE / 2;
@@ -348,12 +369,16 @@ export const GameBoard: React.FC<GameBoardProps> = ({ gameState, onRender }) => 
       drawVictoryEffect(ctx, gameState.victoryProgress);
     }
 
+    if (gameState.gameState === 'paused') {
+      drawPausedEffect(ctx);
+    }
+
     if (gameState.gameState === 'defeat') {
       drawDefeatEffect(ctx);
     }
 
     onRender();
-  }, [gameState, drawBackground, drawTotem, drawOrbit, drawNote, drawParticles, drawVictoryEffect, drawDefeatEffect, drawIdleEffect, getTotemPosition, onRender]);
+  }, [gameState, drawBackground, drawTotem, drawOrbit, drawNote, drawParticles, drawVictoryEffect, drawDefeatEffect, drawPausedEffect, drawIdleEffect, getTotemPosition, onRender]);
 
   useEffect(() => {
     render();
@@ -385,6 +410,67 @@ export const GameBoard: React.FC<GameBoardProps> = ({ gameState, onRender }) => 
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  const handleStart = useCallback(() => {
+    gameEngine.start();
+  }, []);
+
+  const handlePause = useCallback(() => {
+    gameEngine.pause();
+  }, []);
+
+  const handleResume = useCallback(() => {
+    gameEngine.resume();
+  }, []);
+
+  const { gameState: currentState } = gameState;
+  let controlButton: React.ReactNode = null;
+
+  if (currentState === 'idle') {
+    controlButton = (
+      <button
+        onClick={handleStart}
+        style={buttonStyle('#44bb44')}
+        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#33aa33')}
+        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#44bb44')}
+      >
+        ▶ 开始游戏
+      </button>
+    );
+  } else if (currentState === 'playing') {
+    controlButton = (
+      <button
+        onClick={handlePause}
+        style={buttonStyle('#ffbb33')}
+        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#eeaa22')}
+        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#ffbb33')}
+      >
+        ⏸ 暂停
+      </button>
+    );
+  } else if (currentState === 'paused') {
+    controlButton = (
+      <button
+        onClick={handleResume}
+        style={buttonStyle('#44bb44')}
+        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#33aa33')}
+        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#44bb44')}
+      >
+        ▶ 继续
+      </button>
+    );
+  } else if (currentState === 'victory' || currentState === 'defeat') {
+    controlButton = (
+      <button
+        onClick={handleStart}
+        style={buttonStyle('#ffbb33')}
+        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#eeaa22')}
+        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#ffbb33')}
+      >
+        ↻ 重新开始
+      </button>
+    );
+  }
+
   return (
     <div
       ref={containerRef}
@@ -407,9 +493,41 @@ export const GameBoard: React.FC<GameBoardProps> = ({ gameState, onRender }) => 
           imageRendering: 'crisp-edges',
         }}
       />
+
+      {controlButton && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '40px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 20,
+          }}
+        >
+          {controlButton}
+        </div>
+      )}
     </div>
   );
 };
+
+function buttonStyle(bgColor: string): React.CSSProperties {
+  return {
+    padding: '12px 32px',
+    fontSize: '18px',
+    fontFamily: "'ZCOOL KuaiLe', 'Noto Sans SC', sans-serif",
+    fontWeight: 'bold',
+    color: '#1a0a00',
+    backgroundColor: bgColor,
+    border: '3px solid #c0a060',
+    borderRadius: '10px',
+    cursor: 'pointer',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
+    transition: 'all 0.2s ease',
+    letterSpacing: '2px',
+    outline: 'none',
+  } as React.CSSProperties;
+}
 
 function shadeColor(color: string, percent: number): string {
   const num = parseInt(color.replace('#', ''), 16);
