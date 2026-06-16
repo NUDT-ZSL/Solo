@@ -1,17 +1,20 @@
-import { Organism, EnvironmentParams, EcosystemConfig, SpeciesType, Particle } from './types';
+import { Organism, EnvironmentParams, EcosystemConfig, SpeciesType, Particle, DataPoint } from './types';
 import { DEFAULT_ECOSYSTEM_CONFIG, SPECIES_COLORS, SPECIES_SIZES } from './config';
 
-type Listener = (state: { organisms: Organism[]; particles: Particle[] }) => void;
+type Listener = (state: { organisms: Organism[]; particles: Particle[]; dataHistory: DataPoint[] }) => void;
 
 export class SimulationEngine {
   private organisms: Organism[] = [];
   private particles: Particle[] = [];
+  private dataHistory: DataPoint[] = [];
   private environment: EnvironmentParams;
   private config: EcosystemConfig;
   private tickInterval: number | null = null;
+  private dataRecordInterval: number | null = null;
   private animationFrame: number | null = null;
   private listeners: Set<Listener> = new Set();
   private isPaused: boolean = false;
+  private isDataRecordingPaused: boolean = false;
   private idCounter: number = 0;
 
   constructor(initialEnvironment: EnvironmentParams) {
@@ -21,6 +24,8 @@ export class SimulationEngine {
 
   start() {
     this.tickInterval = window.setInterval(() => this.tick(), 5000);
+    this.dataRecordInterval = window.setInterval(() => this.recordDataPoint(), 1000);
+    this.recordDataPoint();
     this.startAnimationLoop();
   }
 
@@ -29,10 +34,53 @@ export class SimulationEngine {
       clearInterval(this.tickInterval);
       this.tickInterval = null;
     }
+    if (this.dataRecordInterval !== null) {
+      clearInterval(this.dataRecordInterval);
+      this.dataRecordInterval = null;
+    }
     if (this.animationFrame !== null) {
       cancelAnimationFrame(this.animationFrame);
       this.animationFrame = null;
     }
+  }
+
+  pauseDataRecording() {
+    this.isDataRecordingPaused = true;
+  }
+
+  resumeDataRecording() {
+    this.isDataRecordingPaused = false;
+  }
+
+  getIsDataRecordingPaused() {
+    return this.isDataRecordingPaused;
+  }
+
+  getDataHistory(): DataPoint[] {
+    return [...this.dataHistory];
+  }
+
+  private recordDataPoint() {
+    if (this.isDataRecordingPaused) return;
+    
+    const avgHealth = this.organisms.length > 0
+      ? this.organisms.reduce((sum, o) => sum + o.health, 0) / this.organisms.length
+      : 0;
+    
+    const dataPoint: DataPoint = {
+      timestamp: Date.now(),
+      light: this.environment.light,
+      humidity: this.environment.humidity,
+      temperature: this.environment.temperature,
+      ecosystemHealth: avgHealth
+    };
+    
+    this.dataHistory.push(dataPoint);
+    
+    const sixtySecondsAgo = Date.now() - 60000;
+    this.dataHistory = this.dataHistory.filter(p => p.timestamp >= sixtySecondsAgo);
+    
+    this.notifyListeners();
   }
 
   pause() {
@@ -231,7 +279,8 @@ export class SimulationEngine {
   private notifyListeners() {
     const state = {
       organisms: this.getOrganisms(),
-      particles: [...this.particles]
+      particles: [...this.particles],
+      dataHistory: this.getDataHistory()
     };
     this.listeners.forEach(l => l(state));
   }

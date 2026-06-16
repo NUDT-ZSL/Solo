@@ -46,3 +46,11 @@ export interface Particle {
   maxLife: number;
   size: number;
 }
+
+export interface DataPoint {
+  timestamp: number;
+  light: number;
+  humidity: number;
+  temperature: number;
+  ecosystemHealth: number;
+}

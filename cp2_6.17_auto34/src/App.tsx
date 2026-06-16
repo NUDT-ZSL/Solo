@@ -10,20 +10,23 @@ import {
   SPECIES_SIZES,
   DEFAULT_ENVIRONMENT
 } from './config';
-import { Organism, Particle, SpeciesType, EcosystemConfig, EnvironmentParams } from './types';
+import { Organism, Particle, SpeciesType, EcosystemConfig, EnvironmentParams, DataPoint } from './types';
 
 const App: React.FC = () => {
   const [organisms, setOrganisms] = useState<Organism[]>([]);
   const [particles, setParticles] = useState<Particle[]>([]);
+  const [dataHistory, setDataHistory] = useState<DataPoint[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [environment, setEnvironment] = useState<EnvironmentParams>(DEFAULT_ENVIRONMENT);
   const [isPaused, setIsPaused] = useState(false);
+  const [isChartPaused, setIsChartPaused] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [configText, setConfigText] = useState('');
   const [dragSpecies, setDragSpecies] = useState<SpeciesType | null>(null);
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
   const [draggingOrganism, setDraggingOrganism] = useState<string | null>(null);
   const jarRef = useRef<SVGSVGElement>(null);
+  const chartRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<SimulationEngine | null>(null);
   const [configError, setConfigError] = useState<string>('');
 
@@ -34,6 +37,7 @@ const App: React.FC = () => {
     const unsubscribe = engine.subscribe((state) => {
       setOrganisms(state.organisms);
       setParticles(state.particles);
+      setDataHistory(state.dataHistory);
     });
 
     engine.start();
@@ -184,6 +188,150 @@ const App: React.FC = () => {
     }
   };
 
+  const toggleChartPause = () => {
+    if (engineRef.current) {
+      if (isChartPaused) {
+        engineRef.current.resumeDataRecording();
+      } else {
+        engineRef.current.pauseDataRecording();
+      }
+      setIsChartPaused(!isChartPaused);
+    }
+  };
+
+  useEffect(() => {
+    if (!chartRef.current || dataHistory.length === 0) return;
+
+    const canvas = chartRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+
+    const width = rect.width;
+    const height = rect.height;
+    const padding = { top: 20, right: 10, bottom: 25, left: 45 };
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+
+    ctx.clearRect(0, 0, width, height);
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+    ctx.fillRect(0, 0, width, height);
+
+    const valueRanges = {
+      light: { min: 0, max: 1000 },
+      humidity: { min: 0, max: 100 },
+      temperature: { min: 15, max: 35 },
+      ecosystemHealth: { min: 0, max: 100 }
+    };
+
+    const yTicksCount = 5;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+    ctx.lineWidth = 1;
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
+    for (let i = 0; i <= yTicksCount; i++) {
+      const y = padding.top + (chartHeight / yTicksCount) * i;
+      ctx.beginPath();
+      ctx.moveTo(padding.left, y);
+      ctx.lineTo(width - padding.right, y);
+      ctx.stroke();
+    }
+
+    ctx.fillText('1000', padding.left - 5, padding.top);
+    ctx.fillText('750', padding.left - 5, padding.top + chartHeight * 0.25);
+    ctx.fillText('500', padding.left - 5, padding.top + chartHeight * 0.5);
+    ctx.fillText('250', padding.left - 5, padding.top + chartHeight * 0.75);
+    ctx.fillText('0', padding.left - 5, padding.top + chartHeight);
+
+    const xTicksCount = 6;
+    const now = Date.now();
+    for (let i = 0; i <= xTicksCount; i++) {
+      const x = padding.left + (chartWidth / xTicksCount) * i;
+      const secondsAgo = Math.round((60 / xTicksCount) * (xTicksCount - i));
+      ctx.fillStyle = '#666';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(`-${secondsAgo}s`, x, height - padding.bottom + 5);
+    }
+
+    const mapValue = (value: number, min: number, max: number) => {
+      return padding.top + chartHeight - ((value - min) / (max - min)) * chartHeight;
+    };
+
+    const mapX = (timestamp: number) => {
+      const start = now - 60000;
+      const ratio = (timestamp - start) / 60000;
+      return padding.left + ratio * chartWidth;
+    };
+
+    const drawLine = (key: keyof DataPoint, color: string, range: { min: number; max: number }) => {
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+
+      let started = false;
+      dataHistory.forEach((point, i) => {
+        const x = mapX(point.timestamp);
+        const y = mapValue(point[key] as number, range.min, range.max);
+        if (!started) {
+          ctx.moveTo(x, y);
+          started = true;
+        } else {
+          ctx.lineTo(x, y);
+        }
+      });
+      ctx.stroke();
+    };
+
+    drawLine('light', '#ffd54f', valueRanges.light);
+    drawLine('humidity', '#64b5f6', valueRanges.humidity);
+    drawLine('temperature', '#ef5350', valueRanges.temperature);
+    drawLine('ecosystemHealth', '#66bb6a', valueRanges.ecosystemHealth);
+
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(padding.left, padding.top, chartWidth, chartHeight);
+
+    const legend = [
+      { label: '光照', color: '#ffd54f' },
+      { label: '湿度', color: '#64b5f6' },
+      { label: '温度', color: '#ef5350' },
+      { label: '健康度', color: '#66bb6a' }
+    ];
+
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    legend.forEach((item, i) => {
+      const x = padding.left + 5 + i * 65;
+      const y = 10;
+      ctx.fillStyle = item.color;
+      ctx.fillRect(x, y - 4, 12, 8);
+      ctx.fillStyle = '#333';
+      ctx.fillText(item.label, x + 16, y);
+    });
+  }, [dataHistory]);
+
+  const speciesCount: Record<SpeciesType, number> = {
+    plant: 0,
+    fungus: 0,
+    decomposer: 0
+  };
+  organisms.forEach(o => {
+    speciesCount[o.species]++;
+  });
+
   const renderOrganism = (org: Organism) => {
     const size = SPECIES_SIZES[org.species];
     const halfSize = size / 2;
@@ -275,6 +423,7 @@ const App: React.FC = () => {
   const renderSpeciesPanelItem = (species: SpeciesType) => {
     const size = 28;
     const color = SPECIES_COLORS[species];
+    const count = speciesCount[species];
     return (
       <div
         key={species}
@@ -287,21 +436,43 @@ const App: React.FC = () => {
           userSelect: 'none',
           borderRadius: 8,
           transition: 'background 0.2s',
-          background: dragSpecies === species ? 'rgba(255,213,79,0.3)' : 'transparent'
+          background: dragSpecies === species ? 'rgba(255,213,79,0.3)' : 'transparent',
+          position: 'relative'
         }}
         onMouseDown={(e) => handleSpeciesDragStart(species, e)}
       >
-        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-          <rect
-            x={0}
-            y={0}
-            width={size}
-            height={size}
-            rx={size * 0.25}
-            fill={color}
-            style={{ filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.3))' }}
-          />
-        </svg>
+        <div style={{ position: 'relative' }}>
+          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+            <rect
+              x={0}
+              y={0}
+              width={size}
+              height={size}
+              rx={size * 0.25}
+              fill={color}
+              style={{ filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.3))' }}
+            />
+          </svg>
+          <div style={{
+            position: 'absolute',
+            top: -6,
+            right: -6,
+            background: '#2e7d32',
+            color: 'white',
+            fontSize: 10,
+            fontWeight: 600,
+            minWidth: 18,
+            height: 18,
+            borderRadius: 9,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '0 4px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+          }}>
+            {count}
+          </div>
+        </div>
         <span style={{ fontSize: 12, color: '#333', marginTop: 4 }}>{SPECIES_NAMES[species]}</span>
       </div>
     );
@@ -512,6 +683,44 @@ const App: React.FC = () => {
             borderRadius: 4
           }}>
             生物: {organisms.length} / 60
+          </div>
+
+          <div style={{
+            position: 'relative',
+            marginTop: 16,
+            background: 'rgba(255,255,255,0.75)',
+            borderRadius: 8,
+            overflow: 'hidden',
+            border: '1px solid rgba(0,0,0,0.1)'
+          }}>
+            <canvas
+              ref={chartRef}
+              width={JAR_WIDTH}
+              height={150}
+              style={{
+                display: 'block',
+                width: JAR_WIDTH,
+                height: 150
+              }}
+            />
+            <button
+              onClick={toggleChartPause}
+              style={{
+              position: 'absolute',
+              top: 4,
+              right: 4,
+              padding: '2px 8px',
+              border: 'none',
+              borderRadius: 4,
+              background: isChartPaused ? '#4caf50' : 'rgba(255,255,255,0.9)',
+              color: isChartPaused ? 'white' : '#333',
+              cursor: 'pointer',
+              fontSize: 11,
+              fontWeight: 500,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+            }}>
+              {isChartPaused ? '▶ 记录' : '⏸ 暂停'}
+            </button>
           </div>
         </div>
 
