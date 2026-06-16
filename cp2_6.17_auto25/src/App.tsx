@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Scene from './components/Scene';
 import ControlPanel from './components/ControlPanel';
 import StatsPanel from './components/StatsPanel';
@@ -6,18 +6,56 @@ import { useTrafficStore } from './store/trafficStore';
 
 export default function App() {
   const { startSimulation, sceneOpacity, isTransitioning } = useTrafficStore();
+  const [displayOpacity, setDisplayOpacity] = useState(1);
+  const animationRef = useRef<number | null>(null);
+  const prevOpacity = useRef(1);
 
   useEffect(() => {
     startSimulation();
   }, [startSimulation]);
+
+  useEffect(() => {
+    if (prevOpacity.current === sceneOpacity) return;
+
+    const startValue = prevOpacity.current;
+    const endValue = sceneOpacity;
+    const duration = 500;
+    let startTime: number | null = null;
+
+    const animate = (timestamp: number) => {
+      if (!startTime) startTime = timestamp;
+      const elapsed = timestamp - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const easeProgress = 1 - Math.pow(1 - progress, 3);
+      const currentValue = startValue + (endValue - startValue) * easeProgress;
+      
+      setDisplayOpacity(currentValue);
+
+      if (progress < 1) {
+        animationRef.current = requestAnimationFrame(animate);
+      } else {
+        prevOpacity.current = endValue;
+      }
+    };
+
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+    }
+    animationRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [sceneOpacity]);
 
   return (
     <div style={appStyle}>
       <div 
         style={{
           ...sceneContainerStyle,
-          opacity: sceneOpacity,
-          transition: 'opacity 0.5s ease'
+          opacity: displayOpacity
         }}
       >
         <Scene />
@@ -25,7 +63,11 @@ export default function App() {
       <ControlPanel />
       <StatsPanel />
       {isTransitioning && (
-        <div style={overlayStyle}>
+        <div style={{
+          ...overlayStyle,
+          opacity: displayOpacity < 0.8 ? 1 : 0,
+          transition: 'opacity 0.3s ease'
+        }}>
           <div style={loadingTextStyle}>切换模式中...</div>
         </div>
       )}

@@ -15,7 +15,10 @@ import {
   createInitialTrafficLight,
   createInitialStatistics,
   updateStatistics,
-  getQueues
+  getQueues,
+  isInIntersection,
+  isInIntersectionArea,
+  getDistanceFromIntersection
 } from '../utils/trafficLogic';
 
 interface TrafficState {
@@ -164,9 +167,17 @@ export const useTrafficStore = create<TrafficState>((set, get) => ({
 
     if (updatedVehicles.length > MAX_VEHICLES) {
       updatedVehicles.sort((a, b) => {
-        const distA = Math.sqrt(a.position[0] ** 2 + a.position[2] ** 2);
-        const distB = Math.sqrt(b.position[0] ** 2 + b.position[2] ** 2);
-        return distA - distB;
+        const aIsWaiting = a.isWaiting ? 1 : 0;
+        const bIsWaiting = b.isWaiting ? 1 : 0;
+        if (aIsWaiting !== bIsWaiting) return aIsWaiting - bIsWaiting;
+
+        const aInIntersection = isInIntersection(a.position, a.direction) || isInIntersectionArea(a) ? 1 : 0;
+        const bInIntersection = isInIntersection(b.position, b.direction) || isInIntersectionArea(b) ? 1 : 0;
+        if (aInIntersection !== bInIntersection) return aInIntersection - bInIntersection;
+
+        const aDist = getDistanceFromIntersection(a);
+        const bDist = getDistanceFromIntersection(b);
+        return aDist - bDist;
       });
       while (updatedVehicles.length > MAX_VEHICLES) {
         updatedVehicles.pop();

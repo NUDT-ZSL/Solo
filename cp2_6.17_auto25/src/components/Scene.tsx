@@ -19,6 +19,22 @@ const LIGHT_COLORS: Record<LightColor, string> = {
   green: '#2ed573'
 };
 
+const hexToRgb = (hex: string): [number, number, number] => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result
+    ? [parseInt(result[1], 16) / 255, parseInt(result[2], 16) / 255, parseInt(result[3], 16) / 255]
+    : [1, 1, 1];
+};
+
+const lerpColor = (color1: string, color2: string, t: number): string => {
+  const [r1, g1, b1] = hexToRgb(color1);
+  const [r2, g2, b2] = hexToRgb(color2);
+  const r = Math.round(r1 + (r2 - r1) * t * 255);
+  const g = Math.round(g1 + (g2 - g1) * t * 255);
+  const b = Math.round(b1 + (b2 - b1) * t * 255);
+  return `rgb(${r}, ${g}, ${b})`;
+};
+
 function Ground() {
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
@@ -138,19 +154,49 @@ function CenterLines() {
   );
 }
 
-function TrafficLightPole({ position, color, intensity }: { position: [number, number, number]; color: LightColor; intensity: number }) {
+function TrafficLightPole({ 
+  position, 
+  currentColor, 
+  prevColor, 
+  transitionProgress 
+}: { 
+  position: [number, number, number]; 
+  currentColor: LightColor; 
+  prevColor: LightColor;
+  transitionProgress: number;
+}) {
   const lightRef = useRef<THREE.Mesh>(null);
   const glowRef = useRef<THREE.Mesh>(null);
 
   useFrame(() => {
+    if (lightRef.current) {
+      const material = lightRef.current.material as THREE.MeshStandardMaterial;
+      const t = transitionProgress;
+      const lerpedColor = lerpColor(LIGHT_COLORS[prevColor], LIGHT_COLORS[currentColor], t);
+      const baseIntensity = 0.3;
+      const targetIntensity = 1.0;
+      const intensity = baseIntensity + (targetIntensity - baseIntensity) * t;
+      
+      material.color.set(lerpedColor);
+      material.emissive.set(lerpedColor);
+      material.emissiveIntensity = intensity;
+    }
+    
     if (glowRef.current) {
-      const scale = 1 + intensity * 0.3;
-      glowRef.current.scale.setScalar(scale);
+      const material = glowRef.current.material as THREE.MeshBasicMaterial;
+      const t = transitionProgress;
+      const lerpedColor = lerpColor(LIGHT_COLORS[prevColor], LIGHT_COLORS[currentColor], t);
+      const baseOpacity = 0.05;
+      const targetOpacity = 0.3;
+      const opacity = baseOpacity + (targetOpacity - baseOpacity) * t;
+      
+      material.color.set(lerpedColor);
+      material.opacity = opacity;
+      glowRef.current.scale.setScalar(1 + t * 0.3);
     }
   });
 
-  const lightColor = LIGHT_COLORS[color];
-  const glowIntensity = 0.3 + intensity * 0.7;
+  const initialColor = LIGHT_COLORS[currentColor];
 
   return (
     <group position={position}>
@@ -161,9 +207,9 @@ function TrafficLightPole({ position, color, intensity }: { position: [number, n
       <mesh ref={lightRef} position={[0, 0.8, 0]}>
         <cylinderGeometry args={[0.15, 0.15, 0.8, 16]} />
         <meshStandardMaterial 
-          color={lightColor} 
-          emissive={lightColor} 
-          emissiveIntensity={glowIntensity}
+          color={initialColor} 
+          emissive={initialColor} 
+          emissiveIntensity={0.3}
           transparent
           opacity={0.9}
         />
@@ -171,9 +217,9 @@ function TrafficLightPole({ position, color, intensity }: { position: [number, n
       <mesh ref={glowRef} position={[0, 0.8, 0]}>
         <sphereGeometry args={[0.25, 16, 16]} />
         <meshBasicMaterial 
-          color={lightColor} 
+          color={initialColor} 
           transparent 
-          opacity={intensity * 0.3}
+          opacity={0.05}
         />
       </mesh>
     </group>
@@ -181,32 +227,31 @@ function TrafficLightPole({ position, color, intensity }: { position: [number, n
 }
 
 function TrafficLights({ trafficLight }: { trafficLight: TrafficLight }) {
-  const nsIntensity = trafficLight.northSouth === 'green' || trafficLight.northSouth === 'red' || trafficLight.northSouth === 'yellow' 
-    ? trafficLight.transitionProgress : 0;
-  const ewIntensity = trafficLight.eastWest === 'green' || trafficLight.eastWest === 'red' || trafficLight.eastWest === 'yellow'
-    ? trafficLight.transitionProgress : 0;
-
   return (
     <>
       <TrafficLightPole 
         position={[-INTERSECTION_HALF_SIZE - 0.5, 0, -INTERSECTION_HALF_SIZE - 0.5]} 
-        color={trafficLight.northSouth} 
-        intensity={nsIntensity} 
+        currentColor={trafficLight.northSouth}
+        prevColor={trafficLight.prevNorthSouth}
+        transitionProgress={trafficLight.colorTransitionProgress}
       />
       <TrafficLightPole 
         position={[INTERSECTION_HALF_SIZE + 0.5, 0, INTERSECTION_HALF_SIZE + 0.5]} 
-        color={trafficLight.northSouth} 
-        intensity={nsIntensity} 
+        currentColor={trafficLight.northSouth}
+        prevColor={trafficLight.prevNorthSouth}
+        transitionProgress={trafficLight.colorTransitionProgress}
       />
       <TrafficLightPole 
         position={[INTERSECTION_HALF_SIZE + 0.5, 0, -INTERSECTION_HALF_SIZE - 0.5]} 
-        color={trafficLight.eastWest} 
-        intensity={ewIntensity} 
+        currentColor={trafficLight.eastWest}
+        prevColor={trafficLight.prevEastWest}
+        transitionProgress={trafficLight.colorTransitionProgress}
       />
       <TrafficLightPole 
         position={[-INTERSECTION_HALF_SIZE - 0.5, 0, INTERSECTION_HALF_SIZE + 0.5]} 
-        color={trafficLight.eastWest} 
-        intensity={ewIntensity} 
+        currentColor={trafficLight.eastWest}
+        prevColor={trafficLight.prevEastWest}
+        transitionProgress={trafficLight.colorTransitionProgress}
       />
     </>
   );

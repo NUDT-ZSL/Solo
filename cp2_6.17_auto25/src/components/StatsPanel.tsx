@@ -3,41 +3,37 @@ import { useTrafficStore } from '../store/trafficStore';
 
 function AnimatedNumber({ value, decimals = 1 }: { value: number; decimals?: number }) {
   const [displayValue, setDisplayValue] = useState(value);
-  const prevValue = useRef(value);
   const animationRef = useRef<number | null>(null);
-  const startTime = useRef<number | null>(null);
+  const targetValue = useRef(value);
+  const currentAnimValue = useRef(value);
 
   useEffect(() => {
-    if (prevValue.current === value) return;
+    if (targetValue.current === value) return;
+    targetValue.current = value;
 
-    const startValue = prevValue.current;
+    const startValue = currentAnimValue.current;
     const endValue = value;
     const duration = 300;
+    let startTime: number | null = null;
 
     const animate = (timestamp: number) => {
-      if (!startTime.current) {
-        startTime.current = timestamp;
-      }
-
-      const elapsed = timestamp - startTime.current;
+      if (!startTime) startTime = timestamp;
+      const elapsed = timestamp - startTime;
       const progress = Math.min(elapsed / duration, 1);
       const easeProgress = 1 - Math.pow(1 - progress, 3);
       const currentValue = startValue + (endValue - startValue) * easeProgress;
 
+      currentAnimValue.current = currentValue;
       setDisplayValue(currentValue);
 
       if (progress < 1) {
         animationRef.current = requestAnimationFrame(animate);
-      } else {
-        prevValue.current = endValue;
-        startTime.current = null;
       }
     };
 
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
     }
-    startTime.current = null;
     animationRef.current = requestAnimationFrame(animate);
 
     return () => {
@@ -52,17 +48,29 @@ function AnimatedNumber({ value, decimals = 1 }: { value: number; decimals?: num
 
 export default function StatsPanel() {
   const { statistics } = useTrafficStore();
-  const [displayStats, setDisplayStats] = useState(statistics);
-  const lastUpdate = useRef(Date.now());
+  const [displayStats, setDisplayStats] = useState({
+    totalVehicles: 0,
+    averageWaitTime: 0,
+    maxQueueLength: 0,
+    throughput: 0
+  });
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const now = Date.now();
-      if (now - lastUpdate.current >= 2000) {
-        setDisplayStats(statistics);
-        lastUpdate.current = now;
-      }
-    }, 500);
+      setDisplayStats({
+        totalVehicles: statistics.totalVehicles,
+        averageWaitTime: statistics.averageWaitTime,
+        maxQueueLength: statistics.maxQueueLength,
+        throughput: statistics.throughput
+      });
+    }, 2000);
+
+    setDisplayStats({
+      totalVehicles: statistics.totalVehicles,
+      averageWaitTime: statistics.averageWaitTime,
+      maxQueueLength: statistics.maxQueueLength,
+      throughput: statistics.throughput
+    });
 
     return () => clearInterval(interval);
   }, [statistics]);

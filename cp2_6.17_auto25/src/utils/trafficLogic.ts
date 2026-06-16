@@ -18,9 +18,12 @@ export interface Vehicle {
 export interface TrafficLight {
   northSouth: LightColor;
   eastWest: LightColor;
+  prevNorthSouth: LightColor;
+  prevEastWest: LightColor;
   remainingTime: number;
   currentPhase: 'nsGreen' | 'nsYellow' | 'ewGreen' | 'ewYellow';
   transitionProgress: number;
+  colorTransitionProgress: number;
 }
 
 export interface Statistics {
@@ -168,6 +171,57 @@ export const getQueues = (vehicles: Vehicle[]): Queues => {
   return queues;
 };
 
+export const getQueuePosition = (vehicle: Vehicle, allVehicles: Vehicle[]): number => {
+  const sameDirectionLane = allVehicles.filter(
+    v => v.direction === vehicle.direction && v.lane === vehicle.lane && v.isWaiting
+  );
+
+  const getStopLineDistance = (v: Vehicle): number => {
+    const [x, , z] = v.position;
+    switch (v.direction) {
+      case 'north':
+        return -INTERSECTION_HALF_SIZE - z;
+      case 'south':
+        return z - INTERSECTION_HALF_SIZE;
+      case 'east':
+        return -INTERSECTION_HALF_SIZE - x;
+      case 'west':
+        return x - INTERSECTION_HALF_SIZE;
+    }
+  };
+
+  const vehicleDist = getStopLineDistance(vehicle);
+  let position = 0;
+  
+  for (const v of sameDirectionLane) {
+    if (v.id !== vehicle.id && getStopLineDistance(v) < vehicleDist) {
+      position++;
+    }
+  }
+
+  return position;
+};
+
+export const getDistanceFromIntersection = (vehicle: Vehicle): number => {
+  const [x, , z] = vehicle.position;
+  switch (vehicle.direction) {
+    case 'north':
+      return Math.abs(-INTERSECTION_HALF_SIZE - z);
+    case 'south':
+      return Math.abs(z - INTERSECTION_HALF_SIZE);
+    case 'east':
+      return Math.abs(-INTERSECTION_HALF_SIZE - x);
+    case 'west':
+      return Math.abs(x - INTERSECTION_HALF_SIZE);
+  }
+};
+
+export const isInIntersectionArea = (vehicle: Vehicle): boolean => {
+  const [x, , z] = vehicle.position;
+  const buffer = 8;
+  return Math.abs(x) < INTERSECTION_HALF_SIZE + buffer && Math.abs(z) < INTERSECTION_HALF_SIZE + buffer;
+};
+
 export const updateVehiclePosition = (
   vehicle: Vehicle,
   allVehicles: Vehicle[],
@@ -198,16 +252,22 @@ export const updateVehiclePosition = (
     const light = isNS ? trafficLight.northSouth : trafficLight.eastWest;
     
     if (light === 'green') {
+      const queuePosition = getQueuePosition(vehicle, allVehicles);
       const elapsedSinceGreen = currentTime - greenStartTime;
-      const startDelay = Array.from(vehiclesStarted).filter(id => {
-        const v = allVehicles.find(v => v.id === id);
-        return v && v.direction === vehicle.direction && v.lane === vehicle.lane;
-      }).length * 300;
+      const startDelay = queuePosition * 300;
       
       if (elapsedSinceGreen >= startDelay || vehiclesStarted.has(vehicle.id)) {
-        updated.isWaiting = false;
-        vehiclesStarted.add(vehicle.id);
-        updated.waitStartTime = 0;
+        const distanceToNext = getDistanceToNextVehicle(vehicle, allVehicles);
+        const safeDistance = VEHICLE_LENGTH + VEHICLE_GAP;
+        
+        if (distanceToNext >= safeDistance || distanceToNext === Infinity) {
+          updated.isWaiting = false;
+          vehiclesStarted.add(vehicle.id);
+          updated.waitStartTime = 0;
+        } else {
+          updated.speed = 0;
+          return updated;
+        }
       } else {
         updated.speed = 0;
         return updated;
@@ -293,6 +353,9 @@ export const updateTrafficLightFixed = (
     const currentIndex = phases.indexOf(updated.currentPhase);
     const nextPhase = phases[(currentIndex + 1) % 4];
     
+    updated.prevNorthSouth = updated.northSouth;
+    updated.prevEastWest = updated.eastWest;
+    updated.colorTransitionProgress = 0;
     updated.currentPhase = nextPhase;
     updated.remainingTime = phaseDurations[nextPhase];
     updated.transitionProgress = 0;
@@ -317,6 +380,7 @@ export const updateTrafficLightFixed = (
     }
   } else {
     updated.transitionProgress = Math.min(1, updated.transitionProgress + deltaTime / 0.2);
+    updated.colorTransitionProgress = Math.min(1, updated.colorTransitionProgress + deltaTime / 0.2);
   }
   
   return updated;
@@ -391,6 +455,9 @@ export const updateTrafficLightAdaptive = (
     const currentIndex = phases.indexOf(updated.currentPhase);
     const nextPhase = phases[(currentIndex + 1) % 4];
     
+    updated.prevNorthSouth = updated.northSouth;
+    updated.prevEastWest = updated.eastWest;
+    updated.colorTransitionProgress = 0;
     updated.currentPhase = nextPhase;
     updated.remainingTime = phaseDurations[nextPhase];
     updated.transitionProgress = 0;
@@ -415,6 +482,7 @@ export const updateTrafficLightAdaptive = (
     }
   } else {
     updated.transitionProgress = Math.min(1, updated.transitionProgress + deltaTime / 0.2);
+    updated.colorTransitionProgress = Math.min(1, updated.colorTransitionProgress + deltaTime / 0.2);
   }
   
   return updated;
@@ -424,9 +492,12 @@ export const createInitialTrafficLight = (): TrafficLight => {
   return {
     northSouth: 'green',
     eastWest: 'red',
+    prevNorthSouth: 'green',
+    prevEastWest: 'red',
     remainingTime: 30,
     currentPhase: 'nsGreen',
-    transitionProgress: 1
+    transitionProgress: 1,
+    colorTransitionProgress: 1
   };
 };
 
