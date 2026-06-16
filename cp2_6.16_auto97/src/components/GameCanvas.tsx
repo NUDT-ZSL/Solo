@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { GameEngine, type Microbe, type ChemicalType } from '../engine/GameEngine';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { GameEngine, type Microbe } from '../engine/GameEngine';
 import type { GameConfig } from '../services/api';
 
 interface GameCanvasProps {
@@ -13,8 +13,11 @@ export function GameCanvas({ width, height, config, onEngineReady }: GameCanvasP
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const hoveredRef = useRef<Microbe | null>(null);
-  const mousePosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const [, forceRender] = useState(0);
+
+  const handleEngineReady = useCallback((engine: GameEngine) => {
+    onEngineReady?.(engine);
+  }, [onEngineReady]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -25,7 +28,7 @@ export function GameCanvas({ width, height, config, onEngineReady }: GameCanvasP
 
     const engine = new GameEngine(width, height, config);
     engineRef.current = engine;
-    onEngineReady?.(engine);
+    handleEngineReady(engine);
 
     let lastTime = performance.now();
     let animationId = 0;
@@ -34,8 +37,8 @@ export function GameCanvas({ width, height, config, onEngineReady }: GameCanvasP
       const dt = Math.min(50, time - lastTime);
       lastTime = time;
       engine.update(dt);
-      engine.render(ctx, hoveredRef.current, mousePosRef.current.x, mousePosRef.current.y);
-      forceRender((n) => n + 1);
+      engine.render(ctx, hoveredRef.current);
+      forceRender((n) => (n + 1) % 1000000);
       animationId = requestAnimationFrame(loop);
     };
 
@@ -44,7 +47,7 @@ export function GameCanvas({ width, height, config, onEngineReady }: GameCanvasP
     return () => {
       cancelAnimationFrame(animationId);
     };
-  }, [width, height, config, onEngineReady]);
+  }, [width, height, config, handleEngineReady]);
 
   const getCanvasCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -60,7 +63,6 @@ export function GameCanvas({ width, height, config, onEngineReady }: GameCanvasP
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const { x, y } = getCanvasCoords(e);
-    mousePosRef.current = { x, y };
     hoveredRef.current = engineRef.current?.getMicrobeAt(x, y) ?? null;
   };
 
@@ -78,8 +80,6 @@ export function GameCanvas({ width, height, config, onEngineReady }: GameCanvasP
     const { x, y } = getCanvasCoords(e);
     engineRef.current?.addChemical(x, y, 'repellent');
   };
-
-  void ChemicalType;
 
   return (
     <canvas

@@ -16,6 +16,9 @@ export interface Microbe {
   speedBoostTimer: number;
   flashTimer: number;
   baseSpeed: number;
+  fusing: boolean;
+  fusionTargetId: string | null;
+  fusionProgress: number;
 }
 
 export type ChemicalType = 'attractor' | 'repellent';
@@ -54,9 +57,15 @@ function mixColors(c1: string, c2: string): string {
 function energyToColor(energy: number): string {
   const t = Math.max(0, Math.min(1, energy / 100));
   const r = Math.round(255 * (1 - t));
-  const g = Math.round(107 + 109 * t);
+  const g = Math.round(107 + 148 * t);
   const b = Math.round(107 * (1 - t));
   return `rgb(${r}, ${g}, ${b})`;
+}
+
+function normalizeAngle(angle: number): number {
+  while (angle > Math.PI) angle -= Math.PI * 2;
+  while (angle < -Math.PI) angle += Math.PI * 2;
+  return angle;
 }
 
 export class GameEngine {
@@ -65,25 +74,24 @@ export class GameEngine {
   config: GameConfig;
   width: number;
   height: number;
-  private lastTime: number = 0;
-  private startTime: number = 0;
   maxMicrobeCount: number = 0;
+  private chemicalUpdateTimer: number = 0;
+  private chemicalUpdateInterval: number = 1000 / 15;
+  private lastChemicalUpdate: number = 0;
 
   constructor(width: number, height: number, config: GameConfig) {
     this.width = width;
     this.height = height;
     this.config = config;
-    this.startTime = performance.now();
     this.initMicrobes();
   }
 
   private initMicrobes(): void {
-    const { initialCount, minRadius, maxRadius, minSpeed, maxSpeed, minTurnFrequency, maxTurnFrequency } = this.config.microbe;
+    const { initialCount } = this.config.microbe;
     for (let i = 0; i < initialCount; i++) {
       this.microbes.push(this.createMicrobe());
     }
     this.maxMicrobeCount = this.microbes.length;
-    void minRadius; void maxRadius; void minSpeed; void maxSpeed; void minTurnFrequency; void maxTurnFrequency;
   }
 
   private createMicrobe(x?: number, y?: number, radius?: number, energy?: number, color?: string): Microbe {
@@ -106,6 +114,9 @@ export class GameEngine {
       speedBoostTimer: 0,
       flashTimer: 0,
       baseSpeed: speed,
+      fusing: false,
+      fusionTargetId: null,
+      fusionProgress: 0,
     };
   }
 
@@ -139,12 +150,12 @@ export class GameEngine {
         const conc = (1 - dist / c.radius) * 100;
         if (c.type === 'attractor') {
           attractor = Math.max(attractor, conc);
-          gx += (dx / dist) * conc;
-          gy += (dy / dist) * conc;
+          gx += (dx / dist) * conc * 0.1;
+          gy += (dy / dist) * conc * 0.1;
         } else {
           repellent = Math.max(repellent, conc);
-          gx -= (dx / dist) * conc;
-          gy -= (dy / dist) * conc;
+          gx -= (dx / dist) * conc * 0.1;
+          gy -= (dy / dist) * conc * 0.1;
         }
       }
     }
@@ -153,7 +164,13 @@ export class GameEngine {
 
   update(dt: number): void {
     const now = performance.now();
-    this.chemicals = this.chemicals.filter((c) => now - c.createdAt < c.duration);
+
+    this.chemicalUpdateTimer += dt;
+    if (this.chemicalUpdateTimer >= this.chemicalUpdateInterval) {
+      this.chemicalUpdateTimer = 0;
+      this.lastChemicalUpdate = now;
+      this.chemicals = this.chemicals.filter((c) => now - c.createdAt < c.duration);
+    }
 
     const { speedBoost, speedBoostDuration, highConcentrationThreshold } = this.config.chemical;
     const { bounceSpeedFactor, flashDuration, fusionEnergyThreshold, fusionEnergyFactor, fusionRadiusBonus } = this.config.collision;
@@ -166,22 +183,24 @@ export class GameEngine {
 
       const conc = this.getChemicalConcentration(m.x, m.y);
       const totalConc = Math.max(conc.attractor, conc.repellent);
-      if (totalConc > highConcentrationThreshold) {
+      if (totalConc > highConcentrationThreshold && m.speedBoostTimer <= 0) {
         m.speedBoostTimer = speedBoostDuration;
       }
 
       if (m.turnTimer >= m.turnInterval) {
         m.turnTimer = 0;
         const gMag = Math.sqrt(conc.gradientX * conc.gradientX + conc.gradientY * conc.gradientY);
-        if (gMag > 1) {
+        if (gMag > 0.1) {
           const targetAngle = Math.atan2(conc.gradientY, conc.gradientX);
-          const baseDeflect = conc.attractor >= conc.repellent ? (Math.PI / 4) : (Math.PI / 6);
-          const randomOffset = (Math.random() - 0.5) * (conc.attractor >= conc.repellent ? (Math.PI / 12) : (Math.PI / 9));
-          let newAngle = targetAngle + baseDeflect * (conc.attractor >= conc.repellent ? 1 : -1) + randomOffset;
-          const diff = ((newAngle - m.angle + Math.PI) % (Math.PI * 2)) - Math.PI;
-          m.angle += diff * 0.3;
+          const angleDiff = normalizeAngle(targetAngle - m.angle);
+          const isAttractor = conc.attractor >= conc.repellent;
+          const maxDeflect = isAttractor ? (Math.PI / 4) : (Math.PI / 6);
+          const randomOffset = (Math.random() - 0.5) * (isAttractor ? (Math.PI / 12) : (Math.PI / 9));
+          let deflectAmount = Math.max(-maxDeflect, Math.min(maxDeflect, angleDiff));
+          deflectAmount += randomOffset;
+          m.angle = normalizeAngle(m.angle + deflectAmount);
         } else {
-          m.angle += (Math.random() - 0.5) * Math.PI * 0.5;
+          m.angle = normalizeAngle(m.angle + (Math.random() - 0.5) * Math.PI * 0.6);
         }
       }
 
@@ -212,6 +231,7 @@ export class GameEngine {
 
     const toRemove = new Set<string>();
     const toAdd: Microbe[] = [];
+    const fusingPairs: Map<string, string> = new Map();
 
     for (let i = 0; i < this.microbes.length; i++) {
       for (let j = i + 1; j < this.microbes.length; j++) {
@@ -222,16 +242,40 @@ export class GameEngine {
         const dy = b.y - a.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         const minDist = a.radius + b.radius;
+
+        if (a.energy < fusionEnergyThreshold && b.energy < fusionEnergyThreshold && !a.fusing && !b.fusing) {
+          const attractDist = minDist * 3;
+          if (dist < attractDist && dist > 0.001) {
+            const nx = dx / dist;
+            const ny = dy / dist;
+            const fusionSpeed = 30;
+            a.x += nx * fusionSpeed * (dt / 1000);
+            a.y += ny * fusionSpeed * (dt / 1000);
+            b.x -= nx * fusionSpeed * (dt / 1000);
+            b.y -= ny * fusionSpeed * (dt / 1000);
+            a.angle = Math.atan2(ny, nx);
+            b.angle = Math.atan2(-ny, -nx);
+
+            if (dist < minDist * 0.5) {
+              fusingPairs.set(a.id, b.id);
+            }
+          }
+        }
+
         if (dist < minDist && dist > 0.001) {
           if (a.energy < fusionEnergyThreshold && b.energy < fusionEnergyThreshold) {
-            toRemove.add(a.id);
-            toRemove.add(b.id);
-            const nx = (a.x + b.x) / 2;
-            const ny = (a.y + b.y) / 2;
-            const nr = (a.radius + b.radius) / 2 + fusionRadiusBonus;
-            const ne = (a.energy + b.energy) * fusionEnergyFactor;
-            const nc = mixColors(a.color, b.color);
-            toAdd.push(this.createMicrobe(nx, ny, nr, Math.min(100, ne), nc));
+            if (!toRemove.has(a.id) && !toRemove.has(b.id)) {
+              toRemove.add(a.id);
+              toRemove.add(b.id);
+              const nx = (a.x + b.x) / 2;
+              const ny = (a.y + b.y) / 2;
+              const nr = (a.radius + b.radius) / 2 + fusionRadiusBonus;
+              const ne = Math.min(100, (a.energy + b.energy) * fusionEnergyFactor);
+              const nc = mixColors(a.color, b.color);
+              const newMicrobe = this.createMicrobe(nx, ny, nr, ne, nc);
+              newMicrobe.flashTimer = flashDuration * 2;
+              toAdd.push(newMicrobe);
+            }
           } else {
             const nx = dx / dist;
             const ny = dy / dist;
@@ -248,13 +292,30 @@ export class GameEngine {
             b.vy = ny * bSpeed;
             a.angle = Math.atan2(a.vy, a.vx);
             b.angle = Math.atan2(b.vy, b.vx);
-            a.baseSpeed = aSpeed;
-            b.baseSpeed = bSpeed;
+            a.baseSpeed = Math.max(a.baseSpeed, aSpeed);
+            b.baseSpeed = Math.max(b.baseSpeed, bSpeed);
             a.flashTimer = flashDuration;
             b.flashTimer = flashDuration;
           }
         }
       }
+    }
+
+    for (const [aId, bId] of fusingPairs) {
+      if (toRemove.has(aId) || toRemove.has(bId)) continue;
+      const a = this.microbes.find((m) => m.id === aId);
+      const b = this.microbes.find((m) => m.id === bId);
+      if (!a || !b) continue;
+      toRemove.add(aId);
+      toRemove.add(bId);
+      const nx = (a.x + b.x) / 2;
+      const ny = (a.y + b.y) / 2;
+      const nr = (a.radius + b.radius) / 2 + fusionRadiusBonus;
+      const ne = Math.min(100, (a.energy + b.energy) * fusionEnergyFactor);
+      const nc = mixColors(a.color, b.color);
+      const newMicrobe = this.createMicrobe(nx, ny, nr, ne, nc);
+      newMicrobe.flashTimer = flashDuration * 2;
+      toAdd.push(newMicrobe);
     }
 
     this.microbes = this.microbes.filter((m) => !toRemove.has(m.id) && m.energy > 0);
@@ -263,7 +324,6 @@ export class GameEngine {
     if (this.microbes.length > this.maxMicrobeCount) {
       this.maxMicrobeCount = this.microbes.length;
     }
-    void this.lastTime;
   }
 
   getMicrobeAt(x: number, y: number): Microbe | null {
@@ -283,7 +343,7 @@ export class GameEngine {
     const avgEnergy = count > 0 ? this.microbes.reduce((s, m) => s + m.energy, 0) / count : 0;
     const histogram = new Array(10).fill(0);
     for (const m of this.microbes) {
-      const idx = Math.min(9, Math.floor(m.energy / 10));
+      const idx = Math.min(9, Math.floor(Math.max(0, m.energy) / 10));
       histogram[idx]++;
     }
     const { maxAttractors, maxRepellents } = this.config.chemical;
@@ -292,7 +352,7 @@ export class GameEngine {
     return { count, avgEnergy, attractorsLeft, repellentsLeft, histogram };
   }
 
-  render(ctx: CanvasRenderingContext2D, hoveredMicrobe: Microbe | null, mouseX: number, mouseY: number): void {
+  render(ctx: CanvasRenderingContext2D, hoveredMicrobe: Microbe | null): void {
     ctx.clearRect(0, 0, this.width, this.height);
 
     const now = performance.now();
@@ -318,7 +378,8 @@ export class GameEngine {
       const alpha = Math.max(0, 1 - age / c.duration);
       const color = c.type === 'attractor' ? '0, 255, 136' : '255, 107, 107';
       const gradient = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, c.radius);
-      gradient.addColorStop(0, `rgba(${color}, ${0.5 * alpha})`);
+      gradient.addColorStop(0, `rgba(${color}, ${0.4 * alpha})`);
+      gradient.addColorStop(0.7, `rgba(${color}, ${0.15 * alpha})`);
       gradient.addColorStop(1, `rgba(${color}, 0)`);
       ctx.fillStyle = gradient;
       ctx.beginPath();
@@ -330,27 +391,36 @@ export class GameEngine {
       let displayRadius = m.radius;
       let flashAlpha = 0;
       if (m.flashTimer > 0) {
-        const t = 1 - m.flashTimer / this.config.collision.flashDuration;
+        const t = 1 - m.flashTimer / (this.config.collision.flashDuration * 2);
         displayRadius = m.radius * (1 + 0.5 * (1 - t));
         flashAlpha = 0.8 * (1 - t);
       }
+
       if (flashAlpha > 0) {
-        const glowGradient = ctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, displayRadius * 1.5);
-        glowGradient.addColorStop(0, `rgba(255, 255, 255, ${flashAlpha * 0.5})`);
+        const glowGradient = ctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, displayRadius * 2);
+        glowGradient.addColorStop(0, `rgba(255, 255, 255, ${flashAlpha * 0.6})`);
         glowGradient.addColorStop(1, `rgba(255, 255, 255, 0)`);
         ctx.fillStyle = glowGradient;
         ctx.beginPath();
-        ctx.arc(m.x, m.y, displayRadius * 1.5, 0, Math.PI * 2);
+        ctx.arc(m.x, m.y, displayRadius * 2, 0, Math.PI * 2);
         ctx.fill();
       }
 
       ctx.fillStyle = m.color;
       ctx.shadowColor = m.color;
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 10;
       ctx.beginPath();
       ctx.arc(m.x, m.y, displayRadius, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
+
+      if (m.energy < 30) {
+        ctx.strokeStyle = 'rgba(255, 107, 107, 0.6)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(m.x, m.y, displayRadius + 2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
 
     if (hoveredMicrobe) {
@@ -360,11 +430,15 @@ export class GameEngine {
       const textWidth = ctx.measureText(text).width;
       const labelX = hoveredMicrobe.x + hoveredMicrobe.radius + 8;
       const labelY = hoveredMicrobe.y - 8;
-      ctx.fillStyle = 'rgba(22, 27, 34, 0.9)';
-      ctx.fillRect(labelX - 4, labelY - 12, textWidth + 8, 18);
+      ctx.fillStyle = 'rgba(22, 27, 34, 0.95)';
+      ctx.strokeStyle = 'rgba(0, 255, 136, 0.3)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(labelX - 6, labelY - 14, textWidth + 12, 20, 4);
+      ctx.fill();
+      ctx.stroke();
       ctx.fillStyle = energyColor;
-      ctx.fillText(text, labelX, labelY + 2);
-      void mouseX; void mouseY;
+      ctx.fillText(text, labelX, labelY + 1);
     }
   }
 }
