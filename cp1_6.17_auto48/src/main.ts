@@ -6,6 +6,8 @@ import { ZodiacManager } from './zodiacManager';
 import { UIPanel } from './uiPanel';
 import constellationsData from './data/constellations';
 
+const R = 12;
+
 class StarLegendApp {
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
@@ -28,10 +30,10 @@ class StarLegendApp {
   private sunAngle = 0;
 
   private cameraTarget = new THREE.Vector3(0, 0, 0);
-  private defaultCameraPos = new THREE.Vector3(0, 5, 45);
+  private defaultCameraPos = new THREE.Vector3(0, 4, 30);
 
   private collectedCount = 0;
-  private totalConstellations = 12;
+  private totalConstellations = 13;
   private progressBar: HTMLElement | null = null;
   private progressFill: HTMLElement | null = null;
 
@@ -71,7 +73,7 @@ class StarLegendApp {
   }
 
   private buildZodiacRing() {
-    const ringGeo = new THREE.TorusGeometry(20, 1, 2, 128);
+    const ringGeo = new THREE.TorusGeometry(12, 0.6, 2, 128);
     const ringMat = new THREE.MeshBasicMaterial({
       color: 0x4fc3f7,
       transparent: true,
@@ -463,8 +465,8 @@ class StarLegendApp {
       const progress = Math.min(elapsed / duration, 1);
 
       this.sunAngle = progress * Math.PI * 2;
-      const sunX = 20 * Math.cos(this.sunAngle);
-      const sunZ = 20 * Math.sin(this.sunAngle);
+      const sunX = R * Math.cos(this.sunAngle);
+      const sunZ = R * Math.sin(this.sunAngle);
       const sunY = Math.sin(this.sunAngle * 2) * 0.5;
 
       if (this.sunMarker) {

@@ -60,9 +60,9 @@ export class UIPanel {
         <div class="panel-section">
           <h3 class="section-title">神话传说</h3>
           <div class="mythology-text">
-            <p class="myth-cn">${data.mythology.cn}</p>
+            <p class="myth-cn">${data.mythology.chinese}</p>
             <hr class="myth-divider">
-            <p class="myth-en">${data.mythology.en}</p>
+            <p class="myth-en">${data.mythology.greek}</p>
           </div>
         </div>
         <div class="panel-actions">
@@ -245,48 +245,79 @@ export class UIPanel {
 
     const w = canvas.width;
     const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
 
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const s of data.stars) {
-      minX = Math.min(minX, s.x);
-      maxX = Math.max(maxX, s.x);
-      minY = Math.min(minY, s.y);
-      maxY = Math.max(maxY, s.y);
-    }
+    if (data.sketchPath) {
+      ctx.save();
+      const tokens = data.sketchPath.split(/\s+/);
 
-    const rangeX = maxX - minX || 1;
-    const rangeY = maxY - minY || 1;
-    const scale = Math.min((w - 60) / rangeX, (h - 60) / rangeY);
-    const offsetX = (w - rangeX * scale) / 2;
-    const offsetY = (h - rangeY * scale) / 2;
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (let i = 0; i < tokens.length; i++) {
+        const cmd = tokens[i];
+        if (cmd === 'M' || cmd === 'L') {
+          const x = parseFloat(tokens[++i]);
+          const y = parseFloat(tokens[++i]);
+          minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+          minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+        } else if (cmd === 'C') {
+          for (let k = 0; k < 3; k++) {
+            const x = parseFloat(tokens[++i]);
+            const y = parseFloat(tokens[++i]);
+            minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+            minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+          }
+        }
+      }
 
-    const mapX = (x: number) => offsetX + (x - minX) * scale;
-    const mapY = (y: number) => h - (offsetY + (y - minY) * scale);
+      const padding = 20;
+      const rw = maxX - minX;
+      const rh = maxY - minY;
+      const scale = Math.min((w - padding * 2) / rw, (h - padding * 2) / rh);
+      const tx = padding - minX * scale + (w - padding * 2 - rw * scale) / 2;
+      const ty = padding - minY * scale + (h - padding * 2 - rh * scale) / 2;
 
-    ctx.strokeStyle = '#81D4FA';
-    ctx.lineWidth = 1.5;
-    ctx.shadowColor = '#81D4FA';
-    ctx.shadowBlur = 4;
+      ctx.translate(tx, ty);
+      ctx.scale(scale, scale);
 
-    for (const [a, b] of data.lines) {
+      ctx.strokeStyle = '#81D4FA';
+      ctx.lineWidth = 1.5 / scale;
+      ctx.shadowColor = '#81D4FA';
+      ctx.shadowBlur = 4;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
       ctx.beginPath();
-      ctx.moveTo(mapX(data.stars[a].x), mapY(data.stars[a].y));
-      ctx.lineTo(mapX(data.stars[b].x), mapY(data.stars[b].y));
+      for (let i = 0; i < tokens.length; i++) {
+        const cmd = tokens[i];
+        if (cmd === 'M') {
+          const x = parseFloat(tokens[++i]);
+          const y = parseFloat(tokens[++i]);
+          ctx.moveTo(x, y);
+        } else if (cmd === 'L') {
+          const x = parseFloat(tokens[++i]);
+          const y = parseFloat(tokens[++i]);
+          ctx.lineTo(x, y);
+        } else if (cmd === 'C') {
+          const cp1x = parseFloat(tokens[++i]); const cp1y = parseFloat(tokens[++i]);
+          const cp2x = parseFloat(tokens[++i]); const cp2y = parseFloat(tokens[++i]);
+          const x = parseFloat(tokens[++i]); const y = parseFloat(tokens[++i]);
+          ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x, y);
+        }
+      }
       ctx.stroke();
-    }
+      ctx.restore();
 
-    ctx.shadowBlur = 0;
-    for (const s of data.stars) {
-      const radius = Math.max(2, 5 - s.magnitude);
-      ctx.fillStyle = '#FFE082';
-      ctx.beginPath();
-      ctx.arc(mapX(s.x), mapY(s.y), radius, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = 'rgba(255,255,255,0.5)';
-      ctx.beginPath();
-      ctx.arc(mapX(s.x), mapY(s.y), radius * 0.4, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.save();
+      for (let i = 0; i < 30; i++) {
+        const px = 20 + Math.random() * (w - 40);
+        const py = 20 + Math.random() * (h - 40);
+        const r = 0.8 + Math.random() * 1.5;
+        ctx.fillStyle = 'rgba(255, 224, 130,' + (0.3 + Math.random() * 0.4) + ')';
+        ctx.beginPath();
+        ctx.arc(px, py, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
     }
   }
 
