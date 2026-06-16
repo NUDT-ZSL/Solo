@@ -1,17 +1,64 @@
 import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import type { TourCity } from '../types';
-import { popularityToColor, optimizeRoute } from '../utils/routeOptimizer';
+import { optimizeRoute } from '../utils/routeOptimizer';
 import { useEffect } from 'react';
 import dayjs from 'dayjs';
 
+function getAbbr(name: string): string {
+  const chinese = name.match(/[\u4e00-\u9fa5]/g);
+  if (chinese && chinese.length >= 2) return chinese.slice(0, 2).join('');
+  return name.slice(0, 2);
+}
+
 function CityMarkerDiv({ city, onRemove }: { city: TourCity; onRemove?: (id: string) => void }) {
-  const color = popularityToColor(city.popularity);
+  const abbr = getAbbr(city.name);
   const icon = L.divIcon({
-    className: 'custom-marker',
-    html: `<div class="city-marker" style="background:${color}"><div class="city-marker-label">${city.name} · ${dayjs(city.date).format('MM/DD')}</div></div>`,
-    iconSize: [16, 16],
-    iconAnchor: [8, 8]
+    className: '',
+    html: `
+      <div style="
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: #ff6b6b;
+        border: 2px solid #ffffff;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 11px;
+        font-weight: 600;
+        animation: bounceIn 0.5s ease;
+        position: relative;
+        cursor: pointer;
+      ">
+        ${abbr}
+        <div style="
+          position: absolute;
+          bottom: calc(100% + 6px);
+          left: 50%;
+          transform: translateX(-50%);
+          background: #1e293b;
+          padding: 4px 10px;
+          border-radius: 6px;
+          font-size: 12px;
+          white-space: nowrap;
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.2s ease-out;
+          color: #f1f5f9;
+          font-weight: 500;
+        " class="marker-tooltip">
+          ${city.name} · ${dayjs(city.date).format('MM/DD')}
+        </div>
+      </div>
+      <style>
+        .leaflet-marker-icon:hover .marker-tooltip { opacity: 1 !important; }
+      </style>
+    `,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16]
   });
 
   const handleContextMenu = () => {
@@ -92,8 +139,8 @@ export default function TourMap({ cities, onMapClick, onRemoveCity, height = '45
         )}
       </MapContainer>
       <div className="map-controls">
-        <div className="map-control-btn" title="城市热度：绿色→红色" style={{ background: 'linear-gradient(135deg,#22c55e,#ef4444)' }}>
-          🔥
+        <div className="map-control-btn" title="点击地图添加城市 · 右键标记移除" style={{ background: 'rgba(255,107,107,0.9)' }}>
+          �
         </div>
       </div>
     </div>

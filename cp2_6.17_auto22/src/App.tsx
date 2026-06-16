@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import Header from './components/Header';
 import FavoriteSidebar from './components/FavoriteSidebar';
 import HomePage from './pages/HomePage';
@@ -7,6 +8,14 @@ import TourPage from './pages/TourPage';
 import ArtistCard from './components/ArtistCard';
 import { useStore } from './store/useStore';
 import { useFavorites } from './hooks/useData';
+
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+  }, [pathname]);
+  return null;
+}
 
 function MobileBottomNav() {
   return (
@@ -49,6 +58,7 @@ export default function App() {
   const { sidebarOpen } = useStore();
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <div className="app-layout">
         <div className="main-content" style={{ marginRight: sidebarOpen ? '320px' : '0' }}>
           <Header />

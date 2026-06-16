@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import type { Song } from '../types';
 
 interface Props {
@@ -15,9 +15,6 @@ export default function SongCard({ song }: Props) {
   const toggleExpand = () => {
     const next = !expanded;
     setExpanded(next);
-    if (contentRef.current) {
-      contentRef.current.style.maxHeight = next ? `${contentRef.current.scrollHeight}px` : '0px';
-    }
   };
 
   return (
@@ -31,8 +28,7 @@ export default function SongCard({ song }: Props) {
       </div>
       <div
         ref={contentRef}
-        className="lyrics-content"
-        style={{ maxHeight: '0px' }}
+        className={'lyrics-content ' + (expanded ? 'lyrics-expanded' : 'lyrics-collapsed')}
       >
         <div className="lyrics-text">{song.lyrics}</div>
       </div>
