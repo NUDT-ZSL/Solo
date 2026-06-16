@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { PetStats, PetAction, FloatingText } from './types';
 import PetDisplay from './PetDisplay';
 import ControlPanel from './ControlPanel';
+import './App.css';
 
 const INITIAL_STATS: PetStats = {
   health: 100,
@@ -46,7 +47,7 @@ const App: React.FC = () => {
   const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([]);
   const [isDead, setIsDead] = useState(false);
   const floatingIdRef = useRef(0);
-  const lastTimeRef = useRef<number>(performance.now());
+  const lastTimeRef = useRef<number | null>(null);
   const actionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const addFloatingText = useCallback((type: keyof PetStats, value: number) => {
@@ -84,10 +85,19 @@ const App: React.FC = () => {
 
   useEffect(() => {
     let animationFrameId: number;
+    lastTimeRef.current = performance.now();
 
     const gameLoop = (currentTime: number) => {
+      if (lastTimeRef.current === null) {
+        lastTimeRef.current = currentTime;
+      }
       const deltaTime = (currentTime - lastTimeRef.current) / 1000;
       lastTimeRef.current = currentTime;
+
+      if (deltaTime > 0.1) {
+        animationFrameId = requestAnimationFrame(gameLoop);
+        return;
+      }
 
       setStats((prev) => {
         if (prev.health <= 0) return prev;
@@ -127,46 +137,44 @@ const App: React.FC = () => {
   }, [stats.health, isDead]);
 
   const renderProgressBar = (key: keyof PetStats) => (
-    <div key={key} style={styles.statRow}>
-      <span style={styles.statLabel}>{STAT_LABELS[key]}</span>
-      <div style={styles.progressBar}>
+    <div key={key} className="stat-row">
+      <span className="stat-label">{STAT_LABELS[key]}</span>
+      <div className="progress-bar">
         <div
+          className="progress-fill"
           style={{
-            ...styles.progressFill,
             width: `${stats[key]}%`,
             background: STAT_COLORS[key],
           }}
         />
       </div>
-      <span style={styles.statValue}>{Math.floor(stats[key])}</span>
+      <span className="stat-value">{Math.floor(stats[key])}</span>
     </div>
   );
 
   const getFloatingTextColor = (type: keyof PetStats) => STAT_COLORS[type];
 
   return (
-    <div style={styles.page}>
-      <div style={styles.gameContainer}>
-        <h1 style={styles.title}>像素小怪兽</h1>
+    <div className="page">
+      <div className="game-container">
+        <h1 className="title-text">像素小怪兽</h1>
 
-        <div style={styles.petArea}>
+        <div className="pet-area">
           <PetDisplay stats={stats} currentAction={currentAction} isDead={isDead} />
 
-          <div style={styles.floatingContainer}>
+          <div className="floating-container">
             {floatingTexts.map((ft) => (
               <div
                 key={ft.id}
-                style={{
-                  ...styles.floatingText,
-                  color: getFloatingTextColor(ft.type),
-                }}
+                className="floating-text"
+                style={{ color: getFloatingTextColor(ft.type) }}
               >
                 +{ft.value}
               </div>
             ))}
           </div>
 
-          <div style={styles.statsContainer}>
+          <div className="stats-container">
             {(Object.keys(INITIAL_STATS) as (keyof PetStats)[]).map(renderProgressBar)}
           </div>
         </div>
@@ -174,152 +182,16 @@ const App: React.FC = () => {
         <ControlPanel onAction={handleAction} stats={stats} isDead={isDead} />
 
         {isDead && (
-          <div style={styles.deathOverlay}>
-            <p style={styles.deathText}>你的小怪兽已离开...</p>
-            <button style={styles.restartButton} onClick={() => window.location.reload()}>
+          <div className="death-overlay">
+            <p className="death-text">你的小怪兽已离开...</p>
+            <button className="pixel-btn restart-btn" onClick={() => window.location.reload()}>
               重新开始
             </button>
           </div>
         )}
       </div>
-
-      <style>{`
-        @keyframes floatUpFade {
-          0% { transform: translateY(0); opacity: 1; }
-          100% { transform: translateY(-40px); opacity: 0; }
-        }
-        @media (max-width: 480px) {
-          .game-container {
-            width: 95% !important;
-          }
-          .title-text {
-            font-size: 0.8em !important;
-          }
-          .stat-label, .stat-value {
-            font-size: 0.6em !important;
-          }
-        }
-      `}</style>
     </div>
   );
-};
-
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: '100vh',
-    width: '100%',
-    background: '#8BAC0F',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    margin: 0,
-    padding: '20px',
-    boxSizing: 'border-box',
-    fontFamily: "'Press Start 2P', cursive",
-  },
-  gameContainer: {
-    width: '350px',
-    background: '#9BBC0F',
-    border: '4px solid #306230',
-    padding: '20px',
-    position: 'relative',
-  },
-  title: {
-    fontFamily: "'Press Start 2P', cursive",
-    fontSize: '16px',
-    color: '#0F380F',
-    textAlign: 'center',
-    marginBottom: '20px',
-    marginTop: 0,
-  },
-  petArea: {
-    background: '#8BAC0F',
-    border: '4px solid #306230',
-    padding: '16px',
-    position: 'relative',
-  },
-  floatingContainer: {
-    position: 'absolute',
-    top: '60px',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    pointerEvents: 'none',
-    zIndex: 10,
-  },
-  floatingText: {
-    fontFamily: "'Press Start 2P', cursive",
-    fontSize: '14px',
-    fontWeight: 'bold',
-    animation: 'floatUpFade 0.6s ease-out forwards',
-    position: 'absolute',
-    whiteSpace: 'nowrap',
-  },
-  statsContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-    marginTop: '8px',
-  },
-  statRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  statLabel: {
-    fontFamily: "'Press Start 2P', cursive",
-    fontSize: '8px',
-    color: '#0F380F',
-    width: '60px',
-    flexShrink: 0,
-  },
-  progressBar: {
-    width: '250px',
-    height: '12px',
-    background: '#306230',
-    position: 'relative',
-    overflow: 'hidden',
-    flexGrow: 1,
-  },
-  progressFill: {
-    height: '100%',
-    transition: 'width 0.5s ease',
-  },
-  statValue: {
-    fontFamily: "'Press Start 2P', cursive",
-    fontSize: '8px',
-    color: '#0F380F',
-    width: '30px',
-    textAlign: 'right',
-    flexShrink: 0,
-  },
-  deathOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: 'rgba(15, 56, 15, 0.9)',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '20px',
-  },
-  deathText: {
-    fontFamily: "'Press Start 2P', cursive",
-    fontSize: '12px',
-    color: '#E74C3C',
-  },
-  restartButton: {
-    fontFamily: "'Press Start 2P', cursive",
-    fontSize: '10px',
-    padding: '12px 24px',
-    background: '#306230',
-    color: '#8BAC0F',
-    border: '3px solid #0F380F',
-    cursor: 'pointer',
-    borderRadius: 0,
-  },
 };
 
 export default App;
