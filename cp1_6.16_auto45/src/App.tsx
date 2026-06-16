@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { SceneModule } from './components/SceneModule';
 import { UIPanel } from './components/UIPanel';
 import { logicModule } from './logic/LogicModule';
@@ -10,8 +10,6 @@ function App() {
   const [furnitureTemplates, setFurnitureTemplates] = useState<FurnitureTemplate[]>([]);
   const [lightingPresets, setLightingPresets] = useState<LightingPreset[]>([]);
   const [loading, setLoading] = useState(true);
-  const placingInstanceIdRef = useRef<string | null>(null);
-  const fpsRef = useRef({ frames: 0, lastTime: performance.now() });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -47,55 +45,14 @@ function App() {
   useEffect(() => {
     const unsubscribe = logicModule.subscribe(() => {
       setFurnitureList([...logicModule.getFurnitureList()]);
-      setLightingConfig(logicModule.getCurrentLighting());
+      setLightingConfig(logicModule.getCurrentLighting() ? { ...logicModule.getCurrentLighting()! } : null);
     });
 
     setFurnitureList([...logicModule.getFurnitureList()]);
-    setLightingConfig(logicModule.getCurrentLighting());
+    const lighting = logicModule.getCurrentLighting();
+    setLightingConfig(lighting ? { ...lighting } : null);
 
     return unsubscribe;
-  }, []);
-
-  useEffect(() => {
-    const updateFPS = () => {
-      fpsRef.current.frames++;
-      const now = performance.now();
-      if (now - fpsRef.current.lastTime >= 1000) {
-        const fpsElement = document.getElementById('fps-counter');
-        if (fpsElement) {
-          fpsElement.textContent = fpsRef.current.frames.toString();
-        }
-        fpsRef.current.frames = 0;
-        fpsRef.current.lastTime = now;
-      }
-      requestAnimationFrame(updateFPS);
-    };
-
-    const animationId = requestAnimationFrame(updateFPS);
-    return () => cancelAnimationFrame(animationId);
-  }, []);
-
-  const handleDragStart = useCallback((templateId: string) => {
-    const instance = logicModule.createPlacingInstance(templateId, { x: 0, z: 0 });
-    if (instance) {
-      placingInstanceIdRef.current = instance.instanceId;
-    }
-  }, []);
-
-  const handleCanvasDragOver = useCallback((point: { x: number; z: number }) => {
-    if (placingInstanceIdRef.current) {
-      logicModule.updatePlacingPosition(placingInstanceIdRef.current, point);
-    }
-  }, []);
-
-  const handleCanvasClick = useCallback((point: { x: number; z: number }) => {
-  }, []);
-
-  const handleDrop = useCallback(() => {
-    if (placingInstanceIdRef.current) {
-      logicModule.finalizePlacement(placingInstanceIdRef.current);
-      placingInstanceIdRef.current = null;
-    }
   }, []);
 
   const handleLightingChange = useCallback((presetId: string) => {
@@ -128,15 +85,11 @@ function App() {
         furnitureList={furnitureList}
         lightingConfig={lightingConfig}
         roomBounds={logicModule.getRoomBounds()}
-        onCanvasClick={handleCanvasClick}
-        onCanvasDragOver={handleCanvasDragOver}
-        onDrop={handleDrop}
       />
       <UIPanel
         furnitureTemplates={furnitureTemplates}
         lightingPresets={lightingPresets}
         currentLightingId={lightingConfig?.id || ''}
-        onDragStart={handleDragStart}
         onLightingChange={handleLightingChange}
       />
     </div>

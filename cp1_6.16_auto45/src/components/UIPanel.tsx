@@ -1,11 +1,11 @@
 import { useState, useCallback } from 'react';
 import type { FurnitureTemplate, LightingPreset } from '../logic/LogicModule';
+import { logicModule } from '../logic/LogicModule';
 
 interface UIPanelProps {
   furnitureTemplates: FurnitureTemplate[];
   lightingPresets: LightingPreset[];
   currentLightingId: string;
-  onDragStart: (templateId: string) => void;
   onLightingChange: (presetId: string) => void;
 }
 
@@ -26,7 +26,6 @@ export function UIPanel({
   furnitureTemplates,
   lightingPresets,
   currentLightingId,
-  onDragStart,
   onLightingChange,
 }: UIPanelProps) {
   const [pulsingButton, setPulsingButton] = useState<string | null>(null);
@@ -34,8 +33,15 @@ export function UIPanel({
   const handleDragStart = useCallback((e: React.DragEvent, templateId: string) => {
     e.dataTransfer.setData('furnitureTemplateId', templateId);
     e.dataTransfer.effectAllowed = 'copy';
-    onDragStart(templateId);
-  }, [onDragStart]);
+    logicModule.startDrag(templateId);
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    const dragState = logicModule.getDragState();
+    if (dragState.isDragging) {
+      logicModule.cancelDrag();
+    }
+  }, []);
 
   const handleLightingClick = useCallback((presetId: string) => {
     setPulsingButton(presetId);
@@ -80,6 +86,7 @@ export function UIPanel({
               key={template.id}
               draggable
               onDragStart={(e) => handleDragStart(e, template.id)}
+              onDragEnd={handleDragEnd}
               style={furnitureCardStyle}
             >
               <div style={{ fontSize: '28px', marginBottom: '8px' }}>

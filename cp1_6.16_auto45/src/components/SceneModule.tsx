@@ -1,16 +1,14 @@
-import { useRef, useMemo, useEffect, useState } from 'react';
+import { useRef, useMemo, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
+import { logicModule } from '../logic/LogicModule';
 import type { PlacedFurniture, LightingConfig } from '../logic/LogicModule';
 
 interface SceneModuleProps {
   furnitureList: PlacedFurniture[];
   lightingConfig: LightingConfig | null;
   roomBounds: { width: number; depth: number; height: number };
-  onCanvasClick: (point: { x: number; z: number }) => void;
-  onCanvasDragOver: (point: { x: number; z: number }) => void;
-  onDrop: () => void;
 }
 
 function generateWoodTexture(): THREE.CanvasTexture {
@@ -19,8 +17,7 @@ function generateWoodTexture(): THREE.CanvasTexture {
   canvas.height = 512;
   const ctx = canvas.getContext('2d')!;
 
-  const baseColor = '#D5B98A';
-  ctx.fillStyle = baseColor;
+  ctx.fillStyle = '#D5B98A';
   ctx.fillRect(0, 0, 512, 512);
 
   for (let i = 0; i < 512; i += 4) {
@@ -54,6 +51,20 @@ function generateWoodTexture(): THREE.CanvasTexture {
   return texture;
 }
 
+function easeOutBack(x: number): number {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+}
+
+function easeInOutQuad(x: number): number {
+  return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
 function Room({ roomBounds }: { roomBounds: { width: number; depth: number; height: number } }) {
   const woodTexture = useMemo(() => generateWoodTexture(), []);
 
@@ -63,27 +74,22 @@ function Room({ roomBounds }: { roomBounds: { width: number; depth: number; heig
         <planeGeometry args={[roomBounds.width, roomBounds.depth]} />
         <meshStandardMaterial map={woodTexture} roughness={0.8} />
       </mesh>
-
       <mesh receiveShadow position={[0, roomBounds.height, 0]} rotation={[Math.PI / 2, 0, 0]}>
         <planeGeometry args={[roomBounds.width, roomBounds.depth]} />
         <meshStandardMaterial color="#FDFEFE" />
       </mesh>
-
       <mesh receiveShadow position={[0, roomBounds.height / 2, -roomBounds.depth / 2]}>
         <planeGeometry args={[roomBounds.width, roomBounds.height]} />
         <meshStandardMaterial color="#EAECEE" side={THREE.DoubleSide} />
       </mesh>
-
       <mesh receiveShadow position={[0, roomBounds.height / 2, roomBounds.depth / 2]}>
         <planeGeometry args={[roomBounds.width, roomBounds.height]} />
         <meshStandardMaterial color="#EAECEE" side={THREE.DoubleSide} />
       </mesh>
-
       <mesh receiveShadow position={[-roomBounds.width / 2, roomBounds.height / 2, 0]} rotation={[0, Math.PI / 2, 0]}>
         <planeGeometry args={[roomBounds.depth, roomBounds.height]} />
         <meshStandardMaterial color="#EAECEE" side={THREE.DoubleSide} />
       </mesh>
-
       <mesh receiveShadow position={[roomBounds.width / 2, roomBounds.height / 2, 0]} rotation={[0, Math.PI / 2, 0]}>
         <planeGeometry args={[roomBounds.depth, roomBounds.height]} />
         <meshStandardMaterial color="#EAECEE" side={THREE.DoubleSide} />
@@ -92,20 +98,71 @@ function Room({ roomBounds }: { roomBounds: { width: number; depth: number; heig
   );
 }
 
-function FurnitureMesh({ furniture }: { furniture: PlacedFurniture }) {
-  const meshRef = useRef<THREE.Group>(null);
-  const [hovered, setHovered] = useState(false);
+function DragProjection() {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const materialRef = useRef<THREE.MeshBasicMaterial>(null);
 
   useFrame(() => {
-    if (meshRef.current) {
-      const scale = furniture.isPlacing ? 1 : (0.9 + furniture.placementProgress * 0.1);
-      meshRef.current.scale.setScalar(scale);
-      meshRef.current.position.set(
-        furniture.position.x,
-        furniture.position.y,
-        furniture.position.z
-      );
+    const dragState = logicModule.getDragState();
+    if (!meshRef.current || !materialRef.current) return;
+
+    if (!dragState.isDragging || !dragState.projectionPosition || !dragState.projectionDimensions) {
+      meshRef.current.visible = false;
+      return;
     }
+
+    meshRef.current.visible = true;
+    meshRef.current.position.set(dragState.projectionPosition.x, 0.02, dragState.projectionPosition.z);
+    meshRef.current.scale.set(dragState.projectionDimensions.width, dragState.projectionDimensions.depth, 1);
+
+    const elapsed = performance.now() - dragState.dragStartTime;
+    const targetOpacity = 0.5;
+    const transitionDuration = 200;
+    materialRef.current.opacity = Math.min(targetOpacity, (elapsed / transitionDuration) * targetOpacity);
+  });
+
+  return (
+    <mesh ref={meshRef} rotation={[-Math.PI / 2, 0, 0]} visible={false}>
+      <planeGeometry args={[1, 1]} />
+      <meshBasicMaterial
+        ref={materialRef}
+        color="#3498DB"
+        transparent
+        opacity={0}
+        depthWrite={false}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  );
+}
+
+function FurnitureMesh({ furniture }: { furniture: PlacedFurniture }) {
+  const meshRef = useRef<THREE.Group>(null);
+
+  useFrame(() => {
+    if (!meshRef.current) return;
+
+    if (furniture.animating) {
+      const elapsed = performance.now() - furniture.animationStartTime;
+      const duration = 300;
+      const progress = Math.min(1, elapsed / duration);
+      const eased = easeOutBack(progress);
+      const scale = 0.9 + eased * 0.1;
+      meshRef.current.scale.setScalar(scale);
+
+      if (progress >= 1) {
+        furniture.animating = false;
+        meshRef.current.scale.setScalar(1);
+      }
+    } else {
+      meshRef.current.scale.setScalar(furniture.isPlacing ? 1 : 1);
+    }
+
+    meshRef.current.position.set(
+      furniture.position.x,
+      furniture.position.y,
+      furniture.position.z
+    );
   });
 
   const opacity = furniture.isPlacing ? 0.7 : 1;
@@ -201,44 +258,86 @@ function FurnitureMesh({ furniture }: { furniture: PlacedFurniture }) {
   };
 
   return (
-    <group
-      ref={meshRef}
-      onPointerOver={() => setHovered(true)}
-      onPointerOut={() => setHovered(false)}
-    >
+    <group ref={meshRef}>
       {furniture.isPlacing && (
         <mesh position={[0, -furniture.position.y + 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <planeGeometry args={[dims.width, dims.depth]} />
-          <meshBasicMaterial color="#3498DB" transparent opacity={0.5} />
+          <meshBasicMaterial color="#3498DB" transparent opacity={0.3} depthWrite={false} />
         </mesh>
       )}
       {renderGeometry()}
-      {hovered && !furniture.isPlacing && (
-        <mesh position={[0, -furniture.position.y + 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[Math.max(dims.width, dims.depth) * 0.6, Math.max(dims.width, dims.depth) * 0.7, 32]} />
-          <meshBasicMaterial color="#3498DB" transparent opacity={0.5} side={THREE.DoubleSide} />
-        </mesh>
-      )}
     </group>
   );
 }
 
-function Lighting({ config, shadowMapSize, shadowRadius }: {
-  config: LightingConfig | null;
-  shadowMapSize: number;
-  shadowRadius: number;
-}) {
-  const directionalRef = useRef<THREE.DirectionalLight>(null);
+function Lighting({ config }: { config: LightingConfig | null }) {
   const ambientRef = useRef<THREE.AmbientLight>(null);
+  const directionalRef = useRef<THREE.DirectionalLight>(null);
   const candleRef = useRef<THREE.PointLight>(null);
+  const fromAmbientColorRef = useRef(new THREE.Color());
+  const fromDirectionalColorRef = useRef(new THREE.Color());
+  const toAmbientColorRef = useRef(new THREE.Color());
+  const toDirectionalColorRef = useRef(new THREE.Color());
 
-  useFrame((_, delta) => {
+  useFrame(() => {
+    const transition = logicModule.getLightingTransition();
+
+    if (transition && transition.active) {
+      const elapsed = performance.now() - transition.startTime;
+      const progress = Math.min(1, elapsed / transition.duration);
+      const eased = easeInOutQuad(progress);
+
+      if (ambientRef.current) {
+        fromAmbientColorRef.current.set(transition.fromAmbientColor);
+        toAmbientColorRef.current.set(transition.toAmbientColor);
+        ambientRef.current.intensity = lerp(transition.fromAmbientIntensity, transition.toAmbientIntensity, eased);
+        ambientRef.current.color.copy(fromAmbientColorRef.current).lerp(toAmbientColorRef.current, eased);
+      }
+
+      if (directionalRef.current) {
+        fromDirectionalColorRef.current.set(transition.fromDirectionalColor);
+        toDirectionalColorRef.current.set(transition.toDirectionalColor);
+        directionalRef.current.intensity = lerp(transition.fromDirectionalIntensity, transition.toDirectionalIntensity, eased);
+        directionalRef.current.color.copy(fromDirectionalColorRef.current).lerp(toDirectionalColorRef.current, eased);
+      }
+
+      if (candleRef.current) {
+        if (transition.toHasCandleLight) {
+          candleRef.current.intensity = lerp(0, 0.2, eased);
+        } else if (transition.fromHasCandleLight) {
+          candleRef.current.intensity = lerp(0.2, 0, eased);
+        }
+      }
+
+      if (progress >= 1) {
+        transition.active = false;
+        logicModule.clearLightingTransition();
+      }
+    } else {
+      if (ambientRef.current && config) {
+        ambientRef.current.intensity = config.ambientIntensity;
+        ambientRef.current.color.set(config.ambientColor);
+      }
+      if (directionalRef.current && config) {
+        directionalRef.current.intensity = config.directionalIntensity;
+        directionalRef.current.color.set(config.directionalColor);
+      }
+    }
+
     if (candleRef.current && config?.hasCandleLight) {
-      candleRef.current.intensity = 0.3 + Math.sin(Date.now() * 0.005) * 0.1 + Math.sin(Date.now() * 0.013) * 0.05;
+      if (!transition?.active) {
+        const flicker = Math.sin(Date.now() * 0.005) * 0.05
+          + Math.sin(Date.now() * 0.013) * 0.03
+          + (Math.random() - 0.5) * 0.04;
+        candleRef.current.intensity = Math.max(0.1, Math.min(0.3, 0.2 + flicker));
+      }
     }
   });
 
   if (!config) return null;
+
+  const shadowMapSize = config.shadowSoftness === 'sharp' ? 2048 : 1024;
+  const shadowRadius = config.shadowSoftness === 'soft' ? 4 : 0;
 
   return (
     <>
@@ -268,7 +367,7 @@ function Lighting({ config, shadowMapSize, shadowRadius }: {
         <pointLight
           ref={candleRef}
           color="#FF8C00"
-          intensity={0.3}
+          intensity={0.2}
           distance={8}
           position={[0, 1, 0]}
         />
@@ -277,81 +376,95 @@ function Lighting({ config, shadowMapSize, shadowRadius }: {
   );
 }
 
-function SceneContent({
-  furnitureList,
-  lightingConfig,
-  roomBounds,
-  onCanvasClick,
-  onCanvasDragOver,
-  onDrop,
-  shadowMapSize,
-  shadowRadius,
-}: SceneModuleProps & { shadowMapSize: number; shadowRadius: number }) {
+function FPSMonitor() {
+  const frameCountRef = useRef(0);
+  const lastTimeRef = useRef(performance.now());
+
+  useFrame(() => {
+    frameCountRef.current++;
+    const now = performance.now();
+    if (now - lastTimeRef.current >= 1000) {
+      const el = document.getElementById('fps-counter');
+      if (el) {
+        el.textContent = frameCountRef.current.toString();
+      }
+      frameCountRef.current = 0;
+      lastTimeRef.current = now;
+    }
+  });
+
+  return null;
+}
+
+function SceneContent({ furnitureList, lightingConfig, roomBounds }: SceneModuleProps) {
   const { raycaster, camera } = useThree();
-  const planeRef = useRef<THREE.Plane>(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
-  const isDraggingRef = useRef(false);
+  const planeRef = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
 
   useEffect(() => {
-    const handleDragOver = (e: DragEvent) => {
-      e.preventDefault();
-      isDraggingRef.current = true;
-      updateDragPosition(e);
-    };
-
-    const handleDragLeave = () => {
-      isDraggingRef.current = false;
-    };
-
-    const handleDrop = (e: DragEvent) => {
-      e.preventDefault();
-      isDraggingRef.current = false;
-      updateDragPosition(e);
-      onDrop();
-    };
-
-    const updateDragPosition = (e: DragEvent | MouseEvent) => {
+    const updateDragPosition = (clientX: number, clientY: number) => {
       const canvas = document.querySelector('canvas');
       if (!canvas) return;
 
       const rect = canvas.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      const x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
       raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
       const intersectPoint = new THREE.Vector3();
       raycaster.ray.intersectPlane(planeRef.current, intersectPoint);
 
       if (intersectPoint) {
-        onCanvasDragOver({ x: intersectPoint.x, z: intersectPoint.z });
+        logicModule.updateDragPosition(intersectPoint.x, intersectPoint.z);
+      }
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.clientX !== undefined) {
+        updateDragPosition(e.clientX, e.clientY);
+      }
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.clientX !== undefined) {
+        updateDragPosition(e.clientX, e.clientY);
+      }
+      logicModule.endDrag();
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      const canvas = document.querySelector('canvas');
+      if (canvas && !canvas.contains(e.relatedTarget as Node)) {
+        logicModule.cancelDrag();
       }
     };
 
     const canvas = document.querySelector('canvas');
     if (canvas) {
       canvas.addEventListener('dragover', handleDragOver);
-      canvas.addEventListener('dragleave', handleDragLeave);
       canvas.addEventListener('drop', handleDrop);
-      canvas.addEventListener('mousemove', (e) => {
-        if (isDraggingRef.current) updateDragPosition(e);
-      });
+      canvas.addEventListener('dragleave', handleDragLeave);
     }
 
     return () => {
       if (canvas) {
         canvas.removeEventListener('dragover', handleDragOver);
-        canvas.removeEventListener('dragleave', handleDragLeave);
         canvas.removeEventListener('drop', handleDrop);
+        canvas.removeEventListener('dragleave', handleDragLeave);
       }
     };
-  }, [raycaster, camera, onCanvasDragOver, onDrop]);
+  }, [raycaster, camera]);
 
   return (
     <>
-      <Lighting config={lightingConfig} shadowMapSize={shadowMapSize} shadowRadius={shadowRadius} />
+      <Lighting config={lightingConfig} />
       <Room roomBounds={roomBounds} />
+      <DragProjection />
       {furnitureList.map((furniture) => (
         <FurnitureMesh key={furniture.instanceId} furniture={furniture} />
       ))}
+      <FPSMonitor />
       <OrbitControls
         enablePan={true}
         enableZoom={true}
@@ -366,9 +479,6 @@ function SceneContent({
 }
 
 export function SceneModule(props: SceneModuleProps) {
-  const shadowMapSize = props.lightingConfig?.shadowSoftness === 'sharp' ? 2048 : 1024;
-  const shadowRadius = props.lightingConfig?.shadowSoftness === 'soft' ? 4 : 0;
-
   return (
     <Canvas
       shadows
@@ -378,7 +488,7 @@ export function SceneModule(props: SceneModuleProps) {
     >
       <color attach="background" args={['#1a1a2e']} />
       <fog attach="fog" args={['#1a1a2e', 20, 50]} />
-      <SceneContent {...props} shadowMapSize={shadowMapSize} shadowRadius={shadowRadius} />
+      <SceneContent {...props} />
     </Canvas>
   );
 }

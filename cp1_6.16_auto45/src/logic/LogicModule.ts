@@ -21,7 +21,8 @@ export interface PlacedFurniture {
   template: FurnitureTemplate;
   position: { x: number; y: number; z: number };
   isPlacing: boolean;
-  placementProgress: number;
+  animating: boolean;
+  animationStartTime: number;
 }
 
 export interface LightingConfig {
@@ -33,7 +34,6 @@ export interface LightingConfig {
   directionalIntensity: number;
   shadowSoftness: 'soft' | 'sharp';
   hasCandleLight: boolean;
-  transitionProgress: number;
 }
 
 export interface LightingPreset {
@@ -45,6 +45,31 @@ export interface LightingPreset {
   directionalIntensity: number;
   shadowSoftness: 'soft' | 'sharp';
   hasCandleLight?: boolean;
+}
+
+export interface DragState {
+  isDragging: boolean;
+  templateId: string | null;
+  instanceId: string | null;
+  projectionPosition: { x: number; z: number } | null;
+  projectionDimensions: { width: number; depth: number } | null;
+  dragStartTime: number;
+}
+
+export interface LightingTransitionState {
+  active: boolean;
+  fromAmbientIntensity: number;
+  toAmbientIntensity: number;
+  fromDirectionalIntensity: number;
+  toDirectionalIntensity: number;
+  fromAmbientColor: string;
+  toAmbientColor: string;
+  fromDirectionalColor: string;
+  toDirectionalColor: string;
+  fromHasCandleLight: boolean;
+  toHasCandleLight: boolean;
+  startTime: number;
+  duration: number;
 }
 
 interface RoomBounds {
@@ -59,12 +84,23 @@ const ROOM_BOUNDS: RoomBounds = {
   height: 3,
 };
 
+const DEFAULT_DRAG_STATE: DragState = {
+  isDragging: false,
+  templateId: null,
+  instanceId: null,
+  projectionPosition: null,
+  projectionDimensions: null,
+  dragStartTime: 0,
+};
+
 export class LogicModule {
   private furnitureList: PlacedFurniture[] = [];
   private currentLighting: LightingConfig | null = null;
   private lightingPresets: LightingPreset[] = [];
   private furnitureTemplates: FurnitureTemplate[] = [];
   private listeners: Set<() => void> = new Set();
+  private dragState: DragState = { ...DEFAULT_DRAG_STATE };
+  private lightingTransition: LightingTransitionState | null = null;
 
   constructor() {
     this.currentLighting = {
@@ -76,7 +112,6 @@ export class LogicModule {
       directionalIntensity: 0.6,
       shadowSoftness: 'soft',
       hasCandleLight: false,
-      transitionProgress: 1,
     };
   }
 
@@ -119,55 +154,97 @@ export class LogicModule {
     return ROOM_BOUNDS;
   }
 
-  createPlacingInstance(templateId: string, initialPos: { x: number; z: number }): PlacedFurniture | null {
+  getDragState(): DragState {
+    return this.dragState;
+  }
+
+  getLightingTransition(): LightingTransitionState | null {
+    return this.lightingTransition;
+  }
+
+  clearLightingTransition(): void {
+    this.lightingTransition = null;
+  }
+
+  startDrag(templateId: string): void {
     const template = this.furnitureTemplates.find((t) => t.id === templateId);
-    if (!template) return null;
+    if (!template) return;
 
-    const constrainedPos = this.constrainPosition(initialPos, template.dimensions);
-    const instance: PlacedFurniture = {
-      instanceId: uuidv4(),
-      template,
-      position: {
-        x: constrainedPos.x,
-        y: template.dimensions.height / 2,
-        z: constrainedPos.z,
-      },
-      isPlacing: true,
-      placementProgress: 0,
+    this.dragState = {
+      isDragging: true,
+      templateId,
+      instanceId: null,
+      projectionPosition: null,
+      projectionDimensions: { width: template.dimensions.width, depth: template.dimensions.depth },
+      dragStartTime: performance.now(),
     };
-
-    this.furnitureList.push(instance);
-    this.notify();
-    return instance;
-  }
-
-  updatePlacingPosition(instanceId: string, pos: { x: number; z: number }): void {
-    const instance = this.furnitureList.find((f) => f.instanceId === instanceId && f.isPlacing);
-    if (!instance) return;
-
-    const constrainedPos = this.constrainPosition(pos, instance.template.dimensions);
-    instance.position.x = constrainedPos.x;
-    instance.position.z = constrainedPos.z;
     this.notify();
   }
 
-  finalizePlacement(instanceId: string): void {
-    const instance = this.furnitureList.find((f) => f.instanceId === instanceId);
-    if (!instance) return;
+  updateDragPosition(worldX: number, worldZ: number): void {
+    if (!this.dragState.isDragging || !this.dragState.templateId) return;
 
-    if (this.checkCollision(instance)) {
-      this.removeFurniture(instanceId);
-      return;
+    const template = this.furnitureTemplates.find((t) => t.id === this.dragState.templateId);
+    if (!template) return;
+
+    const constrainedPos = this.constrainPosition({ x: worldX, z: worldZ }, template.dimensions);
+    this.dragState.projectionPosition = constrainedPos;
+
+    if (!this.dragState.instanceId) {
+      const instance: PlacedFurniture = {
+        instanceId: uuidv4(),
+        template,
+        position: {
+          x: constrainedPos.x,
+          y: template.dimensions.height / 2,
+          z: constrainedPos.z,
+        },
+        isPlacing: true,
+        animating: false,
+        animationStartTime: 0,
+      };
+      this.furnitureList.push(instance);
+      this.dragState.instanceId = instance.instanceId;
+      this.notify();
+    } else {
+      const instance = this.furnitureList.find((f) => f.instanceId === this.dragState.instanceId);
+      if (instance) {
+        instance.position.x = constrainedPos.x;
+        instance.position.z = constrainedPos.z;
+      }
+    }
+  }
+
+  endDrag(): void {
+    if (!this.dragState.isDragging) return;
+
+    if (this.dragState.instanceId) {
+      const instance = this.furnitureList.find((f) => f.instanceId === this.dragState.instanceId);
+      if (instance) {
+        if (this.checkCollision(instance)) {
+          this.removeFurniture(this.dragState.instanceId);
+        } else {
+          instance.isPlacing = false;
+          instance.animating = true;
+          instance.animationStartTime = performance.now();
+          this.notify();
+        }
+      }
     }
 
-    instance.isPlacing = false;
-    instance.placementProgress = 0;
-    this.animatePlacement(instance);
+    this.dragState = { ...DEFAULT_DRAG_STATE };
     this.notify();
   }
 
-  cancelPlacement(instanceId: string): void {
-    this.removeFurniture(instanceId);
+  cancelDrag(): void {
+    if (!this.dragState.isDragging) return;
+
+    if (this.dragState.instanceId) {
+      this.removeFurniture(this.dragState.instanceId);
+    }
+
+    this.dragState = { ...DEFAULT_DRAG_STATE };
+    this.notify();
   }
 
   removeFurniture(instanceId: string): void {
@@ -181,13 +258,36 @@ export class LogicModule {
   switchLighting(presetId: string): void {
     const preset = this.lightingPresets.find((p) => p.id === presetId);
     if (!preset || !this.currentLighting) return;
+    if (preset.id === this.currentLighting.id) return;
 
-    this.currentLighting = {
-      ...this.currentLighting,
-      transitionProgress: 0,
+    this.lightingTransition = {
+      active: true,
+      fromAmbientIntensity: this.currentLighting.ambientIntensity,
+      toAmbientIntensity: preset.ambientIntensity,
+      fromDirectionalIntensity: this.currentLighting.directionalIntensity,
+      toDirectionalIntensity: preset.directionalIntensity,
+      fromAmbientColor: this.currentLighting.ambientColor,
+      toAmbientColor: preset.ambientColor,
+      fromDirectionalColor: this.currentLighting.directionalColor,
+      toDirectionalColor: preset.directionalColor,
+      fromHasCandleLight: this.currentLighting.hasCandleLight,
+      toHasCandleLight: preset.hasCandleLight || false,
+      startTime: performance.now(),
+      duration: 500,
     };
 
-    this.animateLightingTransition(preset);
+    this.currentLighting = {
+      id: preset.id,
+      name: preset.name,
+      ambientColor: preset.ambientColor,
+      ambientIntensity: preset.ambientIntensity,
+      directionalColor: preset.directionalColor,
+      directionalIntensity: preset.directionalIntensity,
+      shadowSoftness: preset.shadowSoftness,
+      hasCandleLight: preset.hasCandleLight || false,
+    };
+
+    this.notify();
   }
 
   private constrainPosition(
@@ -233,83 +333,6 @@ export class LogicModule {
       }
     }
     return false;
-  }
-
-  private animatePlacement(instance: PlacedFurniture): void {
-    const startTime = performance.now();
-    const duration = 300;
-
-    const animate = () => {
-      const elapsed = performance.now() - startTime;
-      const progress = Math.min(1, elapsed / duration);
-      const easeOut = 1 - Math.pow(1 - progress, 3);
-      const scale = 0.9 + easeOut * 0.1;
-
-      instance.placementProgress = progress;
-      instance.position.y = instance.template.dimensions.height / 2 * scale;
-
-      this.notify();
-
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      }
-    };
-
-    requestAnimationFrame(animate);
-  }
-
-  private animateLightingTransition(targetPreset: LightingPreset): void {
-    if (!this.currentLighting) return;
-
-    const startTime = performance.now();
-    const duration = 500;
-
-    const startAmbientIntensity = this.currentLighting.ambientIntensity;
-    const startDirectionalIntensity = this.currentLighting.directionalIntensity;
-
-    const animate = () => {
-      if (!this.currentLighting) return;
-
-      const elapsed = performance.now() - startTime;
-      const progress = Math.min(1, elapsed / duration);
-      const eased = progress < 0.5
-        ? 2 * progress * progress
-        : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-
-      this.currentLighting = {
-        id: targetPreset.id,
-        name: targetPreset.name,
-        ambientColor: targetPreset.ambientColor,
-        ambientIntensity: startAmbientIntensity + (targetPreset.ambientIntensity - startAmbientIntensity) * eased,
-        directionalColor: targetPreset.directionalColor,
-        directionalIntensity: startDirectionalIntensity + (targetPreset.directionalIntensity - startDirectionalIntensity) * eased,
-        shadowSoftness: targetPreset.shadowSoftness,
-        hasCandleLight: targetPreset.hasCandleLight || false,
-        transitionProgress: progress,
-      };
-
-      this.notify();
-
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      }
-    };
-
-    requestAnimationFrame(animate);
-  }
-
-  parseLightingPreset(preset: LightingPreset): LightingConfig {
-    return {
-      id: preset.id,
-      name: preset.name,
-      ambientColor: preset.ambientColor,
-      ambientIntensity: preset.ambientIntensity,
-      directionalColor: preset.directionalColor,
-      directionalIntensity: preset.directionalIntensity,
-      shadowSoftness: preset.shadowSoftness,
-      hasCandleLight: preset.hasCandleLight || false,
-      transitionProgress: 1,
-    };
   }
 
   getShadowMapSize(): number {
