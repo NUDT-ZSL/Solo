@@ -31,6 +31,17 @@ export function BookCard({ book, onReserve, delay = 0 }: BookCardProps) {
     }
   };
 
+  const handleAddToShelf = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) {
+      setToast('请先登录');
+      setTimeout(() => setToast(null), 2000);
+      navigate('/login');
+      return;
+    }
+    navigate('/bookshelf');
+  };
+
   const styles = `
     .book-card {
       width: 200px;
@@ -60,26 +71,55 @@ export function BookCard({ book, onReserve, delay = 0 }: BookCardProps) {
       font-weight: 600;
       text-align: center;
       padding: 0 12px;
+      position: relative;
+    }
+    .book-card-shelf-btn {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 10px 12px;
+      background: #8b5cf6;
+      color: white;
+      border: none;
+      border-radius: 0;
+      font-size: 13px;
+      font-weight: 500;
+      transform: translateY(100%);
+      transition: transform 0.25s ease, background 0.25s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      z-index: 5;
+    }
+    .book-card:hover .book-card-shelf-btn {
+      transform: translateY(0);
+    }
+    .book-card-shelf-btn:hover {
+      background: #7c3aed !important;
     }
     .book-card-body {
       padding: 12px;
       flex: 1;
       display: flex;
       flex-direction: column;
+      position: relative;
     }
     .book-card-title {
-      font-size: 15px;
-      font-weight: 600;
-      color: #1f2937;
-      margin-bottom: 4px;
+      font-size: 16px;
+      font-weight: 700;
+      color: #374151;
+      margin-bottom: 6px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
     .book-card-author {
-      font-size: 13px;
-      color: #6b7280;
-      margin-bottom: 8px;
+      font-size: 14px;
+      font-weight: 400;
+      color: #374151;
+      margin-bottom: 10px;
     }
     .book-card-meta {
       display: flex;
@@ -96,6 +136,13 @@ export function BookCard({ book, onReserve, delay = 0 }: BookCardProps) {
       font-size: 12px;
       color: #6b7280;
     }
+    .book-card-shelf {
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      font-size: 12px;
+      color: #9ca3af;
+    }
     .book-card-reserve-btn {
       margin-top: 10px;
       padding: 6px 14px;
@@ -105,6 +152,7 @@ export function BookCard({ book, onReserve, delay = 0 }: BookCardProps) {
       font-size: 13px;
       font-weight: 500;
       transition: background 0.2s ease;
+      align-self: flex-start;
     }
     .book-card-reserve-btn:hover:not(:disabled) {
       background: #7c3aed;
@@ -136,13 +184,21 @@ export function BookCard({ book, onReserve, delay = 0 }: BookCardProps) {
         onClick={handleClick}
       >
         {toast && <div className="book-card-toast">{toast}</div>}
-        <div className="book-card-cover">{book.title}</div>
+        <div className="book-card-cover">
+          {book.title}
+          <button
+            className="book-card-shelf-btn"
+            onClick={handleAddToShelf}
+          >
+            📚 加入书架
+          </button>
+        </div>
         <div className="book-card-body">
           <div className="book-card-title">{book.title}</div>
           <div className="book-card-author">{book.author}</div>
           <div className="book-card-meta">
             <span className="book-card-rating">★ {book.doubanRating}</span>
-            <span className="book-card-stock">库存 {book.stock}</span>
+            <span className="book-card-shelf">{book.shelf}</span>
           </div>
           <button
             className="book-card-reserve-btn"
