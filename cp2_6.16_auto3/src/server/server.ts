@@ -24,6 +24,14 @@ interface ArchConfig {
   elasticModulus: number;
 }
 
+interface ComparisonResult {
+  archType: string;
+  maxLoad: number;
+  failureMode: string;
+  crackedBlocks: number[];
+  timeToFailure: number;
+}
+
 interface TestRecord {
   id: string;
   timestamp: number;
@@ -35,6 +43,22 @@ interface TestRecord {
   failureMode: string;
   duration: number;
   crackedBlocks: number[];
+  isComparison: boolean;
+  comparisonResults?: ComparisonResult[];
+}
+
+interface ComparisonRecord {
+  id: string;
+  timestamp: number;
+  archType1: string;
+  archType2: string;
+  span: number;
+  compressiveStrength: number;
+  elasticModulus: number;
+  maxLoad: number;
+  duration: number;
+  result1: ComparisonResult;
+  result2: ComparisonResult;
 }
 
 interface QuizQuestion {
@@ -54,6 +78,7 @@ interface Achievement {
 interface DataStore {
   archConfigs: ArchConfig[];
   testRecords: TestRecord[];
+  comparisonRecords: ComparisonRecord[];
   achievements: Achievement[];
   quizQuestions: QuizQuestion[];
 }
@@ -102,6 +127,36 @@ app.post('/api/records', (req, res) => {
     res.json(newRecord);
   } catch (err) {
     res.status(500).json({ error: 'Failed to save record' });
+  }
+});
+
+app.get('/api/comparison-records', (_req, res) => {
+  try {
+    const data = readData();
+    const sorted = (data.comparisonRecords || [])
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 5);
+    res.json(sorted);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to load comparison records' });
+  }
+});
+
+app.post('/api/comparison-records', (req, res) => {
+  try {
+    const record: Omit<ComparisonRecord, 'id' | 'timestamp'> = req.body;
+    const data = readData();
+    const newRecord: ComparisonRecord = {
+      ...record,
+      id: uuidv4(),
+      timestamp: Date.now()
+    };
+    if (!data.comparisonRecords) data.comparisonRecords = [];
+    data.comparisonRecords.push(newRecord);
+    writeData(data);
+    res.json(newRecord);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save comparison record' });
   }
 });
 
