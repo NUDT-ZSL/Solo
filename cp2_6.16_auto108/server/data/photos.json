@@ -1,0 +1,84 @@
+{
+  "photos": [
+    {
+      "id": "photo-1",
+      "imageUrl": "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&q=80",
+      "title": "雨后山林",
+      "smellDescription": "雨后泥土的清新气息混合着松针的香气，空气中弥漫着湿润的草木味道",
+      "smellTags": ["草香", "木香"],
+      "createdAt": "2024-01-15T10:30:00Z"
+    },
+    {
+      "id": "photo-2",
+      "imageUrl": "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&q=80",
+      "title": "妈妈的厨房",
+      "smellDescription": "番茄炖牛腩的浓郁香气，混合着刚蒸好的米饭味，还有葱姜蒜爆锅的香味",
+      "smellTags": ["甜香", "辛香"],
+      "createdAt": "2024-02-20T12:15:00Z"
+    },
+    {
+      "id": "photo-3",
+      "imageUrl": "https://images.unsplash.com/photo-1490750967868-88aa4486c946?w=600&q=80",
+      "title": "春日花园",
+      "smellDescription": "玫瑰和茉莉交织的花香，微风中带着青草和蜂蜜的甜香",
+      "smellTags": ["花香", "甜香"],
+      "createdAt": "2024-03-10T14:45:00Z"
+    },
+    {
+      "id": "photo-4",
+      "imageUrl": "https://images.unsplash.com/photo-1448375240586-882707db888b?w=600&q=80",
+      "title": "清晨森林",
+      "smellDescription": "柏树和雪松的木质清香，混合着苔藓和腐殖土的湿润气息",
+      "smellTags": ["木香", "草香"],
+      "createdAt": "2024-04-05T07:20:00Z"
+    },
+    {
+      "id": "photo-5",
+      "imageUrl": "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=600&q=80",
+      "title": "午后咖啡馆",
+      "smellDescription": "深焙咖啡豆的焦香，混合着热可可和刚出炉曲奇的奶油甜香",
+      "smellTags": ["甜香", "辛香"],
+      "createdAt": "2024-05-12T15:30:00Z"
+    },
+    {
+      "id": "photo-6",
+      "imageUrl": "https://images.unsplash.com/photo-1501004318641-b39e6451bec6?w=600&q=80",
+      "title": "海边日落",
+      "smellDescription": "咸咸的海风带着海藻的气息，远处飘来烤鱼和柠檬的清新香味",
+      "smellTags": ["辛香", "草香"],
+      "createdAt": "2024-06-18T18:50:00Z"
+    },
+    {
+      "id": "photo-7",
+      "imageUrl": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=600&q=80",
+      "title": "雪山之巅",
+      "smellDescription": "凛冽的冷空气，带着淡淡的雪松香和高山岩石的干燥气息",
+      "smellTags": ["木香"],
+      "createdAt": "2024-07-22T09:10:00Z"
+    },
+    {
+      "id": "photo-8",
+      "imageUrl": "https://images.unsplash.com/photo-1470115636492-6d2b56f9146d?w=600&q=80",
+      "title": "夏夜荷塘",
+      "smellDescription": "荷花的清雅幽香，混合着湿润的水草和泥土的淡淡腥味",
+      "smellTags": ["花香", "草香"],
+      "createdAt": "2024-08-08T20:30:00Z"
+    },
+    {
+      "id": "photo-9",
+      "imageUrl": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&q=80",
+      "title": "奶奶的烘焙坊",
+      "smellDescription": "刚出炉的肉桂苹果派，黄油和面粉烘烤的温暖香气弥漫整个房间",
+      "smellTags": ["甜香", "辛香"],
+      "createdAt": "2024-09-25T11:40:00Z"
+    },
+    {
+      "id": "photo-10",
+      "imageUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&q=80",
+      "title": "老书斋",
+      "smellDescription": "泛黄纸张的墨香，混合着檀香和旧木头柜子的沉稳木香",
+      "smellTags": ["木香"],
+      "createdAt": "2024-10-30T16:00:00Z"
+    }
+  ]
+}

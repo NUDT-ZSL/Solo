@@ -1,5 +1,5 @@
 {
-  "name": "auto108",
+  "name": "smell-memory-album",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -16,13 +16,14 @@
     "clsx": "^2.1.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
+    "express": "^4.21.2",
     "lucide-react": "^0.511.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.3.0",
     "tailwind-merge": "^3.0.2",
-    "zustand": "^5.0.3",
-    "express": "^4.21.2"
+    "uuid": "^10.0.0",
+    "zustand": "^5.0.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.25.0",
@@ -31,6 +32,7 @@
     "@types/node": "^22.15.30",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^4.4.1",
     "@vercel/node": "^5.3.6",
     "autoprefixer": "^10.4.21",
