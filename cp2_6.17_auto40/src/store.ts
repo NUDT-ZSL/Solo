@@ -28,6 +28,10 @@ interface OrigamiStore {
   hoverPoint: Point | null;
   nearestGridPoint: Point | null;
   highlightedCrease: Crease | null;
+  isDraggingRotation: boolean;
+  rotationStartAngle: number;
+  foldStartState: PaperState | null;
+  foldEndState: PaperState | null;
 
   setToolMode: (mode: ToolMode) => void;
   setRotation: (angle: number) => void;
@@ -38,6 +42,8 @@ interface OrigamiStore {
   setNearestGridPoint: (point: Point | null) => void;
   setHighlightedCrease: (crease: Crease | null) => void;
   setRotationWithSnap: (angle: number) => void;
+  setIsDraggingRotation: (val: boolean) => void;
+  setRotationStartAngle: (val: number) => void;
   selectGridPoint: (point: Point) => void;
   clearSelection: () => void;
   executeFold: (foldSide: Point) => void;
@@ -86,6 +92,10 @@ export const useOrigamiStore = create<OrigamiStore>((set, get) => ({
   hoverPoint: null,
   nearestGridPoint: null,
   highlightedCrease: null,
+  isDraggingRotation: false,
+  rotationStartAngle: 0,
+  foldStartState: null,
+  foldEndState: null,
 
   setToolMode: (mode) => set({ toolMode: mode, selectedPoints: [], currentCrease: null, hoverPoint: null, nearestGridPoint: null, highlightedCrease: null }),
   setRotation: (angle) => set({ rotation: angle }),
@@ -99,6 +109,8 @@ export const useOrigamiStore = create<OrigamiStore>((set, get) => ({
     const snapped = snapToSpecialAngle(angle);
     set({ rotation: snapped });
   },
+  setIsDraggingRotation: (val) => set({ isDraggingRotation: val }),
+  setRotationStartAngle: (val) => set({ rotationStartAngle: val }),
 
   selectGridPoint: (point) => {
     const { selectedPoints, paperState } = get();
@@ -123,17 +135,17 @@ export const useOrigamiStore = create<OrigamiStore>((set, get) => ({
     const { currentCrease, paperState, foldHistory } = get();
     if (!currentCrease) return;
 
-    set({ isAnimating: true, animationProgress: 0 });
+    const finalState = fold(paperState, currentCrease.start, currentCrease.end, foldSide);
+
+    set({ isAnimating: true, animationProgress: 0, foldStartState: paperState, foldEndState: finalState, currentCrease: currentCrease });
 
     const startTime = performance.now();
-    const duration = 400;
+    const duration = 300;
 
     const animate = (now: number) => {
       const elapsed = now - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      const eased = progress < 0.5
-        ? 2 * progress * progress
-        : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+      const eased = 1 - Math.pow(1 - progress, 3);
 
       set({ animationProgress: eased });
 

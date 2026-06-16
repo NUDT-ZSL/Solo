@@ -1,12 +1,62 @@
+import { useEffect, useState } from "react";
 import { MousePointer2, Scissors, RotateCw, Download } from "lucide-react";
 import { useOrigamiStore, SPECIAL_ANGLES } from "./store";
 import type { ToolMode } from "./store";
 
-const tools: { mode: ToolMode; icon: React.ReactNode; label: string }[] = [
-  { mode: "select", icon: <MousePointer2 size={18} />, label: "选择" },
-  { mode: "fold", icon: <Scissors size={18} />, label: "折叠" },
-  { mode: "rotate", icon: <RotateCw size={18} />, label: "旋转" },
+const tools: { mode: ToolMode; icon: React.ReactNode; label: string; shortcut: string }[] = [
+  { mode: "select", icon: <MousePointer2 size={18} />, label: "选择", shortcut: "V" },
+  { mode: "fold", icon: <Scissors size={18} />, label: "折叠", shortcut: "F" },
+  { mode: "rotate", icon: <RotateCw size={18} />, label: "旋转", shortcut: "R" },
 ];
+
+function TooltipButton({
+  tool,
+  isActive,
+  onClick,
+}: {
+  tool: { mode: ToolMode; icon: React.ReactNode; label: string; shortcut: string };
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  return (
+    <div
+      className="relative w-full"
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+    >
+      <button
+        onClick={onClick}
+        className={`tool-btn flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-150 w-full ${
+          isActive
+            ? "bg-gray-100 text-gray-900 font-medium shadow-sm"
+            : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+        }`}
+        style={{
+          transform: isActive ? "scale(1.02)" : "scale(1)",
+          transition: "transform 0.15s ease-out",
+        }}
+      >
+        {tool.icon}
+        <span>{tool.label}</span>
+      </button>
+      {showTooltip && (
+        <div
+          className="absolute top-1/2 -translate-y-1/2 z-50 pointer-events-none"
+          style={{ left: "calc(100% + 10px)" }}
+        >
+          <div className="bg-gray-800 text-white text-xs px-2.5 py-1.5 rounded shadow-lg whitespace-nowrap relative">
+            {tool.label} ({tool.shortcut})
+            <div
+              className="absolute top-1/2 -translate-y-1/2 -left-1 w-2 h-2 bg-gray-800 rotate-45"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function FoldToolbar() {
   const {
@@ -23,33 +73,39 @@ export default function FoldToolbar() {
     setShowExportModal,
   } = useOrigamiStore();
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === "INPUT" || target.tagName === "SELECT")) {
+        return;
+      }
+      const key = e.key.toUpperCase();
+      if (key === "V") setToolMode("select");
+      else if (key === "F") setToolMode("fold");
+      else if (key === "R") setToolMode("rotate");
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [setToolMode]);
+
   return (
     <div className="toolbar-card flex flex-col gap-4">
       <h2 className="text-sm font-semibold text-gray-600 tracking-wide uppercase">工具</h2>
 
       <div className="flex flex-col gap-1">
         {tools.map((t) => (
-          <button
+          <TooltipButton
             key={t.mode}
+            tool={t}
+            isActive={toolMode === t.mode}
             onClick={() => setToolMode(t.mode)}
-            className={`tool-btn flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-150 ${
-              toolMode === t.mode
-                ? "bg-gray-100 text-gray-900 font-medium shadow-sm"
-                : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-            }`}
-            style={{
-              transform: toolMode === t.mode ? "scale(1.02)" : "scale(1)",
-              transition: "transform 0.15s ease-out",
-            }}
-          >
-            {t.icon}
-            <span>{t.label}</span>
-          </button>
+          />
         ))}
       </div>
 
       <div className="border-t border-gray-100 pt-3">
-        <label className="text-xs text-gray-500 block mb-1">旋转角度: {rotation}°</label>
+        <label className="text-xs text-gray-500 block mb-1">旋转角度: {Math.round(rotation)}°</label>
         <input
           type="range"
           min={0}
@@ -82,22 +138,24 @@ export default function FoldToolbar() {
                 setTimeout(() => setIsRotating(false), 150);
               }}
               className={`px-1 py-1 text-xs rounded transition-all duration-150 ${
-                rotation === angle
+                Math.abs(rotation - angle) < 0.5
                   ? "bg-teal-500 text-white font-medium"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
               style={{
-                transform: rotation === angle ? "scale(1.05)" : "scale(1)",
+                transform: Math.abs(rotation - angle) < 0.5 ? "scale(1.05)" : "scale(1)",
                 transition: "all 0.15s ease-out",
               }}
               onMouseDown={(e) => {
                 (e.currentTarget as HTMLElement).style.transform = "scale(1.05)";
               }}
               onMouseUp={(e) => {
-                (e.currentTarget as HTMLElement).style.transform = rotation === angle ? "scale(1.05)" : "scale(1)";
+                (e.currentTarget as HTMLElement).style.transform =
+                  Math.abs(rotation - angle) < 0.5 ? "scale(1.05)" : "scale(1)";
               }}
               onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.transform = rotation === angle ? "scale(1.05)" : "scale(1)";
+                (e.currentTarget as HTMLElement).style.transform =
+                  Math.abs(rotation - angle) < 0.5 ? "scale(1.05)" : "scale(1)";
               }}
             >
               {angle}°

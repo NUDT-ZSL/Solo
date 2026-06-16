@@ -58,7 +58,7 @@ function scale(p: Point, s: number): Point {
   return { x: p.x * s, y: p.y * s };
 }
 
-function reflectPoint(point: Point, lineStart: Point, lineEnd: Point): Point {
+export function reflectPoint(point: Point, lineStart: Point, lineEnd: Point): Point {
   const d = sub(lineEnd, lineStart);
   const v = sub(point, lineStart);
   const t = dot(v, d) / dot(d, d);
