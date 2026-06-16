@@ -1,4 +1,4 @@
-import { Plant, LightBeam, Particle } from './plant';
+import { Plant, LightBeam, Particle, Branch, Leaf } from './plant';
 
 export class Environment {
   plants: Plant[] = [];
@@ -14,6 +14,7 @@ export class Environment {
   private dragStartY: number = 0;
   private plantStartX: number = 0;
   private plantStartY: number = 0;
+  private overlapThreshold: number = 15;
 
   constructor(width: number, height: number) {
     this.width = width;
@@ -37,6 +38,7 @@ export class Environment {
   update(deltaTime: number): void {
     this.updateLightBeams(deltaTime);
     this.updatePlants(deltaTime);
+    this.detectOverlapsAndAvoidance();
     this.updateParticles(deltaTime);
   }
 
@@ -55,16 +57,153 @@ export class Environment {
 
   private updatePlants(deltaTime: number): void {
     for (const plant of this.plants) {
-      plant.grow(deltaTime, this.plants);
+      plant.grow(deltaTime);
       plant.updateLight(this.lightBeams, deltaTime);
     }
+  }
+
+  private detectOverlapsAndAvoidance(): void {
+    for (let i = 0; i < this.plants.length; i++) {
+      const plant = this.plants[i];
+      const overlappingBranches: Set<number> = new Set();
+      let hasAnyOverlap = false;
+
+      for (let j = 0; j < this.plants.length; j++) {
+        if (i === j) continue;
+        const other = this.plants[j];
+
+        for (let bi = 0; bi < plant.branches.length; bi++) {
+          const branch = plant.branches[bi];
+          const branchMid = plant.getBranchMidpoint(branch);
+
+          for (const otherBranch of other.branches) {
+            const otherSeg = other.getBranchSegment(otherBranch);
+            const dist = this.pointToSegmentDistance(
+              branchMid.x, branchMid.y,
+              otherSeg.x1, otherSeg.y1,
+              otherSeg.x2, otherSeg.y2
+            );
+
+            if (dist < this.overlapThreshold) {
+              hasAnyOverlap = true;
+              overlappingBranches.add(bi);
+              this.handleBranchAvoidance(plant, bi, branchMid, other, otherBranch);
+              break;
+            }
+          }
+
+          for (const otherLeaf of other.leaves) {
+            const dist = Math.hypot(branchMid.x - otherLeaf.x, branchMid.y - otherLeaf.y);
+            if (dist < this.overlapThreshold) {
+              hasAnyOverlap = true;
+              overlappingBranches.add(bi);
+              this.handleLeafAvoidance(plant, bi, branchMid, otherLeaf);
+              break;
+            }
+          }
+        }
+      }
+
+      plant.setGrowSpeedMultiplier(hasAnyOverlap ? 0.5 : 1.0);
+
+      for (let bi = 0; bi < plant.branches.length; bi++) {
+        if (!overlappingBranches.has(bi)) {
+          plant.resetBranchOverlapState(bi);
+        }
+      }
+    }
+  }
+
+  private handleBranchAvoidance(
+    plant: Plant,
+    branchIndex: number,
+    branchMid: { x: number; y: number },
+    other: Plant,
+    otherBranch: Branch
+  ): void {
+    const branch = plant.branches[branchIndex];
+
+    if (branch.overlapStartTime === 0) {
+      plant.setBranchOverlapStartTime(branchIndex, performance.now());
+      return;
+    }
+
+    const overlapDuration = (performance.now() - branch.overlapStartTime) / 1000;
+    if (overlapDuration > 3) {
+      const otherEnd = other.getBranchEnd(otherBranch);
+      const dx = branchMid.x - (otherBranch.x + otherEnd.x) / 2;
+      const dy = branchMid.y - (otherBranch.y + otherEnd.y) / 2;
+      const targetAngle = Math.atan2(dy, dx);
+
+      let angleDiff = targetAngle - branch.angle;
+      while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+      while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+
+      const avoidAngle = (20 + Math.random() * 20) * (Math.PI / 180);
+      const avoidDirection = angleDiff > 0 ? 1 : -1;
+
+      plant.setBranchAvoidAngle(branchIndex, avoidAngle, avoidDirection);
+    }
+  }
+
+  private handleLeafAvoidance(
+    plant: Plant,
+    branchIndex: number,
+    branchMid: { x: number; y: number },
+    otherLeaf: Leaf
+  ): void {
+    const branch = plant.branches[branchIndex];
+
+    if (branch.overlapStartTime === 0) {
+      plant.setBranchOverlapStartTime(branchIndex, performance.now());
+      return;
+    }
+
+    const overlapDuration = (performance.now() - branch.overlapStartTime) / 1000;
+    if (overlapDuration > 3) {
+      const dx = branchMid.x - otherLeaf.x;
+      const dy = branchMid.y - otherLeaf.y;
+      const targetAngle = Math.atan2(dy, dx);
+
+      let angleDiff = targetAngle - branch.angle;
+      while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+      while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+
+      const avoidAngle = (20 + Math.random() * 20) * (Math.PI / 180);
+      const avoidDirection = angleDiff > 0 ? 1 : -1;
+
+      plant.setBranchAvoidAngle(branchIndex, avoidAngle, avoidDirection);
+    }
+  }
+
+  private pointToSegmentDistance(
+    px: number, py: number,
+    x1: number, y1: number,
+    x2: number, y2: number
+  ): number {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const lengthSq = dx * dx + dy * dy;
+
+    if (lengthSq === 0) return Math.hypot(px - x1, py - y1);
+
+    let t = ((px - x1) * dx + (py - y1) * dy) / lengthSq;
+    t = Math.max(0, Math.min(1, t));
+
+    const projX = x1 + t * dx;
+    const projY = y1 + t * dy;
+
+    return Math.hypot(px - projX, py - projY);
   }
 
   private updateParticles(deltaTime: number): void {
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
-      p.x += p.vx * deltaTime * 60;
-      p.y += p.vy * deltaTime * 60;
+      const lifeRatio = p.life / p.maxLife;
+      const speedMultiplier = lifeRatio * 3;
+
+      p.x += p.vx * deltaTime * 60 * speedMultiplier;
+      p.y += p.vy * deltaTime * 60 * speedMultiplier;
       p.life -= deltaTime;
 
       if (p.life <= 0) {

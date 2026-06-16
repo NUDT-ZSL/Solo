@@ -296,10 +296,18 @@ class App {
     if (lowDetail) {
       this.ctx.beginPath();
       this.ctx.moveTo(leaf.size, 0);
-      this.ctx.lineTo(-leaf.size * 0.3, -leaf.size * 0.5);
-      this.ctx.lineTo(-leaf.size * 0.3, leaf.size * 0.5);
+      this.ctx.lineTo(-leaf.size * 0.5, -leaf.size * 0.4);
+      this.ctx.lineTo(-leaf.size * 0.5, leaf.size * 0.4);
       this.ctx.closePath();
       this.ctx.fill();
+
+      this.ctx.shadowBlur = 0;
+      this.ctx.strokeStyle = 'rgba(46, 125, 50, 0.3)';
+      this.ctx.lineWidth = 0.5;
+      this.ctx.beginPath();
+      this.ctx.moveTo(leaf.size * 0.7, 0);
+      this.ctx.lineTo(-leaf.size * 0.3, 0);
+      this.ctx.stroke();
     } else {
       this.ctx.beginPath();
       this.ctx.moveTo(leaf.size, 0);
@@ -310,15 +318,15 @@ class App {
       this.ctx.quadraticCurveTo(0, leaf.size * 0.8, leaf.size * 0.3, leaf.size * 0.3);
       this.ctx.closePath();
       this.ctx.fill();
-    }
 
-    this.ctx.shadowBlur = 0;
-    this.ctx.strokeStyle = 'rgba(46, 125, 50, 0.3)';
-    this.ctx.lineWidth = 0.5;
-    this.ctx.beginPath();
-    this.ctx.moveTo(leaf.size * 0.8, 0);
-    this.ctx.lineTo(-leaf.size * 0.3, 0);
-    this.ctx.stroke();
+      this.ctx.shadowBlur = 0;
+      this.ctx.strokeStyle = 'rgba(46, 125, 50, 0.3)';
+      this.ctx.lineWidth = 0.5;
+      this.ctx.beginPath();
+      this.ctx.moveTo(leaf.size * 0.8, 0);
+      this.ctx.lineTo(-leaf.size * 0.3, 0);
+      this.ctx.stroke();
+    }
 
     this.ctx.restore();
   }
@@ -326,7 +334,7 @@ class App {
   private drawParticles(): void {
     for (const p of this.environment.particles) {
       const alpha = p.life / p.maxLife;
-      this.ctx.fillStyle = p.color.replace(')', `, ${alpha})`).replace('rgb', 'rgba').replace('#8bc34a', `rgba(139, 195, 74, ${alpha})`);
+      this.ctx.fillStyle = `rgba(139, 195, 74, ${alpha})`;
       this.ctx.beginPath();
       this.ctx.arc(p.x, p.y, p.radius * alpha, 0, Math.PI * 2);
       this.ctx.fill();
@@ -336,13 +344,11 @@ class App {
   private drawSelectionCircles(): void {
     for (const plant of this.environment.plants) {
       if (plant.isSelected) {
-        this.ctx.strokeStyle = 'rgba(100, 181, 246, 0.8)';
+        this.ctx.strokeStyle = '#64b5f6';
         this.ctx.lineWidth = 2;
-        this.ctx.setLineDash([5, 3]);
         this.ctx.beginPath();
         this.ctx.arc(plant.seedX, plant.seedY, 40, 0, Math.PI * 2);
         this.ctx.stroke();
-        this.ctx.setLineDash([]);
 
         this.ctx.fillStyle = 'rgba(100, 181, 246, 0.15)';
         this.ctx.beginPath();
