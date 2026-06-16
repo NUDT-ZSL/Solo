@@ -10,13 +10,14 @@ export function useItems() {
   const [hasMore, setHasMore] = useState(true);
 
   const fetchItems = useCallback(
-    async (category: string = 'all', search: string = '', pageNum: number = 1, reset: boolean = false) => {
+    async (category: string = 'all', search: string = '', searchMode: string = 'all', pageNum: number = 1, reset: boolean = false) => {
       setLoading(true);
       setError(null);
       try {
         const params = new URLSearchParams({
           category,
           search,
+          searchMode,
           page: String(pageNum),
           limit: '20',
         });
@@ -37,9 +38,9 @@ export function useItems() {
   );
 
   const loadMore = useCallback(
-    (category: string, search: string) => {
+    (category: string, search: string, searchMode: string) => {
       if (!loading && hasMore) {
-        fetchItems(category, search, page + 1, false);
+        fetchItems(category, search, searchMode, page + 1, false);
       }
     },
     [loading, hasMore, page, fetchItems]

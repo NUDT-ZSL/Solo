@@ -90,7 +90,7 @@ function writeUsersData(data: UsersData) {
 }
 
 app.get('/api/items', (req, res) => {
-  const { category, search, page = '1', limit = '20' } = req.query;
+  const { category, search, searchMode = 'all', page = '1', limit = '20' } = req.query;
   const data = readItemsData();
   let items = data.items.filter((item) => item.status === 'available');
 
@@ -100,11 +100,18 @@ app.get('/api/items', (req, res) => {
 
   if (search) {
     const keyword = String(search).toLowerCase();
-    items = items.filter(
-      (item) =>
-        item.name.toLowerCase().includes(keyword) ||
-        item.description.toLowerCase().includes(keyword)
-    );
+    const mode = String(searchMode);
+    if (mode === 'name') {
+      items = items.filter((item) => item.name.toLowerCase().includes(keyword));
+    } else if (mode === 'desc') {
+      items = items.filter((item) => item.description.toLowerCase().includes(keyword));
+    } else {
+      items = items.filter(
+        (item) =>
+          item.name.toLowerCase().includes(keyword) ||
+          item.description.toLowerCase().includes(keyword)
+      );
+    }
   }
 
   const pageNum = parseInt(String(page));

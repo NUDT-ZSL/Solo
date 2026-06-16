@@ -6,11 +6,11 @@ import type { Item } from '../types';
 
 const CATEGORIES = [
   { value: 'all', label: '全部分类' },
-  { value: '家居', label: '🏠 家居' },
-  { value: '数码', label: '💻 数码' },
-  { value: '书籍', label: '📚 书籍' },
-  { value: '衣物', label: '👔 衣物' },
-  { value: '其他', label: '🎁 其他' },
+  { value: '家居', label: '家居' },
+  { value: '数码', label: '数码' },
+  { value: '书籍', label: '书籍' },
+  { value: '衣物', label: '衣物' },
+  { value: '其他', label: '其他' },
 ];
 
 const SEARCH_MODES = [
@@ -36,10 +36,10 @@ function SkeletonGrid() {
         <div className="skeleton-card" key={i}>
           <div className="skeleton-image" />
           <div className="skeleton-body">
-            <div className="skeleton-line medium" />
-            <div className="skeleton-line full" />
-            <div className="skeleton-line short" />
-            <div className="skeleton-line full" />
+            <div className="skeleton-line title" />
+            <div className="skeleton-line desc" />
+            <div className="skeleton-line desc" />
+            <div className="skeleton-line footer" />
           </div>
         </div>
       ))}
@@ -47,7 +47,7 @@ function SkeletonGrid() {
   );
 }
 
-function EmptyState({ hasFilter, onReset }: { hasFilter: boolean; onReset: () => void }) {
+function EmptyState({ hasFilter }: { hasFilter: boolean }) {
   return (
     <div className="empty-state">
       <div className="empty-state-icon">🔍</div>
@@ -59,11 +59,6 @@ function EmptyState({ hasFilter, onReset }: { hasFilter: boolean; onReset: () =>
           ? '试试调整搜索关键词或筛选条件'
           : '社区里暂时还没有人发布闲置物品'}
       </div>
-      {hasFilter && (
-        <button className="empty-state-action" onClick={onReset}>
-          重置筛选条件
-        </button>
-      )}
     </div>
   );
 }
@@ -86,8 +81,8 @@ export default function ItemListPage() {
   }, [search]);
 
   useEffect(() => {
-    fetchItems(category, searchDebounced, 1, true);
-  }, [category, searchDebounced, fetchItems]);
+    fetchItems(category, searchDebounced, searchMode, 1, true);
+  }, [category, searchDebounced, searchMode, fetchItems]);
 
   const handleCardClick = useCallback(
     (item: Item) => {
@@ -97,7 +92,7 @@ export default function ItemListPage() {
   );
 
   const handleLoadMore = () => {
-    loadMore(category, searchDebounced);
+    loadMore(category, searchDebounced, searchMode);
   };
 
   const handleReset = () => {
@@ -105,16 +100,6 @@ export default function ItemListPage() {
     setCategory('all');
     setSearchMode('all');
   };
-
-  const filteredItems = useMemo(() => {
-    if (!searchDebounced.trim()) return items;
-    const keyword = searchDebounced.toLowerCase();
-    return items.filter((item) => {
-      if (searchMode === 'name') return item.name.toLowerCase().includes(keyword);
-      if (searchMode === 'desc') return item.description.toLowerCase().includes(keyword);
-      return item.name.toLowerCase().includes(keyword) || item.description.toLowerCase().includes(keyword);
-    });
-  }, [items, searchDebounced, searchMode]);
 
   const searchPlaceholder = useMemo(() => {
     if (searchMode === 'name') return '按物品名称搜索...';
@@ -173,16 +158,19 @@ export default function ItemListPage() {
           <div className="empty-state-icon">⚠️</div>
           <div className="empty-state-title">加载失败</div>
           <div className="empty-state-desc">{error}</div>
-          <button className="empty-state-action" onClick={() => fetchItems(category, searchDebounced, 1, true)}>
+          <button
+            className="empty-state-action"
+            onClick={() => fetchItems(category, searchDebounced, searchMode, 1, true)}
+          >
             重新加载
           </button>
         </div>
-      ) : filteredItems.length === 0 ? (
-        <EmptyState hasFilter={hasFilter} onReset={handleReset} />
+      ) : items.length === 0 ? (
+        <EmptyState hasFilter={hasFilter} />
       ) : (
         <>
           <div className="items-grid">
-            {filteredItems.map((item) => (
+            {items.map((item) => (
               <div
                 key={item.id}
                 className="item-card"
@@ -204,7 +192,7 @@ export default function ItemListPage() {
             ))}
           </div>
 
-          {filteredItems.length < total && (
+          {items.length < total && (
             <div className="load-more-container">
               {loading ? (
                 <div className="loading-text">加载更多中...</div>
