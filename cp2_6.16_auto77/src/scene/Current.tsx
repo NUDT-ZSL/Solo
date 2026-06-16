@@ -72,6 +72,7 @@ export default function Current({ current, isPlaying, isHovered, onHover }: Curr
   const particlesRef = useRef<THREE.Points>(null);
   const tubeRef = useRef<THREE.Mesh>(null);
   const progressRef = useRef<Float32Array>(new Float32Array(PARTICLE_COUNT_PER_CURRENT));
+  const originalColorsRef = useRef<Float32Array | null>(null);
   const [hovered, setHovered] = useState(false);
 
   const { particlePositions, particleColors, tubeGeometry, pathLength } = useMemo(() => {
@@ -81,7 +82,7 @@ export default function Current({ current, isPlaying, isHovered, onHover }: Curr
 
     const positions = new Float32Array(PARTICLE_COUNT_PER_CURRENT * 3);
     const colors = new Float32Array(PARTICLE_COUNT_PER_CURRENT * 3);
-    const colorObj = new THREE.Color(current.color);
+    const originalColors = new Float32Array(PARTICLE_COUNT_PER_CURRENT * 3);
 
     for (let i = 0; i < PARTICLE_COUNT_PER_CURRENT; i++) {
       const t = i / PARTICLE_COUNT_PER_CURRENT;
@@ -95,10 +96,14 @@ export default function Current({ current, isPlaying, isHovered, onHover }: Curr
       colors[i * 3] = speedColor.r;
       colors[i * 3 + 1] = speedColor.g;
       colors[i * 3 + 2] = speedColor.b;
+      originalColors[i * 3] = speedColor.r;
+      originalColors[i * 3 + 1] = speedColor.g;
+      originalColors[i * 3 + 2] = speedColor.b;
 
       progressRef.current[i] = t;
     }
 
+    originalColorsRef.current = originalColors;
     const distance = calculateDistance(current.start, current.end);
 
     return {
@@ -119,6 +124,19 @@ export default function Current({ current, isPlaying, isHovered, onHover }: Curr
   useEffect(() => {
     if (isHovered !== hovered) {
       setHovered(isHovered);
+    }
+
+    if (particlesRef.current && originalColorsRef.current) {
+      const colors = particlesRef.current.geometry.attributes.color.array as Float32Array;
+      const brightness = isHovered ? 1.3 : 1.0;
+
+      for (let i = 0; i < PARTICLE_COUNT_PER_CURRENT; i++) {
+        colors[i * 3] = Math.min(1, originalColorsRef.current[i * 3] * brightness);
+        colors[i * 3 + 1] = Math.min(1, originalColorsRef.current[i * 3 + 1] * brightness);
+        colors[i * 3 + 2] = Math.min(1, originalColorsRef.current[i * 3 + 2] * brightness);
+      }
+
+      particlesRef.current.geometry.attributes.color.needsUpdate = true;
     }
   }, [isHovered, hovered]);
 

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import Sphere from '@/scene/Sphere';
@@ -40,7 +40,14 @@ export default function App() {
         />
         <directionalLight position={[-20, -10, -20]} intensity={0.3} />
 
-        <Sphere />
+        <Suspense fallback={
+          <mesh>
+            <sphereGeometry args={[8, 32, 16]} />
+            <meshPhongMaterial color="#1a3a5c" />
+          </mesh>
+        }>
+          <Sphere />
+        </Suspense>
 
         {oceanCurrents.map((current) => (
           <Current
