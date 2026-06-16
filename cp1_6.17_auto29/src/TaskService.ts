@@ -1,4 +1,4 @@
-import { Plant, getCategoryColor } from './plantManager';
+import { Plant, getSpeciesColor } from './plantManager';
 
 export type TaskType = '浇水' | '施肥' | '修剪' | '转盆';
 
@@ -75,7 +75,7 @@ export function generateWeeklyTasks(plants: Plant[], referenceDate: Date): CareT
   const weekDates = getWeekDates(referenceDate);
 
   for (const plant of plants) {
-    const color = getCategoryColor(plant.species as never);
+    const color = getSpeciesColor(plant.species);
 
     for (const dateStr of weekDates) {
       const dayOffset = daysSince(plant.createdAt, new Date(dateStr + 'T12:00:00'));

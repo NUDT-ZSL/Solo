@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   Plant,
   PlantSpecies,
@@ -11,7 +11,7 @@ import {
   MOISTURE_PREFERENCES,
   createPlant,
   validatePlant,
-  getCategoryColor,
+  getSpeciesColor,
   generateWateringFrequency,
 } from './plantManager';
 import {
@@ -135,7 +135,13 @@ const App: React.FC = () => {
   const [selectedPlantId, setSelectedPlantId] = useState<string>('');
   const [growthNote, setGrowthNote] = useState('');
   const [growthPhoto, setGrowthPhoto] = useState('');
+  const [rawPhoto, setRawPhoto] = useState('');
+  const [showCropper, setShowCropper] = useState(false);
+  const [cropArea, setCropArea] = useState({ x: 10, y: 10, w: 80, h: 80 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cropperRef = useRef<HTMLDivElement>(null);
 
   const weeklyTasks = useMemo(() => generateWeeklyTasks(plants, new Date()), [plants]);
 
@@ -205,9 +211,76 @@ const App: React.FC = () => {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      setGrowthPhoto(ev.target?.result as string);
+      const result = ev.target?.result as string;
+      setRawPhoto(result);
+      setShowCropper(true);
+      setCropArea({ x: 10, y: 10, w: 80, h: 80 });
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleCropMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - cropArea.x, y: e.clientY - cropArea.y });
+  };
+
+  const handleCropMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!isDragging) return;
+      const container = cropperRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      let newX = e.clientX - dragStart.x - rect.left;
+      let newY = e.clientY - dragStart.y - rect.top;
+      newX = Math.max(0, Math.min(newX, 120 - cropArea.w));
+      newY = Math.max(0, Math.min(newY, 120 - cropArea.h));
+      setCropArea((prev) => ({ ...prev, x: newX, y: newY }));
+    },
+    [isDragging, dragStart, cropArea.w, cropArea.h]
+  );
+
+  const handleCropMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleCropMouseMove);
+      window.addEventListener('mouseup', handleCropMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleCropMouseMove);
+      window.removeEventListener('mouseup', handleCropMouseUp);
+    };
+  }, [isDragging, handleCropMouseMove, handleCropMouseUp]);
+
+  const applyCrop = () => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const scaleX = img.naturalWidth / 120;
+      const scaleY = img.naturalHeight / 120;
+      const sx = cropArea.x * scaleX;
+      const sy = cropArea.y * scaleY;
+      const sw = cropArea.w * scaleX;
+      const sh = cropArea.h * scaleY;
+
+      canvas.width = 160;
+      canvas.height = 160;
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, 160, 160);
+      setGrowthPhoto(canvas.toDataURL('image/jpeg', 0.8));
+      setShowCropper(false);
+    };
+    img.src = rawPhoto;
+  };
+
+  const cancelCrop = () => {
+    setShowCropper(false);
+    setRawPhoto('');
   };
 
   const handleAddGrowthRecord = () => {
@@ -517,12 +590,14 @@ const App: React.FC = () => {
             <h2 style={{ fontSize: 18, color: '#2E3B2E', marginBottom: 16 }}>生长记录</h2>
 
             <div
+              className="animate-elastic"
               style={{
                 background: '#fff',
                 borderRadius: 12,
                 padding: 20,
                 boxShadow: '1px 1px 4px #E0E0E0',
                 marginBottom: 20,
+                transformOrigin: 'top',
               }}
             >
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
@@ -604,6 +679,116 @@ const App: React.FC = () => {
                   />
                 </div>
               )}
+
+              {showCropper && rawPhoto && (
+                <div
+                  className="animate-elastic"
+                  style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.6)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000,
+                  }}
+                  onClick={(e) => {
+                    if (e.target === e.currentTarget) cancelCrop();
+                  }}
+                >
+                  <div
+                    style={{
+                      background: '#fff',
+                      borderRadius: 12,
+                      padding: 20,
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+                    }}
+                  >
+                    <h4 style={{ fontSize: 15, marginBottom: 12, color: '#333' }}>
+                      裁剪照片
+                    </h4>
+                    <div
+                      ref={cropperRef}
+                      style={{
+                        position: 'relative',
+                        width: 120,
+                        height: 120,
+                        border: '1px solid #E0E0E0',
+                        borderRadius: 8,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <img
+                        src={rawPhoto}
+                        alt="crop"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                      <div
+                        onMouseDown={handleCropMouseDown}
+                        style={{
+                          position: 'absolute',
+                          left: cropArea.x,
+                          top: cropArea.y,
+                          width: cropArea.w,
+                          height: cropArea.h,
+                          border: '2px dashed #4CAF50',
+                          background: 'rgba(76,175,80,0.15)',
+                          cursor: 'move',
+                          borderRadius: 4,
+                        }}
+                      />
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          pointerEvents: 'none',
+                          boxShadow: '0 0 0 9999px rgba(0,0,0,0.5)',
+                        }}
+                      />
+                    </div>
+                    <div style={{ fontSize: 11, color: '#999', marginTop: 8, marginBottom: 12 }}>
+                      拖动选框调整裁剪区域
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <button
+                        onClick={cancelCrop}
+                        style={{
+                          padding: '6px 14px',
+                          borderRadius: 6,
+                          border: '1px solid #E0E0E0',
+                          background: '#fff',
+                          fontSize: 12,
+                          cursor: 'pointer',
+                          color: '#666',
+                        }}
+                      >
+                        取消
+                      </button>
+                      <button
+                        onClick={applyCrop}
+                        style={{
+                          padding: '6px 14px',
+                          borderRadius: 6,
+                          border: 'none',
+                          background: '#4CAF50',
+                          fontSize: 12,
+                          cursor: 'pointer',
+                          color: '#fff',
+                          fontWeight: 600,
+                        }}
+                      >
+                        确认裁剪
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {growthRecords.length === 0 && (
@@ -616,16 +801,17 @@ const App: React.FC = () => {
               {growthRecords.map((record) => {
                 const plant = plants.find((p) => p.id === record.plantId);
                 if (!plant) return null;
-                const color = getCategoryColor(plant.species as never);
+                const color = getSpeciesColor(plant.species);
                 return (
                   <div
                     key={record.id}
-                    className="animate-fade"
+                    className="animate-fade animate-elastic"
                     style={{
                       background: '#fff',
                       borderRadius: 12,
                       boxShadow: '1px 1px 4px #E0E0E0',
                       overflow: 'hidden',
+                      transformOrigin: 'top',
                     }}
                   >
                     <div style={{ display: 'flex', gap: 16, padding: 16 }}>
@@ -706,16 +892,18 @@ const App: React.FC = () => {
                 >
                   {plantStats.map((ps) => {
                     const plant = plants.find((p) => p.id === ps.plantId);
-                    const color = plant ? getCategoryColor(plant.species as never) : '#4CAF50';
+                    const color = plant ? getSpeciesColor(plant.species) : '#4CAF50';
                     return (
                       <div
                         key={ps.plantId}
+                        className="animate-elastic"
                         style={{
                           background: '#fff',
                           borderRadius: 12,
                           padding: 16,
                           boxShadow: '1px 1px 4px #E0E0E0',
                           borderLeft: `4px solid ${color}`,
+                          transformOrigin: 'top',
                         }}
                       >
                         <div style={{ fontWeight: 600, fontSize: 14, color: '#2E3B2E', marginBottom: 8 }}>
@@ -747,11 +935,13 @@ const App: React.FC = () => {
                 </div>
 
                 <div
+                  className="animate-elastic"
                   style={{
                     background: '#fff',
                     borderRadius: 12,
                     padding: 20,
                     boxShadow: '1px 1px 4px #E0E0E0',
+                    transformOrigin: 'top',
                   }}
                 >
                   <h3 style={{ fontSize: 15, color: '#2E3B2E', marginBottom: 16 }}>

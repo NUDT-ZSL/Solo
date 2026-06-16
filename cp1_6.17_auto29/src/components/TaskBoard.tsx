@@ -96,32 +96,33 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ tasks, onToggleTask }) => {
                 </div>
               )}
 
-              {dayTasks.map((task) => (
+              {dayTasks.map((task) => {
+                const lightBg = task.color + '15';
+                return (
                 <div
                   key={task.id}
                   onClick={() => onToggleTask(task.id)}
+                  className={`task-card ${task.completed ? 'task-completed' : ''}`}
                   style={{
-                    background: task.completed
-                      ? 'rgba(255,255,255,0.5)'
-                      : '#fff',
+                    background: lightBg,
                     borderRadius: 6,
                     padding: '6px 8px',
                     marginBottom: 4,
                     borderLeft: `3px solid ${task.color}`,
                     cursor: 'pointer',
-                    opacity: task.completed ? 0.5 : 1,
                     position: 'relative',
                     overflow: 'hidden',
-                    transition: 'opacity 0.3s ease',
+                    transition: 'background 0.3s ease',
                   }}
                 >
                   <div
+                    className="strikethrough"
                     style={{
                       position: 'absolute',
                       top: '50%',
                       left: 8,
                       right: 8,
-                      height: 1,
+                      height: 2,
                       background: task.color,
                       transform: task.completed
                         ? 'scaleX(1)'
@@ -150,7 +151,8 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ tasks, onToggleTask }) => {
                     )}
                   </div>
                 </div>
-              ))}
+              );
+              })}
             </div>
           );
         })}
@@ -160,6 +162,17 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ tasks, onToggleTask }) => {
         @keyframes blink {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.2; }
+        }
+        @keyframes strikeThrough {
+          from { transform: scaleX(0); }
+          to { transform: scaleX(1); }
+        }
+        .task-completed .strikethrough {
+          animation: strikeThrough 0.3s ease forwards;
+          transform-origin: left;
+        }
+        .task-completed {
+          opacity: 0.6;
         }
         @media (max-width: 768px) {
           .task-grid-responsive {

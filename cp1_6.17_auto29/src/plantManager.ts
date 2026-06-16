@@ -81,12 +81,6 @@ const SPECIES_BASE_WATERING: Record<PlantSpecies, number> = {
   '月季': 3,
 };
 
-const MOISTURE_ADJUST: Record<MoisturePreference, number> = {
-  '干燥': 3,
-  '中等': 0,
-  '湿润': -2,
-};
-
 const LIGHT_LEVEL_MAP: Record<LightZone, number> = {
   '东向窗台': 300,
   '西晒阳台': 500,
@@ -102,6 +96,27 @@ const CATEGORY_COLOR_MAP: Record<PlantCategory, string> = {
   '开花植物': '#E91E63',
 };
 
+const SPECIES_COLOR_MAP: Record<PlantSpecies, string> = {
+  '绿萝': '#27AE60',
+  '龟背竹': '#2ECC71',
+  '琴叶榕': '#27AE60',
+  '虎尾兰': '#E67E22',
+  '多肉': '#D35400',
+  '吊兰': '#2ECC71',
+  '常春藤': '#16A085',
+  '芦荟': '#E67E22',
+  '富贵竹': '#27AE60',
+  '发财树': '#2ECC71',
+  '茉莉花': '#E91E63',
+  '月季': '#C2185B',
+};
+
+const MOISTURE_WATERING_RANGE: Record<MoisturePreference, [number, number]> = {
+  '湿润': [3, 4],
+  '中等': [5, 6],
+  '干燥': [7, 10],
+};
+
 export function getSpeciesCategory(species: PlantSpecies): PlantCategory {
   return SPECIES_CATEGORY_MAP[species];
 }
@@ -110,16 +125,20 @@ export function getCategoryColor(species: PlantSpecies): string {
   return CATEGORY_COLOR_MAP[getSpeciesCategory(species)];
 }
 
+export function getSpeciesColor(species: PlantSpecies): string {
+  return SPECIES_COLOR_MAP[species];
+}
+
 export function generateWateringFrequency(
   species: PlantSpecies,
   location: LightZone,
   moisturePreference: MoisturePreference
 ): number {
-  const base = SPECIES_BASE_WATERING[species];
-  const moistureAdj = MOISTURE_ADJUST[moisturePreference];
-  const lightAdj = LIGHT_LEVEL_MAP[location] > 400 ? -1 : LIGHT_LEVEL_MAP[location] < 200 ? 1 : 0;
-  const freq = base + moistureAdj + lightAdj;
-  return Math.max(2, Math.min(14, freq));
+  const [min, max] = MOISTURE_WATERING_RANGE[moisturePreference];
+  const lightFactor = LIGHT_LEVEL_MAP[location] > 400 ? 0 : LIGHT_LEVEL_MAP[location] < 200 ? 1 : 0;
+  const speciesBase = SPECIES_BASE_WATERING[species];
+  const baseFreq = Math.max(min, Math.min(max, speciesBase));
+  return Math.max(min, Math.min(max, baseFreq - lightFactor));
 }
 
 export function mapLightLevel(location: LightZone): number {
