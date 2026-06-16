@@ -1,0 +1,105 @@
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background-color: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 40px;
+  z-index: 1000;
+  border-bottom: 1px solid rgba(232, 196, 160, 0.3);
+}
+
+.navbar-logo {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--secondary-dark);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.navbar-logo::before {
+  content: '';
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-red));
+  border-radius: 50%;
+}
+
+.navbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.login-btn {
+  padding: 8px 20px;
+  background-color: var(--primary-color);
+  color: var(--secondary-dark);
+  border: none;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.login-btn:hover {
+  background-color: var(--secondary-red);
+  color: white;
+  transform: translateY(-1px);
+}
+
+.login-btn.logged-in {
+  background-color: var(--secondary-dark);
+  color: white;
+}
+
+.edit-mode-toggle {
+  padding: 8px 16px;
+  background-color: transparent;
+  border: 2px solid var(--secondary-red);
+  color: var(--secondary-red);
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.edit-mode-toggle:hover {
+  background-color: var(--secondary-red);
+  color: white;
+}
+
+.edit-mode-toggle.active {
+  background-color: var(--secondary-red);
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .navbar {
+    padding: 0 20px;
+  }
+  
+  .navbar-logo {
+    font-size: 18px;
+  }
+  
+  .navbar-actions {
+    gap: 8px;
+  }
+  
+  .login-btn,
+  .edit-mode-toggle {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+}
