@@ -5,52 +5,58 @@ interface ExhibitionGeneratorProps {
   onGenerateExhibition?: (theme: string, selectedBooks: Book[]) => void;
 }
 
-const THEME_GRADIENTS: Record<string, string[]> = {
-  default: [
-    'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-    'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-    'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-    'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-  ],
-  深海: [
-    'linear-gradient(135deg, #0093E9 0%, #80D0C7 100%)',
-    'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-    'linear-gradient(135deg, #5ee7df 0%, #b490ca 100%)',
-    'linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%)',
-  ],
-  宇宙: [
-    'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    'linear-gradient(135deg, #2C3E50 0%, #4A6572 100%)',
-    'linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)',
-    'linear-gradient(135deg, #5ee7df 0%, #b490ca 100%)',
-    'linear-gradient(135deg, #8E44AD 0%, #3498DB 100%)',
-  ],
-  侦探: [
-    'linear-gradient(135deg, #E74C3C 0%, #C0392B 100%)',
-    'linear-gradient(135deg, #2C3E50 0%, #34495E 100%)',
-    'linear-gradient(135deg, #9B59B6 0%, #8E44AD 100%)',
-    'linear-gradient(135deg, #f5576c 0%, #E74C3C 100%)',
-    'linear-gradient(135deg, #7F8C8D 0%, #95A5A6 100%)',
-  ],
-  绘本: [
-    'linear-gradient(135deg, #F39C12 0%, #E67E22 100%)',
-    'linear-gradient(135deg, #2ECC71 0%, #27AE60 100%)',
-    'linear-gradient(135deg, #3498DB 0%, #2980B9 100%)',
-    'linear-gradient(135deg, #E91E63 0%, #F06292 100%)',
-    'linear-gradient(135deg, #fddb92 0%, #d1fdff 100%)',
-  ],
+const THEME_COLOR_PALETTE: Record<string, string[]> = {
+  default: ['#4A90D9', '#8E44AD', '#3498DB'],
+  深海: ['#0093E9', '#80D0C7', '#667eea', '#4facfe'],
+  宇宙: ['#667eea', '#764ba2', '#2C3E50', '#8E44AD'],
+  侦探: ['#E74C3C', '#C0392B', '#2C3E50', '#9B59B6'],
+  绘本: ['#F39C12', '#E67E22', '#2ECC71', '#E91E63'],
+  科幻: ['#667eea', '#0093E9', '#8E44AD'],
+  推理: ['#E74C3C', '#9B59B6', '#2C3E50'],
+  海洋: ['#0093E9', '#80D0C7', '#4facfe', '#5ee7df'],
+  星空: ['#2C3E50', '#667eea', '#8E44AD', '#0f0c29'],
+  冒险: ['#F39C12', '#E74C3C', '#3498DB'],
+  成长: ['#2ECC71', '#F39C12', '#3498DB'],
+  自然: ['#27AE60', '#F39C12', '#2ECC71'],
+  亲情: ['#E91E63', '#F39C12', '#FF7675'],
 };
 
-function getThemeGradients(theme: string): string[] {
+function getThemeColorPalette(theme: string): string[] {
   const themeLower = theme.toLowerCase();
-  for (const key of Object.keys(THEME_GRADIENTS)) {
+  for (const key of Object.keys(THEME_COLOR_PALETTE)) {
     if (themeLower.includes(key) && key !== 'default') {
-      return THEME_GRADIENTS[key];
+      return THEME_COLOR_PALETTE[key];
     }
   }
-  return THEME_GRADIENTS.default;
+  return THEME_COLOR_PALETTE.default;
+}
+
+function generateVariedGradients(colors: string[], count: number): string[] {
+  const gradients: string[] = [];
+  const angles = [120, 135, 150, 160, 110, 145, 125, 155];
+  const stopPositions = [
+    [0, 100],
+    [0, 70, 100],
+    [0, 85, 100],
+    [10, 90, 100],
+    [0, 60, 100],
+  ];
+
+  for (let i = 0; i < count; i++) {
+    const color1 = colors[i % colors.length];
+    const color2 = colors[(i + 1) % colors.length];
+    const color3 = colors[(i + 2) % colors.length];
+    const angle = angles[i % angles.length] + (i * 3) % 15;
+    const stops = stopPositions[i % stopPositions.length];
+
+    if (stops.length === 2) {
+      gradients.push(`linear-gradient(${angle}deg, ${color1} ${stops[0]}%, ${color2} ${stops[1]}%)`);
+    } else {
+      gradients.push(`linear-gradient(${angle}deg, ${color1} ${stops[0]}%, ${color2} ${stops[1]}%, ${color3} ${stops[2]}%)`);
+    }
+  }
+
+  return gradients;
 }
 
 const ExhibitionGenerator: React.FC<ExhibitionGeneratorProps> = ({ onGenerateExhibition }) => {
@@ -64,7 +70,11 @@ const ExhibitionGenerator: React.FC<ExhibitionGeneratorProps> = ({ onGenerateExh
     return matchBooksByTheme(searchTheme, books);
   }, [searchTheme]);
 
-  const gradients = useMemo(() => getThemeGradients(searchTheme), [searchTheme]);
+  const gradients = useMemo(() => {
+    if (!searchTheme.trim()) return [];
+    const palette = getThemeColorPalette(searchTheme);
+    return generateVariedGradients(palette, 20);
+  }, [searchTheme]);
 
   const handleSearch = () => {
     setSearchTheme(theme);
@@ -241,7 +251,7 @@ const ExhibitionGenerator: React.FC<ExhibitionGeneratorProps> = ({ onGenerateExh
             border: `2px ${isBelowMinimum ? 'dashed' : 'solid'} ${isBelowMinimum ? '#E74C3C' : '#E8E8E8'}`,
             borderRadius: '12px',
             transition: 'border-color 0.3s',
-            animation: isBelowMinimum ? 'dashFlash 1s ease-in-out infinite' : 'none',
+            animation: isBelowMinimum ? 'dashFlash 1.5s ease-in-out infinite' : 'none',
           }}
         >
           {recommendedBooks.length === 0 ? (
@@ -318,9 +328,13 @@ interface BookCardProps {
 }
 
 const BookCard: React.FC<BookCardProps> = ({ book, selected, gradient, onClick, delay }) => {
+  const [isHovered, setIsHovered] = useState(false);
+
   return (
     <div
       onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       style={{
         width: '140px',
         height: '200px',
@@ -331,7 +345,7 @@ const BookCard: React.FC<BookCardProps> = ({ book, selected, gradient, onClick, 
         boxShadow: selected ? '0 4px 16px rgba(74, 144, 217, 0.3)' : '0 4px 4px #A0A0A0',
         transition: 'transform 0.3s ease, box-shadow 0.3s ease',
         animation: `scaleIn 0.3s ease-out ${delay}s both`,
-        transform: selected ? 'translateY(-2px)' : 'translateY(0)',
+        transform: selected || isHovered ? 'translateY(-2px)' : 'translateY(0)',
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = 'translateY(-2px)';
@@ -403,8 +417,9 @@ const BookCard: React.FC<BookCardProps> = ({ book, selected, gradient, onClick, 
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          transition: 'all 0.2s ease',
+          transition: 'all 0.15s ease',
           opacity: selected ? 1 : 0.8,
+          boxShadow: selected && isHovered ? '0 0 6px #27AE60' : 'none',
           animation: selected ? 'scaleIn 0.2s ease-out' : 'none',
         }}
       >
@@ -414,7 +429,13 @@ const BookCard: React.FC<BookCardProps> = ({ book, selected, gradient, onClick, 
           </svg>
         ) : (
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-            <path d="M12 5v14M5 12h14" stroke="#BDC3C7" strokeWidth="3" strokeLinecap="round" />
+            <path
+              d="M12 5v14M5 12h14"
+              stroke={isHovered ? '#2ECC71' : '#BDC3C7'}
+              strokeWidth="3"
+              strokeLinecap="round"
+              style={{ transition: 'stroke 0.15s ease' }}
+            />
           </svg>
         )}
       </div>

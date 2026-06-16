@@ -71,15 +71,15 @@ input {
 
 @keyframes dashFlash {
   0%, 100% {
-    border-color: #E74C3C;
+    border-color: rgba(231, 76, 60, 1);
   }
   50% {
-    border-color: transparent;
+    border-color: rgba(231, 76, 60, 0.3);
   }
 }
 
 .dash-flash {
-  animation: dashFlash 1s ease-in-out infinite;
+  animation: dashFlash 1.5s ease-in-out infinite;
 }
 
 @keyframes slideInRight {
