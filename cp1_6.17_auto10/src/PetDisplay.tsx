@@ -39,16 +39,16 @@ const PetDisplay: React.FC<PetDisplayProps> = ({ stats, currentAction, isDead })
   return (
     <div className="pet-display-container">
       {isHungry && (
-        <div className="speech-bubble">
+        <div key={`bubble-${Date.now()}`} className="speech-bubble">
           <span className="speech-text">饥饿</span>
         </div>
       )}
 
       {isDirty && (
         <div className="dust-container">
-          <div className="dust-particle" style={{ animationDelay: '0s' }} />
-          <div className="dust-particle" style={{ animationDelay: '0.3s' }} />
-          <div className="dust-particle" style={{ animationDelay: '0.6s' }} />
+          <div key={`dust1-${isDirty}`} className="dust-particle" style={{ animationDelay: '0s' }} />
+          <div key={`dust2-${isDirty}`} className="dust-particle" style={{ animationDelay: '1s' }} />
+          <div key={`dust3-${isDirty}`} className="dust-particle" style={{ animationDelay: '2s' }} />
         </div>
       )}
 

@@ -177,7 +177,7 @@ body {
   background: #0F380F;
   padding: 8px 12px;
   border: 3px solid #306230;
-  animation: bubblePop 0.3s ease-out;
+  animation: bubblePop 0.5s ease-out;
 }
 
 @keyframes bubblePop {
@@ -310,7 +310,7 @@ body {
   color: #8BAC0F;
   border: 3px solid #0F380F;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: transform 0.15s ease, background-color 0.15s ease;
   border-radius: 0;
 }
 
@@ -343,6 +343,11 @@ body {
     font-size: 0.6em;
   }
 
+  .pet-display-container {
+    width: 100%;
+    height: 180px;
+  }
+
   .control-panel {
     flex-wrap: wrap;
   }
@@ -359,5 +364,14 @@ body {
 
   .progress-bar {
     width: auto;
+  }
+
+  .speech-bubble {
+    right: 10px;
+    padding: 6px 8px;
+  }
+
+  .speech-text {
+    font-size: 0.7em;
   }
 }
