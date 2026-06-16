@@ -1,3 +1,10 @@
+export type BookingConflictType = 'none' | 'user-duplicate' | 'slot-full';
+
+export interface BookingConflictResult {
+  hasConflict: boolean;
+  type: BookingConflictType;
+}
+
 export type BookingPurpose = 'baking' | 'chinese' | 'dessert';
 
 export interface Booking {
@@ -30,6 +37,7 @@ export interface Ingredient {
   shelfLifeDays: number;
   quantity: number;
   isHistorical: boolean;
+  consumedAt?: Date;
 }
 
 export interface AppState {
@@ -42,6 +50,7 @@ export interface AppState {
 type Listener = () => void;
 
 const MAX_BOOKINGS_PER_SLOT = 3;
+const MAX_HISTORY_SIZE = 100;
 const TIME_SLOTS = generateTimeSlots();
 
 function generateTimeSlots(): string[] {
@@ -174,15 +183,15 @@ class AppDataStore {
     return this.bookingsMap.get(timeSlot) || [];
   }
 
-  hasConflict(timeSlot: string, userName?: string): boolean {
+  hasConflict(timeSlot: string, userName?: string): BookingConflictResult {
     const bookings = this.getBookingsBySlot(timeSlot);
+    if (userName && bookings.some(b => b.userName === userName)) {
+      return { hasConflict: true, type: 'user-duplicate' };
+    }
     if (bookings.length >= MAX_BOOKINGS_PER_SLOT) {
-      return true;
+      return { hasConflict: true, type: 'slot-full' };
     }
-    if (userName) {
-      return bookings.some(b => b.userName === userName);
-    }
-    return false;
+    return { hasConflict: false, type: 'none' };
   }
 
   hasUserBookedSlot(timeSlot: string, userName: string): boolean {
@@ -190,11 +199,16 @@ class AppDataStore {
     return bookings.some(b => b.userName === userName);
   }
 
+  isSlotFull(timeSlot: string): boolean {
+    return this.getBookingsBySlot(timeSlot).length >= MAX_BOOKINGS_PER_SLOT;
+  }
+
   bookSlot(
     timeSlot: string,
     data: { userName: string; peopleCount: number; purpose: BookingPurpose }
   ): Booking | null {
-    if (this.hasConflict(timeSlot, data.userName)) {
+    const conflict = this.hasConflict(timeSlot, data.userName);
+    if (conflict.hasConflict) {
       return null;
     }
 
@@ -236,7 +250,7 @@ class AppDataStore {
       : 0;
 
     for (let i = startIndex; i < TIME_SLOTS.length; i++) {
-      if (!this.hasConflict(TIME_SLOTS[i])) {
+      if (!this.isSlotFull(TIME_SLOTS[i])) {
         return TIME_SLOTS[i];
       }
     }
@@ -244,7 +258,24 @@ class AppDataStore {
   }
 
   getEquipments(): Equipment[] {
+    this.checkEquipmentExpiry();
     return Array.from(this.equipmentsMap.values());
+  }
+
+  private checkEquipmentExpiry(): void {
+    const now = Date.now();
+    for (const equipment of this.equipmentsMap.values()) {
+      if (
+        equipment.status === 'in-use' &&
+        equipment.lockedUntil &&
+        equipment.lockedUntil.getTime() <= now
+      ) {
+        equipment.status = 'idle';
+        equipment.lockedBy = undefined;
+        equipment.lockedUntil = undefined;
+        equipment.occupiedUntil = undefined;
+      }
+    }
   }
 
   lockEquipment(equipmentId: string, bookingId: string, durationHours = 2): boolean {
@@ -283,7 +314,11 @@ class AppDataStore {
   }
 
   getHistoryIngredients(): Ingredient[] {
-    return [...this.historyIngredients];
+    return [...this.historyIngredients].sort((a, b) => {
+      const timeA = a.consumedAt ? a.consumedAt.getTime() : 0;
+      const timeB = b.consumedAt ? b.consumedAt.getTime() : 0;
+      return timeB - timeA;
+    });
   }
 
   addIngredient(data: {
@@ -324,7 +359,11 @@ class AppDataStore {
         shelfLifeDays: ingredient.shelfLifeDays,
         quantity: ingredient.quantity,
         isHistorical: true,
+        consumedAt: new Date(),
       });
+      if (this.historyIngredients.length > MAX_HISTORY_SIZE) {
+        this.historyIngredients = this.historyIngredients.slice(-MAX_HISTORY_SIZE);
+      }
     }
     this.notify();
     return true;

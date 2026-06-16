@@ -40,6 +40,15 @@ function formatDate(date: Date): string {
   return `${month}/${day}`;
 }
 
+function formatDateTime(date: Date): string {
+  const d = new Date(date);
+  const month = (d.getMonth() + 1).toString().padStart(2, '0');
+  const day = d.getDate().toString().padStart(2, '0');
+  const hour = d.getHours().toString().padStart(2, '0');
+  const min = d.getMinutes().toString().padStart(2, '0');
+  return `${month}/${day} ${hour}:${min}`;
+}
+
 export function InventoryPanel({ from }: InventoryPanelProps) {
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [historical, setHistorical] = useState<Ingredient[]>([]);
@@ -200,7 +209,8 @@ export function InventoryPanel({ from }: InventoryPanelProps) {
                     </span>
                   </div>
                   <span className="history-meta">
-                    过期日期：{formatDate(expireDate)} · 已用完
+                    过期：{formatDate(expireDate)}
+                    {ing.consumedAt && ` · 消耗于${formatDateTime(ing.consumedAt)}`}
                   </span>
                 </div>
               );

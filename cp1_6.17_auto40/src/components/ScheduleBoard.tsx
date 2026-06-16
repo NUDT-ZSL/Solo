@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { appDataStore, type Booking, type BookingPurpose, type Equipment } from '@/DataStore';
+import { appDataStore, type Booking, type BookingPurpose, type Equipment, type BookingConflictType } from '@/DataStore';
 
 interface ScheduleBoardProps {
   from: typeof appDataStore;
@@ -47,14 +47,25 @@ export function ScheduleBoard({ from }: ScheduleBoardProps) {
     setEquipments(from.getEquipments());
   };
 
-  const handleSlotClick = (slot: string) => {
-    if (from.hasConflict(slot)) {
-      const nextSlot = from.findNextAvailableSlot(slot);
-      setConflictMessage(
-        nextSlot
+  const getConflictMessage = (type: BookingConflictType, slot: string): string => {
+    switch (type) {
+      case 'user-duplicate':
+        return `您已预约该时段，不可重复预约`;
+      case 'slot-full': {
+        const nextSlot = from.findNextAvailableSlot(slot);
+        return nextSlot
           ? `该时段已满，推荐最近空闲时段：${nextSlot}`
-          : '今日所有时段均已满'
-      );
+          : '今日所有时段均已满';
+      }
+      default:
+        return '';
+    }
+  };
+
+  const handleSlotClick = (slot: string) => {
+    const conflict = from.hasConflict(slot);
+    if (conflict.hasConflict) {
+      setConflictMessage(getConflictMessage(conflict.type, slot));
       return;
     }
     setSelectedSlot(slot);
@@ -65,8 +76,9 @@ export function ScheduleBoard({ from }: ScheduleBoardProps) {
   const handleBooking = () => {
     if (!selectedSlot || !formData.userName.trim()) return;
 
-    if (from.hasUserBookedSlot(selectedSlot, formData.userName.trim())) {
-      setConflictMessage(`用户「${formData.userName.trim()}」已在该时段预约，不可重复预约`);
+    const conflict = from.hasConflict(selectedSlot, formData.userName.trim());
+    if (conflict.hasConflict) {
+      setConflictMessage(getConflictMessage(conflict.type, selectedSlot));
       return;
     }
 
@@ -80,13 +92,9 @@ export function ScheduleBoard({ from }: ScheduleBoardProps) {
       setShowForm(false);
       setSelectedSlot(null);
       setFormData({ userName: '', peopleCount: 1, purpose: 'baking' });
+      setConflictMessage(null);
     } else {
-      const nextSlot = from.findNextAvailableSlot(selectedSlot);
-      setConflictMessage(
-        nextSlot
-          ? `该时段已满，推荐最近空闲时段：${nextSlot}`
-          : '今日所有时段均已满'
-      );
+      setConflictMessage(getConflictMessage('slot-full', selectedSlot));
     }
   };
 
@@ -144,7 +152,11 @@ export function ScheduleBoard({ from }: ScheduleBoardProps) {
         <div className="booking-columns">
           {timeSlots.map(slot => {
             const slotBookings = bookingsBySlot.get(slot) || [];
-            const isFull = from.hasConflict(slot);
+            const isFull = from.isSlotFull(slot);
+            const maxVisibleSlots = 3;
+            const overflowCount = slotBookings.length > maxVisibleSlots
+              ? slotBookings.length - maxVisibleSlots
+              : 0;
 
             return (
               <div key={slot} className="time-row" data-time={slot}>
@@ -185,6 +197,11 @@ export function ScheduleBoard({ from }: ScheduleBoardProps) {
                     </div>
                   );
                 })}
+                {overflowCount > 0 && (
+                  <div className="mobile-slot-overflow">
+                    +{overflowCount}
+                  </div>
+                )}
               </div>
             );
           })}
