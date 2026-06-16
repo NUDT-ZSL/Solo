@@ -31,6 +31,7 @@ export type BookPage = PageBlock[];
 
 export interface BookState {
   bookId: string;
+  pageCount: number;
   currentPage: number;
   zoom: number;
   isOpen: boolean;

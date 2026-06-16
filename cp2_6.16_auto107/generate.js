@@ -262,6 +262,10 @@ books.forEach((book) => {
 
 const outDir = path.join(__dirname, "data");
 
+if (!fs.existsSync(outDir)) {
+  fs.mkdirSync(outDir, { recursive: true });
+}
+
 fs.writeFileSync(
   path.join(outDir, "books.json"),
   JSON.stringify(books, null, 2),

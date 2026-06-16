@@ -9,7 +9,7 @@ interface BookStoreState {
 }
 
 interface BookStoreActions {
-  openBook: (id: string) => void;
+  openBook: (id: string, pageCount: number) => void;
   closeBook: (id: string) => void;
   turnPage: (id: string, direction: 'left' | 'right') => void;
   zoomPage: (id: string, delta: number) => void;
@@ -28,13 +28,14 @@ export function BookProvider({ children }: { children: ReactNode }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const openBook = useCallback((id: string) => {
+  const openBook = useCallback((id: string, pageCount: number) => {
     setOpenBooks(prev => {
       if (prev.some(b => b.bookId === id)) {
         return prev;
       }
       const newBook: BookState = {
         bookId: id,
+        pageCount,
         currentPage: 0,
         zoom: 1.0,
         isOpen: true,
@@ -57,7 +58,8 @@ export function BookProvider({ children }: { children: ReactNode }) {
       prev.map(book => {
         if (book.bookId !== id) return book;
         const delta = direction === 'right' ? 1 : -1;
-        const nextPage = Math.max(0, book.currentPage + delta);
+        const maxPage = Math.max(0, book.pageCount - 1);
+        const nextPage = Math.min(maxPage, Math.max(0, book.currentPage + delta));
         return { ...book, currentPage: nextPage };
       })
     );
