@@ -1,4 +1,13 @@
 {
-  "requests": [],
+  "requests": [
+    {
+      "id": "dfd02a12-3dca-46b2-bf91-3a6764db1e67",
+      "bookId": "0741fa44-326a-4d7b-97de-4f59bfa86515",
+      "requesterId": "f9e32fa6-8c75-4f89-8b93-6b94b687f200",
+      "ownerId": "be3f04b8-a02a-4087-9c90-418fe1aa78f9",
+      "status": "pending",
+      "createdAt": "2026-06-16T22:58:25.137Z"
+    }
+  ],
   "records": []
 }

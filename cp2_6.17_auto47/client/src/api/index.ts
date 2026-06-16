@@ -1,4 +1,4 @@
-import type { User, Book, ExchangeRequest, ExchangeRecord, AdminStats } from '../types';
+import type { User, Book, ExchangeRequest, ExchangeRecord, AdminStats, TransferNode } from '../types';
 
 const BASE = '/api';
 
@@ -64,6 +64,6 @@ export const exchangesApi = {
   getHistory: (id: string) => request<TransferNode[]>(`/exchanges/${id}/history`),
   close: (id: string) =>
     request<ExchangeRecord>(`/exchanges/${id}/close`, { method: 'PUT' }),
-  adminStats: () => request<AdminStats>('/admin/stats'),
-  adminRecords: () => request<ExchangeRecord[]>('/admin/records'),
+  adminStats: () => request<AdminStats>('/exchanges/admin/stats'),
+  adminRecords: () => request<ExchangeRecord[]>('/exchanges/admin/records'),
 };
