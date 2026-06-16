@@ -6,6 +6,8 @@ import {
   hexToHsv,
   hsvToHex,
   hsvToRgb,
+  getLuminance,
+  hexToRgb,
 } from '../imageProcessor/colorUtils';
 
 interface ColorPalettePanelProps {
@@ -374,8 +376,22 @@ export default function ColorPalettePanel({
               }}
             />
           </div>
+          <div
+            className="color-wheel-hex-label"
+            style={{
+              backgroundColor: currentColor,
+              color: (() => {
+                const { r, g, b } = hexToRgb(currentColor);
+                return getLuminance(r, g, b) > 0.5 ? 'rgba(30, 30, 30, 0.9)' : 'rgba(255, 255, 255, 0.9)';
+              })(),
+            }}
+          >
+            {currentColor.toUpperCase()}
+          </div>
         </div>
       </div>
+
+      <div className="panel-divider" />
 
       <div className="panel-section">
         <div className="panel-title">预设色板</div>
@@ -388,13 +404,21 @@ export default function ColorPalettePanel({
             >
               <div className="palette-name">{palette.name}</div>
               <div className="palette-grid">
-                {palette.colors.map((color, i) => (
-                  <div
-                    key={i}
-                    className="palette-swatch"
-                    style={{ backgroundColor: color }}
-                  />
-                ))}
+                {palette.colors.map((color, i) => {
+                  const { r, g, b } = hexToRgb(color);
+                  const textColor = getLuminance(r, g, b) > 0.5 ? 'rgba(30, 30, 30, 0.85)' : 'rgba(255, 255, 255, 0.85)';
+                  return (
+                    <div
+                      key={i}
+                      className="palette-swatch"
+                      style={{ backgroundColor: color }}
+                    >
+                      <span className="palette-swatch-label" style={{ color: textColor }}>
+                        {color.substring(1).toUpperCase()}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}

@@ -171,8 +171,20 @@ body {
 
 .color-wheel-container {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 10px;
+}
+
+.color-wheel-hex-label {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .color-wheel {
@@ -237,6 +249,18 @@ body {
 
 .palette-card.active {
   border-color: var(--color-accent);
+  animation: palette-border-fade-in 0.2s ease-out;
+}
+
+@keyframes palette-border-fade-in {
+  from {
+    border-color: transparent;
+    box-shadow: 0 0 0 0 rgba(100, 255, 218, 0);
+  }
+  to {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 8px 0 rgba(100, 255, 218, 0.3);
+  }
 }
 
 .palette-name {
@@ -256,6 +280,27 @@ body {
 .palette-swatch {
   aspect-ratio: 1;
   border-radius: 3px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.palette-swatch-label {
+  font-family: var(--font-mono);
+  font-size: 7px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.panel-divider {
+  height: 1px;
+  background-color: #d0d0d0;
+  margin: 0 16px;
 }
 
 .hsv-picker-container {
