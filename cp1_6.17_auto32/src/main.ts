@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { WeatherSystem, SYSTEM_INFO } from './weatherSystem';
+import { WeatherSystem, SYSTEM_INFO, TRAIL_COUNT } from './weatherSystem';
 import type { SystemType } from './weatherSystem';
 import { ParticleRenderer } from './particleRenderer';
 import { UIPanel } from './uiPanel';
@@ -55,7 +55,9 @@ class WeatherSimulationApp {
     this.weatherSystem = new WeatherSystem('coldFront');
     this.lastSystemType = 'coldFront';
     this.particleRenderer = new ParticleRenderer(this.scene);
-    this.particleRenderer.init(this.weatherSystem.getParticleCount());
+    const mainCount = this.weatherSystem.getParticleCount();
+    const trailCount = mainCount * TRAIL_COUNT;
+    this.particleRenderer.init(mainCount, trailCount);
 
     this.createGroundGrid();
     this.createStars();
@@ -66,7 +68,7 @@ class WeatherSimulationApp {
 
     this.clock = new THREE.Clock();
     this.onWindowResize();
-    window.addEventListener('resize', () => this.onWindowResize());
+    window.addEventListener('resize', this.onWindowResize);
   }
 
   private createGroundGrid(): void {
@@ -132,7 +134,7 @@ class WeatherSimulationApp {
     this.scene.add(dir);
   }
 
-  private onWindowResize(): void {
+  private onWindowResize = (): void => {
     const canvasContainer = this.container;
     const width = canvasContainer.clientWidth || window.innerWidth;
     const height = canvasContainer.clientHeight || window.innerHeight;
@@ -140,17 +142,20 @@ class WeatherSimulationApp {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
     this.particleRenderer.resize();
-  }
+  };
 
   private onParamsChange(params: UIParams): void {
     if (params.systemType !== this.lastSystemType) {
       this.weatherSystem.setSystemType(params.systemType);
-      this.particleRenderer.setParticleCount(this.weatherSystem.getParticleCount());
+      const mainCount = this.weatherSystem.getParticleCount();
+      const trailCount = mainCount * TRAIL_COUNT;
+      this.particleRenderer.setParticleCount(mainCount, trailCount);
       this.lastSystemType = params.systemType;
       this.simTime = 0;
     }
     this.weatherSystem.updateParams(params.tempDiff, params.humidity, params.windSpeed);
     this.isPaused = params.isPaused;
+    this.uiPanel.setPaused(this.isPaused);
   }
 
   public start(): void {
@@ -183,9 +188,12 @@ class WeatherSimulationApp {
         this.simTime = 0;
       }
       this.weatherSystem.update(this.simTime, dt);
-      const particleData = this.weatherSystem.getParticleData();
-      this.particleRenderer.update(particleData);
+      this.uiPanel.updateSlope(this.weatherSystem.getSlope());
     }
+
+    const mainData = this.weatherSystem.getParticleData();
+    const trailData = this.weatherSystem.getTrailData();
+    this.particleRenderer.update(mainData, trailData);
 
     if (this.stars) {
       this.stars.rotation.y += dt * 0.005;
@@ -196,7 +204,7 @@ class WeatherSimulationApp {
 
     this.uiPanel.updateInfo(
       this.weatherSystem.getSystemType(),
-      this.weatherSystem.getParticleCount(),
+      this.weatherSystem.getTotalParticleCount(),
       this.simTime,
       this.currentFps
     );
@@ -213,7 +221,7 @@ class WeatherSimulationApp {
     this.stop();
     this.uiPanel.dispose();
     this.particleRenderer.dispose();
-    window.removeEventListener('resize', () => this.onWindowResize());
+    window.removeEventListener('resize', this.onWindowResize);
     if (this.renderer.domElement.parentNode) {
       this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
     }

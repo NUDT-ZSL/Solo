@@ -25,6 +25,10 @@ export class UIPanel {
   private params: UIParams;
   private listeners: Set<Listener> = new Set();
   private infoPanel: HTMLElement | null = null;
+  private legendPanel: HTMLElement | null = null;
+  private slopeValueEl: HTMLElement | null = null;
+  private statusDotEl: HTMLElement | null = null;
+  private statusTextEl: HTMLElement | null = null;
   private isMobile: boolean = false;
   private drawerToggleBtn: HTMLElement | null = null;
   private isDrawerOpen: boolean = true;
@@ -43,6 +47,7 @@ export class UIPanel {
     this.createStyles();
     this.createControlPanel();
     this.createInfoPanel();
+    this.createLegendPanel();
     this.bindWindowEvents();
   }
 
@@ -65,7 +70,7 @@ export class UIPanel {
   }
 
   private createStyles(): void {
-    const styleId = 'weather-ui-styles';
+    const styleId = 'weather-ui-styles-v2';
     if (document.getElementById(styleId)) return;
     const style = document.createElement('style');
     style.id = styleId;
@@ -135,6 +140,8 @@ export class UIPanel {
         justify-content: space-between;
         align-items: center;
         margin-bottom: 8px;
+        flex-wrap: wrap;
+        gap: 4px;
       }
       .slider-label {
         font-size: 13px;
@@ -147,6 +154,16 @@ export class UIPanel {
         font-variant-numeric: tabular-nums;
         min-width: 50px;
         text-align: right;
+      }
+      .slope-tag {
+        font-size: 11px;
+        color: #BBDEFB;
+        background: rgba(79, 195, 247, 0.15);
+        border: 1px solid rgba(79, 195, 247, 0.35);
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-variant-numeric: tabular-nums;
+        margin-left: auto;
       }
       .slider {
         -webkit-appearance: none;
@@ -249,7 +266,7 @@ export class UIPanel {
         border-radius: 10px;
         color: #fff;
         z-index: 50;
-        min-width: 200px;
+        min-width: 220px;
       }
       .info-item {
         display: flex;
@@ -274,6 +291,68 @@ export class UIPanel {
         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         color: #fff;
       }
+      .status-indicator {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+        transition: all 0.3s;
+      }
+      .status-dot.running {
+        background: #4CAF50;
+        box-shadow: 0 0 8px rgba(76, 175, 80, 0.7);
+        animation: pulse-green 2s ease-in-out infinite;
+      }
+      .status-dot.paused {
+        background: #F44336;
+        box-shadow: 0 0 8px rgba(244, 67, 54, 0.6);
+      }
+      .status-text.running { color: #81C784; }
+      .status-text.paused { color: #E57373; }
+      @keyframes pulse-green {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.7; transform: scale(0.9); }
+      }
+      .legend-panel {
+        position: fixed;
+        right: 310px;
+        bottom: 20px;
+        padding: 12px 16px;
+        background: rgba(11, 14, 45, 0.65);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
+        color: #fff;
+        z-index: 50;
+        min-width: 160px;
+      }
+      .legend-title {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.6);
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        margin-bottom: 8px;
+      }
+      .legend-gradient {
+        height: 12px;
+        border-radius: 6px;
+        background: linear-gradient(90deg, #4FC3F7 0%, #81D4FA 35%, #BBDEFB 65%, #FFFFFF 100%);
+        margin-bottom: 8px;
+        box-shadow: 0 0 12px rgba(79, 195, 247, 0.2);
+      }
+      .legend-scale {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.6);
+        font-variant-numeric: tabular-nums;
+      }
       .drawer-toggle {
         display: none;
         position: fixed;
@@ -289,9 +368,6 @@ export class UIPanel {
         cursor: pointer;
         font-weight: 600;
         backdrop-filter: blur(4px);
-      }
-      .drawer-toggle.closed {
-        right: 0;
       }
       .fps-label {
         font-size: 11px;
@@ -337,7 +413,14 @@ export class UIPanel {
           bottom: auto;
           top: 12px;
           padding: 10px 14px;
-          min-width: 160px;
+          min-width: 180px;
+        }
+        .legend-panel {
+          right: 12px;
+          bottom: auto;
+          top: 12px;
+          left: auto;
+          min-width: 140px;
         }
       }
     `;
@@ -366,6 +449,7 @@ export class UIPanel {
         <div class="slider-header">
           <span class="slider-label">温度差</span>
           <span class="slider-value" id="temp-diff-value">${this.params.tempDiff > 0 ? '+' : ''}${this.params.tempDiff}°C</span>
+          <span class="slope-tag" id="slope-tag">坡度 ${this.calcSlope(0)}°</span>
         </div>
         <div class="slider-container">
           <input type="range" class="slider" id="temp-diff-slider"
@@ -404,7 +488,14 @@ export class UIPanel {
       <div class="fps-label">拖动旋转视角 · 滚轮缩放</div>
     `;
     this.container.appendChild(panel);
+    const slopeEl = panel.querySelector('#slope-tag');
+    this.slopeValueEl = slopeEl as HTMLElement;
     this.bindPanelEvents(panel);
+  }
+
+  private calcSlope(tempDiff: number): number {
+    const normalized = (tempDiff + 10) / 20;
+    return Math.round(15 + normalized * 30);
   }
 
   private bindPanelEvents(panel: HTMLElement): void {
@@ -418,6 +509,9 @@ export class UIPanel {
     const tempValue = panel.querySelector('#temp-diff-value') as HTMLElement;
     this.bindSlider(tempSlider, tempValue, (val) => {
       this.params.tempDiff = val;
+      if (this.slopeValueEl) {
+        this.slopeValueEl.textContent = `坡度 ${this.calcSlope(val)}°`;
+      }
       return `${val > 0 ? '+' : ''}${val}°C`;
     });
 
@@ -439,6 +533,7 @@ export class UIPanel {
     pauseBtn.addEventListener('click', () => {
       this.params.isPaused = !this.params.isPaused;
       pauseBtn.textContent = this.params.isPaused ? '▶ 继续' : '❚❚ 暂停';
+      this.updateStatusDisplay();
       this.emit();
     });
 
@@ -454,6 +549,9 @@ export class UIPanel {
       humidityValue.textContent = '60%';
       windSlider.value = '5';
       windValue.textContent = '5 级';
+      if (this.slopeValueEl) {
+        this.slopeValueEl.textContent = `坡度 ${this.calcSlope(0)}°`;
+      }
       this.emit();
     });
 
@@ -513,12 +611,21 @@ export class UIPanel {
         <span class="info-value" id="info-time">00:00</span>
       </div>
       <div class="info-item">
+        <span class="info-label">当前状态</span>
+        <span class="status-indicator">
+          <span class="status-dot running" id="status-dot"></span>
+          <span class="status-text running" id="status-text">运行中</span>
+        </span>
+      </div>
+      <div class="info-item">
         <span class="info-label">FPS</span>
         <span class="info-value" id="info-fps">60</span>
       </div>
     `;
     this.container.appendChild(info);
     this.infoPanel = info;
+    this.statusDotEl = info.querySelector('#status-dot') as HTMLElement;
+    this.statusTextEl = info.querySelector('#status-text') as HTMLElement;
 
     if (this.isMobile) {
       const toggle = document.createElement('button');
@@ -526,6 +633,39 @@ export class UIPanel {
       this.container.appendChild(toggle);
       this.drawerToggleBtn = toggle;
       toggle.addEventListener('click', () => this.toggleDrawer());
+    }
+  }
+
+  private createLegendPanel(): void {
+    const legend = document.createElement('div');
+    legend.className = 'legend-panel';
+    legend.innerHTML = `
+      <div class="legend-title">海拔颜色</div>
+      <div class="legend-gradient"></div>
+      <div class="legend-scale">
+        <span>0m</span>
+        <span>4000m</span>
+        <span>8000m</span>
+      </div>
+    `;
+    this.container.appendChild(legend);
+    this.legendPanel = legend;
+  }
+
+  private updateStatusDisplay(): void {
+    if (!this.statusDotEl || !this.statusTextEl) return;
+    if (this.params.isPaused) {
+      this.statusDotEl.classList.remove('running');
+      this.statusDotEl.classList.add('paused');
+      this.statusTextEl.classList.remove('running');
+      this.statusTextEl.classList.add('paused');
+      this.statusTextEl.textContent = '已暂停';
+    } else {
+      this.statusDotEl.classList.remove('paused');
+      this.statusDotEl.classList.add('running');
+      this.statusTextEl.classList.remove('paused');
+      this.statusTextEl.classList.add('running');
+      this.statusTextEl.textContent = '运行中';
     }
   }
 
@@ -547,13 +687,16 @@ export class UIPanel {
         if (wasMobile !== this.isMobile) {
           const existingPanel = this.container.querySelector('.control-panel');
           const existingInfo = this.infoPanel;
+          const existingLegend = this.legendPanel;
           const existingToggle = this.drawerToggleBtn;
           if (existingPanel) existingPanel.remove();
           if (existingInfo) existingInfo.remove();
+          if (existingLegend) existingLegend.remove();
           if (existingToggle) existingToggle.remove();
           this.isDrawerOpen = true;
           this.createControlPanel();
           this.createInfoPanel();
+          this.createLegendPanel();
         }
       }, 200);
     });
@@ -576,6 +719,24 @@ export class UIPanel {
     if (fpsEl) fpsEl.textContent = fps.toFixed(0);
   }
 
+  public updateSlope(slopeDeg: number): void {
+    if (this.slopeValueEl) {
+      const rounded = Math.round(slopeDeg);
+      this.slopeValueEl.textContent = `坡度 ${rounded}°`;
+    }
+  }
+
+  public setPaused(paused: boolean): void {
+    if (this.params.isPaused !== paused) {
+      this.params.isPaused = paused;
+      const pauseBtn = document.getElementById('pause-btn');
+      if (pauseBtn) {
+        pauseBtn.textContent = paused ? '▶ 继续' : '❚❚ 暂停';
+      }
+      this.updateStatusDisplay();
+    }
+  }
+
   public getParams(): UIParams {
     return { ...this.params };
   }
@@ -584,6 +745,7 @@ export class UIPanel {
     const panel = this.container.querySelector('.control-panel');
     if (panel) panel.remove();
     if (this.infoPanel) this.infoPanel.remove();
+    if (this.legendPanel) this.legendPanel.remove();
     if (this.drawerToggleBtn) this.drawerToggleBtn.remove();
   }
 }
