@@ -176,6 +176,15 @@ img {
   animation: pulse-blue 0.3s ease-out;
 }
 
+.tag.clicked,
+.color-tag.clicked {
+  animation: scaleIn 0.15s ease-out;
+}
+
+.favorite-btn.bounce {
+  animation: bounce-heart 0.3s ease-out;
+}
+
 .card-gallery {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -340,8 +349,14 @@ img {
 }
 
 .masonry-grid {
-  column-count: 2;
+  column-count: 1;
   column-gap: 24px;
+}
+
+@media (min-width: 640px) {
+  .masonry-grid {
+    column-count: 2;
+  }
 }
 
 @media (min-width: 1024px) {
@@ -352,6 +367,10 @@ img {
 
 .recommend-card {
   break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+  page-break-inside: avoid;
+  display: inline-block;
+  width: 100%;
   margin-bottom: 24px;
   background-color: var(--color-white);
   border-radius: var(--radius-lg);
