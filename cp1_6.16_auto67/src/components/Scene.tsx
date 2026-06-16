@@ -1,5 +1,5 @@
 import { useRef, useMemo, useEffect, useState } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import {
@@ -18,7 +18,13 @@ interface AtomMeshProps {
   transparent?: boolean;
 }
 
-function AtomMesh({ position, radius, color, opacity = 1, transparent = false }: AtomMeshProps) {
+function AtomMesh({
+  position,
+  radius,
+  color,
+  opacity = 1,
+  transparent = false,
+}: AtomMeshProps) {
   const meshRef = useRef<THREE.Mesh>(null);
 
   return (
@@ -44,28 +50,41 @@ interface BondCylinderProps {
   transparent?: boolean;
 }
 
-function BondCylinder({ start, end, radius, color, opacity = 1, transparent = false }: BondCylinderProps) {
+function BondCylinder({
+  start,
+  end,
+  radius,
+  color,
+  opacity = 1,
+  transparent = false,
+}: BondCylinderProps) {
   const meshRef = useRef<THREE.Mesh>(null);
 
-  const { position, rotation } = useMemo(() => {
+  const { position, rotation, length } = useMemo(() => {
     const startVec = new THREE.Vector3(...start);
     const endVec = new THREE.Vector3(...end);
     const direction = new THREE.Vector3().subVectors(endVec, startVec);
-    const length = direction.length();
-    const midPoint = new THREE.Vector3().addVectors(startVec, endVec).multiplyScalar(0.5);
+    const len = direction.length();
+    const midPoint = new THREE.Vector3()
+      .addVectors(startVec, endVec)
+      .multiplyScalar(0.5);
 
     const quaternion = new THREE.Quaternion();
-    quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.clone().normalize());
+    quaternion.setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      direction.clone().normalize()
+    );
 
     return {
       position: midPoint.toArray() as [number, number, number],
       rotation: new THREE.Euler().setFromQuaternion(quaternion),
+      length: len,
     };
   }, [start, end]);
 
   return (
     <mesh ref={meshRef} position={position} rotation={rotation}>
-      <cylinderGeometry args={[radius, radius, 1, 16]} />
+      <cylinderGeometry args={[radius, radius, length, 16]} />
       <meshStandardMaterial
         color={color}
         transparent={transparent}
@@ -73,7 +92,6 @@ function BondCylinder({ start, end, radius, color, opacity = 1, transparent = fa
         roughness={0.5}
         metalness={0.1}
       />
-      <mesh scale={[1, 0, 1]} visible={false} />
     </mesh>
   );
 }
@@ -85,15 +103,19 @@ interface DisplacementLineProps {
   opacity: number;
 }
 
-function DisplacementLineComponent({ start, end, color, opacity }: DisplacementLineProps) {
+function DisplacementLineComponent({
+  start,
+  end,
+  color,
+  opacity,
+}: DisplacementLineProps) {
   return (
     <Line
       points={[start, end]}
       color={color}
-      lineWidth={1}
+      lineWidth={2}
       transparent
       opacity={opacity}
-      dashed={false}
     />
   );
 }
@@ -106,7 +128,13 @@ interface MoleculeGroupProps {
   isInitialAnimating?: boolean;
 }
 
-function MoleculeGroup({ atoms, bonds, opacity = 1, transparent = false, isInitialAnimating = false }: MoleculeGroupProps) {
+function MoleculeGroup({
+  atoms,
+  bonds,
+  opacity = 1,
+  transparent = false,
+  isInitialAnimating = false,
+}: MoleculeGroupProps) {
   const groupRef = useRef<THREE.Group>(null);
   const [fadeIn, setFadeIn] = useState(isInitialAnimating ? 0 : 1);
 
@@ -187,12 +215,15 @@ interface GroundGridProps {
   color?: string;
 }
 
-function GroundGrid({ size = 20, divisions = 40, color = '#95A5A6' }: GroundGridProps) {
+function GroundGrid({
+  size = 20,
+  divisions = 40,
+  color = '#95A5A6',
+}: GroundGridProps) {
   return (
     <gridHelper
       args={[size, divisions, color, color]}
       position={[0, -2, 0]}
-      rotation={[0, 0, 0]}
     >
       <meshBasicMaterial
         attach="material"
@@ -291,7 +322,7 @@ function Scene({
   return (
     <Canvas
       camera={{ position: [0, 2, 8], fov: 50 }}
-      gl={{ antialias: true, alpha: false }}
+      gl={{ antialias: true, alpha: true }}
       dpr={[1, 2]}
       frameloop="always"
     >

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Scene from './components/Scene';
 import ControlPanel from './components/ControlPanel';
 import moleculeDataRaw from '../data/molecule.json';
@@ -18,21 +18,32 @@ function App() {
     []
   );
 
-  const initialActualDihedral = useMemo(() => {
-    return computeDihedralAngle(moleculeData.atoms, moleculeData.dihedralAtoms);
+  const initialAtoms = useMemo(() => {
+    return rotateDihedral(
+      moleculeData.atoms,
+      moleculeData.dihedralAtoms,
+      moleculeData.initialDihedral
+    );
   }, [moleculeData]);
 
-  const [atoms, setAtoms] = useState<Atom[]>(moleculeData.atoms);
-  const [originalAtoms, setOriginalAtoms] = useState<Atom[]>(moleculeData.atoms);
+  const [atoms, setAtoms] = useState<Atom[]>(initialAtoms);
+  const [originalAtoms, setOriginalAtoms] = useState<Atom[]>(initialAtoms);
   const [savedAtoms, setSavedAtoms] = useState<Atom[] | null>(null);
   const [currentDihedral, setCurrentDihedral] = useState<number>(
-    initialActualDihedral
+    moleculeData.initialDihedral
   );
   const [targetDihedral, setTargetDihedral] = useState<number>(
-    initialActualDihedral
+    moleculeData.initialDihedral
   );
   const [isComparisonMode, setIsComparisonMode] = useState<boolean>(false);
   const [isAnimating, setIsAnimating] = useState<boolean>(true);
+
+  const animationRef = useRef<number | null>(null);
+  const originalAtomsRef = useRef<Atom[]>(initialAtoms);
+
+  useEffect(() => {
+    originalAtomsRef.current = originalAtoms;
+  }, [originalAtoms]);
 
   const energy = useMemo(() => {
     return computeConformationEnergy(atoms);
@@ -44,8 +55,22 @@ function App() {
 
   const backgroundIntensity = useMemo(() => {
     const maxAngle = 180;
-    return Math.min(Math.abs(dihedralAngle - initialActualDihedral) / maxAngle, 1);
-  }, [dihedralAngle, initialActualDihedral]);
+    return Math.min(
+      Math.abs(dihedralAngle - moleculeData.initialDihedral) / maxAngle,
+      1
+    );
+  }, [dihedralAngle, moleculeData.initialDihedral]);
+
+  const backgroundColor = useMemo(() => {
+    const t = backgroundIntensity;
+    const r1 = 11, g1 = 12, b1 = 16;
+    const r2 = 44, g2 = 62, b2 = 80;
+    const r = Math.round(r1 + (r2 - r1) * t);
+    const g = Math.round(g1 + (g2 - g1) * t);
+    const b = Math.round(b1 + (b2 - b1) * t);
+    const alpha = 0.4 + t * 0.6;
+    return `linear-gradient(135deg, rgb(${r1}, ${g1}, ${b1}) 0%, rgba(${r}, ${g}, ${b}, ${alpha}) 100%)`;
+  }, [backgroundIntensity]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -55,14 +80,18 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+
     const diff = targetDihedral - currentDihedral;
     if (Math.abs(diff) < 0.1) return;
 
     const duration = 500;
     const startTime = performance.now();
     const startAngle = currentDihedral;
-
-    let animationId: number;
+    const startAtoms = [...originalAtomsRef.current];
 
     const animate = (currentTime: number) => {
       const elapsed = currentTime - startTime;
@@ -71,41 +100,45 @@ function App() {
       const newAngle = startAngle + diff * eased;
 
       setCurrentDihedral(newAngle);
-      setAtoms(rotateDihedral(originalAtoms, moleculeData.dihedralAtoms, newAngle));
+      setAtoms(
+        rotateDihedral(startAtoms, moleculeData.dihedralAtoms, newAngle)
+      );
 
       if (progress < 1) {
-        animationId = requestAnimationFrame(animate);
+        animationRef.current = requestAnimationFrame(animate);
       }
     };
 
-    animationId = requestAnimationFrame(animate);
+    animationRef.current = requestAnimationFrame(animate);
 
-    return () => cancelAnimationFrame(animationId);
-  }, [targetDihedral, originalAtoms, moleculeData.dihedralAtoms, currentDihedral]);
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [targetDihedral, moleculeData.dihedralAtoms, currentDihedral]);
 
-  const handleDihedralChange = useCallback(
-    (angle: number) => {
-      setTargetDihedral(angle);
-    },
-    []
-  );
+  const handleDihedralChange = useCallback((angle: number) => {
+    setTargetDihedral(angle);
+  }, []);
 
   const handleReset = useCallback(() => {
-    setOriginalAtoms(moleculeData.atoms);
-    setTargetDihedral(initialActualDihedral);
-    setCurrentDihedral(initialActualDihedral);
-    setAtoms(moleculeData.atoms);
+    setOriginalAtoms(initialAtoms);
+    originalAtomsRef.current = initialAtoms;
+    setTargetDihedral(moleculeData.initialDihedral);
+    setCurrentDihedral(moleculeData.initialDihedral);
+    setAtoms(initialAtoms);
     setSavedAtoms(null);
     setIsComparisonMode(false);
-  }, [moleculeData, initialActualDihedral]);
+  }, [moleculeData, initialAtoms]);
 
   const handleSaveConformation = useCallback(() => {
-    setSavedAtoms([...atoms]);
+    setSavedAtoms(atoms.map((a) => ({ ...a })));
   }, [atoms]);
 
   const handleToggleComparison = useCallback(() => {
     if (!savedAtoms) {
-      setSavedAtoms([...atoms]);
+      setSavedAtoms(atoms.map((a) => ({ ...a })));
     }
     setIsComparisonMode((prev) => !prev);
   }, [savedAtoms, atoms]);
@@ -114,7 +147,7 @@ function App() {
     <div
       className="app-container"
       style={{
-        background: `linear-gradient(135deg, #0B0C10 0%, rgba(44, 62, 80, ${0.4 + backgroundIntensity * 0.6}) 100%)`,
+        background: backgroundColor,
       }}
     >
       <header className="title-bar">
