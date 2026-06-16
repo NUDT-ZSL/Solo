@@ -870,43 +870,44 @@ body {
 .heroPanel.hero-lowHealth {
   position: relative;
 }
+.heroPanel.hero-lowHealth::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 30, 30, 0.35) 0%, rgba(255, 0, 0, 0.15) 40%, transparent 70%);
+  pointer-events: none;
+  animation: dangerPulse 2s ease-in-out infinite;
+  z-index: 0;
+  transform: translate(-50%, -50%);
+}
 .hero-dangerAura {
   position: absolute;
   left: 50%;
   top: 50%;
-  transform: translate(-50%, -50%);
   width: 140px;
   height: 140px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 0, 0, 0.25) 0%, rgba(255, 0, 0, 0.1) 40%, transparent 70%);
+  background: radial-gradient(circle, rgba(255, 80, 80, 0.4) 0%, rgba(255, 0, 0, 0.2) 40%, transparent 70%);
   pointer-events: none;
   animation: dangerPulse 2s ease-in-out infinite;
-  z-index: 0;
+  animation-delay: 0.3s;
+  z-index: 1;
+  transform: translate(-50%, -50%);
+  mix-blend-mode: screen;
 }
 @keyframes dangerPulse {
   0%, 100% {
-    opacity: 0.3;
+    opacity: 0.25;
     transform: translate(-50%, -50%) scale(0.85);
   }
   50% {
-    opacity: 0.85;
-    transform: translate(-50%, -50%) scale(1.1);
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.15);
   }
-}
-.heroPanel.hero-lowHealth .heroAvatar {
-  animation: dangerShake 2s ease-in-out infinite;
-}
-@keyframes dangerShake {
-  0%, 90%, 100% { filter: none; }
-  92%, 96% { filter: brightness(1.4) hue-rotate(-15deg) saturate(2); }
-  94% { filter: brightness(0.9); }
-}
-.heroPanel.hero-lowHealth .avatarRing {
-  animation: ringPulse 2s ease-in-out infinite;
-}
-@keyframes ringPulse {
-  0%, 100% { box-shadow: 0 0 8px rgba(201, 169, 78, 0.6); }
-  50% { box-shadow: 0 0 20px rgba(255, 50, 50, 0.8), 0 0 40px rgba(255, 0, 0, 0.4); }
 }
 
 /* ==================== 对手手牌区 ==================== */

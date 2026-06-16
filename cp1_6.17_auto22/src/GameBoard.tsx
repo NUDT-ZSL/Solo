@@ -54,9 +54,9 @@ const GameBoard: React.FC<Props> = ({ engine }) => {
 
   const addFloatingNumber = useCallback((value: number, type: 'damage' | 'heal', x: number, y: number) => {
     const id = genId();
-    setFloatingNumbers((prev) => [...prev, { id, value, type, x, y ]);
+    setFloatingNumbers((prev) => [...prev, { id, value, type, x, y }]);
     setTimeout(() => {
-      setFloatingNumbers((prev) => prev.filter((n) => n.id !== id);
+      setFloatingNumbers((prev) => prev.filter((n) => n.id !== id));
     }, 600);
   }, []);
 
@@ -65,7 +65,7 @@ const GameBoard: React.FC<Props> = ({ engine }) => {
       const id = genId();
       setSlashEffects((prev) => [...prev, { id, fromInstanceId, toInstanceId, fromSide, toSide }]);
       setTimeout(() => {
-        setSlashEffects((prev) => prev.filter((s) => s.id !== id);
+        setSlashEffects((prev) => prev.filter((s) => s.id !== id));
       }, 150);
     },
     [],
@@ -198,10 +198,6 @@ const GameBoard: React.FC<Props> = ({ engine }) => {
             setTimeout(() => {
               const tgtPos = tgtId && !isHero ? getMinionScreenPos(tgtId) : isHero ? getHeroScreenPos(targetSide) : null;
               if (tgtPos) addFloatingNumber(dmgToTarget, 'damage', tgtPos.x, tgtPos.y - 40);
-              if (dmgToAttacker > 0) {
-                const atkPos = getMinionScreenPos(atkId);
-                if (atkPos) addFloatingNumber(dmgToAttacker, 'damage', atkPos.x, atkPos.y - 40);
-              }
             }, 60);
             setTimeout(() => {
               setAnimState((prev) => ({
@@ -600,43 +596,39 @@ const GameBoard: React.FC<Props> = ({ engine }) => {
 };
 
 const SlashEffect: React.FC<{ slash: SlashEffect }> = ({ slash }) => {
-  const [lineRef = useRef<HTMLDivElement>(null);
   const [style, setStyle] = useState<React.CSSProperties>({ opacity: 0 });
 
   useEffect(() => {
-    const raf = requestAnimationFrame(() => {
-      const fromPos = slash.fromInstanceId !== 'hero'
-        ? document.querySelector(`[data-instance-id="${slash.fromInstanceId}"]`)?.getBoundingClientRect()
-        : document.querySelector(`.hero-${slash.fromSide} .heroAvatar`)?.getBoundingClientRect();
+    const fromPos = slash.fromInstanceId !== 'hero'
+      ? document.querySelector(`[data-instance-id="${slash.fromInstanceId}"]`)?.getBoundingClientRect()
+      : document.querySelector(`.hero-${slash.fromSide} .heroAvatar`)?.getBoundingClientRect();
 
-      const toPos = slash.toInstanceId !== 'hero'
-        ? document.querySelector(`[data-instance-id="${slash.toInstanceId}"]`)?.getBoundingClientRect()
-        : document.querySelector(`.hero-${slash.toSide} .heroAvatar`)?.getBoundingClientRect();
+    const toPos = slash.toInstanceId !== 'hero'
+      ? document.querySelector(`[data-instance-id="${slash.toInstanceId}"]`)?.getBoundingClientRect()
+      : document.querySelector(`.hero-${slash.toSide} .heroAvatar`)?.getBoundingClientRect();
 
-      if (!fromPos || !toPos) return;
+    if (!fromPos || !toPos) return;
 
-      const x1 = fromPos.left + fromPos.width / 2;
-      const y1 = fromPos.top + fromPos.height / 2;
-      const x2 = toPos.left + toPos.width / 2;
-      const y2 = toPos.top + toPos.height / 2;
+    const x1 = fromPos.left + fromPos.width / 2;
+    const y1 = fromPos.top + fromPos.height / 2;
+    const x2 = toPos.left + toPos.width / 2;
+    const y2 = toPos.top + toPos.height / 2;
 
-      const dx = x2 - x1;
-      const dy = y2 - y1;
-      const length = Math.sqrt(dx * dx + dy * dy);
-      const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
 
-      setStyle({
-        left: x1,
-        top: y1,
-        width: length,
-        transform: `rotate(${angle}deg)`,
-        opacity: 1,
-      });
+    setStyle({
+      left: x1,
+      top: y1,
+      width: length,
+      transform: `rotate(${angle}deg)`,
+      opacity: 1,
     });
-    return () => cancelAnimationFrame(raf);
   }, [slash]);
 
-  return <div ref={lineRef} className="slashLine" style={style} />;
+  return <div className="slashLine" style={style} />;
 };
 
 const ManaCrystals: React.FC<{ current: number; max: number }> = ({ current, max }) => {
