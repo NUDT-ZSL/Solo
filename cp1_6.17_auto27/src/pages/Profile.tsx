@@ -12,7 +12,7 @@ export default function Profile() {
     return null
   }
 
-  const { level, progress, color } = getUserLevel(user.points)
+  const { level, progress, color, gradient } = getUserLevel(user.points)
   const pointsToNext = 100 - (user.points % 100)
 
   const stats = [
@@ -70,12 +70,21 @@ export default function Profile() {
               style={{ height: 16, backgroundColor: '#E8F5E9' }}
             >
               <div
-                className="h-full rounded-full transition-all duration-500"
+                className="h-full rounded-full transition-all duration-500 relative"
                 style={{
                   width: `${progress * 100}%`,
-                  background: `linear-gradient(90deg, ${color}, ${color}dd)`,
+                  background: gradient,
+                  boxShadow: `0 0 6px ${color}`,
                 }}
               />
+            </div>
+            <div className="flex justify-between mt-2">
+              <div className="flex items-center gap-1 text-xs text-garden-text">
+                <span style={{ color: '#8BC34A' }}>●</span> Lv.{level}
+              </div>
+              <div className="flex items-center gap-1 text-xs text-garden-text">
+                <span style={{ color: '#388E3C' }}>●</span> Lv.{level + 1}
+              </div>
             </div>
           </div>
         </div>

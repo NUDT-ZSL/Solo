@@ -35,10 +35,10 @@ function formatDate(iso: string): string {
   return `${y}-${m}-${day}`
 }
 
-const STATUS_BORDER: Record<string, string> = {
-  normal: 'border-l-garden-normal',
-  nearHarvest: 'border-l-garden-nearHarvest',
-  needsWater: 'border-l-garden-needsWater',
+const STATUS_BG: Record<string, string> = {
+  normal: '#C8E6C9',
+  nearHarvest: '#FFF9C4',
+  needsWater: '#FFCDD2',
 }
 
 export default function GardenDashboard() {
@@ -97,17 +97,18 @@ export default function GardenDashboard() {
                 <div
                   key={region.id}
                   onClick={() => navigate(`/region/${region.id}`)}
-                  className={`bg-garden-card rounded-[12px] p-5 border-l-4 cursor-pointer ${STATUS_BORDER[status]}`}
+                  className="rounded-[12px] p-5 cursor-pointer"
                   style={{
+                    backgroundColor: STATUS_BG[status],
                     boxShadow: '4px 4px 12px rgba(0,0,0,0.08)',
                     transition: 'all 0.3s ease',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = '#66BB6A'
+                    e.currentTarget.style.border = '2px solid #66BB6A'
                     e.currentTarget.style.transform = 'translateY(-6px)'
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = ''
+                    e.currentTarget.style.border = ''
                     e.currentTarget.style.transform = ''
                   }}
                 >

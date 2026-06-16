@@ -73,8 +73,8 @@ const regions: Region[] = [
         regionId: 'r1',
         authorId: 'm1',
         authorName: '张三',
-        content: '番茄苗长势良好，已开始开花',
-        photoUrl: null,
+        content: '番茄苗长势良好，已开始开花，花蕊呈淡黄色，很健康！',
+        photoUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgdmlld0JveD0iMCAwIDEyOCAxMjgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEyOCIgaGVpZ2h0PSIxMjgiIGZpbGw9IiNDOEU2QzkiLz48Y2lyY2xlIGN4PSI2NCIgY3k9IjQwIiByPSIxNSIgZmlsbD0iI0ZGQjZDNiIgc3Ryb2tlPSIjRjQ0MzM2IiBzdHJva2Utd2lkdGg9IjIiLz48cGF0aCBkPSJNNjQgNTUgTDU1IDkwIEw3MyA5MCBaIiBmaWxsPSIjNUNBRjUwIi8+PHRleHQgeD0iNjQiIHk9IjExMCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEwIiBmaWxsPSIjMzM2OTFFIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7onJ3oiYjmg47jgII8L3RleHQ+PC9zdmc+',
         createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
       },
     ],
@@ -265,14 +265,14 @@ app.post('/api/water', (req: Request, res: Response): void => {
 
   const now = Date.now()
   if (region.lastWateredAt) {
-    const elapsed = now - new Date(region.lastWateredAt).getTime()
-    const remaining = COOLDOWN_MS - elapsed
-    if (remaining > 0) {
+    const elapsedMs = now - new Date(region.lastWateredAt).getTime()
+    const remainingMs = COOLDOWN_MS - elapsedMs
+    if (remainingMs > 0) {
       res.json({
         success: false,
         message: '冷却中，请稍后再浇水',
         lastWateredAt: region.lastWateredAt,
-        cooldownRemaining: remaining,
+        cooldownRemaining: Math.ceil(remainingMs / 1000),
       })
       return
     }
@@ -315,9 +315,15 @@ app.post('/api/logs', (req: Request, res: Response): void => {
 })
 
 app.post('/api/tasks', (req: Request, res: Response): void => {
-  const { regionId, assigneeId, type } = req.body
-  if (!regionId || !assigneeId || !type) {
+  const { regionId, assigneeId, type, requesterId } = req.body
+  if (!regionId || !assigneeId || !type || !requesterId) {
     res.status(400).json({ success: false, error: '缺少必填字段' })
+    return
+  }
+
+  const requester = findMember(requesterId)
+  if (!requester || requester.role !== 'manager') {
+    res.status(403).json({ success: false, error: '无权限：仅管理者可分配任务' })
     return
   }
 

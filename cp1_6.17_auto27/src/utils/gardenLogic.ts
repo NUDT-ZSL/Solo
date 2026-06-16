@@ -37,14 +37,49 @@ export function calculatePoints(action: 'water' | 'log' | 'harvest'): number {
   return points[action];
 }
 
-export function getUserLevel(points: number): { level: number; progress: number; color: string } {
-  const level = Math.floor(points / 100) + 1;
-  const progress = (points % 100) / 100;
-  let color: string;
-  if (level <= 2) color = '#8BC34A';
-  else if (level <= 4) color = '#4CAF50';
-  else color = '#388E3C';
-  return { level, progress, color };
+export function getUserLevel(points: number): { level: number; progress: number; color: string; gradient: string } {
+  const level = Math.floor(points / 100) + 1
+  const progress = (points % 100) / 100
+  const levelStops: Array<[number, string]> = [
+    [1, '#8BC34A'],
+    [3, '#66BB6A'],
+    [5, '#4CAF50'],
+    [7, '#43A047'],
+    [10, '#388E3C'],
+  ]
+  let color: string
+  if (level <= 2) {
+    const t = Math.min(1, (level - 1) / 2 + progress / 2)
+    color = interpolateColor('#8BC34A', '#4CAF50', t)
+  } else if (level <= 4) {
+    const t = Math.min(1, (level - 3) / 2 + progress / 2)
+    color = interpolateColor('#4CAF50', '#388E3C', t)
+  } else {
+    color = '#388E3C'
+  }
+  const gradient = `linear-gradient(90deg, #8BC34A 0%, #66BB6A 25%, #4CAF50 55%, #43A047 80%, #388E3C 100%)`
+  void levelStops
+  return { level, progress, color, gradient }
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace('#', '')
+  return [
+    parseInt(h.substring(0, 2), 16),
+    parseInt(h.substring(2, 4), 16),
+    parseInt(h.substring(4, 6), 16),
+  ]
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  const toHex = (v: number) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+}
+
+function interpolateColor(a: string, b: string, t: number): string {
+  const [r1, g1, b1] = hexToRgb(a)
+  const [r2, g2, b2] = hexToRgb(b)
+  return rgbToHex(r1 + (r2 - r1) * t, g1 + (g2 - g1) * t, b1 + (b2 - b1) * t)
 }
 
 export function formatCooldown(seconds: number): string {

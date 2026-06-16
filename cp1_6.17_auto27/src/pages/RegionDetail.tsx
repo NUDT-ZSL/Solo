@@ -168,6 +168,7 @@ export default function RegionDetail() {
           regionId: region.id,
           assigneeId: taskAssignee,
           type: taskType,
+          requesterId: user.id,
         }),
       })
       if (res.ok) {
