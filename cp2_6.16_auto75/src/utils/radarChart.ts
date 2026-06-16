@@ -3,16 +3,20 @@ import { SkillData, SKILL_LABELS } from '../types';
 export function drawRadarChart(
   ctx: CanvasRenderingContext2D,
   skills: SkillData,
-  size: number = 280
+  canvasWidth: number,
+  canvasHeight: number
 ) {
-  const centerX = size / 2;
-  const centerY = size / 2;
-  const radius = 80;
+  const padding = 50;
+  const centerX = canvasWidth / 2;
+  const centerY = canvasHeight / 2;
+  const maxRadius = Math.min(centerX, centerY) - padding;
+  const radius = Math.min(maxRadius, 80);
+
   const sides = 6;
   const angleStep = (Math.PI * 2) / sides;
   const startAngle = -Math.PI / 2;
 
-  ctx.clearRect(0, 0, size, size);
+  ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
   ctx.save();
   for (let level = 5; level >= 1; level--) {
@@ -91,30 +95,43 @@ export function drawRadarChart(
   ctx.save();
   ctx.fillStyle = '#64748b';
   ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+
+  const labelRadius = radius + 20;
 
   for (let i = 0; i < sides; i++) {
     const angle = startAngle + i * angleStep;
-    const labelRadius = radius + 24;
     const x = centerX + labelRadius * Math.cos(angle);
-    let y = centerY + labelRadius * Math.sin(angle);
+    const y = centerY + labelRadius * Math.sin(angle);
+    const label = SKILL_LABELS[i].label;
 
-    if (i === 0) {
-      ctx.textBaseline = 'bottom';
-      y -= 4;
-    } else if (i === 3) {
-      ctx.textBaseline = 'top';
-      y += 4;
-    } else if (i === 1 || i === 2) {
-      ctx.textAlign = 'left';
-      x += 8;
-    } else if (i === 4 || i === 5) {
-      ctx.textAlign = 'right';
-      x -= 8;
+    let textAlign: CanvasTextAlign = 'center';
+    let textBaseline: CanvasTextBaseline = 'middle';
+
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    if (Math.abs(cos) < 0.15) {
+      textAlign = 'center';
+      textBaseline = sin < 0 ? 'bottom' : 'top';
+    } else if (cos > 0) {
+      textAlign = 'left';
+    } else {
+      textAlign = 'right';
     }
 
-    ctx.fillText(SKILL_LABELS[i].label, x, y);
+    ctx.textAlign = textAlign;
+    ctx.textBaseline = textBaseline;
+
+    const offset = 6;
+    let drawX = x;
+    let drawY = y;
+
+    if (textAlign === 'left') drawX += offset;
+    else if (textAlign === 'right') drawX -= offset;
+    if (textBaseline === 'top') drawY += offset;
+    else if (textBaseline === 'bottom') drawY -= offset;
+
+    ctx.fillText(label, drawX, drawY);
   }
   ctx.restore();
 }

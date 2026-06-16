@@ -10,22 +10,34 @@ interface UserDetailProps {
 
 const UserDetail: React.FC<UserDetailProps> = ({ contributor, isOpen, onClose }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (isOpen && contributor && canvasRef.current) {
+  const drawChart = () => {
+    if (isOpen && contributor && canvasRef.current && containerRef.current) {
       const canvas = canvasRef.current;
+      const container = containerRef.current;
       const ctx = canvas.getContext('2d');
       if (ctx) {
         const dpr = window.devicePixelRatio || 1;
-        const size = 280;
-        canvas.width = size * dpr;
-        canvas.height = size * dpr;
-        canvas.style.width = `${size}px`;
-        canvas.style.height = `${size}px`;
-        ctx.scale(dpr, dpr);
-        drawRadarChart(ctx, contributor.skills, size);
+        const rect = container.getBoundingClientRect();
+        const size = Math.min(rect.width - 32, 320);
+        const canvasSize = Math.max(size, 240);
+
+        canvas.width = canvasSize * dpr;
+        canvas.height = canvasSize * dpr;
+        canvas.style.width = `${canvasSize}px`;
+        canvas.style.height = `${canvasSize}px`;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        drawRadarChart(ctx, contributor.skills, canvasSize, canvasSize);
       }
     }
+  };
+
+  useEffect(() => {
+    drawChart();
+    const handleResize = () => drawChart();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, [isOpen, contributor]);
 
   if (!contributor) return null;
@@ -79,7 +91,7 @@ const UserDetail: React.FC<UserDetailProps> = ({ contributor, isOpen, onClose })
 
         <div style={styles.section}>
           <h3 style={styles.sectionTitle}>技能雷达图</h3>
-          <div style={styles.radarContainer}>
+          <div ref={containerRef} style={styles.radarContainer}>
             <canvas ref={canvasRef} />
           </div>
         </div>
