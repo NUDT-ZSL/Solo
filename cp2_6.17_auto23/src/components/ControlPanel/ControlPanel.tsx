@@ -98,12 +98,13 @@ export default function ControlPanel({
         >
           情绪选择
         </label>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <select
             value={controlState.emotion}
             onChange={(e) => onChange({ emotion: e.target.value as Emotion })}
             style={{
-              width: '60%',
+              flex: '1 1 120px',
+              minWidth: '120px',
               height: '40px',
               borderRadius: '8px',
               backgroundColor: '#374151',
@@ -130,11 +131,11 @@ export default function ControlPanel({
           </select>
           <p
             style={{
-              width: '38%',
+              flex: '1 1 80px',
+              minWidth: '80px',
               fontSize: '11px',
               color: '#9ca3af',
               lineHeight: '1.4',
-              paddingLeft: '8px',
               margin: 0,
             }}
           >

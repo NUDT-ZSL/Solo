@@ -26,6 +26,10 @@ interface Particle {
   life: number;
   decay: number;
   type?: 'sparkle' | 'glow' | 'trail';
+  phase: number;
+  createdAtHueOffset: number;
+  baseX: number;
+  baseY: number;
 }
 
 interface ParticleBehavior {
@@ -85,6 +89,8 @@ const emotionParticleBehaviors: Record<Emotion, ParticleBehavior> = {
     colorBase: '#9B59B6',
   },
 };
+
+const MAX_PARTICLES = 500;
 
 function hexToHsl(hex: string): { h: number; s: number; l: number } {
   const r = parseInt(hex.slice(1, 3), 16) / 255;
@@ -147,6 +153,12 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
+function simpleNoise(x: number, y: number, seed: number): number {
+  const dot = x * 12.9898 + y * 78.233 + seed * 43.5453;
+  const sin = Math.sin(dot) * 43758.5453;
+  return sin - Math.floor(sin);
+}
+
 export function useCanvasAnimation(
   speed: number,
   hueOffset: number,
@@ -160,6 +172,7 @@ export function useCanvasAnimation(
   const animationFrameRef = useRef<number | null>(null);
   const lastFpsTimeRef = useRef<number>(performance.now());
   const frameCountRef = useRef<number>(0);
+  const timeRef = useRef<number>(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -212,7 +225,8 @@ export function useCanvasAnimation(
       complexityVal: number,
       baseColor: string,
       emotionVal: Emotion,
-      canvasRect: DOMRect
+      canvasRect: DOMRect,
+      currentHueOffset: number
     ): Particle => {
       const behavior = emotionParticleBehaviors[emotionVal];
       const t = (complexityVal - 1) / 9;
@@ -230,12 +244,12 @@ export function useCanvasAnimation(
         Math.random()
       );
       const color = hslToHex(
-        baseHsl.h + hueVariation,
+        baseHsl.h + hueVariation + currentHueOffset,
         baseHsl.s,
         baseHsl.l
       );
 
-      const speed = lerp(
+      const spd = lerp(
         behavior.speedRange[0],
         behavior.speedRange[1],
         t
@@ -254,22 +268,22 @@ export function useCanvasAnimation(
           x = canvasRect.width / 2;
           y = canvasRect.height / 2;
           const angle = Math.random() * Math.PI * 2;
-          vx = Math.cos(angle) * speed;
-          vy = Math.sin(angle) * speed;
+          vx = Math.cos(angle) * spd;
+          vy = Math.sin(angle) * spd;
           break;
         case 'top':
           x = Math.random() * canvasRect.width;
           y = 0;
-          vx = (Math.random() - 0.5) * speed * 0.5;
-          vy = speed;
+          vx = (Math.random() - 0.5) * spd * 0.5;
+          vy = spd;
           break;
         case 'random':
         default:
           x = Math.random() * canvasRect.width;
           y = Math.random() * canvasRect.height;
           const randomAngle = Math.random() * Math.PI * 2;
-          vx = Math.cos(randomAngle) * speed;
-          vy = Math.sin(randomAngle) * speed;
+          vx = Math.cos(randomAngle) * spd;
+          vy = Math.sin(randomAngle) * spd;
           break;
       }
 
@@ -284,6 +298,10 @@ export function useCanvasAnimation(
         life: 1,
         decay,
         type: behavior.particleType,
+        phase: Math.random() * Math.PI * 2,
+        createdAtHueOffset: currentHueOffset,
+        baseX: x,
+        baseY: y,
       };
     };
 
@@ -335,12 +353,14 @@ export function useCanvasAnimation(
       ctx.restore();
     };
 
-    const drawParticle = (ctx: CanvasRenderingContext2D, particle: Particle, offset: number) => {
-      const color = applyHueOffset(particle.color, offset);
+    const drawParticle = (ctx: CanvasRenderingContext2D, particle: Particle, currentHueOffset: number) => {
+      const deltaOffset = currentHueOffset - particle.createdAtHueOffset;
+      const color = applyHueOffset(particle.color, deltaOffset);
       const hsl = hexToHsl(color);
 
       ctx.save();
-      ctx.globalAlpha = particle.alpha;
+      ctx.globalAlpha = particle.alpha * 0.85;
+      ctx.globalCompositeOperation = 'screen';
 
       switch (particle.type) {
         case 'glow': {
@@ -359,7 +379,7 @@ export function useCanvasAnimation(
         }
         case 'sparkle': {
           const sparkleAlpha = Math.sin(particle.life * Math.PI * 4) * 0.5 + 0.5;
-          ctx.globalAlpha = particle.alpha * sparkleAlpha;
+          ctx.globalAlpha = particle.alpha * sparkleAlpha * 0.85;
           ctx.fillStyle = color;
           ctx.beginPath();
           ctx.arc(particle.x, particle.y, particle.size * 0.5, 0, Math.PI * 2);
@@ -379,11 +399,11 @@ export function useCanvasAnimation(
           ctx.beginPath();
           ctx.arc(particle.x, particle.y, particle.size * 0.3, 0, Math.PI * 2);
           ctx.fill();
-          ctx.globalAlpha = particle.alpha * 0.3;
+          ctx.globalAlpha = particle.alpha * 0.25;
           ctx.beginPath();
           ctx.arc(particle.x - particle.vx * 3, particle.y - particle.vy * 3, particle.size * 0.25, 0, Math.PI * 2);
           ctx.fill();
-          ctx.globalAlpha = particle.alpha * 0.15;
+          ctx.globalAlpha = particle.alpha * 0.12;
           ctx.beginPath();
           ctx.arc(particle.x - particle.vx * 6, particle.y - particle.vy * 6, particle.size * 0.2, 0, Math.PI * 2);
           ctx.fill();
@@ -407,34 +427,53 @@ export function useCanvasAnimation(
 
       const t = (complexity - 1) / 9;
       const shapesPerFrame = Math.round(lerp(1, 8, t));
-      const particlesPerFrame = Math.round(lerp(5, 30, t));
+
+      const canvasArea = rect.width * rect.height;
+      const referenceArea = 960 * 640;
+      const areaFactor = Math.min(canvasArea / referenceArea, 2);
+      const baseParticlesPerFrame = Math.round(lerp(5, 30, t));
+      const particlesPerFrame = Math.round(baseParticlesPerFrame * areaFactor);
+
+      const currentCount = particlesRef.current.length;
+      const availableSlots = Math.max(0, MAX_PARTICLES - currentCount);
+      const actualParticlesToAdd = Math.min(particlesPerFrame, availableSlots);
 
       for (let i = 0; i < shapesPerFrame; i++) {
         shapesRef.current.push(createShape(complexity, emotionColor));
       }
 
-      for (let i = 0; i < particlesPerFrame; i++) {
-        particlesRef.current.push(createParticle(complexity, emotionColor, emotion, rect));
+      for (let i = 0; i < actualParticlesToAdd; i++) {
+        particlesRef.current.push(createParticle(complexity, emotionColor, emotion, rect, hueOffset));
       }
 
+      timeRef.current += speed * 0.016;
+
       particlesRef.current = particlesRef.current.filter(particle => {
-        particle.x += particle.vx * speed;
-        particle.y += particle.vy * speed;
+        particle.baseX += particle.vx * speed;
+        particle.baseY += particle.vy * speed;
         particle.life -= particle.decay;
         particle.alpha = particle.life;
 
         if (emotion === 'anxious') {
-          particle.vx += (Math.random() - 0.5) * 0.5;
-          particle.vy += (Math.random() - 0.5) * 0.5;
-        }
-
-        if (emotion === 'sad') {
+          const jitterTime = timeRef.current * 15;
+          const jitterAmp = 3.0;
+          const nx = simpleNoise(particle.baseX * 0.01, particle.baseY * 0.01, particle.phase);
+          const offsetX = Math.sin(jitterTime + particle.phase) * jitterAmp * nx;
+          const offsetY = Math.cos(jitterTime * 1.3 + particle.phase * 2.1) * jitterAmp * nx;
+          particle.x = particle.baseX + offsetX;
+          particle.y = particle.baseY + offsetY;
+        } else if (emotion === 'sad') {
           particle.vy += 0.02;
-        }
-
-        if (emotion === 'calm') {
-          particle.vx += Math.sin(particle.life * 10) * 0.02;
-          particle.vy += Math.cos(particle.life * 8) * 0.02;
+          particle.x = particle.baseX;
+          particle.y = particle.baseY;
+        } else if (emotion === 'calm') {
+          particle.baseX += Math.sin(timeRef.current * 2 + particle.phase) * 0.15;
+          particle.baseY += Math.cos(timeRef.current * 1.5 + particle.phase * 1.7) * 0.15;
+          particle.x = particle.baseX;
+          particle.y = particle.baseY;
+        } else {
+          particle.x = particle.baseX;
+          particle.y = particle.baseY;
         }
 
         return particle.life > 0;
@@ -448,13 +487,19 @@ export function useCanvasAnimation(
         return shape.alpha > 0;
       });
 
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
       particlesRef.current.forEach(particle => {
         drawParticle(ctx, particle, hueOffset);
       });
+      ctx.restore();
 
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
       shapesRef.current.forEach(shape => {
         drawShape(ctx, shape, hueOffset);
       });
+      ctx.restore();
 
       frameCountRef.current++;
       const now = performance.now();
