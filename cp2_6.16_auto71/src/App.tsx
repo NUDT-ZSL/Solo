@@ -23,6 +23,7 @@ type Action =
 
 const ANTIBIOTIC_COOLDOWN = 8;
 const NUTRIENT_COOLDOWN = 5;
+const COOLDOWN_EPSILON = 0.001;
 
 const initialState: AppState = {
   stats: {
@@ -44,12 +45,12 @@ function reducer(state: AppState, action: Action): AppState {
     case 'UPDATE_STATS':
       return { ...state, stats: action.stats };
     case 'TICK_COOLDOWNS': {
-      const newAntibioticCd = Math.max(0, state.antibioticCooldown - action.delta);
-      const newNutrientCd = Math.max(0, state.nutrientCooldown - action.delta);
+      const newAntibioticCd = state.antibioticCooldown - action.delta;
+      const newNutrientCd = state.nutrientCooldown - action.delta;
       return {
         ...state,
-        antibioticCooldown: newAntibioticCd,
-        nutrientCooldown: newNutrientCd,
+        antibioticCooldown: newAntibioticCd <= COOLDOWN_EPSILON ? 0 : newAntibioticCd,
+        nutrientCooldown: newNutrientCd <= COOLDOWN_EPSILON ? 0 : newNutrientCd,
       };
     }
     case 'USE_ANTIBIOTIC':
@@ -82,6 +83,16 @@ const App: React.FC = () => {
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
   const victoryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const winnerNotifiedRef = useRef<boolean>(false);
+  const draggingRef = useRef<InterventionType | null>(null);
+  const mousePosRef = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    draggingRef.current = dragging;
+  }, [dragging]);
+
+  useEffect(() => {
+    mousePosRef.current = mousePos;
+  }, [mousePos]);
 
   const handleStatsChange = useCallback((stats: SimulationStats) => {
     dispatch({ type: 'UPDATE_STATS', stats });
@@ -122,15 +133,24 @@ const App: React.FC = () => {
         simulationRef.current.render(ctx);
       }
 
-      if (mousePos && dragging) {
-        const radius = dragging === 'antibiotic' ? 40 : 30;
-        const color = dragging === 'antibiotic'
-          ? 'rgba(42, 157, 143, 0.2)'
-          : 'rgba(244, 162, 97, 0.3)';
+      const curMousePos = mousePosRef.current;
+      const curDragging = draggingRef.current;
+      if (curMousePos && curDragging) {
+        const radius = curDragging === 'antibiotic' ? 40 : 30;
+        const color = curDragging === 'antibiotic'
+          ? 'rgba(42, 157, 143, 0.35)'
+          : 'rgba(244, 162, 97, 0.45)';
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.arc(mousePos.x, mousePos.y, radius, 0, Math.PI * 2);
+        ctx.arc(curMousePos.x, curMousePos.y, radius, 0, Math.PI * 2);
         ctx.fill();
+        ctx.strokeStyle = curDragging === 'antibiotic'
+          ? 'rgba(42, 157, 143, 0.8)'
+          : 'rgba(244, 162, 97, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.stroke();
+        ctx.setLineDash([]);
       }
 
       animationRef.current = requestAnimationFrame(animate);
@@ -175,23 +195,24 @@ const App: React.FC = () => {
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!dragging) return;
+    if (!draggingRef.current) return;
     const coords = getCanvasCoords(e);
     setMousePos(coords);
   };
 
   const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!dragging || !simulationRef.current || !mousePos) {
+    const curDragging = draggingRef.current;
+    if (!curDragging || !simulationRef.current) {
       setDragging(null);
       setMousePos(null);
       return;
     }
 
     const coords = getCanvasCoords(e);
-    const success = simulationRef.current.addIntervention(dragging, coords.x, coords.y);
+    const success = simulationRef.current.addIntervention(curDragging, coords.x, coords.y);
 
     if (success) {
-      if (dragging === 'antibiotic') {
+      if (curDragging === 'antibiotic') {
         dispatch({ type: 'USE_ANTIBIOTIC' });
       } else {
         dispatch({ type: 'USE_NUTRIENT' });
@@ -222,17 +243,22 @@ const App: React.FC = () => {
     <>
       <style>{`
         @keyframes fadeInBounce {
-          0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
-          60% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+          0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3); }
+          50% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+          70% { transform: translate(-50%, -50%) scale(0.95); }
           100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
         }
         @keyframes blink {
           0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
+          50% { opacity: 0.35; }
         }
-        @keyframes pulse {
-          0%, 100% { box-shadow: 0 0 20px rgba(255, 215, 0, 0.5); }
-          50% { box-shadow: 0 0 40px rgba(255, 215, 0, 0.9); }
+        @keyframes pulseGlow {
+          0%, 100% { 
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.4), inset 0 0 15px rgba(255, 215, 0, 0.1); 
+          }
+          50% { 
+            box-shadow: 0 0 40px rgba(255, 215, 0, 0.9), inset 0 0 25px rgba(255, 215, 0, 0.2); 
+          }
         }
       `}</style>
 
@@ -281,14 +307,15 @@ const App: React.FC = () => {
               userSelect: 'none',
               opacity: antibioticReady ? 1 : 0.4,
               transition: 'opacity 0.3s',
+              filter: antibioticReady ? 'none' : 'grayscale(40%)',
             }}
           >
-            <div style={{ fontSize: 28, marginBottom: 8 }}>�</div>
+            <div style={{ fontSize: 28, marginBottom: 8 }}>💚</div>
             <div style={{ color: '#2a9d8f', fontWeight: 'bold', marginBottom: 4 }}>抗生素</div>
             <div style={{ fontSize: 13 }}>
               拖拽抗生素
               <br />
-              （冷却{state.antibioticCooldown > 0 ? state.antibioticCooldown.toFixed(1) : '0'}秒）
+              （冷却{state.antibioticCooldown.toFixed(1)}秒）
             </div>
           </div>
 
@@ -302,7 +329,7 @@ const App: React.FC = () => {
                 height: 600,
                 borderRadius: '50%',
                 cursor: dragging ? 'crosshair' : 'default',
-                boxShadow: '0 0 40px rgba(142, 202, 230, 0.3)',
+                boxShadow: '0 0 50px rgba(142, 202, 230, 0.25), inset 0 0 60px rgba(142, 202, 230, 0.08)',
               }}
               onMouseDown={(e) => {
                 if (e.button === 0) {
@@ -326,22 +353,22 @@ const App: React.FC = () => {
                   width: 300,
                   height: 80,
                   borderRadius: 16,
-                  backgroundColor: '#1d3557',
+                  backgroundColor: 'rgba(29, 53, 87, 0.95)',
                   color: '#ffffff',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontSize: 22,
                   fontWeight: 'bold',
-                  animation: 'fadeInBounce 0.5s ease-out forwards',
+                  animation: 'fadeInBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, pulseGlow 1.5s ease-in-out infinite 0.5s',
                   zIndex: 100,
                   border: '3px solid #ffd700',
-                  boxShadow: '0 0 30px rgba(255, 215, 0, 0.6)',
-                  opacity: 0,
-                  transform: 'translate(-50%, -50%) scale(0.5)',
+                  backdropFilter: 'blur(4px)',
                 }}
               >
-                {state.winner === 'red' ? '🔴 红色噬硫菌胜利！' : '🔵 蓝色噬磷菌胜利！'}
+                <span style={{ textShadow: '0 0 10px rgba(255, 215, 0, 0.8)' }}>
+                  {state.winner === 'red' ? '🔴 红色噬硫菌胜利！' : '🔵 蓝色噬磷菌胜利！'}
+                </span>
               </div>
             )}
           </div>
@@ -359,14 +386,15 @@ const App: React.FC = () => {
               userSelect: 'none',
               opacity: nutrientReady ? 1 : 0.4,
               transition: 'opacity 0.3s',
+              filter: nutrientReady ? 'none' : 'grayscale(40%)',
             }}
           >
-            <div style={{ fontSize: 28, marginBottom: 8 }}>�</div>
+            <div style={{ fontSize: 28, marginBottom: 8 }}>🧡</div>
             <div style={{ color: '#f4a261', fontWeight: 'bold', marginBottom: 4 }}>营养剂</div>
             <div style={{ fontSize: 13 }}>
               拖拽营养剂
               <br />
-              （冷却{state.nutrientCooldown > 0 ? state.nutrientCooldown.toFixed(1) : '0'}秒）
+              （冷却{state.nutrientCooldown.toFixed(1)}秒）
             </div>
           </div>
         </div>
