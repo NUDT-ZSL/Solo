@@ -6,7 +6,9 @@ import {
   getStandardBeats,
   parseUserBeat,
   calculateDeviation,
+  getBeatPositions,
   type DeviationResult,
+  type BeatPosition,
 } from './utils/beatEngine';
 import './App.css';
 
@@ -25,11 +27,15 @@ function App() {
   const [fadeOpacity, setFadeOpacity] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playProgress, setPlayProgress] = useState(0);
+  const [playTime, setPlayTime] = useState(0);
+  const [beatPosition, setBeatPosition] = useState<BeatPosition | null>(null);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const playAnimationRef = useRef<number | null>(null);
+  const playStartTimeRef = useRef<number>(0);
+  const pausedTimeRef = useRef<number>(0);
   const pulseIdCounter = useRef(0);
 
   const standardBeats = getStandardBeats(selectedPattern, bpm);
@@ -64,6 +70,10 @@ function App() {
     setDeviationResult(null);
     setIsPlaying(false);
     setPlayProgress(0);
+    setPlayTime(0);
+    setBeatPosition(null);
+    playStartTimeRef.current = 0;
+    pausedTimeRef.current = 0;
     if (playAnimationRef.current) {
       cancelAnimationFrame(playAnimationRef.current);
       playAnimationRef.current = null;
@@ -174,32 +184,47 @@ function App() {
     }
   }, [userTimestamps, startTime, userBeats, standardBeats]);
 
-  const handlePlay = useCallback(() => {
-    if (userBeats.length === 0) return;
-
-    setIsPlaying(true);
-    setPlayProgress(0);
+  const handlePlayPause = useCallback(() => {
+    if (userBeats.length === 0 && standardBeats.length === 0) return;
 
     const totalDuration = standardBeats.length > 0
-      ? standardBeats[standardBeats.length - 1] + 500
+      ? (standardBeats.length * 60000) / bpm
       : 2000;
 
-    const startTime = performance.now();
-
-    const animate = () => {
-      const elapsed = performance.now() - startTime;
-      const progress = Math.min(1, elapsed / totalDuration);
-      setPlayProgress(progress);
-
-      if (progress < 1) {
-        playAnimationRef.current = requestAnimationFrame(animate);
-      } else {
-        setIsPlaying(false);
+    if (isPlaying) {
+      pausedTimeRef.current = playTime;
+      setIsPlaying(false);
+      if (playAnimationRef.current) {
+        cancelAnimationFrame(playAnimationRef.current);
+        playAnimationRef.current = null;
       }
-    };
+    } else {
+      setIsPlaying(true);
+      playStartTimeRef.current = performance.now() - pausedTimeRef.current;
 
-    playAnimationRef.current = requestAnimationFrame(animate);
-  }, [userBeats, standardBeats]);
+      const animate = () => {
+        const currentTime = performance.now() - playStartTimeRef.current;
+        const clampedTime = Math.min(currentTime, totalDuration);
+
+        setPlayTime(clampedTime);
+
+        const progress = Math.min(1, clampedTime / totalDuration);
+        setPlayProgress(progress);
+
+        const position = getBeatPositions(standardBeats, clampedTime, bpm);
+        setBeatPosition(position);
+
+        if (progress < 1) {
+          playAnimationRef.current = requestAnimationFrame(animate);
+        } else {
+          setIsPlaying(false);
+          pausedTimeRef.current = 0;
+        }
+      };
+
+      playAnimationRef.current = requestAnimationFrame(animate);
+    }
+  }, [userBeats, standardBeats, bpm, isPlaying, playTime]);
 
   useEffect(() => {
     return () => {
@@ -244,9 +269,10 @@ function App() {
           onStartStop={handleStartStop}
           onManualBeat={handleManualBeat}
           onReset={resetSession}
-          onPlay={handlePlay}
-          canPlay={userBeats.length > 0}
+          onPlayPause={handlePlayPause}
+          canPlay={userBeats.length > 0 || standardBeats.length > 0}
           isPlaying={isPlaying}
+          playTime={playTime}
           pulseAnimations={pulseAnimations}
         />
 
@@ -256,7 +282,11 @@ function App() {
             userBeats={userBeats}
             fadeOpacity={fadeOpacity}
             playProgress={playProgress}
+            playTime={playTime}
             isPlaying={isPlaying}
+            beatPosition={beatPosition}
+            deviations={deviationResult?.deviations || []}
+            bpm={bpm}
           />
 
           {deviationResult && (

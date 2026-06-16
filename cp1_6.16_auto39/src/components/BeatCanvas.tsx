@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import { generateVisualData, generateWaveformPoints, type BeatPoint } from '../utils/beatEngine';
+import { generateVisualData, generateWaveformPoints, getBeatPositions, type BeatPoint, type BeatPosition } from '../utils/beatEngine';
 import '../components/BeatCanvas.css';
 
 interface BeatCanvasProps {
@@ -7,7 +7,11 @@ interface BeatCanvasProps {
   userBeats: number[];
   fadeOpacity: number;
   playProgress: number;
+  playTime: number;
   isPlaying: boolean;
+  beatPosition: BeatPosition | null;
+  deviations: number[];
+  bpm: number;
 }
 
 interface TooltipInfo {
@@ -23,7 +27,11 @@ function BeatCanvas({
   userBeats,
   fadeOpacity,
   playProgress,
+  playTime,
   isPlaying,
+  beatPosition,
+  deviations,
+  bpm,
 }: BeatCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -126,10 +134,38 @@ function BeatCanvas({
     ctx.stroke();
 
     visualData.standardPoints.forEach((point, index) => {
+      const deviation = deviations[index];
+      const hasDeviation = deviation !== undefined;
+      const isAccurate = hasDeviation && Math.abs(deviation) <= 50;
+      const isInaccurate = hasDeviation && Math.abs(deviation) > 50;
+      const isPassed = beatPosition && index <= beatPosition.currentBeatIndex;
+
+      let fillColor = '#3498DB';
+      let radius = 6;
+      let strokeColor: string | null = null;
+
+      if (isPassed && hasDeviation) {
+        if (isAccurate) {
+          fillColor = '#2ECC71';
+          strokeColor = '#27AE60';
+          radius = 8;
+        } else if (isInaccurate) {
+          fillColor = '#E74C3C';
+          strokeColor = '#C0392B';
+          radius = 8;
+        }
+      }
+
       ctx.beginPath();
-      ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
-      ctx.fillStyle = '#3498DB';
+      ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = fillColor;
       ctx.fill();
+
+      if (strokeColor) {
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
 
       ctx.fillStyle = '#8892B0';
       ctx.font = '11px sans-serif';
@@ -157,41 +193,91 @@ function BeatCanvas({
       ctx.stroke();
       ctx.setLineDash([]);
 
-      visualData.userPoints.forEach((point) => {
+      visualData.userPoints.forEach((point, index) => {
+        const deviation = deviations[index];
+        const hasDeviation = deviation !== undefined;
+        const isAccurate = hasDeviation && Math.abs(deviation) <= 50;
+        const isInaccurate = hasDeviation && Math.abs(deviation) > 50;
+        const isPassed = beatPosition && index <= beatPosition.currentBeatIndex;
+
+        let fillColor = '#E74C3C';
+        let radius = 6;
+        let strokeColor: string | null = null;
+
+        if (isPassed && hasDeviation) {
+          if (isAccurate) {
+            fillColor = '#2ECC71';
+            strokeColor = '#27AE60';
+            radius = 8;
+          } else if (isInaccurate) {
+            fillColor = '#E74C3C';
+            strokeColor = '#C0392B';
+            radius = 8;
+          }
+        }
+
         ctx.beginPath();
-        ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
-        ctx.fillStyle = '#E74C3C';
+        ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = fillColor;
         ctx.fill();
+
+        if (strokeColor) {
+          ctx.strokeStyle = strokeColor;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
       });
     }
 
-    if (isPlaying) {
-      const currentX = padding + playProgress * (width - padding * 2);
+    if (isPlaying || playProgress > 0) {
+      const position = beatPosition || getBeatPositions(standardBeats, playTime, bpm);
+      const currentX = padding + position.positionPercent * (width - padding * 2);
 
-      const standardY = centerY;
+      ctx.save();
+      ctx.translate(currentX, centerY);
+
+      const swingAngle = Math.sin(position.beatProgress * Math.PI) * 0.3;
+      ctx.rotate(swingAngle);
+
+      const gradient = ctx.createLinearGradient(0, -centerY + padding, 0, 0);
+      gradient.addColorStop(0, 'rgba(52, 152, 219, 0.1)');
+      gradient.addColorStop(1, 'rgba(52, 152, 219, 0.8)');
+
+      ctx.fillStyle = gradient;
       ctx.beginPath();
-      ctx.arc(currentX, standardY, 8, 0, Math.PI * 2);
+      ctx.moveTo(-8, 0);
+      ctx.lineTo(-3, -centerY + padding);
+      ctx.lineTo(3, -centerY + padding);
+      ctx.lineTo(8, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = '#3498DB';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, -centerY + padding + 10);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(0, 0, 12, 0, Math.PI * 2);
       ctx.fillStyle = '#3498DB';
+      ctx.fill();
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(0, -centerY + padding + 10, 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#E74C3C';
       ctx.fill();
       ctx.strokeStyle = '#FFFFFF';
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      if (visualData.userPoints.length > 0) {
-        const userIndex = Math.floor(playProgress * visualData.userPoints.length);
-        const userPoint = visualData.userPoints[Math.min(userIndex, visualData.userPoints.length - 1)];
-        if (userPoint) {
-          ctx.beginPath();
-          ctx.arc(userPoint.x, userPoint.y, 8, 0, Math.PI * 2);
-          ctx.fillStyle = '#E74C3C';
-          ctx.fill();
-          ctx.strokeStyle = '#FFFFFF';
-          ctx.lineWidth = 2;
-          ctx.stroke();
-        }
-      }
+      ctx.restore();
 
-      ctx.strokeStyle = 'rgba(52, 152, 219, 0.3)';
+      ctx.strokeStyle = 'rgba(52, 152, 219, 0.2)';
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
@@ -199,6 +285,29 @@ function BeatCanvas({
       ctx.lineTo(currentX, height - padding);
       ctx.stroke();
       ctx.setLineDash([]);
+
+      if (visualData.userPoints.length > 0) {
+        const userIndex = Math.min(position.currentBeatIndex, visualData.userPoints.length - 1);
+        const userPoint = visualData.userPoints[userIndex];
+        if (userPoint && position.beatProgress < 0.5) {
+          const pulseRadius = 10 + position.beatProgress * 10;
+          ctx.beginPath();
+          ctx.arc(userPoint.x, userPoint.y, pulseRadius, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(231, 76, 60, ${0.5 - position.beatProgress * 0.5})`;
+          ctx.fill();
+        }
+      }
+
+      if (position.currentBeatIndex < standardBeats.length) {
+        const standardPoint = visualData.standardPoints[position.currentBeatIndex];
+        if (standardPoint && position.beatProgress < 0.5) {
+          const pulseRadius = 10 + position.beatProgress * 10;
+          ctx.beginPath();
+          ctx.arc(standardPoint.x, standardPoint.y, pulseRadius, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(52, 152, 219, ${0.5 - position.beatProgress * 0.5})`;
+          ctx.fill();
+        }
+      }
     }
 
     if (hoveredPoint) {
@@ -209,7 +318,7 @@ function BeatCanvas({
     }
 
     ctx.globalAlpha = 1;
-  }, [dimensions, visualData, fadeOpacity, isPlaying, playProgress, hoveredPoint, standardBeats]);
+  }, [dimensions, visualData, fadeOpacity, isPlaying, playProgress, playTime, hoveredPoint, standardBeats, beatPosition, deviations, bpm]);
 
   useEffect(() => {
     const animate = () => {

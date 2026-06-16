@@ -16,9 +16,10 @@ interface ControlPanelProps {
   onStartStop: () => void;
   onManualBeat: (e?: React.MouseEvent) => void;
   onReset: () => void;
-  onPlay: () => void;
+  onPlayPause: () => void;
   canPlay: boolean;
   isPlaying: boolean;
+  playTime: number;
   pulseAnimations: { id: number; x: number; y: number }[];
 }
 
@@ -37,11 +38,18 @@ function ControlPanel({
   onStartStop,
   onManualBeat,
   onReset,
-  onPlay,
+  onPlayPause,
   canPlay,
   isPlaying,
+  playTime,
   pulseAnimations,
 }: ControlPanelProps) {
+
+  const formatTime = (ms: number): string => {
+    const seconds = Math.floor(ms / 1000);
+    const milliseconds = Math.floor((ms % 1000) / 10);
+    return `${seconds}.${milliseconds.toString().padStart(2, '0')}s`;
+  };
   return (
     <div className="control-panel">
       <h2 className="panel-title">控制面板</h2>
@@ -152,13 +160,20 @@ function ControlPanel({
               : '开始录音'}
           </button>
 
-          <button
-            className="action-btn secondary"
-            onClick={onPlay}
-            disabled={!canPlay || isPlaying}
-          >
-            {isPlaying ? '播放中...' : '播放对比'}
-          </button>
+          <div className="play-control">
+            <div className="play-time-display">
+              <span className="play-time-label">播放时间</span>
+              <span className="play-time-value">{formatTime(playTime)}</span>
+            </div>
+            <button
+              className={`action-btn ${isPlaying ? 'warning' : 'success'}`}
+              onClick={onPlayPause}
+              disabled={!canPlay}
+            >
+              <span className="play-icon">{isPlaying ? '⏸' : '▶'}</span>
+              {isPlaying ? '暂停' : '播放'}
+            </button>
+          </div>
 
           <button className="action-btn secondary" onClick={onReset}>
             重置

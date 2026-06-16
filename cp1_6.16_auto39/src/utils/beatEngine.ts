@@ -26,6 +26,12 @@ export interface DeviationResult {
   grade: string;
 }
 
+export interface BeatPosition {
+  currentBeatIndex: number;
+  positionPercent: number;
+  beatProgress: number;
+}
+
 export const STANDARD_PATTERNS: StandardBeatPattern[] = [
   {
     id: '4/4',
@@ -173,4 +179,45 @@ export function generateWaveformPoints(
   result.push({ x: points[points.length - 1].x, y: centerY });
 
   return result;
+}
+
+export function getBeatPositions(
+  standardBeats: number[],
+  currentTime: number,
+  bpm: number
+): BeatPosition {
+  if (standardBeats.length === 0) {
+    return {
+      currentBeatIndex: 0,
+      positionPercent: 0,
+      beatProgress: 0,
+    };
+  }
+
+  const beatInterval = 60000 / bpm;
+  const totalDuration = standardBeats.length * beatInterval;
+
+  if (currentTime >= totalDuration) {
+    return {
+      currentBeatIndex: standardBeats.length - 1,
+      positionPercent: 1,
+      beatProgress: 1,
+    };
+  }
+
+  const currentBeatIndex = Math.min(
+    Math.floor(currentTime / beatInterval),
+    standardBeats.length - 1
+  );
+
+  const beatStartTime = currentBeatIndex * beatInterval;
+  const beatProgress = Math.min(1, (currentTime - beatStartTime) / beatInterval);
+
+  const positionPercent = Math.min(1, currentTime / totalDuration);
+
+  return {
+    currentBeatIndex,
+    positionPercent,
+    beatProgress,
+  };
 }

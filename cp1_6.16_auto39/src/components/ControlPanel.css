@@ -191,6 +191,48 @@
   color: #FFFFFF;
 }
 
+.action-btn.success {
+  background-color: #2ECC71;
+  color: #FFFFFF;
+}
+
+.action-btn.warning {
+  background-color: #F39C12;
+  color: #FFFFFF;
+}
+
+.play-control {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.play-time-display {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: rgba(15, 52, 96, 0.5);
+  border-radius: 6px;
+}
+
+.play-time-label {
+  color: #8892B0;
+  font-size: 0.85rem;
+}
+
+.play-time-value {
+  color: #3498DB;
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+}
+
+.play-icon {
+  margin-right: 6px;
+  font-size: 1rem;
+}
+
 .beat-btn {
   display: flex;
   align-items: center;
