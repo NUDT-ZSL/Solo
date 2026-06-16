@@ -1,0 +1,222 @@
+{
+  "items": [
+    {
+      "id": "i1",
+      "name": "原木书架",
+      "description": "九成新原木书架，三层结构，稳固耐用，适合放书籍和装饰品。搬家转让，同城自提。",
+      "category": "家居",
+      "condition": "九成新",
+      "points": 30,
+      "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=wooden%20bookshelf%20minimalist%20style%20natural%20wood%20color%20product%20photo&image_size=portrait_4_3",
+      "ownerId": "u2",
+      "ownerName": "小红",
+      "createdAt": "2026-06-10T10:00:00Z",
+      "status": "available",
+      "location": { "lat": 39.9055, "lng": 116.4085 },
+      "exchangeHistory": []
+    },
+    {
+      "id": "i2",
+      "name": "Kindle电子书阅读器",
+      "description": "Kindle Paperwhite 第10代，使用一年，屏幕无划痕，续航优秀。附带原装保护套。",
+      "category": "数码",
+      "condition": "八成新",
+      "points": 45,
+      "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=kindle%20ebook%20reader%20black%20color%20product%20photo%20on%20white%20background&image_size=portrait_4_3",
+      "ownerId": "u3",
+      "ownerName": "阿杰",
+      "createdAt": "2026-06-12T14:30:00Z",
+      "status": "available",
+      "location": { "lat": 39.9030, "lng": 116.4060 },
+      "exchangeHistory": []
+    },
+    {
+      "id": "i3",
+      "name": "《三体》全集",
+      "description": "刘慈欣《三体》三部曲，正版精装，阅读过一次，书页干净无折痕。科幻迷必收藏！",
+      "category": "书籍",
+      "condition": "九成新",
+      "points": 20,
+      "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=three%20body%20problem%20book%20set%20chinese%20edition%20hardcover&image_size=portrait_4_3",
+      "ownerId": "u1",
+      "ownerName": "小明",
+      "createdAt": "2026-06-08T09:15:00Z",
+      "status": "available",
+      "location": { "lat": 39.9042, "lng": 116.4074 },
+      "exchangeHistory": [
+        {
+          "fromUserId": "u4",
+          "toUserId": "u1",
+          "time": "2026-06-09T16:00:00Z",
+          "message": "书保护得很好，谢谢！"
+        }
+      ]
+    },
+    {
+      "id": "i4",
+      "name": "优衣库羽绒服",
+      "description": "优衣库男士轻薄羽绒服，M码，深灰色，穿了一个冬季，保暖效果好。",
+      "category": "衣物",
+      "condition": "七成新",
+      "points": 25,
+      "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=uniqlo%20mens%20light%20down%20jacket%20dark%20gray%20product%20photo&image_size=portrait_4_3",
+      "ownerId": "u4",
+      "ownerName": "莉莉",
+      "createdAt": "2026-06-14T11:20:00Z",
+      "status": "available",
+      "location": { "lat": 39.9060, "lng": 116.4090 },
+      "exchangeHistory": []
+    },
+    {
+      "id": "i5",
+      "name": "陶瓷茶具套装",
+      "description": "景德镇陶瓷茶具一套，含茶壶一把、茶杯六个、茶盘一个。包装精美，适合送礼。",
+      "category": "家居",
+      "condition": "全新",
+      "points": 40,
+      "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=chinese%20ceramic%20tea%20set%20elegant%20blue%20and%20white%20porcelain&image_size=portrait_4_3",
+      "ownerId": "u2",
+      "ownerName": "小红",
+      "createdAt": "2026-06-11T08:45:00Z",
+      "status": "available",
+      "location": { "lat": 39.9055, "lng": 116.4085 },
+      "exchangeHistory": []
+    },
+    {
+      "id": "i6",
+      "name": "罗技无线鼠标",
+      "description": "罗技MX Master 3无线鼠标，办公利器，多设备切换顺畅。配件齐全。",
+      "category": "数码",
+      "condition": "八成新",
+      "points": 35,
+      "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=logitech%20mx%20master%203%20wireless%20mouse%20product%20photo&image_size=portrait_4_3",
+      "ownerId": "u3",
+      "ownerName": "阿杰",
+      "createdAt": "2026-06-13T16:00:00Z",
+      "status": "available",
+      "location": { "lat": 39.9030, "lng": 116.4060 },
+      "exchangeHistory": []
+    },
+    {
+      "id": "i7",
+      "name": "瑜伽垫",
+      "description": "加厚瑜伽垫，TPE环保材质，防滑耐用。紫色，带绑带，只用过几次。",
+      "category": "其他",
+      "condition": "九成新",
+      "points": 15,
+      "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=purple%20yoga%20mat%20rolled%20up%20fitness%20product&image_size=portrait_4_3",
+      "ownerId": "u1",
+      "ownerName": "小明",
+      "createdAt": "2026-06-09T13:30:00Z",
+      "status": "available",
+      "location": { "lat": 39.9042, "lng": 116.4074 },
+      "exchangeHistory": []
+    },
+    {
+      "id": "i8",
+      "name": "《人类简史》",
+      "description": "尤瓦尔·赫拉利《人类简史》，平装版，有少量阅读笔记，不影响阅读。",
+      "category": "书籍",
+      "condition": "八成新",
+      "points": 12,
+      "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sapiens%20a%20brief%20history%20of%20humankind%20book%20paperback&image_size=portrait_4_3",
+      "ownerId": "u4",
+      "ownerName": "莉莉",
+      "createdAt": "2026-06-07T10:00:00Z",
+      "status": "available",
+      "location": { "lat": 39.9060, "lng": 116.4090 },
+      "exchangeHistory": [
+        {
+          "fromUserId": "u2",
+          "toUserId": "u4",
+          "time": "2026-06-08T14:20:00Z",
+          "message": "很不错的书！"
+        }
+      ]
+    },
+    {
+      "id": "i9",
+      "name": "北欧风台灯",
+      "description": "简约北欧风LED台灯，三档亮度调节，护眼柔光。白色，USB供电。",
+      "category": "家居",
+      "condition": "九成新",
+      "points": 22,
+      "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=minimalist%20nordic%20style%20desk%20lamp%20white%20LED&image_size=portrait_4_3",
+      "ownerId": "u2",
+      "ownerName": "小红",
+      "createdAt": "2026-06-15T09:00:00Z",
+      "status": "available",
+      "location": { "lat": 39.9055, "lng": 116.4085 },
+      "exchangeHistory": []
+    },
+    {
+      "id": "i10",
+      "name": "运动T恤两件",
+      "description": "Nike速干运动T恤，黑色和蓝色各一件，L码，透气舒适。",
+      "category": "衣物",
+      "condition": "八成新",
+      "points": 18,
+      "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=nike%20dri%20fit%20sports%20t%20shirts%20black%20and%20blue&image_size=portrait_4_3",
+      "ownerId": "u3",
+      "ownerName": "阿杰",
+      "createdAt": "2026-06-14T17:30:00Z",
+      "status": "available",
+      "location": { "lat": 39.9030, "lng": 116.4060 },
+      "exchangeHistory": []
+    },
+    {
+      "id": "i11",
+      "name": "多肉植物组合",
+      "description": "五盆多肉植物组合，含陶瓷花盆，养护简单，适合新手。自取。",
+      "category": "其他",
+      "condition": "全新",
+      "points": 28,
+      "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=succulent%20plants%20arrangement%20ceramic%20pots%20cute&image_size=portrait_4_3",
+      "ownerId": "u1",
+      "ownerName": "小明",
+      "createdAt": "2026-06-15T11:45:00Z",
+      "status": "available",
+      "location": { "lat": 39.9042, "lng": 116.4074 },
+      "exchangeHistory": []
+    },
+    {
+      "id": "i12",
+      "name": "机械键盘",
+      "description": "樱桃红轴机械键盘，87键，白光背光，打字手感极佳。",
+      "category": "数码",
+      "condition": "七成新",
+      "points": 38,
+      "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=mechanical%20keyboard%2087%20keys%20white%20backlight%20cherry%20mx&image_size=portrait_4_3",
+      "ownerId": "u4",
+      "ownerName": "莉莉",
+      "createdAt": "2026-06-12T08:30:00Z",
+      "status": "available",
+      "location": { "lat": 39.9060, "lng": 116.4090 },
+      "exchangeHistory": []
+    }
+  ],
+  "transactions": [
+    {
+      "id": "t1",
+      "itemId": "i3",
+      "itemName": "《三体》全集",
+      "itemImage": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=three%20body%20problem%20book%20set%20chinese%20edition%20hardcover&image_size=portrait_4_3",
+      "fromUserId": "u4",
+      "toUserId": "u1",
+      "points": 20,
+      "time": "2026-06-09T16:00:00Z",
+      "type": "receive"
+    },
+    {
+      "id": "t2",
+      "itemId": "i8",
+      "itemName": "《人类简史》",
+      "itemImage": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sapiens%20a%20brief%20history%20of%20humankind%20book%20paperback&image_size=portrait_4_3",
+      "fromUserId": "u2",
+      "toUserId": "u4",
+      "points": 12,
+      "time": "2026-06-08T14:20:00Z",
+      "type": "receive"
+    }
+  ]
+}

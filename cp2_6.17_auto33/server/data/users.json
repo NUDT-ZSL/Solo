@@ -1,0 +1,37 @@
+{
+  "users": [
+    {
+      "id": "u1",
+      "username": "小明",
+      "avatar": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=friendly%20asian%20male%20avatar%20portrait%20simple%20style&image_size=square",
+      "points": 50,
+      "reputation": 5,
+      "location": { "lat": 39.9042, "lng": 116.4074 }
+    },
+    {
+      "id": "u2",
+      "username": "小红",
+      "avatar": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=friendly%20asian%20female%20avatar%20portrait%20simple%20style&image_size=square",
+      "points": 120,
+      "reputation": 4,
+      "location": { "lat": 39.9055, "lng": 116.4085 }
+    },
+    {
+      "id": "u3",
+      "username": "阿杰",
+      "avatar": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=young%20asian%20man%20avatar%20casual%20style&image_size=square",
+      "points": 80,
+      "reputation": 5,
+      "location": { "lat": 39.9030, "lng": 116.4060 }
+    },
+    {
+      "id": "u4",
+      "username": "莉莉",
+      "avatar": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=young%20asian%20woman%20avatar%20smile&image_size=square",
+      "points": 65,
+      "reputation": 4,
+      "location": { "lat": 39.9060, "lng": 116.4090 }
+    }
+  ],
+  "currentUserId": "u1"
+}
