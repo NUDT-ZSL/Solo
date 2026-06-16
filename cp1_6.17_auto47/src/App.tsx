@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { CanvasEngine, COLOR_PALETTE, STAMP_TYPES } from './CanvasEngine';
+import { CanvasEngine, COLOR_PALETTE, STAMP_TYPES, LayerInfo } from './CanvasEngine';
 import { GalleryManager, Artwork } from './GalleryManager';
 import './App.css';
 
@@ -9,7 +9,7 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<CanvasEngine | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  
+
   const [selectedColor, setSelectedColor] = useState(COLOR_PALETTE[0].color);
   const [brushSize, setBrushSize] = useState(5);
   const [currentTool, setCurrentTool] = useState<'brush' | 'stamp'>('brush');
@@ -23,6 +23,9 @@ export default function App() {
   const [isEmpty, setIsEmpty] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [showClearDialog, setShowClearDialog] = useState(false);
+  const [layers, setLayers] = useState<LayerInfo[]>([]);
+  const [activeLayerId, setActiveLayerId] = useState('');
+  const [layerThumbnails, setLayerThumbnails] = useState<Record<string, string>>({});
 
   const updateCanvasSize = useCallback(() => {
     if (containerRef.current) {
@@ -49,6 +52,9 @@ export default function App() {
             setCanUndo(engineRef.current.canUndo());
             setCanRedo(engineRef.current.canRedo());
             setIsEmpty(engineRef.current.isEmpty());
+            setLayers(engineRef.current.getLayers());
+            setActiveLayerId(engineRef.current.getActiveLayerId());
+            updateLayerThumbnails();
           }
         });
       }
@@ -83,6 +89,16 @@ export default function App() {
       setGallery(galleryManager.loadGallery());
     });
     return unsubscribe;
+  }, []);
+
+  const updateLayerThumbnails = useCallback(() => {
+    if (!engineRef.current) return;
+    const currentLayers = engineRef.current.getLayers();
+    const thumbs: Record<string, string> = {};
+    for (const layer of currentLayers) {
+      thumbs[layer.id] = engineRef.current.getLayerThumbnail(layer.id);
+    }
+    setLayerThumbnails(thumbs);
   }, []);
 
   const getCanvasCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -147,7 +163,6 @@ export default function App() {
 
     const dataUrl = engineRef.current.getCanvasData();
     await galleryManager.saveArtwork(dataUrl, title || '未命名作品');
-    engineRef.current.clearCanvas();
   };
 
   const handleLike = (artworkId: string) => {
@@ -179,8 +194,32 @@ export default function App() {
     setShowClearDialog(false);
   };
 
+  const handleAddLayer = () => {
+    if (engineRef.current) {
+      engineRef.current.addLayer();
+    }
+  };
+
+  const handleRemoveLayer = () => {
+    if (engineRef.current && layers.length > 1) {
+      engineRef.current.removeLayer(activeLayerId);
+    }
+  };
+
+  const handleSelectLayer = (layerId: string) => {
+    if (engineRef.current) {
+      engineRef.current.selectLayer(layerId);
+    }
+  };
+
+  const handleToggleVisibility = (layerId: string) => {
+    if (engineRef.current) {
+      engineRef.current.toggleLayerVisibility(layerId);
+    }
+  };
+
   const filteredGallery = galleryManager.searchArtworks(searchText);
-  const matchedIds = searchText.trim() 
+  const matchedIds = searchText.trim()
     ? new Set(filteredGallery.map(a => a.id))
     : new Set<string>();
 
@@ -237,7 +276,7 @@ export default function App() {
       <div className="sidebar-section">
         <div className="tool-section">
           <h3 className="section-title">创作工具</h3>
-          
+
           <div className="tool-toggle">
             <button
               className={`tool-btn ${currentTool === 'brush' ? 'active' : ''}`}
@@ -300,11 +339,59 @@ export default function App() {
               </div>
             </div>
           )}
+
+          <div className="layer-section">
+            <h4 className="subsection-title">图层</h4>
+            <div className="layer-list">
+              {[...layers].reverse().map((layer) => (
+                <div
+                  key={layer.id}
+                  className={`layer-item ${layer.id === activeLayerId ? 'active' : ''}`}
+                  onClick={() => handleSelectLayer(layer.id)}
+                >
+                  <div className="layer-thumbnail">
+                    {layerThumbnails[layer.id] && (
+                      <img src={layerThumbnails[layer.id]} alt={layer.name} />
+                    )}
+                  </div>
+                  <span className="layer-name">{layer.name}</span>
+                  <button
+                    className={`visibility-btn ${layer.visible ? 'visible' : 'hidden'}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleVisibility(layer.id);
+                    }}
+                    title={layer.visible ? '隐藏图层' : '显示图层'}
+                  >
+                    {layer.visible ? '👁️' : '🚫'}
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="layer-actions">
+              <button
+                className="layer-add-btn"
+                onClick={handleAddLayer}
+                disabled={layers.length >= 10}
+                title="新建图层"
+              >
+                ➕
+              </button>
+              <button
+                className="layer-delete-btn"
+                onClick={handleRemoveLayer}
+                disabled={layers.length <= 1}
+                title="删除图层"
+              >
+                🗑️
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="gallery-section">
           <h3 className="section-title">作品集</h3>
-          
+
           <div className="search-section">
             <input
               type="text"

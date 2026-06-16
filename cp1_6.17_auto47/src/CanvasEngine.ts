@@ -28,16 +28,33 @@ interface ClearData {
   previousActions: DrawAction[];
 }
 
-type DrawAction = 
+type DrawAction =
   | { type: 'line'; data: LineData }
   | { type: 'stamp'; data: StampData }
   | { type: 'clear'; data: ClearData };
+
+export interface LayerInfo {
+  id: string;
+  name: string;
+  visible: boolean;
+}
+
+interface Layer {
+  id: string;
+  name: string;
+  visible: boolean;
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  actions: DrawAction[];
+  redoStack: DrawAction[];
+}
 
 const MAX_HISTORY = 20;
 const MAX_POINTS_PER_FRAME = 200;
 const MIN_POINT_DISTANCE = 2;
 const LINE_ANIMATION_DURATION = 150;
 const STAMP_ANIMATION_DURATION = 300;
+const MAX_LAYERS = 10;
 
 function drawStar(ctx: CanvasRenderingContext2D, size: number): void {
   const spikes = 5;
@@ -45,17 +62,17 @@ function drawStar(ctx: CanvasRenderingContext2D, size: number): void {
   const innerRadius = outerRadius * 0.4;
   let rot = (Math.PI / 2) * 3;
   const step = Math.PI / spikes;
-  
+
   ctx.beginPath();
   ctx.moveTo(0, -outerRadius);
-  
+
   for (let i = 0; i < spikes; i++) {
     ctx.lineTo(Math.cos(rot) * outerRadius, Math.sin(rot) * outerRadius);
     rot += step;
     ctx.lineTo(Math.cos(rot) * innerRadius, Math.sin(rot) * innerRadius);
     rot += step;
   }
-  
+
   ctx.lineTo(0, -outerRadius);
   ctx.closePath();
   ctx.fill();
@@ -64,7 +81,7 @@ function drawStar(ctx: CanvasRenderingContext2D, size: number): void {
 function drawArrow(ctx: CanvasRenderingContext2D, size: number): void {
   const half = size / 2;
   const headLen = size * 0.4;
-  
+
   ctx.beginPath();
   ctx.moveTo(-half, 0);
   ctx.lineTo(half - headLen, 0);
@@ -83,20 +100,20 @@ function drawHandprint(ctx: CanvasRenderingContext2D, size: number): void {
   const palmHeight = size * 0.35;
   const fingerWidth = size * 0.12;
   const fingerHeight = size * 0.35;
-  
+
   ctx.beginPath();
   ctx.roundRect(-palmWidth / 2, -palmHeight / 2, palmWidth, palmHeight, palmWidth * 0.2);
   ctx.fill();
-  
+
   const fingerPositions = [-palmWidth * 0.35, -palmWidth * 0.1, palmWidth * 0.1, palmWidth * 0.35];
   const fingerHeights = [fingerHeight * 0.8, fingerHeight, fingerHeight * 0.95, fingerHeight * 0.85];
-  
+
   fingerPositions.forEach((x, i) => {
     ctx.beginPath();
     ctx.roundRect(x - fingerWidth / 2, -palmHeight / 2 - fingerHeights[i], fingerWidth, fingerHeights[i], fingerWidth * 0.4);
     ctx.fill();
   });
-  
+
   ctx.beginPath();
   ctx.roundRect(-palmWidth * 0.6, -palmHeight * 0.1, fingerWidth * 1.1, palmHeight * 0.8, fingerWidth * 0.4);
   ctx.fill();
@@ -170,13 +187,22 @@ export const COLOR_PALETTE = [
   { color: '#FFFFFF', name: '白色' },
 ];
 
+function createLayerCanvas(width: number, height: number): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Failed to create layer canvas context');
+  return { canvas, ctx };
+}
+
 export class CanvasEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private bgCanvas: HTMLCanvasElement;
   private bgCtx: CanvasRenderingContext2D;
-  private history: DrawAction[] = [];
-  private redoStack: DrawAction[] = [];
+  private layers: Layer[] = [];
+  private activeLayerId: string = '';
   private currentLine: LineData | null = null;
   private isDrawing: boolean = false;
   private currentColor: string = '#FF4500';
@@ -184,6 +210,7 @@ export class CanvasEngine {
   private animationFrameId: number | null = null;
   private pendingPoints: Point[] = [];
   private onChangeCallback: (() => void) | null = null;
+  private layerCounter: number = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -197,6 +224,7 @@ export class CanvasEngine {
     this.bgCtx = bgCtx;
 
     this.renderBrickBackground();
+    this.addLayer();
     this.startAnimationLoop();
   }
 
@@ -222,23 +250,27 @@ export class CanvasEngine {
       for (let x = -brickWidth; x < width + brickWidth; x += brickWidth) {
         const brickX = x + rowOffset;
         const colorIndex = Math.floor((x + y) / brickWidth) % 2;
-        
+
         this.bgCtx.fillStyle = brickColors[colorIndex];
         this.bgCtx.fillRect(brickX, y, brickWidth - 1, brickHeight - 1);
-        
+
         this.bgCtx.strokeStyle = mortarColor;
         this.bgCtx.lineWidth = 1;
         this.bgCtx.strokeRect(brickX, y, brickWidth, brickHeight);
       }
     }
-
-    this.redraw();
   }
 
   setCanvasSize(width: number, height: number): void {
     this.canvas.width = width;
     this.canvas.height = height;
     this.renderBrickBackground();
+    for (const layer of this.layers) {
+      const oldCanvas = layer.canvas;
+      layer.canvas.width = width;
+      layer.canvas.height = height;
+      layer.ctx.drawImage(oldCanvas, 0, 0);
+    }
   }
 
   setColor(color: string): void {
@@ -249,7 +281,79 @@ export class CanvasEngine {
     this.currentSize = Math.max(1, Math.min(50, size));
   }
 
+  getLayers(): LayerInfo[] {
+    return this.layers.map(l => ({ id: l.id, name: l.name, visible: l.visible }));
+  }
+
+  getActiveLayerId(): string {
+    return this.activeLayerId;
+  }
+
+  addLayer(): LayerInfo | null {
+    if (this.layers.length >= MAX_LAYERS) return null;
+
+    this.layerCounter++;
+    const id = `layer_${Date.now()}_${this.layerCounter}`;
+    const name = `图层${this.layerCounter}`;
+    const { canvas, ctx } = createLayerCanvas(this.canvas.width, this.canvas.height);
+
+    const layer: Layer = {
+      id,
+      name,
+      visible: true,
+      canvas,
+      ctx,
+      actions: [],
+      redoStack: [],
+    };
+
+    this.layers.push(layer);
+    this.activeLayerId = id;
+    this.notifyChange();
+    return { id, name, visible: true };
+  }
+
+  removeLayer(layerId: string): boolean {
+    if (this.layers.length <= 1) return false;
+
+    const index = this.layers.findIndex(l => l.id === layerId);
+    if (index === -1) return false;
+
+    this.layers.splice(index, 1);
+
+    if (this.activeLayerId === layerId) {
+      const newIndex = Math.min(index, this.layers.length - 1);
+      this.activeLayerId = this.layers[newIndex].id;
+    }
+
+    this.notifyChange();
+    return true;
+  }
+
+  selectLayer(layerId: string): void {
+    const layer = this.layers.find(l => l.id === layerId);
+    if (layer) {
+      this.activeLayerId = layerId;
+      this.notifyChange();
+    }
+  }
+
+  toggleLayerVisibility(layerId: string): void {
+    const layer = this.layers.find(l => l.id === layerId);
+    if (layer) {
+      layer.visible = !layer.visible;
+      this.notifyChange();
+    }
+  }
+
+  private getActiveLayer(): Layer | null {
+    return this.layers.find(l => l.id === this.activeLayerId) || null;
+  }
+
   startDrawing(x: number, y: number): void {
+    const layer = this.getActiveLayer();
+    if (!layer || !layer.visible) return;
+
     this.isDrawing = true;
     this.currentLine = {
       points: [{ x, y }],
@@ -267,7 +371,7 @@ export class CanvasEngine {
 
     const lastPoint = this.currentLine.points[this.currentLine.points.length - 1];
     const distance = Math.hypot(x - lastPoint.x, y - lastPoint.y);
-    
+
     if (distance >= MIN_POINT_DISTANCE) {
       this.pendingPoints.push({ x, y });
     }
@@ -275,13 +379,14 @@ export class CanvasEngine {
 
   endDrawing(): void {
     if (!this.isDrawing || !this.currentLine) return;
-    
+
     this.flushPendingPoints();
-    
-    if (this.currentLine.points.length > 1) {
-      this.addToHistory({ type: 'line', data: this.currentLine });
+
+    const layer = this.getActiveLayer();
+    if (this.currentLine.points.length > 1 && layer) {
+      this.addActionToLayer(layer, { type: 'line', data: this.currentLine });
     }
-    
+
     this.isDrawing = false;
     this.currentLine = null;
     this.pendingPoints = [];
@@ -289,7 +394,7 @@ export class CanvasEngine {
 
   private flushPendingPoints(): void {
     if (!this.currentLine || this.pendingPoints.length === 0) return;
-    
+
     const pointsToAdd = this.pendingPoints.slice(0, MAX_POINTS_PER_FRAME);
     this.currentLine.points.push(...pointsToAdd);
     this.pendingPoints = this.pendingPoints.slice(MAX_POINTS_PER_FRAME);
@@ -297,6 +402,9 @@ export class CanvasEngine {
 
   addStamp(x: number, y: number, stampType: string): void {
     if (!STAMP_DRAWERS[stampType]) return;
+
+    const layer = this.getActiveLayer();
+    if (!layer || !layer.visible) return;
 
     const grayValue = Math.floor(Math.random() * 100) + 100;
     const stamp: StampData = {
@@ -311,28 +419,29 @@ export class CanvasEngine {
       animationDuration: STAMP_ANIMATION_DURATION,
     };
 
-    this.addToHistory({ type: 'stamp', data: stamp });
+    this.addActionToLayer(layer, { type: 'stamp', data: stamp });
   }
 
-  private addToHistory(action: DrawAction): void {
-    if (this.history.length >= MAX_HISTORY) {
-      this.history.shift();
+  private addActionToLayer(layer: Layer, action: DrawAction): void {
+    if (layer.actions.length >= MAX_HISTORY) {
+      layer.actions.shift();
     }
-    this.history.push(action);
-    this.redoStack = [];
+    layer.actions.push(action);
+    layer.redoStack = [];
     this.notifyChange();
   }
 
   undo(): boolean {
-    if (this.history.length === 0) return false;
-    
-    const action = this.history.pop();
+    const layer = this.getActiveLayer();
+    if (!layer || layer.actions.length === 0) return false;
+
+    const action = layer.actions.pop();
     if (action) {
       if (action.type === 'clear') {
-        this.history.push(...action.data.previousActions);
+        layer.actions.push(...action.data.previousActions);
       }
-      this.redoStack.push(action);
-      this.redraw();
+      layer.redoStack.push(action);
+      this.redrawLayer(layer);
       this.notifyChange();
       return true;
     }
@@ -340,18 +449,19 @@ export class CanvasEngine {
   }
 
   redo(): boolean {
-    if (this.redoStack.length === 0) return false;
-    
-    const action = this.redoStack.pop();
+    const layer = this.getActiveLayer();
+    if (!layer || layer.redoStack.length === 0) return false;
+
+    const action = layer.redoStack.pop();
     if (action) {
       if (action.type === 'clear') {
         const removeCount = action.data.previousActions.length;
         for (let i = 0; i < removeCount; i++) {
-          this.history.pop();
+          layer.actions.pop();
         }
       }
-      this.history.push(action);
-      this.redraw();
+      layer.actions.push(action);
+      this.redrawLayer(layer);
       this.notifyChange();
       return true;
     }
@@ -359,63 +469,89 @@ export class CanvasEngine {
   }
 
   canUndo(): boolean {
-    return this.history.length > 0;
+    const layer = this.getActiveLayer();
+    return layer !== null && layer.actions.length > 0;
   }
 
   canRedo(): boolean {
-    return this.redoStack.length > 0;
+    const layer = this.getActiveLayer();
+    return layer !== null && layer.redoStack.length > 0;
   }
 
   isEmpty(): boolean {
-    if (this.history.length === 0) return true;
-    
+    for (const layer of this.layers) {
+      if (layer.visible && !this.isLayerEmpty(layer)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private isLayerEmpty(layer: Layer): boolean {
+    if (layer.actions.length === 0) return true;
+
     let effectiveStartIndex = 0;
-    for (let i = this.history.length - 1; i >= 0; i--) {
-      if (this.history[i].type === 'clear') {
+    for (let i = layer.actions.length - 1; i >= 0; i--) {
+      if (layer.actions[i].type === 'clear') {
         effectiveStartIndex = i + 1;
         break;
       }
     }
-    
-    return effectiveStartIndex >= this.history.length;
+
+    return effectiveStartIndex >= layer.actions.length;
   }
 
   clearCanvas(): void {
-    if (this.history.length === 0) return;
+    const layer = this.getActiveLayer();
+    if (!layer || this.isLayerEmpty(layer)) return;
 
-    const previousActions = [...this.history];
+    const previousActions = [...layer.actions];
     const clearAction: DrawAction = {
       type: 'clear',
       data: { previousActions },
     };
 
-    if (this.history.length >= MAX_HISTORY) {
-      this.history.shift();
+    if (layer.actions.length >= MAX_HISTORY) {
+      layer.actions.shift();
     }
-    this.history.push(clearAction);
-    this.redoStack = [];
-    this.redraw();
+    layer.actions.push(clearAction);
+    layer.redoStack = [];
+    this.redrawLayer(layer);
     this.notifyChange();
   }
 
   getCanvasData(): string {
-    return this.canvas.toDataURL('image/png');
+    const compositeCanvas = document.createElement('canvas');
+    compositeCanvas.width = this.canvas.width;
+    compositeCanvas.height = this.canvas.height;
+    const compositeCtx = compositeCanvas.getContext('2d');
+    if (!compositeCtx) return this.canvas.toDataURL('image/png');
+
+    compositeCtx.drawImage(this.bgCanvas, 0, 0);
+    for (const layer of this.layers) {
+      if (layer.visible) {
+        compositeCtx.drawImage(layer.canvas, 0, 0);
+      }
+    }
+
+    return compositeCanvas.toDataURL('image/png');
   }
 
-  async loadImage(dataUrl: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        this.ctx.drawImage(img, 0, 0);
-        this.history = [];
-        this.redoStack = [];
-        this.notifyChange();
-        resolve();
-      };
-      img.onerror = reject;
-      img.src = dataUrl;
-    });
+  getLayerThumbnail(layerId: string): string {
+    const layer = this.layers.find(l => l.id === layerId);
+    if (!layer) return '';
+
+    const thumbCanvas = document.createElement('canvas');
+    thumbCanvas.width = 40;
+    thumbCanvas.height = 40;
+    const thumbCtx = thumbCanvas.getContext('2d');
+    if (!thumbCtx) return '';
+
+    thumbCtx.fillStyle = '#2C2C2C';
+    thumbCtx.fillRect(0, 0, 40, 40);
+    thumbCtx.drawImage(layer.canvas, 0, 0, 40, 40);
+
+    return thumbCanvas.toDataURL('image/png');
   }
 
   private notifyChange(): void {
@@ -427,88 +563,94 @@ export class CanvasEngine {
   private startAnimationLoop(): void {
     const animate = () => {
       this.flushPendingPoints();
-      this.redraw();
+      this.compositeLayers();
       this.animationFrameId = requestAnimationFrame(animate);
     };
     this.animationFrameId = requestAnimationFrame(animate);
   }
 
-  private redraw(): void {
+  private compositeLayers(): void {
     const { width, height } = this.canvas;
     this.ctx.clearRect(0, 0, width, height);
     this.ctx.drawImage(this.bgCanvas, 0, 0);
 
-    const now = performance.now();
+    for (const layer of this.layers) {
+      if (layer.visible) {
+        this.ctx.drawImage(layer.canvas, 0, 0);
+      }
+    }
+  }
+
+  private redrawLayer(layer: Layer): void {
+    const { width, height } = layer.canvas;
+    layer.ctx.clearRect(0, 0, width, height);
 
     let effectiveStartIndex = 0;
-    for (let i = this.history.length - 1; i >= 0; i--) {
-      if (this.history[i].type === 'clear') {
+    for (let i = layer.actions.length - 1; i >= 0; i--) {
+      if (layer.actions[i].type === 'clear') {
         effectiveStartIndex = i + 1;
         break;
       }
     }
 
-    for (let i = effectiveStartIndex; i < this.history.length; i++) {
-      const action = this.history[i];
+    const now = performance.now();
+    for (let i = effectiveStartIndex; i < layer.actions.length; i++) {
+      const action = layer.actions[i];
       if (action.type === 'line') {
-        this.drawLineAction(action.data, now);
+        this.drawLineAction(layer.ctx, action.data, now);
       } else if (action.type === 'stamp') {
-        this.drawStampAction(action.data, now);
+        this.drawStampAction(layer.ctx, action.data, now);
       }
-    }
-
-    if (this.currentLine) {
-      this.drawLineAction(this.currentLine, now);
     }
   }
 
-  private drawLineAction(line: LineData, now: number): void {
+  private drawLineAction(ctx: CanvasRenderingContext2D, line: LineData, now: number): void {
     if (line.points.length < 2) return;
 
     const progress = Math.min((now - line.animationStart) / line.animationDuration, 1);
     const currentOpacity = line.opacity * progress;
 
-    this.ctx.save();
-    this.ctx.globalAlpha = currentOpacity;
-    this.ctx.strokeStyle = line.color;
-    this.ctx.lineWidth = line.size;
-    this.ctx.lineCap = 'round';
-    this.ctx.lineJoin = 'round';
+    ctx.save();
+    ctx.globalAlpha = currentOpacity;
+    ctx.strokeStyle = line.color;
+    ctx.lineWidth = line.size;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
 
-    this.ctx.beginPath();
-    this.ctx.moveTo(line.points[0].x, line.points[0].y);
+    ctx.beginPath();
+    ctx.moveTo(line.points[0].x, line.points[0].y);
 
     for (let i = 1; i < line.points.length - 1; i++) {
       const xc = (line.points[i].x + line.points[i + 1].x) / 2;
       const yc = (line.points[i].y + line.points[i + 1].y) / 2;
-      this.ctx.quadraticCurveTo(line.points[i].x, line.points[i].y, xc, yc);
+      ctx.quadraticCurveTo(line.points[i].x, line.points[i].y, xc, yc);
     }
 
     const lastIdx = line.points.length - 1;
-    this.ctx.lineTo(line.points[lastIdx].x, line.points[lastIdx].y);
-    this.ctx.stroke();
-    this.ctx.restore();
+    ctx.lineTo(line.points[lastIdx].x, line.points[lastIdx].y);
+    ctx.stroke();
+    ctx.restore();
   }
 
-  private drawStampAction(stamp: StampData, now: number): void {
+  private drawStampAction(ctx: CanvasRenderingContext2D, stamp: StampData, now: number): void {
     const progress = Math.min((now - stamp.animationStart) / stamp.animationDuration, 1);
     const scaleProgress = progress < 0.7 ? progress / 0.7 * 1.1 : 1.1 - (progress - 0.7) / 0.3 * 0.1;
     const currentOpacity = stamp.opacity * Math.min(progress * 2, 1);
     const currentScale = stamp.scale * scaleProgress;
 
-    this.ctx.save();
-    this.ctx.globalAlpha = currentOpacity;
-    this.ctx.fillStyle = `rgb(${stamp.grayscale}, ${stamp.grayscale}, ${stamp.grayscale})`;
-    this.ctx.translate(stamp.x, stamp.y);
-    this.ctx.rotate((stamp.rotation * Math.PI) / 180);
-    this.ctx.scale(currentScale, currentScale);
+    ctx.save();
+    ctx.globalAlpha = currentOpacity;
+    ctx.fillStyle = `rgb(${stamp.grayscale}, ${stamp.grayscale}, ${stamp.grayscale})`;
+    ctx.translate(stamp.x, stamp.y);
+    ctx.rotate((stamp.rotation * Math.PI) / 180);
+    ctx.scale(currentScale, currentScale);
 
     const drawer = STAMP_DRAWERS[stamp.type];
     if (drawer) {
-      drawer(this.ctx, 60);
+      drawer(ctx, 60);
     }
 
-    this.ctx.restore();
+    ctx.restore();
   }
 
   destroy(): void {

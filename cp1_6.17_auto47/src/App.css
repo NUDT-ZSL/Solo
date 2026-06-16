@@ -321,6 +321,136 @@ body {
   color: #FFD700;
 }
 
+.layer-section {
+  margin-bottom: 20px;
+}
+
+.layer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+  padding-right: 4px;
+}
+
+.layer-list::-webkit-scrollbar {
+  width: 3px;
+}
+
+.layer-list::-webkit-scrollbar-track {
+  background: #2A2A3A;
+  border-radius: 2px;
+}
+
+.layer-list::-webkit-scrollbar-thumb {
+  background: #FFA500;
+  border-radius: 2px;
+}
+
+.layer-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #2A2A3A;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+}
+
+.layer-item:hover {
+  background: #33334A;
+  transform: scale(1.02);
+}
+
+.layer-item.active {
+  border-color: #FFD700;
+  background: rgba(255, 215, 0, 0.08);
+}
+
+.layer-thumbnail {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #1A1A24;
+  flex-shrink: 0;
+  border: 1px solid #444;
+}
+
+.layer-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.layer-name {
+  flex: 1;
+  font-size: 11px;
+  color: #C0C0C0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layer-item.active .layer-name {
+  color: #FFD700;
+  font-weight: 500;
+}
+
+.visibility-btn {
+  background: none;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.visibility-btn:hover {
+  transform: scale(1.15);
+}
+
+.visibility-btn.hidden {
+  opacity: 0.4;
+}
+
+.layer-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.layer-add-btn,
+.layer-delete-btn {
+  flex: 1;
+  padding: 6px;
+  border: 2px solid #2A2A3A;
+  border-radius: 8px;
+  background: #2A2A3A;
+  color: #C0C0C0;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.layer-add-btn:hover:not(:disabled),
+.layer-delete-btn:hover:not(:disabled) {
+  border-color: #FF8C00;
+  color: #FFA500;
+  transform: scale(1.05);
+}
+
+.layer-add-btn:disabled,
+.layer-delete-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
 .search-section {
   margin-bottom: 16px;
 }
