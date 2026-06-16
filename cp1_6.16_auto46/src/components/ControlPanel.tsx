@@ -9,11 +9,13 @@ interface ControlPanelProps {
   selectedYears: number[];
   simulationTime: Date;
   cometName: string;
+  orbitOpacity: number;
   onCometSelect: (cometId: string) => void;
   onSpeedChange: (speed: number) => void;
   onPlayPause: () => void;
   onYearToggle: (year: number) => void;
   onAddComet: (cometData: Omit<CometData, 'id' | 'perihelionEpoch' | 'color' | 'isCustom'>) => Promise<boolean>;
+  onOrbitOpacityChange: (opacity: number) => void;
 }
 
 const formatDate = (date: Date): string => {
@@ -33,11 +35,13 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   selectedYears,
   simulationTime,
   cometName,
+  orbitOpacity,
   onCometSelect,
   onSpeedChange,
   onPlayPause,
   onYearToggle,
-  onAddComet
+  onAddComet,
+  onOrbitOpacityChange
 }) => {
   const [formData, setFormData] = useState({
     name: '',
@@ -222,6 +226,26 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                 </span>
               ))
             )}
+          </div>
+        </div>
+      </div>
+
+      <div className="panel-section">
+        <h3 className="section-title">轨道显示</h3>
+        <div className="orbit-opacity-control">
+          <label className="opacity-label">轨道透明度: {(orbitOpacity * 100).toFixed(0)}%</label>
+          <input
+            type="range"
+            min="0.1"
+            max="1"
+            step="0.05"
+            value={orbitOpacity}
+            onChange={(e) => onOrbitOpacityChange(parseFloat(e.target.value))}
+            className="opacity-slider"
+          />
+          <div className="opacity-labels">
+            <span>10%</span>
+            <span>100%</span>
           </div>
         </div>
       </div>

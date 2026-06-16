@@ -36,55 +36,194 @@ const Sun: React.FC<SunProps> = ({ position = [0, 0, 0] }) => {
 
 interface OrbitLineProps {
   points: OrbitPoint[];
-  color?: string;
-  opacity?: number;
-  dashed?: boolean;
+  currentIndex: number;
+  distanceToSun: number;
+  opacity: number;
+  isHistorical?: boolean;
+  historicalOpacity?: number;
 }
 
-const OrbitLine: React.FC<OrbitLineProps> = ({ points, color = '#FFFFFF', opacity = 0.3, dashed = false }) => {
-  const lineRef = useRef<THREE.Line>(null);
+const getDistanceColor = (distance: number, minDist: number, maxDist: number): THREE.Color => {
+  const normalized = Math.min(1, Math.max(0, (distance - minDist) / (maxDist - minDist)));
+  
+  const warmColor = new THREE.Color('#FF6B35');
+  const coolColor = new THREE.Color('#E8F4F8');
+  const midColor = new THREE.Color('#FFFFFF');
+  
+  if (normalized < 0.5) {
+    const t = normalized * 2;
+    return warmColor.clone().lerp(midColor, t);
+  } else {
+    const t = (normalized - 0.5) * 2;
+    return midColor.clone().lerp(coolColor, t);
+  }
+};
 
-  const geometry = useMemo(() => {
+const OrbitLine: React.FC<OrbitLineProps> = ({
+  points,
+  currentIndex,
+  distanceToSun,
+  opacity,
+  isHistorical = false,
+  historicalOpacity = 0.5
+}) => {
+  const lineRef = useRef<THREE.Line>(null);
+  const glowLineRef = useRef<THREE.Line>(null);
+
+  const { geometry, glowGeometry, distances, minDist, maxDist } = useMemo(() => {
     const positions = new Float32Array(points.length * 3);
+    const colors = new Float32Array(points.length * 3);
+    const glowColors = new Float32Array(points.length * 3);
+    const distances: number[] = [];
+
+    let minDist = Infinity;
+    let maxDist = -Infinity;
+
     points.forEach((p, i) => {
       positions[i * 3] = p.x;
       positions[i * 3 + 1] = p.y;
       positions[i * 3 + 2] = p.z;
+      distances.push(p.distanceToSun);
+      minDist = Math.min(minDist, p.distanceToSun);
+      maxDist = Math.max(maxDist, p.distanceToSun);
     });
+
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    return geo;
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const glowGeo = new THREE.BufferGeometry();
+    glowGeo.setAttribute('position', new THREE.BufferAttribute(positions.slice(), 3));
+    glowGeo.setAttribute('color', new THREE.BufferAttribute(glowColors, 3));
+
+    return { geometry: geo, glowGeometry: glowGeo, distances, minDist, maxDist };
   }, [points]);
 
-  const material = useMemo(() => {
-    if (dashed) {
-      return new THREE.LineDashedMaterial({
-        color,
-        transparent: true,
-        opacity,
-        dashSize: 0.3,
-        gapSize: 0.2,
-        linewidth: 2
-      });
+  useFrame(() => {
+    if (!lineRef.current || !glowLineRef.current) return;
+
+    const colorAttr = lineRef.current.geometry.getAttribute('color') as THREE.BufferAttribute;
+    const glowColorAttr = glowLineRef.current.geometry.getAttribute('color') as THREE.BufferAttribute;
+
+    for (let i = 0; i < points.length; i++) {
+      const idx = (i + currentIndex) % points.length;
+      const distance = distances[idx];
+      const color = getDistanceColor(distance, minDist, maxDist);
+
+      if (!isHistorical) {
+        const glowIntensity = Math.max(0, 1 - Math.abs(i - points.length / 2) / (points.length / 2));
+        const segmentOpacity = opacity * (0.3 + glowIntensity * 0.7);
+        
+        if (i >= points.length - 30 && i < points.length) {
+          const trailIntensity = (i - (points.length - 30)) / 30;
+          const trailOpacity = opacity * (0.3 + trailIntensity * 0.7);
+          colorAttr.setXYZ(i, color.r * (trailOpacity / opacity), color.g * (trailOpacity / opacity), color.b * (trailOpacity / opacity));
+        } else {
+          colorAttr.setXYZ(i, color.r * (segmentOpacity / opacity), color.g * (segmentOpacity / opacity), color.b * (segmentOpacity / opacity));
+        }
+      } else {
+        colorAttr.setXYZ(i, color.r, color.g, color.b);
+      }
+
+      const glowIntensity = isHistorical ? 0 : Math.max(0, 1 - Math.abs(i - points.length + 5) / 20);
+      const glowColor = isHistorical
+        ? new THREE.Color('#AED6F1')
+        : new THREE.Color('#FFD700').lerp(new THREE.Color('#FF6B35'), 1 - distanceToSun / maxDist);
+      
+      glowColorAttr.setXYZ(
+        i,
+        glowColor.r * (isHistorical ? historicalOpacity : glowIntensity),
+        glowColor.g * (isHistorical ? historicalOpacity : glowIntensity),
+        glowColor.b * (isHistorical ? historicalOpacity : glowIntensity)
+      );
     }
-    return new THREE.LineBasicMaterial({
-      color,
-      transparent: true,
-      opacity,
-      linewidth: 1
-    });
-  }, [color, opacity, dashed]);
+
+    colorAttr.needsUpdate = true;
+    glowColorAttr.needsUpdate = true;
+  });
 
   const lineObject = useMemo(() => {
+    const material = isHistorical
+      ? new THREE.LineDashedMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: historicalOpacity,
+          dashSize: 0.3,
+          gapSize: 0.2,
+          linewidth: 2
+        })
+      : new THREE.LineBasicMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity,
+          linewidth: 2
+        });
+
     const line = new THREE.Line(geometry, material);
-    if (dashed) {
+    if (isHistorical) {
       line.computeLineDistances();
     }
     return line;
-  }, [geometry, material, dashed]);
+  }, [geometry, isHistorical, opacity, historicalOpacity]);
+
+  const glowLineObject = useMemo(() => {
+    const material = new THREE.LineBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: isHistorical ? historicalOpacity * 0.5 : 0.8,
+      linewidth: 4,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+
+    const line = new THREE.Line(glowGeometry, material);
+    return line;
+  }, [glowGeometry, isHistorical, historicalOpacity]);
 
   return (
-    <primitive object={lineObject} ref={lineRef} />
+    <group>
+      <primitive object={lineObject} ref={lineRef} />
+      {!isHistorical && <primitive object={glowLineObject} ref={glowLineRef} />}
+    </group>
+  );
+};
+
+interface OrbitGlowMarkerProps {
+  position: [number, number, number];
+  distanceToSun: number;
+}
+
+const OrbitGlowMarker: React.FC<OrbitGlowMarkerProps> = ({ position, distanceToSun }) => {
+  const markerRef = useRef<THREE.Mesh>(null);
+
+  const color = useMemo(() => {
+    const normalized = Math.min(1, Math.max(0, distanceToSun / 15));
+    return new THREE.Color('#FFD700').lerp(new THREE.Color('#FF6B35'), 1 - normalized);
+  }, [distanceToSun]);
+
+  useFrame((_, delta) => {
+    if (markerRef.current) {
+      markerRef.current.rotation.y += delta * 2;
+      const scale = 1 + Math.sin(Date.now() * 0.005) * 0.2;
+      markerRef.current.scale.setScalar(scale);
+    }
+  });
+
+  return (
+    <group position={position}>
+      <mesh ref={markerRef}>
+        <sphereGeometry args={[0.25, 32, 32]} />
+        <meshBasicMaterial color={color} transparent opacity={0.9} />
+      </mesh>
+      <mesh scale={2}>
+        <sphereGeometry args={[0.25, 32, 32]} />
+        <meshBasicMaterial color={color} transparent opacity={0.3} side={THREE.BackSide} />
+      </mesh>
+      <mesh scale={3}>
+        <sphereGeometry args={[0.25, 32, 32]} />
+        <meshBasicMaterial color={color} transparent opacity={0.1} side={THREE.BackSide} />
+      </mesh>
+    </group>
   );
 };
 
@@ -208,7 +347,16 @@ interface SceneContentProps {
 }
 
 const SceneContent: React.FC<SceneContentProps> = ({ params }) => {
-  const { orbitPoints, position, distanceToSun, historicalTrajectories, cometColor } = params;
+  const {
+    orbitPoints,
+    position,
+    distanceToSun,
+    historicalTrajectories,
+    cometColor,
+    orbitOpacity,
+    currentOrbitIndex
+  } = params;
+  
   const sunPos: [number, number, number] = [0, 0, 0];
   const cometPos: [number, number, number] = [position.x, position.y, position.z];
 
@@ -217,15 +365,25 @@ const SceneContent: React.FC<SceneContentProps> = ({ params }) => {
       <ambientLight intensity={0.1} />
       <Sun position={sunPos} />
 
-      <OrbitLine points={orbitPoints} color="#FFFFFF" opacity={0.3} dashed={false} />
+      <OrbitLine
+        points={orbitPoints}
+        currentIndex={currentOrbitIndex}
+        distanceToSun={distanceToSun}
+        opacity={orbitOpacity}
+        isHistorical={false}
+      />
+
+      <OrbitGlowMarker position={cometPos} distanceToSun={distanceToSun} />
 
       {historicalTrajectories.map((traj) => (
         <OrbitLine
           key={traj.year}
           points={traj.points}
-          color="#AED6F1"
-          opacity={traj.opacity}
-          dashed={true}
+          currentIndex={0}
+          distanceToSun={distanceToSun}
+          opacity={orbitOpacity * traj.opacity}
+          isHistorical={true}
+          historicalOpacity={traj.opacity * orbitOpacity}
         />
       ))}
 

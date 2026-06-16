@@ -31,6 +31,8 @@ export interface SceneParams {
   isPlaying: boolean;
   historicalTrajectories: { year: number; points: OrbitPoint[]; opacity: number }[];
   cometColor: string;
+  orbitOpacity: number;
+  currentOrbitIndex: number;
 }
 
 const App: React.FC = () => {
@@ -40,11 +42,13 @@ const App: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [selectedYears, setSelectedYears] = useState<number[]>([]);
   const [simulationTime, setSimulationTime] = useState<Date>(new Date());
-  const [currentPosState, setCurrentPosState] = useState<{ x: number; y: number; z: number; distanceToSun: number }>({
+  const [orbitOpacity, setOrbitOpacity] = useState<number>(0.6);
+  const [currentPosState, setCurrentPosState] = useState<{ x: number; y: number; z: number; distanceToSun: number; orbitIndex: number }>({
     x: 0,
     y: 0,
     z: 0,
-    distanceToSun: 0
+    distanceToSun: 0,
+    orbitIndex: 0
   });
   const animFrameRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
@@ -124,7 +128,8 @@ const App: React.FC = () => {
           x: pos.position.x,
           y: pos.position.y,
           z: pos.position.z,
-          distanceToSun: pos.position.distanceToSun
+          distanceToSun: pos.position.distanceToSun,
+          orbitIndex: pos.index
         });
 
         const baseYear = selectedComet?.perihelionEpoch || 2025;
@@ -212,8 +217,14 @@ const App: React.FC = () => {
     speed,
     isPlaying,
     historicalTrajectories,
-    cometColor: selectedComet?.color || '#B0B0B0'
+    cometColor: selectedComet?.color || '#B0B0B0',
+    orbitOpacity,
+    currentOrbitIndex: currentPosState.orbitIndex
   };
+
+  const handleOrbitOpacityChange = useCallback((newOpacity: number) => {
+    setOrbitOpacity(newOpacity);
+  }, []);
 
   return (
     <div className="app-container">
@@ -229,11 +240,13 @@ const App: React.FC = () => {
           selectedYears={selectedYears}
           simulationTime={simulationTime}
           cometName={selectedComet?.name || ''}
+          orbitOpacity={orbitOpacity}
           onCometSelect={handleCometSelect}
           onSpeedChange={handleSpeedChange}
           onPlayPause={handlePlayPause}
           onYearToggle={handleYearToggle}
           onAddComet={handleAddComet}
+          onOrbitOpacityChange={handleOrbitOpacityChange}
         />
       </div>
     </div>
