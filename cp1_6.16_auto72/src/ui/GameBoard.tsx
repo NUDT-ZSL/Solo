@@ -21,6 +21,7 @@ const COLORS = {
   flash: '#FFFFE0',
   echo: '#00BFFF',
   player: '#FFFFFF',
+  playerHurt: '#E74C3C',
   trapSpike: '#E74C3C',
   trapRock: '#C0392B',
   trapPoison: '#9B59B6',
@@ -37,6 +38,9 @@ const COLORS = {
   cooldownText: '#888888',
   flashIcon: '#FFD700',
   echoIcon: '#00BFFF',
+  explored: '#0D0D12',
+  exploredGrid: '#151520',
+  flashGlow: 'rgba(255, 250, 205, 0.3)',
 };
 
 function directionToArrow(dir: Direction): string {
@@ -55,6 +59,9 @@ export default function GameBoard({ engine, onWin, onLose }: GameBoardProps) {
   const shakeOffsetRef = useRef({ x: 0, y: 0 });
   const keyFeedbackRef = useRef<Record<string, number>>({});
   const prevStatusRef = useRef<GameEngine['status']>('playing');
+  const exploredCellsRef = useRef<Set<string>>(new Set());
+  const trapTriggeredRef = useRef<number>(0);
+  const trapFlashStartRef = useRef<number>(0);
 
   const cellSize = useCallback(() => {
     const canvas = canvasRef.current;
@@ -64,57 +71,54 @@ export default function GameBoard({ engine, onWin, onLose }: GameBoardProps) {
     return Math.floor(minDim / Math.max(map.width, map.height));
   }, []);
 
-  const drawGrid = useCallback(
-    (ctx: CanvasRenderingContext2D, data: RenderData, now: number) => {
-      const { map, visibility, player } = data;
-      const cs = cellSize();
-      const offsetX = Math.floor((ctx.canvas.width - map.width * cs) / 2) + shakeOffsetRef.current.x;
-      const offsetY = Math.floor((ctx.canvas.height - map.height * cs) / 2) + shakeOffsetRef.current.y;
-
-      for (let y = 0; y < map.height; y++) {
-        for (let x = 0; x < map.width; x++) {
-          const px = offsetX + x * cs;
-          const py = offsetY + y * cs;
-          const vis = visibility[y][x];
-          const cellType = map.grid[y][x];
-
-          ctx.fillStyle = getCellColor(vis.level, cellType, now);
-          ctx.fillRect(px, py, cs, cs);
-
-          if (vis.level !== 'hidden') {
-            drawCellContent(ctx, px, py, cs, cellType, vis.level, now, data);
-          }
-
-          ctx.strokeStyle = vis.level === 'hidden' ? '#0A0A0A' : '#1A1A2E';
-          ctx.lineWidth = 1;
-          ctx.strokeRect(px, py, cs, cs);
-        }
+  const getCellColor = useCallback((visLevel: VisibilityLevel, cellType: CellType, _now: number, x: number, y: number): string => {
+    if (visLevel === 'hidden') {
+      const key = `${x},${y}`;
+      if (exploredCellsRef.current.has(key)) {
+        return COLORS.explored;
       }
-
-      drawPlayer(ctx, offsetX, offsetY, cs, player, now, data);
-
-      const isShaking = now < data.screenShakeUntil;
-      if (isShaking) {
-        shakeOffsetRef.current = {
-          x: (Math.random() - 0.5) * 6,
-          y: (Math.random() - 0.5) * 6,
-        };
-      } else {
-        shakeOffsetRef.current = { x: 0, y: 0 };
-      }
-    },
-    [cellSize]
-  );
-
-  const getCellColor = (visLevel: VisibilityLevel, cellType: CellType, now: number): string => {
-    if (visLevel === 'hidden') return COLORS.hidden;
+      return COLORS.hidden;
+    }
     if (visLevel === 'flash') return COLORS.flash;
     if (visLevel === 'echo') return COLORS.echo;
     if (cellType === CellType.WALL) return COLORS.wall;
     return COLORS.permanent;
-  };
+  }, []);
 
-  const drawCellContent = (
+  const drawFlashGlow = useCallback((
+    ctx: CanvasRenderingContext2D,
+    data: RenderData,
+    now: number,
+    offsetX: number,
+    offsetY: number,
+    cs: number
+  ) => {
+    const flashCells = data.activeEffects.flashCells;
+    if (flashCells.length === 0) return;
+
+    const flashProgress = data.activeEffects.flashExpireAt > now
+      ? 1 - (now - (data.activeEffects.flashExpireAt - 4000)) / 4000
+      : 0;
+    const glowAlpha = 0.25 * flashProgress;
+
+    for (const cell of flashCells) {
+      const px = offsetX + cell.x * cs;
+      const py = offsetY + cell.y * cs;
+
+      const gradient = ctx.createRadialGradient(
+        px + cs / 2, py + cs / 2, cs * 0.2,
+        px + cs / 2, py + cs / 2, cs * 0.9
+      );
+      gradient.addColorStop(0, `rgba(255, 250, 205, ${glowAlpha * 0.6})`);
+      gradient.addColorStop(0.5, `rgba(255, 245, 180, ${glowAlpha * 0.3})`);
+      gradient.addColorStop(1, `rgba(255, 240, 160, 0)`);
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(px - cs * 0.1, py - cs * 0.1, cs * 1.2, cs * 1.2);
+    }
+  }, []);
+
+  const drawCellContent = useCallback((
     ctx: CanvasRenderingContext2D,
     px: number,
     py: number,
@@ -122,7 +126,9 @@ export default function GameBoard({ engine, onWin, onLose }: GameBoardProps) {
     cellType: CellType,
     visLevel: VisibilityLevel,
     now: number,
-    data: RenderData
+    data: RenderData,
+    cellX: number,
+    cellY: number
   ) => {
     const cx = px + cs / 2;
     const cy = py + cs / 2;
@@ -152,12 +158,23 @@ export default function GameBoard({ engine, onWin, onLose }: GameBoardProps) {
       ctx.fill();
       ctx.fillRect(cx - r * 0.15, cy - r, r * 0.3, r * 0.6);
     } else if (cellType === CellType.EXIT) {
-      const pulse = 0.5 + 0.5 * Math.sin(now / 200);
-      ctx.fillStyle = `rgba(0, 255, 0, ${0.3 + pulse * 0.7})`;
+      const breathe = 0.5 + 0.5 * Math.sin(now / 1000 * Math.PI);
+      const alpha = 0.6 + breathe * 0.4;
+      ctx.fillStyle = `rgba(0, 255, 0, ${0.3 + breathe * 0.4})`;
       ctx.fillRect(px + 2, py + 2, cs - 4, cs - 4);
-      ctx.strokeStyle = COLORS.exit;
-      ctx.lineWidth = 2;
+
+      ctx.strokeStyle = `rgba(0, 255, 0, ${alpha})`;
+      ctx.lineWidth = 3;
       ctx.strokeRect(px + 2, py + 2, cs - 4, cs - 4);
+
+      const pulseGradient = ctx.createRadialGradient(
+        cx, cy, cs * 0.2,
+        cx, cy, cs * 0.8
+      );
+      pulseGradient.addColorStop(0, `rgba(0, 255, 0, ${0.3 * alpha})`);
+      pulseGradient.addColorStop(1, `rgba(0, 255, 0, 0)`);
+      ctx.fillStyle = pulseGradient;
+      ctx.fillRect(px, py, cs, cs);
     }
 
     if (visLevel === 'echo') {
@@ -168,24 +185,31 @@ export default function GameBoard({ engine, onWin, onLose }: GameBoardProps) {
     }
 
     const isHighlighted = data.trapHighlightPositions.some(
-      (p) => p.x === (px - Math.floor((ctx.canvas.width - data.map.width * cs) / 2)) / cs &&
-             p.y === (py - Math.floor((ctx.canvas.height - data.map.height * cs) / 2)) / cs
+      (p) => p.x === cellX && p.y === cellY
     );
-    if (isHighlighted) {
-      const flash = 0.5 + 0.5 * Math.sin(now / 80);
-      ctx.fillStyle = `rgba(255, 68, 68, ${flash * 0.5})`;
-      ctx.fillRect(px, py, cs, cs);
-    }
-  };
+    if (isHighlighted && trapFlashStartRef.current > 0) {
+      const timeSince = now - trapFlashStartRef.current;
+      if (timeSince < 500) {
+        const flashPhase = timeSince / 500;
+        const flashIntensity = 0.8 * Math.abs(Math.sin(flashPhase * Math.PI * 4));
+        ctx.fillStyle = `rgba(255, 30, 30, ${0.4 + flashIntensity * 0.4})`;
+        ctx.fillRect(px, py, cs, cs);
 
-  const drawPlayer = (
+        ctx.strokeStyle = `rgba(255, 60, 60, ${0.8 + flashIntensity * 0.2})`;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(px + 1, py + 1, cs - 2, cs - 2);
+      }
+    }
+  }, []);
+
+  const drawPlayer = useCallback((
     ctx: CanvasRenderingContext2D,
     offsetX: number,
     offsetY: number,
     cs: number,
     player: RenderData['player'],
     now: number,
-    data: RenderData
+    _data: RenderData
   ) => {
     const px = offsetX + player.position.x * cs + cs / 2;
     const py = offsetY + player.position.y * cs + cs / 2;
@@ -194,9 +218,94 @@ export default function GameBoard({ engine, onWin, onLose }: GameBoardProps) {
     ctx.font = `bold ${cs * 0.7}px Cinzel Decorative, serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = COLORS.player;
+
+    let playerColor = COLORS.player;
+    if (trapFlashStartRef.current > 0) {
+      const timeSince = now - trapFlashStartRef.current;
+      if (timeSince < 500) {
+        const hurtPhase = timeSince / 500;
+        const hurtIntensity = Math.abs(Math.sin(hurtPhase * Math.PI * 4));
+        if (hurtIntensity > 0.5) {
+          playerColor = COLORS.playerHurt;
+        }
+      }
+    }
+
+    ctx.shadowColor = playerColor;
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = playerColor;
     ctx.fillText(arrow, px, py);
-  };
+    ctx.shadowBlur = 0;
+  }, []);
+
+  const drawGrid = useCallback(
+    (ctx: CanvasRenderingContext2D, data: RenderData, now: number) => {
+      const { map, visibility, player } = data;
+      const cs = cellSize();
+      const offsetX = Math.floor((ctx.canvas.width - map.width * cs) / 2) + shakeOffsetRef.current.x;
+      const offsetY = Math.floor((ctx.canvas.height - map.height * cs) / 2) + shakeOffsetRef.current.y;
+
+      if (trapTriggeredRef.current > 0 && data.trapHighlightPositions.length > 0) {
+        if (trapFlashStartRef.current === 0) {
+          trapFlashStartRef.current = now;
+        }
+      } else {
+        trapFlashStartRef.current = 0;
+      }
+
+      for (let y = 0; y < map.height; y++) {
+        for (let x = 0; x < map.width; x++) {
+          const px = offsetX + x * cs;
+          const py = offsetY + y * cs;
+          const vis = visibility[y][x];
+          const cellType = map.grid[y][x];
+          const key = `${x},${y}`;
+
+          if (vis.level !== 'hidden') {
+            exploredCellsRef.current.add(key);
+          }
+
+          ctx.fillStyle = getCellColor(vis.level, cellType, now, x, y);
+          ctx.fillRect(px, py, cs, cs);
+
+          if (vis.level !== 'hidden') {
+            drawCellContent(ctx, px, py, cs, cellType, vis.level, now, data, x, y);
+          } else if (exploredCellsRef.current.has(key)) {
+            ctx.strokeStyle = COLORS.exploredGrid;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(px + 0.5, py + 0.5, cs - 1, cs - 1);
+          }
+
+          if (vis.level === 'hidden' && !exploredCellsRef.current.has(key)) {
+            ctx.strokeStyle = '#0A0A0A';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(px, py, cs, cs);
+          } else if (vis.level !== 'hidden') {
+            ctx.strokeStyle = '#1A1A2E';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(px, py, cs, cs);
+          }
+        }
+      }
+
+      drawFlashGlow(ctx, data, now, offsetX, offsetY, cs);
+
+      drawPlayer(ctx, offsetX, offsetY, cs, player, now, data);
+
+      const isShaking = now < data.screenShakeUntil;
+      if (isShaking) {
+        shakeOffsetRef.current = {
+          x: (Math.random() - 0.5) * 6,
+          y: (Math.random() - 0.5) * 6,
+        };
+      } else {
+        shakeOffsetRef.current = { x: 0, y: 0 };
+      }
+
+      trapTriggeredRef.current = data.trapHighlightPositions.length;
+    },
+    [cellSize, getCellColor, drawCellContent, drawFlashGlow, drawPlayer]
+  );
 
   const drawStatusPanel = useCallback(
     (ctx: CanvasRenderingContext2D, status: PlayerStatus, now: number) => {
