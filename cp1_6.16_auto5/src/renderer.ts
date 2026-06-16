@@ -73,8 +73,12 @@ export class Renderer {
   private sunParticles: THREE.Points | null = null;
   private planetMeshes: Map<string, THREE.Mesh> = new Map();
   private planetHighlights: Map<string, THREE.Mesh> = new Map();
+  private planetAxisLines: Map<string, THREE.Line> = new Map();
   private orbitLines: Map<string, THREE.Line> = new Map();
+  private orbitPhases: Map<string, number> = new Map();
   private saturnRings: Map<string, THREE.Points> = new Map();
+  private saturnRingSizes: Map<string, Float32Array> = new Map();
+  private saturnRingPhases: Map<string, Float32Array> = new Map();
   private trajectoryLines: Map<string, THREE.Points> = new Map();
   private constellationGroup: THREE.Group | null = null;
   private constellationLabels: Map<string, HTMLDivElement> = new Map();
@@ -233,7 +237,7 @@ export class Renderer {
       this.planetMeshes.set(data.id, planet);
       this.scene.add(planet);
 
-      const highlightGeometry = new THREE.SphereGeometry(data.size * 1.3, 32, 32);
+      const highlightGeometry = new THREE.SphereGeometry(data.size * 1.5, 32, 32);
       const highlightMaterial = new THREE.MeshBasicMaterial({
         color: data.color,
         transparent: true,
@@ -244,6 +248,21 @@ export class Renderer {
       highlight.visible = false;
       this.planetHighlights.set(data.id, highlight);
       this.scene.add(highlight);
+
+      const axisLength = data.size * 1.5;
+      const axisPoints = [
+        new THREE.Vector3(0, -axisLength, 0),
+        new THREE.Vector3(0, axisLength, 0)
+      ];
+      const axisGeometry = new THREE.BufferGeometry().setFromPoints(axisPoints);
+      const axisMaterial = new THREE.LineBasicMaterial({
+        color: 0xcccccc,
+        transparent: true,
+        opacity: 0.4
+      });
+      const axisLine = new THREE.Line(axisGeometry, axisMaterial);
+      this.planetAxisLines.set(data.id, axisLine);
+      this.scene.add(axisLine);
     });
   }
 
@@ -271,6 +290,7 @@ export class Renderer {
       const orbitLine = new THREE.Line(geometry, material);
       this.orbitLines.set(data.id, orbitLine);
       this.scene.add(orbitLine);
+      this.orbitPhases.set(data.id, Math.random() * Math.PI * 2);
     });
   }
 
@@ -281,6 +301,9 @@ export class Renderer {
     const particleCount = 2000;
     const positions = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3);
+    const sizes = new Float32Array(particleCount);
+    const baseSizes = new Float32Array(particleCount);
+    const phases = new Float32Array(particleCount);
 
     for (let i = 0; i < particleCount; i++) {
       const innerRadius = saturnData.size * 1.4;
@@ -296,11 +319,16 @@ export class Renderer {
       colors[i * 3] = gray;
       colors[i * 3 + 1] = gray * 0.9;
       colors[i * 3 + 2] = gray * 0.8;
+
+      baseSizes[i] = 0.06 + Math.random() * 0.08;
+      sizes[i] = baseSizes[i];
+      phases[i] = Math.random() * Math.PI * 2;
     }
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
     const material = new THREE.PointsMaterial({
       size: 0.08,
@@ -313,6 +341,8 @@ export class Renderer {
     const ring = new THREE.Points(geometry, material);
     ring.rotation.x = Math.PI / 2.5;
     this.saturnRings.set(saturnData.id, ring);
+    this.saturnRingSizes.set(saturnData.id, baseSizes);
+    this.saturnRingPhases.set(saturnData.id, phases);
     this.scene.add(ring);
   }
 
@@ -479,11 +509,24 @@ export class Renderer {
       this.sunParticles.rotation.y += 0.001;
     }
 
+    this.orbitLines.forEach((line, id) => {
+      const phase = this.orbitPhases.get(id) || 0;
+      const breathe = Math.sin(time * Math.PI / 2000 + phase) * 0.5 + 0.5;
+      const opacity = 0.3 + breathe * 0.4;
+      (line.material as THREE.LineBasicMaterial).opacity = opacity;
+    });
+
     planetStates.forEach((state) => {
       const planet = this.planetMeshes.get(state.id);
       if (planet) {
         planet.position.set(state.x, state.y, state.z);
         planet.rotation.y = state.rotationY;
+      }
+
+      const axisLine = this.planetAxisLines.get(state.id);
+      if (axisLine) {
+        axisLine.position.set(state.x, state.y, state.z);
+        axisLine.rotation.y = state.rotationY;
       }
 
       const highlight = this.planetHighlights.get(state.id);
@@ -501,6 +544,25 @@ export class Renderer {
       if (ring) {
         ring.position.set(state.x, state.y, state.z);
         ring.rotation.z += 0.002;
+
+        const baseSizes = this.saturnRingSizes.get(state.id);
+        const phases = this.saturnRingPhases.get(state.id);
+        if (baseSizes && phases) {
+          const sizeAttr = ring.geometry.getAttribute('size') as THREE.BufferAttribute;
+          const colorAttr = ring.geometry.getAttribute('color') as THREE.BufferAttribute;
+          
+          for (let i = 0; i < baseSizes.length; i++) {
+            const flicker = Math.sin(time * 0.003 + phases[i]) * 0.3 + 0.7;
+            sizeAttr.setX(i, baseSizes[i] * flicker);
+            
+            const colorFlicker = 0.8 + flicker * 0.2;
+            colorAttr.setX(i, colorAttr.getX(i) * colorFlicker);
+            colorAttr.setY(i, colorAttr.getY(i) * colorFlicker);
+            colorAttr.setZ(i, colorAttr.getZ(i) * colorFlicker);
+          }
+          sizeAttr.needsUpdate = true;
+          colorAttr.needsUpdate = true;
+        }
       }
     });
 
@@ -602,5 +664,9 @@ export class Renderer {
     this.constellationLabels.forEach((label) => {
       label.remove();
     });
+    this.planetAxisLines.clear();
+    this.orbitPhases.clear();
+    this.saturnRingSizes.clear();
+    this.saturnRingPhases.clear();
   }
 }
