@@ -19,13 +19,14 @@ const CLUSTER_THRESHOLD = 500
 const GRID_SIZE = 0.01
 
 function createCustomMarker(color: string, isCluster = false, count = 0) {
-  const size = isCluster ? Math.min(40, 24 + Math.log2(count) * 4) : 16
+  const size = isCluster ? Math.min(48, 28 + Math.log2(count) * 3) : 16
   const radius = isCluster ? size / 2 - 2 : 7
+  const fontSize = isCluster ? Math.max(11, size / 3.5) : 0
 
   return L.divIcon({
-    className: 'custom-marker',
+    className: `custom-marker ${isCluster ? 'cluster-marker' : ''}`,
     html: `
-      <div class="marker-container ${isCluster ? 'cluster' : ''}" style="width:${size}px;height:${size}px;">
+      <div class="marker-wrapper" style="width:${size}px;height:${size}px;">
         <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
           <circle 
             cx="${size / 2}" 
@@ -36,7 +37,7 @@ function createCustomMarker(color: string, isCluster = false, count = 0) {
             stroke-width="2"
           />
         </svg>
-        ${isCluster ? `<span class="cluster-count" style="font-size:${Math.max(10, size / 4)}px;">${count}</span>` : ''}
+        ${isCluster ? `<span class="cluster-number" style="font-size:${fontSize}px;line-height:${size}px;">${count}</span>` : ''}
       </div>
     `,
     iconSize: [size, size],
@@ -191,22 +192,23 @@ function ClusterMarker({ cluster }: { cluster: Cluster }) {
   if (isExpanded) {
     return (
       <>
-        {cluster.reports.slice(0, 10).map((report) => (
+        {cluster.reports.map((report) => (
           <ReportMarker key={report.id} report={report} />
         ))}
-        {cluster.reports.length > 10 && (
-          <Marker
-            position={[cluster.lat, cluster.lng]}
-            icon={createCustomMarker(color, true, cluster.reports.length - 10)}
-          >
-            <Popup>
-              <div className="popup-content">
-                <div className="popup-type">还有 {cluster.reports.length - 10} 条记录</div>
-                <div className="popup-count">请放大地图查看更多详情</div>
-              </div>
-            </Popup>
-          </Marker>
-        )}
+        <Marker
+          position={[cluster.lat, cluster.lng]}
+          icon={createCustomMarker('#6b7280', true, -1)}
+          eventHandlers={{
+            click: () => setIsExpanded(false)
+          }}
+        >
+          <Popup>
+            <div className="popup-content">
+              <div className="popup-type">收起聚合</div>
+              <div className="popup-count">点击收起 {cluster.reports.length} 条标记</div>
+            </div>
+          </Popup>
+        </Marker>
       </>
     )
   }
@@ -223,7 +225,7 @@ function ClusterMarker({ cluster }: { cluster: Cluster }) {
         <div className="popup-content">
           <div className="popup-type">灾情聚合</div>
           <div className="popup-count">共 {cluster.reports.length} 条上报</div>
-          <div className="popup-hint">点击聚合点展开</div>
+          <div className="popup-hint">点击聚合点展开查看</div>
           {cluster.reports.slice(0, 5).map((r, i) => (
             <div key={i} className="popup-cluster-item">
               <span style={{ color: REPORT_COLORS[r.type] }}>

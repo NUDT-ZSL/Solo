@@ -66,7 +66,11 @@ export async function fetchWithRetry<T>(
         break;
       }
 
-      const delayMs = initialDelayMs * Math.pow(2, attempt);
+      if (signal?.aborted) {
+        throw new DOMException('Request was aborted', 'AbortError');
+      }
+
+      const delayMs = initialDelayMs * Math.pow(2, attempt + 1);
       await new Promise<void>((resolve, reject) => {
         const timeoutId = setTimeout(resolve, delayMs);
 
@@ -161,7 +165,11 @@ export async function uploadWithProgress<T>(
         break;
       }
 
-      const delayMs = initialDelayMs * Math.pow(2, attempt);
+      if (signal?.aborted) {
+        throw new DOMException('Request was aborted', 'AbortError');
+      }
+
+      const delayMs = initialDelayMs * Math.pow(2, attempt + 1);
       await new Promise<void>((resolve, reject) => {
         const timeoutId = setTimeout(resolve, delayMs);
 

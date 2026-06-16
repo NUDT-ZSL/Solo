@@ -36,42 +36,43 @@
   border: none !important;
 }
 
-.marker-container {
+.marker-wrapper {
   position: relative;
   width: 100%;
   height: 100%;
   transition: transform 0.2s ease;
 }
 
-.marker-container:hover {
+.custom-marker:hover .marker-wrapper {
   transform: scale(1.2);
 }
 
-.marker-container svg {
+.marker-wrapper svg {
   display: block;
   transition: transform 0.2s ease;
 }
 
-.marker-container:hover svg {
+.custom-marker:hover .marker-wrapper svg {
   animation: markerPulse 1s ease-in-out infinite;
 }
 
-.marker-container.cluster {
+.cluster-marker .marker-wrapper {
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
 }
 
-.cluster-count {
+.cluster-number {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   color: #ffffff;
-  font-size: 12px;
   font-weight: 700;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   pointer-events: none;
+  z-index: 1;
 }
 
 .popup-content {

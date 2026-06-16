@@ -24,6 +24,7 @@ export default function ReportForm({ onSuccess, initialLocation, onPickLocation 
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const photoFileRef = useRef<File | null>(null)
   const { addReportWithProgress } = useAddReport()
   const { toasts, showToast } = useToast()
 
@@ -54,6 +55,8 @@ export default function ReportForm({ onSuccess, initialLocation, onPickLocation 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
+      photoFileRef.current = file
+
       const reader = new FileReader()
       reader.onloadstart = () => {
         setIsUploading(true)
@@ -81,7 +84,7 @@ export default function ReportForm({ onSuccess, initialLocation, onPickLocation 
   }, [showToast])
 
   const removePhoto = () => {
-    setPhoto(null)
+    photoFileRef.current = null
     setPhotoPreview(null)
     setUploadProgress(0)
     setIsUploading(false)
@@ -129,7 +132,7 @@ export default function ReportForm({ onSuccess, initialLocation, onPickLocation 
 
       setType('rainstorm_flooding')
       setDescription('')
-      setPhoto(null)
+      photoFileRef.current = null
       setPhotoPreview(null)
       setUploadProgress(0)
       setSubmitProgress(0)
@@ -158,72 +161,60 @@ export default function ReportForm({ onSuccess, initialLocation, onPickLocation 
         >
           {REPORT_TYPE_OPTIONS.map(option => (
             <option key={option.value} value={option.value}>
-              {option.label}
+              {option.emoji} {option.label}
             </option>
           ))}
         </select>
       </div>
 
       <div className="form-group">
-        <label className="form-label">
-          位置
-          <span className="location-status">
-            {locationStatus === 'loading' && '定位中...'}
-            {locationStatus === 'success' && location && `(${location[0].toFixed(4)}, ${location[1].toFixed(4)})`}
-            {locationStatus === 'error' && '定位失败'}
-          </span>
-        </label>
-        <div className="location-actions">
-          {locationStatus === 'error' && (
-            <>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={fetchLocation}
-                disabled={isSubmitting}
-              >
-                重新定位
-              </button>
-              {onPickLocation && (
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={onPickLocation}
-                  disabled={isSubmitting}
-                >
-                  在地图选择
-                </button>
-              )}
-            </>
-          )}
-          {locationStatus === 'success' && (
+        <label className="form-label">位置信息</label>
+        <div className="location-input-wrapper">
+          <div className={`location-status ${locationStatus}`}>
+            {locationStatus === 'loading' && '📡 获取位置中...'}
+            {locationStatus === 'success' && location && (
+              <>
+                <span className="location-coords">
+                  📍 {location[0].toFixed(4)}, {location[1].toFixed(4)}
+                </span>
+              </>
+            )}
+            {locationStatus === 'error' && '❌ 获取位置失败'}
+            {locationStatus === 'idle' && '🔍 等待获取位置'}
+          </div>
+          <div className="location-actions">
             <button
               type="button"
-              className="btn btn-secondary btn-sm"
+              className="btn btn-secondary"
               onClick={fetchLocation}
+              disabled={isSubmitting || locationStatus === 'loading'}
+            >
+              重新获取
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={onPickLocation}
               disabled={isSubmitting}
             >
-              刷新位置
+              🗺️ 地图选择
             </button>
-          )}
-          {locationStatus === 'loading' && (
-            <span className="loading-spinner">⏳</span>
-          )}
+          </div>
         </div>
       </div>
 
       <div className="form-group">
         <label className="form-label">
-          文字描述
-          <span className={`char-count ${isOverLimit ? 'error' : ''}`}>
-            {remainingChars}/{maxLength}
+          灾情描述
+          <span className={`char-count ${isOverLimit ? 'over-limit' : ''}`}>
+            {description.length}/{maxLength}
           </span>
         </label>
         <textarea
           className={`form-textarea ${isOverLimit ? 'error' : ''}`}
           value={description}
           onChange={e => setDescription(e.target.value)}
-          placeholder="请描述灾情情况（最多200字）..."
+          placeholder="请描述灾情情况（不超过200字）"
           maxLength={maxLength + 50}
           rows={4}
           disabled={isSubmitting}
@@ -232,46 +223,50 @@ export default function ReportForm({ onSuccess, initialLocation, onPickLocation 
 
       <div className="form-group">
         <label className="form-label">照片上传</label>
-        <div className="photo-upload">
-          {!photoPreview && (
-            <label className={`photo-upload-btn ${isSubmitting ? 'disabled' : ''}`}>
+        <div className="photo-upload-wrapper">
+          {!photoPreview ? (
+            <label className="photo-upload-area">
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
                 onChange={handleFileChange}
-                hidden
-                disabled={isSubmitting}
+                className="photo-input"
+                disabled={isSubmitting || isUploading}
               />
-              <span className="upload-icon">📷</span>
-              <span className="upload-text">点击上传照片</span>
-            </label>
-          )}
-          {photoPreview && (
-            <div className="photo-preview">
-              <img src={photoPreview} alt="Preview" />
-              {(isUploading || isSubmitting) && (
+              <div className="upload-icon">📷</div>
+              <div className="upload-text">点击上传照片</div>
+              <div className="upload-hint">支持 JPG、PNG 格式</div>
+              {isUploading && (
                 <div className="upload-progress-overlay">
-                  <div className="progress-bar">
-                    <div
-                      className="progress-fill"
-                      style={{ width: `${isSubmitting ? submitProgress : uploadProgress}%` }}
-                    />
-                  </div>
-                  <span className="progress-text">
-                    {isSubmitting ? `提交中 ${submitProgress}%` : `${uploadProgress}%`}
-                  </span>
+                  <div
+                    className="upload-progress-bar"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                  <span className="upload-progress-text">{uploadProgress}%</span>
                 </div>
               )}
-              {!isUploading && !isSubmitting && (
-                <button
-                  type="button"
-                  className="photo-remove"
-                  onClick={removePhoto}
-                >
-                  ×
-                </button>
+            </label>
+          ) : (
+            <div className="photo-preview-wrapper">
+              <img src={photoPreview} alt="Preview" className="photo-preview" />
+              {isUploading && (
+                <div className="upload-progress-overlay">
+                  <div
+                    className="upload-progress-bar"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                  <span className="upload-progress-text">{uploadProgress}%</span>
+                </div>
               )}
+              <button
+                type="button"
+                className="photo-remove-btn"
+                onClick={removePhoto}
+                disabled={isSubmitting || isUploading}
+              >
+                ×
+              </button>
             </div>
           )}
         </div>
@@ -279,37 +274,23 @@ export default function ReportForm({ onSuccess, initialLocation, onPickLocation 
 
       {isSubmitting && (
         <div className="submit-progress-container">
+          <div className="submit-progress-label">提交中... {submitProgress}%</div>
           <div className="submit-progress-bar">
             <div
               className="submit-progress-fill"
               style={{ width: `${submitProgress}%` }}
             />
           </div>
-          <span className="submit-progress-text">正在提交... {submitProgress}%</span>
         </div>
       )}
 
       <button
         type="submit"
-        className="btn btn-primary btn-submit"
-        disabled={isSubmitting || isUploading || !location || isOverLimit}
+        className="btn btn-primary submit-btn"
+        disabled={isSubmitting || !location || isUploading}
       >
         {isSubmitting ? '提交中...' : '提交上报'}
       </button>
-
-      <div className="toast-container">
-        {toasts.map(toast => (
-          <div
-            key={toast.id}
-            className={`toast toast-${toast.type}`}
-          >
-            {toast.type === 'success' && '✓'}
-            {toast.type === 'error' && '✕'}
-            {toast.type === 'info' && 'ℹ'}
-            <span>{toast.message}</span>
-          </div>
-        ))}
-      </div>
     </form>
   )
 }
