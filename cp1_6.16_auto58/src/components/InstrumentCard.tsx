@@ -18,10 +18,10 @@ const InstrumentCard: React.FC<InstrumentCardProps> = ({ instrument, onClick, ac
     borderRadius: '12px',
     overflow: 'hidden',
     cursor: onClick ? 'pointer' : 'default',
-    transition: 'transform 0.3s ease-out, box-shadow 0.3s ease-out, background-color 0.3s ease',
+    transition: 'transform 0.3s ease-out, box-shadow 0.3s ease-out, background-color 0.3s ease, border-color 0.3s ease-out',
     display: 'flex',
     flexDirection: 'column',
-    border: '1px solid rgba(255,255,255,0.05)'
+    border: '1px solid #e0e0e0'
   };
 
   const imageContainerStyle: React.CSSProperties = {
@@ -44,9 +44,9 @@ const InstrumentCard: React.FC<InstrumentCardProps> = ({ instrument, onClick, ac
     top: '12px',
     right: '12px',
     backgroundColor: statusStyle.bg,
-    color: statusStyle.text,
-    padding: '4px 12px',
-    borderRadius: '20px',
+    color: '#FFFFFF',
+    padding: '4px 10px',
+    borderRadius: '4px',
     fontSize: '12px',
     fontWeight: '600',
     zIndex: 10
@@ -112,6 +112,25 @@ const InstrumentCard: React.FC<InstrumentCardProps> = ({ instrument, onClick, ac
     marginTop: '8px'
   };
 
+  const metaRowStyle: React.CSSProperties = {
+    fontSize: '12px',
+    color: '#a0a0a0',
+    marginTop: '8px',
+    paddingTop: '8px',
+    borderTop: '1px solid rgba(255,255,255,0.05)',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px'
+  };
+
+  const getDaysAgo = (dateStr: string): string => {
+    const diffMs = Date.now() - new Date(dateStr).getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays <= 0) return '今天发布';
+    if (diffDays === 1) return '1天前发布';
+    return `${diffDays}天前发布`;
+  };
+
   const renderStars = (count: number) => {
     return Array.from({ length: 5 }, (_, i) => (
       <span key={i} style={{ opacity: i < count ? 1 : 0.3 }}>★</span>
@@ -127,6 +146,7 @@ const InstrumentCard: React.FC<InstrumentCardProps> = ({ instrument, onClick, ac
         const target = e.currentTarget;
         target.style.transform = 'translateY(-6px)';
         target.style.boxShadow = '0 12px 24px rgba(0,0,0,0.4)';
+        target.style.borderColor = '#b0b0b0';
         const img = target.querySelector('img');
         if (img) img.style.transform = 'scale(1.05)';
       }}
@@ -134,6 +154,7 @@ const InstrumentCard: React.FC<InstrumentCardProps> = ({ instrument, onClick, ac
         const target = e.currentTarget;
         target.style.transform = 'translateY(0)';
         target.style.boxShadow = 'none';
+        target.style.borderColor = '#e0e0e0';
         const img = target.querySelector('img');
         if (img) img.style.transform = 'scale(1)';
       }}
@@ -156,6 +177,11 @@ const InstrumentCard: React.FC<InstrumentCardProps> = ({ instrument, onClick, ac
             <div style={starsStyle}>{renderStars(stars)}</div>
             <span style={sellerNameStyle}>{instrument.sellerName}</span>
           </div>
+        </div>
+        <div style={metaRowStyle}>
+          <span>{instrument.brand}</span>
+          <span style={{ opacity: 0.5 }}>·</span>
+          <span>{getDaysAgo(instrument.createdAt)}</span>
         </div>
         {showCreatedAt && (
           <div style={dateStyle}>
