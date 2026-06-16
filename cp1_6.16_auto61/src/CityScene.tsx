@@ -2,7 +2,7 @@ import { useRef, useEffect, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { Building, BuildingStyle, interpolateColor, easeInOut } from './CityGenerator';
+import { Building, BuildingStyle, interpolateColor, easeInOut, ZONE_HEIGHT_RANGES } from './CityGenerator';
 
 interface CitySceneProps {
   buildings: Building[];
@@ -44,13 +44,23 @@ function BuildingMesh({
     const b = parseInt(building.color.slice(5, 7), 16);
     const baseColorHex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 
+    const zone = building.zone;
+    const heightRange = ZONE_HEIGHT_RANGES[zone] || ZONE_HEIGHT_RANGES.none;
+    const heightRatio = Math.min(Math.max((building.height - heightRange[0]) / (heightRange[1] - heightRange[0] || 1), 0), 1);
+
     let targetColorHex = baseColorHex;
-    if (building.zone === 'center') {
-      targetColorHex = interpolateColor(baseColorHex, '#1976D2', 0.3);
-    } else if (building.zone === 'axis') {
-      targetColorHex = interpolateColor(baseColorHex, '#0D47A1', 0.2);
-    } else if (building.zone === 'suburb') {
-      targetColorHex = interpolateColor(baseColorHex, '#FFD54F', 0.2);
+    if (zone === 'center') {
+      const blueTint = interpolateColor(baseColorHex, '#1976D2', 0.2 + heightRatio * 0.3);
+      const darkenAmount = 0.1 + heightRatio * 0.2;
+      targetColorHex = interpolateColor(blueTint, '#000000', darkenAmount * 0.5);
+    } else if (zone === 'axis') {
+      const deepBlue = interpolateColor(baseColorHex, '#0D47A1', 0.3 + heightRatio * 0.4);
+      const darkenAmount = 0.15 + heightRatio * 0.25;
+      targetColorHex = interpolateColor(deepBlue, '#000000', darkenAmount * 0.5);
+    } else if (zone === 'suburb') {
+      const warmTint = interpolateColor(baseColorHex, '#FFD54F', 0.15 + heightRatio * 0.25);
+      const brightness = 0.05 + heightRatio * 0.15;
+      targetColorHex = interpolateColor(warmTint, '#FFFFFF', brightness * 0.5);
     }
 
     const targetScale = targetStyle === 'classical' ? 1 : 1;

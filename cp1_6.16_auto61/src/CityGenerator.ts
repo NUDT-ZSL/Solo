@@ -33,86 +33,85 @@ export interface BuildingTemplate {
   colorPalette: string[];
 }
 
+export const ZONE_HEIGHT_RANGES: Record<ZoneType, [number, number]> = {
+  center: [80, 150],
+  axis: [150, 250],
+  suburb: [20, 60],
+  none: [20, 250],
+};
+
+export const ZONE_BASE_SIZE_RANGES: Record<ZoneType, [number, number]> = {
+  center: [3, 6],
+  axis: [4, 7],
+  suburb: [2, 4],
+  none: [2, 7],
+};
+
+export const ZONE_SPAWN_PROBABILITIES: Record<ZoneType, number> = {
+  center: 0.95,
+  axis: 0.85,
+  suburb: 0.5,
+  none: 0.7,
+};
+
+export const DEFAULT_CITY_WIDTH = 160;
+
 const lSystemRules: LSystemRule[] = [
   { symbol: 'S', replacement: '[FB][FB][FB]' },
   { symbol: 'B', replacement: 'B+S' },
   { symbol: 'F', replacement: 'F[FB]F' },
 ];
 
-const buildingTemplates: BuildingTemplate[] = [
-  {
-    id: 'modern-center',
-    style: 'modern',
-    zone: 'center',
-    heightRange: [80, 150],
-    baseSizeRange: [3, 6],
-    decorationTypes: ['flat', 'slope'],
-    colorPalette: ['#607D8B', '#78909C', '#546E7A', '#455A64', '#37474F'],
-  },
-  {
-    id: 'modern-axis',
-    style: 'modern',
-    zone: 'axis',
-    heightRange: [150, 250],
-    baseSizeRange: [4, 7],
-    decorationTypes: ['flat', 'slope'],
-    colorPalette: ['#1E88E5', '#1976D2', '#1565C0', '#0D47A1', '#42A5F5'],
-  },
-  {
-    id: 'modern-suburb',
-    style: 'modern',
-    zone: 'suburb',
-    heightRange: [20, 60],
-    baseSizeRange: [2, 4],
-    decorationTypes: ['flat'],
-    colorPalette: ['#90A4AE', '#B0BEC5', '#CFD8DC', '#78909C', '#607D8B'],
-  },
-  {
-    id: 'modern-default',
-    style: 'modern',
-    zone: 'none',
-    heightRange: [5, 15],
-    baseSizeRange: [2, 5],
-    decorationTypes: ['flat', 'slope'],
-    colorPalette: ['#607D8B', '#1E88E5', '#455A64', '#1976D2', '#78909C'],
-  },
-  {
-    id: 'classical-center',
-    style: 'classical',
-    zone: 'center',
-    heightRange: [88, 165],
-    baseSizeRange: [3, 6],
-    decorationTypes: ['dome', 'spire'],
-    colorPalette: ['#F5DEB3', '#DEB887', '#D2B48C', '#C4A77D', '#BC8F8F'],
-  },
-  {
-    id: 'classical-axis',
-    style: 'classical',
-    zone: 'axis',
-    heightRange: [165, 275],
-    baseSizeRange: [4, 7],
-    decorationTypes: ['dome', 'spire'],
-    colorPalette: ['#BC8F8F', '#CD853F', '#D2691E', '#A0522D', '#8B4513'],
-  },
-  {
-    id: 'classical-suburb',
-    style: 'classical',
-    zone: 'suburb',
-    heightRange: [22, 66],
-    baseSizeRange: [2, 4],
-    decorationTypes: ['spire', 'dome'],
-    colorPalette: ['#F5DEB3', '#FFEFD5', '#FFE4B5', '#FFE4C4', '#FFDAB9'],
-  },
-  {
-    id: 'classical-default',
-    style: 'classical',
-    zone: 'none',
-    heightRange: [5.5, 16.5],
-    baseSizeRange: [2, 5],
-    decorationTypes: ['dome', 'spire'],
-    colorPalette: ['#F5DEB3', '#BC8F8F', '#DEB887', '#CD853F', '#D2B48C'],
-  },
-];
+const MODERN_COLOR_PALETTES: Record<ZoneType, string[]> = {
+  center: ['#607D8B', '#78909C', '#546E7A', '#455A64', '#37474F'],
+  axis: ['#1E88E5', '#1976D2', '#1565C0', '#0D47A1', '#42A5F5'],
+  suburb: ['#90A4AE', '#B0BEC5', '#CFD8DC', '#78909C', '#607D8B'],
+  none: ['#607D8B', '#1E88E5', '#455A64', '#1976D2', '#78909C', '#90A4AE', '#B0BEC5', '#FFD54F'],
+};
+
+const CLASSICAL_COLOR_PALETTES: Record<ZoneType, string[]> = {
+  center: ['#F5DEB3', '#DEB887', '#D2B48C', '#C4A77D', '#BC8F8F'],
+  axis: ['#BC8F8F', '#CD853F', '#D2691E', '#A0522D', '#8B4513'],
+  suburb: ['#F5DEB3', '#FFEFD5', '#FFE4B5', '#FFE4C4', '#FFDAB9'],
+  none: ['#F5DEB3', '#BC8F8F', '#DEB887', '#CD853F', '#D2B48C', '#8B4513', '#FFDAB9', '#A0522D'],
+};
+
+function buildTemplates(): BuildingTemplate[] {
+  const templates: BuildingTemplate[] = [];
+  const zones: ZoneType[] = ['center', 'axis', 'suburb', 'none'];
+  const styles: BuildingStyle[] = ['modern', 'classical'];
+
+  for (const style of styles) {
+    for (const zone of zones) {
+      const heightRange = style === 'classical'
+        ? [ZONE_HEIGHT_RANGES[zone][0] * 1.1, ZONE_HEIGHT_RANGES[zone][1] * 1.1] as [number, number]
+        : ZONE_HEIGHT_RANGES[zone];
+
+      const baseSizeRange = ZONE_BASE_SIZE_RANGES[zone];
+      const colorPalette = style === 'modern'
+        ? MODERN_COLOR_PALETTES[zone]
+        : CLASSICAL_COLOR_PALETTES[zone];
+
+      const decorationTypes: Array<'dome' | 'spire' | 'flat' | 'slope'> = style === 'modern'
+        ? (zone === 'suburb' ? ['flat'] : ['flat', 'slope'])
+        : ['dome', 'spire'];
+
+      templates.push({
+        id: `${style}-${zone}`,
+        style,
+        zone,
+        heightRange,
+        baseSizeRange,
+        decorationTypes,
+        colorPalette,
+      });
+    }
+  }
+
+  return templates;
+}
+
+const buildingTemplates: BuildingTemplate[] = buildTemplates();
 
 function parseLSystem(axiom: string, iterations: number): string {
   let result = axiom;
@@ -200,13 +199,26 @@ function generateBuildingFromTemplate(
   };
 }
 
-function applyZoneColorAdjustment(baseColor: string, zone: ZoneType): string {
+function applyZoneColorAdjustment(
+  baseColor: string,
+  zone: ZoneType,
+  buildingHeight: number,
+  heightRange: [number, number]
+): string {
+  const heightRatio = (buildingHeight - heightRange[0]) / (heightRange[1] - heightRange[0] || 1);
+
   if (zone === 'center') {
-    return shiftColor(baseColor, -10, -10, 10);
+    const blueShift = Math.floor(20 * heightRatio);
+    const darken = Math.floor(15 * heightRatio);
+    return shiftColor(baseColor, -darken, -darken, blueShift);
   } else if (zone === 'axis') {
-    return shiftColor(baseColor, 10, -10, -10);
+    const darken = Math.floor(25 * heightRatio);
+    const blueBoost = Math.floor(10 * heightRatio);
+    return shiftColor(baseColor, -darken, -darken, blueBoost);
   } else if (zone === 'suburb') {
-    return shiftColor(baseColor, 5, 10, -5);
+    const yellowBoost = Math.floor(15 * heightRatio);
+    const redBoost = Math.floor(8 * heightRatio);
+    return shiftColor(baseColor, redBoost, yellowBoost, -5);
   }
   return baseColor;
 }
@@ -219,38 +231,67 @@ function shiftColor(color: string, rShift: number, gShift: number, bShift: numbe
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 }
 
-export interface GenerateBuildingsOptions {
-  gridSize: number;
-  density: number;
-  style: BuildingStyle;
-  zoningEnabled: boolean;
+function generateRandomBuildings(
+  gridSize: number,
+  cellSize: number,
+  offset: number,
+  density: number,
+  style: BuildingStyle,
+  patternSymbols: string[]
+): Building[] {
+  const buildings: Building[] = [];
+  let symbolIndex = 0;
+  const template = getBuildingTemplate(style, 'none');
+
+  for (let gridX = 0; gridX < gridSize; gridX++) {
+    for (let gridZ = 0; gridZ < gridSize; gridZ++) {
+      const symbol = patternSymbols[symbolIndex % patternSymbols.length];
+      symbolIndex++;
+
+      let spawnProbability = ZONE_SPAWN_PROBABILITIES.none;
+      if (symbol === 'F' || symbol === 'B') {
+        spawnProbability *= 1.2;
+      }
+
+      if (Math.random() > Math.min(spawnProbability, density / 30)) {
+        continue;
+      }
+
+      const worldX = gridX * cellSize - offset + randomRange(-cellSize * 0.2, cellSize * 0.2);
+      const worldZ = gridZ * cellSize - offset + randomRange(-cellSize * 0.2, cellSize * 0.2);
+
+      const building = generateBuildingFromTemplate(
+        template,
+        worldX,
+        worldZ,
+        style,
+        'none'
+      );
+
+      buildings.push(building);
+    }
+  }
+
+  return buildings;
 }
 
-export function generateBuildings(
-  options: GenerateBuildingsOptions
+function generateZonedBuildings(
+  gridSize: number,
+  cellSize: number,
+  offset: number,
+  density: number,
+  style: BuildingStyle,
+  patternSymbols: string[]
 ): Building[] {
-  const { gridSize, density, style, zoningEnabled } = options;
   const buildings: Building[] = [];
-  const cellSize = 8;
-  const offset = (gridSize * cellSize) / 2;
-
-  const lSystemPattern = parseLSystem('S', 3);
-  const patternSymbols = lSystemPattern.replace(/[\[\]+\-]/g, '').split('');
-
   let symbolIndex = 0;
 
   for (let gridX = 0; gridX < gridSize; gridX++) {
     for (let gridZ = 0; gridZ < gridSize; gridZ++) {
-      const zone = zoningEnabled
-        ? getZoneForPosition(gridX, gridZ, gridSize)
-        : 'none';
+      const zone = getZoneForPosition(gridX, gridZ, gridSize);
+      const template = getBuildingTemplate(style, zone);
 
-      let spawnProbability = 0.7;
-      if (zoningEnabled) {
-        if (zone === 'center') spawnProbability = 0.95;
-        else if (zone === 'axis') spawnProbability = 0.85;
-        else if (zone === 'suburb') spawnProbability = 0.5;
-      }
+      let spawnProbability = ZONE_SPAWN_PROBABILITIES[zone];
 
       const symbol = patternSymbols[symbolIndex % patternSymbols.length];
       symbolIndex++;
@@ -263,9 +304,8 @@ export function generateBuildings(
         continue;
       }
 
-      const template = getBuildingTemplate(style, zone);
-      const worldX = gridX * cellSize - offset + randomRange(-1, 1);
-      const worldZ = gridZ * cellSize - offset + randomRange(-1, 1);
+      const worldX = gridX * cellSize - offset + randomRange(-cellSize * 0.15, cellSize * 0.15);
+      const worldZ = gridZ * cellSize - offset + randomRange(-cellSize * 0.15, cellSize * 0.15);
 
       let building = generateBuildingFromTemplate(
         template,
@@ -275,15 +315,44 @@ export function generateBuildings(
         zone
       );
 
-      if (zoningEnabled) {
-        building.color = applyZoneColorAdjustment(building.color, zone);
-      }
+      building.color = applyZoneColorAdjustment(
+        building.color,
+        zone,
+        building.height,
+        ZONE_HEIGHT_RANGES[zone]
+      );
 
       buildings.push(building);
     }
   }
 
   return buildings;
+}
+
+export interface GenerateBuildingsOptions {
+  gridSize: number;
+  density: number;
+  style: BuildingStyle;
+  zoningEnabled: boolean;
+  cityWidth?: number;
+}
+
+export function generateBuildings(
+  options: GenerateBuildingsOptions
+): Building[] {
+  const { gridSize, density, style, zoningEnabled, cityWidth = DEFAULT_CITY_WIDTH } = options;
+
+  const cellSize = cityWidth / gridSize;
+  const offset = cityWidth / 2;
+
+  const lSystemPattern = parseLSystem('S', 3);
+  const patternSymbols = lSystemPattern.replace(/[\[\]+\-]/g, '').split('');
+
+  if (zoningEnabled) {
+    return generateZonedBuildings(gridSize, cellSize, offset, density, style, patternSymbols);
+  } else {
+    return generateRandomBuildings(gridSize, cellSize, offset, density, style, patternSymbols);
+  }
 }
 
 export function getSkylineProfile(
