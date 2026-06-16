@@ -1,0 +1,46 @@
+[
+  {
+    "id": "a1",
+    "name": "《活着》读书分享会",
+    "description": "一起探讨余华笔下的生命哲学",
+    "poster": "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=640",
+    "date": "2026-06-25T19:00:00.000Z",
+    "location": "墨香书苑·二楼阅读空间",
+    "totalSlots": 20,
+    "registeredUsers": ["u1", "u2"],
+    "createdAt": "2025-12-01T10:00:00.000Z"
+  },
+  {
+    "id": "a2",
+    "name": "科幻之夜：三体宇宙",
+    "description": "与科幻迷一起探索三体的宏大世界",
+    "poster": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=640",
+    "date": "2026-07-02T19:30:00.000Z",
+    "location": "墨香书苑·一楼活动区",
+    "totalSlots": 30,
+    "registeredUsers": ["u1"],
+    "createdAt": "2025-12-05T10:00:00.000Z"
+  },
+  {
+    "id": "a3",
+    "name": "诗歌朗诵会：夏夜之梦",
+    "description": "在夏夜与诗歌相遇",
+    "poster": "https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=640",
+    "date": "2026-07-10T18:30:00.000Z",
+    "location": "墨香书苑·露台花园",
+    "totalSlots": 25,
+    "registeredUsers": [],
+    "createdAt": "2025-12-10T10:00:00.000Z"
+  },
+  {
+    "id": "a4",
+    "name": "亲子阅读时光",
+    "description": "带上孩子，一起享受阅读的乐趣",
+    "poster": "https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=640",
+    "date": "2026-07-18T14:00:00.000Z",
+    "location": "墨香书苑·儿童阅读角",
+    "totalSlots": 15,
+    "registeredUsers": ["u2"],
+    "createdAt": "2025-12-15T10:00:00.000Z"
+  }
+]

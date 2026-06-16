@@ -1,0 +1,45 @@
+[
+  {
+    "id": "u1",
+    "nickname": "书虫小明",
+    "email": "xiaoming@example.com",
+    "password": "123456",
+    "registeredAt": "2025-10-01T10:00:00.000Z",
+    "borrowStats": {
+      "reserved": 12,
+      "borrowed": 28,
+      "total": 45
+    },
+    "reservations": [],
+    "borrowed": []
+  },
+  {
+    "id": "u2",
+    "nickname": "文艺青年",
+    "email": "wenyi@example.com",
+    "password": "123456",
+    "registeredAt": "2025-11-15T10:00:00.000Z",
+    "borrowStats": {
+      "reserved": 5,
+      "borrowed": 12,
+      "total": 20
+    },
+    "reservations": [],
+    "borrowed": []
+  },
+  {
+    "id": "admin",
+    "nickname": "管理员",
+    "email": "admin@bookstore.com",
+    "password": "admin123",
+    "isAdmin": true,
+    "registeredAt": "2025-09-01T10:00:00.000Z",
+    "borrowStats": {
+      "reserved": 0,
+      "borrowed": 0,
+      "total": 0
+    },
+    "reservations": [],
+    "borrowed": []
+  }
+]

@@ -1,0 +1,129 @@
+[
+  {
+    "id": "1",
+    "isbn": "9787020002207",
+    "title": "活着",
+    "author": "余华",
+    "publisher": "作家出版社",
+    "stock": 12,
+    "shelf": "A-03",
+    "description": "《活着》是余华的代表作之一，讲述了农村人福贵悲惨的人生遭遇。福贵本是个阔少爷，可他嗜赌如命，终于赌光了家业，一贫如洗。",
+    "doubanRating": 9.4,
+    "reserveCount": 156,
+    "createdAt": "2025-12-01T10:00:00.000Z",
+    "comments": [
+      {
+        "id": "c1",
+        "userId": "u1",
+        "nickname": "书虫小明",
+        "content": "余华的文字总是那么有力量，读完久久不能平静。",
+        "createdAt": "2025-12-10T14:30:00.000Z"
+      },
+      {
+        "id": "c2",
+        "userId": "u2",
+        "nickname": "文艺青年",
+        "content": "经典就是经典，每读一遍都有新的感悟。",
+        "createdAt": "2025-12-15T09:20:00.000Z"
+      }
+    ]
+  },
+  {
+    "id": "2",
+    "isbn": "9787544291163",
+    "title": "百年孤独",
+    "author": "加西亚·马尔克斯",
+    "publisher": "南海出版公司",
+    "stock": 8,
+    "shelf": "B-01",
+    "description": "《百年孤独》是魔幻现实主义文学的代表作，描写了布恩迪亚家族七代人的传奇故事，以及加勒比海沿岸小镇马孔多的百年兴衰。",
+    "doubanRating": 9.3,
+    "reserveCount": 142,
+    "createdAt": "2025-11-20T10:00:00.000Z",
+    "comments": []
+  },
+  {
+    "id": "3",
+    "isbn": "9787530219218",
+    "title": "平凡的世界",
+    "author": "路遥",
+    "publisher": "北京十月文艺出版社",
+    "stock": 15,
+    "shelf": "A-05",
+    "description": "《平凡的世界》是一部全景式地表现中国当代城乡社会生活的长篇小说。三部六部，共一百万字。",
+    "doubanRating": 9.1,
+    "reserveCount": 128,
+    "createdAt": "2025-12-05T10:00:00.000Z",
+    "comments": []
+  },
+  {
+    "id": "4",
+    "isbn": "9787544270878",
+    "title": "挪威的森林",
+    "author": "村上春树",
+    "publisher": "上海译文出版社",
+    "stock": 6,
+    "shelf": "B-03",
+    "description": "《挪威的森林》是日本作家村上春树于1987年所著的一部长篇爱情小说。故事讲述主角纠缠在情绪不稳定且患有精神疾病的直子和开朗活泼的小林绿子之间，展开了自我成长的旅程。",
+    "doubanRating": 8.8,
+    "reserveCount": 98,
+    "createdAt": "2025-12-10T10:00:00.000Z",
+    "comments": []
+  },
+  {
+    "id": "5",
+    "isbn": "9787020141609",
+    "title": "三体",
+    "author": "刘慈欣",
+    "publisher": "重庆出版社",
+    "stock": 20,
+    "shelf": "C-02",
+    "description": "《三体》是刘慈欣创作的系列长篇科幻小说，由《三体》、《三体Ⅱ·黑暗森林》、《三体Ⅲ·死神永生》组成。",
+    "doubanRating": 9.3,
+    "reserveCount": 203,
+    "createdAt": "2025-12-08T10:00:00.000Z",
+    "comments": []
+  },
+  {
+    "id": "6",
+    "isbn": "9787544253994",
+    "title": "小王子",
+    "author": "安托万·德·圣-埃克苏佩里",
+    "publisher": "人民文学出版社",
+    "stock": 25,
+    "shelf": "D-01",
+    "description": "《小王子》是法国作家安托万·德·圣-埃克苏佩里于1942年写成的著名儿童文学短篇小说。本书的主人公是来自外星球的小王子。",
+    "doubanRating": 9.0,
+    "reserveCount": 87,
+    "createdAt": "2025-11-25T10:00:00.000Z",
+    "comments": []
+  },
+  {
+    "id": "7",
+    "isbn": "9787550016361",
+    "title": "人类简史",
+    "author": "尤瓦尔·赫拉利",
+    "publisher": "中信出版社",
+    "stock": 10,
+    "shelf": "E-02",
+    "description": "《人类简史：从动物到上帝》是以色列新锐历史学家尤瓦尔·赫拉利的一部重磅作品。从十万年前有生命迹象开始到21世纪资本、科技交织的人类发展史。",
+    "doubanRating": 9.1,
+    "reserveCount": 112,
+    "createdAt": "2025-12-12T10:00:00.000Z",
+    "comments": []
+  },
+  {
+    "id": "8",
+    "isbn": "9787020100224",
+    "title": "围城",
+    "author": "钱钟书",
+    "publisher": "人民文学出版社",
+    "stock": 7,
+    "shelf": "A-02",
+    "description": "《围城》是钱钟书所著的长篇小说，是中国现代文学史上一部风格独特的讽刺小说。被誉为新儒林外史。",
+    "doubanRating": 8.9,
+    "reserveCount": 76,
+    "createdAt": "2025-12-15T10:00:00.000Z",
+    "comments": []
+  }
+]
