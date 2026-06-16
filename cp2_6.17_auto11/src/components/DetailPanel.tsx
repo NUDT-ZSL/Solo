@@ -75,9 +75,8 @@ const DetailPanel: React.FC = () => {
       <div 
         className={`detail-panel ${isAnimating ? 'slide-in' : 'slide-out'}`}
         style={{
-          borderLeft: `3px solid ${work.primaryColor}`,
-          borderTop: `3px solid ${work.primaryColor}`
-        }}>
+          '--primary-color': work.primaryColor
+        } as React.CSSProperties}>
         <div style={{
           position: 'relative',
           padding: '24px'
@@ -141,14 +140,13 @@ const DetailPanel: React.FC = () => {
             </h2>
             <button
               onClick={handleFavoriteClick}
+              className={isPulsing ? 'favorite-pulse-animation' : ''}
               style={{
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
                 fontSize: '32px',
                 padding: '8px',
-                transform: isPulsing ? 'scale(1.3)' : 'scale(1.0)',
-                transition: 'transform 0.2s ease-in-out',
                 lineHeight: 1
               }}
             >

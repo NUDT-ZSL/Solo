@@ -51,7 +51,10 @@ const Header: React.FC = () => {
           overflowX: 'auto',
           paddingBottom: '4px',
           scrollbarWidth: 'none',
-          msOverflowStyle: 'none'
+          msOverflowStyle: 'none',
+          flexWrap: 'nowrap',
+          whiteSpace: 'nowrap',
+          WebkitOverflowScrolling: 'touch'
         }}>
           {filters.map(filter => {
             const isActive = filterStyle === filter.key;
