@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import './ControlPanel.css';
 
 interface ControlPanelProps {
@@ -21,6 +21,9 @@ function ControlPanel({
   hasSavedConformation,
 }: ControlPanelProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const [isResetFlashing, setIsResetFlashing] = useState(false);
+  const [showSavedTip, setShowSavedTip] = useState(false);
+  const savedTipTimerRef = useRef<number | null>(null);
 
   const handleSliderChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -36,6 +39,34 @@ function ControlPanel({
 
   const handleSliderMouseUp = useCallback(() => {
     setIsDragging(false);
+  }, []);
+
+  const handleResetClick = useCallback(() => {
+    onReset();
+    setIsResetFlashing(true);
+    window.setTimeout(() => {
+      setIsResetFlashing(false);
+    }, 300);
+  }, [onReset]);
+
+  const handleSaveClick = useCallback(() => {
+    onSaveConformation();
+    if (savedTipTimerRef.current) {
+      window.clearTimeout(savedTipTimerRef.current);
+    }
+    setShowSavedTip(true);
+    savedTipTimerRef.current = window.setTimeout(() => {
+      setShowSavedTip(false);
+      savedTipTimerRef.current = null;
+    }, 2000);
+  }, [onSaveConformation]);
+
+  useEffect(() => {
+    return () => {
+      if (savedTipTimerRef.current) {
+        window.clearTimeout(savedTipTimerRef.current);
+      }
+    };
   }, []);
 
   return (
@@ -62,6 +93,9 @@ function ControlPanel({
             className="dihedral-slider"
           />
         </div>
+        <div className="slider-current-value">
+          当前二面角：{dihedralAngle.toFixed(1)}°
+        </div>
         <div className="slider-range">
           <span>-180°</span>
           <span>0°</span>
@@ -71,18 +105,21 @@ function ControlPanel({
 
       <div className="buttons-section">
         <button
-          className="control-btn reset-btn"
-          onClick={onReset}
+          className={`control-btn reset-btn ${isResetFlashing ? 'flashing' : ''}`}
+          onClick={handleResetClick}
         >
           重置构象
         </button>
 
-        <button
-          className="control-btn save-btn"
-          onClick={onSaveConformation}
-        >
-          保存当前构象
-        </button>
+        <div className="save-btn-wrapper">
+          <button
+            className="control-btn save-btn"
+            onClick={handleSaveClick}
+          >
+            保存当前构象
+          </button>
+          {showSavedTip && <span className="saved-tip">已保存</span>}
+        </div>
 
         <button
           className={`control-btn compare-btn ${isComparisonMode ? 'active' : ''}`}
