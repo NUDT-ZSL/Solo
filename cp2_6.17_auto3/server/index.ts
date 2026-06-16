@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 3003;
+const PORT = 3006;
 const DATA_FILE = path.join(__dirname, '..', 'data', 'bottles.json');
 
 interface BottleWrite {

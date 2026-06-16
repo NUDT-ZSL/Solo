@@ -16,6 +16,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const saved = localStorage.getItem(SORT_KEY) as SortMode | null;
+    console.log('[localStorage] 读取排序模式:', saved);
     if (saved === 'random' || saved === 'hot') {
       setSortMode(saved);
     }
@@ -23,6 +24,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     localStorage.setItem(SORT_KEY, sortMode);
+    console.log('[localStorage] 写入排序模式:', sortMode, '当前值:', localStorage.getItem(SORT_KEY));
   }, [sortMode]);
 
   const loadBottles = useCallback(async () => {
@@ -148,7 +150,7 @@ const App: React.FC = () => {
         style={{
           position: 'absolute',
           top: '16px',
-          right: sortMode ? '160px' : '16px',
+          right: '160px',
           width: '160px',
           height: '44px',
           borderRadius: '8px',
