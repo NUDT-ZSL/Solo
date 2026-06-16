@@ -30,18 +30,27 @@ let currentParams: HeatParams = {
 };
 
 let tempBarFill: HTMLElement;
+let tempScaleTicksContainer: HTMLElement;
 let tempMaxLabel: HTMLElement;
+let tempMidLabel: HTMLElement;
 let tempMinLabel: HTMLElement;
+let tempAvgNumber: HTMLElement;
 let densityValue: HTMLElement;
 let greeneryValue: HTMLElement;
 let albedoValue: HTMLElement;
 
 let currentMinTemp = 20;
 let currentMaxTemp = 35;
+let currentAvgTemp = 27.5;
 let targetMinTemp = 20;
 let targetMaxTemp = 35;
+let targetAvgTemp = 27.5;
 let tempBarTransitionProgress = 1;
-const TEMP_BAR_TRANSITION_DURATION = 0.2;
+const TEMP_BAR_TRANSITION_DURATION = 0.3;
+
+const OVERALL_MIN_TEMP = 15;
+const OVERALL_MAX_TEMP = 45;
+const TICK_COUNT = 5;
 
 function init(): void {
   const container = document.getElementById('canvas-container');
@@ -178,8 +187,13 @@ function setupUI(): void {
   albedoValue = document.getElementById('albedo-value')!;
 
   tempBarFill = document.getElementById('temp-bar-fill')!;
+  tempScaleTicksContainer = document.getElementById('temp-scale-ticks')!;
   tempMaxLabel = document.getElementById('temp-max')!;
+  tempMidLabel = document.getElementById('temp-mid')!;
   tempMinLabel = document.getElementById('temp-min')!;
+  tempAvgNumber = document.getElementById('temp-avg-number')!;
+
+  createTempScaleTicks();
 
   densitySlider.addEventListener('input', (e) => {
     const value = parseFloat((e.target as HTMLInputElement).value);
@@ -203,6 +217,29 @@ function setupUI(): void {
   });
 }
 
+function createTempScaleTicks(): void {
+  for (let i = 0; i <= TICK_COUNT; i++) {
+    const ratio = i / TICK_COUNT;
+    const temp = OVERALL_MIN_TEMP + (OVERALL_MAX_TEMP - OVERALL_MIN_TEMP) * ratio;
+    const isMajor = i === 0 || i === TICK_COUNT || i === Math.floor(TICK_COUNT / 2);
+
+    const tick = document.createElement('div');
+    tick.className = `temp-scale-tick${isMajor ? ' major' : ''}`;
+    tick.style.bottom = `${ratio * 100}%`;
+
+    const line = document.createElement('div');
+    line.className = 'temp-scale-line';
+
+    const label = document.createElement('span');
+    label.className = 'temp-scale-label';
+    label.textContent = `${temp.toFixed(0)}°`;
+
+    tick.appendChild(line);
+    tick.appendChild(label);
+    tempScaleTicksContainer.appendChild(tick);
+  }
+}
+
 function updateValueDisplay(element: HTMLElement, value: string): void {
   element.textContent = value;
   element.classList.remove('bump');
@@ -220,10 +257,13 @@ function updateTemperature(): void {
 
   targetMinTemp = result.minTemp;
   targetMaxTemp = result.maxTemp;
+  targetAvgTemp = result.avgTemp;
   tempBarTransitionProgress = 0;
 
   updateTempLabel(tempMaxLabel, result.maxTemp);
+  updateTempLabel(tempMidLabel, (result.minTemp + result.maxTemp) / 2);
   updateTempLabel(tempMinLabel, result.minTemp);
+  updateAvgTemp(result.avgTemp);
 }
 
 function updateTempLabel(element: HTMLElement, temp: number): void {
@@ -236,6 +276,16 @@ function updateTempLabel(element: HTMLElement, temp: number): void {
   }, 200);
 }
 
+function updateAvgTemp(temp: number): void {
+  tempAvgNumber.textContent = temp.toFixed(1);
+  tempAvgNumber.classList.remove('bump');
+  void tempAvgNumber.offsetWidth;
+  tempAvgNumber.classList.add('bump');
+  setTimeout(() => {
+    tempAvgNumber.classList.remove('bump');
+  }, 200);
+}
+
 function updateTempBar(deltaTime: number): void {
   if (tempBarTransitionProgress < 1) {
     tempBarTransitionProgress += deltaTime / TEMP_BAR_TRANSITION_DURATION;
@@ -243,28 +293,35 @@ function updateTempBar(deltaTime: number): void {
       tempBarTransitionProgress = 1;
     }
 
-    const t = elasticOut(tempBarTransitionProgress);
+    const t = easeInOut(tempBarTransitionProgress);
     currentMinTemp = currentMinTemp + (targetMinTemp - currentMinTemp) * t;
     currentMaxTemp = currentMaxTemp + (targetMaxTemp - currentMaxTemp) * t;
+    currentAvgTemp = currentAvgTemp + (targetAvgTemp - currentAvgTemp) * t;
+
+    const midTemp = (currentMinTemp + currentMaxTemp) / 2;
+    tempMidLabel.textContent = `${midTemp.toFixed(1)}°`;
+    tempAvgNumber.textContent = currentAvgTemp.toFixed(1);
   }
 
-  const overallMin = 18;
-  const overallMax = 40;
-  const overallRange = overallMax - overallMin;
+  const overallRange = OVERALL_MAX_TEMP - OVERALL_MIN_TEMP;
 
-  const minRatio = (currentMinTemp - overallMin) / overallRange;
-  const maxRatio = (currentMaxTemp - overallMin) / overallRange;
+  const minRatio = (currentMinTemp - OVERALL_MIN_TEMP) / overallRange;
+  const maxRatio = (currentMaxTemp - OVERALL_MIN_TEMP) / overallRange;
+  const midRatio = (minRatio + maxRatio) / 2;
 
   const barHeight = (maxRatio - minRatio) * 100;
   const barBottom = minRatio * 100;
 
-  tempBarFill.style.height = `${Math.max(5, barHeight)}%`;
+  tempBarFill.style.height = `${Math.max(3, barHeight)}%`;
   tempBarFill.style.bottom = `${barBottom}%`;
+
+  tempMaxLabel.style.top = `${100 - maxRatio * 100}%`;
+  tempMidLabel.style.top = `${100 - midRatio * 100}%`;
+  tempMinLabel.style.top = `${100 - minRatio * 100}%`;
 }
 
-function elasticOut(t: number): number {
-  const c4 = (2 * Math.PI) / 3;
-  return t === 0 ? 0 : t === 1 ? 1 : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1;
+function easeInOut(t: number): number {
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 }
 
 function updateBuildingFloat(time: number): void {
