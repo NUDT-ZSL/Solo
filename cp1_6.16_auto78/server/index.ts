@@ -38,6 +38,7 @@ interface ReviewScore {
   submitted: boolean;
   arbitratedScores: ScoreItem | null;
   isArbitrated: boolean;
+  submittedAt?: string;
 }
 
 interface ConflictFlag {
@@ -177,6 +178,25 @@ app.get('/api/reviewers/:id/papers', (req, res) => {
   res.json(assigned);
 });
 
+app.get('/api/reviewers/:id/history', (req, res) => {
+  const { id } = req.params;
+  const reviewerScores = scores
+    .filter((s) => s.reviewerId === id && s.submitted)
+    .map((s) => {
+      const paper = papers.find((p) => p.id === s.paperId);
+      return {
+        ...s,
+        paperTitle: paper?.title || '未知论文',
+      };
+    })
+    .sort((a, b) => {
+      const ta = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+      const tb = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+      return tb - ta;
+    });
+  res.json(reviewerScores);
+});
+
 app.get('/api/scores', (_req, res) => {
   res.json(scores);
 });
@@ -194,6 +214,7 @@ app.post('/api/scores', (req, res) => {
     existing.scores = scoreValues;
     existing.comment = comment;
     existing.submitted = true;
+    existing.submittedAt = new Date().toISOString();
     checkConflicts(paperId);
     res.json(existing);
     return;
@@ -207,6 +228,7 @@ app.post('/api/scores', (req, res) => {
     submitted: true,
     arbitratedScores: null,
     isArbitrated: false,
+    submittedAt: new Date().toISOString(),
   };
   scores.push(score);
   checkConflicts(paperId);

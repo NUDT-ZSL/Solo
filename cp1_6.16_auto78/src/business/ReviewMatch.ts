@@ -30,6 +30,7 @@ export interface ReviewScore {
   submitted: boolean;
   arbitratedScores: ScoreItem | null;
   isArbitrated: boolean;
+  submittedAt?: string;
 }
 
 export interface ConflictFlag {

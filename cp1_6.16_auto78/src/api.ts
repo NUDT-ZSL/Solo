@@ -47,6 +47,15 @@ export async function fetchReviewerPapers(reviewerId: string): Promise<Paper[]> 
   return res.data;
 }
 
+export interface ReviewerHistoryItem extends ReviewScore {
+  paperTitle: string;
+}
+
+export async function getReviewerHistory(reviewerId: string): Promise<ReviewerHistoryItem[]> {
+  const res = await api.get<ReviewerHistoryItem[]>(`/reviewers/${reviewerId}/history`);
+  return res.data;
+}
+
 export async function fetchScores(): Promise<ReviewScore[]> {
   const res = await api.get<ReviewScore[]>('/scores');
   return res.data;
