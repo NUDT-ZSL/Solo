@@ -167,25 +167,27 @@ class StorageLogicClass {
       return { hasCollision: true, collisionType: 'boundary' };
     }
 
-    for (const module of this.modules) {
-      if (excludeModuleId && module.id === excludeModuleId) continue;
+    for (let r = startRow; r <= endRow; r++) {
+      for (let c = startCol; c <= endCol; c++) {
+        for (const module of this.modules) {
+          if (excludeModuleId && module.id === excludeModuleId) continue;
 
-      const mEndRow = module.row + module.heightCells - 1;
-      const mEndCol = module.col + module.widthCells - 1;
+          const mEndRow = module.row + module.heightCells - 1;
+          const mEndCol = module.col + module.widthCells - 1;
 
-      const overlap = !(
-        endRow < module.row ||
-        startRow > mEndRow ||
-        endCol < module.col ||
-        startCol > mEndCol
-      );
-
-      if (overlap) {
-        return {
-          hasCollision: true,
-          collisionType: 'overlap',
-          overlappingModuleId: module.id
-        };
+          if (
+            r >= module.row &&
+            r <= mEndRow &&
+            c >= module.col &&
+            c <= mEndCol
+          ) {
+            return {
+              hasCollision: true,
+              collisionType: 'overlap',
+              overlappingModuleId: module.id
+            };
+          }
+        }
       }
     }
 

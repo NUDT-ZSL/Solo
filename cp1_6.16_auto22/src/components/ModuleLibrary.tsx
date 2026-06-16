@@ -76,14 +76,16 @@ const ModuleLibrary: React.FC = () => {
 
     target.style.opacity = '0.5';
     target.style.transform = 'scale(0.92)';
-    target.style.boxShadow = '0 12px 24px rgba(0,0,0,0.3)';
+    target.style.boxShadow = '0 12px 24px rgba(0,0,0,0.4)';
+    target.style.transition = 'all 0.15s ease';
   };
 
   const handleDragEnd = (e: React.DragEvent) => {
     const target = e.currentTarget as HTMLElement;
-    target.style.opacity = '1';
-    target.style.transform = 'scale(1)';
-    target.style.boxShadow = 'none';
+    target.style.opacity = '';
+    target.style.transform = '';
+    target.style.boxShadow = '';
+    target.style.transition = '';
   };
 
   const handleDragEnter = (e: React.DragEvent) => {

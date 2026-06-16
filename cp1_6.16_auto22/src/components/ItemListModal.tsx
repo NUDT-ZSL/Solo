@@ -103,7 +103,9 @@ const ItemListModal: React.FC<ItemListModalProps> = ({ moduleId, visible, onClos
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10000,
-    animation: isAnimating ? 'modalFadeOut 0.2s ease forwards' : 'modalFadeIn 0.2s ease'
+    animation: isAnimating ? 'modalFadeOut 0.2s ease forwards' : 'modalFadeIn 0.2s ease',
+    animationDuration: '0.2s',
+    animationFillMode: 'forwards'
   };
 
   const modalStyle: React.CSSProperties = {
@@ -115,7 +117,10 @@ const ItemListModal: React.FC<ItemListModalProps> = ({ moduleId, visible, onClos
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
-    boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+    boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+    animation: isAnimating ? 'modalFadeOut 0.2s ease forwards' : 'modalFadeIn 0.2s ease',
+    animationDuration: '0.2s',
+    animationFillMode: 'forwards'
   };
 
   const headerStyle: React.CSSProperties = {
