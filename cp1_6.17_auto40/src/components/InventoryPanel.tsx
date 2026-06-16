@@ -58,9 +58,8 @@ export function InventoryPanel({ from }: InventoryPanelProps) {
   }, [from]);
 
   const refreshData = () => {
-    const allIngredients = from.getIngredients(true);
-    const active = allIngredients.filter(ing => !ing.isHistorical);
-    const history = allIngredients.filter(ing => ing.isHistorical);
+    const active = from.getIngredients(false);
+    const history = from.getHistoryIngredients();
     setIngredients(active);
     setHistorical(history);
   };
@@ -180,16 +179,32 @@ export function InventoryPanel({ from }: InventoryPanelProps) {
 
       {historical.length > 0 && (
         <div className="history-section">
-          <h3 className="section-subtitle">历史记录</h3>
+          <h3 className="section-subtitle">历史记录（已用完）</h3>
           <div className="history-list">
-            {historical.map(ing => (
-              <div key={ing.id} className="history-item">
-                <span className="history-name">{ing.name}</span>
-                <span className="history-meta">
-                  {categoryLabels[ing.category]} · 已用完
-                </span>
-              </div>
-            ))}
+            {historical.map(ing => {
+              const expireDate = new Date(ing.purchaseDate);
+              expireDate.setDate(expireDate.getDate() + ing.shelfLifeDays);
+              return (
+                <div key={ing.id} className="history-item">
+                  <div className="history-info">
+                    <span className="history-name">{ing.name}</span>
+                    <span
+                      className="category-tag"
+                      style={{
+                        backgroundColor: categoryColors[ing.category] + '15',
+                        color: categoryColors[ing.category],
+                        opacity: 0.7,
+                      }}
+                    >
+                      {categoryLabels[ing.category]}
+                    </span>
+                  </div>
+                  <span className="history-meta">
+                    过期日期：{formatDate(expireDate)} · 已用完
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

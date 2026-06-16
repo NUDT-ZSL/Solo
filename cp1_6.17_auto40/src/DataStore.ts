@@ -16,6 +16,7 @@ export interface Equipment {
   name: string;
   status: EquipmentStatus;
   occupiedUntil?: Date;
+  lockedUntil?: Date;
   lockedBy?: string;
 }
 
@@ -35,6 +36,7 @@ export interface AppState {
   bookings: Booking[];
   equipments: Equipment[];
   ingredients: Ingredient[];
+  historyIngredients: Ingredient[];
 }
 
 type Listener = () => void;
@@ -58,6 +60,7 @@ class AppDataStore {
   private bookingsMap = new Map<string, Booking[]>();
   private equipmentsMap = new Map<string, Equipment>();
   private ingredientsMap = new Map<string, Ingredient>();
+  private historyIngredients: Ingredient[] = [];
   private listeners = new Set<Listener>();
 
   constructor() {
@@ -171,16 +174,27 @@ class AppDataStore {
     return this.bookingsMap.get(timeSlot) || [];
   }
 
-  hasConflict(timeSlot: string): boolean {
+  hasConflict(timeSlot: string, userName?: string): boolean {
     const bookings = this.getBookingsBySlot(timeSlot);
-    return bookings.length >= MAX_BOOKINGS_PER_SLOT;
+    if (bookings.length >= MAX_BOOKINGS_PER_SLOT) {
+      return true;
+    }
+    if (userName) {
+      return bookings.some(b => b.userName === userName);
+    }
+    return false;
+  }
+
+  hasUserBookedSlot(timeSlot: string, userName: string): boolean {
+    const bookings = this.getBookingsBySlot(timeSlot);
+    return bookings.some(b => b.userName === userName);
   }
 
   bookSlot(
     timeSlot: string,
     data: { userName: string; peopleCount: number; purpose: BookingPurpose }
   ): Booking | null {
-    if (this.hasConflict(timeSlot)) {
+    if (this.hasConflict(timeSlot, data.userName)) {
       return null;
     }
 
@@ -233,15 +247,16 @@ class AppDataStore {
     return Array.from(this.equipmentsMap.values());
   }
 
-  lockEquipment(equipmentId: string, bookingId: string): boolean {
+  lockEquipment(equipmentId: string, bookingId: string, durationHours = 2): boolean {
     const equipment = this.equipmentsMap.get(equipmentId);
     if (!equipment || equipment.status !== 'idle') {
       return false;
     }
+    const now = new Date();
     equipment.status = 'in-use';
     equipment.lockedBy = bookingId;
-    const now = new Date();
-    equipment.occupiedUntil = new Date(now.getTime() + 60 * 60 * 1000);
+    equipment.lockedUntil = new Date(now.getTime() + durationHours * 60 * 60 * 1000);
+    equipment.occupiedUntil = equipment.lockedUntil;
     this.notify();
     return true;
   }
@@ -253,6 +268,7 @@ class AppDataStore {
     }
     equipment.status = 'idle';
     equipment.lockedBy = undefined;
+    equipment.lockedUntil = undefined;
     equipment.occupiedUntil = undefined;
     this.notify();
     return true;
@@ -264,6 +280,10 @@ class AppDataStore {
       return ingredients.filter(ing => !ing.isHistorical);
     }
     return ingredients;
+  }
+
+  getHistoryIngredients(): Ingredient[] {
+    return [...this.historyIngredients];
   }
 
   addIngredient(data: {
@@ -296,6 +316,15 @@ class AppDataStore {
     if (ingredient.quantity <= 0) {
       ingredient.quantity = 0;
       ingredient.isHistorical = true;
+      this.historyIngredients.push({
+        id: ingredient.id,
+        name: ingredient.name,
+        category: ingredient.category,
+        purchaseDate: new Date(ingredient.purchaseDate),
+        shelfLifeDays: ingredient.shelfLifeDays,
+        quantity: ingredient.quantity,
+        isHistorical: true,
+      });
     }
     this.notify();
     return true;
@@ -310,6 +339,7 @@ class AppDataStore {
       bookings,
       equipments: this.getEquipments(),
       ingredients: this.getIngredients(true),
+      historyIngredients: this.getHistoryIngredients(),
     };
   }
 }

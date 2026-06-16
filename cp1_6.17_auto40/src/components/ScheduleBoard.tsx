@@ -65,6 +65,11 @@ export function ScheduleBoard({ from }: ScheduleBoardProps) {
   const handleBooking = () => {
     if (!selectedSlot || !formData.userName.trim()) return;
 
+    if (from.hasUserBookedSlot(selectedSlot, formData.userName.trim())) {
+      setConflictMessage(`用户「${formData.userName.trim()}」已在该时段预约，不可重复预约`);
+      return;
+    }
+
     const result = from.bookSlot(selectedSlot, {
       userName: formData.userName.trim(),
       peopleCount: formData.peopleCount,
@@ -75,6 +80,13 @@ export function ScheduleBoard({ from }: ScheduleBoardProps) {
       setShowForm(false);
       setSelectedSlot(null);
       setFormData({ userName: '', peopleCount: 1, purpose: 'baking' });
+    } else {
+      const nextSlot = from.findNextAvailableSlot(selectedSlot);
+      setConflictMessage(
+        nextSlot
+          ? `该时段已满，推荐最近空闲时段：${nextSlot}`
+          : '今日所有时段均已满'
+      );
     }
   };
 
@@ -100,11 +112,12 @@ export function ScheduleBoard({ from }: ScheduleBoardProps) {
       case 'idle':
         return '空闲';
       case 'in-use':
-        if (eq.occupiedUntil) {
+        if (eq.lockedUntil) {
           const hours = Math.ceil(
-            (eq.occupiedUntil.getTime() - Date.now()) / (1000 * 60 * 60)
+            (eq.lockedUntil.getTime() - Date.now()) / (1000 * 60 * 60)
           );
-          return `使用中 (约${hours}小时后结束)`;
+          const endTime = eq.lockedUntil.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+          return `使用中 (预计${endTime}结束，约${hours}小时)`;
         }
         return '使用中';
       case 'maintenance':
@@ -134,7 +147,7 @@ export function ScheduleBoard({ from }: ScheduleBoardProps) {
             const isFull = from.hasConflict(slot);
 
             return (
-              <div key={slot} className="time-row">
+              <div key={slot} className="time-row" data-time={slot}>
                 {[0, 1, 2].map(colIndex => {
                   const booking = slotBookings[colIndex];
                   const isCancelling = booking && cancellingId === booking.id;
@@ -192,17 +205,32 @@ export function ScheduleBoard({ from }: ScheduleBoardProps) {
             <div
               key={eq.id}
               className={`equipment-card status-${eq.status}`}
-              onClick={() => handleLockEquipment(eq.id)}
+              onClick={() => {
+                if (eq.status === 'idle') {
+                  handleLockEquipment(eq.id);
+                }
+              }}
             >
               <div className="equipment-name">{eq.name}</div>
               <div className={`equipment-status status-${eq.status}`}>
                 {getEquipmentStatusText(eq)}
               </div>
               {eq.status === 'idle' && (
-                <div className="equipment-hint">点击锁定</div>
+                <div className="equipment-hint">点击锁定（2小时）</div>
               )}
               {eq.status === 'in-use' && (
-                <div className="equipment-hint">点击释放</div>
+                <button
+                  className="equipment-unlock-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    from.unlockEquipment(eq.id);
+                  }}
+                >
+                  解锁设备
+                </button>
+              )}
+              {eq.status === 'maintenance' && (
+                <div className="equipment-hint">维护中</div>
               )}
             </div>
           ))}

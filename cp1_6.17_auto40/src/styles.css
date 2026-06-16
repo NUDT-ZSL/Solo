@@ -191,7 +191,7 @@ input {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all var(--transition-normal);
+  transition: background-color 0.3s ease, border-left-color 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease;
   border-left: 4px solid transparent;
   background: var(--color-gray-light);
   position: relative;
@@ -221,9 +221,9 @@ input {
 }
 
 .booking-slot.cancelling {
-  background: var(--color-gray) !important;
-  border-left-color: var(--color-gray) !important;
-  transition: all 0.3s ease;
+  background-color: var(--color-gray);
+  border-left-color: var(--color-gray);
+  transition: background-color 0.3s ease, border-left-color 0.3s ease;
 }
 
 .booking-slot.full {
@@ -376,6 +376,21 @@ input {
 .equipment-hint {
   font-size: 10px;
   color: var(--color-text-muted);
+}
+
+.equipment-unlock-btn {
+  margin-top: 8px;
+  padding: 4px 10px;
+  background: var(--color-danger);
+  color: white;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 500;
+  width: 100%;
+}
+
+.equipment-unlock-btn:hover {
+  background: #E53935;
 }
 
 /* Inventory Panel Styles */
@@ -539,15 +554,23 @@ input {
 .history-item {
   display: flex;
   justify-content: space-between;
-  padding: 8px 12px;
+  align-items: center;
+  padding: 10px 14px;
   background: var(--color-gray-light);
   border-radius: var(--radius-sm);
   font-size: 12px;
 }
 
+.history-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .history-name {
   color: var(--color-text-muted);
   text-decoration: line-through;
+  font-weight: 500;
 }
 
 .history-meta {
@@ -786,15 +809,48 @@ input {
   }
 
   .schedule-grid {
-    overflow-x: auto;
+    display: flex;
+    flex-direction: column;
+    overflow-x: visible;
+    overflow-y: auto;
+    max-height: 600px;
   }
 
-  .time-row {
-    min-width: 300px;
+  .time-labels {
+    display: none;
   }
 
   .booking-columns {
-    min-width: 300px;
+    flex: 1;
+    min-width: 0;
+    overflow-x: visible;
+  }
+
+  .time-row {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: 160px;
+    gap: 4px;
+    position: relative;
+    padding-left: 70px;
+    margin-bottom: 8px;
+  }
+
+  .time-row::before {
+    content: attr(data-time);
+    position: absolute;
+    left: 0;
+    top: 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    padding-top: 14px;
+  }
+
+  .time-row .booking-slot {
+    height: 44px;
+    width: 100%;
   }
 
   .ingredient-grid {
