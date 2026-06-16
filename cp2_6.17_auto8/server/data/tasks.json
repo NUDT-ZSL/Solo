@@ -1,0 +1,83 @@
+[
+  {
+    "id": "task-001",
+    "title": "优化登录页面性能",
+    "description": "减少首屏加载时间至2秒以内，优化图片资源和代码分割",
+    "tags": ["前端", "性能优化"],
+    "status": "pending",
+    "assigneeId": null,
+    "createdAt": "2026-06-10T08:00:00.000Z"
+  },
+  {
+    "id": "task-002",
+    "title": "实现用户权限管理模块",
+    "description": "基于RBAC模型设计权限系统，支持角色分配和权限校验",
+    "tags": ["后端", "安全"],
+    "status": "pending",
+    "assigneeId": null,
+    "createdAt": "2026-06-11T09:30:00.000Z"
+  },
+  {
+    "id": "task-003",
+    "title": "修复移动端表格布局问题",
+    "description": "移动端表格溢出显示异常，需要增加横向滚动和自适应列宽",
+    "tags": ["前端", "Bug修复"],
+    "status": "in_progress",
+    "assigneeId": "member-001",
+    "createdAt": "2026-06-12T10:15:00.000Z"
+  },
+  {
+    "id": "task-004",
+    "title": "数据库查询索引优化",
+    "description": "分析慢查询日志，为常用查询添加合适的索引",
+    "tags": ["后端", "数据库"],
+    "status": "in_progress",
+    "assigneeId": "member-003",
+    "createdAt": "2026-06-13T11:45:00.000Z"
+  },
+  {
+    "id": "task-005",
+    "title": "新增数据导出Excel功能",
+    "description": "支持将列表数据导出为Excel文件，包含格式和样式",
+    "tags": ["前端", "功能"],
+    "status": "completed",
+    "assigneeId": "member-002",
+    "createdAt": "2026-06-05T14:20:00.000Z"
+  },
+  {
+    "id": "task-006",
+    "title": "接入第三方支付接口",
+    "description": "集成微信支付和支付宝支付，支持沙箱环境测试",
+    "tags": ["后端", "支付"],
+    "status": "completed",
+    "assigneeId": "member-004",
+    "createdAt": "2026-06-03T16:00:00.000Z"
+  },
+  {
+    "id": "task-007",
+    "title": "重构全局状态管理",
+    "description": "从Redux迁移到Zustand，简化代码和提升开发体验",
+    "tags": ["前端", "重构"],
+    "status": "pending",
+    "assigneeId": null,
+    "createdAt": "2026-06-14T09:00:00.000Z"
+  },
+  {
+    "id": "task-008",
+    "title": "编写单元测试覆盖核心模块",
+    "description": "为核心业务逻辑编写单元测试，覆盖率达到80%以上",
+    "tags": ["测试", "质量"],
+    "status": "in_progress",
+    "assigneeId": "member-005",
+    "createdAt": "2026-06-14T10:30:00.000Z"
+  },
+  {
+    "id": "task-009",
+    "title": "实现深色模式主题切换",
+    "description": "支持系统主题自动适配和手动切换，持久化用户偏好",
+    "tags": ["前端", "UI"],
+    "status": "completed",
+    "assigneeId": "member-006",
+    "createdAt": "2026-06-08T13:15:00.000Z"
+  }
+]

@@ -1,0 +1,56 @@
+[
+  {
+    "id": "member-001",
+    "name": "张伟",
+    "avatarInitial": "张",
+    "avatarColor": "#3b82f6",
+    "prCount": 15,
+    "issueCount": 9,
+    "likes": 42
+  },
+  {
+    "id": "member-002",
+    "name": "李娜",
+    "avatarInitial": "李",
+    "avatarColor": "#ec4899",
+    "prCount": 22,
+    "issueCount": 14,
+    "likes": 68
+  },
+  {
+    "id": "member-003",
+    "name": "王强",
+    "avatarInitial": "王",
+    "avatarColor": "#10b981",
+    "prCount": 18,
+    "issueCount": 7,
+    "likes": 35
+  },
+  {
+    "id": "member-004",
+    "name": "刘洋",
+    "avatarInitial": "刘",
+    "avatarColor": "#8b5cf6",
+    "prCount": 8,
+    "issueCount": 12,
+    "likes": 29
+  },
+  {
+    "id": "member-005",
+    "name": "陈静",
+    "avatarInitial": "陈",
+    "avatarColor": "#f59e0b",
+    "prCount": 12,
+    "issueCount": 5,
+    "likes": 21
+  },
+  {
+    "id": "member-006",
+    "name": "赵磊",
+    "avatarInitial": "赵",
+    "avatarColor": "#ef4444",
+    "prCount": 5,
+    "issueCount": 3,
+    "likes": 14
+  }
+]
