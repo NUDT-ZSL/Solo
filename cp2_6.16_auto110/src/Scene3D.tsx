@@ -1,4 +1,4 @@
-import { useRef, useMemo, useState, useEffect } from 'react';
+import { useRef, useMemo, useState, useEffect, useCallback } from 'react';
 import { useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
@@ -6,7 +6,8 @@ import {
   SoundSource,
   constants,
   frequencyToColor,
-  frequencyToSpeed
+  frequencyToSpeed,
+  calculateInterference
 } from './utils/soundPhysics';
 
 interface Scene3DProps {
@@ -19,6 +20,13 @@ interface Scene3DProps {
   deletingSourceIds: Set<string>;
 }
 
+interface RippleInstance {
+  id: string;
+  sourceId: string;
+  birthTime: number;
+  mesh: THREE.Mesh;
+}
+
 export default function Scene3D({
   sources,
   selectedSourceId,
@@ -28,19 +36,38 @@ export default function Scene3D({
   onSourceHover,
   deletingSourceIds
 }: Scene3DProps) {
-  const gridRef = useRef<THREE.Group>(null);
   const rippleGroupRef = useRef<THREE.Group>(null);
   const interferenceGroupRef = useRef<THREE.Group>(null);
-  const planeRef = useRef<THREE.Mesh>(null);
   const [hoveredSourceId, setHoveredSourceId] = useState<string | null>(null);
-  const { camera } = useThree();
-  const rippleMeshesRef = useRef<Map<string, THREE.Mesh[]>>(new Map());
+  const { camera, scene } = useThree();
+  const ripplesRef = useRef<Map<string, RippleInstance[]>>(new Map());
   const lastSpawnTimeRef = useRef<Map<string, number>>(new Map());
+  const interferenceMeshPoolRef = useRef<THREE.Mesh[]>([]);
+  const clickIndicatorRef = useRef<THREE.Mesh | null>(null);
 
   useEffect(() => {
     camera.position.set(0, 8, 8);
     camera.lookAt(0, 0, 0);
   }, [camera]);
+
+  const cleanupSourceRipples = useCallback((sourceId: string) => {
+    const sourceRipples = ripplesRef.current.get(sourceId);
+    if (sourceRipples && rippleGroupRef.current) {
+      sourceRipples.forEach((ripple) => {
+        rippleGroupRef.current?.remove(ripple.mesh);
+        ripple.mesh.geometry.dispose();
+        (ripple.mesh.material as THREE.Material).dispose();
+      });
+    }
+    ripplesRef.current.delete(sourceId);
+    lastSpawnTimeRef.current.delete(sourceId);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      ripplesRef.current.forEach((_, sourceId) => cleanupSourceRipples(sourceId));
+    };
+  }, [cleanupSourceRipples]);
 
   useFrame(({ clock }) => {
     const currentTime = clock.getElapsedTime();
@@ -48,73 +75,93 @@ export default function Scene3D({
     if (!rippleGroupRef.current) return;
 
     sources.forEach((source) => {
-      if (deletingSourceIds.has(source.id)) return;
+      if (deletingSourceIds.has(source.id)) {
+        cleanupSourceRipples(source.id);
+        return;
+      }
 
       const speed = frequencyToSpeed(source.frequency);
-      const lifetime = 5 / speed;
-      const interval = 0.4;
+      const lifetime = 8 / speed;
+      const interval = 0.5;
 
-      let meshes = rippleMeshesRef.current.get(source.id);
-      if (!meshes) {
-        meshes = [];
-        rippleMeshesRef.current.set(source.id, meshes);
+      let sourceRipples = ripplesRef.current.get(source.id);
+      if (!sourceRipples) {
+        sourceRipples = [];
+        ripplesRef.current.set(source.id, sourceRipples);
       }
 
       const lastSpawn = lastSpawnTimeRef.current.get(source.id) || -999;
-      if (currentTime - lastSpawn >= interval && meshes.length < constants.MAX_RIPPLES_PER_SOURCE) {
+      if (currentTime - lastSpawn >= interval && sourceRipples.length < constants.MAX_RIPPLES_PER_SOURCE) {
         const color = frequencyToColor(source.frequency);
-        const innerRadius = 0.98;
-        const outerRadius = 1.02;
-        const geometry = new THREE.RingGeometry(innerRadius, outerRadius, 80);
+        const geometry = new THREE.RingGeometry(0.95, 1.05, 64);
         const material = new THREE.MeshBasicMaterial({
           color: color,
           transparent: true,
-          opacity: 0.9,
-          side: THREE.DoubleSide
+          opacity: 1.0,
+          side: THREE.DoubleSide,
+          depthWrite: false
         });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.rotation.x = -Math.PI / 2;
-        mesh.position.set(source.x, 0.03, source.z);
-        mesh.userData = { birthTime: currentTime, sourceId: source.id };
+        mesh.position.set(source.x, 0.02, source.z);
         rippleGroupRef.current!.add(mesh);
-        meshes.push(mesh);
+
+        sourceRipples.push({
+          id: `${source.id}-${currentTime.toFixed(3)}`,
+          sourceId: source.id,
+          birthTime: currentTime,
+          mesh
+        });
         lastSpawnTimeRef.current.set(source.id, currentTime);
       }
 
-      for (let i = meshes.length - 1; i >= 0; i--) {
-        const mesh = meshes[i];
-        const elapsed = currentTime - mesh.userData.birthTime;
+      for (let i = sourceRipples.length - 1; i >= 0; i--) {
+        const ripple = sourceRipples[i];
+        const elapsed = currentTime - ripple.birthTime;
 
         if (elapsed > lifetime) {
-          rippleGroupRef.current!.remove(mesh);
-          mesh.geometry.dispose();
-          (mesh.material as THREE.Material).dispose();
-          meshes.splice(i, 1);
+          rippleGroupRef.current!.remove(ripple.mesh);
+          ripple.mesh.geometry.dispose();
+          (ripple.mesh.material as THREE.Material).dispose();
+          sourceRipples.splice(i, 1);
         } else {
           const radius = speed * elapsed;
-          mesh.scale.set(radius, radius, 1);
-          const opacity = Math.max(1 - elapsed / lifetime, 0) * 0.85;
-          (mesh.material as THREE.MeshBasicMaterial).opacity = opacity;
+          ripple.mesh.scale.set(radius, radius, 1);
+          const opacity = Math.max(1 - elapsed / lifetime, 0) * 0.8;
+          (ripple.mesh.material as THREE.MeshBasicMaterial).opacity = opacity;
         }
       }
     });
 
-    rippleMeshesRef.current.forEach((meshes, sourceId) => {
-      if (!sources.find((s) => s.id === sourceId) || deletingSourceIds.has(sourceId)) {
-        meshes.forEach((mesh) => {
-          rippleGroupRef.current?.remove(mesh);
-          mesh.geometry.dispose();
-          (mesh.material as THREE.Material).dispose();
-        });
-        rippleMeshesRef.current.delete(sourceId);
-        lastSpawnTimeRef.current.delete(sourceId);
+    ripplesRef.current.forEach((_, sourceId) => {
+      if (!sources.find((s) => s.id === sourceId)) {
+        cleanupSourceRipples(sourceId);
       }
     });
 
     updateInterference(currentTime);
+    updateClickIndicator(currentTime);
   });
 
-  const interferenceMeshesRef = useRef<THREE.Mesh[]>([]);
+  const updateClickIndicator = (currentTime: number) => {
+    if (!clickIndicatorRef.current) return;
+
+    const elapsed = currentTime - (clickIndicatorRef.current.userData.startTime || 0);
+    if (elapsed > 0.2) {
+      if (rippleGroupRef.current) {
+        rippleGroupRef.current.remove(clickIndicatorRef.current);
+      }
+      clickIndicatorRef.current.geometry.dispose();
+      (clickIndicatorRef.current.material as THREE.Material).dispose();
+      clickIndicatorRef.current = null;
+      return;
+    }
+
+    const scale = 0.1 + (elapsed / 0.2) * 2;
+    const opacity = 1 - elapsed / 0.2;
+    clickIndicatorRef.current.scale.set(scale, scale, 1);
+    (clickIndicatorRef.current.material as THREE.MeshBasicMaterial).opacity = opacity;
+  };
 
   const updateInterference = (currentTime: number) => {
     if (!interferenceGroupRef.current) return;
@@ -122,90 +169,120 @@ export default function Scene3D({
     if (sources.length < 2) {
       interferenceGroupRef.current.children.forEach((child) => {
         if (child instanceof THREE.Mesh) {
-          child.geometry.dispose();
-          (child.material as THREE.Material).dispose();
+          child.visible = false;
         }
       });
-      interferenceGroupRef.current.clear();
       return;
     }
 
-    const resolution = 12;
+    const resolution = 15;
     const half = constants.GRID_SIZE / 2;
     const step = constants.GRID_SIZE / resolution;
-    const targetCount = (resolution + 1) * (resolution + 1);
+    const totalPoints = (resolution + 1) * (resolution + 1);
 
-    while (interferenceGroupRef.current.children.length < targetCount * 2) {
-      const geomC = new THREE.CircleGeometry(step * 0.55, 10);
-      const matC = new THREE.MeshBasicMaterial({
-        color: '#fdcb6e',
+    while (interferenceMeshPoolRef.current.length < totalPoints) {
+      const geometry = new THREE.CircleGeometry(step * 0.5, 8);
+      const material = new THREE.MeshBasicMaterial({
+        color: '#ffff00',
         transparent: true,
-        opacity: 0
+        opacity: 0,
+        depthWrite: false
       });
-      const meshC = new THREE.Mesh(geomC, matC);
-      meshC.rotation.x = -Math.PI / 2;
-      interferenceGroupRef.current.add(meshC);
-
-      const geomD = new THREE.CircleGeometry(step * 0.45, 10);
-      const matD = new THREE.MeshBasicMaterial({
-        color: '#636e72',
-        transparent: true,
-        opacity: 0
-      });
-      const meshD = new THREE.Mesh(geomD, matD);
-      meshD.rotation.x = -Math.PI / 2;
-      interferenceGroupRef.current.add(meshD);
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.rotation.x = -Math.PI / 2;
+      interferenceGroupRef.current.add(mesh);
+      interferenceMeshPoolRef.current.push(mesh);
     }
 
     let meshIndex = 0;
-    const children = interferenceGroupRef.current.children as THREE.Mesh[];
+    const flickerSpeed = 8;
+    const flickerAmount = 0.3 + Math.sin(currentTime * flickerSpeed) * 0.2;
 
     for (let i = 0; i <= resolution; i++) {
       for (let j = 0; j <= resolution; j++) {
         const x = -half + i * step;
         const z = -half + j * step;
 
-        let totalAmplitude = 0;
-        let maxPossible = 0;
+        let maxConstructive = 0;
+        let maxDestructive = 0;
 
-        sources.forEach((source) => {
-          const dist = Math.sqrt((x - source.x) ** 2 + (z - source.z) ** 2);
-          const speed = frequencyToSpeed(source.frequency);
-          const wavelength = speed / Math.max(source.frequency / 200, 0.5);
-          const phase = (dist / wavelength) * Math.PI * 2 + (source.phase * Math.PI) / 180;
-          const attenuation = Math.max(1 / (1 + dist * 0.3), 0.1);
-          totalAmplitude += Math.sin(currentTime * source.frequency * 0.08 - phase) * (source.amplitude / 100) * attenuation;
-          maxPossible += (source.amplitude / 100) * attenuation;
-        });
+        for (let a = 0; a < sources.length; a++) {
+          for (let b = a + 1; b < sources.length; b++) {
+            const result = calculateInterference(
+              sources[a],
+              sources[b],
+              x,
+              z,
+              currentTime
+            );
 
-        const ratio = maxPossible > 0 ? Math.abs(totalAmplitude) / maxPossible : 0;
-
-        const constructiveMesh = children[meshIndex * 2];
-        const destructiveMesh = children[meshIndex * 2 + 1];
-
-        if (constructiveMesh) {
-          constructiveMesh.position.set(x, 0.015, z);
-          const opacity = ratio > 0.65 ? (ratio - 0.65) * 2 : 0;
-          (constructiveMesh.material as THREE.MeshBasicMaterial).opacity = Math.min(opacity, 0.7);
+            if (result.type === 'constructive') {
+              maxConstructive = Math.max(maxConstructive, result.amplitude);
+            } else if (result.type === 'destructive') {
+              maxDestructive = Math.max(maxDestructive, result.amplitude);
+            }
+          }
         }
 
-        if (destructiveMesh) {
-          destructiveMesh.position.set(x, 0.01, z);
-          const opacity = ratio < 0.35 ? (0.35 - ratio) * 2 : 0;
-          (destructiveMesh.material as THREE.MeshBasicMaterial).opacity = Math.min(opacity, 0.5);
+        const mesh = interferenceMeshPoolRef.current[meshIndex];
+        if (mesh) {
+          mesh.visible = true;
+          mesh.position.set(x, 0.03, z);
+
+          if (maxConstructive > 0.3) {
+            const intensity = Math.min((maxConstructive - 0.3) * 2, 1);
+            const flickerIntensity = intensity * (0.7 + flickerAmount * 0.3);
+            (mesh.material as THREE.MeshBasicMaterial).color.set('#ffff00');
+            (mesh.material as THREE.MeshBasicMaterial).opacity = flickerIntensity * 0.6;
+          } else if (maxDestructive > 0.1) {
+            const intensity = Math.min((maxDestructive - 0.1) * 2, 1);
+            (mesh.material as THREE.MeshBasicMaterial).color.set('#636e72');
+            (mesh.material as THREE.MeshBasicMaterial).opacity = intensity * 0.3;
+          } else {
+            (mesh.material as THREE.MeshBasicMaterial).opacity = 0;
+          }
         }
 
         meshIndex++;
+      }
+    }
+
+    for (let i = meshIndex; i < interferenceMeshPoolRef.current.length; i++) {
+      const mesh = interferenceMeshPoolRef.current[i];
+      if (mesh) {
+        mesh.visible = false;
       }
     }
   };
 
   const handleGridClick = (event: ThreeEvent<MouseEvent>) => {
     event.stopPropagation();
+
+    if (sources.length >= constants.MAX_SOURCES) {
+      return;
+    }
+
     const point = event.point;
     const halfGrid = constants.GRID_SIZE / 2;
     const x = Math.max(-halfGrid, Math.min(halfGrid, point.x));
     const z = Math.max(-halfGrid, Math.min(halfGrid, point.z));
+
+    if (rippleGroupRef.current) {
+      const geometry = new THREE.RingGeometry(0.8, 1.2, 32);
+      const material = new THREE.MeshBasicMaterial({
+        color: '#74b9ff',
+        transparent: true,
+        opacity: 1,
+        side: THREE.DoubleSide
+      });
+      const indicator = new THREE.Mesh(geometry, material);
+      indicator.rotation.x = -Math.PI / 2;
+      indicator.position.set(x, 0.05, z);
+      indicator.userData = { startTime: performance.now() / 1000 };
+      rippleGroupRef.current.add(indicator);
+      clickIndicatorRef.current = indicator;
+    }
+
     onGridClick(x, z);
   };
 
@@ -266,9 +343,8 @@ export default function Scene3D({
         dampingFactor={0.05}
       />
 
-      <group ref={gridRef}>
+      <group>
         <mesh
-          ref={planeRef}
           rotation={[-Math.PI / 2, 0, 0]}
           position={[0, 0, 0]}
           onClick={handleGridClick}
@@ -332,7 +408,8 @@ export default function Scene3D({
         const isHovered = hoveredSourceId === source.id;
         const isDeleting = deletingSourceIds.has(source.id);
         const baseRadius = 0.3;
-        const targetScale = isHovered || isSelected ? 0.5 / baseRadius : 1;
+        const targetRadius = isHovered || isSelected ? 0.5 : baseRadius;
+        const scale = targetRadius / baseRadius;
         const color = isHovered || isSelected ? '#00cec9' : '#74b9ff';
 
         return (
@@ -343,7 +420,7 @@ export default function Scene3D({
               onDoubleClick={(e) => handleSourceDoubleClick(e, source.id)}
               onPointerOver={(e) => handleSourcePointerOver(e, source.id)}
               onPointerOut={handleSourcePointerOut}
-              scale={isDeleting ? [0.01, 0.01, 0.01] : [targetScale, targetScale, targetScale]}
+              scale={isDeleting ? [0.01, 0.01, 0.01] : [scale, scale, scale]}
             >
               <sphereGeometry args={[baseRadius, 32, 32]} />
               <meshStandardMaterial
