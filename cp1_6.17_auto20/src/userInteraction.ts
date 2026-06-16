@@ -4,6 +4,7 @@ import {
   setPointLightPosition,
   setPointLightColor,
   setPointLightIntensity,
+  setPointLightHelperSize,
   getPointLightConfig,
   transitionToTime,
   getState,
@@ -14,6 +15,7 @@ let sunCanvas: HTMLCanvasElement | null = null;
 let sunCtx: CanvasRenderingContext2D | null = null;
 let sunColorValueEl: HTMLElement | null = null;
 let sunColorBarEl: HTMLElement | null = null;
+let sunColorIndicatorEl: HTMLElement | null = null;
 let sunIntDisplayEl: HTMLElement | null = null;
 let sunIntBarEl: HTMLElement | null = null;
 
@@ -44,6 +46,7 @@ export function initInteraction(): void {
   sunCtx = sunCanvas?.getContext('2d') || null;
   sunColorValueEl = document.getElementById('sunColorValue');
   sunColorBarEl = document.getElementById('sunColorBar');
+  sunColorIndicatorEl = document.getElementById('sunColorIndicator');
   sunIntDisplayEl = document.getElementById('sunIntDisplay');
   sunIntBarEl = document.getElementById('sunIntBar');
 
@@ -102,31 +105,66 @@ export function initInteraction(): void {
       skyGradient.addColorStop(1, '#1A1A3A');
     }
 
+    const groundGrad = sunCtx.createLinearGradient(0, h * 0.7, 0, h);
+    groundGrad.addColorStop(0, '#2A2A3A');
+    groundGrad.addColorStop(1, '#1A1A2A');
+
     const arcCenterX = w / 2;
-    const arcCenterY = h * 0.75;
-    const arcRadius = w * 0.42;
+    const arcCenterY = h * 0.7;
+    const arcRadius = w * 0.4;
 
     sunCtx.save();
     sunCtx.beginPath();
-    sunCtx.rect(0, 0, w, h * 0.75);
+    sunCtx.rect(0, 0, w, h * 0.7);
     sunCtx.clip();
     sunCtx.fillStyle = skyGradient;
     sunCtx.fillRect(0, 0, w, h);
     sunCtx.restore();
 
-    const groundGrad = sunCtx.createLinearGradient(0, h * 0.75, 0, h);
-    groundGrad.addColorStop(0, '#2A2A3A');
-    groundGrad.addColorStop(1, '#1A1A2A');
     sunCtx.fillStyle = groundGrad;
-    sunCtx.fillRect(0, h * 0.75, w, h * 0.25);
+    sunCtx.fillRect(0, h * 0.7, w, h * 0.3);
+
+    const horizonY = arcCenterY;
+    sunCtx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    sunCtx.lineWidth = 1.5;
+    sunCtx.beginPath();
+    sunCtx.moveTo(arcCenterX - arcRadius - 4, horizonY);
+    sunCtx.lineTo(arcCenterX + arcRadius + 4, horizonY);
+    sunCtx.stroke();
+
+    sunCtx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    sunCtx.font = 'bold 9px system-ui, sans-serif';
+    sunCtx.textAlign = 'center';
+    sunCtx.fillText('东', arcCenterX - arcRadius, horizonY + 12);
+    sunCtx.fillText('南', arcCenterX, horizonY + 12);
+    sunCtx.fillText('西', arcCenterX + arcRadius, horizonY + 12);
+
+    sunCtx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    sunCtx.font = '8px system-ui, sans-serif';
+    sunCtx.fillText('↑方位角', arcCenterX, 10);
 
     sunCtx.beginPath();
     sunCtx.arc(arcCenterX, arcCenterY, arcRadius, Math.PI, 0, false);
-    sunCtx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    sunCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
     sunCtx.lineWidth = 1;
-    sunCtx.setLineDash([3, 4]);
+    sunCtx.setLineDash([2, 3]);
     sunCtx.stroke();
     sunCtx.setLineDash([]);
+
+    const tickTimes = [6, 9, 12, 15, 18];
+    const tickLabels = ['6时', '9时', '12时', '15时', '18时'];
+    sunCtx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+    sunCtx.font = '8px system-ui, sans-serif';
+    sunCtx.textAlign = 'center';
+    for (let i = 0; i < tickTimes.length; i++) {
+      const tt = tickTimes[i];
+      const ta = Math.PI - ((tt - 6) / 12) * Math.PI;
+      const tx = arcCenterX + Math.cos(ta) * (arcRadius + 10);
+      const ty = arcCenterY - Math.sin(ta) * (arcRadius + 10);
+      if (ty < h * 0.68 && ty > 8) {
+        sunCtx.fillText(tickLabels[i], tx, ty);
+      }
+    }
 
     const angle = Math.PI - ((t - 6) / 12) * Math.PI;
     const sunX = arcCenterX + Math.cos(angle) * arcRadius;
@@ -137,9 +175,50 @@ export function initInteraction(): void {
     const isVisible = t >= 5 && t <= 20;
 
     if (isVisible && sunIntensity > 0) {
-      const glowRadius = 16 + sunIntensity * 6;
+      const arrowStartX = arcCenterX;
+      const arrowStartY = arcCenterY;
+      const arrowLen = arcRadius * 0.88;
+      const arrowEndX = arcCenterX + Math.cos(angle) * arrowLen;
+      const arrowEndY = arcCenterY - Math.sin(angle) * arrowLen;
+
+      sunCtx.strokeStyle = `${sunColor}66`;
+      sunCtx.lineWidth = 4;
+      sunCtx.lineCap = 'round';
+      sunCtx.beginPath();
+      sunCtx.moveTo(arrowStartX, arrowStartY);
+      sunCtx.lineTo(arrowEndX, arrowEndY);
+      sunCtx.stroke();
+
+      sunCtx.strokeStyle = `${sunColor}CC`;
+      sunCtx.lineWidth = 2;
+      sunCtx.beginPath();
+      sunCtx.moveTo(arrowStartX, arrowStartY);
+      sunCtx.lineTo(arrowEndX, arrowEndY);
+      sunCtx.stroke();
+
+      const headLen = 8;
+      const headAngle1 = angle + Math.PI + Math.PI * 0.12;
+      const headAngle2 = angle + Math.PI - Math.PI * 0.12;
+      sunCtx.fillStyle = `${sunColor}`;
+      sunCtx.beginPath();
+      sunCtx.moveTo(arrowEndX, arrowEndY);
+      sunCtx.lineTo(
+        arrowEndX + Math.cos(headAngle1) * headLen,
+        arrowEndY - Math.sin(headAngle1) * headLen
+      );
+      sunCtx.lineTo(
+        arrowEndX + Math.cos(headAngle2) * headLen,
+        arrowEndY - Math.sin(headAngle2) * headLen
+      );
+      sunCtx.closePath();
+      sunCtx.fill();
+
+      sunCtx.lineWidth = 1;
+      sunCtx.lineCap = 'butt';
+
+      const glowRadius = 14 + sunIntensity * 5;
       const glow = sunCtx.createRadialGradient(sunX, sunY, 2, sunX, sunY, glowRadius);
-      glow.addColorStop(0, `${sunColor}80`);
+      glow.addColorStop(0, `${sunColor}A0`);
       glow.addColorStop(0.4, `${sunColor}30`);
       glow.addColorStop(1, `${sunColor}00`);
       sunCtx.fillStyle = glow;
@@ -149,30 +228,36 @@ export function initInteraction(): void {
 
       sunCtx.fillStyle = sunColor;
       sunCtx.beginPath();
-      sunCtx.arc(sunX, sunY, 6 + sunIntensity * 2, 0, Math.PI * 2);
+      sunCtx.arc(sunX, sunY, 5 + sunIntensity * 1.8, 0, Math.PI * 2);
       sunCtx.fill();
 
       sunCtx.fillStyle = '#FFFFFF';
       sunCtx.beginPath();
-      sunCtx.arc(sunX - 1.5, sunY - 1.5, 2.5, 0, Math.PI * 2);
+      sunCtx.arc(sunX - 1.2, sunY - 1.2, 2, 0, Math.PI * 2);
       sunCtx.fill();
+
+      const azimuthDeg = Math.round(((t - 6) / 12) * 180);
+      sunCtx.fillStyle = `${sunColor}`;
+      sunCtx.font = 'bold 9px system-ui, sans-serif';
+      sunCtx.textAlign = 'left';
+      sunCtx.fillText(`${azimuthDeg}°`, arrowEndX + 8, arrowEndY + 3);
     } else {
-      const moonX = arcCenterX - arcRadius * 0.8;
-      const moonY = h * 0.2;
+      const moonX = arcCenterX - arcRadius * 0.5;
+      const moonY = arcCenterY - arcRadius * 0.6;
       sunCtx.fillStyle = '#E8E8F0';
       sunCtx.beginPath();
-      sunCtx.arc(moonX, moonY, 5, 0, Math.PI * 2);
+      sunCtx.arc(moonX, moonY, 6, 0, Math.PI * 2);
       sunCtx.fill();
       sunCtx.fillStyle = '#0A0A20';
       sunCtx.beginPath();
-      sunCtx.arc(moonX + 1.5, moonY - 1, 4, 0, Math.PI * 2);
+      sunCtx.arc(moonX + 1.8, moonY - 1.2, 5, 0, Math.PI * 2);
       sunCtx.fill();
 
       if (t < 5 || t > 20) {
-        for (let i = 0; i < 8; i++) {
-          const sx = (i * 17 + 5) % w;
-          const sy = (i * 11 + 3) % (h * 0.5);
-          const size = (i % 3) * 0.5 + 0.5;
+        for (let i = 0; i < 10; i++) {
+          const sx = 8 + ((i * 17 + 5) % (w - 16));
+          const sy = 10 + ((i * 11 + 3) % Math.floor(h * 0.55));
+          const size = (i % 3) * 0.4 + 0.4;
           sunCtx.fillStyle = `rgba(255, 255, 255, ${0.3 + (i % 3) * 0.2})`;
           sunCtx.beginPath();
           sunCtx.arc(sx, sy, size, 0, Math.PI * 2);
@@ -181,59 +266,12 @@ export function initInteraction(): void {
       }
     }
 
-    const arrowAngle = angle + Math.PI / 2;
-    const arrowLen = 14;
-    const arrowStartX = sunX + Math.cos(arrowAngle) * 4;
-    const arrowStartY = sunY + Math.sin(arrowAngle) * 4;
-    const arrowEndX = sunX + Math.cos(arrowAngle) * arrowLen;
-    const arrowEndY = sunY + Math.sin(arrowAngle) * arrowLen;
-
-    if (isVisible && sunIntensity > 0) {
-      sunCtx.strokeStyle = `${sunColor}CC`;
-      sunCtx.lineWidth = 2;
-      sunCtx.beginPath();
-      sunCtx.moveTo(arrowStartX, arrowStartY);
-      sunCtx.lineTo(arrowEndX, arrowEndY);
-      sunCtx.stroke();
-
-      const headLen = 4;
-      const headAngle1 = arrowAngle + Math.PI * 0.75;
-      const headAngle2 = arrowAngle - Math.PI * 0.75;
-      sunCtx.beginPath();
-      sunCtx.moveTo(arrowEndX, arrowEndY);
-      sunCtx.lineTo(
-        arrowEndX + Math.cos(headAngle1) * headLen,
-        arrowEndY + Math.sin(headAngle1) * headLen
-      );
-      sunCtx.moveTo(arrowEndX, arrowEndY);
-      sunCtx.lineTo(
-        arrowEndX + Math.cos(headAngle2) * headLen,
-        arrowEndY + Math.sin(headAngle2) * headLen
-      );
-      sunCtx.stroke();
-    }
-
-    const tickTimes = [6, 12, 18];
-    const tickLabels = ['6时', '12时', '18时'];
-    sunCtx.fillStyle = 'rgba(255, 255, 255, 0.35)';
-    sunCtx.font = '9px system-ui, sans-serif';
-    sunCtx.textAlign = 'center';
-    for (let i = 0; i < tickTimes.length; i++) {
-      const tt = tickTimes[i];
-      const ta = Math.PI - ((tt - 6) / 12) * Math.PI;
-      const tx = arcCenterX + Math.cos(ta) * (arcRadius + 6);
-      const ty = arcCenterY - Math.sin(ta) * (arcRadius + 6);
-      if (ty < h * 0.72) {
-        sunCtx.fillText(tickLabels[i], tx, ty);
-      }
-    }
-
     if (sunColorValueEl) {
       sunColorValueEl.textContent = sunColor.toUpperCase();
     }
-    if (sunColorBarEl) {
-      sunColorBarEl.style.backgroundColor = sunColor;
-      sunColorBarEl.style.color = sunColor;
+    if (sunColorIndicatorEl) {
+      const colorProgress = getColorTemperatureProgress(t);
+      sunColorIndicatorEl.style.left = `${colorProgress}%`;
     }
     if (sunIntDisplayEl) {
       sunIntDisplayEl.textContent = sunIntensity.toFixed(2);
@@ -241,6 +279,34 @@ export function initInteraction(): void {
     if (sunIntBarEl) {
       const pct = Math.min(100, (sunIntensity / 2) * 100);
       sunIntBarEl.style.width = `${pct}%`;
+    }
+  }
+
+  function getColorTemperatureProgress(time: number): number {
+    if (time <= 5) return 0;
+    if (time >= 20) return 0;
+    if (time <= 12) {
+      if (time <= 7) {
+        const t = (time - 5) / 2;
+        return 12 + t * 13;
+      }
+      if (time <= 9) {
+        const t = (time - 7) / 2;
+        return 25 + t * 15;
+      }
+      const t = (time - 9) / 3;
+      return 40 + t * 10;
+    } else {
+      if (time <= 16) {
+        const t = (time - 12) / 4;
+        return 50 - t * 10;
+      }
+      if (time <= 18) {
+        const t = (time - 16) / 2;
+        return 40 - t * 20;
+      }
+      const t = (time - 18) / 2;
+      return 20 - t * 20;
     }
   }
 
@@ -360,10 +426,6 @@ export function initInteraction(): void {
     if (s) {
       s.sunLight.color.set(color);
       if (sunColorValueEl) sunColorValueEl.textContent = color.toUpperCase();
-      if (sunColorBarEl) {
-        sunColorBarEl.style.backgroundColor = color;
-        sunColorBarEl.style.color = color;
-      }
     }
   });
 
@@ -409,6 +471,17 @@ export function initInteraction(): void {
       setPointLightPosition(selectedLightIndex, config.position.x, config.position.y, val);
     }
   });
+
+  const helperSizeSlider = document.getElementById('helperSize') as HTMLInputElement;
+  const helperSizeValue = document.getElementById('helperSizeValue') as HTMLSpanElement;
+
+  if (helperSizeSlider && helperSizeValue) {
+    helperSizeSlider.addEventListener('input', () => {
+      const val = parseFloat(helperSizeSlider.value);
+      helperSizeValue.textContent = val.toFixed(2);
+      setPointLightHelperSize(val);
+    });
+  }
 
   syncPointLightUI();
   updateSunIndicator(12);
