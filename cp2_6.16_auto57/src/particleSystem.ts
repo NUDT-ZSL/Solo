@@ -9,7 +9,6 @@ const GRAVITY_COEFFICIENT = 0.8;
 const REPULSION_COEFFICIENT = 0.3;
 const REPULSION_DISTANCE = 2;
 const MAX_SPEED = 3;
-const GRID_CELL_SIZE = REPULSION_DISTANCE;
 
 const particleVertexShader = `
   attribute float size;
@@ -62,6 +61,7 @@ export class ParticleSystem {
   private velocities: Float32Array;
   private colors: Float32Array;
   private sizes: Float32Array;
+  private ages: Float32Array;
   private trailPositions: Float32Array;
   private trailColors: Float32Array;
   private trailAlphas: Float32Array;
@@ -76,21 +76,30 @@ export class ParticleSystem {
   private lowSpeedColor = new THREE.Color('#00e5ff');
   private highSpeedColor = new THREE.Color('#ff1744');
 
-  private gridMap: Map<string, number[]> = new Map();
+  private positionAttr: THREE.BufferAttribute;
+  private colorAttr: THREE.BufferAttribute;
+  private sizeAttr: THREE.BufferAttribute;
+  private trailPositionAttr: THREE.BufferAttribute;
+  private trailColorAttr: THREE.BufferAttribute;
+  private trailAlphaAttr: THREE.BufferAttribute;
 
   constructor() {
     this.positions = new Float32Array(PARTICLE_COUNT * 3);
     this.velocities = new Float32Array(PARTICLE_COUNT * 3);
     this.colors = new Float32Array(PARTICLE_COUNT * 3);
     this.sizes = new Float32Array(PARTICLE_COUNT);
+    this.ages = new Float32Array(PARTICLE_COUNT);
     this.trailHistory = [];
 
     this.initializeParticles();
 
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 3));
-    geometry.setAttribute('size', new THREE.BufferAttribute(this.sizes, 1));
+    this.positionAttr = new THREE.BufferAttribute(this.positions, 3);
+    this.colorAttr = new THREE.BufferAttribute(this.colors, 3);
+    this.sizeAttr = new THREE.BufferAttribute(this.sizes, 1);
+    geometry.setAttribute('position', this.positionAttr);
+    geometry.setAttribute('color', this.colorAttr);
+    geometry.setAttribute('size', this.sizeAttr);
 
     const material = new THREE.ShaderMaterial({
       vertexShader: particleVertexShader,
@@ -109,9 +118,12 @@ export class ParticleSystem {
     this.trailAlphas = new Float32Array(trailSegmentCount * 2);
 
     const trailGeometry = new THREE.BufferGeometry();
-    trailGeometry.setAttribute('position', new THREE.BufferAttribute(this.trailPositions, 3));
-    trailGeometry.setAttribute('color', new THREE.BufferAttribute(this.trailColors, 3));
-    trailGeometry.setAttribute('alpha', new THREE.BufferAttribute(this.trailAlphas, 1));
+    this.trailPositionAttr = new THREE.BufferAttribute(this.trailPositions, 3);
+    this.trailColorAttr = new THREE.BufferAttribute(this.trailColors, 3);
+    this.trailAlphaAttr = new THREE.BufferAttribute(this.trailAlphas, 1);
+    trailGeometry.setAttribute('position', this.trailPositionAttr);
+    trailGeometry.setAttribute('color', this.trailColorAttr);
+    trailGeometry.setAttribute('alpha', this.trailAlphaAttr);
 
     const trailMaterial = new THREE.ShaderMaterial({
       vertexShader: trailVertexShader,
@@ -148,6 +160,7 @@ export class ParticleSystem {
       this.velocities[i * 3 + 2] = speed * Math.cos(vPhi);
 
       this.sizes[i] = 1.5 + Math.random() * 1.5;
+      this.ages[i] = Math.random() * 10;
 
       this.trailHistory[i] = [];
       for (let t = 0; t < TRAIL_LENGTH; t++) {
@@ -186,49 +199,17 @@ export class ParticleSystem {
   public reset(): void {
     this.initializeParticles();
     this.updateColors();
-    (this.particles.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
-    (this.particles.geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true;
-    (this.particles.geometry.attributes.size as THREE.BufferAttribute).needsUpdate = true;
+    this.updateTrails();
+    this.markAllAttributesUpdated();
   }
 
-  private buildSpatialGrid(): void {
-    this.gridMap.clear();
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      const i3 = i * 3;
-      const gx = Math.floor(this.positions[i3] / GRID_CELL_SIZE);
-      const gy = Math.floor(this.positions[i3 + 1] / GRID_CELL_SIZE);
-      const gz = Math.floor(this.positions[i3 + 2] / GRID_CELL_SIZE);
-      const key = `${gx},${gy},${gz}`;
-      if (!this.gridMap.has(key)) {
-        this.gridMap.set(key, []);
-      }
-      this.gridMap.get(key)!.push(i);
-    }
-  }
-
-  private getNearbyParticles(i: number): number[] {
-    const i3 = i * 3;
-    const gx = Math.floor(this.positions[i3] / GRID_CELL_SIZE);
-    const gy = Math.floor(this.positions[i3 + 1] / GRID_CELL_SIZE);
-    const gz = Math.floor(this.positions[i3 + 2] / GRID_CELL_SIZE);
-
-    const nearby: number[] = [];
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dz = -1; dz <= 1; dz++) {
-          const key = `${gx + dx},${gy + dy},${gz + dz}`;
-          const cell = this.gridMap.get(key);
-          if (cell) {
-            for (const j of cell) {
-              if (j !== i) {
-                nearby.push(j);
-              }
-            }
-          }
-        }
-      }
-    }
-    return nearby;
+  private markAllAttributesUpdated(): void {
+    this.positionAttr.needsUpdate = true;
+    this.colorAttr.needsUpdate = true;
+    this.sizeAttr.needsUpdate = true;
+    this.trailPositionAttr.needsUpdate = true;
+    this.trailColorAttr.needsUpdate = true;
+    this.trailAlphaAttr.needsUpdate = true;
   }
 
   private updateColors(): void {
@@ -256,12 +237,15 @@ export class ParticleSystem {
     maxSpeed = Math.max(maxSpeed, 0.01);
 
     for (let i = 0; i < PARTICLE_COUNT; i++) {
-      let color: THREE.Color;
+      const i3 = i * 3;
+      let baseColor: THREE.Color;
+      const age = this.ages[i];
+      const lifeFactor = 0.7 + 0.3 * Math.sin(age * 0.5);
 
       if (this.colorMode === 'distance') {
-        const px = this.positions[i * 3];
-        const py = this.positions[i * 3 + 1];
-        const pz = this.positions[i * 3 + 2];
+        const px = this.positions[i3];
+        const py = this.positions[i3 + 1];
+        const pz = this.positions[i3 + 2];
         const dx = px - this.gravityPosition.x;
         const dy = py - this.gravityPosition.y;
         const dz = pz - this.gravityPosition.z;
@@ -269,29 +253,31 @@ export class ParticleSystem {
         const t = Math.min(distance / maxDistance, 1);
 
         if (t < 0.5) {
-          color = this.warmColor.clone().lerp(this.violetColor, t * 2);
+          baseColor = this.warmColor.clone().lerp(this.violetColor, t * 2);
         } else {
-          color = this.violetColor.clone().lerp(this.coolColor, (t - 0.5) * 2);
+          baseColor = this.violetColor.clone().lerp(this.coolColor, (t - 0.5) * 2);
         }
-      } else {
-        const vx = this.velocities[i * 3];
-        const vy = this.velocities[i * 3 + 1];
-        const vz = this.velocities[i * 3 + 2];
+      } else if (this.colorMode === 'velocity') {
+        const vx = this.velocities[i3];
+        const vy = this.velocities[i3 + 1];
+        const vz = this.velocities[i3 + 2];
         const speed = Math.sqrt(vx * vx + vy * vy + vz * vz);
         const t = Math.min(speed / maxSpeed, 1);
-        color = this.lowSpeedColor.clone().lerp(this.highSpeedColor, t);
+        baseColor = this.lowSpeedColor.clone().lerp(this.highSpeedColor, t);
+      } else {
+        baseColor = this.violetColor.clone();
       }
 
-      this.colors[i * 3] = color.r;
-      this.colors[i * 3 + 1] = color.g;
-      this.colors[i * 3 + 2] = color.b;
+      baseColor.multiplyScalar(lifeFactor);
+
+      this.colors[i3] = baseColor.r;
+      this.colors[i3 + 1] = baseColor.g;
+      this.colors[i3 + 2] = baseColor.b;
     }
   }
 
   public update(deltaTime: number): void {
     const dt = Math.min(deltaTime, 0.05);
-
-    this.buildSpatialGrid();
 
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const i3 = i * 3;
@@ -313,9 +299,10 @@ export class ParticleSystem {
       this.velocities[i3 + 2] += (dz / dist) * gravityForce * dt;
 
       let repX = 0, repY = 0, repZ = 0;
-      const nearby = this.getNearbyParticles(i);
 
-      for (const j of nearby) {
+      for (let j = 0; j < PARTICLE_COUNT; j++) {
+        if (i === j) continue;
+
         const j3 = j * 3;
         const rdx = px - this.positions[j3];
         const rdy = py - this.positions[j3 + 1];
@@ -347,6 +334,8 @@ export class ParticleSystem {
       this.positions[i3 + 1] += this.velocities[i3 + 1] * dt;
       this.positions[i3 + 2] += this.velocities[i3 + 2] * dt;
 
+      this.ages[i] += dt;
+
       const history = this.trailHistory[i];
       for (let t = TRAIL_LENGTH - 1; t > 0; t--) {
         history[t].copy(history[t - 1]);
@@ -356,26 +345,26 @@ export class ParticleSystem {
 
     this.updateColors();
     this.updateTrails();
-
-    (this.particles.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
-    (this.particles.geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true;
-    (this.particles.geometry.attributes.size as THREE.BufferAttribute).needsUpdate = true;
-    (this.trails.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
-    (this.trails.geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true;
-    (this.trails.geometry.attributes.alpha as THREE.BufferAttribute).needsUpdate = true;
+    this.markAllAttributesUpdated();
   }
 
   private updateTrails(): void {
+    const trailSegmentStride = 6;
+    const trailColorStride = 6;
+    const trailAlphaStride = 2;
+
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const history = this.trailHistory[i];
       const colorR = this.colors[i * 3];
       const colorG = this.colors[i * 3 + 1];
       const colorB = this.colors[i * 3 + 2];
 
+      const baseTrailIndex = i * (TRAIL_LENGTH - 1);
+
       for (let t = 0; t < TRAIL_LENGTH - 1; t++) {
-        const segmentIndex = (i * (TRAIL_LENGTH - 1) + t) * 2;
-        const posIndex = segmentIndex * 3;
-        const alphaIndex = segmentIndex;
+        const segmentIndex = baseTrailIndex + t;
+        const posIndex = segmentIndex * trailSegmentStride;
+        const alphaIndex = segmentIndex * trailAlphaStride;
 
         const p1 = history[t];
         const p2 = history[t + 1];
@@ -383,7 +372,6 @@ export class ParticleSystem {
         this.trailPositions[posIndex] = p1.x;
         this.trailPositions[posIndex + 1] = p1.y;
         this.trailPositions[posIndex + 2] = p1.z;
-
         this.trailPositions[posIndex + 3] = p2.x;
         this.trailPositions[posIndex + 4] = p2.y;
         this.trailPositions[posIndex + 5] = p2.z;
@@ -391,16 +379,15 @@ export class ParticleSystem {
         this.trailColors[posIndex] = colorR;
         this.trailColors[posIndex + 1] = colorG;
         this.trailColors[posIndex + 2] = colorB;
-
         this.trailColors[posIndex + 3] = colorR;
         this.trailColors[posIndex + 4] = colorG;
         this.trailColors[posIndex + 5] = colorB;
 
-        const alpha1 = 0.5 - t * 0.08;
-        const alpha2 = 0.5 - (t + 1) * 0.08;
+        const alpha1 = Math.max(0.5 - t * 0.08, 0.1);
+        const alpha2 = Math.max(0.5 - (t + 1) * 0.08, 0.1);
 
-        this.trailAlphas[alphaIndex] = Math.max(alpha1, 0.1);
-        this.trailAlphas[alphaIndex + 1] = Math.max(alpha2, 0.1);
+        this.trailAlphas[alphaIndex] = alpha1;
+        this.trailAlphas[alphaIndex + 1] = alpha2;
       }
     }
   }

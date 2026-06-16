@@ -8,12 +8,15 @@ export class GravitySource {
   private position: THREE.Vector3;
 
   private isDragging: boolean = false;
-  private dragPlane: THREE.Plane;
   private raycaster: THREE.Raycaster;
   private mouse: THREE.Vector2;
   private camera: THREE.PerspectiveCamera;
   private domElement: HTMLElement;
   private scene: THREE.Scene;
+
+  private dragOffset: THREE.Vector3;
+  private tempVector: THREE.Vector3;
+  private tempPlane: THREE.Plane;
 
   private boundMouseDown: (e: MouseEvent) => void;
   private boundMouseMove: (e: MouseEvent) => void;
@@ -24,9 +27,11 @@ export class GravitySource {
     this.domElement = domElement;
     this.scene = scene;
     this.position = new THREE.Vector3(0, 0, 0);
-    this.dragPlane = new THREE.Plane();
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
+    this.dragOffset = new THREE.Vector3();
+    this.tempVector = new THREE.Vector3();
+    this.tempPlane = new THREE.Plane();
 
     const geometry = new THREE.SphereGeometry(GRAVITY_RADIUS, 32, 32);
     const material = new THREE.MeshBasicMaterial({
@@ -59,6 +64,14 @@ export class GravitySource {
     this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   }
 
+  private getDragPlane(): THREE.Plane {
+    const normal = this.tempVector;
+    this.camera.getWorldDirection(normal);
+    normal.negate();
+    this.tempPlane.setFromNormalAndCoplanarPoint(normal, this.position);
+    return this.tempPlane;
+  }
+
   private onMouseDown(event: MouseEvent): void {
     if (event.button !== 0) return;
 
@@ -69,12 +82,16 @@ export class GravitySource {
     if (intersects.length > 0) {
       this.isDragging = true;
 
-      const normal = new THREE.Vector3();
-      this.camera.getWorldDirection(normal);
-      normal.negate();
+      const plane = this.getDragPlane();
+      const intersection = new THREE.Vector3();
+      this.raycaster.ray.intersectPlane(plane, intersection);
 
-      this.dragPlane.setFromNormalAndCoplanarPoint(normal, this.position);
+      if (intersection) {
+        this.dragOffset.copy(this.position).sub(intersection);
+      }
+
       this.domElement.style.cursor = 'grabbing';
+      event.preventDefault();
     }
   }
 
@@ -90,21 +107,27 @@ export class GravitySource {
     this.updateMouse(event);
     this.raycaster.setFromCamera(this.mouse, this.camera);
 
+    const plane = this.getDragPlane();
     const intersection = new THREE.Vector3();
-    const result = this.raycaster.ray.intersectPlane(this.dragPlane, intersection);
+    const result = this.raycaster.ray.intersectPlane(plane, intersection);
 
     if (result) {
+      intersection.add(this.dragOffset);
+
       const distance = intersection.length();
       if (distance > MAX_RANGE) {
         intersection.normalize().multiplyScalar(MAX_RANGE);
       }
+
       this.position.copy(intersection);
       this.mesh.position.copy(this.position);
     }
+
+    event.preventDefault();
   }
 
-  private onMouseUp(): void {
-    if (this.isDragging) {
+  private onMouseUp(event: MouseEvent): void {
+    if (this.isDragging && event.button === 0) {
       this.isDragging = false;
       this.domElement.style.cursor = 'default';
     }
