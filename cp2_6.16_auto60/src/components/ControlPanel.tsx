@@ -77,15 +77,17 @@ const ControlPanel: React.FC = () => {
                 ...(selectedColor === color ? styles.colorSwatchSelected : {}),
               }}
               onMouseEnter={(e) => {
-                if (selectedColor !== color) {
-                  ;(e.currentTarget as HTMLDivElement).style.transform = 'scale(1.1)'
-                  ;(e.currentTarget as HTMLDivElement).style.border = '2px solid white'
-                }
+                ;(e.currentTarget as HTMLDivElement).style.transform = 'scale(1.1)'
+                ;(e.currentTarget as HTMLDivElement).style.outline = '2px solid #3b82f6'
+                ;(e.currentTarget as HTMLDivElement).style.outlineOffset = '0px'
               }}
               onMouseLeave={(e) => {
                 if (selectedColor !== color) {
                   ;(e.currentTarget as HTMLDivElement).style.transform = 'scale(1)'
-                  ;(e.currentTarget as HTMLDivElement).style.border = 'none'
+                  ;(e.currentTarget as HTMLDivElement).style.outline = 'none'
+                } else {
+                  ;(e.currentTarget as HTMLDivElement).style.transform = 'scale(1)'
+                  ;(e.currentTarget as HTMLDivElement).style.outline = '3px solid #3b82f6'
                 }
               }}
             />
@@ -217,7 +219,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   colorSwatchSelected: {
     transform: 'scale(1)',
-    border: '3px solid #ffd700',
+    outline: '3px solid #3b82f6',
+    outlineOffset: '0px',
   },
   select: {
     padding: '10px 12px',
