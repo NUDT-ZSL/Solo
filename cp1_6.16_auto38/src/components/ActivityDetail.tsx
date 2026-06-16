@@ -66,20 +66,37 @@ const ActivityDetail: React.FC<ActivityDetailProps> = ({
         <span>返回列表</span>
       </button>
       <div style={styles.detailCard}>
-        <div style={{ ...styles.detailHeader, background: '#E0E0E0' }}>
+        <div style={styles.skeletonImageArea} className="skeleton"></div>
+        <div style={{ ...styles.detailHeader, background: '#E0E0E0', padding: '24px 32px' }}>
           <div style={{ ...styles.skeletonTag, width: '80px' }} className="skeleton"></div>
+          <div style={{ width: '120px', height: '24px', borderRadius: '8px' }} className="skeleton"></div>
         </div>
         <div style={styles.detailBody}>
           <div style={{ ...styles.skeletonLine, width: '60%', height: '32px', marginBottom: '24px' }} className="skeleton"></div>
           <div style={styles.infoGrid}>
             {[1, 2, 3, 4].map(i => (
               <div key={i} style={styles.infoItem}>
-                <div style={{ ...styles.skeletonLine, width: '40px', height: '20px', marginBottom: '8px' }} className="skeleton"></div>
-                <div style={{ ...styles.skeletonLine, width: '150px', height: '24px' }} className="skeleton"></div>
+                <div style={{ ...styles.skeletonLine, width: '60px', height: '12px', marginBottom: '8px' }} className="skeleton"></div>
+                <div style={{ ...styles.skeletonLine, width: '150px', height: '20px', marginBottom: '6px' }} className="skeleton"></div>
+                <div style={{ ...styles.skeletonLine, width: '120px', height: '20px' }} className="skeleton"></div>
               </div>
             ))}
           </div>
-          <div style={{ ...styles.skeletonLine, width: '100%', height: '120px', marginTop: '32px' }} className="skeleton"></div>
+          <div style={{ marginTop: '32px' }}>
+            <div style={{ ...styles.skeletonLine, width: '100px', height: '18px', marginBottom: '12px' }} className="skeleton"></div>
+            <div style={{ ...styles.skeletonLine, width: '100%', height: '16px', marginBottom: '8px' }} className="skeleton"></div>
+            <div style={{ ...styles.skeletonLine, width: '90%', height: '16px', marginBottom: '8px' }} className="skeleton"></div>
+            <div style={{ ...styles.skeletonLine, width: '95%', height: '16px', marginBottom: '8px' }} className="skeleton"></div>
+            <div style={{ ...styles.skeletonLine, width: '70%', height: '16px' }} className="skeleton"></div>
+          </div>
+          <div style={{ marginTop: '32px' }}>
+            <div style={{ ...styles.skeletonLine, width: '100px', height: '18px', marginBottom: '12px' }} className="skeleton"></div>
+            <div style={{ ...styles.skeletonLine, width: '100%', height: '16px', marginBottom: '8px' }} className="skeleton"></div>
+            <div style={{ ...styles.skeletonLine, width: '85%', height: '16px' }} className="skeleton"></div>
+          </div>
+          <div style={styles.skeletonActionSection}>
+            <div style={{ ...styles.skeletonLine, width: '100%', height: '52px', borderRadius: '12px' }} className="skeleton"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -391,6 +408,16 @@ const styles = {
   skeletonTag: {
     height: '32px',
     borderRadius: '20px',
+  },
+  skeletonImageArea: {
+    width: '100%',
+    height: '200px',
+    backgroundColor: '#E0E0E0',
+  },
+  skeletonActionSection: {
+    marginTop: '40px',
+    paddingTop: '24px',
+    borderTop: '1px solid #E0E0E0',
   },
   emptyState: {
     textAlign: 'center' as const,

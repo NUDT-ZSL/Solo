@@ -169,6 +169,7 @@ const ActivityList: React.FC<ActivityListProps> = ({ onActivityClick, registered
 
     return (
       <div style={styles.paginationContainer}>
+        <span style={styles.pageInfo}>第{pagination.page}页/共{pagination.totalPages}页</span>
         <button
           style={{
             ...styles.pageButton,
@@ -501,6 +502,12 @@ const styles = {
     alignItems: 'center',
     gap: '8px',
     flexWrap: 'wrap' as const,
+  },
+  pageInfo: {
+    fontSize: '14px',
+    color: '#7F8C8D',
+    fontWeight: 500,
+    marginRight: '8px',
   },
   pageButton: {
     minWidth: '40px',

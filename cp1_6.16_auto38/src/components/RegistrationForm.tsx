@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useCallback } from 'react'
 import { validateName, validateEmail, validatePhone } from '../business/activityManager'
 
 interface RegistrationFormProps {
@@ -36,22 +36,57 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [checkingDuplicate, setCheckingDuplicate] = useState(false)
+  const [duplicateHint, setDuplicateHint] = useState<string | null>(null)
 
-  const checkDuplicateRegistration = async (email: string, phone: string): Promise<boolean> => {
+  const checkDuplicateRegistration = useCallback(async (email: string, phone: string): Promise<boolean> => {
+    if (!email && !phone) return false
     try {
       const response = await fetch(`/api/activities/${activityId}/registrations`)
       const registrations = await response.json()
       
-      const exists = registrations.some(
-        (reg: any) => reg.email === email || reg.phone === phone
-      )
+      const emailMatch = email ? registrations.some((reg: any) => reg.email === email) : false
+      const phoneMatch = phone ? registrations.some((reg: any) => reg.phone === phone) : false
       
-      return exists
+      if (emailMatch && phoneMatch) return true
+      if (emailMatch || phoneMatch) return true
+      
+      return false
     } catch (error) {
       console.error('Failed to check duplicate registration:', error)
       return false
     }
-  }
+  }, [activityId])
+
+  const performDuplicateCheck = useCallback(async (email: string, phone: string) => {
+    if (!email && !phone) {
+      setDuplicateHint(null)
+      return
+    }
+
+    const emailValid = email ? validateEmail(email) : false
+    const phoneValid = phone ? validatePhone(phone) : false
+
+    if (!emailValid && !phoneValid) {
+      setDuplicateHint(null)
+      return
+    }
+
+    setCheckingDuplicate(true)
+    try {
+      const isDuplicate = await checkDuplicateRegistration(email, phone)
+      if (isDuplicate) {
+        setDuplicateHint('您已报名此活动')
+        setErrors(prev => ({ ...prev, duplicate: '您已报名此活动' }))
+      } else {
+        setDuplicateHint(null)
+        setErrors(prev => ({ ...prev, duplicate: undefined }))
+      }
+    } catch (error) {
+      console.error('Duplicate check failed:', error)
+    } finally {
+      setCheckingDuplicate(false)
+    }
+  }, [checkDuplicateRegistration])
 
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {}
@@ -77,11 +112,24 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }))
     }
-    if (errors.duplicate) {
+    if (duplicateHint) {
+      setDuplicateHint(null)
       setErrors(prev => ({ ...prev, duplicate: undefined }))
     }
     if (submitError) {
       setSubmitError(null)
+    }
+  }
+
+  const handleEmailBlur = () => {
+    if (formData.email && validateEmail(formData.email)) {
+      performDuplicateCheck(formData.email, formData.phone)
+    }
+  }
+
+  const handlePhoneBlur = () => {
+    if (formData.phone && validatePhone(formData.phone)) {
+      performDuplicateCheck(formData.email, formData.phone)
     }
   }
 
@@ -92,12 +140,17 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
       return
     }
 
+    if (duplicateHint) {
+      return
+    }
+
     setCheckingDuplicate(true)
     try {
       const isDuplicate = await checkDuplicateRegistration(formData.email, formData.phone)
       
       if (isDuplicate) {
         setErrors(prev => ({ ...prev, duplicate: '您已报名此活动' }))
+        setDuplicateHint('您已报名此活动')
         setCheckingDuplicate(false)
         return
       }
@@ -136,6 +189,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
     }
   }
 
+  const isDuplicateDetected = !!duplicateHint || !!errors.duplicate
+
   return (
     <div style={styles.formWrapper}>
       <div style={styles.formHeader}>
@@ -166,11 +221,13 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
             type="email"
             style={{
               ...styles.input,
-              ...(errors.email ? styles.inputError : {})
+              ...(errors.email ? styles.inputError : {}),
+              ...(duplicateHint && formData.email ? styles.inputWarning : {})
             }}
             placeholder="请输入您的邮箱地址"
             value={formData.email}
             onChange={(e) => handleInputChange('email', e.target.value)}
+            onBlur={handleEmailBlur}
             disabled={submitting || checkingDuplicate}
           />
           {errors.email && <p style={styles.errorText}>{errors.email}</p>}
@@ -182,20 +239,22 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
             type="tel"
             style={{
               ...styles.input,
-              ...(errors.phone ? styles.inputError : {})
+              ...(errors.phone ? styles.inputError : {}),
+              ...(duplicateHint && formData.phone ? styles.inputWarning : {})
             }}
             placeholder="请输入您的手机号码"
             value={formData.phone}
             onChange={(e) => handleInputChange('phone', e.target.value)}
+            onBlur={handlePhoneBlur}
             disabled={submitting || checkingDuplicate}
           />
           {errors.phone && <p style={styles.errorText}>{errors.phone}</p>}
         </div>
 
-        {errors.duplicate && (
+        {duplicateHint && (
           <div style={styles.duplicateError}>
             <span style={styles.errorIcon}>⚠️</span>
-            <span>{errors.duplicate}</span>
+            <span>{duplicateHint}</span>
           </div>
         )}
 
@@ -210,11 +269,12 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({
           type="submit"
           style={{
             ...styles.submitButton,
-            ...(submitting || checkingDuplicate ? styles.submitButtonLoading : {})
+            ...(submitting || checkingDuplicate ? styles.submitButtonLoading : {}),
+            ...(isDuplicateDetected ? styles.submitButtonDisabled : {})
           }}
-          disabled={submitting || checkingDuplicate}
+          disabled={submitting || checkingDuplicate || isDuplicateDetected}
         >
-          {checkingDuplicate ? '校验中...' : submitting ? '提交中...' : '确认报名'}
+          {checkingDuplicate ? '校验中...' : submitting ? '提交中...' : isDuplicateDetected ? '已报名，无法重复提交' : '确认报名'}
         </button>
       </form>
     </div>
@@ -271,6 +331,10 @@ const styles = {
     borderColor: '#E74C3C',
     backgroundColor: '#FDF2F2',
   },
+  inputWarning: {
+    borderColor: '#F39C12',
+    backgroundColor: '#FEF9E7',
+  },
   errorText: {
     fontSize: '12px',
     color: '#E74C3C',
@@ -315,6 +379,10 @@ const styles = {
   },
   submitButtonLoading: {
     backgroundColor: '#85C1E9',
+    cursor: 'not-allowed',
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#95A5A6',
     cursor: 'not-allowed',
   },
 }

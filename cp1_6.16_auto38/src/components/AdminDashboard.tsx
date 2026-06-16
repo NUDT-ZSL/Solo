@@ -127,7 +127,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
               }}
               onClick={() => setStatusFilter('all')}
             >
-              全部 ({registrations.length})
+              全部
             </button>
             <button
               style={{
@@ -136,7 +136,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
               }}
               onClick={() => setStatusFilter('checkedIn')}
             >
-              已签到 ({stats?.totalCheckedIn || 0})
+              已签到
             </button>
             <button
               style={{
@@ -145,7 +145,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
               }}
               onClick={() => setStatusFilter('notCheckedIn')}
             >
-              未签到 ({stats?.notCheckedInCount || 0})
+              未签到
             </button>
           </div>
         </div>

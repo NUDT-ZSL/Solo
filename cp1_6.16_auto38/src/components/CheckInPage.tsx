@@ -80,10 +80,6 @@ const CheckInPage: React.FC = () => {
         setCurrentActivity(data.activity)
         setShowSuccessAnimation(true)
         fetchParticipants(data.activity.id)
-        
-        setTimeout(() => {
-          setShowSuccessAnimation(false)
-        }, 2000)
       } else {
         setCheckInStatus('error')
         setStatusMessage(data.error || '签到失败，请检查信息')
@@ -127,7 +123,7 @@ const CheckInPage: React.FC = () => {
           <p style={styles.subtitle}>输入签到码或扫码完成签到</p>
         </div>
 
-        {showSuccessAnimation && (
+        {checkInStatus === 'success' && showSuccessAnimation && (
           <div style={styles.successAnimation}>
             <div style={styles.successIconWrapper}>
               <svg width="80" height="80" viewBox="0 0 80 80" fill="none" style={{ animation: 'rotate 0.5s ease-out' }}>
@@ -142,10 +138,17 @@ const CheckInPage: React.FC = () => {
               </svg>
             </div>
             <p style={styles.successText}>签到成功！</p>
+            <button
+              type="button"
+              style={styles.resetButton}
+              onClick={handleReset}
+            >
+              继续签到
+            </button>
           </div>
         )}
 
-        {!showSuccessAnimation && (
+        {checkInStatus !== 'success' && (
           <form style={styles.form} onSubmit={handleCheckIn}>
             <div style={styles.formGroup}>
               <label style={styles.label}>签到码</label>
@@ -214,13 +217,13 @@ const CheckInPage: React.FC = () => {
               {errors.phone && <p style={styles.errorText}>{errors.phone}</p>}
             </div>
 
-            {checkInStatus !== 'idle' && (
+            {checkInStatus === 'error' && (
               <div style={{
                 ...styles.statusMessage,
-                ...(checkInStatus === 'success' ? styles.successMessage : styles.errorMessage)
+                ...styles.errorMessage
               }}>
                 <span style={styles.statusIcon}>
-                  {checkInStatus === 'success' ? '✓' : '✕'}
+                  ✕
                 </span>
                 <span>{statusMessage}</span>
               </div>
@@ -247,16 +250,6 @@ const CheckInPage: React.FC = () => {
                 扫码签到
               </button>
             </div>
-
-            {checkInStatus === 'success' && (
-              <button
-                type="button"
-                style={styles.resetButton}
-                onClick={handleReset}
-              >
-                继续签到
-              </button>
-            )}
           </form>
         )}
       </div>
