@@ -15,7 +15,7 @@ interface RecipeCardProps {
 const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onBack }) => {
   const [copySuccess, setCopySuccess] = useState(false);
 
-  const { ingredientsWithPercentage, totalWeight, aggregatedPercentages } = useMemo(() => {
+  const { ingredientsWithPercentage, totalWeight, aggregatedPercentages, totalSteps, totalIngredients } = useMemo(() => {
     const allIngredients = getAllIngredients(recipe.steps);
     const { ingredients, totalWeight } = calculatePercentages(allIngredients);
     const aggregated = aggregateIngredientPercentages(ingredients);
@@ -23,6 +23,8 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onBack }) => {
       ingredientsWithPercentage: ingredients,
       totalWeight,
       aggregatedPercentages: aggregated.sort((a, b) => b.percentage - a.percentage),
+      totalSteps: recipe.steps.length,
+      totalIngredients: allIngredients.length,
     };
   }, [recipe.steps]);
 
@@ -85,9 +87,32 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onBack }) => {
             <h1 className="text-3xl font-bold mb-2" style={{ color: '#8B4513' }}>
               🍰 {recipe.name}
             </h1>
-            <p className="text-lg" style={{ color: '#D2691E' }}>
-              总重量: <span className="font-bold">{totalWeight}g</span>
-            </p>
+          </div>
+
+          <div className="mb-8 p-6 rounded-xl" style={{ backgroundColor: '#FFFAF0', border: '2px solid #F5DEB3' }}>
+            <h2 className="text-lg font-bold mb-4 text-center" style={{ color: '#8B4513' }}>
+              📊 配方总览
+            </h2>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center p-4 rounded-lg" style={{ backgroundColor: '#FFF8DC' }}>
+                <div className="text-3xl font-bold mb-1" style={{ color: '#D2691E' }}>
+                  {totalWeight}
+                </div>
+                <div className="text-sm" style={{ color: '#8B4513' }}>总重量 (g)</div>
+              </div>
+              <div className="text-center p-4 rounded-lg" style={{ backgroundColor: '#FFF8DC' }}>
+                <div className="text-3xl font-bold mb-1" style={{ color: '#D2691E' }}>
+                  {totalSteps}
+                </div>
+                <div className="text-sm" style={{ color: '#8B4513' }}>步骤数</div>
+              </div>
+              <div className="text-center p-4 rounded-lg" style={{ backgroundColor: '#FFF8DC' }}>
+                <div className="text-3xl font-bold mb-1" style={{ color: '#D2691E' }}>
+                  {totalIngredients}
+                </div>
+                <div className="text-sm" style={{ color: '#8B4513' }}>食材项</div>
+              </div>
+            </div>
           </div>
 
           <div className="mb-8">
@@ -132,21 +157,36 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onBack }) => {
                   key={step.id}
                   className="p-4 rounded-lg"
                   style={{
-                    backgroundColor: '#FFF8DC',
-                    border: '1px solid #F5DEB3',
+                    backgroundColor: '#FFF',
+                    border: '2px solid #F5DEB3',
                   }}
                 >
                   <div className="flex items-start gap-3 mb-3">
-                    <div className="step-number-badge">{stepIndex + 1}</div>
+                    <div 
+                      className="step-number-badge flex-shrink-0"
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        fontSize: '18px',
+                        boxShadow: '0 2px 8px rgba(210, 105, 30, 0.3)',
+                      }}
+                    >
+                      {stepIndex + 1}
+                    </div>
                     <div className="flex-1">
-                      <h3 className="text-lg font-bold mb-1" style={{ color: '#8B4513' }}>
+                      <h3 className="text-lg font-bold mb-2" style={{ color: '#8B4513' }}>
                         {step.title}
                       </h3>
+                      
                       {step.description && (
-                        <p className="text-gray-700 mb-2">{step.description}</p>
+                        <div className="p-3 mb-2 rounded-lg" style={{ backgroundColor: '#FFFAF0', border: '1px solid #F5DEB3' }}>
+                          <div className="text-xs font-medium mb-1" style={{ color: '#D2691E' }}>📝 说明</div>
+                          <p className="text-gray-700" style={{ color: '#5D4037' }}>{step.description}</p>
+                        </div>
                       )}
+                      
                       {(step.timerHours > 0 || step.timerMinutes > 0) && (
-                        <p className="text-sm mb-2" style={{ color: '#D2691E' }}>
+                        <p className="text-sm mb-2 px-3 py-2 rounded-lg" style={{ backgroundColor: '#FFF3E0', color: '#E65100' }}>
                           ⏱️ 定时: {step.timerHours > 0 && `${step.timerHours}小时`}
                           {step.timerMinutes > 0 && `${step.timerMinutes}分钟`}
                         </p>
@@ -155,25 +195,32 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onBack }) => {
                   </div>
 
                   {step.ingredients.length > 0 && (
-                    <div className="ml-12 border-t pt-3" style={{ borderColor: '#F5DEB3' }}>
+                    <div className="ml-14 p-3 rounded-lg" style={{ backgroundColor: '#FFF8DC', border: '1px solid #D2B48C' }}>
                       <p className="text-sm font-medium mb-2" style={{ color: '#8B4513' }}>
-                        食材:
+                        🥘 食材清单
                       </p>
                       <div className="space-y-1">
                         {step.ingredients.map((ing) => {
                           const percent = percentageMap.get(ing.id) ?? 0;
+                          const isUnweighed = ing.weight === 0;
                           return (
                             <div
                               key={ing.id}
-                              className="flex items-center justify-between text-sm py-1 px-2 rounded"
-                              style={{ backgroundColor: '#FFFAF0' }}
+                              className="flex items-center justify-between text-sm py-2 px-3 rounded"
+                              style={{ 
+                                backgroundColor: isUnweighed ? '#F5F5F5' : '#FFFAF0',
+                                border: isUnweighed ? '1px dashed #E0E0E0' : 'none',
+                              }}
                             >
-                              <span>
-                                • {ing.name}: {ing.weight}g
+                              <span className={isUnweighed ? 'text-gray-400' : ''} style={{ color: isUnweighed ? undefined : '#5D4037' }}>
+                                • {ing.name}: {isUnweighed ? <span className="italic">未称量</span> : `${ing.weight}g`}
                                 {ing.temperature && ` (${ing.temperature}°C)`}
                               </span>
-                              <span className="font-bold" style={{ color: '#2E8B57' }}>
-                                {percent.toFixed(1)}%
+                              <span 
+                                className="font-bold" 
+                                style={{ color: isUnweighed ? '#9E9E9E' : '#2E8B57' }}
+                              >
+                                {isUnweighed ? '-' : `${percent.toFixed(1)}%`}
                               </span>
                             </div>
                           );

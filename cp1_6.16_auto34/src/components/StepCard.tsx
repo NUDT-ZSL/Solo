@@ -54,11 +54,32 @@ const StepCard: React.FC<StepCardProps> = ({
     onUpdateStep({ ...step, timerMinutes: minutes });
   };
 
+  const getDefaultWeight = (name: string): number => {
+    const defaultWeights: Record<string, number> = {
+      '面粉': 200,
+      '细砂糖': 100,
+      '黄油': 100,
+      '鸡蛋': 50,
+      '牛奶': 100,
+      '奶油奶酪': 150,
+      '泡打粉': 5,
+      '小苏打': 3,
+      '盐': 2,
+      '香草精': 5,
+      '可可粉': 30,
+      '抹茶粉': 10,
+      '肉桂粉': 3,
+      '柠檬汁': 15,
+      '蜂蜜': 50,
+    };
+    return defaultWeights[name] || 50;
+  };
+
   const addIngredient = (name: string) => {
     const newIngredient: Ingredient = {
       id: uuidv4(),
       name,
-      weight: 0,
+      weight: getDefaultWeight(name),
       temperature: undefined,
       time: undefined,
     };
@@ -120,13 +141,17 @@ const StepCard: React.FC<StepCardProps> = ({
             style={{ backgroundColor: 'transparent', border: 'none', borderBottom: '1px solid #D2B48C' }}
           />
 
-          <textarea
-            value={step.description}
-            onChange={(e) => updateStepDescription(e.target.value)}
-            placeholder="步骤说明（可选）"
-            className="w-full mb-3 text-sm resize-none"
-            rows={2}
-          />
+          <div className="p-3 mb-3 rounded-lg" style={{ backgroundColor: '#FFFAF0', border: '1px solid #F5DEB3' }}>
+            <div className="text-xs font-medium mb-1" style={{ color: '#D2691E' }}>📝 步骤说明</div>
+            <textarea
+              value={step.description}
+              onChange={(e) => updateStepDescription(e.target.value)}
+              placeholder="请输入步骤说明（可选）"
+              className="w-full text-sm resize-none bg-transparent border-none p-0"
+              style={{ color: '#5D4037' }}
+              rows={2}
+            />
+          </div>
 
           <Timer
             hours={step.timerHours}
@@ -146,87 +171,95 @@ const StepCard: React.FC<StepCardProps> = ({
       </div>
 
       <div className="ml-12">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium text-amber-800">🥘 食材列表</span>
-        </div>
-
         {step.ingredients.length > 0 && (
-          <div className="space-y-2 mb-3">
-            {step.ingredients.map((ing) => {
-              const withPercent = ingredientsWithPercentage.get(ing.id);
-              const percentage = withPercent?.percentage ?? 0;
-              const progressColor = getProgressBarColor(percentage);
+          <div className="p-3 mb-3 rounded-lg" style={{ backgroundColor: '#FFF8DC', border: '1px solid #D2B48C' }}>
+            <div className="text-xs font-medium mb-2" style={{ color: '#D2691E' }}>🥘 食材列表</div>
+            <div className="space-y-2">
+              {step.ingredients.map((ing) => {
+                const withPercent = ingredientsWithPercentage.get(ing.id);
+                const percentage = withPercent?.percentage ?? 0;
+                const progressColor = getProgressBarColor(percentage);
+                const isUnweighed = ing.weight === 0;
 
-              return (
-                <div
-                  key={ing.id}
-                  className="flex items-center gap-2 p-2 bg-amber-50 rounded border border-amber-200"
-                >
-                  <span className="w-24 font-medium text-amber-900 truncate">
-                    {ing.name}
-                  </span>
-
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      min="0"
-                      value={ing.weight || ''}
-                      onChange={(e) =>
-                        updateIngredient(ing.id, {
-                          weight: parseFloat(e.target.value) || 0,
-                        })
-                      }
-                      className="w-16 text-center"
-                      placeholder="重量"
-                    />
-                    <span className="text-xs text-gray-500">g</span>
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      value={ing.temperature ?? ''}
-                      onChange={(e) =>
-                        updateIngredient(ing.id, {
-                          temperature: e.target.value
-                            ? parseFloat(e.target.value)
-                            : undefined,
-                        })
-                      }
-                      className="w-14 text-center"
-                      placeholder="温度"
-                    />
-                    <span className="text-xs text-gray-500">°C</span>
-                  </div>
-
-                  <div className="flex-1 flex items-center gap-2">
-                    <div className="flex-1 h-3 bg-gray-200 rounded-full overflow-hidden">
-                      <div
-                        className="progress-bar h-full rounded-full"
-                        style={{
-                          width: `${Math.min(percentage, 100)}%`,
-                          backgroundColor: progressColor,
-                        }}
-                      />
-                    </div>
-                    <span
-                      className="text-sm font-bold w-16 text-right"
-                      style={{ color: '#2E8B57' }}
-                    >
-                      {percentage.toFixed(1)}%
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={() => deleteIngredient(ing.id)}
-                    className="btn-icon text-red-500"
-                    title="删除食材"
+                return (
+                  <div
+                    key={ing.id}
+                    className="flex items-center gap-2 p-2 bg-white rounded border"
+                    style={{ borderColor: isUnweighed ? '#E0E0E0' : '#F5DEB3' }}
                   >
-                    ✕
-                  </button>
-                </div>
-              );
-            })}
+                    <span 
+                      className={`w-24 font-medium truncate ${isUnweighed ? 'text-gray-400' : 'text-amber-900'}`}
+                    >
+                      {ing.name}
+                      {isUnweighed && (
+                        <span className="ml-1 text-xs italic" style={{ color: '#9E9E9E' }}>
+                          (未称量)
+                        </span>
+                      )}
+                    </span>
+
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min="0"
+                        value={ing.weight || ''}
+                        onChange={(e) =>
+                          updateIngredient(ing.id, {
+                            weight: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        className={`w-16 text-center ${isUnweighed ? 'text-gray-400' : ''}`}
+                        placeholder="重量"
+                      />
+                      <span className="text-xs text-gray-500">g</span>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        value={ing.temperature ?? ''}
+                        onChange={(e) =>
+                          updateIngredient(ing.id, {
+                            temperature: e.target.value
+                              ? parseFloat(e.target.value)
+                              : undefined,
+                          })
+                        }
+                        className="w-14 text-center"
+                        placeholder="温度"
+                      />
+                      <span className="text-xs text-gray-500">°C</span>
+                    </div>
+
+                    <div className="flex-1 flex items-center gap-2">
+                      <div className="flex-1 h-3 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className="progress-bar h-full rounded-full"
+                          style={{
+                            width: isUnweighed ? '0%' : `${Math.min(percentage, 100)}%`,
+                            backgroundColor: isUnweighed ? '#E0E0E0' : progressColor,
+                          }}
+                        />
+                      </div>
+                      <span
+                        className={`text-sm font-bold w-16 text-right ${isUnweighed ? 'text-gray-400' : ''}`}
+                        style={{ color: isUnweighed ? undefined : '#2E8B57' }}
+                      >
+                        {isUnweighed ? '-' : `${percentage.toFixed(1)}%`}
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => deleteIngredient(ing.id)}
+                      className="btn-icon text-red-500"
+                      title="删除食材"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
