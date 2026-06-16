@@ -10,7 +10,6 @@ export default function InfoPanel() {
     path,
     selectedWallId,
     selectedExhibitId,
-    setSelectedExhibitId,
     updateWall,
     updateExhibit,
     selectedTool,
@@ -74,8 +73,8 @@ export default function InfoPanel() {
           {pathStats ? (
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-[#94a3b8] flex items-center gap-1.5">
-                  <Route size={14} />
+                <span className="text-sm text-[#64748b] flex items-center gap-1.5">
+                  <Route size={16} />
                   动线长度
                 </span>
                 <span className="text-sm font-medium text-[#6366f1]">
@@ -90,8 +89,8 @@ export default function InfoPanel() {
               </div>
 
               <div className="flex justify-between items-center mt-4">
-                <span className="text-sm text-[#94a3b8] flex items-center gap-1.5">
-                  <Clock size={14} />
+                <span className="text-sm text-[#64748b] flex items-center gap-1.5">
+                  <Clock size={16} />
                   预计时间
                 </span>
                 <span className="text-sm font-medium text-[#22c55e]">
@@ -203,17 +202,7 @@ export default function InfoPanel() {
         )}
 
         <div className="p-4 border-b border-[#334155]">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-[#f1f5f9]">展品详情</h3>
-            {selectedExhibit && (
-              <button
-                onClick={() => setSelectedExhibitId(null)}
-                className="text-[#94a3b8] hover:text-[#6366f1] transition-colors"
-              >
-                <X size={16} />
-              </button>
-            )}
-          </div>
+          <h3 className="text-sm font-semibold text-[#f1f5f9] mb-3">展品详情</h3>
           {selectedExhibit ? (
             <div className="space-y-3">
               <div className="w-full h-32 bg-[#0f172a] rounded-lg overflow-hidden mb-3">
@@ -304,8 +293,8 @@ export default function InfoPanel() {
               </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <ImageIcon size={32} className="text-[#475569] mb-2" />
+            <div className="flex flex-col items-center justify-center py-8 text-center rounded-lg cursor-pointer hover:bg-[#0f172a]/50 transition-colors duration-200">
+              <ImageIcon size={32} className="text-[#475569] mb-2 transition-colors group-hover:text-[#64748b]" />
               <p className="text-sm text-[#64748b]">点击展品查看详情</p>
             </div>
           )}

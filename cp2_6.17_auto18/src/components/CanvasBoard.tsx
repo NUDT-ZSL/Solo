@@ -47,6 +47,9 @@ export default function CanvasBoard() {
   });
   const [previewWall, setPreviewWall] = useState<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
   const [exhibitImages, setExhibitImages] = useState<Map<string, HTMLImageElement>>(new Map());
+  const [mousePos, setMousePos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [viewTransform, setViewTransform] = useState<{ scale: number; offsetX: number; offsetY: number }>({
+    scale: 1, offsetX: 0, offsetY: 0 });
 
   useEffect(() => {
     const images = new Map<string, HTMLImageElement>();
@@ -243,16 +246,16 @@ export default function CanvasBoard() {
   const drawGridHighlights = useCallback((ctx: CanvasRenderingContext2D) => {
     if (!dragState.isDragging && !previewWall) return;
 
-    let highlightPoints: { x: number; y: number }[] = [];
+    let checkPoints: { x: number; y: number }[] = [];
+
+    checkPoints.push({ x: mousePos.x, y: mousePos.y });
 
     if (previewWall) {
-      const corners = [
-        { x: previewWall.startX, y: previewWall.startY },
-        { x: previewWall.endX, y: previewWall.startY },
-        { x: previewWall.startX, y: previewWall.endY },
-        { x: previewWall.endX, y: previewWall.endY },
-      ];
-      highlightPoints = corners;
+      const centerX = (previewWall.startX + previewWall.endX) / 2;
+      const centerY = (previewWall.startY + previewWall.endY) / 2;
+      checkPoints.push({ x: centerX, y: centerY });
+      checkPoints.push({ x: previewWall.startX, y: previewWall.startY });
+      checkPoints.push({ x: previewWall.endX, y: previewWall.endY });
     } else if (dragState.isDragging && dragState.id) {
       let element: Wall | Exhibit | undefined;
       if (dragState.type === 'wall') {
@@ -261,20 +264,37 @@ export default function CanvasBoard() {
         element = currentExhibition.exhibits.find((e) => e.id === dragState.id);
       }
       if (element) {
-        const corners = [
-          { x: element.x, y: element.y },
-          { x: element.x + element.width, y: element.y },
-          { x: element.x, y: element.y + element.height },
-          { x: element.x + element.width, y: element.y + element.height },
-        ];
-        highlightPoints = corners;
+        const centerX = element.x + element.width / 2;
+        const centerY = element.y + element.height / 2;
+        checkPoints.push({ x: centerX, y: centerY });
+
+        const edgeSamples = 8;
+        for (let i = 0; i <= edgeSamples; i++) {
+          const t = i / edgeSamples;
+          checkPoints.push({
+            x: element.x + t * element.width,
+            y: element.y
+          });
+          checkPoints.push({
+            x: element.x + t * element.width,
+            y: element.y + element.height
+          });
+          checkPoints.push({
+            x: element.x,
+            y: element.y + t * element.height
+          });
+          checkPoints.push({
+            x: element.x + element.width,
+            y: element.y + t * element.height
+          });
+        }
       }
     }
 
     const highlightedGridPoints: { x: number; y: number }[] = [];
     const addedPoints = new Set<string>();
 
-    for (const point of highlightPoints) {
+    for (const point of checkPoints) {
       const gridX = Math.round(point.x / GRID_SIZE) * GRID_SIZE;
       const gridY = Math.round(point.y / GRID_SIZE) * GRID_SIZE;
 
@@ -292,15 +312,19 @@ export default function CanvasBoard() {
 
     if (highlightedGridPoints.length === 0) return;
 
+    const { scale, offsetX, offsetY } = viewTransform;
+
     ctx.save();
     ctx.fillStyle = GRID_HIGHLIGHT_COLOR;
     for (const point of highlightedGridPoints) {
+      const screenX = point.x * scale + offsetX;
+      const screenY = point.y * scale + offsetY;
       ctx.beginPath();
-      ctx.arc(point.x, point.y, GRID_HIGHLIGHT_RADIUS, 0, Math.PI * 2);
+      ctx.arc(screenX, screenY, GRID_HIGHLIGHT_RADIUS * Math.max(1, scale), 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
-  }, [dragState, previewWall, currentExhibition.walls, currentExhibition.exhibits]);
+  }, [dragState, previewWall, mousePos, viewTransform, currentExhibition.walls, currentExhibition.exhibits]);
 
   const drawPreviewWall = useCallback((ctx: CanvasRenderingContext2D) => {
     if (!previewWall) return;
@@ -356,9 +380,11 @@ export default function CanvasBoard() {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
     return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+      x: (screenX - viewTransform.offsetX) / viewTransform.scale,
+      y: (screenY - viewTransform.offsetY) / viewTransform.scale,
     };
   };
 
@@ -446,11 +472,12 @@ export default function CanvasBoard() {
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    const { x, y } = getCanvasCoords(e);
+    const coords = getCanvasCoords(e);
+    setMousePos(coords);
 
     if (dragState.isDragging && selectedTool !== 'select' && previewWall) {
-      const snappedX = snapToGrid(x);
-      const snappedY = snapToGrid(y);
+      const snappedX = snapToGrid(coords.x);
+      const snappedY = snapToGrid(coords.y);
       setPreviewWall({ ...previewWall, endX: snappedX, endY: snappedY });
       return;
     }
@@ -458,12 +485,12 @@ export default function CanvasBoard() {
     if (!dragState.isDragging) return;
 
     if (dragState.type === 'wall' && dragState.id) {
-      const newX = snapToGrid(x - dragState.offsetX);
-      const newY = snapToGrid(y - dragState.offsetY);
+      const newX = snapToGrid(coords.x - dragState.offsetX);
+      const newY = snapToGrid(coords.y - dragState.offsetY);
       updateWall(dragState.id, { x: newX, y: newY });
     } else if (dragState.type === 'exhibit' && dragState.id) {
-      const newX = snapToGrid(x - dragState.offsetX);
-      const newY = snapToGrid(y - dragState.offsetY);
+      const newX = snapToGrid(coords.x - dragState.offsetX);
+      const newY = snapToGrid(coords.y - dragState.offsetY);
       updateExhibit(dragState.id, { x: newX, y: newY });
     }
   };
