@@ -1,5 +1,5 @@
-import { useRef, useState, useMemo } from 'react';
-import { useFrame, ThreeEvent } from '@react-three/fiber';
+import { useRef, useState, useMemo, useEffect } from 'react';
+import { useFrame, ThreeEvent, useThree } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { LANGUAGE_COLORS } from '../types';
@@ -29,9 +29,14 @@ interface HoverInfo {
 
 function LineChart3D({ data, position = [0, 0, 0] }: LineChart3DProps) {
   const [hoveredPoint, setHoveredPoint] = useState<HoverInfo | null>(null);
+  const [tooltipVisible, setTooltipVisible] = useState(false);
   const groupRef = useRef<THREE.Group>(null);
   const lineRefs = useRef<Map<number, THREE.Mesh>>(new Map());
   const dotRefs = useRef<Map<string, THREE.Mesh>>(new Map());
+  const fadeTimerRef = useRef<number | null>(null);
+  const targetPoints = useRef<THREE.Vector3[]>([]);
+  const currentPoints = useRef<THREE.Vector3[]>([]);
+  const t = useRef(0);
 
   const width = 8;
   const height = 4.5;
@@ -53,15 +58,17 @@ function LineChart3D({ data, position = [0, 0, 0] }: LineChart3DProps) {
       const zOffset = (lineIndex - (data.length - 1) / 2) * 0.9;
       const color = LANGUAGE_COLORS[line.language] || '#00d2ff';
 
-      const points: THREE.Vector3[] = [];
+      const targetPts: THREE.Vector3[] = [];
+      const currentPts: THREE.Vector3[] = [];
       line.points.forEach((point, i) => {
         const x = (i / (months - 1)) * width - width / 2;
         const y = (point.value / maxValue) * height;
         const z = zOffset;
-        points.push(new THREE.Vector3(x, y, z));
+        targetPts.push(new THREE.Vector3(x, y, z));
+        currentPts.push(new THREE.Vector3(x, 0, z));
       });
 
-      const curve = new THREE.CatmullRomCurve3(points);
+      const curve = new THREE.CatmullRomCurve3(targetPts);
       const tubeGeometry = new THREE.TubeGeometry(curve, 150, 0.04, 6, false);
 
       const dotData: { position: [number, number, number]; value: number; month: number; index: number }[] = [];
@@ -79,12 +86,17 @@ function LineChart3D({ data, position = [0, 0, 0] }: LineChart3DProps) {
         });
       }
 
-      return { curve, tubeGeometry, dotData, color, zOffset };
+      return { curve, tubeGeometry, dotData, color, zOffset, targetPts };
     });
   }, [data, maxValue]);
 
-  useFrame((state) => {
+  useEffect(() => {
+    t.current = 0;
+  }, [data]);
+
+  useFrame((state, delta) => {
     const time = state.clock.elapsedTime;
+    t.current = Math.min(t.current + delta * 2, 1);
 
     if (groupRef.current) {
       groupRef.current.position.y = Math.sin(time * 0.25) * 0.08;
@@ -92,7 +104,8 @@ function LineChart3D({ data, position = [0, 0, 0] }: LineChart3DProps) {
 
     dotRefs.current.forEach((mesh, key) => {
       if (mesh) {
-        const scale = 1 + Math.sin(time * 2 + parseInt(key.split('-')[1]) * 0.5) * 0.15;
+        const baseScale = mesh.userData.baseScale || 1;
+        const scale = baseScale + Math.sin(time * 2 + parseInt(key.split('-')[1]) * 0.5) * 0.15;
         mesh.scale.setScalar(scale);
       }
     });
@@ -103,6 +116,9 @@ function LineChart3D({ data, position = [0, 0, 0] }: LineChart3DProps) {
     const config = lineConfigs[lineIndex];
     const dot = config.dotData[dotIndex];
     if (dot) {
+      if (fadeTimerRef.current) {
+        clearTimeout(fadeTimerRef.current);
+      }
       setHoveredPoint({
         lineIndex,
         pointIndex: dotIndex,
@@ -110,14 +126,27 @@ function LineChart3D({ data, position = [0, 0, 0] }: LineChart3DProps) {
         value: dot.value,
         month: dot.month
       });
+      setTooltipVisible(true);
       document.body.style.cursor = 'pointer';
     }
   };
 
   const handleDotOut = () => {
-    setHoveredPoint(null);
     document.body.style.cursor = 'auto';
+    if (fadeTimerRef.current) {
+      clearTimeout(fadeTimerRef.current);
+    }
+    fadeTimerRef.current = window.setTimeout(() => {
+      setTooltipVisible(false);
+      setTimeout(() => {
+        setHoveredPoint(null);
+      }, 150);
+    }, 50);
   };
+
+  const hoverColor = hoveredPoint && data[hoveredPoint.lineIndex]
+    ? LANGUAGE_COLORS[data[hoveredPoint.lineIndex].language]
+    : '#00d2ff';
 
   return (
     <group position={position} ref={groupRef}>
@@ -153,7 +182,12 @@ function LineChart3D({ data, position = [0, 0, 0] }: LineChart3DProps) {
             <mesh
               key={dotIndex}
               position={dot.position as [number, number, number]}
-              ref={(el) => { if (el) dotRefs.current.set(`${lineIndex}-${dotIndex}`, el); }}
+              ref={(el) => {
+                if (el) {
+                  dotRefs.current.set(`${lineIndex}-${dotIndex}`, el);
+                  el.userData.baseScale = 1;
+                }
+              }}
               onPointerOver={(e) => handleDotHover(e, lineIndex, dotIndex)}
               onPointerOut={handleDotOut}
             >
@@ -176,29 +210,41 @@ function LineChart3D({ data, position = [0, 0, 0] }: LineChart3DProps) {
             hoveredPoint.position[2]
           ]}
           center
+          zIndexRange={[100, 0]}
           style={{
             pointerEvents: 'none',
-            transition: 'opacity 0.15s ease-in'
+            opacity: tooltipVisible ? 1 : 0,
+            transition: 'opacity 0.15s ease-in-out',
+            transform: tooltipVisible ? 'translateY(0)' : 'translateY(5px)',
           }}
         >
-          <div style={{
+          <div className="line-tooltip" style={{
             background: 'rgba(22, 33, 62, 0.95)',
             backdropFilter: 'blur(10px)',
-            border: `1px solid ${data[hoveredPoint.lineIndex] ? LANGUAGE_COLORS[data[hoveredPoint.lineIndex].language] : '#00d2ff'}`,
+            WebkitBackdropFilter: 'blur(10px)',
+            border: `1px solid ${hoverColor}`,
             borderRadius: '8px',
             padding: '10px 14px',
             color: '#e0e0e0',
             fontSize: '12px',
             fontFamily: 'sans-serif',
             whiteSpace: 'nowrap',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-            animation: 'fadeIn 0.15s ease'
+            boxShadow: `0 4px 20px ${hoverColor}40`,
           }}>
-            <div style={{ fontWeight: '600', marginBottom: '4px', color: data[hoveredPoint.lineIndex] ? LANGUAGE_COLORS[data[hoveredPoint.lineIndex].language] : '#00d2ff' }}>
+            <div style={{
+              fontWeight: '600',
+              marginBottom: '4px',
+              color: hoverColor,
+              fontSize: '13px'
+            }}>
               {data[hoveredPoint.lineIndex]?.language}
             </div>
-            <div>月份: 第 {hoveredPoint.month + 1} 个月</div>
-            <div>贡献者: {hoveredPoint.value.toLocaleString()}</div>
+            <div style={{ marginBottom: '2px' }}>
+              月份: 第 {hoveredPoint.month + 1} 个月
+            </div>
+            <div>
+              贡献者: <span style={{ color: '#fff', fontWeight: '500' }}>{hoveredPoint.value.toLocaleString()}</span>
+            </div>
           </div>
         </Html>
       )}

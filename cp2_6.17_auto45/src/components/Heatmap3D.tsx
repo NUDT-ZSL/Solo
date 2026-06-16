@@ -1,4 +1,4 @@
-import { useRef, useMemo, useEffect } from 'react';
+import { useRef, useMemo, useEffect, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -11,7 +11,9 @@ interface Heatmap3DProps {
 function Heatmap3D({ data, maxValue, position = [0, 0, 0] }: Heatmap3DProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const targetHeights = useRef<Float32Array | null>(null);
+  const currentHeights = useRef<Float32Array | null>(null);
   const animationTime = useRef(0);
+  const t = useRef(0);
 
   const gridSize = 30;
   const size = 8;
@@ -28,7 +30,14 @@ function Heatmap3D({ data, maxValue, position = [0, 0, 0] }: Heatmap3DProps) {
   useEffect(() => {
     if (!meshRef.current || data.length === 0) return;
     const positions = meshRef.current.geometry.attributes.position;
-    targetHeights.current = new Float32Array(positions.count);
+
+    if (!targetHeights.current) {
+      targetHeights.current = new Float32Array(positions.count);
+      currentHeights.current = new Float32Array(positions.count);
+      for (let i = 0; i < positions.count; i++) {
+        currentHeights.current[i] = 0;
+      }
+    }
 
     const colorStart = new THREE.Color('#00d2ff');
     const colorEnd = new THREE.Color('#3a7bd5');
@@ -48,27 +57,42 @@ function Heatmap3D({ data, maxValue, position = [0, 0, 0] }: Heatmap3DProps) {
       }
     }
     colorAttr.needsUpdate = true;
+    t.current = 0;
   }, [data, maxValue]);
 
   useFrame((state, delta) => {
-    if (!meshRef.current || !targetHeights.current) return;
+    if (!meshRef.current || !targetHeights.current || !currentHeights.current) return;
 
     animationTime.current += delta;
+    t.current = Math.min(t.current + delta * 2, 1);
 
     const positions = meshRef.current.geometry.attributes.position;
-    const lerpSpeed = Math.min(delta * 2, 1);
+    const colorAttr = meshRef.current.geometry.attributes.color;
+    const colorStart = new THREE.Color('#00d2ff');
+    const colorEnd = new THREE.Color('#3a7bd5');
     const time = animationTime.current;
 
     for (let i = 0; i < positions.count; i++) {
-      const x = (i % gridSize) / gridSize;
-      const y = Math.floor(i / gridSize) / gridSize;
-      const wave = Math.sin(time * 0.6 + x * Math.PI * 2) * Math.cos(time * 0.4 + y * Math.PI * 2) * 0.06;
+      const tx = (i % gridSize) / gridSize;
+      const ty = Math.floor(i / gridSize) / gridSize;
+      const wave = Math.sin(time * 0.6 + tx * Math.PI * 2) * Math.cos(time * 0.4 + ty * Math.PI * 2) * 0.06;
+
       const targetY = targetHeights.current[i] + wave;
-      const currentY = positions.getY(i);
-      positions.setY(i, currentY + (targetY - currentY) * lerpSpeed);
+      const currentY = currentHeights.current[i];
+      const newY = currentY + (targetY - currentY) * t.current;
+
+      positions.setY(i, newY);
+      currentHeights.current[i] = newY;
+
+      const normalizedHeight = Math.max(0, Math.min(1, newY / 2.8));
+      const color = new THREE.Color().lerpColors(colorStart, colorEnd, normalizedHeight);
+      colorAttr.setX(i, color.r);
+      colorAttr.setY(i, color.g);
+      colorAttr.setZ(i, color.b);
     }
 
     positions.needsUpdate = true;
+    colorAttr.needsUpdate = true;
     meshRef.current.geometry.computeVertexNormals();
   });
 
@@ -78,12 +102,13 @@ function Heatmap3D({ data, maxValue, position = [0, 0, 0] }: Heatmap3DProps) {
         <meshStandardMaterial
           vertexColors
           side={THREE.DoubleSide}
-          metalness={0.35}
-          roughness={0.55}
+          metalness={0.3}
+          roughness={0.6}
           emissive={'#00d2ff'}
-          emissiveIntensity={0.15}
+          emissiveIntensity={0.12}
           transparent
           opacity={0.95}
+          flatShading={false}
         />
       </mesh>
 
