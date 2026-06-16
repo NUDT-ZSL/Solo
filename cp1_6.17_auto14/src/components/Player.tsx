@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { AudioEngine, formatTime, frequencyToColor, getAverageFrequency } from '../business/audio-engine';
+import { AudioEngine, formatTime, getAverageFrequency } from '../business/audio-engine';
 import type { Mixtape, Comment, Sticker, StickerType, Song } from '../types';
 import { STICKER_COLORS, STICKER_EMOJIS, THEMES } from '../types';
 
