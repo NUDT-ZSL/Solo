@@ -87,8 +87,7 @@ const ClaimModal: React.FC<ClaimModalProps> = ({
 
         <div
           style={{
-            padding: 20,
-            24,
+            padding: '20px 24px 24px',
           }}
         >
           <div

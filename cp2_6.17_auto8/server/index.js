@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 4000;
+const PORT = 4001;
 
 app.use(cors());
 app.use(express.json());
@@ -53,6 +53,49 @@ app.post('/api/team/:id/like', (req, res) => {
     res.status(500).json({ error: 'Failed to update likes' });
   }
 });
+
+app.get('/api/team/:id/trend', (req, res) => {
+  try {
+    const { id } = req.params;
+    const team = readJsonFile(TEAM_FILE);
+    const member = team.find((m) => m.id === id);
+
+    if (!member) {
+      return res.status(404).json({ error: 'Member not found' });
+    }
+
+    if (!member.dailyContributions) {
+      const generateRandomTrend = () => {
+        const data = [];
+        for (let i = 0; i < 7; i++) {
+          data.push(Math.floor(Math.random() * 8) + 1);
+        }
+        return data;
+      };
+      member.dailyContributions = generateRandomTrend();
+      writeJsonFile(TEAM_FILE, team);
+    }
+
+    res.json({
+      memberId: member.id,
+      dailyContributions: member.dailyContributions,
+      labels: generateDayLabels(),
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to load trend data' });
+  }
+});
+
+function generateDayLabels() {
+  const labels = [];
+  const today = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - i);
+    labels.push(`${date.getMonth() + 1}/${date.getDate()}`);
+  }
+  return labels;
+}
 
 app.get('/api/tasks', (req, res) => {
   try {

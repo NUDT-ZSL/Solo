@@ -53,3 +53,18 @@ export async function claimTask(
   if (!res.ok) throw new Error('Failed to claim task');
   return res.json();
 }
+
+export interface TrendData {
+  memberId: string;
+  dailyContributions: number[];
+  labels: string[];
+}
+
+export async function getMemberTrend(
+  id: string,
+  signal?: AbortSignal
+): Promise<TrendData> {
+  const res = await fetch(`${BASE_URL}/team/${id}/trend`, { signal });
+  if (!res.ok) throw new Error('Failed to fetch member trend');
+  return res.json();
+}

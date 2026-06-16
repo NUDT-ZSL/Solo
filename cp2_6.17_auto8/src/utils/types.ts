@@ -6,6 +6,7 @@ export interface TeamMember {
   prCount: number;
   issueCount: number;
   likes: number;
+  dailyContributions?: number[];
 }
 
 export type TaskStatus = 'pending' | 'in_progress' | 'completed';
