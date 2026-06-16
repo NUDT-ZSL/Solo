@@ -11,8 +11,10 @@ export interface Bottle {
   color: string;
   author: string;
   mileage: number;
+  likes: number;
   writes: BottleWrite[];
   createdAt: string;
+  updatedAt: string;
 }
 
 const API_BASE = '/api';
@@ -56,5 +58,13 @@ export async function writeBottle(
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Failed to write to bottle');
+  return res.json();
+}
+
+export async function likeBottle(id: string): Promise<Bottle> {
+  const res = await fetch(`${API_BASE}/bottles/${id}/like`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error('Failed to like bottle');
   return res.json();
 }

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import type { Bottle } from '../api';
+import type { SortMode } from '../App';
 
 interface FloatingBottle {
   bottle: Bottle;
@@ -14,6 +15,7 @@ interface OceanProps {
   bottles: Bottle[];
   onBottleClick: (bottle: Bottle) => void;
   onBottlePick: (bottle: Bottle) => void;
+  sortMode: SortMode;
 }
 
 const WARM_COLORS = ['#f97316', '#ef4444', '#eab308', '#f59e0b', '#fb923c', '#dc2626'];
@@ -31,7 +33,7 @@ function hashCode(s: string): number {
   return h;
 }
 
-const Ocean: React.FC<OceanProps> = ({ bottles, onBottleClick, onBottlePick }) => {
+const Ocean: React.FC<OceanProps> = ({ bottles, onBottleClick, onBottlePick, sortMode }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const floatingRef = useRef<FloatingBottle[]>([]);
   const animRef = useRef<number>(0);
@@ -39,17 +41,39 @@ const Ocean: React.FC<OceanProps> = ({ bottles, onBottleClick, onBottlePick }) =
   const hoverRef = useRef<string | null>(null);
   const mouseRef = useRef<{ x: number; y: number } | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
-  const bottlesRef = useRef(bottles);
+  const sortModeRef = useRef(sortMode);
+  const prevSortModeRef = useRef<SortMode>(sortMode);
 
   useEffect(() => {
-    bottlesRef.current = bottles;
-  }, [bottles]);
+    sortModeRef.current = sortMode;
+  }, [sortMode]);
 
-  const syncFloats = useCallback(() => {
+  const syncFloats = useCallback((latestBottles: Bottle[]) => {
     const current = floatingRef.current;
-    const currentIds = new Set(current.map((f) => f.bottle.id));
-    const newBottles = bottlesRef.current.filter((b) => !currentIds.has(b.id));
+    const mode = sortModeRef.current;
+    const switched = prevSortModeRef.current !== mode;
 
+    if (switched) {
+      prevSortModeRef.current = mode;
+      if (mode === 'random') {
+        for (const f of current) {
+          f.x = Math.random() * 0.9 + 0.05;
+          f.y = Math.random() * 0.3 + 0.35;
+          f.vx = (Math.random() - 0.5) * 0.0003;
+          f.vy = (Math.random() - 0.5) * 0.0001;
+        }
+      }
+    }
+
+    const currentIds = new Set(current.map((f) => f.bottle.id));
+    const sortedBottles = mode === 'hot'
+      ? [...latestBottles].sort((a, b) => {
+          if (b.likes !== a.likes) return b.likes - a.likes;
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        }).slice(0, MAX_BOTTLES)
+      : latestBottles.slice(0, MAX_BOTTLES);
+
+    const newBottles = sortedBottles.filter((b) => !currentIds.has(b.id));
     for (const b of newBottles) {
       if (current.length >= MAX_BOTTLES) break;
       current.push({
@@ -62,8 +86,37 @@ const Ocean: React.FC<OceanProps> = ({ bottles, onBottleClick, onBottlePick }) =
       });
     }
 
-    const newIds = new Set(bottlesRef.current.map((b) => b.id));
+    for (const f of current) {
+      const fresh = sortedBottles.find((b) => b.id === f.bottle.id);
+      if (fresh) f.bottle = fresh;
+    }
+
+    const newIds = new Set(sortedBottles.map((b) => b.id));
     floatingRef.current = current.filter((f) => newIds.has(f.bottle.id));
+
+    if (mode === 'hot') {
+      const orderMap = new Map(sortedBottles.map((b, i) => [b.id, i]));
+      const total = Math.min(sortedBottles.length, MAX_BOTTLES);
+      const cols = Math.min(8, Math.max(3, Math.ceil(Math.sqrt(total * 1.6))));
+      const rows = Math.ceil(total / cols);
+      const startX = 0.08;
+      const endX = 0.92;
+      const startY = 0.35;
+      const endY = 0.65;
+      for (const f of floatingRef.current) {
+        const idx = orderMap.get(f.bottle.id);
+        if (idx !== undefined && idx < total) {
+          const col = idx % cols;
+          const row = Math.floor(idx / cols);
+          const tx = total === 1 ? 0.5 : startX + (endX - startX) * (col / (cols - 1));
+          const ty = rows === 1 ? 0.5 : startY + (endY - startY) * (row / (rows - 1));
+          f.x += (tx - f.x) * 0.12;
+          f.y += (ty - f.y) * 0.12;
+          f.vx = 0;
+          f.vy = 0;
+        }
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -104,12 +157,30 @@ const Ocean: React.FC<OceanProps> = ({ bottles, onBottleClick, onBottlePick }) =
       ctx.fill();
     };
 
+    const drawHeart = (cx: number, cy: number, size: number) => {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - size * 0.25);
+      ctx.bezierCurveTo(cx, cy - size * 0.75, cx - size, cy - size * 0.85, cx - size, cy - size * 0.25);
+      ctx.bezierCurveTo(cx - size, cy + size * 0.25, cx - size * 0.4, cy + size * 0.6, cx, cy + size);
+      ctx.bezierCurveTo(cx + size * 0.4, cy + size * 0.6, cx + size, cy + size * 0.25, cx + size, cy - size * 0.25);
+      ctx.bezierCurveTo(cx + size, cy - size * 0.85, cx, cy - size * 0.75, cx, cy - size * 0.25);
+      ctx.closePath();
+      ctx.fillStyle = '#ef4444';
+      ctx.globalAlpha = 0.92;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    };
+
     const drawBottle = (
       x: number,
       y: number,
       color: string,
       hovered: boolean,
-      scale: number
+      scale: number,
+      likes: number
     ) => {
       ctx.save();
       ctx.translate(x, y);
@@ -130,17 +201,28 @@ const Ocean: React.FC<OceanProps> = ({ bottles, onBottleClick, onBottlePick }) =
       ctx.quadraticCurveTo(0, -18, -4, -16);
       ctx.closePath();
       ctx.fillStyle = color;
-      ctx.globalAlpha = 0.85;
+      ctx.globalAlpha = 0.88;
       ctx.fill();
       ctx.globalAlpha = 1;
-      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+      ctx.lineWidth = 1.2;
       ctx.stroke();
 
       ctx.beginPath();
       ctx.ellipse(-3, -2, 2, 5, -0.3, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
       ctx.fill();
+
+      drawHeart(13, 15, 4);
+
+      ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+      ctx.lineWidth = 2.5;
+      ctx.strokeText(String(likes), 19, 15);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(String(likes), 19, 15);
 
       ctx.restore();
     };
@@ -163,8 +245,11 @@ const Ocean: React.FC<OceanProps> = ({ bottles, onBottleClick, onBottlePick }) =
     let lastTime = performance.now();
     const fpsInterval = 1000 / 35;
     let elapsed = 0;
+    let frameCount = 0;
+    let latestBottlesSnapshot: Bottle[] = bottles;
 
     const animate = (now: number) => {
+      frameCount++;
       const delta = now - lastTime;
       lastTime = now;
       elapsed += delta;
@@ -208,8 +293,9 @@ const Ocean: React.FC<OceanProps> = ({ bottles, onBottleClick, onBottlePick }) =
 
       drawLightSpots(t);
 
-      syncFloats();
+      syncFloats(latestBottlesSnapshot);
       const floats = floatingRef.current;
+      const mode = sortModeRef.current;
       let hoveredId: string | null = null;
 
       if (mouseRef.current) {
@@ -218,7 +304,7 @@ const Ocean: React.FC<OceanProps> = ({ bottles, onBottleClick, onBottlePick }) =
         for (const f of floats) {
           const bx = f.x * w;
           const by = f.y * h;
-          if (Math.abs(mx - bx) < 18 && Math.abs(my - by) < 20) {
+          if (Math.abs(mx - bx) < 30 && Math.abs(my - by) < 32) {
             hoveredId = f.bottle.id;
             break;
           }
@@ -228,23 +314,26 @@ const Ocean: React.FC<OceanProps> = ({ bottles, onBottleClick, onBottlePick }) =
       hoverRef.current = hoveredId;
 
       for (const f of floats) {
-        f.x += f.vx;
-        f.y += f.vy;
-        if (f.x < 0.02 || f.x > 0.98) f.vx *= -1;
-        if (f.y < 0.3 || f.y > 0.65) f.vy *= -1;
-        f.x = Math.max(0.02, Math.min(0.98, f.x));
-        f.y = Math.max(0.3, Math.min(0.65, f.y));
+        if (mode === 'random') {
+          f.x += f.vx;
+          f.y += f.vy;
+          if (f.x < 0.05 || f.x > 0.95) f.vx *= -1;
+          if (f.y < 0.32 || f.y > 0.63) f.vy *= -1;
+          f.x = Math.max(0.05, Math.min(0.95, f.x));
+          f.y = Math.max(0.32, Math.min(0.63, f.y));
+        }
 
         const bx = f.x * w;
-        const by = f.y * h + Math.sin(t * Math.PI + f.phase) * 6;
+        const bobY = mode === 'random' ? Math.sin(t * Math.PI + f.phase) * 6 : Math.sin(t * Math.PI * 0.5 + f.phase) * 3;
+        const by = f.y * h + bobY;
         const color = getColorForBottle(f.bottle);
         const hovered = f.bottle.id === hoveredId;
-        drawBottle(bx, by, color, hovered, 1);
+        drawBottle(bx, by, color, hovered, 1.6, f.bottle.likes || 0);
 
         if (hovered) {
           tooltip.style.display = 'block';
-          tooltip.style.left = `${bx + 20}px`;
-          tooltip.style.top = `${by - 20}px`;
+          tooltip.style.left = `${Math.min(bx + 28, window.innerWidth - 200)}px`;
+          tooltip.style.top = `${Math.max(by - 24, 10)}px`;
           tooltip.textContent = f.bottle.title;
         }
       }
@@ -258,6 +347,15 @@ const Ocean: React.FC<OceanProps> = ({ bottles, onBottleClick, onBottlePick }) =
 
     animRef.current = requestAnimationFrame(animate);
 
+    const refreshInterval = setInterval(() => {
+      latestBottlesSnapshot = bottles;
+    }, 200);
+
+    const updateSnapshot = (val: Bottle[]) => {
+      latestBottlesSnapshot = val;
+    };
+    (window as any).__updateBottlesSnapshot = updateSnapshot;
+
     const handleMouseMove = (e: MouseEvent) => {
       mouseRef.current = { x: e.clientX, y: e.clientY };
     };
@@ -268,7 +366,7 @@ const Ocean: React.FC<OceanProps> = ({ bottles, onBottleClick, onBottlePick }) =
       for (const f of floatingRef.current) {
         const bx = f.x * canvas.width;
         const by = f.y * canvas.height;
-        if (Math.abs(mx - bx) < 18 && Math.abs(my - by) < 20) {
+        if (Math.abs(mx - bx) < 30 && Math.abs(my - by) < 32) {
           onBottleClick(f.bottle);
           onBottlePick(f.bottle);
           break;
@@ -281,11 +379,12 @@ const Ocean: React.FC<OceanProps> = ({ bottles, onBottleClick, onBottlePick }) =
 
     return () => {
       cancelAnimationFrame(animRef.current);
+      clearInterval(refreshInterval);
       window.removeEventListener('resize', resize);
       canvas.removeEventListener('mousemove', handleMouseMove);
       canvas.removeEventListener('click', handleClick);
     };
-  }, [onBottleClick, onBottlePick, syncFloats]);
+  }, [bottles, onBottleClick, onBottlePick, syncFloats]);
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>

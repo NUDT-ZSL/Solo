@@ -6,9 +6,11 @@ interface BottleModalProps {
   bottle: Bottle | null;
   onClose: () => void;
   onWritten: () => void;
+  onLiked: () => void;
+  onLikeClick: () => void;
 }
 
-const BottleModal: React.FC<BottleModalProps> = ({ bottle, onClose, onWritten }) => {
+const BottleModal: React.FC<BottleModalProps> = ({ bottle, onClose, onWritten, onLikeClick }) => {
   const [writeContent, setWriteContent] = useState('');
   const [writeAuthor, setWriteAuthor] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -132,12 +134,53 @@ const BottleModal: React.FC<BottleModalProps> = ({ bottle, onClose, onWritten })
             marginTop: '12px',
             display: 'flex',
             justifyContent: 'space-between',
-            fontSize: '12px',
-            color: '#94a3b8',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '10px',
           }}
         >
-          <span>来自：{bottle.author || '匿名旅人'}</span>
-          <span>漂流里程：{bottle.mileage} 次</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+              来自：{bottle.author || '匿名旅人'}
+            </span>
+            <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+              漂流里程：{bottle.mileage} 次
+            </span>
+            <span style={{ fontSize: '14px', color: '#6b7280' }}>
+              热度：{bottle.likes || 0}
+            </span>
+          </div>
+
+          <button
+            onClick={onLikeClick}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 14px',
+              borderRadius: '20px',
+              border: '1px solid #fecaca',
+              background: '#fff1f2',
+              color: '#ef4444',
+              fontSize: '13px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#fecdd3';
+              e.currentTarget.style.transform = 'scale(1.05)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = '#fff1f2';
+              e.currentTarget.style.transform = 'scale(1)';
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#ef4444">
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            </svg>
+            {bottle.likes || 0}
+          </button>
         </div>
 
         {recentWrites.length > 0 && (
