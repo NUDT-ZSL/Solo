@@ -129,10 +129,7 @@ export class GameEngine {
 
     const emptyPos = this.findEmptyPosition();
     if (emptyPos) {
-      const placed = this.placeHero(hero.id, emptyPos);
-      if (!placed) {
-        hero.pos = emptyPos;
-      }
+      hero.pos = { ...emptyPos };
     }
 
     this.emitStateUpdate();
@@ -163,14 +160,14 @@ export class GameEngine {
       if (occupant.id === heroId) {
         return true;
       }
-      if (!occupant.isEnemy) {
-        const oldHeroPos = hero.pos ? { ...hero.pos } : null;
-        hero.pos = { ...pos };
-        occupant.pos = oldHeroPos;
-        this.emitStateUpdate();
-        return true;
+      if (occupant.isEnemy) {
+        return false;
       }
-      return false;
+      const oldPos = hero.pos ? { ...hero.pos } : null;
+      hero.pos = { ...pos };
+      occupant.pos = oldPos;
+      this.emitStateUpdate();
+      return true;
     }
 
     hero.pos = { ...pos };
@@ -205,7 +202,7 @@ export class GameEngine {
       const matches = this.heroes.filter(
         h => h.name === template.name && h.star === star && h.isAlive()
       );
-      if (matches.length >= 2) return true;
+      if (matches.length >= 3) return true;
     }
     return false;
   }
@@ -219,27 +216,25 @@ export class GameEngine {
         h => h.name === template.name && h.star === star && h.isAlive()
       );
 
-      if (matches.length >= 2) {
-        const h1 = matches[0];
-        const h2 = matches[1];
+      if (matches.length >= 3) {
+        const keep = matches[0];
+        const remove1 = matches[1];
+        const remove2 = matches[2];
 
-        const pos1 = h1.pos ? { ...h1.pos } : null;
-        const pos2 = h2.pos ? { ...h2.pos } : null;
+        const keepPos = keep.pos ? { ...keep.pos } : null;
 
-        h1.upgrade();
+        keep.upgrade();
 
-        if (!h1.pos && pos1) {
-          h1.pos = pos1;
+        if (!keep.pos && keepPos) {
+          keep.pos = keepPos;
         }
 
-        if (this.selectedHeroId === h2.id) {
-          this.selectedHeroId = h1.id;
+        if (this.selectedHeroId === remove1.id || this.selectedHeroId === remove2.id) {
+          this.selectedHeroId = keep.id;
         }
 
-        const idx2 = this.heroes.findIndex(h => h.id === h2.id);
-        if (idx2 !== -1) {
-          this.heroes.splice(idx2, 1);
-        }
+        const idsToRemove = new Set([remove1.id, remove2.id]);
+        this.heroes = this.heroes.filter(h => !idsToRemove.has(h.id));
 
         this.emitStateUpdate();
         return true;
@@ -283,22 +278,25 @@ export class GameEngine {
     this.lastFrameTime = performance.now();
     this.frameAccumulator = 0;
     this.destroyed = false;
-    this.tickLoop();
+    this.requestNextFrame();
   }
 
   private stopGameLoop(): void {
-    this.destroyed = true;
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
   }
 
-  private tickLoop = (): void => {
+  private requestNextFrame = (): void => {
+    if (this.destroyed) return;
+    this.animationFrameId = requestAnimationFrame(this.gameLoop);
+  };
+
+  private gameLoop = (now: number): void => {
     if (this.destroyed) return;
     if (this.phase !== 'battle') return;
 
-    const now = performance.now();
     const delta = now - this.lastFrameTime;
     this.lastFrameTime = now;
     this.frameAccumulator += delta;
@@ -312,7 +310,7 @@ export class GameEngine {
     this.emitStateUpdate();
 
     if (this.phase === 'battle' && !this.destroyed) {
-      this.animationFrameId = requestAnimationFrame(this.tickLoop);
+      this.requestNextFrame();
     }
   };
 
@@ -464,6 +462,7 @@ export class GameEngine {
   }
 
   destroy(): void {
+    this.destroyed = true;
     this.stopGameLoop();
     this.eventListeners.clear();
   }

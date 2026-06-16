@@ -54,32 +54,24 @@ const App: React.FC = () => {
     const engine = new GameEngine();
     engineRef.current = engine;
 
-    let rafPending = false;
-    let pendingState: Partial<GameState> | null = null;
+    (window as unknown as { __gameEngine: GameEngine }).__gameEngine = engine;
 
     const handleStateUpdate = (data: unknown) => {
-      pendingState = data as Partial<GameState>;
-      if (!rafPending) {
-        rafPending = true;
-        requestAnimationFrame(() => {
-          rafPending = false;
-          if (pendingState) {
-            dispatch({ type: 'SET_STATE', payload: pendingState });
-            pendingState = null;
-          }
-        });
-      }
+      dispatch({ type: 'SET_STATE', payload: data as Partial<GameState> });
     };
 
     engine.on('stateUpdate', handleStateUpdate);
 
-    const initState = engine.getState();
-    dispatch({ type: 'SET_STATE', payload: initState as unknown as Partial<GameState> });
+    setTimeout(() => {
+      const initState = engine.getState();
+      dispatch({ type: 'SET_STATE', payload: initState as unknown as Partial<GameState> });
+    }, 0);
 
     return () => {
       engine.off('stateUpdate', handleStateUpdate);
       engine.destroy();
       engineRef.current = null;
+      delete (window as unknown as { __gameEngine?: GameEngine }).__gameEngine;
     };
   }, []);
 
