@@ -47,24 +47,34 @@ export class GamepadRecorder {
     this.playing = true;
     this.playbackTimeouts = [];
 
-    this.events.forEach((event) => {
-      const timeoutId = window.setTimeout(() => {
-        if (this.playing) {
-          onEvent(event);
-        }
-      }, event.timestamp);
-      this.playbackTimeouts.push(timeoutId);
-    });
-
-    const lastEvent = this.events[this.events.length - 1];
-    const completeTimeoutId = window.setTimeout(() => {
-      if (this.playing) {
+    const scheduleNext = (index: number) => {
+      if (index >= this.events.length || !this.playing) {
         this.playing = false;
         this.playbackTimeouts = [];
         onComplete();
+        return;
       }
-    }, lastEvent.timestamp + 50);
-    this.playbackTimeouts.push(completeTimeoutId);
+
+      const currentEvent = this.events[index];
+      let delay: number;
+
+      if (index === 0) {
+        delay = currentEvent.timestamp;
+      } else {
+        const prevEvent = this.events[index - 1];
+        delay = currentEvent.timestamp - prevEvent.timestamp;
+      }
+
+      const timeoutId = window.setTimeout(() => {
+        if (!this.playing) return;
+        onEvent(currentEvent);
+        scheduleNext(index + 1);
+      }, delay);
+
+      this.playbackTimeouts.push(timeoutId);
+    };
+
+    scheduleNext(0);
   }
 
   stopPlayback(): void {

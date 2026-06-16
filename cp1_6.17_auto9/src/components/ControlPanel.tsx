@@ -68,7 +68,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           ) : (
             sortedLog.map((event, index) => (
               <div
-                key={`${event.timestamp}-${event.buttonName}-${event.isPressed}-${index}`}
+                key={`${event.timestamp}-${event.buttonName}-${event.isPressed}-${index}-${Math.random()}`}
                 className={`log-entry ${event.isPressed ? 'press' : 'release'}`}
               >
                 [{formatTimestamp(event.timestamp)}] {event.buttonName} {event.isPressed ? '按下' : '释放'}
