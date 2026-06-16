@@ -98,8 +98,8 @@ const NotationCard: React.FC<NotationCardProps> = ({ notation, onClick, onDragSt
         width: '180px',
         height: '220px',
         borderRadius: '10px',
-        backgroundColor: isSelected ? '#fff8e7' : '#f5f0e8',
-        border: `1px solid ${isSelected ? '#e67e22' : '#d4c5a9'}`,
+        backgroundColor: isSelected ? '#fff8e7' : isHovered ? '#faf5ef' : '#f5f0e8',
+        border: `1px solid ${isSelected ? '#e67e22' : isHovered ? '#d4c5a9' : '#d4c5a9'}`,
         boxShadow: isHovered
           ? '0 6px 20px rgba(0,0,0,0.18)'
           : '0 2px 8px rgba(0,0,0,0.1)',
@@ -129,7 +129,10 @@ const NotationCard: React.FC<NotationCardProps> = ({ notation, onClick, onDragSt
           textAlign: 'center',
           lineHeight: 1.4,
           marginBottom: '4px',
-          fontFamily: '"ZCOOL XiaoWei", serif'
+          fontFamily: '"ZCOOL XiaoWei", serif',
+          transform: isHovered ? 'scale(1.05)' : 'scale(1)',
+          transition: 'transform 0.25s ease-out',
+          transformOrigin: 'center'
         }}
       >
         {notation.name}
@@ -142,7 +145,10 @@ const NotationCard: React.FC<NotationCardProps> = ({ notation, onClick, onDragSt
           fontFamily: '"ZCOOL XiaoWei", serif',
           backgroundColor: 'rgba(139, 90, 43, 0.08)',
           padding: '2px 8px',
-          borderRadius: '10px'
+          borderRadius: '10px',
+          transform: isHovered ? 'scale(1.05)' : 'scale(1)',
+          transition: 'transform 0.25s ease-out',
+          transformOrigin: 'center'
         }}
       >
         {notation.huiPosition}

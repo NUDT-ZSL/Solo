@@ -506,7 +506,7 @@ const Home: React.FC<HomeProps> = ({ user, onLogin, onRegister, onLogout }) => {
               padding: '16px',
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-              gap: '14px',
+              gap: '16px',
               alignContent: 'start'
             }}
           >
