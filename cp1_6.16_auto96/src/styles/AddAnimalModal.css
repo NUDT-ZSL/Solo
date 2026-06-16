@@ -1,0 +1,263 @@
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-content {
+  background-color: white;
+  border-radius: 16px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  animation: modalIn 0.3s ease;
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #E0E0E0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h2 {
+  font-size: 20px;
+  color: #4A4A4A;
+}
+
+.close-btn {
+  font-size: 18px;
+  color: #999;
+  padding: 4px 8px;
+  transition: color 0.2s;
+}
+
+.close-btn:hover {
+  color: #666;
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #E0E0E0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.form-error {
+  background-color: #FDECEA;
+  color: #E74C3C;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.form-row .form-group {
+  flex: 1;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #DDD;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+  background-color: #FFF8F0;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #FF8C00;
+}
+
+.radio-group {
+  display: flex;
+  gap: 24px;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.checkbox-tag {
+  position: relative;
+  cursor: pointer;
+}
+
+.checkbox-tag input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.checkbox-tag {
+  display: inline-block;
+  padding: 6px 14px;
+  background-color: #FFF5E6;
+  color: #666;
+  border-radius: 20px;
+  font-size: 13px;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+}
+
+.checkbox-tag:hover {
+  background-color: #FFE4CC;
+}
+
+.checkbox-tag.active {
+  background-color: #FF8C00;
+  color: white;
+}
+
+.photo-upload {
+  width: 100%;
+}
+
+.upload-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 160px;
+  border: 2px dashed #DDD;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background-color: #FFF8F0;
+}
+
+.upload-area:hover {
+  border-color: #FF8C00;
+  background-color: #FFF5E6;
+}
+
+.upload-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.photo-preview {
+  position: relative;
+  width: 100%;
+  text-align: center;
+}
+
+.photo-preview img {
+  width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.reupload-btn {
+  margin-top: 8px;
+  color: #FF8C00;
+  font-size: 13px;
+}
+
+.cancel-btn {
+  padding: 10px 24px;
+  border-radius: 12px;
+  font-size: 14px;
+  background-color: #F0F0F0;
+  color: #666;
+  transition: background-color 0.2s;
+}
+
+.cancel-btn:hover {
+  background-color: #E0E0E0;
+}
+
+.submit-btn {
+  padding: 10px 24px;
+  border-radius: 12px;
+  font-size: 14px;
+  background-color: #FF8C00;
+  color: white;
+  transition: all 0.2s;
+  box-shadow: 4px 4px 12px #DDD;
+}
+
+.submit-btn:hover:not(:disabled) {
+  background-color: #FFA500;
+}
+
+.submit-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .form-row {
+    flex-direction: column;
+    gap: 16px;
+  }
+}
