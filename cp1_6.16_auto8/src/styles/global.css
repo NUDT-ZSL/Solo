@@ -571,6 +571,48 @@ input, select {
   top: 20px;
 }
 
+.plan-search-box {
+  position: relative;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0 14px;
+  transition: all var(--transition-fast);
+}
+
+.plan-search-box:focus-within {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+}
+
+.search-icon {
+  font-size: 14px;
+  margin-right: 8px;
+  opacity: 0.6;
+}
+
+.plan-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  padding: 12px 0;
+  font-size: 14px;
+}
+
+.search-count-badge {
+  background: rgba(139, 92, 246, 0.2);
+  color: var(--accent-secondary);
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .form-title {
   font-size: 18px;
   font-weight: 700;

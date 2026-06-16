@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import PlanForm from './components/PlanForm';
 import ProgressChart from './components/ProgressChart';
 import TrackList from './components/TrackList';
+import AchievementPage from './components/AchievementPage';
 import type { Track, Feedback, Student } from './api/backend';
 import { fetchTracks, fetchStudents, fetchFeedback, instrumentLabels, instrumentColors } from './api/backend';
 import type { WeeklyPlan, WeeklyStats, DifficultyPreference } from './logic/planGenerator';
@@ -16,12 +17,13 @@ import {
 } from './logic/dataStore';
 import { useDebounce, useMediaQuery } from './hooks/useDebounce';
 
-type NavKey = 'tracks' | 'plan' | 'stats' | 'feedback';
+type NavKey = 'tracks' | 'plan' | 'stats' | 'feedback' | 'achievements';
 
 const navItems: { key: NavKey; label: string; icon: string }[] = [
   { key: 'tracks', label: '曲目库', icon: '🎼' },
   { key: 'plan', label: '计划', icon: '📋' },
   { key: 'stats', label: '统计', icon: '📊' },
+  { key: 'achievements', label: '成就', icon: '🏅' },
   { key: 'feedback', label: '反馈', icon: '💬' },
 ];
 

@@ -181,28 +181,37 @@ export default function PlanForm({
 
       <div className="form-section">
         <label className="form-label">选择练习曲目</label>
+        <div className="plan-search-box">
+          <span className="search-icon">🔍</span>
+          <input
+            type="text"
+            className="plan-search-input"
+            placeholder="搜索曲目名、作曲家..."
+            value={searchKeyword}
+            onChange={(e) => {
+              setSearchKeyword(e.target.value);
+              if (!dropdownOpen) setDropdownOpen(true);
+            }}
+            onFocus={() => setDropdownOpen(true)}
+          />
+          {debouncedKeyword && (
+            <span className="search-count-badge">{trackCount}首</span>
+          )}
+        </div>
         <div className="track-dropdown" ref={dropdownRef}>
           <div
             className="dropdown-trigger"
             onClick={() => setDropdownOpen(v => !v)}
           >
             <span className="dropdown-placeholder">
-              🔍 搜索曲目（支持名称/作曲家）
+              {selectedTracks.length > 0
+                ? `已选择 ${selectedTracks.length} 首曲目`
+                : '点击展开曲目列表'}
             </span>
             <span className={`dropdown-arrow ${dropdownOpen ? 'up' : ''}`}>▾</span>
           </div>
           {dropdownOpen && (
             <div className="dropdown-panel">
-              <input
-                type="text"
-                className="dropdown-search"
-                placeholder="输入关键词搜索..."
-                value={searchKeyword}
-                onChange={(e) => {
-                  setSearchKeyword(e.target.value);
-                }}
-                autoFocus
-              />
               {debouncedKeyword && (
                 <div className="search-hint">
                   搜索 "{debouncedKeyword}"，找到 {trackCount} 个结果
