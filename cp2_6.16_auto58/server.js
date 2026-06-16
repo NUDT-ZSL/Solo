@@ -14,78 +14,100 @@ app.use(express.json());
 const poisPath = join(__dirname, 'src', 'data', 'pois.json');
 const poisData = JSON.parse(fs.readFileSync(poisPath, 'utf-8'));
 
-const cities = Object.keys(poisData);
+const citiesMap = {};
+poisData.cities.forEach(city => {
+  citiesMap[city.name] = {
+    attractions: city.attractions,
+    restaurants: city.restaurants,
+    hotels: city.hotels
+  };
+});
+
+const cityNames = poisData.cities.map(city => city.name);
 
 app.get('/api/cities', (req, res) => {
-  res.json(cities);
+  res.json(cityNames);
 });
 
 app.get('/api/pois', (req, res) => {
   const city = req.query.city;
-  if (!city || !poisData[city]) {
+  if (!city || !citiesMap[city]) {
     return res.status(404).json({ error: '城市未找到' });
   }
-  res.json(poisData[city]);
+  res.json(citiesMap[city]);
 });
 
 app.get('/api/itinerary', (req, res) => {
   const city = req.query.city;
   const days = parseInt(req.query.days, 10);
 
-  if (!city || !poisData[city]) {
+  if (!city || !citiesMap[city]) {
     return res.status(404).json({ error: '城市未找到' });
   }
-  if (!days || days < 1 || days > 30) {
-    return res.status(400).json({ error: '天数需在1-30之间' });
+  if (!days || days < 1 || days > 14) {
+    return res.status(400).json({ error: '天数需在1-14之间' });
   }
 
-  const { attractions, restaurants, hotels } = poisData[city];
+  const { attractions, restaurants, hotels } = citiesMap[city];
+  
+  const sortedAttractions = [...attractions].sort((a, b) => b.rating - a.rating);
+  const sortedRestaurants = [...restaurants].sort((a, b) => b.rating - a.rating);
+  const sortedHotels = [...hotels].sort((a, b) => b.rating - a.rating);
+
   const itinerary = [];
 
   for (let day = 0; day < days; day++) {
-    const morningAttraction = attractions[day % attractions.length];
-    const lunchRestaurant = restaurants[day % restaurants.length];
-    const afternoonAttraction = attractions[(day + 1) % attractions.length];
-    const eveningHotel = hotels[day % hotels.length];
+    const morningAttraction = sortedAttractions[day % sortedAttractions.length];
+    const lunchRestaurant = sortedRestaurants[day % sortedRestaurants.length];
+    const afternoonAttraction = sortedAttractions[(day + 1) % sortedAttractions.length];
+    const eveningHotel = sortedHotels[day % sortedHotels.length];
 
     itinerary.push({
       day: day + 1,
       schedule: [
         {
+          id: `day${day + 1}-morning`,
           time: '上午',
           type: 'attraction',
           name: morningAttraction.name,
           lat: morningAttraction.lat,
           lng: morningAttraction.lng,
+          rating: morningAttraction.rating,
           description: morningAttraction.description,
           duration: morningAttraction.duration
         },
         {
-          time: '午餐',
+          id: `day${day + 1}-lunch`,
+          time: '中午',
           type: 'restaurant',
           name: lunchRestaurant.name,
           lat: lunchRestaurant.lat,
           lng: lunchRestaurant.lng,
+          rating: lunchRestaurant.rating,
           description: lunchRestaurant.description,
-          cuisine: lunchRestaurant.cuisine
+          duration: lunchRestaurant.duration
         },
         {
+          id: `day${day + 1}-afternoon`,
           time: '下午',
           type: 'attraction',
           name: afternoonAttraction.name,
           lat: afternoonAttraction.lat,
           lng: afternoonAttraction.lng,
+          rating: afternoonAttraction.rating,
           description: afternoonAttraction.description,
           duration: afternoonAttraction.duration
         },
         {
-          time: '晚间',
+          id: `day${day + 1}-evening`,
+          time: '晚上',
           type: 'hotel',
           name: eveningHotel.name,
           lat: eveningHotel.lat,
           lng: eveningHotel.lng,
+          rating: eveningHotel.rating,
           description: eveningHotel.description,
-          stars: eveningHotel.stars
+          duration: eveningHotel.duration
         }
       ]
     });

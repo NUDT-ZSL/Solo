@@ -1,107 +1,160 @@
 {
-  "北京": {
-    "attractions": [
-      { "name": "故宫博物院", "lat": 39.9163, "lng": 116.3972, "description": "中国明清两代的皇家宫殿，世界上现存规模最大的木质结构古建筑群", "duration": 3 },
-      { "name": "八达岭长城", "lat": 40.3588, "lng": 116.0204, "description": "万里长城最具代表性的段落，世界文化遗产", "duration": 4 },
-      { "name": "天坛公园", "lat": 39.8822, "lng": 116.4066, "description": "明清两代皇帝祭天祈谷的场所，世界文化遗产", "duration": 2 },
-      { "name": "颐和园", "lat": 39.9998, "lng": 116.2755, "description": "中国古典园林之首，皇家园林博物馆", "duration": 3 },
-      { "name": "天安门广场", "lat": 39.9055, "lng": 116.3976, "description": "世界上最大的城市广场之一，中国的象征", "duration": 1 },
-      { "name": "南锣鼓巷", "lat": 39.9371, "lng": 116.4029, "description": "北京最古老的街区之一，胡同文化的缩影", "duration": 2 }
-    ],
-    "restaurants": [
-      { "name": "全聚德烤鸭店", "lat": 39.9003, "lng": 116.3973, "description": "百年老字号，正宗北京烤鸭", "cuisine": "京菜" },
-      { "name": "东来顺饭庄", "lat": 39.9172, "lng": 116.4105, "description": "铜锅涮肉老字号，京城涮羊肉首选", "cuisine": "清真菜" },
-      { "name": "便宜坊烤鸭店", "lat": 39.8946, "lng": 116.3956, "description": "焖炉烤鸭代表，600年历史传承", "cuisine": "京菜" },
-      { "name": "护国寺小吃", "lat": 39.9345, "lng": 116.3737, "description": "老北京传统小吃荟萃之地", "cuisine": "小吃" }
-    ],
-    "hotels": [
-      { "name": "北京饭店", "lat": 39.9098, "lng": 116.4103, "description": "百年历史名店，地处长安街核心地段", "stars": 5 },
-      { "name": "王府井希尔顿酒店", "lat": 39.9148, "lng": 116.4127, "description": "位于繁华王府井商圈，出行便利", "stars": 5 },
-      { "name": "前门建国饭店", "lat": 39.8948, "lng": 116.3951, "description": "紧邻前门大街，感受老北京风情", "stars": 4 }
-    ]
-  },
-  "上海": {
-    "attractions": [
-      { "name": "外滩", "lat": 31.2400, "lng": 121.4900, "description": "上海的标志性景观带，万国建筑博览会", "duration": 2 },
-      { "name": "东方明珠塔", "lat": 31.2397, "lng": 121.4998, "description": "上海地标建筑，登高俯瞰浦江两岸", "duration": 2 },
-      { "name": "豫园", "lat": 31.2274, "lng": 121.4920, "description": "明代私家园林，江南古典园林代表", "duration": 2 },
-      { "name": "上海迪士尼乐园", "lat": 31.1440, "lng": 121.6570, "description": "中国大陆首座迪士尼主题乐园", "duration": 8 },
-      { "name": "田子坊", "lat": 31.2099, "lng": 121.4680, "description": "文艺气息浓厚的创意街区", "duration": 2 },
-      { "name": "南京路步行街", "lat": 31.2353, "lng": 121.4727, "description": "中华商业第一街，购物天堂", "duration": 2 }
-    ],
-    "restaurants": [
-      { "name": "南翔馒头店", "lat": 31.2273, "lng": 121.4923, "description": "百年老店，正宗南翔小笼包", "cuisine": "本帮菜" },
-      { "name": "老正兴菜馆", "lat": 31.2351, "lng": 121.4736, "description": "上海本帮菜鼻祖，百年传承", "cuisine": "本帮菜" },
-      { "name": "绿波廊酒楼", "lat": 31.2272, "lng": 121.4928, "description": "豫园内经典上海菜，接待过多国元首", "cuisine": "本帮菜" },
-      { "name": "小杨生煎", "lat": 31.2292, "lng": 121.4748, "description": "上海生煎包代表，皮脆汁鲜", "cuisine": "小吃" }
-    ],
-    "hotels": [
-      { "name": "和平饭店", "lat": 31.2420, "lng": 121.4880, "description": "外滩标志性建筑，百年奢华传奇", "stars": 5 },
-      { "name": "上海浦东香格里拉", "lat": 31.2380, "lng": 121.5020, "description": "陆家嘴核心地段，浦江美景尽收眼底", "stars": 5 },
-      { "name": "上海外滩茂悦大酒店", "lat": 31.2440, "lng": 121.4920, "description": "北外滩地标，270度无死角江景", "stars": 5 }
-    ]
-  },
-  "成都": {
-    "attractions": [
-      { "name": "大熊猫繁育研究基地", "lat": 30.7328, "lng": 104.1468, "description": "近距离观赏国宝大熊猫的绝佳去处", "duration": 3 },
-      { "name": "武侯祠", "lat": 30.6461, "lng": 104.0477, "description": "中国唯一的君臣合祀祠庙，三国文化圣地", "duration": 2 },
-      { "name": "锦里古街", "lat": 30.6451, "lng": 104.0488, "description": "西蜀历史上最古老的商业街之一", "duration": 2 },
-      { "name": "宽窄巷子", "lat": 30.6695, "lng": 104.0550, "description": "成都慢生活的代表，老成都的缩影", "duration": 2 },
-      { "name": "都江堰", "lat": 30.9985, "lng": 103.6070, "description": "世界文化遗产，两千年前的伟大水利工程", "duration": 4 },
-      { "name": "春熙路", "lat": 30.6571, "lng": 104.0815, "description": "成都最繁华的商业步行街", "duration": 2 }
-    ],
-    "restaurants": [
-      { "name": "陈麻婆豆腐", "lat": 30.6587, "lng": 104.0657, "description": "麻婆豆腐发源地，百年川菜老店", "cuisine": "川菜" },
-      { "name": "小龙坎火锅", "lat": 30.6549, "lng": 104.0793, "description": "成都人气火锅品牌，麻辣鲜香", "cuisine": "火锅" },
-      { "name": "蜀九香火锅", "lat": 30.6498, "lng": 104.0667, "description": "地道成都火锅，牛油锅底一绝", "cuisine": "火锅" },
-      { "name": "钟水饺", "lat": 30.6573, "lng": 104.0685, "description": "百年老字号，成都名小吃代表", "cuisine": "小吃" }
-    ],
-    "hotels": [
-      { "name": "成都香格里拉大酒店", "lat": 30.6475, "lng": 104.0852, "description": "市中心豪华酒店，俯瞰锦江", "stars": 5 },
-      { "name": "成都钓鱼台精品酒店", "lat": 30.6690, "lng": 104.0535, "description": "宽窄巷子旁，感受成都文化", "stars": 5 },
-      { "name": "成都太古里博舍酒店", "lat": 30.6513, "lng": 104.0842, "description": "时尚设计酒店，毗邻太古里", "stars": 5 }
-    ]
-  },
-  "西安": {
-    "attractions": [
-      { "name": "秦始皇兵马俑博物馆", "lat": 34.3842, "lng": 109.2785, "description": "世界第八大奇迹，秦始皇的地下军团", "duration": 4 },
-      { "name": "大雁塔", "lat": 34.2186, "lng": 108.9645, "description": "唐代高僧玄奘译经之地，西安地标", "duration": 2 },
-      { "name": "华清宫", "lat": 34.3624, "lng": 109.2140, "description": "唐代皇家温泉行宫，杨贵妃沐浴之地", "duration": 3 },
-      { "name": "西安城墙", "lat": 34.2613, "lng": 108.9463, "description": "中国现存最完整的古代城垣", "duration": 2 },
-      { "name": "回民街", "lat": 34.2654, "lng": 108.9421, "description": "西安著名的美食文化街区", "duration": 2 },
-      { "name": "陕西历史博物馆", "lat": 34.2275, "lng": 108.9568, "description": "华夏宝库，中国第一座大型现代化博物馆", "duration": 3 }
-    ],
-    "restaurants": [
-      { "name": "老孙家饭庄", "lat": 34.2658, "lng": 108.9425, "description": "百年老字号，西安泡馍扛把子", "cuisine": "清真菜" },
-      { "name": "贾三灌汤包", "lat": 34.2650, "lng": 108.9410, "description": "回民街名店，灌汤包一绝", "cuisine": "小吃" },
-      { "name": "子午路张记肉夹馍", "lat": 34.2310, "lng": 108.9480, "description": "西安肉夹馍代表，酥脆白吉馍", "cuisine": "小吃" },
-      { "name": "长安大牌档", "lat": 34.2563, "lng": 108.9512, "description": "陕菜文化体验餐厅，葫芦鸡必点", "cuisine": "陕菜" }
-    ],
-    "hotels": [
-      { "name": "西安威斯汀大酒店", "lat": 34.2217, "lng": 108.9612, "description": "大雁塔旁，坐拥曲江美景", "stars": 5 },
-      { "name": "西安索菲特人民大厦", "lat": 34.2647, "lng": 108.9468, "description": "古城中心的法式优雅", "stars": 5 },
-      { "name": "西安华清御汤酒店", "lat": 34.3630, "lng": 109.2150, "description": "华清宫畔，享受皇家温泉", "stars": 5 }
-    ]
-  },
-  "杭州": {
-    "attractions": [
-      { "name": "西湖", "lat": 30.2590, "lng": 120.1388, "description": "人间天堂，世界文化遗产", "duration": 4 },
-      { "name": "灵隐寺", "lat": 30.2400, "lng": 120.1000, "description": "江南名刹，千年古寺", "duration": 2 },
-      { "name": "雷峰塔", "lat": 30.2310, "lng": 120.1488, "description": "白蛇传故事发生地，西湖十景之一", "duration": 1 },
-      { "name": "千岛湖", "lat": 29.6000, "lng": 119.0000, "description": "天下第一秀水，碧波千岛", "duration": 6 },
-      { "name": "宋城", "lat": 30.1860, "lng": 120.1200, "description": "大型宋代文化主题公园，宋城千古情", "duration": 4 },
-      { "name": "河坊街", "lat": 30.2463, "lng": 120.1690, "description": "杭州历史文化街区，感受南宋风情", "duration": 2 }
-    ],
-    "restaurants": [
-      { "name": "楼外楼", "lat": 30.2560, "lng": 120.1420, "description": "西湖畔百年老店，西湖醋鱼闻名天下", "cuisine": "杭帮菜" },
-      { "name": "知味观", "lat": 30.2480, "lng": 120.1690, "description": "杭州名小吃汇聚，东坡肉必尝", "cuisine": "杭帮菜" },
-      { "name": "外婆家", "lat": 30.2520, "lng": 120.1550, "description": "高性价比杭帮菜，茶香虾招牌", "cuisine": "杭帮菜" },
-      { "name": "奎元馆", "lat": 30.2500, "lng": 120.1700, "description": "百年面馆，片儿川发源地", "cuisine": "面食" }
-    ],
-    "hotels": [
-      { "name": "杭州西湖国宾馆", "lat": 30.2380, "lng": 120.1380, "description": "西湖畔的园林式国宾馆，领袖下榻之地", "stars": 5 },
-      { "name": "杭州西子湖四季酒店", "lat": 30.2440, "lng": 120.1460, "description": "灵隐旁的江南庭院，西湖美景入室", "stars": 5 },
-      { "name": "杭州法云安缦", "lat": 30.2380, "lng": 120.1050, "description": "灵隐寺旁的古村落，隐世奢华", "stars": 5 }
-    ]
-  }
+  "cities": [
+    {
+      "name": "北京",
+      "attractions": [
+        {"id":"bj-a01","name":"故宫博物院","lat":39.9163,"lng":116.3972,"rating":4.9,"description":"中国明清两代皇家宫殿，世界上现存规模最大的木质结构古建筑群","duration":"3小时","type":"attraction"},
+        {"id":"bj-a02","name":"八达岭长城","lat":40.3588,"lng":116.0204,"rating":4.8,"description":"万里长城最具代表性的段落，世界文化遗产，不到长城非好汉","duration":"4小时","type":"attraction"},
+        {"id":"bj-a03","name":"天坛公园","lat":39.8822,"lng":116.4066,"rating":4.7,"description":"明清两代皇帝祭天祈谷的场所，世界文化遗产，建筑宏伟壮观","duration":"2小时","type":"attraction"},
+        {"id":"bj-a04","name":"颐和园","lat":39.9998,"lng":116.2755,"rating":4.8,"description":"中国古典园林之首，皇家园林博物馆，昆明湖万寿山相映成趣","duration":"3小时","type":"attraction"},
+        {"id":"bj-a05","name":"南锣鼓巷","lat":39.9371,"lng":116.4029,"rating":4.5,"description":"北京最古老的街区之一，胡同文化的缩影，文艺小店林立","duration":"2小时","type":"attraction"},
+        {"id":"bj-a06","name":"798艺术区","lat":39.9845,"lng":116.4963,"rating":4.6,"description":"当代艺术聚集地，由旧工厂改造，充满工业风与艺术气息","duration":"2.5小时","type":"attraction"},
+        {"id":"bj-a07","name":"圆明园遗址公园","lat":40.0080,"lng":116.2980,"rating":4.5,"description":"万园之园遗址，铭记历史沧桑，残垣断壁诉说着曾经的辉煌","duration":"2小时","type":"attraction"},
+        {"id":"bj-a08","name":"鸟巢国家体育场","lat":39.9929,"lng":116.3966,"rating":4.5,"description":"2008北京奥运会主体育场，钢结构建筑奇迹，现代地标","duration":"1.5小时","type":"attraction"},
+        {"id":"bj-a09","name":"景山公园","lat":39.9240,"lng":116.3960,"rating":4.4,"description":"俯瞰故宫全景的最佳地点，崇祯自缢处，明崇祯皇帝殉国处","duration":"1小时","type":"attraction"},
+        {"id":"bj-a10","name":"北海公园","lat":39.9285,"lng":116.3830,"rating":4.5,"description":"中国现存最古老的皇家园林，白塔倒映碧水，让我们荡起双桨","duration":"2小时","type":"attraction"}
+      ],
+      "restaurants": [
+        {"id":"bj-r01","name":"全聚德烤鸭店","lat":39.9003,"lng":116.3973,"rating":4.5,"description":"百年老字号，正宗北京烤鸭，皮脆肉嫩，名满天下","duration":"1.5小时","type":"restaurant"},
+        {"id":"bj-r02","name":"便宜坊烤鸭店","lat":39.8946,"lng":116.3956,"rating":4.4,"description":"焖炉烤鸭代表，600年历史传承，鸭子皮酥肉嫩","duration":"1.5小时","type":"restaurant"},
+        {"id":"bj-r03","name":"东来顺饭庄","lat":39.9172,"lng":116.4105,"rating":4.4,"description":"铜锅涮肉老字号，京城涮羊肉首选，肉质鲜嫩","duration":"1.5小时","type":"restaurant"},
+        {"id":"bj-r04","name":"仿膳饭庄","lat":39.9260,"lng":116.3840,"rating":4.5,"description":"北海公园内的宫廷菜，精致小点心，体验皇家御膳","duration":"2小时","type":"restaurant"},
+        {"id":"bj-r05","name":"烤肉季饭庄","lat":39.9430,"lng":116.3820,"rating":4.3,"description":"什刹海边的百年老店，炙子烤肉，边吃边赏湖景","duration":"1.5小时","type":"restaurant"},
+        {"id":"bj-r06","name":"护国寺小吃","lat":39.9345,"lng":116.3737,"rating":4.2,"description":"老北京传统小吃荟萃之地，艾窝窝、驴打滚、豆汁焦圈","duration":"1小时","type":"restaurant"},
+        {"id":"bj-r07","name":"局气","lat":39.9050,"lng":116.3900,"rating":4.4,"description":"创意京菜餐厅，兔爷土豆泥、蜂窝煤炒饭，新颖有趣","duration":"1.5小时","type":"restaurant"},
+        {"id":"bj-r08","name":"大董烤鸭店","lat":39.9100,"lng":116.4150,"rating":4.6,"description":"高端创意烤鸭，酥不腻烤鸭，精致摆盘，美食艺术","duration":"2小时","type":"restaurant"},
+        {"id":"bj-r09","name":"四季民福","lat":39.8990,"lng":116.4050,"rating":4.5,"description":"故宫边上的烤鸭店，景观位可看角楼，性价比高","duration":"1.5小时","type":"restaurant"},
+        {"id":"bj-r10","name":"花家怡园","lat":39.9380,"lng":116.4180,"rating":4.3,"description":"四合院式餐厅，新派京菜，环境雅致，京韵十足","duration":"2小时","type":"restaurant"}
+      ],
+      "hotels": [
+        {"id":"bj-h01","name":"北京饭店","lat":39.9098,"lng":116.4103,"rating":4.6,"description":"百年历史名店，地处长安街核心地段，见证时代变迁","duration":"过夜","type":"hotel"},
+        {"id":"bj-h02","name":"王府井希尔顿酒店","lat":39.9148,"lng":116.4127,"rating":4.5,"description":"位于繁华王府井商圈，购物出行便利，商务首选","duration":"过夜","type":"hotel"},
+        {"id":"bj-h03","name":"故宫漫心酒店","lat":39.9150,"lng":116.3950,"rating":4.4,"description":"步行可达故宫，老北京胡同里的精品酒店，闹中取静","duration":"过夜","type":"hotel"},
+        {"id":"bj-h04","name":"北京瑰丽酒店","lat":39.9320,"lng":116.4520,"rating":4.7,"description":"奢华酒店代表，艺术氛围浓厚，CBD核心区域","duration":"过夜","type":"hotel"},
+        {"id":"bj-h05","name":"长安街W酒店","lat":39.9080,"lng":116.4200,"rating":4.3,"description":"时尚设计酒店，紧邻长安街，潮人打卡圣地","duration":"过夜","type":"hotel"},
+        {"id":"bj-h06","name":"诺富特和平宾馆","lat":39.9160,"lng":116.4130,"rating":4.2,"description":"王府井商圈老牌酒店，交通便利，经济实惠","duration":"过夜","type":"hotel"},
+        {"id":"bj-h07","name":"北京国际饭店","lat":39.9100,"lng":116.4220,"rating":4.3,"description":"长安街上的标志性酒店，地理位置绝佳，商务首选","duration":"过夜","type":"hotel"},
+        {"id":"bj-h08","name":"前门皇家驿栈","lat":39.8960,"lng":116.3970,"rating":4.4,"description":"前门胡同里的设计酒店，屋顶露台看正阳门，特色十足","duration":"过夜","type":"hotel"},
+        {"id":"bj-h09","name":"北京新世界酒店","lat":39.8950,"lng":116.4080,"rating":4.3,"description":"崇文门商圈，紧邻天坛，商务旅游两相宜","duration":"过夜","type":"hotel"},
+        {"id":"bj-h10","name":"什刹海紫檀文化酒店","lat":39.9420,"lng":116.3870,"rating":4.5,"description":"什刹海边的四合院酒店，紫檀家具，老北京风情浓郁","duration":"过夜","type":"hotel"}
+      ]
+    },
+    {
+      "name": "上海",
+      "attractions": [
+        {"id":"sh-a01","name":"外滩","lat":31.2400,"lng":121.4900,"rating":4.8,"description":"上海的标志性景观带，万国建筑博览会，黄浦江畔璀璨夜景","duration":"2小时","type":"attraction"},
+        {"id":"sh-a02","name":"东方明珠塔","lat":31.2397,"lng":121.4998,"rating":4.6,"description":"上海地标建筑，登高俯瞰浦江两岸，悬空玻璃走廊刺激体验","duration":"2小时","type":"attraction"},
+        {"id":"sh-a03","name":"豫园","lat":31.2274,"lng":121.4920,"rating":4.7,"description":"明代私家园林，江南古典园林代表，亭台楼阁曲径通幽","duration":"2小时","type":"attraction"},
+        {"id":"sh-a04","name":"南京路步行街","lat":31.2353,"lng":121.4727,"rating":4.5,"description":"中华商业第一街，购物天堂，百年老店林立","duration":"2小时","type":"attraction"},
+        {"id":"sh-a05","name":"田子坊","lat":31.2099,"lng":121.4680,"rating":4.4,"description":"文艺气息浓厚的创意街区，石库门里弄改造，文艺小店多","duration":"2小时","type":"attraction"},
+        {"id":"sh-a06","name":"上海博物馆","lat":31.2330,"lng":121.4760,"rating":4.7,"description":"中国最大的古代艺术博物馆之一，青铜器和瓷器馆藏丰富","duration":"2.5小时","type":"attraction"},
+        {"id":"sh-a07","name":"朱家角古镇","lat":31.1050,"lng":121.0530,"rating":4.5,"description":"上海威尼斯，江南水乡古镇，放生桥、北大街古色古香","duration":"3小时","type":"attraction"},
+        {"id":"sh-a08","name":"上海迪士尼乐园","lat":31.1440,"lng":121.6570,"rating":4.8,"description":"中国大陆首座迪士尼主题乐园，米奇大街、奇想花园梦幻体验","duration":"8小时","type":"attraction"},
+        {"id":"sh-a09","name":"武康路","lat":31.2080,"lng":121.4460,"rating":4.5,"description":"上海最美马路，武康大楼地标，梧桐树下的老洋房","duration":"1.5小时","type":"attraction"},
+        {"id":"sh-a10","name":"新天地","lat":31.2210,"lng":121.4740,"rating":4.5,"description":"石库门改造的时尚地标，高端餐饮酒吧，中西合璧","duration":"2小时","type":"attraction"}
+      ],
+      "restaurants": [
+        {"id":"sh-r01","name":"南翔馒头店","lat":31.2273,"lng":121.4923,"rating":4.4,"description":"百年老店，正宗南翔小笼包，皮薄馅大汤汁鲜","duration":"1小时","type":"restaurant"},
+        {"id":"sh-r02","name":"老正兴菜馆","lat":31.2351,"lng":121.4736,"rating":4.3,"description":"上海本帮菜鼻祖，百年传承，红烧肉、油爆虾经典","duration":"1.5小时","type":"restaurant"},
+        {"id":"sh-r03","name":"绿波廊酒楼","lat":31.2272,"lng":121.4928,"rating":4.5,"description":"豫园内经典上海菜，接待过多国元首，精致点心","duration":"1.5小时","type":"restaurant"},
+        {"id":"sh-r04","name":"王宝和大酒店","lat":31.2380,"lng":121.4850,"rating":4.4,"description":"蟹宴大王，阳澄湖大闸蟹，蟹粉系列美味","duration":"2小时","type":"restaurant"},
+        {"id":"sh-r05","name":"小杨生煎","lat":31.2292,"lng":121.4748,"rating":4.3,"description":"上海生煎包代表，皮脆汁鲜，性价比超高","duration":"45分钟","type":"restaurant"},
+        {"id":"sh-r06","name":"鼎泰丰","lat":31.2350,"lng":121.4650,"rating":4.5,"description":"米其林推荐，小笼包皮薄馅多，精致美味","duration":"1小时","type":"restaurant"},
+        {"id":"sh-r07","name":"老大房","lat":31.2360,"lng":121.4780,"rating":4.2,"description":"上海老字号，鲜肉月饼、熏鱼，本帮熟食","duration":"45分钟","type":"restaurant"},
+        {"id":"sh-r08","name":"上海老饭店","lat":31.2250,"lng":121.4860,"rating":4.4,"description":"百年本帮菜老字号，八宝鸭、虾子大乌参经典","duration":"1.5小时","type":"restaurant"},
+        {"id":"sh-r09","name":"蟹壳黄","lat":31.2320,"lng":121.4700,"rating":4.1,"description":"上海传统小吃，酥香可口，咸甜两味","duration":"30分钟","type":"restaurant"},
+        {"id":"sh-r10","name":"杏花楼","lat":31.2330,"lng":121.4680,"rating":4.3,"description":"百年粤菜馆，广式点心，月饼闻名","duration":"1.5小时","type":"restaurant"}
+      ],
+      "hotels": [
+        {"id":"sh-h01","name":"和平饭店","lat":31.2420,"lng":121.4880,"rating":4.8,"description":"外滩标志性建筑，百年奢华传奇，老上海风情","duration":"过夜","type":"hotel"},
+        {"id":"sh-h02","name":"上海半岛酒店","lat":31.2420,"lng":121.4920,"rating":4.9,"description":"外滩顶级奢华酒店，劳斯莱斯接送，极致服务","duration":"过夜","type":"hotel"},
+        {"id":"sh-h03","name":"外滩华尔道夫酒店","lat":31.2380,"lng":121.4930,"rating":4.7,"description":"百年建筑与现代奢华完美融合，外滩景观无敌","duration":"过夜","type":"hotel"},
+        {"id":"sh-h04","name":"浦东香格里拉","lat":31.2380,"lng":121.5020,"rating":4.6,"description":"陆家嘴核心地段，浦江美景尽收眼底，商务首选","duration":"过夜","type":"hotel"},
+        {"id":"sh-h05","name":"上海大厦","lat":31.2430,"lng":121.4870,"rating":4.4,"description":"北外滩地标，原名百老汇大厦，历史悠久","duration":"过夜","type":"hotel"},
+        {"id":"sh-h06","name":"静安香格里拉","lat":31.2250,"lng":121.4490,"rating":4.6,"description":"静安寺商圈，交通便利，购物餐饮方便","duration":"过夜","type":"hotel"},
+        {"id":"sh-h07","name":"锦江饭店","lat":31.2250,"lng":121.4620,"rating":4.3,"description":"上海经典老牌酒店，花园洋房，历史底蕴深厚","duration":"过夜","type":"hotel"},
+        {"id":"sh-h08","name":"上海威斯汀大饭店","lat":31.2360,"lng":121.4760,"rating":4.5,"description":"外滩附近，顶层泳池，商务休闲两相宜","duration":"过夜","type":"hotel"},
+        {"id":"sh-h09","name":"世茂皇家艾美酒店","lat":31.2380,"lng":121.4780,"rating":4.5,"description":"南京东路地标，楼高66层，俯瞰上海城市风光","duration":"过夜","type":"hotel"},
+        {"id":"sh-h10","name":"豫园万丽酒店","lat":31.2290,"lng":121.4900,"rating":4.3,"description":"豫园旁，城隍庙边，感受老上海风情","duration":"过夜","type":"hotel"}
+      ]
+    },
+    {
+      "name": "成都",
+      "attractions": [
+        {"id":"cd-a01","name":"大熊猫繁育研究基地","lat":30.7328,"lng":104.1468,"rating":4.8,"description":"近距离观赏国宝大熊猫的绝佳去处，滚滚萌化人心","duration":"3小时","type":"attraction"},
+        {"id":"cd-a02","name":"武侯祠","lat":30.6461,"lng":104.0477,"rating":4.6,"description":"中国唯一的君臣合祀祠庙，三国文化圣地，诸葛亮威名","duration":"2小时","type":"attraction"},
+        {"id":"cd-a03","name":"锦里古街","lat":30.6451,"lng":104.0488,"rating":4.5,"description":"西蜀历史上最古老的商业街之一，三国文化体验街","duration":"2小时","type":"attraction"},
+        {"id":"cd-a04","name":"宽窄巷子","lat":30.6695,"lng":104.0550,"rating":4.5,"description":"成都慢生活的代表，老成都的缩影，喝茶掏耳朵","duration":"2小时","type":"attraction"},
+        {"id":"cd-a05","name":"都江堰","lat":30.9985,"lng":103.6070,"rating":4.8,"description":"世界文化遗产，两千年前的伟大水利工程，李冰父子杰作","duration":"4小时","type":"attraction"},
+        {"id":"cd-a06","name":"杜甫草堂","lat":30.6610,"lng":104.0230,"rating":4.5,"description":"诗圣杜甫故居，草堂柴门，感受唐诗意境","duration":"2小时","type":"attraction"},
+        {"id":"cd-a07","name":"青城山","lat":30.9050,"lng":103.5150,"rating":4.7,"description":"世界文化遗产，道教名山，青城天下幽，云雾缭绕仙境","duration":"5小时","type":"attraction"},
+        {"id":"cd-a08","name":"春熙路","lat":30.6571,"lng":104.0815,"rating":4.4,"description":"成都最繁华的商业步行街，帅哥美女如云，购物天堂","duration":"2小时","type":"attraction"},
+        {"id":"cd-a09","name":"文殊院","lat":30.6810,"lng":104.0730,"rating":4.5,"description":"川西著名佛教寺院，香火鼎盛，素斋有名","duration":"1.5小时","type":"attraction"},
+        {"id":"cd-a10","name":"金沙遗址博物馆","lat":30.6820,"lng":104.0110,"rating":4.6,"description":"古蜀文明遗址，太阳神鸟金饰，三千年前的辉煌","duration":"2.5小时","type":"attraction"}
+      ],
+      "restaurants": [
+        {"id":"cd-r01","name":"龙抄手","lat":30.6580,"lng":104.0660,"rating":4.3,"description":"成都老字号小吃，抄手皮薄馅嫩，红油抄手经典","duration":"1小时","type":"restaurant"},
+        {"id":"cd-r02","name":"皇城老妈火锅","lat":30.6450,"lng":104.0550,"rating":4.5,"description":"成都火锅代表品牌，环境优雅，锅底醇厚","duration":"2小时","type":"restaurant"},
+        {"id":"cd-r03","name":"蜀九香火锅","lat":30.6498,"lng":104.0667,"rating":4.6,"description":"地道成都火锅，牛油锅底一绝，麻辣鲜香","duration":"2小时","type":"restaurant"},
+        {"id":"cd-r04","name":"小龙坎火锅","lat":30.6549,"lng":104.0793,"rating":4.5,"description":"成都人气火锅品牌，天天排队，味道巴适得板","duration":"2小时","type":"restaurant"},
+        {"id":"cd-r05","name":"大龙燚火锅","lat":30.6500,"lng":104.0800,"rating":4.4,"description":"明星都爱的火锅，麻辣鲜香，越煮越有味","duration":"2小时","type":"restaurant"},
+        {"id":"cd-r06","name":"马路边边麻辣烫","lat":30.6560,"lng":104.0720,"rating":4.4,"description":"复古风串串，怀旧80年代，串串配干碟","duration":"1.5小时","type":"restaurant"},
+        {"id":"cd-r07","name":"陈麻婆豆腐","lat":30.6587,"lng":104.0657,"rating":4.5,"description":"麻婆豆腐发源地，百年川菜老店，麻辣鲜香烫","duration":"1.5小时","type":"restaurant"},
+        {"id":"cd-r08","name":"钟水饺","lat":30.6573,"lng":104.0685,"rating":4.2,"description":"百年老字号，成都名小吃代表，甜水面好吃","duration":"1小时","type":"restaurant"},
+        {"id":"cd-r09","name":"玉林串串香","lat":30.6330,"lng":104.0640,"rating":4.3,"description":"玉林小区的串串，成都人的深夜食堂，性价比高","duration":"1.5小时","type":"restaurant"},
+        {"id":"cd-r10","name":"建设路小吃街","lat":30.6660,"lng":104.1050,"rating":4.4,"description":"电子科大旁的小吃街，烤脑花、冰粉、锅巴土豆","duration":"1.5小时","type":"restaurant"}
+      ],
+      "hotels": [
+        {"id":"cd-h01","name":"成都香格里拉大酒店","lat":30.6475,"lng":104.0852,"rating":4.6,"description":"市中心豪华酒店，俯瞰锦江，廊桥酒吧出名","duration":"过夜","type":"hotel"},
+        {"id":"cd-h02","name":"成都太古里博舍酒店","lat":30.6513,"lng":104.0842,"rating":4.8,"description":"时尚设计酒店，毗邻太古里，百年古寺改造","duration":"过夜","type":"hotel"},
+        {"id":"cd-h03","name":"成都瑞吉酒店","lat":30.6520,"lng":104.0650,"rating":4.7,"description":"奢华酒店，管家服务一流，金融城核心地段","duration":"过夜","type":"hotel"},
+        {"id":"cd-h04","name":"成都世纪城天堂洲际","lat":30.5830,"lng":104.0550,"rating":4.5,"description":"新会展中心旁，超大花园式酒店，度假风十足","duration":"过夜","type":"hotel"},
+        {"id":"cd-h05","name":"成都尼依格罗酒店","lat":30.6540,"lng":104.0830,"rating":4.7,"description":"IFS楼上的奢华酒店，太古里逛街方便，熊猫雕塑","duration":"过夜","type":"hotel"},
+        {"id":"cd-h06","name":"成都万达瑞华酒店","lat":30.6380,"lng":104.0760,"rating":4.6,"description":"顶级奢华，黄金马桶，极致体验，锦江畔","duration":"过夜","type":"hotel"},
+        {"id":"cd-h07","name":"成都钓鱼台精品酒店","lat":30.6690,"lng":104.0535,"rating":4.7,"description":"宽窄巷子旁，感受成都文化，四合院式酒店","duration":"过夜","type":"hotel"},
+        {"id":"cd-h08","name":"成都总府皇冠假日","lat":30.6570,"lng":104.0690,"rating":4.3,"description":"春熙路商圈，交通便利，性价比高，商务首选","duration":"过夜","type":"hotel"},
+        {"id":"cd-h09","name":"成都岷山饭店","lat":30.6510,"lng":104.0640,"rating":4.2,"description":"成都老牌酒店，锦江畔，位置好，机场大巴起点","duration":"过夜","type":"hotel"},
+        {"id":"cd-h10","name":"成都西藏饭店","lat":30.6760,"lng":104.0760,"rating":4.3,"description":"藏式风格主题酒店，体验藏族文化，特色鲜明","duration":"过夜","type":"hotel"}
+      ]
+    },
+    {
+      "name": "大理",
+      "attractions": [
+        {"id":"dl-a01","name":"洱海","lat":25.7820,"lng":100.2220,"rating":4.8,"description":"风花雪月四大名景之一，苍山雪洱海月，环湖骑行必体验","duration":"5小时","type":"attraction"},
+        {"id":"dl-a02","name":"大理古城","lat":25.6060,"lng":100.2670,"rating":4.6,"description":"千年南诏国古都，白族文化发源地，古朴典雅的小镇","duration":"3小时","type":"attraction"},
+        {"id":"dl-a03","name":"崇圣寺三塔","lat":25.6950,"lng":100.2380,"rating":4.7,"description":"大理地标，千年佛塔，天龙八部天龙寺原型，苍洱胜景","duration":"2.5小时","type":"attraction"},
+        {"id":"dl-a04","name":"苍山","lat":25.6450,"lng":100.1820,"rating":4.6,"description":"风花雪月之苍山雪，十九峰十八溪，洗马潭大索道","duration":"5小时","type":"attraction"},
+        {"id":"dl-a05","name":"双廊古镇","lat":25.8060,"lng":100.2050,"rating":4.5,"description":"苍洱风光第一镇，杨丽萍太阳宫，海景民宿聚集地","duration":"3小时","type":"attraction"},
+        {"id":"dl-a06","name":"喜洲古镇","lat":25.8570,"lng":100.1730,"rating":4.5,"description":"白族民居建筑博物馆，喜洲粑粑、扎染，田园风光","duration":"2小时","type":"attraction"},
+        {"id":"dl-a07","name":"南诏风情岛","lat":25.8140,"lng":100.1980,"rating":4.3,"description":"洱海中的小岛，南诏行宫，沙壹母群雕，风光秀丽","duration":"2小时","type":"attraction"},
+        {"id":"dl-a08","name":"蝴蝶泉","lat":25.8640,"lng":100.1470,"rating":4.2,"description":"五朵金花拍摄地，白族爱情圣地，蝴蝶会奇观","duration":"1.5小时","type":"attraction"},
+        {"id":"dl-a09","name":"大理大学","lat":25.6300,"lng":100.2800,"rating":4.3,"description":"中国最美大学之一，樱花浪漫，俯瞰洱海美景","duration":"1.5小时","type":"attraction"},
+        {"id":"dl-a10","name":"才村码头","lat":25.7730,"lng":100.2430,"rating":4.3,"description":"洱海西岸码头，乘船游湖，看日出日落，宁静悠闲","duration":"2小时","type":"attraction"}
+      ],
+      "restaurants": [
+        {"id":"dl-r01","name":"段公子","lat":25.6080,"lng":100.2650,"rating":4.5,"description":"大理古城网红餐厅，段誉的菜，创意云南菜，环境雅致","duration":"1.5小时","type":"restaurant"},
+        {"id":"dl-r02","name":"玉洱路银米线","lat":25.6100,"lng":100.2620,"rating":4.4,"description":"大理特色银米线，配料丰富，味道鲜美，本地人常去","duration":"1小时","type":"restaurant"},
+        {"id":"dl-r03","name":"再回首凉鸡米线","lat":25.6050,"lng":100.2680,"rating":4.3,"description":"大理名小吃，凉鸡米线酸辣开胃，古城老店","duration":"45分钟","type":"restaurant"},
+        {"id":"dl-r04","name":"苍洱春饭店","lat":25.6060,"lng":100.2660,"rating":4.3,"description":"白族家常菜，酸辣鱼、黄焖鸡，地道大理味道","duration":"1.5小时","type":"restaurant"},
+        {"id":"dl-r05","name":"益恒饭店","lat":25.8550,"lng":100.1750,"rating":4.4,"description":"喜洲古镇老字号，白族特色菜，喜洲粑粑超好吃","duration":"1.5小时","type":"restaurant"},
+        {"id":"dl-r06","name":"杨记乳扇","lat":25.6080,"lng":100.2700,"rating":4.2,"description":"大理特色乳扇，烤乳扇蘸玫瑰酱，奶香十足","duration":"30分钟","type":"restaurant"},
+        {"id":"dl-r07","name":"石板烧","lat":25.6030,"lng":100.2690,"rating":4.3,"description":"大理特色美食，石板上烤肉，滋滋作响，鲜香四溢","duration":"1.5小时","type":"restaurant"},
+        {"id":"dl-r08","name":"大理口福人家","lat":25.6100,"lng":100.2580,"rating":4.4,"description":"本地人推荐的白族菜馆，酸辣鱼、水性杨花，地道","duration":"1.5小时","type":"restaurant"},
+        {"id":"dl-r09","name":"老字号","lat":25.6070,"lng":100.2650,"rating":4.2,"description":"大理古城老店，饵丝、饵块，云南传统早餐","duration":"1小时","type":"restaurant"},
+        {"id":"dl-r10","name":"烤乳扇摊","lat":25.6050,"lng":100.2710,"rating":4.1,"description":"街头特色小吃，现烤乳扇，抹上玫瑰酱，美味","duration":"30分钟","type":"restaurant"}
+      ],
+      "hotels": [
+        {"id":"dl-h01","name":"大理古城兰林阁酒店","lat":25.6060,"lng":100.2650,"rating":4.5,"description":"古城内白族庭院式酒店，闹中取静，体验白族风情","duration":"过夜","type":"hotel"},
+        {"id":"dl-h02","name":"大理风花雪月酒店","lat":25.7000,"lng":100.2450,"rating":4.6,"description":"背靠苍山面朝洱海，五星级度假酒店，设施完备","duration":"过夜","type":"hotel"},
+        {"id":"dl-h03","name":"大理洱海天域英迪格","lat":25.7500,"lng":100.2400,"rating":4.7,"description":"洱海边的设计酒店，无敌海景，现代奢华","duration":"过夜","type":"hotel"},
+        {"id":"dl-h04","name":"大理苍海高尔夫度假酒店","lat":25.6900,"lng":100.1900,"rating":4.6,"description":"苍山脚下高尔夫度假村，山景湖景，高端度假","duration":"过夜","type":"hotel"},
+        {"id":"dl-h05","name":"大理古城云起客栈","lat":25.6040,"lng":100.2690,"rating":4.4,"description":"古城内文艺客栈，花园庭院，温馨舒适，家的感觉","duration":"过夜","type":"hotel"},
+        {"id":"dl-h06","name":"大理双廊半岛63","lat":25.8080,"lng":100.2030,"rating":4.7,"description":"双廊海景客栈，洱海边的白色房子，拍照圣地","duration":"过夜","type":"hotel"},
+        {"id":"dl-h07","name":"大理洱海龙湾酒店","lat":25.7200,"lng":100.2300,"rating":4.4,"description":"洱海边的园林式酒店，环境优美，度假休闲","duration":"过夜","type":"hotel"},
+        {"id":"dl-h08","name":"大理古城红龙井酒店","lat":25.6030,"lng":100.2670,"rating":4.3,"description":"古城内四合院式酒店，红龙井溪水边，清幽雅致","duration":"过夜","type":"hotel"},
+        {"id":"dl-h09","name":"大理才村听花堂","lat":25.7700,"lng":100.2450,"rating":4.5,"description":"才村海边花园民宿，花团锦簇，浪漫满屋","duration":"过夜","type":"hotel"},
+        {"id":"dl-h10","name":"大理苍山饭店","lat":25.6050,"lng":100.2550,"rating":4.2,"description":"大理老牌酒店，下关城区，交通便利，性价比高","duration":"过夜","type":"hotel"}
+      ]
+    }
+  ]
 }
