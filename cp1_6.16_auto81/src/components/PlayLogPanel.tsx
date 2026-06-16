@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import type { Course, PlayLog } from '@/types'
 import { ChevronDown, ChevronUp, Clock, Send, FileText } from 'lucide-react'
 import { pieces } from '@/data/pieces'
@@ -14,11 +14,15 @@ export default function PlayLogPanel({ course }: PlayLogPanelProps) {
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
-  const [form, setForm] = useState({
-    piece: '',
-    duration: 30,
-    note: '',
-  })
+  const [piece, setPiece] = useState<string>('')
+  const [duration, setDuration] = useState<number>(30)
+  const [note, setNote] = useState<string>('')
+
+  const resetForm = useCallback(() => {
+    setPiece('')
+    setDuration(30)
+    setNote('')
+  }, [])
 
   useEffect(() => {
     if (expanded) {
@@ -40,7 +44,7 @@ export default function PlayLogPanel({ course }: PlayLogPanelProps) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.piece || !form.note) return
+    if (!piece.trim() || !note.trim()) return
 
     setSubmitting(true)
     try {
@@ -49,16 +53,16 @@ export default function PlayLogPanel({ course }: PlayLogPanelProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           studentId: course.studentId,
-          piece: form.piece,
-          duration: form.duration,
-          note: form.note,
+          piece: piece,
+          duration: duration,
+          note: note,
         }),
       })
       const data = await res.json()
 
       if (data.success) {
         showToast('success', '日志提交成功')
-        setForm({ piece: '', duration: 30, note: '' })
+        resetForm()
         fetchLogs()
       } else {
         showToast('error', data.message || '提交失败')
@@ -77,6 +81,7 @@ export default function PlayLogPanel({ course }: PlayLogPanelProps) {
   return (
     <div>
       <button
+        type="button"
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-1 text-sm transition-colors hover:opacity-80"
         style={{ color: '#4A90D9' }}
@@ -157,12 +162,16 @@ export default function PlayLogPanel({ course }: PlayLogPanelProps) {
 
             <div className="space-y-4">
               <div>
-                <label style={{ fontSize: '13px', color: '#666', display: 'block', marginBottom: '4px' }}>
+                <label htmlFor={`piece-${course.id}`} style={{ fontSize: '13px', color: '#666', display: 'block', marginBottom: '4px' }}>
                   练习曲目
                 </label>
                 <select
-                  value={form.piece}
-                  onChange={(e) => setForm({ ...form, piece: e.target.value })}
+                  id={`piece-${course.id}`}
+                  name="piece"
+                  value={piece}
+                  onChange={(e) => {
+                    setPiece(e.target.value)
+                  }}
                   className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none focus:ring-2"
                   style={{ borderColor: '#E0E6ED' }}
                   required
@@ -177,15 +186,19 @@ export default function PlayLogPanel({ course }: PlayLogPanelProps) {
               </div>
 
               <div>
-                <label style={{ fontSize: '13px', color: '#666', display: 'block', marginBottom: '4px' }}>
+                <label htmlFor={`duration-${course.id}`} style={{ fontSize: '13px', color: '#666', display: 'block', marginBottom: '4px' }}>
                   练习时长（分钟）
                 </label>
                 <input
+                  id={`duration-${course.id}`}
                   type="number"
                   min={5}
                   max={120}
-                  value={form.duration}
-                  onChange={(e) => setForm({ ...form, duration: Number(e.target.value) })}
+                  value={duration}
+                  onChange={(e) => {
+                    const val = Number(e.target.value)
+                    setDuration(val)
+                  }}
                   className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none focus:ring-2"
                   style={{ borderColor: '#E0E6ED' }}
                   required
@@ -194,12 +207,15 @@ export default function PlayLogPanel({ course }: PlayLogPanelProps) {
               </div>
 
               <div>
-                <label style={{ fontSize: '13px', color: '#666', display: 'block', marginBottom: '4px' }}>
+                <label htmlFor={`note-${course.id}`} style={{ fontSize: '13px', color: '#666', display: 'block', marginBottom: '4px' }}>
                   练习心得
                 </label>
                 <textarea
-                  value={form.note}
-                  onChange={(e) => setForm({ ...form, note: e.target.value })}
+                  id={`note-${course.id}`}
+                  value={note}
+                  onChange={(e) => {
+                    setNote(e.target.value)
+                  }}
                   rows={3}
                   className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none focus:ring-2 resize-none"
                   style={{ borderColor: '#E0E6ED' }}

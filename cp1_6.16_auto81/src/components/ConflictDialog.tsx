@@ -9,11 +9,12 @@ export default function ConflictDialog() {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30">
       <div
-        className="animate-shake relative w-full max-w-md mx-4 p-6"
+        className="relative w-full max-w-md mx-4 p-6"
         style={{
           borderRadius: '16px',
           background: '#FFF5F5',
           border: '2px solid #E74C3C',
+          animation: 'shake 0.3s ease-in-out',
         }}
       >
         <button

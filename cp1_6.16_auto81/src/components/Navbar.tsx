@@ -13,7 +13,7 @@ export default function Navbar() {
   const location = useLocation()
 
   function isActive(path: string): boolean {
-    return location.pathname === path || location.pathname.startsWith(path + '/')
+    return location.pathname === path
   }
 
   return (

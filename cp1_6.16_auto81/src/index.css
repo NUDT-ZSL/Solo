@@ -98,10 +98,20 @@ body {
 @media (max-width: 767px) {
   .course-card {
     border-left: none !important;
+    border-left-width: 0 !important;
+    border-left-style: none !important;
   }
 
   .page-container {
     max-width: 100% !important;
     padding: 16px !important;
+  }
+
+  nav > div {
+    max-width: 100% !important;
+  }
+
+  main > div {
+    max-width: 100% !important;
   }
 }
