@@ -224,16 +224,19 @@ const StickyNoteComponent: React.FC<StickyNoteProps> = ({
           border-radius: 4px;
           cursor: move;
           user-select: none;
-          box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.15);
-          transition: box-shadow 0.1s ease-out, transform 0.1s ease-out;
+          box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.12);
+          transition: box-shadow 0.1s linear;
           overflow: hidden;
         }
 
-        .sticky-note.dragging,
-        .sticky-note.resizing {
-          box-shadow: 8px 8px 24px rgba(0, 0, 0, 0.3), 0 0 0 4px rgba(79, 195, 247, 0.1);
+        .sticky-note.dragging {
+          box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.2);
           z-index: 100;
-          transform: scale(1.01);
+        }
+
+        .sticky-note.resizing {
+          box-shadow: 3px 3px 10px rgba(0, 0, 0, 0.16);
+          z-index: 100;
         }
 
         .sticky-note.selected {

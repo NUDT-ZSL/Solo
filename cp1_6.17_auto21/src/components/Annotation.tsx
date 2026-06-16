@@ -232,11 +232,11 @@ const AnnotationComponent: React.FC<AnnotationProps> = ({
           border: 2px solid #ffffff;
           box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
           z-index: 2;
-          transition: all 0.3s ease;
         }
 
         .annotation-marker:hover .marker-dot {
-          animation: markerBreathe 1.5s ease-in-out infinite;
+          animation: markerBreathe 1.2s ease-in-out infinite;
+          animation-delay: 0s;
         }
 
         @keyframes markerBreathe {
@@ -245,13 +245,9 @@ const AnnotationComponent: React.FC<AnnotationProps> = ({
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(231, 76, 60, 0.5);
           }
           50% {
-            transform: translate(-50%, -50%) scale(1.3);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4), 0 0 0 8px rgba(231, 76, 60, 0);
+            transform: translate(-50%, -50%) scale(1.25);
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35), 0 0 0 6px rgba(231, 76, 60, 0);
           }
-        }
-
-        .annotation-marker:hover .marker-count {
-          animation: markerBreathe 1.5s ease-in-out infinite;
         }
 
         .marker-pulse {

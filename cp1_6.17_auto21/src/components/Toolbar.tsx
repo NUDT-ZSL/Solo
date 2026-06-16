@@ -184,10 +184,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
           width: 24px;
           height: 24px;
           border-radius: 50%;
-          border: 1px solid #bdbdbd;
+          border: 1px solid rgba(0, 0, 0, 0.15);
           cursor: pointer;
           transition: transform 0.2s ease, box-shadow 0.2s ease;
-          box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05);
+          box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
         }
 
         .color-circle:hover {

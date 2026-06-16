@@ -15,15 +15,34 @@ interface ProjectListProps {
 
 const ProjectList: React.FC<ProjectListProps> = ({ userName }) => {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
     fetch('/api/projects')
       .then(res => res.json())
-      .then(data => {
+      .then(async (data: Project[]) => {
         setProjects(data);
         setLoading(false);
+
+        const thumbnailMap: Record<string, string> = {};
+        for (const project of data) {
+          if (project.thumbnail) {
+            thumbnailMap[project.id] = project.thumbnail;
+          } else {
+            try {
+              const res = await fetch(`/api/whiteboards/${project.id}/thumbnail`);
+              const thumbnailData = await res.json();
+              if (thumbnailData.thumbnail) {
+                thumbnailMap[project.id] = thumbnailData.thumbnail;
+              }
+            } catch (e) {
+              console.error(`Failed to load thumbnail for ${project.id}:`, e);
+            }
+          }
+        }
+        setThumbnails(thumbnailMap);
       })
       .catch(err => {
         console.error('Failed to load projects:', err);
@@ -71,8 +90,14 @@ const ProjectList: React.FC<ProjectListProps> = ({ userName }) => {
                 onClick={() => handleProjectClick(project.id)}
               >
                 <div className="card-thumbnail">
-                  {project.thumbnail ? (
-                    <img src={project.thumbnail} alt={project.title} />
+                  {project.thumbnail || thumbnails[project.id] ? (
+                    <img
+                      src={project.thumbnail || thumbnails[project.id]}
+                      alt={project.title}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
                   ) : (
                     <div className="thumbnail-placeholder">
                       <div className="thumbnail-gradient" />
@@ -215,7 +240,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ userName }) => {
         }
 
         .card-thumbnail {
-          height: 130px;
+          height: 160px;
           overflow: hidden;
           background: #ffffff;
           display: flex;
@@ -226,14 +251,14 @@ const ProjectList: React.FC<ProjectListProps> = ({ userName }) => {
 
         .card-thumbnail img {
           width: 200px;
-          height: 110px;
+          height: 150px;
           object-fit: cover;
           border-radius: 4px;
         }
 
         .thumbnail-placeholder {
           width: 200px;
-          height: 110px;
+          height: 150px;
           border-radius: 4px;
           position: relative;
           overflow: hidden;

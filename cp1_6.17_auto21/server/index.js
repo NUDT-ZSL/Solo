@@ -22,30 +22,65 @@ app.use(express.json({ limit: '5mb' }));
 const whiteboards = new Map();
 const onlineUsers = new Map();
 
+function generateThumbnail(boardId, title) {
+  const colors = [
+    { bg1: '#E0F7FA', bg2: '#B2EBF2', accent: '#4FC3F7' },
+    { bg1: '#F3E5F5', bg2: '#E1BEE7', accent: '#BA68C8' },
+    { bg1: '#FFF9C4', bg2: '#FFF59D', accent: '#FBC02D' },
+    { bg1: '#FFEBEE', bg2: '#FFCDD2', accent: '#EF5350' },
+    { bg1: '#E8F5E9', bg2: '#C8E6C9', accent: '#66BB6A' },
+    { bg1: '#E3F2FD', bg2: '#BBDEFB', accent: '#42A5F5' }
+  ];
+  const hash = boardId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const palette = colors[hash % colors.length];
+
+  const titleShort = title.length > 8 ? title.substring(0, 8) + '..' : title;
+  
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+    <defs>
+      <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:${palette.bg1}"/>
+        <stop offset="100%" style="stop-color:${palette.bg2}"/>
+      </linearGradient>
+    </defs>
+    <rect width="400" height="300" fill="url(#bg)"/>
+    <circle cx="70" cy="70" r="25" fill="none" stroke="${palette.accent}" stroke-width="3"/>
+    <rect x="280" y="45" width="70" height="45" rx="3" fill="none" stroke="#EF5350" stroke-width="3"/>
+    <line x1="50" y1="240" x2="140" y2="200" stroke="#424242" stroke-width="3" stroke-linecap="round"/>
+    <rect x="240" y="200" width="90" height="70" rx="4" fill="#FFF9C4" stroke="#FBC02D" stroke-width="2"/>
+    <text x="285" y="242" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#424242">${titleShort}</text>
+    <circle cx="200" cy="150" r="18" fill="${palette.accent}" opacity="0.6"/>
+    <rect x="150" y="100" width="100" height="100" rx="8" fill="white" opacity="0.3"/>
+  </svg>`;
+
+  const base64 = Buffer.from(svg).toString('base64');
+  return `data:image/svg+xml;base64,${base64}`;
+}
+
 const sampleProjects = [
   {
     id: 'board-1',
     title: '产品设计评审',
     lastEditTime: Date.now() - 3600000,
-    thumbnail: null
+    thumbnail: generateThumbnail('board-1', '产品设计评审')
   },
   {
     id: 'board-2',
     title: 'UI组件讨论',
     lastEditTime: Date.now() - 7200000,
-    thumbnail: null
+    thumbnail: generateThumbnail('board-2', 'UI组件讨论')
   },
   {
     id: 'board-3',
     title: '需求头脑风暴',
     lastEditTime: Date.now() - 86400000,
-    thumbnail: null
+    thumbnail: generateThumbnail('board-3', '需求头脑风暴')
   },
   {
     id: 'board-4',
     title: '架构设计图',
     lastEditTime: Date.now() - 172800000,
-    thumbnail: null
+    thumbnail: generateThumbnail('board-4', '架构设计图')
   }
 ];
 
@@ -85,6 +120,14 @@ app.get('/api/whiteboards/:id', (req, res) => {
   const { id } = req.params;
   const board = initWhiteboard(id);
   res.json(board);
+});
+
+app.get('/api/whiteboards/:id/thumbnail', (req, res) => {
+  const { id } = req.params;
+  const project = sampleProjects.find(p => p.id === id);
+  const title = project ? project.title : `白板 ${id}`;
+  const thumbnail = generateThumbnail(id, title);
+  res.json({ id, thumbnail });
 });
 
 io.on('connection', (socket) => {

@@ -160,8 +160,6 @@ export function formatRelativeTime(timestamp: number): string {
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
-  const weeks = Math.floor(days / 7);
-  const months = Math.floor(days / 30);
 
   if (seconds < 60) {
     return '刚刚';
@@ -171,12 +169,28 @@ export function formatRelativeTime(timestamp: number): string {
     return `${hours} 小时前`;
   } else if (days < 7) {
     return `${days} 天前`;
-  } else if (weeks < 4) {
+  } else if (days < 30) {
+    const weeks = Math.floor(days / 7);
     return `${weeks} 周前`;
-  } else if (months < 12) {
-    return `${months} 个月前`;
   } else {
-    return formatDateTime(timestamp);
+    const nowDate = new Date(now);
+    const thenDate = new Date(timestamp);
+    let monthDiff = (nowDate.getFullYear() - thenDate.getFullYear()) * 12
+      + (nowDate.getMonth() - thenDate.getMonth());
+    
+    if (nowDate.getDate() < thenDate.getDate()) {
+      monthDiff -= 1;
+    }
+
+    if (monthDiff < 1) {
+      monthDiff = 1;
+    }
+
+    if (monthDiff < 12) {
+      return `${monthDiff} 个月前`;
+    } else {
+      return formatDateTime(timestamp);
+    }
   }
 }
 
