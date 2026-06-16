@@ -1,14 +1,25 @@
 import React, { useState } from 'react';
-import { Plant, getCategoryColor } from '../plantManager';
+import { Plant, getSpeciesColor } from '../plantManager';
+
+export type CareStatus = 'watered' | 'fertilized' | 'overdue' | 'idle';
 
 interface PlantCardProps {
   plant: Plant;
   onDelete: (id: string) => void;
+  careStatus: CareStatus;
 }
 
-const PlantCard: React.FC<PlantCardProps> = ({ plant, onDelete }) => {
+const STATUS_CONFIG: Record<CareStatus, { icon: string; label: string; bg: string }> = {
+  watered: { icon: '💧', label: '已浇水', bg: '#E3F2FD' },
+  fertilized: { icon: '🍃', label: '已施肥', bg: '#E8F5E9' },
+  overdue: { icon: '⚠️', label: '需养护', bg: '#FFF3E0' },
+  idle: { icon: '🆕', label: '新档案', bg: '#F5F5F5' },
+};
+
+const PlantCard: React.FC<PlantCardProps> = ({ plant, onDelete, careStatus }) => {
   const [expanded, setExpanded] = useState(false);
-  const color = getCategoryColor(plant.species as never);
+  const color = getSpeciesColor(plant.species);
+  const statusCfg = STATUS_CONFIG[careStatus];
 
   return (
     <div
@@ -42,8 +53,30 @@ const PlantCard: React.FC<PlantCardProps> = ({ plant, onDelete }) => {
             }}
           />
           <div>
-            <div style={{ fontWeight: 600, fontSize: 15, color: '#2E3B2E' }}>
-              {plant.name}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontWeight: 600, fontSize: 15, color: '#2E3B2E' }}>
+                {plant.name}
+              </span>
+              <span
+                title={statusCfg.label}
+                style={{
+                  fontSize: 13,
+                  width: 22,
+                  height: 22,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '50%',
+                  background: statusCfg.bg,
+                  border: careStatus === 'overdue'
+                    ? `1.5px solid ${color}`
+                    : '1px solid transparent',
+                  transition: 'all 0.3s ease',
+                  animation: careStatus === 'overdue' ? 'pulse 2s infinite' : 'none',
+                }}
+              >
+                {statusCfg.icon}
+              </span>
             </div>
             <div style={{ fontSize: 12, color: '#7B8B6F', marginTop: 2 }}>
               {plant.species} · {plant.location}
@@ -88,10 +121,26 @@ const PlantCard: React.FC<PlantCardProps> = ({ plant, onDelete }) => {
         <div style={{ padding: '0 20px 16px', borderTop: '1px solid #E8E8E8' }}>
           <div
             style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              marginTop: 12,
+              fontSize: 12,
+              color: careStatus === 'overdue' ? '#E65100' : '#555',
+              background: statusCfg.bg,
+              borderRadius: 6,
+              padding: '4px 10px',
+              width: 'fit-content',
+            }}
+          >
+            {statusCfg.icon} {statusCfg.label}
+          </div>
+          <div
+            style={{
               display: 'grid',
               gridTemplateColumns: '1fr 1fr',
               gap: 8,
-              marginTop: 12,
+              marginTop: 10,
               fontSize: 13,
               color: '#555',
             }}
@@ -176,6 +225,13 @@ const PlantCard: React.FC<PlantCardProps> = ({ plant, onDelete }) => {
           </button>
         </div>
       </div>
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.15); }
+        }
+      `}</style>
     </div>
   );
 };

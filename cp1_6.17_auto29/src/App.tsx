@@ -21,7 +21,7 @@ import {
   aggregateMonthlyStats,
   computePlantStats,
 } from './TaskService';
-import PlantCard from './components/PlantCard';
+import PlantCard, { CareStatus } from './components/PlantCard';
 import TaskBoard from './components/TaskBoard';
 
 type TabKey = 'plants' | 'tasks' | 'growth' | 'stats';
@@ -144,6 +144,39 @@ const App: React.FC = () => {
   const cropperRef = useRef<HTMLDivElement>(null);
 
   const weeklyTasks = useMemo(() => generateWeeklyTasks(plants, new Date()), [plants]);
+
+  const careStatusMap = useMemo(() => {
+    const statusMap: Record<string, CareStatus> = {};
+    const now = new Date();
+
+    for (const plant of plants) {
+      const plantTasks = weeklyTasks.filter((t) => t.plantId === plant.id);
+      const completed = plantTasks.filter((t) => completedTaskIds.includes(t.id));
+      const overdue = plantTasks.filter((t) => {
+        const taskDate = new Date(t.date + 'T23:59:59');
+        return !completedTaskIds.includes(t.id) && taskDate < now;
+      });
+
+      if (overdue.length > 0) {
+        statusMap[plant.id] = 'overdue';
+      } else if (completed.some((t) => t.taskType === '施肥')) {
+        statusMap[plant.id] = 'fertilized';
+      } else if (completed.some((t) => t.taskType === '浇水')) {
+        statusMap[plant.id] = 'watered';
+      } else {
+        const createdDaysAgo = Math.floor(
+          (now.getTime() - new Date(plant.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+        );
+        if (createdDaysAgo < plant.wateringFrequency) {
+          statusMap[plant.id] = 'idle';
+        } else {
+          statusMap[plant.id] = 'overdue';
+        }
+      }
+    }
+
+    return statusMap;
+  }, [plants, weeklyTasks, completedTaskIds]);
 
   const tasksWithCompletion = useMemo(
     () =>
@@ -499,28 +532,64 @@ const App: React.FC = () => {
                       ))}
                     </select>
                   </div>
-                  {formSpecies && formLocation && formMoisture && (
-                    <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                      <div
-                        style={{
-                          background: '#E8F5E9',
-                          borderRadius: 8,
-                          padding: '8px 12px',
-                          fontSize: 13,
-                          color: '#2E7D32',
-                          fontWeight: 600,
-                        }}
-                      >
-                        💧 建议浇水频率：每
-                        {generateWateringFrequency(
-                          formSpecies,
-                          formLocation,
-                          formMoisture
-                        )}
-                        天
-                      </div>
+                {formSpecies && formLocation && formMoisture && (
+                  <div
+                    className="animate-fade"
+                    style={{
+                      gridColumn: '1 / -1',
+                      background: '#FAFAFA',
+                      borderRadius: 10,
+                      padding: '14px 16px',
+                      border: '1px solid #E8E8E8',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#2E3B2E' }}>
+                        💧 浇水频率建议
+                      </span>
+                      <span style={{ fontSize: 18, fontWeight: 700, color: formMoisture === '湿润' ? '#4CAF50' : formMoisture === '干燥' ? '#E67E22' : '#66BB6A' }}>
+                        每{generateWateringFrequency(formSpecies, formLocation, formMoisture)}天
+                      </span>
                     </div>
-                  )}
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: 3,
+                        height: 12,
+                        borderRadius: 6,
+                        overflow: 'hidden',
+                        background: '#F5F5F5',
+                      }}
+                    >
+                      {Array.from({ length: 10 }).map((_, i) => {
+                        const freq = generateWateringFrequency(formSpecies, formLocation, formMoisture);
+                        const maxDays = 10;
+                        const filled = i < (maxDays - freq + 1);
+                        const barColor = formMoisture === '湿润'
+                          ? `rgba(76, 175, 80, ${0.4 + (i / 10) * 0.6})`
+                          : formMoisture === '干燥'
+                            ? `rgba(230, 126, 34, ${0.4 + (i / 10) * 0.6})`
+                            : `rgba(102, 187, 106, ${0.4 + (i / 10) * 0.6})`;
+                        return (
+                          <div
+                            key={i}
+                            style={{
+                              flex: 1,
+                              borderRadius: 2,
+                              background: filled ? barColor : '#E8E8E8',
+                              transition: 'background 0.4s ease, transform 0.3s ease',
+                              transform: filled ? 'scaleY(1)' : 'scaleY(0.6)',
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+                      <span style={{ fontSize: 10, color: formMoisture === '湿润' ? '#4CAF50' : '#AAA' }}>频繁</span>
+                      <span style={{ fontSize: 10, color: formMoisture === '干燥' ? '#E67E22' : '#AAA' }}>稀疏</span>
+                    </div>
+                  </div>
+                )}
                 </div>
 
                 <button
@@ -566,7 +635,7 @@ const App: React.FC = () => {
               }}
             >
               {plants.map((plant) => (
-                <PlantCard key={plant.id} plant={plant} onDelete={handleDeletePlant} />
+                <PlantCard key={plant.id} plant={plant} onDelete={handleDeletePlant} careStatus={careStatusMap[plant.id] || 'idle'} />
               ))}
             </div>
           </div>
