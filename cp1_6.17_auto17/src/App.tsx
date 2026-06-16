@@ -465,45 +465,57 @@ const App: React.FC = () => {
       >
         <div
           style={{
-            padding: '6px 16px',
-            backgroundColor: 'rgba(0, 0, 0, 0.55)',
-            borderRadius: '6px',
-            color: '#E0E0E0',
+            padding: '8px 18px',
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            borderRadius: '8px',
             fontSize: '14px',
             fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-            backdropFilter: 'blur(6px)',
+            backdropFilter: 'blur(8px)',
             textAlign: 'center',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
-            userSelect: 'none'
+            gap: '10px',
+            userSelect: 'none',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)'
           }}
         >
-          <span style={{ color: '#AAAAAA' }}>当前方块:</span>
+          <span style={{
+            color: '#CCCCCC',
+            textShadow: '0 1px 2px rgba(0,0,0,0.8)'
+          }}>当前方块:</span>
           <span
             style={{
               display: 'inline-block',
-              width: '14px',
-              height: '14px',
+              width: '16px',
+              height: '16px',
               backgroundColor: BLOCK_COLORS[selectedBlockType],
-              borderRadius: '3px',
-              border: '1px solid rgba(255,255,255,0.3)',
-              verticalAlign: 'middle'
+              borderRadius: '4px',
+              border: selectedBlockType === BlockType.BEDROCK
+                ? '2px solid #FFD700'
+                : '2px solid rgba(255,255,255,0.3)',
+              verticalAlign: 'middle',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.5)'
             }}
           />
-          <span style={{ color: '#FFFFFF', fontWeight: 600 }}>{BLOCK_NAMES[selectedBlockType]}</span>
+          <span style={{
+            color: '#FFFFFF',
+            fontWeight: 700,
+            textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 0 6px rgba(0,0,0,0.5)',
+            fontSize: '15px'
+          }}>{BLOCK_NAMES[selectedBlockType]}</span>
         </div>
 
         <div
           style={{
             display: 'flex',
-            gap: '6px',
-            padding: '10px 14px',
-            backgroundColor: 'rgba(44, 62, 80, 0.85)',
-            borderRadius: '12px',
-            backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+            gap: '8px',
+            padding: '12px 16px',
+            backgroundColor: 'rgba(44, 62, 80, 0.9)',
+            borderRadius: '14px',
+            backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
+            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.35)'
           }}
         >
           {BUILDABLE_BLOCK_TYPES.map(bt => {
@@ -516,33 +528,38 @@ const App: React.FC = () => {
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
-                  gap: '4px',
-                  padding: '8px 10px',
-                  border: isSelected ? '2px solid #FFD700' : '2px solid rgba(255, 255, 255, 0.15)',
-                  borderRadius: '8px',
-                  backgroundColor: isSelected ? 'rgba(255, 215, 0, 0.12)' : 'rgba(255, 255, 255, 0.05)',
+                  gap: '6px',
+                  padding: '10px 12px',
+                  border: isSelected ? '2px solid #FFD700' : '2px solid rgba(255, 255, 255, 0.12)',
+                  borderRadius: '10px',
+                  backgroundColor: isSelected
+                    ? 'rgba(255, 215, 0, 0.15)'
+                    : 'rgba(255, 255, 255, 0.04)',
                   cursor: 'pointer',
-                  transition: 'all 0.2s ease',
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                   boxShadow: isSelected
-                    ? '0 0 12px rgba(255, 215, 0, 0.4), inset 0 0 8px rgba(255, 215, 0, 0.1)'
-                    : 'none',
-                  transform: isSelected ? 'scale(1.08)' : 'scale(1)',
+                    ? '0 0 16px rgba(255, 215, 0, 0.5), inset 0 0 10px rgba(255, 215, 0, 0.12)'
+                    : '0 2px 8px rgba(0, 0, 0, 0.2)',
+                  transform: isSelected ? 'scale(1.1)' : 'scale(1)',
                   outline: 'none',
                   userSelect: 'none'
                 }}
               >
                 <div
                   style={{
-                    width: '36px',
-                    height: '36px',
+                    width: '40px',
+                    height: '40px',
                     backgroundColor: BLOCK_COLORS[bt],
-                    borderRadius: '4px',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: '6px',
+                    border: isSelected
+                      ? '2px solid #FFD700'
+                      : '1px solid rgba(255, 255, 255, 0.18)',
                     boxShadow: isSelected
-                      ? '0 0 8px rgba(255, 215, 0, 0.3)'
-                      : '0 2px 4px rgba(0, 0, 0, 0.3)',
+                      ? '0 0 12px rgba(255, 215, 0, 0.45), 0 2px 8px rgba(0,0,0,0.3)'
+                      : '0 2px 6px rgba(0, 0, 0, 0.35)',
                     position: 'relative',
-                    overflow: 'hidden'
+                    overflow: 'hidden',
+                    transition: 'all 0.2s ease'
                   }}
                 >
                   <div
@@ -551,20 +568,23 @@ const App: React.FC = () => {
                       top: 0,
                       left: 0,
                       right: 0,
-                      height: '40%',
-                      background: 'linear-gradient(to bottom, rgba(255,255,255,0.25), transparent)',
-                      borderRadius: '3px 3px 0 0'
+                      height: '42%',
+                      background: 'linear-gradient(to bottom, rgba(255,255,255,0.22), transparent)',
+                      borderRadius: '5px 5px 0 0'
                     }}
                   />
                 </div>
                 <span
                   style={{
-                    color: isSelected ? '#FFD700' : 'rgba(255, 255, 255, 0.75)',
-                    fontSize: '11px',
+                    color: isSelected ? '#FFD700' : 'rgba(255, 255, 255, 0.8)',
+                    fontSize: '12px',
                     fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-                    fontWeight: isSelected ? 600 : 400,
-                    letterSpacing: '0.5px',
-                    whiteSpace: 'nowrap'
+                    fontWeight: isSelected ? 700 : 500,
+                    letterSpacing: '0.4px',
+                    whiteSpace: 'nowrap',
+                    textShadow: isSelected
+                      ? '0 0 8px rgba(255, 215, 0, 0.6)'
+                      : '0 1px 2px rgba(0,0,0,0.6)'
                   }}
                 >
                   {BLOCK_NAMES[bt]}
