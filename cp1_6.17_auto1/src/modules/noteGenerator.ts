@@ -68,7 +68,10 @@ export function generateNotesByBPM(options: NoteGeneratorOptions): Note[] {
 }
 
 export function calculateFallDuration(bpm: number): number {
-  return (60 / bpm) * 4;
+  const baseBPM = 120;
+  const baseFallDuration = 2.5;
+  const speedRatio = bpm / baseBPM;
+  return Math.max(1.0, baseFallDuration / speedRatio);
 }
 
 export function getNoteColor(type: Note['type']): string {

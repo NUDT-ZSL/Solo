@@ -129,6 +129,122 @@ body {
   }
 }
 
+@keyframes stageGlowPerfect {
+  0%, 100% {
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5), inset 0 0 0 rgba(255, 215, 0, 0);
+  }
+  30% {
+    box-shadow: 0 0 80px rgba(255, 215, 0, 0.6), inset 0 0 60px rgba(255, 215, 0, 0.15);
+  }
+  100% {
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5), inset 0 0 0 rgba(255, 215, 0, 0);
+  }
+}
+
+@keyframes stageGlowGood {
+  0%, 100% {
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5), inset 0 0 0 rgba(52, 152, 219, 0);
+  }
+  30% {
+    box-shadow: 0 0 70px rgba(52, 152, 219, 0.5), inset 0 0 50px rgba(52, 152, 219, 0.12);
+  }
+  100% {
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5), inset 0 0 0 rgba(52, 152, 219, 0);
+  }
+}
+
+@keyframes stageGlowOK {
+  0%, 100% {
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5), inset 0 0 0 rgba(76, 175, 80, 0);
+  }
+  30% {
+    box-shadow: 0 0 60px rgba(76, 175, 80, 0.4), inset 0 0 40px rgba(76, 175, 80, 0.1);
+  }
+  100% {
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5), inset 0 0 0 rgba(76, 175, 80, 0);
+  }
+}
+
+@keyframes stageGlowMiss {
+  0%, 100% {
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5), inset 0 0 0 rgba(231, 76, 60, 0);
+  }
+  30% {
+    box-shadow: 0 0 60px rgba(231, 76, 60, 0.4), inset 0 0 40px rgba(231, 76, 60, 0.08);
+  }
+  100% {
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5), inset 0 0 0 rgba(231, 76, 60, 0);
+  }
+}
+
+@keyframes bounceHit {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  30% {
+    transform: translateY(-15px) scale(1.1);
+  }
+  60% {
+    transform: translateY(5px) scale(0.95);
+  }
+}
+
+@keyframes swingHit {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-12deg);
+  }
+  75% {
+    transform: rotate(12deg);
+  }
+}
+
+@keyframes particleBurst {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+}
+
+@keyframes backgroundPulsePerfect {
+  0%, 100% {
+    background: radial-gradient(ellipse at top, #2D2D4A 0%, #1E1E2E 70%);
+  }
+  50% {
+    background: radial-gradient(ellipse at top, #3D3D5A 0%, #2A2A3E 50%, #1E1E2E 70%);
+  }
+}
+
+.stage-glow-perfect {
+  animation: stageGlowPerfect 0.3s ease-out;
+}
+
+.stage-glow-good {
+  animation: stageGlowGood 0.3s ease-out;
+}
+
+.stage-glow-ok {
+  animation: stageGlowOK 0.3s ease-out;
+}
+
+.stage-glow-miss {
+  animation: stageGlowMiss 0.3s ease-out;
+}
+
+.character-bounce {
+  animation: bounceHit 0.3s ease-out !important;
+}
+
+.character-swing {
+  animation: swingHit 0.3s ease-out !important;
+}
+
 .app-container {
   display: flex;
   width: 100%;

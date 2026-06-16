@@ -38,6 +38,8 @@ export default function App() {
   const [hitEffects, setHitEffects] = useState<Array<{ id: string; judgement: HitResult['judgement']; trackIndex: number }>>([]);
   const [lightFlash, setLightFlash] = useState(false);
   const [jumpingTracks, setJumpingTracks] = useState<Set<number>>(new Set());
+  const [lastHitJudgement, setLastHitJudgement] = useState<HitResult['judgement'] | null>(null);
+  const [lastHitTrackIndex, setLastHitTrackIndex] = useState<number>(-1);
   const [scores, setScores] = useState<ScoreRecord[]>([]);
   const [playerName] = useState('玩家');
   const [fallDuration, setFallDuration] = useState(2);
@@ -100,8 +102,15 @@ export default function App() {
     const effectId = Date.now().toString() + Math.random();
     setHitEffects(prev => [...prev, { id: effectId, judgement, trackIndex }]);
     
+    setLastHitJudgement(judgement);
+    setLastHitTrackIndex(trackIndex);
+    
     setLightFlash(true);
-    setTimeout(() => setLightFlash(false), 200);
+    setTimeout(() => {
+      setLightFlash(false);
+      setLastHitJudgement(null);
+      setLastHitTrackIndex(-1);
+    }, 300);
     
     setJumpingTracks(prev => {
       const newSet = new Set(prev);
@@ -114,7 +123,7 @@ export default function App() {
         newSet.delete(trackIndex);
         return newSet;
       });
-    }, 150);
+    }, 300);
     
     setTimeout(() => {
       setHitEffects(prev => prev.filter(e => e.id !== effectId));
@@ -307,6 +316,8 @@ export default function App() {
               onRemoveCharacter={handleRemoveCharacter}
               lightFlash={lightFlash}
               jumpingTracks={jumpingTracks}
+              hitJudgement={lastHitJudgement}
+              hitTrackIndex={lastHitTrackIndex}
             />
             <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
               <button className="btn btn-primary" onClick={() => setCurrentView('select')}>
@@ -356,6 +367,8 @@ export default function App() {
               onRemoveCharacter={handleRemoveCharacter}
               lightFlash={lightFlash}
               jumpingTracks={jumpingTracks}
+              hitJudgement={lastHitJudgement}
+              hitTrackIndex={lastHitTrackIndex}
             />
             
             <NotePanel 
