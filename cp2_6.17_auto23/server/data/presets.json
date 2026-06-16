@@ -1,0 +1,7 @@
+[
+  { "emotion": "happy", "color": "#fbbf24", "speed": 1.0, "hueOffset": 0, "complexity": 5 },
+  { "emotion": "sad", "color": "#6366f1", "speed": 0.4, "hueOffset": 0, "complexity": 3 },
+  { "emotion": "angry", "color": "#ef4444", "speed": 1.8, "hueOffset": 0, "complexity": 8 },
+  { "emotion": "calm", "color": "#34d399", "speed": 0.3, "hueOffset": 0, "complexity": 2 },
+  { "emotion": "anxious", "color": "#a78bfa", "speed": 1.5, "hueOffset": 0, "complexity": 7 }
+]
