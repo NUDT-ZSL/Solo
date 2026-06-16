@@ -219,7 +219,8 @@ export function createStarsSystem(
       for (let i = 0; i < count; i++) {
         const flicker = 0.5 + 0.5 * Math.sin(time * flickerSpeeds[i] + flickerOffsets[i])
         alphaArr[i] = baseAlphas[i] * (0.2 + 0.8 * flicker)
-        sizeArr[i] = baseSizes[i] * lodScale
+        const flickerSizeScale = 0.6 + 0.4 * flicker
+        sizeArr[i] = baseSizes[i] * lodScale * flickerSizeScale
       }
 
       sizeAttr.needsUpdate = true

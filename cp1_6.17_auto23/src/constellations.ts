@@ -11,6 +11,7 @@ export interface ConstellationSystem {
   group: THREE.Group
   lines: THREE.LineSegments[]
   haloParticles: THREE.Points
+  endpointHalos: THREE.Points
   highlight: (constellationId: string | null) => void
   getConstellationByLine: (line: THREE.LineSegments) => Constellation | null
   update: (delta: number) => void
@@ -218,6 +219,119 @@ function createHaloParticles(count: number): THREE.Points {
   return new THREE.Points(geometry, material)
 }
 
+function createEndpointHalos(endpointCount: number): {
+  points: THREE.Points
+  updateEndpoint: (index: number, pos: THREE.Vector3, color: THREE.Color, highlighted: boolean) => void
+  clearAll: () => void
+} {
+  const geometry = new THREE.BufferGeometry()
+  const count = endpointCount * 2
+  const positions = new Float32Array(count * 3)
+  const colors = new Float32Array(count * 3)
+  const sizes = new Float32Array(count)
+  const alphas = new Float32Array(count)
+
+  for (let i = 0; i < count; i++) {
+    positions[i * 3] = 0
+    positions[i * 3 + 1] = 0
+    positions[i * 3 + 2] = 0
+    colors[i * 3] = 0.56
+    colors[i * 3 + 1] = 0.79
+    colors[i * 3 + 2] = 0.98
+    sizes[i] = 4
+    alphas[i] = 0.3
+  }
+
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+  geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1))
+  geometry.setAttribute('aAlpha', new THREE.BufferAttribute(alphas, 1))
+
+  const texture = createCircleTexture('#90CAF9')
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      uTexture: { value: texture },
+      uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) }
+    },
+    vertexShader: `
+      uniform float uPixelRatio;
+      attribute float aSize;
+      attribute float aAlpha;
+      attribute vec3 color;
+      varying float vAlpha;
+      varying vec3 vColor;
+      varying vec2 vUv;
+      void main() {
+        vAlpha = aAlpha;
+        vColor = color;
+        vUv = uv;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = aSize * uPixelRatio * (300.0 / -mvPosition.z);
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `,
+    fragmentShader: `
+      uniform sampler2D uTexture;
+      varying float vAlpha;
+      varying vec3 vColor;
+      varying vec2 vUv;
+      void main() {
+        vec4 texColor = texture2D(uTexture, gl_PointCoord);
+        if (texColor.a < 0.01) discard;
+        gl_FragColor = vec4(vColor * texColor.rgb, texColor.a * vAlpha);
+      }
+    `,
+    transparent: true,
+    alphaTest: 0.01,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  })
+
+  const uvs = new Float32Array(count * 2).fill(0)
+  geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2))
+
+  const points = new THREE.Points(geometry, material)
+
+  const defaultColor = new THREE.Color('#90CAF9')
+  const highlightColor = new THREE.Color('#FFD54F')
+
+  return {
+    points,
+    updateEndpoint(index: number, pos: THREE.Vector3, color: THREE.Color, highlighted: boolean) {
+      const posAttr = geometry.getAttribute('position') as THREE.BufferAttribute
+      const colorAttr = geometry.getAttribute('color') as THREE.BufferAttribute
+      const alphaAttr = geometry.getAttribute('aAlpha') as THREE.BufferAttribute
+      const sizeAttr = geometry.getAttribute('aSize') as THREE.BufferAttribute
+
+      posAttr.array[index * 3] = pos.x
+      posAttr.array[index * 3 + 1] = pos.y
+      posAttr.array[index * 3 + 2] = pos.z
+
+      const endpointColor = highlighted ? highlightColor : defaultColor
+      colorAttr.array[index * 3] = endpointColor.r
+      colorAttr.array[index * 3 + 1] = endpointColor.g
+      colorAttr.array[index * 3 + 2] = endpointColor.b
+
+      alphaAttr.array[index] = highlighted ? 0.6 : 0.3
+      sizeAttr.array[index] = highlighted ? 5 : 4
+
+      posAttr.needsUpdate = true
+      colorAttr.needsUpdate = true
+      alphaAttr.needsUpdate = true
+      sizeAttr.needsUpdate = true
+    },
+    clearAll() {
+      const posAttr = geometry.getAttribute('position') as THREE.BufferAttribute
+      for (let i = 0; i < count; i++) {
+        posAttr.array[i * 3] = 0
+        posAttr.array[i * 3 + 1] = 0
+        posAttr.array[i * 3 + 2] = 0
+      }
+      posAttr.needsUpdate = true
+    }
+  }
+}
+
 export function createConstellationSystem(
   constellationData: Constellation[],
   starsData: Star[]
@@ -284,9 +398,12 @@ export function createConstellationSystem(
     edgeMetadata.push(edge)
   })
 
+  const endpointHalos = createEndpointHalos(edgeMetadata.length)
+  const lineEndpointIndices: Map<THREE.LineSegments, [number, number]> = new Map()
+
   const segmentGroup = new THREE.Group()
 
-  edgeMetadata.forEach(meta => {
+  edgeMetadata.forEach((meta, edgeIndex) => {
     const starA = starsData[meta.starA]
     const starB = starsData[meta.starB]
     if (!starA || !starB) return
@@ -327,12 +444,29 @@ export function createConstellationSystem(
       lineToConstellation.set(line, meta.constellation)
     }
     segmentGroup.add(line)
+
+    const endpointAIndex = edgeIndex * 2
+    const endpointBIndex = edgeIndex * 2 + 1
+    lineEndpointIndices.set(line, [endpointAIndex, endpointBIndex])
+    endpointHalos.updateEndpoint(
+      endpointAIndex,
+      new THREE.Vector3(starA.x, starA.y, starA.z),
+      defaultColor,
+      false
+    )
+    endpointHalos.updateEndpoint(
+      endpointBIndex,
+      new THREE.Vector3(starB.x, starB.y, starB.z),
+      defaultColor,
+      false
+    )
   })
 
   group.add(segmentGroup)
 
   const haloParticles = createHaloParticles(300)
   group.add(haloParticles)
+  group.add(endpointHalos.points)
 
   let highlightedConstellation: Constellation | null = null
   let haloTime = 0
@@ -341,6 +475,7 @@ export function createConstellationSystem(
     group,
     lines,
     haloParticles,
+    endpointHalos: endpointHalos.points,
     constellations: constellationData,
     lineToConstellation,
     raycastTargets,
@@ -365,6 +500,16 @@ export function createConstellationSystem(
         const material = line.material as THREE.LineBasicMaterial
         const colorAttr = line.geometry.getAttribute('color') as THREE.BufferAttribute
         const colorArr = colorAttr.array as Float32Array
+
+        const endpointIndices = lineEndpointIndices.get(line)
+        if (endpointIndices) {
+          const positions = line.geometry.getAttribute('position').array as Float32Array
+          const posA = new THREE.Vector3(positions[0], positions[1], positions[2])
+          const posB = new THREE.Vector3(positions[3], positions[4], positions[5])
+          const lineColor = shouldHighlight ? highlightColor : defaultColor
+          endpointHalos.updateEndpoint(endpointIndices[0], posA, lineColor, !!shouldHighlight)
+          endpointHalos.updateEndpoint(endpointIndices[1], posB, lineColor, !!shouldHighlight)
+        }
 
         if (shouldHighlight) {
           material.opacity = 1
@@ -409,8 +554,11 @@ export function createConstellationSystem(
     update(delta: number) {
       haloTime += delta
       const haloMaterial = haloParticles.material as THREE.ShaderMaterial
+      const endpointHaloMaterial = endpointHalos.points.material as THREE.ShaderMaterial
+
       if (highlightedConstellation) {
         haloMaterial.opacity = 0.6 + 0.2 * Math.sin(haloTime * 3)
+        endpointHaloMaterial.opacity = 0.8 + 0.2 * Math.sin(haloTime * 2)
         const haloGeom = haloParticles.geometry
         const haloPos = haloGeom.getAttribute('position') as THREE.BufferAttribute
         const haloPosArr = haloPos.array as Float32Array
@@ -424,6 +572,7 @@ export function createConstellationSystem(
         haloPos.needsUpdate = true
       } else {
         haloMaterial.opacity = 0
+        endpointHaloMaterial.opacity = 0.5 + 0.1 * Math.sin(haloTime * 1.5)
       }
     }
   }
