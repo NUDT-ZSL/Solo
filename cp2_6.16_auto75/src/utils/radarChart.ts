@@ -6,11 +6,20 @@ export function drawRadarChart(
   canvasWidth: number,
   canvasHeight: number
 ) {
-  const padding = 50;
   const centerX = canvasWidth / 2;
   const centerY = canvasHeight / 2;
-  const maxRadius = Math.min(centerX, centerY) - padding;
-  const radius = Math.min(maxRadius, 80);
+
+  ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+  const labelWidths = SKILL_LABELS.map(s => ctx.measureText(s.label).width);
+  const maxLabelWidth = Math.max(...labelWidths);
+  const labelPadding = maxLabelWidth / 2 + 16;
+
+  const horizontalPadding = labelPadding + 20;
+  const verticalPadding = 30 + 20;
+  const maxRadiusX = centerX - horizontalPadding;
+  const maxRadiusY = centerY - verticalPadding;
+  const maxRadius = Math.min(maxRadiusX, maxRadiusY);
+  const radius = Math.max(Math.min(maxRadius, 80), 50);
 
   const sides = 6;
   const angleStep = (Math.PI * 2) / sides;
@@ -96,7 +105,7 @@ export function drawRadarChart(
   ctx.fillStyle = '#64748b';
   ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
 
-  const labelRadius = radius + 20;
+  const labelRadius = radius + 12;
 
   for (let i = 0; i < sides; i++) {
     const angle = startAngle + i * angleStep;
@@ -110,26 +119,35 @@ export function drawRadarChart(
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
 
-    if (Math.abs(cos) < 0.15) {
+    if (Math.abs(cos) < 0.2) {
       textAlign = 'center';
       textBaseline = sin < 0 ? 'bottom' : 'top';
-    } else if (cos > 0) {
+    } else if (cos > 0.2) {
       textAlign = 'left';
-    } else {
+    } else if (cos < -0.2) {
       textAlign = 'right';
     }
 
     ctx.textAlign = textAlign;
     ctx.textBaseline = textBaseline;
 
-    const offset = 6;
     let drawX = x;
     let drawY = y;
 
-    if (textAlign === 'left') drawX += offset;
-    else if (textAlign === 'right') drawX -= offset;
-    if (textBaseline === 'top') drawY += offset;
-    else if (textBaseline === 'bottom') drawY -= offset;
+    if (textAlign === 'left') {
+      drawX = x + 8;
+    } else if (textAlign === 'right') {
+      drawX = x - 8;
+    }
+
+    if (textBaseline === 'top') {
+      drawY = y + 6;
+    } else if (textBaseline === 'bottom') {
+      drawY = y - 6;
+    }
+
+    drawX = Math.max(8, Math.min(canvasWidth - 8, drawX));
+    drawY = Math.max(14, Math.min(canvasHeight - 4, drawY));
 
     ctx.fillText(label, drawX, drawY);
   }

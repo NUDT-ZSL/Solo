@@ -96,9 +96,7 @@ const App: React.FC = () => {
     setSelectedContributor(null);
   };
 
-  const maxCommits = repoData?.contributors.length
-    ? Math.max(...repoData.contributors.map(c => c.commits))
-    : 0;
+
 
   return (
     <div style={styles.app}>
@@ -124,10 +122,10 @@ const App: React.FC = () => {
               </span>
             </div>
             <Leaderboard
-              contributors={repoData.contributors}
+              owner={repoData.owner}
+              repo={repoData.name}
               selectedUser={selectedUser}
               onSelectUser={handleSelectUser}
-              maxCommits={maxCommits}
             />
           </div>
 

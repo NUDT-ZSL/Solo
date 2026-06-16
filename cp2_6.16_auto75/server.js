@@ -125,19 +125,56 @@ function getRepoData(owner, repo) {
   return data;
 }
 
+function filterContributors(contributors, filter) {
+  switch (filter) {
+    case 'code':
+      return contributors.filter(c => c.commits > 10);
+    case 'issue':
+      return contributors.filter(c => c.issues > 0);
+    case 'pr':
+      return contributors.filter(c => c.pullRequests > 0);
+    case 'all':
+    default:
+      return contributors;
+  }
+}
+
+function sortContributors(contributors, sortBy) {
+  const list = [...contributors];
+  switch (sortBy) {
+    case 'lines':
+      return list.sort((a, b) =>
+        (b.linesAdded + b.linesDeleted) - (a.linesAdded + a.linesDeleted)
+      );
+    case 'prMergeRate':
+      return list.sort((a, b) => b.prMergeRate - a.prMergeRate);
+    case 'commits':
+    default:
+      return list.sort((a, b) => b.commits - a.commits);
+  }
+}
+
 app.get('/api/contributors/:owner/:repo', (req, res) => {
   const { owner, repo } = req.params;
+  const { filter = 'all', sortBy = 'commits' } = req.query;
 
   setTimeout(() => {
     try {
       const data = getRepoData(owner, repo);
+
+      let filtered = filterContributors(data.contributors, filter);
+      let sorted = sortContributors(filtered, sortBy);
+      const maxCommits = Math.max(...data.contributors.map(c => c.commits));
+
       res.json({
         success: true,
         data: {
           name: data.name,
           owner: data.owner,
           totalCommits: data.totalCommits,
-          contributors: data.contributors.map(c => ({
+          maxCommits,
+          total: sorted.length,
+          contributors: sorted.map(c => ({
             username: c.username,
             avatar: c.avatar,
             commits: c.commits,
@@ -152,9 +189,10 @@ app.get('/api/contributors/:owner/:repo', (req, res) => {
         }
       });
     } catch (error) {
+      console.error('API Error:', error);
       res.status(500).json({ success: false, error: 'Failed to fetch data' });
     }
-  }, 800);
+  }, 300);
 });
 
 app.get('/api/contributors/:owner/:repo/:username', (req, res) => {
@@ -174,9 +212,10 @@ app.get('/api/contributors/:owner/:repo/:username', (req, res) => {
         data: contributor
       });
     } catch (error) {
+      console.error('API Error:', error);
       res.status(500).json({ success: false, error: 'Failed to fetch data' });
     }
-  }, 300);
+  }, 200);
 });
 
 app.get('/', (req, res) => {

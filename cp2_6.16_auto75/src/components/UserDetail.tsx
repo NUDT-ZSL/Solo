@@ -234,9 +234,11 @@ const styles = {
     borderRadius: '12px'
   } as React.CSSProperties,
   timelineContainer: {
-    height: '180px',
+    maxHeight: '240px',
+    minHeight: '120px',
     overflowY: 'auto' as const,
-    paddingRight: '8px'
+    paddingRight: '8px',
+    paddingBottom: '8px'
   },
   timelineItem: {
     display: 'flex',

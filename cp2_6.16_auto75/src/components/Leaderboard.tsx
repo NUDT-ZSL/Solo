@@ -1,62 +1,151 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Contributor, FilterDimension, SortBy } from '../types';
 
 interface LeaderboardProps {
-  contributors: Contributor[];
+  owner: string;
+  repo: string;
   selectedUser: string | null;
   onSelectUser: (username: string) => void;
-  maxCommits: number;
+}
+
+interface ApiResponse {
+  success: boolean;
+  data: {
+    name: string;
+    owner: string;
+    totalCommits: number;
+    maxCommits: number;
+    contributors: Contributor[];
+    total: number;
+  };
 }
 
 const Leaderboard: React.FC<LeaderboardProps> = ({
-  contributors,
+  owner,
+  repo,
   selectedUser,
-  onSelectUser,
-  maxCommits
+  onSelectUser
 }) => {
   const [filter, setFilter] = useState<FilterDimension>('all');
   const [sortBy, setSortBy] = useState<SortBy>('commits');
+  const [contributors, setContributors] = useState<Contributor[]>([]);
+  const [maxCommits, setMaxCommits] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
   const [scrollTop, setScrollTop] = useState(0);
+  const [itemHeights, setItemHeights] = useState<Map<string, number>>(new Map());
+
   const listRef = useRef<HTMLDivElement>(null);
-  const itemHeight = 72;
-  const visibleCount = 12;
+  const listContainerRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  const filteredContributors = useMemo(() => {
-    let list = [...contributors];
+  const ITEM_HEIGHT = 72;
+  const BUFFER = 5;
 
-    if (filter === 'code') {
-      list = list.filter(c => c.commits > 10);
-    } else if (filter === 'issue') {
-      list = list.filter(c => c.issues > 0);
-    } else if (filter === 'pr') {
-      list = list.filter(c => c.pullRequests > 0);
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const params = new URLSearchParams({
+        filter,
+        sortBy
+      });
+      const response = await fetch(
+        `/api/contributors/${owner}/${repo}?${params.toString()}`
+      );
+      const result: ApiResponse = await response.json();
+
+      if (result.success) {
+        setContributors(result.data.contributors);
+        setMaxCommits(result.data.maxCommits);
+        setTotal(result.data.total);
+      }
+    } catch (err) {
+      console.error('Failed to fetch contributors:', err);
+    } finally {
+      setIsLoading(false);
     }
+  }, [owner, repo, filter, sortBy]);
 
-    if (sortBy === 'commits') {
-      list.sort((a, b) => b.commits - a.commits);
-    } else if (sortBy === 'lines') {
-      list.sort((a, b) => (b.linesAdded + b.linesDeleted) - (a.linesAdded + a.linesDeleted));
-    } else if (sortBy === 'prMergeRate') {
-      list.sort((a, b) => b.prMergeRate - a.prMergeRate);
+  useEffect(() => {
+    if (owner && repo) {
+      fetchData();
     }
+  }, [fetchData]);
 
-    return list;
-  }, [contributors, filter, sortBy]);
+  useEffect(() => {
+    const newHeights = new Map(itemHeights);
+    itemRefs.current.forEach((el, key) => {
+      if (el) {
+        newHeights.set(key, el.offsetHeight || ITEM_HEIGHT);
+      }
+    });
+    if (newHeights.size !== itemHeights.size) {
+      setItemHeights(newHeights);
+    }
+  }, [contributors]);
 
-  const totalHeight = filteredContributors.length * itemHeight;
-  const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - 2);
-  const endIndex = Math.min(
-    filteredContributors.length,
-    startIndex + visibleCount + 4
-  );
-  const visibleItems = filteredContributors.slice(startIndex, endIndex);
-  const offsetY = startIndex * itemHeight;
+  const getItemHeight = (index: number) => {
+    const c = contributors[index];
+    if (c && itemHeights.has(c.username)) {
+      return itemHeights.get(c.username)!;
+    }
+    return ITEM_HEIGHT;
+  };
+
+  const getOffsetForIndex = (targetIndex: number) => {
+    let offset = 0;
+    for (let i = 0; i < targetIndex && i < contributors.length; i++) {
+      offset += getItemHeight(i);
+    }
+    return offset;
+  };
+
+  const totalHeight = contributors.reduce((sum, _, i) => sum + getItemHeight(i), 0);
+  const containerHeight = listContainerRef.current?.clientHeight || 600;
+
+  let startIndex = 0;
+  let accumulated = 0;
+  for (let i = 0; i < contributors.length; i++) {
+    const h = getItemHeight(i);
+    if (accumulated + h > scrollTop) {
+      startIndex = Math.max(0, i - BUFFER);
+      break;
+    }
+    accumulated += h;
+  }
+
+  let endIndex = startIndex;
+  accumulated = getOffsetForIndex(startIndex);
+  while (endIndex < contributors.length && accumulated < scrollTop + containerHeight) {
+    accumulated += getItemHeight(endIndex);
+    endIndex++;
+  }
+  endIndex = Math.min(contributors.length, endIndex + BUFFER);
+
+  const visibleItems = contributors.slice(startIndex, endIndex);
+  const offsetY = getOffsetForIndex(startIndex);
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     setScrollTop((e.target as HTMLDivElement).scrollTop);
   };
 
-  const useVirtualScroll = filteredContributors.length > 100;
+  const handleFilterChange = (newFilter: FilterDimension) => {
+    setFilter(newFilter);
+    setScrollTop(0);
+  };
+
+  const handleSortChange = (newSort: SortBy) => {
+    setSortBy(newSort);
+    setScrollTop(0);
+  };
+
+  const setItemRef = (username: string) => (el: HTMLDivElement | null) => {
+    if (el) {
+      itemRefs.current.set(username, el);
+    } else {
+      itemRefs.current.delete(username);
+    }
+  };
 
   const filterButtons: { key: FilterDimension; label: string }[] = [
     { key: 'all', label: '全部' },
@@ -78,11 +167,13 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
           {filterButtons.map(({ key, label }) => (
             <button
               key={key}
-              onClick={() => setFilter(key)}
+              onClick={() => handleFilterChange(key)}
+              disabled={isLoading}
               style={{
                 ...styles.filterButton,
                 backgroundColor: filter === key ? '#6366f1' : '#ffffff',
-                color: filter === key ? '#ffffff' : '#64748b'
+                color: filter === key ? '#ffffff' : '#64748b',
+                opacity: isLoading ? 0.6 : 1
               }}
             >
               {label}
@@ -92,8 +183,12 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
 
         <select
           value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as SortBy)}
-          style={styles.sortSelect}
+          onChange={(e) => handleSortChange(e.target.value as SortBy)}
+          disabled={isLoading}
+          style={{
+            ...styles.sortSelect,
+            opacity: isLoading ? 0.6 : 1
+          }}
         >
           {sortOptions.map(({ key, label }) => (
             <option key={key} value={key}>
@@ -104,42 +199,42 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
       </div>
 
       <div style={styles.countInfo}>
-        共 {filteredContributors.length} 位贡献者
+        {isLoading ? '加载中...' : `共 ${total} 位贡献者`}
       </div>
 
       <div
-        ref={listRef}
+        ref={listContainerRef}
         onScroll={handleScroll}
         style={styles.listContainer}
       >
-        {useVirtualScroll ? (
-          <div style={{ height: totalHeight, position: 'relative' }}>
-            <div style={{ transform: `translateY(${offsetY}px)` }}>
-              {visibleItems.map((contributor) => (
-                <ContributorCard
-                  key={contributor.username}
-                  contributor={contributor}
-                  isSelected={selectedUser === contributor.username}
-                  onClick={() => onSelectUser(contributor.username)}
-                  maxCommits={maxCommits}
-                  sortBy={sortBy}
-                />
-              ))}
-            </div>
+        {isLoading ? (
+          <div style={styles.loadingState}>
+            <div style={styles.spinner} />
+            <span>正在加载数据...</span>
           </div>
         ) : (
-          <>
-            {filteredContributors.map((contributor) => (
-              <ContributorCard
-                key={contributor.username}
-                contributor={contributor}
-                isSelected={selectedUser === contributor.username}
-                onClick={() => onSelectUser(contributor.username)}
-                maxCommits={maxCommits}
-                sortBy={sortBy}
-              />
-            ))}
-          </>
+          <div ref={listRef} style={{ height: totalHeight, position: 'relative' }}>
+            <div style={{ transform: `translateY(${offsetY}px)` }}>
+              {visibleItems.map((contributor, idx) => {
+                const absoluteIndex = startIndex + idx;
+                return (
+                  <div
+                    key={contributor.username}
+                    ref={setItemRef(contributor.username)}
+                  >
+                    <ContributorCard
+                      contributor={contributor}
+                      isSelected={selectedUser === contributor.username}
+                      onClick={() => onSelectUser(contributor.username)}
+                      maxCommits={maxCommits}
+                      sortBy={sortBy}
+                      index={absoluteIndex}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -152,6 +247,7 @@ interface CardProps {
   onClick: () => void;
   maxCommits: number;
   sortBy: SortBy;
+  index: number;
 }
 
 const ContributorCard: React.FC<CardProps> = ({
@@ -165,10 +261,12 @@ const ContributorCard: React.FC<CardProps> = ({
 
   const getProgressValue = () => {
     if (sortBy === 'commits') {
-      return (contributor.commits / maxCommits) * 100;
+      return maxCommits > 0 ? (contributor.commits / maxCommits) * 100 : 0;
     } else if (sortBy === 'lines') {
       const maxLines = maxCommits * 100;
-      return ((contributor.linesAdded + contributor.linesDeleted) / maxLines) * 100;
+      return maxLines > 0
+        ? ((contributor.linesAdded + contributor.linesDeleted) / maxLines) * 100
+        : 0;
     }
     return contributor.prMergeRate * 100;
   };
@@ -220,9 +318,9 @@ const ContributorCard: React.FC<CardProps> = ({
 const styles = {
   container: {
     display: 'flex',
-    flexDirection: 'column',
+    flexDirection: 'column' as const,
     height: '100%'
-  } as React.CSSProperties,
+  },
   header: {
     display: 'flex',
     alignItems: 'center',
@@ -266,6 +364,23 @@ const styles = {
     overflowY: 'auto' as const,
     borderRadius: '8px'
   },
+  loadingState: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '40px',
+    gap: '12px',
+    color: '#64748b'
+  },
+  spinner: {
+    width: '32px',
+    height: '32px',
+    border: '3px solid #e2e8f0',
+    borderTopColor: '#6366f1',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite'
+  } as React.CSSProperties,
   card: {
     height: '64px',
     borderRadius: '8px',

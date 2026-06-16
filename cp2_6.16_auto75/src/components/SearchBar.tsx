@@ -18,6 +18,29 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading }) => {
 
   return (
     <form onSubmit={handleSubmit} style={styles.container}>
+      <style>{`
+        @keyframes dot-blink {
+          0%, 80%, 100% {
+            opacity: 0.3;
+          }
+          40% {
+            opacity: 1;
+          }
+        }
+        .loading-dot-0 {
+          animation: dot-blink 0.9s infinite ease-in-out;
+          animation-delay: 0s;
+        }
+        .loading-dot-1 {
+          animation: dot-blink 0.9s infinite ease-in-out;
+          animation-delay: 0.3s;
+        }
+        .loading-dot-2 {
+          animation: dot-blink 0.9s infinite ease-in-out;
+          animation-delay: 0.6s;
+        }
+      `}</style>
+
       <input
         type="text"
         value={inputValue}
@@ -37,8 +60,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading }) => {
         disabled={isLoading || !inputValue.trim()}
         style={{
           ...styles.button,
-          opacity: isLoading || !inputValue.trim() ? 0.6 : 1,
-          filter: isLoading || !inputValue.trim() ? 'none' : undefined
+          opacity: isLoading || !inputValue.trim() ? 0.6 : 1
         }}
         onMouseEnter={(e) => {
           if (!isLoading && inputValue.trim()) {
@@ -53,18 +75,11 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading }) => {
       </button>
       {isLoading && (
         <div style={styles.loadingDots}>
-          <span style={{ ...styles.dot, animationDelay: '0s' }} />
-          <span style={{ ...styles.dot, animationDelay: '0.3s' }} />
-          <span style={{ ...styles.dot, animationDelay: '0.6s' }} />
+          <span className="loading-dot-0" style={styles.dot} />
+          <span className="loading-dot-1" style={styles.dot} />
+          <span className="loading-dot-2" style={styles.dot} />
         </div>
       )}
-
-      <style>{`
-        @keyframes blink {
-          0%, 100% { opacity: 0.3; }
-          50% { opacity: 1; }
-        }
-      `}</style>
     </form>
   );
 };
@@ -109,8 +124,7 @@ const styles = {
     width: '8px',
     height: '8px',
     borderRadius: '50%',
-    backgroundColor: '#a5b4fc',
-    animation: 'blink 0.9s infinite ease-in-out'
+    backgroundColor: '#a5b4fc'
   } as React.CSSProperties
 };
 
