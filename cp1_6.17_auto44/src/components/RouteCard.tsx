@@ -1,12 +1,20 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Route } from '../data/dataStore';
 
 interface RouteCardProps {
   route: Route;
   onClick: (routeId: string) => void;
+  index?: number;
 }
 
 const RouteCard: React.FC<RouteCardProps> = ({ route, onClick }) => {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setMounted(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
+
   const transportPct = (route.budget.transport / route.totalBudget) * 100;
   const accommodationPct = (route.budget.accommodation / route.totalBudget) * 100;
   const foodPct = (route.budget.food / route.totalBudget) * 100;
@@ -33,37 +41,37 @@ const RouteCard: React.FC<RouteCardProps> = ({ route, onClick }) => {
         <div className="budget-progress">
           <div
             className="budget-segment budget-transport"
-            style={{ width: `${transportPct}%` }}
+            style={{ width: mounted ? `${transportPct}%` : '0%' }}
             title={`交通 ¥${route.budget.transport}`}
           />
           <div
             className="budget-segment budget-accommodation"
-            style={{ width: `${accommodationPct}%` }}
+            style={{ width: mounted ? `${accommodationPct}%` : '0%' }}
             title={`住宿 ¥${route.budget.accommodation}`}
           />
           <div
             className="budget-segment budget-food"
-            style={{ width: `${foodPct}%` }}
+            style={{ width: mounted ? `${foodPct}%` : '0%' }}
             title={`餐饮 ¥${route.budget.food}`}
           />
           <div
             className="budget-segment budget-other"
-            style={{ width: `${otherPct}%` }}
+            style={{ width: mounted ? `${otherPct}%` : '0%' }}
             title={`其他 ¥${route.budget.other}`}
           />
         </div>
         <div className="budget-legend">
           <span>
-            <i className="legend-dot transport-dot" /> 交通30%
+            <span className="legend-icon">🚗</span> 交通30%
           </span>
           <span>
-            <i className="legend-dot accommodation-dot" /> 住宿40%
+            <span className="legend-icon">🏨</span> 住宿40%
           </span>
           <span>
-            <i className="legend-dot food-dot" /> 餐饮20%
+            <span className="legend-icon">🍽️</span> 餐饮20%
           </span>
           <span>
-            <i className="legend-dot other-dot" /> 其他10%
+            <span className="legend-icon">🎒</span> 其他10%
           </span>
         </div>
       </div>

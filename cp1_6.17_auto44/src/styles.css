@@ -206,10 +206,64 @@ html, body, #root {
   color: var(--text-primary);
 }
 
+.search-btn {
+  margin-left: 8px;
+  padding: 6px 18px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+  flex-shrink: 0;
+}
+
+.search-btn:hover {
+  background: var(--primary-dark);
+}
+
+.search-btn:active {
+  transform: scale(0.97);
+}
+
 .search-tip {
   margin-top: 10px;
   font-size: 13px;
   color: var(--text-muted);
+}
+
+.results-hint {
+  width: 100%;
+  padding: 12px 20px;
+  background: linear-gradient(90deg, rgba(0, 105, 92, 0.06), rgba(245, 127, 23, 0.06));
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+  animation: hintFadeIn 0.3s ease;
+}
+
+.results-hint strong {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.results-hint.results-empty {
+  background: rgba(158, 158, 158, 0.08);
+  color: var(--text-muted);
+}
+
+@keyframes hintFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .results-list {
@@ -217,6 +271,18 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.card-fade-wrap {
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  will-change: opacity, transform;
+}
+
+.card-fade-wrap.card-visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 /* ========== Route Card ========== */
@@ -236,7 +302,7 @@ html, body, #root {
 
 .route-card:hover {
   box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
 }
 
 .route-card-left {
@@ -304,7 +370,7 @@ html, body, #root {
 
 .budget-segment {
   height: 100%;
-  transition: width 0.3s ease;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .budget-transport { background: var(--transport); }
@@ -326,17 +392,12 @@ html, body, #root {
   gap: 6px;
 }
 
-.legend-dot {
+.legend-icon {
   display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  font-size: 13px;
+  width: 18px;
+  text-align: center;
 }
-
-.transport-dot { background: var(--transport); }
-.accommodation-dot { background: var(--accommodation); }
-.food-dot { background: var(--food); }
-.other-dot { background: var(--other); }
 
 /* ========== Detail Page ========== */
 .detail-page {
@@ -480,7 +541,8 @@ html, body, #root {
 .node-line {
   width: 2px;
   flex: 1;
-  background: #E0E0E0;
+  border-left: 2px dashed #BDBDBD;
+  background: transparent;
   margin: 4px 0;
   min-height: 40px;
 }
@@ -707,6 +769,74 @@ html, body, #root {
   font-size: 24px;
   font-weight: 700;
   color: var(--text-primary);
+}
+
+.tabs-container {
+  width: 100%;
+  display: flex;
+}
+
+.tabs-wrapper {
+  position: relative;
+  display: flex;
+  gap: 32px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0;
+}
+
+.tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 4px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s ease;
+  position: relative;
+  white-space: nowrap;
+}
+
+.tab-btn:hover {
+  color: var(--text-secondary);
+}
+
+.tab-btn.tab-active {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.tab-count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: rgba(0, 105, 92, 0.1);
+  color: var(--primary);
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-btn.tab-active .tab-count {
+  background: var(--primary);
+  color: #fff;
+}
+
+.tab-indicator {
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: var(--primary);
+  border-radius: 1px;
+  transition: left 0.2s cubic-bezier(0.4, 0, 0.2, 1), width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .user-section {
@@ -1052,5 +1182,14 @@ html, body, #root {
 
   .btn-large {
     padding: 12px 36px;
+  }
+
+  .tabs-wrapper {
+    gap: 20px;
+  }
+
+  .tab-btn {
+    font-size: 14px;
+    padding: 8px 2px;
   }
 }

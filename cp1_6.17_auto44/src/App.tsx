@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import RouteCard from './components/RouteCard';
 import RouteDetail from './components/RouteDetail';
 import UserCenter from './components/UserCenter';
@@ -11,7 +11,11 @@ const App: React.FC = () => {
   const [view, setView] = useState<ViewType>('home');
   const [selectedRouteId, setSelectedRouteId] = useState<string>('');
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [cardVisible, setCardVisible] = useState<boolean[]>([]);
+  const searchTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768);
@@ -26,6 +30,42 @@ const App: React.FC = () => {
     }
     return dataStore.getRoutes().slice(0, 3);
   }, [searchKeyword]);
+
+  useEffect(() => {
+    searchTimersRef.current.forEach((t) => clearTimeout(t));
+    searchTimersRef.current = [];
+    setCardVisible(new Array(routes.length).fill(false));
+    routes.forEach((_, idx) => {
+      const timer = setTimeout(() => {
+        setCardVisible((prev) => {
+          const next = [...prev];
+          next[idx] = true;
+          return next;
+        });
+      }, 100 + idx * 150);
+      searchTimersRef.current.push(timer);
+    });
+    return () => {
+      searchTimersRef.current.forEach((t) => clearTimeout(t));
+    };
+  }, [routes]);
+
+  const handleSearch = () => {
+    setSearchKeyword(searchInput);
+    setHasSearched(true);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  };
+
+  const handleClearSearch = () => {
+    setSearchInput('');
+    setSearchKeyword('');
+    setHasSearched(false);
+  };
 
   const handleCardClick = (routeId: string) => {
     setSelectedRouteId(routeId);
@@ -84,21 +124,43 @@ const App: React.FC = () => {
                 <input
                   type="text"
                   placeholder="搜索目的地城市，如：成都、丽江、厦门..."
-                  value={searchKeyword}
-                  onChange={(e) => setSearchKeyword(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
                 />
-                {searchKeyword && (
-                  <button className="search-clear" onClick={() => setSearchKeyword('')}>
+                {searchInput && (
+                  <button className="search-clear" onClick={handleClearSearch}>
                     ×
                   </button>
                 )}
+                <button className="search-btn" onClick={handleSearch}>
+                  搜索
+                </button>
               </div>
               <p className="search-tip">输入目的地，我们将为您推荐 3 条精选路线</p>
             </div>
 
+            {hasSearched && routes.length > 0 && (
+              <div className="results-hint">
+                ✨ 为您找到 <strong>{routes.length}</strong> 条路线
+              </div>
+            )}
+
+            {hasSearched && routes.length === 0 && (
+              <div className="results-hint results-empty">
+                😔 未找到相关路线，试试其他关键词
+              </div>
+            )}
+
             <div className="results-list">
-              {routes.map((route) => (
-                <RouteCard key={route.id} route={route} onClick={handleCardClick} />
+              {routes.map((route, idx) => (
+                <div
+                  key={route.id}
+                  className={`card-fade-wrap ${cardVisible[idx] ? 'card-visible' : ''}`}
+                  style={{ transitionDelay: `${idx * 0.1}s` }}
+                >
+                  <RouteCard route={route} onClick={handleCardClick} index={idx} />
+                </div>
               ))}
             </div>
           </div>
