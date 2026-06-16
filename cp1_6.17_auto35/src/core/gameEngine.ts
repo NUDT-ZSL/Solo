@@ -258,7 +258,8 @@ export class GameEngine {
       deltaTime,
       this.currentFrame,
       projLimit,
-      this.projectiles.length
+      this.projectiles.length,
+      collisionInfo
     )
 
     for (const p of aiResult.newProjectiles) {
@@ -291,7 +292,7 @@ export class GameEngine {
       updateHealthBar(ship)
       checkAndUpdateLOD(ship, this.ctx.camera.position)
 
-      if (ship.mesh && ship.status.stunned > 0) {
+      if (ship.mesh && (ship.status.stunned > 0 || ship.status.disabled > 0)) {
         ship.mesh.visible = Math.floor(this.stats.battleDuration * 10) % 2 === 0
       } else if (ship.mesh) {
         ship.mesh.visible = ship.status.alive

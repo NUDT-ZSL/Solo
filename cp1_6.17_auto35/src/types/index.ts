@@ -39,10 +39,12 @@ export interface Ship {
   status: {
     alive: boolean
     stunned: number
+    disabled: number
     damaged: number
     selected: boolean
   }
   attackCooldown: number
+  cooldownRemaining: number
   targetShipId: string | null
   mesh?: THREE.Group
   isLOD?: boolean

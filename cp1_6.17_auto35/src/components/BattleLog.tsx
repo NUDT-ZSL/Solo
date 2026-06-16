@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { useGame } from '../context/GameContext'
 import type { BattleLog as BattleLogType } from '../types'
 
-type LogFilter = 'all' | 'attack' | 'skill' | 'death' | 'heal' | 'stun'
+type LogFilter = 'all' | 'attack' | 'skill' | 'death' | 'heal' | 'stun' | 'info'
 
 export const BattleLog: React.FC = () => {
   const { logs, phase, engine } = useGame()
@@ -11,14 +11,18 @@ export const BattleLog: React.FC = () => {
   const [highlightId, setHighlightId] = useState<string | null>(null)
   const prevLengthRef = useRef(0)
   const [unreadCount, setUnreadCount] = useState(0)
+  const [liveEvent, setLiveEvent] = useState<BattleLogType | null>(null)
 
   useEffect(() => {
     if (logs.length > prevLengthRef.current && logs.length > 0) {
       const newLogs = logs.slice(prevLengthRef.current)
       if (newLogs.length > 0) {
-        setHighlightId(newLogs[newLogs.length - 1].id)
+        const latest = newLogs[newLogs.length - 1]
+        setHighlightId(latest.id)
+        setLiveEvent(latest)
         setUnreadCount(c => c + newLogs.length)
         setTimeout(() => setHighlightId(null), 1200)
+        setTimeout(() => setLiveEvent(null), 2000)
       }
     }
     prevLengthRef.current = logs.length
@@ -33,11 +37,27 @@ export const BattleLog: React.FC = () => {
 
   useEffect(() => {
     if (!engine) return
-    const off = engine.on('phaseChange', () => {
+
+    const offs: (() => void)[] = []
+
+    offs.push(engine.on('phaseChange', () => {
       prevLengthRef.current = 0
       setUnreadCount(0)
-    })
-    return () => off()
+      setLiveEvent(null)
+    }))
+
+    offs.push(engine.on('newLog', (log: BattleLogType) => {
+      setLiveEvent(log)
+      setTimeout(() => setLiveEvent(null), 2000)
+    }))
+
+    offs.push(engine.on('collisionDetected', () => {}))
+
+    offs.push(engine.on('battleResult', () => {
+      setLiveEvent(null)
+    }))
+
+    return () => offs.forEach(off => off())
   }, [engine])
 
   if (phase !== 'battle' && phase !== 'result') return null
@@ -49,6 +69,7 @@ export const BattleLog: React.FC = () => {
       case 'death': return '#FF5252'
       case 'heal': return '#81C784'
       case 'stun': return '#1E88E5'
+      case 'info': return '#90A4AE'
       default: return '#90A4AE'
     }
   }
@@ -60,6 +81,7 @@ export const BattleLog: React.FC = () => {
       case 'death': return '💥'
       case 'heal': return '💚'
       case 'stun': return '⚡'
+      case 'info': return '📡'
       default: return '📢'
     }
   }
@@ -81,10 +103,21 @@ export const BattleLog: React.FC = () => {
     { key: 'skill', label: '技能', icon: '✨' },
     { key: 'death', label: '击毁', icon: '💥' },
     { key: 'heal', label: '治疗', icon: '💚' },
+    { key: 'stun', label: '控制', icon: '⚡' },
   ]
 
   return (
     <div className="battle-log-panel">
+      {liveEvent && (
+        <div
+          className="log-live-banner"
+          style={{ borderLeftColor: getLogColor(liveEvent.type) }}
+        >
+          <span className="log-live-dot" />
+          <span>{liveEvent.message}</span>
+        </div>
+      )}
+
       <div className="log-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <h3>📜 战斗战报</h3>

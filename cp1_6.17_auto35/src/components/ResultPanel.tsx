@@ -1,9 +1,32 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useGame } from '../context/GameContext'
 import type { GameResult, FrameData } from '../types'
 
 interface ResultPanelProps {
   onPlayAgain: () => void
+}
+
+function computeRatingDetail(result: GameResult): { score: number; breakdown: string[] } {
+  const survivalScore = result.survivalRate * 0.4
+  const breakdown: string[] = []
+
+  breakdown.push(`存活率 ${result.survivalRate}% → +${Math.round(survivalScore * 100) / 100}分`)
+
+  if (result.survivalRate >= 100) breakdown.push('🏆 全员存活加成')
+  if (result.winner === 'player') breakdown.push('⚔️ 胜利基础分')
+  else if (result.winner === 'enemy') breakdown.push('💀 失败扣分')
+
+  const totalDamageScore = Math.min(result.totalDamage / 1000, 15)
+  breakdown.push(`总伤害 ${result.totalDamage} → +${Math.round(totalDamageScore * 10) / 10}分`)
+
+  const skillScore = Math.min(result.skillUsage * 2, 10)
+  breakdown.push(`技能 ${result.skillUsage} 次 → +${skillScore}分`)
+
+  const timeScore = result.duration < 60 ? 5 : result.duration < 120 ? 2 : 0
+  if (timeScore > 0) breakdown.push(`速通 ${result.duration}s → +${timeScore}分`)
+
+  const score = survivalScore * 100 + totalDamageScore + skillScore + timeScore
+  return { score: Math.min(100, score), breakdown }
 }
 
 export const ResultPanel: React.FC<ResultPanelProps> = ({ onPlayAgain }) => {
@@ -13,8 +36,11 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({ onPlayAgain }) => {
   const [replaySpeed, setReplaySpeed] = useState(1)
   const [isPlaying, setIsPlaying] = useState(false)
   const [cameraMode, setCameraMode] = useState<'top' | 'free'>('top')
+  const [showBreakdown, setShowBreakdown] = useState(false)
 
   if (!result) return null
+
+  const ratingDetail = useMemo(() => computeRatingDetail(result), [result])
 
   const frameData: FrameData[] = engine?.getFrameData() || []
   const totalFrames = frameData.length
@@ -38,6 +64,13 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({ onPlayAgain }) => {
     A: '#4FC3F7',
     B: '#81C784',
     C: '#90A4AE'
+  }
+
+  const ratingDescriptions: Record<string, string> = {
+    S: '完美指挥！',
+    A: '出色表现！',
+    B: '表现尚可',
+    C: '仍需努力'
   }
 
   const winnerText = result.winner === 'player' ? '🏆 胜利！' :
@@ -66,6 +99,9 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({ onPlayAgain }) => {
             >
               {result.rating}
             </span>
+            <span className="rating-desc" style={{ color: ratingColors[result.rating] }}>
+              {ratingDescriptions[result.rating]}
+            </span>
           </div>
 
           <div className="result-stats">
@@ -86,6 +122,24 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({ onPlayAgain }) => {
               <span className="stat-value">{result.duration} 秒</span>
             </div>
           </div>
+
+          <button
+            className="breakdown-toggle"
+            onClick={() => setShowBreakdown(!showBreakdown)}
+          >
+            {showBreakdown ? '▼ 收起评分详情' : '▶ 查看评分详情'}
+          </button>
+
+          {showBreakdown && (
+            <div className="rating-breakdown">
+              {ratingDetail.breakdown.map((line, i) => (
+                <div key={i} className="breakdown-line">{line}</div>
+              ))}
+              <div className="breakdown-total">
+                综合得分：{Math.round(ratingDetail.score)} / 100
+              </div>
+            </div>
+          )}
 
           <div className="result-actions">
             <button className="primary-btn" onClick={onPlayAgain}>

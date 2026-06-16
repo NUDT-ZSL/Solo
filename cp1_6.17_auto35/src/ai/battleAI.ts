@@ -45,13 +45,16 @@ export function createAIState(): AIState {
   }
 }
 
+export type CollisionInfo = Map<string, { inRange: string[]; distances: Map<string, number> }>
+
 export function updateAllShipsAI(
   ships: Ship[],
   state: AIState,
   deltaTime: number,
   currentFrame: number,
   maxProjectilesPerFrame: number = 5,
-  totalProjectileCount: number = 0
+  totalProjectileCount: number = 0,
+  collisionInfo: CollisionInfo = new Map()
 ): AIUpdateResult {
   const result: AIUpdateResult = {
     newProjectiles: [],
@@ -73,22 +76,29 @@ export function updateAllShipsAI(
 
   for (const ship of ships) {
     if (!ship.status.alive) continue
-    if (ship.status.stunned > 0) continue
+    if (ship.status.stunned > 0 || ship.status.disabled > 0) continue
 
     const allies = ships.filter(s => s.faction === ship.faction && s.id !== ship.id)
     const enemies = ships.filter(s => s.faction !== ship.faction)
     const tactic = ship.faction === 'player' ? state.playerTactic : state.enemyTactic
     const decision = applyTactic(ship, allies, enemies, tactic)
 
+    const info = collisionInfo.get(ship.id)
+    const hasInRangeTarget = info && info.inRange.length > 0
+
     applyMoveDecision(ship, decision, deltaTime)
-    applyAttackDecision(ship, decision, ships, result, projectilesCreated, projectileBudget)
+    applyAttackDecision(
+      ship, decision, ships, result,
+      projectilesCreated, projectileBudget,
+      hasInRangeTarget
+    )
 
     if (projectilesCreated < projectileBudget && result.newProjectiles.length > 0) {
       projectilesCreated = result.newProjectiles.length
     }
 
     if (decision.useSkill && canUseSkill(ship)) {
-      executeSkill(ship, ships, state, result, currentFrame)
+      executeSkill(ship, ships, state, result, currentFrame, collisionInfo)
     }
   }
 
@@ -137,7 +147,8 @@ function applyAttackDecision(
   allShips: Ship[],
   result: AIUpdateResult,
   createdSoFar: number,
-  budget: number
+  budget: number,
+  hasInRangeTarget: boolean = false
 ): void {
   ship.targetShipId = decision.targetShipId
   if (!ship.targetShipId) return
@@ -145,8 +156,7 @@ function applyAttackDecision(
   const target = allShips.find(s => s.id === ship.targetShipId)
   if (!target || !target.status.alive) return
 
-  const distance = ship.position.distanceTo(target.position)
-  if (distance > ship.stats.range) return
+  if (hasInRangeTarget === false) return
 
   if (ship.attackCooldown > 0) return
   if (createdSoFar >= budget) return
@@ -180,7 +190,8 @@ function executeSkill(
   allShips: Ship[],
   state: AIState,
   result: AIUpdateResult,
-  currentFrame: number
+  currentFrame: number,
+  collisionInfo: CollisionInfo = new Map()
 ): void {
   const skill = ship.skills[0]
   if (!skill) return

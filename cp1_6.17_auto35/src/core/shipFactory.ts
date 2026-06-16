@@ -148,10 +148,12 @@ export function createShip(
     status: {
       alive: true,
       stunned: 0,
+      disabled: 0,
       damaged: 0,
       selected: false
     },
     attackCooldown: 0,
+    cooldownRemaining: 0,
     targetShipId: null,
     isLOD: false
   }
@@ -166,7 +168,8 @@ export function cloneShipForReplay(ship: Ship): Ship {
     targetPosition: ship.targetPosition?.clone() ?? null,
     stats: { ...ship.stats },
     skills: ship.skills.map(s => ({ ...s })),
-    status: { ...ship.status }
+    status: { ...ship.status },
+    cooldownRemaining: ship.cooldownRemaining
   }
 }
 
@@ -203,6 +206,7 @@ export function triggerSkillCooldown(ship: Ship, skillIndex: number = 0): void {
   const skill = ship.skills[skillIndex]
   if (skill) {
     skill.currentCooldown = skill.cooldown
+    ship.cooldownRemaining = skill.cooldown
   }
 }
 
@@ -231,6 +235,12 @@ export function stunShip(ship: Ship, duration: number): void {
   }
 }
 
+export function disableShip(ship: Ship, duration: number): void {
+  if (ship.status.alive) {
+    ship.status.disabled = Math.max(ship.status.disabled, duration)
+  }
+}
+
 export function updateShipTimers(ship: Ship, deltaTime: number): void {
   if (ship.attackCooldown > 0) {
     ship.attackCooldown = Math.max(0, ship.attackCooldown - deltaTime)
@@ -238,8 +248,14 @@ export function updateShipTimers(ship: Ship, deltaTime: number): void {
   if (ship.status.stunned > 0) {
     ship.status.stunned = Math.max(0, ship.status.stunned - deltaTime)
   }
+  if (ship.status.disabled > 0) {
+    ship.status.disabled = Math.max(0, ship.status.disabled - deltaTime)
+  }
   if (ship.status.damaged > 0) {
     ship.status.damaged = Math.max(0, ship.status.damaged - deltaTime)
+  }
+  if (ship.cooldownRemaining > 0) {
+    ship.cooldownRemaining = Math.max(0, ship.cooldownRemaining - deltaTime)
   }
   for (const skill of ship.skills) {
     if (skill.currentCooldown > 0) {
@@ -275,11 +291,12 @@ export function executeEMP(ship: Ship, allShips: Ship[]): SkillEffectResult {
     if (target.faction === ship.faction) continue
     if (ship.position.distanceTo(target.position) > 3) continue
     stunShip(target, 3)
+    target.status.disabled = 2
     result.affectedIds.push(target.id)
     result.logs.push({
       id: `sk_emp_${Date.now()}_${++skillLogCounter}`,
       timestamp: Date.now(),
-      message: `⚡ ${ship.name} 释放 EMP 干扰，${target.name} 眩晕 3 秒！`,
+      message: `⚡ ${ship.name} 释放 EMP 干扰，${target.name} 瘫痪 2 秒、眩晕 3 秒！`,
       type: 'stun'
     })
   }
