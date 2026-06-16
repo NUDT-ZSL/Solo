@@ -6,6 +6,8 @@ import {
   VoxelWorld,
   BlockType,
   BLOCK_COLORS,
+  BLOCK_NAMES,
+  BUILDABLE_BLOCK_TYPES,
   WORLD_SIZE_X,
   WORLD_SIZE_Y,
   WORLD_SIZE_Z
@@ -324,8 +326,8 @@ const VoxelScene: React.FC<{
     onCoordinatesChange(closestHit)
   }, [camera, blockPositions, onCoordinatesChange])
 
-  const handleContextMenu = useCallback((event: ThreeEvent<MouseEvent>) => {
-    event.preventDefault()
+  const handleContextMenu = useCallback((_event: ThreeEvent<MouseEvent>) => {
+    _event.nativeEvent.preventDefault()
   }, [])
 
   return (
@@ -403,11 +405,10 @@ const App: React.FC = () => {
   const [selectedBlockType, setSelectedBlockType] = useState<BlockType>(BlockType.DIRT)
   const [coordinates, setCoordinates] = useState<{ x: number; y: number; z: number } | null>(null)
 
-  const blockTypes = [
-    { type: BlockType.DIRT, name: '泥土', color: BLOCK_COLORS[BlockType.DIRT] },
-    { type: BlockType.STONE, name: '石头', color: BLOCK_COLORS[BlockType.STONE] },
-    { type: BlockType.GRASS, name: '草地', color: BLOCK_COLORS[BlockType.GRASS] }
-  ]
+  const handleSelectBlockType = useCallback((type: BlockType) => {
+    setSelectedBlockType(type)
+    world.selectedBlockType = type
+  }, [world])
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -452,34 +453,126 @@ const App: React.FC = () => {
       <div
         style={{
           position: 'absolute',
-          top: '16px',
-          left: '16px',
+          bottom: '24px',
+          left: '50%',
+          transform: 'translateX(-50%)',
           display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
           gap: '8px',
-          padding: '8px',
-          backgroundColor: 'rgba(44, 62, 80, 0.9)',
-          borderRadius: '8px',
-          backdropFilter: 'blur(8px)'
+          pointerEvents: 'auto'
         }}
       >
-        {blockTypes.map(bt => (
-          <button
-            key={bt.type}
-            onClick={() => setSelectedBlockType(bt.type)}
+        <div
+          style={{
+            padding: '6px 16px',
+            backgroundColor: 'rgba(0, 0, 0, 0.55)',
+            borderRadius: '6px',
+            color: '#E0E0E0',
+            fontSize: '14px',
+            fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+            backdropFilter: 'blur(6px)',
+            textAlign: 'center',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            userSelect: 'none'
+          }}
+        >
+          <span style={{ color: '#AAAAAA' }}>当前方块:</span>
+          <span
             style={{
-              width: '48px',
-              height: '48px',
-              border: selectedBlockType === bt.type ? '3px solid #FFD700' : '2px solid transparent',
-              borderRadius: '6px',
-              backgroundColor: bt.color,
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              boxShadow: selectedBlockType === bt.type ? '0 0 10px rgba(255, 215, 0, 0.5)' : 'none',
-              transform: selectedBlockType === bt.type ? 'scale(1.1)' : 'scale(1)'
+              display: 'inline-block',
+              width: '14px',
+              height: '14px',
+              backgroundColor: BLOCK_COLORS[selectedBlockType],
+              borderRadius: '3px',
+              border: '1px solid rgba(255,255,255,0.3)',
+              verticalAlign: 'middle'
             }}
-            title={bt.name}
           />
-        ))}
+          <span style={{ color: '#FFFFFF', fontWeight: 600 }}>{BLOCK_NAMES[selectedBlockType]}</span>
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            gap: '6px',
+            padding: '10px 14px',
+            backgroundColor: 'rgba(44, 62, 80, 0.85)',
+            borderRadius: '12px',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+          }}
+        >
+          {BUILDABLE_BLOCK_TYPES.map(bt => {
+            const isSelected = selectedBlockType === bt
+            return (
+              <button
+                key={bt}
+                onClick={() => handleSelectBlockType(bt)}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '8px 10px',
+                  border: isSelected ? '2px solid #FFD700' : '2px solid rgba(255, 255, 255, 0.15)',
+                  borderRadius: '8px',
+                  backgroundColor: isSelected ? 'rgba(255, 215, 0, 0.12)' : 'rgba(255, 255, 255, 0.05)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: isSelected
+                    ? '0 0 12px rgba(255, 215, 0, 0.4), inset 0 0 8px rgba(255, 215, 0, 0.1)'
+                    : 'none',
+                  transform: isSelected ? 'scale(1.08)' : 'scale(1)',
+                  outline: 'none',
+                  userSelect: 'none'
+                }}
+              >
+                <div
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    backgroundColor: BLOCK_COLORS[bt],
+                    borderRadius: '4px',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    boxShadow: isSelected
+                      ? '0 0 8px rgba(255, 215, 0, 0.3)'
+                      : '0 2px 4px rgba(0, 0, 0, 0.3)',
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}
+                >
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: '40%',
+                      background: 'linear-gradient(to bottom, rgba(255,255,255,0.25), transparent)',
+                      borderRadius: '3px 3px 0 0'
+                    }}
+                  />
+                </div>
+                <span
+                  style={{
+                    color: isSelected ? '#FFD700' : 'rgba(255, 255, 255, 0.75)',
+                    fontSize: '11px',
+                    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+                    fontWeight: isSelected ? 600 : 400,
+                    letterSpacing: '0.5px',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {BLOCK_NAMES[bt]}
+                </span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {coordinates && (
@@ -494,7 +587,8 @@ const App: React.FC = () => {
             color: 'white',
             fontSize: '14px',
             fontFamily: 'monospace',
-            backdropFilter: 'blur(4px)'
+            backdropFilter: 'blur(4px)',
+            pointerEvents: 'none'
           }}
         >
           X: {coordinates.x}, Y: {coordinates.y}, Z: {coordinates.z}
@@ -511,7 +605,8 @@ const App: React.FC = () => {
           borderRadius: '4px',
           color: 'white',
           fontSize: '12px',
-          backdropFilter: 'blur(4px)'
+          backdropFilter: 'blur(4px)',
+          pointerEvents: 'none'
         }}
       >
         <div>🖱️ 左键：挖掘方块</div>

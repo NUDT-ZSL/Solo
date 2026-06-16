@@ -18,6 +18,21 @@ export const BLOCK_COLORS: Record<BlockType, string> = {
   [BlockType.BEDROCK]: '#333333'
 };
 
+export const BLOCK_NAMES: Record<BlockType, string> = {
+  [BlockType.AIR]: '空气',
+  [BlockType.DIRT]: '泥土',
+  [BlockType.STONE]: '石头',
+  [BlockType.GRASS]: '草地',
+  [BlockType.BEDROCK]: '基岩'
+};
+
+export const BUILDABLE_BLOCK_TYPES: BlockType[] = [
+  BlockType.GRASS,
+  BlockType.DIRT,
+  BlockType.STONE,
+  BlockType.BEDROCK
+];
+
 export interface FallingBlock {
   x: number;
   y: number;
@@ -31,10 +46,21 @@ export interface FallingBlock {
 export class VoxelWorld {
   private data: Uint8Array;
   public fallingBlocks: FallingBlock[] = [];
+  private _selectedBlockType: BlockType = BlockType.DIRT;
 
   constructor() {
     this.data = new Uint8Array(WORLD_SIZE_X * WORLD_SIZE_Y * WORLD_SIZE_Z);
     this.initializeWorld();
+  }
+
+  public get selectedBlockType(): BlockType {
+    return this._selectedBlockType;
+  }
+
+  public set selectedBlockType(type: BlockType) {
+    if (type !== BlockType.AIR) {
+      this._selectedBlockType = type;
+    }
   }
 
   private getIndex(x: number, y: number, z: number): number {
