@@ -1,22 +1,37 @@
-import type { Station, Line, Point } from './stationData';
-import { getHeatColor, getCrowdLevelText, getAllStations } from './stationData';
+import type { Station, Line, Trend, CrowdLevel } from './stationData';
+import {
+  getStationsByLineIds,
+  getCurrentFlow,
+  getDensity,
+  getHeatColorRgb,
+  getCrowdLevel,
+  getCrowdLevelText,
+  getCrowdLevelColor,
+  calculateTrend,
+  getTrendArrow,
+  getTrendColor,
+} from './stationData';
 
 interface MapRendererOptions {
   onStationHover?: (station: Station | null) => void;
   onStationClick?: (station: Station) => void;
 }
 
-const STATION_HIT_RADIUS = 12;
+const STATION_HIT_RADIUS = 14;
 const HEAT_RADIUS = 60;
 const HEAT_ALPHA = 0.7;
 const TARGET_FPS = 30;
 const FRAME_INTERVAL = 1000 / TARGET_FPS;
+const STATION_NODE_RADIUS = 6;
+const STATION_HOVER_RADIUS = 9;
 
 export class MapRenderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private lines: Line[] = [];
   private stations: Station[] = [];
+  private selectedLineIds: string[] = [];
+  private currentHour: number = 8;
   private offscreenCanvas: HTMLCanvasElement | null = null;
   private offscreenCtx: CanvasRenderingContext2D | null = null;
   private infoWindow: HTMLDivElement | null = null;
@@ -26,6 +41,8 @@ export class MapRenderer {
   private needsRedraw = true;
   private onStationHover: ((station: Station | null) => void) | undefined;
   private onStationClick: ((station: Station) => void) | undefined;
+  private transform = { scale: 1, offsetX: 0, offsetY: 0 };
+  private dpr: number = 1;
 
   constructor(canvas: HTMLCanvasElement, options: MapRendererOptions = {}) {
     this.canvas = canvas;
@@ -37,6 +54,7 @@ export class MapRenderer {
     this.onStationHover = options.onStationHover;
     this.onStationClick = options.onStationClick;
 
+    this.dpr = window.devicePixelRatio || 1;
     this.createOffscreenCanvas();
     this.createInfoWindow();
     this.bindEvents();
@@ -56,24 +74,32 @@ export class MapRenderer {
 
   private createInfoWindow(): void {
     this.infoWindow = document.createElement('div');
-    this.infoWindow.style.position = 'absolute';
-    this.infoWindow.style.display = 'none';
-    this.infoWindow.style.width = '240px';
-    this.infoWindow.style.backgroundColor = '#ffffff';
-    this.infoWindow.style.borderRadius = '12px';
-    this.infoWindow.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
-    this.infoWindow.style.padding = '16px';
-    this.infoWindow.style.pointerEvents = 'none';
-    this.infoWindow.style.zIndex = '100';
-    this.infoWindow.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
-    this.infoWindow.style.transform = 'translateY(10px)';
-    this.infoWindow.style.opacity = '0';
-    this.infoWindow.style.fontSize = '14px';
-    this.infoWindow.style.color = '#333';
+    this.infoWindow.className = 'station-info-window';
+    this.infoWindow.style.cssText = `
+      position: absolute;
+      display: none;
+      width: 240px;
+      background-color: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      padding: 16px;
+      pointer-events: none;
+      z-index: 100;
+      transform: translateY(10px);
+      opacity: 0;
+      transition: transform 0.2s ease-out, opacity 0.2s ease-out;
+      font-size: 14px;
+      color: #333;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      box-sizing: border-box;
+    `;
 
     const parent = this.canvas.parentElement;
     if (parent) {
-      parent.style.position = parent.style.position || 'relative';
+      const pos = getComputedStyle(parent).position;
+      if (pos === 'static') {
+        parent.style.position = 'relative';
+      }
       parent.appendChild(this.infoWindow);
     }
   }
@@ -86,10 +112,8 @@ export class MapRenderer {
 
   private handleMouseMove = (e: MouseEvent): void => {
     const rect = this.canvas.getBoundingClientRect();
-    const scaleX = this.canvas.width / rect.width;
-    const scaleY = this.canvas.height / rect.height;
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
 
     const station = this.findStationAtPoint(x, y);
 
@@ -102,12 +126,12 @@ export class MapRenderer {
       }
 
       if (station) {
-        this.showInfoWindow(station, e.clientX - rect.left, e.clientY - rect.top);
+        this.showInfoWindow(station, x, y);
       } else {
         this.hideInfoWindow();
       }
     } else if (station) {
-      this.updateInfoWindowPosition(e.clientX - rect.left, e.clientY - rect.top);
+      this.updateInfoWindowPosition(x, y);
     }
   };
 
@@ -126,10 +150,8 @@ export class MapRenderer {
 
   private handleClick = (e: MouseEvent): void => {
     const rect = this.canvas.getBoundingClientRect();
-    const scaleX = this.canvas.width / rect.width;
-    const scaleY = this.canvas.height / rect.height;
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
 
     const station = this.findStationAtPoint(x, y);
     if (station && this.onStationClick) {
@@ -140,10 +162,12 @@ export class MapRenderer {
   private findStationAtPoint(x: number, y: number): Station | null {
     for (let i = this.stations.length - 1; i >= 0; i--) {
       const station = this.stations[i];
-      const dx = x - station.position.x;
-      const dy = y - station.position.y;
+      const sx = this.transform.offsetX + station.x * this.transform.scale;
+      const sy = this.transform.offsetY + station.y * this.transform.scale;
+      const dx = x - sx;
+      const dy = y - sy;
       const distance = Math.sqrt(dx * dx + dy * dy);
-      if (distance <= STATION_HIT_RADIUS) {
+      if (distance <= STATION_HIT_RADIUS * this.transform.scale) {
         return station;
       }
     }
@@ -153,22 +177,29 @@ export class MapRenderer {
   private showInfoWindow(station: Station, x: number, y: number): void {
     if (!this.infoWindow) return;
 
-    const trendArrow = this.getTrendArrow(station.trend);
-    const trendColor = this.getTrendColor(station.trend);
+    const density = getDensity(station, this.currentHour);
+    const flow = getCurrentFlow(station, this.currentHour);
+    const crowdLevel = getCrowdLevel(density);
+    const crowdText = getCrowdLevelText(crowdLevel);
+    const crowdColor = getCrowdLevelColor(crowdLevel);
+    const trend: Trend = calculateTrend(station, this.currentHour);
+    const trendArrow = getTrendArrow(trend);
+    const trendColor = getTrendColor(trend);
+    const trendText = trend === 'up' ? '上升' : trend === 'down' ? '下降' : '稳定';
 
     this.infoWindow.innerHTML = `
       <div style="font-weight: 600; font-size: 16px; margin-bottom: 12px; color: #1a1a1a;">${station.name}</div>
       <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-        <span style="color: #666;">客流量</span>
-        <span style="font-weight: 500;">${station.passengerFlow.toLocaleString()} 人</span>
+        <span style="color: #666; font-size: 13px;">当前客流量</span>
+        <span style="font-weight: 500; color: #1a1a1a;">${flow.toLocaleString()} 人</span>
       </div>
       <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-        <span style="color: #666;">拥挤等级</span>
-        <span style="font-weight: 500; color: ${this.getCrowdLevelColor(station.crowdLevel)};">${getCrowdLevelText(station.crowdLevel)}</span>
+        <span style="color: #666; font-size: 13px;">拥挤等级</span>
+        <span style="font-weight: 500; color: ${crowdColor};">${crowdText}</span>
       </div>
       <div style="display: flex; justify-content: space-between;">
-        <span style="color: #666;">趋势</span>
-        <span style="font-weight: 500; color: ${trendColor};">${trendArrow} ${station.trend === 'up' ? '上升' : station.trend === 'down' ? '下降' : '稳定'}</span>
+        <span style="color: #666; font-size: 13px;">客流趋势</span>
+        <span style="font-weight: 500; color: ${trendColor};">${trendArrow} ${trendText}</span>
       </div>
     `;
 
@@ -186,20 +217,19 @@ export class MapRenderer {
   private updateInfoWindowPosition(x: number, y: number): void {
     if (!this.infoWindow) return;
 
-    const infoWidth = 240 + 32;
-    const infoHeight = 120;
-    const offsetX = 16;
-    const offsetY = 16;
+    const infoWidth = 240;
+    const infoHeight = 110;
+    const offset = 16;
 
-    let posX = x + offsetX;
-    let posY = y - infoHeight - offsetY;
+    let posX = x + offset;
+    let posY = y - infoHeight - offset;
 
     const rect = this.canvas.getBoundingClientRect();
     if (posX + infoWidth > rect.width) {
-      posX = x - infoWidth - offsetX;
+      posX = x - infoWidth - offset;
     }
     if (posY < 0) {
-      posY = y + offsetY;
+      posY = y + offset;
     }
 
     this.infoWindow.style.left = `${posX}px`;
@@ -219,32 +249,6 @@ export class MapRenderer {
     }, 200);
   }
 
-  private getTrendArrow(trend: string): string {
-    switch (trend) {
-      case 'up': return '↑';
-      case 'down': return '↓';
-      default: return '→';
-    }
-  }
-
-  private getTrendColor(trend: string): string {
-    switch (trend) {
-      case 'up': return '#ef4444';
-      case 'down': return '#22c55e';
-      default: return '#6b7280';
-    }
-  }
-
-  private getCrowdLevelColor(level: string): string {
-    switch (level) {
-      case 'loose': return '#22c55e';
-      case 'normal': return '#eab308';
-      case 'crowded': return '#f97316';
-      case 'veryCrowded': return '#ef4444';
-      default: return '#6b7280';
-    }
-  }
-
   private startAnimationLoop(): void {
     const loop = (timestamp: number) => {
       this.animationFrameId = requestAnimationFrame(loop);
@@ -262,8 +266,42 @@ export class MapRenderer {
     this.animationFrameId = requestAnimationFrame(loop);
   }
 
+  private calculateTransform(): void {
+    const canvasWidth = this.canvas.width / this.dpr;
+    const canvasHeight = this.canvas.height / this.dpr;
+    const padding = 60;
+
+    if (this.stations.length === 0) {
+      this.transform = { scale: 1, offsetX: 0, offsetY: 0 };
+      return;
+    }
+
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+
+    for (const station of this.stations) {
+      minX = Math.min(minX, station.x);
+      maxX = Math.max(maxX, station.x);
+      minY = Math.min(minY, station.y);
+      maxY = Math.max(maxY, station.y);
+    }
+
+    const mapWidth = maxX - minX;
+    const mapHeight = maxY - minY;
+
+    const scaleX = (canvasWidth - padding * 2) / mapWidth;
+    const scaleY = (canvasHeight - padding * 2) / mapHeight;
+    const scale = Math.min(scaleX, scaleY);
+
+    const offsetX = (canvasWidth - mapWidth * scale) / 2 - minX * scale;
+    const offsetY = (canvasHeight - mapHeight * scale) / 2 - minY * scale;
+
+    this.transform = { scale, offsetX, offsetY };
+  }
+
   private render(): void {
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    const { width, height } = this.canvas;
+    this.ctx.clearRect(0, 0, width, height);
 
     if (this.offscreenCanvas && this.offscreenCtx) {
       this.ctx.drawImage(this.offscreenCanvas, 0, 0);
@@ -280,47 +318,50 @@ export class MapRenderer {
   }
 
   private drawStationHeat(station: Station): void {
-    const { x, y } = station.position;
-    const gradient = this.ctx.createRadialGradient(x, y, 0, x, y, HEAT_RADIUS);
+    const x = this.transform.offsetX + station.x * this.transform.scale;
+    const y = this.transform.offsetY + station.y * this.transform.scale;
+    const density = getDensity(station, this.currentHour);
+    const radius = HEAT_RADIUS * this.transform.scale;
 
-    const baseColor = getHeatColor(station.density);
-    const rgbMatch = baseColor.match(/\d+/g);
-    if (!rgbMatch) return;
-
-    const [r, g, b] = rgbMatch;
+    const { r, g, b } = getHeatColorRgb(density);
     const alpha = HEAT_ALPHA;
 
+    const gradient = this.ctx.createRadialGradient(x, y, 0, x, y, radius);
     gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${alpha})`);
-    gradient.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${alpha * 0.5})`);
+    gradient.addColorStop(0.4, `rgba(${r}, ${g}, ${b}, ${alpha * 0.6})`);
+    gradient.addColorStop(0.7, `rgba(${r}, ${g}, ${b}, ${alpha * 0.25})`);
     gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
 
     this.ctx.fillStyle = gradient;
     this.ctx.beginPath();
-    this.ctx.arc(x, y, HEAT_RADIUS, 0, Math.PI * 2);
+    this.ctx.arc(x, y, radius, 0, Math.PI * 2);
     this.ctx.fill();
   }
 
   private drawStationNodes(): void {
     for (const station of this.stations) {
       const isHovered = station === this.hoveredStation;
-      const radius = isHovered ? 8 : 6;
-      const { x, y } = station.position;
+      const x = this.transform.offsetX + station.x * this.transform.scale;
+      const y = this.transform.offsetY + station.y * this.transform.scale;
+      const density = getDensity(station, this.currentHour);
+      const color = getHeatColorRgb(density);
+      const radius = (isHovered ? STATION_HOVER_RADIUS : STATION_NODE_RADIUS) * this.transform.scale;
 
       this.ctx.fillStyle = '#ffffff';
       this.ctx.beginPath();
-      this.ctx.arc(x, y, radius + 2, 0, Math.PI * 2);
+      this.ctx.arc(x, y, radius + 2 * this.transform.scale, 0, Math.PI * 2);
       this.ctx.fill();
 
-      this.ctx.fillStyle = getHeatColor(station.density);
+      this.ctx.fillStyle = `rgb(${color.r}, ${color.g}, ${color.b})`;
       this.ctx.beginPath();
       this.ctx.arc(x, y, radius, 0, Math.PI * 2);
       this.ctx.fill();
 
       if (isHovered) {
-        this.ctx.strokeStyle = getHeatColor(station.density);
-        this.ctx.lineWidth = 2;
+        this.ctx.strokeStyle = `rgb(${color.r}, ${color.g}, ${color.b})`;
+        this.ctx.lineWidth = 2 * this.transform.scale;
         this.ctx.beginPath();
-        this.ctx.arc(x, y, radius + 6, 0, Math.PI * 2);
+        this.ctx.arc(x, y, radius + 6 * this.transform.scale, 0, Math.PI * 2);
         this.ctx.stroke();
       }
     }
@@ -337,26 +378,57 @@ export class MapRenderer {
   }
 
   private drawLineToOffscreen(line: Line): void {
-    if (!this.offscreenCtx || line.stations.length < 2) return;
+    if (!this.offscreenCtx) return;
 
-    this.offscreenCtx.strokeStyle = '#d1d5db';
-    this.offscreenCtx.lineWidth = 4;
+    const lineStations = this.stations.filter((s) => s.lineId === line.id);
+    if (lineStations.length < 2) return;
+
+    const isSelected =
+      this.selectedLineIds.length === 0 || this.selectedLineIds.includes(line.id);
+
+    this.offscreenCtx.strokeStyle = isSelected ? 'rgba(148, 163, 184, 0.6)' : 'rgba(148, 163, 184, 0.2)';
+    this.offscreenCtx.lineWidth = (isSelected ? 4 : 2) * this.dpr;
     this.offscreenCtx.lineCap = 'round';
     this.offscreenCtx.lineJoin = 'round';
 
     this.offscreenCtx.beginPath();
-    this.offscreenCtx.moveTo(line.stations[0].position.x, line.stations[0].position.y);
 
-    for (let i = 1; i < line.stations.length; i++) {
-      this.offscreenCtx.lineTo(line.stations[i].position.x, line.stations[i].position.y);
+    const first = lineStations[0];
+    const fx = (this.transform.offsetX + first.x * this.transform.scale) * this.dpr;
+    const fy = (this.transform.offsetY + first.y * this.transform.scale) * this.dpr;
+    this.offscreenCtx.moveTo(fx, fy);
+
+    for (let i = 1; i < lineStations.length; i++) {
+      const station = lineStations[i];
+      const sx = (this.transform.offsetX + station.x * this.transform.scale) * this.dpr;
+      const sy = (this.transform.offsetY + station.y * this.transform.scale) * this.dpr;
+      this.offscreenCtx.lineTo(sx, sy);
     }
 
     this.offscreenCtx.stroke();
   }
 
-  public updateStations(lines: Line[]): void {
+  public updateData(lines: Line[], selectedLineIds: string[], hour: number): void {
     this.lines = lines;
-    this.stations = getAllStations(lines);
+    this.selectedLineIds = selectedLineIds;
+    this.currentHour = hour;
+    this.stations = getStationsByLineIds(selectedLineIds.length > 0 ? selectedLineIds : lines.map((l) => l.id));
+
+    this.calculateTransform();
+    this.renderLinesToOffscreen();
+    this.needsRedraw = true;
+  }
+
+  public setHour(hour: number): void {
+    this.currentHour = hour;
+    this.needsRedraw = true;
+  }
+
+  public setSelectedLineIds(ids: string[]): void {
+    this.selectedLineIds = ids;
+    this.stations = getStationsByLineIds(
+      ids.length > 0 ? ids : this.lines.map((l) => l.id)
+    );
     this.renderLinesToOffscreen();
     this.needsRedraw = true;
   }
@@ -369,15 +441,23 @@ export class MapRenderer {
     this.onStationClick = callback;
   }
 
-  public resize(width: number, height: number): void {
-    this.canvas.width = width;
-    this.canvas.height = height;
+  public resize(): void {
+    const rect = this.canvas.getBoundingClientRect();
+    this.dpr = window.devicePixelRatio || 1;
+    this.canvas.width = rect.width * this.dpr;
+    this.canvas.height = rect.height * this.dpr;
+    this.canvas.style.width = `${rect.width}px`;
+    this.canvas.style.height = `${rect.height}px`;
 
     if (this.offscreenCanvas) {
-      this.offscreenCanvas.width = width;
-      this.offscreenCanvas.height = height;
+      this.offscreenCanvas.width = rect.width * this.dpr;
+      this.offscreenCanvas.height = rect.height * this.dpr;
     }
 
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.scale(this.dpr, this.dpr);
+
+    this.calculateTransform();
     this.renderLinesToOffscreen();
     this.needsRedraw = true;
   }

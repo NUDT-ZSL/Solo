@@ -7,120 +7,166 @@
 }
 
 html,
-body,
-#root {
+body {
   margin: 0;
   padding: 0;
-  width: 100%;
   height: 100%;
+  width: 100%;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans",
     Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   line-height: 1.5;
   font-weight: 400;
-  background-color: #1e293b;
-  color: #e2e8f0;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: #1e293b;
+  color: #f8fafc;
+  overflow: hidden;
 }
 
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: #1e293b;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #475569;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
-}
-
-::-webkit-scrollbar-corner {
-  background: #1e293b;
-}
-
-@layer components {
-  .card {
-    @apply bg-slate-800/60 rounded-lg border border-slate-700/50;
-  }
+#root {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
 }
 
 @keyframes slideUpFadeIn {
-  0% {
+  from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(10px);
   }
-  100% {
+  to {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
 .animate-slideUpFadeIn {
-  animation: slideUpFadeIn 0.3s ease-out forwards;
+  animation: slideUpFadeIn 0.2s ease-out;
 }
 
-input[type="range"].slider {
-  -webkit-appearance: none;
-  appearance: none;
-  background: transparent;
-  cursor: pointer;
+.main-layout {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 56px - 180px);
+  min-height: 0;
 }
 
-input[type="range"].slider::-webkit-slider-runnable-track {
-  background: #334155;
-  height: 6px;
-  border-radius: 3px;
+.sidebar-left {
+  flex-shrink: 0;
+  padding: 12px;
+  display: flex;
+  justify-content: center;
+  order: 2;
 }
 
-input[type="range"].slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  margin-top: -5px;
-  background-color: #3b82f6;
-  height: 16px;
-  width: 16px;
-  border-radius: 50%;
-  border: 2px solid #fff;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-  transition: transform 0.15s ease;
+.map-container {
+  flex: 1;
+  min-height: 300px;
+  position: relative;
+  order: 1;
+  padding: 12px;
 }
 
-input[type="range"].slider::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
+.sidebar-right {
+  flex-shrink: 0;
+  padding: 12px;
+  display: flex;
+  justify-content: center;
+  order: 3;
 }
 
-input[type="range"].slider::-moz-range-track {
-  background: #334155;
-  height: 6px;
-  border-radius: 3px;
+.footer-bar {
+  flex-shrink: 0;
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid rgba(51, 65, 85, 0.5);
+  display: flex;
+  justify-content: center;
 }
 
-input[type="range"].slider::-moz-range-thumb {
-  background-color: #3b82f6;
-  height: 16px;
-  width: 16px;
-  border-radius: 50%;
-  border: 2px solid #fff;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+@media (min-width: 768px) {
+  .main-layout {
+    flex-direction: row;
+    height: calc(100vh - 56px - 180px);
+  }
+
+  .sidebar-left {
+    order: 1;
+    width: 220px;
+  }
+
+  .map-container {
+    order: 2;
+    min-height: 0;
+  }
+
+  .sidebar-right {
+    order: 3;
+    width: 340px;
+  }
 }
 
 @media (min-width: 1200px) {
   .main-layout {
-    grid-template-columns: 200px 1fr 320px;
+    height: calc(100vh - 56px - 180px);
+  }
+
+  .sidebar-left {
+    width: 220px;
+  }
+
+  .sidebar-right {
+    width: 360px;
+  }
+
+  .map-container {
+    padding: 16px;
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .main-layout {
-    grid-template-rows: auto auto auto;
+    height: auto;
+    overflow-y: auto;
   }
+
+  .map-container {
+    height: 400px;
+  }
+
+  .sidebar-left,
+  .sidebar-right {
+    width: 100%;
+    padding: 8px;
+  }
+
+  #root {
+    overflow-y: auto;
+  }
+
+  html,
+  body {
+    overflow-y: auto;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.5);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.8);
 }
