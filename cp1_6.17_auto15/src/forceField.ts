@@ -15,6 +15,7 @@ interface ForceLine {
   dayIndex: number;
   line: THREE.Line;
   baseOpacity: number;
+  isHovered: boolean;
 }
 
 export class ForceField {
@@ -24,9 +25,10 @@ export class ForceField {
   private config: ForceFieldConfig;
   private group: THREE.Group;
   private forceLines: ForceLine[] = [];
-  private baseOpacity: number = 0.3;
+  private baseOpacity: number = 0.35;
   private hoveredStockIndex: number = -1;
   private enabled: boolean = true;
+  private time: number = 0;
 
   constructor(
     scene: THREE.Scene,
@@ -41,34 +43,44 @@ export class ForceField {
     this.group = new THREE.Group();
     this.baseOpacity = config.baseOpacity;
     this.scene.add(this.group);
-    this.buildForceLines();
+    this.buildForceFieldLines();
   }
 
-  private buildForceLines(): void {
-    this.clearLines();
+  private buildForceFieldLines(): void {
+    this.clearAllLines();
 
     const stockCount = this.dataManager.getStockCount();
     const daysCount = this.dataManager.getDaysCount();
-    const correlations: Map<string, number> = new Map();
+
+    const correlationMap: Map<string, number> = new Map();
 
     for (let i = 0; i < stockCount; i++) {
       for (let j = i + 1; j < stockCount; j++) {
         const corr = this.dataManager.computeCorrelation(i, j);
         if (Math.abs(corr) >= this.config.correlationThreshold) {
-          correlations.set(`${i}-${j}`, corr);
+          correlationMap.set(`${i}-${j}`, corr);
         }
       }
     }
 
-    const sampleDays = this.sampleDays(daysCount, 12);
+    console.log(`[ForceField] Found ${correlationMap.size} stock pairs with correlation >= ${this.config.correlationThreshold}`);
 
-    for (const [key, corr] of correlations) {
+    const sampleStep = Math.max(1, Math.floor(daysCount / 15));
+    const sampledDays: number[] = [];
+    for (let d = 0; d < daysCount; d += sampleStep) {
+      sampledDays.push(d);
+    }
+    if (sampledDays[sampledDays.length - 1] !== daysCount - 1) {
+      sampledDays.push(daysCount - 1);
+    }
+
+    for (const [key, corr] of correlationMap) {
       const [idxA, idxB] = key.split('-').map(Number);
       const stockA = this.dataManager.getStock(idxA);
       const stockB = this.dataManager.getStock(idxB);
       if (!stockA || !stockB) continue;
 
-      for (const day of sampleDays) {
+      for (const day of sampledDays) {
         const pointA = stockA.data[day];
         const pointB = stockB.data[day];
         if (!pointA || !pointB) continue;
@@ -77,7 +89,9 @@ export class ForceField {
         const posB = this.particleSystem.getParticlePosition(pointB);
 
         const geometry = new THREE.BufferGeometry().setFromPoints([posA, posB]);
-        const opacity = this.baseOpacity * (0.5 + Math.abs(corr) * 0.5);
+
+        const corrStrength = Math.abs(corr);
+        const opacity = this.baseOpacity * (0.5 + corrStrength * 0.5);
 
         const material = new THREE.LineBasicMaterial({
           color: 0xffffff,
@@ -95,56 +109,59 @@ export class ForceField {
           correlation: corr,
           dayIndex: day,
           line,
-          baseOpacity: opacity
+          baseOpacity: opacity,
+          isHovered: false
         });
       }
     }
-  }
 
-  private sampleDays(totalDays: number, count: number): number[] {
-    const result: number[] = [];
-    const step = Math.max(1, Math.floor(totalDays / count));
-    for (let i = 0; i < totalDays; i += step) {
-      result.push(i);
-    }
-    if (result[result.length - 1] !== totalDays - 1) {
-      result.push(totalDays - 1);
-    }
-    return result;
+    console.log(`[ForceField] Total force lines: ${this.forceLines.length}`);
   }
 
   updateCorrelationThreshold(threshold: number): void {
     this.config.correlationThreshold = threshold;
-    this.buildForceLines();
+    this.buildForceFieldLines();
   }
 
-  animate(_delta: number, camera: THREE.Camera): void {
+  animate(delta: number, camera: THREE.Camera): void {
     if (!this.enabled) return;
 
-    const camPos = camera.position.clone();
-    const center = new THREE.Vector3(0, 0, 0);
-    const viewAngle = camPos.angleTo(new THREE.Vector3(0, 1, 0));
-    const waveFactor = 0.7 + Math.sin(Date.now() * 0.001 + viewAngle * 2) * 0.3;
+    this.time += delta;
 
-    const camDistance = camPos.distanceTo(center);
-    const distanceFactor = Math.max(0.3, 1 - (camDistance - 5) / 20);
+    const camPos = camera.position.clone();
+    const camDistance = camPos.distanceTo(new THREE.Vector3(0, 0, 0));
+    const distanceFactor = Math.max(0.3, 1 - Math.max(0, (camDistance - 8) / 15));
+
+    const wavePhase = this.time * 1.5;
+    const minOpacity = 0.2;
+    const maxOpacity = 0.5;
 
     for (const forceLine of this.forceLines) {
       const material = forceLine.line.material as THREE.LineBasicMaterial;
-      const corrFactor = 0.4 + Math.abs(forceLine.correlation) * 0.6;
 
-      let targetOpacity = forceLine.baseOpacity * waveFactor * corrFactor * distanceFactor;
-
-      if (this.hoveredStockIndex >= 0 &&
-          (forceLine.stockIdxA === this.hoveredStockIndex ||
-           forceLine.stockIdxB === this.hoveredStockIndex)) {
-        targetOpacity = 0.9;
-        material.color.setHex(0xffd700);
+      if (forceLine.stockIdxA === this.hoveredStockIndex ||
+          forceLine.stockIdxB === this.hoveredStockIndex) {
+        if (!forceLine.isHovered) {
+          forceLine.isHovered = true;
+          material.color.setHex(0xffd700);
+        }
+        const hoverTarget = 0.9;
+        material.opacity += (hoverTarget - material.opacity) * 0.15;
       } else {
-        material.color.setHex(0xffffff);
-      }
+        if (forceLine.isHovered) {
+          forceLine.isHovered = false;
+          material.color.setHex(0xffffff);
+        }
 
-      material.opacity += (targetOpacity - material.opacity) * 0.1;
+        const corrFactor = 0.4 + Math.abs(forceLine.correlation) * 0.6;
+        const waveOffset = forceLine.dayIndex * 0.15 + forceLine.stockIdxA * 0.1;
+        const waveValue = 0.7 + Math.sin(wavePhase + waveOffset) * 0.3;
+
+        const dynamicOpacity = forceLine.baseOpacity * waveValue * corrFactor * distanceFactor;
+        const clampedOpacity = Math.max(minOpacity, Math.min(maxOpacity, dynamicOpacity));
+
+        material.opacity += (clampedOpacity - material.opacity) * 0.08;
+      }
     }
   }
 
@@ -167,11 +184,16 @@ export class ForceField {
   }
 
   setLODLevel(cameraDistance: number): void {
-    const farThreshold = 15;
+    const farThreshold = 18;
+    const targetOpacity = 0.1;
+
     if (cameraDistance > farThreshold) {
       for (const forceLine of this.forceLines) {
-        (forceLine.line.material as THREE.LineBasicMaterial).opacity =
-          forceLine.baseOpacity * 0.1;
+        const material = forceLine.line.material as THREE.LineBasicMaterial;
+        if (forceLine.stockIdxA !== this.hoveredStockIndex &&
+            forceLine.stockIdxB !== this.hoveredStockIndex) {
+          material.opacity = Math.min(material.opacity, targetOpacity);
+        }
       }
     }
   }
@@ -180,7 +202,7 @@ export class ForceField {
     return this.forceLines.length;
   }
 
-  clearLines(): void {
+  private clearAllLines(): void {
     for (const forceLine of this.forceLines) {
       forceLine.line.geometry.dispose();
       (forceLine.line.material as THREE.Material).dispose();
@@ -190,7 +212,7 @@ export class ForceField {
   }
 
   dispose(): void {
-    this.clearLines();
+    this.clearAllLines();
     this.scene.remove(this.group);
   }
 

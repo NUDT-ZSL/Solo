@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { DataManager, StockDataPoint } from './dataManager';
+import { DataManager, StockDataPoint, Stock } from './dataManager';
 
 export interface ParticleSystemConfig {
   particleSize: number;
@@ -22,6 +22,7 @@ export class ParticleSystem {
   private raycaster: THREE.Raycaster;
   private meshes: THREE.Mesh[] = [];
   private hoveredStockIndex: number = -1;
+  private fullParticleCount: number = 0;
 
   constructor(
     scene: THREE.Scene,
@@ -34,49 +35,47 @@ export class ParticleSystem {
     this.group = new THREE.Group();
     this.raycaster = new THREE.Raycaster();
     this.scene.add(this.group);
-    this.createParticles();
+    this.createAllParticles();
   }
 
-  private normalizeData(): {
-    xRange: number[];
-    yRange: [number, number];
-    zRange: [number, number];
+  private getDataRanges(): {
+    xMin: number; xMax: number;
+    yMin: number; yMax: number;
+    zMin: number; zMax: number;
   } {
     const priceRange = this.dataManager.getPriceRange();
     const volumeRange = this.dataManager.getVolumeRange();
     const daysCount = this.dataManager.getDaysCount();
 
     return {
-      xRange: [0, daysCount - 1],
-      yRange: [priceRange.min, priceRange.max],
-      zRange: [volumeRange.min, volumeRange.max]
+      xMin: 0, xMax: daysCount - 1,
+      yMin: priceRange.min, yMax: priceRange.max,
+      zMin: volumeRange.min, zMax: volumeRange.max
     };
   }
 
-  private mapToPosition(
-    point: StockDataPoint,
-    ranges: { xRange: number[]; yRange: [number, number]; zRange: [number, number] }
-  ): THREE.Vector3 {
-    const xScale = 10 / (ranges.xRange[1] - ranges.xRange[0]);
-    const yScale = 10 / (ranges.yRange[1] - ranges.yRange[0]);
-    const zScale = 10 / (ranges.zRange[1] - ranges.zRange[0]);
+  private mapPointToPosition(point: StockDataPoint, ranges: {
+    xMin: number; xMax: number;
+    yMin: number; yMax: number;
+    zMin: number; zMax: number;
+  }): THREE.Vector3 {
+    const xSpan = ranges.xMax - ranges.xMin || 1;
+    const ySpan = ranges.yMax - ranges.yMin || 1;
+    const zSpan = ranges.zMax - ranges.zMin || 1;
 
-    const x = (point.dayIndex - ranges.xRange[0]) * xScale - 5;
-    const y = (point.price - ranges.yRange[0]) * yScale - 5;
-    const z = (point.volume - ranges.zRange[0]) * zScale - 5;
+    const x = ((point.dayIndex - ranges.xMin) / xSpan) * 10 - 5;
+    const y = ((point.price - ranges.yMin) / ySpan) * 10 - 5;
+    const z = ((point.volume - ranges.zMin) / zSpan) * 10 - 5;
 
     return new THREE.Vector3(x, y, z);
   }
 
-  private getParticleColor(stockIndex: number, dayIndex: number): THREE.Color {
-    const stock = this.dataManager.getStock(stockIndex);
-    if (!stock) return new THREE.Color(0xffffff);
-
+  private getParticleColor(stock: Stock, dayIndex: number): THREE.Color {
     const data = stock.data;
     if (dayIndex === 0) {
       return this.config.colorScheme === 'redGreen'
-        ? new THREE.Color(0xffffff)
-        : this.getWarmColor(0);
+        ? new THREE.Color(0xbbbbbb)
+        : new THREE.Color(0xffcc00);
     }
 
     const prevPrice = data[dayIndex - 1].price;
@@ -85,106 +84,110 @@ export class ParticleSystem {
 
     if (this.config.colorScheme === 'redGreen') {
       if (changePct >= 0) {
-        const intensity = Math.min(1, Math.abs(changePct) / 5);
+        const intensity = Math.min(1, Math.abs(changePct) / 3);
         return new THREE.Color().lerpColors(
-          new THREE.Color(0xffaa44),
+          new THREE.Color(0xffaaaa),
           new THREE.Color(0xff4444),
           intensity
         );
       } else {
-        const intensity = Math.min(1, Math.abs(changePct) / 5);
+        const intensity = Math.min(1, Math.abs(changePct) / 3);
         return new THREE.Color().lerpColors(
-          new THREE.Color(0x44ff88),
+          new THREE.Color(0xaaffaa),
           new THREE.Color(0x44ff44),
           intensity
         );
       }
     } else {
-      return this.getWarmColor(changePct);
+      const normalized = Math.max(-1, Math.min(1, changePct / 5));
+      if (normalized >= 0) {
+        return new THREE.Color().lerpColors(
+          new THREE.Color(0xffcc66),
+          new THREE.Color(0xff3300),
+          normalized
+        );
+      } else {
+        return new THREE.Color().lerpColors(
+          new THREE.Color(0xffcc66),
+          new THREE.Color(0x3366ff),
+          -normalized
+        );
+      }
     }
   }
 
-  private getWarmColor(changePct: number): THREE.Color {
-    const normalized = Math.max(-1, Math.min(1, changePct / 5));
-    if (normalized >= 0) {
-      return new THREE.Color().lerpColors(
-        new THREE.Color(0xffaa00),
-        new THREE.Color(0xff0000),
-        normalized
-      );
-    } else {
-      return new THREE.Color().lerpColors(
-        new THREE.Color(0xffaa00),
-        new THREE.Color(0x0066ff),
-        -normalized
-      );
+  private createAllParticles(): void {
+    const ranges = this.getDataRanges();
+    const stocks = this.dataManager.getStocks();
+    const stockCount = this.dataManager.getStockCount();
+    const daysCount = this.dataManager.getDaysCount();
+
+    for (let si = 0; si < stockCount; si++) {
+      const stock = stocks[si];
+      if (!stock) continue;
+
+      const sizeMultiplier = 1 + Math.min(1.5, Math.abs(stock.changePercent) / 8);
+
+      for (let di = 0; di < daysCount; di++) {
+        const point = stock.data[di];
+        if (!point) continue;
+
+        const position = this.mapPointToPosition(point, ranges);
+        const color = this.getParticleColor(stock, di);
+
+        const geometry = new THREE.SphereGeometry(
+          this.config.particleSize * sizeMultiplier,
+          12,
+          12
+        );
+
+        const material = new THREE.MeshStandardMaterial({
+          color: color,
+          emissive: color,
+          emissiveIntensity: this.config.emissiveIntensity,
+          metalness: 0.25,
+          roughness: 0.5,
+          transparent: true,
+          opacity: 0.92
+        });
+
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.copy(position);
+        mesh.userData = {
+          stockIndex: si,
+          dayIndex: di,
+          originalColor: color.clone(),
+          baseSize: this.config.particleSize * sizeMultiplier
+        };
+
+        this.group.add(mesh);
+        this.meshes.push(mesh);
+        this.particles.push({ stockIndex: si, dayIndex: di, mesh });
+      }
     }
+
+    this.fullParticleCount = this.meshes.length;
+    console.log(`[ParticleSystem] Created ${this.fullParticleCount} particles (${stockCount} stocks × ${daysCount} days)`);
   }
 
   getParticlePosition(point: StockDataPoint): THREE.Vector3 {
-    const ranges = this.normalizeData();
-    return this.mapToPosition(point, ranges);
+    const ranges = this.getDataRanges();
+    return this.mapPointToPosition(point, ranges);
   }
 
   getStockPositions(stockIndex: number): THREE.Vector3[] {
     const stock = this.dataManager.getStock(stockIndex);
     if (!stock) return [];
-    const ranges = this.normalizeData();
-    return stock.data.map(p => this.mapToPosition(p, ranges));
-  }
-
-  private createParticles(): void {
-    const ranges = this.normalizeData();
-    const allPoints = this.dataManager.getAllDataPoints();
-    const stocks = this.dataManager.getStocks();
-
-    const displayCount = Math.min(allPoints.length, 2000);
-    const step = Math.ceil(allPoints.length / Math.min(displayCount, 2000));
-
-    for (let i = 0; i < allPoints.length; i += step) {
-      const point = allPoints[i];
-      const position = this.mapToPosition(point, ranges);
-      const color = this.getParticleColor(point.stockIndex, point.dayIndex);
-      const stock = stocks[point.stockIndex];
-      const sizeMultiplier = 1 + Math.min(2, Math.abs(stock?.changePercent || 0) / 10);
-
-      const geometry = new THREE.SphereGeometry(
-        this.config.particleSize * sizeMultiplier,
-        16,
-        16
-      );
-      const material = new THREE.MeshStandardMaterial({
-        color: color,
-        emissive: color,
-        emissiveIntensity: this.config.emissiveIntensity,
-        metalness: 0.3,
-        roughness: 0.4,
-        transparent: true,
-        opacity: 0.9
-      });
-
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.position.copy(position);
-      mesh.userData = {
-        stockIndex: point.stockIndex,
-        dayIndex: point.dayIndex,
-        originalColor: color.clone(),
-        originalScale: this.config.particleSize * sizeMultiplier
-      };
-
-      this.group.add(mesh);
-      this.meshes.push(mesh);
-      this.particles.push({
-        stockIndex: point.stockIndex,
-        dayIndex: point.dayIndex,
-        mesh
-      });
-    }
+    const ranges = this.getDataRanges();
+    return stock.data.map(p => this.mapPointToPosition(p, ranges));
   }
 
   updateColors(): void {
+    const stocks = this.dataManager.getStocks();
     for (const particle of this.particles) {
-      const color = this.getParticleColor(particle.stockIndex, particle.dayIndex);
+      const stock = stocks[particle.stockIndex];
+      if (!stock) continue;
+      const color = this.getParticleColor(stock, particle.dayIndex);
       const material = particle.mesh.material as THREE.MeshStandardMaterial;
       material.color.copy(color);
       material.emissive.copy(color);
@@ -197,9 +200,12 @@ export class ParticleSystem {
     const stocks = this.dataManager.getStocks();
     for (const particle of this.particles) {
       const stock = stocks[particle.stockIndex];
-      const sizeMultiplier = 1 + Math.min(2, Math.abs(stock?.changePercent || 0) / 10);
-      particle.mesh.scale.setScalar((newSize * sizeMultiplier) / particle.mesh.userData.originalScale);
-      particle.mesh.userData.originalScale = newSize * sizeMultiplier;
+      if (!stock) continue;
+      const sizeMultiplier = 1 + Math.min(1.5, Math.abs(stock.changePercent) / 8);
+      const targetSize = newSize * sizeMultiplier;
+      const currentSize = particle.mesh.userData.baseSize;
+      particle.mesh.scale.setScalar(targetSize / currentSize);
+      particle.mesh.userData.baseSize = targetSize;
     }
   }
 
@@ -220,7 +226,8 @@ export class ParticleSystem {
     camera: THREE.Camera
   ): { stockIndex: number; dayIndex: number } | null {
     this.raycaster.setFromCamera(mouse, camera);
-    const intersects = this.raycaster.intersectObjects(this.meshes, false);
+    const visibleMeshes = this.meshes.filter(m => m.visible);
+    const intersects = this.raycaster.intersectObjects(visibleMeshes, false);
     if (intersects.length > 0) {
       const { stockIndex, dayIndex } = intersects[0].object.userData;
       return { stockIndex, dayIndex };
@@ -233,7 +240,8 @@ export class ParticleSystem {
     camera: THREE.Camera
   ): number {
     this.raycaster.setFromCamera(mouse, camera);
-    const intersects = this.raycaster.intersectObjects(this.meshes, false);
+    const visibleMeshes = this.meshes.filter(m => m.visible);
+    const intersects = this.raycaster.intersectObjects(visibleMeshes, false);
     if (intersects.length > 0) {
       return intersects[0].object.userData.stockIndex;
     }
@@ -244,11 +252,12 @@ export class ParticleSystem {
     for (const particle of this.particles) {
       const material = particle.mesh.material as THREE.MeshStandardMaterial;
       if (particle.stockIndex === stockIndex) {
-        material.emissiveIntensity = this.config.emissiveIntensity * 2;
-        particle.mesh.scale.setScalar(1.5);
+        material.emissiveIntensity = this.config.emissiveIntensity * 2.5;
+        particle.mesh.scale.setScalar(1.6);
+        material.opacity = 1;
       } else {
-        material.opacity = 0.3;
-        particle.mesh.scale.setScalar(0.8);
+        material.opacity = 0.25;
+        particle.mesh.scale.setScalar(0.7);
       }
     }
   }
@@ -258,8 +267,9 @@ export class ParticleSystem {
     for (const particle of this.particles) {
       const material = particle.mesh.material as THREE.MeshStandardMaterial;
       if (particle.stockIndex === stockIndex) {
-        material.emissiveIntensity = this.config.emissiveIntensity * 1.5;
-        particle.mesh.scale.setScalar(1.2);
+        material.emissiveIntensity = this.config.emissiveIntensity * 1.8;
+        particle.mesh.scale.setScalar(1.3);
+        material.opacity = 1;
       }
     }
   }
@@ -269,7 +279,7 @@ export class ParticleSystem {
     for (const particle of this.particles) {
       const material = particle.mesh.material as THREE.MeshStandardMaterial;
       material.emissiveIntensity = this.config.emissiveIntensity;
-      material.opacity = 0.9;
+      material.opacity = 0.92;
       particle.mesh.scale.setScalar(1);
     }
   }
@@ -291,16 +301,25 @@ export class ParticleSystem {
   }
 
   setLODLevel(cameraDistance: number): void {
-    const farThreshold = 15;
-    const nearThreshold = 8;
-    
+    const farThreshold = 18;
+    const midThreshold = 12;
+    const nearThreshold = 6;
+
     if (cameraDistance > farThreshold) {
-      let visibleCount = 0;
-      const targetCount = Math.floor(this.meshes.length * 0.8);
-      for (let i = 0; i < this.meshes.length; i++) {
-        const shouldShow = i % Math.ceil(this.meshes.length / targetCount) === 0;
-        this.meshes[i].visible = shouldShow;
-        if (shouldShow) visibleCount++;
+      const targetRatio = 0.8;
+      const step = Math.round(1 / targetRatio);
+      let idx = 0;
+      for (const mesh of this.meshes) {
+        mesh.visible = (idx % step === 0);
+        idx++;
+      }
+    } else if (cameraDistance > midThreshold) {
+      const targetRatio = 0.95;
+      const step = Math.round(1 / targetRatio);
+      let idx = 0;
+      for (const mesh of this.meshes) {
+        mesh.visible = (idx % step === 0);
+        idx++;
       }
     } else if (cameraDistance < nearThreshold) {
       for (const mesh of this.meshes) {
@@ -310,7 +329,15 @@ export class ParticleSystem {
   }
 
   getVisibleCount(): number {
-    return this.meshes.filter(m => m.visible).length;
+    let count = 0;
+    for (const mesh of this.meshes) {
+      if (mesh.visible) count++;
+    }
+    return count;
+  }
+
+  getTotalCount(): number {
+    return this.fullParticleCount;
   }
 
   animate(delta: number, rotationSpeed: number): void {
@@ -324,13 +351,13 @@ export class ParticleSystem {
       if (this.config.colorScheme === 'redGreen') {
         return new THREE.Color(0xff4444);
       } else {
-        return this.getWarmColor(stock.changePercent);
+        return new THREE.Color(0xff3300);
       }
     } else {
       if (this.config.colorScheme === 'redGreen') {
         return new THREE.Color(0x44ff44);
       } else {
-        return this.getWarmColor(stock.changePercent);
+        return new THREE.Color(0x3366ff);
       }
     }
   }
