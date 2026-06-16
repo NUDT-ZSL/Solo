@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useApi } from '../hooks/useApi';
 import ItemList from '../item/ItemList';
+import MapLegend from './MapLegend';
 import type { Station } from '../types';
 
 interface StationsResponse {
@@ -259,6 +260,7 @@ export default function MapView({ onStationSelect }: MapViewProps) {
           onMouseMoveCapture={handleMouseDrag}
           onWheel={handleWheel}
         />
+        <MapLegend lineColors={lineColors} />
       </div>
 
       {selectedStation && (
