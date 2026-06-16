@@ -1,0 +1,132 @@
+.plant-card {
+  width: 200px;
+  height: 300px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #e8f5e9 0%, #ffffff 100%);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-bottom: 4px solid var(--status-color, #66bb6a);
+  transition: transform 0.4s ease, box-shadow 0.4s ease, border-color 0.4s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 16px 16px;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: slideUp 0.5s ease-out var(--delay, 0s) forwards;
+}
+
+@keyframes slideUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.plant-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.plant-card:active {
+  transform: scale(0.98);
+}
+
+.plant-card--visible {
+}
+
+.plant-card__status-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.plant-card__avatar-wrapper {
+  margin-top: 12px;
+  margin-bottom: 14px;
+}
+
+.plant-card__avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 2px solid #a5d6a7;
+  object-fit: cover;
+  background: #f1f8f5;
+}
+
+.plant-card__info {
+  text-align: center;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.plant-card__name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #2e5339;
+  margin: 0 0 4px 0;
+}
+
+.plant-card__latin {
+  font-size: 11px;
+  color: #8a9a8f;
+  font-style: italic;
+  margin: 0;
+}
+
+.plant-card__mini-bars {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  height: 50px;
+  padding-top: 8px;
+}
+
+.mini-bar {
+  width: 14px;
+  height: 40px;
+  background: rgba(165, 214, 167, 0.2);
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+}
+
+.mini-bar__fill {
+  width: 100%;
+  border-radius: 4px;
+  transition: height 0.8s ease-out;
+}
+
+.mini-bar--light .mini-bar__fill {
+  background: linear-gradient(180deg, #ffd54f 0%, #ffb300 100%);
+}
+
+.mini-bar--moisture .mini-bar__fill {
+  background: linear-gradient(180deg, #64b5f6 0%, #1976d2 100%);
+}
+
+.mini-bar--temp .mini-bar__fill {
+  background: linear-gradient(180deg, #ef9a9a 0%, #e57373 100%);
+}
+
+.mini-bar__label {
+  position: absolute;
+  bottom: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: #8a9a8f;
+}

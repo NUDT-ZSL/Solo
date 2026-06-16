@@ -1,0 +1,283 @@
+{
+  "plants": [
+    {
+      "id": "p1",
+      "name": "绿萝",
+      "latinName": "Epipremnum aureum",
+      "avatar": "https://images.unsplash.com/photo-1614594975525-e45190c55d0b?w=200&h=200&fit=crop",
+      "healthStatus": "healthy",
+      "light": 65,
+      "moisture": 78,
+      "temperature": 72,
+      "createdAt": "2024-03-15T10:30:00Z",
+      "description": "一盆长势喜人的绿萝，已经爬满了书架。"
+    },
+    {
+      "id": "p2",
+      "name": "多肉桃蛋",
+      "latinName": "Graptopetalum amethystinum",
+      "avatar": "https://images.unsplash.com/photo-1459411552884-841db9b3cc2a?w=200&h=200&fit=crop",
+      "healthStatus": "warning",
+      "light": 45,
+      "moisture": 35,
+      "temperature": 80,
+      "createdAt": "2024-02-20T14:00:00Z",
+      "description": "桃蛋颜色有点褪了，需要多晒太阳。"
+    },
+    {
+      "id": "p3",
+      "name": "龟背竹",
+      "latinName": "Monstera deliciosa",
+      "avatar": "https://images.unsplash.com/photo-1614594975525-e45190c55d0b?w=200&h=200&fit=crop",
+      "healthStatus": "healthy",
+      "light": 58,
+      "moisture": 65,
+      "temperature": 68,
+      "createdAt": "2023-11-05T09:20:00Z",
+      "description": "客厅的老伙计，新叶正在舒展。"
+    },
+    {
+      "id": "p4",
+      "name": "发财树",
+      "latinName": "Pachira aquatica",
+      "avatar": "https://images.unsplash.com/photo-1509423350716-97f9360b4e09?w=200&h=200&fit=crop",
+      "healthStatus": "danger",
+      "light": 30,
+      "moisture": 25,
+      "temperature": 55,
+      "createdAt": "2024-01-10T16:45:00Z",
+      "description": "叶子有点发黄，可能水浇多了。"
+    },
+    {
+      "id": "p5",
+      "name": "虎尾兰",
+      "latinName": "Sansevieria trifasciata",
+      "avatar": "https://images.unsplash.com/photo-1593691509543-c55fb32d8de5?w=200&h=200&fit=crop",
+      "healthStatus": "healthy",
+      "light": 50,
+      "moisture": 40,
+      "temperature": 62,
+      "createdAt": "2023-09-18T11:30:00Z",
+      "description": "卧室的空气净化小能手。"
+    },
+    {
+      "id": "p6",
+      "name": "吊兰",
+      "latinName": "Chlorophytum comosum",
+      "avatar": "https://images.unsplash.com/photo-1572688484438-313a6e50c333?w=200&h=200&fit=crop",
+      "healthStatus": "warning",
+      "light": 40,
+      "moisture": 55,
+      "temperature": 70,
+      "createdAt": "2024-04-01T08:15:00Z",
+      "description": "刚换了盆，还在服盆期。"
+    }
+  ],
+  "records": [
+    {
+      "id": "r1",
+      "plantId": "p1",
+      "type": "water",
+      "description": "浇透水一次，土壤完全湿润",
+      "time": "2024-06-10T08:30:00Z",
+      "note": "用的是晾了一天的自来水",
+      "likes": 3,
+      "liked": false
+    },
+    {
+      "id": "r2",
+      "plantId": "p1",
+      "type": "fertilize",
+      "description": "施加稀释后的绿萝专用营养液",
+      "time": "2024-06-05T19:00:00Z",
+      "note": "浓度1:1000，浇在根部周围",
+      "likes": 5,
+      "liked": true
+    },
+    {
+      "id": "r3",
+      "plantId": "p1",
+      "type": "prune",
+      "description": "修剪了底部的老黄叶",
+      "time": "2024-05-28T17:20:00Z",
+      "note": "大概剪了5片叶子，让株型更清爽",
+      "likes": 2,
+      "liked": false
+    },
+    {
+      "id": "r4",
+      "plantId": "p1",
+      "type": "repot",
+      "description": "换了大一号的花盆，加了营养土",
+      "time": "2024-04-15T10:00:00Z",
+      "note": "泥炭土+珍珠岩+蛭石 配比 5:3:2",
+      "likes": 8,
+      "liked": false
+    },
+    {
+      "id": "r5",
+      "plantId": "p1",
+      "type": "water",
+      "description": "叶面喷水清洁",
+      "time": "2024-06-01T09:15:00Z",
+      "note": "顺便擦了擦叶子上的灰尘",
+      "likes": 1,
+      "liked": false
+    },
+    {
+      "id": "r6",
+      "plantId": "p2",
+      "type": "water",
+      "description": "浸盆浇水一次",
+      "time": "2024-06-08T20:00:00Z",
+      "note": "多肉浇水要见干见湿",
+      "likes": 4,
+      "liked": true
+    },
+    {
+      "id": "r7",
+      "plantId": "p2",
+      "type": "other",
+      "description": "移到南向窗台增加光照",
+      "time": "2024-06-02T11:30:00Z",
+      "note": "最近颜色有点绿，多晒晒应该会粉回来",
+      "likes": 6,
+      "liked": false
+    },
+    {
+      "id": "r8",
+      "plantId": "p3",
+      "type": "water",
+      "description": "正常浇水",
+      "time": "2024-06-12T08:00:00Z",
+      "note": "",
+      "likes": 0,
+      "liked": false
+    },
+    {
+      "id": "r9",
+      "plantId": "p3",
+      "type": "fertilize",
+      "description": "施加缓释肥",
+      "time": "2024-05-20T14:00:00Z",
+      "note": "奥绿A2，10粒左右",
+      "likes": 2,
+      "liked": false
+    },
+    {
+      "id": "r10",
+      "plantId": "p4",
+      "type": "water",
+      "description": "控制浇水，等土壤干透",
+      "time": "2024-06-09T10:00:00Z",
+      "note": "怀疑之前水大烂根了，先断水观察",
+      "likes": 3,
+      "liked": true
+    },
+    {
+      "id": "r11",
+      "plantId": "p4",
+      "type": "other",
+      "description": "移到通风好的位置",
+      "time": "2024-06-03T16:30:00Z",
+      "note": "希望能缓过来",
+      "likes": 1,
+      "liked": false
+    }
+  ],
+  "exchanges": [
+    {
+      "id": "e1",
+      "userId": "u2",
+      "userName": "花园里的小明",
+      "userAvatar": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop",
+      "title": "绿萝扦插苗免费送",
+      "description": "家里绿萝长得太快了，修剪下来一大把枝条，已经水培出根了，免费赠送，自提或者同城快递到付都可以。",
+      "images": [
+        "https://images.unsplash.com/photo-1614594975525-e45190c55d0b?w=300&h=300&fit=crop",
+        "https://images.unsplash.com/photo-1459411552884-841db9b3cc2a?w=300&h=300&fit=crop"
+      ],
+      "location": {
+        "lat": 31.2304,
+        "lng": 121.4737,
+        "address": "上海市浦东新区"
+      },
+      "type": "give",
+      "createdAt": "2024-06-14T09:30:00Z"
+    },
+    {
+      "id": "e2",
+      "userId": "u3",
+      "userName": "多肉控阿花",
+      "userAvatar": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop",
+      "title": "桃蛋叶片换法师",
+      "description": "有很多桃蛋的叶插苗，想换一颗法师老桩，最好是黑法师或紫羊绒。",
+      "images": [
+        "https://images.unsplash.com/photo-1459411552884-841db9b3cc2a?w=300&h=300&fit=crop",
+        "https://images.unsplash.com/photo-1509423350716-97f9360b4e09?w=300&h=300&fit=crop",
+        "https://images.unsplash.com/photo-1593691509543-c55fb32d8de5?w=300&h=300&fit=crop"
+      ],
+      "location": {
+        "lat": 31.2200,
+        "lng": 121.5000,
+        "address": "上海市徐汇区"
+      },
+      "type": "exchange",
+      "createdAt": "2024-06-13T14:20:00Z"
+    },
+    {
+      "id": "e3",
+      "userId": "u4",
+      "userName": "植物小白",
+      "userAvatar": "https://images.unsplash.com/photo-1527980965255-d3b416303d12?w=100&h=100&fit=crop",
+      "title": "求推荐好养的室内植物",
+      "description": "刚搬新家，想入一些好养的室内绿植，有没有花友推荐一下？或者有小苗可以转让的？",
+      "images": [
+        "https://images.unsplash.com/photo-1572688484438-313a6e50c333?w=300&h=300&fit=crop"
+      ],
+      "location": {
+        "lat": 31.2500,
+        "lng": 121.4400,
+        "address": "上海市杨浦区"
+      },
+      "type": "want",
+      "createdAt": "2024-06-12T11:00:00Z"
+    },
+    {
+      "id": "e4",
+      "userId": "u5",
+      "userName": "园艺达人老王",
+      "userAvatar": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop",
+      "title": "多余的加仑盆免费送",
+      "description": "之前买多了一加仑的花盆，大概20个，全新的，送给有需要的花友，自提。",
+      "images": [
+        "https://images.unsplash.com/photo-1485955900006-10f4d324d411?w=300&h=300&fit=crop",
+        "https://images.unsplash.com/photo-1463936575829-25148e1db1b8?w=300&h=300&fit=crop"
+      ],
+      "location": {
+        "lat": 31.2100,
+        "lng": 121.5200,
+        "address": "上海市浦东新区张江"
+      },
+      "type": "give",
+      "createdAt": "2024-06-11T16:45:00Z"
+    },
+    {
+      "id": "e5",
+      "userId": "u6",
+      "userName": "仙人掌爱好者",
+      "userAvatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop",
+      "title": "收各种仙人球侧芽",
+      "description": "刚开始玩仙人球，想收集一些品种，哪位花友有多余的侧芽可以出给我？",
+      "images": [],
+      "location": {
+        "lat": 31.1900,
+        "lng": 121.4300,
+        "address": "上海市长宁区"
+      },
+      "type": "want",
+      "createdAt": "2024-06-10T20:15:00Z"
+    }
+  ],
+  "messages": []
+}

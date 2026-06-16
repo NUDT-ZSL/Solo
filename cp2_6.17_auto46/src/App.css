@@ -1,0 +1,163 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #f1f8f5;
+  color: #424242;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app__main {
+  flex: 1;
+}
+
+/* 导航栏 */
+.navbar {
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: 64px;
+}
+
+.navbar__inner {
+  max-width: 1440px;
+  margin: 0 auto;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 24px;
+}
+
+.navbar__logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.navbar__logo-icon {
+  font-size: 24px;
+}
+
+.navbar__logo-text {
+  font-size: 18px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #66bb6a, #81c784);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.navbar__links {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+}
+
+.navbar__link {
+  padding: 8px 16px;
+  text-decoration: none;
+  color: #757575;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.navbar__link:hover {
+  background: #f1f8f5;
+  color: #66bb6a;
+}
+
+.navbar__link:active {
+  transform: scale(0.95);
+}
+
+.navbar__link--active {
+  background: #e8f5e9;
+  color: #4caf50;
+}
+
+.navbar__user {
+  margin-left: auto;
+}
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #a5d6a7, #81c784);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.user-avatar:hover {
+  transform: scale(1.1);
+}
+
+.user-avatar:active {
+  transform: scale(0.95);
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c8e6c9;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a5d6a7;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .navbar__inner {
+    padding: 0 16px;
+    gap: 12px;
+  }
+
+  .navbar__logo-text {
+    display: none;
+  }
+
+  .navbar__links {
+    gap: 4px;
+  }
+
+  .navbar__link {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+}
