@@ -29,21 +29,32 @@ export class ParticleSystem {
   }
 
   private createParticle(id: number): Particle {
-    const startX = (Math.random() - 0.5) * 60
-    const startY = 5 + Math.random() * 15
-    const startZ = (Math.random() - 0.5) * 40
+    const bandAngle = Math.random() * Math.PI * 2
+    const bandRadius = 15 + Math.random() * 25
+    const bandWidth = (Math.random() - 0.5) * 8
 
-    const endX = startX + (Math.random() - 0.5) * 30
-    const endY = startY + (Math.random() - 0.5) * 10
-    const endZ = startZ + (Math.random() - 0.5) * 20
+    const startX = Math.cos(bandAngle) * bandRadius + bandWidth
+    const startY = 0.5 + Math.random() * 3
+    const startZ = Math.sin(bandAngle) * bandRadius + bandWidth * 0.5
 
-    const cp1X = startX + (Math.random() - 0.5) * 20
-    const cp1Y = startY + 5 + Math.random() * 10
-    const cp1Z = startZ + (Math.random() - 0.5) * 15
+    const riseAngle = bandAngle + (Math.random() - 0.5) * 0.5
+    const riseHeight = 15 + Math.random() * 20
+    const riseDrift = 3 + Math.random() * 8
 
-    const cp2X = endX + (Math.random() - 0.5) * 20
-    const cp2Y = endY + 5 + Math.random() * 10
-    const cp2Z = endZ + (Math.random() - 0.5) * 15
+    const endX = startX + Math.cos(riseAngle) * riseDrift
+    const endY = startY + riseHeight
+    const endZ = startZ + Math.sin(riseAngle) * riseDrift
+
+    const bendAmount = 4 + Math.random() * 8
+    const bendAngle = bandAngle + Math.PI / 2 + (Math.random() - 0.5) * 0.8
+
+    const cp1X = startX + Math.cos(bendAngle) * bendAmount * 0.6
+    const cp1Y = startY + riseHeight * 0.35
+    const cp1Z = startZ + Math.sin(bendAngle) * bendAmount * 0.6
+
+    const cp2X = endX - Math.cos(bendAngle) * bendAmount * 0.4
+    const cp2Y = startY + riseHeight * 0.7
+    const cp2Z = endZ - Math.sin(bendAngle) * bendAmount * 0.4
 
     const curve = new THREE.CubicBezierCurve3(
       new THREE.Vector3(startX, startY, startZ),
@@ -55,19 +66,19 @@ export class ParticleSystem {
     return {
       id,
       curve,
-      progress: Math.random(),
-      speed: 0.3 + Math.random() * 0.4,
-      period: 0.5 + Math.random() * 1.0,
-      length: 1.0 + Math.random() * 0.5,
+      progress: Math.random() * 0.3,
+      speed: 0.25 + Math.random() * 0.35,
+      period: 1.0 + Math.random() * 2.0,
+      length: 0.8 + Math.random() * 0.6,
       colorOffset: Math.random() * Math.PI * 2,
       brightnessPhase: Math.random() * Math.PI * 2,
       baseY: startY,
-      amplitude: 2 + Math.random() * 3,
+      amplitude: 1.5 + Math.random() * 2,
     }
   }
 
   private getInterpolatedColor(time: number, colorOffset: number): THREE.Color {
-    const t = (time * 0.1 + colorOffset) % 3
+    const t = (time * 0.08 + colorOffset) % 3
     const index = Math.floor(t) % 3
     const nextIndex = (index + 1) % 3
     const localT = t - Math.floor(t)
@@ -78,9 +89,26 @@ export class ParticleSystem {
     return new THREE.Color().lerpColors(color1, color2, localT)
   }
 
+  private getHeightBasedAlpha(progress: number, startY: number, endY: number): number {
+    const currentY = startY + (endY - startY) * progress
+    const totalHeight = endY - startY
+    const heightAboveStart = currentY - startY
+    const normalizedHeight = Math.max(0, Math.min(1, heightAboveStart / totalHeight))
+
+    if (normalizedHeight < 0.15) {
+      return normalizedHeight / 0.15
+    } else if (normalizedHeight > 0.7) {
+      const fadeStart = 0.7
+      const fadeRange = 0.3
+      return Math.max(0, 1 - (normalizedHeight - fadeStart) / fadeRange)
+    } else {
+      return 1.0
+    }
+  }
+
   private getBrightness(time: number, phase: number): number {
-    const wave = Math.sin(time * 0.5 + phase) * 0.5 + 0.5
-    return 0.4 + wave * 0.6
+    const wave = Math.sin(time * 0.4 + phase) * 0.5 + 0.5
+    return 0.5 + wave * 0.5
   }
 
   public update(deltaTime: number, config: ParticleConfig): void {
@@ -96,6 +124,7 @@ export class ParticleSystem {
     const speedMultiplier = 1 + audioVolume * 0.5
 
     const time = performance.now() / 1000
+    const step = 0.008
 
     for (let i = 0; i < this.activeCount; i++) {
       const p = this.particles[i]
@@ -107,34 +136,64 @@ export class ParticleSystem {
       }
 
       const t1 = p.progress
-      const t2 = Math.min(1, p.progress + 0.02 * p.length * configLength)
+      const t2 = Math.min(1, p.progress + step * p.length * configLength)
 
-      const pos1 = p.curve.getPointAt(t1)
-      const pos2 = p.curve.getPointAt(t2)
+      const rawPos1 = p.curve.getPointAt(t1)
+      const rawPos2 = p.curve.getPointAt(t2)
 
-      const waveOffset = Math.sin(time * 0.8 + p.id * 0.1) * 0.5
-      pos1.y += Math.sin(time * 0.3 + p.brightnessPhase) * p.amplitude * 0.3
-      pos2.y += Math.sin(time * 0.3 + p.brightnessPhase + 0.1) * p.amplitude * 0.3
+      const tangent = p.curve.getTangentAt(t1).normalize()
 
-      this.positions[i * 6] = pos1.x
-      this.positions[i * 6 + 1] = pos1.y + waveOffset
-      this.positions[i * 6 + 2] = pos1.z
-      this.positions[i * 6 + 3] = pos2.x
-      this.positions[i * 6 + 4] = pos2.y + waveOffset
-      this.positions[i * 6 + 5] = pos2.z
+      const waveX = Math.sin(time * 0.6 + p.id * 0.08) * 0.8
+      const waveZ = Math.cos(time * 0.5 + p.id * 0.12) * 0.8
+      const waveY = Math.sin(time * 0.3 + p.brightnessPhase) * p.amplitude * 0.4
+
+      const pos1 = new THREE.Vector3(
+        rawPos1.x + waveX,
+        rawPos1.y + waveY,
+        rawPos1.z + waveZ
+      )
+      const pos2 = new THREE.Vector3(
+        rawPos2.x + waveX,
+        rawPos2.y + waveY,
+        rawPos2.z + waveZ
+      )
+
+      const stripLength = 0.6 * p.length * configLength
+      const perp1 = new THREE.Vector3().copy(tangent).multiplyScalar(-stripLength * 0.5)
+      const perp2 = new THREE.Vector3().copy(tangent).multiplyScalar(stripLength * 0.5)
+
+      const finalStart = new THREE.Vector3().addVectors(pos1, perp1)
+      const finalEnd = new THREE.Vector3().addVectors(pos1, perp2)
+
+      this.positions[i * 6] = finalStart.x
+      this.positions[i * 6 + 1] = finalStart.y
+      this.positions[i * 6 + 2] = finalStart.z
+      this.positions[i * 6 + 3] = finalEnd.x
+      this.positions[i * 6 + 4] = finalEnd.y
+      this.positions[i * 6 + 5] = finalEnd.z
 
       const baseColor = this.getInterpolatedColor(time, p.colorOffset)
       const hue = (baseColor.getHSL({ h: 0, s: 0, l: 0 }).h * 360 + configHue) % 360 / 360
-      const color = new THREE.Color().setHSL(hue, 0.8, 0.55)
-      const brightness = this.getBrightness(time, p.brightnessPhase)
-      color.multiplyScalar(brightness * (0.7 + audioVolume * 0.3))
+      const color = new THREE.Color().setHSL(hue, 0.85, 0.55)
 
-      this.colors[i * 6] = color.r
-      this.colors[i * 6 + 1] = color.g
-      this.colors[i * 6 + 2] = color.b
-      this.colors[i * 6 + 3] = color.r * 0.8
-      this.colors[i * 6 + 4] = color.g * 0.8
-      this.colors[i * 6 + 5] = color.b * 0.8
+      const startY = p.curve.v0.y
+      const endY = p.curve.v3.y
+      const alpha1 = this.getHeightBasedAlpha(t1, startY, endY)
+      const alpha2 = this.getHeightBasedAlpha(t2, startY, endY)
+
+      const brightness = this.getBrightness(time, p.brightnessPhase)
+      const audioBoost = 0.7 + audioVolume * 0.3
+      const lightnessBoost = 0.9 + Math.sin(time * 0.25 + p.id * 0.05) * 0.1
+
+      const colorStart = color.clone().multiplyScalar(brightness * alpha1 * audioBoost * lightnessBoost)
+      const colorEnd = color.clone().multiplyScalar(brightness * alpha2 * audioBoost * lightnessBoost * 0.85)
+
+      this.colors[i * 6] = colorStart.r
+      this.colors[i * 6 + 1] = colorStart.g
+      this.colors[i * 6 + 2] = colorStart.b
+      this.colors[i * 6 + 3] = colorEnd.r
+      this.colors[i * 6 + 4] = colorEnd.g
+      this.colors[i * 6 + 5] = colorEnd.b
     }
 
     for (let i = this.activeCount; i < this.maxCount; i++) {
