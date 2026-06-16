@@ -917,24 +917,39 @@ function startDrag(card: HTMLElement, clientX: number, clientY: number): void {
   animationState.dragPartType = partType;
   animationState.dragPartId = partId;
 
+  const ghostSVGWrapper = createSVGElement('svg', {
+    width: '100',
+    height: '100',
+    viewBox: '-100 -100 200 200',
+    class: 'drag-ghost'
+  });
+  ghostSVGWrapper.style.position = 'fixed';
+  ghostSVGWrapper.style.pointerEvents = 'none';
+  ghostSVGWrapper.style.zIndex = '1000';
+  ghostSVGWrapper.style.opacity = '0.5';
+  ghostSVGWrapper.style.willChange = 'transform';
+  ghostSVGWrapper.style.overflow = 'visible';
+
   const ghost = createPartSVG(part);
-  ghost.classList.add('drag-ghost');
-  ghost.setAttribute('width', '100');
-  ghost.setAttribute('height', '100');
-  document.body.appendChild(ghost);
-  animationState.ghostElement = ghost;
+  ghostSVGWrapper.appendChild(ghost);
+  document.body.appendChild(ghostSVGWrapper);
+  animationState.ghostElement = ghostSVGWrapper as unknown as SVGGElement;
 
   updateGhostPosition(clientX, clientY);
 }
 
 function updateGhostPosition(clientX: number, clientY: number): void {
-  if (!animationState.ghostElement || !animationState.animationFrameId) {
-    animationState.animationFrameId = raf(() => {
-      if (animationState.ghostElement) {
-        animationState.ghostElement.style.transform = `translate(${clientX - 50}px, ${clientY - 50}px)`;
-      }
-      animationState.animationFrameId = null;
-    });
+  if (animationState.ghostElement) {
+    const targetX = clientX - 50;
+    const targetY = clientY - 50;
+    if (!animationState.animationFrameId) {
+      animationState.animationFrameId = raf(() => {
+        if (animationState.ghostElement) {
+          animationState.ghostElement.style.transform = `translate(${targetX}px, ${targetY}px)`;
+        }
+        animationState.animationFrameId = null;
+      });
+    }
   }
 }
 
@@ -997,6 +1012,7 @@ function startKnobDrag(e: Event): void {
   knobHandle?.classList.add('knob-pulse');
 }
 
+let lastKnobMoodUpdate = 0;
 function updateKnobFromPointer(clientX: number, clientY: number): void {
   const knob = document.getElementById('moodKnob');
   if (!knob) return;
@@ -1013,10 +1029,15 @@ function updateKnobFromPointer(clientX: number, clientY: number): void {
 
   const newMood = getMoodFromKnobValue(knobValue);
   if (newMood !== currentMood) {
-    currentMood = newMood;
-    currentParts = matchPartsForMood(currentMood, PARTS);
-    updateCharacter(true);
-    updateCardSelection();
+    const now = Date.now();
+    if (now - lastKnobMoodUpdate > 150) {
+      lastKnobMoodUpdate = now;
+      currentMood = newMood;
+      currentParts = matchPartsForMood(currentMood, PARTS);
+      updateCharacter(true);
+      updateCardSelection();
+      showFeedback();
+    }
   }
 }
 
@@ -1097,20 +1118,27 @@ function triggerReassembleAnimation(): void {
   isAnimating = true;
 
   const partTypes: PartType[] = ['hair', 'eyes', 'mouth', 'arm'];
-  const delays = [0, 0.05, 0.1, 0.15];
+  const delays = [0, 80, 160, 240];
 
   partTypes.forEach((type, index) => {
     const element = partElements[type];
     if (element) {
+      const scatterX = (Math.random() - 0.5) * 80;
+      const scatterY = (Math.random() - 0.5) * 80;
+      element.style.setProperty('--scatter-x', `${scatterX}px`);
+      element.style.setProperty('--scatter-y', `${scatterY}px`);
+      
       setTimeout(() => {
+        element.classList.remove('reassemble');
+        void (element as unknown as HTMLElement).offsetWidth;
         applyAnimation(element, 'reassemble', 400);
-      }, delays[index] * 1000);
+      }, delays[index]);
     }
   });
 
   setTimeout(() => {
     isAnimating = false;
-  }, 600);
+  }, 700);
 }
 
 function triggerRandomCharacter(): void {
@@ -1119,39 +1147,47 @@ function triggerRandomCharacter(): void {
 
   const partTypes: PartType[] = ['hair', 'eyes', 'mouth', 'arm'];
   const newParts = getRandomParts(PARTS);
-
-  partTypes.forEach((type, index) => {
+  let totalOutTime = 0;
+  partTypes.forEach((type) => {
     const element = partElements[type];
     if (element) {
-      const delay = getRandomInt(300, 600);
+      const outDelay = getRandomInt(300, 600);
+      totalOutTime = Math.max(totalOutTime, outDelay + 300);
+      
       setTimeout(() => {
-        applyAnimation(element, 'domino-out', 300).then(() => {
-          currentParts[type] = newParts[type];
-          const part = getPartConfigById(newParts[type], PARTS);
-          const groupId = `${type}-group`;
-          const group = document.getElementById(groupId) as unknown as SVGGElement;
-          
-          if (part && group) {
-            while (group.firstChild) {
-              group.removeChild(group.firstChild);
-            }
-            const newElement = createPartSVG(part);
-            group.appendChild(newElement);
-            partElements[type] = newElement;
-            applyAnimation(newElement, 'domino-in', 300);
-          }
-
-          if (index === partTypes.length - 1) {
-            setTimeout(() => {
-              isAnimating = false;
-              updateExpressionDisplay();
-              updateCardSelection();
-              showFeedback();
-            }, 400);
-          }
-        });
-      }, delay * index);
+        applyAnimation(element, 'domino-out', 300);
+      }, outDelay);
     }
+  });
+
+  partTypes.forEach((type, index) => {
+    const inDelay = totalOutTime + getRandomInt(300, 600);
+
+    setTimeout(() => {
+      currentParts[type] = newParts[type];
+      const part = getPartConfigById(newParts[type], PARTS);
+      const groupId = `${type}-group`;
+      const group = document.getElementById(groupId) as unknown as SVGGElement;
+      
+      if (part && group) {
+        while (group.firstChild) {
+          group.removeChild(group.firstChild);
+        }
+        const newElement = createPartSVG(part);
+        group.appendChild(newElement);
+        partElements[type] = newElement;
+        applyAnimation(newElement, 'domino-in', 300);
+      }
+
+      if (index === partTypes.length - 1) {
+        setTimeout(() => {
+          isAnimating = false;
+          updateExpressionDisplay();
+          updateCardSelection();
+          showFeedback();
+        }, 400);
+      }
+    }, inDelay);
   });
 }
 

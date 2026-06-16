@@ -76,15 +76,16 @@ export function createPartSVG(part: PartConfig): SVGGElement {
   if (part.svgPath.includes('M')) {
     const pathData = part.svgPath.split(/(?=M)/).filter(p => p.trim());
     pathData.forEach((d, index) => {
-      const path = createSVGElement('path', {
+      const attrs: Record<string, string | number> = {
         d: d.trim(),
         fill: part.fillColor || 'none',
         stroke: part.strokeColor || '#212121',
-        'stroke-width': '1',
+        'stroke-width': part.strokeWidth || '1',
         'stroke-linecap': 'round',
         'stroke-linejoin': 'round',
         class: `part-path part-path-${index}`
-      });
+      };
+      const path = createSVGElement('path', attrs);
       group.appendChild(path);
     });
   }
