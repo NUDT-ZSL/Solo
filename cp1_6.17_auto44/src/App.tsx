@@ -16,11 +16,15 @@ const App: React.FC = () => {
   const [hasSearched, setHasSearched] = useState(false);
   const [cardVisible, setCardVisible] = useState<boolean[]>([]);
   const searchTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
   }, []);
 
   const routes: Route[] = useMemo(() => {
@@ -55,13 +59,31 @@ const App: React.FC = () => {
     setHasSearched(true);
   };
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchInput(value);
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      setSearchKeyword(value);
+      setHasSearched(true);
+    }, 300);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
       handleSearch();
     }
   };
 
   const handleClearSearch = () => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
     setSearchInput('');
     setSearchKeyword('');
     setHasSearched(false);
@@ -125,7 +147,7 @@ const App: React.FC = () => {
                   type="text"
                   placeholder="搜索目的地城市，如：成都、丽江、厦门..."
                   value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
+                  onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
                 />
                 {searchInput && (

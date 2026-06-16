@@ -67,7 +67,7 @@ const RouteDetail: React.FC<RouteDetailProps> = ({ routeId, onBack }) => {
         {route.dailyPlans.map((plan, idx) => (
           <div key={plan.day} className="timeline-item">
             <div className="timeline-node">
-              <div className={`node-dot ${idx === 0 ? 'node-active' : ''}`} />
+              <div className={`node-dot node-breath ${idx === 0 ? 'node-active' : ''}`} />
               {idx < route.dailyPlans.length - 1 && <div className="node-line" />}
             </div>
             <div className="timeline-content">
