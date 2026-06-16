@@ -479,5 +479,671 @@
       ],
       "notes": []
     }
+  },
+  {
+    "version": 14,
+    "timestamp": "2026-06-16 04:37",
+    "authorIp": "::1",
+    "data": {
+      "id": "score-mz5uhg3uamqg59n0q",
+      "title": "未命名乐曲",
+      "composer": "未知",
+      "tracks": [
+        {
+          "id": "track-1",
+          "name": "钢琴",
+          "color": "#e94560",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-2",
+          "name": "小提琴",
+          "color": "#00d4ff",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-3",
+          "name": "大提琴",
+          "color": "#533483",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        }
+      ],
+      "notes": []
+    }
+  },
+  {
+    "version": 15,
+    "timestamp": "2026-06-16 04:38",
+    "authorIp": "::1",
+    "data": {
+      "id": "score-mz5uhg3uamqg59n0q",
+      "title": "未命名乐曲",
+      "composer": "未知",
+      "tracks": [
+        {
+          "id": "track-1",
+          "name": "钢琴",
+          "color": "#e94560",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-2",
+          "name": "小提琴",
+          "color": "#00d4ff",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-3",
+          "name": "大提琴",
+          "color": "#533483",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        }
+      ],
+      "notes": []
+    }
+  },
+  {
+    "version": 16,
+    "timestamp": "2026-06-16 04:38",
+    "authorIp": "::1",
+    "data": {
+      "id": "score-mz5uhg3uamqg59n0q",
+      "title": "未命名乐曲",
+      "composer": "未知",
+      "tracks": [
+        {
+          "id": "track-1",
+          "name": "钢琴",
+          "color": "#e94560",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-2",
+          "name": "小提琴",
+          "color": "#00d4ff",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-3",
+          "name": "大提琴",
+          "color": "#533483",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        }
+      ],
+      "notes": []
+    }
+  },
+  {
+    "version": 17,
+    "timestamp": "2026-06-16 04:39",
+    "authorIp": "::1",
+    "data": {
+      "id": "score-mz5uhg3uamqg59n0q",
+      "title": "未命名乐曲",
+      "composer": "未知",
+      "tracks": [
+        {
+          "id": "track-1",
+          "name": "钢琴",
+          "color": "#e94560",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-2",
+          "name": "小提琴",
+          "color": "#00d4ff",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-3",
+          "name": "大提琴",
+          "color": "#533483",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        }
+      ],
+      "notes": []
+    }
+  },
+  {
+    "version": 18,
+    "timestamp": "2026-06-16 04:39",
+    "authorIp": "::1",
+    "data": {
+      "id": "score-mz5uhg3uamqg59n0q",
+      "title": "未命名乐曲",
+      "composer": "未知",
+      "tracks": [
+        {
+          "id": "track-1",
+          "name": "钢琴",
+          "color": "#e94560",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-2",
+          "name": "小提琴",
+          "color": "#00d4ff",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-3",
+          "name": "大提琴",
+          "color": "#533483",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        }
+      ],
+      "notes": []
+    }
+  },
+  {
+    "version": 19,
+    "timestamp": "2026-06-16 04:40",
+    "authorIp": "::1",
+    "data": {
+      "id": "score-mz5uhg3uamqg59n0q",
+      "title": "未命名乐曲",
+      "composer": "未知",
+      "tracks": [
+        {
+          "id": "track-1",
+          "name": "钢琴",
+          "color": "#e94560",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-2",
+          "name": "小提琴",
+          "color": "#00d4ff",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-3",
+          "name": "大提琴",
+          "color": "#533483",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        }
+      ],
+      "notes": []
+    }
+  },
+  {
+    "version": 20,
+    "timestamp": "2026-06-16 04:40",
+    "authorIp": "::1",
+    "data": {
+      "id": "score-mz5uhg3uamqg59n0q",
+      "title": "未命名乐曲",
+      "composer": "未知",
+      "tracks": [
+        {
+          "id": "track-1",
+          "name": "钢琴",
+          "color": "#e94560",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-2",
+          "name": "小提琴",
+          "color": "#00d4ff",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-3",
+          "name": "大提琴",
+          "color": "#533483",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        }
+      ],
+      "notes": []
+    }
+  },
+  {
+    "version": 21,
+    "timestamp": "2026-06-16 04:41",
+    "authorIp": "::1",
+    "data": {
+      "id": "score-mz5uhg3uamqg59n0q",
+      "title": "未命名乐曲",
+      "composer": "未知",
+      "tracks": [
+        {
+          "id": "track-1",
+          "name": "钢琴",
+          "color": "#e94560",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-2",
+          "name": "小提琴",
+          "color": "#00d4ff",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-3",
+          "name": "大提琴",
+          "color": "#533483",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        }
+      ],
+      "notes": []
+    }
+  },
+  {
+    "version": 22,
+    "timestamp": "2026-06-16 04:41",
+    "authorIp": "::1",
+    "data": {
+      "id": "score-mz5uhg3uamqg59n0q",
+      "title": "未命名乐曲",
+      "composer": "未知",
+      "tracks": [
+        {
+          "id": "track-1",
+          "name": "钢琴",
+          "color": "#e94560",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-2",
+          "name": "小提琴",
+          "color": "#00d4ff",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-3",
+          "name": "大提琴",
+          "color": "#533483",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        }
+      ],
+      "notes": []
+    }
+  },
+  {
+    "version": 23,
+    "timestamp": "2026-06-16 04:42",
+    "authorIp": "::1",
+    "data": {
+      "id": "score-mz5uhg3uamqg59n0q",
+      "title": "未命名乐曲",
+      "composer": "未知",
+      "tracks": [
+        {
+          "id": "track-1",
+          "name": "钢琴",
+          "color": "#e94560",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-2",
+          "name": "小提琴",
+          "color": "#00d4ff",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-3",
+          "name": "大提琴",
+          "color": "#533483",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        }
+      ],
+      "notes": []
+    }
+  },
+  {
+    "version": 24,
+    "timestamp": "2026-06-16 04:42",
+    "authorIp": "::1",
+    "data": {
+      "id": "score-mz5uhg3uamqg59n0q",
+      "title": "未命名乐曲",
+      "composer": "未知",
+      "tracks": [
+        {
+          "id": "track-1",
+          "name": "钢琴",
+          "color": "#e94560",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-2",
+          "name": "小提琴",
+          "color": "#00d4ff",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-3",
+          "name": "大提琴",
+          "color": "#533483",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        }
+      ],
+      "notes": []
+    }
+  },
+  {
+    "version": 25,
+    "timestamp": "2026-06-16 04:43",
+    "authorIp": "::1",
+    "data": {
+      "id": "score-mz5uhg3uamqg59n0q",
+      "title": "未命名乐曲",
+      "composer": "未知",
+      "tracks": [
+        {
+          "id": "track-1",
+          "name": "钢琴",
+          "color": "#e94560",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-2",
+          "name": "小提琴",
+          "color": "#00d4ff",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-3",
+          "name": "大提琴",
+          "color": "#533483",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        }
+      ],
+      "notes": []
+    }
+  },
+  {
+    "version": 26,
+    "timestamp": "2026-06-16 04:43",
+    "authorIp": "::1",
+    "data": {
+      "id": "score-mz5uhg3uamqg59n0q",
+      "title": "未命名乐曲",
+      "composer": "未知",
+      "tracks": [
+        {
+          "id": "track-1",
+          "name": "钢琴",
+          "color": "#e94560",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-2",
+          "name": "小提琴",
+          "color": "#00d4ff",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-3",
+          "name": "大提琴",
+          "color": "#533483",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        }
+      ],
+      "notes": []
+    }
+  },
+  {
+    "version": 27,
+    "timestamp": "2026-06-16 04:44",
+    "authorIp": "::1",
+    "data": {
+      "id": "score-mz5uhg3uamqg59n0q",
+      "title": "未命名乐曲",
+      "composer": "未知",
+      "tracks": [
+        {
+          "id": "track-1",
+          "name": "钢琴",
+          "color": "#e94560",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-2",
+          "name": "小提琴",
+          "color": "#00d4ff",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-3",
+          "name": "大提琴",
+          "color": "#533483",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        }
+      ],
+      "notes": []
+    }
+  },
+  {
+    "version": 28,
+    "timestamp": "2026-06-16 04:44",
+    "authorIp": "::1",
+    "data": {
+      "id": "score-mz5uhg3uamqg59n0q",
+      "title": "未命名乐曲",
+      "composer": "未知",
+      "tracks": [
+        {
+          "id": "track-1",
+          "name": "钢琴",
+          "color": "#e94560",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-2",
+          "name": "小提琴",
+          "color": "#00d4ff",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-3",
+          "name": "大提琴",
+          "color": "#533483",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        }
+      ],
+      "notes": []
+    }
+  },
+  {
+    "version": 29,
+    "timestamp": "2026-06-16 04:45",
+    "authorIp": "::1",
+    "data": {
+      "id": "score-mz5uhg3uamqg59n0q",
+      "title": "未命名乐曲",
+      "composer": "未知",
+      "tracks": [
+        {
+          "id": "track-1",
+          "name": "钢琴",
+          "color": "#e94560",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-2",
+          "name": "小提琴",
+          "color": "#00d4ff",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-3",
+          "name": "大提琴",
+          "color": "#533483",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        }
+      ],
+      "notes": []
+    }
+  },
+  {
+    "version": 30,
+    "timestamp": "2026-06-16 04:45",
+    "authorIp": "::1",
+    "data": {
+      "id": "score-mz5uhg3uamqg59n0q",
+      "title": "未命名乐曲",
+      "composer": "未知",
+      "tracks": [
+        {
+          "id": "track-1",
+          "name": "钢琴",
+          "color": "#e94560",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-2",
+          "name": "小提琴",
+          "color": "#00d4ff",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-3",
+          "name": "大提琴",
+          "color": "#533483",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        }
+      ],
+      "notes": []
+    }
+  },
+  {
+    "version": 31,
+    "timestamp": "2026-06-16 04:46",
+    "authorIp": "::1",
+    "data": {
+      "id": "score-mz5uhg3uamqg59n0q",
+      "title": "未命名乐曲",
+      "composer": "未知",
+      "tracks": [
+        {
+          "id": "track-1",
+          "name": "钢琴",
+          "color": "#e94560",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-2",
+          "name": "小提琴",
+          "color": "#00d4ff",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        },
+        {
+          "id": "track-3",
+          "name": "大提琴",
+          "color": "#533483",
+          "solo": false,
+          "mute": false,
+          "visible": true
+        }
+      ],
+      "notes": []
+    }
   }
 ]
