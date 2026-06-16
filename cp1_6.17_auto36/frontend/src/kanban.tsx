@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import type { Card, CardStatus, CardTag, TeamMember } from './types';
 import { COLUMN_LABELS, TAG_COLORS, TAG_LABELS } from './types';
 import { api } from './api';
@@ -14,13 +14,17 @@ interface KanbanProps {
 
 const COLUMNS: CardStatus[] = ['discussion', 'scheduling', 'confirmed', 'in_progress', 'completed'];
 
-interface DragState {
-  cardId: string | null;
-  startY: number;
+interface DragData {
+  cardId: string;
+  cardWidth: number;
+  cardHeight: number;
   offsetX: number;
   offsetY: number;
-  ghostPosition: { x: number; y: number } | null;
-  targetColumn: CardStatus | null;
+  startX: number;
+  startY: number;
+  sourceColumn: CardStatus;
+  sourceIndex: number;
+  targetColumn: CardStatus;
   targetIndex: number;
 }
 
@@ -32,16 +36,9 @@ export const Kanban: React.FC<KanbanProps> = ({
   onOpenVoting,
   projectId
 }) => {
-  const [dragState, setDragState] = useState<DragState>({
-    cardId: null,
-    startY: 0,
-    offsetX: 0,
-    offsetY: 0,
-    ghostPosition: null,
-    targetColumn: null,
-    targetIndex: -1
-  });
-  
+  const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
+  const [targetColumn, setTargetColumn] = useState<CardStatus | null>(null);
+  const [targetIndex, setTargetIndex] = useState<number>(-1);
   const [pulsingCardId, setPulsingCardId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newCard, setNewCard] = useState({
@@ -54,7 +51,10 @@ export const Kanban: React.FC<KanbanProps> = ({
   });
   
   const boardRef = useRef<HTMLDivElement>(null);
-  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const ghostRef = useRef<HTMLDivElement>(null);
+  const dragDataRef = useRef<DragData | null>(null);
+  const rafIdRef = useRef<number | null>(null);
+  const columnRefs = useRef<Map<CardStatus, HTMLDivElement>>(new Map());
   
   const getMemberName = useCallback((id: string) => {
     return teamMembers.find(m => m.id === id)?.name || id;
@@ -64,98 +64,148 @@ export const Kanban: React.FC<KanbanProps> = ({
     return cards.filter(c => c.status === status);
   }, [cards]);
   
+  const updateGhostPosition = useCallback((clientX: number, clientY: number) => {
+    if (!ghostRef.current || !dragDataRef.current || !boardRef.current) return;
+    
+    const boardRect = boardRef.current.getBoundingClientRect();
+    const x = clientX - boardRect.left - dragDataRef.current.offsetX;
+    const y = clientY - boardRect.top - dragDataRef.current.offsetY;
+    
+    ghostRef.current.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+  }, []);
+  
+  const detectDropTarget = useCallback((clientX: number, clientY: number) => {
+    if (!dragDataRef.current) return;
+    
+    let foundColumn: CardStatus | null = null;
+    let foundIndex = -1;
+    
+    columnRefs.current.forEach((colEl, colStatus) => {
+      const colRect = colEl.getBoundingClientRect();
+      
+      if (clientX >= colRect.left && clientX <= colRect.right) {
+        foundColumn = colStatus;
+        
+        const contentEl = colEl.querySelector<HTMLDivElement>('.column-content');
+        if (!contentEl) return;
+        
+        const cardEls = contentEl.querySelectorAll<HTMLDivElement>('[data-card]');
+        const placeholderEl = contentEl.querySelector<HTMLDivElement>('.drop-placeholder');
+        
+        if (cardEls.length === 0) {
+          foundIndex = 0;
+          return;
+        }
+        
+        let closestIdx = cardEls.length;
+        let closestDistance = Infinity;
+        
+        cardEls.forEach((cardEl, idx) => {
+          const cardRect = cardEl.getBoundingClientRect();
+          const cardMiddle = cardRect.top + cardRect.height / 2;
+          const distance = Math.abs(clientY - cardMiddle);
+          
+          if (distance < closestDistance) {
+            closestDistance = distance;
+            closestIdx = clientY < cardMiddle ? idx : idx + 1;
+          }
+        });
+        
+        foundIndex = closestIdx;
+      }
+    });
+    
+    if (foundColumn && (foundColumn !== dragDataRef.current.targetColumn || foundIndex !== dragDataRef.current.targetIndex)) {
+      dragDataRef.current.targetColumn = foundColumn;
+      dragDataRef.current.targetIndex = foundIndex;
+      setTargetColumn(foundColumn);
+      setTargetIndex(foundIndex);
+    }
+  }, []);
+  
   const handleDragStart = useCallback((e: React.MouseEvent, card: Card) => {
     e.preventDefault();
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    e.stopPropagation();
+    
+    const cardEl = e.currentTarget as HTMLDivElement;
+    const cardRect = cardEl.getBoundingClientRect();
     const boardRect = boardRef.current?.getBoundingClientRect();
     
     if (!boardRect) return;
     
-    setDragState({
+    const sourceCards = getCardsByStatus(card.status);
+    const sourceIndex = sourceCards.findIndex(c => c.id === card.id);
+    
+    dragDataRef.current = {
       cardId: card.id,
+      cardWidth: cardRect.width,
+      cardHeight: cardRect.height,
+      offsetX: e.clientX - cardRect.left,
+      offsetY: e.clientY - cardRect.top,
+      startX: e.clientX,
       startY: e.clientY,
-      offsetX: e.clientX - rect.left,
-      offsetY: e.clientY - rect.top,
-      ghostPosition: {
-        x: e.clientX - boardRect.left,
-        y: e.clientY - boardRect.top
-      },
+      sourceColumn: card.status,
+      sourceIndex,
       targetColumn: card.status,
-      targetIndex: getCardsByStatus(card.status).findIndex(c => c.id === card.id)
-    });
+      targetIndex: sourceIndex
+    };
+    
+    setDraggingCardId(card.id);
+    setTargetColumn(card.status);
+    setTargetIndex(sourceIndex);
+    
+    if (ghostRef.current) {
+      ghostRef.current.style.width = `${cardRect.width}px`;
+      ghostRef.current.style.display = 'block';
+      ghostRef.current.style.transform = `translate3d(${cardRect.left - boardRect.left}px, ${cardRect.top - boardRect.top}px, 0)`;
+    }
     
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      const currentBoardRect = boardRef.current?.getBoundingClientRect();
-      if (!currentBoardRect) return;
+      moveEvent.preventDefault();
       
-      setDragState(prev => ({
-        ...prev,
-        ghostPosition: {
-          x: moveEvent.clientX - currentBoardRect.left,
-          y: moveEvent.clientY - currentBoardRect.top
-        }
-      }));
-      
-      const columns = document.querySelectorAll<HTMLDivElement>('[data-column]');
-      let foundColumn: CardStatus | null = null;
-      let foundIndex = -1;
-      
-      columns.forEach(col => {
-        const colRect = col.getBoundingClientRect();
-        if (moveEvent.clientX >= colRect.left && moveEvent.clientX <= colRect.right) {
-          foundColumn = col.dataset.column as CardStatus;
-          
-          const columnCards = col.querySelectorAll<HTMLDivElement>('[data-card]');
-          columnCards.forEach((cardEl, idx) => {
-            const cardRect = cardEl.getBoundingClientRect();
-            if (moveEvent.clientY < cardRect.top + cardRect.height / 2) {
-              foundIndex = idx;
-            } else if (idx === columnCards.length - 1) {
-              foundIndex = idx + 1;
-            }
-          });
-          
-          if (columnCards.length === 0) {
-            foundIndex = 0;
-          }
-        }
-      });
-      
-      if (foundColumn) {
-        setDragState(prev => ({
-          ...prev,
-          targetColumn: foundColumn,
-          targetIndex: foundIndex
-        }));
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
       }
+      
+      rafIdRef.current = requestAnimationFrame(() => {
+        updateGhostPosition(moveEvent.clientX, moveEvent.clientY);
+        detectDropTarget(moveEvent.clientX, moveEvent.clientY);
+      });
     };
     
     const handleMouseUp = async (_upEvent: MouseEvent) => {
-      if (dragState.cardId && dragState.targetColumn) {
-        const card = cards.find(c => c.id === dragState.cardId);
-        if (card && card.status !== dragState.targetColumn) {
-          try {
-            const updatedCard = await api.updateCardStatus(card.id, dragState.targetColumn);
-            const newCards = cards.map(c => c.id === card.id ? updatedCard : c);
-            onCardsChange(newCards);
-            
-            setPulsingCardId(card.id);
-            setTimeout(() => setPulsingCardId(null), 300);
-          } catch (err) {
-            console.error('Failed to update card status:', err);
-          }
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      
+      const dragData = dragDataRef.current;
+      const currentDraggingId = draggingCardId;
+      
+      if (ghostRef.current) {
+        ghostRef.current.style.display = 'none';
+      }
+      
+      if (dragData && dragData.sourceColumn !== dragData.targetColumn) {
+        try {
+          const updatedCard = await api.updateCardStatus(dragData.cardId, dragData.targetColumn);
+          const newCards = cards.map(c => c.id === dragData.cardId ? updatedCard : c);
+          onCardsChange(newCards);
+          
+          setPulsingCardId(dragData.cardId);
+          
+          setTimeout(() => {
+            setPulsingCardId(null);
+          }, 300);
+        } catch (err) {
+          console.error('Failed to update card status:', err);
         }
       }
       
-      setDragState({
-        cardId: null,
-        startY: 0,
-        offsetX: 0,
-        offsetY: 0,
-        ghostPosition: null,
-        targetColumn: null,
-        targetIndex: -1
-      });
+      dragDataRef.current = null;
+      setDraggingCardId(null);
+      setTargetColumn(null);
+      setTargetIndex(-1);
       
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
@@ -163,7 +213,7 @@ export const Kanban: React.FC<KanbanProps> = ({
     
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  }, [cards, dragState.cardId, dragState.targetColumn, getCardsByStatus, onCardsChange]);
+  }, [cards, draggingCardId, getCardsByStatus, onCardsChange, updateGhostPosition, detectDropTarget]);
   
   const handleAddCard = async () => {
     if (!newCard.title.trim() || !newCard.assignee) return;
@@ -194,8 +244,8 @@ export const Kanban: React.FC<KanbanProps> = ({
     }
   };
   
-  const renderCard = (card: Card) => {
-    const isDragging = dragState.cardId === card.id;
+  const renderCard = (card: Card, index: number) => {
+    const isDragging = draggingCardId === card.id;
     const isPulsing = pulsingCardId === card.id;
     const isHighRisk = highRiskCardIds.has(card.id);
     
@@ -203,14 +253,8 @@ export const Kanban: React.FC<KanbanProps> = ({
       <div
         key={card.id}
         data-card={card.id}
-        ref={el => { if (el) cardRefs.current.set(card.id, el); }}
-        className={`kanban-card ${isDragging ? 'dragging' : ''} ${isPulsing ? 'pulsing' : ''}`}
+        className={`kanban-card ${isDragging ? 'card-source' : ''} ${isPulsing ? 'card-pulse' : ''}`}
         onMouseDown={(e) => handleDragStart(e, card)}
-        style={{
-          opacity: isDragging ? 0.5 : 1,
-          transform: isPulsing ? 'scale(1.02)' : 'scale(1)',
-          transition: isPulsing ? 'transform 0.15s ease-in-out' : 'none'
-        }}
       >
         {isHighRisk && (
           <div className="risk-pulse" title="高风险">
@@ -251,20 +295,16 @@ export const Kanban: React.FC<KanbanProps> = ({
   };
   
   const renderGhostCard = () => {
-    if (!dragState.cardId || !dragState.ghostPosition) return null;
+    if (!draggingCardId) return null;
     
-    const card = cards.find(c => c.id === dragState.cardId);
+    const card = cards.find(c => c.id === draggingCardId);
     if (!card) return null;
     
     return (
       <div
+        ref={ghostRef}
         className="ghost-card"
-        style={{
-          left: dragState.ghostPosition.x - dragState.offsetX,
-          top: dragState.ghostPosition.y - dragState.offsetY,
-          opacity: 0.8,
-          pointerEvents: 'none'
-        }}
+        style={{ display: 'none' }}
       >
         <div className="card-header">
           <span 
@@ -303,13 +343,15 @@ export const Kanban: React.FC<KanbanProps> = ({
       <div className="kanban-board" ref={boardRef}>
         {COLUMNS.map(status => {
           const columnCards = getCardsByStatus(status);
-          const isDropTarget = dragState.targetColumn === status;
+          const isDropTarget = targetColumn === status && draggingCardId !== null;
+          const isSourceColumn = dragDataRef.current?.sourceColumn === status;
           
           return (
             <div
               key={status}
               data-column={status}
-              className={`kanban-column ${isDropTarget ? 'drop-target' : ''}`}
+              ref={el => { if (el) columnRefs.current.set(status, el); }}
+              className={`kanban-column ${isDropTarget ? 'column-drop-highlight' : ''}`}
             >
               <div className="column-header">
                 <h3>{COLUMN_LABELS[status]}</h3>
@@ -317,15 +359,19 @@ export const Kanban: React.FC<KanbanProps> = ({
               </div>
               
               <div className="column-content">
-                {columnCards.map(card => renderCard(card))}
+                {columnCards.map((card, index) => {
+                  const showPlaceholder = isDropTarget && targetIndex === index && draggingCardId !== card.id;
+                  
+                  return (
+                    <React.Fragment key={card.id}>
+                      {showPlaceholder && <div className="drop-placeholder" />}
+                      {renderCard(card, index)}
+                    </React.Fragment>
+                  );
+                })}
                 
-                {isDropTarget && dragState.cardId && (
-                  <div 
-                    className="drop-placeholder"
-                    style={{
-                      order: dragState.targetIndex >= 0 ? dragState.targetIndex : columnCards.length
-                    }}
-                  />
+                {isDropTarget && targetIndex >= columnCards.length && (
+                  <div className="drop-placeholder" />
                 )}
               </div>
             </div>
