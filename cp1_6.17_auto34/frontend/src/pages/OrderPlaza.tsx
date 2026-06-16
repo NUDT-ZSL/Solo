@@ -13,6 +13,7 @@ import {
 import { checkUnlock } from '../logic/unlockLogic';
 import CreateOrderModal from '../components/CreateOrderModal';
 import HiddenMenuModal from '../components/HiddenMenuModal';
+import OrderSuccessModal from '../components/OrderSuccessModal';
 import './OrderPlaza.css';
 
 interface OrderPlazaProps {
@@ -30,6 +31,17 @@ const OrderPlaza: React.FC<OrderPlazaProps> = ({ user, showToast, onHiddenMenuUn
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(Date.now());
   const [timeoutOrderIds, setTimeoutOrderIds] = useState<Set<string>>(new Set());
+  const [successModal, setSuccessModal] = useState<{
+    open: boolean;
+    type: 'create' | 'join';
+    data: {
+      targetDrinkName: string;
+      tableNumber: number;
+      deadline: number;
+      participantsCount: number;
+      maxParticipants: number;
+    } | null;
+  }>({ open: false, type: 'create', data: null });
 
   const loadData = useCallback(async () => {
     try {
@@ -100,7 +112,17 @@ const OrderPlaza: React.FC<OrderPlazaProps> = ({ user, showToast, onHiddenMenuUn
       const newOrder = await createOrder(data);
       setOrders((prev) => [newOrder, ...prev]);
       setShowCreate(false);
-      showToast('拼单已发起！');
+      setSuccessModal({
+        open: true,
+        type: 'create',
+        data: {
+          targetDrinkName: newOrder.targetDrinkName,
+          tableNumber: newOrder.tableNumber,
+          deadline: newOrder.deadline,
+          participantsCount: newOrder.participants.length,
+          maxParticipants: newOrder.maxParticipants
+        }
+      });
       const count = incrementOrderCount(user.id);
       handleCheckUnlock(count);
     } catch (err: any) {
@@ -120,11 +142,17 @@ const OrderPlaza: React.FC<OrderPlazaProps> = ({ user, showToast, onHiddenMenuUn
       const drinkName = order.targetDrinkName;
       const updated = await joinOrder(order.id, drinkId, drinkName);
       setOrders((prev) => prev.map((o) => (o.id === order.id ? updated : o)));
-      if (updated.status === 'completed') {
-        showToast('拼单成功！已通知所有参与者 🎉');
-      } else {
-        showToast('已加入拼单！');
-      }
+      setSuccessModal({
+        open: true,
+        type: 'join',
+        data: {
+          targetDrinkName: updated.targetDrinkName,
+          tableNumber: updated.tableNumber,
+          deadline: updated.deadline,
+          participantsCount: updated.participants.length,
+          maxParticipants: updated.maxParticipants
+        }
+      });
       const count = incrementOrderCount(user.id);
       handleCheckUnlock(count);
     } catch (err: any) {
@@ -177,6 +205,7 @@ const OrderPlaza: React.FC<OrderPlazaProps> = ({ user, showToast, onHiddenMenuUn
             {orders.map((order, idx) => {
               const isTimeout = timeoutOrderIds.has(order.id);
               const isFull = order.participants.length >= order.maxParticipants;
+              const isNearlyFull = order.participants.length >= order.maxParticipants - 1;
               const isJoined = order.participants.some((p) => p.userId === user.id);
               const countdown = formatCountdown(order.deadline);
               return (
@@ -199,11 +228,38 @@ const OrderPlaza: React.FC<OrderPlazaProps> = ({ user, showToast, onHiddenMenuUn
                     <div className="order-countdown">{countdown}</div>
                   </div>
                   <div className="order-card-body">
-                    <div className="order-info-row">
-                      <span className="order-info-label">参与人数</span>
-                      <span className="order-info-value">
-                        {order.participants.length} / {order.maxParticipants} 人
-                      </span>
+                    <div className="order-people-progress">
+                      <div className="order-people-header">
+                        <span className="order-info-label">参与人数</span>
+                        <span className={`order-people-count ${isNearlyFull ? 'urgent' : ''}`}>
+                          {order.participants.length} / {order.maxParticipants} 人
+                        </span>
+                      </div>
+                      <div className="order-people-bar">
+                        {Array.from({ length: order.maxParticipants }).map((_, i) => (
+                          <div
+                            key={i}
+                            className={`order-people-slot ${i < order.participants.length ? 'filled' : ''} ${isNearlyFull && i >= order.participants.length - 1 ? 'urgent' : ''}`}
+                          >
+                            {i < order.participants.length ? (
+                              <div className="order-people-avatar">
+                                {order.participants[i].userName.charAt(0)}
+                              </div>
+                            ) : (
+                              <span className="order-people-plus">+</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="order-people-status">
+                        {isFull ? (
+                          <span className="order-people-msg full">已满员</span>
+                        ) : isNearlyFull ? (
+                          <span className="order-people-msg urgent">只差 {order.maxParticipants - order.participants.length} 人！</span>
+                        ) : (
+                          <span className="order-people-msg">还差 {order.maxParticipants - order.participants.length} 人成团</span>
+                        )}
+                      </div>
                     </div>
                     <div className="order-info-row">
                       <span className="order-info-label">碰头桌号</span>
@@ -245,6 +301,13 @@ const OrderPlaza: React.FC<OrderPlazaProps> = ({ user, showToast, onHiddenMenuUn
           onClose={() => setUnlockedMenu(null)}
           onShared={() => {}}
           showToast={showToast}
+        />
+
+        <OrderSuccessModal
+          open={successModal.open}
+          type={successModal.type as 'create' | 'join'}
+          data={successModal.data}
+          onClose={() => setSuccessModal({ open: false, type: 'create', data: null })}
         />
       </div>
     </div>

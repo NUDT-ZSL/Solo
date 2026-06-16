@@ -146,7 +146,115 @@
 .order-card-body {
   display: flex;
   flex-direction: column;
+  gap: 12px;
+}
+
+.order-people-progress {
+  background-color: rgba(255, 255, 255, 0.6);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 4px;
+}
+
+.order-people-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.order-people-count {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-primary-dark);
+}
+
+.order-people-count.urgent {
+  color: #E53935;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.order-people-bar {
+  display: flex;
   gap: 8px;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.order-people-slot {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background-color: #F5F5F5;
+  border: 2px dashed var(--color-border-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.order-people-slot.filled {
+  border: 2px solid var(--color-primary-light);
+  background: linear-gradient(135deg, #A1887F, #6D4C41);
+}
+
+.order-people-slot.urgent {
+  border-color: #FF8A65;
+  animation: pulseBorder 1.2s ease-in-out infinite;
+}
+
+@keyframes pulseBorder {
+  0%, 100% { border-color: #FF8A65; box-shadow: 0 0 0 0 rgba(255, 138, 101, 0.4); }
+  50% { border-color: #E53935; box-shadow: 0 0 0 6px rgba(255, 138, 101, 0); }
+}
+
+.order-people-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.order-people-plus {
+  color: var(--color-disabled);
+  font-size: 20px;
+  font-weight: 300;
+}
+
+.order-people-slot.urgent .order-people-plus {
+  color: #FF8A65;
+  font-weight: 600;
+}
+
+.order-people-status {
+  text-align: center;
+}
+
+.order-people-msg {
+  font-size: 13px;
+  color: var(--color-text-light);
+  font-weight: 500;
+}
+
+.order-people-msg.urgent {
+  color: #E53935;
+  font-weight: 700;
+}
+
+.order-people-msg.full {
+  color: #4CAF50;
+  font-weight: 600;
 }
 
 .order-info-row {
