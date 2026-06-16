@@ -4,6 +4,7 @@ import type { Enemy } from './enemy'
 
 export interface Ship {
   id: string
+  basePosition: THREE.Vector3
   position: THREE.Vector3
   targetPosition: THREE.Vector3 | null
   color: string
@@ -12,12 +13,12 @@ export interface Ship {
   maxHp: number
   speed: number
   rotation: THREE.Euler
+  yawRotation: number
+  yawSpeed: number
   isSelected: boolean
   isMoving: boolean
   isAttacking: boolean
   attackCooldown: number
-  yawRotation: number
-  yawSpeed: number
   hoverTime: number
   hoverAmplitude: number
   hoverPeriod: number
@@ -32,6 +33,8 @@ export interface Ship {
     duration: number
   } | null
   lastAttackTime: number
+  isInFormation: boolean
+  formationIndex: number
 }
 
 export function createShip(
@@ -40,6 +43,7 @@ export function createShip(
 ): Ship {
   return {
     id: generateId(),
+    basePosition: position.clone(),
     position: position.clone(),
     targetPosition: null,
     color,
@@ -48,13 +52,13 @@ export function createShip(
     maxHp: 200,
     speed: randomRange(1, 3),
     rotation: new THREE.Euler(0, 0, 0),
+    yawRotation: 0,
+    yawSpeed: 30 * (Math.PI / 180),
     isSelected: false,
     isMoving: false,
     isAttacking: false,
     attackCooldown: 0.5,
-    yawRotation: 0,
-    yawSpeed: 30 * (Math.PI / 180),
-    hoverTime: 0,
+    hoverTime: Math.random() * Math.PI * 2,
     hoverAmplitude: 0.5,
     hoverPeriod: 2,
     formationPosition: null,
@@ -63,6 +67,8 @@ export function createShip(
     pathDuration: 2,
     colorTransition: null,
     lastAttackTime: 0,
+    isInFormation: false,
+    formationIndex: 0,
   }
 }
 
@@ -109,7 +115,8 @@ export function updateShip(
   ship: Ship,
   delta: number,
   currentTime: number,
-  enemy: Enemy | null
+  enemy: Enemy | null,
+  attackEnabled: boolean
 ): { shouldFireLaser: boolean; laserTarget: THREE.Vector3 | null } {
   let shouldFireLaser = false
   let laserTarget: THREE.Vector3 | null = null
@@ -132,6 +139,7 @@ export function updateShip(
   if (ship.bezierPath) {
     ship.pathProgress += delta / ship.pathDuration
     if (ship.pathProgress >= 1) {
+      ship.basePosition.copy(ship.bezierPath.p2)
       ship.position.copy(ship.bezierPath.p2)
       ship.bezierPath = null
       ship.isMoving = false
@@ -144,38 +152,39 @@ export function updateShip(
         ship.pathProgress
       )
       const dir = newPos.clone().sub(ship.position).normalize()
-      rotateShip(ship, dir, delta)
+      if (dir.length() > 0.001) {
+        rotateShip(ship, dir, delta)
+      }
+      ship.basePosition.copy(newPos)
       ship.position.copy(newPos)
     }
   } else if (ship.targetPosition && ship.isMoving) {
-    const dir = ship.targetPosition.clone().sub(ship.position)
+    const dir = ship.targetPosition.clone().sub(ship.basePosition)
     const dist = dir.length()
 
     if (dist < 0.5) {
+      ship.basePosition.copy(ship.targetPosition)
       ship.position.copy(ship.targetPosition)
       ship.isMoving = false
       ship.targetPosition = null
     } else {
       dir.normalize()
       rotateShip(ship, dir, delta)
-      const moveSpeed = ship.speed * delta
-      if (ship.formationPosition) {
-        const formationDist = distance(ship.position, ship.formationPosition)
-        const adjustedSpeed = formationDist > 10 ? ship.speed * 1.2 : ship.speed
-        ship.position.add(dir.multiplyScalar(adjustedSpeed * delta))
+      const moveDist = ship.speed * delta
+      if (moveDist >= dist) {
+        ship.basePosition.copy(ship.targetPosition)
       } else {
-        ship.position.add(dir.multiplyScalar(moveSpeed))
+        ship.basePosition.add(dir.clone().multiplyScalar(moveDist))
       }
+      ship.position.copy(ship.basePosition)
     }
   }
 
-  if (!ship.isMoving) {
-    ship.hoverTime += delta
-    const hoverOffset = Math.sin(ship.hoverTime * (Math.PI * 2) / ship.hoverPeriod) * ship.hoverAmplitude
-    ship.position.y = ship.position.y + (hoverOffset - (ship.position.y % ship.hoverAmplitude)) * 0.1
-  }
+  ship.hoverTime += delta
+  const hoverY = Math.sin(ship.hoverTime * (Math.PI * 2) / ship.hoverPeriod) * ship.hoverAmplitude
+  ship.position.y = ship.basePosition.y + hoverY
 
-  if (enemy && !enemy.isExploding) {
+  if (enemy && !enemy.isExploding && attackEnabled) {
     const distToEnemy = distance(ship.position, enemy.position)
     if (distToEnemy < 50) {
       ship.isAttacking = true
