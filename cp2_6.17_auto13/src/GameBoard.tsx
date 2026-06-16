@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Star, Constellation, Firefly } from './types';
+import { Star, Constellation, Firefly, Nebula, BurstParticle } from './types';
 import { CONFIG, CONSTELLATION_NAMES } from './config';
 
 interface GameBoardProps {
@@ -24,8 +24,12 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [hoveredConstellationId, setHoveredConstellationId] = useState<number | null>(null);
   const firefliesRef = useRef<Firefly[]>([]);
+  const nebulaeRef = useRef<Nebula[]>([]);
+  const burstParticlesRef = useRef<BurstParticle[]>([]);
   const animationRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
+  const burstIdRef = useRef(0);
+  const lastHoveredRef = useRef<number | null>(null);
 
   const initializeStars = useCallback((width: number, height: number) => {
     const newStars: Star[] = [];
@@ -93,6 +97,50 @@ const GameBoard: React.FC<GameBoardProps> = ({
     firefliesRef.current = fireflies;
   }, []);
 
+  const initializeNebulae = useCallback((width: number, height: number) => {
+    const nebulae: Nebula[] = [];
+    const skyHeight = height * 0.75;
+    const count = 3 + Math.floor(Math.random() * 3);
+
+    for (let i = 0; i < count; i++) {
+      nebulae.push({
+        id: i,
+        x: Math.random() * width,
+        y: Math.random() * skyHeight * 0.8,
+        radiusX: 150 + Math.random() * 250,
+        radiusY: 80 + Math.random() * 150,
+        opacity: 0.1 + Math.random() * 0.2,
+        rotation: Math.random() * Math.PI * 2,
+        rotationSpeed: (Math.random() - 0.5) * 0.0002,
+        driftSpeed: 0.05 + Math.random() * 0.1,
+        angle: Math.random() * Math.PI * 2
+      });
+    }
+    nebulaeRef.current = nebulae;
+  }, []);
+
+  const spawnBurstParticles = useCallback((centerX: number, centerY: number) => {
+    const colors = [CONFIG.COLORS.BURST_GOLD, CONFIG.COLORS.BURST_WHITE];
+    const count = 10 + Math.floor(Math.random() * 6);
+
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.5;
+      const speed = 40 + Math.random() * 80;
+      burstParticlesRef.current.push({
+        id: burstIdRef.current++,
+        x: centerX,
+        y: centerY,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: 1 + Math.random() * 1,
+        opacity: 1,
+        life: 0,
+        maxLife: CONFIG.BURST_PARTICLE_LIFE,
+        color: colors[Math.floor(Math.random() * colors.length)]
+      });
+    }
+  }, []);
+
   useEffect(() => {
     const updateDimensions = () => {
       if (containerRef.current) {
@@ -110,8 +158,20 @@ const GameBoard: React.FC<GameBoardProps> = ({
     if (dimensions.width > 0 && dimensions.height > 0) {
       initializeStars(dimensions.width, dimensions.height);
       initializeFireflies(dimensions.width, dimensions.height);
+      initializeNebulae(dimensions.width, dimensions.height);
     }
-  }, [dimensions, initializeStars, initializeFireflies]);
+  }, [dimensions, initializeStars, initializeFireflies, initializeNebulae]);
+
+  useEffect(() => {
+    if (hoveredConstellationId !== null && hoveredConstellationId !== lastHoveredRef.current) {
+      const constellation = constellations.find(c => c.id === hoveredConstellationId);
+      if (constellation && constellation.starIds.length > 0) {
+        const centerStar = stars[constellation.starIds[Math.floor(constellation.starIds.length / 2)]];
+        spawnBurstParticles(centerStar.x, centerStar.y);
+      }
+    }
+    lastHoveredRef.current = hoveredConstellationId;
+  }, [hoveredConstellationId, constellations, stars, spawnBurstParticles]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -120,18 +180,61 @@ const GameBoard: React.FC<GameBoardProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const hexToRgb = (hex: string) => {
+      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+      return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+      } : { r: 0, g: 0, b: 0 };
+    };
+
     const render = (currentTime: number) => {
       const deltaTime = lastTimeRef.current ? (currentTime - lastTimeRef.current) / 1000 : 0;
+      const deltaMs = lastTimeRef.current ? currentTime - lastTimeRef.current : 0;
       lastTimeRef.current = currentTime;
 
       const { width, height } = dimensions;
       const groundY = height * 0.7;
+      const skyHeight = groundY;
 
       const bgGradient = ctx.createLinearGradient(0, 0, 0, groundY);
       bgGradient.addColorStop(0, CONFIG.COLORS.BG_TOP);
       bgGradient.addColorStop(1, CONFIG.COLORS.BG_BOTTOM);
       ctx.fillStyle = bgGradient;
       ctx.fillRect(0, 0, width, groundY);
+
+      const nebulaStart = hexToRgb(CONFIG.COLORS.NEBULA_COLOR_START);
+      const nebulaEnd = hexToRgb(CONFIG.COLORS.NEBULA_COLOR_END);
+
+      nebulaeRef.current.forEach(nebula => {
+        nebula.rotation += nebula.rotationSpeed * deltaMs;
+        nebula.angle += nebula.driftSpeed * deltaTime * 0.05;
+        const driftX = Math.cos(nebula.angle) * 0.3;
+        const driftY = Math.sin(nebula.angle * 0.7) * 0.2;
+        nebula.x += driftX;
+        nebula.y += driftY;
+
+        if (nebula.x < -nebula.radiusX) nebula.x = width + nebula.radiusX;
+        if (nebula.x > width + nebula.radiusX) nebula.x = -nebula.radiusX;
+        if (nebula.y < -nebula.radiusY) nebula.y = skyHeight + nebula.radiusY;
+        if (nebula.y > groundY + nebula.radiusY) nebula.y = -nebula.radiusY;
+
+        ctx.save();
+        ctx.translate(nebula.x, nebula.y);
+        ctx.rotate(nebula.rotation);
+
+        const nebulaGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(nebula.radiusX, nebula.radiusY));
+        nebulaGradient.addColorStop(0, `rgba(${nebulaStart.r}, ${nebulaStart.g}, ${nebulaStart.b}, ${nebula.opacity})`);
+        nebulaGradient.addColorStop(0.5, `rgba(${Math.floor((nebulaStart.r + nebulaEnd.r) / 2)}, ${Math.floor((nebulaStart.g + nebulaEnd.g) / 2)}, ${Math.floor((nebulaStart.b + nebulaEnd.b) / 2)}, ${nebula.opacity * 0.6})`);
+        nebulaGradient.addColorStop(1, `rgba(${nebulaEnd.r}, ${nebulaEnd.g}, ${nebulaEnd.b}, 0)`);
+
+        ctx.fillStyle = nebulaGradient;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, nebula.radiusX, nebula.radiusY, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
 
       ctx.fillStyle = CONFIG.COLORS.GROUND;
       ctx.fillRect(0, groundY, width, height - groundY);
@@ -191,6 +294,31 @@ const GameBoard: React.FC<GameBoardProps> = ({
           const textY = firstStar.y - 25;
           ctx.fillText(`${constellation.name} · ${constellation.zodiac}`, firstStar.x, textY);
         }
+      });
+
+      burstParticlesRef.current = burstParticlesRef.current.filter(p => {
+        p.life += deltaMs;
+        if (p.life >= p.maxLife) return false;
+
+        const progress = p.life / p.maxLife;
+        p.x += p.vx * deltaTime;
+        p.y += p.vy * deltaTime;
+        p.vx *= 0.96;
+        p.vy *= 0.96;
+        p.opacity = 1 - progress;
+
+        const rgb = hexToRgb(p.color);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * (1 - progress * 0.5), 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${p.opacity})`;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * 2 * (1 - progress * 0.5), 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${p.opacity * 0.3})`;
+        ctx.fill();
+
+        return true;
       });
 
       firefliesRef.current.forEach(firefly => {
@@ -292,9 +420,13 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
     const constellation = findConstellationAtPoint(x, y);
     if (constellation) {
+      if (constellation.starIds.length > 0) {
+        const centerStar = stars[constellation.starIds[Math.floor(constellation.starIds.length / 2)]];
+        spawnBurstParticles(centerStar.x, centerStar.y);
+      }
       onConstellationClick(constellation);
     }
-  }, [findConstellationAtPoint, onConstellationClick, canDivinate]);
+  }, [findConstellationAtPoint, onConstellationClick, canDivinate, stars, spawnBurstParticles]);
 
   const handleMouseLeave = useCallback(() => {
     setHoveredConstellationId(null);

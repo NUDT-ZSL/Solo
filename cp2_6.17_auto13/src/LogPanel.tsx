@@ -50,10 +50,12 @@ const LogPanel: React.FC<LogPanelProps> = ({ logs, isOpen, onClose }) => {
         onMouseEnter={(e) => {
           e.currentTarget.style.backgroundColor = CONFIG.COLORS.BUTTON_HOVER;
           e.currentTarget.style.transform = 'scale(1.1)';
+          e.currentTarget.style.boxShadow = `0 0 20px 6px rgba(212, 165, 116, 0.5), 0 4px 12px rgba(0,0,0,0.3)`;
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.backgroundColor = CONFIG.COLORS.BUTTON;
           e.currentTarget.style.transform = 'scale(1)';
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
         }}
       >
         📜
@@ -181,7 +183,7 @@ const LogPanel: React.FC<LogPanelProps> = ({ logs, isOpen, onClose }) => {
                   key={log.id}
                   style={{
                     padding: '10px 0',
-                    borderBottom: index < recentLogs.length - 1 ? '1px solid rgba(184, 134, 11, 0.1)' : 'none'
+                    borderBottom: index < recentLogs.length - 1 ? '1px solid rgba(184, 134, 11, 0.3)' : 'none'
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>

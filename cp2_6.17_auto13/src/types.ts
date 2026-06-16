@@ -54,3 +54,29 @@ export interface Firefly {
   blinkInterval: number;
   isBlinking: boolean;
 }
+
+export interface Nebula {
+  id: number;
+  x: number;
+  y: number;
+  radiusX: number;
+  radiusY: number;
+  opacity: number;
+  rotation: number;
+  rotationSpeed: number;
+  driftSpeed: number;
+  angle: number;
+}
+
+export interface BurstParticle {
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  opacity: number;
+  life: number;
+  maxLife: number;
+  color: string;
+}

@@ -54,6 +54,7 @@ const DivinationPanel: React.FC<DivinationPanelProps> = ({ result, isOpen, onClo
       <div
         style={{
           backgroundColor: CONFIG.COLORS.PANEL_BG,
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Cpath d='M5 5h10v5h-5v5h-5zM45 5h10v5h-5v5h-5zM5 45h5v5h5v5h-10zM45 50h5v5h-10v-5h5zM15 15h5v5h-5zM40 15h5v5h-5zM15 40h5v5h-5zM40 40h5v5h-5zM20 5h5v5h-5v5h-5v-5h5zM35 5h5v5h-5v5h-5v-5h5zM20 50h5v5h-5v-5h-5v5h10v-5zM35 50h5v5h-5v-5h-5v5h10v-5zM5 20h5v5h-5zM50 20h5v5h-5zM5 35h5v5h-5zM50 35h5v5h-5z' fill='%23b8860b' fill-opacity='0.08'/%3E%3C/svg%3E")`,
           borderRadius: '20px',
           border: `2px solid ${CONFIG.COLORS.PANEL_BORDER}`,
           padding: '20px 24px',

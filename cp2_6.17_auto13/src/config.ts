@@ -4,6 +4,9 @@ export const CONFIG = {
   MIN_CONSTELLATION_STARS: 3,
   MAX_CONSTELLATION_STARS: 5,
   FIREFLY_COUNT: 50,
+  NEBULA_COUNT: 4,
+  BURST_PARTICLE_COUNT: 12,
+  BURST_PARTICLE_LIFE: 500,
 
   COLORS: {
     BG_TOP: '#0a0a2e',
@@ -18,6 +21,10 @@ export const CONFIG = {
     PANEL_BORDER: '#b8860b',
     PANEL_TEXT: '#3a2a1a',
     COUNTDOWN: '#cc3333',
+    NEBULA_COLOR_START: '#4a2a6a',
+    NEBULA_COLOR_END: '#2a1a4a',
+    BURST_GOLD: '#ffd700',
+    BURST_WHITE: '#ffffff',
     BUTTON: '#d4a574',
     BUTTON_HOVER: '#e8c49a'
   },
