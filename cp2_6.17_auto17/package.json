@@ -1,0 +1,33 @@
+{
+  "name": "collaborative-code-editor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "学生代码实时协作练习系统",
+  "scripts": {
+    "dev": "vite --port 3000",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "server": "node server/server.js"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.22.0",
+    "express": "^4.18.2",
+    "ws": "^8.16.0",
+    "cors": "^2.8.5",
+    "uuid": "^9.0.1",
+    "ace-builds": "^1.32.6",
+    "react-ace": "^10.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vite": "^5.1.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "@types/react": "^18.2.55",
+    "@types/react-dom": "^18.2.19",
+    "@types/ws": "^8.5.10",
+    "@types/cors": "^2.8.17",
+    "@types/uuid": "^9.0.8"
+  }
+}
