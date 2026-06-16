@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>三维粒子沙盘地形编辑器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0a0a0a;
+      font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+      color: #e0e0e0;
+    }
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+    .ui-panel {
+      position: absolute;
+      background: rgba(51, 51, 51, 0.75);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(76, 175, 80, 0.3);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      line-height: 1.6;
+      pointer-events: none;
+      z-index: 10;
+    }
+    #stats-panel {
+      left: 16px;
+      bottom: 16px;
+      min-width: 220px;
+    }
+    #info-panel {
+      right: 16px;
+      top: 16px;
+      min-width: 220px;
+    }
+    .ui-panel .label {
+      color: #888;
+      display: inline-block;
+      min-width: 110px;
+    }
+    .ui-panel .value {
+      color: #4CAF50;
+      font-weight: 600;
+    }
+    .ui-panel .title {
+      color: #4CAF50;
+      font-weight: 700;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid rgba(76, 175, 80, 0.3);
+    }
+    .preset-container {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+      pointer-events: auto;
+    }
+    .preset-btn {
+      flex: 1;
+      min-width: 70px;
+      padding: 6px 10px;
+      background: #333;
+      color: #ccc;
+      border: 2px solid transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+    .preset-btn:hover {
+      background: #444;
+      color: #fff;
+    }
+    .preset-btn.active {
+      border-color: #FFD700;
+      color: #FFD700;
+      background: rgba(255, 215, 0, 0.1);
+    }
+    .dg.main {
+      backdrop-filter: blur(8px) !important;
+      -webkit-backdrop-filter: blur(8px) !important;
+    }
+    .dg.main .close-button {
+      background-color: rgba(76, 175, 80, 0.4) !important;
+    }
+    #crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 24px;
+      height: 24px;
+      pointer-events: none;
+      display: none;
+      z-index: 100;
+    }
+    #crosshair::before,
+    #crosshair::after {
+      content: '';
+      position: absolute;
+      background: rgba(255, 255, 255, 0.8);
+      box-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+    }
+    #crosshair::before {
+      left: 50%;
+      top: 0;
+      width: 1px;
+      height: 100%;
+      transform: translateX(-50%);
+    }
+    #crosshair::after {
+      top: 50%;
+      left: 0;
+      width: 100%;
+      height: 1px;
+      transform: translateY(-50%);
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="crosshair"></div>
+    <div id="stats-panel" class="ui-panel">
+      <div class="title">地形参数</div>
+      <div><span class="label">噪声频率:</span><span class="value" id="stat-freq">-</span></div>
+      <div><span class="label">幅度:</span><span class="value" id="stat-amp">-</span></div>
+      <div><span class="label">八度:</span><span class="value" id="stat-oct">-</span></div>
+      <div><span class="label">帧率 FPS:</span><span class="value" id="stat-fps">-</span></div>
+      <div class="preset-container">
+        <button class="preset-btn" data-preset="mountain">山地</button>
+        <button class="preset-btn" data-preset="plain">平原</button>
+        <button class="preset-btn" data-preset="hill">丘陵</button>
+        <button class="preset-btn" data-preset="basin">盆地</button>
+      </div>
+    </div>
+    <div id="info-panel" class="ui-panel">
+      <div class="title">地形统计</div>
+      <div><span class="label">最高点海拔:</span><span class="value" id="info-max">-</span></div>
+      <div><span class="label">最低点海拔:</span><span class="value" id="info-min">-</span></div>
+      <div><span class="label">顶点数量:</span><span class="value" id="info-verts">-</span></div>
+      <div><span class="label">标记点数:</span><span class="value" id="info-markers">0</span></div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
