@@ -137,6 +137,8 @@ export class ExcavationManager {
     const colors: number[] = [];
 
     const color = new THREE.Color();
+    const R = this.DIG_RADIUS;
+    const D = this.DIG_DEPTH;
 
     for (let i = 0; i < positions.count; i++) {
       const px = positions.getX(i);
@@ -147,10 +149,10 @@ export class ExcavationManager {
       const dz = pz - z;
       const dist = Math.sqrt(dx * dx + dz * dz);
 
-      if (dist < this.DIG_RADIUS) {
-        const t = 1 - dist / this.DIG_RADIUS;
-        const offset = this.DIG_DEPTH * t * t;
-        const newY = py - offset;
+      if (dist < R) {
+        const normalizedR = dist / R;
+        const hemisphereOffset = D * Math.sqrt(Math.max(0, 1 - normalizedR * normalizedR));
+        const newY = py - hemisphereOffset;
         positions.setY(i, newY);
 
         const depth = Math.abs(newY);

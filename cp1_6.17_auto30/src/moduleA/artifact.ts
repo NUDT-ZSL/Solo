@@ -471,9 +471,9 @@ export class ArtifactManager {
 
       oscillator.type = 'sine';
       oscillator.frequency.setValueAtTime(880, this.audioContext.currentTime);
-      oscillator.frequency.exponentialRampToValueAtTime(660, this.audioContext.currentTime + 0.3);
 
-      gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
+      gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.4, this.audioContext.currentTime + 0.01);
       gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.3);
 
       oscillator.connect(gainNode);

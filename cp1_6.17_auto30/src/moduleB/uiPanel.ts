@@ -14,6 +14,24 @@ const TYPE_TO_COLOR: Record<ArtifactType, number> = {
   '石器': 0x9E9E9E
 };
 
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : { r: 255, g: 255, b: 255 };
+}
+
+function lerpColor(hex1: string, hex2: string, t: number): string {
+  const c1 = hexToRgb(hex1);
+  const c2 = hexToRgb(hex2);
+  const r = Math.round(c1.r + (c2.r - c1.r) * t);
+  const g = Math.round(c1.g + (c2.g - c1.g) * t);
+  const b = Math.round(c1.b + (c2.b - c1.b) * t);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
 export class UIManager {
   private dataLogger: DataLogger;
   private container: HTMLElement;
@@ -413,33 +431,13 @@ export class UIManager {
     progressCircle.setAttribute('cy', '40');
     progressCircle.setAttribute('r', '32');
     progressCircle.setAttribute('fill', 'none');
-    progressCircle.setAttribute('stroke', 'url(#progressGradient)');
+    progressCircle.setAttribute('stroke', '#FF8A65');
     progressCircle.setAttribute('stroke-width', '8');
     progressCircle.setAttribute('stroke-linecap', 'round');
     progressCircle.setAttribute('stroke-dasharray', '201');
     progressCircle.setAttribute('stroke-dashoffset', '201');
     progressCircle.setAttribute('transform', 'rotate(-90 40 40)');
-    progressCircle.style.transition = 'stroke-dashoffset 0.3s ease';
-
-    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-    const gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
-    gradient.setAttribute('id', 'progressGradient');
-    gradient.setAttribute('x1', '0%');
-    gradient.setAttribute('y1', '0%');
-    gradient.setAttribute('x2', '100%');
-    gradient.setAttribute('y2', '0%');
-
-    const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    stop1.setAttribute('offset', '0%');
-    stop1.setAttribute('stop-color', '#FF8A65');
-
-    const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    stop2.setAttribute('offset', '100%');
-    stop2.setAttribute('stop-color', '#4CAF50');
-
-    gradient.appendChild(stop1);
-    gradient.appendChild(stop2);
-    defs.appendChild(gradient);
+    progressCircle.style.transition = 'stroke-dashoffset 0.3s ease, stroke 0.2s ease';
 
     const label = document.createElement('div');
     label.id = 'progress-label';
@@ -455,7 +453,23 @@ export class UIManager {
     `;
     label.textContent = '0%';
 
-    svg.appendChild(defs);
+    const flashStyle = document.createElement('style');
+    flashStyle.textContent = `
+      @keyframes progress-flash-green {
+        0% { filter: drop-shadow(0 0 4px #4CAF50); stroke-width: 8px; }
+        25% { filter: drop-shadow(0 0 20px #4CAF50); stroke-width: 12px; }
+        50% { filter: drop-shadow(0 0 30px #81C784); stroke-width: 10px; }
+        75% { filter: drop-shadow(0 0 15px #4CAF50); stroke-width: 9px; }
+        100% { filter: none; stroke-width: 8px; }
+      }
+      .progress-flash {
+        animation: progress-flash-green 0.6s ease-out 2;
+        transform-box: fill-box;
+        transform-origin: center;
+      }
+    `;
+    document.head.appendChild(flashStyle);
+
     svg.appendChild(bgCircle);
     svg.appendChild(progressCircle);
     this.progressRing.appendChild(svg);
@@ -480,11 +494,14 @@ export class UIManager {
       ring.setAttribute('stroke-dashoffset', String(offset));
       label.textContent = `${Math.round(progress * 100)}%`;
 
-      if (progress >= 1) {
-        ring.style.filter = 'drop-shadow(0 0 8px #4CAF50)';
+      const currentColor = lerpColor('#FF8A65', '#4CAF50', progress);
+      ring.setAttribute('stroke', currentColor);
+
+      if (progress >= 1 && !ring.classList.contains('progress-flash')) {
+        ring.classList.add('progress-flash');
         setTimeout(() => {
-          if (ring) ring.style.filter = 'none';
-        }, 500);
+          if (ring) ring.classList.remove('progress-flash');
+        }, 1500);
       }
     }
   }
