@@ -5,6 +5,7 @@ import {
   EmotionType,
   EMOTION_COLORS,
   EMOTION_LABELS,
+  EMOTION_TYPES,
   emotionStore,
 } from './emotionStore'
 
@@ -55,8 +56,6 @@ export default function ArtDetail({
 
   const counts = localCount
   const maxCount = Math.max(1, ...Object.values(counts))
-
-  const emotionTypes: EmotionType[] = ['amaze', 'joy', 'thought', 'moved', 'doubt']
 
   return (
     <div
@@ -148,6 +147,7 @@ export default function ArtDetail({
               alignItems: 'center',
               justifyContent: 'center',
               transform: 'rotate(15deg)',
+              transformOrigin: 'top right',
               zIndex: 2,
               pointerEvents: 'none',
             }}
@@ -225,7 +225,7 @@ export default function ArtDetail({
             flexWrap: 'wrap',
           }}
         >
-          {emotionTypes.map((emotion) => {
+          {EMOTION_TYPES.map((emotion) => {
             return (
               <div
                 key={emotion}
@@ -330,7 +330,7 @@ export default function ArtDetail({
             borderBottom: '1px solid #E0E0E0',
           }}
         >
-          {emotionTypes.map((emotion) => {
+          {EMOTION_TYPES.map((emotion) => {
             const heightRatio = counts[emotion] / maxCount
             const heightPx = Math.max(2, heightRatio * 80)
             return (
@@ -369,7 +369,7 @@ export default function ArtDetail({
             justifyContent: 'space-between',
           }}
         >
-          {emotionTypes.map((emotion) => (
+          {EMOTION_TYPES.map((emotion) => (
             <div
               key={emotion}
               style={{

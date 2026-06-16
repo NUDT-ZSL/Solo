@@ -94,6 +94,14 @@ class EmotionStore {
 
 export const emotionStore = new EmotionStore()
 
+export const EMOTION_TYPES: EmotionType[] = [
+  'amaze',
+  'joy',
+  'thought',
+  'moved',
+  'doubt',
+]
+
 export const EMOTION_COLORS: Record<EmotionType, string> = {
   amaze: '#FF6B6B',
   joy: '#4FC3F7',

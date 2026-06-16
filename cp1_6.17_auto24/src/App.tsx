@@ -61,10 +61,17 @@ const DESCRIPTIONS = [
 ]
 
 const generateRandomSuffix = (): string => {
-  const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-  let result = ''
-  for (let i = 0; i < 4; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length))
+  let result = Math.random()
+    .toString(36)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .substring(0, 4)
+  while (result.length < 4) {
+    result += Math.random()
+      .toString(36)
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .substring(0, 4 - result.length)
   }
   return result
 }

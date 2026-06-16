@@ -6,6 +6,7 @@ import {
   EmotionType,
   EMOTION_COLORS,
   EMOTION_LABELS,
+  EMOTION_TYPES,
 } from './emotionStore'
 
 interface GalleryProps {
@@ -17,6 +18,17 @@ interface GalleryProps {
 
 const DAMPING = 0.8
 const CARD_GAP = 60
+
+const formatYear = (year: number | undefined | null): string => {
+  if (year === undefined || year === null) {
+    return '创作年份未知'
+  }
+  const yearNum = Number(year)
+  if (isNaN(yearNum) || yearNum < 1900 || yearNum > 2024) {
+    return '创作年份不详'
+  }
+  return `创作于 ${yearNum}年`
+}
 
 export default function Gallery({
   artworks,
@@ -369,7 +381,7 @@ export default function Gallery({
                       marginTop: '4px',
                     }}
                   >
-                    创作于 {art.year}年
+                    {formatYear(art.year)}
                   </div>
                 </div>
 
@@ -383,7 +395,7 @@ export default function Gallery({
                     flexWrap: 'wrap',
                   }}
                 >
-                  {(Object.keys(EMOTION_COLORS) as EmotionType[]).map((emotion) => {
+                  {EMOTION_TYPES.map((emotion) => {
                     const rippleId = getRippleKey(art.id, emotion)
                     const count = counts[emotion]
                     return (
