@@ -18,6 +18,7 @@ export type Guard = {
   attackSpeed: number;
   lastAttackTime: number;
   isAttacking: boolean;
+  attackAnimationKey: number;
 };
 
 export type Enemy = {
@@ -91,24 +92,29 @@ export const rollDice = (luck: number): number => {
   let probabilities = [...baseProb];
 
   if (luck > 80) {
-    const boost = 0.2 / 2;
-    probabilities[4] += boost;
-    probabilities[5] += boost;
-    const reduction = 0.2 / 4;
+    const boost = 0.2;
+    const original56 = probabilities[4] + probabilities[5];
+    const new56 = Math.min(original56 + boost, 0.95);
+    const actualBoost = new56 - original56;
+    probabilities[4] += actualBoost * (probabilities[4] / original56);
+    probabilities[5] += actualBoost * (probabilities[5] / original56);
+    const reduction = actualBoost / 4;
     for (let i = 0; i < 4; i++) {
-      probabilities[i] -= reduction;
+      probabilities[i] = Math.max(0.01, probabilities[i] - reduction);
     }
   } else if (luck < 30) {
-    const boost = 0.3 / 2;
-    probabilities[0] += boost;
-    probabilities[1] += boost;
-    const reduction = 0.3 / 4;
+    const boost = 0.3;
+    const original12 = probabilities[0] + probabilities[1];
+    const new12 = Math.min(original12 + boost, 0.95);
+    const actualBoost = new12 - original12;
+    probabilities[0] += actualBoost * (probabilities[0] / original12);
+    probabilities[1] += actualBoost * (probabilities[1] / original12);
+    const reduction = actualBoost / 4;
     for (let i = 2; i < 6; i++) {
-      probabilities[i] -= reduction;
+      probabilities[i] = Math.max(0.01, probabilities[i] - reduction);
     }
   }
 
-  probabilities = probabilities.map(p => Math.max(0, p));
   const total = probabilities.reduce((a, b) => a + b, 0);
   probabilities = probabilities.map(p => p / total);
 
@@ -127,6 +133,24 @@ export const canMergeDice = (dice1: DiceType, dice2: DiceType): boolean => {
   return dice1.id !== dice2.id;
 };
 
+export const findEmptyCell = (guards: Guard[]): { row: number; col: number } | null => {
+  const centerRow = Math.floor(BOARD_ROWS / 2);
+  const centerCol = Math.floor(BOARD_COLS / 2);
+
+  for (let distance = 1; distance < Math.max(BOARD_ROWS, BOARD_COLS); distance++) {
+    for (let row = 0; row < BOARD_ROWS; row++) {
+      for (let col = 0; col < BOARD_COLS; col++) {
+        if (row === centerRow && col === centerCol) continue;
+        const occupied = guards.some(g => g.row === row && g.col === col);
+        if (!occupied) {
+          return { row, col };
+        }
+      }
+    }
+  }
+  return null;
+};
+
 export const mergeDice = (state: GameState, diceId1: string, diceId2: string): GameState => {
   const dice1 = state.dice.find(d => d.id === diceId1);
   const dice2 = state.dice.find(d => d.id === diceId2);
@@ -135,17 +159,9 @@ export const mergeDice = (state: GameState, diceId1: string, diceId2: string): G
     return state;
   }
 
-  const newValue = (dice1.value + dice2.value) % 7;
-  const finalValue = newValue === 0 ? 6 : newValue;
+  const newValue = (dice1.value + dice2.value) % 6;
 
   const newDice = state.dice.filter(d => d.id !== diceId1 && d.id !== diceId2);
-  newDice.push({
-    id: generateId(),
-    value: finalValue,
-    isSelected: false,
-    isNew: true,
-    isMerging: true,
-  });
 
   while (newDice.length < MAX_DICE) {
     newDice.push({
@@ -157,12 +173,21 @@ export const mergeDice = (state: GameState, diceId1: string, diceId2: string): G
     });
   }
 
-  return {
+  let newState: GameState = {
     ...state,
     dice: newDice,
     luck: Math.min(150, state.luck + LUCK_MERGE_BONUS),
     mergeCount: state.mergeCount + 1,
   };
+
+  if (newValue !== 0) {
+    const emptyCell = findEmptyCell(state.guards);
+    if (emptyCell) {
+      newState = placeGuard(newState, emptyCell.row, emptyCell.col, newValue);
+    }
+  }
+
+  return newState;
 };
 
 export const selectDice = (state: GameState, diceId: string): GameState => {
@@ -185,8 +210,8 @@ export const getSelectedDice = (state: GameState): DiceType[] => {
 };
 
 export const getGuardTypeFromDice = (value: number): GuardType => {
-  if (value <= 2) return 'warrior';
-  if (value <= 4) return 'archer';
+  if (value >= 1 && value <= 2) return 'warrior';
+  if (value >= 3 && value <= 4) return 'archer';
   return 'mage';
 };
 
@@ -199,13 +224,13 @@ export const placeGuard = (state: GameState, row: number, col: number, diceValue
   let range = 1;
 
   if (type === 'warrior') {
-    damage = 15 + diceValue * 3;
+    damage = 15 + diceValue * 5;
     range = 1;
   } else if (type === 'archer') {
-    damage = 10 + diceValue * 2;
+    damage = 10 + (diceValue - 2) * 5;
     range = 3;
   } else {
-    damage = 8 + diceValue * 2;
+    damage = 12 + (diceValue - 4) * 6;
     range = 2;
   }
 
@@ -219,6 +244,7 @@ export const placeGuard = (state: GameState, row: number, col: number, diceValue
     attackSpeed: GUARD_ATTACK_INTERVAL,
     lastAttackTime: 0,
     isAttacking: false,
+    attackAnimationKey: 0,
   };
 
   return {
@@ -308,7 +334,7 @@ export const updateGame = (state: GameState, deltaTime: number, currentTime: num
 
   newState.guards = state.guards.map(guard => {
     if (currentTime - guard.lastAttackTime < guard.attackSpeed) {
-      return { ...guard, isAttacking: false };
+      return guard;
     }
 
     const targets = newState.enemies.filter(enemy => {
@@ -321,10 +347,14 @@ export const updateGame = (state: GameState, deltaTime: number, currentTime: num
     if (targets.length > 0) {
       const target = targets[0];
       target.hp -= guard.damage;
-      return { ...guard, lastAttackTime: currentTime, isAttacking: true };
+      return {
+        ...guard,
+        lastAttackTime: currentTime,
+        attackAnimationKey: guard.attackAnimationKey + 1,
+      };
     }
 
-    return { ...guard, isAttacking: false };
+    return guard;
   });
 
   newState.enemies = newState.enemies.filter(e => e.hp > 0);
