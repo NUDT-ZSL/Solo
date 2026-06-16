@@ -1,4 +1,4 @@
-import { GameState, Plant, Sprite, ALL_ELEMENTS, ElementType } from './entity';
+import { GameState, IPlant, ISprite, Sprite, ALL_ELEMENTS, ElementType } from './entity';
 import { Renderer } from './renderer';
 import { InteractionManager } from './interaction';
 
@@ -98,11 +98,11 @@ class Game {
     this.state.sprites.push(sprite);
   }
 
-  private handlePlantCreated(plant: Plant): void {
+  private handlePlantCreated(plant: IPlant): void {
     this.state.plants.push(plant);
   }
 
-  private handleSpriteFed(_sprite: Sprite, _plant: Plant): void {
+  private handleSpriteFed(_sprite: ISprite, _plant: IPlant): void {
   }
 
   private gameLoop(): void {
@@ -238,4 +238,5 @@ class Game {
 }
 
 const game = new Game();
+(window as any).game = game;
 export default game;

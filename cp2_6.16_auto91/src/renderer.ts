@@ -1,4 +1,46 @@
-import { GameState, Plant, Sprite, Particle, Ripple, ElementType, ELEMENT_COLORS, ELEMENT_NAMES, ALL_ELEMENTS } from './entity';
+import {
+  GameState,
+  IPlant,
+  ISprite,
+  IParticle,
+  IRipple,
+  ElementType,
+  ELEMENT_COLORS,
+  ELEMENT_NAMES,
+  ALL_ELEMENTS,
+  Sprite
+} from './entity';
+
+const SPRITE_PIXEL_WIDTH = 16;
+const SPRITE_PIXEL_HEIGHT = 24;
+const PIXEL_SCALE = 1.5;
+
+const SPRITE_PIXEL_DATA: number[][] = [
+  [0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0],
+  [0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0],
+  [0,0,0,0,1,1,2,2,1,1,2,2,1,0,0,0],
+  [0,0,0,1,1,2,2,1,1,2,2,1,1,1,0,0],
+  [0,0,1,1,2,2,1,1,1,1,2,2,1,1,1,0],
+  [0,1,1,2,2,1,1,2,2,1,1,2,2,1,1,1],
+  [0,1,1,2,2,1,1,2,2,1,1,2,2,1,1,1],
+  [0,0,1,1,2,2,1,1,1,1,2,2,1,1,1,0],
+  [0,0,0,1,1,2,2,1,1,2,2,1,1,1,0,0],
+  [0,0,0,0,1,1,2,2,1,1,2,2,1,0,0,0],
+  [0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0],
+  [0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0],
+  [0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0],
+  [0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0],
+  [0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0],
+  [0,0,0,0,3,0,0,0,0,0,0,0,3,0,0,0],
+  [0,0,0,3,0,0,0,0,0,0,0,0,0,3,0,0],
+  [0,0,3,0,0,0,0,0,0,0,0,0,0,0,3,0],
+  [0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,3],
+  [3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3],
+  [0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,3],
+  [0,0,3,0,0,0,0,0,0,0,0,0,0,0,3,0],
+  [0,0,0,3,3,3,3,3,3,3,3,3,3,3,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+];
 
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
@@ -28,6 +70,11 @@ export class Renderer {
 
   render(state: GameState, ecoHealth: number, levelDistribution: Record<ElementType, number>): void {
     this.clear();
+
+    if (ecoHealth < 40 && Math.floor(Date.now() / 200) % 2 === 0) {
+      this.ctx.fillStyle = 'rgba(229, 49, 112, 0.15)';
+      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    }
 
     if (ecoHealth < 40 && Math.floor(Date.now() / 300) % 2 === 0) {
       this.ctx.fillStyle = 'rgba(229, 49, 112, 0.1)';
@@ -89,7 +136,7 @@ export class Renderer {
     this.ctx.strokeRect(this.gardenOffsetX, this.gardenOffsetY, gridSize * cellSize, gridSize * cellSize);
   }
 
-  private drawRipples(ripples: Ripple[]): void {
+  private drawRipples(ripples: IRipple[]): void {
     for (const ripple of ripples) {
       const alpha = ripple.getAlpha();
       this.ctx.strokeStyle = ripple.color;
@@ -108,7 +155,7 @@ export class Renderer {
     }
   }
 
-  private drawPlants(plants: Plant[]): void {
+  private drawPlants(plants: IPlant[]): void {
     for (const plant of plants) {
       const px = this.gardenOffsetX + plant.x;
       const py = this.gardenOffsetY + plant.y;
@@ -193,7 +240,7 @@ export class Renderer {
     }
   }
 
-  private drawParticles(particles: Particle[]): void {
+  private drawParticles(particles: IParticle[]): void {
     for (const particle of particles) {
       const alpha = particle.getAlpha();
       this.ctx.globalAlpha = alpha;
@@ -238,68 +285,112 @@ export class Renderer {
     }
   }
 
-  private drawSprite(sprite: Sprite, isDragging: boolean = false): void {
+  private drawSprite(sprite: ISprite, isDragging: boolean = false): void {
     const px = this.gardenOffsetX + sprite.x;
     const py = this.gardenOffsetY + sprite.y;
 
     this.ctx.save();
     this.ctx.translate(px, py);
-    this.ctx.scale(sprite.scale, sprite.scale);
+    this.ctx.scale(sprite.scale * PIXEL_SCALE, sprite.scale * PIXEL_SCALE);
 
     if (isDragging) {
       this.ctx.shadowColor = sprite.color;
       this.ctx.shadowBlur = 15;
       this.ctx.strokeStyle = sprite.color;
       this.ctx.lineWidth = 3;
-      this.ctx.strokeRect(-sprite.size.w / 2 - 3, -sprite.size.h / 2 - 3, sprite.size.w + 6, sprite.size.h + 6);
+      this.ctx.strokeRect(
+        -SPRITE_PIXEL_WIDTH / 2 - 2,
+        -SPRITE_PIXEL_HEIGHT / 2 - 2,
+        SPRITE_PIXEL_WIDTH + 4,
+        SPRITE_PIXEL_HEIGHT + 4
+      );
       this.ctx.shadowBlur = 0;
-    }
-
-    if (sprite.isFlashing()) {
-      this.ctx.shadowColor = '#ffffff';
-      this.ctx.shadowBlur = 20;
     }
 
     if (sprite.isMutated) {
       this.ctx.strokeStyle = '#e53170';
       this.ctx.lineWidth = 1;
       this.ctx.setLineDash([2, 2]);
-      this.ctx.strokeRect(-sprite.size.w / 2 - 2, -sprite.size.h / 2 - 2, sprite.size.w + 4, sprite.size.h + 4);
+      this.ctx.strokeRect(
+        -SPRITE_PIXEL_WIDTH / 2 - 3,
+        -SPRITE_PIXEL_HEIGHT / 2 - 3,
+        SPRITE_PIXEL_WIDTH + 6,
+        SPRITE_PIXEL_HEIGHT + 6
+      );
       this.ctx.setLineDash([]);
     }
 
-    const w = sprite.size.w;
-    const h = sprite.size.h;
     const baseColor = sprite.isFlashing() ? '#ffffff' : sprite.color;
+    const lightColor = this.lightenColor(baseColor, 30);
+    const darkColor = this.darkenColor(baseColor, 20);
+    const eyeColor = '#0f0e17';
+    const eyeHighlight = '#ffffff';
 
-    this.ctx.fillStyle = baseColor;
-    this.ctx.fillRect(-w / 2, -h / 2 + 4, w, h - 4);
+    const wingFlap = Math.sin(Date.now() / 80) * 0.3;
 
-    this.ctx.fillStyle = this.lightenColor(baseColor, 20);
-    this.ctx.fillRect(-w / 2 + 2, -h / 2, w - 4, 8);
+    for (let row = 0; row < SPRITE_PIXEL_HEIGHT; row++) {
+      for (let col = 0; col < SPRITE_PIXEL_WIDTH; col++) {
+        const pixelType = SPRITE_PIXEL_DATA[row][col];
+        if (pixelType === 0) continue;
 
-    this.ctx.fillStyle = '#0f0e17';
-    this.ctx.fillRect(-w / 2 + 3, -h / 2 + 2, 3, 3);
-    this.ctx.fillRect(w / 2 - 6, -h / 2 + 2, 3, 3);
+        let color: string;
+        switch (pixelType) {
+          case 1:
+            color = baseColor;
+            break;
+          case 2:
+            color = lightColor;
+            break;
+          case 3:
+            color = darkColor;
+            break;
+          default:
+            color = baseColor;
+        }
 
-    this.ctx.fillStyle = '#ffffff';
-    this.ctx.fillRect(-w / 2 + 4, -h / 2 + 2, 1, 1);
-    this.ctx.fillRect(w / 2 - 5, -h / 2 + 2, 1, 1);
+        let drawX = col - SPRITE_PIXEL_WIDTH / 2;
+        let drawY = row - SPRITE_PIXEL_HEIGHT / 2;
 
-    const wingOffset = Math.sin(Date.now() / 100) * 2;
-    this.ctx.fillStyle = this.lightenColor(baseColor, 40) + '80';
-    this.ctx.beginPath();
-    this.ctx.ellipse(-w / 2 - 2, 0, 4, 6 + wingOffset, -0.3, 0, Math.PI * 2);
-    this.ctx.fill();
-    this.ctx.beginPath();
-    this.ctx.ellipse(w / 2 + 2, 0, 4, 6 + wingOffset, 0.3, 0, Math.PI * 2);
-    this.ctx.fill();
+        if (pixelType === 3 && row < 22) {
+          const wingRow = row - 15;
+          if (col < 8) {
+            drawX -= wingFlap * (1 + wingRow * 0.1);
+          } else {
+            drawX += wingFlap * (1 + wingRow * 0.1);
+          }
+        }
+
+        this.ctx.fillStyle = color;
+        this.ctx.fillRect(drawX, drawY, 1, 1);
+      }
+    }
+
+    this.ctx.fillStyle = eyeColor;
+    this.ctx.fillRect(-4, -8, 2, 2);
+    this.ctx.fillRect(2, -8, 2, 2);
+
+    this.ctx.fillStyle = eyeHighlight;
+    this.ctx.fillRect(-3, -8, 1, 1);
+    this.ctx.fillRect(3, -8, 1, 1);
+
+    if (sprite.isFlashing()) {
+      this.ctx.shadowColor = '#ffffff';
+      this.ctx.shadowBlur = 25;
+      this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      this.ctx.fillRect(
+        -SPRITE_PIXEL_WIDTH / 2,
+        -SPRITE_PIXEL_HEIGHT / 2,
+        SPRITE_PIXEL_WIDTH,
+        SPRITE_PIXEL_HEIGHT
+      );
+      this.ctx.shadowBlur = 0;
+    }
 
     if (sprite.level > 1) {
       this.ctx.fillStyle = '#ff8906';
-      this.ctx.font = 'bold 8px Arial';
+      this.ctx.font = 'bold 5px Arial';
       this.ctx.textAlign = 'center';
-      this.ctx.fillText(`Lv${sprite.level}`, 0, -h / 2 - 4);
+      this.ctx.fillText(`Lv${sprite.level}`, 0, -SPRITE_PIXEL_HEIGHT / 2 - 3);
     }
 
     this.ctx.restore();
@@ -487,7 +578,7 @@ export class Renderer {
     }
   }
 
-  getHoveredPlant(state: GameState): Plant | null {
+  getHoveredPlant(state: GameState): IPlant | null {
     const gardenX = state.mouseX - this.gardenOffsetX;
     const gardenY = state.mouseY - this.gardenOffsetY;
 
@@ -502,7 +593,7 @@ export class Renderer {
     return null;
   }
 
-  getHoveredSprite(state: GameState): Sprite | null {
+  getHoveredSprite(state: GameState): ISprite | null {
     const gardenX = state.mouseX - this.gardenOffsetX;
     const gardenY = state.mouseY - this.gardenOffsetY;
 
@@ -510,7 +601,7 @@ export class Renderer {
       const sprite = state.sprites[i];
       const dx = gardenX - sprite.x;
       const dy = gardenY - sprite.y;
-      const hitRadius = Math.max(sprite.size.w, sprite.size.h) * sprite.scale / 2 + 5;
+      const hitRadius = Math.max(SPRITE_PIXEL_WIDTH, SPRITE_PIXEL_HEIGHT) * PIXEL_SCALE * sprite.scale / 2 + 5;
       if (dx * dx + dy * dy < hitRadius * hitRadius) {
         return sprite;
       }
@@ -538,6 +629,15 @@ export class Renderer {
     const R = Math.min(255, (num >> 16) + amt);
     const G = Math.min(255, ((num >> 8) & 0x00ff) + amt);
     const B = Math.min(255, (num & 0x0000ff) + amt);
+    return '#' + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+  }
+
+  private darkenColor(color: string, percent: number): string {
+    const num = parseInt(color.replace('#', ''), 16);
+    const amt = Math.round(2.55 * percent);
+    const R = Math.max(0, (num >> 16) - amt);
+    const G = Math.max(0, ((num >> 8) & 0x00ff) - amt);
+    const B = Math.max(0, (num & 0x0000ff) - amt);
     return '#' + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
   }
 

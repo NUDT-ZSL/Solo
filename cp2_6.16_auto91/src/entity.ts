@@ -40,11 +40,109 @@ export const PLANT_CONFIG: Record<PlantElement, { growthTime: number; manaRadius
   thunder: { growthTime: 10000, manaRadius: 50 }
 };
 
+export interface IPlant {
+  readonly id: string;
+  element: PlantElement;
+  x: number;
+  y: number;
+  gridX: number;
+  gridY: number;
+  growthProgress: number;
+  growthTime: number;
+  manaRadius: number;
+  color: string;
+  plantedAt: number;
+  scale: number;
+  targetScale: number;
+  update(deltaTime: number): boolean;
+  isFullyGrown(): boolean;
+}
+
+export interface ISprite {
+  readonly id: string;
+  element: ElementType;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  speed: number;
+  baseSpeed: number;
+  size: { w: number; h: number };
+  color: string;
+  feedCount: number;
+  level: number;
+  isEvolved: boolean;
+  isMutated: boolean;
+  stayTimer: number;
+  flashTimer: number;
+  flashCount: number;
+  scale: number;
+  targetScale: number;
+  targetAngle: number;
+  currentAngle: number;
+  sparkTimer: number;
+  update(deltaTime: number, gardenWidth: number, gardenHeight: number): void;
+  stay(duration: number): void;
+  feed(): boolean;
+  shouldEmitSpark(): boolean;
+  resetSparkTimer(): void;
+  isFlashing(): boolean;
+  evolve(): [ISprite, ISprite];
+}
+
+export interface IParticle {
+  readonly id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  size: number;
+  color: string;
+  type: 'spark' | 'repel';
+  update(deltaTime: number): boolean;
+  getAlpha(): number;
+}
+
+export interface IRipple {
+  readonly id: string;
+  x: number;
+  y: number;
+  radius: number;
+  maxRadius: number;
+  life: number;
+  maxLife: number;
+  color: string;
+  update(deltaTime: number): boolean;
+  getAlpha(): number;
+}
+
+export interface GameState {
+  plants: IPlant[];
+  sprites: ISprite[];
+  particles: IParticle[];
+  ripples: IRipple[];
+  gridSize: number;
+  cellSize: number;
+  gardenWidth: number;
+  gardenHeight: number;
+  selectedPlantElement: PlantElement;
+  selectedSprite: ISprite | null;
+  isDragging: boolean;
+  dragOffset: { x: number; y: number };
+  mouseX: number;
+  mouseY: number;
+  totalPlanted: number;
+  lastSpriteSpawn: number;
+  spriteSpawnInterval: number;
+}
+
 let idCounter = 0;
 const generateId = (): string => `${Date.now()}-${++idCounter}`;
 
-export class Plant {
-  id: string;
+export class Plant implements IPlant {
+  readonly id: string;
   element: PlantElement;
   x: number;
   y: number;
@@ -90,8 +188,8 @@ export class Plant {
   }
 }
 
-export class Sprite {
-  id: string;
+export class Sprite implements ISprite {
+  readonly id: string;
   element: ElementType;
   x: number;
   y: number;
@@ -107,6 +205,7 @@ export class Sprite {
   isMutated: boolean;
   stayTimer: number;
   flashTimer: number;
+  flashCount: number;
   scale: number;
   targetScale: number;
   targetAngle: number;
@@ -128,6 +227,7 @@ export class Sprite {
     this.isMutated = false;
     this.stayTimer = 0;
     this.flashTimer = 0;
+    this.flashCount = 0;
     this.scale = 1;
     this.targetScale = 1;
     this.targetAngle = Math.random() * Math.PI * 2;
@@ -177,6 +277,14 @@ export class Sprite {
 
     if (this.flashTimer > 0) {
       this.flashTimer -= deltaTime;
+      if (this.flashTimer <= 0) {
+        this.flashCount++;
+        if (this.flashCount < 2) {
+          this.flashTimer = 250;
+        } else {
+          this.targetScale = 1;
+        }
+      }
     }
 
     if (this.scale !== this.targetScale) {
@@ -195,7 +303,8 @@ export class Sprite {
   feed(): boolean {
     this.feedCount++;
     this.targetScale = 1.3;
-    this.flashTimer = 600;
+    this.flashTimer = 250;
+    this.flashCount = 0;
     this.level = Math.floor(this.feedCount / 3) + 1;
     return this.feedCount >= 3;
   }
@@ -209,7 +318,7 @@ export class Sprite {
   }
 
   isFlashing(): boolean {
-    return this.flashTimer > 0 && Math.floor(this.flashTimer / 150) % 2 === 0;
+    return this.flashTimer > 0 && Math.floor(this.flashTimer / 125) % 2 === 0;
   }
 
   evolve(): [Sprite, Sprite] {
@@ -230,8 +339,8 @@ export class Sprite {
   }
 }
 
-export class Particle {
-  id: string;
+export class Particle implements IParticle {
+  readonly id: string;
   x: number;
   y: number;
   vx: number;
@@ -271,8 +380,8 @@ export class Particle {
   }
 }
 
-export class Ripple {
-  id: string;
+export class Ripple implements IRipple {
+  readonly id: string;
   x: number;
   y: number;
   radius: number;
@@ -294,31 +403,13 @@ export class Ripple {
 
   update(deltaTime: number): boolean {
     this.life -= deltaTime;
-    this.radius = this.maxRadius * (1 - this.life / this.maxLife);
+    const progress = 1 - this.life / this.maxLife;
+    this.radius = this.maxRadius * progress;
     return this.life > 0;
   }
 
   getAlpha(): number {
-    return (this.life / this.maxLife) * 0.6;
+    const progress = 1 - this.life / this.maxLife;
+    return Math.max(0, 0.6 * (1 - progress));
   }
-}
-
-export interface GameState {
-  plants: Plant[];
-  sprites: Sprite[];
-  particles: Particle[];
-  ripples: Ripple[];
-  gridSize: number;
-  cellSize: number;
-  gardenWidth: number;
-  gardenHeight: number;
-  selectedPlantElement: PlantElement;
-  selectedSprite: Sprite | null;
-  isDragging: boolean;
-  dragOffset: { x: number; y: number };
-  mouseX: number;
-  mouseY: number;
-  totalPlanted: number;
-  lastSpriteSpawn: number;
-  spriteSpawnInterval: number;
 }

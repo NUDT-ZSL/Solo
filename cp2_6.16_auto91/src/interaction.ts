@@ -1,4 +1,4 @@
-import { GameState, Plant, Sprite, Particle, Ripple, PlantElement, ELEMENT_COLORS } from './entity';
+import { GameState, IPlant, ISprite, Plant, Sprite, Particle, Ripple, PlantElement, ELEMENT_COLORS } from './entity';
 import { Renderer } from './renderer';
 
 const MAX_PARTICLES = 300;
@@ -7,15 +7,15 @@ export class InteractionManager {
   private canvas: HTMLCanvasElement;
   private state: GameState;
   private renderer: Renderer;
-  private onPlantCreated: (plant: Plant) => void;
-  private onSpriteFed: (sprite: Sprite, plant: Plant) => void;
+  private onPlantCreated: (plant: IPlant) => void;
+  private onSpriteFed: (sprite: ISprite, plant: IPlant) => void;
 
   constructor(
     canvas: HTMLCanvasElement,
     state: GameState,
     renderer: Renderer,
-    onPlantCreated: (plant: Plant) => void,
-    onSpriteFed: (sprite: Sprite, plant: Plant) => void
+    onPlantCreated: (plant: IPlant) => void,
+    onSpriteFed: (sprite: ISprite, plant: IPlant) => void
   ) {
     this.canvas = canvas;
     this.state = state;
