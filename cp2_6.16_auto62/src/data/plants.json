@@ -1,0 +1,126 @@
+[
+  {
+    "id": "plant-001",
+    "name": "绿萝",
+    "variety": "黄金葛",
+    "lightPreference": "scattered",
+    "locationPreference": "living_room",
+    "waterInterval": 7,
+    "fertilizeInterval": 21,
+    "lastWaterTime": "2026-06-10T08:30:00.000Z",
+    "lastFertilizeTime": "2026-05-25T10:00:00.000Z",
+    "isSucculent": false,
+    "careRecords": [
+      {
+        "id": "rec-001",
+        "type": "water",
+        "time": "2026-06-10T08:30:00.000Z",
+        "operator": "主人"
+      },
+      {
+        "id": "rec-002",
+        "type": "fertilize",
+        "time": "2026-05-25T10:00:00.000Z",
+        "operator": "主人"
+      },
+      {
+        "id": "rec-003",
+        "type": "water",
+        "time": "2026-06-03T09:15:00.000Z",
+        "operator": "主人"
+      }
+    ]
+  },
+  {
+    "id": "plant-002",
+    "name": "多肉",
+    "variety": "玉露",
+    "lightPreference": "direct",
+    "locationPreference": "balcony",
+    "waterInterval": 14,
+    "fertilizeInterval": 30,
+    "lastWaterTime": "2026-05-28T14:00:00.000Z",
+    "lastFertilizeTime": "2026-05-01T16:00:00.000Z",
+    "isSucculent": true,
+    "careRecords": [
+      {
+        "id": "rec-004",
+        "type": "water",
+        "time": "2026-05-28T14:00:00.000Z",
+        "operator": "主人"
+      },
+      {
+        "id": "rec-005",
+        "type": "fertilize",
+        "time": "2026-05-01T16:00:00.000Z",
+        "operator": "主人"
+      }
+    ]
+  },
+  {
+    "id": "plant-003",
+    "name": "发财树",
+    "variety": "马拉巴栗",
+    "lightPreference": "scattered",
+    "locationPreference": "living_room",
+    "waterInterval": 7,
+    "fertilizeInterval": 21,
+    "lastWaterTime": "2026-06-08T07:00:00.000Z",
+    "lastFertilizeTime": "2026-05-20T11:00:00.000Z",
+    "isSucculent": false,
+    "careRecords": [
+      {
+        "id": "rec-006",
+        "type": "water",
+        "time": "2026-06-08T07:00:00.000Z",
+        "operator": "主人"
+      },
+      {
+        "id": "rec-007",
+        "type": "fertilize",
+        "time": "2026-05-20T11:00:00.000Z",
+        "operator": "主人"
+      }
+    ]
+  },
+  {
+    "id": "plant-004",
+    "name": "仙人掌",
+    "variety": "金琥",
+    "lightPreference": "direct",
+    "locationPreference": "balcony",
+    "waterInterval": 14,
+    "fertilizeInterval": 30,
+    "lastWaterTime": "2026-06-01T12:00:00.000Z",
+    "lastFertilizeTime": "2026-04-15T15:00:00.000Z",
+    "isSucculent": true,
+    "careRecords": [
+      {
+        "id": "rec-008",
+        "type": "water",
+        "time": "2026-06-01T12:00:00.000Z",
+        "operator": "主人"
+      }
+    ]
+  },
+  {
+    "id": "plant-005",
+    "name": "吊兰",
+    "variety": "金边吊兰",
+    "lightPreference": "shady",
+    "locationPreference": "bedroom",
+    "waterInterval": 7,
+    "fertilizeInterval": 21,
+    "lastWaterTime": "2026-06-12T18:30:00.000Z",
+    "lastFertilizeTime": "2026-05-28T09:30:00.000Z",
+    "isSucculent": false,
+    "careRecords": [
+      {
+        "id": "rec-009",
+        "type": "water",
+        "time": "2026-06-12T18:30:00.000Z",
+        "operator": "主人"
+      }
+    ]
+  }
+]
