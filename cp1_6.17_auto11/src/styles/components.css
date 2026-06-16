@@ -689,25 +689,43 @@
 
 .weather-list {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
-  overflow-x: auto;
-  padding-bottom: 8px;
 }
 
-.weather-item {
+.weather-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  min-width: 60px;
+  gap: 6px;
   padding: 8px;
-  background: #f5f5f5;
+  background: #F5F5F5;
   border-radius: 8px;
+  min-width: calc(25% - 9px);
+  flex: 1 1 calc(25% - 9px);
+  transition: background 0.2s ease;
+}
+
+.weather-card:hover {
+  background: #ECEFF1;
+}
+
+.weather-card-header {
+  width: 100%;
+  text-align: center;
 }
 
 .weather-date {
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+.weather-card-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
 }
 
 .weather-icon {
@@ -724,23 +742,87 @@
   font-size: 13px;
   color: var(--text-secondary);
   font-style: italic;
-}
-
-.luggage-btn {
   width: 100%;
-  margin-top: 12px;
-  padding: 10px;
-  background: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: background 0.2s;
+  padding: 12px;
+  text-align: center;
 }
 
-.luggage-btn:hover {
-  background: var(--primary-dark);
+.luggage-tip-wrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.luggage-tip-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  background: rgba(56, 142, 60, 0.12);
+  color: #2E2E2E;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: help;
+  transition: background 0.2s ease;
+}
+
+.weather-card:hover .luggage-tip-tag {
+  background: rgba(56, 142, 60, 0.2);
+}
+
+.luggage-tip-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  border-radius: 8px;
+  padding: 12px 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  max-width: 240px;
+  z-index: 50;
+  animation: fadeIn 0.2s ease-out;
+  pointer-events: none;
+}
+
+.luggage-tip-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: white;
+}
+
+.tooltip-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary-color);
+  margin-bottom: 6px;
+}
+
+.tooltip-items {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.tooltip-items li {
+  font-size: 12px;
+  color: var(--text-primary);
+  padding: 2px 0;
+  padding-left: 12px;
+  position: relative;
+}
+
+.tooltip-items li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  color: var(--primary-color);
 }
 
 .modal-overlay {
@@ -755,17 +837,6 @@
   justify-content: center;
   z-index: 1000;
   animation: fadeIn 0.2s ease;
-}
-
-.luggage-modal {
-  background: white;
-  border-radius: 16px;
-  width: 90%;
-  max-width: 480px;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  animation: slideUp 0.4s ease-out;
 }
 
 .modal-header {
@@ -803,41 +874,6 @@
   padding: 20px;
   overflow-y: auto;
   flex: 1;
-}
-
-.suggestion-card {
-  background: #f8f9fa;
-  border-radius: 10px;
-  padding: 16px;
-  margin-bottom: 12px;
-}
-
-.suggestion-category {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--primary-color);
-  margin-bottom: 8px;
-}
-
-.suggestion-items {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.suggestion-tag {
-  background: white;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 13px;
-  color: var(--text-primary);
-  border: 1px solid #e0e0e0;
-}
-
-.suggestion-reason {
-  font-size: 13px;
-  color: var(--text-secondary);
 }
 
 .add-checkin-modal {
@@ -1337,6 +1373,11 @@
   .trips-grid {
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   }
+
+  .weather-card {
+    min-width: calc(33.33% - 8px);
+    flex: 1 1 calc(33.33% - 8px);
+  }
 }
 
 @media (max-width: 768px) {
@@ -1381,6 +1422,11 @@
   .action-btn {
     flex: 1;
     text-align: center;
+  }
+
+  .weather-card {
+    min-width: calc(50% - 6px);
+    flex: 1 1 calc(50% - 6px);
   }
 }
 

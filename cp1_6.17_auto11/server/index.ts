@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db } from './db';
 
 const app = express();
-const PORT = 3001;
+const PORT = 3002;
 
 app.use(cors());
 app.use(express.json());

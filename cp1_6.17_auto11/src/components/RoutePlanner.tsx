@@ -9,12 +9,13 @@ import {
 } from 'react-leaflet';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 import L from 'leaflet';
-import type { Attraction, DayPlan, WeatherInfo, LuggageSuggestion } from '../types';
+import type { Attraction, DayPlan, WeatherInfo } from '../types';
 import {
   calculateDayDistance,
   isDistanceExceeded,
   getWeatherIcon,
-  generateLuggageSuggestions,
+  getDailyLuggageTip,
+  type DailyLuggageTip,
 } from '../business/tripEngine';
 import { attractionApi, weatherApi } from '../services/api';
 
@@ -52,8 +53,7 @@ const RoutePlanner: React.FC<RoutePlannerProps> = ({
   const [searchResults, setSearchResults] = useState<Attraction[]>([]);
   const [showSearch, setShowSearch] = useState(false);
   const [weatherList, setWeatherList] = useState<WeatherInfo[]>([]);
-  const [luggageSuggestions, setLuggageSuggestions] = useState<LuggageSuggestion[]>([]);
-  const [showLuggageModal, setShowLuggageModal] = useState(false);
+  const [hoveredWeatherIdx, setHoveredWeatherIdx] = useState<number | null>(null);
   const searchRef = useRef<HTMLDivElement>(null);
 
   const currentDay = days[selectedDay] || days[0];
@@ -95,8 +95,6 @@ const RoutePlanner: React.FC<RoutePlannerProps> = ({
           const city = attractions[0].city;
           const data = await weatherApi.getByCity(city);
           setWeatherList(data.weather);
-          const suggestions = generateLuggageSuggestions(data.weather);
-          setLuggageSuggestions(suggestions);
         } catch (err) {
           console.error('Weather fetch failed:', err);
         }
@@ -333,59 +331,53 @@ const RoutePlanner: React.FC<RoutePlannerProps> = ({
       </div>
 
       <div className="weather-section">
-        <h4>🌤️ 天气预报</h4>
+        <h4>🌤️ 天气预报与行李建议</h4>
         <div className="weather-list">
           {weatherList.length > 0 ? (
-            weatherList.map((weather, idx) => (
-              <div key={idx} className="weather-item">
-                <span className="weather-date">{weather.date.slice(5)}</span>
-                <span className="weather-icon">{getWeatherIcon(weather.condition)}</span>
-                <span className="weather-temp">
-                  {weather.tempHigh}° / {weather.tempLow}°
-                </span>
-              </div>
-            ))
+            weatherList.map((weather, idx) => {
+              const tip = getDailyLuggageTip(weather);
+              const isHovered = hoveredWeatherIdx === idx;
+              return (
+                <div
+                  key={idx}
+                  className="weather-card"
+                  onMouseEnter={() => setHoveredWeatherIdx(idx)}
+                  onMouseLeave={() => setHoveredWeatherIdx(null)}
+                >
+                  <div className="weather-card-header">
+                    <span className="weather-date">{weather.date.slice(5)}</span>
+                  </div>
+                  <div className="weather-card-main">
+                    <span className="weather-icon">{getWeatherIcon(weather.condition)}</span>
+                    <span className="weather-temp">
+                      {weather.tempHigh}° / {weather.tempLow}°
+                    </span>
+                  </div>
+                  {tip && (
+                    <div className="luggage-tip-wrapper">
+                      <span className="luggage-tip-tag">
+                        {tip.shortTip}
+                      </span>
+                      {isHovered && tip && (
+                        <div className="luggage-tip-tooltip">
+                          <div className="tooltip-title">{tip.detailTitle}</div>
+                          <ul className="tooltip-items">
+                            {tip.items.map((item, i) => (
+                              <li key={i}>{item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
           ) : (
-            <span className="weather-empty">添加景点后显示天气</span>
+            <span className="weather-empty">添加景点后显示天气预报与行李建议</span>
           )}
         </div>
-        {luggageSuggestions.length > 0 && (
-          <button
-            className="luggage-btn"
-            onClick={() => setShowLuggageModal(true)}
-          >
-            🎒 查看行李建议
-          </button>
-        )}
       </div>
-
-      {showLuggageModal && (
-        <div className="modal-overlay" onClick={() => setShowLuggageModal(false)}>
-          <div className="luggage-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>🎒 行李建议</h3>
-              <button className="close-btn" onClick={() => setShowLuggageModal(false)}>
-                ×
-              </button>
-            </div>
-            <div className="modal-content">
-              {luggageSuggestions.map((suggestion, idx) => (
-                <div key={idx} className="suggestion-card">
-                  <div className="suggestion-category">{suggestion.category}</div>
-                  <div className="suggestion-items">
-                    {suggestion.items.map((item, i) => (
-                      <span key={i} className="suggestion-tag">
-                        {item}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="suggestion-reason">💡 {suggestion.reason}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

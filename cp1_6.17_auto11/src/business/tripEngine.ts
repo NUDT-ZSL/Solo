@@ -130,6 +130,78 @@ export function generateLuggageSuggestions(weatherList: WeatherInfo[]): LuggageS
   return suggestions;
 }
 
+export interface DailyLuggageTip {
+  shortTip: string;
+  detailTitle: string;
+  items: string[];
+}
+
+export function getDailyLuggageTip(weather: WeatherInfo): DailyLuggageTip | null {
+  const { condition, tempHigh, tempLow } = weather;
+
+  if (condition === 'rainy' || condition === 'thunderstorm') {
+    return {
+      shortTip: '建议带伞',
+      detailTitle: '雨具',
+      items: ['雨伞或便携雨衣', '防水鞋套', '防水袋保护电子产品'],
+    };
+  }
+
+  if (condition === 'snowy') {
+    return {
+      shortTip: '注意保暖',
+      detailTitle: '防寒装备',
+      items: ['厚外套', '保暖内衣', '手套围巾', '防滑鞋'],
+    };
+  }
+
+  if (tempHigh > 30) {
+    return {
+      shortTip: '注意防晒',
+      detailTitle: '防晒用品',
+      items: ['防晒霜SPF50+', '太阳镜', '遮阳帽', '防晒衣'],
+    };
+  }
+
+  if (condition === 'windy') {
+    return {
+      shortTip: '建议防风',
+      detailTitle: '防风装备',
+      items: ['防风外套', '帽子', '防风围巾'],
+    };
+  }
+
+  if (tempLow < 10) {
+    return {
+      shortTip: '注意保暖',
+      detailTitle: '保暖衣物',
+      items: ['外套', '长袖衣物', '薄围巾'],
+    };
+  }
+
+  if (condition === 'sunny') {
+    return {
+      shortTip: '舒适出行',
+      detailTitle: '舒适装备',
+      items: ['舒适步行鞋', '充电宝', '水壶', '遮阳帽'],
+    };
+  }
+
+  if (condition === 'cloudy') {
+    return {
+      shortTip: '适宜出行',
+      detailTitle: '基础装备',
+      items: ['舒适鞋子', '日常衣物', '充电宝'],
+    };
+  }
+
+  return {
+    shortTip: '轻松出行',
+    detailTitle: '基础装备',
+    items: ['舒适鞋子', '日常衣物', '个人洗漱用品'],
+  };
+}
+
 export interface WaterfallItem {
   id: string;
   width: number;
