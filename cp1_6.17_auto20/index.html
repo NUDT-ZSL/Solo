@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>三维建筑光环境模拟</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #1E1E2E;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+
+    #app-container {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      position: relative;
+    }
+
+    #canvas-container {
+      flex: 1;
+      height: 100%;
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    .control-panel {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 320px;
+      max-height: calc(100vh - 32px);
+      background: rgba(42, 42, 62, 0.92);
+      backdrop-filter: blur(12px);
+      border-radius: 12px;
+      padding: 20px;
+      overflow-y: auto;
+      z-index: 10;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    .control-panel::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .control-panel::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 2px;
+    }
+
+    .panel-title {
+      color: #E0E0F0;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      margin-bottom: 18px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .section-label {
+      color: #A0A0C0;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      margin-top: 16px;
+      margin-bottom: 10px;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .control-row label {
+      color: #C0C0D8;
+      font-size: 12px;
+      min-width: 70px;
+    }
+
+    .control-row .value-display {
+      color: #9090B0;
+      font-size: 11px;
+      min-width: 36px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      flex: 1;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      outline: none;
+      margin: 0 10px;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #7A7AE0;
+      cursor: pointer;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      background: #9A9AF0;
+      transform: scale(1.15);
+    }
+
+    input[type="range"]:active::-webkit-slider-thumb {
+      transform: scale(0.9);
+    }
+
+    input[type="color"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 32px;
+      height: 32px;
+      border: 2px solid rgba(255, 255, 255, 0.15);
+      border-radius: 50%;
+      cursor: pointer;
+      background: none;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    input[type="color"]::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+
+    input[type="color"]::-webkit-color-swatch {
+      border: none;
+      border-radius: 50%;
+    }
+
+    .preset-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    .preset-btn {
+      flex: 1;
+      min-width: 60px;
+      padding: 8px 4px;
+      border: none;
+      border-radius: 20px;
+      background: #3A3A4A;
+      color: #D0D0E8;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      user-select: none;
+      letter-spacing: 0.3px;
+    }
+
+    .preset-btn:hover {
+      background: #4A4A5E;
+      transform: translateY(-1px);
+    }
+
+    .preset-btn:active {
+      background: #5A5AB0;
+      transform: scale(0.93);
+    }
+
+    .preset-btn.active {
+      background: #5A5AB0;
+      color: #FFFFFF;
+      box-shadow: 0 2px 12px rgba(90, 90, 176, 0.4);
+    }
+
+    .time-display {
+      text-align: center;
+      color: #E0E0F0;
+      font-size: 28px;
+      font-weight: 300;
+      margin: 8px 0 4px;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 2px;
+    }
+
+    .time-label {
+      text-align: center;
+      color: #7A7A9A;
+      font-size: 11px;
+      margin-bottom: 12px;
+    }
+
+    select {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      color: #D0D0E8;
+      padding: 6px 10px;
+      font-size: 12px;
+      outline: none;
+      cursor: pointer;
+      flex: 1;
+      margin-left: 10px;
+    }
+
+    select:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    select option {
+      background: #2A2A3E;
+      color: #D0D0E8;
+    }
+
+    .divider {
+      height: 1px;
+      background: rgba(255, 255, 255, 0.06);
+      margin: 16px 0;
+    }
+
+    .fps-counter {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      color: rgba(255, 255, 255, 0.35);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      z-index: 10;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="app-container">
+    <div id="canvas-container"></div>
+    <div class="control-panel" id="controlPanel">
+      <div class="panel-title">光环境模拟控制</div>
+
+      <div class="section-label">时间控制</div>
+      <div class="time-display" id="timeDisplay">12:00</div>
+      <div class="time-label" id="timeLabel">正午</div>
+      <div class="control-row">
+        <label>时间</label>
+        <input type="range" id="timeSlider" min="0" max="24" step="0.1" value="12" />
+        <span class="value-display" id="timeValue">12.0</span>
+      </div>
+      <div class="preset-buttons">
+        <button class="preset-btn" data-time="6">清晨</button>
+        <button class="preset-btn active" data-time="12">正午</button>
+        <button class="preset-btn" data-time="18">黄昏</button>
+        <button class="preset-btn" data-time="0">夜晚</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="section-label">太阳光</div>
+      <div class="control-row">
+        <label>强度</label>
+        <input type="range" id="sunIntensity" min="0" max="2" step="0.05" value="1.5" />
+        <span class="value-display" id="sunIntValue">1.5</span>
+      </div>
+      <div class="control-row">
+        <label>色温</label>
+        <input type="color" id="sunColor" value="#ffffff" />
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="section-label">室内光源</div>
+      <div class="control-row">
+        <label>选择</label>
+        <select id="lightSelect">
+          <option value="0">点光源 A</option>
+          <option value="1">点光源 B</option>
+        </select>
+      </div>
+      <div class="control-row">
+        <label>强度</label>
+        <input type="range" id="pointIntensity" min="0" max="10" step="0.1" value="3" />
+        <span class="value-display" id="pointIntValue">3.0</span>
+      </div>
+      <div class="control-row">
+        <label>颜色</label>
+        <input type="color" id="pointColor" value="#ffe4b5" />
+      </div>
+      <div class="control-row">
+        <label>X</label>
+        <input type="range" id="pointX" min="-2" max="2" step="0.05" value="1" />
+        <span class="value-display" id="pointXValue">1.0</span>
+      </div>
+      <div class="control-row">
+        <label>Y</label>
+        <input type="range" id="pointY" min="0" max="3" step="0.05" value="2.5" />
+        <span class="value-display" id="pointYValue">2.5</span>
+      </div>
+      <div class="control-row">
+        <label>Z</label>
+        <input type="range" id="pointZ" min="-1.5" max="1.5" step="0.05" value="0" />
+        <span class="value-display" id="pointZValue">0.0</span>
+      </div>
+    </div>
+    <div class="fps-counter" id="fpsCounter">-- FPS</div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
