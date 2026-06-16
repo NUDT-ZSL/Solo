@@ -27,9 +27,9 @@ export class BuildingGrid {
   }
 
   private getBuildingColor(height: number): THREE.Color {
-    const colorLow = new THREE.Color(0x5C6BC0);
-    const colorMid = new THREE.Color(0x7E57C2);
-    const colorHigh = new THREE.Color(0x6C63FF);
+    const colorLow = new THREE.Color(0x7986CB);
+    const colorMid = new THREE.Color(0x5C6BC0);
+    const colorHigh = new THREE.Color(0x3949AB);
 
     if (height <= 4) {
       const t = (height - 2) / 2;

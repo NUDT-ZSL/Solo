@@ -18,8 +18,10 @@ export class UIPanel {
 
   private windSpeedSlider: HTMLInputElement | null = null;
   private windSpeedValue: HTMLSpanElement | null = null;
+  private windSpeedInlineValue: HTMLSpanElement | null = null;
   private densitySlider: HTMLInputElement | null = null;
   private densityValue: HTMLSpanElement | null = null;
+  private densityInlineValue: HTMLSpanElement | null = null;
   private sourceSelect: HTMLSelectElement | null = null;
   private simulateButton: HTMLButtonElement | null = null;
 
@@ -109,6 +111,9 @@ export class UIPanel {
     labelRow.appendChild(label);
     labelRow.appendChild(valueSpan);
 
+    const sliderRow = document.createElement('div');
+    sliderRow.className = 'control-slider-row';
+
     const slider = document.createElement('input');
     slider.type = 'range';
     slider.min = '1';
@@ -118,16 +123,28 @@ export class UIPanel {
     slider.className = 'control-slider';
     this.windSpeedSlider = slider;
 
+    const inlineValue = document.createElement('span');
+    inlineValue.className = 'control-slider-value';
+    inlineValue.textContent = '5.0 m/s';
+    this.windSpeedInlineValue = inlineValue;
+
     slider.addEventListener('input', (e) => {
       const value = parseFloat((e.target as HTMLInputElement).value);
       this.callbacks.onWindSpeedChange(value);
+      const displayText = value.toFixed(1) + ' m/s';
       if (this.windSpeedValue) {
-        this.windSpeedValue.textContent = value.toFixed(1) + ' m/s';
+        this.windSpeedValue.textContent = displayText;
+      }
+      if (this.windSpeedInlineValue) {
+        this.windSpeedInlineValue.textContent = displayText;
       }
     });
 
+    sliderRow.appendChild(slider);
+    sliderRow.appendChild(inlineValue);
+
     group.appendChild(labelRow);
-    group.appendChild(slider);
+    group.appendChild(sliderRow);
 
     return group;
   }
@@ -186,6 +203,9 @@ export class UIPanel {
     labelRow.appendChild(label);
     labelRow.appendChild(valueSpan);
 
+    const sliderRow = document.createElement('div');
+    sliderRow.className = 'control-slider-row';
+
     const slider = document.createElement('input');
     slider.type = 'range';
     slider.min = '0.1';
@@ -195,16 +215,27 @@ export class UIPanel {
     slider.className = 'control-slider';
     this.densitySlider = slider;
 
+    const inlineValue = document.createElement('span');
+    inlineValue.className = 'control-slider-value';
+    inlineValue.textContent = '0.40';
+    this.densityInlineValue = inlineValue;
+
     slider.addEventListener('input', (e) => {
       const value = parseFloat((e.target as HTMLInputElement).value);
       this.callbacks.onDensityChange(value);
       if (this.densityValue) {
         this.densityValue.textContent = value.toFixed(2);
       }
+      if (this.densityInlineValue) {
+        this.densityInlineValue.textContent = value.toFixed(2);
+      }
     });
 
+    sliderRow.appendChild(slider);
+    sliderRow.appendChild(inlineValue);
+
     group.appendChild(labelRow);
-    group.appendChild(slider);
+    group.appendChild(sliderRow);
 
     return group;
   }
@@ -328,7 +359,7 @@ export class UIPanel {
       }
 
       .control-slider {
-        width: 100%;
+        flex: 1;
         height: 6px;
         -webkit-appearance: none;
         appearance: none;
@@ -336,6 +367,22 @@ export class UIPanel {
         border-radius: 3px;
         outline: none;
         cursor: pointer;
+      }
+
+      .control-slider-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .control-slider-value {
+        font-size: 14px;
+        font-weight: 600;
+        color: #6C63FF;
+        font-family: 'Courier New', monospace;
+        white-space: nowrap;
+        min-width: 60px;
+        text-align: right;
       }
 
       .control-slider::-webkit-slider-thumb {
