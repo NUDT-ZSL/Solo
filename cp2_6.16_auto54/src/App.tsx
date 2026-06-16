@@ -1,4 +1,4 @@
-import React, { useEffect, useReducer, useRef, useCallback } from 'react';
+import React, { useEffect, useReducer, useRef, useCallback, useMemo } from 'react';
 import { GameEngine } from './core/GameEngine';
 import { StatusBar } from './components/StatusBar';
 import { GameBoard } from './components/GameBoard';
@@ -7,7 +7,7 @@ import { ResultModal } from './components/ResultModal';
 import { GameState, Position, HeroData } from './types';
 
 type Action =
-  | { type: 'SET_STATE'; payload: GameState }
+  | { type: 'SET_STATE'; payload: Partial<GameState> }
   | { type: 'SELECT_HERO'; payload: string | null };
 
 const initialBoard = (): (HeroData | null)[][] => {
@@ -54,82 +54,104 @@ const App: React.FC = () => {
     const engine = new GameEngine();
     engineRef.current = engine;
 
+    let rafPending = false;
+    let pendingState: Partial<GameState> | null = null;
+
     const handleStateUpdate = (data: unknown) => {
-      const newState = data as GameState;
-      dispatch({ type: 'SET_STATE', payload: newState });
+      pendingState = data as Partial<GameState>;
+      if (!rafPending) {
+        rafPending = true;
+        requestAnimationFrame(() => {
+          rafPending = false;
+          if (pendingState) {
+            dispatch({ type: 'SET_STATE', payload: pendingState });
+            pendingState = null;
+          }
+        });
+      }
     };
 
     engine.on('stateUpdate', handleStateUpdate);
 
-    const initialStateData = engine.getState();
-    dispatch({ type: 'SET_STATE', payload: initialStateData as unknown as GameState });
+    const initState = engine.getState();
+    dispatch({ type: 'SET_STATE', payload: initState as unknown as Partial<GameState> });
 
     return () => {
       engine.off('stateUpdate', handleStateUpdate);
       engine.destroy();
+      engineRef.current = null;
     };
   }, []);
 
-  const handleBuyHero = useCallback((index: number) => {
-    if (engineRef.current) {
-      engineRef.current.buyHero(index);
-    }
-  }, []);
+  const heroTemplates = engineRef.current?.getHeroTemplates() ?? [
+    { name: '战士', emoji: '⚔️', cost: 1, baseAtk: 8, baseHp: 60, range: 1, speed: 1 },
+    { name: '弓手', emoji: '🏹', cost: 2, baseAtk: 12, baseHp: 35, range: 2, speed: 1 },
+    { name: '法师', emoji: '🔮', cost: 3, baseAtk: 18, baseHp: 25, range: 2, speed: 1 },
+    { name: '骑士', emoji: '🛡️', cost: 2, baseAtk: 6, baseHp: 90, range: 1, speed: 1 },
+    { name: '刺客', emoji: '🗡️', cost: 3, baseAtk: 20, baseHp: 30, range: 1, speed: 1 },
+  ];
 
-  const handleUpgradeHero = useCallback((index: number) => {
-    if (engineRef.current) {
-      engineRef.current.upgradeHero(index);
-    }
-  }, []);
+  const canUpgrade = useMemo(() => {
+    const engine = engineRef.current;
+    if (!engine) return heroTemplates.map(() => false);
+    return heroTemplates.map((_, i) => engine.canUpgradeHero(i));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [heroTemplates, state.heroes, state.phase, state.boardHeroCount]);
 
-  const handleCellClick = useCallback((pos: Position) => {
-    if (!engineRef.current) return;
+  const handleBuyHero = (index: number) => {
+    engineRef.current?.buyHero(index);
+  };
+
+  const handleUpgradeHero = (index: number) => {
+    engineRef.current?.upgradeHero(index);
+  };
+
+  const handleCellClick = (pos: Position) => {
+    const engine = engineRef.current;
+    if (!engine) return;
     if (state.phase !== 'prepare') return;
 
-    const engine = engineRef.current;
-    const cellHero = state.boardHeroes[pos.y][pos.x];
+    const cellHero = state.boardHeroes[pos.y]?.[pos.x] ?? null;
+    const selectedId = state.selectedHeroId;
 
-    if (state.selectedHeroId) {
-      if (cellHero && cellHero.id === state.selectedHeroId) {
+    if (selectedId) {
+      if (cellHero && cellHero.id === selectedId) {
         engine.selectHero(null);
-      } else {
-        const success = engine.placeHero(state.selectedHeroId, pos);
-        if (success) {
-          engine.selectHero(null);
-        }
+        return;
       }
+      if (cellHero && cellHero.isEnemy) {
+        return;
+      }
+      const ok = engine.placeHero(selectedId, pos);
+      if (ok) {
+        engine.selectHero(null);
+      }
+      return;
+    }
+
+    if (cellHero && !cellHero.isEnemy) {
+      engine.selectHero(cellHero.id);
     } else {
-      if (cellHero && !cellHero.isEnemy) {
-        engine.selectHero(cellHero.id);
+      const unplacedHero = state.heroes.find(h => !h.pos && !h.isEnemy);
+      if (unplacedHero) {
+        engine.placeHero(unplacedHero.id, pos);
       }
     }
-  }, [state.selectedHeroId, state.boardHeroes, state.phase]);
+  };
 
-  const handleStartRound = useCallback(() => {
-    if (engineRef.current) {
-      engineRef.current.startRound();
-    }
-  }, []);
+  const handleStartRound = () => {
+    engineRef.current?.startRound();
+  };
 
-  const handleNextRound = useCallback(() => {
-    if (engineRef.current) {
-      engineRef.current.nextRound();
-    }
-  }, []);
+  const handleNextRound = () => {
+    engineRef.current?.nextRound();
+  };
 
-  const handleRestart = useCallback(() => {
-    if (engineRef.current) {
-      engineRef.current.restartGame();
-    }
-  }, []);
+  const handleRestart = () => {
+    engineRef.current?.restartGame();
+  };
 
-  const canUpgrade = state.heroes
-    ? engineRef.current?.getHeroTemplates().map((_, i) =>
-        engineRef.current?.canUpgradeHero(i) ?? false
-      ) ?? []
-    : [];
-
-  const canStartRound = state.phase === 'prepare' && state.boardHeroCount > 0;
+  const canStartRound = state.phase === 'prepare' && (state.boardHeroCount ?? 0) > 0;
   const showResultModal = state.phase === 'roundEnd' || state.phase === 'gameOver';
 
   return (
@@ -150,21 +172,35 @@ const App: React.FC = () => {
             disabled={state.phase !== 'prepare'}
           />
 
-          <button
-            style={{
-              ...styles.startButton,
-              opacity: canStartRound ? 1 : 0.5,
-              cursor: canStartRound ? 'pointer' : 'not-allowed',
-            }}
-            onClick={handleStartRound}
-            disabled={!canStartRound}
-          >
-            开始回合
-          </button>
+          <div style={styles.sideColumn}>
+            <button
+              style={{
+                ...styles.startButton,
+                opacity: canStartRound ? 1 : 0.45,
+                cursor: canStartRound ? 'pointer' : 'not-allowed',
+                boxShadow: canStartRound ? '0 4px 16px rgba(198, 40, 40, 0.5)' : 'none',
+              }}
+              onClick={handleStartRound}
+              disabled={!canStartRound}
+            >
+              开始回合
+            </button>
+            <div style={styles.phaseLabel}>
+              {state.phase === 'prepare' && <span style={{ color: '#4caf50' }}>准备阶段</span>}
+              {state.phase === 'battle' && <span style={{ color: '#ff9800' }}>战斗中...</span>}
+              {state.phase === 'roundEnd' && <span style={{ color: '#2196f3' }}>回合结束</span>}
+              {state.phase === 'gameOver' && <span style={{ color: '#f44336' }}>游戏结束</span>}
+            </div>
+            {state.winStreak > 0 && state.phase !== 'gameOver' && (
+              <div style={styles.streak}>
+                🔥 连胜 {state.winStreak}
+              </div>
+            )}
+          </div>
         </div>
 
         <HeroPanel
-          heroTemplates={engineRef.current?.getHeroTemplates() ?? []}
+          heroTemplates={heroTemplates}
           gold={state.gold}
           canUpgrade={canUpgrade}
           onBuyHero={handleBuyHero}
@@ -188,6 +224,7 @@ const styles: Record<string, React.CSSProperties> = {
   appContainer: {
     width: '100%',
     height: '100%',
+    minHeight: '100vh',
     backgroundColor: '#0d0d0d',
     display: 'flex',
     flexDirection: 'column',
@@ -200,13 +237,20 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 24,
-    padding: 20,
+    gap: 20,
+    padding: '16px 20px',
   },
   gameArea: {
     display: 'flex',
     alignItems: 'center',
     gap: 40,
+  },
+  sideColumn: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 16,
+    minWidth: 120,
   },
   startButton: {
     width: 120,
@@ -219,6 +263,22 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 'bold',
     fontFamily: 'monospace',
     transition: 'all 0.2s ease',
+    letterSpacing: 1,
+  },
+  phaseLabel: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  streak: {
+    fontSize: 14,
+    color: '#ff9800',
+    fontWeight: 'bold',
+    padding: '4px 12px',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 152, 0, 0.1)',
+    border: '1px solid rgba(255, 152, 0, 0.3)',
   },
 };
 

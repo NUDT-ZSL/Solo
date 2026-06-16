@@ -14,7 +14,7 @@ const HERO_TEMPLATES: HeroStats[] = [
   { name: '弓手', emoji: '🏹', cost: 2, baseAtk: 12, baseHp: 35, range: 2, speed: 1 },
   { name: '法师', emoji: '🔮', cost: 3, baseAtk: 18, baseHp: 25, range: 2, speed: 1 },
   { name: '骑士', emoji: '🛡️', cost: 2, baseAtk: 6, baseHp: 90, range: 1, speed: 1 },
-  { name: '刺客', emoji: '🗡️', cost: 3, baseAtk: 20, baseHp: 30, range: 1, speed: 2 },
+  { name: '刺客', emoji: '🗡️', cost: 3, baseAtk: 20, baseHp: 30, range: 1, speed: 1 },
 ];
 
 type EventCallback = (data?: unknown) => void;
@@ -33,6 +33,7 @@ export class GameEngine {
   private eventListeners: Map<string, EventCallback[]> = new Map();
   private resultMessage: string | null = null;
   private isVictory: boolean | null = null;
+  private destroyed: boolean = false;
 
   constructor() {
     this.reset();
@@ -48,114 +49,90 @@ export class GameEngine {
     this.selectedHeroId = null;
     this.resultMessage = null;
     this.isVictory = null;
+    this.destroyed = false;
     this.stopGameLoop();
   }
 
   on(event: string, callback: EventCallback): void {
-    if (!this.eventListeners.has(event)) {
-      this.eventListeners.set(event, []);
-    }
-    this.eventListeners.get(event)!.push(callback);
+    const list = this.eventListeners.get(event) || [];
+    list.push(callback);
+    this.eventListeners.set(event, list);
   }
 
   off(event: string, callback: EventCallback): void {
     const listeners = this.eventListeners.get(event);
     if (listeners) {
-      const index = listeners.indexOf(callback);
-      if (index > -1) {
-        listeners.splice(index, 1);
-      }
+      const idx = listeners.indexOf(callback);
+      if (idx !== -1) listeners.splice(idx, 1);
     }
   }
 
   private emit(event: string, data?: unknown): void {
     const listeners = this.eventListeners.get(event);
     if (listeners) {
-      listeners.forEach((cb) => cb(data));
+      listeners.slice().forEach(cb => {
+        try { cb(data); } catch (e) { /* ignore */ }
+      });
     }
   }
 
-  getGold(): number {
-    return this.gold;
-  }
-
-  getRound(): number {
-    return this.round;
-  }
-
-  getWinStreak(): number {
-    return this.winStreak;
-  }
-
-  getPhase(): GamePhase {
-    return this.phase;
-  }
+  getGold(): number { return this.gold; }
+  getRound(): number { return this.round; }
+  getWinStreak(): number { return this.winStreak; }
+  getPhase(): GamePhase { return this.phase; }
+  getSelectedHeroId(): string | null { return this.selectedHeroId; }
+  getHeroTemplates(): HeroStats[] { return HERO_TEMPLATES; }
+  getResultMessage(): string | null { return this.resultMessage; }
+  getIsVictory(): boolean | null { return this.isVictory; }
 
   getHeroes(): Hero[] {
-    return this.heroes.map((h) => h.clone());
+    return this.heroes.map(h => h.clone());
   }
 
   getEnemies(): Hero[] {
-    return this.enemies.map((h) => h.clone());
+    return this.enemies.map(h => h.clone());
   }
 
   getBoardHeroes(): (Hero | null)[][] {
-    const board: (Hero | null)[][] = [];
-    for (let y = 0; y < BOARD_SIZE; y++) {
-      board[y] = [];
-      for (let x = 0; x < BOARD_SIZE; x++) {
-        board[y][x] = null;
-      }
-    }
-    const allUnits = [...this.heroes, ...this.enemies];
-    for (const unit of allUnits) {
-      if (unit.pos && unit.isAlive()) {
-        const { x, y } = unit.pos;
-        if (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
-          board[y][x] = unit.clone();
-        }
+    const board: (Hero | null)[][] = Array.from({ length: BOARD_SIZE }, () =>
+      Array.from({ length: BOARD_SIZE }, () => null)
+    );
+    for (const unit of [...this.heroes, ...this.enemies]) {
+      if (unit.pos && unit.isAlive() &&
+          unit.pos.x >= 0 && unit.pos.x < BOARD_SIZE &&
+          unit.pos.y >= 0 && unit.pos.y < BOARD_SIZE) {
+        board[unit.pos.y][unit.pos.x] = unit.clone();
       }
     }
     return board;
   }
 
-  getSelectedHeroId(): string | null {
-    return this.selectedHeroId;
-  }
-
-  getHeroTemplates(): HeroStats[] {
-    return HERO_TEMPLATES;
-  }
-
-  getResultMessage(): string | null {
-    return this.resultMessage;
-  }
-
-  getIsVictory(): boolean | null {
-    return this.isVictory;
-  }
-
   getBoardHeroCount(): number {
-    return this.heroes.filter((h) => h.pos !== null && h.isAlive()).length;
+    return this.heroes.filter(h => h.pos && h.isAlive()).length;
   }
 
   canBuyHero(templateIndex: number): boolean {
     if (this.phase !== 'prepare') return false;
-    const template = HERO_TEMPLATES[templateIndex];
-    if (!template) return false;
-    return this.gold >= template.cost;
+    const tpl = HERO_TEMPLATES[templateIndex];
+    if (!tpl) return false;
+    return this.gold >= tpl.cost;
   }
 
   buyHero(templateIndex: number): Hero | null {
     if (!this.canBuyHero(templateIndex)) return null;
     const template = HERO_TEMPLATES[templateIndex];
     const hero = new Hero(template);
+
     this.heroes.push(hero);
-    this.gold -= template.cost;
+    this.gold = Math.max(0, this.gold - template.cost);
+    this.gold = Math.min(MAX_GOLD, this.gold);
 
     const emptyPos = this.findEmptyPosition();
     if (emptyPos) {
-      hero.pos = emptyPos;
+      const placed = this.placeHero(hero.id, emptyPos);
+      if (!placed) {
+        hero.pos = emptyPos;
+      }
     }
 
     this.emitStateUpdate();
@@ -177,22 +154,19 @@ export class GameEngine {
     if (this.phase !== 'prepare') return false;
     if (pos.x < 0 || pos.x >= BOARD_SIZE || pos.y < 0 || pos.y >= BOARD_SIZE) return false;
 
-    const hero = this.heroes.find((h) => h.id === heroId);
-    if (!hero || hero.isEnemy) return false;
+    const hero = this.heroes.find(h => h.id === heroId);
+    if (!hero || hero.isEnemy || !hero.isAlive()) return false;
 
-    const occupied = this.isPositionOccupied(pos);
-    if (occupied) {
-      const otherHero = this.heroes.find(
-        (h) => h.pos && h.pos.x === pos.x && h.pos.y === pos.y
-      );
-      if (otherHero && otherHero.id !== heroId) {
-        const oldPos = hero.pos;
-        if (oldPos) {
-          otherHero.pos = { ...oldPos };
-        } else {
-          otherHero.pos = null;
-        }
+    const occupant = this.getUnitAt(pos);
+
+    if (occupant) {
+      if (occupant.id === heroId) {
+        return true;
+      }
+      if (!occupant.isEnemy) {
+        const oldHeroPos = hero.pos ? { ...hero.pos } : null;
         hero.pos = { ...pos };
+        occupant.pos = oldHeroPos;
         this.emitStateUpdate();
         return true;
       }
@@ -204,11 +178,17 @@ export class GameEngine {
     return true;
   }
 
+  private getUnitAt(pos: Position): Hero | null {
+    for (const u of [...this.heroes, ...this.enemies]) {
+      if (u.pos && u.pos.x === pos.x && u.pos.y === pos.y && u.isAlive()) {
+        return u;
+      }
+    }
+    return null;
+  }
+
   private isPositionOccupied(pos: Position): boolean {
-    const allUnits = [...this.heroes, ...this.enemies];
-    return allUnits.some(
-      (u) => u.pos && u.pos.x === pos.x && u.pos.y === pos.y && u.isAlive()
-    );
+    return this.getUnitAt(pos) !== null;
   }
 
   selectHero(heroId: string | null): void {
@@ -222,12 +202,10 @@ export class GameEngine {
     if (!template) return false;
 
     for (let star = 1; star <= 2; star++) {
-      const sameHeroes = this.heroes.filter(
-        (h) => h.name === template.name && h.star === star
+      const matches = this.heroes.filter(
+        h => h.name === template.name && h.star === star && h.isAlive()
       );
-      if (sameHeroes.length >= 2) {
-        return true;
-      }
+      if (matches.length >= 2) return true;
     }
     return false;
   }
@@ -237,29 +215,36 @@ export class GameEngine {
     const template = HERO_TEMPLATES[templateIndex];
 
     for (let star = 1; star <= 2; star++) {
-      const sameHeroes = this.heroes.filter(
-        (h) => h.name === template.name && h.star === star
+      const matches = this.heroes.filter(
+        h => h.name === template.name && h.star === star && h.isAlive()
       );
 
-      if (sameHeroes.length >= 2) {
-        const baseHero = sameHeroes[0];
-        baseHero.upgrade();
+      if (matches.length >= 2) {
+        const h1 = matches[0];
+        const h2 = matches[1];
 
-        const removeHero = sameHeroes[1];
-        const index = this.heroes.findIndex((h) => h.id === removeHero.id);
-        if (index > -1) {
-          this.heroes.splice(index, 1);
+        const pos1 = h1.pos ? { ...h1.pos } : null;
+        const pos2 = h2.pos ? { ...h2.pos } : null;
+
+        h1.upgrade();
+
+        if (!h1.pos && pos1) {
+          h1.pos = pos1;
         }
 
-        if (this.selectedHeroId === removeHero.id) {
-          this.selectedHeroId = baseHero.id;
+        if (this.selectedHeroId === h2.id) {
+          this.selectedHeroId = h1.id;
+        }
+
+        const idx2 = this.heroes.findIndex(h => h.id === h2.id);
+        if (idx2 !== -1) {
+          this.heroes.splice(idx2, 1);
         }
 
         this.emitStateUpdate();
         return true;
       }
     }
-
     return false;
   }
 
@@ -270,6 +255,7 @@ export class GameEngine {
     this.phase = 'battle';
     this.resultMessage = null;
     this.isVictory = null;
+    this.selectedHeroId = null;
     this.spawnEnemies();
     this.startGameLoop();
     this.emitStateUpdate();
@@ -279,27 +265,15 @@ export class GameEngine {
   private spawnEnemies(): void {
     this.enemies = [];
     const rows = [0, 1, 2];
-
     for (const row of rows) {
       for (let i = 0; i < 2; i++) {
         const col = BOARD_SIZE - 1 - i;
         const hp = 20 + Math.floor(Math.random() * 21) + (this.round - 1) * 5;
         const atk = 3 + Math.floor(Math.random() * 4) + Math.floor((this.round - 1) * 0.5);
-
-        const enemy = new Hero(
-          {
-            name: '骷髅',
-            emoji: '💀',
-            cost: 0,
-            baseAtk: atk,
-            baseHp: hp,
-            range: 1,
-            speed: 1,
-            isEnemy: true,
-          },
+        this.enemies.push(new Hero(
+          { name: '骷髅', emoji: '💀', cost: 0, baseAtk: atk, baseHp: hp, range: 1, speed: 1, isEnemy: true },
           { x: col, y: row }
-        );
-        this.enemies.push(enemy);
+        ));
       }
     }
   }
@@ -308,133 +282,121 @@ export class GameEngine {
     this.stopGameLoop();
     this.lastFrameTime = performance.now();
     this.frameAccumulator = 0;
-    this.animationFrameId = requestAnimationFrame(this.gameLoop);
+    this.destroyed = false;
+    this.tickLoop();
   }
 
   private stopGameLoop(): void {
+    this.destroyed = true;
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
   }
 
-  private gameLoop = (currentTime: number): void => {
+  private tickLoop = (): void => {
+    if (this.destroyed) return;
     if (this.phase !== 'battle') return;
 
-    const deltaTime = currentTime - this.lastFrameTime;
-    this.lastFrameTime = currentTime;
-    this.frameAccumulator += deltaTime;
+    const now = performance.now();
+    const delta = now - this.lastFrameTime;
+    this.lastFrameTime = now;
+    this.frameAccumulator += delta;
 
-    while (this.frameAccumulator >= FRAME_INTERVAL) {
-      this.update(FRAME_INTERVAL);
+    let safety = 10;
+    while (this.frameAccumulator >= FRAME_INTERVAL && safety-- > 0) {
+      this.tickUpdate();
       this.frameAccumulator -= FRAME_INTERVAL;
     }
 
     this.emitStateUpdate();
-    this.animationFrameId = requestAnimationFrame(this.gameLoop);
+
+    if (this.phase === 'battle' && !this.destroyed) {
+      this.animationFrameId = requestAnimationFrame(this.tickLoop);
+    }
   };
 
-  private update(deltaTime: number): void {
-    const aliveHeroes = this.heroes.filter((h) => h.isAlive() && h.pos);
-    const aliveEnemies = this.enemies.filter((h) => h.isAlive() && h.pos);
+  private tickUpdate(): void {
+    const aliveHeroes = this.heroes.filter(h => h.isAlive() && h.pos);
+    const aliveEnemies = this.enemies.filter(h => h.isAlive() && h.pos);
 
-    if (aliveHeroes.length === 0) {
-      this.endRound(false);
-      return;
-    }
-
-    if (aliveEnemies.length === 0) {
-      this.endRound(true);
-      return;
-    }
+    if (aliveHeroes.length === 0) { this.endRound(false); return; }
+    if (aliveEnemies.length === 0) { this.endRound(true); return; }
 
     for (const hero of aliveHeroes) {
-      this.unitAction(hero, aliveEnemies);
+      this.unitAct(hero, aliveEnemies);
     }
-
     for (const enemy of aliveEnemies) {
-      if (enemy.isAlive()) {
-        this.unitAction(enemy, aliveHeroes);
-      }
+      if (enemy.isAlive()) this.unitAct(enemy, aliveHeroes);
     }
 
-    const stillAliveHeroes = this.heroes.filter((h) => h.isAlive() && h.pos);
-    const stillAliveEnemies = this.enemies.filter((h) => h.isAlive() && h.pos);
-
-    if (stillAliveHeroes.length === 0) {
-      this.endRound(false);
-    } else if (stillAliveEnemies.length === 0) {
-      this.endRound(true);
-    }
+    const hAlive = this.heroes.filter(h => h.isAlive() && h.pos);
+    const eAlive = this.enemies.filter(h => h.isAlive() && h.pos);
+    if (hAlive.length === 0) this.endRound(false);
+    else if (eAlive.length === 0) this.endRound(true);
   }
 
-  private unitAction(unit: Hero, targets: Hero[]): void {
-    const aliveTargets = targets.filter((t) => t.isAlive() && t.pos);
-    if (aliveTargets.length === 0 || !unit.pos) return;
+  private unitAct(unit: Hero, targets: Hero[]): void {
+    if (!unit.pos) return;
+    const alive = targets.filter(t => t.isAlive() && t.pos);
+    if (alive.length === 0) return;
 
-    let nearestTarget: Hero | null = null;
-    let minDistance = Infinity;
-
-    for (const target of aliveTargets) {
-      if (!target.pos) continue;
-      const dist = unit.getDistance(target.pos);
-      if (dist < minDistance) {
-        minDistance = dist;
-        nearestTarget = target;
-      }
+    let nearest: Hero | null = null;
+    let minD = Infinity;
+    for (const t of alive) {
+      if (!t.pos) continue;
+      const d = unit.getDistance(t.pos);
+      if (d < minD) { minD = d; nearest = t; }
     }
-
-    if (!nearestTarget || !nearestTarget.pos) return;
+    if (!nearest || !nearest.pos) return;
 
     const now = performance.now();
 
-    if (unit.isInRange(nearestTarget)) {
+    if (unit.isInRange(nearest)) {
       if (now - unit.lastAttackTime >= ATTACK_INTERVAL) {
-        unit.attack(nearestTarget);
+        unit.attack(nearest);
         unit.lastAttackTime = now;
       }
     } else {
       if (now - unit.lastMoveTime >= MOVE_INTERVAL) {
-        const newPos = unit.moveToward(nearestTarget.pos);
-        const occupied = this.isPositionOccupiedByOther(newPos, unit);
-        if (!occupied && newPos.x >= 0 && newPos.x < BOARD_SIZE && newPos.y >= 0 && newPos.y < BOARD_SIZE) {
-          unit.pos = newPos;
-          unit.lastMoveTime = now;
+        const np = unit.moveToward(nearest.pos);
+        if (np.x >= 0 && np.x < BOARD_SIZE && np.y >= 0 && np.y < BOARD_SIZE) {
+          const blocked = this.isBlockedByOther(np, unit);
+          if (!blocked) {
+            unit.pos = np;
+            unit.lastMoveTime = now;
+          }
         }
       }
     }
   }
 
-  private isPositionOccupiedByOther(pos: Position, unit: Hero): boolean {
-    const allUnits = [...this.heroes, ...this.enemies];
-    return allUnits.some(
-      (u) =>
-        u.id !== unit.id &&
-        u.pos &&
-        u.pos.x === pos.x &&
-        u.pos.y === pos.y &&
-        u.isAlive()
-    );
+  private isBlockedByOther(pos: Position, self: Hero): boolean {
+    for (const u of [...this.heroes, ...this.enemies]) {
+      if (u.id !== self.id && u.pos && u.pos.x === pos.x && u.pos.y === pos.y && u.isAlive()) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private endRound(victory: boolean): void {
     this.stopGameLoop();
-    this.phase = 'roundEnd';
+    this.phase = victory ? 'roundEnd' : 'gameOver';
     this.isVictory = victory;
 
     if (victory) {
       this.winStreak++;
-      const reward = BASE_REWARD + this.winStreak - 1;
+      const reward = BASE_REWARD + Math.max(0, this.winStreak - 1);
       this.gold = Math.min(MAX_GOLD, this.gold + reward);
       this.resultMessage = `恭喜获胜！获得 ${reward} 金币`;
     } else {
       this.winStreak = 0;
-      this.phase = 'gameOver';
       this.resultMessage = `游戏结束！存活 ${this.round} 回合`;
     }
 
     this.enemies = [];
-    this.emit('roundEnd', { victory });
+    try { this.emit('roundEnd', { victory }); } catch (e) { /* ignore */ }
     this.emitStateUpdate();
   }
 
@@ -444,10 +406,8 @@ export class GameEngine {
     this.phase = 'prepare';
     this.resultMessage = null;
     this.isVictory = null;
-    this.heroes = this.heroes.filter((h) => h.isAlive());
-    for (const hero of this.heroes) {
-      hero.hp = hero.maxHp;
-    }
+    this.heroes = this.heroes.filter(h => h.isAlive());
+    for (const h of this.heroes) { h.hp = h.maxHp; }
     this.emitStateUpdate();
     return true;
   }
@@ -458,35 +418,26 @@ export class GameEngine {
   }
 
   private emitStateUpdate(): void {
-    const state = this.getState();
-    this.emit('stateUpdate', state);
+    if (this.destroyed) return;
+    try {
+      this.emit('stateUpdate', this.getState());
+    } catch (e) {
+      /* swallow listener errors to avoid breaking loop */
+    }
   }
 
-  getState(): {
-    gold: number;
-    round: number;
-    winStreak: number;
-    phase: GamePhase;
-    heroes: HeroData[];
-    enemies: HeroData[];
-    boardHeroes: (HeroData | null)[][];
-    selectedHeroId: string | null;
-    resultMessage: string | null;
-    isVictory: boolean | null;
-    boardHeroCount: number;
-  } {
+  getState() {
     const board = this.getBoardHeroes();
-    const boardData: (HeroData | null)[][] = board.map((row) =>
-      row.map((h) => (h ? this.heroToData(h) : null))
+    const boardData: (HeroData | null)[][] = board.map(row =>
+      row.map(h => h ? this.heroToData(h) : null)
     );
-
     return {
       gold: this.gold,
       round: this.round,
       winStreak: this.winStreak,
       phase: this.phase,
-      heroes: this.heroes.map((h) => this.heroToData(h)),
-      enemies: this.enemies.map((h) => this.heroToData(h)),
+      heroes: this.heroes.map(h => this.heroToData(h)),
+      enemies: this.enemies.map(h => this.heroToData(h)),
       boardHeroes: boardData,
       selectedHeroId: this.selectedHeroId,
       resultMessage: this.resultMessage,
@@ -495,20 +446,20 @@ export class GameEngine {
     };
   }
 
-  private heroToData(hero: Hero): HeroData {
+  private heroToData(h: Hero): HeroData {
     return {
-      id: hero.id,
-      name: hero.name,
-      emoji: hero.emoji,
-      star: hero.star,
-      atk: hero.atk,
-      hp: hero.hp,
-      maxHp: hero.maxHp,
-      range: hero.range,
-      speed: hero.speed,
-      pos: hero.pos ? { ...hero.pos } : null,
-      isEnemy: hero.isEnemy,
-      cost: hero.cost,
+      id: h.id,
+      name: h.name,
+      emoji: h.emoji,
+      star: h.star,
+      atk: h.atk,
+      hp: h.hp,
+      maxHp: h.maxHp,
+      range: h.range,
+      speed: h.speed,
+      pos: h.pos ? { ...h.pos } : null,
+      isEnemy: h.isEnemy,
+      cost: h.cost,
     };
   }
 
