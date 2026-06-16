@@ -1,0 +1,276 @@
+.emotion-log-panel {
+  width: 280px;
+  background: #1b2838;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  position: relative;
+  color: #e2e8f0;
+}
+
+.log-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #e2e8f0;
+}
+
+.log-subtitle {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-bottom: 20px;
+}
+
+.timeline-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.timeline-day {
+  position: relative;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.day-label {
+  width: 60px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.day-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #e2e8f0;
+}
+
+.day-date {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.day-dots {
+  flex: 1;
+  position: relative;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+}
+
+.emotion-dot-wrapper {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  z-index: 1;
+}
+
+.emotion-dot {
+  border-radius: 50%;
+  transition: transform 0.3s ease-out, box-shadow 0.3s ease-out;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+
+.emotion-dot:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.emotion-dot.has-log {
+  box-shadow: 0 0 0 2px #a78bfa, 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.dot-emoji {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+}
+
+.day-avg {
+  width: 50px;
+  font-size: 11px;
+  color: #94a3b8;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.time-axis-labels {
+  display: flex;
+  justify-content: space-between;
+  padding-left: 70px;
+  padding-right: 60px;
+  font-size: 10px;
+  color: #64748b;
+  margin-bottom: 24px;
+}
+
+.detail-card {
+  position: absolute;
+  width: 200px;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  padding: 14px;
+  z-index: 100;
+  color: #1e293b;
+  animation: expandFromDot 0.3s ease-out;
+  transform-origin: top center;
+}
+
+@keyframes expandFromDot {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.detail-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.detail-time {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.detail-emotion-value {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.detail-card-date {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 10px;
+}
+
+.detail-card-note {
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.4;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.detail-card-no-note {
+  font-size: 12px;
+  color: #94a3b8;
+  font-style: italic;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.input-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 16px;
+}
+
+.emoji-selector {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.emoji-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.emoji-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: scale(1.05);
+}
+
+.emoji-btn.selected {
+  background: rgba(167, 139, 250, 0.3);
+  border: 2px solid #a78bfa;
+}
+
+.emoji-btn.animating {
+  animation: emojiBounce 0.4s ease-out;
+}
+
+@keyframes emojiBounce {
+  0%, 100% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.3) translateY(-8px);
+  }
+  60% {
+    transform: scale(0.95) translateY(2px);
+  }
+}
+
+.note-input-wrapper {
+  display: flex;
+  gap: 8px;
+}
+
+.note-input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #e2e8f0;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.3s ease-out;
+}
+
+.note-input::placeholder {
+  color: #64748b;
+}
+
+.note-input:focus {
+  border-color: #a78bfa;
+}
+
+.submit-btn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #a78bfa, #8b5cf6);
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease-out;
+}
+
+.submit-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(167, 139, 250, 0.4);
+}
+
+.submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

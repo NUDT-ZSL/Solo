@@ -1,0 +1,56 @@
+.clock-canvas-container {
+  position: relative;
+  display: inline-block;
+}
+
+.clock-canvas {
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.3s ease-out, box-shadow 0.3s ease-out;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+.clock-canvas:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.clock-canvas.hovering {
+  transform: scale(1.05);
+}
+
+.sound-indicator {
+  position: absolute;
+  bottom: -32px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(27, 40, 56, 0.9);
+  border-radius: 20px;
+  font-size: 13px;
+  color: #e2e8f0;
+  animation: fadeInUp 0.3s ease-out;
+  white-space: nowrap;
+}
+
+.sound-icon {
+  font-size: 14px;
+}
+
+.sound-name {
+  font-weight: 500;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
