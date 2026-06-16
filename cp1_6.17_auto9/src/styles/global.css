@@ -6,6 +6,9 @@
   --button-pressed: #FF6B6B;
   --button-glow: rgba(255, 107, 107, 0.6);
   --panel-bg: #2D2D44;
+  --panel-border: #3D3D5C;
+  --gamepad-bg: #1A1A2E;
+  --gamepad-border: #3D3D5C;
   --log-text: #B0B0B0;
   --control-btn: #4A4A6A;
   --control-btn-hover: #6A6A8A;
@@ -22,6 +25,9 @@
   --button-normal: #B0B0B0;
   --button-pressed: #FF6B6B;
   --panel-bg: #1A1A2E;
+  --panel-border: #2D2D44;
+  --gamepad-bg: #0A0A14;
+  --gamepad-border: #1A1A2E;
   --control-btn: #2D2D44;
   --control-btn-hover: #3D3D55;
   --crosshair-color: #555577;
@@ -127,11 +133,16 @@ body {
   position: relative;
   width: 320px;
   height: 200px;
+  background-color: var(--gamepad-bg);
+  border: 3px solid var(--gamepad-border);
+  border-radius: 16px;
+  padding: 20px;
+  transition: background-color var(--transition-theme), border-color var(--transition-theme);
 }
 
 .dpad {
   position: absolute;
-  left: 20px;
+  left: 40px;
   top: 50%;
   transform: translateY(-50%);
   width: 100px;
@@ -143,84 +154,94 @@ body {
 .dpad-left,
 .dpad-right {
   position: absolute;
-  width: 0;
-  height: 0;
-  transition: border-color 0.1s ease, filter 0.1s ease;
+  background-color: var(--button-normal);
+  transition: background-color 0.1s ease, box-shadow 0.1s ease;
 }
 
 .dpad-up.pressed,
 .dpad-down.pressed,
 .dpad-left.pressed,
 .dpad-right.pressed {
-  filter: drop-shadow(0 0 10px var(--button-glow));
+  background-color: var(--button-pressed);
+  animation: buttonFlash 0.1s ease;
+  box-shadow: 0 0 20px var(--button-glow), 0 0 40px var(--button-glow);
+}
+
+@keyframes buttonFlash {
+  0% {
+    filter: brightness(1.5);
+  }
+  100% {
+    filter: brightness(1);
+  }
 }
 
 .dpad-up {
-  top: 2px;
+  top: 0;
   left: 50%;
   transform: translateX(-50%);
-  border-left: 18px solid transparent;
-  border-right: 18px solid transparent;
-  border-bottom: 28px solid var(--button-normal);
+  width: 36px;
+  height: 36px;
+  clip-path: polygon(50% 0%, 100% 50%, 75% 50%, 75% 100%, 25% 100%, 25% 50%, 0% 50%);
 }
 
 [data-theme="dark"] .dpad-up {
-  border-bottom-color: #8888AA;
+  background-color: #8888AA;
 }
 
 .dpad-up.pressed {
-  border-bottom-color: var(--button-pressed) !important;
+  background-color: var(--button-pressed) !important;
 }
 
 .dpad-down {
-  bottom: 2px;
+  bottom: 0;
   left: 50%;
   transform: translateX(-50%);
-  border-left: 18px solid transparent;
-  border-right: 18px solid transparent;
-  border-top: 28px solid var(--button-normal);
+  width: 36px;
+  height: 36px;
+  clip-path: polygon(50% 100%, 100% 50%, 75% 50%, 75% 0%, 25% 0%, 25% 50%, 0% 50%);
 }
 
 [data-theme="dark"] .dpad-down {
-  border-top-color: #8888AA;
+  background-color: #8888AA;
 }
 
 .dpad-down.pressed {
-  border-top-color: var(--button-pressed) !important;
+  background-color: var(--button-pressed) !important;
 }
 
 .dpad-left {
-  left: 2px;
+  left: 0;
   top: 50%;
   transform: translateY(-50%);
-  border-top: 18px solid transparent;
-  border-bottom: 18px solid transparent;
-  border-right: 28px solid var(--button-normal);
+  width: 36px;
+  height: 36px;
+  clip-path: polygon(0% 50%, 50% 0%, 50% 25%, 100% 25%, 100% 75%, 50% 75%, 50% 100%);
 }
 
 [data-theme="dark"] .dpad-left {
-  border-right-color: #8888AA;
+  background-color: #8888AA;
 }
 
 .dpad-left.pressed {
-  border-right-color: var(--button-pressed) !important;
+  background-color: var(--button-pressed) !important;
 }
 
 .dpad-right {
-  right: 2px;
+  right: 0;
   top: 50%;
   transform: translateY(-50%);
-  border-top: 18px solid transparent;
-  border-bottom: 18px solid transparent;
-  border-left: 28px solid var(--button-normal);
+  width: 36px;
+  height: 36px;
+  clip-path: polygon(100% 50%, 50% 0%, 50% 25%, 0% 25%, 0% 75%, 50% 75%, 50% 100%);
 }
 
 [data-theme="dark"] .dpad-right {
-  border-left-color: #8888AA;
+  background-color: #8888AA;
 }
 
 .dpad-right.pressed {
-  border-left-color: var(--button-pressed) !important;
+  background-color: var(--button-pressed) !important;
 }
 
 .dpad-center {
@@ -228,8 +249,8 @@ body {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   background-color: var(--button-normal);
   border-radius: 4px;
   z-index: -1;
@@ -242,7 +263,7 @@ body {
 
 .abxy-buttons {
   position: absolute;
-  right: 10px;
+  right: 30px;
   top: 50%;
   transform: translateY(-50%);
   width: 120px;
@@ -353,7 +374,7 @@ body {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  transition: transform 0.05s linear;
+  transition: transform 0.05s linear !important;
   box-shadow: 0 0 8px var(--button-glow);
   z-index: 1;
   will-change: transform;
@@ -374,11 +395,12 @@ body {
 
 .panel-section {
   background-color: var(--panel-bg);
+  border: 2px solid var(--panel-border);
   border-radius: 12px;
   padding: 16px;
   display: flex;
   flex-direction: column;
-  transition: background-color var(--transition-theme);
+  transition: background-color var(--transition-theme), border-color var(--transition-theme);
 }
 
 .panel-title {
@@ -419,6 +441,7 @@ body {
 .event-log {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -431,6 +454,7 @@ body {
   padding: 3px 6px;
   border-radius: 4px;
   animation: slideIn 0.3s ease;
+  animation-fill-mode: backwards;
   white-space: nowrap;
 }
 
