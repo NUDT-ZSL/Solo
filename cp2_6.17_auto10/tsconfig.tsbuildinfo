@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/gameengine.ts","./src/main.tsx","./src/types.ts","./src/vite-env.d.ts","./src/components/gameboard.tsx","./src/components/scoreboard.tsx","./src/hooks/usegameloop.ts","./src/utils/audiomanager.ts","./src/utils/particlesystem.ts"],"version":"5.8.3"}
