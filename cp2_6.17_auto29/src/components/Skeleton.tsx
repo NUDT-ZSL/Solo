@@ -31,13 +31,19 @@ export const BoxCardSkeleton: React.FC = () => (
     <Skeleton variant="rect" width={80} height={24} className="skeleton-badge" />
     <Skeleton variant="text" width={120} height={28} className="skeleton-title" />
     <Skeleton variant="text" width={80} height={36} className="skeleton-price" />
-    <div className="skeleton-veggies">
-      {[...Array(6)].map((_, i) => (
-        <Skeleton key={i} variant="circle" width={32} height={32} />
+    <div className="skeleton-veggie-grid">
+      {[...Array(9)].map((_, i) => (
+        <div key={i} className="skeleton-veggie-item">
+          <Skeleton variant="circle" width={40} height={40} />
+          <Skeleton variant="text" width={40} height={12} />
+        </div>
       ))}
     </div>
     <Skeleton variant="text" width="100%" height={16} />
-    <Skeleton variant="text" width="80%" height={16} />
+    <div className="skeleton-tags">
+      <Skeleton variant="rect" width={70} height={22} />
+      <Skeleton variant="rect" width={80} height={22} />
+    </div>
     <Skeleton variant="rect" width="100%" height={40} className="skeleton-btn" />
   </div>
 );

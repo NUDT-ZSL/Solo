@@ -14,8 +14,8 @@
 }
 
 .skeleton-card-wrapper {
-  width: 240px;
-  height: 340px;
+  width: 280px;
+  min-height: 480px;
   border-radius: 16px;
   background: #ffffff;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
@@ -38,12 +38,26 @@
   border-radius: 6px;
 }
 
-.skeleton-veggies {
+.skeleton-veggie-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #f9fafb, #fef9c322);
+  border-radius: 12px;
+}
+
+.skeleton-veggie-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.skeleton-tags {
   display: flex;
   gap: 8px;
-  flex-wrap: wrap;
-  justify-content: center;
-  margin: 8px 0;
 }
 
 .skeleton-btn {
