@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Star, Constellation, DivinationResult } from './types';
-import { CONFIG, DIVINATION_TEXTS, WEATHER_ICONS } from './config';
+import { CONFIG, DIVINATION_TEXTS, WEATHER_ICONS, FORTUNE_LEVELS, FORTUNE_ASPECTS, AUSPICIOUS_ITEMS, INAUSPICIOUS_ITEMS } from './config';
 import GameBoard from './GameBoard';
 import DivinationPanel from './DivinationPanel';
 import LogPanel from './LogPanel';
@@ -108,6 +108,21 @@ const App: React.FC = () => {
     const randomWeather = WEATHER_ICONS[Math.floor(Math.random() * WEATHER_ICONS.length)];
     const now = Date.now();
 
+    const fortunes = FORTUNE_ASPECTS.map(aspect => {
+      const fortuneLevel = FORTUNE_LEVELS[Math.floor(Math.random() * FORTUNE_LEVELS.length)];
+      return {
+        icon: aspect.icon,
+        label: aspect.label,
+        level: fortuneLevel.level,
+        color: fortuneLevel.color
+      };
+    });
+
+    const shuffledAuspicious = [...AUSPICIOUS_ITEMS].sort(() => Math.random() - 0.5);
+    const shuffledInauspicious = [...INAUSPICIOUS_ITEMS].sort(() => Math.random() - 0.5);
+    const auspicious = shuffledAuspicious.slice(0, 2);
+    const inauspicious = shuffledInauspicious.slice(0, 2);
+
     const result: DivinationResult = {
       id: now,
       constellationId: constellation.id,
@@ -116,7 +131,10 @@ const App: React.FC = () => {
       text: randomText,
       weather: randomWeather,
       date: formatDate(new Date(now)),
-      timestamp: now
+      timestamp: now,
+      fortunes,
+      auspicious,
+      inauspicious
     };
 
     setCurrentResult(result);

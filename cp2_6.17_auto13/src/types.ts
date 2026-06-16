@@ -15,6 +15,13 @@ export interface Constellation {
   starIds: number[];
 }
 
+export interface FortuneAspect {
+  icon: string;
+  label: string;
+  level: string;
+  color: string;
+}
+
 export interface DivinationResult {
   id: number;
   constellationId: number;
@@ -24,6 +31,9 @@ export interface DivinationResult {
   weather: string;
   date: string;
   timestamp: number;
+  fortunes: FortuneAspect[];
+  auspicious: string[];
+  inauspicious: string[];
 }
 
 export interface LogEntry {

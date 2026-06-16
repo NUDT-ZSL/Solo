@@ -45,7 +45,7 @@ const DivinationPanel: React.FC<DivinationPanelProps> = ({ result, isOpen, onClo
         left: '50%',
         transform: isOpen ? 'translateX(-50%) translateY(0)' : 'translateX(-50%) translateY(100%)',
         transition: `transform ${CONFIG.ANIMATION.PANEL_SLIDE_DURATION}ms ease-out`,
-        width: 'min(360px, 90vw)',
+        width: 'min(380px, 90vw)',
         maxWidth: '90vw',
         zIndex: 100,
         pointerEvents: isOpen ? 'auto' : 'none'
@@ -56,11 +56,11 @@ const DivinationPanel: React.FC<DivinationPanelProps> = ({ result, isOpen, onClo
           backgroundColor: CONFIG.COLORS.PANEL_BG,
           borderRadius: '20px',
           border: `2px solid ${CONFIG.COLORS.PANEL_BORDER}`,
-          padding: '24px',
+          padding: '20px 24px',
           margin: '16px',
           boxShadow: `0 8px 32px rgba(0,0,0,0.4), inset 0 0 20px rgba(184, 134, 11, 0.1)`,
           position: 'relative',
-          minHeight: '240px',
+          minHeight: '320px',
           display: 'flex',
           flexDirection: 'column'
         }}
@@ -110,8 +110,8 @@ const DivinationPanel: React.FC<DivinationPanelProps> = ({ result, isOpen, onClo
 
         {result ? (
           <>
-            <div style={{ textAlign: 'center', marginBottom: '16px' }}>
-              <div style={{ fontSize: '28px', marginBottom: '8px' }}>
+            <div style={{ textAlign: 'center', marginBottom: '12px' }}>
+              <div style={{ fontSize: '28px', marginBottom: '6px' }}>
                 {result.weather}
               </div>
               <h2
@@ -120,7 +120,7 @@ const DivinationPanel: React.FC<DivinationPanelProps> = ({ result, isOpen, onClo
                   color: CONFIG.COLORS.PANEL_TEXT,
                   fontSize: '20px',
                   fontWeight: 'bold',
-                  marginBottom: '4px'
+                  marginBottom: '2px'
                 }}
               >
                 {result.constellationName}
@@ -137,16 +137,43 @@ const DivinationPanel: React.FC<DivinationPanelProps> = ({ result, isOpen, onClo
               </p>
             </div>
 
+            {result.fortunes && result.fortunes.length > 0 && (
+              <div
+                style={{
+                  padding: '10px 12px',
+                  borderTop: `1px solid rgba(184, 134, 11, 0.2)`,
+                  marginBottom: '10px'
+                }}
+              >
+                {result.fortunes.map((fortune, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '4px 0',
+                      fontFamily: 'serif',
+                      fontSize: '15px'
+                    }}
+                  >
+                    <span style={{ color: CONFIG.COLORS.PANEL_TEXT }}>
+                      {fortune.icon} {fortune.label}
+                    </span>
+                    <span style={{ color: fortune.color, fontWeight: 'bold' }}>
+                      {fortune.level}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div
               style={{
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '12px 0',
-                borderTop: `1px solid rgba(184, 134, 11, 0.2)`,
-                borderBottom: `1px solid rgba(184, 134, 11, 0.2)`,
-                marginBottom: '12px'
+                borderTop: `1px solid rgba(184, 134, 11, 0.3)`,
+                borderBottom: `1px solid rgba(184, 134, 11, 0.3)`,
+                padding: '10px 0',
+                marginBottom: '10px'
               }}
             >
               <p
@@ -163,7 +190,39 @@ const DivinationPanel: React.FC<DivinationPanelProps> = ({ result, isOpen, onClo
               </p>
             </div>
 
-            <div style={{ textAlign: 'center' }}>
+            {result.auspicious && result.inauspicious && (
+              <div
+                style={{
+                  padding: '0 4px',
+                  marginBottom: '10px'
+                }}
+              >
+                <div style={{ display: 'flex', gap: '24px', justifyContent: 'center' }}>
+                  <p
+                    style={{
+                      fontFamily: 'serif',
+                      color: '#5d4037',
+                      fontSize: '14px',
+                      margin: 0
+                    }}
+                  >
+                    宜：{result.auspicious.join('、')}
+                  </p>
+                  <p
+                    style={{
+                      fontFamily: 'serif',
+                      color: '#5d4037',
+                      fontSize: '14px',
+                      margin: 0
+                    }}
+                  >
+                    忌：{result.inauspicious.join('、')}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div style={{ textAlign: 'center', marginTop: 'auto' }}>
               <p
                 style={{
                   fontFamily: 'serif',

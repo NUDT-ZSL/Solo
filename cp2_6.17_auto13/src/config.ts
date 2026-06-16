@@ -40,8 +40,8 @@ export const CONFIG = {
     FIREFLY_OPACITY_MIN: 0.6,
     FIREFLY_OPACITY_MAX: 1.0,
     STAR_HIGHLIGHT_SCALE: 1.5,
-    DIVINATION_PANEL_WIDTH: 360,
-    DIVINATION_PANEL_HEIGHT: 240,
+    DIVINATION_PANEL_WIDTH: 380,
+    DIVINATION_PANEL_HEIGHT: 320,
     LOG_PANEL_WIDTH: 280,
     LOG_BUTTON_SIZE: 40
   },
@@ -62,6 +62,34 @@ export const CONSTELLATION_NAMES = [
   { name: '西方白虎', zodiac: '奎宿' },
   { name: '南方朱雀', zodiac: '井宿' },
   { name: '天罡星', zodiac: '魁星' }
+];
+
+export const FORTUNE_LEVELS = [
+  { level: '大吉', color: '#2e7d32' },
+  { level: '上吉', color: '#2e7d32' },
+  { level: '中吉', color: '#2e7d32' },
+  { level: '中平', color: '#e65100' },
+  { level: '小凶', color: '#e65100' },
+  { level: '下凶', color: '#c62828' },
+  { level: '大凶', color: '#c62828' }
+];
+
+export const FORTUNE_ASPECTS = [
+  { icon: '⭐', label: '运势' },
+  { icon: '💰', label: '财运' },
+  { icon: '❤️', label: '健康' }
+];
+
+export const AUSPICIOUS_ITEMS = [
+  '出行', '求财', '嫁娶', '开市', '读书', '祭祀',
+  '搬家', '会友', '祈福', '签约', '修造', '纳畜',
+  '栽种', '入宅', '安床', '赴任'
+];
+
+export const INAUSPICIOUS_ITEMS = [
+  '动土', '安葬', '破土', '远行', '争吵', '签约',
+  '嬉戏', '荤腥', '独处', '掘井', '开仓', '纳采',
+  '造桥', '行舟', '伐木', '作灶'
 ];
 
 export const DIVINATION_TEXTS = [

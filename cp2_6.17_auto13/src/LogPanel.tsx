@@ -197,6 +197,23 @@ const LogPanel: React.FC<LogPanelProps> = ({ logs, isOpen, onClose }) => {
                       {log.constellationName}
                     </span>
                   </div>
+                  {log.fortunes && log.fortunes.length > 0 && (
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                      {log.fortunes.map((f, i) => (
+                        <span
+                          key={i}
+                          style={{
+                            fontFamily: 'serif',
+                            fontSize: '12px',
+                            color: f.color,
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          {f.icon}{f.level}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <p
                     style={{
                       fontFamily: 'serif',
@@ -208,6 +225,28 @@ const LogPanel: React.FC<LogPanelProps> = ({ logs, isOpen, onClose }) => {
                   >
                     {log.text}
                   </p>
+                  {log.auspicious && log.inauspicious && (
+                    <div style={{ display: 'flex', gap: '12px', marginBottom: '4px' }}>
+                      <span
+                        style={{
+                          fontFamily: 'serif',
+                          color: '#5d4037',
+                          fontSize: '12px'
+                        }}
+                      >
+                        宜：{log.auspicious.join('、')}
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: 'serif',
+                          color: '#5d4037',
+                          fontSize: '12px'
+                        }}
+                      >
+                        忌：{log.inauspicious.join('、')}
+                      </span>
+                    </div>
+                  )}
                   <p
                     style={{
                       fontFamily: 'serif',
