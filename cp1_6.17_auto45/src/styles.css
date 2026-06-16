@@ -1036,4 +1036,287 @@
   .puzzle-progress {
     font-size: 0.75rem;
   }
+  .view-toggle {
+    font-size: 0.75rem !important;
+    padding: 0.25rem 0.5rem !important;
+  }
 }
+
+/* ============ View Toggle ============ */
+.room-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.view-toggle {
+  padding: 0.4rem 0.8rem;
+  background: var(--color-button);
+  color: white;
+  border: 2px solid var(--color-highlight);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  backdrop-filter: blur(6px);
+}
+
+.view-toggle:hover {
+  background: var(--color-accent);
+  transform: scale(1.05);
+  box-shadow: 0 0 15px rgba(233, 69, 96, 0.5);
+}
+
+.view-toggle:active {
+  transform: scale(0.95);
+}
+
+.view-toggle.active {
+  background: var(--color-accent);
+  box-shadow: 0 0 15px rgba(233, 69, 96, 0.5);
+}
+
+.camera-info {
+  font-size: 0.75rem;
+  color: var(--color-highlight);
+  backdrop-filter: blur(6px);
+  padding: 0.4rem 0.6rem;
+  background: rgba(26, 26, 46, 0.6);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 214, 0, 0.2);
+  cursor: help;
+}
+
+/* ============ Ambient Lights ============ */
+.ambient-light {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  animation: ambientFlicker 3s ease-in-out infinite alternate;
+  mix-blend-mode: screen;
+  filter: blur(8px);
+}
+
+@keyframes ambientFlicker {
+  0% {
+    opacity: 0.15;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+  30% {
+    opacity: 0.4;
+    transform: translate(-48%, -52%) scale(1.05);
+  }
+  60% {
+    opacity: 0.25;
+    transform: translate(-52%, -48%) scale(0.95);
+  }
+  100% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+}
+
+/* ============ 3D Mode ============ */
+.game-canvas.mode-3d {
+  overflow: hidden;
+  transform-style: preserve-3d;
+  user-select: none;
+}
+
+.game-canvas.mode-3d .room-header {
+  pointer-events: auto;
+}
+
+.scene-3d {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+  transform-style: preserve-3d;
+}
+
+.room-3d-floor {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 800px;
+  height: 700px;
+  transform: translate(-50%, -50%) rotateX(90deg) translateZ(-100px);
+  transform-style: preserve-3d;
+  opacity: 0.9;
+}
+
+.room-3d-ceiling {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 800px;
+  height: 700px;
+  background: linear-gradient(135deg, #0a0a1a 0%, #151530 100%);
+  transform: translate(-50%, -50%) rotateX(90deg) translateZ(300px);
+  transform-style: preserve-3d;
+  opacity: 0.7;
+}
+
+.room-3d-wall-n {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 800px;
+  height: 400px;
+  transform: translate(-50%, -50%) translateZ(-350px);
+  transform-style: preserve-3d;
+}
+
+.room-3d-wall-s {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 800px;
+  height: 400px;
+  transform: translate(-50%, -50%) rotateY(180deg) translateZ(-350px);
+  transform-style: preserve-3d;
+}
+
+.room-3d-wall-e {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 700px;
+  height: 400px;
+  transform: translate(-50%, -50%) rotateY(90deg) translateZ(-400px);
+  transform-style: preserve-3d;
+}
+
+.room-3d-wall-w {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 700px;
+  height: 400px;
+  transform: translate(-50%, -50%) rotateY(-90deg) translateZ(-400px);
+  transform-style: preserve-3d;
+}
+
+.furniture-3d,
+.door-3d,
+.puzzle-3d,
+.interactive-3d {
+  position: absolute;
+  transform-origin: center center;
+  will-change: transform, opacity;
+}
+
+.furniture-3d {
+  border: 2px solid rgba(0, 0, 0, 0.4);
+  border-radius: 6px;
+}
+
+.door-3d {
+  border: 3px solid #6a4a30 !important;
+  border-radius: 4px;
+}
+
+.puzzle-3d {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  transition: all var(--transition-fast);
+}
+
+.puzzle-3d:hover:not(.solved) {
+  box-shadow: 0 0 25px rgba(233, 69, 96, 0.8) !important;
+  transform: scale(1.02);
+}
+
+.interactive-3d {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 214, 0, 0.08);
+  border: 2px solid var(--color-highlight);
+  box-shadow: 0 0 15px rgba(255, 214, 0, 0.4);
+  animation: pulseGlow 0.3s ease-in-out infinite alternate;
+  transition: all var(--transition-medium);
+}
+
+.interactive-3d:hover {
+  box-shadow: 0 0 30px rgba(255, 214, 0, 0.8);
+  background: rgba(255, 214, 0, 0.15);
+}
+
+.interactive-3d.collecting {
+  animation: collectAnim3d 0.3s ease-out forwards;
+}
+
+@keyframes collectAnim3d {
+  0% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(2) rotate(180deg);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(0) translateY(100px) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+/* ============ Crosshair ============ */
+.crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0.5;
+}
+
+.crosshair-h,
+.crosshair-v {
+  position: absolute;
+  background: var(--color-highlight);
+  box-shadow: 0 0 4px var(--color-highlight);
+}
+
+.crosshair-h {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+}
+
+.crosshair-v {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+}
+
+/* ============ 3D Mode Vignette ============ */
+.game-canvas.mode-3d::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 40%,
+    rgba(0, 0, 0, 0.6) 100%
+  );
+  pointer-events: none;
+  z-index: 2;
+}
+
