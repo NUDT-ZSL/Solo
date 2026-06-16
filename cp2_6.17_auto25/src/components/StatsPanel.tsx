@@ -9,25 +9,32 @@ function AnimatedNumber({ value, decimals = 1 }: { value: number; decimals?: num
 
   useEffect(() => {
     if (targetValue.current === value) return;
-    targetValue.current = value;
 
     const startValue = currentAnimValue.current;
     const endValue = value;
+    targetValue.current = value;
     const duration = 300;
     let startTime: number | null = null;
+    let cancelled = false;
+    const valueRange = Math.max(1, Math.abs(endValue - startValue));
+    const threshold = valueRange * 0.001;
 
     const animate = (timestamp: number) => {
+      if (cancelled) return;
       if (!startTime) startTime = timestamp;
       const elapsed = timestamp - startTime;
       const progress = Math.min(elapsed / duration, 1);
       const easeProgress = 1 - Math.pow(1 - progress, 3);
-      const currentValue = startValue + (endValue - startValue) * easeProgress;
+      const newValue = startValue + (endValue - startValue) * easeProgress;
 
-      currentAnimValue.current = currentValue;
-      setDisplayValue(currentValue);
+      currentAnimValue.current = newValue;
+      setDisplayValue(newValue);
 
-      if (progress < 1) {
+      if (progress < 1 && Math.abs(newValue - endValue) > threshold) {
         animationRef.current = requestAnimationFrame(animate);
+      } else {
+        currentAnimValue.current = endValue;
+        setDisplayValue(endValue);
       }
     };
 
@@ -37,8 +44,10 @@ function AnimatedNumber({ value, decimals = 1 }: { value: number; decimals?: num
     animationRef.current = requestAnimationFrame(animate);
 
     return () => {
+      cancelled = true;
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
       }
     };
   }, [value]);

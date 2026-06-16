@@ -71,7 +71,7 @@ export const useTrafficStore = create<TrafficState>((set, get) => ({
     const { isTransitioning } = get();
     if (isTransitioning) return;
 
-    set({ isTransitioning: true, sceneOpacity: 0.5 });
+    set({ isTransitioning: true, sceneOpacity: 0 });
 
     setTimeout(() => {
       set({
@@ -84,10 +84,15 @@ export const useTrafficStore = create<TrafficState>((set, get) => ({
         spawnTimers: { north: 1, south: 1.5, east: 0.8, west: 1.2 },
         greenStartTime: Date.now(),
         vehiclesStarted: new Set<string>(),
-        actuatedExtended: false,
-        sceneOpacity: 1,
-        isTransitioning: false
+        actuatedExtended: false
       });
+
+      setTimeout(() => {
+        set({
+          sceneOpacity: 1,
+          isTransitioning: false
+        });
+      }, 100);
     }, 500);
   },
 

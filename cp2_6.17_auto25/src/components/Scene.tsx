@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
@@ -26,9 +26,11 @@ const hexToRgb = (hex: string): [number, number, number] => {
     : [1, 1, 1];
 };
 
-const lerpColor = (color1: string, color2: string, t: number): string => {
-  const [r1, g1, b1] = hexToRgb(color1);
-  const [r2, g2, b2] = hexToRgb(color2);
+const lerpColor = (color1: string | undefined, color2: string | undefined, t: number): string => {
+  const safeColor1 = color1 || '#ffffff';
+  const safeColor2 = color2 || '#ffffff';
+  const [r1, g1, b1] = hexToRgb(safeColor1);
+  const [r2, g2, b2] = hexToRgb(safeColor2);
   const r = Math.round(r1 + (r2 - r1) * t * 255);
   const g = Math.round(g1 + (g2 - g1) * t * 255);
   const b = Math.round(b1 + (b2 - b1) * t * 255);
@@ -162,17 +164,40 @@ function TrafficLightPole({
 }: { 
   position: [number, number, number]; 
   currentColor: LightColor; 
-  prevColor: LightColor;
+  prevColor?: LightColor;
   transitionProgress: number;
 }) {
   const lightRef = useRef<THREE.Mesh>(null);
   const glowRef = useRef<THREE.Mesh>(null);
+  const internalPrevColor = useRef<LightColor | undefined>(prevColor);
+  const internalCurrentColor = useRef<LightColor>(currentColor);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    if (internalCurrentColor.current !== currentColor) {
+      internalPrevColor.current = internalCurrentColor.current;
+      internalCurrentColor.current = currentColor;
+    }
+  }, [currentColor]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      internalPrevColor.current = undefined;
+      internalCurrentColor.current = 'red';
+    };
+  }, []);
 
   useFrame(() => {
+    if (!mountedRef.current) return;
+    
+    const effectivePrev = prevColor || internalPrevColor.current || currentColor;
+    
     if (lightRef.current) {
       const material = lightRef.current.material as THREE.MeshStandardMaterial;
       const t = transitionProgress;
-      const lerpedColor = lerpColor(LIGHT_COLORS[prevColor], LIGHT_COLORS[currentColor], t);
+      const lerpedColor = lerpColor(LIGHT_COLORS[effectivePrev], LIGHT_COLORS[currentColor], t);
       const baseIntensity = 0.3;
       const targetIntensity = 1.0;
       const intensity = baseIntensity + (targetIntensity - baseIntensity) * t;
@@ -185,7 +210,7 @@ function TrafficLightPole({
     if (glowRef.current) {
       const material = glowRef.current.material as THREE.MeshBasicMaterial;
       const t = transitionProgress;
-      const lerpedColor = lerpColor(LIGHT_COLORS[prevColor], LIGHT_COLORS[currentColor], t);
+      const lerpedColor = lerpColor(LIGHT_COLORS[effectivePrev], LIGHT_COLORS[currentColor], t);
       const baseOpacity = 0.05;
       const targetOpacity = 0.3;
       const opacity = baseOpacity + (targetOpacity - baseOpacity) * t;

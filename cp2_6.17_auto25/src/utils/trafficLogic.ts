@@ -48,6 +48,7 @@ const INTERSECTION_SPEED = 0.15;
 const VEHICLE_LENGTH = 2;
 const VEHICLE_GAP = 0.5;
 const LANE_WIDTH = 1.2;
+const ROAD_WIDTH = LANE_WIDTH * 8;
 const INTERSECTION_HALF_SIZE = 2.4;
 const SPAWN_DISTANCE = 25;
 
@@ -190,16 +191,9 @@ export const getQueuePosition = (vehicle: Vehicle, allVehicles: Vehicle[]): numb
     }
   };
 
-  const vehicleDist = getStopLineDistance(vehicle);
-  let position = 0;
-  
-  for (const v of sameDirectionLane) {
-    if (v.id !== vehicle.id && getStopLineDistance(v) < vehicleDist) {
-      position++;
-    }
-  }
-
-  return position;
+  sameDirectionLane.sort((a, b) => getStopLineDistance(a) - getStopLineDistance(b));
+  const index = sameDirectionLane.findIndex(v => v.id === vehicle.id);
+  return index >= 0 ? index : 0;
 };
 
 export const getDistanceFromIntersection = (vehicle: Vehicle): number => {
@@ -216,10 +210,39 @@ export const getDistanceFromIntersection = (vehicle: Vehicle): number => {
   }
 };
 
+export const getStopLineDistance = (vehicle: Vehicle): number => {
+  const [x, , z] = vehicle.position;
+  switch (vehicle.direction) {
+    case 'north':
+      return -INTERSECTION_HALF_SIZE - z;
+    case 'south':
+      return z - INTERSECTION_HALF_SIZE;
+    case 'east':
+      return -INTERSECTION_HALF_SIZE - x;
+    case 'west':
+      return x - INTERSECTION_HALF_SIZE;
+  }
+};
+
 export const isInIntersectionArea = (vehicle: Vehicle): boolean => {
   const [x, , z] = vehicle.position;
-  const buffer = 8;
-  return Math.abs(x) < INTERSECTION_HALF_SIZE + buffer && Math.abs(z) < INTERSECTION_HALF_SIZE + buffer;
+  const laneOffset = (vehicle.lane - 1.5) * LANE_WIDTH;
+  const buffer = 12;
+  
+  switch (vehicle.direction) {
+    case 'north':
+    case 'south': {
+      const perpDist = Math.abs(x - laneOffset);
+      const parallelDist = Math.abs(z);
+      return perpDist < ROAD_WIDTH / 2 + 2 && parallelDist < INTERSECTION_HALF_SIZE + buffer;
+    }
+    case 'east':
+    case 'west': {
+      const perpDist = Math.abs(z - laneOffset);
+      const parallelDist = Math.abs(x);
+      return perpDist < ROAD_WIDTH / 2 + 2 && parallelDist < INTERSECTION_HALF_SIZE + buffer;
+    }
+  }
 };
 
 export const updateVehiclePosition = (

@@ -21,8 +21,10 @@ export default function App() {
     const endValue = sceneOpacity;
     const duration = 500;
     let startTime: number | null = null;
+    let cancelled = false;
 
     const animate = (timestamp: number) => {
+      if (cancelled) return;
       if (!startTime) startTime = timestamp;
       const elapsed = timestamp - startTime;
       const progress = Math.min(elapsed / duration, 1);
@@ -44,11 +46,15 @@ export default function App() {
     animationRef.current = requestAnimationFrame(animate);
 
     return () => {
+      cancelled = true;
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
       }
     };
   }, [sceneOpacity]);
+
+  const showOverlay = isTransitioning && displayOpacity < 0.7;
 
   return (
     <div style={appStyle}>
@@ -60,17 +66,24 @@ export default function App() {
       >
         <Scene />
       </div>
-      <ControlPanel />
-      <StatsPanel />
-      {isTransitioning && (
-        <div style={{
-          ...overlayStyle,
-          opacity: displayOpacity < 0.8 ? 1 : 0,
-          transition: 'opacity 0.3s ease'
-        }}>
+      <div style={{
+        ...controlWrapperStyle,
+        opacity: Math.min(1, displayOpacity + 0.3)
+      }}>
+        <ControlPanel />
+        <StatsPanel />
+      </div>
+      <div style={{
+        ...overlayStyle,
+        opacity: showOverlay ? 1 : 0,
+        pointerEvents: showOverlay ? 'auto' : 'none',
+        transition: 'opacity 0.3s ease'
+      }}>
+        <div style={overlayInnerStyle}>
+          <div style={spinnerStyle}></div>
           <div style={loadingTextStyle}>切换模式中...</div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -93,23 +106,53 @@ const sceneContainerStyle: React.CSSProperties = {
   left: 0
 };
 
+const controlWrapperStyle: React.CSSProperties = {
+  position: 'relative',
+  zIndex: 100,
+  transition: 'opacity 0.3s ease'
+};
+
 const overlayStyle: React.CSSProperties = {
   position: 'absolute',
   top: 0,
   left: 0,
   width: '100%',
   height: '100%',
-  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  backgroundColor: 'rgba(0, 0, 0, 0.8)',
+  zIndex: 500,
+  transition: 'opacity 0.3s ease'
+};
+
+const overlayInnerStyle: React.CSSProperties = {
+  width: '100%',
+  height: '100%',
   display: 'flex',
+  flexDirection: 'column',
   justifyContent: 'center',
   alignItems: 'center',
-  zIndex: 200,
-  pointerEvents: 'none'
+  gap: '16px'
+};
+
+const spinnerStyle: React.CSSProperties = {
+  width: '40px',
+  height: '40px',
+  border: '3px solid rgba(0, 184, 148, 0.2)',
+  borderTopColor: '#00b894',
+  borderRadius: '50%',
+  animation: 'spin 0.8s linear infinite'
 };
 
 const loadingTextStyle: React.CSSProperties = {
   color: '#dfe6e9',
-  fontSize: '18px',
+  fontSize: '16px',
   fontWeight: 500,
   letterSpacing: '2px'
 };
+
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+`;
+document.head.appendChild(style);
