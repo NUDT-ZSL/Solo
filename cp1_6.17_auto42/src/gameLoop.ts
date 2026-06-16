@@ -7,7 +7,8 @@ import type {
   ActiveEvent,
   WorkshopState,
   ShopItem,
-  LoggedEvent
+  LoggedEvent,
+  RecipeIngredient
 } from './types';
 
 export const MATERIALS: Material[] = [
@@ -24,8 +25,8 @@ export const RECIPES: Recipe[] = [
     name: '生命药水',
     description: '恢复生命值的基础药水',
     ingredients: [
-      { materialId: 'moonstone', minRatio: 0.2, maxRatio: 0.4, required: 2 },
-      { materialId: 'unicorn_tear', minRatio: 0.6, maxRatio: 0.8, required: 3 }
+      { materialId: 'moonstone', minRatio: 0.2, maxRatio: 0.4, required: 2, tolerance: 0.10 },
+      { materialId: 'unicorn_tear', minRatio: 0.6, maxRatio: 0.8, required: 3, tolerance: 0.10 }
     ],
     baseValue: 20,
     icon: '❤️'
@@ -35,8 +36,8 @@ export const RECIPES: Recipe[] = [
     name: '爆炸药水',
     description: '造成范围伤害的烈性药水',
     ingredients: [
-      { materialId: 'dragon_scale', minRatio: 0.3, maxRatio: 0.5, required: 2 },
-      { materialId: 'fire_flower', minRatio: 0.5, maxRatio: 0.7, required: 3 }
+      { materialId: 'dragon_scale', minRatio: 0.3, maxRatio: 0.5, required: 2, tolerance: 0.10 },
+      { materialId: 'fire_flower', minRatio: 0.5, maxRatio: 0.7, required: 3, tolerance: 0.10 }
     ],
     baseValue: 35,
     icon: '💥'
@@ -46,9 +47,9 @@ export const RECIPES: Recipe[] = [
     name: '变形药水',
     description: '暂时改变形态的神秘药水',
     ingredients: [
-      { materialId: 'shadow_root', minRatio: 0.4, maxRatio: 0.6, required: 2 },
-      { materialId: 'unicorn_tear', minRatio: 0.2, maxRatio: 0.4, required: 1 },
-      { materialId: 'moonstone', minRatio: 0.1, maxRatio: 0.3, required: 1 }
+      { materialId: 'shadow_root', minRatio: 0.4, maxRatio: 0.6, required: 2, tolerance: 0.10 },
+      { materialId: 'unicorn_tear', minRatio: 0.2, maxRatio: 0.4, required: 1, tolerance: 0.10 },
+      { materialId: 'moonstone', minRatio: 0.1, maxRatio: 0.3, required: 1, tolerance: 0.10 }
     ],
     baseValue: 50,
     icon: '🦎'
@@ -58,8 +59,8 @@ export const RECIPES: Recipe[] = [
     name: '隐身药水',
     description: '让使用者暂时隐形',
     ingredients: [
-      { materialId: 'shadow_root', minRatio: 0.5, maxRatio: 0.7, required: 3 },
-      { materialId: 'moonstone', minRatio: 0.3, maxRatio: 0.5, required: 2 }
+      { materialId: 'shadow_root', minRatio: 0.5, maxRatio: 0.7, required: 3, tolerance: 0.10 },
+      { materialId: 'moonstone', minRatio: 0.3, maxRatio: 0.5, required: 2, tolerance: 0.10 }
     ],
     baseValue: 45,
     icon: '👻'
@@ -69,9 +70,9 @@ export const RECIPES: Recipe[] = [
     name: '力量药水',
     description: '增强体力和攻击力',
     ingredients: [
-      { materialId: 'dragon_scale', minRatio: 0.4, maxRatio: 0.6, required: 2 },
-      { materialId: 'fire_flower', minRatio: 0.2, maxRatio: 0.4, required: 1 },
-      { materialId: 'moonstone', minRatio: 0.1, maxRatio: 0.3, required: 1 }
+      { materialId: 'dragon_scale', minRatio: 0.4, maxRatio: 0.6, required: 2, tolerance: 0.10 },
+      { materialId: 'fire_flower', minRatio: 0.2, maxRatio: 0.4, required: 1, tolerance: 0.10 },
+      { materialId: 'moonstone', minRatio: 0.1, maxRatio: 0.3, required: 1, tolerance: 0.10 }
     ],
     baseValue: 40,
     icon: '💪'
@@ -81,9 +82,9 @@ export const RECIPES: Recipe[] = [
     name: '智慧药水',
     description: '提升魔法能力和智力',
     ingredients: [
-      { materialId: 'unicorn_tear', minRatio: 0.4, maxRatio: 0.6, required: 2 },
-      { materialId: 'moonstone', minRatio: 0.3, maxRatio: 0.5, required: 2 },
-      { materialId: 'shadow_root', minRatio: 0.1, maxRatio: 0.3, required: 1 }
+      { materialId: 'unicorn_tear', minRatio: 0.4, maxRatio: 0.6, required: 2, tolerance: 0.10 },
+      { materialId: 'moonstone', minRatio: 0.3, maxRatio: 0.5, required: 2, tolerance: 0.10 },
+      { materialId: 'shadow_root', minRatio: 0.1, maxRatio: 0.3, required: 1, tolerance: 0.10 }
     ],
     baseValue: 42,
     icon: '🧠'
@@ -93,9 +94,9 @@ export const RECIPES: Recipe[] = [
     name: '疾速药水',
     description: '大幅提升移动速度',
     ingredients: [
-      { materialId: 'fire_flower', minRatio: 0.3, maxRatio: 0.5, required: 2 },
-      { materialId: 'dragon_scale', minRatio: 0.2, maxRatio: 0.4, required: 1 },
-      { materialId: 'unicorn_tear', minRatio: 0.2, maxRatio: 0.4, required: 1 }
+      { materialId: 'fire_flower', minRatio: 0.3, maxRatio: 0.5, required: 2, tolerance: 0.10 },
+      { materialId: 'dragon_scale', minRatio: 0.2, maxRatio: 0.4, required: 1, tolerance: 0.10 },
+      { materialId: 'unicorn_tear', minRatio: 0.2, maxRatio: 0.4, required: 1, tolerance: 0.10 }
     ],
     baseValue: 38,
     icon: '⚡'
@@ -105,15 +106,20 @@ export const RECIPES: Recipe[] = [
     name: '治疗灵药',
     description: '强效治愈的高级药水',
     ingredients: [
-      { materialId: 'unicorn_tear', minRatio: 0.3, maxRatio: 0.5, required: 2 },
-      { materialId: 'moonstone', minRatio: 0.2, maxRatio: 0.4, required: 2 },
-      { materialId: 'fire_flower', minRatio: 0.1, maxRatio: 0.3, required: 1 },
-      { materialId: 'shadow_root', minRatio: 0.1, maxRatio: 0.3, required: 1 }
+      { materialId: 'unicorn_tear', minRatio: 0.3, maxRatio: 0.5, required: 2, tolerance: 0.10 },
+      { materialId: 'moonstone', minRatio: 0.2, maxRatio: 0.4, required: 2, tolerance: 0.10 },
+      { materialId: 'fire_flower', minRatio: 0.1, maxRatio: 0.3, required: 1, tolerance: 0.10 },
+      { materialId: 'shadow_root', minRatio: 0.1, maxRatio: 0.3, required: 1, tolerance: 0.10 }
     ],
     baseValue: 65,
     icon: '✨'
   }
 ];
+
+export const ALCHEMY_DURATION_MS = 3000;
+export const EVENT_CHECK_INTERVAL_MS = 300;
+export const ALCHEMY_EVENT_TIMEOUT_MS = 500;
+export const WORKSHOP_EVENT_INTERVAL = 3;
 
 export function generateId(): string {
   return Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
@@ -132,6 +138,47 @@ export function canAddMaterial(
   return material.quantity - inCauldron >= quantity;
 }
 
+export interface RatioValidationResult {
+  valid: boolean;
+  deviations: { materialId: string; deviation: number; allowedTolerance: number; outOfRange: boolean }[];
+}
+
+export function validateRatioDeviation(
+  recipe: Recipe,
+  cauldron: CauldronIngredient[]
+): RatioValidationResult {
+  const totalInCauldron = cauldron.reduce((sum, c) => sum + c.quantity, 0);
+  if (totalInCauldron === 0) {
+    return {
+      valid: false,
+      deviations: recipe.ingredients.map(ing => ({
+        materialId: ing.materialId,
+        deviation: 1,
+        allowedTolerance: ing.tolerance,
+        outOfRange: true
+      }))
+    };
+  }
+
+  const deviations = recipe.ingredients.map(ing => {
+    const inCauldron = cauldron.find(c => c.materialId === ing.materialId)?.quantity || 0;
+    const actualRatio = inCauldron / totalInCauldron;
+    const idealRatio = (ing.minRatio + ing.maxRatio) / 2;
+    const deviation = Math.abs(actualRatio - idealRatio);
+    return {
+      materialId: ing.materialId,
+      deviation,
+      allowedTolerance: ing.tolerance,
+      outOfRange: deviation > ing.tolerance
+    };
+  });
+
+  return {
+    valid: deviations.every(d => !d.outOfRange),
+    deviations
+  };
+}
+
 export function validateRecipe(recipe: Recipe, cauldron: CauldronIngredient[]): boolean {
   if (cauldron.length === 0) return false;
   
@@ -142,6 +189,9 @@ export function validateRecipe(recipe: Recipe, cauldron: CauldronIngredient[]): 
     const inCauldron = cauldron.find(c => c.materialId === ingredient.materialId)?.quantity || 0;
     if (inCauldron < ingredient.required) return false;
   }
+
+  const ratioCheck = validateRatioDeviation(recipe, cauldron);
+  if (!ratioCheck.valid) return false;
 
   return true;
 }
@@ -158,12 +208,13 @@ export function calculateAccuracy(recipe: Recipe, cauldron: CauldronIngredient[]
     const actualRatio = inCauldron / totalInCauldron;
     const idealRatio = (ingredient.minRatio + ingredient.maxRatio) / 2;
     const deviation = Math.abs(actualRatio - idealRatio);
-    totalDeviation += deviation;
+    const normalizedDeviation = Math.min(1, deviation / Math.max(0.01, ingredient.tolerance));
+    totalDeviation += normalizedDeviation;
     validIngredients++;
   }
 
   const avgDeviation = totalDeviation / validIngredients;
-  const accuracy = Math.max(0, 1 - avgDeviation * 3);
+  const accuracy = Math.max(0, 1 - avgDeviation);
   return Math.min(1, accuracy);
 }
 
@@ -181,10 +232,9 @@ export function calculateQuality(
 }
 
 export function generateRandomEvent(
-  eventType: 'alchemy' | 'workshop'
+  eventType: 'alchemy' | 'workshop',
+  now: number = Date.now()
 ): ActiveEvent | null {
-  const now = Date.now();
-
   if (eventType === 'alchemy') {
     const rand = Math.random();
     if (rand < 0.05) {
@@ -193,7 +243,7 @@ export function generateRandomEvent(
         type: 'cauldron_smoke',
         message: '坩埚开始冒烟！快搅拌！',
         action: '搅拌',
-        timeoutAt: now + 500,
+        timeoutAt: now + ALCHEMY_EVENT_TIMEOUT_MS,
         createdAt: now
       };
     }
@@ -203,7 +253,7 @@ export function generateRandomEvent(
         type: 'spark_splash',
         message: '火花迸溅！需要冷却！',
         action: '冷却',
-        timeoutAt: now + 500,
+        timeoutAt: now + ALCHEMY_EVENT_TIMEOUT_MS,
         createdAt: now
       };
     }
@@ -240,6 +290,75 @@ export function generateRandomEvent(
   }
 }
 
+export function updateAlchemyProgress(
+  startTime: number,
+  now: number = Date.now()
+): { progress: number; isComplete: boolean } {
+  const elapsed = now - startTime;
+  const progress = Math.min(1, elapsed / ALCHEMY_DURATION_MS);
+  return {
+    progress,
+    isComplete: progress >= 1
+  };
+}
+
+export function shouldCheckForEvent(
+  lastCheckTime: number,
+  now: number = Date.now()
+): boolean {
+  return now - lastCheckTime >= EVENT_CHECK_INTERVAL_MS;
+}
+
+export function isEventTimedOut(
+  event: ActiveEvent,
+  now: number = Date.now()
+): boolean {
+  return now > event.timeoutAt;
+}
+
+export function getRemainingEventTime(
+  event: ActiveEvent,
+  now: number = Date.now()
+): number {
+  return Math.max(0, event.timeoutAt - now);
+}
+
+export function handleEventTimeout(
+  event: ActiveEvent,
+  currentState: {
+    materialLossMultiplier: number;
+    qualityPenalty: number;
+    isBrewFailed: boolean;
+  }
+): {
+  materialLossMultiplier: number;
+  qualityPenalty: number;
+  isBrewFailed: boolean;
+} {
+  if (event.type === 'cauldron_smoke') {
+    return {
+      materialLossMultiplier: Math.min(1.5, currentState.materialLossMultiplier + 0.2),
+      qualityPenalty: currentState.qualityPenalty,
+      isBrewFailed: true
+    };
+  } else if (event.type === 'spark_splash') {
+    return {
+      materialLossMultiplier: currentState.materialLossMultiplier,
+      qualityPenalty: Math.min(0.5, currentState.qualityPenalty + 0.2),
+      isBrewFailed: currentState.isBrewFailed
+    };
+  }
+  return currentState;
+}
+
+export function shouldTriggerWorkshopEvent(
+  successfulAlchemies: number,
+  lastTriggeredCount: number
+): boolean {
+  if (successfulAlchemies === 0) return false;
+  return successfulAlchemies % WORKSHOP_EVENT_INTERVAL === 0 && successfulAlchemies > lastTriggeredCount;
+}
+
 export function runAlchemy(
   recipe: Recipe,
   cauldron: CauldronIngredient[],
@@ -247,6 +366,15 @@ export function runAlchemy(
   materialLossMultiplier: number,
   isFailed: boolean
 ): { success: boolean; potion?: Potion; waste?: CauldronIngredient[] } {
+  const ratioValidation = validateRatioDeviation(recipe, cauldron);
+  if (!ratioValidation.valid) {
+    const waste = cauldron.map(c => ({
+      ...c,
+      quantity: Math.ceil(c.quantity * materialLossMultiplier)
+    }));
+    return { success: false, waste };
+  }
+
   if (isFailed) {
     const waste = cauldron.map(c => ({
       ...c,
@@ -408,6 +536,38 @@ export function logEvent(event: ActiveEvent): LoggedEvent {
   };
 }
 
+export function addPotionToInventory(
+  inventory: Potion[],
+  potion: Potion
+): Potion[] {
+  const existingPotion = inventory.find(
+    p => p.name === potion.name && p.quality === potion.quality
+  );
+  if (existingPotion) {
+    return inventory.map(p =>
+      p.id === existingPotion.id
+        ? { ...p, quantity: p.quantity + 1 }
+        : p
+    );
+  }
+  return [...inventory, potion];
+}
+
+export function consumeMaterials(
+  materials: Material[],
+  cauldron: CauldronIngredient[],
+  wasteMultiplier: number
+): Material[] {
+  return materials.map(m => {
+    const inCauldron = cauldron.find(c => c.materialId === m.id);
+    if (inCauldron) {
+      const consumed = Math.ceil(inCauldron.quantity * wasteMultiplier);
+      return { ...m, quantity: Math.max(0, m.quantity - consumed) };
+    }
+    return m;
+  });
+}
+
 export function getInitialState(): WorkshopState {
   return {
     materials: JSON.parse(JSON.stringify(MATERIALS)),
@@ -429,6 +589,10 @@ export function getInitialState(): WorkshopState {
     isBrewFailed: false,
     showRecipePanel: true,
     currentPage: 1,
-    itemsPerPage: 6
+    itemsPerPage: 6,
+    lastWorkshopEventCount: 0,
+    lastEventCheckTime: 0
   };
 }
+
+export type { RecipeIngredient };

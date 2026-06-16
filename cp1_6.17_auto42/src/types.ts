@@ -20,6 +20,7 @@ export interface RecipeIngredient {
   minRatio: number;
   maxRatio: number;
   required: number;
+  tolerance: number;
 }
 
 export interface Recipe {
@@ -93,6 +94,8 @@ export interface WorkshopState {
   showRecipePanel: boolean;
   currentPage: number;
   itemsPerPage: number;
+  lastWorkshopEventCount: number;
+  lastEventCheckTime: number;
 }
 
 export type AlchemyAction =
@@ -100,10 +103,11 @@ export type AlchemyAction =
   | { type: 'ADD_MATERIAL'; materialId: string; quantity: number }
   | { type: 'REMOVE_MATERIAL'; materialId: string; quantity: number }
   | { type: 'CLEAR_CAULDRON' }
-  | { type: 'START_ALCHEMY' }
-  | { type: 'UPDATE_PROGRESS'; progress: number }
-  | { type: 'TRIGGER_EVENT'; event: ActiveEvent }
-  | { type: 'RESOLVE_EVENT'; success: boolean }
+  | { type: 'START_ALCHEMY'; now: number }
+  | { type: 'UPDATE_PROGRESS'; progress: number; now: number }
+  | { type: 'TRIGGER_EVENT'; event: ActiveEvent; now: number }
+  | { type: 'RESOLVE_EVENT'; success: boolean; now: number }
+  | { type: 'EVENT_TIMEOUT'; now: number }
   | { type: 'FINISH_ALCHEMY'; result: { success: boolean; potion?: Potion } }
   | { type: 'LOG_EVENT'; event: LoggedEvent }
   | { type: 'LIST_FOR_SALE'; potionId: string; price: number }
@@ -111,11 +115,16 @@ export type AlchemyAction =
   | { type: 'UPDATE_MATERIALS'; materials: Material[] }
   | { type: 'UPDATE_PRICE_MULTIPLIER'; multiplier: number }
   | { type: 'UPDATE_QUALITY_PENALTY'; penalty: number }
+  | { type: 'UPDATE_MATERIAL_LOSS'; multiplier: number }
+  | { type: 'UPDATE_BREW_FAILED'; failed: boolean }
   | { type: 'INCREMENT_SUCCESS_COUNT' }
+  | { type: 'TRIGGER_WORKSHOP_EVENT'; event: ActiveEvent }
+  | { type: 'UPDATE_LAST_WORKSHOP_COUNT'; count: number }
   | { type: 'TOGGLE_RECIPE_PANEL' }
   | { type: 'SET_PAGE'; page: number }
   | { type: 'ADD_GOLD'; amount: number }
-  | { type: 'ADD_MATERIAL_BONUS'; materialId: string; quantity: number };
+  | { type: 'ADD_MATERIAL_BONUS'; materialId: string; quantity: number }
+  | { type: 'UPDATE_LAST_EVENT_CHECK'; time: number };
 
 export const QUALITY_COLORS: Record<Quality, string> = {
   common: '#9E9E9E',

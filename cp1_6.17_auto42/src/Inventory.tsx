@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import type { Potion, ShopItem, WorkshopState, AlchemyAction } from './types';
+import React, { useState, useMemo, useCallback } from 'react';
+import type { Potion, ShopItem, WorkshopState, AlchemyAction, Quality } from './types';
 import { QUALITY_COLORS, QUALITY_STARS } from './types';
 import { listForSale, executeTrade } from './gameLoop';
 
@@ -13,7 +13,164 @@ interface DragItem {
   potion: Potion;
 }
 
-export const Inventory: React.FC<InventoryProps> = ({ state, dispatch }) => {
+const getQualityStyles = (quality: Quality) => {
+  const color = QUALITY_COLORS[quality];
+  return {
+    borderColor: color,
+    backgroundColor: `${color}15`,
+    boxShadow: `0 0 8px ${color}40, inset 0 0 8px ${color}10`
+  };
+};
+
+const PotionCard: React.FC<{
+  potion: Potion;
+  isSelected: boolean;
+  onDragStart: (e: React.DragEvent, potion: Potion) => void;
+  onClick: () => void;
+}> = React.memo(({ potion, isSelected, onDragStart, onClick }) => {
+  const qualityStyles = getQualityStyles(potion.quality);
+  return (
+    <div
+      draggable
+      onDragStart={(e) => onDragStart(e, potion)}
+      onClick={onClick}
+      style={{
+        padding: '10px',
+        backgroundColor: isSelected
+          ? `${QUALITY_COLORS[potion.quality]}40`
+          : qualityStyles.backgroundColor,
+        borderRadius: '8px',
+        cursor: 'grab',
+        textAlign: 'center',
+        transition: 'all 0.2s ease',
+        border: `2px solid ${qualityStyles.borderColor}`,
+        boxShadow: qualityStyles.boxShadow,
+        position: 'relative'
+      }}
+      className="interactive-element"
+    >
+      <div style={{ fontSize: '28px', marginBottom: '4px' }}>{potion.icon}</div>
+      <div style={{
+        fontFamily: "'Josefin Sans', sans-serif",
+        fontSize: '12px',
+        color: '#fff',
+        marginBottom: '4px',
+        fontWeight: 500
+      }}>
+        {potion.name}
+      </div>
+      <div style={{
+        display: 'flex',
+        gap: '0.5px',
+        justifyContent: 'center'
+      }}>
+        {Array.from({ length: QUALITY_STARS[potion.quality] }).map((_, i) => (
+          <span key={i} style={{ color: QUALITY_COLORS[potion.quality], fontSize: '11px' }}>★</span>
+        ))}
+      </div>
+      {potion.quantity > 1 && (
+        <div style={{
+          position: 'absolute',
+          top: '4px',
+          right: '4px',
+          backgroundColor: QUALITY_COLORS[potion.quality],
+          color: potion.quality === 'perfect' ? '#1A1A2E' : 'white',
+          fontSize: '10px',
+          fontWeight: 700,
+          padding: '2px 6px',
+          borderRadius: '10px'
+        }}>
+          x{potion.quantity}
+        </div>
+      )}
+    </div>
+  );
+});
+PotionCard.displayName = 'PotionCard';
+
+const ShopItemCard: React.FC<{
+  item: ShopItem;
+  priceMultiplier: number;
+  onBuy: (item: ShopItem) => void;
+}> = React.memo(({ item, priceMultiplier, onBuy }) => {
+  const qualityStyles = getQualityStyles(item.quality);
+  const icon = item.potionName === '生命药水' ? '❤️' :
+               item.potionName === '爆炸药水' ? '💥' :
+               item.potionName === '变形药水' ? '🦎' :
+               item.potionName === '隐身药水' ? '👻' :
+               item.potionName === '力量药水' ? '💪' :
+               item.potionName === '智慧药水' ? '🧠' :
+               item.potionName === '疾速药水' ? '⚡' : '✨';
+
+  return (
+    <div
+      style={{
+        padding: '10px',
+        backgroundColor: qualityStyles.backgroundColor,
+        borderRadius: '8px',
+        textAlign: 'center',
+        border: `2px solid ${qualityStyles.borderColor}`,
+        boxShadow: qualityStyles.boxShadow,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px'
+      }}
+    >
+      <div style={{
+        fontSize: '24px',
+        fontFamily: "'Josefin Sans', sans-serif"
+      }}>
+        {icon}
+      </div>
+      <div style={{
+        fontFamily: "'Josefin Sans', sans-serif",
+        fontSize: '11px',
+        color: '#fff',
+        fontWeight: 500
+      }}>
+        {item.potionName}
+      </div>
+      <div style={{
+        display: 'flex',
+        gap: '0.5px',
+        justifyContent: 'center'
+      }}>
+        {Array.from({ length: QUALITY_STARS[item.quality] }).map((_, i) => (
+          <span key={i} style={{ color: QUALITY_COLORS[item.quality], fontSize: '11px' }}>★</span>
+        ))}
+      </div>
+      <div style={{
+        color: '#FFD700',
+        fontFamily: "'Josefin Sans', sans-serif",
+        fontWeight: 700,
+        fontSize: '14px'
+      }}>
+        {Math.round(item.price * priceMultiplier)} 金
+      </div>
+      <button
+        onClick={() => onBuy(item)}
+        style={{
+          padding: '6px 8px',
+          backgroundColor: '#4CAF50',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          fontFamily: "'Josefin Sans', sans-serif",
+          fontSize: '11px',
+          fontWeight: 600,
+          cursor: 'pointer',
+          transition: 'all 0.1s ease'
+        }}
+        className="interactive-element"
+      >
+        购买
+      </button>
+    </div>
+  );
+});
+ShopItemCard.displayName = 'ShopItemCard';
+
+export const Inventory: React.FC<InventoryProps> = React.memo(({ state, dispatch }) => {
   const [selectedPotionId, setSelectedPotionId] = useState<string | null>(null);
   const [salePrice, setSalePrice] = useState<number>(50);
   const [dragOverShop, setDragOverShop] = useState(false);
@@ -25,31 +182,34 @@ export const Inventory: React.FC<InventoryProps> = ({ state, dispatch }) => {
     return sortedItems.slice(start, start + state.itemsPerPage);
   }, [state.shopItems, state.currentPage, state.itemsPerPage]);
 
-  const totalPages = Math.ceil(state.shopItems.length / state.itemsPerPage);
+  const totalPages = useMemo(() => 
+    Math.ceil(state.shopItems.length / state.itemsPerPage),
+    [state.shopItems.length, state.itemsPerPage]
+  );
 
-  const showMessage = (msg: string) => {
+  const showMessage = useCallback((msg: string) => {
     setMessage(msg);
     setTimeout(() => setMessage(null), 2000);
-  };
+  }, []);
 
-  const handleDragStart = (e: React.DragEvent, potion: Potion) => {
+  const handleDragStart = useCallback((e: React.DragEvent, potion: Potion) => {
     const dragItem: DragItem = { type: 'potion', potion };
     e.dataTransfer.setData('application/json', JSON.stringify(dragItem));
     e.dataTransfer.effectAllowed = 'move';
     setSelectedPotionId(potion.id);
-  };
+  }, []);
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setDragOverShop(true);
-  };
+  }, []);
 
-  const handleDragLeave = () => {
+  const handleDragLeave = useCallback(() => {
     setDragOverShop(false);
-  };
+  }, []);
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragOverShop(false);
 
@@ -64,9 +224,9 @@ export const Inventory: React.FC<InventoryProps> = ({ state, dispatch }) => {
     } catch {
       console.error('Invalid drag data');
     }
-  };
+  }, []);
 
-  const handleListForSale = () => {
+  const handleListForSale = useCallback(() => {
     if (!selectedPotionId) {
       showMessage('请先选择药水');
       return;
@@ -86,9 +246,9 @@ export const Inventory: React.FC<InventoryProps> = ({ state, dispatch }) => {
     } else {
       showMessage(result.error || '上架失败');
     }
-  };
+  }, [selectedPotionId, state.inventory, state.shopItems, state.materials, salePrice, dispatch, showMessage]);
 
-  const handleBuyItem = (item: ShopItem) => {
+  const handleBuyItem = useCallback((item: ShopItem) => {
     const result = executeTrade(state.shopItems, state.inventory, item.id, state.gold);
     
     if (result.success) {
@@ -98,20 +258,12 @@ export const Inventory: React.FC<InventoryProps> = ({ state, dispatch }) => {
     } else {
       showMessage(result.error || '购买失败');
     }
-  };
+  }, [state.shopItems, state.inventory, state.gold, dispatch, showMessage]);
 
-  const renderStars = (quality: string) => {
-    const count = QUALITY_STARS[quality as keyof typeof QUALITY_STARS] || 1;
-    return (
-      <div className="flex gap-0.5">
-        {Array.from({ length: count }).map((_, i) => (
-          <span key={i} style={{ color: QUALITY_COLORS[quality as keyof typeof QUALITY_COLORS] }}>★</span>
-        ))}
-      </div>
-    );
-  };
-
-  const selectedPotion = state.inventory.find(p => p.id === selectedPotionId);
+  const selectedPotion = useMemo(() => 
+    state.inventory.find(p => p.id === selectedPotionId) || null,
+    [state.inventory, selectedPotionId]
+  );
 
   return (
     <div className="inventory-container" style={{
@@ -157,7 +309,8 @@ export const Inventory: React.FC<InventoryProps> = ({ state, dispatch }) => {
         gap: '8px',
         padding: '8px 12px',
         backgroundColor: 'rgba(255, 215, 0, 0.1)',
-        borderRadius: '8px'
+        borderRadius: '8px',
+        border: '1px solid rgba(255, 215, 0, 0.3)'
       }}>
         <span style={{ fontSize: '20px' }}>💰</span>
         <span style={{
@@ -189,50 +342,13 @@ export const Inventory: React.FC<InventoryProps> = ({ state, dispatch }) => {
           gap: '8px'
         }}>
           {state.inventory.map(potion => (
-            <div
+            <PotionCard
               key={potion.id}
-              draggable
-              onDragStart={(e) => handleDragStart(e, potion)}
+              potion={potion}
+              isSelected={selectedPotionId === potion.id}
+              onDragStart={handleDragStart}
               onClick={() => setSelectedPotionId(potion.id)}
-              style={{
-                padding: '10px',
-                backgroundColor: selectedPotionId === potion.id
-                  ? 'rgba(233, 69, 96, 0.3)'
-                  : 'rgba(255, 255, 255, 0.05)',
-                borderRadius: '8px',
-                cursor: 'grab',
-                textAlign: 'center',
-                transition: 'all 0.2s ease',
-                border: `2px solid ${QUALITY_COLORS[potion.quality]}`,
-                position: 'relative'
-              }}
-              className="interactive-element"
-            >
-              <div style={{ fontSize: '28px', marginBottom: '4px' }}>{potion.icon}</div>
-              <div style={{
-                fontFamily: "'Josefin Sans', sans-serif",
-                fontSize: '12px',
-                color: '#fff',
-                marginBottom: '4px'
-              }}>
-                {potion.name}
-              </div>
-              {renderStars(potion.quality)}
-              {potion.quantity > 1 && (
-                <div style={{
-                  position: 'absolute',
-                  top: '4px',
-                  right: '4px',
-                  backgroundColor: '#E94560',
-                  color: 'white',
-                  fontSize: '10px',
-                  padding: '2px 6px',
-                  borderRadius: '10px'
-                }}>
-                  x{potion.quantity}
-                </div>
-              )}
-            </div>
+            />
           ))}
           {state.inventory.length === 0 && (
             <div style={{
@@ -277,8 +393,9 @@ export const Inventory: React.FC<InventoryProps> = ({ state, dispatch }) => {
               alignItems: 'center',
               gap: '12px',
               padding: '8px',
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              borderRadius: '8px'
+              backgroundColor: `${QUALITY_COLORS[selectedPotion.quality]}20`,
+              borderRadius: '8px',
+              border: `1px solid ${QUALITY_COLORS[selectedPotion.quality]}50`
             }}>
               <span style={{ fontSize: '32px' }}>{selectedPotion.icon}</span>
               <div>
@@ -289,7 +406,14 @@ export const Inventory: React.FC<InventoryProps> = ({ state, dispatch }) => {
                 }}>
                   {selectedPotion.name}
                 </div>
-                {renderStars(selectedPotion.quality)}
+                <div style={{
+                  display: 'flex',
+                  gap: '0.5px'
+                }}>
+                  {Array.from({ length: QUALITY_STARS[selectedPotion.quality] }).map((_, i) => (
+                    <span key={i} style={{ color: QUALITY_COLORS[selectedPotion.quality], fontSize: '12px' }}>★</span>
+                  ))}
+                </div>
               </div>
             </div>
             <div>
@@ -369,66 +493,12 @@ export const Inventory: React.FC<InventoryProps> = ({ state, dispatch }) => {
           gap: '8px'
         }}>
           {paginatedItems.map(item => (
-            <div
+            <ShopItemCard
               key={item.id}
-              style={{
-                padding: '10px',
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                borderRadius: '8px',
-                textAlign: 'center',
-                border: `2px solid ${QUALITY_COLORS[item.quality]}`,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '6px'
-              }}
-            >
-              <div style={{
-                fontSize: '24px',
-                fontFamily: "'Josefin Sans', sans-serif"
-              }}>
-                {item.potionName === '生命药水' ? '❤️' :
-                 item.potionName === '爆炸药水' ? '💥' :
-                 item.potionName === '变形药水' ? '🦎' :
-                 item.potionName === '隐身药水' ? '👻' :
-                 item.potionName === '力量药水' ? '💪' :
-                 item.potionName === '智慧药水' ? '🧠' :
-                 item.potionName === '疾速药水' ? '⚡' : '✨'}
-              </div>
-              <div style={{
-                fontFamily: "'Josefin Sans', sans-serif",
-                fontSize: '11px',
-                color: '#fff'
-              }}>
-                {item.potionName}
-              </div>
-              {renderStars(item.quality)}
-              <div style={{
-                color: '#FFD700',
-                fontFamily: "'Josefin Sans', sans-serif",
-                fontWeight: 600,
-                fontSize: '14px'
-              }}>
-                {Math.round(item.price * state.priceMultiplier)} 金
-              </div>
-              <button
-                onClick={() => handleBuyItem(item)}
-                style={{
-                  padding: '6px 8px',
-                  backgroundColor: '#4CAF50',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  fontFamily: "'Josefin Sans', sans-serif",
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.1s ease'
-                }}
-                className="interactive-element"
-              >
-                购买
-              </button>
-            </div>
+              item={item}
+              priceMultiplier={state.priceMultiplier}
+              onBuy={handleBuyItem}
+            />
           ))}
         </div>
         {totalPages > 1 && (
@@ -481,7 +551,8 @@ export const Inventory: React.FC<InventoryProps> = ({ state, dispatch }) => {
 
       <style>{`
         .interactive-element:hover {
-          background-color: rgba(233, 69, 96, 0.2) !important;
+          filter: brightness(1.2);
+          transform: translateY(-1px);
         }
         .interactive-element:active {
           transform: scale(0.95);
@@ -501,7 +572,7 @@ export const Inventory: React.FC<InventoryProps> = ({ state, dispatch }) => {
         }
         ::-webkit-scrollbar-thumb {
           background: rgba(233, 69, 96, 0.5);
-          borderRadius: 3px;
+          border-radius: 3px;
         }
         ::-webkit-scrollbar-thumb:hover {
           background: rgba(233, 69, 96, 0.7);
@@ -509,4 +580,5 @@ export const Inventory: React.FC<InventoryProps> = ({ state, dispatch }) => {
       `}</style>
     </div>
   );
-};
+});
+Inventory.displayName = 'Inventory';

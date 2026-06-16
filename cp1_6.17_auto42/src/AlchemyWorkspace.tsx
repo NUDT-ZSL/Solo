@@ -1,6 +1,14 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { WorkshopState, AlchemyAction, Material, Recipe, ActiveEvent } from './types';
-import { canAddMaterial, validateRecipe, calculateAccuracy } from './gameLoop';
+import { QUALITY_COLORS } from './types';
+import {
+  canAddMaterial,
+  validateRecipe,
+  calculateAccuracy,
+  validateRatioDeviation,
+  getRemainingEventTime,
+  ALCHEMY_EVENT_TIMEOUT_MS
+} from './gameLoop';
 
 interface AlchemyWorkspaceProps {
   state: WorkshopState;
@@ -12,7 +20,7 @@ interface DragItem {
   material: Material;
 }
 
-const CauldronSVG: React.FC<{ isShaking: boolean; isFailed: boolean }> = ({ isShaking, isFailed }) => {
+const CauldronSVG: React.FC<{ isShaking: boolean; isFailed: boolean }> = React.memo(({ isShaking, isFailed }) => {
   return (
     <svg
       width="120"
@@ -141,16 +149,18 @@ const CauldronSVG: React.FC<{ isShaking: boolean; isFailed: boolean }> = ({ isSh
       )}
     </svg>
   );
-};
+});
+CauldronSVG.displayName = 'CauldronSVG';
 
-const Particles: React.FC<{ isFailed: boolean }> = ({ isFailed }) => {
-  const particles = Array.from({ length: 20 }).map((_, i) => ({
+const Particles: React.FC<{ isFailed: boolean }> = React.memo(({ isFailed }) => {
+  const particles = useMemo(() => Array.from({ length: 20 }).map((_, i) => ({
     id: i,
     left: Math.random() * 100,
     delay: Math.random() * 3,
     duration: 2 + Math.random() * 2,
-    size: 2 + Math.random() * 4
-  }));
+    size: 2 + Math.random() * 4,
+    color: Math.random() > 0.5 ? '#7B1FA2' : '#4FC3F7'
+  })), []);
 
   return (
     <div style={{
@@ -168,24 +178,106 @@ const Particles: React.FC<{ isFailed: boolean }> = ({ isFailed }) => {
             bottom: '20%',
             width: `${p.size}px`,
             height: `${p.size}px`,
-            backgroundColor: isFailed ? '#333' : (Math.random() > 0.5 ? '#7B1FA2' : '#4FC3F7'),
+            backgroundColor: isFailed ? '#333' : p.color,
             borderRadius: '50%',
             animation: `${isFailed ? 'fall' : 'rise'} ${p.duration}s ease-in-out infinite`,
             animationDelay: `${p.delay}s`,
             opacity: 0.8,
-            boxShadow: isFailed ? 'none' : `0 0 ${p.size * 2}px ${Math.random() > 0.5 ? '#7B1FA2' : '#4FC3F7'}`
+            boxShadow: isFailed ? 'none' : `0 0 ${p.size * 2}px ${p.color}`
           }}
         />
       ))}
     </div>
   );
+});
+Particles.displayName = 'Particles';
+
+const EventCountdown: React.FC<{ event: ActiveEvent }> = ({ event }) => {
+  const [remaining, setRemaining] = useState(getRemainingEventTime(event));
+  const rafRef = useRef<number | null>(null);
+  const isRunningRef = useRef(true);
+
+  useEffect(() => {
+    isRunningRef.current = true;
+    const tick = () => {
+      if (!isRunningRef.current) return;
+      const newRemaining = getRemainingEventTime(event);
+      setRemaining(newRemaining);
+      if (newRemaining > 0) {
+        rafRef.current = requestAnimationFrame(tick);
+      }
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      isRunningRef.current = false;
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, [event]);
+
+  const percentage = (remaining / ALCHEMY_EVENT_TIMEOUT_MS) * 100;
+  const isUrgent = percentage < 30;
+
+  return (
+    <div style={{ marginTop: '16px' }}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '6px'
+      }}>
+        <span style={{
+          fontFamily: "'Josefin Sans', sans-serif",
+          fontSize: '12px',
+          color: isUrgent ? '#f44336' : '#aaa',
+          fontWeight: 600
+        }}>
+          ⏱️ 剩余时间
+        </span>
+        <span style={{
+          fontFamily: "'Josefin Sans', sans-serif",
+          fontSize: '14px',
+          color: isUrgent ? '#f44336' : '#fff',
+          fontWeight: 700,
+          animation: isUrgent ? 'pulse 0.3s ease-in-out infinite' : 'none'
+        }}>
+          {(remaining / 1000).toFixed(2)}s
+        </span>
+      </div>
+      <div style={{
+        height: '6px',
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderRadius: '3px',
+        overflow: 'hidden'
+      }}>
+        <div
+          style={{
+            height: '100%',
+            backgroundColor: isUrgent ? '#f44336' : '#E94560',
+            borderRadius: '3px',
+            width: `${percentage}%`,
+            transition: 'width 0.016s linear, background-color 0.2s'
+          }}
+        />
+      </div>
+    </div>
+  );
 };
 
-export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = ({ state, dispatch }) => {
+export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = React.memo(({ state, dispatch }) => {
   const [dragOverCauldron, setDragOverCauldron] = useState(false);
   const [showEventLog, setShowEventLog] = useState(false);
-  const progressRef = useRef<number | null>(null);
-  const eventCheckRef = useRef<number | null>(null);
+  const [isTabletMode, setIsTabletMode] = useState(false);
+
+  useEffect(() => {
+    const checkMode = () => {
+      setIsTabletMode(window.innerWidth <= 768 && window.innerWidth > 480);
+    };
+    checkMode();
+    window.addEventListener('resize', checkMode);
+    return () => window.removeEventListener('resize', checkMode);
+  }, []);
 
   const selectedRecipe = state.recipes.find(r => r.id === state.selectedRecipeId);
   const totalInCauldron = state.cauldron.reduce((sum, c) => sum + c.quantity, 0);
@@ -210,14 +302,18 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = ({ state, dispa
   }, [selectedRecipe, state.isAlchemizing, state.cauldron]);
 
   const getMaterialDeficit = useCallback((recipe: Recipe) => {
-    return recipe.ingredients.map(ing => {
+    const ratioValidation = validateRatioDeviation(recipe, state.cauldron);
+    return recipe.ingredients.map((ing, idx) => {
       const material = getMaterialById(ing.materialId);
       const inCauldron = state.cauldron.find(c => c.materialId === ing.materialId)?.quantity || 0;
+      const devInfo = ratioValidation.deviations[idx];
       return {
         ...ing,
         material,
         inCauldron,
-        deficit: Math.max(0, ing.required - inCauldron)
+        deficit: Math.max(0, ing.required - inCauldron),
+        deviation: devInfo?.deviation || 0,
+        outOfRange: devInfo?.outOfRange || false
       };
     });
   }, [getMaterialById, state.cauldron]);
@@ -261,7 +357,7 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = ({ state, dispa
 
   const handleStartAlchemy = () => {
     if (!canStartAlchemy()) return;
-    dispatch({ type: 'START_ALCHEMY' });
+    dispatch({ type: 'START_ALCHEMY', now: Date.now() });
   };
 
   const handleClearCauldron = () => {
@@ -270,7 +366,7 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = ({ state, dispa
   };
 
   const handleEventAction = () => {
-    dispatch({ type: 'RESOLVE_EVENT', success: true });
+    dispatch({ type: 'RESOLVE_EVENT', success: true, now: Date.now() });
   };
 
   const handleLogEvent = (event: ActiveEvent) => {
@@ -290,79 +386,8 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = ({ state, dispa
     dispatch({ type: 'REMOVE_MATERIAL', materialId, quantity: 1 });
   };
 
-  useEffect(() => {
-    if (!state.isAlchemizing) {
-      if (progressRef.current) {
-        cancelAnimationFrame(progressRef.current);
-        progressRef.current = null;
-      }
-      if (eventCheckRef.current) {
-        window.clearInterval(eventCheckRef.current);
-        eventCheckRef.current = null;
-      }
-      return;
-    }
-
-    const startTime = state.alchemyStartTime || Date.now();
-    const duration = 3000;
-
-    const updateProgress = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(1, elapsed / duration);
-      dispatch({ type: 'UPDATE_PROGRESS', progress });
-
-      if (progress >= 1) {
-        return;
-      }
-      progressRef.current = requestAnimationFrame(updateProgress);
-    };
-
-    progressRef.current = requestAnimationFrame(updateProgress);
-
-    eventCheckRef.current = window.setInterval(() => {
-      if (state.activeEvent) {
-        if (Date.now() > state.activeEvent.timeoutAt) {
-          dispatch({ type: 'RESOLVE_EVENT', success: false });
-        }
-        return;
-      }
-
-      const random = Math.random();
-      if (random < 0.05) {
-        const event: ActiveEvent = {
-          id: Math.random().toString(36).substr(2, 9),
-          type: 'cauldron_smoke',
-          message: '坩埚开始冒烟！快搅拌！',
-          action: '搅拌',
-          timeoutAt: Date.now() + 500,
-          createdAt: Date.now()
-        };
-        dispatch({ type: 'TRIGGER_EVENT', event });
-      } else if (random < 0.08) {
-        const event: ActiveEvent = {
-          id: Math.random().toString(36).substr(2, 9),
-          type: 'spark_splash',
-          message: '火花迸溅！需要冷却！',
-          action: '冷却',
-          timeoutAt: Date.now() + 500,
-          createdAt: Date.now()
-        };
-        dispatch({ type: 'TRIGGER_EVENT', event });
-      }
-    }, 300);
-
-    return () => {
-      if (progressRef.current) {
-        cancelAnimationFrame(progressRef.current);
-      }
-      if (eventCheckRef.current) {
-        window.clearInterval(eventCheckRef.current);
-      }
-    };
-  }, [state.isAlchemizing, state.alchemyStartTime, state.activeEvent, dispatch]);
-
   const cauldronRatios = getCauldronRatios();
-  const progressPercentage = state.alchemyProgress * 100;
+  const showRecipeToggle = isTabletMode;
 
   return (
     <div style={{
@@ -371,7 +396,8 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = ({ state, dispa
       height: '100%',
       backgroundColor: '#16213E',
       borderRadius: '12px',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      position: 'relative'
     }}>
       <div style={{
         display: 'flex',
@@ -412,7 +438,7 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = ({ state, dispa
         flex: 1,
         minHeight: 0
       }}>
-        <div style={{
+        <div className="materials-panel" style={{
           width: '200px',
           padding: '12px',
           borderRight: '1px solid rgba(255,255,255,0.1)',
@@ -484,7 +510,36 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = ({ state, dispa
         }}>
           <Particles isFailed={state.isBrewFailed} />
 
-          {state.selectedRecipeId && (
+          {showRecipeToggle && (
+            <button
+              onClick={() => dispatch({ type: 'TOGGLE_RECIPE_PANEL' })}
+              style={{
+                position: 'absolute',
+                top: '10px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                padding: '8px 16px',
+                backgroundColor: state.showRecipePanel
+                  ? 'rgba(123, 31, 162, 0.5)'
+                  : 'rgba(123, 31, 162, 0.3)',
+                color: '#BA68C8',
+                border: '1px solid #7B1FA2',
+                borderRadius: '6px',
+                fontFamily: "'Josefin Sans', sans-serif",
+                fontSize: '12px',
+                cursor: 'pointer',
+                zIndex: 10,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              className="interactive-element"
+            >
+              📖 {state.showRecipePanel ? '隐藏' : '显示'}配方
+            </button>
+          )}
+
+          {state.selectedRecipeId && !showRecipeToggle && (
             <button
               onClick={() => dispatch({ type: 'TOGGLE_RECIPE_PANEL' })}
               style={{
@@ -512,7 +567,6 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = ({ state, dispa
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            onClick={() => {}}
             style={{
               position: 'relative',
               width: '200px',
@@ -640,14 +694,15 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = ({ state, dispa
                       fontSize: '10px',
                       padding: '2px 6px',
                       borderRadius: '8px',
-                      backgroundColor: item.deficit > 0
+                      backgroundColor: item.deficit > 0 || item.outOfRange
                         ? 'rgba(244, 67, 54, 0.2)'
                         : 'rgba(76, 175, 80, 0.2)',
-                      color: item.deficit > 0 ? '#f44336' : '#4CAF50'
+                      color: item.deficit > 0 || item.outOfRange ? '#f44336' : '#4CAF50'
                     }}
                   >
                     {item.material?.icon} {item.inCauldron}/{item.required}
                     {item.deficit > 0 && ` (缺${item.deficit})`}
+                    {item.outOfRange && ' ⚠️'}
                   </span>
                 ))}
               </div>
@@ -669,11 +724,11 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = ({ state, dispa
               <div
                 style={{
                   height: '100%',
-                  background: `linear-gradient(90deg, #7B1FA2 ${100 - progressPercentage}%, #FF6F00 ${100 - progressPercentage}%)`,
+                  background: `linear-gradient(90deg, #7B1FA2, #FF6F00)`,
                   borderRadius: '4px',
-                  transition: 'background 0.016s linear',
                   transform: `scaleX(${state.alchemyProgress})`,
-                  transformOrigin: 'left'
+                  transformOrigin: 'left',
+                  transition: 'transform 0.016s linear'
                 }}
               />
             </div>
@@ -703,24 +758,58 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = ({ state, dispa
         </div>
 
         {state.showRecipePanel && (
-          <div style={{
+          <div className={`recipe-panel ${isTabletMode ? 'tablet-recipe-panel' : ''}`} style={{
             width: '240px',
             padding: '12px',
             borderLeft: '1px solid rgba(255,255,255,0.1)',
-            overflowY: 'auto'
+            overflowY: 'auto',
+            ...(isTabletMode ? {
+              position: 'absolute',
+              top: '60px',
+              right: '10px',
+              bottom: '10px',
+              backgroundColor: '#16213E',
+              borderRadius: '12px',
+              border: '2px solid #7B1FA2',
+              zIndex: 50,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+              animation: 'scaleIn 0.2s ease-out'
+            } : {})
           }}>
-            <h3 style={{
-              fontFamily: "'Josefin Sans', sans-serif",
-              fontSize: '14px',
-              color: '#aaa',
-              margin: '0 0 12px 0'
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '12px'
             }}>
-              配方列表
-            </h3>
+              <h3 style={{
+                fontFamily: "'Josefin Sans', sans-serif",
+                fontSize: '14px',
+                color: '#aaa',
+                margin: 0
+              }}>
+                配方列表
+              </h3>
+              {isTabletMode && (
+                <button
+                  onClick={() => dispatch({ type: 'TOGGLE_RECIPE_PANEL' })}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#888',
+                    fontSize: '20px',
+                    cursor: 'pointer',
+                    padding: '0 4px'
+                  }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {state.recipes.map(recipe => {
                 const deficits = getMaterialDeficit(recipe);
-                const hasDeficit = deficits.some(d => d.deficit > 0);
+                const hasDeficit = deficits.some(d => d.deficit > 0 || d.outOfRange);
                 const isSelected = state.selectedRecipeId === recipe.id;
 
                 return (
@@ -777,6 +866,14 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = ({ state, dispa
                     }}>
                       {recipe.description}
                     </div>
+                    <div style={{
+                      fontFamily: "'Josefin Sans', sans-serif",
+                      fontSize: '9px',
+                      color: '#666',
+                      marginBottom: '6px'
+                    }}>
+                      容差: ±{(recipe.ingredients[0]?.tolerance * 100 || 10)}%
+                    </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                       {deficits.map(d => (
                         <span
@@ -785,14 +882,15 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = ({ state, dispa
                             fontSize: '10px',
                             padding: '2px 6px',
                             borderRadius: '8px',
-                            backgroundColor: d.deficit > 0
+                            backgroundColor: d.deficit > 0 || d.outOfRange
                               ? 'rgba(244, 67, 54, 0.2)'
                               : 'rgba(76, 175, 80, 0.2)',
-                            color: d.deficit > 0 ? '#f44336' : '#4CAF50'
+                            color: d.deficit > 0 || d.outOfRange ? '#f44336' : '#4CAF50'
                           }}
                         >
                           {d.material?.icon} {d.required}
                           {d.deficit > 0 && ` (-${d.deficit})`}
+                          {d.outOfRange && ' ⚠️'}
                         </span>
                       ))}
                     </div>
@@ -804,7 +902,7 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = ({ state, dispa
         )}
       </div>
 
-      {state.activeEvent && (
+      {state.activeEvent && (state.activeEvent.type === 'cauldron_smoke' || state.activeEvent.type === 'spark_splash') && (
         <div style={{
           position: 'fixed',
           inset: 0,
@@ -844,14 +942,27 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = ({ state, dispa
               fontSize: '14px',
               color: '#fff',
               textAlign: 'center',
-              margin: '0 0 20px 0'
+              margin: '0 0 8px 0'
             }}>
               {state.activeEvent.message}
             </p>
+            <p style={{
+              fontFamily: "'Josefin Sans', sans-serif",
+              fontSize: '11px',
+              color: '#aaa',
+              textAlign: 'center',
+              margin: '0 0 16px 0'
+            }}>
+              超时未处理将导致材料损耗或品质下降！
+            </p>
+
+            <EventCountdown event={state.activeEvent} />
+
             <div style={{
               display: 'flex',
               gap: '12px',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              marginTop: '20px'
             }}>
               <button
                 onClick={handleEventAction}
@@ -967,7 +1078,7 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = ({ state, dispa
                       padding: '12px',
                       backgroundColor: 'rgba(255, 255, 255, 0.05)',
                       borderRadius: '8px',
-                      borderLeft: '3px solid #E94560'
+                      borderLeft: `3px solid ${event.type === 'cauldron_smoke' || event.type === 'spark_splash' ? '#E94560' : QUALITY_COLORS.excellent}`
                     }}
                   >
                     <div style={{
@@ -1025,14 +1136,15 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = ({ state, dispa
         .interactive-element:active {
           transform: scale(0.95);
         }
-        @media (max-width: 1024px) {
-          .inventory-container {
-            display: none !important;
+        @media (max-width: 768px) {
+          .recipe-panel {
+            width: 220px !important;
           }
         }
-        @media (max-width: 768px) {
-          [style*="width: 240px"] {
-            display: none !important;
+        @media (max-width: 480px) {
+          .materials-panel {
+            width: 140px !important;
+            padding: 8px !important;
           }
         }
         ::-webkit-scrollbar {
@@ -1049,4 +1161,5 @@ export const AlchemyWorkspace: React.FC<AlchemyWorkspaceProps> = ({ state, dispa
       `}</style>
     </div>
   );
-};
+});
+AlchemyWorkspace.displayName = 'AlchemyWorkspace';

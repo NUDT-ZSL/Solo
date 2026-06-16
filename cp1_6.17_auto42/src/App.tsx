@@ -1,4 +1,4 @@
-import React, { useReducer, useEffect, useCallback } from 'react';
+import React, { useReducer, useEffect, useCallback, useRef } from 'react';
 import type { WorkshopState, AlchemyAction } from './types';
 import {
   getInitialState,
@@ -7,7 +7,15 @@ import {
   applyWorkshopEvent,
   logEvent,
   listForSale,
-  executeTrade
+  executeTrade,
+  updateAlchemyProgress,
+  shouldCheckForEvent,
+  isEventTimedOut,
+  handleEventTimeout,
+  shouldTriggerWorkshopEvent,
+  addPotionToInventory,
+  consumeMaterials,
+  logEvent as createLogEvent
 } from './gameLoop';
 import { AlchemyWorkspace } from './AlchemyWorkspace';
 import { Inventory } from './Inventory';
@@ -63,15 +71,17 @@ function reducer(state: WorkshopState, action: AlchemyAction): WorkshopState {
       return {
         ...state,
         isAlchemizing: true,
-        alchemyStartTime: Date.now(),
+        alchemyStartTime: action.now,
         alchemyProgress: 0,
-        isBrewFailed: false
+        isBrewFailed: false,
+        qualityPenalty: 0,
+        lastEventCheckTime: action.now
       };
 
     case 'UPDATE_PROGRESS': {
       const newState = { ...state, alchemyProgress: action.progress };
       
-      if (action.progress >= 1) {
+      if (action.progress >= 1 && state.alchemyStartTime) {
         const selectedRecipe = state.recipes.find(r => r.id === state.selectedRecipeId);
         if (selectedRecipe) {
           const result = runAlchemy(
@@ -82,31 +92,12 @@ function reducer(state: WorkshopState, action: AlchemyAction): WorkshopState {
             state.isBrewFailed
           );
 
-          const newMaterials = state.materials.map(m => {
-            const inCauldron = state.cauldron.find(c => c.materialId === m.id);
-            if (inCauldron) {
-              const lost = result.waste
-                ? result.waste.find(w => w.materialId === m.id)?.quantity || 0
-                : inCauldron.quantity;
-              return { ...m, quantity: Math.max(0, m.quantity - lost) };
-            }
-            return m;
-          });
+          const wasteMul = result.waste ? state.materialLossMultiplier : 1;
+          const newMaterials = consumeMaterials(state.materials, state.cauldron, wasteMul);
 
           let newInventory = [...state.inventory];
           if (result.success && result.potion) {
-            const existingPotion = newInventory.find(
-              p => p.name === result.potion!.name && p.quality === result.potion!.quality
-            );
-            if (existingPotion) {
-              newInventory = newInventory.map(p =>
-                p.id === existingPotion.id
-                  ? { ...p, quantity: p.quantity + 1 }
-                  : p
-              );
-            } else {
-              newInventory = [...newInventory, result.potion];
-            }
+            newInventory = addPotionToInventory(newInventory, result.potion);
           }
 
           const newSuccessCount = result.success ? state.successfulAlchemies + 1 : state.successfulAlchemies;
@@ -138,24 +129,56 @@ function reducer(state: WorkshopState, action: AlchemyAction): WorkshopState {
       return newState;
     }
 
+    case 'UPDATE_LAST_EVENT_CHECK':
+      return { ...state, lastEventCheckTime: action.time };
+
     case 'TRIGGER_EVENT':
       return { ...state, activeEvent: action.event };
+
+    case 'EVENT_TIMEOUT': {
+      if (!state.activeEvent) return state;
+      
+      const timeoutEffects = handleEventTimeout(state.activeEvent, {
+        materialLossMultiplier: state.materialLossMultiplier,
+        qualityPenalty: state.qualityPenalty,
+        isBrewFailed: state.isBrewFailed
+      });
+
+      const loggedEvent = createLogEvent(state.activeEvent);
+      
+      return {
+        ...state,
+        activeEvent: null,
+        materialLossMultiplier: timeoutEffects.materialLossMultiplier,
+        qualityPenalty: timeoutEffects.qualityPenalty,
+        isBrewFailed: timeoutEffects.isBrewFailed,
+        eventLog: [loggedEvent, ...state.eventLog]
+      };
+    }
 
     case 'RESOLVE_EVENT': {
       if (!state.activeEvent) return state;
       
-      let newState = { ...state, activeEvent: null };
-      
       const loggedEvent = logEvent(state.activeEvent);
-      newState.eventLog = [loggedEvent, ...newState.eventLog];
+
+      let newState = {
+        ...state,
+        activeEvent: null,
+        eventLog: [loggedEvent, ...state.eventLog]
+      };
 
       if (!action.success) {
-        if (state.activeEvent.type === 'cauldron_smoke') {
-          newState.isBrewFailed = true;
-          newState.materialLossMultiplier = Math.min(1.5, state.materialLossMultiplier + 0.2);
-        } else if (state.activeEvent.type === 'spark_splash') {
-          newState.qualityPenalty = Math.min(0.5, state.qualityPenalty + 0.2);
-        }
+        const timeoutEffects = handleEventTimeout(state.activeEvent, {
+          materialLossMultiplier: state.materialLossMultiplier,
+          qualityPenalty: state.qualityPenalty,
+          isBrewFailed: state.isBrewFailed
+        });
+        newState = {
+          ...newState,
+          materialLossMultiplier: timeoutEffects.materialLossMultiplier,
+          qualityPenalty: timeoutEffects.qualityPenalty,
+          isBrewFailed: timeoutEffects.isBrewFailed
+        };
       }
 
       return newState;
@@ -204,8 +227,20 @@ function reducer(state: WorkshopState, action: AlchemyAction): WorkshopState {
     case 'UPDATE_QUALITY_PENALTY':
       return { ...state, qualityPenalty: action.penalty };
 
+    case 'UPDATE_MATERIAL_LOSS':
+      return { ...state, materialLossMultiplier: action.multiplier };
+
+    case 'UPDATE_BREW_FAILED':
+      return { ...state, isBrewFailed: action.failed };
+
     case 'INCREMENT_SUCCESS_COUNT':
       return { ...state, successfulAlchemies: state.successfulAlchemies + 1 };
+
+    case 'TRIGGER_WORKSHOP_EVENT':
+      return { ...state, activeEvent: action.event };
+
+    case 'UPDATE_LAST_WORKSHOP_COUNT':
+      return { ...state, lastWorkshopEventCount: action.count };
 
     case 'TOGGLE_RECIPE_PANEL':
       return { ...state, showRecipePanel: !state.showRecipePanel };
@@ -234,12 +269,51 @@ function reducer(state: WorkshopState, action: AlchemyAction): WorkshopState {
 
 const App: React.FC = () => {
   const [state, dispatch] = useReducer(reducer, getInitialState());
+  const animationFrameRef = useRef<number | null>(null);
+  const workshopEventTriggeredRef = useRef<boolean>(false);
+
+  const gameLoop = useCallback(() => {
+    const now = Date.now();
+
+    if (state.isAlchemizing && state.alchemyStartTime) {
+      const { progress } = updateAlchemyProgress(state.alchemyStartTime, now);
+      dispatch({ type: 'UPDATE_PROGRESS', progress, now });
+
+      if (state.activeEvent) {
+        if (isEventTimedOut(state.activeEvent, now)) {
+          dispatch({ type: 'EVENT_TIMEOUT', now });
+        }
+      } else if (shouldCheckForEvent(state.lastEventCheckTime, now)) {
+        dispatch({ type: 'UPDATE_LAST_EVENT_CHECK', time: now });
+        const newEvent = generateRandomEvent('alchemy', now);
+        if (newEvent) {
+          dispatch({ type: 'TRIGGER_EVENT', event: newEvent, now });
+        }
+      }
+    }
+
+    animationFrameRef.current = requestAnimationFrame(gameLoop);
+  }, [state.isAlchemizing, state.alchemyStartTime, state.activeEvent, state.lastEventCheckTime]);
 
   useEffect(() => {
-    if (state.successfulAlchemies > 0 && state.successfulAlchemies % 3 === 0 && !state.isAlchemizing) {
+    animationFrameRef.current = requestAnimationFrame(gameLoop);
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [gameLoop]);
+
+  useEffect(() => {
+    if (
+      !state.isAlchemizing &&
+      shouldTriggerWorkshopEvent(state.successfulAlchemies, state.lastWorkshopEventCount) &&
+      !workshopEventTriggeredRef.current
+    ) {
+      workshopEventTriggeredRef.current = true;
       const event = generateRandomEvent('workshop');
       if (event) {
-        dispatch({ type: 'TRIGGER_EVENT', event });
+        dispatch({ type: 'TRIGGER_WORKSHOP_EVENT', event });
         
         const updates = applyWorkshopEvent(event, state);
         Object.entries(updates).forEach(([key, value]) => {
@@ -254,18 +328,30 @@ const App: React.FC = () => {
               dispatch({ type: 'UPDATE_QUALITY_PENALTY', penalty: value as number });
               break;
             case 'materialLossMultiplier':
+              dispatch({ type: 'UPDATE_MATERIAL_LOSS', multiplier: value as number });
               break;
           }
         });
       }
+      dispatch({ type: 'UPDATE_LAST_WORKSHOP_COUNT', count: state.successfulAlchemies });
+      setTimeout(() => {
+        workshopEventTriggeredRef.current = false;
+      }, 100);
     }
-  }, [state.successfulAlchemies, state.isAlchemizing, state]);
+  }, [state.successfulAlchemies, state.isAlchemizing, state.lastWorkshopEventCount, state]);
 
   const handleResolveWorkshopEvent = useCallback(() => {
     if (state.activeEvent) {
-      const loggedEvent = logEvent(state.activeEvent);
-      dispatch({ type: 'LOG_EVENT', event: loggedEvent });
-      dispatch({ type: 'RESOLVE_EVENT', success: true });
+      dispatch({
+        type: 'LOG_EVENT',
+        event: {
+          id: state.activeEvent.id,
+          type: state.activeEvent.type,
+          message: state.activeEvent.message,
+          timestamp: Date.now()
+        }
+      });
+      dispatch({ type: 'RESOLVE_EVENT', success: true, now: Date.now() });
     }
   }, [state.activeEvent]);
 
@@ -300,7 +386,7 @@ const App: React.FC = () => {
         </p>
       </header>
 
-      <main style={{
+      <main className="main-layout" style={{
         display: 'grid',
         gridTemplateColumns: '1fr 350px',
         gap: '16px',
@@ -312,7 +398,7 @@ const App: React.FC = () => {
         <div style={{ minWidth: 0 }}>
           <AlchemyWorkspace state={state} dispatch={dispatch} />
         </div>
-        <div style={{ minWidth: 0 }}>
+        <div className="inventory-column" style={{ minWidth: 0 }}>
           <Inventory state={state} dispatch={dispatch} />
         </div>
       </main>
@@ -389,7 +475,7 @@ const App: React.FC = () => {
                         timestamp: Date.now()
                       }
                     });
-                    dispatch({ type: 'RESOLVE_EVENT', success: true });
+                    dispatch({ type: 'RESOLVE_EVENT', success: true, now: Date.now() });
                   }
                 }}
                 style={{
@@ -432,10 +518,10 @@ const App: React.FC = () => {
           transform: scale(0.95);
         }
         @media (max-width: 1024px) {
-          main {
+          .main-layout {
             grid-template-columns: 1fr !important;
           }
-          main > div:last-child {
+          .inventory-column {
             display: none;
           }
         }
@@ -446,13 +532,13 @@ const App: React.FC = () => {
           header p {
             font-size: 12px !important;
           }
-          main {
+          .main-layout {
             padding: 8px !important;
             height: calc(100vh - 80px) !important;
           }
         }
         @media (max-width: 480px) {
-          main {
+          .main-layout {
             grid-template-columns: 1fr !important;
           }
         }
