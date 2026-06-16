@@ -9,19 +9,21 @@ export interface ParagraphVersion {
 export interface ConflictResult {
   resolved: boolean;
   mergedContent: string | null;
+  diffPercent: number;
   conflict: {
     versionA: ParagraphVersion;
     versionB: ParagraphVersion;
   } | null;
 }
 
-function computeDifference(a: string, b: string): number {
-  if (a.length === 0 && b.length === 0) return 0;
-  if (a.length === 0 || b.length === 0) return 1;
+export const DIFF_THRESHOLD_PERCENT = 20;
+
+function computeEditDistance(a: string, b: string): number {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
 
   const lenA = a.length;
   const lenB = b.length;
-  const maxLen = Math.max(lenA, lenB);
 
   const dp: number[][] = Array.from({ length: lenA + 1 }, () =>
     Array(lenB + 1).fill(0)
@@ -40,7 +42,15 @@ function computeDifference(a: string, b: string): number {
     }
   }
 
-  return dp[lenA][lenB] / maxLen;
+  return dp[lenA][lenB];
+}
+
+export function computeDifferencePercent(a: string, b: string): number {
+  if (a.length === 0 && b.length === 0) return 0;
+  const maxLen = Math.max(a.length, b.length);
+  if (maxLen === 0) return 0;
+  const distance = computeEditDistance(a, b);
+  return Math.round((distance / maxLen) * 100);
 }
 
 function mergeContents(base: string, versionA: string, versionB: string): string {
@@ -76,13 +86,14 @@ export function resolveConflict(
   versionA: ParagraphVersion,
   versionB: ParagraphVersion
 ): ConflictResult {
-  const diff = computeDifference(versionA.content, versionB.content);
+  const diffPercent = computeDifferencePercent(versionA.content, versionB.content);
 
-  if (diff < 0.2) {
+  if (diffPercent < DIFF_THRESHOLD_PERCENT) {
     const merged = mergeContents(baseContent, versionA.content, versionB.content);
     return {
       resolved: true,
       mergedContent: merged,
+      diffPercent,
       conflict: null,
     };
   }
@@ -90,6 +101,7 @@ export function resolveConflict(
   return {
     resolved: false,
     mergedContent: null,
+    diffPercent,
     conflict: {
       versionA,
       versionB,
@@ -101,9 +113,11 @@ export function chooseVersion(
   chosen: ParagraphVersion,
   discarded: ParagraphVersion
 ): ConflictResult {
+  const diffPercent = computeDifferencePercent(chosen.content, discarded.content);
   return {
     resolved: true,
     mergedContent: chosen.content,
+    diffPercent,
     conflict: {
       versionA: chosen,
       versionB: discarded,

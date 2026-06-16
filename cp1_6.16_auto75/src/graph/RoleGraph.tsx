@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { type GraphData, type GraphNode, applyForceLayout } from './GraphBuilder';
+import { type GraphData, type GraphNode, applyForceLayout, computeIterationCount } from './GraphBuilder';
 
 interface RoleGraphProps {
   graphData: GraphData;
@@ -23,7 +23,8 @@ const RoleGraph: React.FC<RoleGraphProps> = ({ graphData, onRefresh, onNodeDoubl
 
   useEffect(() => {
     if (graphData.nodes.length > 0) {
-      layoutData.current = applyForceLayout(graphData, 120);
+      const iterations = computeIterationCount(graphData.nodes.length);
+      layoutData.current = applyForceLayout(graphData, iterations);
     } else {
       layoutData.current = graphData;
     }

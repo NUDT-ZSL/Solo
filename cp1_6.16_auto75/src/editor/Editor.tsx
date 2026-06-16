@@ -161,16 +161,37 @@ const Editor: React.FC<EditorProps> = ({
     [paragraphs, chapterId, userId, socket, onParagraphsChange]
   );
 
-  const handleDragStart = (index: number) => {
+  const handleDragStart = (e: React.DragEvent, index: number) => {
     setDragIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+    const target = e.currentTarget as HTMLElement;
+    target.style.opacity = '0.4';
   };
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
-    setDragOverIndex(index);
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverIndex !== index) {
+      setDragOverIndex(index);
+    }
   };
 
-  const handleDrop = (index: number) => {
+  const handleDragLeave = (_e: React.DragEvent, index: number) => {
+    if (dragOverIndex === index) {
+      setDragOverIndex(null);
+    }
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    const target = e.currentTarget as HTMLElement;
+    target.style.opacity = '1';
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
     if (dragIndex === null || dragIndex === index) {
       setDragIndex(null);
       setDragOverIndex(null);
@@ -260,10 +281,9 @@ const Editor: React.FC<EditorProps> = ({
         return (
           <div
             key={para.id}
-            draggable
-            onDragStart={() => handleDragStart(index)}
             onDragOver={(e) => handleDragOver(e, index)}
-            onDrop={() => handleDrop(index)}
+            onDragLeave={(e) => handleDragLeave(e, index)}
+            onDrop={(e) => handleDrop(e, index)}
             style={{
               position: 'relative',
               marginBottom: '12px',
@@ -274,12 +294,18 @@ const Editor: React.FC<EditorProps> = ({
                 ? '2px solid #E74C3C'
                 : isEditing
                 ? '1.5px solid #3498DB'
+                : dragOverIndex === index
+                ? `2px dashed ${dragIndex! < index ? '#2ECC71' : '#3498DB'}`
                 : '1px solid transparent',
               padding: '12px 16px 12px 40px',
-              opacity: dragOverIndex === index ? 0.7 : 1,
+              opacity: dragIndex === index ? 0.4 : 1,
+              transition: 'border 0.15s ease, opacity 0.15s ease',
             }}
           >
             <div
+              draggable
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragEnd={handleDragEnd}
               style={{
                 position: 'absolute',
                 left: '8px',
@@ -289,11 +315,36 @@ const Editor: React.FC<EditorProps> = ({
                 color: '#BDC3C7',
                 fontSize: '18px',
                 userSelect: 'none',
+                padding: '4px',
+                borderRadius: '4px',
               }}
-              onMouseDown={(e) => e.preventDefault()}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.color = '#7F8C8D';
+                (e.currentTarget as HTMLElement).style.background = '#F0F0F0';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.color = '#BDC3C7';
+                (e.currentTarget as HTMLElement).style.background = 'transparent';
+              }}
+              title="拖拽排序"
             >
               ⠿
             </div>
+
+            {dragOverIndex === index && dragIndex !== null && dragIndex !== index && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: '0',
+                  right: '0',
+                  height: '3px',
+                  background: dragIndex < index ? '#2ECC71' : '#3498DB',
+                  top: dragIndex < index ? 'auto' : '-2px',
+                  bottom: dragIndex < index ? '-2px' : 'auto',
+                  borderRadius: '2px',
+                }}
+              />
+            )}
 
             <textarea
               ref={(el) => {
@@ -371,7 +422,7 @@ const Editor: React.FC<EditorProps> = ({
             {hasConflict && para.conflict?.conflict && (
               <div style={{ marginTop: '8px', borderTop: '1px solid #E0E0E0', paddingTop: '8px' }}>
                 <div style={{ fontSize: '13px', color: '#E74C3C', fontWeight: 600, marginBottom: '6px' }}>
-                  ⚠ 冲突检测 - 请选择保留版本
+                  ⚠ 冲突检测 - 差异 {para.conflict.diffPercent}%，请选择保留版本
                 </div>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   <div

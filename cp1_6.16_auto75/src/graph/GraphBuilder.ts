@@ -71,8 +71,14 @@ function computeIntimacy(
   contextSentiment: number
 ): number {
   const coocFactor = Math.min(cooccurrence / 10, 1);
-  const sentimentFactor = (contextSentiment + 1) / 2;
-  return coocFactor * 0.6 + sentimentFactor * 0.4;
+  return contextSentiment * (0.4 + coocFactor * 0.6);
+}
+
+export function computeIterationCount(nodeCount: number): number {
+  if (nodeCount <= 10) return 80;
+  if (nodeCount <= 30) return 120;
+  if (nodeCount <= 50) return 200;
+  return Math.min(500, 200 + (nodeCount - 50) * 4);
 }
 
 function getInteractionType(content: string, charA: string, charB: string): string {
@@ -155,7 +161,7 @@ export function buildGraph(
           vx: 0,
           vy: 0,
           radius: Math.min(50, Math.max(20, 20 + positions.length * 3)),
-          color: '#3498DB',
+          color: intimacyToColor(0),
         });
       } else {
         const node = nodeMap.get(name)!;
@@ -218,16 +224,16 @@ export function buildGraph(
     const angle = (2 * Math.PI * i) / nodes.length;
     node.x = spreadRadius * Math.cos(angle);
     node.y = spreadRadius * Math.sin(angle);
-    node.color = intimacyToColor(
-      nodes.length > 1
-        ? Array.from(edgeMap.values())
-            .filter((e) => e.source === node.id || e.target === node.id)
-            .reduce((sum, e) => sum + e.intimacy, 0) /
-            Array.from(edgeMap.values()).filter(
-              (e) => e.source === node.id || e.target === node.id
-            ).length || 0
-        : 0
+
+    const relatedEdges = Array.from(edgeMap.values()).filter(
+      (e) => e.source === node.id || e.target === node.id
     );
+    let avgIntimacy = 0;
+    if (relatedEdges.length > 0) {
+      const totalIntimacy = relatedEdges.reduce((sum, e) => sum + e.intimacy, 0);
+      avgIntimacy = totalIntimacy / relatedEdges.length;
+    }
+    node.color = intimacyToColor(avgIntimacy);
   });
 
   return {
