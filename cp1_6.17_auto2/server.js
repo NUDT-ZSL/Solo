@@ -242,6 +242,54 @@ app.get('/api/instruments/:id', (req, res) => {
   res.json(instrument);
 });
 
+app.get('/api/instruments/similar/:id', (req, res) => {
+  const current = instruments.find(i => i.id === req.params.id);
+  if (!current) {
+    return res.status(404).json({ error: 'Instrument not found' });
+  }
+
+  const similar = instruments
+    .filter(i => i.id !== current.id && (i.brand === current.brand || i.model === current.model))
+    .slice(0, 3)
+    .map(i => {
+      const soldPrice = Math.round(i.price * (0.85 + Math.random() * 0.15));
+      const month = Math.floor(Math.random() * 5) + 1;
+      const day = Math.floor(Math.random() * 28) + 1;
+      return {
+        id: i.id,
+        name: i.name,
+        brand: i.brand,
+        condition: i.condition,
+        price: soldPrice,
+        soldDate: `2024-0${month}-${day < 10 ? '0' + day : day}`,
+        image: i.images[0] || ''
+      };
+    });
+
+  if (similar.length < 3) {
+    const others = instruments
+      .filter(i => i.id !== current.id && !similar.find(s => s.id === i.id))
+      .slice(0, 3 - similar.length)
+      .map(i => {
+        const soldPrice = Math.round(i.price * (0.8 + Math.random() * 0.2));
+        const month = Math.floor(Math.random() * 5) + 1;
+        const day = Math.floor(Math.random() * 28) + 1;
+        return {
+          id: i.id,
+          name: i.name,
+          brand: i.brand,
+          condition: i.condition,
+          price: soldPrice,
+          soldDate: `2024-0${month}-${day < 10 ? '0' + day : day}`,
+          image: i.images[0] || ''
+        };
+      });
+    similar.push(...others);
+  }
+
+  res.json(similar.slice(0, 3));
+});
+
 app.post('/api/instruments', upload.array('images', 6), (req, res) => {
   const newInstrument = {
     id: uuidv4(),

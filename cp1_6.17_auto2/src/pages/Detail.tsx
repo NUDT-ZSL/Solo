@@ -42,12 +42,11 @@ function getConditionClass(condition: string): string {
 }
 
 function getRatingLabel(score: number): { label: string; color: string } {
-  if (score >= 95) return { label: '完美', color: '#2ECC71' };
   if (score >= 90) return { label: '优秀', color: '#2ECC71' };
-  if (score >= 80) return { label: '良好', color: '#3498DB' };
-  if (score >= 70) return { label: '中等', color: '#E67E22' };
+  if (score >= 75) return { label: '良好', color: '#3498DB' };
   if (score >= 60) return { label: '一般', color: '#E67E22' };
-  return { label: '较差', color: '#E74C3C' };
+  if (score >= 40) return { label: '较差', color: '#E74C3C' };
+  return { label: '很差', color: '#C0392B' };
 }
 
 function CircleProgress({ score, size = 160 }: { score: number; size?: number }) {
@@ -120,8 +119,8 @@ function CircleProgress({ score, size = 160 }: { score: number; size?: number })
 
 function ImageGallery({ images, flaws }: { images: string[]; flaws: Instrument['flaws'] }) {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isFading, setIsFading] = useState(false);
-  const [loadedImages, setLoadedImages] = useState<Set<number>>(new Set([0]));
+  const [displayIndex, setDisplayIndex] = useState(0);
+  const [transitioning, setTransitioning] = useState(false);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
@@ -129,14 +128,16 @@ function ImageGallery({ images, flaws }: { images: string[]; flaws: Instrument['
   const imagesToShow = images.slice(0, 6);
 
   const goToSlide = useCallback((index: number) => {
-    if (index === currentIndex) return;
-    setIsFading(true);
+    if (index === currentIndex || transitioning) return;
+    setTransitioning(true);
+    setCurrentIndex(index);
     setTimeout(() => {
-      setCurrentIndex(index);
-      setLoadedImages(prev => new Set(prev).add(index));
-      setTimeout(() => setIsFading(false), 50);
+      setDisplayIndex(index);
+      setTimeout(() => {
+        setTransitioning(false);
+      }, 300);
     }, 300);
-  }, [currentIndex]);
+  }, [currentIndex, transitioning]);
 
   const nextSlide = useCallback(() => {
     const next = (currentIndex + 1) % imagesToShow.length;
@@ -179,7 +180,7 @@ function ImageGallery({ images, flaws }: { images: string[]; flaws: Instrument['
     }
   };
 
-  const currentFlaws = currentIndex === 0 ? flaws : [];
+  const currentFlaws = displayIndex === 0 ? flaws : [];
 
   return (
     <div 
@@ -189,36 +190,29 @@ function ImageGallery({ images, flaws }: { images: string[]; flaws: Instrument['
       onTouchEnd={onTouchEnd}
     >
       <div className="gallery-main">
-        {imagesToShow.map((img, idx) => (
-          <div
-            key={idx}
-            className={`gallery-image-wrapper ${idx === currentIndex ? 'active' : ''} ${isFading ? 'fading' : ''}`}
-          >
-            {(idx === currentIndex || loadedImages.has(idx)) && (
-              <img 
-                src={img} 
-                alt={`乐器图片 ${idx + 1}`}
-                className="gallery-image"
-              />
-            )}
-            {idx === currentIndex && currentFlaws.map((flaw, flawIdx) => (
-              <div
-                key={flawIdx}
-                className="flaw-marker"
-                style={{
-                  left: `${flaw.x * 100}%`,
-                  top: `${flaw.y * 100}%`,
-                  width: `${flaw.w * 100}%`,
-                  height: `${flaw.h * 100}%`
-                }}
-                title={flaw.description}
-              >
-                <span className="flaw-badge">{flawIdx + 1}</span>
-                <span className="flaw-tooltip">{flaw.description}</span>
-              </div>
-            ))}
-          </div>
-        ))}
+        <div className={`gallery-slide ${transitioning ? 'fade-out' : 'fade-in'}`}>
+          <img 
+            src={imagesToShow[displayIndex]} 
+            alt={`乐器图片 ${displayIndex + 1}`}
+            className="gallery-image"
+          />
+          {currentFlaws.map((flaw, flawIdx) => (
+            <div
+              key={flawIdx}
+              className="flaw-marker"
+              style={{
+                left: `${flaw.x * 100}%`,
+                top: `${flaw.y * 100}%`,
+                width: `${flaw.w * 100}%`,
+                height: `${flaw.h * 100}%`
+              }}
+              title={flaw.description}
+            >
+              <span className="flaw-badge">{flawIdx + 1}</span>
+              <span className="flaw-tooltip">{flaw.description}</span>
+            </div>
+          ))}
+        </div>
         
         <div className="gallery-counter">
           {currentIndex + 1} / {imagesToShow.length}
@@ -230,6 +224,7 @@ function ImageGallery({ images, flaws }: { images: string[]; flaws: Instrument['
               className="gallery-btn gallery-prev" 
               onClick={prevSlide}
               aria-label="上一张"
+              disabled={transitioning}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <polyline points="15 18 9 12 15 6" />
@@ -239,6 +234,7 @@ function ImageGallery({ images, flaws }: { images: string[]; flaws: Instrument['
               className="gallery-btn gallery-next" 
               onClick={nextSlide}
               aria-label="下一张"
+              disabled={transitioning}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <polyline points="9 18 15 12 9 6" />
@@ -255,6 +251,7 @@ function ImageGallery({ images, flaws }: { images: string[]; flaws: Instrument['
               key={idx}
               className={`gallery-thumb ${idx === currentIndex ? 'active' : ''}`}
               onClick={() => goToSlide(idx)}
+              disabled={transitioning}
             >
               <img src={img} alt={`缩略图 ${idx + 1}`} loading="lazy" />
               <div className="thumb-overlay">
@@ -268,17 +265,17 @@ function ImageGallery({ images, flaws }: { images: string[]; flaws: Instrument['
   );
 }
 
-function SimilarInstruments({ brand, model, currentId }: { brand: string; model: string; currentId: string }) {
-  const { data: instruments, isLoading } = useQuery<Instrument[]>({
-    queryKey: ['instruments'],
+function SimilarInstruments({ currentId }: { currentId: string }) {
+  const { data: similarItems, isLoading } = useQuery<SimilarInstrument[]>({
+    queryKey: ['similar-instruments', currentId],
     queryFn: async () => {
-      const res = await fetch('/api/instruments');
-      if (!res.ok) throw new Error('Failed to fetch');
+      const res = await fetch(`/api/instruments/similar/${currentId}`);
+      if (!res.ok) throw new Error('Failed to fetch similar instruments');
       return res.json();
     }
   });
 
-  if (isLoading || !instruments) {
+  if (isLoading) {
     return (
       <div className="similar-section">
         <h4 className="similar-title">相似乐器参考</h4>
@@ -287,31 +284,7 @@ function SimilarInstruments({ brand, model, currentId }: { brand: string; model:
     );
   }
 
-  const mockSoldData: SimilarInstrument[] = [
-    ...instruments
-      .filter(i => i.id !== currentId && (i.brand === brand || i.model.includes(model.split(' ')[0])))
-      .slice(0, 2)
-      .map(i => ({
-        id: i.id,
-        name: i.name,
-        brand: i.brand,
-        condition: i.condition,
-        price: Math.round(i.price * (0.85 + Math.random() * 0.2)),
-        soldDate: '2024-0' + (Math.floor(Math.random() * 5) + 1) + '-' + (10 + Math.floor(Math.random() * 18)),
-        image: i.images[0]
-      })),
-    {
-      id: 'mock-1',
-      name: `${brand} ${model}（已售）`,
-      brand,
-      condition: Math.random() > 0.5 ? '几乎全新' : '有明显使用痕迹',
-      price: Math.round(8000 + Math.random() * 15000),
-      soldDate: '2024-03-' + (15 + Math.floor(Math.random() * 10)),
-      image: instruments[0]?.images[0] || ''
-    }
-  ].slice(0, 3);
-
-  if (mockSoldData.length === 0) {
+  if (!similarItems || similarItems.length === 0) {
     return null;
   }
 
@@ -321,8 +294,8 @@ function SimilarInstruments({ brand, model, currentId }: { brand: string; model:
       <p className="similar-subtitle">同品牌/型号近期成交价参考</p>
       
       <div className="similar-list">
-        {mockSoldData.map((item, idx) => (
-          <div key={item.id} className={`similar-item ${idx < mockSoldData.length - 1 ? 'has-divider' : ''}`}>
+        {similarItems.map((item, idx) => (
+          <div key={item.id} className={`similar-item ${idx < similarItems.length - 1 ? 'has-divider' : ''}`}>
             <div className="similar-image">
               <img src={item.image} alt={item.name} />
               <span className="sold-badge">已成交</span>
@@ -531,8 +504,6 @@ export default function Detail() {
               </div>
 
               <SimilarInstruments 
-                brand={instrument.brand} 
-                model={instrument.model}
                 currentId={instrument.id}
               />
 
