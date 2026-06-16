@@ -13,6 +13,13 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ mapData, selectedTil
   const lastCellRef = useRef<{ row: number; col: number } | null>(null);
   const shiftStartRef = useRef<{ row: number; col: number } | null>(null);
   const hoverCellRef = useRef<{ row: number; col: number } | null>(null);
+  const drawingWithShiftRef = useRef(false);
+  const erasingRef = useRef(false);
+  const mapDataRef = useRef(mapData);
+
+  useEffect(() => {
+    mapDataRef.current = mapData;
+  }, [mapData]);
 
   const drawGrid = useCallback(() => {
     const canvas = canvasRef.current;
@@ -111,12 +118,6 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ mapData, selectedTil
     return { row, col };
   };
 
-  const placeTile = useCallback((row: number, col: number, tileType: TileType) => {
-    const newMap = mapData.map(r => [...r]);
-    newMap[row][col] = tileType;
-    onMapChange(newMap);
-  }, [mapData, onMapChange]);
-
   const getLinePoints = (r0: number, c0: number, r1: number, c1: number): { row: number; col: number }[] => {
     const points: { row: number; col: number }[] = [];
     let dr = Math.abs(r1 - r0);
@@ -143,16 +144,30 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ mapData, selectedTil
     return points;
   };
 
-  const fillLine = useCallback((startRow: number, startCol: number, endRow: number, endCol: number, tileType: TileType) => {
-    const newMap = mapData.map(r => [...r]);
-    const points = getLinePoints(startRow, startCol, endRow, endCol);
-    for (const p of points) {
-      if (p.row >= 0 && p.row < GRID_ROWS && p.col >= 0 && p.col < GRID_COLS) {
-        newMap[p.row][p.col] = tileType;
+  const commitChanges = useCallback((changes: Map<number, TileType>) => {
+    if (changes.size === 0) return;
+    const newMap = mapDataRef.current.map(r => [...r]);
+    for (const [key, tile] of changes.entries()) {
+      const row = Math.floor(key / GRID_COLS);
+      const col = key % GRID_COLS;
+      if (row >= 0 && row < GRID_ROWS && col >= 0 && col < GRID_COLS) {
+        newMap[row][col] = tile;
       }
     }
     onMapChange(newMap);
-  }, [mapData, onMapChange]);
+  }, [onMapChange]);
+
+  const placePointsOnLine = useCallback((startRow: number, startCol: number, endRow: number, endCol: number, tileType: TileType) => {
+    const changes = new Map<number, TileType>();
+    const points = getLinePoints(startRow, startCol, endRow, endCol);
+    for (const p of points) {
+      if (p.row >= 0 && p.row < GRID_ROWS && p.col >= 0 && p.col < GRID_COLS) {
+        const key = p.row * GRID_COLS + p.col;
+        changes.set(key, tileType);
+      }
+    }
+    commitChanges(changes);
+  }, [commitChanges]);
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     e.preventDefault();
@@ -162,16 +177,21 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ mapData, selectedTil
     isDrawingRef.current = true;
     lastCellRef.current = cell;
 
-    if (e.shiftKey) {
-      shiftStartRef.current = cell;
+    if (e.button === 2) {
+      erasingRef.current = true;
     } else {
-      shiftStartRef.current = null;
+      erasingRef.current = false;
     }
 
-    if (e.button === 2) {
-      placeTile(cell.row, cell.col, 0 as TileType);
+    if (e.shiftKey && e.button !== 2) {
+      drawingWithShiftRef.current = true;
+      shiftStartRef.current = cell;
+      placePointsOnLine(cell.row, cell.col, cell.row, cell.col, selectedTile);
     } else {
-      placeTile(cell.row, cell.col, selectedTile);
+      drawingWithShiftRef.current = false;
+      shiftStartRef.current = null;
+      const tile = erasingRef.current ? (0 as TileType) : selectedTile;
+      placePointsOnLine(cell.row, cell.col, cell.row, cell.col, tile);
     }
   };
 
@@ -186,24 +206,28 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ mapData, selectedTil
     hoverCellRef.current = cell;
 
     if (isDrawingRef.current && cell) {
-      if (e.shiftKey && shiftStartRef.current) {
-        fillLine(shiftStartRef.current.row, shiftStartRef.current.col, cell.row, cell.col, selectedTile);
+      if (drawingWithShiftRef.current && shiftStartRef.current) {
+        placePointsOnLine(
+          shiftStartRef.current.row,
+          shiftStartRef.current.col,
+          cell.row,
+          cell.col,
+          selectedTile
+        );
+        lastCellRef.current = cell;
       } else {
         if (!lastCellRef.current || lastCellRef.current.row !== cell.row || lastCellRef.current.col !== cell.col) {
-          if (e.buttons === 2) {
-            fillLine(
-              lastCellRef.current?.row ?? cell.row,
-              lastCellRef.current?.col ?? cell.col,
+          const tile = erasingRef.current ? (0 as TileType) : selectedTile;
+          if (lastCellRef.current) {
+            placePointsOnLine(
+              lastCellRef.current.row,
+              lastCellRef.current.col,
               cell.row,
               cell.col,
-              0 as TileType
+              tile
             );
           } else {
-            if (lastCellRef.current) {
-              fillLine(lastCellRef.current.row, lastCellRef.current.col, cell.row, cell.col, selectedTile);
-            } else {
-              placeTile(cell.row, cell.col, selectedTile);
-            }
+            placePointsOnLine(cell.row, cell.col, cell.row, cell.col, tile);
           }
           lastCellRef.current = cell;
         }
@@ -214,16 +238,11 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ mapData, selectedTil
   };
 
   const handleMouseUp = () => {
-    if (isDrawingRef.current && shiftStartRef.current && lastCellRef.current) {
-      const end = lastCellRef.current;
-      const start = shiftStartRef.current;
-      if (start.row !== end.row || start.col !== end.col) {
-        fillLine(start.row, start.col, end.row, end.col, selectedTile);
-      }
-    }
     isDrawingRef.current = false;
     lastCellRef.current = null;
     shiftStartRef.current = null;
+    drawingWithShiftRef.current = false;
+    erasingRef.current = false;
   };
 
   const handleMouseLeave = () => {
@@ -231,6 +250,8 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ mapData, selectedTil
     isDrawingRef.current = false;
     lastCellRef.current = null;
     shiftStartRef.current = null;
+    drawingWithShiftRef.current = false;
+    erasingRef.current = false;
     drawGrid();
   };
 

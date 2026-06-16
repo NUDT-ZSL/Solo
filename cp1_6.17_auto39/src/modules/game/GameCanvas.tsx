@@ -10,6 +10,12 @@ interface GameCanvasProps {
   onGameOver: () => void;
   isPlaying: boolean;
   onReplay: () => void;
+  gameDataRef?: React.MutableRefObject<{
+    positions: Position[];
+    deaths: number;
+    coins: number;
+    playTime: number;
+  } | null>;
 }
 
 export const GameCanvas: React.FC<GameCanvasProps> = ({
@@ -19,11 +25,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   onGameOver,
   isPlaying,
   onReplay,
+  gameDataRef,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<PhysicsEngine | null>(null);
   const heatmapCalcRef = useRef(new HeatmapCalculator());
   const animFrameRef = useRef<number>(0);
+  const heatmapIntervalRef = useRef<number | null>(null);
   const inputRef = useRef<InputState>({ left: false, right: false, up: false, down: false });
   const playerRef = useRef<PlayerState>({
     x: 0, y: 0, vx: 0, vy: 0,
@@ -34,7 +42,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const [showHeatmap, setShowHeatmap] = useState(false);
   const heatmapDataRef = useRef<HeatmapData>({ positions: [], densityMatrix: [] });
   const positionRecordsRef = useRef<Position[]>([]);
-  const lastRecordTimeRef = useRef<number>(0);
   const ripplesRef = useRef<RippleEffect[]>([]);
   const coinAnimsRef = useRef<CoinAnimation[]>([]);
   const wasGroundedRef = useRef(false);
@@ -75,13 +82,21 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     startTimeRef.current = performance.now();
     gameOverRef.current = false;
     positionRecordsRef.current = [];
-    lastRecordTimeRef.current = 0;
     ripplesRef.current = [];
     coinAnimsRef.current = [];
     fpsFramesRef.current = [];
     lastFrameTimeRef.current = performance.now();
     setShowHeatmap(false);
     heatmapDataRef.current = { positions: [], densityMatrix: [] };
+
+    if (gameDataRef) {
+      gameDataRef.current = {
+        positions: [],
+        deaths: 0,
+        coins: 0,
+        playTime: 0,
+      };
+    }
 
     onStatsUpdate({
       fps: 0,
@@ -90,7 +105,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       playTime: 0,
       isGameOver: false,
     });
-  }, [mapData, onStatsUpdate]);
+  }, [mapData, onStatsUpdate, gameDataRef]);
 
   useEffect(() => {
     if (isPlaying) {
@@ -195,16 +210,17 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
       playerRef.current = updated;
 
-      if (now - lastRecordTimeRef.current >= 500) {
-        positionRecordsRef.current.push({
-          x: updated.x + updated.width / 2,
-          y: updated.y + updated.height / 2,
-          timestamp: now,
-        });
-        lastRecordTimeRef.current = now;
+      const playTime = (now - startTimeRef.current) / 1000;
+
+      if (gameDataRef) {
+        gameDataRef.current = {
+          positions: [...positionRecordsRef.current],
+          deaths: deathsRef.current,
+          coins: playerRef.current.coins,
+          playTime: playTime,
+        };
       }
 
-      const playTime = (now - startTimeRef.current) / 1000;
       onStatsUpdate({
         fps,
         deaths: deathsRef.current,
@@ -347,13 +363,35 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   useEffect(() => {
     if (isPlaying) {
       animFrameRef.current = requestAnimationFrame(gameLoop);
+
+      heatmapIntervalRef.current = window.setInterval(() => {
+        if (gameOverRef.current) return;
+        const player = playerRef.current;
+        positionRecordsRef.current.push({
+          x: player.x + player.width / 2,
+          y: player.y + player.height / 2,
+          timestamp: performance.now(),
+        });
+        if (gameDataRef) {
+          gameDataRef.current = {
+            positions: [...positionRecordsRef.current],
+            deaths: deathsRef.current,
+            coins: playerRef.current.coins,
+            playTime: (performance.now() - startTimeRef.current) / 1000,
+          };
+        }
+      }, 500);
     }
     return () => {
       if (animFrameRef.current) {
         cancelAnimationFrame(animFrameRef.current);
       }
+      if (heatmapIntervalRef.current) {
+        clearInterval(heatmapIntervalRef.current);
+        heatmapIntervalRef.current = null;
+      }
     };
-  }, [isPlaying, gameLoop]);
+  }, [isPlaying, gameLoop, gameDataRef]);
 
   const handleReplay = () => {
     initGame();

@@ -1,8 +1,9 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { MapData, TileType, GameStats, HeatmapData, ExportData, createEmptyMap } from './types';
+import { MapData, TileType, GameStats, HeatmapData, ExportData, createEmptyMap, Position } from './types';
 import { EditorCanvas } from './modules/editor/EditorCanvas';
 import { EditorToolbar } from './modules/editor/EditorToolbar';
 import { GameCanvas } from './modules/game/GameCanvas';
+import { HeatmapCalculator } from './modules/game/HeatmapCalculator';
 
 const App: React.FC = () => {
   const [mapData, setMapData] = useState<MapData>(createEmptyMap());
@@ -24,10 +25,26 @@ const App: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const currentMapDataRef = useRef<MapData>(mapData);
+  const gameStatsRef = useRef<GameStats>(gameStats);
+  const heatmapDataRef = useRef<HeatmapData>(heatmapData);
+  const gameDataRef = useRef<{
+    positions: Position[];
+    deaths: number;
+    coins: number;
+    playTime: number;
+  } | null>(null);
 
   useEffect(() => {
     currentMapDataRef.current = mapData;
   }, [mapData]);
+
+  useEffect(() => {
+    gameStatsRef.current = gameStats;
+  }, [gameStats]);
+
+  useEffect(() => {
+    heatmapDataRef.current = heatmapData;
+  }, [heatmapData]);
 
   const handleMapChange = useCallback((newMap: MapData) => {
     setMapData(newMap);
@@ -63,13 +80,26 @@ const App: React.FC = () => {
   }, []);
 
   const handleExportData = useCallback(() => {
+    const latestGameData = gameDataRef.current;
+    const stats = gameStatsRef.current;
+    const heatmap = heatmapDataRef.current;
+    const latestPositions = latestGameData ? latestGameData.positions : heatmap.positions;
+
+    const calc = new HeatmapCalculator();
+    const densityMatrix = latestPositions.length > 0
+      ? calc.calculateDensity(latestPositions)
+      : heatmap.densityMatrix;
+
     const exportData: ExportData = {
       mapData: currentMapDataRef.current,
-      heatmapData: heatmapData,
+      heatmapData: {
+        positions: latestPositions,
+        densityMatrix: densityMatrix,
+      },
       gameStats: {
-        deaths: gameStats.deaths,
-        coins: gameStats.coins,
-        playTime: gameStats.playTime,
+        deaths: latestGameData ? latestGameData.deaths : stats.deaths,
+        coins: latestGameData ? latestGameData.coins : stats.coins,
+        playTime: latestGameData ? Math.round(latestGameData.playTime * 10) / 10 : stats.playTime,
       },
       timestamp: new Date().toISOString(),
     };
@@ -84,7 +114,7 @@ const App: React.FC = () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [heatmapData, gameStats]);
+  }, []);
 
   const handleMouseDown = useCallback(() => {
     setIsDragging(true);
@@ -93,12 +123,20 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!isDragging) return;
 
+    const MIN_PANEL_WIDTH = 300;
+
     const handleMouseMove = (e: MouseEvent) => {
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
+      const totalWidth = rect.width;
       const x = e.clientX - rect.left;
-      const ratio = (x / rect.width) * 100;
-      setSplitRatio(Math.max(20, Math.min(80, ratio)));
+
+      const minLeft = MIN_PANEL_WIDTH;
+      const maxLeft = totalWidth - MIN_PANEL_WIDTH;
+
+      let clampedX = Math.max(minLeft, Math.min(maxLeft, x));
+      const ratio = (clampedX / totalWidth) * 100;
+      setSplitRatio(ratio);
     };
 
     const handleMouseUp = () => {
@@ -301,6 +339,7 @@ const App: React.FC = () => {
               onGameOver={handleGameOver}
               isPlaying={isPlaying}
               onReplay={handleReplay}
+              gameDataRef={gameDataRef}
             />
           </div>
 

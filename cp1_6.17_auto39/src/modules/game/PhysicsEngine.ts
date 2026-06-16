@@ -52,59 +52,41 @@ export class PhysicsEngine {
     let newState = this.applyInput(player, input);
     newState = this.applyGravity(newState);
 
-    newState = this.moveAxis(newState, 'x', newState.vx);
-    newState = this.moveAxis(newState, 'y', newState.vy);
+    const steps = Math.max(Math.abs(newState.vx), Math.abs(newState.vy));
+    if (steps < 1) {
+      newState = this.moveSingleAxis(newState, 'x', newState.vx);
+      newState = this.moveSingleAxis(newState, 'y', newState.vy);
+    } else {
+      const stepX = newState.vx / steps;
+      const stepY = newState.vy / steps;
+      for (let i = 0; i < steps; i++) {
+        newState = this.moveSingleAxis(newState, 'x', stepX);
+        newState = this.moveSingleAxis(newState, 'y', stepY);
+      }
+    }
 
     return newState;
   }
 
-  private moveAxis(player: PlayerState, axis: 'x' | 'y', velocity: number): PlayerState {
-    if (velocity === 0) return player;
+  private moveSingleAxis(player: PlayerState, axis: 'x' | 'y', delta: number): PlayerState {
+    if (delta === 0) return player;
 
-    const newPos = {
-      ...player,
-      [axis]: player[axis] + velocity,
-    };
-
-    const collision = this.checkCollision(newPos.x, newPos.y, newPos.width, newPos.height);
+    const moved = { ...player, [axis]: player[axis] + delta };
 
     if (axis === 'x') {
-      if (velocity > 0 && collision.right) {
-        const rightEdge = Math.floor((newPos.x + newPos.width) / this.tileSize) * this.tileSize;
-        newPos.x = rightEdge - newPos.width - 0.01;
-        newPos.vx = 0;
-      } else if (velocity < 0 && collision.left) {
-        const leftEdge = Math.ceil(newPos.x / this.tileSize) * this.tileSize;
-        newPos.x = leftEdge + 0.01;
-        newPos.vx = 0;
-      }
+      return this.resolveXCollision(moved);
+    } else {
+      return this.resolveYCollision(moved);
     }
-
-    if (axis === 'y') {
-      if (velocity > 0 && collision.bottom) {
-        const bottomEdge = Math.floor((newPos.y + newPos.height) / this.tileSize) * this.tileSize;
-        newPos.y = bottomEdge - newPos.height - 0.01;
-        newPos.vy = 0;
-        newPos.isGrounded = true;
-      } else if (velocity < 0 && collision.top) {
-        const topEdge = Math.ceil(newPos.y / this.tileSize) * this.tileSize;
-        newPos.y = topEdge + 0.01;
-        newPos.vy = 0;
-      }
-    }
-
-    return newPos;
   }
 
   checkCollision(x: number, y: number, w: number, h: number): CollisionResult {
     const result: CollisionResult = { top: false, bottom: false, left: false, right: false };
 
-    const margin = 0.5;
-
-    const left = x + margin;
-    const right = x + w - margin;
-    const top = y + margin;
-    const bottom = y + h - margin;
+    const left = x + 0.1;
+    const right = x + w - 0.1;
+    const top = y + 0.1;
+    const bottom = y + h - 0.1;
 
     const startCol = Math.max(0, Math.floor(left / this.tileSize));
     const endCol = Math.min(GRID_COLS - 1, Math.floor(right / this.tileSize));
@@ -130,21 +112,53 @@ export class PhysicsEngine {
         const overlapTop = bottom - tileTop;
         const overlapBottom = tileBottom - top;
 
-        const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
-
-        if (minOverlap === overlapTop) {
-          result.bottom = true;
-        } else if (minOverlap === overlapBottom) {
-          result.top = true;
-        } else if (minOverlap === overlapLeft) {
-          result.right = true;
-        } else if (minOverlap === overlapRight) {
-          result.left = true;
-        }
+        if (overlapLeft > 0) result.right = true;
+        if (overlapRight > 0) result.left = true;
+        if (overlapTop > 0) result.bottom = true;
+        if (overlapBottom > 0) result.top = true;
       }
     }
 
     return result;
+  }
+
+  private resolveXCollision(player: PlayerState): PlayerState {
+    const next = { ...player };
+    const collision = this.checkCollision(next.x, next.y, next.width, next.height);
+
+    if (next.vx > 0 && collision.right) {
+      const tileCol = Math.floor((next.x + next.width) / this.tileSize);
+      const tileLeft = tileCol * this.tileSize;
+      next.x = tileLeft - next.width - 0.01;
+      next.vx = 0;
+    } else if (next.vx < 0 && collision.left) {
+      const tileCol = Math.floor(next.x / this.tileSize);
+      const tileRight = (tileCol + 1) * this.tileSize;
+      next.x = tileRight + 0.01;
+      next.vx = 0;
+    }
+
+    return next;
+  }
+
+  private resolveYCollision(player: PlayerState): PlayerState {
+    const next = { ...player };
+    const collision = this.checkCollision(next.x, next.y, next.width, next.height);
+
+    if (next.vy > 0 && collision.bottom) {
+      const tileRow = Math.floor((next.y + next.height) / this.tileSize);
+      const tileTop = tileRow * this.tileSize;
+      next.y = tileTop - next.height - 0.01;
+      next.vy = 0;
+      next.isGrounded = true;
+    } else if (next.vy < 0 && collision.top) {
+      const tileRow = Math.floor(next.y / this.tileSize);
+      const tileBottom = (tileRow + 1) * this.tileSize;
+      next.y = tileBottom + 0.01;
+      next.vy = 0;
+    }
+
+    return next;
   }
 
   checkSpikeCollision(x: number, y: number, w: number, h: number): boolean {
