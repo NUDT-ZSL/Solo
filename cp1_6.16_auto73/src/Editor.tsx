@@ -43,6 +43,7 @@ const emojiCategories: EmojiCategory[] = [
 
 function Editor({ date, entry, onSave }: EditorProps) {
   const [activeCategory, setActiveCategory] = useState(0)
+  const [prevCategory, setPrevCategory] = useState(0)
   const [emojis, setEmojis] = useState<EmojiItem[]>(entry?.emojis || [])
   const [note, setNote] = useState(entry?.note || '')
   const [draggingId, setDraggingId] = useState<string | null>(null)
@@ -176,13 +177,20 @@ function Editor({ date, entry, onSave }: EditorProps) {
                   color: activeCategory === idx ? '#E65100' : '#5D6D7E',
                   fontWeight: activeCategory === idx ? 600 : 400,
                 }}
-                onClick={() => setActiveCategory(idx)}
+                onClick={() => {
+                  setPrevCategory(activeCategory)
+                  setActiveCategory(idx)
+                }}
               >
                 {cat.name}
               </button>
             ))}
           </div>
-          <div className="emoji-panel-slide" key={activeCategory} style={styles.emojiGrid}>
+          <div
+            className={activeCategory >= prevCategory ? 'emoji-panel-slide-right' : 'emoji-panel-slide-left'}
+            key={activeCategory}
+            style={styles.emojiGrid}
+          >
             {emojiCategories[activeCategory].emojis.map((emojiChar, idx) => (
               <button
                 key={idx}
@@ -213,7 +221,9 @@ function Editor({ date, entry, onSave }: EditorProps) {
                   ...styles.emojiOnCanvas,
                   left: emojiItem.x,
                   top: emojiItem.y,
-                  fontSize: `${32 * emojiItem.scale}px`,
+                  fontSize: '32px',
+                  transform: `scale(${emojiItem.scale})`,
+                  transformOrigin: 'top left',
                   boxShadow: draggingId === emojiItem.id
                     ? '0 8px 20px rgba(0, 0, 0, 0.3)'
                     : 'none',

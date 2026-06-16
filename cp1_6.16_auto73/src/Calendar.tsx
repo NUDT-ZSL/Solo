@@ -114,7 +114,7 @@ function Calendar({ currentMonth, entries, onDateClick }: CalendarProps) {
               className="calendar-cell"
               style={{
                 ...styles.cell,
-                border: hasEntry ? 'none' : `2px dashed #BDC3C7`,
+                border: hasEntry ? 'none' : `1px dashed #BDC3C7`,
                 background: hasEntry ? '#FFFFFF' : 'transparent',
                 outline: isToday(day) ? '2px solid #FFB74D' : 'none',
                 outlineOffset: isToday(day) ? '-2px' : '0',
@@ -132,11 +132,13 @@ function Calendar({ currentMonth, entries, onDateClick }: CalendarProps) {
 
       {hoveredCell && entries[hoveredCell.date] && (
         <div
+          key={hoveredCell.date}
           className="preview-bubble"
           style={{
             ...styles.previewBubble,
             left: hoveredCell.x,
             top: hoveredCell.y - 12,
+            transform: undefined,
           }}
         >
           <div style={styles.previewEmojis}>
@@ -229,7 +231,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
   previewBubble: {
     position: 'fixed',
-    transform: 'translateX(-50%)',
     background: '#FFFFFF',
     borderRadius: '12px',
     padding: '12px',
