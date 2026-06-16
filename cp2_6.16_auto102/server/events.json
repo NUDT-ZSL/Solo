@@ -1,0 +1,71 @@
+{
+  "events": [
+    {
+      "id": "pangaea",
+      "name": "泛大陆形成",
+      "description": "3亿年前所有大陆汇聚形成超级大陆",
+      "duration": 8000,
+      "timeStamps": [
+        { "time": 0, "note": "各板块分散状态" },
+        { "time": 50, "note": "板块开始汇聚" },
+        { "time": 100, "note": "主要碰撞发生" },
+        { "time": 150, "note": "乌拉尔山脉形成" },
+        { "time": 200, "note": "盘古大陆基本成型" },
+        { "time": 250, "note": "泛大陆完整形成" },
+        { "time": 300, "note": "超级大陆稳定期" }
+      ],
+      "highlightedPlates": ["plate-1", "plate-2", "plate-3", "plate-4", "plate-5", "plate-6"]
+    },
+    {
+      "id": "himalaya",
+      "name": "喜马拉雅造山",
+      "description": "印度洋板块撞击亚欧板块形成世界屋脊",
+      "duration": 10000,
+      "timeStamps": [
+        { "time": 0, "note": "两板块分离" },
+        { "time": 100, "note": "印度洋板块北移" },
+        { "time": 175, "note": "特提斯洋开始闭合" },
+        { "time": 220, "note": "初始碰撞发生" },
+        { "time": 250, "note": "山脉快速隆起" },
+        { "time": 275, "note": "青藏高原抬升" },
+        { "time": 300, "note": "喜马拉雅形成" }
+      ],
+      "highlightedPlates": ["plate-2", "plate-6"],
+      "collisionPairs": [["plate-2", "plate-6"]]
+    },
+    {
+      "id": "atlantic",
+      "name": "大西洋裂开",
+      "description": "美洲板块与亚欧非洲板块分离",
+      "duration": 9000,
+      "timeStamps": [
+        { "time": 0, "note": "泛大陆完整状态" },
+        { "time": 50, "note": "初始张裂开始" },
+        { "time": 100, "note": "中大西洋海岭形成" },
+        { "time": 150, "note": "海水涌入裂谷" },
+        { "time": 200, "note": "大西洋雏形出现" },
+        { "time": 250, "note": "洋盆持续扩张" },
+        { "time": 300, "note": "现代大西洋形成" }
+      ],
+      "highlightedPlates": ["plate-2", "plate-3", "plate-4"],
+      "separationPairs": [["plate-2", "plate-4"], ["plate-3", "plate-4"]]
+    },
+    {
+      "id": "pegmatite",
+      "name": "班岩巨晶形成",
+      "description": "板块俯冲带岩浆活动形成巨型晶体",
+      "duration": 6000,
+      "timeStamps": [
+        { "time": 0, "note": "板块稳定状态" },
+        { "time": 80, "note": "俯冲作用开始" },
+        { "time": 140, "note": "洋壳熔融形成岩浆" },
+        { "time": 180, "note": "岩浆房缓慢冷却" },
+        { "time": 220, "note": "矿物结晶生长" },
+        { "time": 260, "note": "巨晶矿物形成" },
+        { "time": 300, "note": "班岩矿床成型" }
+      ],
+      "highlightedPlates": ["plate-1", "plate-2"],
+      "subductionPairs": [["plate-1", "plate-2"]]
+    }
+  ]
+}
