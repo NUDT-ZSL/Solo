@@ -1,0 +1,39 @@
+{
+  "stop-001": {
+    "averageRating": 4.3,
+    "reviews": [
+      { "customerName": "张三", "rating": 5, "comment": "经典剧目，演员表演非常到位，情绪感染力强！", "date": "2026-02-13" },
+      { "customerName": "李四", "rating": 4, "comment": "舞美效果很棒，剧情紧凑，值得一看。", "date": "2026-02-12" },
+      { "customerName": "赵六", "rating": 4, "comment": "整体不错，就是最后一幕节奏稍慢了些。", "date": "2026-02-11" }
+    ]
+  },
+  "stop-002": {
+    "averageRating": 4.5,
+    "reviews": [
+      { "customerName": "王五", "rating": 5, "comment": "上海话剧艺术中心的效果很好，演员功底深厚。", "date": "2026-02-16" },
+      { "customerName": "刘一", "rating": 4, "comment": "非常震撼的演出，观众反响热烈。", "date": "2026-02-15" }
+    ]
+  },
+  "stop-003": {
+    "averageRating": 4.8,
+    "reviews": [
+      { "customerName": "陈七", "rating": 5, "comment": "昆曲太美了，唱腔婉转，服饰精美，如痴如醉。", "date": "2026-03-22" },
+      { "customerName": "孙八", "rating": 5, "comment": "传统戏曲的魅力无穷，杜丽娘的扮演者堪称一绝！", "date": "2026-03-21" },
+      { "customerName": "褚十四", "rating": 5, "comment": "广州大剧院的音响效果一流，昆曲听得很清楚。", "date": "2026-03-20" }
+    ]
+  },
+  "stop-004": {
+    "averageRating": 4.5,
+    "reviews": [
+      { "customerName": "周九", "rating": 4, "comment": "四川大剧院的环境不错，表演也很专业。", "date": "2026-03-29" },
+      { "customerName": "吴十", "rating": 5, "comment": "第一次看昆曲现场，被深深震撼，以后还会来！", "date": "2026-03-28" }
+    ]
+  },
+  "stop-005": {
+    "averageRating": 4.5,
+    "reviews": [
+      { "customerName": "郑十一", "rating": 5, "comment": "孩子非常喜欢，舞台效果绚丽，互动环节很有趣。", "date": "2026-04-21" },
+      { "customerName": "钱十二", "rating": 4, "comment": "适合全家观看，寓教于乐，小朋友看得很开心。", "date": "2026-04-20" }
+    ]
+  }
+}

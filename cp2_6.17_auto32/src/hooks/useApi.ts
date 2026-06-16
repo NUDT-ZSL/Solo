@@ -32,23 +32,28 @@ export interface Order {
   customerName: string;
   orderDate: string;
   price: number;
-  rating?: number;
-  comment?: string;
   playName?: string;
   city?: string;
   venue?: string;
   date?: string;
 }
 
+export interface ReviewItem {
+  customerName: string;
+  rating: number;
+  comment: string;
+  date: string;
+}
+
+export interface StopReview {
+  averageRating: number;
+  reviews: ReviewItem[];
+}
+
 export interface ReviewSummary {
   averageRating: number;
   totalReviews: number;
-  recentReviews: {
-    customerName: string;
-    rating: number;
-    comment: string;
-    orderDate: string;
-  }[];
+  recentReviews: ReviewItem[];
 }
 
 export interface BoxOfficeData {
@@ -143,6 +148,11 @@ function useApi() {
     }) as Promise<Order>;
   }, [request]);
 
+  const getReviews = useCallback((stopId?: string) => {
+    const query = stopId ? `?stopId=${stopId}` : '';
+    return request(`/reviews${query}`) as Promise<StopReview | Record<string, StopReview>>;
+  }, [request]);
+
   const getBoxOffice = useCallback((playId?: string, range: string = 'week') => {
     const params = new URLSearchParams();
     if (playId) params.append('playId', playId);
@@ -163,6 +173,7 @@ function useApi() {
     getOrders,
     getOrder,
     createOrder,
+    getReviews,
     getBoxOffice,
   };
 }

@@ -114,6 +114,12 @@
   font-size: 13px;
 }
 
+.popup-no-rating {
+  color: #999;
+  font-size: 12px;
+  font-style: italic;
+}
+
 .star-rating {
   display: inline-flex;
   line-height: 1;
@@ -223,12 +229,12 @@
   position: absolute;
   top: 16px;
   right: 16px;
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.1);
   border: none;
-  font-size: 22px;
+  font-size: 18px;
   color: #e0e0e0;
   cursor: pointer;
   line-height: 1;
@@ -240,13 +246,12 @@
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.25);
   color: #fff;
-  transform: scale(1.1);
 }
 
 .close-btn:active {
-  transform: scale(0.95);
+  transform: scale(0.9);
 }
 
 .detail-row {
@@ -319,6 +324,25 @@
   font-size: 13px;
 }
 
+.review-empty {
+  text-align: center;
+  padding: 24px 16px;
+  color: #a0a0a0;
+}
+
+.review-empty-icon {
+  font-size: 28px;
+  display: block;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+.review-empty p {
+  margin: 0;
+  font-size: 13px;
+  color: #808080;
+}
+
 .review-list {
   display: flex;
   flex-direction: column;
@@ -385,9 +409,9 @@
   }
 
   .close-btn {
-    width: 32px;
-    height: 32px;
-    font-size: 20px;
+    width: 28px;
+    height: 28px;
+    font-size: 18px;
   }
 
   .review-header {

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import useApi, { TourStop, Order, ReviewSummary } from '../hooks/useApi';
+import useApi, { TourStop, StopReview, ReviewSummary, ReviewItem } from '../hooks/useApi';
 import './MapModule.css';
 
 const createCustomIcon = (status: string) => {
@@ -45,22 +45,31 @@ const StarRating: React.FC<{ rating: number; size?: number }> = ({ rating, size 
   );
 };
 
+const EMPTY_SUMMARY: ReviewSummary = {
+  averageRating: 0,
+  totalReviews: 0,
+  recentReviews: []
+};
+
 const MapModule: React.FC = () => {
-  const { getStops, getOrders } = useApi();
+  const { getStops, getReviews } = useApi();
   const [stops, setStops] = useState<TourStop[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [reviewsMap, setReviewsMap] = useState<Record<string, StopReview>>({});
   const [loading, setLoading] = useState(true);
   const [selectedStop, setSelectedStop] = useState<TourStop | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [stopsData, ordersData] = await Promise.all([
+        const [stopsData, reviewsData] = await Promise.all([
           getStops(),
-          getOrders()
+          getReviews()
         ]);
         setStops(stopsData);
-        setOrders(ordersData);
+        if (reviewsData && typeof reviewsData === 'object' && !('averageRating' in reviewsData)) {
+          setReviewsMap(reviewsData as Record<string, StopReview>);
+        }
       } catch (err) {
         console.error('加载数据失败', err);
       } finally {
@@ -79,47 +88,40 @@ const MapModule: React.FC = () => {
       }
     };
 
+    const handleMouseDown = (e: MouseEvent) => {
+      if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
+        setSelectedStop(null);
+      }
+    };
+
     document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousedown', handleMouseDown);
     document.body.style.overflow = 'hidden';
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handleMouseDown);
       document.body.style.overflow = '';
     };
   }, [selectedStop]);
 
   const getReviewSummary = useCallback((stopId: string): ReviewSummary => {
-    const stopOrders = orders.filter(
-      o => o.stopId === stopId && o.rating !== undefined && o.comment && o.comment.trim() !== ''
-    );
+    const stopReview = reviewsMap[stopId];
 
-    if (stopOrders.length === 0) {
-      return {
-        averageRating: 0,
-        totalReviews: 0,
-        recentReviews: []
-      };
+    if (!stopReview || !stopReview.reviews || stopReview.reviews.length === 0) {
+      return EMPTY_SUMMARY;
     }
 
-    const totalRating = stopOrders.reduce((sum, o) => sum + (o.rating || 0), 0);
-    const averageRating = Math.round((totalRating / stopOrders.length) * 10) / 10;
-
-    const recentReviews = [...stopOrders]
-      .sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime())
-      .slice(0, 3)
-      .map(o => ({
-        customerName: o.customerName,
-        rating: o.rating || 0,
-        comment: o.comment || '',
-        orderDate: o.orderDate
-      }));
+    const recentReviews = [...stopReview.reviews]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 3);
 
     return {
-      averageRating,
-      totalReviews: stopOrders.length,
+      averageRating: stopReview.averageRating || 0,
+      totalReviews: stopReview.reviews.length,
       recentReviews
     };
-  }, [orders]);
+  }, [reviewsMap]);
 
   const routePositions = stops
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
@@ -202,11 +204,17 @@ const MapModule: React.FC = () => {
                     {stop.status === '已演出' && (
                       <p><strong>票房：</strong>¥{stop.boxOffice.toLocaleString()}</p>
                     )}
-                    {reviewSummary.totalReviews > 0 && (
+                    {stop.status === '已演出' && reviewSummary.totalReviews > 0 && (
                       <div className="popup-rating">
                         <strong>评分：</strong>
                         <StarRating rating={reviewSummary.averageRating} />
                         <span className="popup-rating-score">{reviewSummary.averageRating.toFixed(1)}</span>
+                      </div>
+                    )}
+                    {stop.status === '已演出' && reviewSummary.totalReviews === 0 && (
+                      <div className="popup-rating">
+                        <strong>评分：</strong>
+                        <span className="popup-no-rating">暂无评价</span>
                       </div>
                     )}
                   </div>
@@ -218,8 +226,8 @@ const MapModule: React.FC = () => {
       </div>
 
       {selectedStop && (
-        <div className="stop-detail-modal" onClick={() => setSelectedStop(null)}>
-          <div className="stop-detail-card" onClick={e => e.stopPropagation()}>
+        <div className="stop-detail-modal">
+          <div className="stop-detail-card" ref={cardRef}>
             <button 
               className="close-btn" 
               onClick={() => setSelectedStop(null)}
@@ -253,43 +261,48 @@ const MapModule: React.FC = () => {
               </div>
             )}
 
-            {selectedStop.status === '已演出' && (
-              <div className="review-section">
-                <div className="review-header">
-                  <h4>观众评价</h4>
-                  {(() => {
-                    const summary = getReviewSummary(selectedStop.id);
-                    if (summary.totalReviews === 0) {
-                      return <span className="no-review">暂无评价</span>;
-                    }
-                    return (
-                      <div className="rating-summary">
-                        <StarRating rating={summary.averageRating} size={16} />
-                        <span className="rating-score">{summary.averageRating.toFixed(1)}</span>
-                        <span className="rating-count">({summary.totalReviews}条评价)</span>
-                      </div>
-                    );
-                  })()}
-                </div>
+            <div className="review-section">
+              <div className="review-header">
+                <h4>观众评价</h4>
                 {(() => {
                   const summary = getReviewSummary(selectedStop.id);
-                  if (summary.recentReviews.length === 0) return null;
+                  if (summary.totalReviews === 0) {
+                    return <span className="no-review">暂无评价</span>;
+                  }
                   return (
-                    <div className="review-list">
-                      {summary.recentReviews.map((review, index) => (
-                        <div key={index} className="review-item">
-                          <div className="review-top">
-                            <span className="reviewer-name">{review.customerName}</span>
-                            <StarRating rating={review.rating} size={12} />
-                          </div>
-                          <p className="review-comment">{review.comment}</p>
-                        </div>
-                      ))}
+                    <div className="rating-summary">
+                      <StarRating rating={summary.averageRating} size={16} />
+                      <span className="rating-score">{summary.averageRating.toFixed(1)}</span>
+                      <span className="rating-count">({summary.totalReviews}条评价)</span>
                     </div>
                   );
                 })()}
               </div>
-            )}
+              {(() => {
+                const summary = getReviewSummary(selectedStop.id);
+                if (summary.totalReviews === 0) {
+                  return (
+                    <div className="review-empty">
+                      <span className="review-empty-icon">💬</span>
+                      <p>该站点暂无观众评价</p>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="review-list">
+                    {summary.recentReviews.map((review, index) => (
+                      <div key={index} className="review-item">
+                        <div className="review-top">
+                          <span className="reviewer-name">{review.customerName}</span>
+                          <StarRating rating={review.rating} size={12} />
+                        </div>
+                        <p className="review-comment">{review.comment}</p>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         </div>
       )}

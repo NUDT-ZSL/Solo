@@ -181,6 +181,18 @@ app.post('/api/orders', (req, res) => {
   res.status(201).json(newOrder);
 });
 
+// 评价 API
+app.get('/api/reviews', (req, res) => {
+  const { stopId } = req.query;
+  const reviews = readJSON('reviews.json');
+  
+  if (stopId) {
+    res.json(reviews[stopId] || { averageRating: 0, reviews: [] });
+  } else {
+    res.json(reviews);
+  }
+});
+
 // 票房数据 API
 app.get('/api/boxoffice', (req, res) => {
   const { playId, range = 'week' } = req.query;
