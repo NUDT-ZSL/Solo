@@ -1,1 +1,10 @@
-[]
+[
+  {
+    "playerName": "Player",
+    "maxMicrobeCount": 50,
+    "avgEnergy": 75.37815242539554,
+    "duration": 92.166,
+    "timestamp": 1781598580227,
+    "id": "901ed15c-9dec-45ff-8bb3-9350d1fd2e8d"
+  }
+]

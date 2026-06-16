@@ -24,6 +24,7 @@ export default function App() {
     histogram: new Array(10).fill(0),
   });
   const [showHelp, setShowHelp] = useState(false);
+  const [engineReady, setEngineReady] = useState(false);
   const engineRef = useRef<GameEngine | null>(null);
   const startTimeRef = useRef<number>(Date.now());
 
@@ -38,19 +39,20 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!engineRef.current) return;
+    if (!engineReady || !engineRef.current) return;
     const interval = setInterval(() => {
       if (engineRef.current) {
         setStats(engineRef.current.getStats());
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [config]);
+  }, [engineReady]);
 
   const handleEngineReady = useCallback((engine: GameEngine) => {
     engineRef.current = engine;
     startTimeRef.current = Date.now();
     setStats(engine.getStats());
+    setEngineReady(true);
   }, []);
 
   useEffect(() => {
