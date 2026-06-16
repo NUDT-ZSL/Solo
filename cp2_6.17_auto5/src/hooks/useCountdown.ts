@@ -1,14 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
-export function useCountdown(endTime: number) {
+export function useCountdown(endTime: string) {
   const [timeLeft, setTimeLeft] = useState<string>('')
   const [isExpired, setIsExpired] = useState(false)
+  const endTimeMs = useRef(new Date(endTime).getTime())
 
   useEffect(() => {
+    endTimeMs.current = new Date(endTime).getTime()
+
     const calculate = () => {
       const now = Date.now()
-      const diff = endTime - now
-      
+      const diff = endTimeMs.current - now
+
       if (diff <= 0) {
         setIsExpired(true)
         setTimeLeft('00天00时00分00秒')
@@ -30,7 +33,10 @@ export function useCountdown(endTime: number) {
 
     calculate()
     const timer = setInterval(calculate, 1000)
-    return () => clearInterval(timer)
+
+    return () => {
+      clearInterval(timer)
+    }
   }, [endTime])
 
   return { timeLeft, isExpired }

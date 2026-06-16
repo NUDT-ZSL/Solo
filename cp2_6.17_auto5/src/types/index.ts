@@ -1,62 +1,17 @@
-/**
- * 坐标类型
- */
-export interface Coordinates {
-  lat: number;
-  lng: number;
-}
+export type AlertType = 'thunderstorm' | 'typhoon' | 'rainstorm' | 'high_temperature' | 'cold_wave';
 
-/**
- * 地图边界类型
- */
-export interface Bounds {
-  west: number;
-  south: number;
-  east: number;
-  north: number;
-}
-
-/**
- * 灾害类型枚举
- */
-export type DisasterType =
-  | 'typhoon'
-  | 'rainstorm'
-  | 'flood'
-  | 'earthquake'
-  | 'landslide'
-  | 'thunder'
-  | 'hail'
-  | 'frost'
-  | 'heatwave'
-  | 'coldwave'
-  | 'drought'
-  | 'sandstorm'
-  | 'other';
-
-/**
- * 预警级别枚举
- */
 export type AlertLevel = 'blue' | 'yellow' | 'orange' | 'red';
 
-/**
- * 上报类型枚举
- */
 export type ReportType =
-  | 'flooding'
-  | 'debris'
-  | 'roadblock'
-  | 'collapse'
-  | 'damage'
-  | 'injury'
+  | 'rainstorm_flooding'
+  | 'wind_tree_fall'
+  | 'hail'
+  | 'landslide'
   | 'other';
 
-/**
- * 预警信息
- */
 export interface Alert {
   id: string;
-  type: DisasterType;
+  type: AlertType;
   level: AlertLevel;
   region: string;
   description: string;
@@ -64,14 +19,25 @@ export interface Alert {
   endTime: string;
 }
 
-/**
- * 上报信息
- */
 export interface Report {
   id: string;
   type: ReportType;
-  location: Coordinates;
+  lat: number;
+  lng: number;
   description: string;
-  photo: string;
-  createdAt: string;
+  photoUrl?: string;
+  timestamp: string;
+}
+
+export interface Bounds {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+}
+
+export interface ToastItem {
+  id: string;
+  type: 'success' | 'error' | 'info';
+  message: string;
 }

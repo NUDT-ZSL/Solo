@@ -1,6 +1,8 @@
-export type AlertType = '雷暴' | '台风' | '暴雨' | '高温' | '寒潮';
+export type AlertType = 'thunderstorm' | 'typhoon' | 'rainstorm' | 'high_temperature' | 'cold_wave';
 
-export type AlertLevel = '蓝色' | '黄色' | '橙色' | '红色';
+export type AlertLevel = 'blue' | 'yellow' | 'orange' | 'red';
+
+export type ReportType = 'rainstorm_flooding' | 'wind_tree_fall' | 'hail' | 'landslide' | 'other';
 
 export interface Alert {
   id: string;
@@ -12,19 +14,14 @@ export interface Alert {
   endTime: string;
 }
 
-export interface Coordinates {
-  lat: number;
-  lng: number;
-}
-
 export interface Report {
   id: string;
-  title: string;
+  type: ReportType;
+  lat: number;
+  lng: number;
   description: string;
-  type: string;
-  coordinates: Coordinates;
-  region: string;
-  createdAt: string;
+  photoUrl?: string;
+  timestamp: string;
 }
 
 export interface Bounds {

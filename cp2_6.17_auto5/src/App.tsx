@@ -61,6 +61,7 @@ export default function App() {
         <ReportModal
           onClose={handleCloseModal}
           initialLocation={reportLocation}
+          onPickLocation={handlePickLocation}
         />
       )}
 

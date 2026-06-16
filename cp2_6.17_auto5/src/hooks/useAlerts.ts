@@ -4,47 +4,19 @@ import { fetchWithRetry, API_BASE_PATH } from '../utils/api';
 import { cache } from '../utils/cache';
 import { isExpired } from '../utils/helpers';
 
-/**
- * useAlerts返回类型定义
- */
 interface UseAlertsResult {
   alerts: Alert[];
   loading: boolean;
   error: Error | null;
+  showSkeleton: boolean;
   refetch: () => void;
 }
 
-/**
- * 缓存键名
- */
 const CACHE_KEY = 'alerts_data';
-
-/**
- * 缓存时间：10分钟（毫秒）
- */
 const CACHE_TTL = 10 * 60 * 1000;
-
-/**
- * 轮询间隔：30秒（毫秒）
- */
 const POLL_INTERVAL = 30 * 1000;
-
-/**
- * 骨架屏显示超时：5秒（毫秒）
- */
 const SKELETON_TIMEOUT = 5 * 1000;
 
-/**
- * 预警数据Hook
- * 功能：
- * - 获取alerts数组、loading状态、error对象、refetch函数
- * - 轮询：每30秒自动刷新
- * - 缓存：同一会话缓存10分钟，refetch清除缓存
- * - 请求取消：使用AbortController
- * - 自动重试：失败后最多重试3次，间隔指数递增（1s, 2s, 4s）
- * - 5秒超时显示骨架屏
- * - 过滤已过期的预警（endTime < now）
- */
 export function useAlerts(): UseAlertsResult {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -56,10 +28,6 @@ export function useAlerts(): UseAlertsResult {
   const skeletonTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef<boolean>(false);
 
-  /**
-   * 获取预警数据
-   * @param forceRefetch 是否强制刷新（忽略缓存）
-   */
   const fetchAlerts = useCallback(async (forceRefetch: boolean = false) => {
     if (!forceRefetch) {
       const cachedData = cache.get<Alert[]>(CACHE_KEY);
@@ -120,18 +88,11 @@ export function useAlerts(): UseAlertsResult {
     }
   }, []);
 
-  /**
-   * 强制刷新数据
-   * 清除缓存并重新获取
-   */
   const refetch = useCallback(() => {
     cache.delete(CACHE_KEY);
     fetchAlerts(true);
   }, [fetchAlerts]);
 
-  /**
-   * 组件挂载时初始化
-   */
   useEffect(() => {
     isMountedRef.current = true;
     fetchAlerts();
@@ -141,9 +102,6 @@ export function useAlerts(): UseAlertsResult {
     };
   }, [fetchAlerts]);
 
-  /**
-   * 轮询机制：每30秒刷新一次
-   */
   useEffect(() => {
     const startPolling = () => {
       pollTimeoutRef.current = setTimeout(() => {
@@ -164,9 +122,6 @@ export function useAlerts(): UseAlertsResult {
     };
   }, [fetchAlerts]);
 
-  /**
-   * 组件卸载时清理
-   */
   useEffect(() => {
     return () => {
       if (abortControllerRef.current) {
@@ -186,8 +141,9 @@ export function useAlerts(): UseAlertsResult {
 
   return {
     alerts,
-    loading: loading || showSkeleton,
+    loading,
     error,
+    showSkeleton,
     refetch,
   };
 }

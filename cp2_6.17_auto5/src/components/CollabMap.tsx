@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import dayjs from 'dayjs'
 import { useReports } from '../hooks/useReports'
 import { getCurrentPosition } from '../utils/geolocation'
 import { REPORT_COLORS, REPORT_TYPE_NAMES, FALLBACK_CENTER } from '../utils/constants'
-import type { Report, ReportType } from '../types'
+import type { Report, ReportType, Bounds } from '../types'
 import './CollabMap.css'
 
 interface CollabMapProps {
@@ -15,107 +15,130 @@ interface CollabMapProps {
   selectedLocation?: [number, number] | null
 }
 
+const CLUSTER_THRESHOLD = 500
+const GRID_SIZE = 0.01
+
 function createCustomMarker(color: string, isCluster = false, count = 0) {
+  const size = isCluster ? Math.min(40, 24 + Math.log2(count) * 4) : 16
+  const radius = isCluster ? size / 2 - 2 : 7
+
   return L.divIcon({
     className: 'custom-marker',
     html: `
-      <div class="marker-container ${isCluster ? 'cluster' : ''}">
-        <svg width="${isCluster ? 32 : 16}" height="${isCluster ? 32 : 16}" viewBox="0 0 ${isCluster ? 32 : 16} ${isCluster ? 32 : 16}">
+      <div class="marker-container ${isCluster ? 'cluster' : ''}" style="width:${size}px;height:${size}px;">
+        <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
           <circle 
-            cx="${isCluster ? 16 : 8}" 
-            cy="${isCluster ? 16 : 8}" 
-            r="${isCluster ? 14 : 7}" 
+            cx="${size / 2}" 
+            cy="${size / 2}" 
+            r="${radius}" 
             fill="${color}" 
             stroke="#ffffff" 
             stroke-width="2"
           />
         </svg>
-        ${isCluster ? `<span class="cluster-count">${count}</span>` : ''}
+        ${isCluster ? `<span class="cluster-count" style="font-size:${Math.max(10, size / 4)}px;">${count}</span>` : ''}
       </div>
     `,
-    iconSize: isCluster ? [32, 32] : [16, 16],
-    iconAnchor: isCluster ? [16, 16] : [8, 8],
-    popupAnchor: [0, -8]
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2]
   })
 }
 
 function getAverageColor(reports: Report[]): string {
-  const colors = reports.map(r => REPORT_COLORS[r.type])
-  const rgb = colors.reduce(
-    (acc, color) => {
-      const r = parseInt(color.slice(1, 3), 16)
-      const g = parseInt(color.slice(3, 5), 16)
-      const b = parseInt(color.slice(5, 7), 16)
-      return { r: acc.r + r, g: acc.g + g, b: acc.b + b }
-    },
-    { r: 0, g: 0, b: 0 }
-  )
-  const count = colors.length
-  return `rgb(${Math.round(rgb.r / count)}, ${Math.round(rgb.g / count)}, ${Math.round(rgb.b / count)})`
+  if (reports.length === 0) return '#6b7280'
+
+  const typeCount: Record<string, number> = {}
+  reports.forEach(r => {
+    typeCount[r.type] = (typeCount[r.type] || 0) + 1
+  })
+
+  const dominantType = Object.entries(typeCount).sort((a, b) => b[1] - a[1])[0][0] as ReportType
+  return REPORT_COLORS[dominantType] || '#6b7280'
 }
 
-function clusterReports(reports: Report[], threshold: number) {
+interface Cluster {
+  id: string
+  lat: number
+  lng: number
+  reports: Report[]
+}
+
+function clusterReports(reports: Report[], threshold: number, zoom: number): { markers: Report[]; clusters: Cluster[] } {
   if (reports.length <= threshold) {
     return { markers: reports, clusters: [] }
   }
 
-  const clusters: { lat: number; lng: number; reports: Report[] }[] = []
-  const used = new Set<string>()
+  const gridCellSize = GRID_SIZE / Math.pow(2, Math.max(0, zoom - 13))
+  const grid: Record<string, Report[]> = {}
 
-  reports.forEach((report, i) => {
-    if (used.has(report.id)) return
+  reports.forEach(report => {
+    const gridLat = Math.floor(report.lat / gridCellSize)
+    const gridLng = Math.floor(report.lng / gridCellSize)
+    const key = `${gridLat}_${gridLng}`
 
-    const cluster = [report]
-    used.add(report.id)
-
-    for (let j = i + 1; j < reports.length; j++) {
-      const other = reports[j]
-      if (used.has(other.id)) continue
-
-      const dist = Math.sqrt(
-        Math.pow(report.lat - other.lat, 2) +
-        Math.pow(report.lng - other.lng, 2)
-      )
-
-      if (dist < 0.05) {
-        cluster.push(other)
-        used.add(other.id)
-      }
+    if (!grid[key]) {
+      grid[key] = []
     }
+    grid[key].push(report)
+  })
 
-    if (cluster.length > 1) {
-      const avgLat = cluster.reduce((sum, r) => sum + r.lat, 0) / cluster.length
-      const avgLng = cluster.reduce((sum, r) => sum + r.lng, 0) / cluster.length
-      clusters.push({ lat: avgLat, lng: avgLng, reports: cluster })
+  const clusters: Cluster[] = []
+  const markers: Report[] = []
+
+  Object.entries(grid).forEach(([key, gridReports]) => {
+    if (gridReports.length > 1) {
+      const avgLat = gridReports.reduce((sum, r) => sum + r.lat, 0) / gridReports.length
+      const avgLng = gridReports.reduce((sum, r) => sum + r.lng, 0) / gridReports.length
+      clusters.push({
+        id: `cluster_${key}`,
+        lat: avgLat,
+        lng: avgLng,
+        reports: gridReports
+      })
+    } else if (gridReports.length === 1) {
+      markers.push(gridReports[0])
     }
   })
 
-  const markers = reports.filter(r => !used.has(r.id))
   return { markers, clusters }
 }
 
-function MapController({ onBoundsChange, onClick, selectMode, onSelectModeExit }: {
-  onBoundsChange: (bounds: [[number, number], [number, number]]) => void
+function MapController({
+  onBoundsChange,
+  onClick,
+  selectMode,
+  onSelectModeExit,
+  onZoomChange
+}: {
+  onBoundsChange: (bounds: Bounds) => void
   onClick?: (lat: number, lng: number) => void
   selectMode?: boolean
   onSelectModeExit?: () => void
+  onZoomChange: (zoom: number) => void
 }) {
   const map = useMap()
 
   useMapEvents({
     moveend: () => {
       const bounds = map.getBounds()
-      onBoundsChange([
-        [bounds.getSouth(), bounds.getWest()],
-        [bounds.getNorth(), bounds.getEast()]
-      ])
+      onBoundsChange({
+        west: bounds.getWest(),
+        south: bounds.getSouth(),
+        east: bounds.getEast(),
+        north: bounds.getNorth()
+      })
+      onZoomChange(map.getZoom())
     },
     zoomend: () => {
       const bounds = map.getBounds()
-      onBoundsChange([
-        [bounds.getSouth(), bounds.getWest()],
-        [bounds.getNorth(), bounds.getEast()]
-      ])
+      onBoundsChange({
+        west: bounds.getWest(),
+        south: bounds.getSouth(),
+        east: bounds.getEast(),
+        north: bounds.getNorth()
+      })
+      onZoomChange(map.getZoom())
     },
     click: (e) => {
       if (selectMode && onClick) {
@@ -129,7 +152,6 @@ function MapController({ onBoundsChange, onClick, selectMode, onSelectModeExit }
 }
 
 function ReportMarker({ report }: { report: Report }) {
-  const [isHovered, setIsHovered] = useState(false)
   const color = REPORT_COLORS[report.type]
   const icon = useMemo(() => createCustomMarker(color), [color])
 
@@ -137,10 +159,6 @@ function ReportMarker({ report }: { report: Report }) {
     <Marker
       position={[report.lat, report.lng]}
       icon={icon}
-      eventHandlers={{
-        mouseover: () => setIsHovered(true),
-        mouseout: () => setIsHovered(false)
-      }}
     >
       <Popup>
         <div className="popup-content">
@@ -158,31 +176,55 @@ function ReportMarker({ report }: { report: Report }) {
           )}
         </div>
       </Popup>
-      {isHovered && (
-        <style>{`
-          .leaflet-marker-icon[style*="translate3d"] {
-            transform: scale(1.2) !important;
-          }
-        `}</style>
-      )}
     </Marker>
   )
 }
 
-function ClusterMarker({ cluster }: { cluster: { lat: number; lng: number; reports: Report[] } }) {
-  const color = getAverageColor(cluster.reports)
+function ClusterMarker({ cluster }: { cluster: Cluster }) {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const color = useMemo(() => getAverageColor(cluster.reports), [cluster.reports])
   const icon = useMemo(
     () => createCustomMarker(color, true, cluster.reports.length),
     [color, cluster.reports.length]
   )
 
+  if (isExpanded) {
+    return (
+      <>
+        {cluster.reports.slice(0, 10).map((report) => (
+          <ReportMarker key={report.id} report={report} />
+        ))}
+        {cluster.reports.length > 10 && (
+          <Marker
+            position={[cluster.lat, cluster.lng]}
+            icon={createCustomMarker(color, true, cluster.reports.length - 10)}
+          >
+            <Popup>
+              <div className="popup-content">
+                <div className="popup-type">还有 {cluster.reports.length - 10} 条记录</div>
+                <div className="popup-count">请放大地图查看更多详情</div>
+              </div>
+            </Popup>
+          </Marker>
+        )}
+      </>
+    )
+  }
+
   return (
-    <Marker position={[cluster.lat, cluster.lng]} icon={icon}>
+    <Marker
+      position={[cluster.lat, cluster.lng]}
+      icon={icon}
+      eventHandlers={{
+        click: () => setIsExpanded(true)
+      }}
+    >
       <Popup>
         <div className="popup-content">
           <div className="popup-type">灾情聚合</div>
           <div className="popup-count">共 {cluster.reports.length} 条上报</div>
-          {cluster.reports.slice(0, 3).map((r, i) => (
+          <div className="popup-hint">点击聚合点展开</div>
+          {cluster.reports.slice(0, 5).map((r, i) => (
             <div key={i} className="popup-cluster-item">
               <span style={{ color: REPORT_COLORS[r.type] }}>
                 {REPORT_TYPE_NAMES[r.type]}
@@ -192,8 +234,8 @@ function ClusterMarker({ cluster }: { cluster: { lat: number; lng: number; repor
               </span>
             </div>
           ))}
-          {cluster.reports.length > 3 && (
-            <div className="popup-more">...还有 {cluster.reports.length - 3} 条</div>
+          {cluster.reports.length > 5 && (
+            <div className="popup-more">...还有 {cluster.reports.length - 5} 条</div>
           )}
         </div>
       </Popup>
@@ -203,8 +245,11 @@ function ClusterMarker({ cluster }: { cluster: { lat: number; lng: number; repor
 
 export default function CollabMap({ onMapClick, selectMode, center, selectedLocation }: CollabMapProps) {
   const [mapCenter, setMapCenter] = useState<[number, number]>(center || FALLBACK_CENTER)
-  const [bounds, setBounds] = useState<[[number, number], [number, number]] | null>(null)
-  const { reports, refetch } = useReports(bounds ? { bounds } : undefined)
+  const [bounds, setBounds] = useState<Bounds | null>(null)
+  const [zoom, setZoom] = useState(13)
+  const mapRef = useRef<L.Map | null>(null)
+
+  const { reports } = useReports(bounds || undefined)
 
   useEffect(() => {
     if (!center) {
@@ -220,8 +265,12 @@ export default function CollabMap({ onMapClick, selectMode, center, selectedLoca
     }
   }, [center])
 
-  const handleBoundsChange = useCallback((newBounds: [[number, number], [number, number]]) => {
+  const handleBoundsChange = useCallback((newBounds: Bounds) => {
     setBounds(newBounds)
+  }, [])
+
+  const handleZoomChange = useCallback((newZoom: number) => {
+    setZoom(newZoom)
   }, [])
 
   const handleClick = useCallback((lat: number, lng: number) => {
@@ -229,9 +278,11 @@ export default function CollabMap({ onMapClick, selectMode, center, selectedLoca
   }, [onMapClick])
 
   const { markers, clusters } = useMemo(
-    () => clusterReports(reports, 500),
-    [reports]
+    () => clusterReports(reports, CLUSTER_THRESHOLD, zoom),
+    [reports, zoom]
   )
+
+  const selectedIcon = useMemo(() => createCustomMarker('#ef4444'), [])
 
   return (
     <div className={`collab-map-container ${selectMode ? 'select-mode' : ''}`}>
@@ -245,6 +296,7 @@ export default function CollabMap({ onMapClick, selectMode, center, selectedLoca
         zoom={13}
         style={{ height: '100%', width: '100%', borderRadius: '16px' }}
         zoomControl={true}
+        ref={(map) => { mapRef.current = map }}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -252,19 +304,20 @@ export default function CollabMap({ onMapClick, selectMode, center, selectedLoca
         />
         <MapController
           onBoundsChange={handleBoundsChange}
+          onZoomChange={handleZoomChange}
           onClick={handleClick}
           selectMode={selectMode}
         />
         {markers.map(report => (
           <ReportMarker key={report.id} report={report} />
         ))}
-        {clusters.map((cluster, i) => (
-          <ClusterMarker key={i} cluster={cluster} />
+        {clusters.map(cluster => (
+          <ClusterMarker key={cluster.id} cluster={cluster} />
         ))}
         {selectedLocation && (
           <Marker
             position={selectedLocation}
-            icon={createCustomMarker('#ef4444')}
+            icon={selectedIcon}
           >
             <Popup>
               <div className="popup-content">

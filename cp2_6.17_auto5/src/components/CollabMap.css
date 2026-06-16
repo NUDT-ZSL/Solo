@@ -2,7 +2,7 @@
   width: 100%;
   height: 100%;
   border-radius: 16px;
-  border: 1px solid var(--color-gray-700);
+  border: 1px solid #334155;
   overflow: hidden;
   position: relative;
 }
@@ -20,14 +20,14 @@
   top: 16px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--color-primary);
+  background: #3b82f6;
   color: #ffffff;
   padding: 10px 20px;
   border-radius: 20px;
   font-size: 14px;
   font-weight: 600;
   z-index: 1000;
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   animation: pulse 2s ease-in-out infinite;
 }
 
@@ -53,7 +53,7 @@
 }
 
 .marker-container:hover svg {
-  animation: pulse 1s ease-in-out infinite;
+  animation: markerPulse 1s ease-in-out infinite;
 }
 
 .marker-container.cluster {
@@ -71,6 +71,7 @@
   font-size: 12px;
   font-weight: 700;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
 }
 
 .popup-content {
@@ -78,21 +79,23 @@
   flex-direction: column;
   gap: 8px;
   min-width: 180px;
+  max-width: 250px;
 }
 
 .popup-type {
   font-size: 16px;
   font-weight: 700;
+  color: #1e293b;
 }
 
 .popup-time {
   font-size: 12px;
-  color: var(--color-gray-400);
+  color: #64748b;
 }
 
 .popup-description {
   font-size: 14px;
-  color: var(--color-gray-200);
+  color: #334155;
   line-height: 1.5;
   word-break: break-word;
 }
@@ -107,8 +110,15 @@
 
 .popup-count {
   font-size: 14px;
-  color: var(--color-gray-300);
+  color: #475569;
   margin-bottom: 8px;
+}
+
+.popup-hint {
+  font-size: 12px;
+  color: #64748b;
+  font-style: italic;
+  margin-bottom: 4px;
 }
 
 .popup-cluster-item {
@@ -117,7 +127,7 @@
   align-items: center;
   padding: 4px 0;
   font-size: 13px;
-  border-top: 1px solid var(--color-gray-700);
+  border-top: 1px solid #e2e8f0;
 }
 
 .popup-cluster-item:first-of-type {
@@ -126,10 +136,10 @@
 
 .popup-more {
   font-size: 12px;
-  color: var(--color-gray-400);
+  color: #64748b;
   text-align: center;
   padding-top: 8px;
-  border-top: 1px solid var(--color-gray-700);
+  border-top: 1px solid #e2e8f0;
 }
 
 @keyframes pulse {
@@ -141,10 +151,6 @@
   }
 }
 
-.marker-container:hover svg {
-  animation: markerPulse 1s ease-in-out infinite;
-}
-
 @keyframes markerPulse {
   0%, 100% {
     transform: scale(1);
@@ -154,12 +160,21 @@
   }
 }
 
+.leaflet-popup-content-wrapper {
+  border-radius: 12px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
+}
+
+.leaflet-popup-content {
+  margin: 12px 16px !important;
+}
+
 @media (max-width: 768px) {
   .collab-map-container {
     height: 50vh;
     min-height: 300px;
   }
-  
+
   .map-hint {
     font-size: 12px;
     padding: 8px 16px;

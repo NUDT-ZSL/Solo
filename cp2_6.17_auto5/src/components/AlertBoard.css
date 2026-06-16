@@ -40,16 +40,24 @@
   overflow: hidden;
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  transition: transform 0.3s ease-out, box-shadow 0.3s ease-out;
+  transition: transform 0.3s ease-out, box-shadow 0.3s ease-out, opacity 0.5s ease, scale 0.5s ease;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
 .alert-card:hover {
   transform: translateY(-6px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.alert-card-exit {
+  opacity: 0 !important;
+  transform: scale(0.5) !important;
+  pointer-events: none;
 }
 
 .alert-level-bar {
@@ -81,7 +89,7 @@
 
 .alert-countdown {
   font-size: 14px;
-  font-family: var(--font-mono), monospace;
+  font-family: 'Courier New', monospace;
   color: rgba(255, 255, 255, 0.9);
   background: rgba(0, 0, 0, 0.2);
   padding: 8px 16px;
@@ -92,7 +100,7 @@
 }
 
 .skeleton-card {
-  background: linear-gradient(135deg, var(--color-gray-700) 0%, var(--color-gray-600) 100%);
+  background: linear-gradient(135deg, #334155 0%, #475569 100%);
   cursor: default;
 }
 
@@ -101,9 +109,21 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
+.skeleton {
+  background: linear-gradient(90deg, #475569 25%, #64748b 50%, #475569 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 .skeleton-level-bar {
   height: 6px;
   border-radius: 0;
+  width: 100%;
 }
 
 .skeleton-emoji {
@@ -135,13 +155,13 @@
     min-height: 50vh;
     padding: 16px;
   }
-  
+
   .alert-grid {
     grid-template-columns: 1fr;
     max-width: 320px;
     margin: 0 auto;
   }
-  
+
   .alert-card {
     width: 100%;
     max-width: 320px;
@@ -154,7 +174,7 @@
     max-width: 560px;
     margin: 0 auto;
   }
-  
+
   .alert-card {
     width: 100%;
     max-width: 240px;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAlerts } from '../hooks/useAlerts'
 import { useCountdown } from '../hooks/useCountdown'
 import { ALERT_EMOJIS, ALERT_LEVEL_COLORS, ALERT_GRADIENTS } from '../utils/constants'
@@ -17,18 +17,20 @@ function AlertCard({ alert, onExpire, onClick }: AlertCardProps) {
   const [isRemoving, setIsRemoving] = useState(false)
 
   useEffect(() => {
-    if (isExpired) {
+    if (isExpired && !isRemoving) {
       setIsRemoving(true)
-      const timer = setTimeout(() => onExpire(alert.id), 500)
+      const timer = setTimeout(() => {
+        onExpire(alert.id)
+      }, 500)
       return () => clearTimeout(timer)
     }
-  }, [isExpired, alert.id, onExpire])
+  }, [isExpired, isRemoving, alert.id, onExpire])
 
   return (
     <div
-      className={`alert-card ${isRemoving ? 'animate-fade-out' : ''}`}
+      className={`alert-card ${isRemoving ? 'alert-card-exit' : ''}`}
       style={{ background: ALERT_GRADIENTS[alert.level] }}
-      onClick={() => onClick(alert)}
+      onClick={() => !isRemoving && onClick(alert)}
     >
       <div
         className="alert-level-bar"
@@ -57,7 +59,7 @@ interface AlertBoardProps {
 }
 
 export default function AlertBoard({ onSelectMapLocation }: AlertBoardProps) {
-  const { alerts, showSkeleton, refetch } = useAlerts()
+  const { alerts, showSkeleton } = useAlerts()
   const [visibleAlerts, setVisibleAlerts] = useState<Alert[]>([])
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null)
 
@@ -65,15 +67,15 @@ export default function AlertBoard({ onSelectMapLocation }: AlertBoardProps) {
     setVisibleAlerts(alerts)
   }, [alerts])
 
-  const handleExpire = (id: string) => {
+  const handleExpire = useCallback((id: string) => {
     setVisibleAlerts(prev => prev.filter(a => a.id !== id))
-  }
+  }, [])
 
   const handleCardClick = (alert: Alert) => {
     setSelectedAlert(alert)
   }
 
-  const handleLocateOnMap = (alert: Alert) => {
+  const handleLocateOnMap = (_alert: Alert) => {
     if (onSelectMapLocation) {
       onSelectMapLocation(39.9042, 116.4074)
     }

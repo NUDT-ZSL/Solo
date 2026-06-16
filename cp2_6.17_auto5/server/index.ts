@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { readFile, writeFile } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import type { Alert, Report, Bounds } from './types.js';
+import type { Alert, Report } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -20,7 +20,7 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 async function readAlerts(): Promise<Alert[]> {
   const data = await readFile(ALERTS_FILE, 'utf-8');
@@ -38,7 +38,7 @@ async function writeReports(reports: Report[]): Promise<void> {
 
 app.get('/api/alerts', async (req: Request, res: Response<Alert[] | { error: string }>) => {
   try {
-    const { region, from, to } = req.query;
+    const { region } = req.query;
     let alerts = await readAlerts();
     const now = new Date();
 
@@ -46,16 +46,6 @@ app.get('/api/alerts', async (req: Request, res: Response<Alert[] | { error: str
 
     if (typeof region === 'string' && region.trim()) {
       alerts = alerts.filter(alert => alert.region.includes(region.trim()));
-    }
-
-    if (typeof from === 'string' && from) {
-      const fromDate = new Date(from);
-      alerts = alerts.filter(alert => new Date(alert.startTime) >= fromDate);
-    }
-
-    if (typeof to === 'string' && to) {
-      const toDate = new Date(to);
-      alerts = alerts.filter(alert => new Date(alert.endTime) <= toDate);
     }
 
     alerts.sort((a, b) => new Date(a.endTime).getTime() - new Date(b.endTime).getTime());
@@ -68,26 +58,26 @@ app.get('/api/alerts', async (req: Request, res: Response<Alert[] | { error: str
 
 app.get('/api/reports', async (req: Request, res: Response<Report[] | { error: string }>) => {
   try {
-    const { bounds } = req.query;
+    const { west, south, east, north } = req.query;
     let reports = await readReports();
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    reports = reports.filter(report => new Date(report.createdAt) >= twentyFourHoursAgo);
+    reports = reports.filter(report => new Date(report.timestamp) >= twentyFourHoursAgo);
 
-    if (typeof bounds === 'string' && bounds) {
-      const [westStr, southStr, eastStr, northStr] = bounds.split(',');
-      const west = parseFloat(westStr);
-      const south = parseFloat(southStr);
-      const east = parseFloat(eastStr);
-      const north = parseFloat(northStr);
+    if (west && south && east && north) {
+      const westNum = parseFloat(String(west));
+      const southNum = parseFloat(String(south));
+      const eastNum = parseFloat(String(east));
+      const northNum = parseFloat(String(north));
 
-      if (!isNaN(west) && !isNaN(south) && !isNaN(east) && !isNaN(north)) {
+      if (!isNaN(westNum) && !isNaN(southNum) && !isNaN(eastNum) && !isNaN(northNum)) {
         reports = reports.filter(report => {
-          const { lat, lng } = report.coordinates;
-          return lng >= west && lng <= east && lat >= south && lat <= north;
+          return report.lng >= westNum && report.lng <= eastNum && report.lat >= southNum && report.lat <= northNum;
         });
       }
     }
+
+    reports.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
     res.json(reports);
   } catch (error) {
@@ -95,11 +85,11 @@ app.get('/api/reports', async (req: Request, res: Response<Report[] | { error: s
   }
 });
 
-app.post('/api/reports', async (req: Request<unknown, unknown, Omit<Report, 'id' | 'createdAt'>>, res: Response<Report | { error: string }>) => {
+app.post('/api/reports', async (req: Request<unknown, unknown, Omit<Report, 'id' | 'timestamp'>>, res: Response<Report | { error: string }>) => {
   try {
-    const { title, description, type, coordinates, region } = req.body;
+    const { type, lat, lng, description, photoUrl } = req.body;
 
-    if (!title || !description || !type || !coordinates || !region) {
+    if (!type || lat === undefined || lng === undefined || !description) {
       res.status(400).json({ error: 'Missing required fields' });
       return;
     }
@@ -107,12 +97,12 @@ app.post('/api/reports', async (req: Request<unknown, unknown, Omit<Report, 'id'
     const reports = await readReports();
     const newReport: Report = {
       id: uuidv4(),
-      title,
-      description,
       type,
-      coordinates,
-      region,
-      createdAt: new Date().toISOString()
+      lat,
+      lng,
+      description,
+      photoUrl,
+      timestamp: new Date().toISOString()
     };
 
     reports.push(newReport);

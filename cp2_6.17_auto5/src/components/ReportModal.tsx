@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import ReportForm from './ReportForm'
-import type { ReportType } from '../types'
 import './Modal.css'
 
 interface ReportModalProps {
   onClose: () => void
   initialLocation?: [number, number] | null
+  onPickLocation?: () => void
 }
 
-export default function ReportModal({ onClose, initialLocation }: ReportModalProps) {
+export default function ReportModal({ onClose, initialLocation, onPickLocation }: ReportModalProps) {
   const [isClosing, setIsClosing] = useState(false)
 
   useEffect(() => {
@@ -47,9 +47,7 @@ export default function ReportModal({ onClose, initialLocation }: ReportModalPro
         <ReportForm
           onSuccess={handleSuccess}
           initialLocation={initialLocation}
-          onPickLocation={() => {
-            handleClose()
-          }}
+          onPickLocation={onPickLocation}
         />
       </div>
     </div>

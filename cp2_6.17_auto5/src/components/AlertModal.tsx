@@ -11,6 +11,39 @@ interface AlertModalProps {
   onLocate?: (alert: Alert) => void
 }
 
+const MEASURES_MAP: Record<string, string[]> = {
+  thunderstorm: [
+    '关好门窗，远离阳台和窗户',
+    '避免在大树、电线杆下避雨',
+    '暂停户外活动，尽量留在室内',
+    '注意防范雷电和短时强降水'
+  ],
+  typhoon: [
+    '关好门窗，加固易被风吹动的搭建物',
+    '停止高空、水上等户外作业',
+    '储备食品、饮用水和应急物资',
+    '避免前往海边、低洼等危险区域'
+  ],
+  rainstorm: [
+    '避免前往低洼地区和地下空间',
+    '注意防范城市内涝和山洪',
+    '驾驶车辆注意安全，避开积水路段',
+    '暂停户外作业，转移至安全地带'
+  ],
+  high_temperature: [
+    '避免高温时段户外活动',
+    '做好防暑降温措施，多补充水分',
+    '关注老弱病幼人群健康状况',
+    '注意用电安全，防范火灾风险'
+  ],
+  cold_wave: [
+    '及时添衣保暖，注意防寒防冻',
+    '关注老弱病幼人群健康状况',
+    '做好农作物、牲畜防寒措施',
+    '注意取暖安全，防范煤气中毒'
+  ]
+}
+
 export default function AlertModal({ alert, onClose, onLocate }: AlertModalProps) {
   const [isClosing, setIsClosing] = useState(false)
   const { timeLeft, isExpired } = useCountdown(alert.endTime)
@@ -32,6 +65,8 @@ export default function AlertModal({ alert, onClose, onLocate }: AlertModalProps
     setTimeout(onClose, 400)
   }
 
+  const measures = MEASURES_MAP[alert.type] || []
+
   return (
     <div className="modal-overlay" onClick={handleClose}>
       <div
@@ -43,7 +78,7 @@ export default function AlertModal({ alert, onClose, onLocate }: AlertModalProps
         <button className="modal-close" onClick={handleClose}>
           ×
         </button>
-        
+
         <div className="alert-modal-header">
           <div className="alert-modal-emoji">{ALERT_EMOJIS[alert.type]}</div>
           <div className="alert-modal-title">
@@ -81,14 +116,16 @@ export default function AlertModal({ alert, onClose, onLocate }: AlertModalProps
           <p>{alert.description}</p>
         </div>
 
-        <div className="alert-modal-measures">
-          <h3>防御指南</h3>
-          <ul>
-            {alert.measures.map((measure, index) => (
-              <li key={index}>{measure}</li>
-            ))}
-          </ul>
-        </div>
+        {measures.length > 0 && (
+          <div className="alert-modal-measures">
+            <h3>防御指南</h3>
+            <ul>
+              {measures.map((measure, index) => (
+                <li key={index}>{measure}</li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="alert-modal-actions">
           {onLocate && (
