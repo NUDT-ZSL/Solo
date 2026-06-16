@@ -1,0 +1,773 @@
+:root {
+  --bg-from: #1A1A2E;
+  --bg-to: #16213E;
+  --card-bg: #3D2B1F;
+  --card-border: #C9A94E;
+  --card-border-glow: #F5D76E;
+  --text: #F5F5F5;
+  --text-dim: #B0B0B0;
+  --attack-red: #FF0000;
+  --hp-green: #00FF00;
+  --mana-blue: #4A90E2;
+  --mana-blue-dark: #2C5F8C;
+  --hero-shadow: 0 0 20px rgba(0, 0, 0, 0.6);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  color: var(--text);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body {
+  background: linear-gradient(180deg, var(--bg-from) 0%, var(--bg-to) 100%);
+  background-attachment: fixed;
+}
+
+/* ==================== 游戏根容器 ==================== */
+.gameRoot {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  min-width: 1280px;
+  overflow: hidden;
+  background-image:
+    radial-gradient(circle at 50% 50%, rgba(201, 169, 78, 0.05) 0%, transparent 70%),
+    linear-gradient(180deg, var(--bg-from) 0%, var(--bg-to) 100%);
+}
+
+.gameRoot::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 85%;
+  height: 70%;
+  background-image: radial-gradient(circle, rgba(201, 169, 78, 0.08) 1px, transparent 1px);
+  background-size: 30px 30px;
+  border-radius: 16px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ==================== 全屏效果 ==================== */
+.fullscreenEffect {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1000;
+  opacity: 0;
+  transition: opacity 0.05s ease;
+}
+.fullscreen-damage {
+  background: radial-gradient(circle, rgba(255, 0, 0, 0.35), transparent 70%);
+  opacity: 1;
+  animation: flashDamage 0.15s ease-out;
+}
+.fullscreen-heal {
+  background: radial-gradient(circle, rgba(0, 255, 0, 0.3), transparent 70%);
+  opacity: 1;
+  animation: flashHeal 0.1s ease-out;
+}
+@keyframes flashDamage {
+  0% { opacity: 0.8; }
+  100% { opacity: 0; }
+}
+@keyframes flashHeal {
+  0% { opacity: 0.7; }
+  100% { opacity: 0; }
+}
+
+/* ==================== 顶部HUD ==================== */
+.topHud {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  height: 140px;
+  padding: 16px 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.topHud > * {
+  pointer-events: auto;
+}
+
+.turnInfo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.turnNum {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: var(--card-border);
+  text-shadow: 0 0 10px rgba(201, 169, 78, 0.5);
+  padding: 6px 20px;
+  border: 2px solid var(--card-border);
+  border-radius: 24px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.endTurnBtn {
+  padding: 10px 28px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: linear-gradient(180deg, #2a2a3a, #1a1a2a);
+  border: 2px solid #444;
+  border-radius: 28px;
+  cursor: not-allowed;
+  transition: all 0.2s ease;
+  letter-spacing: 2px;
+}
+.endTurnBtn.active {
+  color: var(--text);
+  background: linear-gradient(180deg, #5a3a1a, #3a2a0a);
+  border-color: var(--card-border);
+  box-shadow: 0 0 16px rgba(201, 169, 78, 0.4);
+  cursor: pointer;
+}
+.endTurnBtn.active:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 24px rgba(201, 169, 78, 0.7);
+  border-color: var(--card-border-glow);
+}
+.endTurnBtn.active:active {
+  transform: translateY(0);
+}
+
+/* ==================== 英雄面板 ==================== */
+.heroPanel {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  cursor: default;
+  transition: all 0.3s ease;
+  border-radius: 16px;
+  padding: 8px 12px;
+  position: relative;
+}
+.hero-ai { flex-direction: row; }
+.hero-player { flex-direction: row-reverse; }
+
+.heroPanel.hero-targetable {
+  cursor: crosshair;
+  animation: targetPulse 0.8s ease-in-out infinite;
+}
+@keyframes targetPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.6); }
+  50% { box-shadow: 0 0 0 10px rgba(255, 0, 0, 0); }
+}
+.hero-player.hero-targetable {
+  animation: targetPulseFriendly 0.8s ease-in-out infinite;
+}
+@keyframes targetPulseFriendly {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 255, 0, 0.6); }
+  50% { box-shadow: 0 0 0 10px rgba(0, 255, 0, 0); }
+}
+
+.heroPanel.hero-hit {
+  animation: heroHit 0.35s ease-in-out;
+}
+@keyframes heroHit {
+  0%, 100% { filter: none; transform: translateX(0); }
+  20% { filter: brightness(2) hue-rotate(-20deg) saturate(3); transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-6px); background: rgba(255, 0, 0, 0.3); }
+  80% { transform: translateX(4px); }
+}
+
+.heroPanel.hero-thinking .heroAvatar {
+  animation: thinkingPulse 0.3s ease-in-out infinite;
+}
+@keyframes thinkingPulse {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.12); filter: brightness(1.5) drop-shadow(0 0 12px #ffcc00); }
+}
+
+.heroAvatar {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+.avatarRing {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, var(--card-border), #fff4c4, var(--card-border), #a78a2e, var(--card-border));
+  filter: drop-shadow(0 0 8px rgba(201, 169, 78, 0.6));
+}
+.avatarInner {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  border: 3px solid rgba(0, 0, 0, 0.6);
+}
+
+.heroInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 220px;
+}
+.hero-player .heroInfo { align-items: flex-end; }
+
+.heroCounts {
+  font-size: 13px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+}
+
+.hpBarOuter {
+  position: relative;
+  width: 220px;
+  height: 26px;
+  background: #333;
+  border: 2px solid var(--card-border);
+  border-radius: 13px;
+  overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+.hpBarFill {
+  height: 100%;
+  transition: width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.hpText {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  letter-spacing: 1px;
+}
+
+/* ==================== 法力水晶条 ==================== */
+.manaBar {
+  position: relative;
+  z-index: 5;
+  width: 100%;
+  padding: 0 40px;
+  display: flex;
+  height: 36px;
+}
+.aiMana { justify-content: flex-start; }
+.playerMana { justify-content: flex-end; margin-top: 4px; }
+
+.manaCrystals {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 20px;
+  border: 1px solid rgba(201, 169, 78, 0.3);
+}
+.crystal {
+  width: 18px;
+  height: 20px;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  background: #2a2a3a;
+  transition: all 0.3s ease;
+}
+.crystal-full {
+  background: linear-gradient(135deg, #7bc9ff, #3a8fd8 60%, #1e5a9a);
+  box-shadow: 0 0 8px rgba(74, 144, 226, 0.8), inset 0 0 4px rgba(255, 255, 255, 0.5);
+}
+.crystal-used {
+  background: linear-gradient(135deg, #555, #333);
+  opacity: 0.6;
+}
+.crystal-empty {
+  background: #1a1a25;
+  opacity: 0.3;
+  transform: scale(0.75);
+}
+.manaText {
+  margin-left: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #7bc9ff;
+  letter-spacing: 1px;
+  text-shadow: 0 0 8px rgba(74, 144, 226, 0.6);
+}
+
+/* ==================== 战场区域 ==================== */
+.battlefield {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: calc(100vh - 140px - 72px - 260px);
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  gap: 8px;
+}
+.boardSide {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 20px;
+}
+.battlefieldDivider {
+  width: 80%;
+  max-width: 1000px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(201, 169, 78, 0.5), transparent);
+  margin: 4px 0;
+}
+.boardRow {
+  display: flex;
+  gap: 18px;
+  height: 100%;
+  align-items: center;
+}
+.minionSlot {
+  width: 120px;
+  height: 170px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: rgba(201, 169, 78, 0.03);
+  border: 1px dashed rgba(201, 169, 78, 0.12);
+  transition: all 0.2s ease;
+}
+
+/* ==================== 手牌区 ==================== */
+.handArea {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 260px;
+  z-index: 20;
+  pointer-events: none;
+}
+.handArea > * {
+  pointer-events: auto;
+}
+
+/* ==================== 卡牌样式 ==================== */
+.card {
+  position: absolute;
+  width: 120px;
+  height: 170px;
+  background: var(--card-bg);
+  border: 3px solid var(--card-border);
+  border-radius: 10px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease, filter 0.2s ease, opacity 0.3s ease;
+  transform-origin: bottom center;
+  will-change: transform;
+  cursor: default;
+}
+
+/* 手牌悬停效果 */
+.card-loc-hand.card-hovered {
+  transform: translate(-50%, -40px) scale(1.2) !important;
+  z-index: 999 !important;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7), 0 0 24px rgba(201, 169, 78, 0.4);
+  filter: brightness(1.15);
+}
+.card-loc-hand {
+  transform-origin: center bottom;
+}
+
+/* 可打出 */
+.card-playable {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6), 0 0 12px rgba(74, 144, 226, 0.5);
+  cursor: grab;
+}
+.card-playable.card-hovered {
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7), 0 0 32px rgba(74, 144, 226, 0.8);
+}
+.card-unplayable {
+  filter: brightness(0.6) saturate(0.7) grayscale(0.3);
+  cursor: not-allowed;
+}
+
+/* 选中 */
+.card-selected {
+  filter: brightness(1.3) drop-shadow(0 0 14px #4A90E2);
+}
+
+/* 可攻击 */
+.card-canAttack {
+  cursor: pointer;
+  animation: canAttackGlow 1.2s ease-in-out infinite;
+}
+@keyframes canAttackGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 255, 0, 0.6), 0 6px 16px rgba(0, 0, 0, 0.6); }
+  50% { box-shadow: 0 0 0 4px rgba(0, 255, 0, 0.3), 0 6px 16px rgba(0, 0, 0, 0.6), 0 0 20px rgba(0, 255, 0, 0.5); }
+}
+.card-attackIndicator {
+  position: absolute;
+  inset: -4px;
+  border: 2px solid rgba(0, 255, 0, 0.7);
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+/* 可作为目标 */
+.card-targetable {
+  cursor: crosshair;
+  animation: targetableGlow 0.8s ease-in-out infinite;
+}
+@keyframes targetableGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.8), 0 6px 16px rgba(0, 0, 0, 0.6); }
+  50% { box-shadow: 0 0 0 5px rgba(255, 0, 0, 0.2), 0 6px 16px rgba(0, 0, 0, 0.6), 0 0 24px rgba(255, 0, 0, 0.6); }
+}
+.card-targetIndicator {
+  position: absolute;
+  inset: -4px;
+  border: 2px solid rgba(255, 0, 0, 0.8);
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+/* 低血量 */
+.card-lowHealth .card-health {
+  animation: lowHpPulse 0.8s ease-in-out infinite;
+}
+@keyframes lowHpPulse {
+  0%, 100% { filter: brightness(1); transform: scale(1); }
+  50% { filter: brightness(1.6); transform: scale(1.12); }
+}
+
+/* 拖拽状态 */
+.card-dragging {
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(201, 169, 78, 0.6);
+  filter: brightness(1.25);
+}
+
+/* ==================== 卡牌内部元素 ==================== */
+.card-cost {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 32px;
+  height: 32px;
+  background: radial-gradient(circle, #7bc9ff 0%, #3a8fd8 50%, #1e5a9a 100%);
+  border: 2px solid #0a2a4a;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  z-index: 3;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6), inset 0 0 6px rgba(255, 255, 255, 0.4);
+}
+.card-art {
+  position: absolute;
+  top: 22px;
+  left: 8px;
+  right: 8px;
+  height: 70px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 2px solid rgba(0, 0, 0, 0.4);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+.card-spellGlow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.4), transparent 60%);
+  animation: spellGlow 2.5s ease-in-out infinite;
+}
+@keyframes spellGlow {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.1); }
+}
+.card-name {
+  position: absolute;
+  top: 96px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  padding: 2px 6px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  letter-spacing: 0.5px;
+}
+.card-typeBadge {
+  position: absolute;
+  top: 118px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  font-size: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(201, 169, 78, 0.4);
+  border-radius: 10px;
+  color: var(--card-border-glow);
+  white-space: nowrap;
+}
+.card-attack {
+  position: absolute;
+  bottom: 6px;
+  left: 4px;
+  width: 30px;
+  height: 30px;
+  background: radial-gradient(circle, #ff6b6b 0%, #c92a2a 70%, #8b0000 100%);
+  border: 2px solid #4a0000;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6), inset 0 0 4px rgba(255, 255, 255, 0.3);
+  z-index: 2;
+}
+.card-health {
+  position: absolute;
+  bottom: 6px;
+  right: 4px;
+  width: 30px;
+  height: 30px;
+  background: radial-gradient(circle, #63e6be 0%, #2f9e44 70%, #14532d 100%);
+  border: 2px solid #0a3a1a;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6), inset 0 0 4px rgba(255, 255, 255, 0.3);
+  z-index: 2;
+}
+.card-health-low {
+  background: radial-gradient(circle, #ffa94d 0%, #e8590c 70%, #8b3a00 100%) !important;
+  border-color: #4a1a00 !important;
+}
+
+/* ==================== 动画:攻击 ==================== */
+.card-loc-board_player.card-anim-attacking {
+  animation: attackForwardShake 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.card-loc-board_ai.card-anim-attacking {
+  animation: attackBackwardShake 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes attackForwardShake {
+  0% { transform: translateY(0) rotate(0); }
+  30% { transform: translateY(-80px) rotate(-2deg); }
+  40% { transform: translateY(-80px) rotate(3deg); }
+  50% { transform: translateY(-80px) rotate(-3deg); }
+  60% { transform: translateY(-80px) rotate(2deg); }
+  70% { transform: translateY(-80px) rotate(0); }
+  100% { transform: translateY(0) rotate(0); }
+}
+@keyframes attackBackwardShake {
+  0% { transform: translateY(0) rotate(0); }
+  30% { transform: translateY(80px) rotate(2deg); }
+  40% { transform: translateY(80px) rotate(-3deg); }
+  50% { transform: translateY(80px) rotate(3deg); }
+  60% { transform: translateY(80px) rotate(-2deg); }
+  70% { transform: translateY(80px) rotate(0); }
+  100% { transform: translateY(0) rotate(0); }
+}
+
+/* ==================== 动画:受击 ==================== */
+.card-anim-hit {
+  animation: hitShake 0.35s ease-in-out !important;
+}
+@keyframes hitShake {
+  0%, 100% { filter: none; transform: translateX(0); }
+  20% { filter: brightness(2.2) hue-rotate(-30deg) saturate(4); transform: translateX(-8px) rotate(-2deg); background: rgba(255, 0, 0, 0.5); }
+  40% { transform: translateX(10px) rotate(3deg); }
+  60% { transform: translateX(-6px) rotate(-1deg); }
+  80% { transform: translateX(4px); }
+}
+
+/* ==================== 动画:死亡 ==================== */
+.card-anim-dying {
+  animation: minionDeath 0.4s ease-in forwards !important;
+}
+@keyframes minionDeath {
+  0% { opacity: 1; transform: scale(1); filter: brightness(1); }
+  30% { opacity: 1; transform: scale(1.15) rotate(6deg); filter: brightness(2) hue-rotate(30deg); }
+  70% { opacity: 0.4; transform: scale(0.6) rotate(-12deg) translateY(20px); filter: brightness(0.5); }
+  100% { opacity: 0; transform: scale(0.1) rotate(-30deg) translateY(40px); filter: brightness(0); }
+}
+
+/* ==================== 回合横幅 ==================== */
+.turnBanner {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 96px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 16px;
+  text-shadow:
+    0 0 20px var(--card-border),
+    0 0 40px rgba(201, 169, 78, 0.8),
+    0 4px 20px rgba(0, 0, 0, 0.9);
+  z-index: 500;
+  pointer-events: none;
+  animation: bannerShrink 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  white-space: nowrap;
+}
+@keyframes bannerShrink {
+  0% { opacity: 0; font-size: 160px; }
+  15% { opacity: 1; }
+  40% { font-size: 96px; opacity: 1; }
+  80% { font-size: 60px; opacity: 0.8; transform: translate(-50%, -180px); }
+  100% { opacity: 0; font-size: 40px; transform: translate(-50%, -240px); }
+}
+
+/* ==================== 选择提示 ==================== */
+.selectionHint {
+  position: fixed;
+  top: 156px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 20px;
+  background: rgba(0, 0, 0, 0.75);
+  border: 2px solid var(--card-border);
+  border-radius: 24px;
+  color: var(--card-border-glow);
+  font-size: 14px;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+}
+.cancelBtn {
+  padding: 4px 12px;
+  background: rgba(255, 60, 60, 0.2);
+  border: 1px solid #c92a2a;
+  color: #ff8787;
+  border-radius: 14px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+.cancelBtn:hover {
+  background: rgba(255, 60, 60, 0.4);
+}
+
+/* ==================== 游戏结束 ==================== */
+.gameOverOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  cursor: pointer;
+  animation: fadeIn 0.5s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.gameOverBox {
+  padding: 48px 80px;
+  background: linear-gradient(135deg, var(--card-bg), #2a1a0e);
+  border: 4px solid var(--card-border);
+  border-radius: 24px;
+  text-align: center;
+  box-shadow: 0 0 80px rgba(201, 169, 78, 0.5), 0 20px 60px rgba(0, 0, 0, 0.8);
+  animation: popIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes popIn {
+  0% { transform: scale(0.2); opacity: 0; }
+  60% { transform: scale(1.08); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.gameOverTitle {
+  font-size: 64px;
+  font-weight: 900;
+  color: var(--card-border-glow);
+  letter-spacing: 12px;
+  text-shadow: 0 0 30px rgba(201, 169, 78, 0.8);
+  margin-bottom: 16px;
+}
+.gameOverSub {
+  font-size: 18px;
+  color: var(--text-dim);
+  letter-spacing: 4px;
+}
+
+/* ==================== 响应式缩放 ==================== */
+@media (max-width: 1600px) {
+  .card { width: 108px; height: 153px; }
+  .minionSlot { width: 108px; height: 153px; }
+  .card-art { top: 20px; left: 7px; right: 7px; height: 63px; }
+  .card-name { top: 86px; font-size: 11px; }
+  .card-typeBadge { top: 106px; font-size: 9px; }
+  .card-cost { width: 29px; height: 29px; font-size: 14px; }
+  .card-attack, .card-health { width: 27px; height: 27px; font-size: 12px; }
+  .boardRow { gap: 14px; }
+  .handArea { height: 230px; }
+  .turnNum { font-size: 18px; }
+  .endTurnBtn { padding: 8px 22px; font-size: 14px; }
+  .heroAvatar { width: 70px; height: 70px; }
+  .avatarInner { font-size: 24px; }
+}
+
+@media (max-width: 1366px) {
+  .card { width: 96px; height: 136px; }
+  .minionSlot { width: 96px; height: 136px; }
+  .card-art { top: 18px; left: 6px; right: 6px; height: 56px; }
+  .card-name { top: 77px; font-size: 10px; }
+  .card-typeBadge { top: 94px; font-size: 9px; padding: 1px 6px; }
+  .card-cost { width: 26px; height: 26px; font-size: 13px; top: -6px; }
+  .card-attack, .card-health { width: 24px; height: 24px; font-size: 11px; bottom: 5px; }
+  .boardRow { gap: 12px; }
+  .turnBanner { font-size: 72px; letter-spacing: 12px; }
+  @keyframes bannerShrink {
+    0% { opacity: 0; font-size: 120px; }
+    15% { opacity: 1; }
+    40% { font-size: 72px; opacity: 1; }
+    80% { font-size: 44px; opacity: 0.8; transform: translate(-50%, -160px); }
+    100% { opacity: 0; font-size: 28px; transform: translate(-50%, -200px); }
+  }
+}
