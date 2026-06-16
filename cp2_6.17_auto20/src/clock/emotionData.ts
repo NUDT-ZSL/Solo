@@ -69,6 +69,12 @@ export function getEmotionValueByTime(date: Date): number {
   return Math.round(value)
 }
 
+export function getEmotionValueByHour(hourDecimal: number): number {
+  const baseValue = getHourEmotionBase(hourDecimal)
+  let value = Math.max(EMOTION_MIN, Math.min(EMOTION_MAX, baseValue))
+  return Math.round(value)
+}
+
 export function getEmotionForHourSegment(hourSegment: number): number {
   const hourDecimal = hourSegment * 0.25
   return getHourEmotionBase(hourDecimal)

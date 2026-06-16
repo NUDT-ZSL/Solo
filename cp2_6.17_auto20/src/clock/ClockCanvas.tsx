@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import {
   getCurrentEmotionValue,
+  getEmotionValueByHour,
   generateWaveformSamples,
-  getEmotionColorRgb,
   getTimeColorAtHour,
   getAmbientSoundType,
 } from './emotionData'
@@ -14,7 +14,9 @@ const RADIUS = 140
 const SLICE_COUNT = 96
 const WAVEFORM_SAMPLES = 24
 const GLOW_RADIUS = 12
-const SUBSTEP_PER_SLICE = 8
+const AUDIO_TARGET_VOLUME = 0.15
+const AUDIO_FADE_IN_DURATION = 0.3
+const AUDIO_FADE_OUT_DURATION = 0.2
 
 export default function ClockCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -24,6 +26,8 @@ export default function ClockCanvas() {
   const audioCtxRef = useRef<AudioContext | null>(null)
   const noiseNodeRef = useRef<AudioBufferSourceNode | null>(null)
   const gainNodeRef = useRef<GainNode | null>(null)
+  const biquadFilterRef = useRef<BiquadFilterNode | null>(null)
+  const audioInitializedRef = useRef<boolean>(false)
   const [isHovering, setIsHovering] = useState(false)
   const [currentSound, setCurrentSound] = useState('')
   const lastEmotionUpdateRef = useRef<number>(0)
@@ -35,32 +39,14 @@ export default function ClockCanvas() {
       const startAngle = (i / SLICE_COUNT) * Math.PI * 2 - Math.PI / 2
       const endAngle = ((i + 1) / SLICE_COUNT) * Math.PI * 2 - Math.PI / 2
 
-      const startHour = i / 4
-      const endHour = (i + 1) / 4
-
-      const startColor = getTimeColorAtHour(startHour)
-      const endColor = getTimeColorAtHour(endHour)
-
-      const x1 = CENTER + Math.cos(startAngle) * RADIUS
-      const y1 = CENTER + Math.sin(startAngle) * RADIUS
-      const x2 = CENTER + Math.cos(endAngle) * RADIUS
-      const y2 = CENTER + Math.sin(endAngle) * RADIUS
-
-      const gradient = ctx.createLinearGradient(x1, y1, x2, y2)
-      gradient.addColorStop(
-        0,
-        `rgb(${startColor.r}, ${startColor.g}, ${startColor.b})`
-      )
-      gradient.addColorStop(
-        1,
-        `rgb(${endColor.r}, ${endColor.g}, ${endColor.b})`
-      )
+      const midHour = (i + 0.5) / 4
+      const color = getTimeColorAtHour(midHour)
 
       ctx.beginPath()
       ctx.moveTo(CENTER, CENTER)
       ctx.arc(CENTER, CENTER, RADIUS, startAngle, endAngle)
       ctx.closePath()
-      ctx.fillStyle = gradient
+      ctx.fillStyle = `rgb(${color.r}, ${color.g}, ${color.b})`
       ctx.fill()
 
       ctx.beginPath()
@@ -85,17 +71,21 @@ export default function ClockCanvas() {
     const totalMinutes = hours * 60 + minutes + seconds / 60 + milliseconds / 60000
     const angle = (totalMinutes / 1440) * Math.PI * 2 - Math.PI / 2
 
-    const emotionValue = emotionValueRef.current
+    const hourDecimal = hours + minutes / 60 + seconds / 3600 + milliseconds / 3600000
+    const hourEmotion = getEmotionValueByHour(hourDecimal)
+    const currentEmotion = emotionValueRef.current
+    const blendedEmotion = hourEmotion * 0.7 + currentEmotion * 0.3
+
     const waveformSamples = generateWaveformSamples(
-      emotionValue,
+      blendedEmotion,
       WAVEFORM_SAMPLES,
       waveformPhaseRef.current
     )
 
     const pointerLength = RADIUS * 0.55
-    const baseAmplitude = 8 + (emotionValue / 100) * 18
-    const sineModulation = Math.sin(waveformPhaseRef.current * 0.5) * 4
-    const waveAmplitude = baseAmplitude + sineModulation
+    const emotionAmplitude = (blendedEmotion / 100) * 22
+    const sineModulation = Math.sin(waveformPhaseRef.current * 0.5) * 5
+    const waveAmplitude = 6 + emotionAmplitude + sineModulation
 
     ctx.save()
     ctx.translate(CENTER, CENTER)
@@ -133,13 +123,24 @@ export default function ClockCanvas() {
 
     ctx.stroke()
 
-    const glowColor = getEmotionColorRgb(emotionValue)
+    const t = Math.max(0, Math.min(1, blendedEmotion / 100))
+    const glowInner = { r: 13, g: 27, b: 42 }
+    const glowOuter = { r: 255, g: 71, b: 87 }
+
+    const glowCenterR = Math.round(glowInner.r + (glowOuter.r - glowInner.r) * t)
+    const glowCenterG = Math.round(glowInner.g + (glowOuter.g - glowInner.g) * t)
+    const glowCenterB = Math.round(glowInner.b + (glowOuter.b - glowInner.b) * t)
+
+    const glowMidR = Math.round(glowInner.r + (glowOuter.r - glowInner.r) * t * 0.5)
+    const glowMidG = Math.round(glowInner.g + (glowOuter.g - glowInner.g) * t * 0.5)
+    const glowMidB = Math.round(glowInner.b + (glowOuter.b - glowInner.b) * t * 0.5)
+
     const glowOuterRadius = GLOW_RADIUS * 3
 
     const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, glowOuterRadius)
-    gradient.addColorStop(0, `rgba(${glowColor.r}, ${glowColor.g}, ${glowColor.b}, 1)`)
-    gradient.addColorStop(0.4, `rgba(${glowColor.r}, ${glowColor.g}, ${glowColor.b}, 0.5)`)
-    gradient.addColorStop(1, `rgba(${glowColor.r}, ${glowColor.g}, ${glowColor.b}, 0)`)
+    gradient.addColorStop(0, `rgba(${glowCenterR}, ${glowCenterG}, ${glowCenterB}, 1)`)
+    gradient.addColorStop(0.4, `rgba(${glowMidR}, ${glowMidG}, ${glowMidB}, 0.5)`)
+    gradient.addColorStop(1, `rgba(${glowInner.r}, ${glowInner.g}, ${glowInner.b}, 0)`)
 
     ctx.beginPath()
     ctx.arc(0, 0, glowOuterRadius, 0, Math.PI * 2)
@@ -148,7 +149,7 @@ export default function ClockCanvas() {
 
     ctx.beginPath()
     ctx.arc(0, 0, GLOW_RADIUS, 0, Math.PI * 2)
-    ctx.fillStyle = `rgb(${glowColor.r}, ${glowColor.g}, ${glowColor.b})`
+    ctx.fillStyle = `rgb(${glowCenterR}, ${glowCenterG}, ${glowCenterB})`
     ctx.fill()
 
     ctx.beginPath()
@@ -185,7 +186,7 @@ export default function ClockCanvas() {
     })
   }, [])
 
-  const startAmbientSound = useCallback(() => {
+  const initAudioChain = useCallback(() => {
     try {
       if (!audioCtxRef.current) {
         audioCtxRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
@@ -201,11 +202,7 @@ export default function ClockCanvas() {
       const output = noiseBuffer.getChannelData(0)
 
       for (let i = 0; i < bufferSize; i++) {
-        output[i] = (Math.random() * 2 - 1) * 0.3
-      }
-
-      if (noiseNodeRef.current) {
-        noiseNodeRef.current.stop()
+        output[i] = Math.random() * 2 - 1
       }
 
       const noiseNode = audioCtx.createBufferSource()
@@ -218,7 +215,6 @@ export default function ClockCanvas() {
 
       const gainNode = audioCtx.createGain()
       gainNode.gain.setValueAtTime(0, audioCtx.currentTime)
-      gainNode.gain.linearRampToValueAtTime(0.08, audioCtx.currentTime + 0.3)
 
       noiseNode.connect(biquadFilter)
       biquadFilter.connect(gainNode)
@@ -228,30 +224,57 @@ export default function ClockCanvas() {
 
       noiseNodeRef.current = noiseNode
       gainNodeRef.current = gainNode
+      biquadFilterRef.current = biquadFilter
+      audioInitializedRef.current = true
     } catch (e) {
-      console.warn('Audio playback failed:', e)
+      console.warn('Audio init failed:', e)
     }
   }, [])
+
+  const startAmbientSound = useCallback(() => {
+    if (!audioInitializedRef.current || !gainNodeRef.current || !audioCtxRef.current) {
+      initAudioChain()
+    }
+
+    if (gainNodeRef.current && audioCtxRef.current) {
+      const audioCtx = audioCtxRef.current
+      const gainNode = gainNodeRef.current
+
+      gainNode.gain.cancelScheduledValues(audioCtx.currentTime)
+      gainNode.gain.setValueAtTime(gainNode.gain.value, audioCtx.currentTime)
+      gainNode.gain.linearRampToValueAtTime(AUDIO_TARGET_VOLUME, audioCtx.currentTime + AUDIO_FADE_IN_DURATION)
+    }
+  }, [initAudioChain])
 
   const stopAmbientSound = useCallback(() => {
     if (gainNodeRef.current && audioCtxRef.current) {
       const audioCtx = audioCtxRef.current
-      gainNodeRef.current.gain.cancelScheduledValues(audioCtx.currentTime)
-      gainNodeRef.current.gain.setValueAtTime(gainNodeRef.current.gain.value, audioCtx.currentTime)
-      gainNodeRef.current.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2)
-    }
+      const gainNode = gainNodeRef.current
 
-    setTimeout(() => {
-      if (noiseNodeRef.current) {
-        try {
-          noiseNodeRef.current.stop()
-        } catch (e) {
-          // ignore
-        }
-        noiseNodeRef.current = null
+      gainNode.gain.cancelScheduledValues(audioCtx.currentTime)
+      gainNode.gain.setValueAtTime(gainNode.gain.value, audioCtx.currentTime)
+      gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + AUDIO_FADE_OUT_DURATION)
+    }
+  }, [])
+
+  const cleanupAudio = useCallback(() => {
+    if (noiseNodeRef.current) {
+      try {
+        noiseNodeRef.current.stop()
+      } catch (e) {
+        // ignore
       }
+      noiseNodeRef.current = null
+    }
+    if (biquadFilterRef.current) {
+      biquadFilterRef.current.disconnect()
+      biquadFilterRef.current = null
+    }
+    if (gainNodeRef.current) {
+      gainNodeRef.current.disconnect()
       gainNodeRef.current = null
-    }, 300)
+    }
+    audioInitializedRef.current = false
   }, [])
 
   useEffect(() => {
@@ -281,12 +304,13 @@ export default function ClockCanvas() {
 
     return () => {
       cancelAnimationFrame(animationRef.current)
-      stopAmbientSound()
+      cleanupAudio()
       if (audioCtxRef.current) {
         audioCtxRef.current.close()
+        audioCtxRef.current = null
       }
     }
-  }, [drawClock, stopAmbientSound])
+  }, [drawClock, cleanupAudio])
 
   const handleMouseEnter = () => {
     setIsHovering(true)
