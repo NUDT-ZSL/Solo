@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import type { User } from '../data/db';
 
@@ -8,27 +8,51 @@ interface UserCardProps {
   compact?: boolean;
 }
 
+let styleInjected = false;
+function injectUserCardStyles() {
+  if (styleInjected) return;
+  styleInjected = true;
+  const css = `
+    .user-card-avatar {
+      transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+    .user-card-link:hover .user-card-avatar {
+      border-color: #6366f1 !important;
+    }
+    .user-card-link:hover .user-card-avatar-compact {
+      border-color: #6366f1 !important;
+      transform: scale(1.05);
+    }
+    .user-card-link:hover .user-card-wrapper {
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+    }
+  `;
+  const style = document.createElement('style');
+  style.setAttribute('data-user-card', 'true');
+  style.textContent = css;
+  document.head.appendChild(style);
+}
+
 export function UserCard({ user, isCurrentUser = false, compact = false }: UserCardProps) {
-  const [hover, setHover] = useState(false);
+  useMemo(() => injectUserCardStyles(), []);
 
   if (compact) {
     return (
       <Link
         to={`/profile/${user.id}`}
+        className="user-card-link"
         style={{ textDecoration: 'none' }}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <img
             src={user.avatarUrl}
             alt={user.nickname}
+            className="user-card-avatar user-card-avatar-compact"
             style={{
               width: '36px',
               height: '36px',
               borderRadius: '50%',
-              border: `2px solid ${hover ? '#6366f1' : '#e5e7eb'}`,
-              transition: 'border-color 0.2s ease',
+              border: '2px solid #e5e7eb',
               objectFit: 'cover',
               background: '#f3f4f6'
             }}
@@ -48,11 +72,11 @@ export function UserCard({ user, isCurrentUser = false, compact = false }: UserC
   return (
     <Link
       to={`/profile/${user.id}`}
-      style={{ textDecoration: 'none' }}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      className="user-card-link"
+      style={{ textDecoration: 'none', display: 'inline-block' }}
     >
       <div
+        className="user-card-wrapper"
         style={{
           display: 'flex',
           flexDirection: 'column',
@@ -61,7 +85,7 @@ export function UserCard({ user, isCurrentUser = false, compact = false }: UserC
           padding: '16px',
           borderRadius: '12px',
           background: '#ffffff',
-          boxShadow: hover ? '0 4px 12px rgba(0,0,0,0.1)' : '0 2px 6px rgba(0,0,0,0.06)',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
           transition: 'box-shadow 0.2s ease',
           width: 'fit-content'
         }}
@@ -69,12 +93,12 @@ export function UserCard({ user, isCurrentUser = false, compact = false }: UserC
         <img
           src={user.avatarUrl}
           alt={user.nickname}
+          className="user-card-avatar"
           style={{
             width: '60px',
             height: '60px',
             borderRadius: '50%',
-            border: `2px solid ${hover ? '#6366f1' : '#e5e7eb'}`,
-            transition: 'border-color 0.2s ease',
+            border: '2px solid #e5e7eb',
             objectFit: 'cover',
             background: '#f3f4f6'
           }}

@@ -40,7 +40,7 @@ styleSheet.textContent = `
 `;
 document.head.appendChild(styleSheet);
 
-type BuildingFilter = 'all' | 'same';
+type BuildingFilter = 'all' | 'same' | string;
 
 function useUsers() {
   const [users, setUsers] = useState<User[]>([]);
@@ -231,34 +231,17 @@ function Header({
   );
 }
 
-function FilterBar({
-  buildingFilter,
-  setBuildingFilter,
-  statusFilter,
-  setStatusFilter,
-  users,
-  currentUser
+function FilterButton({
+  active,
+  label,
+  onClick
 }: {
-  buildingFilter: BuildingFilter;
-  setBuildingFilter: (b: BuildingFilter) => void;
-  statusFilter: string;
-  setStatusFilter: (s: string) => void;
-  users: User[];
-  currentUser: User | null;
+  active: boolean;
+  label: string;
+  onClick: () => void;
 }) {
-  const FilterButton = ({
-    active,
-    label,
-    onClick,
-    keyId
-  }: {
-    active: boolean;
-    label: string;
-    onClick: () => void;
-    keyId: string;
-  }) => (
+  return (
     <button
-      key={keyId}
       onClick={onClick}
       style={{
         padding: '6px 14px',
@@ -288,12 +271,37 @@ function FilterBar({
       {label}
     </button>
   );
+}
 
-  const buildings = [
-    { key: 'all', label: '全部楼栋', filterValue: 'all' as BuildingFilter },
+function FilterBar({
+  buildingFilter,
+  setBuildingFilter,
+  statusFilter,
+  setStatusFilter,
+  users,
+  currentUser
+}: {
+  buildingFilter: BuildingFilter;
+  setBuildingFilter: (b: BuildingFilter) => void;
+  statusFilter: string;
+  setStatusFilter: (s: string) => void;
+  users: User[];
+  currentUser: User | null;
+}) {
+  const allBuildings = Array.from(new Set(users.map((u) => u.building))).sort();
+
+  const buildingOptions: { key: string; label: string; value: BuildingFilter }[] = [
+    { key: 'all', label: '全部楼栋', value: 'all' },
     ...(currentUser
-      ? [{ key: 'same', label: `${currentUser.building}（同楼栋）`, filterValue: 'same' as BuildingFilter }]
-      : [])
+      ? [{ key: 'same', label: `${currentUser.building}（同楼栋）`, value: 'same' as BuildingFilter }]
+      : []),
+    ...allBuildings
+      .filter((b) => !currentUser || b !== currentUser.building)
+      .map((b) => ({
+        key: `b-${b}`,
+        label: b,
+        value: b as BuildingFilter
+      }))
   ];
 
   const statuses = [
@@ -303,16 +311,31 @@ function FilterBar({
     { value: 'completed', label: '已完成' }
   ];
 
+  const isBuildingActive = (val: BuildingFilter) => {
+    if (val === 'same' && currentUser) {
+      return buildingFilter === 'same' || buildingFilter === currentUser.building;
+    }
+    return buildingFilter === val;
+  };
+
+  const handleBuildingClick = (val: BuildingFilter) => {
+    if (val === 'same' && currentUser) {
+      setBuildingFilter(currentUser.building);
+    } else {
+      setBuildingFilter(val);
+    }
+  };
+
   return (
     <div style={{ marginBottom: '16px' }}>
       <div style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '12px', fontWeight: 600, color: '#6b7280', marginRight: '4px' }}>楼栋:</span>
-        {buildings.map((b) => (
+        {buildingOptions.map((b) => (
           <FilterButton
-            keyId={b.key}
-            active={buildingFilter === b.filterValue}
+            key={b.key}
+            active={isBuildingActive(b.value)}
             label={b.label}
-            onClick={() => setBuildingFilter(b.filterValue)}
+            onClick={() => handleBuildingClick(b.value)}
           />
         ))}
       </div>
@@ -320,7 +343,7 @@ function FilterBar({
         <span style={{ fontSize: '12px', fontWeight: 600, color: '#6b7280', marginRight: '4px' }}>状态:</span>
         {statuses.map((s) => (
           <FilterButton
-            keyId={s.value}
+            key={s.value}
             active={statusFilter === s.value}
             label={s.label}
             onClick={() => setStatusFilter(s.value)}
@@ -354,7 +377,14 @@ function HomePage() {
     [users, currentUserId]
   );
 
-  const effectiveBuilding = buildingFilter === 'same' && currentUser ? currentUser.building : undefined;
+  let effectiveBuilding: string | undefined;
+  if (buildingFilter === 'same' && currentUser) {
+    effectiveBuilding = currentUser.building;
+  } else if (buildingFilter !== 'all' && buildingFilter !== 'same') {
+    effectiveBuilding = buildingFilter;
+  } else {
+    effectiveBuilding = undefined;
+  }
   const effectiveStatus = statusFilter === 'all' ? undefined : statusFilter;
 
   const {

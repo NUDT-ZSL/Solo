@@ -4,7 +4,6 @@ import { getTaskTypeLabel, getTaskTypeColor, getTaskStatusLabel, formatTime, for
 
 interface TaskCardProps {
   task: Task;
-  index?: number;
   currentUserId?: string | null;
   users?: { id: string; nickname: string; avatarUrl: string; building: string }[];
   onAccept?: (taskId: string) => void;
@@ -12,7 +11,7 @@ interface TaskCardProps {
   onCancel?: (taskId: string) => void;
 }
 
-export function TaskCard({ task, index = 0, currentUserId, users = [], onAccept, onComplete, onCancel }: TaskCardProps) {
+export function TaskCard({ task, currentUserId, users = [], onAccept, onComplete, onCancel }: TaskCardProps) {
   const [hover, setHover] = useState(false);
   const publisher = users.find((u) => u.id === task.publisherId);
   const acceptor = users.find((u) => u.id === task.acceptorId);
@@ -30,9 +29,6 @@ export function TaskCard({ task, index = 0, currentUserId, users = [], onAccept,
     flexDirection: 'column',
     overflow: 'hidden',
     cursor: 'default',
-    opacity: 0,
-    transform: 'translateY(20px)',
-    animation: `fadeInUp 0.4s ease-out ${index * 0.2}s forwards`,
     transition: 'box-shadow 0.2s ease'
   };
 

@@ -10,13 +10,40 @@ interface VirtualTaskListProps {
   onAccept: (taskId: string) => void;
   onComplete: (taskId: string) => void;
   onCancel: (taskId: string) => void;
-  maxVisible?: number;
 }
 
 const CARD_WIDTH = 280;
 const CARD_HEIGHT = 180;
 const CARD_GAP = 20;
-const BUFFER = 3;
+const BUFFER_ROWS = 3;
+const MAX_VIRTUAL_LIMIT = 200;
+
+let vlistStyleInjected = false;
+function injectVListStyles() {
+  if (vlistStyleInjected) return;
+  vlistStyleInjected = true;
+  const css = `
+    @keyframes taskCardFadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .task-card-enter {
+      opacity: 0;
+      transform: translateY(20px);
+      animation: taskCardFadeInUp 0.4s ease-out forwards;
+    }
+  `;
+  const style = document.createElement('style');
+  style.setAttribute('data-vlist', 'true');
+  style.textContent = css;
+  document.head.appendChild(style);
+}
 
 export function VirtualTaskList({
   tasks,
@@ -24,14 +51,32 @@ export function VirtualTaskList({
   currentUserId,
   onAccept,
   onComplete,
-  onCancel,
-  maxVisible = 50
+  onCancel
 }: VirtualTaskListProps) {
+  useMemo(() => injectVListStyles(), []);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [containerWidth, setContainerWidth] = useState(800);
+  const [containerHeight, setContainerHeight] = useState(600);
+  const animatedIdsRef = useRef<Set<string>>(new Set());
+  const firstLoadRef = useRef<boolean>(true);
+  const tasksLengthRef = useRef<number>(0);
 
-  const displayTasks = useMemo(() => tasks.slice(0, maxVisible), [tasks, maxVisible]);
+  const clampedTasks = useMemo(() => tasks.slice(0, MAX_VIRTUAL_LIMIT), [tasks]);
+  const totalTasks = clampedTasks.length;
+
+  useEffect(() => {
+    if (totalTasks !== tasksLengthRef.current) {
+      if (tasksLengthRef.current === 0 && totalTasks > 0) {
+        firstLoadRef.current = true;
+      } else if (totalTasks < tasksLengthRef.current) {
+        animatedIdsRef.current.clear();
+        firstLoadRef.current = true;
+      }
+      tasksLengthRef.current = totalTasks;
+    }
+  }, [totalTasks]);
 
   const columns = useMemo(() => {
     if (containerWidth < 640) return 1;
@@ -40,51 +85,88 @@ export function VirtualTaskList({
   }, [containerWidth]);
 
   const rowHeight = CARD_HEIGHT + CARD_GAP;
-  const totalRows = Math.ceil(displayTasks.length / columns);
+  const totalRows = Math.ceil(totalTasks / columns);
   const totalHeight = totalRows * rowHeight - CARD_GAP + 40;
 
-  useEffect(() => {
-    const updateWidth = () => {
-      if (containerRef.current) {
-        setContainerWidth(containerRef.current.clientWidth);
-      }
-    };
-    updateWidth();
-    window.addEventListener('resize', updateWidth);
-    return () => window.removeEventListener('resize', updateWidth);
+  const updateDimensions = useCallback(() => {
+    if (containerRef.current) {
+      setContainerWidth(containerRef.current.clientWidth);
+      setContainerHeight(containerRef.current.clientHeight);
+    }
   }, []);
+
+  useEffect(() => {
+    updateDimensions();
+    const ro = new ResizeObserver(updateDimensions);
+    if (containerRef.current) {
+      ro.observe(containerRef.current);
+    }
+    window.addEventListener('resize', updateDimensions);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', updateDimensions);
+    };
+  }, [updateDimensions]);
 
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     setScrollTop(e.currentTarget.scrollTop);
   }, []);
 
-  const visibleStartRow = Math.max(0, Math.floor(scrollTop / rowHeight) - BUFFER);
+  const rafRef = useRef<number | null>(null);
+  const scrollHandler = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    if (rafRef.current !== null) return;
+    rafRef.current = requestAnimationFrame(() => {
+      handleScroll(e);
+      rafRef.current = null;
+    });
+  }, [handleScroll]);
+
+  const visibleStartRow = Math.max(0, Math.floor(scrollTop / rowHeight) - BUFFER_ROWS);
   const visibleEndRow = Math.min(
     totalRows,
-    Math.ceil((scrollTop + (containerRef.current?.clientHeight || 600)) / rowHeight) + BUFFER
+    Math.ceil((scrollTop + containerHeight) / rowHeight) + BUFFER_ROWS
   );
 
   const startIndex = visibleStartRow * columns;
-  const endIndex = Math.min(displayTasks.length, visibleEndRow * columns);
+  const endIndex = Math.min(totalTasks, visibleEndRow * columns);
 
-  const visibleTasks = displayTasks.slice(startIndex, endIndex);
+  const visibleTasks = useMemo(
+    () => clampedTasks.slice(startIndex, endIndex),
+    [clampedTasks, startIndex, endIndex]
+  );
 
-  const getCardPosition = (index: number) => {
-    const actualIndex = startIndex + index;
-    const row = Math.floor(actualIndex / columns);
-    const col = actualIndex % columns;
+  const colPadding = useMemo(() => {
     const totalGap = CARD_GAP * (columns - 1);
     const availableWidth = containerWidth - 32;
     const extraSpace = Math.max(0, availableWidth - (columns * CARD_WIDTH + totalGap));
-    const colPadding = extraSpace / (columns * 2);
+    return extraSpace / (columns * 2);
+  }, [containerWidth, columns]);
 
+  const getCardPosition = useCallback((actualIndex: number) => {
+    const row = Math.floor(actualIndex / columns);
+    const col = actualIndex % columns;
     return {
       left: col * (CARD_WIDTH + CARD_GAP) + 16 + colPadding,
       top: row * rowHeight + 20
     };
-  };
+  }, [columns, colPadding, rowHeight]);
 
-  if (displayTasks.length === 0) {
+  const getAnimationDelay = useCallback((globalIndex: number) => {
+    if (!firstLoadRef.current) return 0;
+    if (globalIndex >= columns * 4) return 0;
+    return globalIndex * 0.2;
+  }, [columns]);
+
+  useEffect(() => {
+    if (totalTasks > 0) {
+      const t = setTimeout(() => {
+        firstLoadRef.current = false;
+      }, 2000);
+      return () => clearTimeout(t);
+    }
+  }, [totalTasks]);
+
+  if (totalTasks === 0) {
     return (
       <div
         style={{
@@ -107,7 +189,7 @@ export function VirtualTaskList({
   return (
     <div
       ref={containerRef}
-      onScroll={handleScroll}
+      onScroll={scrollHandler}
       style={{
         height: 'calc(100vh - 260px)',
         minHeight: '400px',
@@ -115,26 +197,47 @@ export function VirtualTaskList({
         overflowX: 'hidden',
         position: 'relative',
         overscrollBehavior: 'contain',
-        WebkitOverflowScrolling: 'touch'
+        WebkitOverflowScrolling: 'touch',
+        willChange: 'scroll-position'
       }}
     >
-      <div style={{ height: `${totalHeight}px`, position: 'relative', width: '100%' }}>
-        {visibleTasks.map((task, i) => {
-          const pos = getCardPosition(i);
-          const animIndex = startIndex + i;
+      <div
+        style={{
+          height: `${totalHeight}px`,
+          position: 'relative',
+          width: '100%',
+          contain: 'layout style paint'
+        }}
+      >
+        {visibleTasks.map((task, localIndex) => {
+          const globalIndex = startIndex + localIndex;
+          const pos = getCardPosition(globalIndex);
+          const delay = getAnimationDelay(globalIndex);
+          const shouldAnimate = firstLoadRef.current && delay > 0 && !animatedIdsRef.current.has(task.id);
+
+          if (shouldAnimate) {
+            animatedIdsRef.current.add(task.id);
+          }
+
+          const animStyle: React.CSSProperties = shouldAnimate
+            ? { animationDelay: `${delay}s` }
+            : {};
+
           return (
             <div
               key={task.id}
+              className={shouldAnimate ? 'task-card-enter' : ''}
               style={{
                 position: 'absolute',
                 left: pos.left,
                 top: pos.top,
-                willChange: 'transform'
+                willChange: 'transform',
+                contain: 'layout style paint',
+                ...animStyle
               }}
             >
               <TaskCard
                 task={task}
-                index={animIndex}
                 currentUserId={currentUserId}
                 users={users}
                 onAccept={onAccept}
@@ -146,7 +249,7 @@ export function VirtualTaskList({
         })}
       </div>
 
-      {tasks.length > maxVisible && (
+      {tasks.length > MAX_VIRTUAL_LIMIT && (
         <div
           style={{
             position: 'sticky',
@@ -160,7 +263,7 @@ export function VirtualTaskList({
             color: '#9ca3af'
           }}
         >
-          还有 {tasks.length - maxVisible} 个任务未显示，使用筛选条件缩小范围
+          还有 {tasks.length - MAX_VIRTUAL_LIMIT} 个任务未显示，使用筛选条件缩小范围
         </div>
       )}
     </div>
