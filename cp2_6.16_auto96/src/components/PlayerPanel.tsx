@@ -166,7 +166,7 @@ export default function PlayerPanel({ albumId, onClose, onListen }: PlayerPanelP
 
     let frequencyData: number[] = [];
     if (analyserRef.current && frequencyDataRef.current) {
-      analyserRef.current.getByteFrequencyData(frequencyDataRef.current);
+      analyserRef.current.getByteFrequencyData(frequencyDataRef.current as Uint8Array<ArrayBuffer>);
       const data = frequencyDataRef.current;
       const step = Math.floor(data.length / barCount);
       for (let i = 0; i < barCount; i++) {
@@ -180,15 +180,24 @@ export default function PlayerPanel({ albumId, onClose, onListen }: PlayerPanelP
 
     for (let i = 0; i < barCount; i++) {
       let targetHeight: number;
-      if (frequencyData.length === barCount) {
-        targetHeight = Math.max(8, frequencyData[i] * (height - 10) + 5);
-      } else {
+      if (isPlaying && frequencyData.length === barCount) {
+        const freqVal = isNaN(frequencyData[i]) ? 0 : frequencyData[i];
+        targetHeight = Math.max(8, freqVal * (height - 10) + 5);
+      } else if (isPlaying) {
         targetHeight = 10 + Math.random() * 15;
+      } else {
+        targetHeight = 8;
+      }
+      if (isNaN(targetHeight) || !isFinite(targetHeight)) {
+        targetHeight = 10;
       }
       barHeights.current[i] += (targetHeight - barHeights.current[i]) * 0.25;
+      if (isNaN(barHeights.current[i]) || !isFinite(barHeights.current[i])) {
+        barHeights.current[i] = 10;
+      }
 
       const x = i * barWidth + gap / 2;
-      const barH = barHeights.current[i];
+      const barH = Math.max(5, Math.min(height, barHeights.current[i]));
       const y = height - barH;
 
       const gradient = ctx.createLinearGradient(x, y, x, height);
@@ -334,55 +343,118 @@ export default function PlayerPanel({ albumId, onClose, onListen }: PlayerPanelP
       onTouchEnd={handleTouchEnd}
     >
       {isMobile && (
-        <div className="flex justify-center mb-4">
-          <div className="w-12 h-1 bg-gray-500 rounded-full" />
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
+          <div
+            style={{
+              width: '48px',
+              height: '4px',
+              backgroundColor: 'rgba(255,255,255,0.35)',
+              borderRadius: '9999px',
+            }}
+          />
         </div>
       )}
 
       <div className="flex justify-between items-start mb-6">
-        <h2 className="text-white font-bold text-xl">{album.title}</h2>
+        <h2 style={{ color: '#ffffff', fontWeight: 700, fontSize: '20px', margin: 0 }}>
+          {album.title}
+        </h2>
         <button
           onClick={handleClose}
-          className="text-gray-400 hover:text-white transition-colors text-2xl leading-none"
+          style={{
+            color: 'rgba(255,255,255,0.5)',
+            transition: 'color 0.2s ease',
+            fontSize: '24px',
+            lineHeight: 1,
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: 0,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = '#ffffff';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = 'rgba(255,255,255,0.5)';
+          }}
         >
           ×
         </button>
       </div>
 
-      <div className="flex justify-center mb-6">
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
         <canvas
           ref={canvasRef}
           width={360}
           height={80}
-          className="rounded-lg"
+          style={{ borderRadius: '8px' }}
         />
       </div>
 
-      <div className="mb-6">
+      <div style={{ marginBottom: '24px' }}>
         <div
-          className="w-full h-2 bg-gray-700 rounded-full cursor-pointer relative"
           onClick={handleProgressClick}
+          style={{
+            width: '100%',
+            height: '8px',
+            backgroundColor: 'rgba(255,255,255,0.12)',
+            borderRadius: '9999px',
+            cursor: 'pointer',
+            position: 'relative',
+          }}
         >
           <div
-            className="h-full rounded-full absolute top-0 left-0"
             style={{
+              height: '100%',
+              borderRadius: '9999px',
+              position: 'absolute',
+              top: 0,
+              left: 0,
               width: `${(currentTime / duration) * 100}%`,
               background: 'linear-gradient(90deg, #ff6b6b, #feca57)',
             }}
           />
         </div>
-        <div className="flex justify-between text-gray-400 text-sm mt-2">
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            color: 'rgba(255,255,255,0.5)',
+            fontSize: '14px',
+            marginTop: '8px',
+          }}
+        >
           <span>{formatTime(currentTime)}</span>
           <span>{formatTime(duration)}</span>
         </div>
       </div>
 
-      <div className="flex justify-center">
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
         <button
           onClick={togglePlay}
-          className="w-16 h-16 rounded-full flex items-center justify-center transition-transform hover:scale-105 active:scale-95"
           style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: '9999px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'transform 0.2s ease',
             background: 'linear-gradient(135deg, #ff6b6b, #feca57)',
+            border: 'none',
+            cursor: 'pointer',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.05)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+          }}
+          onMouseDown={(e) => {
+            e.currentTarget.style.transform = 'scale(0.95)';
+          }}
+          onMouseUp={(e) => {
+            e.currentTarget.style.transform = 'scale(1.05)';
           }}
         >
           {isPlaying ? (
@@ -398,11 +470,26 @@ export default function PlayerPanel({ albumId, onClose, onListen }: PlayerPanelP
         </button>
       </div>
 
-      <div className="mt-auto text-center text-gray-500 text-sm">
-        <p>曲目列表：</p>
-        <ul className="mt-2 space-y-1">
+      <div
+        style={{
+          marginTop: 'auto',
+          textAlign: 'center',
+          color: 'rgba(255,255,255,0.35)',
+          fontSize: '14px',
+        }}
+      >
+        <p style={{ margin: 0 }}>曲目列表：</p>
+        <ul style={{ marginTop: '8px', padding: 0, listStyle: 'none' }}>
           {album.trackList.slice(0, 3).map((track, idx) => (
-            <li key={idx} className="text-gray-400">{track}</li>
+            <li
+              key={idx}
+              style={{
+                color: 'rgba(255,255,255,0.5)',
+                marginTop: idx > 0 ? '4px' : 0,
+              }}
+            >
+              {track}
+            </li>
           ))}
         </ul>
       </div>

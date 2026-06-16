@@ -51,9 +51,13 @@ function hslToHex(h: number, s: number, l: number): string {
 
 function getComplementaryColor(hex: string): string {
   const [h, s, l] = hexToHsl(hex);
+
+  if (l <= 5) return '#ffffff';
+  if (l >= 95) return '#000000';
+
   const compH = (h + 180) % 360;
   const compS = Math.min(Math.max(s, 70), 100);
-  const compL = l > 50 ? 30 : 85;
+  const compL = l > 50 ? 25 : 85;
   return hslToHex(compH, compS, compL);
 }
 
@@ -62,6 +66,13 @@ function getLuminance(hex: string): number {
   const g = parseInt(hex.slice(3, 5), 16) / 255;
   const b = parseInt(hex.slice(5, 7), 16) / 255;
   return 0.299 * r + 0.587 * g + 0.114 * b;
+}
+
+function getPlayButtonTextColor(hex: string): string {
+  const l = getLuminance(hex);
+  if (l <= 0.05) return '#000000';
+  if (l >= 0.95) return '#ffffff';
+  return hex;
 }
 
 export default function AlbumTimeline({ albums, onPlay }: AlbumTimelineProps) {
@@ -82,6 +93,7 @@ export default function AlbumTimeline({ albums, onPlay }: AlbumTimelineProps) {
           const complementaryColor = getComplementaryColor(album.coverColor);
           const luminance = getLuminance(album.coverColor);
           const textColor = luminance > 0.5 ? "#000000" : "#ffffff";
+          const btnTextColor = getPlayButtonTextColor(album.coverColor);
 
           return (
             <div
@@ -168,15 +180,15 @@ export default function AlbumTimeline({ albums, onPlay }: AlbumTimelineProps) {
                       width: "40px",
                       height: "40px",
                       backgroundColor: complementaryColor,
-                      color: album.coverColor,
+                      color: btnTextColor,
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.backgroundColor = "#ffffff";
-                      e.currentTarget.style.color = album.coverColor;
+                      e.currentTarget.style.color = "#000000";
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.backgroundColor = complementaryColor;
-                      e.currentTarget.style.color = album.coverColor;
+                      e.currentTarget.style.color = btnTextColor;
                     }}
                   >
                     <svg

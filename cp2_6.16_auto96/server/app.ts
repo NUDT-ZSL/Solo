@@ -33,15 +33,19 @@ app.get('/api/album/:id', async (req, res) => {
     const albumsPath = path.resolve(dataDir, 'albums.json');
     const data = await fs.readFile(albumsPath, 'utf-8');
     const albums = JSON.parse(data);
-    const album = albums.find((a: { id: string; audioFile: string }) => a.id === id);
+    const album = albums.find((a: { id: string; audioFile?: string }) => a.id === id);
 
     if (!album) {
       return res.status(404).json({ error: 'Album not found' });
     }
 
     let audioBase64 = '';
+    const audioFile = album.audioFile && typeof album.audioFile === 'string' && album.audioFile.trim() !== ''
+      ? album.audioFile
+      : `${id}.mp3`;
+
     try {
-      const audioPath = path.resolve(dataDir, 'audio', album.audioFile);
+      const audioPath = path.resolve(dataDir, 'audio', audioFile);
       const audioBuffer = await fs.readFile(audioPath);
       audioBase64 = audioBuffer.toString('base64');
     } catch {

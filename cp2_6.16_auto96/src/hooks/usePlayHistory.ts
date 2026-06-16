@@ -36,6 +36,8 @@ export function usePlayHistory() {
       listens.map((l) => `${l.albumId}-${l.trackTitle}`)
     );
 
+    const listenedAlbumIds = new Set(listens.map((l) => l.albumId));
+
     const albumListenCount = new Map<string, number>();
     listens.forEach((listen) => {
       albumListenCount.set(
@@ -66,6 +68,28 @@ export function usePlayHistory() {
           });
           if (recommendations.length >= 3) {
             return recommendations;
+          }
+        }
+      }
+    }
+
+    if (recommendations.length < 3) {
+      for (const album of albums) {
+        if (listenedAlbumIds.has(album.id)) continue;
+
+        for (const trackTitle of album.trackList) {
+          const key = `${album.id}-${trackTitle}`;
+          if (!listenedKeySet.has(key)) {
+            recommendations.push({
+              id: `${album.id}-${trackTitle}`,
+              albumId: album.id,
+              albumTitle: album.title,
+              trackTitle,
+              coverColor: album.coverColor,
+            });
+            if (recommendations.length >= 3) {
+              return recommendations;
+            }
           }
         }
       }
