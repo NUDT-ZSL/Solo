@@ -57,6 +57,8 @@ const App: React.FC = () => {
   const [characterNames, setCharacterNames] = useState<string[]>(SAMPLE_CHARACTERS);
   const [charInput, setCharInput] = useState('');
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [previewVersion, setPreviewVersion] = useState<ChapterVersion | null>(null);
+  const [confirmRollbackId, setConfirmRollbackId] = useState<string | null>(null);
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -193,7 +195,14 @@ const App: React.FC = () => {
       await loadChapter(currentChapterId);
       await loadVersions(currentChapterId);
       setShowHistory(false);
+      setPreviewVersion(null);
+      setConfirmRollbackId(null);
     }
+  };
+
+  const openRollbackConfirm = (version: ChapterVersion) => {
+    setPreviewVersion(version);
+    setConfirmRollbackId(version.id);
   };
 
   const handleAddCharacter = () => {
@@ -499,42 +508,287 @@ const App: React.FC = () => {
                 position: 'absolute',
                 right: '0',
                 top: '0',
-                width: '280px',
+                width: '320px',
                 height: '100%',
                 background: '#fff',
                 borderLeft: '1px solid #E0E0E0',
-                overflowY: 'auto',
-                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
                 boxShadow: '-2px 0 8px rgba(0,0,0,0.05)',
                 zIndex: 10,
               }}
             >
-              <h3 style={{ marginBottom: '12px', color: '#2C3E50', fontSize: '15px' }}>
-                版本历史
-              </h3>
-              {versions.length === 0 && (
-                <p style={{ color: '#999', fontSize: '13px' }}>暂无版本记录</p>
-              )}
-              {versions.map((v, i) => (
-                <div
-                  key={v.id || i}
-                  style={{
-                    padding: '10px',
-                    marginBottom: '8px',
-                    borderLeft: '3px solid #3498DB',
-                    background: '#F8F9FA',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '13px',
+              <div
+                style={{
+                  padding: '12px 16px',
+                  borderBottom: '1px solid #E0E0E0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexShrink: 0,
+                }}
+              >
+                <h3 style={{ color: '#2C3E50', fontSize: '15px', margin: 0 }}>
+                  版本历史 · 最近 {versions.length} 个版本
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowHistory(false);
+                    setPreviewVersion(null);
+                    setConfirmRollbackId(null);
                   }}
-                  onClick={() => handleRollback(v.id)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    fontSize: '16px',
+                    cursor: 'pointer',
+                    color: '#888',
+                    padding: '4px 8px',
+                  }}
                 >
-                  <div style={{ fontWeight: 600, color: '#2C3E50' }}>{v.authorName}</div>
-                  <div style={{ color: '#888', fontSize: '11px' }}>
-                    {new Date(v.timestamp).toLocaleString('zh-CN')}
-                  </div>
+                  ×
+                </button>
+              </div>
+
+              <div style={{ flex: 1, overflowY: 'auto', padding: '16px 12px 16px 28px' }}>
+                {versions.length === 0 && (
+                  <p style={{ color: '#999', fontSize: '13px', textAlign: 'center', marginTop: '20px' }}>
+                    暂无版本记录
+                  </p>
+                )}
+                <div style={{ position: 'relative' }}>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: '-10px',
+                      top: '8px',
+                      bottom: '8px',
+                      width: '2px',
+                      background: 'linear-gradient(180deg, #3498DB 0%, #2ECC71 100%)',
+                    }}
+                  />
+                  {[...versions].reverse().map((v, i) => {
+                    const isCurrent = i === 0;
+                    const isSelected = previewVersion?.id === v.id;
+                    return (
+                      <div
+                        key={v.id || i}
+                        style={{
+                          position: 'relative',
+                          marginBottom: '16px',
+                          padding: '10px 12px',
+                          background: isSelected
+                            ? '#EBF5FB'
+                            : isCurrent
+                            ? '#F0FFF0'
+                            : '#F8F9FA',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '13px',
+                          border: isSelected
+                            ? '1px solid #3498DB'
+                            : '1px solid transparent',
+                          transition: 'all 0.15s ease',
+                        }}
+                        onClick={() => setPreviewVersion(v)}
+                      >
+                        <div
+                          style={{
+                            position: 'absolute',
+                            left: '-22px',
+                            top: '14px',
+                            width: '10px',
+                            height: '10px',
+                            borderRadius: '50%',
+                            background: isCurrent ? '#2ECC71' : '#3498DB',
+                            border: '2px solid #fff',
+                            boxShadow: '0 0 0 2px #3498DB',
+                          }}
+                        />
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            color: isCurrent ? '#27AE60' : '#2C3E50',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                          }}
+                        >
+                          {v.authorName}
+                          {isCurrent && (
+                            <span
+                              style={{
+                                fontSize: '10px',
+                                background: '#2ECC71',
+                                color: '#fff',
+                                padding: '1px 6px',
+                                borderRadius: '8px',
+                                fontWeight: 400,
+                              }}
+                            >
+                              当前
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ color: '#888', fontSize: '11px', marginTop: '2px' }}>
+                          {new Date(v.timestamp).toLocaleString('zh-CN')}
+                        </div>
+                        <div style={{ marginTop: '6px', display: 'flex', gap: '6px' }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPreviewVersion(v);
+                            }}
+                            style={{
+                              padding: '3px 8px',
+                              background: '#3498DB',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: '3px',
+                              cursor: 'pointer',
+                              fontSize: '11px',
+                            }}
+                          >
+                            预览
+                          </button>
+                          {!isCurrent && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openRollbackConfirm(v);
+                              }}
+                              style={{
+                                padding: '3px 8px',
+                                background: '#E67E22',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '3px',
+                                cursor: 'pointer',
+                                fontSize: '11px',
+                              }}
+                            >
+                              回滚
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
+              </div>
+
+              {previewVersion && (
+                <div
+                  style={{
+                    borderTop: '1px solid #E0E0E0',
+                    padding: '12px',
+                    maxHeight: '40%',
+                    overflow: 'auto',
+                    background: '#FAFAFA',
+                    flexShrink: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: '8px',
+                    }}
+                  >
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#2C3E50' }}>
+                      版本预览 - {previewVersion.authorName}
+                    </div>
+                    <button
+                      onClick={() => setPreviewVersion(null)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        fontSize: '14px',
+                        cursor: 'pointer',
+                        color: '#888',
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div style={{ color: '#888', fontSize: '11px', marginBottom: '8px' }}>
+                    {new Date(previewVersion.timestamp).toLocaleString('zh-CN')} ·{' '}
+                    {previewVersion.paragraphs.length} 个段落
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '12px',
+                      color: '#333',
+                      lineHeight: '1.6',
+                      background: '#fff',
+                      padding: '10px',
+                      borderRadius: '4px',
+                      whiteSpace: 'pre-wrap',
+                      border: '1px solid #EEE',
+                      maxHeight: '200px',
+                      overflow: 'auto',
+                    }}
+                  >
+                    {previewVersion.paragraphs
+                      .map((p, i) => `【${i + 1}】${p || '(空)'}`)
+                      .join('\n\n')}
+                  </div>
+                  {confirmRollbackId === previewVersion.id && (
+                    <div
+                      style={{
+                        marginTop: '12px',
+                        padding: '10px',
+                        background: '#FEF5E7',
+                        border: '1px solid #F39C12',
+                        borderRadius: '4px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: '12px',
+                          color: '#E67E22',
+                          fontWeight: 600,
+                          marginBottom: '8px',
+                        }}
+                      >
+                        ⚠ 确定要回滚到此版本吗？当前内容将被覆盖。
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          onClick={() => handleRollback(previewVersion.id)}
+                          style={{
+                            padding: '4px 12px',
+                            background: '#E74C3C',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                          }}
+                        >
+                          确认回滚
+                        </button>
+                        <button
+                          onClick={() => setConfirmRollbackId(null)}
+                          style={{
+                            padding: '4px 12px',
+                            background: '#95A5A6',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                          }}
+                        >
+                          取消
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

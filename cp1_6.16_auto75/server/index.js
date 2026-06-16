@@ -16,6 +16,7 @@ app.use(express.json());
 const users = new Map();
 const chapters = new Map();
 const locks = new Map();
+const lockTimers = new Map();
 const onlineUsers = new Map();
 
 const DEFAULT_CHAPTERS = [
@@ -69,14 +70,40 @@ function cleanupExpiredLocks() {
   const now = Date.now();
   for (const [key, lock] of locks) {
     if (now - lock.acquiredAt > 60000) {
-      locks.delete(key);
-      io.emit('lock-released', {
-        chapterId: lock.chapterId,
-        paragraphIndex: lock.paragraphIndex,
-        userId: lock.userId,
-      });
+      releaseSingleLock(key, lock);
     }
+  }
+}
+
+function releaseSingleLock(lockKey, lock) {
+  locks.delete(lockKey);
+  const timer = lockTimers.get(lockKey);
+  if (timer) {
+    clearTimeout(timer);
+    lockTimers.delete(lockKey);
+  }
+  io.emit('lock-released', {
+    chapterId: lock.chapterId,
+    paragraphIndex: lock.paragraphIndex,
+    userId: lock.userId,
   });
+}
+
+function scheduleLockRelease(lockKey, lock, durationMs = 60000) {
+  const existingTimer = lockTimers.get(lockKey);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+  }
+  const timer = setTimeout(() => {
+    if (locks.has(lockKey)) {
+      const currentLock = locks.get(lockKey);
+      if (currentLock && currentLock.userId === lock.userId) {
+        releaseSingleLock(lockKey, currentLock);
+      }
+    }
+    lockTimers.delete(lockKey);
+  }, durationMs);
+  lockTimers.set(lockKey, timer);
 }
 
 setInterval(cleanupExpiredLocks, 10000);
@@ -271,7 +298,7 @@ app.post('/api/locks/acquire', (req, res) => {
         lock: existing,
       });
     }
-    locks.delete(lockKey);
+    releaseSingleLock(lockKey, existing);
   }
 
   const ch = chapters.get(chapterId);
@@ -284,6 +311,7 @@ app.post('/api/locks/acquire', (req, res) => {
     currentContent: ch ? ch.paragraphs[paragraphIndex] || '' : '',
   };
   locks.set(lockKey, lock);
+  scheduleLockRelease(lockKey, lock, 60000);
 
   res.json({ success: true, lock });
 });
@@ -294,7 +322,7 @@ app.post('/api/locks/release', (req, res) => {
   const existing = locks.get(lockKey);
 
   if (existing && existing.userId === userId) {
-    locks.delete(lockKey);
+    releaseSingleLock(lockKey, existing);
     return res.json({ success: true });
   }
 
@@ -359,7 +387,7 @@ io.on('connection', (socket) => {
     const lockKey = getLockKey(data.chapterId, data.paragraphIndex);
     const existing = locks.get(lockKey);
     if (existing && existing.userId === data.userId) {
-      locks.delete(lockKey);
+      releaseSingleLock(lockKey, existing);
     }
     socket.broadcast.emit('lock-released', data);
   });
@@ -410,12 +438,7 @@ io.on('connection', (socket) => {
 
       for (const [key, lock] of locks) {
         if (lock.userId === socket.userId) {
-          locks.delete(key);
-          io.emit('lock-released', {
-            chapterId: lock.chapterId,
-            paragraphIndex: lock.paragraphIndex,
-            userId: lock.userId,
-          });
+          releaseSingleLock(key, lock);
         }
       }
 
