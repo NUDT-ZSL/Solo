@@ -46,7 +46,16 @@ const CardModal: React.FC<CardModalProps> = ({ isOpen, state, onClose }) => {
                     />
                     {cardData.potInfo.colorCode}
                   </span>
-                  <span className="detail-size">{cardData.potInfo.size}</span>
+                  <div className="detail-dimensions">
+                    <span className="dim-item">
+                      <span className="dim-label">宽</span>
+                      <span className="dim-value">{cardData.potInfo.widthCm}</span>
+                    </span>
+                    <span className="dim-item">
+                      <span className="dim-label">高</span>
+                      <span className="dim-value">{cardData.potInfo.heightCm}</span>
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
@@ -63,7 +72,16 @@ const CardModal: React.FC<CardModalProps> = ({ isOpen, state, onClose }) => {
                     />
                     {cardData.plantInfo.colorCode}
                   </span>
-                  <span className="detail-size">{cardData.plantInfo.size}</span>
+                  <div className="detail-dimensions">
+                    <span className="dim-item">
+                      <span className="dim-label">宽</span>
+                      <span className="dim-value">{cardData.plantInfo.widthCm}</span>
+                    </span>
+                    <span className="dim-item">
+                      <span className="dim-label">高</span>
+                      <span className="dim-value">{cardData.plantInfo.heightCm}</span>
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
@@ -270,7 +288,35 @@ const CardModal: React.FC<CardModalProps> = ({ isOpen, state, onClose }) => {
         
         .detail-size {
           font-size: 12px;
-          color: #A1887F;
+          color: #8B7355;
+        }
+        
+        .detail-dimensions {
+          display: flex;
+          gap: 12px;
+          margin-top: 4px;
+        }
+        
+        .dim-item {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+        
+        .dim-label {
+          font-size: 11px;
+          color: #8B7355;
+          font-weight: 500;
+          background: #F5F0E1;
+          padding: 1px 6px;
+          border-radius: 3px;
+        }
+        
+        .dim-value {
+          font-size: 12px;
+          color: #8B7355;
+          font-family: monospace;
+          font-weight: 600;
         }
         
         .deco-values {

@@ -31,12 +31,20 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
   const [activeTab, setActiveTab] = useState<'pot' | 'plant' | 'decoration'>('pot');
   const [flashingCard, setFlashingCard] = useState<string | null>(null);
   const [loadedCards, setLoadedCards] = useState<Set<string>>(new Set());
+  const [tabFadeKey, setTabFadeKey] = useState(0);
 
   const tabs = [
     { key: 'pot' as const, label: '花盆' },
     { key: 'plant' as const, label: '植物' },
     { key: 'decoration' as const, label: '装饰' }
   ];
+
+  const handleTabChange = (key: 'pot' | 'plant' | 'decoration') => {
+    if (key !== activeTab) {
+      setActiveTab(key);
+      setTabFadeKey(prev => prev + 1);
+    }
+  };
 
   const handleCardClick = (item: MaterialItem) => {
     if (item.category === 'pot') {
@@ -222,13 +230,13 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
           <button
             key={tab.key}
             className={`tab-btn ${activeTab === tab.key ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => handleTabChange(tab.key)}
           >
             {tab.label}
           </button>
         ))}
       </div>
-      <div className="material-grid">
+      <div className="material-grid fade-in" key={tabFadeKey}>
         {renderCards()}
       </div>
 
@@ -280,6 +288,23 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
           grid-template-columns: repeat(2, 1fr);
           gap: 12px;
           align-content: start;
+        }
+        
+        .material-grid.fade-in {
+          animation: tabFadeIn 0.3s ease-out forwards;
+        }
+        
+        @keyframes tabFadeIn {
+          0% {
+            opacity: 0;
+            transform: translateY(8px);
+            max-height: 0;
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
+            max-height: 2000px;
+          }
         }
         
         .material-card {

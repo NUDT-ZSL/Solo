@@ -41,18 +41,24 @@ export interface CardData {
     color: string;
     colorCode: string;
     size: string;
+    widthCm: string;
+    heightCm: string;
   } | null;
   plantInfo: {
     name: string;
     color: string;
     colorCode: string;
     size: string;
+    widthCm: string;
+    heightCm: string;
   } | null;
   decorations: {
     name: string;
     color: string;
     colorCode: string;
     size: string;
+    widthCm: string;
+    heightCm: string;
   }[];
   totalSize: string;
 }
@@ -86,11 +92,14 @@ export function generateCardData(state: BonsaiState): CardData {
   let totalHeight = 0;
   let totalWidth = 0;
 
+  const potDims = state.pot ? calculatePotDimensions(state.pot) : null;
   const potInfo = state.pot ? {
     name: getPotMaterialName(state.pot.type),
     color: state.pot.colorName,
     colorCode: formatColorCode(state.pot.color),
-    size: `${calculatePotDimensions(state.pot).widthCm} × ${calculatePotDimensions(state.pot).heightCm} cm`
+    size: `${potDims!.widthCm} × ${potDims!.heightCm} cm`,
+    widthCm: `${potDims!.widthCm} cm`,
+    heightCm: `${potDims!.heightCm} cm`
   } : null;
 
   if (state.pot) {
@@ -98,11 +107,14 @@ export function generateCardData(state: BonsaiState): CardData {
     totalHeight = state.pot.height;
   }
 
+  const plantDims = state.plant ? calculatePlantDimensions(state.plant) : null;
   const plantInfo = state.plant ? {
     name: state.plant.name,
     color: '自然绿',
     colorCode: formatColorCode(state.plant.color),
-    size: `${calculatePlantDimensions(state.plant).widthCm} × ${calculatePlantDimensions(state.plant).heightCm} cm`
+    size: `${plantDims!.widthCm} × ${plantDims!.heightCm} cm`,
+    widthCm: `${plantDims!.widthCm} cm`,
+    heightCm: `${plantDims!.heightCm} cm`
   } : null;
 
   if (state.plant) {
@@ -114,7 +126,9 @@ export function generateCardData(state: BonsaiState): CardData {
     name: dec.name,
     color: dec.color,
     colorCode: formatColorCode(dec.color),
-    size: `${(dec.width / 10).toFixed(1)} × ${(dec.height / 10).toFixed(1)} cm`
+    size: `${(dec.width / 10).toFixed(1)} × ${(dec.height / 10).toFixed(1)} cm`,
+    widthCm: `${(dec.width / 10).toFixed(1)} cm`,
+    heightCm: `${(dec.height / 10).toFixed(1)} cm`
   }));
 
   const totalSize = `${(totalWidth / 10).toFixed(1)} × ${(totalHeight / 10).toFixed(1)} cm`;

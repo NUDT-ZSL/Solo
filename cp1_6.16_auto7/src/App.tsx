@@ -22,6 +22,65 @@ import {
   HistoryState
 } from './utils/history';
 
+const STORAGE_KEY = 'bonsai-studio-state';
+
+interface DecoRelativePosition {
+  id: string;
+  type: string;
+  name: string;
+  color: string;
+  width: number;
+  height: number;
+  pctX: number;
+  pctY: number;
+}
+
+function saveStateToStorage(state: BonsaiState, containerWidth?: number, containerHeight?: number) {
+  try {
+    const data: {
+      pot: BonsaiState['pot'];
+      plant: BonsaiState['plant'];
+      decoPositions: DecoRelativePosition[];
+    } = {
+      pot: state.pot,
+      plant: state.plant,
+      decoPositions: state.decorations.map(d => {
+        const pctX = containerWidth && containerWidth > 0 ? d.x / containerWidth : d.x;
+        const pctY = containerHeight && containerHeight > 0 ? d.y / containerHeight : d.y;
+        return { id: d.id, type: d.type, name: d.name, color: d.color, width: d.width, height: d.height, pctX, pctY };
+      })
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (_e) {
+    // ignore storage errors
+  }
+}
+
+function loadStateFromStorage(containerWidth?: number, containerHeight?: number): BonsaiState | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    const decorations: Decoration[] = (data.decoPositions || []).map((dp: DecoRelativePosition) => ({
+      id: dp.id,
+      type: dp.type as 'stone' | 'moss' | 'doll',
+      name: dp.name,
+      color: dp.color,
+      width: dp.width,
+      height: dp.height,
+      x: containerWidth && containerWidth > 0 ? dp.pctX * containerWidth : dp.pctX,
+      y: containerHeight && containerHeight > 0 ? dp.pctY * containerHeight : dp.pctY
+    }));
+    return {
+      pot: data.pot || null,
+      plant: data.plant || null,
+      decorations
+    };
+  } catch (_e) {
+    return null;
+  }
+}
+
 const pots: PotMaterial[] = [
   { type: 'ceramic', color: '#D2B48C', colorName: '米白陶', gradientStart: '#F5DEB3', gradientEnd: '#D2B48C', width: 140, height: 120 },
   { type: 'ceramic', color: '#8D6E63', colorName: '深棕陶', gradientStart: '#A1887F', gradientEnd: '#6D4C41', width: 140, height: 120 },
@@ -48,11 +107,19 @@ const decorationTemplates: Omit<Decoration, 'id' | 'x' | 'y'>[] = [
   { type: 'doll', name: '小玩偶', color: '#EF5350', width: 35, height: 50 },
 ];
 
-const initialState: BonsaiState = {
-  pot: null,
-  plant: null,
-  decorations: []
+const getInitialState = (): BonsaiState => {
+  const saved = loadStateFromStorage();
+  if (saved) {
+    return saved;
+  }
+  return {
+    pot: null,
+    plant: null,
+    decorations: []
+  };
 };
+
+const initialState: BonsaiState = getInitialState();
 
 interface MaterialItem {
   id: string;
@@ -69,8 +136,33 @@ const App: React.FC = () => {
   const [redoPulse, setRedoPulse] = useState(false);
   const workbenchRef = useRef<HTMLDivElement>(null);
   const lastStateRef = useRef<BonsaiState>(cloneState(initialState));
+  const hasRestoredPositions = useRef(false);
 
   const currentState = history.present;
+
+  useEffect(() => {
+    if (!hasRestoredPositions.current && workbenchRef.current) {
+      hasRestoredPositions.current = true;
+      const rect = workbenchRef.current.getBoundingClientRect();
+      const saved = loadStateFromStorage(rect.width, rect.height);
+      if (saved && saved.decorations.length > 0) {
+        setHistory(prev => ({
+          ...prev,
+          present: saved
+        }));
+        lastStateRef.current = cloneState(saved);
+      }
+      if (saved) {
+        if (saved.pot) setSelectedPotId(`pot-${saved.pot.type}-${saved.pot.color}`);
+        if (saved.plant) setSelectedPlantId(`plant-${saved.plant.type}`);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const rect = workbenchRef.current?.getBoundingClientRect();
+    saveStateToStorage(currentState, rect?.width, rect?.height);
+  }, [currentState]);
 
   const commitStateChange = useCallback((newState: BonsaiState) => {
     if (statesEqual(lastStateRef.current, newState)) {

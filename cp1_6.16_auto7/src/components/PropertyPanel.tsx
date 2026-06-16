@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { BonsaiState, CardData, generateCardData } from '../utils/bonSaiLogic';
 
 interface PropertyPanelProps {
@@ -8,6 +8,11 @@ interface PropertyPanelProps {
 
 const PropertyPanel: React.FC<PropertyPanelProps> = ({ state, onGenerateCard }) => {
   const cardData: CardData = generateCardData(state);
+  const [previewKey, setPreviewKey] = useState(0);
+
+  const handleRefreshPreview = useCallback(() => {
+    setPreviewKey(prev => prev + 1);
+  }, []);
 
   return (
     <div className="property-panel">
@@ -15,11 +20,19 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ state, onGenerateCard }) 
         <h3 className="section-title">实时预览</h3>
         <div className="preview-container">
           <div className="preview-frame">
-            <div className="preview-inner">
+            <div className="preview-inner" key={previewKey}>
               <MiniPreview state={state} />
             </div>
           </div>
-          <div className="preview-size">{cardData.totalSize}</div>
+          <div className="preview-actions">
+            <div className="preview-size">{cardData.totalSize}</div>
+            <button className="refresh-preview-btn" onClick={handleRefreshPreview} title="刷新预览">
+              <svg viewBox="0 0 24 24" className="refresh-icon">
+                <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="currentColor" />
+              </svg>
+              刷新
+            </button>
+          </div>
         </div>
       </div>
 
@@ -154,16 +167,50 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ state, onGenerateCard }) 
         }
         
         .preview-inner {
-          width: 300px;
-          height: 300px;
-          transform: scale(0.5);
-          transform-origin: center center;
+          width: 150px;
+          height: 150px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          object-fit: contain;
+        }
+        
+        .preview-actions {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          width: 100%;
+          gap: 8px;
         }
         
         .preview-size {
           font-size: 12px;
           color: #8D6E63;
           font-weight: 500;
+        }
+        
+        .refresh-preview-btn {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 4px 10px;
+          border: 1px solid #E8E0D5;
+          border-radius: 6px;
+          background: white;
+          color: #8D6E63;
+          font-size: 11px;
+          cursor: pointer;
+          transition: all 0.2s ease-out;
+        }
+        
+        .refresh-preview-btn:hover {
+          background: #F5F0E1;
+          border-color: #D2B48C;
+        }
+        
+        .refresh-icon {
+          width: 14px;
+          height: 14px;
         }
         
         .info-section {
@@ -348,118 +395,86 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ state, onGenerateCard }) 
 };
 
 const MiniPreview: React.FC<{ state: BonsaiState }> = ({ state }) => {
+  const hasContent = state.pot || state.plant;
+  
   return (
     <div className="mini-preview">
-      <div className="mini-pot-area">
-        {state.plant && (
-          <div className="mini-plant">
-            <svg viewBox="0 0 120 160" style={{ width: '100%', height: '100%' }}>
-              <defs>
-                <linearGradient id="mini-plant-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor={state.plant.gradientStart} />
-                  <stop offset="100%" stopColor={state.plant.gradientEnd} />
-                </linearGradient>
-              </defs>
-              {state.plant.type === 'pothos' && (
-                <>
-                  <path d="M60 150 Q50 110 30 90 Q20 70 40 50" stroke="url(#mini-plant-grad)" strokeWidth="5" fill="none" />
-                  <path d="M60 150 Q70 110 90 90 Q100 70 80 50" stroke="url(#mini-plant-grad)" strokeWidth="5" fill="none" />
-                  <ellipse cx="36" cy="70" rx="16" ry="10" fill="url(#mini-plant-grad)" transform="rotate(-30 36 70)" />
-                  <ellipse cx="84" cy="70" rx="16" ry="10" fill="url(#mini-plant-grad)" transform="rotate(30 84 70)" />
-                </>
-              )}
-              {state.plant.type === 'succulent' && (
-                <>
-                  <ellipse cx="60" cy="100" rx="45" ry="25" fill="url(#mini-plant-grad)" />
-                  <ellipse cx="40" cy="90" rx="18" ry="22" fill="url(#mini-plant-grad)" />
-                  <ellipse cx="80" cy="90" rx="18" ry="22" fill="url(#mini-plant-grad)" />
-                </>
-              )}
-              {state.plant.type === 'cactus' && (
-                <>
-                  <rect x="48" y="40" width="24" height="110" rx="12" fill="url(#mini-plant-grad)" />
-                  <rect x="20" y="70" width="20" height="45" rx="10" fill="url(#mini-plant-grad)" />
-                  <rect x="80" y="60" width="20" height="55" rx="10" fill="url(#mini-plant-grad)" />
-                </>
-              )}
-            </svg>
-          </div>
-        )}
-        {state.pot && (
-          <div className="mini-pot">
-            <div 
-              className="mini-pot-rim"
-              style={{
-                background: `linear-gradient(180deg, ${state.pot.gradientStart} 0%, ${state.pot.gradientEnd} 100%)`,
-                opacity: state.pot.type === 'glass' ? 0.7 : 1
-              }}
-            />
-            <div 
-              className="mini-pot-body"
-              style={{
-                background: `linear-gradient(180deg, ${state.pot.gradientStart} 0%, ${state.pot.gradientEnd} 100%)`,
-                opacity: state.pot.type === 'glass' ? 0.5 : 1
-              }}
-            />
-          </div>
-        )}
-      </div>
+      {!hasContent && <div className="mini-preview-empty">暂无搭配</div>}
+      {hasContent && (
+        <svg viewBox="0 0 200 300" className="mini-preview-svg" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            {state.plant && (
+              <linearGradient id="mini-plant-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor={state.plant.gradientStart} />
+                <stop offset="100%" stopColor={state.plant.gradientEnd} />
+              </linearGradient>
+            )}
+            {state.pot && (
+              <linearGradient id="mini-pot-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor={state.pot.gradientStart} />
+                <stop offset="100%" stopColor={state.pot.gradientEnd} />
+              </linearGradient>
+            )}
+          </defs>
+          
+          {state.plant && state.plant.type === 'pothos' && (
+            <>
+              <path d="M100 220 Q85 175 55 150 Q40 125 65 95" stroke="url(#mini-plant-grad)" strokeWidth="6" fill="none" />
+              <path d="M100 220 Q115 175 145 150 Q160 125 135 95" stroke="url(#mini-plant-grad)" strokeWidth="6" fill="none" />
+              <ellipse cx="60" cy="120" rx="22" ry="14" fill="url(#mini-plant-grad)" transform="rotate(-30 60 120)" />
+              <ellipse cx="140" cy="120" rx="22" ry="14" fill="url(#mini-plant-grad)" transform="rotate(30 140 120)" />
+              <ellipse cx="80" cy="160" rx="18" ry="10" fill="url(#mini-plant-grad)" transform="rotate(-15 80 160)" />
+              <ellipse cx="120" cy="160" rx="18" ry="10" fill="url(#mini-plant-grad)" transform="rotate(15 120 160)" />
+            </>
+          )}
+          {state.plant && state.plant.type === 'succulent' && (
+            <>
+              <ellipse cx="100" cy="160" rx="55" ry="30" fill="url(#mini-plant-grad)" />
+              <ellipse cx="75" cy="148" rx="22" ry="28" fill="url(#mini-plant-grad)" />
+              <ellipse cx="125" cy="148" rx="22" ry="28" fill="url(#mini-plant-grad)" />
+              <ellipse cx="100" cy="130" rx="18" ry="24" fill="url(#mini-plant-grad)" />
+              <ellipse cx="85" cy="172" rx="16" ry="20" fill="url(#mini-plant-grad)" />
+              <ellipse cx="115" cy="172" rx="16" ry="20" fill="url(#mini-plant-grad)" />
+            </>
+          )}
+          {state.plant && state.plant.type === 'cactus' && (
+            <>
+              <rect x="82" y="60" width="36" height="160" rx="18" fill="url(#mini-plant-grad)" />
+              <rect x="35" y="100" width="30" height="65" rx="15" fill="url(#mini-plant-grad)" />
+              <rect x="135" y="85" width="30" height="80" rx="15" fill="url(#mini-plant-grad)" />
+              <circle cx="100" cy="60" r="8" fill="#FF7043" />
+            </>
+          )}
+          
+          {state.pot && (
+            <>
+              <rect x="30" y="220" width="140" height="22" rx="6" fill="url(#mini-pot-grad)" opacity={state.pot.type === 'glass' ? 0.7 : 1} />
+              <rect x="40" y="240" width="120" height="55" rx="4" fill="url(#mini-pot-grad)" opacity={state.pot.type === 'glass' ? 0.5 : 1}
+                style={{ clipPath: 'polygon(7% 0%, 93% 0%, 100% 100%, 0% 100%)' }} />
+              <ellipse cx="100" cy="298" rx="70" ry="5" fill="rgba(0,0,0,0.08)" />
+            </>
+          )}
+        </svg>
+      )}
 
       <style>{`
         .mini-preview {
           width: 100%;
           height: 100%;
           background: #F5F0E1;
-          position: relative;
           display: flex;
           align-items: center;
           justify-content: center;
         }
         
-        .mini-pot-area {
-          position: relative;
-          width: 180px;
-          height: 240px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: flex-end;
+        .mini-preview-svg {
+          width: 100%;
+          height: 100%;
         }
         
-        .mini-plant {
-          position: absolute;
-          bottom: 90px;
-          width: 140px;
-          height: 160px;
-          z-index: 0;
-        }
-        
-        .mini-pot {
-          position: relative;
-          width: 130px;
-          height: 110px;
-          z-index: 1;
-        }
-        
-        .mini-pot-rim {
-          position: absolute;
-          top: 0;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 130px;
-          height: 16px;
-          border-radius: 4px 4px 2px 2px;
-        }
-        
-        .mini-pot-body {
-          position: absolute;
-          top: 13px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 115px;
-          height: 97px;
-          border-radius: 0 0 15px 15px;
-          clip-path: polygon(7% 0%, 93% 0%, 100% 100%, 0% 100%);
+        .mini-preview-empty {
+          color: #BCAAA4;
+          font-size: 13px;
         }
       `}</style>
     </div>
