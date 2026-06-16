@@ -4,6 +4,7 @@ import {
   SoundWave,
   FrequencyBin,
   easeInOutCubic,
+  easeInOutQuad,
   frequencyToColor,
   calculateWaveInterference,
   calculateSpectrum,
@@ -40,6 +41,8 @@ const INSTRUMENT_SIZE = 48
 const INSTRUMENT_RADIUS = INSTRUMENT_SIZE / 2
 const WAVE_MAX_RADIUS = 200
 const WAVE_DURATION = 1500
+const WAVE_INITIAL_ALPHA = 0.6
+const WAVE_FINAL_ALPHA = 0.0
 
 const Simulation: React.FC<SimulationProps> = ({
   placedInstruments,
@@ -56,6 +59,8 @@ const Simulation: React.FC<SimulationProps> = ({
   const audioContextRef = useRef<AudioContext | null>(null)
   const audioNodesRef = useRef<Map<string, { oscillators: OscillatorNode[]; gains: GainNode[]; mainGain: GainNode; reverbNode?: ConvolverNode }>>(new Map())
   const targetVolumeRef = useRef(volume)
+  const reverbRef = useRef(reverb)
+  const presetTimeoutsRef = useRef<number[]>([])
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
@@ -63,6 +68,10 @@ const Simulation: React.FC<SimulationProps> = ({
   useEffect(() => {
     targetVolumeRef.current = volume
   }, [volume])
+
+  useEffect(() => {
+    reverbRef.current = reverb
+  }, [reverb])
 
   const createImpulseResponse = useCallback((ctx: AudioContext, duration: number, decay: number): AudioBuffer => {
     const rate = ctx.sampleRate
@@ -87,7 +96,7 @@ const Simulation: React.FC<SimulationProps> = ({
     return audioContextRef.current
   }, [])
 
-  const playInstrumentSound = useCallback((instrumentId: string, instrumentIndex: number, _startDelay: number = 0) => {
+  const playInstrumentSound = useCallback((instrumentId: string, instrumentIndex: number, durationMs: number = 3000) => {
     const ctx = ensureAudioContext()
     const instrument = INSTRUMENTS[instrumentIndex]
 
@@ -98,11 +107,13 @@ const Simulation: React.FC<SimulationProps> = ({
 
     const mainGain = ctx.createGain()
     const volFactor = targetVolumeRef.current / 100
+    const soundDurationSec = durationMs / 1000
+
     mainGain.gain.setValueAtTime(0, ctx.currentTime)
     mainGain.gain.linearRampToValueAtTime(volFactor * 0.5, ctx.currentTime + 0.05)
-    mainGain.gain.exponentialRampToValueAtTime(volFactor * 0.001, ctx.currentTime + 3)
+    mainGain.gain.exponentialRampToValueAtTime(volFactor * 0.001, ctx.currentTime + soundDurationSec)
 
-    const reverbAmount = reverb / 100
+    const reverbAmount = reverbRef.current / 100
     let reverbNode: ConvolverNode | undefined
     let reverbGain: GainNode | undefined
     let dryGain: GainNode | undefined
@@ -138,15 +149,15 @@ const Simulation: React.FC<SimulationProps> = ({
       oscillators.push(osc)
       gains.push(gain)
       osc.start(ctx.currentTime)
-      osc.stop(ctx.currentTime + 3)
+      osc.stop(ctx.currentTime + soundDurationSec)
     })
 
     audioNodesRef.current.set(instrumentId, { oscillators, gains, mainGain, reverbNode })
 
     setTimeout(() => {
       stopInstrumentSound(instrumentId)
-    }, 3200)
-  }, [ensureAudioContext, reverb, createImpulseResponse])
+    }, durationMs + 200)
+  }, [ensureAudioContext, createImpulseResponse])
 
   const stopInstrumentSound = useCallback((instrumentId: string) => {
     const nodes = audioNodesRef.current.get(instrumentId)
@@ -174,7 +185,7 @@ const Simulation: React.FC<SimulationProps> = ({
   }, [])
 
   useEffect(() => {
-    audioNodesRef.current.forEach((nodes, id) => {
+    audioNodesRef.current.forEach((nodes) => {
       const ctx = audioContextRef.current
       if (ctx && nodes.mainGain) {
         const currentGain = nodes.mainGain.gain.value
@@ -189,7 +200,6 @@ const Simulation: React.FC<SimulationProps> = ({
   const spawnWave = useCallback((instrumentId: string, instrumentIndex: number, x: number, y: number, delay: number = 0) => {
     const instrument = INSTRUMENTS[instrumentIndex]
     const waveId = `${instrumentId}-${Date.now()}-${Math.random()}`
-    const now = performance.now()
 
     setTimeout(() => {
       wavesRef.current.push({
@@ -208,7 +218,7 @@ const Simulation: React.FC<SimulationProps> = ({
   }, [])
 
   const handleInstrumentClick = useCallback((id: string, instrumentIndex: number, x: number, y: number) => {
-    playInstrumentSound(id, instrumentIndex, 0)
+    playInstrumentSound(id, instrumentIndex, 3000)
     spawnWave(id, instrumentIndex, x, y)
 
     setPlacedInstruments(prev => prev.map(inst =>
@@ -224,75 +234,119 @@ const Simulation: React.FC<SimulationProps> = ({
     }, 3000)
   }, [playInstrumentSound, spawnWave, setPlacedInstruments])
 
+  const clearPresetTimeouts = useCallback(() => {
+    presetTimeoutsRef.current.forEach(id => clearTimeout(id))
+    presetTimeoutsRef.current = []
+  }, [])
+
   const playPresetSequence = useCallback(() => {
     if (!presetPlaying) return
+    clearPresetTimeouts()
 
-    const now = Date.now()
-    const timeline = [
-      { index: 0, delay: 0 },
-      { index: 1, delay: 2000 },
-      { index: 2, delay: 4000 },
-      { index: 3, delay: 6000 }
-    ]
+    const findInst = (idx: number) => placedInstruments.find(p => p.instrumentIndex === idx)
 
-    timeline.forEach(({ index, delay }) => {
-      setTimeout(() => {
-        const instrument = placedInstruments.find(p => p.instrumentIndex === index)
-        if (instrument) {
-          playInstrumentSound(instrument.id, instrument.instrumentIndex, 0)
-          spawnWave(instrument.id, instrument.instrumentIndex, instrument.x, instrument.y)
-          setPlacedInstruments(prev => prev.map(inst =>
-            inst.id === instrument.id
-              ? { ...inst, isPlaying: true, playStartTime: performance.now() }
-              : inst
+    const t1 = window.setTimeout(() => {
+      const inst = findInst(0)
+      if (inst) {
+        playInstrumentSound(inst.id, inst.instrumentIndex, 4000)
+        spawnWave(inst.id, inst.instrumentIndex, inst.x, inst.y)
+        setPlacedInstruments(prev => prev.map(i =>
+          i.id === inst.id ? { ...i, isPlaying: true, playStartTime: performance.now() } : i
+        ))
+        setTimeout(() => {
+          setPlacedInstruments(prev => prev.map(i =>
+            i.id === inst.id ? { ...i, isPlaying: false } : i
           ))
-        }
-      }, delay)
-    })
+        }, 4000)
+      }
+    }, 100)
+    presetTimeoutsRef.current.push(t1)
 
-    const replayInterval = setInterval(() => {
-      const elapsed = Date.now() - now
-      if (elapsed >= 10000) {
-        clearInterval(replayInterval)
-        placedInstruments.forEach((instrument, idx) => {
-          const score = calculateHarmonyScore(
-            placedInstruments.map(p => ({
-              x: p.x, y: p.y, instrumentIndex: p.instrumentIndex, isPlaying: true
-            })),
-            wavesRef.current,
-            performance.now()
-          )
-          const finalScore = Math.max(0, Math.min(100, score + idx * 2))
-          onScoreUpdate(instrument.id, finalScore)
-        })
-        return
-      }
-      const stage = Math.floor((elapsed / 2000))
-      if (stage >= 0 && stage <= 3) {
-        const instrument = placedInstruments.find(p => p.instrumentIndex === stage)
-        if (instrument) {
-          spawnWave(instrument.id, instrument.instrumentIndex, instrument.x, instrument.y)
-        }
-      }
-      for (let i = 0; i < Math.min(stage + 1, 4); i++) {
-        const instrument = placedInstruments.find(p => p.instrumentIndex === i)
-        if (instrument) {
-          playInstrumentSound(instrument.id, instrument.instrumentIndex, 0)
-          setPlacedInstruments(prev => prev.map(inst =>
-            inst.id === instrument.id
-              ? { ...inst, isPlaying: true, playStartTime: performance.now() }
-              : inst
+    const t2 = window.setTimeout(() => {
+      const inst = findInst(1)
+      if (inst) {
+        playInstrumentSound(inst.id, inst.instrumentIndex, 4000)
+        spawnWave(inst.id, inst.instrumentIndex, inst.x, inst.y)
+        setPlacedInstruments(prev => prev.map(i =>
+          i.id === inst.id ? { ...i, isPlaying: true, playStartTime: performance.now() } : i
+        ))
+        setTimeout(() => {
+          setPlacedInstruments(prev => prev.map(i =>
+            i.id === inst.id ? { ...i, isPlaying: false } : i
           ))
-        }
+        }, 4000)
       }
-    }, 2800)
-  }, [presetPlaying, placedInstruments, playInstrumentSound, spawnWave, setPlacedInstruments, onScoreUpdate])
+    }, 2000)
+    presetTimeoutsRef.current.push(t2)
+
+    const t3 = window.setTimeout(() => {
+      const inst = findInst(2)
+      if (inst) {
+        playInstrumentSound(inst.id, inst.instrumentIndex, 4000)
+        spawnWave(inst.id, inst.instrumentIndex, inst.x, inst.y)
+        setPlacedInstruments(prev => prev.map(i =>
+          i.id === inst.id ? { ...i, isPlaying: true, playStartTime: performance.now() } : i
+        ))
+        setTimeout(() => {
+          setPlacedInstruments(prev => prev.map(i =>
+            i.id === inst.id ? { ...i, isPlaying: false } : i
+          ))
+        }, 4000)
+      }
+    }, 4000)
+    presetTimeoutsRef.current.push(t3)
+
+    const t4 = window.setTimeout(() => {
+      const inst = findInst(3)
+      if (inst) {
+        playInstrumentSound(inst.id, inst.instrumentIndex, 5000)
+        spawnWave(inst.id, inst.instrumentIndex, inst.x, inst.y)
+        setPlacedInstruments(prev => prev.map(i =>
+          i.id === inst.id ? { ...i, isPlaying: true, playStartTime: performance.now() } : i
+        ))
+        setTimeout(() => {
+          setPlacedInstruments(prev => prev.map(i =>
+            i.id === inst.id ? { ...i, isPlaying: false } : i
+          ))
+        }, 5000)
+      }
+    }, 6000)
+    presetTimeoutsRef.current.push(t4)
+
+    const waveInterval = window.setInterval(() => {
+      placedInstruments.forEach(inst => {
+        if (inst.isPlaying) {
+          spawnWave(inst.id, inst.instrumentIndex, inst.x, inst.y)
+        }
+      })
+    }, 1400)
+    presetTimeoutsRef.current.push(waveInterval as unknown as number)
+
+    const t5 = window.setTimeout(() => {
+      clearInterval(waveInterval)
+      placedInstruments.forEach((instrument, idx) => {
+        const score = calculateHarmonyScore(
+          placedInstruments.map(p => ({
+            x: p.x, y: p.y, instrumentIndex: p.instrumentIndex, isPlaying: true
+          })),
+          wavesRef.current,
+          performance.now()
+        )
+        const finalScore = Math.max(0, Math.min(100, score + idx * 3))
+        onScoreUpdate(instrument.id, finalScore)
+      })
+    }, 10200)
+    presetTimeoutsRef.current.push(t5)
+  }, [presetPlaying, placedInstruments, playInstrumentSound, spawnWave, setPlacedInstruments, onScoreUpdate, clearPresetTimeouts])
 
   useEffect(() => {
     if (presetPlaying) {
       playPresetSequence()
+    } else {
+      clearPresetTimeouts()
     }
-  }, [presetPlaying, playPresetSequence])
+    return () => clearPresetTimeouts()
+  }, [presetPlaying, playPresetSequence, clearPresetTimeouts])
 
   const getCanvasCoords = useCallback((e: React.MouseEvent): { x: number; y: number } => {
     const canvas = canvasRef.current
@@ -447,27 +501,31 @@ const Simulation: React.FC<SimulationProps> = ({
   }
 
   const drawSoundWave = (ctx: CanvasRenderingContext2D, wave: SoundWave, progress: number) => {
-    const alpha = (1 - progress) * 0.6
+    const alphaDecay = easeInOutQuad(1 - progress)
+    const baseAlpha = WAVE_INITIAL_ALPHA + (WAVE_FINAL_ALPHA - WAVE_INITIAL_ALPHA) * (1 - alphaDecay)
     const color = frequencyToColor(wave.frequency)
 
     for (let ring = 0; ring < 3; ring++) {
-      const ringProgress = Math.max(0, progress - ring * 0.15)
+      const ringOffset = ring * 0.15
+      const ringProgress = Math.max(0, progress - ringOffset)
       if (ringProgress <= 0 || ringProgress >= 1) continue
 
       const ringRadius = easeInOutCubic(ringProgress) * wave.maxRadius
-      const ringAlpha = alpha * (1 - ring * 0.25)
+      const ringAlphaDecay = easeInOutQuad(1 - ringProgress)
+      const ringAlpha = (WAVE_INITIAL_ALPHA + (WAVE_FINAL_ALPHA - WAVE_INITIAL_ALPHA) * (1 - ringAlphaDecay)) * (1 - ring * 0.25)
+      const finalAlpha = Math.max(0, Math.min(1, ringAlpha * baseAlpha / WAVE_INITIAL_ALPHA))
 
       const gradient = ctx.createRadialGradient(
         wave.x, wave.y, ringRadius * 0.95,
         wave.x, wave.y, ringRadius
       )
       gradient.addColorStop(0, rgba(color, 0))
-      gradient.addColorStop(0.5, rgba(color, ringAlpha * 0.5))
+      gradient.addColorStop(0.5, rgba(color, finalAlpha * 0.5))
       gradient.addColorStop(1, rgba(color, 0))
 
       ctx.beginPath()
       ctx.arc(wave.x, wave.y, ringRadius, 0, Math.PI * 2)
-      ctx.strokeStyle = rgba(color, ringAlpha)
+      ctx.strokeStyle = rgba(color, finalAlpha)
       ctx.lineWidth = 3
       ctx.stroke()
 
@@ -480,23 +538,77 @@ const Simulation: React.FC<SimulationProps> = ({
   }
 
   const drawInterference = (ctx: CanvasRenderingContext2D, waves: SoundWave[], currentTime: number) => {
-    const interferenceRegions: { x: number; y: number; radius: number; type: 'constructive' | 'destructive' }[] = []
+    const interferenceRegions: { x: number; y: number; radius: number; type: 'constructive' | 'destructive'; phaseDiff: number }[] = []
 
     for (let i = 0; i < waves.length; i++) {
       for (let j = i + 1; j < waves.length; j++) {
-        const { interferencePoints, constructive, destructive } = calculateWaveInterference(waves[i], waves[j], currentTime)
+        const w1 = waves[i]
+        const w2 = waves[j]
 
-        interferencePoints.forEach(point => {
-          const intensity = Math.max(constructive, destructive)
-          if (intensity > 0.1) {
-            interferenceRegions.push({
-              x: point.x,
-              y: point.y,
-              radius: 20 + intensity * 30,
-              type: point.type
-            })
-          }
-        })
+        const elapsed1 = currentTime - w1.startTime
+        const elapsed2 = currentTime - w2.startTime
+        const progress1 = elapsed1 / w1.duration
+        const progress2 = elapsed2 / w2.duration
+
+        if (progress1 <= 0 || progress2 <= 0 || progress1 >= 1 || progress2 >= 1) continue
+
+        const dx = w2.x - w1.x
+        const dy = w2.y - w1.y
+        const distance = Math.sqrt(dx * dx + dy * dy)
+
+        if (distance >= w1.radius + w2.radius || distance <= Math.abs(w1.radius - w2.radius)) continue
+
+        const freqDiff = Math.abs(w1.frequency - w2.frequency)
+        const freqAvg = (w1.frequency + w2.frequency) / 2
+        const freqRatio = freqDiff / freqAvg
+
+        const phase1 = (elapsed1 / 1000) * w1.frequency * Math.PI * 2
+        const phase2 = (elapsed2 / 1000) * w2.frequency * Math.PI * 2
+        let phaseDiff = Math.abs(phase1 - phase2) % (Math.PI * 2)
+        if (phaseDiff > Math.PI) phaseDiff = Math.PI * 2 - phaseDiff
+
+        const constructive = Math.max(0, 1 - freqRatio * 2) * (1 - Math.abs(progress1 - progress2))
+        const destructiveBase = freqRatio > 0.05 ? Math.min(1, freqRatio * 3) * (1 - Math.abs(progress1 - progress2)) : 0.1
+        const destructiveBoost = Math.max(0, (phaseDiff - Math.PI * 0.6) / (Math.PI * 0.4))
+        const destructive = Math.min(1, destructiveBase + destructiveBoost * 0.5)
+
+        const nx = dx / (distance || 1)
+        const ny = dy / (distance || 1)
+
+        const a = (w1.radius * w1.radius - w2.radius * w2.radius + distance * distance) / (2 * (distance || 1))
+        const h = Math.sqrt(Math.max(0, w1.radius * w1.radius - a * a))
+
+        const mx = w1.x + a * nx
+        const my = w1.y + a * ny
+        const px = -ny * h
+        const py = nx * h
+
+        const midX = (w1.x + w2.x) / 2
+        const midY = (w1.y + w2.y) / 2
+
+        const type = constructive > destructive ? 'constructive' : 'destructive'
+        const intensity = Math.max(constructive, destructive)
+
+        if (intensity > 0.1) {
+          interferenceRegions.push({
+            x: mx + px, y: my + py,
+            radius: 20 + intensity * 30,
+            type,
+            phaseDiff
+          })
+          interferenceRegions.push({
+            x: mx - px, y: my - py,
+            radius: 20 + intensity * 30,
+            type,
+            phaseDiff
+          })
+          interferenceRegions.push({
+            x: midX, y: midY,
+            radius: 30 + intensity * 40,
+            type,
+            phaseDiff
+          })
+        }
       }
     }
 
@@ -522,33 +634,48 @@ const Simulation: React.FC<SimulationProps> = ({
         ctx.lineWidth = 2
         ctx.stroke()
       } else {
+        const isNear180 = region.phaseDiff > Math.PI * 0.7 && region.phaseDiff < Math.PI * 1.3
+        const gridAlpha = isNear180 ? 0.5 : 0.3
+
         ctx.save()
-        const gridAlpha = 0.5
 
         ctx.beginPath()
         ctx.arc(region.x, region.y, region.radius, 0, Math.PI * 2)
         ctx.clip()
 
-        ctx.strokeStyle = `rgba(30, 30, 60, ${gridAlpha})`
-        ctx.lineWidth = 1
-        const gridStep = 4
+        ctx.fillStyle = `rgba(20, 20, 45, ${gridAlpha * 0.3})`
+        ctx.fillRect(region.x - region.radius, region.y - region.radius, region.radius * 2, region.radius * 2)
 
-        for (let gx = region.x - region.radius; gx < region.x + region.radius; gx += gridStep) {
+        ctx.strokeStyle = `rgba(30, 30, 70, ${gridAlpha})`
+        ctx.lineWidth = 1
+        const gridStep = 5
+
+        for (let gx = region.x - region.radius; gx <= region.x + region.radius; gx += gridStep) {
           ctx.beginPath()
           ctx.moveTo(gx, region.y - region.radius)
           ctx.lineTo(gx, region.y + region.radius)
           ctx.stroke()
         }
-        for (let gy = region.y - region.radius; gy < region.y + region.radius; gy += gridStep) {
+        for (let gy = region.y - region.radius; gy <= region.y + region.radius; gy += gridStep) {
           ctx.beginPath()
           ctx.moveTo(region.x - region.radius, gy)
           ctx.lineTo(region.x + region.radius, gy)
           ctx.stroke()
         }
 
+        if (isNear180) {
+          ctx.strokeStyle = `rgba(10, 10, 30, ${gridAlpha})`
+          ctx.lineWidth = 2
+          ctx.setLineDash([4, 4])
+          ctx.beginPath()
+          ctx.arc(region.x, region.y, region.radius * 0.7, 0, Math.PI * 2)
+          ctx.stroke()
+          ctx.setLineDash([])
+        }
+
         ctx.beginPath()
         ctx.arc(region.x, region.y, region.radius, 0, Math.PI * 2)
-        ctx.strokeStyle = `rgba(20, 20, 40, ${gridAlpha * 0.8})`
+        ctx.strokeStyle = `rgba(15, 15, 35, ${gridAlpha * 0.9})`
         ctx.lineWidth = 2
         ctx.stroke()
 
@@ -568,13 +695,14 @@ const Simulation: React.FC<SimulationProps> = ({
       const glowAlpha = 0.4 + Math.sin(currentTime / 300) * 0.1
       const glowGradient = ctx.createRadialGradient(
         inst.x, inst.y, INSTRUMENT_RADIUS,
-        inst.x, inst.y, INSTRUMENT_RADIUS + 25
+        inst.x, inst.y, INSTRUMENT_RADIUS + 28
       )
       glowGradient.addColorStop(0, rgba('#48dbfb', glowAlpha))
+      glowGradient.addColorStop(0.5, rgba('#48dbfb', glowAlpha * 0.5))
       glowGradient.addColorStop(1, rgba('#48dbfb', 0))
 
       ctx.beginPath()
-      ctx.arc(inst.x, inst.y, INSTRUMENT_RADIUS + 25, 0, Math.PI * 2)
+      ctx.arc(inst.x, inst.y, INSTRUMENT_RADIUS + 28, 0, Math.PI * 2)
       ctx.fillStyle = glowGradient
       ctx.fill()
     }
@@ -583,7 +711,7 @@ const Simulation: React.FC<SimulationProps> = ({
 
     ctx.save()
     ctx.shadowColor = instrument.color
-    ctx.shadowBlur = inst.isPlaying ? 20 : 10
+    ctx.shadowBlur = inst.isPlaying ? 22 : 10
 
     const gradient = ctx.createRadialGradient(
       inst.x - radius * 0.3, inst.y - radius * 0.3, 0,

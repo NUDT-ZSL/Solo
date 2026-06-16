@@ -3,10 +3,6 @@ import Simulation, { PlacedInstrument } from './Simulation'
 import AnalyticsPanel from './AnalyticsPanel'
 import { INSTRUMENTS, FrequencyBin } from './utils'
 
-const CANVAS_WIDTH = 960
-const CANVAS_HEIGHT = 640
-const INSTRUMENT_RADIUS = 24
-
 const App: React.FC = () => {
   const [placedInstruments, setPlacedInstruments] = useState<PlacedInstrument[]>([])
   const [spectrum, setSpectrum] = useState<FrequencyBin[]>([])
@@ -15,6 +11,7 @@ const App: React.FC = () => {
   const [presetPlaying, setPresetPlaying] = useState<boolean>(false)
   const [hoveredInstrumentId, setHoveredInstrumentId] = useState<number | null>(null)
   const scoreAnimRef = useRef<Map<string, { target: number; current: number; startTime: number }>>(new Map())
+  const animFrameRef = useRef<number>(0)
 
   const placeInstrument = useCallback((instrumentIndex: number) => {
     if (placedInstruments.some(p => p.instrumentIndex === instrumentIndex)) return
@@ -53,6 +50,28 @@ const App: React.FC = () => {
     setSpectrum(newSpectrum)
   }, [])
 
+  const animateScores = useCallback(() => {
+    let allDone = true
+    setPlacedInstruments(prev => prev.map(inst => {
+      const anim = scoreAnimRef.current.get(inst.id)
+      if (anim && anim.current < anim.target) {
+        const elapsed = performance.now() - anim.startTime
+        const duration = 1500
+        const progress = Math.min(1, elapsed / duration)
+        const eased = 1 - Math.pow(1 - progress, 3)
+        const newCurrent = Math.round(anim.target * eased)
+        anim.current = newCurrent
+        if (newCurrent < anim.target) allDone = false
+        return { ...inst, score: newCurrent }
+      }
+      return inst
+    }))
+
+    if (!allDone) {
+      animFrameRef.current = requestAnimationFrame(animateScores)
+    }
+  }, [])
+
   const onScoreUpdate = useCallback((id: string, targetScore: number) => {
     scoreAnimRef.current.set(id, {
       target: targetScore,
@@ -64,36 +83,16 @@ const App: React.FC = () => {
       inst.id === id ? { ...inst, showScore: true, score: 0 } : inst
     ))
 
-    const animateScore = () => {
-      let allDone = true
-      setPlacedInstruments(prev => prev.map(inst => {
-        const anim = scoreAnimRef.current.get(inst.id)
-        if (anim && anim.current < anim.target) {
-          const elapsed = performance.now() - anim.startTime
-          const duration = 1500
-          const progress = Math.min(1, elapsed / duration)
-          const eased = 1 - Math.pow(1 - progress, 3)
-          const newCurrent = Math.round(anim.target * eased)
-          anim.current = newCurrent
-          if (newCurrent < anim.target) allDone = false
-          return { ...inst, score: newCurrent }
-        }
-        return inst
-      }))
-
-      if (!allDone) {
-        requestAnimationFrame(animateScore)
-      }
-    }
-
-    requestAnimationFrame(animateScore)
-  }, [])
+    cancelAnimationFrame(animFrameRef.current)
+    animFrameRef.current = requestAnimationFrame(animateScores)
+  }, [animateScores])
 
   const triggerPresetMode = useCallback(() => {
     if (presetPlaying) return
 
     setPlacedInstruments([])
     scoreAnimRef.current.clear()
+    cancelAnimationFrame(animFrameRef.current)
 
     setTimeout(() => {
       const cornerPositions = [
@@ -120,12 +119,12 @@ const App: React.FC = () => {
 
       setTimeout(() => {
         setPresetPlaying(true)
-      }, 300)
-    }, 50)
+      }, 400)
+    }, 80)
 
     setTimeout(() => {
       setPresetPlaying(false)
-    }, 12000)
+    }, 13000)
   }, [presetPlaying])
 
   useEffect(() => {
@@ -153,6 +152,7 @@ const App: React.FC = () => {
     document.head.appendChild(style)
     return () => {
       document.head.removeChild(style)
+      cancelAnimationFrame(animFrameRef.current)
     }
   }, [])
 
@@ -330,4 +330,184 @@ const logoStyle: React.CSSProperties = {
   width: 48,
   height: 48,
   borderRadius: 12,
-  background: 'linear-gradient(135deg, #e94560 0%,
+  background: 'linear-gradient(135deg, #e94560 0%, #0f3460 100%)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  boxShadow: '0 4px 16px rgba(233, 69, 96, 0.3)'
+}
+
+const mainTitleStyle: React.CSSProperties = {
+  fontSize: 20,
+  fontWeight: 700,
+  color: '#e0e0ff',
+  margin: 0,
+  letterSpacing: 0.5
+}
+
+const subtitleStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: 'rgba(224, 224, 255, 0.45)',
+  margin: '2px 0 0 0',
+  letterSpacing: 1,
+  textTransform: 'uppercase'
+}
+
+const presetButtonStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  padding: '10px 20px',
+  fontSize: 13,
+  fontWeight: 600,
+  color: '#ffffff',
+  background: 'linear-gradient(135deg, #e94560 0%, #0f3460 100%)',
+  border: 'none',
+  borderRadius: 8,
+  cursor: 'pointer',
+  transition: 'all 0.2s ease-in-out',
+  letterSpacing: 0.5,
+  boxShadow: '0 4px 16px rgba(233, 69, 96, 0.25)'
+}
+
+const presetButtonActiveStyle: React.CSSProperties = {
+  cursor: 'not-allowed',
+  opacity: 0.8,
+  animation: 'pulse-glow 1.5s ease-in-out infinite'
+}
+
+const btnIconStyle: React.CSSProperties = {
+  fontSize: 16,
+  lineHeight: 1
+}
+
+const instrumentPickerStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 10,
+  background: 'rgba(22, 33, 62, 0.5)',
+  borderRadius: 12,
+  padding: 14,
+  border: '1px solid rgba(72, 219, 251, 0.1)'
+}
+
+const pickerLabelStyle: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center'
+}
+
+const pickerTitleStyle: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: '#e0e0ff',
+  letterSpacing: 1,
+  textTransform: 'uppercase'
+}
+
+const pickerSubtitleStyle: React.CSSProperties = {
+  fontSize: 10,
+  color: 'rgba(224, 224, 255, 0.4)'
+}
+
+const pickerButtonsStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(4, 1fr)',
+  gap: 10
+}
+
+const pickerItemContainerStyle: React.CSSProperties = {
+  transition: 'all 0.3s ease-in-out'
+}
+
+const pickerItemStyle: React.CSSProperties = {
+  position: 'relative',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+  width: '100%',
+  padding: '10px 12px',
+  background: 'rgba(10, 22, 40, 0.6)',
+  border: '1px solid rgba(255,255,255,0.1)',
+  borderRadius: 8,
+  cursor: 'pointer',
+  transition: 'all 0.3s ease-in-out',
+  color: '#e0e0ff',
+  textAlign: 'left'
+}
+
+const pickerIconStyle: React.CSSProperties = {
+  width: 36,
+  height: 36,
+  borderRadius: '50%',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  flexShrink: 0
+}
+
+const pickerIconTextStyle: React.CSSProperties = {
+  color: '#ffffff',
+  fontSize: 16,
+  fontWeight: 'bold',
+  textShadow: '0 1px 4px rgba(0,0,0,0.3)'
+}
+
+const pickerInfoStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 2,
+  flex: 1,
+  minWidth: 0
+}
+
+const pickerNameStyle: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 600,
+  color: '#e0e0ff',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis'
+}
+
+const pickerFreqStyle: React.CSSProperties = {
+  fontSize: 10,
+  color: 'rgba(224, 224, 255, 0.5)',
+  fontFamily: 'monospace'
+}
+
+const placedBadgeStyle: React.CSSProperties = {
+  position: 'absolute',
+  top: 6,
+  right: 6,
+  fontSize: 9,
+  fontWeight: 600,
+  color: '#4ade80',
+  background: 'rgba(74, 222, 128, 0.1)',
+  padding: '2px 6px',
+  borderRadius: 4
+}
+
+const simulationContainerStyle: React.CSSProperties = {
+  position: 'relative',
+  flex: 1,
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: 8,
+  minHeight: 0
+}
+
+const canvasHintStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 12,
+  fontSize: 11,
+  color: 'rgba(224, 224, 255, 0.4)'
+}
+
+const hintDividerStyle: React.CSSProperties = {
+  color: 'rgba(224, 224, 255, 0.15)'
+}
+
+export default App
