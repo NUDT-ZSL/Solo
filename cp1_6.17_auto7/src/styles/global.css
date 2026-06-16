@@ -245,15 +245,22 @@ body {
 /* ========== 照片区域：圆角遮罩 + 渐变覆盖层 ========== */
 .photo-wrapper {
   position: relative;
-  width: 100%;
+  width: calc(100% - 20px);
   aspect-ratio: 3 / 2;
   overflow: hidden;
-  border-radius: 16px 16px 0 0;
-  margin: 10px 10px 0 10px;
-  transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  border-radius: 20px;
+  margin: 12px auto 0;
+  transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              border-radius 0.3s ease,
+              box-shadow 0.4s ease;
   box-shadow:
-    0 4px 12px rgba(180, 140, 80, 0.2),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+    0 6px 18px rgba(180, 140, 80, 0.22),
+    inset 0 0 0 1.5px rgba(255, 255, 255, 0.35),
+    0 2px 6px rgba(139, 115, 85, 0.1);
+}
+
+.animal-card-enhanced:hover .photo-wrapper {
+  border-radius: 22px;
 }
 
 .photo-wrapper::after {
@@ -306,6 +313,107 @@ body {
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+/* ========== 骨架屏加载动画 ========== */
+.skeleton-wrapper {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.skeleton-shimmer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    135deg,
+    #FFF5E6 0%,
+    #FFE4C4 30%,
+    #FFEDD8 50%,
+    #FFE4C4 70%,
+    #FFF5E6 100%
+  );
+  background-size: 200% 200%;
+  animation: skeletonGlow 1.8s ease-in-out infinite;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.skeleton-shimmer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 100%
+  );
+  background-size: 80px 100%;
+  animation: skeletonShimmer 1.6s linear infinite;
+}
+
+@keyframes skeletonGlow {
+  0%, 100% {
+    background-position: 0% 50%;
+    filter: brightness(1);
+  }
+  50% {
+    background-position: 100% 50%;
+    filter: brightness(1.05);
+  }
+}
+
+@keyframes skeletonShimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton-paw {
+  font-size: 48px;
+  opacity: 0.35;
+  animation: pawBounce 1.4s ease-in-out infinite;
+  filter: drop-shadow(0 2px 4px rgba(255, 168, 82, 0.25));
+  z-index: 1;
+}
+
+@keyframes pawBounce {
+  0%, 100% {
+    transform: translateY(0) rotate(-8deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(8deg);
+  }
+}
+
+.skeleton-placeholder {
+  width: 60%;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 100px;
+  z-index: 1;
+  animation: placeholderPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes placeholderPulse {
+  0%, 100% {
+    transform: scaleX(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scaleX(1.1);
+    opacity: 0.9;
   }
 }
 

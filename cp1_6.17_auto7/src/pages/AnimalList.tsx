@@ -24,7 +24,7 @@ function LazyImage({ src, alt }: LazyImageProps) {
           }
         });
       },
-      { rootMargin: '100px' }
+      { rootMargin: '150px' }
     );
     observer.observe(imgRef.current);
     return () => observer.disconnect();
@@ -32,6 +32,14 @@ function LazyImage({ src, alt }: LazyImageProps) {
 
   return (
     <div className="photo-wrapper" ref={imgRef}>
+      {!loaded && (
+        <div className="skeleton-wrapper">
+          <div className="skeleton-shimmer">
+            <div className="skeleton-paw">🐾</div>
+            <div className="skeleton-placeholder"></div>
+          </div>
+        </div>
+      )}
       {isVisible && (
         <>
           <img
@@ -39,6 +47,7 @@ function LazyImage({ src, alt }: LazyImageProps) {
             alt={alt}
             className={`animal-photo ${loaded ? 'loaded' : ''}`}
             onLoad={() => setLoaded(true)}
+            style={{ visibility: loaded ? 'visible' : 'hidden' }}
           />
           <div className="photo-gradient-overlay"></div>
         </>
@@ -48,23 +57,23 @@ function LazyImage({ src, alt }: LazyImageProps) {
 }
 
 interface PersonalityColorMap {
-  [key: string]: { bg: string; border: string };
+  [key: string]: { bg: string; border: string; text: string };
 }
 
 interface HealthColorMap {
-  [key: string]: { bg: string; border: string };
+  [key: string]: { bg: string; border: string; text: string };
 }
 
 const personalityColors: PersonalityColorMap = {
-  '友好': { bg: '#FF6B9D', border: '#FF4081' },
-  '胆小': { bg: '#9B59B6', border: '#8E44AD' },
-  '活泼': { bg: '#3498DB', border: '#2980B9' }
+  '友好': { bg: '#52C41A', border: '#389E0D', text: '#FFFFFF' },
+  '胆小': { bg: '#1890FF', border: '#096DD9', text: '#FFFFFF' },
+  '活泼': { bg: '#FA8C16', border: '#D46B08', text: '#FFFFFF' }
 };
 
 const healthColors: HealthColorMap = {
-  '已驱虫': { bg: '#1ABC9C', border: '#16A085' },
-  '已疫苗': { bg: '#27AE60', border: '#229954' },
-  '已绝育': { bg: '#E67E22', border: '#D35400' }
+  '已驱虫': { bg: '#F5F5F5', border: '#D9D9D9', text: '#666666' },
+  '已疫苗': { bg: '#F5F5F5', border: '#D9D9D9', text: '#666666' },
+  '已绝育': { bg: '#F5F5F5', border: '#D9D9D9', text: '#666666' }
 };
 
 function Tag({
@@ -73,16 +82,20 @@ function Tag({
   icon
 }: {
   text: string;
-  colors: { bg: string; border: string };
+  colors: { bg: string; border: string; text: string };
   icon: string;
 }) {
+  const isLightBg = colors.text !== '#FFFFFF';
   return (
     <span
       className="enhanced-tag"
       style={{
         backgroundColor: colors.bg,
         borderColor: colors.border,
-        boxShadow: `0 2px 6px ${colors.bg}40`
+        color: colors.text,
+        boxShadow: isLightBg
+          ? '0 1px 3px rgba(0, 0, 0, 0.06)'
+          : `0 2px 6px ${colors.bg}60`
       }}
     >
       <span className="tag-icon">{icon}</span>
