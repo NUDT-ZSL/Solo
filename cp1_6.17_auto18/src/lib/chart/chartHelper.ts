@@ -117,6 +117,52 @@ export function getMuscleGroupVolumeConfig(data: { muscle: string; volume: numbe
   };
 }
 
+const pieColors = ['#FF6F00', '#0D1B2A', '#FF9E40', '#1B2838', '#FFB74D', '#4A6FA5', '#81C784', '#E57373'];
+
+export function getMuscleDistributionPieConfig(data: { muscle: string; volume: number }[]): Record<string, any> {
+  return {
+    animationDuration: 500,
+    tooltip: {
+      trigger: 'item',
+      formatter: (params: any) => `${params.name}<br/>训练量: ${params.value} kg (${params.percent}%)`,
+    },
+    legend: {
+      orient: 'vertical',
+      right: 10,
+      top: 'center',
+      textStyle: { color: '#333', fontSize: 12 },
+    },
+    series: [
+      {
+        type: 'pie',
+        radius: ['40%', '70%'],
+        center: ['35%', '50%'],
+        avoidLabelOverlap: true,
+        itemStyle: {
+          borderRadius: 6,
+          borderColor: '#fff',
+          borderWidth: 2,
+        },
+        label: {
+          show: false,
+        },
+        emphasis: {
+          label: {
+            show: true,
+            fontSize: 14,
+            fontWeight: 'bold',
+          },
+        },
+        data: data.map((d, i) => ({
+          name: muscleGroupLabels[d.muscle as MuscleGroup] ?? d.muscle,
+          value: d.volume,
+          itemStyle: { color: pieColors[i % pieColors.length] },
+        })),
+      },
+    ],
+  };
+}
+
 export function getMaxWeightProgressConfig(
   data: { date: string; maxWeight: number }[],
   exerciseName: string,
