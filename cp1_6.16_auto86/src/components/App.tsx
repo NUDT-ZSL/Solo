@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { AudioClip, Project, User, PALETTE, THEME } from '../types';
 import { decodeAudioFile, exportMix, generateWaveformData } from '../engine/AudioEngine';
 import Login from './Login';
@@ -6,6 +6,12 @@ import Sidebar from './Sidebar';
 import ParentTimeLine from './ParentTimeLine';
 import Mixer from './Mixer';
 import ExportProgress from './ExportProgress';
+
+interface Toast {
+  id: number;
+  message: string;
+  type: 'success' | 'info' | 'error';
+}
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -17,11 +23,22 @@ const App: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(0);
   const [exportProgress, setExportProgress] = useState<number | null>(null);
   const [mixerCollapsed, setMixerCollapsed] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [toasts, setToasts] = useState<Toast[]>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
   const playStartTimeRef = useRef<number>(0);
   const animFrameRef = useRef<number>(0);
   const colorIndexRef = useRef<number>(0);
+  const toastIdRef = useRef(0);
+
+  const showToast = useCallback((message: string, type: Toast['type'] = 'info') => {
+    const id = toastIdRef.current++;
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 2500);
+  }, []);
 
   const nextColor = useCallback(() => {
     const color = PALETTE[colorIndexRef.current % PALETTE.length];
@@ -55,7 +72,10 @@ const App: React.FC = () => {
       formData.append('audio', file);
 
       const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
-      if (!uploadRes.ok) return;
+      if (!uploadRes.ok) {
+        showToast('上传失败', 'error');
+        return;
+      }
       const uploadData = await uploadRes.json();
 
       const arrayBuffer = await file.arrayBuffer();
@@ -79,10 +99,12 @@ const App: React.FC = () => {
       };
 
       setClipLibrary((prev) => [...prev, newClip]);
+      showToast(`"${newClip.name}" 上传成功`, 'success');
     } catch (err) {
       console.error('Upload failed:', err);
+      showToast('上传失败，请检查文件格式', 'error');
     }
-  }, [nextColor]);
+  }, [nextColor, showToast]);
 
   const handleAddClipToTimeline = useCallback((clip: AudioClip) => {
     const timelineClip: AudioClip = {
@@ -204,6 +226,7 @@ const App: React.FC = () => {
 
   const handleSaveProject = useCallback(async () => {
     if (!user || !currentProject) return;
+    setIsSaving(true);
     try {
       const res = await fetch('/api/mix/save', {
         method: 'POST',
@@ -225,6 +248,7 @@ const App: React.FC = () => {
           })),
         }),
       });
+      if (!res.ok) throw new Error('Save failed');
       const saved = await res.json();
       setCurrentProject(saved);
       setProjects((prev) => {
@@ -236,10 +260,14 @@ const App: React.FC = () => {
         }
         return [...prev, saved];
       });
+      showToast('工程保存成功', 'success');
     } catch (err) {
       console.error('Save failed:', err);
+      showToast('保存失败，请重试', 'error');
+    } finally {
+      setIsSaving(false);
     }
-  }, [user, currentProject, clips]);
+  }, [user, currentProject, clips, showToast]);
 
   const handleNewProject = useCallback(() => {
     const newProj: Project = {
@@ -296,12 +324,19 @@ const App: React.FC = () => {
         <div className="toolbar">
           <div className="toolbar-left">
             <span className="project-name">{currentProject?.name || 'No Project'}</span>
-            <button className="btn btn-secondary" onClick={handleSaveProject}>Save</button>
+            <button
+              className={`btn btn-secondary ${isSaving ? 'saving' : ''}`}
+              onClick={handleSaveProject}
+              disabled={isSaving || !currentProject}
+            >
+              {isSaving ? '保存中...' : '保存'}
+            </button>
           </div>
           <div className="toolbar-center">
             <button
               className={`btn btn-play ${isPlaying ? 'playing' : ''}`}
               onClick={handlePlay}
+              disabled={clips.length === 0}
             >
               {isPlaying ? '⏸' : '▶'}
             </button>
@@ -310,8 +345,12 @@ const App: React.FC = () => {
             </span>
           </div>
           <div className="toolbar-right">
-            <button className="btn btn-primary" onClick={handleExport} disabled={clips.length === 0}>
-              导出混音
+            <button
+              className="btn btn-primary"
+              onClick={handleExport}
+              disabled={clips.length === 0 || exportProgress !== null}
+            >
+              {exportProgress !== null ? '导出中...' : '导出混音'}
             </button>
           </div>
         </div>
@@ -332,6 +371,18 @@ const App: React.FC = () => {
         )}
       </div>
       {exportProgress !== null && <ExportProgress progress={exportProgress} />}
+      <div className="toast-container">
+        {toasts.map((toast) => (
+          <div key={toast.id} className={`toast toast-${toast.type}`}>
+            <span className="toast-icon">
+              {toast.type === 'success' && '✓'}
+              {toast.type === 'error' && '✕'}
+              {toast.type === 'info' && 'ℹ'}
+            </span>
+            <span className="toast-message">{toast.message}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
