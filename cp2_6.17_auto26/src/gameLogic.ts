@@ -10,6 +10,7 @@ import {
   MOVE_INTERVAL,
   GATE_DURATION,
   coordToKey,
+  CoordKey,
   GRID_SIZE,
 } from './gameTypes';
 import { levels } from './levels';
@@ -24,6 +25,9 @@ const dirDelta: Record<Direction, Coord> = {
 const addCoord = (a: Coord, b: Coord): Coord => ({ x: a.x + b.x, y: a.y + b.y });
 const eqCoord = (a: Coord, b: Coord): boolean => a.x === b.x && a.y === b.y;
 const inBounds = (c: Coord): boolean => c.x >= 0 && c.x < GRID_SIZE && c.y >= 0 && c.y < GRID_SIZE;
+
+const getGateCoordsForPlate = (level: LevelData, plate: Coord): Coord[] | undefined =>
+  level.pressurePlateToGate.get(coordToKey(plate));
 
 export const cloneLevelData = (data: LevelData): LevelData => {
   return {
@@ -128,7 +132,7 @@ const checkPlatesAndStartTimers = (state: GameState, now: number): { state: Game
 
   state.levelData.pressurePlates.forEach((plate) => {
     const plateKey = coordToKey(plate);
-    const gateCoords = state.levelData.pressurePlateToGate.get(plateKey);
+    const gateCoords = getGateCoordsForPlate(state.levelData, plate);
     if (!gateCoords) return;
 
     const hasActive = activePlates.has(plateKey);
@@ -202,7 +206,7 @@ export const handleMove = (prev: GameState, dir: Direction, now: number): MoveRe
   }
 
   if (now - state.lastMoveTime < MOVE_INTERVAL) {
-    return { state, events };
+    return { state: state, events: [] };
   }
 
   const delta = dirDelta[dir];

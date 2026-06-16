@@ -1,16 +1,49 @@
-import { GameState, TILE_SIZE, CANVAS_SIZE, LevelData, coordToKey, TRAP_FLASH_DURATION, GATE_DURATION } from './gameTypes';
+import { GameState, TILE_SIZE, CANVAS_SIZE, LevelData, coordToKey, CoordKey, TRAP_FLASH_DURATION, GATE_DURATION } from './gameTypes';
 
 let offscreenCanvas: HTMLCanvasElement | null = null;
 let offscreenCtx: CanvasRenderingContext2D | null = null;
 let cachedLevelKey = '';
 let cachedGatesKey = '';
 
-const getLevelCacheKey = (level: LevelData, removedGates: Set<string>): string => {
+const TIMER_BUCKET_MS = 100;
+
+const getLevelCacheKey = (state: GameState, now: number): string => {
+  const { levelData, removedGates, gateTimers, player, rocks, rescuedCount, totalCompanions } = state;
+
   const gateKey = Array.from(removedGates).sort().join('|');
-  const wallsKey = level.walls.map((w) => coordToKey(w)).sort().join(';');
-  const trapsKey = level.traps.map((t) => coordToKey(t)).sort().join(';');
-  const platesKey = level.pressurePlates.map((p) => coordToKey(p)).sort().join(';');
-  return `${level.id}|${wallsKey}|${trapsKey}|${platesKey}|${coordToKey(level.exit)}|${gateKey}`;
+  const wallsKey = levelData.walls.map((w) => coordToKey(w)).sort().join(';');
+  const trapsKey = levelData.traps.map((t) => coordToKey(t)).sort().join(';');
+  const platesLocKey = levelData.pressurePlates.map((p) => coordToKey(p)).sort().join(';');
+
+  const pressedPlates: CoordKey[] = [];
+  levelData.pressurePlates.forEach((p) => {
+    const pk = coordToKey(p);
+    if (player.coord.x === p.x && player.coord.y === p.y) {
+      pressedPlates.push(pk + ':P');
+      return;
+    }
+    for (const r of rocks) {
+      if (r.coord.x === p.x && r.coord.y === p.y) {
+        pressedPlates.push(pk + ':R');
+        return;
+      }
+    }
+  });
+  const pressedKey = pressedPlates.sort().join(',');
+
+  const timerKey = gateTimers
+    .map((gt) => {
+      const remaining = Math.max(0, GATE_DURATION - (now - gt.startTime));
+      const bucket = Math.floor(remaining / TIMER_BUCKET_MS);
+      const gates = gt.gateCoords.map((g) => coordToKey(g)).sort().join(',');
+      return `${coordToKey(gt.plateCoord)}:${bucket}:${gates}`;
+    })
+    .sort()
+    .join('|');
+
+  const exitKey = rescuedCount === totalCompanions ? 'U' : 'L';
+
+  return `${levelData.id}|${wallsKey}|${trapsKey}|${platesLocKey}|${coordToKey(levelData.exit)}|${gateKey}|${pressedKey}|${timerKey}|${exitKey}`;
 };
 
 const ensureOffscreen = () => {
@@ -192,7 +225,7 @@ const drawCompanion = (ctx: CanvasRenderingContext2D, x: number, y: number) => {
 };
 
 export const render = (ctx: CanvasRenderingContext2D, state: GameState, now: number) => {
-  const levelKey = getLevelCacheKey(state.levelData, state.removedGates);
+  const levelKey = getLevelCacheKey(state, now);
   const gatesKey = levelKey;
 
   if (levelKey !== cachedLevelKey || gatesKey !== cachedGatesKey) {

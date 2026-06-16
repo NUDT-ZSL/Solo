@@ -51,7 +51,7 @@ export interface LevelData {
   traps: Coord[];
   rocks: Rock[];
   pressurePlates: Coord[];
-  pressurePlateToGate: Map<string, Coord[]>;
+  pressurePlateToGate: Map<CoordKey, Coord[]>;
   companions: Omit<Companion, 'rescued'>[];
   exit: Coord;
   playerStart: Coord;
@@ -64,7 +64,7 @@ export interface GameState {
   player: Player;
   rocks: Rock[];
   companions: Companion[];
-  removedGates: Set<string>;
+  removedGates: Set<CoordKey>;
   gateTimers: GateTimer[];
   stepCount: number;
   rescuedCount: number;
@@ -83,4 +83,6 @@ export const MOVE_INTERVAL = 150;
 export const GATE_DURATION = 800;
 export const TRAP_FLASH_DURATION = 500;
 
-export const coordToKey = (c: Coord): string => `${c.x},${c.y}`;
+export type CoordKey = string;
+
+export const coordToKey = (c: Coord): CoordKey => `${c.x},${c.y}`;

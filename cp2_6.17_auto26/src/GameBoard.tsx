@@ -24,10 +24,16 @@ const FONT_FAMILY = 'Courier New, monospace';
 export const GameBoard: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameStateRef = useRef<GameState>(createInitialState(0));
+  const pendingTimeoutsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const [, setUiTick] = useState(0);
   const [showVictory, setShowVictory] = useState(false);
   const [totalTime, setTotalTime] = useState(0);
   const forceUpdate = useCallback(() => setUiTick((t) => t + 1), []);
+
+  const clearAllPendingTimeouts = useCallback(() => {
+    pendingTimeoutsRef.current.forEach((id) => clearTimeout(id));
+    pendingTimeoutsRef.current.clear();
+  }, []);
 
   useEffect(() => {
     let rafId = 0;
@@ -43,7 +49,13 @@ export const GameBoard: React.FC = () => {
       if (tickResult.state.isFailed) {
         const elapsed = now - tickResult.state.trapFlashStart;
         if (elapsed >= TRAP_FLASH_DURATION) {
-          const result = resetLevel(tickResult.state);
+          clearAllPendingTimeouts();
+          gameStateRef.current = {
+            ...gameStateRef.current,
+            gateTimers: [],
+            removedGates: new Set(),
+          };
+          const result = resetLevel(gameStateRef.current);
           gameStateRef.current = result.state;
           invalidateStaticCache();
           forceUpdate();
@@ -62,8 +74,11 @@ export const GameBoard: React.FC = () => {
     };
 
     rafId = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(rafId);
-  }, [forceUpdate]);
+    return () => {
+      cancelAnimationFrame(rafId);
+      clearAllPendingTimeouts();
+    };
+  }, [forceUpdate, clearAllPendingTimeouts]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -93,15 +108,23 @@ export const GameBoard: React.FC = () => {
       setShowVictory(true);
       invalidateStaticCache();
     } else {
-      setTimeout(() => {
+      const tid = setTimeout(() => {
+        pendingTimeoutsRef.current.delete(tid);
         gameStateRef.current = nxt.state;
         invalidateStaticCache();
         forceUpdate();
       }, 300);
+      pendingTimeoutsRef.current.add(tid);
     }
   }, [forceUpdate]);
 
   const restartGame = () => {
+    clearAllPendingTimeouts();
+    gameStateRef.current = {
+      ...gameStateRef.current,
+      gateTimers: [],
+      removedGates: new Set(),
+    };
     gameStateRef.current = createInitialState(0);
     invalidateStaticCache();
     setShowVictory(false);
