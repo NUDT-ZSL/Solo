@@ -13,33 +13,64 @@ export default function App() {
     Promise.all([
       fetch('/api/scores').then((r) => r.json()),
       fetch('/api/favorites').then((r) => r.json()),
-    ]).then(([scoresData, favoritesData]) => {
-      setScores(scoresData);
-      setFavorites(favoritesData);
-      setLoading(false);
-    });
+    ])
+      .then(([scoresData, favoritesData]) => {
+        setScores(scoresData);
+        setFavorites(favoritesData);
+        console.log('[App] 初始数据加载成功', {
+          scores: scoresData.length,
+          favorites: favoritesData.length,
+        });
+      })
+      .catch((err) => {
+        console.error('[App] 初始数据加载失败:', err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, []);
 
   const handleScoreAdded = (newScore: Score) => {
     setScores((prev) => [newScore, ...prev]);
   };
 
-  const handleFavoriteToggle = (scoreId: string) => {
+  const handleFavoriteToggle = async (scoreId: string): Promise<void> => {
     const existing = favorites.find((f) => f.scoreId === scoreId);
+
     if (existing) {
-      fetch(`/api/favorites/${existing.id}`, { method: 'DELETE' }).then(() => {
-        setFavorites((prev) => prev.filter((f) => f.id !== existing.id));
-      });
-    } else {
-      fetch('/api/favorites', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scoreId }),
-      })
-        .then((r) => r.json())
-        .then((newFav) => {
-          setFavorites((prev) => [...prev, newFav]);
+      console.log(`[收藏] 取消收藏 scoreId=${scoreId}, favoriteId=${existing.id}`);
+      try {
+        const response = await fetch(`/api/favorites/${existing.id}`, {
+          method: 'DELETE',
         });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        console.log(`[收藏] 取消收藏成功:`, data);
+        setFavorites((prev) => prev.filter((f) => f.id !== existing.id));
+      } catch (err) {
+        console.error(`[收藏] 取消收藏失败:`, err);
+        throw err;
+      }
+    } else {
+      console.log(`[收藏] 添加收藏 scoreId=${scoreId}`);
+      try {
+        const response = await fetch('/api/favorites', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scoreId }),
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const newFav: Favorite = await response.json();
+        console.log(`[收藏] 添加收藏成功:`, newFav);
+        setFavorites((prev) => [...prev, newFav]);
+      } catch (err) {
+        console.error(`[收藏] 添加收藏失败:`, err);
+        throw err;
+      }
     }
   };
 
