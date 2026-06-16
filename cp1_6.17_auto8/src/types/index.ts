@@ -50,3 +50,13 @@ export interface ChallengeResult {
   streak: number;
   totalScore: number;
 }
+
+export interface Comment {
+  id: string;
+  logId: string;
+  userId: string;
+  username: string;
+  avatar: string;
+  content: string;
+  createdAt: string;
+}

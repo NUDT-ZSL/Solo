@@ -5,14 +5,28 @@ import '../styles/cards.css';
 interface CoffeeCardProps {
   log: CoffeeLog;
   index?: number;
+  isLiked?: boolean;
+  likeCount?: number;
   onLike?: (id: string) => void;
   onComment?: (id: string) => void;
   onChallenge?: (id: string) => void;
+  onCardClick?: (id: string) => void;
 }
 
-const CoffeeCard: React.FC<CoffeeCardProps> = ({ log, index = 0, onLike, onComment, onChallenge }) => {
+const CoffeeCard: React.FC<CoffeeCardProps> = ({
+  log,
+  index = 0,
+  isLiked = false,
+  likeCount,
+  onLike,
+  onComment,
+  onChallenge,
+  onCardClick,
+}) => {
   const [activeFlavor, setActiveFlavor] = useState<Flavor | null>(null);
   const [imgLoaded, setImgLoaded] = useState(false);
+
+  const displayLikes = likeCount !== undefined ? likeCount : log.likes;
 
   const handleFlavorClick = (flavor: Flavor, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -30,6 +44,7 @@ const CoffeeCard: React.FC<CoffeeCardProps> = ({ log, index = 0, onLike, onComme
       style={{
         animationDelay: `${Math.min(index * 60, 600)}ms`,
       }}
+      onClick={() => onCardClick?.(log.id)}
     >
       <div style={{ position: 'relative', backgroundColor: 'var(--color-panel)' }}>
         {!imgLoaded && <div style={{ height: 180, backgroundColor: 'var(--color-panel)' }} />}
@@ -89,14 +104,15 @@ const CoffeeCard: React.FC<CoffeeCardProps> = ({ log, index = 0, onLike, onComme
         <div className="coffee-card-actions">
           <button
             className="action-btn"
+            style={isLiked ? { color: '#e53935', opacity: 1 } : undefined}
             onClick={(e) => {
               e.stopPropagation();
               onLike?.(log.id);
             }}
           >
-            <span className="action-btn-icon">♥</span>
-            <span>{log.likes}</span>
-            <span className="action-tooltip">点赞</span>
+            <span className="action-btn-icon">{isLiked ? '♥' : '♡'}</span>
+            <span>{displayLikes}</span>
+            <span className="action-tooltip">{isLiked ? '取消点赞' : '点赞'}</span>
           </button>
           <button
             className="action-btn"
