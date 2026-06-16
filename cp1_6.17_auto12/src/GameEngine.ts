@@ -1,4 +1,4 @@
-import type { Port, Good, Ship, CargoItem, VoyageState, VoyageEvent, SettlementResult } from './types';
+import type { Port, Good, Ship, CargoItem, VoyageState, VoyageEvent, SettlementResult, PortTradeHistory } from './types';
 
 export const INITIAL_GOODS: Good[] = [
   { id: 'spice', name: '香料', emoji: '🧂', weight: 10, basePrice: 50, sellPrice: 120 },
@@ -16,6 +16,7 @@ export const INITIAL_PORTS: Port[] = [
     y: 35,
     goods: [INITIAL_GOODS[0], INITIAL_GOODS[1], INITIAL_GOODS[3]],
     isExplored: true,
+    prosperity: 5,
   },
   {
     id: 'guangzhou',
@@ -24,6 +25,7 @@ export const INITIAL_PORTS: Port[] = [
     y: 55,
     goods: [INITIAL_GOODS[1], INITIAL_GOODS[2], INITIAL_GOODS[3]],
     isExplored: true,
+    prosperity: 4,
   },
   {
     id: 'champa',
@@ -32,6 +34,7 @@ export const INITIAL_PORTS: Port[] = [
     y: 60,
     goods: [INITIAL_GOODS[0], INITIAL_GOODS[3], INITIAL_GOODS[4]],
     isExplored: false,
+    prosperity: 3,
   },
   {
     id: 'malacca',
@@ -40,6 +43,7 @@ export const INITIAL_PORTS: Port[] = [
     y: 72,
     goods: [INITIAL_GOODS[0], INITIAL_GOODS[4], INITIAL_GOODS[2]],
     isExplored: false,
+    prosperity: 4,
   },
   {
     id: 'india',
@@ -48,6 +52,7 @@ export const INITIAL_PORTS: Port[] = [
     y: 45,
     goods: [INITIAL_GOODS[4], INITIAL_GOODS[1], INITIAL_GOODS[2]],
     isExplored: false,
+    prosperity: 5,
   },
 ];
 
@@ -178,4 +183,28 @@ export function getPointOnBezier(
   const x = mt * mt * from.x + 2 * mt * t * cp.cx + t * t * to.x;
   const y = mt * mt * from.y + 2 * mt * t * cp.cy + t * t * to.y;
   return { x, y };
+}
+
+export function generateMockPortHistory(port: Port, allPorts: Port[]): PortTradeHistory[] {
+  const otherPorts = allPorts.filter(p => p.id !== port.id);
+  const history: PortTradeHistory[] = [];
+  const now = Date.now();
+
+  for (let i = 0; i < 3; i++) {
+    const randomGood = port.goods[Math.floor(Math.random() * port.goods.length)];
+    const randomOtherPort = otherPorts[Math.floor(Math.random() * otherPorts.length)];
+    const baseProfit = (randomGood.sellPrice - randomGood.basePrice) * Math.floor(Math.random() * 10 + 5);
+    const variance = Math.floor(baseProfit * 0.3 * (Math.random() - 0.5) * port.prosperity);
+
+    history.push({
+      id: `${port.id}-history-${i}`,
+      goodName: randomGood.name,
+      goodEmoji: randomGood.emoji,
+      profit: baseProfit + variance,
+      timestamp: now - (i + 1) * 3600000 * Math.floor(Math.random() * 24 + 1),
+      otherPort: randomOtherPort.name,
+    });
+  }
+
+  return history.sort((a, b) => b.timestamp - a.timestamp);
 }

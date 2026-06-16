@@ -141,6 +141,8 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
         const isSelected = selectedPort?.id === port.id;
         const isDestination = destinationPort?.id === port.id;
         const isCurrent = voyage?.fromPort.id === port.id || voyage?.toPort.id === port.id;
+        const pulseDuration = 3 - (port.prosperity - 1) * 0.3;
+        const pulseDelay = (port.x + port.y) * 0.05;
 
         return (
           <g
@@ -170,6 +172,10 @@ const MapCanvas: React.FC<MapCanvasProps> = ({
                   ? 'rgba(255,255,255,0.3)'
                   : 'rgba(241,250,238,0.2)'}
               strokeWidth={isSelected || isDestination ? 0.6 : 0.3}
+              style={{
+                animation: `portPulse ${pulseDuration}s ease-in-out ${pulseDelay}s infinite`,
+                transformOrigin: `${port.x} ${port.y}`,
+              }}
             />
             <text
               x={port.x}

@@ -1,9 +1,10 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import type { Port, CargoItem, Ship, Good } from '../types';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import type { Port, CargoItem, Ship, Good, PortTradeHistory } from '../types';
 import {
   calculateRouteDistance,
   calculateVoyageDuration,
   calculateCargoProfit,
+  generateMockPortHistory,
 } from '../GameEngine';
 
 interface PortInfoProps {
@@ -11,6 +12,7 @@ interface PortInfoProps {
   destinationPort: Port | null;
   cargo: CargoItem[];
   ship: Ship;
+  allPorts: Port[];
   onAddCargo: (goodId: string, quantity: number, goods: Good[]) => void;
   onRemoveCargo: (goodId: string) => void;
   onStartVoyage: () => void;
@@ -25,6 +27,7 @@ const PortInfo: React.FC<PortInfoProps> = ({
   destinationPort,
   cargo,
   ship,
+  allPorts,
   onAddCargo,
   onRemoveCargo,
   onStartVoyage,
@@ -33,7 +36,10 @@ const PortInfo: React.FC<PortInfoProps> = ({
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [scrollTop, setScrollTop] = useState(0);
   const [listHeight, setListHeight] = useState(GOODS_LIST_MAX_HEIGHT);
+  const [showHistory, setShowHistory] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+
+  const portHistory = useMemo(() => generateMockPortHistory(port, allPorts), [port, allPorts]);
 
   useEffect(() => {
     if (listRef.current) {
@@ -74,6 +80,35 @@ const PortInfo: React.FC<PortInfoProps> = ({
   const endIndex = Math.min(port.goods.length, startIndex + visibleCount + 2);
   const offsetY = startIndex * GOOD_ITEM_HEIGHT;
   const visibleGoods = port.goods.slice(startIndex, endIndex);
+
+  const renderStars = (count: number) => {
+    return (
+      <span style={{ display: 'inline-flex', gap: 2 }}>
+        {Array.from({ length: 5 }, (_, i) => (
+          <span
+            key={i}
+            style={{
+              color: i < count ? '#F4A261' : 'rgba(241,250,238,0.3)',
+              fontSize: 14,
+            }}
+          >
+            ★
+          </span>
+        ))}
+      </span>
+    );
+  };
+
+  const formatHistoryTime = (ts: number) => {
+    const d = new Date(ts);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    if (diffHours < 1) return '刚刚';
+    if (diffHours < 24) return `${diffHours}小时前`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}天前`;
+  };
 
   const renderGoodItem = (good: Good, index: number) => {
     const maxQty = getMaxQuantity(good);
@@ -184,7 +219,7 @@ const PortInfo: React.FC<PortInfoProps> = ({
         background: 'rgba(41, 50, 65, 0.92)',
         borderRadius: 12,
         padding: 16,
-        width: 260,
+        width: 280,
         color: '#F1FAEE',
         position: 'relative',
         maxHeight: '90vh',
@@ -208,16 +243,25 @@ const PortInfo: React.FC<PortInfoProps> = ({
         ✕
       </button>
 
-      <h3
-        style={{
-          margin: '0 0 12px 0',
-          color: '#F1FAEE',
-          fontFamily: 'Cinzel, serif',
-          fontSize: 18,
-        }}
-      >
-        {port.name}
-      </h3>
+      <div style={{ marginBottom: 12 }}>
+        <h3
+          style={{
+            margin: '0 0 4px 0',
+            color: '#F1FAEE',
+            fontFamily: 'Cinzel, serif',
+            fontSize: 18,
+          }}
+        >
+          {port.name}
+        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, opacity: 0.7 }}>繁荣度:</span>
+          {renderStars(port.prosperity)}
+        </div>
+        <div style={{ fontSize: 11, opacity: 0.5, marginTop: 2 }}>
+          繁荣度越高，货物价格波动越大
+        </div>
+      </div>
 
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>港口货物</div>
@@ -239,7 +283,7 @@ const PortInfo: React.FC<PortInfoProps> = ({
       {cargo.length > 0 && (
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-            当前装载 ({currentWeight}/{ship.maxCapacity})
+            当前装载 ({currentWeight}/{ship.maxCapacity} 吨)
           </div>
           {cargo.map((item) => (
             <div
@@ -258,7 +302,7 @@ const PortInfo: React.FC<PortInfoProps> = ({
               <span>
                 {item.good.emoji} {item.good.name} ×{item.quantity}
                 <span style={{ color: 'rgba(241,250,238,0.5)', marginLeft: 4 }}>
-                  ({item.good.weight * item.quantity})
+                  ({item.good.weight * item.quantity} 吨)
                 </span>
               </span>
               <button
@@ -321,6 +365,7 @@ const PortInfo: React.FC<PortInfoProps> = ({
             fontWeight: 600,
             cursor: canSetSail ? 'pointer' : 'not-allowed',
             transition: 'all 0.1s ease',
+            marginBottom: 12,
           }}
           onMouseEnter={(e) => {
             if (canSetSail) (e.currentTarget as HTMLButtonElement).style.background = '#FF6B6B';
@@ -339,6 +384,94 @@ const PortInfo: React.FC<PortInfoProps> = ({
           确认出发
         </button>
       )}
+
+      <div style={{ borderTop: '1px solid rgba(241,250,238,0.1)', paddingTop: 12 }}>
+        <button
+          onClick={() => setShowHistory(!showHistory)}
+          style={{
+            width: '100%',
+            padding: '6px 10px',
+            background: 'transparent',
+            border: '1px solid rgba(244,162,97,0.5)',
+            borderRadius: 6,
+            color: '#F4A261',
+            fontSize: 12,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            transition: 'all 0.2s ease',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.borderColor = '#F4A261';
+            (e.currentTarget as HTMLButtonElement).style.background = 'rgba(244,162,97,0.1)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(244,162,97,0.5)';
+            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+          }}
+        >
+          <span>📜 查看历史贸易记录</span>
+          <span style={{ transition: 'transform 0.2s ease', transform: showHistory ? 'rotate(180deg)' : 'rotate(0)' }}>
+            ▼
+          </span>
+        </button>
+
+        {showHistory && (
+          <div
+            style={{
+              marginTop: 8,
+              maxHeight: 180,
+              overflowY: 'auto',
+              animation: 'fadeIn 0.3s ease',
+            }}
+          >
+            {portHistory.length === 0 ? (
+              <div style={{ fontSize: 11, opacity: 0.5, textAlign: 'center', padding: '12px 0' }}>
+                暂无历史记录
+              </div>
+            ) : (
+              portHistory.map((record: PortTradeHistory) => (
+                <div
+                  key={record.id}
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    borderRadius: 6,
+                    padding: '8px 10px',
+                    marginBottom: 6,
+                    fontSize: 11,
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>
+                      {record.goodEmoji} {record.goodName}
+                    </span>
+                    <span
+                      style={{
+                        fontWeight: 700,
+                        color: record.profit >= 0 ? '#2A9D8F' : '#E63946',
+                      }}
+                    >
+                      {record.profit >= 0 ? '+' : ''}{record.profit} 金
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.6, marginTop: 2 }}>
+                    <span>↔ {record.otherPort}</span>
+                    <span>{formatHistoryTime(record.timestamp)}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 };

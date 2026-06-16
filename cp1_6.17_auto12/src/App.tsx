@@ -127,6 +127,7 @@ export default function App() {
               destinationPort={destinationPort}
               cargo={cargo}
               ship={ship}
+              allPorts={ports}
               onAddCargo={addCargo}
               onRemoveCargo={removeCargo}
               onStartVoyage={startVoyage}

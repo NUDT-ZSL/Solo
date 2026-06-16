@@ -14,6 +14,7 @@ export interface Port {
   y: number;
   goods: Good[];
   isExplored: boolean;
+  prosperity: 1 | 2 | 3 | 4 | 5;
 }
 
 export interface Ship {
@@ -76,4 +77,13 @@ export interface SettlementResult {
   cargoLost: number;
   durabilityLost: number;
   events: string[];
+}
+
+export interface PortTradeHistory {
+  id: string;
+  goodName: string;
+  goodEmoji: string;
+  profit: number;
+  timestamp: number;
+  otherPort: string;
 }
