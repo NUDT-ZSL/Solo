@@ -13,6 +13,8 @@ interface MoodBoardProps {
   onAddComment: (cardId: string, content: string) => void;
   onBack: () => void;
   isExporting?: boolean;
+  onStartExport?: () => void;
+  onEndExport?: () => void;
 }
 
 const RatingChart: React.FC<{
@@ -112,7 +114,9 @@ const MoodBoard: React.FC<MoodBoardProps> = ({
   onAddRating,
   onAddComment,
   onBack,
-  isExporting = false
+  isExporting = false,
+  onStartExport,
+  onEndExport
 }) => {
   const exportRef = useRef<HTMLDivElement>(null);
   const [isExportingLocal, setIsExportingLocal] = useState(false);
@@ -135,6 +139,7 @@ const MoodBoard: React.FC<MoodBoardProps> = ({
     try {
       setIsExportingLocal(true);
       setExportingMode(true);
+      onStartExport?.();
       await new Promise(r => setTimeout(r, 100));
       const canvas = await html2canvas(exportRef.current, {
         backgroundColor: theme.lightest,
@@ -151,8 +156,9 @@ const MoodBoard: React.FC<MoodBoardProps> = ({
     } finally {
       setIsExportingLocal(false);
       setExportingMode(false);
+      onEndExport?.();
     }
-  }, [themeColor, theme.lightest]);
+  }, [themeColor, theme.lightest, onStartExport, onEndExport]);
 
   const gridStyle = useMemo(() => ({
     display: 'grid',
@@ -398,20 +404,12 @@ const MoodBoard: React.FC<MoodBoardProps> = ({
                       key={`empty-${idx}`}
                       style={{
                         aspectRatio: '1 / 1.1',
-                        border: `2px dashed ${theme.cardBorder}`,
+                        border: 'none',
                         borderRadius: 12,
-                        background: `${theme.cardBg}80`,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: theme.light,
-                        fontSize: 14,
-                        fontWeight: 500,
+                        background: `${theme.cardBg}40`,
                         transition: 'all 0.2s ease'
                       }}
-                    >
-                      + 空位 {idx + 1}
-                    </div>
+                    />
                   );
                 }
                 return (

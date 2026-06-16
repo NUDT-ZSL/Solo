@@ -24,34 +24,6 @@ const MIN_SCALE = 0.5;
 const MAX_SCALE = 4;
 const ZOOM_DAMPING = 0.85;
 
-const useFPSMonitor = () => {
-  const fpsRef = useRef({
-    frames: 0,
-    lastTime: performance.now(),
-    currentFPS: 60,
-    frameTimes: [] as number[]
-  });
-
-  useEffect(() => {
-    let rafId: number;
-    const measure = () => {
-      fpsRef.current.frames++;
-      const now = performance.now();
-      const delta = now - fpsRef.current.lastTime;
-      if (delta >= 1000) {
-        fpsRef.current.currentFPS = Math.round((fpsRef.current.frames * 1000) / delta);
-        fpsRef.current.frames = 0;
-        fpsRef.current.lastTime = now;
-      }
-      rafId = requestAnimationFrame(measure);
-    };
-    rafId = requestAnimationFrame(measure);
-    return () => cancelAnimationFrame(rafId);
-  }, []);
-
-  return fpsRef;
-};
-
 const ToolButton: React.FC<{
   icon: string;
   label: string;
@@ -139,8 +111,6 @@ const Board: React.FC<BoardProps> = ({
   const [urlInput, setUrlInput] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeTheme: ThemeColor = 'cool';
-
-  const fpsRef = useFPSMonitor();
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth <= 768);
@@ -310,6 +280,40 @@ const Board: React.FC<BoardProps> = ({
 
   const showToolbar = !isExporting;
 
+  const handleZoomIn = useCallback(() => {
+    const center = screenToWorld(
+      window.innerWidth / 2,
+      window.innerHeight / 2
+    );
+    const factor = 1.2;
+    const newScale = clamp(scaleRef.current * factor, MIN_SCALE, MAX_SCALE);
+    const actualFactor = newScale / scaleRef.current;
+    panRef.current.x = center.x - (center.x - panRef.current.x) / actualFactor;
+    panRef.current.y = center.y - (center.y - panRef.current.y) / actualFactor;
+    scaleRef.current = newScale;
+    scheduleRender();
+  }, [screenToWorld, scheduleRender]);
+
+  const handleZoomOut = useCallback(() => {
+    const center = screenToWorld(
+      window.innerWidth / 2,
+      window.innerHeight / 2
+    );
+    const factor = 0.8;
+    const newScale = clamp(scaleRef.current * factor, MIN_SCALE, MAX_SCALE);
+    const actualFactor = newScale / scaleRef.current;
+    panRef.current.x = center.x - (center.x - panRef.current.x) / actualFactor;
+    panRef.current.y = center.y - (center.y - panRef.current.y) / actualFactor;
+    scaleRef.current = newScale;
+    scheduleRender();
+  }, [screenToWorld, scheduleRender]);
+
+  const handleResetView = useCallback(() => {
+    panRef.current = { x: 0, y: 0 };
+    scaleRef.current = 1;
+    scheduleRender();
+  }, [scheduleRender]);
+
   const toolbarContent = useMemo(() => (
     <>
       <ToolButton
@@ -340,6 +344,32 @@ const Board: React.FC<BoardProps> = ({
         active={hasSelection}
         activeColor={THEMES[activeTheme].lightest}
         onClick={onCreateMoodBoard}
+      />
+      {!isMobile && (
+        <div style={{
+          height: 1,
+          background: '#ECEFF1',
+          margin: '8px 12px'
+        }} />
+      )}
+      {/* 缩放控制 */}
+      <ToolButton
+        icon="⊕"
+        label="放大"
+        expanded={!isMobile ? toolbarExpanded : true}
+        onClick={handleZoomIn}
+      />
+      <ToolButton
+        icon="⊖"
+        label="缩小"
+        expanded={!isMobile ? toolbarExpanded : true}
+        onClick={handleZoomOut}
+      />
+      <ToolButton
+        icon="⤧"
+        label="重置视图"
+        expanded={!isMobile ? toolbarExpanded : true}
+        onClick={handleResetView}
       />
       {!isMobile && (
         <div style={{
@@ -382,7 +412,7 @@ const Board: React.FC<BoardProps> = ({
         </div>
       </div>
     </>
-  ), [toolbarExpanded, isMobile, showUrlInput, hasSelection, ratingFilter, activeTheme, onCreateMoodBoard, onRatingFilterChange]);
+  ), [toolbarExpanded, isMobile, showUrlInput, hasSelection, ratingFilter, activeTheme, onCreateMoodBoard, onRatingFilterChange, handleZoomIn, handleZoomOut, handleResetView]);
 
   return (
     <div style={{
@@ -581,9 +611,6 @@ const Board: React.FC<BoardProps> = ({
             gap: 8
           }}>
             <span>{Math.round(scaleRef.current * 100)}%</span>
-            <span style={{ color: fpsRef.current.currentFPS >= 45 ? '#4CAF50' : '#F44336' }}>
-              | {fpsRef.current.currentFPS} FPS
-            </span>
           </div>
         )}
 

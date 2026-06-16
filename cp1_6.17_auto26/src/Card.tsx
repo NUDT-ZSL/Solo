@@ -358,10 +358,9 @@ const Card: React.FC<CardProps> = ({
         <div style={{
           position: 'absolute',
           inset: 0,
-          background: '#B0BEC5',
-          opacity: 0.5,
+          background: 'rgba(176, 190, 197, 0.5)',
           pointerEvents: 'none',
-          transition: 'opacity 0.3s ease'
+          transition: 'background 0.3s ease'
         }} />
       )}
     </div>

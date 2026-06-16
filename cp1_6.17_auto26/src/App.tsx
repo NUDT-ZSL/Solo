@@ -35,6 +35,14 @@ const App: React.FC = () => {
   const [ratingFilter, setRatingFilter] = useState<number>(0);
   const [isExporting, setIsExporting] = useState(false);
 
+  const handleStartExport = useCallback(() => {
+    setIsExporting(true);
+  }, []);
+
+  const handleEndExport = useCallback(() => {
+    setIsExporting(false);
+  }, []);
+
   const addCard = useCallback((imageUrl: string, x: number, y: number) => {
     const newCard: CardData = {
       id: generateId(),
@@ -154,6 +162,8 @@ const App: React.FC = () => {
             onAddComment={addComment}
             onBack={backToBoard}
             isExporting={isExporting}
+            onStartExport={handleStartExport}
+            onEndExport={handleEndExport}
           />
         )
       )}
