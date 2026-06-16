@@ -19,7 +19,6 @@ function GalleryPage({ photos }: GalleryPageProps) {
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
   const [fadeKey, setFadeKey] = useState(0)
-  const [columns, setColumns] = useState(3)
 
   const priceRange = useMemo(() => getPriceRange(photos), [photos])
 
@@ -27,50 +26,21 @@ function GalleryPage({ photos }: GalleryPageProps) {
     setPriceMax(priceRange[1])
   }, [priceRange])
 
-  useEffect(() => {
-    const handleResize = () => {
-      const width = window.innerWidth
-      if (width <= 480) {
-        setColumns(1)
-      } else if (width <= 768) {
-        setColumns(2)
-      } else {
-        setColumns(3)
-      }
-    }
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
-
   const filteredPhotos = useMemo(() => {
     const startTime = performance.now()
-    
+
     let result = [...photos]
-    
+
     result = filterByStyle(result, selectedStyle as Photo['style'] | 'all')
     result = filterByPriceRange(result, priceRange[0], priceMax)
     result = filterByDateRange(result, startDate, endDate)
     result = sortPhotos(result, 'date')
-    
+
     const endTime = performance.now()
     console.log(`Filtering completed in ${endTime - startTime}ms`)
-    
+
     return result
   }, [photos, selectedStyle, priceMax, startDate, endDate, priceRange])
-
-  const waterfallColumns = useMemo(() => {
-    const cols: Photo[][] = Array.from({ length: columns }, () => [])
-    const colHeights: number[] = Array(columns).fill(0)
-    
-    filteredPhotos.forEach(photo => {
-      const shortestColIndex = colHeights.indexOf(Math.min(...colHeights))
-      cols[shortestColIndex].push(photo)
-      colHeights[shortestColIndex] += photo.height + 80 + 24
-    })
-    
-    return cols
-  }, [filteredPhotos, columns])
 
   const handleStyleChange = (style: typeof STYLE_TAGS[number]['value']) => {
     setSelectedStyle(style)
@@ -80,14 +50,12 @@ function GalleryPage({ photos }: GalleryPageProps) {
   return (
     <div className="container">
       <h1 className="page-title">作品集</h1>
-      
+
+      <div className="result-count">
+        共找到 <strong style={{ color: '#D4A574' }}>{filteredPhotos.length}</strong> 个作品
+      </div>
+
       <div className="filter-section">
-        <div className="filter-header">
-          <div className="result-count">
-            共找到 <strong style={{ color: '#D4A574' }}>{filteredPhotos.length}</strong> 个作品
-          </div>
-        </div>
-        
         <div className="style-tags">
           {STYLE_TAGS.map(tag => (
             <button
@@ -99,7 +67,7 @@ function GalleryPage({ photos }: GalleryPageProps) {
             </button>
           ))}
         </div>
-        
+
         <div className="price-range-section">
           <div className="filter-group">
             <label className="filter-label">价格上限</label>
@@ -115,7 +83,7 @@ function GalleryPage({ photos }: GalleryPageProps) {
               <span className="price-value">¥{priceMax.toLocaleString()}</span>
             </div>
           </div>
-          
+
           <div className="filter-group">
             <label className="filter-label">开始日期</label>
             <input
@@ -125,7 +93,7 @@ function GalleryPage({ photos }: GalleryPageProps) {
               onChange={(e) => setStartDate(e.target.value)}
             />
           </div>
-          
+
           <div className="filter-group">
             <label className="filter-label">结束日期</label>
             <input
@@ -137,29 +105,24 @@ function GalleryPage({ photos }: GalleryPageProps) {
           </div>
         </div>
       </div>
-      
+
       <div className="waterfall-container" key={fadeKey}>
-        {waterfallColumns.map((column, colIndex) => (
-          <div className="waterfall-column" key={colIndex}>
-            {column.map(photo => (
-              <div
-                key={photo.id}
-                className="photo-card"
-                style={{ animation: `fadeIn 0.4s ease` }}
-              >
-                <div
-                  className="photo-placeholder"
-                  style={{ height: photo.height }}
-                >
-                  <span>{photo.title.charAt(0)}</span>
-                </div>
-                <div className="photo-info">
-                  <h3 className="photo-title">{photo.title}</h3>
-                  <p className="photo-date">{formatDate(photo.shootDate)}</p>
-                  <p className="photo-price">¥{photo.price.toLocaleString()}</p>
-                </div>
-              </div>
-            ))}
+        {filteredPhotos.map(photo => (
+          <div
+            key={photo.id}
+            className="photo-card"
+          >
+            <div
+              className="photo-placeholder"
+              style={{ height: photo.height }}
+            >
+              <span>{photo.title.charAt(0)}</span>
+            </div>
+            <div className="photo-info">
+              <h3 className="photo-title">{photo.title}</h3>
+              <p className="photo-date">{formatDate(photo.shootDate)}</p>
+              <p className="photo-price">¥{photo.price.toLocaleString()}</p>
+            </div>
           </div>
         ))}
       </div>

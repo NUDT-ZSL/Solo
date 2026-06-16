@@ -17,9 +17,12 @@ export interface Package {
   color: string
 }
 
+export type TimeSlot = 'morning' | 'afternoon'
+
 export interface Booking {
   id: string
   date: string
+  timeSlot: TimeSlot
   name: string
   phone: string
   email: string
@@ -34,6 +37,7 @@ export interface BookingFormData {
   phone: string
   email: string
   date: string
+  timeSlot: TimeSlot
   notes: string
 }
 
@@ -69,11 +73,11 @@ export function filterByDateRange(photos: Photo[], startDate: string, endDate: s
   })
 }
 
-export function detectConflict(bookingDate: string, existingBookings: Booking[]): boolean {
+export function detectConflict(bookingDate: string, timeSlot: TimeSlot, existingBookings: Booking[]): boolean {
   const targetDate = new Date(bookingDate).toDateString()
   return existingBookings.some(booking => {
     const bookingDateObj = new Date(booking.date).toDateString()
-    return bookingDateObj === targetDate
+    return bookingDateObj === targetDate && booking.timeSlot === timeSlot
   })
 }
 
@@ -82,7 +86,16 @@ export function calculatePackagePrice(
   addOns: AddOnService[] = [],
   discountPercent: number = 0
 ): number {
-  const addOnsTotal = addOns.reduce((sum, addOn) => sum + addOn.price, 0)
+  if (basePrice < 0) {
+    throw new Error('basePrice cannot be negative')
+  }
+  if (discountPercent > 100) {
+    throw new Error('discountPercent cannot exceed 100')
+  }
+  if (discountPercent < 0) {
+    throw new Error('discountPercent cannot be negative')
+  }
+  const addOnsTotal = addOns.reduce((sum, addOn) => sum + Math.max(0, addOn.price), 0)
   const subtotal = basePrice + addOnsTotal
   const discount = subtotal * (discountPercent / 100)
   return Math.round(subtotal - discount)

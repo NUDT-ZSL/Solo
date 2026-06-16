@@ -149,17 +149,11 @@ input, select, textarea {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
-.filter-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
 .result-count {
   font-size: 0.9rem;
   color: #8A7A6A;
   font-weight: 500;
+  margin-bottom: 16px;
 }
 
 .style-tags {
@@ -277,16 +271,9 @@ input, select, textarea {
 
 /* Waterfall layout */
 .waterfall-container {
-  display: flex;
-  gap: 24px;
+  columns: 3;
+  column-gap: 24px;
   transition: all 0.4s ease;
-}
-
-.waterfall-column {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
 }
 
 .photo-card {
@@ -296,6 +283,8 @@ input, select, textarea {
   cursor: pointer;
   transition: transform 0.3s ease-out, box-shadow 0.3s ease-out;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  break-inside: avoid;
+  margin-bottom: 24px;
 }
 
 .photo-card:hover {
@@ -547,29 +536,18 @@ textarea.form-input {
 /* Admin panel styles */
 .admin-trigger {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
-  width: 40px;
-  height: 40px;
-  background: rgba(212, 165, 116, 0.3);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  bottom: 0;
+  right: 0;
+  width: 1px;
+  height: 1px;
+  display: block;
   cursor: pointer;
   z-index: 1500;
-  transition: all 0.3s ease;
-  opacity: 0.5;
-}
-
-.admin-trigger:hover {
-  opacity: 1;
-  background: #D4A574;
 }
 
 .admin-panel {
   position: fixed;
-  bottom: 70px;
+  bottom: 20px;
   right: 20px;
   width: 600px;
   background: white;
@@ -741,31 +719,28 @@ textarea.form-input {
   }
   
   .waterfall-container {
-    gap: 16px;
+    columns: 2;
+    column-gap: 16px;
   }
-  
-  .waterfall-column {
-    gap: 16px;
+
+  .photo-card {
+    margin-bottom: 16px;
   }
-  
-  .waterfall-container .waterfall-column:nth-child(n+3) {
-    display: none;
-  }
-  
+
   .price-range-section {
     gap: 16px;
   }
-  
+
   .filter-group {
     width: 100%;
   }
-  
+
   .photographer-info {
     flex-direction: column;
     align-items: center;
     text-align: center;
   }
-  
+
   .admin-cards {
     flex-direction: column;
   }
@@ -775,28 +750,29 @@ textarea.form-input {
   .container {
     padding: 0 16px;
   }
-  
+
   .navbar {
     padding: 0 16px;
   }
-  
+
   .logo {
     font-size: 1rem;
     padding: 6px 12px;
   }
-  
+
   .nav-links {
     gap: 12px;
   }
-  
+
   .nav-link {
     font-size: 0.85rem;
   }
-  
-  .waterfall-container .waterfall-column:nth-child(n+2) {
-    display: none;
+
+  .waterfall-container {
+    columns: 1;
+    column-gap: 0;
   }
-  
+
   .page-title {
     font-size: 1.5rem;
   }

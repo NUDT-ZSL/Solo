@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Package, Booking, BookingFormData, detectConflict, calculatePackagePrice, validateEmail, validatePhone, formatDate } from '../business/portfolio'
+import { Package, Booking, BookingFormData, TimeSlot, detectConflict, calculatePackagePrice, validateEmail, validatePhone, formatDate } from '../business/portfolio'
 
 interface BookingPageProps {
   packages: Package[]
@@ -20,6 +20,7 @@ function BookingPage({ packages, bookings, onBookingAdded }: BookingPageProps) {
     phone: '',
     email: '',
     date: '',
+    timeSlot: 'morning',
     notes: ''
   })
   const [errors, setErrors] = useState<Partial<BookingFormData>>({})
@@ -38,14 +39,14 @@ function BookingPage({ packages, bookings, onBookingAdded }: BookingPageProps) {
   useEffect(() => {
     if (formData.date) {
       const startTime = performance.now()
-      const conflict = detectConflict(formData.date, bookings)
+      const conflict = detectConflict(formData.date, formData.timeSlot, bookings)
       const endTime = performance.now()
       console.log(`Conflict detection completed in ${endTime - startTime}ms`)
       setHasConflict(conflict)
     } else {
       setHasConflict(false)
     }
-  }, [formData.date, bookings])
+  }, [formData.date, formData.timeSlot, bookings])
 
   const isFormValid = useMemo(() => {
     return (
@@ -245,9 +246,29 @@ function BookingPage({ packages, bookings, onBookingAdded }: BookingPageProps) {
                 {errors.date && <div className="error-text">{errors.date}</div>}
                 {formData.date && !hasConflict && (
                   <div style={{ fontSize: '0.85rem', color: '#27AE60', marginTop: '4px' }}>
-                    {formatDate(formData.date)} 可预约
+                    {formatDate(formData.date)} {formData.timeSlot === 'morning' ? '上午' : '下午'} 可预约
                   </div>
                 )}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">拍摄时段</label>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button
+                    type="button"
+                    className={`style-tag ${formData.timeSlot === 'morning' ? 'active' : ''}`}
+                    onClick={() => handleInputChange('timeSlot', 'morning')}
+                  >
+                    上午 (9:00-12:00)
+                  </button>
+                  <button
+                    type="button"
+                    className={`style-tag ${formData.timeSlot === 'afternoon' ? 'active' : ''}`}
+                    onClick={() => handleInputChange('timeSlot', 'afternoon')}
+                  >
+                    下午 (14:00-17:00)
+                  </button>
+                </div>
               </div>
 
               <div className="form-group">
@@ -271,6 +292,7 @@ function BookingPage({ packages, bookings, onBookingAdded }: BookingPageProps) {
                       phone: '',
                       email: '',
                       date: '',
+                      timeSlot: 'morning',
                       notes: ''
                     })
                     setErrors({})

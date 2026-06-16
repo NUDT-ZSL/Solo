@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express'
 import cors from 'cors'
 import { v4 as uuidv4 } from 'uuid'
-import { Photo, Package, Booking } from '../src/business/portfolio'
+import { Photo, Package, Booking, TimeSlot } from '../src/business/portfolio'
 
 const app = express()
 const PORT = 3001
@@ -78,6 +78,7 @@ const today = new Date()
 const generateBookings = (): Booking[] => {
   const bookings: Booking[] = []
   const statuses: Booking['status'][] = ['pending', 'confirmed', 'completed']
+  const timeSlots: TimeSlot[] = ['morning', 'afternoon']
   for (let i = 0; i < 15; i++) {
     const bookingDate = new Date(today)
     bookingDate.setDate(today.getDate() + Math.floor(Math.random() * 30) - 10)
@@ -86,6 +87,7 @@ const generateBookings = (): Booking[] => {
     bookings.push({
       id: uuidv4(),
       date: bookingDate.toISOString().split('T')[0],
+      timeSlot: timeSlots[Math.floor(Math.random() * timeSlots.length)],
       name: `客户${i + 1}`,
       phone: `1${3 + Math.floor(Math.random() * 7)}${String(Math.floor(Math.random() * 1000000000)).padStart(9, '0')}`,
       email: `client${i + 1}@example.com`,
@@ -113,15 +115,16 @@ app.get('/api/bookings', (_req: Request, res: Response) => {
 })
 
 app.post('/api/bookings', (req: Request, res: Response) => {
-  const { name, phone, email, date, packageId, notes } = req.body
+  const { name, phone, email, date, timeSlot, packageId, notes } = req.body
   
-  if (!name || !phone || !email || !date || !packageId) {
+  if (!name || !phone || !email || !date || !packageId || !timeSlot) {
     return res.status(400).json({ error: '缺少必填字段' })
   }
   
   const newBooking: Booking = {
     id: uuidv4(),
     date,
+    timeSlot,
     name,
     phone,
     email,

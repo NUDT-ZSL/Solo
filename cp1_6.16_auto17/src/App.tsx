@@ -97,13 +97,7 @@ function App() {
       <div
         className="admin-trigger"
         onClick={() => setShowAdmin(!showAdmin)}
-        title="管理面板"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#D4A574" strokeWidth="2">
-          <circle cx="12" cy="12" r="3" />
-          <path d="M12 1v6m0 6v6m4.22-13.22l4.24 4.24M1.54 1.54l4.24 4.24M20.46 20.46l-4.24-4.24M1.54 20.46l4.24-4.24M1 12h6m6 0h6" />
-        </svg>
-      </div>
+      />
 
       {showAdmin && (
         <div className="admin-panel">
