@@ -231,6 +231,35 @@ export function generateWaterfallLayout(
     height: p.height || 200 + Math.random() * 200,
   }));
 
+  const useCenteredLayout = photos.length <= columns;
+
+  if (useCenteredLayout && photos.length > 0) {
+    const totalPhotosWidth = photos.length * columnWidth + (photos.length - 1) * gap;
+    const startLeft = (containerWidth - totalPhotosWidth) / 2;
+
+    sizedPhotos.forEach((photo, index) => {
+      const scaledHeight = (photo.height / photo.width) * columnWidth;
+      layoutItems.push({
+        ...photo,
+        column: index,
+        row: 0,
+        width: columnWidth,
+        height: scaledHeight,
+        top: 0,
+        left: startLeft + index * (columnWidth + gap),
+      });
+    });
+
+    const maxHeight = Math.max(...layoutItems.map((i) => i.height));
+    return {
+      items: layoutItems,
+      totalHeight: maxHeight,
+      totalWidth: containerWidth,
+    };
+  }
+
+  const columnPhotoCount = new Array(columns).fill(0);
+
   for (const photo of sizedPhotos) {
     const shortestColumn = columnHeights.indexOf(Math.min(...columnHeights));
     const scaledHeight = (photo.height / photo.width) * columnWidth;
@@ -238,7 +267,7 @@ export function generateWaterfallLayout(
     layoutItems.push({
       ...photo,
       column: shortestColumn,
-      row: 0,
+      row: columnPhotoCount[shortestColumn],
       width: columnWidth,
       height: scaledHeight,
       top: columnHeights[shortestColumn],
@@ -246,6 +275,37 @@ export function generateWaterfallLayout(
     });
 
     columnHeights[shortestColumn] += scaledHeight + gap;
+    columnPhotoCount[shortestColumn]++;
+  }
+
+  const minRowCount = Math.min(...columnPhotoCount);
+  const lastRowStartIndex = layoutItems.findIndex(
+    (item) => item.row === minRowCount
+  );
+
+  if (lastRowStartIndex >= 0) {
+    const lastRowItems = layoutItems.filter((item) => item.row === minRowCount);
+    const lastRowColumns = lastRowItems.map((item) => item.column).sort((a, b) => a - b);
+    const isLastRowPartial = lastRowColumns.length < columns;
+
+    if (isLastRowPartial && lastRowColumns.length > 0) {
+      const areColumnsConsecutive =
+        lastRowColumns[lastRowColumns.length - 1] - lastRowColumns[0] + 1 ===
+        lastRowColumns.length;
+
+      if (areColumnsConsecutive) {
+        const totalLastRowWidth =
+          lastRowItems.length * columnWidth + (lastRowItems.length - 1) * gap;
+        const offsetLeft = (containerWidth - totalLastRowWidth) / 2;
+
+        layoutItems.forEach((item) => {
+          if (item.row === minRowCount) {
+            const relativeCol = lastRowColumns.indexOf(item.column);
+            item.left = offsetLeft + relativeCol * (columnWidth + gap);
+          }
+        });
+      }
+    }
   }
 
   return {
