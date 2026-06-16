@@ -440,17 +440,7 @@ input, textarea {
 
 .lyrics-content {
   overflow: hidden;
-  max-height: 0;
   transition: max-height 0.3s ease-out;
-  opacity: 0;
-}
-.lyrics-content.lyrics-expanded {
-  max-height: 500px;
-  opacity: 1;
-}
-.lyrics-content.lyrics-collapsed {
-  max-height: 0;
-  opacity: 0;
 }
 
 .lyrics-text {

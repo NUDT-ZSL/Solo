@@ -10,10 +10,12 @@ import { useStore } from './store/useStore';
 import { useFavorites } from './hooks/useData';
 
 function ScrollToTop() {
-  const { pathname } = useLocation();
+  const { pathname, key } = useLocation();
   useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
-  }, [pathname]);
+    if (key !== 'default') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+    }
+  }, [pathname, key]);
   return null;
 }
 

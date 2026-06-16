@@ -65,7 +65,7 @@ export default function SearchBar() {
             matchType = 'genre';
           }
         } else {
-          score = r.name.toLowerCase().includes(qLower) ? 70 : 40;
+          score = r.name.toLowerCase().includes(qLower) ? 30 : 20;
           matchType = 'song';
         }
         return { ...r, score, matchType };

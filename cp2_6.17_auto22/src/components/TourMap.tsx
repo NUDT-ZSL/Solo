@@ -29,7 +29,6 @@ function CityMarkerDiv({ city, onRemove }: { city: TourCity; onRemove?: (id: str
         color: white;
         font-size: 11px;
         font-weight: 600;
-        animation: bounceIn 0.5s ease;
         position: relative;
         cursor: pointer;
       ">

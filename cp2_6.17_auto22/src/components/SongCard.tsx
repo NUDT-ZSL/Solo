@@ -15,6 +15,11 @@ export default function SongCard({ song }: Props) {
   const toggleExpand = () => {
     const next = !expanded;
     setExpanded(next);
+    if (contentRef.current) {
+      contentRef.current.style.maxHeight = next
+        ? `${contentRef.current.scrollHeight}px`
+        : '0px';
+    }
   };
 
   return (
@@ -28,7 +33,8 @@ export default function SongCard({ song }: Props) {
       </div>
       <div
         ref={contentRef}
-        className={'lyrics-content ' + (expanded ? 'lyrics-expanded' : 'lyrics-collapsed')}
+        className="lyrics-content"
+        style={{ maxHeight: '0px' }}
       >
         <div className="lyrics-text">{song.lyrics}</div>
       </div>
