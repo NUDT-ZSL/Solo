@@ -1,0 +1,201 @@
+.pet-card {
+  position: relative;
+  background: linear-gradient(135deg, #FAD0C4 0%, #FFD1FF 100%);
+  border-radius: 16px;
+  padding: 20px;
+  cursor: pointer;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  overflow: hidden;
+  user-select: none;
+}
+
+.pet-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 10px 25px rgba(153, 153, 153, 0.4);
+}
+
+.pet-card.compact {
+  padding: 16px;
+}
+
+.pet-card.lost {
+  border: 2px solid #E74C3C;
+}
+
+.lost-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: #E74C3C;
+  color: white;
+  padding: 6px 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  animation: blink 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes blink {
+  from {
+    opacity: 0.7;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.lost-text {
+  letter-spacing: 1px;
+}
+
+.badge {
+  position: absolute;
+  top: 40px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: badge-enter 0.5s ease-out;
+  z-index: 2;
+}
+
+@keyframes badge-enter {
+  0% {
+    transform: scale(0) rotate(-180deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2) rotate(10deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.badge-icon {
+  font-size: 14px;
+}
+
+.pet-avatar-container {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  overflow: hidden;
+  margin-bottom: 12px;
+  border: 3px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-top: 8px;
+}
+
+.pet-card.compact .pet-avatar-container {
+  width: 60px;
+  height: 60px;
+}
+
+.pet-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pet-avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.placeholder-icon {
+  font-size: 40px;
+}
+
+.pet-card.compact .placeholder-icon {
+  font-size: 28px;
+}
+
+.pet-info {
+  flex: 1;
+}
+
+.pet-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 4px 0;
+}
+
+.pet-card.compact .pet-name {
+  font-size: 16px;
+}
+
+.pet-breed {
+  font-size: 13px;
+  color: #666;
+  margin: 0 0 8px 0;
+}
+
+.pet-card.compact .pet-breed {
+  font-size: 12px;
+  margin-bottom: 0;
+}
+
+.pet-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+}
+
+.pet-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  color: #666;
+}
+
+.snack-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+
+.snack-icon {
+  font-size: 12px;
+}
+
+.snack-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: #FF6B6B;
+}
+
+@media (max-width: 768px) {
+  .pet-card {
+    padding: 16px;
+  }
+
+  .pet-name {
+    font-size: 16px;
+  }
+
+  .pet-breed {
+    font-size: 12px;
+  }
+}
