@@ -13,7 +13,8 @@ import {
 
 const SPRITE_PIXEL_WIDTH = 16;
 const SPRITE_PIXEL_HEIGHT = 24;
-const PIXEL_SCALE = 1.5;
+const PIXEL_SCALE = 2.0;
+const PIXEL_GAP = 0.12;
 
 const SPRITE_PIXEL_DATA: number[][] = [
   [0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0],
@@ -295,38 +296,52 @@ export class Renderer {
 
     if (isDragging) {
       this.ctx.shadowColor = sprite.color;
-      this.ctx.shadowBlur = 15;
+      this.ctx.shadowBlur = 20;
       this.ctx.strokeStyle = sprite.color;
-      this.ctx.lineWidth = 3;
+      this.ctx.lineWidth = 2 / PIXEL_SCALE;
       this.ctx.strokeRect(
-        -SPRITE_PIXEL_WIDTH / 2 - 2,
-        -SPRITE_PIXEL_HEIGHT / 2 - 2,
-        SPRITE_PIXEL_WIDTH + 4,
-        SPRITE_PIXEL_HEIGHT + 4
+        -SPRITE_PIXEL_WIDTH / 2 - 1,
+        -SPRITE_PIXEL_HEIGHT / 2 - 1,
+        SPRITE_PIXEL_WIDTH + 2,
+        SPRITE_PIXEL_HEIGHT + 2
       );
       this.ctx.shadowBlur = 0;
     }
 
-    if (sprite.isMutated) {
-      this.ctx.strokeStyle = '#e53170';
-      this.ctx.lineWidth = 1;
-      this.ctx.setLineDash([2, 2]);
-      this.ctx.strokeRect(
-        -SPRITE_PIXEL_WIDTH / 2 - 3,
-        -SPRITE_PIXEL_HEIGHT / 2 - 3,
-        SPRITE_PIXEL_WIDTH + 6,
-        SPRITE_PIXEL_HEIGHT + 6
-      );
-      this.ctx.setLineDash([]);
+    let baseColor = sprite.color;
+    let lightnessBoost = 0;
+
+    if (sprite.level > 1) {
+      lightnessBoost = (sprite.level - 1) * 8;
     }
 
-    const baseColor = sprite.isFlashing() ? '#ffffff' : sprite.color;
-    const lightColor = this.lightenColor(baseColor, 30);
-    const darkColor = this.darkenColor(baseColor, 20);
+    if (sprite.isEvolved) {
+      lightnessBoost += 5;
+    }
+
+    if (sprite.isMutated) {
+      baseColor = this.hueShiftColor(baseColor, 30);
+      lightnessBoost += 10;
+    }
+
+    if (sprite.stayTimer > 0) {
+      lightnessBoost += 5 + Math.sin(Date.now() / 150) * 3;
+    }
+
+    if (sprite.isFlashing()) {
+      baseColor = '#ffffff';
+      lightnessBoost = 0;
+    }
+
+    const finalBaseColor = this.lightenColor(baseColor, lightnessBoost);
+    const lightColor = this.lightenColor(finalBaseColor, 25);
+    const darkColor = this.darkenColor(finalBaseColor, 25);
     const eyeColor = '#0f0e17';
     const eyeHighlight = '#ffffff';
 
-    const wingFlap = Math.sin(Date.now() / 80) * 0.3;
+    const wingFlap = Math.sin(Date.now() / 80) * 0.35;
+
+    const pixelSize = 1 - PIXEL_GAP * 2;
 
     for (let row = 0; row < SPRITE_PIXEL_HEIGHT; row++) {
       for (let col = 0; col < SPRITE_PIXEL_WIDTH; col++) {
@@ -336,7 +351,7 @@ export class Renderer {
         let color: string;
         switch (pixelType) {
           case 1:
-            color = baseColor;
+            color = finalBaseColor;
             break;
           case 2:
             color = lightColor;
@@ -345,11 +360,11 @@ export class Renderer {
             color = darkColor;
             break;
           default:
-            color = baseColor;
+            color = finalBaseColor;
         }
 
-        let drawX = col - SPRITE_PIXEL_WIDTH / 2;
-        let drawY = row - SPRITE_PIXEL_HEIGHT / 2;
+        let drawX = col - SPRITE_PIXEL_WIDTH / 2 + PIXEL_GAP;
+        let drawY = row - SPRITE_PIXEL_HEIGHT / 2 + PIXEL_GAP;
 
         if (pixelType === 3 && row < 22) {
           const wingRow = row - 15;
@@ -361,22 +376,22 @@ export class Renderer {
         }
 
         this.ctx.fillStyle = color;
-        this.ctx.fillRect(drawX, drawY, 1, 1);
+        this.ctx.fillRect(drawX, drawY, pixelSize, pixelSize);
       }
     }
 
     this.ctx.fillStyle = eyeColor;
-    this.ctx.fillRect(-4, -8, 2, 2);
-    this.ctx.fillRect(2, -8, 2, 2);
+    this.ctx.fillRect(-4 + PIXEL_GAP, -8 + PIXEL_GAP, 2 - PIXEL_GAP * 2, 2 - PIXEL_GAP * 2);
+    this.ctx.fillRect(2 + PIXEL_GAP, -8 + PIXEL_GAP, 2 - PIXEL_GAP * 2, 2 - PIXEL_GAP * 2);
 
     this.ctx.fillStyle = eyeHighlight;
-    this.ctx.fillRect(-3, -8, 1, 1);
-    this.ctx.fillRect(3, -8, 1, 1);
+    this.ctx.fillRect(-3 + PIXEL_GAP, -8 + PIXEL_GAP, 1 - PIXEL_GAP, 1 - PIXEL_GAP);
+    this.ctx.fillRect(3 + PIXEL_GAP, -8 + PIXEL_GAP, 1 - PIXEL_GAP, 1 - PIXEL_GAP);
 
     if (sprite.isFlashing()) {
       this.ctx.shadowColor = '#ffffff';
-      this.ctx.shadowBlur = 25;
-      this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      this.ctx.shadowBlur = 15;
+      this.ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
       this.ctx.fillRect(
         -SPRITE_PIXEL_WIDTH / 2,
         -SPRITE_PIXEL_HEIGHT / 2,
@@ -386,11 +401,35 @@ export class Renderer {
       this.ctx.shadowBlur = 0;
     }
 
+    if (sprite.isMutated) {
+      this.ctx.strokeStyle = '#e53170';
+      this.ctx.lineWidth = 0.5;
+      this.ctx.setLineDash([1, 1]);
+      this.ctx.strokeRect(
+        -SPRITE_PIXEL_WIDTH / 2 - 0.5,
+        -SPRITE_PIXEL_HEIGHT / 2 - 0.5,
+        SPRITE_PIXEL_WIDTH + 1,
+        SPRITE_PIXEL_HEIGHT + 1
+      );
+      this.ctx.setLineDash([]);
+    }
+
+    if (sprite.isEvolved && !sprite.isMutated) {
+      this.ctx.strokeStyle = '#ff8906';
+      this.ctx.lineWidth = 0.5;
+      this.ctx.strokeRect(
+        -SPRITE_PIXEL_WIDTH / 2 - 0.5,
+        -SPRITE_PIXEL_HEIGHT / 2 - 0.5,
+        SPRITE_PIXEL_WIDTH + 1,
+        SPRITE_PIXEL_HEIGHT + 1
+      );
+    }
+
     if (sprite.level > 1) {
       this.ctx.fillStyle = '#ff8906';
-      this.ctx.font = 'bold 5px Arial';
+      this.ctx.font = 'bold 3px Arial';
       this.ctx.textAlign = 'center';
-      this.ctx.fillText(`Lv${sprite.level}`, 0, -SPRITE_PIXEL_HEIGHT / 2 - 3);
+      this.ctx.fillText(`Lv${sprite.level}`, 0, -SPRITE_PIXEL_HEIGHT / 2 - 1);
     }
 
     this.ctx.restore();
@@ -638,6 +677,54 @@ export class Renderer {
     const R = Math.max(0, (num >> 16) - amt);
     const G = Math.max(0, ((num >> 8) & 0x00ff) - amt);
     const B = Math.max(0, (num & 0x0000ff) - amt);
+    return '#' + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+  }
+
+  private hueShiftColor(color: string, degrees: number): string {
+    const num = parseInt(color.replace('#', ''), 16);
+    const r = (num >> 16) / 255;
+    const g = ((num >> 8) & 0x00ff) / 255;
+    const b = (num & 0x0000ff) / 255;
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    let h = 0, s = 0;
+    const l = (max + min) / 2;
+
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+        case g: h = ((b - r) / d + 2) / 6; break;
+        case b: h = ((r - g) / d + 4) / 6; break;
+      }
+    }
+
+    h = (h + degrees / 360) % 1;
+
+    let r2, g2, b2;
+    if (s === 0) {
+      r2 = g2 = b2 = l;
+    } else {
+      const hue2rgb = (p: number, q: number, t: number) => {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1/6) return p + (q - p) * 6 * t;
+        if (t < 1/2) return q;
+        if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+        return p;
+      };
+      const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      const p = 2 * l - q;
+      r2 = hue2rgb(p, q, h + 1/3);
+      g2 = hue2rgb(p, q, h);
+      b2 = hue2rgb(p, q, h - 1/3);
+    }
+
+    const R = Math.round(r2 * 255);
+    const G = Math.round(g2 * 255);
+    const B = Math.round(b2 * 255);
     return '#' + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
   }
 
