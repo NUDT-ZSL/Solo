@@ -13,6 +13,7 @@ export default function App() {
   const [selectedFish, setSelectedFish] = useState<Fish | null>(null);
   const [isTankExpanded, setIsTankExpanded] = useState(false);
   const [isBoostAnimating, setIsBoostAnimating] = useState(false);
+  const [environmentEnabled, setEnvironmentEnabled] = useState(true);
   const elapsedTimeRef = useRef(0);
 
   useEffect(() => {
@@ -131,6 +132,7 @@ export default function App() {
             fishData={fishData}
             onFishClick={handleFishClick}
             onFishUpdate={handleFishUpdate}
+            environmentEnabled={environmentEnabled}
           />
         </Canvas>
       </div>
@@ -250,6 +252,78 @@ export default function App() {
           }}>
             <span>0.5x</span>
             <span>3.0x</span>
+          </div>
+        </div>
+
+        <div style={{
+          marginTop: '20px',
+          paddingTop: '16px',
+          borderTop: '1px solid rgba(255, 255, 255, 0.1)'
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <span style={{ fontSize: '16px' }}>💧</span>
+              <span style={{
+                fontSize: '13px',
+                color: 'rgba(255, 255, 255, 0.85)'
+              }}>
+                环境效果
+              </span>
+            </div>
+            <button
+              onClick={() => setEnvironmentEnabled(prev => !prev)}
+              style={{
+                width: '48px',
+                height: '26px',
+                borderRadius: '13px',
+                border: 'none',
+                background: environmentEnabled
+                  ? 'linear-gradient(135deg, #4ECDC4 0%, #44A8B3 100%)'
+                  : 'rgba(255, 255, 255, 0.15)',
+                cursor: 'pointer',
+                position: 'relative',
+                transition: 'all 0.2s ease',
+                padding: 0
+              }}
+              onMouseDown={(e) => {
+                e.currentTarget.style.transform = 'scale(0.95)';
+              }}
+              onMouseUp={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
+            >
+              <div
+                style={{
+                  width: '22px',
+                  height: '22px',
+                  borderRadius: '50%',
+                  background: '#ffffff',
+                  position: 'absolute',
+                  top: '2px',
+                  left: environmentEnabled ? '24px' : '2px',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
+                }}
+              />
+            </button>
+          </div>
+          <div style={{
+            marginTop: '6px',
+            fontSize: '11px',
+            color: 'rgba(255, 255, 255, 0.5)'
+          }}>
+            {environmentEnabled ? '气泡和植物摆动已开启' : '气泡和植物摆动已关闭'}
           </div>
         </div>
       </div>

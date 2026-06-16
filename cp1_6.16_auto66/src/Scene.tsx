@@ -9,6 +9,7 @@ interface SceneProps {
   fishData: Fish[];
   onFishClick: (fishId: number) => void;
   onFishUpdate: (fish: Fish[]) => void;
+  environmentEnabled: boolean;
 }
 
 function createFishGeometry(shape: string): THREE.BufferGeometry {
@@ -190,13 +191,19 @@ function FishMesh({
   );
 }
 
-function Coral({ position, color, scale }: { position: [number, number, number]; color: string; scale: number }) {
+function Coral({ position, color, scale, environmentEnabled }: { position: [number, number, number]; color: string; scale: number; environmentEnabled: boolean }) {
   const coralRef = useRef<THREE.Group>(null);
   const timeOffset = useRef(Math.random() * Math.PI * 2);
+  const swaySpeed = useRef(0.8 + Math.random() * 0.4);
   
   useFrame(() => {
-    if (coralRef.current) {
-      coralRef.current.rotation.y = Math.sin(Date.now() * 0.0005 + timeOffset.current) * 0.05;
+    if (coralRef.current && environmentEnabled) {
+      const time = Date.now() * 0.001;
+      const baseSway = Math.sin(time * swaySpeed.current + timeOffset.current) * 0.08;
+      const secondarySway = Math.sin(time * swaySpeed.current * 1.3 + timeOffset.current * 0.7) * 0.03;
+      
+      coralRef.current.rotation.y = baseSway + secondarySway;
+      coralRef.current.rotation.x = Math.sin(time * swaySpeed.current * 0.6 + timeOffset.current) * 0.03;
     }
   });
   
@@ -232,17 +239,23 @@ function Coral({ position, color, scale }: { position: [number, number, number];
   );
 }
 
-function Seaweed({ position, height }: { position: [number, number, number]; height: number }) {
+function Seaweed({ position, height, environmentEnabled }: { position: [number, number, number]; height: number; environmentEnabled: boolean }) {
   const seaweedRef = useRef<THREE.Group>(null);
   const timeOffset = useRef(Math.random() * Math.PI * 2);
+  const waveSpeed = useRef(1.0 + Math.random() * 0.5);
   
   useFrame(() => {
-    if (seaweedRef.current) {
+    if (seaweedRef.current && environmentEnabled) {
       const time = Date.now() * 0.001;
       seaweedRef.current.children.forEach((child, i) => {
         if (child instanceof THREE.Mesh) {
-          const swayAmount = Math.sin(time * 2 + timeOffset.current + i * 0.5) * 0.15;
-          child.rotation.z = swayAmount * (1 + i * 0.2);
+          const wavePhase = time * waveSpeed.current + timeOffset.current + i * 0.4;
+          
+          const zSway = Math.sin(wavePhase) * 0.12;
+          const xSway = Math.sin(wavePhase * 1.3 + timeOffset.current * 0.5) * 0.08;
+          
+          child.rotation.z = zSway * (1 + i * 0.25);
+          child.rotation.x = xSway * (1 + i * 0.15);
         }
       });
     }
@@ -274,6 +287,116 @@ function Seaweed({ position, height }: { position: [number, number, number]; hei
         </mesh>
       ))}
     </group>
+  );
+}
+
+function Bubbles({ enabled }: { enabled: boolean }) {
+  const particlesRef = useRef<THREE.Points>(null);
+  const bubbleCount = 65;
+  
+  const { positions, sizes, speeds, offsets } = useMemo(() => {
+    const positions = new Float32Array(bubbleCount * 3);
+    const sizes = new Float32Array(bubbleCount);
+    const speeds = new Float32Array(bubbleCount);
+    const offsets = new Float32Array(bubbleCount);
+    
+    for (let i = 0; i < bubbleCount; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * 14;
+      positions[i * 3 + 1] = -3 + Math.random() * 8;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 10;
+      
+      sizes[i] = 0.03 + Math.random() * 0.08;
+      speeds[i] = 0.5 + Math.random() * 1.5;
+      offsets[i] = Math.random() * Math.PI * 2;
+    }
+    
+    return { positions, sizes, speeds, offsets };
+  }, []);
+  
+  const geometry = useMemo(() => {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+    return geo;
+  }, [positions, sizes]);
+  
+  const material = useMemo(() => new THREE.ShaderMaterial({
+    uniforms: {
+      time: { value: 0 },
+      pixelRatio: { value: window.devicePixelRatio }
+    },
+    vertexShader: `
+      attribute float size;
+      uniform float time;
+      uniform float pixelRatio;
+      varying float vAlpha;
+      varying float vSize;
+      
+      void main() {
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        vSize = size;
+        vAlpha = 0.3 + 0.4 * sin(position.y * 0.8 + time * 2.0);
+        gl_PointSize = size * 300.0 * pixelRatio / -mvPosition.z;
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `,
+    fragmentShader: `
+      varying float vAlpha;
+      varying float vSize;
+      
+      void main() {
+        vec2 center = gl_PointCoord - vec2(0.5);
+        float dist = length(center);
+        
+        if (dist > 0.5) discard;
+        
+        float edge = smoothstep(0.5, 0.3, dist);
+        float highlight = smoothstep(0.2, 0.0, dist);
+        
+        vec3 color = vec3(0.9, 0.95, 1.0);
+        float alpha = edge * vAlpha;
+        
+        gl_FragColor = vec4(color + highlight * 0.3, alpha);
+      }
+    `,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  }), []);
+  
+  useFrame((_, delta) => {
+    if (!particlesRef.current || !enabled) return;
+    
+    const positions = particlesRef.current.geometry.attributes.position.array as Float32Array;
+    const time = Date.now() * 0.001;
+    
+    for (let i = 0; i < bubbleCount; i++) {
+      const i3 = i * 3;
+      
+      positions[i3 + 1] += speeds[i] * delta * 0.8;
+      
+      positions[i3] += Math.sin(time * speeds[i] + offsets[i]) * delta * 0.3;
+      positions[i3 + 2] += Math.cos(time * speeds[i] * 0.7 + offsets[i]) * delta * 0.2;
+      
+      if (positions[i3 + 1] > 4.5) {
+        positions[i3] = (Math.random() - 0.5) * 14;
+        positions[i3 + 1] = -2.8;
+        positions[i3 + 2] = (Math.random() - 0.5) * 10;
+      }
+    }
+    
+    particlesRef.current.geometry.attributes.position.needsUpdate = true;
+    
+    if (material.uniforms) {
+      material.uniforms.time.value = time;
+    }
+  });
+  
+  if (!enabled) return null;
+  
+  return (
+    <points ref={particlesRef} geometry={geometry} material={material}>
+    </points>
   );
 }
 
@@ -357,7 +480,7 @@ function TankGlass() {
   );
 }
 
-export default function Scene({ controlData, fishData, onFishClick, onFishUpdate }: SceneProps) {
+export default function Scene({ controlData, fishData, onFishClick, onFishUpdate, environmentEnabled }: SceneProps) {
   const { camera } = useThree();
   const elapsedTime = useRef(0);
   const [highlightedFishId, setHighlightedFishId] = useState<number | null>(null);
@@ -435,12 +558,14 @@ export default function Scene({ controlData, fishData, onFishClick, onFishUpdate
       
       <TankGlass />
       
+      <Bubbles enabled={environmentEnabled} />
+      
       {coralData.map((coral, i) => (
-        <Coral key={`coral-${i}`} {...coral} />
+        <Coral key={`coral-${i}`} {...coral} environmentEnabled={environmentEnabled} />
       ))}
       
       {seaweedData.map((seaweed, i) => (
-        <Seaweed key={`seaweed-${i}`} {...seaweed} />
+        <Seaweed key={`seaweed-${i}`} {...seaweed} environmentEnabled={environmentEnabled} />
       ))}
       
       {fishData.map(fish => (
