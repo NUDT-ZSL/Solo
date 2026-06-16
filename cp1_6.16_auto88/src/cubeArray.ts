@@ -15,19 +15,22 @@ const COLD_COLOR = new THREE.Color('#4169E1');
 const WARM_COLOR = new THREE.Color('#FF4500');
 const MODE_TRANSITION_DURATION = 500;
 
-const EDGE_LINE_WIDTH = 0.02;
+const EDGE_LINE_RADIUS = 0.01;
+const EDGE_COLOR = 0xffffff;
+const EDGE_BASE_OPACITY = 0.25;
 
 const GLOW_BASE_SCALE = 1.15;
 const GLOW_MAX_SCALE = 1.5;
 const GLOW_BASE_OPACITY = 0.12;
 const GLOW_MAX_OPACITY = 0.35;
+const GLOW_PULSE_SPEED = 1.5;
 
 export class CubeArray {
   public group: THREE.Group;
   public particleGroup: THREE.Group;
   private cubes: THREE.Mesh[] = [];
   private glows: THREE.Mesh[] = [];
-  private edges: THREE.LineSegments[] = [];
+  private edgeGroups: THREE.Group[] = [];
   private particles: THREE.Points[] = [];
   private cubeStates: CubeState[] = [];
   private cubeSizes: number[] = [];
@@ -35,6 +38,7 @@ export class CubeArray {
   private modeTransitionStart: number = 0;
   private isTransitioning: boolean = false;
   private materialCache: Map<string, THREE.MeshStandardMaterial> = new Map();
+  private edgeMaterial: THREE.MeshBasicMaterial | null = null;
 
   constructor() {
     this.group = new THREE.Group();
@@ -50,6 +54,44 @@ export class CubeArray {
     if (dist <= 1) return 'center';
     if (dist <= 3) return 'middle';
     return 'outer';
+  }
+
+  private createCubeEdges(size: number): THREE.Group {
+    const group = new THREE.Group();
+    const half = size / 2;
+
+    const vertices: THREE.Vector3[][] = [
+      [new THREE.Vector3(-half, -half, -half), new THREE.Vector3(half, -half, -half)],
+      [new THREE.Vector3(half, -half, -half), new THREE.Vector3(half, -half, half)],
+      [new THREE.Vector3(half, -half, half), new THREE.Vector3(-half, -half, half)],
+      [new THREE.Vector3(-half, -half, half), new THREE.Vector3(-half, -half, -half)],
+      [new THREE.Vector3(-half, half, -half), new THREE.Vector3(half, half, -half)],
+      [new THREE.Vector3(half, half, -half), new THREE.Vector3(half, half, half)],
+      [new THREE.Vector3(half, half, half), new THREE.Vector3(-half, half, half)],
+      [new THREE.Vector3(-half, half, half), new THREE.Vector3(-half, half, -half)],
+      [new THREE.Vector3(-half, -half, -half), new THREE.Vector3(-half, half, -half)],
+      [new THREE.Vector3(half, -half, -half), new THREE.Vector3(half, half, -half)],
+      [new THREE.Vector3(half, -half, half), new THREE.Vector3(half, half, half)],
+      [new THREE.Vector3(-half, -half, half), new THREE.Vector3(-half, half, half)],
+    ];
+
+    if (!this.edgeMaterial) {
+      this.edgeMaterial = new THREE.MeshBasicMaterial({
+        color: EDGE_COLOR,
+        transparent: true,
+        opacity: EDGE_BASE_OPACITY,
+      });
+    }
+
+    const material = this.edgeMaterial!;
+    vertices.forEach(([start, end]) => {
+      const path = new THREE.LineCurve3(start, end);
+      const geometry = new THREE.TubeGeometry(path, 2, EDGE_LINE_RADIUS, 5, false);
+      const edge = new THREE.Mesh(geometry, material);
+      group.add(edge);
+    });
+
+    return group;
   }
 
   private createCubes(): void {
@@ -94,19 +136,10 @@ export class CubeArray {
         this.glows.push(glow);
         this.group.add(glow);
 
-        const edgesGeometry = new THREE.EdgesGeometry(geometry);
-        const edgesMaterial = new THREE.LineBasicMaterial({
-          color: 0xffffff,
-          transparent: true,
-          opacity: 0.25,
-          linewidth: 1,
-        });
-        const edge = new THREE.LineSegments(edgesGeometry, edgesMaterial);
-        const edgeScale = 1 + EDGE_LINE_WIDTH / size;
-        edge.scale.setScalar(edgeScale);
-        edge.position.copy(cube.position);
-        this.edges.push(edge);
-        this.group.add(edge);
+        const edgeGroup = this.createCubeEdges(size);
+        edgeGroup.position.copy(cube.position);
+        this.edgeGroups.push(edgeGroup);
+        this.group.add(edgeGroup);
 
         const region = this.getRegion(row, col);
         this.cubeStates.push({
@@ -200,6 +233,10 @@ export class CubeArray {
     }
   }
 
+  private easeInOutSine(t: number): number {
+    return -(Math.cos(Math.PI * t) - 1) / 2;
+  }
+
   private lerpColor(from: string, to: string, t: number): string {
     const c1 = new THREE.Color(from);
     const c2 = new THREE.Color(to);
@@ -240,7 +277,7 @@ export class CubeArray {
     for (let i = 0; i < CUBE_COUNT; i++) {
       const cube = this.cubes[i];
       const glow = this.glows[i];
-      const edge = this.edges[i];
+      const edgeGroup = this.edgeGroups[i];
       const state = this.cubeStates[i];
       const cubeSize = this.cubeSizes[i];
       const particle = this.particles[i];
@@ -293,25 +330,27 @@ export class CubeArray {
       material.emissive.copy(targetColorObj);
       material.emissiveIntensity += (state.baseEmissiveIntensity - material.emissiveIntensity) * 0.15;
 
-      glow.position.copy(cube.position);
-      glow.rotation.copy(cube.rotation);
-      const glowScale = cubeSize * (GLOW_BASE_SCALE + this.easeOutBounce(Math.min(1, low * 1.5)) * (GLOW_MAX_SCALE - GLOW_BASE_SCALE));
-      glow.scale.x += (glowScale - glow.scale.x) * 0.2;
-      glow.scale.y += (glowScale - glow.scale.y) * 0.2;
-      glow.scale.z += (glowScale - glow.scale.z) * 0.2;
+      glow.position.y = cube.position.y;
+      glow.position.x = cube.position.x;
+      glow.position.z = cube.position.z;
+      const pulseFactor = this.easeInOutSine((Math.sin(time * GLOW_PULSE_SPEED + state.bouncePhase) + 1) / 2);
+      const audioModulated = 0.5 + low * 0.5;
+      const glowIntensity = pulseFactor * 0.4 + audioModulated * 0.6;
+      const glowScale = cubeSize * (GLOW_BASE_SCALE + glowIntensity * (GLOW_MAX_SCALE - GLOW_BASE_SCALE));
+      glow.scale.x += (glowScale - glow.scale.x) * 0.12;
+      glow.scale.y += (glowScale - glow.scale.y) * 0.12;
+      glow.scale.z += (glowScale - glow.scale.z) * 0.12;
       const glowMat = glow.material as THREE.MeshBasicMaterial;
       glowMat.color.lerp(targetColorObj, 0.15);
-      const targetGlowOpacity = GLOW_BASE_OPACITY + this.easeOutBounce(Math.min(1, low * 1.3)) * (GLOW_MAX_OPACITY - GLOW_BASE_OPACITY);
-      glowMat.opacity += (targetGlowOpacity - glowMat.opacity) * 0.18;
+      const targetGlowOpacity = GLOW_BASE_OPACITY + glowIntensity * (GLOW_MAX_OPACITY - GLOW_BASE_OPACITY);
+      glowMat.opacity += (targetGlowOpacity - glowMat.opacity) * 0.15;
 
-      edge.position.copy(cube.position);
-      edge.rotation.copy(cube.rotation);
-      const edgeMat = edge.material as THREE.LineBasicMaterial;
-      const baseEdgeOpacity = 0.25;
-      const boostEdgeOpacity = low * 0.2 + state.baseEmissiveIntensity * 0.08;
-      const targetEdgeOpacity = baseEdgeOpacity + boostEdgeOpacity;
-      edgeMat.opacity += (targetEdgeOpacity - edgeMat.opacity) * 0.12;
-      edgeMat.color.lerp(targetColorObj, 0.05);
+      edgeGroup.position.copy(cube.position);
+      edgeGroup.rotation.copy(cube.rotation);
+      if (this.edgeMaterial) {
+        const targetEdgeOpacity = EDGE_BASE_OPACITY + low * 0.12 + state.baseEmissiveIntensity * 0.06;
+        this.edgeMaterial.opacity += (targetEdgeOpacity - this.edgeMaterial.opacity) * 0.1;
+      }
 
       if (this.isTransitioning || this.mode === 'particle') {
         const particleMaterial = particle.material as THREE.PointsMaterial;
@@ -368,10 +407,17 @@ export class CubeArray {
       glow.geometry.dispose();
       (glow.material as THREE.Material).dispose();
     });
-    this.edges.forEach(edge => {
-      edge.geometry.dispose();
-      (edge.material as THREE.Material).dispose();
+    this.edgeGroups.forEach(group => {
+      group.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+        }
+      });
     });
+    if (this.edgeMaterial) {
+      this.edgeMaterial.dispose();
+      this.edgeMaterial = null;
+    }
     this.particles.forEach(particle => {
       particle.geometry.dispose();
       (particle.material as THREE.Material).dispose();
