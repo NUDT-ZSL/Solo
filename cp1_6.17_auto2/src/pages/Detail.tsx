@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { generateReport, formatReportForDisplay } from '../modules/report';
 import { estimatePrice } from '../modules/analysis';
@@ -21,6 +21,16 @@ interface Instrument {
   flaws: Array<{ x: number; y: number; w: number; h: number; description: string }>;
 }
 
+interface SimilarInstrument {
+  id: string;
+  name: string;
+  brand: string;
+  condition: string;
+  price: number;
+  soldDate: string;
+  image: string;
+}
+
 function getConditionClass(condition: string): string {
   switch (condition) {
     case '全新': return 'condition-new';
@@ -29,6 +39,15 @@ function getConditionClass(condition: string): string {
     case '有瑕疵': return 'condition-damaged';
     default: return 'condition-used';
   }
+}
+
+function getRatingLabel(score: number): { label: string; color: string } {
+  if (score >= 95) return { label: '完美', color: '#2ECC71' };
+  if (score >= 90) return { label: '优秀', color: '#2ECC71' };
+  if (score >= 80) return { label: '良好', color: '#3498DB' };
+  if (score >= 70) return { label: '中等', color: '#E67E22' };
+  if (score >= 60) return { label: '一般', color: '#E67E22' };
+  return { label: '较差', color: '#E74C3C' };
 }
 
 function CircleProgress({ score, size = 160 }: { score: number; size?: number }) {
@@ -99,20 +118,44 @@ function CircleProgress({ score, size = 160 }: { score: number; size?: number })
   );
 }
 
-function ImageCarousel({ images, flaws }: { images: string[]; flaws: Instrument['flaws'] }) {
+function ImageGallery({ images, flaws }: { images: string[]; flaws: Instrument['flaws'] }) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isFading, setIsFading] = useState(false);
+  const [loadedImages, setLoadedImages] = useState<Set<number>>(new Set([0]));
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
   const minSwipeDistance = 50;
+  const imagesToShow = images.slice(0, 6);
 
-  const nextSlide = () => {
-    setCurrentIndex((prev) => (prev + 1) % images.length);
-  };
+  const goToSlide = useCallback((index: number) => {
+    if (index === currentIndex) return;
+    setIsFading(true);
+    setTimeout(() => {
+      setCurrentIndex(index);
+      setLoadedImages(prev => new Set(prev).add(index));
+      setTimeout(() => setIsFading(false), 50);
+    }, 300);
+  }, [currentIndex]);
 
-  const prevSlide = () => {
-    setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
-  };
+  const nextSlide = useCallback(() => {
+    const next = (currentIndex + 1) % imagesToShow.length;
+    goToSlide(next);
+  }, [currentIndex, imagesToShow.length, goToSlide]);
+
+  const prevSlide = useCallback(() => {
+    const prev = (currentIndex - 1 + imagesToShow.length) % imagesToShow.length;
+    goToSlide(prev);
+  }, [currentIndex, imagesToShow.length, goToSlide]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') prevSlide();
+      if (e.key === 'ArrowRight') nextSlide();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [prevSlide, nextSlide]);
 
   const onTouchStart = (e: React.TouchEvent) => {
     setTouchEnd(null);
@@ -140,62 +183,165 @@ function ImageCarousel({ images, flaws }: { images: string[]; flaws: Instrument[
 
   return (
     <div 
-      className="image-carousel"
+      className="image-gallery"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
-      <div className="carousel-main">
-        <img 
-          src={images[currentIndex]} 
-          alt="乐器图片" 
-          className="carousel-image"
-        />
-        {currentFlaws.map((flaw, idx) => (
+      <div className="gallery-main">
+        {imagesToShow.map((img, idx) => (
           <div
             key={idx}
-            className="flaw-marker"
-            style={{
-              left: `${flaw.x * 100}%`,
-              top: `${flaw.y * 100}%`,
-              width: `${flaw.w * 100}%`,
-              height: `${flaw.h * 100}%`
-            }}
-            title={flaw.description}
+            className={`gallery-image-wrapper ${idx === currentIndex ? 'active' : ''} ${isFading ? 'fading' : ''}`}
           >
-            <span className="flaw-tooltip">{flaw.description}</span>
+            {(idx === currentIndex || loadedImages.has(idx)) && (
+              <img 
+                src={img} 
+                alt={`乐器图片 ${idx + 1}`}
+                className="gallery-image"
+              />
+            )}
+            {idx === currentIndex && currentFlaws.map((flaw, flawIdx) => (
+              <div
+                key={flawIdx}
+                className="flaw-marker"
+                style={{
+                  left: `${flaw.x * 100}%`,
+                  top: `${flaw.y * 100}%`,
+                  width: `${flaw.w * 100}%`,
+                  height: `${flaw.h * 100}%`
+                }}
+                title={flaw.description}
+              >
+                <span className="flaw-badge">{flawIdx + 1}</span>
+                <span className="flaw-tooltip">{flaw.description}</span>
+              </div>
+            ))}
           </div>
         ))}
         
-        {images.length > 1 && (
+        <div className="gallery-counter">
+          {currentIndex + 1} / {imagesToShow.length}
+        </div>
+        
+        {imagesToShow.length > 1 && (
           <>
-            <button className="carousel-btn prev-btn" onClick={prevSlide}>
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+            <button 
+              className="gallery-btn gallery-prev" 
+              onClick={prevSlide}
+              aria-label="上一张"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="15 18 9 12 15 6" />
               </svg>
             </button>
-            <button className="carousel-btn next-btn" onClick={nextSlide}>
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+            <button 
+              className="gallery-btn gallery-next" 
+              onClick={nextSlide}
+              aria-label="下一张"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="9 18 15 12 9 6" />
               </svg>
             </button>
           </>
         )}
       </div>
       
-      {images.length > 1 && (
-        <div className="carousel-thumbnails">
-          {images.map((img, idx) => (
+      {imagesToShow.length > 1 && (
+        <div className="gallery-thumbnails">
+          {imagesToShow.map((img, idx) => (
             <button
               key={idx}
-              className={`thumbnail ${idx === currentIndex ? 'active' : ''}`}
-              onClick={() => setCurrentIndex(idx)}
+              className={`gallery-thumb ${idx === currentIndex ? 'active' : ''}`}
+              onClick={() => goToSlide(idx)}
             >
-              <img src={img} alt={`缩略图 ${idx + 1}`} />
+              <img src={img} alt={`缩略图 ${idx + 1}`} loading="lazy" />
+              <div className="thumb-overlay">
+                <span className="thumb-index">{idx + 1}</span>
+              </div>
             </button>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function SimilarInstruments({ brand, model, currentId }: { brand: string; model: string; currentId: string }) {
+  const { data: instruments, isLoading } = useQuery<Instrument[]>({
+    queryKey: ['instruments'],
+    queryFn: async () => {
+      const res = await fetch('/api/instruments');
+      if (!res.ok) throw new Error('Failed to fetch');
+      return res.json();
+    }
+  });
+
+  if (isLoading || !instruments) {
+    return (
+      <div className="similar-section">
+        <h4 className="similar-title">相似乐器参考</h4>
+        <div className="similar-loading">加载中...</div>
+      </div>
+    );
+  }
+
+  const mockSoldData: SimilarInstrument[] = [
+    ...instruments
+      .filter(i => i.id !== currentId && (i.brand === brand || i.model.includes(model.split(' ')[0])))
+      .slice(0, 2)
+      .map(i => ({
+        id: i.id,
+        name: i.name,
+        brand: i.brand,
+        condition: i.condition,
+        price: Math.round(i.price * (0.85 + Math.random() * 0.2)),
+        soldDate: '2024-0' + (Math.floor(Math.random() * 5) + 1) + '-' + (10 + Math.floor(Math.random() * 18)),
+        image: i.images[0]
+      })),
+    {
+      id: 'mock-1',
+      name: `${brand} ${model}（已售）`,
+      brand,
+      condition: Math.random() > 0.5 ? '几乎全新' : '有明显使用痕迹',
+      price: Math.round(8000 + Math.random() * 15000),
+      soldDate: '2024-03-' + (15 + Math.floor(Math.random() * 10)),
+      image: instruments[0]?.images[0] || ''
+    }
+  ].slice(0, 3);
+
+  if (mockSoldData.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="similar-section">
+      <h4 className="similar-title">相似乐器参考</h4>
+      <p className="similar-subtitle">同品牌/型号近期成交价参考</p>
+      
+      <div className="similar-list">
+        {mockSoldData.map((item, idx) => (
+          <div key={item.id} className={`similar-item ${idx < mockSoldData.length - 1 ? 'has-divider' : ''}`}>
+            <div className="similar-image">
+              <img src={item.image} alt={item.name} />
+              <span className="sold-badge">已成交</span>
+            </div>
+            <div className="similar-info">
+              <Link to={`/instrument/${item.id}`} className="similar-name">
+                {item.name}
+              </Link>
+              <div className="similar-meta">
+                <span className={`condition-tag-small ${getConditionClass(item.condition)}`}>
+                  {item.condition}
+                </span>
+                <span className="similar-date">{item.soldDate}</span>
+              </div>
+              <span className="similar-price">¥{item.price.toLocaleString()}</span>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -233,6 +379,7 @@ export default function Detail() {
 
   const report = instrument ? formatReportForDisplay(generateReport(instrument.conditionScore, instrument.flaws)) : null;
   const priceRange = instrument ? estimatePrice(instrument.brand, instrument.model, instrument.conditionScore) : null;
+  const rating = report ? getRatingLabel(report.score) : { label: '', color: '' };
 
   const toggleFavorite = async () => {
     const userId = localStorage.getItem('userId');
@@ -285,15 +432,16 @@ export default function Detail() {
     <div className={`detail-page ${pageVisible ? 'visible' : ''}`}>
       <div className="container">
         <button className="back-btn" onClick={() => navigate(-1)}>
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="19" y1="12" x2="5" y2="12" />
+            <polyline points="12 19 5 12 12 5" />
           </svg>
           返回
         </button>
 
         <div className="detail-layout">
           <div className="detail-left">
-            <ImageCarousel images={instrument.images} flaws={instrument.flaws} />
+            <ImageGallery images={instrument.images} flaws={instrument.flaws} />
             
             <div className="detail-info-card">
               <h1 className="detail-title">{instrument.name}</h1>
@@ -303,6 +451,7 @@ export default function Detail() {
                 </span>
                 <span className="detail-brand">{instrument.brand}</span>
                 <span className="detail-model">{instrument.model}</span>
+                <span className="detail-date">上架于 {instrument.createdAt}</span>
               </div>
               <div className="detail-price">¥{instrument.price.toLocaleString()}</div>
               <p className="detail-description">{instrument.description}</p>
@@ -311,29 +460,57 @@ export default function Detail() {
 
           <div className="detail-right">
             <div className="report-card">
-              <h3 className="report-title">成色鉴定报告</h3>
+              <h3 className="report-title">
+                <span className="report-icon">📊</span>
+                成色鉴定报告
+              </h3>
               
               <div className="report-score-section">
-                <CircleProgress score={report?.score || 0} />
-                <div className="score-label-large">
-                  <span className="grade-text" style={{ color: report?.gradeColor }}>
-                    {report?.grade}
-                  </span>
+                <div className="score-main">
+                  <CircleProgress score={report?.score || 0} size={140} />
+                </div>
+                <div className="score-info">
+                  <div className="rating-row">
+                    <span className="rating-label">成色评级</span>
+                    <span className="rating-value" style={{ color: rating.color }}>
+                      {rating.label}
+                    </span>
+                  </div>
+                  <div className="grade-row">
+                    <span className="grade-label">成色等级</span>
+                    <span className="grade-tag" style={{ color: report?.gradeColor }}>
+                      {report?.grade}
+                    </span>
+                  </div>
+                  <div className="score-bar">
+                    <div 
+                      className="score-bar-fill" 
+                      style={{ 
+                        width: `${report?.score || 0}%`,
+                        background: `linear-gradient(90deg, ${rating.color}, var(--classical-copper))`
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
 
               <div className="report-summary">
+                <span className="summary-icon">💡</span>
                 {report?.summary}
               </div>
 
               {report && report.flaws.length > 0 && (
                 <div className="flaws-section">
-                  <h4 className="flaws-title">检测到的瑕疵</h4>
+                  <h4 className="flaws-title">
+                    <span className="flaws-icon">⚠️</span>
+                    检测到的瑕疵
+                    <span className="flaws-count">{report.flaws.length}</span>
+                  </h4>
                   <ul className="flaws-list">
                     {report.flaws.map((flaw, idx) => (
                       <li key={idx} className="flaw-item">
-                        <span className="flaw-dot"></span>
-                        {flaw.description}
+                        <span className="flaw-index">{idx + 1}</span>
+                        <span className="flaw-desc">{flaw.description}</span>
                       </li>
                     ))}
                   </ul>
@@ -341,29 +518,43 @@ export default function Detail() {
               )}
 
               <div className="price-suggestion">
-                <h4 className="price-title">推荐售价区间</h4>
+                <h4 className="price-title">
+                  <span className="price-icon">💰</span>
+                  推荐售价区间
+                </h4>
                 <div className="price-range">
-                  ¥{priceRange?.min.toLocaleString()} - ¥{priceRange?.max.toLocaleString()}
+                  ¥{priceRange?.min.toLocaleString()}
+                  <span className="price-sep">—</span>
+                  ¥{priceRange?.max.toLocaleString()}
                 </div>
                 <p className="price-note">基于品牌、型号、成色及平台历史数据估算</p>
               </div>
+
+              <SimilarInstruments 
+                brand={instrument.brand} 
+                model={instrument.model}
+                currentId={instrument.id}
+              />
 
               <button 
                 className={`favorite-btn ${isFavorite ? 'active' : ''}`}
                 onClick={toggleFavorite}
               >
                 <svg viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
-                  <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
                 </svg>
                 {isFavorite ? '已收藏' : '收藏'}
               </button>
             </div>
 
             <div className="seller-card">
-              <h3 className="seller-title">卖家信息</h3>
+              <h3 className="seller-title">
+                <span className="seller-icon">👤</span>
+                卖家信息
+              </h3>
               <div className="seller-info">
                 <div className="seller-avatar">{instrument.sellerName.charAt(0)}</div>
-                <div>
+                <div className="seller-details">
                   <div className="seller-name">{instrument.sellerName}</div>
                   <div className="seller-date">上架于 {instrument.createdAt}</div>
                 </div>
@@ -406,6 +597,10 @@ export default function Detail() {
                     />
                   </div>
                   <button type="submit" className="btn btn-primary contact-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="22" y1="2" x2="11" y2="13" />
+                      <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                    </svg>
                     联系卖家
                   </button>
                 </form>
