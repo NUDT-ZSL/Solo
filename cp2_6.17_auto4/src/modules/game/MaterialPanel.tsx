@@ -39,10 +39,12 @@ export default function MaterialPanel({ onOpenBook }: Props) {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(2, 1fr)',
-          gap: 10,
+          gridTemplateColumns: '60px 60px',
+          gridAutoRows: '80px',
+          gap: '12px 10px',
           flex: 1,
           alignContent: 'start',
+          justifyContent: 'center',
         }}
       >
         {MATERIALS.map((mat) => (
@@ -66,6 +68,7 @@ export default function MaterialPanel({ onOpenBook }: Props) {
               fontWeight: 'bold',
               transition: 'transform 0.25s ease, box-shadow 0.25s ease',
               boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+              boxSizing: 'border-box',
             }}
             onMouseEnter={(e) => {
               ;(e.currentTarget as HTMLDivElement).style.transform = 'scale(1.1)'

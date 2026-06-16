@@ -46,9 +46,21 @@ body {
 }
 
 @keyframes sparkle {
-  0% { opacity: 0; transform: scale(0.5) rotate(0deg); }
-  50% { opacity: 1; transform: scale(1) rotate(180deg); }
-  100% { opacity: 0; transform: scale(0.5) rotate(360deg); }
+  0% { opacity: 0; transform: scale(0.5) rotate(0deg) translateY(0); }
+  50% { opacity: 1; transform: scale(1) rotate(180deg) translateY(-20px); }
+  100% { opacity: 0; transform: scale(0.5) rotate(360deg) translateY(-40px); }
+}
+
+@keyframes driftLeft {
+  0% { opacity: 0; transform: translateX(0) translateY(0) scale(0.6); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-30px) translateY(-60px) scale(1.2); }
+}
+
+@keyframes driftRight {
+  0% { opacity: 0; transform: translateX(0) translateY(0) scale(0.6); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(30px) translateY(-60px) scale(1.2); }
 }
 
 @keyframes fadeIn {

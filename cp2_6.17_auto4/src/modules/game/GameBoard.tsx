@@ -19,7 +19,7 @@ interface Props {
 
 export default function GameBoard({ onOpenBook, onUnlockRecipe }: Props) {
   const [materials, setMaterials] = useState<string[]>([])
-  const [temperature, setTemperature] = useState(20)
+  const [temperature, setTemperature] = useState<number>(20)
   const [heating, setHeating] = useState(false)
   const [cooling, setCooling] = useState(false)
   const [stirring, setStirring] = useState(false)
@@ -43,11 +43,11 @@ export default function GameBoard({ onOpenBook, onUnlockRecipe }: Props) {
     let interval: number
     if (heating && !cooling) {
       interval = window.setInterval(() => {
-        setTemperature((t) => Math.min(t + 10, 1000))
+        setTemperature((t) => Math.round(Math.min(t + 10, 1000)))
       }, 1000)
     } else if (cooling && !heating) {
       interval = window.setInterval(() => {
-        setTemperature((t) => Math.max(t - 15, -100))
+        setTemperature((t) => Math.round(Math.max(t - 15, -100)))
       }, 1000)
     }
     return () => {
@@ -360,19 +360,39 @@ export default function GameBoard({ onOpenBook, onUnlockRecipe }: Props) {
 
       {reaction && (
         <div className="modal-overlay" onClick={() => setReaction(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            {Array.from({ length: 10 }).map((_, i) => (
-              <div
-                key={i}
-                className="particle"
-                style={{
-                  left: `${10 + (i * 9) % 90}%`,
-                  top: `${10 + (i * 13) % 80}%`,
-                  animationDelay: `${i * 0.15}s`,
-                  background: i % 2 === 0 ? '#ffd700' : '#b8860b',
-                }}
-              />
-            ))}
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: 400,
+              height: 300,
+              borderRadius: 16,
+              background: '#1e293b',
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+          >
+            {Array.from({ length: 12 }).map((_, i) => {
+              const isLeft = i < 6
+              return (
+                <div
+                  key={i}
+                  style={{
+                    position: 'absolute',
+                    width: 4 + (i % 3) * 2,
+                    height: 4 + (i % 3) * 2,
+                    borderRadius: '50%',
+                    background: i % 2 === 0 ? '#ffd700' : '#b8860b',
+                    left: isLeft ? `${8 + (i % 3) * 4}%` : `${82 + (i % 3) * 4}%`,
+                    top: `${20 + (i % 4) * 18}%`,
+                    boxShadow: `0 0 8px ${i % 2 === 0 ? '#ffd700' : '#b8860b'}`,
+                    animation: `${isLeft ? 'driftLeft' : 'driftRight'} 2.5s ease-in-out infinite`,
+                    animationDelay: `${i * 0.2}s`,
+                    pointerEvents: 'none',
+                  }}
+                />
+              )
+            })}
             <div
               style={{
                 fontSize: 36,
