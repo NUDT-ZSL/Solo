@@ -1,5 +1,0 @@
-{
-  "watch": ["src/backend/**/*.ts"],
-  "ext": "ts,json",
-  "ignore": ["src/**/*.spec.ts"]
-}
