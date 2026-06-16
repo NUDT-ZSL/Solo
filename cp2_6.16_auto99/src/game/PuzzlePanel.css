@@ -1,0 +1,234 @@
+.puzzle-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 10, 46, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(8px);
+}
+
+.puzzle-container {
+  position: relative;
+  background: linear-gradient(135deg, #1e1e2e 0%, #2d1b4e 100%);
+  border-radius: 16px;
+  padding: 40px;
+  box-shadow: 0 0 60px rgba(255, 215, 0, 0.15), inset 0 0 40px rgba(107, 79, 160, 0.1);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  max-width: 600px;
+  width: 90%;
+  transition: transform 0.5s ease-out;
+}
+
+.puzzle-close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: #e0e0e0;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 18px;
+  transition: all 0.2s ease;
+}
+
+.puzzle-close-btn:hover {
+  background: rgba(255, 71, 87, 0.3);
+  color: #ff4757;
+}
+
+.puzzle-title {
+  text-align: center;
+  font-size: 28px;
+  color: #ffd700;
+  margin-bottom: 8px;
+  text-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+}
+
+.puzzle-type {
+  text-align: center;
+  color: #9e7b56;
+  font-size: 14px;
+  margin-bottom: 40px;
+}
+
+.rune-circle {
+  position: relative;
+  width: 400px;
+  height: 400px;
+  margin: 0 auto 40px;
+}
+
+@media (max-width: 768px) {
+  .rune-circle {
+    width: 300px;
+    height: 300px;
+  }
+}
+
+.rune-btn {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 50px;
+  height: 50px;
+  margin: -25px 0 0 -25px;
+  background: rgba(45, 27, 78, 0.8);
+  border: 2px solid rgba(255, 215, 0, 0.3);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+}
+
+.rune-btn:hover:not(:disabled) {
+  transform: scale(1.2);
+  border-color: #ffd700;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+}
+
+.rune-btn.selected {
+  transform: translateY(4px);
+  border-color: #ffe066;
+  background: rgba(255, 224, 102, 0.15);
+}
+
+.rune-btn.correct {
+  border-color: #2ed573;
+  background: rgba(46, 213, 115, 0.2);
+  animation: correctPulse 0.5s ease-out;
+}
+
+.rune-btn.wrong {
+  border-color: #ff4757;
+  background: rgba(255, 71, 87, 0.2);
+}
+
+.rune-btn.shake {
+  animation: shake 0.3s ease-in-out;
+}
+
+@keyframes correctPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+  100% { transform: scale(1.15); }
+}
+
+.rune-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(107, 79, 160, 0.3) 0%, transparent 70%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sequence-dots {
+  display: flex;
+  gap: 12px;
+}
+
+.sequence-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #4a4a4a;
+  border: 2px solid #3a3a4a;
+  transition: all 0.3s ease;
+}
+
+.sequence-dot.filled {
+  background: #ffd700;
+  border-color: #ffe066;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.puzzle-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+
+.puzzle-btn {
+  padding: 12px 32px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.puzzle-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.reset-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e0e0e0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.reset-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.submit-btn {
+  background: linear-gradient(135deg, #ffd700 0%, #ffaa00 100%);
+  color: #1a0a2e;
+  box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+}
+
+.submit-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 215, 0, 0.4);
+}
+
+.puzzle-loading,
+.puzzle-error {
+  text-align: center;
+  padding: 60px 20px;
+  color: #999;
+  font-size: 18px;
+}
+
+.success-particles {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 101;
+}
+
+.particle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffd700;
+  box-shadow: 0 0 10px #ffd700;
+  animation: particleBurst 1s ease-out forwards;
+}
+
+@keyframes particleBurst {
+  0% {
+    transform: scale(0) translate(0, 0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) translate(calc((var(--random-x, 0) - 0.5) * 100px), calc((var(--random-y, 0) - 0.5) * 100px));
+    opacity: 0;
+  }
+}
