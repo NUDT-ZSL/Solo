@@ -1,0 +1,16 @@
+{
+  "videos": [],
+  "markers": [],
+  "presetLabels": [
+    { "name": "A-Roll", "color": "#e53935" },
+    { "name": "B-Roll", "color": "#d81b60" },
+    { "name": "采访", "color": "#8e24aa" },
+    { "name": "空镜", "color": "#5e35b1" },
+    { "name": "特效", "color": "#3949ab" },
+    { "name": "转场", "color": "#1e88e5" },
+    { "name": "字幕", "color": "#039be5" },
+    { "name": "音乐", "color": "#00acc1" },
+    { "name": "调色", "color": "#00897b" },
+    { "name": "其他", "color": "#43a047" }
+  ]
+}
