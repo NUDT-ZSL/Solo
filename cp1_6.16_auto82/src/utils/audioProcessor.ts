@@ -303,9 +303,20 @@ export const evaluatePronunciation = (
     time: i * 0.01
   }));
   
+  if (userMFCC.length === 0 || referenceMFCC.length === 0) {
+    return {
+      errors: [],
+      overallScore: 50,
+      userWaveform: normalizedUser,
+      referenceWaveform: normalizedUser,
+      phonemeScores: phonemes.map(p => ({ phoneme: p, score: 50 })),
+      duration: normalizedUser.length / sampleRate
+    };
+  }
+  
   const { path, distance } = dtwAlign(userMFCC, referenceMFCC);
   
-  const frameConfidence: number[] = new Array(userMFCC.length).fill(1);
+  const frameConfidence: number[] = new Array(userMFCC.length).fill(0);
   
   for (const [userIdx, refIdx] of path) {
     if (userIdx < userMFCC.length && refIdx < referenceMFCC.length) {
@@ -313,65 +324,153 @@ export const evaluatePronunciation = (
         userMFCC[userIdx].coefficients,
         referenceMFCC[refIdx].coefficients
       );
-      const maxDist = 5;
+      const maxDist = 8;
       const confidence = Math.max(0, Math.min(1, 1 - dist / maxDist));
-      frameConfidence[userIdx] = confidence;
+      if (confidence > frameConfidence[userIdx]) {
+        frameConfidence[userIdx] = confidence;
+      }
+    }
+  }
+  
+  for (let i = 0; i < frameConfidence.length; i++) {
+    if (frameConfidence[i] === 0) {
+      let left = i - 1;
+      let right = i + 1;
+      while (left >= 0 && frameConfidence[left] === 0) left--;
+      while (right < frameConfidence.length && frameConfidence[right] === 0) right++;
+      
+      const leftVal = left >= 0 ? frameConfidence[left] : 0.5;
+      const rightVal = right < frameConfidence.length ? frameConfidence[right] : 0.5;
+      const leftDist = i - left;
+      const rightDist = right - i;
+      frameConfidence[i] = (rightVal * leftDist + leftVal * rightDist) / (leftDist + rightDist);
+    }
+  }
+  
+  const userToRefMap: number[] = new Array(userMFCC.length).fill(-1);
+  const refToUserMap: number[] = new Array(referenceMFCC.length).fill(-1);
+  
+  for (const [userIdx, refIdx] of path) {
+    if (userIdx < userMFCC.length && refIdx < referenceMFCC.length) {
+      if (userToRefMap[userIdx] === -1) {
+        userToRefMap[userIdx] = refIdx;
+      }
+      if (refToUserMap[refIdx] === -1) {
+        refToUserMap[refIdx] = userIdx;
+      }
     }
   }
   
   const errors: PhonemeError[] = [];
   const phonemeScores: { phoneme: string; score: number }[] = [];
   
-  const phonemeDuration = userMFCC.length > 0 
-    ? (userMFCC[userMFCC.length - 1].time - userMFCC[0].time) / phonemes.length
+  const totalDuration = userMFCC.length > 0 
+    ? userMFCC[userMFCC.length - 1].time - userMFCC[0].time
     : 0.1;
+  const phonemeDuration = totalDuration / phonemes.length;
+  const startTimeOffset = userMFCC.length > 0 ? userMFCC[0].time : 0;
   
-  phonemes.forEach((phoneme, index) => {
-    const startTime = index * phonemeDuration;
-    const endTime = (index + 1) * phonemeDuration;
+  const refPhonemeDuration = referenceMFCC.length > 0
+    ? (referenceMFCC[referenceMFCC.length - 1].time - referenceMFCC[0].time) / phonemes.length
+    : 0.1;
+  const refStartTimeOffset = referenceMFCC.length > 0 ? referenceMFCC[0].time : 0;
+  
+  phonemes.forEach((phoneme, phonemeIndex) => {
+    const phonemeStartTime = startTimeOffset + phonemeIndex * phonemeDuration;
+    const phonemeEndTime = startTimeOffset + (phonemeIndex + 1) * phonemeDuration;
     
-    const startFrame = Math.floor(startTime / 0.01);
-    const endFrame = Math.ceil(endTime / 0.01);
+    const refPhonemeStartTime = refStartTimeOffset + phonemeIndex * refPhonemeDuration;
+    const refPhonemeEndTime = refStartTimeOffset + (phonemeIndex + 1) * refPhonemeDuration;
+    
+    const startFrame = Math.floor((phonemeStartTime - startTimeOffset) / 0.01);
+    const endFrame = Math.ceil((phonemeEndTime - startTimeOffset) / 0.01);
+    
+    const refStartFrame = Math.floor((refPhonemeStartTime - refStartTimeOffset) / 0.01);
+    const refEndFrame = Math.ceil((refPhonemeEndTime - refStartTimeOffset) / 0.01);
     
     let totalConfidence = 0;
     let frameCount = 0;
+    let worstFrame = -1;
+    let worstConfidence = 1;
     
     for (let i = startFrame; i < endFrame && i < frameConfidence.length; i++) {
       if (i >= 0) {
-        totalConfidence += frameConfidence[i];
+        const conf = frameConfidence[i];
+        totalConfidence += conf;
         frameCount++;
+        if (conf < worstConfidence) {
+          worstConfidence = conf;
+          worstFrame = i;
+        }
       }
     }
     
     const avgConfidence = frameCount > 0 ? totalConfidence / frameCount : 0.5;
-    const score = Math.round(avgConfidence * 100);
+    const score = Math.max(0, Math.min(100, Math.round(avgConfidence * 100)));
     
     phonemeScores.push({ phoneme, score });
     
     if (score < 70) {
-      const errorType = score < 50 ? 'consonant' : 'vowel';
+      let actualPhoneme = phoneme;
+      
+      const alignedRefFrames: number[] = [];
+      for (let i = startFrame; i < endFrame && i < userToRefMap.length; i++) {
+        if (userToRefMap[i] >= refStartFrame && userToRefMap[i] < refEndFrame) {
+          alignedRefFrames.push(userToRefMap[i]);
+        }
+      }
+      
+      if (alignedRefFrames.length === 0 && frameCount > 0) {
+        actualPhoneme = phoneme.slice(0, Math.max(1, Math.floor(phoneme.length * 0.5)));
+      } else if (alignedRefFrames.length < (refEndFrame - refStartFrame) * 0.3) {
+        actualPhoneme = phoneme.slice(0, Math.max(1, Math.floor(phoneme.length * 0.7)));
+      } else if (avgConfidence < 0.4) {
+        const firstChar = phoneme[0];
+        const midChar = phoneme[Math.floor(phoneme.length / 2)];
+        actualPhoneme = firstChar + (phoneme.length > 2 ? midChar : '');
+      }
+      
+      const errorTime = worstFrame >= 0 && worstFrame < userMFCC.length
+        ? userMFCC[worstFrame].time
+        : phonemeStartTime + phonemeDuration / 2;
+      
       errors.push({
-        time: startTime + phonemeDuration / 2,
+        time: errorTime,
         expected: phoneme,
-        actual: phoneme.split('').reverse().join(''),
-        suggestion: generateSuggestion(phoneme, phoneme, language),
+        actual: actualPhoneme,
+        suggestion: generateSuggestion(phoneme, actualPhoneme, language),
         confidence: avgConfidence
       });
     }
   });
   
-  const overallScore = Math.max(0, Math.min(100, Math.round(
-    85 - distance * 2 + Math.random() * 10
-  )));
+  const avgFrameConfidence = frameConfidence.reduce((a, b) => a + b, 0) / frameConfidence.length;
+  const lengthRatio = Math.min(userMFCC.length / referenceMFCC.length, referenceMFCC.length / userMFCC.length);
+  const pathEfficiency = path.length / Math.max(userMFCC.length, referenceMFCC.length);
+  const alignmentScore = Math.max(0, Math.min(1, 1 - Math.abs(1 - pathEfficiency) * 0.5));
+  
+  const baseScore = avgFrameConfidence * 0.6 + lengthRatio * 0.25 + alignmentScore * 0.15;
+  const overallScore = Math.max(0, Math.min(100, Math.round(baseScore * 100)));
   
   const referenceWaveform = new Float32Array(normalizedUser.length);
-  for (let i = 0; i < referenceWaveform.length; i++) {
+  const refSamplesPerUserSample = referenceMFCC.length / Math.max(1, userMFCC.length);
+  
+  for (let i = 0; i < normalizedUser.length; i++) {
+    const userFrameIdx = Math.floor((i / normalizedUser.length) * userMFCC.length);
+    const refFrameIdx = userToRefMap[userFrameIdx] >= 0 
+      ? userToRefMap[userFrameIdx] 
+      : Math.floor(userFrameIdx * refSamplesPerUserSample);
+    
     const t = i / sampleRate;
-    referenceWaveform[i] = Math.sin(2 * Math.PI * 200 * t) * 0.3 * 
-      (1 + 0.3 * Math.sin(t * 3));
+    const amplitudeModulation = refFrameIdx >= 0 && refFrameIdx < referenceFeatures.length
+      ? Math.abs(referenceFeatures[refFrameIdx][0]) * 0.5 + 0.2
+      : 0.3;
+    
+    referenceWaveform[i] = Math.sin(2 * Math.PI * 180 * t) * amplitudeModulation *
+      (0.7 + 0.3 * Math.sin(t * 2.5));
   }
   
-  const duration = userMFCC.length > 0 ? userMFCC[userMFCC.length - 1].time : 0;
+  const duration = totalDuration;
   
   return {
     errors,

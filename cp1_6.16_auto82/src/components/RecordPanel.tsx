@@ -30,7 +30,6 @@ function RecordPanel({
   const [waveformData, setWaveformData] = useState<Float32Array>(new Float32Array(100));
   const [recordedAudio, setRecordedAudio] = useState<Float32Array | null>(null);
   const [isPlayingReference, setIsPlayingReference] = useState(false);
-  const [isHoveringRecord, setIsHoveringRecord] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -402,10 +401,7 @@ function RecordPanel({
               {isRecording ? '正在录音...' : isProcessing ? '评测中...' : '波形预览'}
             </h3>
             <button
-              style={{
-                ...styles.playButton,
-                ...((!selectedSample || isRecording) ? styles.playButtonDisabled : {})
-              }}
+              className="play-button"
               onClick={playReference}
               disabled={!selectedSample || isRecording}
             >
@@ -437,14 +433,7 @@ function RecordPanel({
 
         <div style={styles.recordControls}>
           <button
-            style={{
-              ...styles.recordButton,
-              ...(isHoveringRecord ? styles.recordButtonHover : {}),
-              ...(isRecording ? styles.recordButtonActive : {}),
-              ...((isProcessing || !selectedSample) ? styles.recordButtonDisabled : {})
-            }}
-            onMouseEnter={() => setIsHoveringRecord(true)}
-            onMouseLeave={() => setIsHoveringRecord(false)}
+            className={`record-button ${isRecording ? 'record-button-active' : ''}`}
             onClick={isRecording ? stopRecording : startRecording}
             disabled={isProcessing || !selectedSample}
           >

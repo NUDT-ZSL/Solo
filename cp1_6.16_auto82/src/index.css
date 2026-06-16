@@ -61,3 +61,65 @@ body {
     width: 0;
   }
 }
+
+.record-button {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background-color: #E74C3C;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4);
+  transition: all 0.3s ease-in-out;
+}
+
+.record-button:hover:not(:disabled) {
+  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(231, 76, 60, 0.5);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.record-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.record-button-active {
+  background-color: #C0392B !important;
+  animation: pulse 1.5s ease-in-out infinite !important;
+}
+
+.play-button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background-color: #3498DB;
+  color: white;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.play-button:hover:not(:disabled) {
+  background-color: #2980B9;
+}
+
+.play-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.waveform-canvas {
+  width: 100%;
+  display: block;
+  border-radius: 10px;
+  cursor: grab;
+}
+
+.waveform-canvas:active {
+  cursor: grabbing;
+}

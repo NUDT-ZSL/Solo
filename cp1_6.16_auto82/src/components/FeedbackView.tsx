@@ -238,17 +238,17 @@ function FeedbackView({ result, onRetry, onBack }: FeedbackViewProps) {
             ...styles.waveformContainer,
             cursor: isDragging ? 'grabbing' : 'grab'
           }}
-          onWheel={handleWheel}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
         >
           <canvas
             ref={canvasRef}
             width={800}
             height={180}
-            style={styles.waveformCanvas}
+            className="waveform-canvas"
+            onWheel={handleWheel}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
           />
         </div>
         <p style={styles.waveformHint}>

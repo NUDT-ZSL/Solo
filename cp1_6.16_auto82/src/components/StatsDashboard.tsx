@@ -19,6 +19,8 @@ function StatsDashboard({ userId }: StatsDashboardProps) {
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const pointPathsRef = useRef<Path2D[]>([]);
+  const pointsRef = useRef<{ x: number; y: number }[]>([]);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -86,6 +88,7 @@ function StatsDashboard({ userId }: StatsDashboardProps) {
         y: getY(score)
       });
     });
+    pointsRef.current = points;
 
     const gradient = ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
     gradient.addColorStop(0, 'rgba(46, 204, 113, 0.3)');
@@ -123,9 +126,14 @@ function StatsDashboard({ userId }: StatsDashboardProps) {
     });
     ctx.stroke();
 
+    pointPathsRef.current = [];
     points.forEach((point, i) => {
       const isHovered = hoveredIndex === i;
       const radius = isHovered ? 8 : 5;
+
+      const pointPath = new Path2D();
+      pointPath.arc(point.x, point.y, radius + 5, 0, Math.PI * 2);
+      pointPathsRef.current.push(pointPath);
 
       ctx.beginPath();
       ctx.arc(point.x, point.y, radius + 3, 0, Math.PI * 2);
