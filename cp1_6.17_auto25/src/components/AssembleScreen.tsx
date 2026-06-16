@@ -179,9 +179,8 @@ export default function AssembleScreen({
     setDragOverType(null);
   };
 
-  const handlePartClick = (part: Part) => {
-    playClickSound();
-    setPart(part.type, part);
+  const handlePartClick = () => {
+    // 点击不做任何操作，必须使用拖拽
   };
 
   const handleSlotClick = (slotType: PartType) => {
@@ -289,14 +288,16 @@ export default function AssembleScreen({
                   key={part.id}
                   draggable
                   onDragStart={(e) => handleDragStart(e, part)}
-                  onClick={() => handlePartClick(part)}
+                  onClick={handlePartClick}
+                  className="assemble-part-tile"
+                  data-selected={isSelected}
                   style={{
                     width: '100%',
                     aspectRatio: '1 / 1',
                     maxWidth: 128,
                     maxHeight: 128,
                     backgroundColor: isSelected ? '#FFE0B2' : '#37474F',
-                    border: `1px solid ${isSelected ? '#FF9800' : '#263238'}`,
+                    border: `1px solid #1A1A2E`,
                     borderRadius: 4,
                     cursor: 'grab',
                     display: 'flex',
@@ -304,7 +305,7 @@ export default function AssembleScreen({
                     alignItems: 'center',
                     justifyContent: 'center',
                     padding: 8,
-                    transition: 'all 0.2s ease',
+                    transition: 'background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease',
                     userSelect: 'none',
                     position: 'relative',
                   }}
@@ -312,7 +313,6 @@ export default function AssembleScreen({
                     if (!isSelected) {
                       e.currentTarget.style.backgroundColor = '#FFE0B2';
                       e.currentTarget.style.transform = 'scale(1.1)';
-                      e.currentTarget.style.zIndex = '10';
                       e.currentTarget.style.boxShadow = '0 4px 12px rgba(255, 224, 178, 0.4)';
                     }
                   }}
@@ -320,9 +320,13 @@ export default function AssembleScreen({
                     if (!isSelected) {
                       e.currentTarget.style.backgroundColor = '#37474F';
                       e.currentTarget.style.transform = 'scale(1)';
-                      e.currentTarget.style.zIndex = '1';
                       e.currentTarget.style.boxShadow = 'none';
                     }
+                  }}
+                  onDragEnd={(e) => {
+                    e.currentTarget.style.backgroundColor = isSelected ? '#FFE0B2' : '#37474F';
+                    e.currentTarget.style.transform = 'scale(1)';
+                    e.currentTarget.style.boxShadow = 'none';
                   }}
                 >
                   <div style={{

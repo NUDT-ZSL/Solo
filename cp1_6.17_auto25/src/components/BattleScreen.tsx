@@ -504,16 +504,16 @@ function BattleMonsterCard({ monster, isActive, isShaking, isAttacking, isLeft, 
                 className="damage-float"
                 style={{
                   position: 'absolute',
-                  top: -10,
+                  top: -20,
                   left: '50%',
-                  transform: 'translateX(-50%)',
                   fontFamily: "'Press Start 2P', cursive",
                   fontSize: dp.isCrit ? 24 : 18,
                   color: dp.isCrit ? '#FFEB3B' : '#FF1744',
-                  textShadow: '2px 2px 0 #000',
+                  textShadow: '2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000',
                   fontWeight: 'bold',
                   zIndex: 10,
                   whiteSpace: 'nowrap',
+                  pointerEvents: 'none',
                 }}
               >
                 -{dp.value}

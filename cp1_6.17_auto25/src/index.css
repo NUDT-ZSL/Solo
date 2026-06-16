@@ -19,6 +19,7 @@ body {
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-3px); }
+  50% { transform: translateX(0); }
   75% { transform: translateX(3px); }
 }
 
@@ -27,8 +28,20 @@ body {
 }
 
 @keyframes damageFloat {
-  0% { opacity: 1; transform: translateY(0); color: #FF1744; }
-  100% { opacity: 0; transform: translateY(-40px); color: rgba(255, 23, 68, 0); }
+  0% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    color: #FF1744;
+  }
+  50% {
+    opacity: 0.8;
+    color: #FF5252;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-50px);
+    color: rgba(255, 23, 68, 0);
+  }
 }
 
 .damage-float {
