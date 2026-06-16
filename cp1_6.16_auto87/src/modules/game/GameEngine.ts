@@ -2,6 +2,16 @@ export type TerrainType = 'plain' | 'forest' | 'river' | 'highland'
 export type UnitType = 'infantry' | 'archer' | 'cavalry'
 export type PlayerSide = 'player' | 'enemy'
 
+export interface TerrainEffect {
+  moveCostMultiplier: number
+  attackMultiplier: number
+  dodgeBonus: number
+  hitRateModifier: number
+  rangeBonus: number
+  moveRangeBonus: number
+  description: string
+}
+
 export interface HexCoord {
   q: number
   r: number
@@ -75,6 +85,25 @@ const UNIT_STATS: Record<UnitType, { hp: number; attack: number; range: number; 
 const GRID_SIZE = 10
 let logIdCounter = 0
 let unitIdCounter = 0
+
+const BASE_TERRAIN_EFFECTS: Record<TerrainType, { moveCost: number; attackMod: number; dodgeBonus: number; hitMod: number }> = {
+  plain: { moveCost: 1, attackMod: 1, dodgeBonus: 0, hitMod: 0 },
+  forest: { moveCost: 1, attackMod: 0.8, dodgeBonus: 0, hitMod: 0 },
+  river: { moveCost: 2, attackMod: 1, dodgeBonus: 0, hitMod: -0.2 },
+  highland: { moveCost: 1, attackMod: 1.2, dodgeBonus: 0, hitMod: 0 }
+}
+
+const UNIT_TERRAIN_BONUSES: Record<UnitType, Partial<Record<TerrainType, { moveCostMod: number; attackMod: number; dodgeBonus: number; hitMod: number; rangeBonus: number; moveRangeBonus: number }>>> = {
+  infantry: {
+    forest: { moveCostMod: 0.5, attackMod: 1, dodgeBonus: 0.1, hitMod: 0, rangeBonus: 0, moveRangeBonus: 0 }
+  },
+  archer: {
+    highland: { moveCostMod: 1, attackMod: 1.1, dodgeBonus: 0, hitMod: 0, rangeBonus: 1, moveRangeBonus: 0 }
+  },
+  cavalry: {
+    plain: { moveCostMod: 1, attackMod: 1.15, dodgeBonus: 0, hitMod: 0, rangeBonus: 0, moveRangeBonus: 1 }
+  }
+}
 
 export class GameEngine {
   private state: GameState
@@ -175,6 +204,64 @@ export class GameEngine {
     return TERRAIN_COLORS[terrain]
   }
 
+  getTerrainEffect(terrain: TerrainType, unitType: UnitType): TerrainEffect {
+    const base = BASE_TERRAIN_EFFECTS[terrain]
+    const bonus = UNIT_TERRAIN_BONUSES[unitType]?.[terrain]
+
+    const moveCostMultiplier = base.moveCost * (bonus?.moveCostMod ?? 1)
+    const attackMultiplier = base.attackMod * (bonus?.attackMod ?? 1)
+    const dodgeBonus = base.dodgeBonus + (bonus?.dodgeBonus ?? 0)
+    const hitRateModifier = base.hitMod + (bonus?.hitMod ?? 0)
+    const rangeBonus = bonus?.rangeBonus ?? 0
+    const moveRangeBonus = bonus?.moveRangeBonus ?? 0
+
+    const parts: string[] = []
+    if (moveCostMultiplier !== 1) {
+      parts.push(`移动消耗${moveCostMultiplier < 1 ? '减半' : '×' + moveCostMultiplier}`)
+    }
+    if (attackMultiplier !== 1) {
+      const pct = Math.round((attackMultiplier - 1) * 100)
+      parts.push(`攻击力${pct > 0 ? '+' : ''}${pct}%`)
+    }
+    if (dodgeBonus > 0) parts.push(`闪避+${Math.round(dodgeBonus * 100)}%`)
+    if (hitRateModifier !== 0) {
+      parts.push(`命中率${hitRateModifier > 0 ? '+' : ''}${Math.round(hitRateModifier * 100)}%`)
+    }
+    if (rangeBonus > 0) parts.push(`射程+${rangeBonus}`)
+    if (moveRangeBonus > 0) parts.push(`移动力+${moveRangeBonus}`)
+    const description = parts.length > 0 ? parts.join('，') : '无特殊效果'
+
+    return {
+      moveCostMultiplier,
+      attackMultiplier,
+      dodgeBonus,
+      hitRateModifier,
+      rangeBonus,
+      moveRangeBonus,
+      description
+    }
+  }
+
+  getEffectiveMoveRange(unit: Unit): number {
+    const currentTerrain = this.state.grid[unit.position.r]?.[unit.position.q]?.terrain
+    let moveRange = unit.moveRange
+    if (currentTerrain) {
+      const effect = this.getTerrainEffect(currentTerrain, unit.type)
+      moveRange += effect.moveRangeBonus
+    }
+    return moveRange
+  }
+
+  getEffectiveRange(unit: Unit): number {
+    const currentTerrain = this.state.grid[unit.position.r]?.[unit.position.q]?.terrain
+    let range = unit.range
+    if (currentTerrain) {
+      const effect = this.getTerrainEffect(currentTerrain, unit.type)
+      range += effect.rangeBonus
+    }
+    return range
+  }
+
   hexToPixel(coord: HexCoord, size: number): { x: number; y: number } {
     const x = size * (3 / 2 * coord.q)
     const y = size * (Math.sqrt(3) / 2 * coord.q + Math.sqrt(3) * coord.r)
@@ -197,30 +284,43 @@ export class GameEngine {
 
   getMovableRange(unit: Unit): HexCoord[] {
     if (unit.hasMoved) return []
+
+    const effectiveMoveRange = this.getEffectiveMoveRange(unit)
     const result: HexCoord[] = []
-    const visited = new Set<string>()
-    const queue: { coord: HexCoord; distance: number }[] = [{ coord: unit.position, distance: 0 }]
+    const bestCost = new Map<string, number>()
+    const startKey = `${unit.position.q},${unit.position.r}`
+    bestCost.set(startKey, 0)
+
+    const queue: { coord: HexCoord; cost: number }[] = [{ coord: unit.position, cost: 0 }]
 
     while (queue.length > 0) {
+      queue.sort((a, b) => a.cost - b.cost)
       const current = queue.shift()!
       const key = `${current.coord.q},${current.coord.r}`
-      if (visited.has(key)) continue
-      visited.add(key)
 
-      if (current.distance > 0) {
+      const existingCost = bestCost.get(key)
+      if (existingCost !== undefined && current.cost > existingCost) continue
+
+      if (current.cost > 0) {
         const cell = this.state.grid[current.coord.r][current.coord.q]
         if (!cell.unit && cell.terrain !== 'river') {
           result.push(current.coord)
         }
       }
 
-      if (current.distance < unit.moveRange) {
+      if (current.cost < effectiveMoveRange) {
         this.getHexNeighbors(current.coord).forEach(neighbor => {
+          const nCell = this.state.grid[neighbor.r][neighbor.q]
+          const terrainEffect = this.getTerrainEffect(nCell.terrain, unit.type)
+          const moveCost = terrainEffect.moveCostMultiplier
+
+          const newCost = current.cost + moveCost
           const nKey = `${neighbor.q},${neighbor.r}`
-          if (!visited.has(nKey)) {
-            const nCell = this.state.grid[neighbor.r][neighbor.q]
-            const extraCost = nCell.terrain === 'forest' ? 1 : 0
-            queue.push({ coord: neighbor, distance: current.distance + 1 + extraCost })
+          const prevCost = bestCost.get(nKey)
+
+          if (newCost <= effectiveMoveRange && (prevCost === undefined || newCost < prevCost)) {
+            bestCost.set(nKey, newCost)
+            queue.push({ coord: neighbor, cost: newCost })
           }
         })
       }
@@ -231,12 +331,13 @@ export class GameEngine {
 
   getAttackableRange(unit: Unit): HexCoord[] {
     if (unit.hasAttacked) return []
+    const effectiveRange = this.getEffectiveRange(unit)
     const result: HexCoord[] = []
     for (let r = 0; r < GRID_SIZE; r++) {
       for (let q = 0; q < GRID_SIZE; q++) {
         const target = { q, r }
         const dist = this.hexDistance(unit.position, target)
-        if (dist > 0 && dist <= unit.range) {
+        if (dist > 0 && dist <= effectiveRange) {
           const cell = this.state.grid[r][q]
           if (cell.unit && cell.unit.side !== unit.side) {
             result.push(target)
@@ -265,27 +366,60 @@ export class GameEngine {
     return true
   }
 
-  attackUnit(attackerId: string, targetId: string): { damage: number; killed: boolean } | null {
+  attackUnit(attackerId: string, targetId: string): { damage: number; killed: boolean; dodged: boolean; missReason: string } | null {
     const attacker = this.state.units.find(u => u.id === attackerId)
     const target = this.state.units.find(u => u.id === targetId)
     if (!attacker || !target || attacker.hasAttacked) return null
     if (attacker.side === target.side) return null
 
+    const effectiveRange = this.getEffectiveRange(attacker)
     const dist = this.hexDistance(attacker.position, target.position)
-    if (dist > attacker.range) return null
+    if (dist > effectiveRange) return null
 
     let damage = attacker.attack
+
+    const attackerTerrain = this.state.grid[attacker.position.r][attacker.position.q].terrain
+    const attackerTerrainEffect = this.getTerrainEffect(attackerTerrain, attacker.type)
+    damage = Math.floor(damage * attackerTerrainEffect.attackMultiplier)
+
+    const targetTerrain = this.state.grid[target.position.r][target.position.q].terrain
+    const targetTerrainEffect = this.getTerrainEffect(targetTerrain, target.type)
+
+    let hitRate = 1.0
     const hasAmbush = target.statusEffects.some(e => e.type === 'ambush')
-    if (hasAmbush && Math.random() < 0.5) {
-      this.addLog(`${this.getUnitName(target)} 闪避了 ${this.getUnitName(attacker)} 的攻击！`)
-      attacker.hasAttacked = true
-      return { damage: 0, killed: false }
+    const ambushDodgeChance = hasAmbush ? 0.5 : 0
+    const terrainDodgeBonus = targetTerrainEffect.dodgeBonus
+    const totalDodgeChance = ambushDodgeChance + terrainDodgeBonus
+
+    if (attackerTerrainEffect.hitRateModifier !== 0) {
+      hitRate += attackerTerrainEffect.hitRateModifier
+    }
+    if (targetTerrain === 'river') {
+      const riverHitMod = this.getTerrainEffect('river', attacker.type).hitRateModifier
+      hitRate += riverHitMod
     }
 
-    const attackerCell = this.state.grid[attacker.position.r][attacker.position.q]
-    if (attackerCell.terrain === 'highland') damage = Math.floor(damage * 1.2)
-    const targetCell = this.state.grid[target.position.r][target.position.q]
-    if (targetCell.terrain === 'forest') damage = Math.floor(damage * 0.8)
+    hitRate = Math.max(0.1, Math.min(1.0, hitRate))
+
+    if (Math.random() < totalDodgeChance) {
+      let dodgeReason = ''
+      if (terrainDodgeBonus > 0 && hasAmbush) {
+        dodgeReason = '伏兵+地形'
+      } else if (terrainDodgeBonus > 0) {
+        dodgeReason = '地形闪避'
+      } else {
+        dodgeReason = '伏兵'
+      }
+      this.addLog(`${this.getUnitName(target)} 借${dodgeReason}闪避了 ${this.getUnitName(attacker)} 的攻击！`)
+      attacker.hasAttacked = true
+      return { damage: 0, killed: false, dodged: true, missReason: dodgeReason }
+    }
+
+    if (Math.random() > hitRate) {
+      this.addLog(`${this.getUnitName(attacker)} 的攻击因地形影响未能命中 ${this.getUnitName(target)}！`)
+      attacker.hasAttacked = true
+      return { damage: 0, killed: false, dodged: false, missReason: '未命中' }
+    }
 
     target.hp = Math.max(0, target.hp - damage)
     attacker.hasAttacked = true
@@ -301,7 +435,7 @@ export class GameEngine {
       this.checkWinCondition()
     }
 
-    return { damage, killed }
+    return { damage, killed, dodged: false, missReason: '' }
   }
 
   private removeUnit(unit: Unit): void {
@@ -393,14 +527,15 @@ export class GameEngine {
         }
       })
 
-      const target = closestPlayer
-      if (!target) return
+      if (!closestPlayer) return
+      const target: Unit = closestPlayer
 
-      if (minDist <= enemy.range && !enemy.hasAttacked) {
+      const effectiveRange = this.getEffectiveRange(enemy)
+      if (minDist <= effectiveRange && !enemy.hasAttacked) {
         this.attackUnit(enemy.id, target.id)
       }
 
-      if (!enemy.hasMoved && minDist > enemy.range) {
+      if (!enemy.hasMoved && minDist > effectiveRange) {
         const movable = this.getMovableRange(enemy)
         if (movable.length > 0) {
           let bestMove = movable[0]
@@ -415,7 +550,7 @@ export class GameEngine {
           this.moveUnit(enemy.id, bestMove)
 
           const newDist = this.hexDistance(bestMove, target.position)
-          if (newDist <= enemy.range && !enemy.hasAttacked) {
+          if (newDist <= effectiveRange && !enemy.hasAttacked) {
             this.attackUnit(enemy.id, target.id)
           }
         }

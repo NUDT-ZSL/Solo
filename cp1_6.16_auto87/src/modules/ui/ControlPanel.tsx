@@ -59,19 +59,19 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           <h3>地形图例</h3>
           <div className="legend-item">
             <span className="legend-color" style={{ background: '#8FBC8F' }}></span>
-            <span>平原</span>
+            <span>平原 — 骑兵：攻击+15%，移动力+1</span>
           </div>
           <div className="legend-item">
             <span className="legend-color" style={{ background: '#2E8B57' }}></span>
-            <span>森林（防御+20%，移动消耗+1）</span>
+            <span>森林 — 步兵：移动消耗减半，闪避+10%；其他：攻击-20%</span>
           </div>
           <div className="legend-item">
             <span className="legend-color" style={{ background: '#4682B4' }}></span>
-            <span>河流（不可通行）</span>
+            <span>河流 — 不可通行，命中率-20%</span>
           </div>
           <div className="legend-item">
             <span className="legend-color" style={{ background: '#D2B48C' }}></span>
-            <span>高地（攻击+20%）</span>
+            <span>高地 — 弓箭手：射程+1，攻击+10%；其他：攻击+20%</span>
           </div>
         </div>
       </div>

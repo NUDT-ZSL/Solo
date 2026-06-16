@@ -4,7 +4,9 @@ import {
   HexCoord,
   Unit,
   HexCell,
-  UnitType
+  UnitType,
+  TerrainType,
+  TerrainEffect
 } from '../game/GameEngine'
 
 interface BattleFieldProps {
@@ -48,6 +50,7 @@ const BattleField: React.FC<BattleFieldProps> = ({
   const [attackEffects, setAttackEffects] = useState<AttackEffect[]>([])
   const [animatingUnits, setAnimatingUnits] = useState<Record<string, { fromX: number; fromY: number; toX: number; toY: number }>>({})
   const [newlyDeployed, setNewlyDeployed] = useState<Set<string>>(new Set())
+  const [hoveredCell, setHoveredCell] = useState<HexCoord | null>(null)
 
   const HEX_SIZE = 36
   const state = engine.getState()
@@ -174,6 +177,20 @@ const BattleField: React.FC<BattleFieldProps> = ({
             `-${result.damage}`,
             '#FF4444'
           )
+        } else if (result.dodged) {
+          addFloatingText(
+            targetPos.x + HEX_SIZE,
+            targetPos.y + HEX_SIZE - 10,
+            '闪避!',
+            '#3498DB'
+          )
+        } else if (result.missReason === '未命中') {
+          addFloatingText(
+            targetPos.x + HEX_SIZE,
+            targetPos.y + HEX_SIZE - 10,
+            '未命中',
+            '#999999'
+          )
         }
         onStateChange()
       }
@@ -206,6 +223,26 @@ const BattleField: React.FC<BattleFieldProps> = ({
 
   const getUnitColor = (type: UnitType): string => {
     return type === 'infantry' ? '#E74C3C' : type === 'archer' ? '#3498DB' : '#F39C12'
+  }
+
+  const getTerrainName = (terrain: TerrainType): string => {
+    const names: Record<TerrainType, string> = {
+      plain: '平原',
+      forest: '森林',
+      river: '河流',
+      highland: '高地'
+    }
+    return names[terrain]
+  }
+
+  const getTerrainTooltipInfo = (cell: HexCell): { terrainName: string; effect: TerrainEffect; unitTypeName: string } | null => {
+    if (!selectedUnit) return null
+    const effect = engine.getTerrainEffect(cell.terrain, selectedUnit.type)
+    return {
+      terrainName: getTerrainName(cell.terrain),
+      effect,
+      unitTypeName: engine.getUnitTypeName(selectedUnit.type)
+    }
   }
 
   const renderUnit = (unit: Unit, pixelX: number, pixelY: number) => {
@@ -367,6 +404,8 @@ const BattleField: React.FC<BattleFieldProps> = ({
                 <g
                   key={`${q}-${r}`}
                   onClick={(e) => { e.stopPropagation(); handleCellClick(cell) }}
+                  onMouseEnter={() => setHoveredCell({ q, r })}
+                  onMouseLeave={() => setHoveredCell(null)}
                   style={{ cursor: 'pointer' }}
                 >
                   <path
@@ -493,6 +532,76 @@ const BattleField: React.FC<BattleFieldProps> = ({
           ))}
         </g>
       </svg>
+
+      {hoveredCell && (() => {
+        const cell = state.grid[hoveredCell.r]?.[hoveredCell.q]
+        if (!cell) return null
+        const tooltipInfo = getTerrainTooltipInfo(cell)
+        if (!tooltipInfo) return null
+        const pos = engine.hexToPixel(hoveredCell, HEX_SIZE)
+
+        const effectLines: { label: string; value: string; isPositive: boolean }[] = []
+
+        const e = tooltipInfo.effect
+        if (e.moveCostMultiplier !== 1) {
+          const val = e.moveCostMultiplier < 1 ? `×${e.moveCostMultiplier}` : `×${e.moveCostMultiplier}`
+          effectLines.push({ label: '移动消耗', value: val, isPositive: e.moveCostMultiplier < 1 })
+        }
+        if (e.attackMultiplier !== 1) {
+          const pct = Math.round((e.attackMultiplier - 1) * 100)
+          effectLines.push({ label: '攻击力', value: `${pct > 0 ? '+' : ''}${pct}%`, isPositive: pct > 0 })
+        }
+        if (e.dodgeBonus > 0) {
+          effectLines.push({ label: '闪避率', value: `+${Math.round(e.dodgeBonus * 100)}%`, isPositive: true })
+        }
+        if (e.hitRateModifier !== 0) {
+          const pct = Math.round(e.hitRateModifier * 100)
+          effectLines.push({ label: '命中率', value: `${pct > 0 ? '+' : ''}${pct}%`, isPositive: pct > 0 })
+        }
+        if (e.rangeBonus > 0) {
+          effectLines.push({ label: '射程', value: `+${e.rangeBonus}`, isPositive: true })
+        }
+        if (e.moveRangeBonus > 0) {
+          effectLines.push({ label: '移动力', value: `+${e.moveRangeBonus}`, isPositive: true })
+        }
+
+        return (
+          <div
+            className="terrain-tooltip"
+            style={{
+              position: 'absolute',
+              left: Math.min(pos.x + 20, (gridWidth || 700) - 180),
+              top: Math.max(pos.y - 10, 10),
+              background: 'rgba(44, 30, 20, 0.95)',
+              border: '2px solid #8B7355',
+              borderRadius: '8px',
+              padding: '10px 14px',
+              zIndex: 50,
+              pointerEvents: 'none',
+              minWidth: '160px'
+            }}
+          >
+            <div className="terrain-tooltip-title" style={{ color: '#FFD700', fontSize: '14px', fontWeight: 'bold', marginBottom: '6px', letterSpacing: '1px' }}>
+              {tooltipInfo.terrainName}
+            </div>
+            <div className="terrain-tooltip-unit" style={{ color: '#F5E6D3', fontSize: '12px', marginBottom: '8px', opacity: 0.8 }}>
+              对{tooltipInfo.unitTypeName}的影响：
+            </div>
+            {effectLines.length === 0 ? (
+              <div style={{ color: '#999', fontSize: '12px', fontStyle: 'italic' }}>无特殊效果</div>
+            ) : (
+              effectLines.map((line, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px', fontSize: '12px' }}>
+                  <span style={{ color: '#F5E6D3', opacity: 0.9 }}>{line.label}</span>
+                  <span style={{ color: line.isPositive ? '#2ECC71' : '#E74C3C', fontWeight: 'bold' }}>
+                    {line.value}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        )
+      })()}
 
       {showDeployMenu && (() => {
         const pos = engine.hexToPixel(showDeployMenu, HEX_SIZE)
