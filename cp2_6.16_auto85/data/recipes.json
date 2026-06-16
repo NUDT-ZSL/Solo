@@ -1,0 +1,101 @@
+[
+  {
+    "id": "recipe-1",
+    "name": "番茄炒蛋",
+    "description": "家常经典，酸甜可口的下饭菜",
+    "cookTime": 15,
+    "cuisine": "chinese",
+    "ingredients": [
+      { "id": "ing-1", "name": "番茄", "quantity": "2", "unit": "个" },
+      { "id": "ing-2", "name": "鸡蛋", "quantity": "3", "unit": "个" },
+      { "id": "ing-3", "name": "葱花", "quantity": "适量", "unit": "克" },
+      { "id": "ing-4", "name": "盐", "quantity": "少许", "unit": "克" },
+      { "id": "ing-5", "name": "白糖", "quantity": "1", "unit": "勺" }
+    ],
+    "steps": [
+      { "id": "step-1", "text": "番茄洗净切块，鸡蛋打散加少许盐搅匀。" },
+      { "id": "step-2", "text": "热锅倒油，倒入蛋液炒至八分熟盛出。" },
+      { "id": "step-3", "text": "锅中再倒少许油，放入番茄块翻炒出汁。" },
+      { "id": "step-4", "text": "加入白糖和盐调味，倒入炒好的鸡蛋翻炒均匀。" },
+      { "id": "step-5", "text": "撒上葱花即可出锅。" }
+    ],
+    "createdAt": "2024-01-15T10:30:00.000Z",
+    "updatedAt": "2024-01-20T14:20:00.000Z"
+  },
+  {
+    "id": "recipe-2",
+    "name": "日式照烧鸡腿",
+    "description": "甜咸交织的日式经典，配米饭绝佳",
+    "cookTime": 40,
+    "cuisine": "japanese",
+    "ingredients": [
+      { "id": "ing-6", "name": "鸡腿肉", "quantity": "2", "unit": "块" },
+      { "id": "ing-7", "name": "酱油", "quantity": "3", "unit": "勺" },
+      { "id": "ing-8", "name": "味醂", "quantity": "2", "unit": "勺" },
+      { "id": "ing-9", "name": "清酒", "quantity": "1", "unit": "勺" },
+      { "id": "ing-10", "name": "白糖", "quantity": "1", "unit": "勺" },
+      { "id": "ing-11", "name": "姜片", "quantity": "3", "unit": "片" }
+    ],
+    "steps": [
+      { "id": "step-6", "text": "鸡腿肉用厨房纸吸干水分，皮朝下放入平底锅。" },
+      { "id": "step-7", "text": "中小火煎至两面金黄，逼出油脂。" },
+      { "id": "step-8", "text": "将酱油、味醂、清酒、白糖混合调成照烧汁。" },
+      { "id": "step-9", "text": "倒入照烧汁和姜片，小火收汁至浓稠。" },
+      { "id": "step-10", "text": "切片装盘，淋上剩余酱汁即可。" }
+    ],
+    "createdAt": "2024-02-01T09:00:00.000Z",
+    "updatedAt": "2024-02-10T16:45:00.000Z"
+  },
+  {
+    "id": "recipe-3",
+    "name": "奶油蘑菇意面",
+    "description": "浓郁奶香搭配鲜美蘑菇，西式经典",
+    "cookTime": 25,
+    "cuisine": "western",
+    "ingredients": [
+      { "id": "ing-12", "name": "意大利面", "quantity": "200", "unit": "克" },
+      { "id": "ing-13", "name": "口蘑", "quantity": "150", "unit": "克" },
+      { "id": "ing-14", "name": "淡奶油", "quantity": "150", "unit": "毫升" },
+      { "id": "ing-15", "name": "大蒜", "quantity": "2", "unit": "瓣" },
+      { "id": "ing-16", "name": "黄油", "quantity": "20", "unit": "克" },
+      { "id": "ing-17", "name": "帕玛森芝士", "quantity": "30", "unit": "克" },
+      { "id": "ing-18", "name": "黑胡椒", "quantity": "少许", "unit": "克" }
+    ],
+    "steps": [
+      { "id": "step-11", "text": "锅中加水煮沸，加盐，放入意面煮至八分熟。" },
+      { "id": "step-12", "text": "蘑菇切片，大蒜切末。" },
+      { "id": "step-13", "text": "平底锅中火融化黄油，炒香蒜末。" },
+      { "id": "step-14", "text": "加入蘑菇片炒至金黄出水。" },
+      { "id": "step-15", "text": "倒入淡奶油，小火煮至微沸。" },
+      { "id": "step-16", "text": "加入煮好的意面和帕玛森芝士，翻拌均匀，撒黑胡椒即可。" }
+    ],
+    "createdAt": "2024-02-20T11:30:00.000Z",
+    "updatedAt": "2024-03-05T08:15:00.000Z"
+  },
+  {
+    "id": "recipe-4",
+    "name": "泰式冬阴功汤",
+    "description": "酸辣鲜香的异域风味，开胃暖身",
+    "cookTime": 30,
+    "cuisine": "fusion",
+    "ingredients": [
+      { "id": "ing-19", "name": "大虾", "quantity": "8", "unit": "只" },
+      { "id": "ing-20", "name": "香茅", "quantity": "2", "unit": "根" },
+      { "id": "ing-21", "name": "柠檬叶", "quantity": "5", "unit": "片" },
+      { "id": "ing-22", "name": "南姜", "quantity": "3", "unit": "片" },
+      { "id": "ing-23", "name": "冬阴功酱", "quantity": "2", "unit": "勺" },
+      { "id": "ing-24", "name": "椰浆", "quantity": "100", "unit": "毫升" },
+      { "id": "ing-25", "name": "青柠", "quantity": "半个", "unit": "个" }
+    ],
+    "steps": [
+      { "id": "step-17", "text": "大虾去壳去虾线，虾头保留备用。" },
+      { "id": "step-18", "text": "香茅拍扁切段，南姜切片，柠檬叶撕成小片。" },
+      { "id": "step-19", "text": "锅中加水煮沸，放入香茅、南姜、柠檬叶煮出香味。" },
+      { "id": "step-20", "text": "加入冬阴功酱搅拌均匀，放入虾头煮出鲜味。" },
+      { "id": "step-21", "text": "放入虾仁煮至变色，倒入椰浆煮至微沸。" },
+      { "id": "step-22", "text": "关火，挤入青柠汁调味即可。" }
+    ],
+    "createdAt": "2024-03-10T14:00:00.000Z",
+    "updatedAt": "2024-03-15T10:30:00.000Z"
+  }
+]
