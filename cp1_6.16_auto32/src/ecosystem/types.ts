@@ -4,6 +4,13 @@ export interface Position {
   z: number;
 }
 
+export interface BreathingParams {
+  phase: number;
+  period: number;
+  amplitude: number;
+  baseScale: number;
+}
+
 export interface SpeciesBase {
   id: string;
   name: string;
@@ -21,6 +28,14 @@ export interface Coral extends SpeciesBase {
   size: number;
   coverage: number;
   symbionts: string[];
+  breathing: BreathingParams;
+  growthAnimation: {
+    active: boolean;
+    startTime: number;
+    duration: number;
+    fromSize: number;
+    toSize: number;
+  };
 }
 
 export interface Fish extends SpeciesBase {

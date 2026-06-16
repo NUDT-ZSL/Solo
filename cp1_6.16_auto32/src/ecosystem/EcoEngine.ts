@@ -11,38 +11,40 @@ import type {
   Symbiosis,
   Position,
   Boid,
+  BreathingParams,
   EcosystemState,
 } from './types';
 
-export interface CoralGrowthParams {
-  lightCoefficient: number;
-  currentCoefficient: number;
-  nutrientCoefficient: number;
-  symbiosisBonus: number;
-  saturationPoint: number;
-  inhibitionThreshold: number;
+export interface LogisticGrowthParams {
+  K: number;
+  r: number;
+  t0: number;
 }
 
 export class EcoEngine {
   private state: EcosystemState;
   private eventListeners: Set<(state: EcosystemState) => void>;
   private lastUpdate: number;
+  private prevNutrientLevel: number;
   private readonly GRID_SIZE = 20;
   private readonly MAX_PARTICLES = 5000;
   private readonly BASE_PARTICLES = 1000;
-  private coralGrowthParams: CoralGrowthParams;
+  private logisticParams: LogisticGrowthParams;
+  private readonly L_MAX = 1.0;
+  private readonly ALPHA = 3.0;
+  private readonly C_MAX = 1.0;
+  private readonly BETA = 8.0;
+  private readonly OPTIMAL_CURRENT = 0.5;
+  private readonly N_MAX = 1.0;
+  private readonly GAMMA = 2.0;
+  private readonly DELTA = 3.0;
+  private readonly INHIBITION_THRESHOLD = 90;
 
   constructor() {
     this.eventListeners = new Set();
     this.lastUpdate = Date.now();
-    this.coralGrowthParams = {
-      lightCoefficient: 0.35,
-      currentCoefficient: 0.25,
-      nutrientCoefficient: 0.4,
-      symbiosisBonus: 1.3,
-      saturationPoint: 0.7,
-      inhibitionThreshold: 90,
-    };
+    this.prevNutrientLevel = 50;
+    this.logisticParams = { K: 1.0, r: 0.5, t0: 5 };
     this.state = this.initializeState();
   }
 
@@ -75,6 +77,15 @@ export class EcoEngine {
       events: [],
       symbioses,
       currentField,
+    };
+  }
+
+  private generateBreathingParams(): BreathingParams {
+    return {
+      baseScale: 1.0,
+      amplitude: 0.05,
+      period: 3 + Math.random() * 2,
+      phase: Math.random() * Math.PI * 2,
     };
   }
 
@@ -127,6 +138,23 @@ export class EcoEngine {
     speciesData.forEach((s) => {
       const id = s.id || uuidv4();
       const species = { ...s, id };
+
+      if (species.speciesType === 'coral') {
+        const coral = species as Coral;
+        if (!coral.breathing) {
+          coral.breathing = this.generateBreathingParams();
+        }
+        if (!coral.growthAnimation) {
+          coral.growthAnimation = {
+            active: false,
+            startTime: 0,
+            duration: 2000,
+            fromSize: coral.size,
+            toSize: coral.size,
+          };
+        }
+      }
+
       this.state.species.set(id, species);
 
       if (species.speciesType === 'fish') {
@@ -213,9 +241,31 @@ export class EcoEngine {
   }
 
   public setEnvironment(params: Partial<EnvironmentParams>): void {
+    const prevNutrient = this.state.environment.nutrientLevel;
     this.state.environment = { ...this.state.environment, ...params };
     this.state.currentField = this.generateCurrentField();
+
+    if (params.nutrientLevel !== undefined && params.nutrientLevel !== prevNutrient) {
+      this.triggerGrowthAnimation();
+      this.prevNutrientLevel = params.nutrientLevel;
+    }
+
     this.notifyListeners();
+  }
+
+  private triggerGrowthAnimation(): void {
+    const now = Date.now();
+    this.state.species.forEach((s) => {
+      if (s.speciesType !== 'coral') return;
+      const coral = s as Coral;
+      coral.growthAnimation = {
+        active: true,
+        startTime: now,
+        duration: 2000,
+        fromSize: coral.size,
+        toSize: coral.size * (1 + coral.growthRate * 0.1),
+      };
+    });
   }
 
   public getEnvironment(): EnvironmentParams {
@@ -236,75 +286,61 @@ export class EcoEngine {
     this.notifyListeners();
   }
 
+  private calculateLightFactor(lightIntensity: number): number {
+    return this.L_MAX * (1 - Math.exp(-this.ALPHA * lightIntensity));
+  }
+
+  private calculateCurrentFactor(currentSpeed: number): number {
+    return this.C_MAX * Math.exp(-this.BETA * Math.pow(currentSpeed - this.OPTIMAL_CURRENT, 2));
+  }
+
+  private calculateNutrientFactor(nutrientLevel: number): number {
+    if (nutrientLevel < this.INHIBITION_THRESHOLD) {
+      const normalized = nutrientLevel / this.INHIBITION_THRESHOLD;
+      return this.N_MAX * (Math.exp(this.GAMMA * normalized) - 1) / (Math.exp(this.GAMMA) - 1);
+    }
+    const excess = (nutrientLevel - this.INHIBITION_THRESHOLD) / (100 - this.INHIBITION_THRESHOLD);
+    return this.N_MAX * Math.exp(-this.DELTA * excess);
+  }
+
   private updateCorals(dt: number): void {
     const { lightIntensity, currentSpeed, nutrientLevel } = this.state.environment;
-    const {
-      lightCoefficient,
-      currentCoefficient,
-      nutrientCoefficient,
-      saturationPoint,
-      inhibitionThreshold,
-    } = this.coralGrowthParams;
+    const { K, r, t0 } = this.logisticParams;
+    const now = Date.now();
+
+    const lightFactor = this.calculateLightFactor(lightIntensity);
+    const currentFactor = this.calculateCurrentFactor(currentSpeed);
+    const nutrientFactor = this.calculateNutrientFactor(nutrientLevel);
 
     this.state.species.forEach((s) => {
       if (s.speciesType !== 'coral') return;
       const coral = s as Coral;
 
       const symbiosisBonus = this.getSymbiosisBonus(coral.id);
+      const environmentFactor = lightFactor * currentFactor * nutrientFactor * symbiosisBonus;
 
-      const lightFactor = this.calculateNonLinearFactor(
-        lightIntensity,
-        lightCoefficient,
-        saturationPoint
-      );
-
-      const currentFactor = this.calculateNonLinearFactor(
-        currentSpeed,
-        currentCoefficient,
-        saturationPoint
-      );
-
-      const nutrientNormalized = nutrientLevel / 100;
-      let nutrientFactor: number;
-      if (nutrientLevel < inhibitionThreshold) {
-        nutrientFactor = this.calculateNonLinearFactor(
-          nutrientNormalized,
-          nutrientCoefficient,
-          saturationPoint
-        );
-      } else {
-        const excess = (nutrientLevel - inhibitionThreshold) / (100 - inhibitionThreshold);
-        nutrientFactor = Math.max(0, 1 - excess * 2) * nutrientCoefficient;
-      }
-
-      const baseGrowth =
-        (lightFactor + currentFactor + nutrientFactor) / 3 * symbiosisBonus;
-
-      const densityFactor = 1 - coral.coverage * 0.3;
-      const growthRate = baseGrowth * densityFactor;
+      const logisticGrowth = K / (1 + Math.exp(-r * (coral.age - t0)));
+      const growthRate = logisticGrowth * environmentFactor;
 
       coral.age += dt;
       coral.growthRate = Math.max(0, growthRate * 0.02 * dt);
       coral.size = Math.min(3, coral.size + coral.growthRate * coral.size);
       coral.coverage = Math.min(1, coral.coverage + coral.growthRate * 0.08);
 
-      const healthChange = (baseGrowth - 0.35) * dt * 8;
+      if (coral.growthAnimation.active) {
+        const elapsed = now - coral.growthAnimation.startTime;
+        if (elapsed >= coral.growthAnimation.duration) {
+          coral.growthAnimation.active = false;
+        }
+      }
+
+      if (!coral.breathing) {
+        coral.breathing = this.generateBreathingParams();
+      }
+
+      const healthChange = (environmentFactor - 0.35) * dt * 8;
       coral.health = Math.max(0, Math.min(100, coral.health + healthChange));
     });
-  }
-
-  private calculateNonLinearFactor(
-    value: number,
-    coefficient: number,
-    saturationPoint: number
-  ): number {
-    if (value <= saturationPoint) {
-      const normalized = value / saturationPoint;
-      return coefficient * (1 - Math.exp(-normalized * 3));
-    } else {
-      const excess = (value - saturationPoint) / (1 - saturationPoint);
-      return coefficient * (1 - excess * 0.3);
-    }
   }
 
   private getSymbiosisBonus(speciesId: string): number {
@@ -364,8 +400,7 @@ export class EcoEngine {
   private updateBoids(school: School, dt: number): void {
     const boids = school.boids;
     const baseSpeed = 2;
-    const speedMultiplier = this.state.environment.currentSpeed * 0.5 + 1;
-    const maxSpeed = baseSpeed * speedMultiplier;
+    const maxSpeed = baseSpeed * (this.state.environment.currentSpeed * 0.5 + 1);
     const maxForce = 0.15;
     const neighborDist = 4;
     const separationDist = 1.5;
@@ -439,7 +474,13 @@ export class EcoEngine {
         this.limit(separation, maxForce * 2);
       }
 
-      const current = this.getCurrentAtPosition(boid.position.x, boid.position.z);
+      const gx = Math.floor(
+        Math.max(0, Math.min(this.GRID_SIZE - 1, boid.position.x + this.GRID_SIZE / 2))
+      );
+      const gz = Math.floor(
+        Math.max(0, Math.min(this.GRID_SIZE - 1, boid.position.z + this.GRID_SIZE / 2))
+      );
+      const currentSample = this.state.currentField[gx]?.[gz] || { x: 0, y: 0, z: 0 };
 
       const targetY = 3 + Math.sin(boid.position.x * 0.3 + boid.position.z * 0.2) * 2;
       const yDiff = targetY - boid.position.y;
@@ -447,24 +488,11 @@ export class EcoEngine {
 
       const dtScaled = dt * 60;
       boid.acceleration.x +=
-        (alignment.x * 1.0 +
-          cohesion.x * 1.2 +
-          separation.x * 1.8 +
-          current.x * currentInfluence) *
-        dtScaled;
+        (alignment.x * 1.0 + cohesion.x * 1.2 + separation.x * 1.8 + currentSample.x * currentInfluence) * dtScaled;
       boid.acceleration.y +=
-        (alignment.y * 0.8 +
-          cohesion.y * 0.5 +
-          separation.y * 1.5 +
-          current.y * currentInfluence +
-          verticalForce) *
-        dtScaled;
+        (alignment.y * 0.8 + cohesion.y * 0.5 + separation.y * 1.5 + currentSample.y * currentInfluence + verticalForce) * dtScaled;
       boid.acceleration.z +=
-        (alignment.z * 1.0 +
-          cohesion.z * 1.2 +
-          separation.z * 1.8 +
-          current.z * currentInfluence) *
-        dtScaled;
+        (alignment.z * 1.0 + cohesion.z * 1.2 + separation.z * 1.8 + currentSample.z * currentInfluence) * dtScaled;
 
       boid.velocity.x += boid.acceleration.x * dt;
       boid.velocity.y += boid.acceleration.y * dt;
@@ -672,7 +700,7 @@ export class EcoEngine {
   }
 
   private checkCriticalEvents(): void {
-    const { coralCoverage, populationDensity, waterHealth } = this.state.metrics;
+    const { coralCoverage, waterHealth } = this.state.metrics;
 
     if (coralCoverage > 0.7) {
       if (!this.hasRecentEvent('prosperity', 60000)) {
@@ -694,12 +722,6 @@ export class EcoEngine {
         }
       }
     });
-
-    if (populationDensity < 0.2) {
-      if (!this.hasRecentEvent('warning', 60000)) {
-        this.addEvent('warning', '种群密度过低，生态系统面临风险');
-      }
-    }
 
     if (waterHealth < 0.4) {
       if (!this.hasRecentEvent('warning', 45000, 'waterHealth')) {
@@ -776,8 +798,10 @@ export class EcoEngine {
   }
 
   public getParticleCount(): number {
-    const base = this.BASE_PARTICLES + this.state.environment.currentSpeed * 1500;
-    return Math.min(base, this.MAX_PARTICLES);
+    return Math.min(
+      this.BASE_PARTICLES + this.state.environment.currentSpeed * 1500,
+      this.MAX_PARTICLES
+    );
   }
 
   public getMaxParticles(): number {
