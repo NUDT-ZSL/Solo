@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import {
   HexCoord,
   Tower,
@@ -17,24 +17,29 @@ interface GameGridProps {
   towers: Map<string, Tower>;
   tideState: TideState;
   selectedTowerId: string | null;
-  onHexClick: (coord: HexCoord) => void;
+  onPlaceTower: (coord: HexCoord, type: TowerType) => void;
   onTowerClick: (towerId: string) => void;
   onTowerHover: (towerId: string | null, mouseX: number, mouseY: number) => void;
-  placementMenu: { coord: HexCoord; x: number; y: number } | null;
-  onPlaceTower: (type: TowerType) => void;
-  onCloseMenu: () => void;
   hoveredTowerId: string | null;
   mouseX: number;
   mouseY: number;
 }
 
 function hexCorner(cx: number, cy: number, size: number, i: number): [number, number] {
-  const angleDeg = 60 * i - 30;
+  const angleDeg = 60 * i;
   const angleRad = (Math.PI / 180) * angleDeg;
   return [cx + size * Math.cos(angleRad), cy + size * Math.sin(angleRad)];
 }
 
-function drawHex(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, fill: string, stroke: string, lineWidth: number) {
+function drawHex(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  size: number,
+  fill: string,
+  stroke: string,
+  lineWidth: number
+) {
   ctx.beginPath();
   for (let i = 0; i < 6; i++) {
     const [x, y] = hexCorner(cx, cy, size, i);
@@ -145,8 +150,10 @@ const HEX_COORDS = buildHexCoords();
 function pointInHex(px: number, py: number, cx: number, cy: number, size: number): boolean {
   const dx = Math.abs(px - cx);
   const dy = Math.abs(py - cy);
-  if (dx > size || dy > size) return false;
-  return size * size - dx * dy * (1 + Math.sqrt(3)) / 2 - dx * dx / 2 > -size * size * 0.3;
+  const h = size * Math.sqrt(3) / 2;
+  if (dx > size || dy > h) return false;
+  if (dx <= size / 2) return true;
+  return dy <= Math.sqrt(3) * (size - dx);
 }
 
 const MENU_ICON_SIZE = 36;
@@ -165,8 +172,13 @@ const TowerMenu: React.FC<{
         onClose();
       }
     };
-    setTimeout(() => document.addEventListener('mousedown', handler), 0);
-    return () => document.removeEventListener('mousedown', handler);
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('mousedown', handler);
+    }, 0);
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('mousedown', handler);
+    };
   }, [onClose]);
 
   const types = [
@@ -191,6 +203,7 @@ const TowerMenu: React.FC<{
         gap: 6,
         zIndex: 100,
         boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+        userSelect: 'none',
       }}
     >
       {types.map((t) => {
@@ -198,7 +211,10 @@ const TowerMenu: React.FC<{
         return (
           <div
             key={t}
-            onClick={() => onPlace(t)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPlace(t);
+            }}
             style={{
               display: 'flex',
               flexDirection: 'column',
@@ -277,18 +293,16 @@ const GameGrid: React.FC<GameGridProps> = ({
   towers,
   tideState,
   selectedTowerId,
-  onHexClick,
+  onPlaceTower,
   onTowerClick,
   onTowerHover,
-  placementMenu,
-  onPlaceTower,
-  onCloseMenu,
   hoveredTowerId,
   mouseX,
   mouseY,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [placementMenu, setPlacementMenu] = useState<{ coord: HexCoord; x: number; y: number } | null>(null);
 
   const canvasWidth = GRID_COLS * HEX_HORIZONTAL_SPACING + HEX_HORIZONTAL_SPACING + GRID_OFFSET_X;
   const canvasHeight = GRID_ROWS * HEX_VERTICAL_SPACING + GRID_OFFSET_Y * 2;
@@ -302,7 +316,6 @@ const GameGrid: React.FC<GameGridProps> = ({
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
     const tideNorm = (tideState.tideHeight - 0.5) / 4.0;
-    const tideAlpha = 0.05 + tideNorm * 0.15;
 
     for (const coord of HEX_COORDS) {
       const key = `${coord.row},${coord.col}`;
@@ -311,14 +324,10 @@ const GameGrid: React.FC<GameGridProps> = ({
       const r = parseInt(fillBase.slice(1, 3), 16);
       const g = parseInt(fillBase.slice(3, 5), 16);
       const b = parseInt(fillBase.slice(5, 7), 16);
-      const fill = `rgba(${r},${g + Math.round(tideNorm * 30)},${b + Math.round(tideNorm * 50)},1)`;
+      const tideBoost = Math.round(tideNorm * 25);
+      const fill = `rgb(${r},${Math.min(255, g + tideBoost)},${Math.min(255, b + tideBoost + 10)})`;
 
-      const isTideHighlight = tideNorm > 0.5 && !hasTower;
-      const finalFill = isTideHighlight
-        ? `rgba(26,36,60,${0.8 + tideAlpha})`
-        : fill;
-
-      drawHex(ctx, coord.pixelX, coord.pixelY, HEX_SIZE, finalFill, '#263238', 1);
+      drawHex(ctx, coord.pixelX, coord.pixelY, HEX_SIZE, fill, '#263238', 1);
     }
 
     towers.forEach((tower) => {
@@ -331,6 +340,18 @@ const GameGrid: React.FC<GameGridProps> = ({
     draw();
   }, [draw]);
 
+  const getHexAt = useCallback(
+    (canvasX: number, canvasY: number): HexCoord | null => {
+      for (const coord of HEX_COORDS) {
+        if (pointInHex(canvasX, canvasY, coord.pixelX, coord.pixelY, HEX_SIZE)) {
+          return coord;
+        }
+      }
+      return null;
+    },
+    []
+  );
+
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       const canvas = canvasRef.current;
@@ -341,19 +362,23 @@ const GameGrid: React.FC<GameGridProps> = ({
       const px = (e.clientX - rect.left) * scaleX;
       const py = (e.clientY - rect.top) * scaleY;
 
-      for (const coord of HEX_COORDS) {
-        if (pointInHex(px, py, coord.pixelX, coord.pixelY, HEX_SIZE)) {
-          const key = `${coord.row},${coord.col}`;
-          if (towers.has(key)) {
-            onTowerClick(towers.get(key)!.id);
-          } else {
-            onHexClick(coord);
-          }
-          return;
-        }
+      const coord = getHexAt(px, py);
+      if (!coord) {
+        setPlacementMenu(null);
+        return;
+      }
+
+      const key = `${coord.row},${coord.col}`;
+      if (towers.has(key)) {
+        setPlacementMenu(null);
+        onTowerClick(towers.get(key)!.id);
+      } else {
+        const menuCssX = (coord.pixelX / scaleX) - 80;
+        const menuCssY = (coord.pixelY / scaleY) - 60;
+        setPlacementMenu({ coord, x: menuCssX, y: menuCssY });
       }
     },
-    [towers, onHexClick, onTowerClick]
+    [towers, onTowerClick, getHexAt]
   );
 
   const handleCanvasMouseMove = useCallback(
@@ -366,26 +391,42 @@ const GameGrid: React.FC<GameGridProps> = ({
       const px = (e.clientX - rect.left) * scaleX;
       const py = (e.clientY - rect.top) * scaleY;
 
-      let found = false;
+      let foundId: string | null = null;
       for (const coord of HEX_COORDS) {
         const key = `${coord.row},${coord.col}`;
-        if (towers.has(key) && pointInHex(px, py, coord.pixelX, coord.pixelY, HEX_SIZE)) {
-          onTowerHover(towers.get(key)!.id, e.clientX, e.clientY);
-          found = true;
+        const tower = towers.get(key);
+        if (tower && pointInHex(px, py, coord.pixelX, coord.pixelY, HEX_SIZE)) {
+          foundId = tower.id;
           break;
         }
       }
-      if (!found) {
-        onTowerHover(null, e.clientX, e.clientY);
-      }
+      onTowerHover(foundId, e.clientX, e.clientY);
     },
     [towers, onTowerHover]
   );
 
-  const hoveredTower = hoveredTowerId ? towers.get(hoveredTowerId) : null;
+  const handlePlace = useCallback(
+    (type: TowerType) => {
+      if (!placementMenu) return;
+      onPlaceTower(placementMenu.coord, type);
+      setPlacementMenu(null);
+    },
+    [placementMenu, onPlaceTower]
+  );
+
+  const handleCloseMenu = useCallback(() => {
+    setPlacementMenu(null);
+  }, []);
+
+  const hoveredTower = hoveredTowerId
+    ? Array.from(towers.values()).find((t) => t.id === hoveredTowerId) || null
+    : null;
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', minWidth: 600 }}>
+    <div
+      ref={containerRef}
+      style={{ position: 'relative', minWidth: 600, display: 'inline-block' }}
+    >
       <canvas
         ref={canvasRef}
         width={canvasWidth}
@@ -398,8 +439,8 @@ const GameGrid: React.FC<GameGridProps> = ({
         <TowerMenu
           x={placementMenu.x}
           y={placementMenu.y}
-          onPlace={onPlaceTower}
-          onClose={onCloseMenu}
+          onPlace={handlePlace}
+          onClose={handleCloseMenu}
         />
       )}
       {hoveredTower && (

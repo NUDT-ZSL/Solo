@@ -13,9 +13,7 @@ import {
   GRID_COLS,
 } from './types';
 import { computeTideState, calculateTowerOutput, countAdjacentTowers } from './TideSystem';
-import GameGrid, { buildHexCoords } from './GameGrid';
-
-const HEX_COORDS = buildHexCoords();
+import GameGrid from './GameGrid';
 
 let towerIdCounter = 0;
 
@@ -90,27 +88,34 @@ const CurrentIndicator: React.FC<{ tideState: TideState }> = ({ tideState }) => 
   const speed = tideState.currentSpeed;
   const baseLen = 24;
   const len = baseLen * (speed / 1.0);
-  const rad = (dir * Math.PI) / 180;
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <svg width={40} height={40} viewBox="-20 -20 40 40">
-        <line
-          x1={0}
-          y1={0}
-          x2={Math.cos(rad) * len * 0.5}
-          y2={Math.sin(rad) * len * 0.5}
-          stroke="#26c6da"
-          strokeWidth={2}
-          strokeLinecap="round"
-          style={{ transition: 'all 0.5s ease' }}
-        />
-        <polygon
-          points={`${Math.cos(rad) * len * 0.5},${Math.sin(rad) * len * 0.5} ${Math.cos(rad - 0.4) * (len * 0.5 - 5)},${Math.sin(rad - 0.4) * (len * 0.5 - 5)} ${Math.cos(rad + 0.4) * (len * 0.5 - 5)},${Math.sin(rad + 0.4) * (len * 0.5 - 5)}`}
-          fill="#26c6da"
-          style={{ transition: 'all 0.5s ease' }}
-        />
-      </svg>
+      <div
+        style={{
+          width: 40,
+          height: 40,
+          position: 'relative' as const,
+          transform: `rotate(${dir}deg)`,
+          transition: 'transform 0.5s ease',
+        }}
+      >
+        <svg width={40} height={40} viewBox="-20 -20 40 40" style={{ position: 'absolute', top: 0, left: 0 }}>
+          <line
+            x1={0}
+            y1={0}
+            x2={len * 0.5}
+            y2={0}
+            stroke="#26c6da"
+            strokeWidth={2}
+            strokeLinecap="round"
+          />
+          <polygon
+            points={`${len * 0.5},0 ${len * 0.5 - 5},-4 ${len * 0.5 - 5},4`}
+            fill="#26c6da"
+          />
+        </svg>
+      </div>
       <span style={{ color: '#26c6da', fontSize: 11, fontFamily: "'Courier New', monospace" }}>
         {speed.toFixed(1)}m/s
       </span>
@@ -126,7 +131,8 @@ const RightPanel: React.FC<{
   onUpgrade: () => void;
   onDemolish: () => void;
   onClose: () => void;
-}> = ({ tower, tideState, towers, energyCoins, onUpgrade, onDemolish, onClose }) => {
+  isMobile?: boolean;
+}> = ({ tower, tideState, towers, energyCoins, onUpgrade, onDemolish, onClose, isMobile }) => {
   if (!tower) return null;
 
   const info = TOWER_INFO[tower.type];
@@ -136,25 +142,76 @@ const RightPanel: React.FC<{
   const canUpgrade = upgradeCost !== null && energyCoins >= upgradeCost && tower.level < 3;
   const demolishReturn = Math.round(PLACE_COST * tower.level * 0.5);
 
+  const baseStyle: React.CSSProperties = {
+    background: '#0f0f1a',
+    padding: 16,
+    fontFamily: "'Courier New', monospace",
+    color: '#ccc',
+    fontSize: 13,
+    lineHeight: 1.8,
+    position: 'relative',
+  };
+
+  if (isMobile) {
+    return (
+      <div
+        style={{
+          ...baseStyle,
+          position: 'fixed',
+          top: 80,
+          right: 10,
+          width: 260,
+          borderRadius: 10,
+          border: '1px solid #263238',
+          zIndex: 200,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
+        }}
+      >
+        <button
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            background: 'none',
+            border: 'none',
+            color: '#888',
+            cursor: 'pointer',
+            fontSize: 16,
+            lineHeight: 1,
+          }}
+        >
+          ✕
+        </button>
+        <PanelContent
+          tower={tower}
+          output={output}
+          adjCount={adjCount}
+          upgradeCost={upgradeCost}
+          canUpgrade={canUpgrade}
+          demolishReturn={demolishReturn}
+          info={info}
+          onUpgrade={onUpgrade}
+          onDemolish={onDemolish}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
+        ...baseStyle,
         width: 240,
-        background: '#0f0f1a',
-        padding: 16,
         borderRadius: '10px 0 0 10px',
         borderLeft: '1px solid #263238',
-        fontFamily: "'Courier New', monospace",
-        color: '#ccc',
-        fontSize: 13,
-        lineHeight: 1.8,
-        position: 'relative' as const,
+        alignSelf: 'flex-start',
       }}
     >
       <button
         onClick={onClose}
         style={{
-          position: 'absolute' as const,
+          position: 'absolute',
           top: 8,
           right: 8,
           background: 'none',
@@ -167,58 +224,59 @@ const RightPanel: React.FC<{
       >
         ✕
       </button>
-      <div style={{ color: info.color, fontWeight: 'bold', fontSize: 15, marginBottom: 8 }}>
-        {info.name}
-      </div>
-      <div>等级: Lv.{tower.level}</div>
-      <div>效率: {(tower.efficiency * 100).toFixed(0)}%</div>
-      <div>
-        实时功率:{' '}
-        <span style={{ color: '#4fc3f7' }}>{output.toFixed(1)}</span> 单位/秒
-      </div>
-      <div>累计发电: {tower.accumulatedEnergy.toFixed(1)}</div>
-      {tower.type === TowerType.OSCILLATING_WATER_COLUMN && (
-        <div>相邻塔: {adjCount} (+{Math.min(adjCount, 5) * 10}%)</div>
-      )}
-      {tower.type === TowerType.STORAGE_TOWER && (
-        <div>储能: {tower.accumulatedEnergy.toFixed(0)} / 1000</div>
-      )}
+      <PanelContent
+        tower={tower}
+        output={output}
+        adjCount={adjCount}
+        upgradeCost={upgradeCost}
+        canUpgrade={canUpgrade}
+        demolishReturn={demolishReturn}
+        info={info}
+        onUpgrade={onUpgrade}
+        onDemolish={onDemolish}
+      />
+    </div>
+  );
+};
 
-      <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {canUpgrade && (
-          <button
-            onClick={onUpgrade}
-            style={{
-              background: '#1a3a5f',
-              border: '1px solid #4a4a6a',
-              borderRadius: 6,
-              color: '#4fc3f7',
-              padding: '8px 12px',
-              cursor: 'pointer',
-              fontSize: 12,
-              fontFamily: "'Courier New', monospace",
-              transition: 'background 0.2s ease',
-            }}
-            onMouseEnter={(e) => {
-              (e.target as HTMLButtonElement).style.background = '#2a4a6f';
-            }}
-            onMouseLeave={(e) => {
-              (e.target as HTMLButtonElement).style.background = '#1a3a5f';
-            }}
-          >
-            升级 Lv.{tower.level + 1} (消耗 {upgradeCost})
-          </button>
-        )}
-        {upgradeCost === null && tower.level >= 3 && (
-          <div style={{ color: '#4fc3f7', fontSize: 11 }}>已达最高等级</div>
-        )}
+const PanelContent: React.FC<{
+  tower: Tower;
+  output: number;
+  adjCount: number;
+  upgradeCost: number | null;
+  canUpgrade: boolean;
+  demolishReturn: number;
+  info: { name: string; color: string; icon: string };
+  onUpgrade: () => void;
+  onDemolish: () => void;
+}> = ({ tower, output, adjCount, upgradeCost, canUpgrade, demolishReturn, info, onUpgrade, onDemolish }) => (
+  <>
+    <div style={{ color: info.color, fontWeight: 'bold', fontSize: 15, marginBottom: 8, paddingRight: 20 }}>
+      {info.name}
+    </div>
+    <div>等级: Lv.{tower.level}</div>
+    <div>效率: {(tower.efficiency * 100).toFixed(0)}%</div>
+    <div>
+      实时功率:{' '}
+      <span style={{ color: '#4fc3f7' }}>{output.toFixed(1)}</span> 单位/秒
+    </div>
+    <div>累计发电: {tower.accumulatedEnergy.toFixed(1)}</div>
+    {tower.type === TowerType.OSCILLATING_WATER_COLUMN && (
+      <div>相邻塔: {adjCount} (+{Math.min(adjCount, 5) * 10}%)</div>
+    )}
+    {tower.type === TowerType.STORAGE_TOWER && (
+      <div>储能: {tower.accumulatedEnergy.toFixed(0)} / 1000</div>
+    )}
+
+    <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {canUpgrade && (
         <button
-          onClick={onDemolish}
+          onClick={onUpgrade}
           style={{
-            background: '#3a1a1a',
-            border: '1px solid #6a4a4a',
+            background: '#1a3a5f',
+            border: '1px solid #4a4a6a',
             borderRadius: 6,
-            color: '#ef9a9a',
+            color: '#4fc3f7',
             padding: '8px 12px',
             cursor: 'pointer',
             fontSize: 12,
@@ -226,37 +284,62 @@ const RightPanel: React.FC<{
             transition: 'background 0.2s ease',
           }}
           onMouseEnter={(e) => {
-            (e.target as HTMLButtonElement).style.background = '#5a2a2a';
+            (e.target as HTMLButtonElement).style.background = '#2a4a6f';
           }}
           onMouseLeave={(e) => {
-            (e.target as HTMLButtonElement).style.background = '#3a1a1a';
+            (e.target as HTMLButtonElement).style.background = '#1a3a5f';
           }}
         >
-          拆除 (返还 {demolishReturn})
+          升级 Lv.{tower.level + 1} (消耗 {upgradeCost})
         </button>
-      </div>
+      )}
+      {upgradeCost === null && tower.level >= 3 && (
+        <div style={{ color: '#4fc3f7', fontSize: 11 }}>已达最高等级</div>
+      )}
+      <button
+        onClick={onDemolish}
+        style={{
+          background: '#3a1a1a',
+          border: '1px solid #6a4a4a',
+          borderRadius: 6,
+          color: '#ef9a9a',
+          padding: '8px 12px',
+          cursor: 'pointer',
+          fontSize: 12,
+          fontFamily: "'Courier New', monospace",
+          transition: 'background 0.2s ease',
+        }}
+        onMouseEnter={(e) => {
+          (e.target as HTMLButtonElement).style.background = '#5a2a2a';
+        }}
+        onMouseLeave={(e) => {
+          (e.target as HTMLButtonElement).style.background = '#3a1a1a';
+        }}
+      >
+        拆除 (返还 {demolishReturn})
+      </button>
     </div>
-  );
-};
+  </>
+);
 
 const App: React.FC = () => {
   const [towers, setTowers] = useState<Map<string, Tower>>(new Map());
   const [energyCoins, setEnergyCoins] = useState(INITIAL_COINS);
   const [totalEnergy, setTotalEnergy] = useState(0);
   const [paused, setPaused] = useState(false);
-  const [elapsedTime, setElapsedTime] = useState(0);
   const [tideState, setTideState] = useState<TideState>(computeTideState(0));
   const [selectedTowerId, setSelectedTowerId] = useState<string | null>(null);
-  const [placementMenu, setPlacementMenu] = useState<{ coord: HexCoord; x: number; y: number } | null>(null);
   const [hoveredTowerId, setHoveredTowerId] = useState<string | null>(null);
   const [mouseX, setMouseX] = useState(0);
   const [mouseY, setMouseY] = useState(0);
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [isNarrow, setIsNarrow] = useState(false);
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
 
   const towersRef = useRef(towers);
   towersRef.current = towers;
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
+  const elapsedRef = useRef(0);
 
   const gameLoopRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
@@ -267,10 +350,9 @@ const App: React.FC = () => {
       const delta = (timestamp - lastTimeRef.current) / 1000;
       lastTimeRef.current = timestamp;
 
-      if (!pausedRef.current && delta < 0.5) {
-        const newElapsed = elapsedTime + delta;
-        setElapsedTime(newElapsed);
-        const newTide = computeTideState(newElapsed);
+      if (!pausedRef.current && delta < 0.5 && delta > 0) {
+        elapsedRef.current += delta;
+        const newTide = computeTideState(elapsedRef.current);
         setTideState(newTide);
 
         const currentTowers = towersRef.current;
@@ -300,26 +382,22 @@ const App: React.FC = () => {
 
     gameLoopRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(gameLoopRef.current);
-  }, [elapsedTime]);
+  }, []);
 
-  const handleHexClick = useCallback(
-    (coord: HexCoord) => {
-      setPlacementMenu(null);
-      const canvas = document.querySelector('canvas');
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const menuX = (coord.pixelX / scaleX) + rect.left - rect.width / 2 + 60;
-      const menuY = (coord.pixelY / (canvas.height / rect.height)) + rect.top - 50;
-      setPlacementMenu({ coord, x: coord.pixelX + 20, y: coord.pixelY - 20 });
-    },
-    []
-  );
+  useEffect(() => {
+    const checkWidth = () => {
+      setIsNarrow(window.innerWidth < 900);
+    };
+    checkWidth();
+    window.addEventListener('resize', checkWidth);
+    return () => window.removeEventListener('resize', checkWidth);
+  }, []);
 
   const handleTowerClick = useCallback((towerId: string) => {
-    setPlacementMenu(null);
     setSelectedTowerId(towerId);
-    setPanelOpen(true);
+    if (window.innerWidth < 900) {
+      setMobilePanelOpen(true);
+    }
   }, []);
 
   const handleTowerHover = useCallback((towerId: string | null, mx: number, my: number) => {
@@ -329,44 +407,38 @@ const App: React.FC = () => {
   }, []);
 
   const handlePlaceTower = useCallback(
-    (type: TowerType) => {
-      if (!placementMenu) return;
-      if (energyCoins < PLACE_COST) {
-        setPlacementMenu(null);
-        return;
-      }
-      const key = `${placementMenu.coord.row},${placementMenu.coord.col}`;
+    (coord: HexCoord, type: TowerType) => {
+      if (energyCoins < PLACE_COST) return;
+      const key = `${coord.row},${coord.col}`;
       if (towers.has(key)) return;
 
-      const newTower = createTower(type, placementMenu.coord);
+      const newTower = createTower(type, coord);
       setTowers((prev) => {
         const next = new Map(prev);
         next.set(key, newTower);
         return next;
       });
       setEnergyCoins((prev) => prev - PLACE_COST);
-      setPlacementMenu(null);
     },
-    [placementMenu, energyCoins, towers]
+    [energyCoins, towers]
   );
-
-  const handleCloseMenu = useCallback(() => {
-    setPlacementMenu(null);
-  }, []);
 
   const handleUpgrade = useCallback(() => {
     if (!selectedTowerId) return;
     setTowers((prev) => {
       const next = new Map(prev);
-      let towerKey = '';
+      let foundKey: string | null = null;
+      let foundTower: Tower | undefined;
       prev.forEach((t, k) => {
-        if (t.id === selectedTowerId) towerKey = k;
+        if (t.id === selectedTowerId) {
+          foundKey = k;
+          foundTower = t;
+        }
       });
-      if (!towerKey) return prev;
-      const tower = next.get(towerKey)!;
-      const cost = UPGRADE_COSTS[tower.level];
+      if (!foundKey || !foundTower) return prev;
+      const cost = UPGRADE_COSTS[foundTower.level];
       if (cost === undefined || energyCoins < cost) return prev;
-      next.set(towerKey, { ...tower, level: tower.level + 1 });
+      next.set(foundKey, { ...foundTower, level: foundTower.level + 1 });
       setEnergyCoins((c) => c - cost);
       return next;
     });
@@ -389,6 +461,7 @@ const App: React.FC = () => {
       next.delete(foundKey);
       setEnergyCoins((c) => c + refund);
       setSelectedTowerId(null);
+      setMobilePanelOpen(false);
       return next;
     });
   }, [selectedTowerId]);
@@ -398,6 +471,11 @@ const App: React.FC = () => {
     : null;
 
   const energyBarPercent = Math.min(100, (totalEnergy / 500) * 100);
+
+  const closePanel = () => {
+    setSelectedTowerId(null);
+    setMobilePanelOpen(false);
+  };
 
   return (
     <div
@@ -409,7 +487,6 @@ const App: React.FC = () => {
         overflow: 'hidden',
       }}
     >
-      {/* 顶部工具栏 */}
       <div
         style={{
           height: 60,
@@ -421,7 +498,6 @@ const App: React.FC = () => {
           padding: '0 20px',
         }}
       >
-        {/* 左侧：潮汐时钟 + 洋流 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <TideClock tideState={tideState} />
           <div>
@@ -433,7 +509,6 @@ const App: React.FC = () => {
           <CurrentIndicator tideState={tideState} />
         </div>
 
-        {/* 中间：能量条 + 能量币 */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
           <div
             style={{
@@ -474,7 +549,6 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* 右侧：暂停按钮 */}
         <button
           onClick={() => setPaused((p) => !p)}
           style={{
@@ -498,63 +572,68 @@ const App: React.FC = () => {
         </button>
       </div>
 
-      {/* 主内容区域 */}
-      <div style={{ display: 'flex', justifyContent: 'center', position: 'relative' }}>
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', overflow: 'auto' }}>
+      <div
+        style={{ display: 'flex', justifyContent: 'center', position: 'relative', height: 'calc(100vh - 88px)' }}
+      >
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', overflow: 'auto', paddingTop: 20 }}>
           <GameGrid
             towers={towers}
             tideState={tideState}
             selectedTowerId={selectedTowerId}
-            onHexClick={handleHexClick}
+            onPlaceTower={handlePlaceTower}
             onTowerClick={handleTowerClick}
             onTowerHover={handleTowerHover}
-            placementMenu={placementMenu}
-            onPlaceTower={handlePlaceTower}
-            onCloseMenu={handleCloseMenu}
             hoveredTowerId={hoveredTowerId}
             mouseX={mouseX}
             mouseY={mouseY}
           />
         </div>
 
-        {/* 右侧面板 */}
-        {window.innerWidth >= 900 && panelOpen && (
-          <div style={{ position: 'sticky', top: 0, alignSelf: 'flex-start' }}>
-            <RightPanel
-              tower={selectedTower}
-              tideState={tideState}
-              towers={towers}
-              energyCoins={energyCoins}
-              onUpgrade={handleUpgrade}
-              onDemolish={handleDemolish}
-              onClose={() => {
-                setSelectedTowerId(null);
-                setPanelOpen(false);
-              }}
-            />
-          </div>
+        {!isNarrow && selectedTower && (
+          <RightPanel
+            tower={selectedTower}
+            tideState={tideState}
+            towers={towers}
+            energyCoins={energyCoins}
+            onUpgrade={handleUpgrade}
+            onDemolish={handleDemolish}
+            onClose={closePanel}
+          />
         )}
 
-        {/* 小屏幕悬浮按钮 */}
-        {window.innerWidth < 900 && selectedTower && (
+        {isNarrow && mobilePanelOpen && selectedTower && (
+          <RightPanel
+            tower={selectedTower}
+            tideState={tideState}
+            towers={towers}
+            energyCoins={energyCoins}
+            onUpgrade={handleUpgrade}
+            onDemolish={handleDemolish}
+            onClose={closePanel}
+            isMobile
+          />
+        )}
+
+        {isNarrow && selectedTower && !mobilePanelOpen && (
           <div
-            onClick={() => setPanelOpen(!panelOpen)}
+            onClick={() => setMobilePanelOpen(true)}
             style={{
               position: 'fixed',
-              bottom: 20,
+              bottom: 40,
               right: 20,
-              width: 48,
-              height: 48,
-              borderRadius: 24,
+              width: 52,
+              height: 52,
+              borderRadius: 26,
               background: '#1a3a5f',
               border: '1px solid #4a4a6a',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
-              fontSize: 20,
+              fontSize: 22,
               zIndex: 300,
               boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+              transition: 'background 0.2s ease',
             }}
           >
             ⓘ
@@ -562,7 +641,6 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* 底部状态栏 */}
       <div
         style={{
           position: 'fixed',
