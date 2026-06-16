@@ -32,10 +32,23 @@ export interface Order {
   customerName: string;
   orderDate: string;
   price: number;
+  rating?: number;
+  comment?: string;
   playName?: string;
   city?: string;
   venue?: string;
   date?: string;
+}
+
+export interface ReviewSummary {
+  averageRating: number;
+  totalReviews: number;
+  recentReviews: {
+    customerName: string;
+    rating: number;
+    comment: string;
+    orderDate: string;
+  }[];
 }
 
 export interface BoxOfficeData {

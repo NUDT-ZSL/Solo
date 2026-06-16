@@ -7,7 +7,9 @@
     "seatArea": "front",
     "customerName": "张三",
     "orderDate": "2026-02-10",
-    "price": 580
+    "price": 580,
+    "rating": 5,
+    "comment": "经典剧目，演员表演非常到位，情绪感染力强！"
   },
   {
     "id": "order-002",
@@ -17,7 +19,9 @@
     "seatArea": "front",
     "customerName": "李四",
     "orderDate": "2026-02-11",
-    "price": 580
+    "price": 580,
+    "rating": 4,
+    "comment": "舞美效果很棒，剧情紧凑，值得一看。"
   },
   {
     "id": "order-003",
@@ -27,6 +31,116 @@
     "seatArea": "middle",
     "customerName": "王五",
     "orderDate": "2026-02-15",
-    "price": 380
+    "price": 380,
+    "rating": 5,
+    "comment": "上海话剧艺术中心的效果很好，演员功底深厚。"
+  },
+  {
+    "id": "order-004",
+    "playId": "play-001",
+    "stopId": "stop-001",
+    "seatNumber": "C-03",
+    "seatArea": "middle",
+    "customerName": "赵六",
+    "orderDate": "2026-02-12",
+    "price": 380,
+    "rating": 4,
+    "comment": "整体不错，就是最后一幕节奏稍慢了些。"
+  },
+  {
+    "id": "order-005",
+    "playId": "play-002",
+    "stopId": "stop-003",
+    "seatNumber": "A-02",
+    "seatArea": "front",
+    "customerName": "陈七",
+    "orderDate": "2026-03-20",
+    "price": 680,
+    "rating": 5,
+    "comment": "昆曲太美了，唱腔婉转，服饰精美，如痴如醉。"
+  },
+  {
+    "id": "order-006",
+    "playId": "play-002",
+    "stopId": "stop-003",
+    "seatNumber": "B-08",
+    "seatArea": "middle",
+    "customerName": "孙八",
+    "orderDate": "2026-03-21",
+    "price": 480,
+    "rating": 5,
+    "comment": "传统戏曲的魅力无穷，杜丽娘的扮演者堪称一绝！"
+  },
+  {
+    "id": "order-007",
+    "playId": "play-002",
+    "stopId": "stop-004",
+    "seatNumber": "A-01",
+    "seatArea": "front",
+    "customerName": "周九",
+    "orderDate": "2026-03-28",
+    "price": 680,
+    "rating": 4,
+    "comment": "四川大剧院的环境不错，表演也很专业。"
+  },
+  {
+    "id": "order-008",
+    "playId": "play-002",
+    "stopId": "stop-004",
+    "seatNumber": "C-10",
+    "seatArea": "back",
+    "customerName": "吴十",
+    "orderDate": "2026-03-29",
+    "price": 280,
+    "rating": 5,
+    "comment": "第一次看昆曲现场，被深深震撼，以后还会来！"
+  },
+  {
+    "id": "order-009",
+    "playId": "play-003",
+    "stopId": "stop-005",
+    "seatNumber": "A-03",
+    "seatArea": "front",
+    "customerName": "郑十一",
+    "orderDate": "2026-04-20",
+    "price": 380,
+    "rating": 5,
+    "comment": "孩子非常喜欢，舞台效果绚丽，互动环节很有趣。"
+  },
+  {
+    "id": "order-010",
+    "playId": "play-003",
+    "stopId": "stop-005",
+    "seatNumber": "B-05",
+    "seatArea": "middle",
+    "customerName": "钱十二",
+    "orderDate": "2026-04-21",
+    "price": 280,
+    "rating": 4,
+    "comment": "适合全家观看，寓教于乐，小朋友看得很开心。"
+  },
+  {
+    "id": "order-011",
+    "playId": "play-001",
+    "stopId": "stop-001",
+    "seatNumber": "D-07",
+    "seatArea": "back",
+    "customerName": "冯十三",
+    "orderDate": "2026-02-13",
+    "price": 180,
+    "rating": 4,
+    "comment": "后排视野稍差，但票价性价比高，剧本身没得说。"
+  },
+  {
+    "id": "order-012",
+    "playId": "play-002",
+    "stopId": "stop-003",
+    "seatNumber": "C-05",
+    "seatArea": "back",
+    "customerName": "褚十四",
+    "orderDate": "2026-03-22",
+    "price": 280,
+    "rating": 5,
+    "comment": "广州大剧院的音响效果一流，昆曲听得很清楚。"
   }
 ]

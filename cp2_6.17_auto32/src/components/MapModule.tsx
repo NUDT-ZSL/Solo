@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import useApi, { TourStop } from '../hooks/useApi';
+import useApi, { TourStop, Order, ReviewSummary } from '../hooks/useApi';
 import './MapModule.css';
 
 const createCustomIcon = (status: string) => {
@@ -26,25 +26,100 @@ const MapController: React.FC<{ stops: TourStop[] }> = ({ stops }) => {
   return null;
 };
 
+const StarRating: React.FC<{ rating: number; size?: number }> = ({ rating, size = 14 }) => {
+  const fullStars = Math.floor(rating);
+  const hasHalf = rating % 1 >= 0.5;
+  
+  return (
+    <span className="star-rating" style={{ fontSize: `${size}px` }}>
+      {[1, 2, 3, 4, 5].map(i => {
+        let className = 'star';
+        if (i <= fullStars) className += ' star-full';
+        else if (i === fullStars + 1 && hasHalf) className += ' star-half';
+        else className += ' star-empty';
+        return (
+          <span key={i} className={className}>★</span>
+        );
+      })}
+    </span>
+  );
+};
+
 const MapModule: React.FC = () => {
-  const { getStops } = useApi();
+  const { getStops, getOrders } = useApi();
   const [stops, setStops] = useState<TourStop[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStop, setSelectedStop] = useState<TourStop | null>(null);
 
   useEffect(() => {
-    const loadStops = async () => {
+    const loadData = async () => {
       try {
-        const data = await getStops();
-        setStops(data);
+        const [stopsData, ordersData] = await Promise.all([
+          getStops(),
+          getOrders()
+        ]);
+        setStops(stopsData);
+        setOrders(ordersData);
       } catch (err) {
-        console.error('加载站点失败', err);
+        console.error('加载数据失败', err);
       } finally {
         setLoading(false);
       }
     };
-    loadStops();
+    loadData();
   }, []);
+
+  useEffect(() => {
+    if (!selectedStop) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedStop(null);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, [selectedStop]);
+
+  const getReviewSummary = useCallback((stopId: string): ReviewSummary => {
+    const stopOrders = orders.filter(
+      o => o.stopId === stopId && o.rating !== undefined && o.comment && o.comment.trim() !== ''
+    );
+
+    if (stopOrders.length === 0) {
+      return {
+        averageRating: 0,
+        totalReviews: 0,
+        recentReviews: []
+      };
+    }
+
+    const totalRating = stopOrders.reduce((sum, o) => sum + (o.rating || 0), 0);
+    const averageRating = Math.round((totalRating / stopOrders.length) * 10) / 10;
+
+    const recentReviews = [...stopOrders]
+      .sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime())
+      .slice(0, 3)
+      .map(o => ({
+        customerName: o.customerName,
+        rating: o.rating || 0,
+        comment: o.comment || '',
+        orderDate: o.orderDate
+      }));
+
+    return {
+      averageRating,
+      totalReviews: stopOrders.length,
+      recentReviews
+    };
+  }, [orders]);
 
   const routePositions = stops
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
@@ -102,40 +177,56 @@ const MapModule: React.FC = () => {
             />
           )}
 
-          {stops.map(stop => (
-            <Marker
-              key={stop.id}
-              position={[stop.lat, stop.lng]}
-              icon={createCustomIcon(stop.status)}
-              eventHandlers={{
-                click: () => setSelectedStop(stop)
-              }}
-            >
-              <Popup>
-                <div className="popup-content">
-                  <h4>{stop.city}</h4>
-                  <p><strong>剧目：</strong>{stop.playName}</p>
-                  <p><strong>时间：</strong>{formatDate(stop.date)}</p>
-                  <p><strong>场馆：</strong>{stop.venue}</p>
-                  <p><strong>状态：</strong>
-                    <span className={`status-tag ${stop.status === '已演出' ? 'done' : 'planned'}`}>
-                      {stop.status}
-                    </span>
-                  </p>
-                  {stop.status === '已演出' && (
-                    <p><strong>票房：</strong>¥{stop.boxOffice.toLocaleString()}</p>
-                  )}
-                </div>
-              </Popup>
-            </Marker>
-          ))}
+          {stops.map(stop => {
+            const reviewSummary = getReviewSummary(stop.id);
+            return (
+              <Marker
+                key={stop.id}
+                position={[stop.lat, stop.lng]}
+                icon={createCustomIcon(stop.status)}
+                eventHandlers={{
+                  click: () => setSelectedStop(stop)
+                }}
+              >
+                <Popup>
+                  <div className="popup-content">
+                    <h4>{stop.city}</h4>
+                    <p><strong>剧目：</strong>{stop.playName}</p>
+                    <p><strong>时间：</strong>{formatDate(stop.date)}</p>
+                    <p><strong>场馆：</strong>{stop.venue}</p>
+                    <p><strong>状态：</strong>
+                      <span className={`status-tag ${stop.status === '已演出' ? 'done' : 'planned'}`}>
+                        {stop.status}
+                      </span>
+                    </p>
+                    {stop.status === '已演出' && (
+                      <p><strong>票房：</strong>¥{stop.boxOffice.toLocaleString()}</p>
+                    )}
+                    {reviewSummary.totalReviews > 0 && (
+                      <div className="popup-rating">
+                        <strong>评分：</strong>
+                        <StarRating rating={reviewSummary.averageRating} />
+                        <span className="popup-rating-score">{reviewSummary.averageRating.toFixed(1)}</span>
+                      </div>
+                    )}
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
         </MapContainer>
       </div>
 
       {selectedStop && (
         <div className="stop-detail-modal" onClick={() => setSelectedStop(null)}>
           <div className="stop-detail-card" onClick={e => e.stopPropagation()}>
-            <button className="close-btn" onClick={() => setSelectedStop(null)}>×</button>
+            <button 
+              className="close-btn" 
+              onClick={() => setSelectedStop(null)}
+              title="关闭"
+            >
+              ×
+            </button>
             <h3>{selectedStop.city}站</h3>
             <div className="detail-row">
               <span className="label">演出剧目</span>
@@ -159,6 +250,44 @@ const MapModule: React.FC = () => {
               <div className="detail-row highlight">
                 <span className="label">票房收入</span>
                 <span className="value">¥{selectedStop.boxOffice.toLocaleString()}</span>
+              </div>
+            )}
+
+            {selectedStop.status === '已演出' && (
+              <div className="review-section">
+                <div className="review-header">
+                  <h4>观众评价</h4>
+                  {(() => {
+                    const summary = getReviewSummary(selectedStop.id);
+                    if (summary.totalReviews === 0) {
+                      return <span className="no-review">暂无评价</span>;
+                    }
+                    return (
+                      <div className="rating-summary">
+                        <StarRating rating={summary.averageRating} size={16} />
+                        <span className="rating-score">{summary.averageRating.toFixed(1)}</span>
+                        <span className="rating-count">({summary.totalReviews}条评价)</span>
+                      </div>
+                    );
+                  })()}
+                </div>
+                {(() => {
+                  const summary = getReviewSummary(selectedStop.id);
+                  if (summary.recentReviews.length === 0) return null;
+                  return (
+                    <div className="review-list">
+                      {summary.recentReviews.map((review, index) => (
+                        <div key={index} className="review-item">
+                          <div className="review-top">
+                            <span className="reviewer-name">{review.customerName}</span>
+                            <StarRating rating={review.rating} size={12} />
+                          </div>
+                          <p className="review-comment">{review.comment}</p>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
