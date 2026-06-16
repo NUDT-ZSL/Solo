@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { Material } from '../types';
 
 interface AddMaterialFormProps {
   onAdd: (material: Omit<Material, 'id'>) => void;
   onClose: () => void;
+  materials: Material[];
 }
 
 const PRESET_COLORS = [
@@ -11,13 +12,21 @@ const PRESET_COLORS = [
   '#1ABC9C', '#E67E22', '#34495E', '#BDC3C7', '#ECF0F1',
 ];
 
-export const AddMaterialForm: React.FC<AddMaterialFormProps> = ({ onAdd, onClose }) => {
+export const AddMaterialForm: React.FC<AddMaterialFormProps> = ({ onAdd, onClose, materials }) => {
   const [name, setName] = useState('');
   const [unit, setUnit] = useState('颗');
   const [color, setColor] = useState('#E74C3C');
   const [quantity, setQuantity] = useState(0);
   const [supplier, setSupplier] = useState('');
   const [price, setPrice] = useState(0);
+  const [showSupplierList, setShowSupplierList] = useState(false);
+
+  const uniqueSuppliers = useMemo(() => {
+    const suppliers = materials
+      .map((m) => m.supplier)
+      .filter((s) => s && s.trim() !== '');
+    return Array.from(new Set(suppliers));
+  }, [materials]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,13 +109,55 @@ export const AddMaterialForm: React.FC<AddMaterialFormProps> = ({ onAdd, onClose
             </div>
             <div className="form-group">
               <label>供应商</label>
-              <input
-                type="text"
-                value={supplier}
-                onChange={(e) => setSupplier(e.target.value)}
-                placeholder="请输入供应商名称"
-                required
-              />
+              <div className="supplier-input-wrapper">
+                <input
+                  type="text"
+                  value={supplier}
+                  onChange={(e) => setSupplier(e.target.value)}
+                  placeholder="请输入供应商名称"
+                />
+                <button
+                  type="button"
+                  className="supplier-list-btn"
+                  onClick={() => setShowSupplierList(!showSupplierList)}
+                  title="查看已有供应商"
+                >
+                  📋
+                </button>
+              </div>
+              {showSupplierList && (
+                <div className="supplier-list-dropdown" onClick={(e) => e.stopPropagation()}>
+                  <div className="supplier-list-header">
+                    <span>已有供应商</span>
+                    <button
+                      type="button"
+                      className="supplier-list-close"
+                      onClick={() => setShowSupplierList(false)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  {uniqueSuppliers.length > 0 ? (
+                    <div className="supplier-list-items">
+                      {uniqueSuppliers.map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          className="supplier-list-item"
+                          onClick={() => {
+                            setSupplier(s);
+                            setShowSupplierList(false);
+                          }}
+                        >
+                          🏪 {s}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="supplier-list-empty">暂无已有供应商</div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           <div className="form-actions">

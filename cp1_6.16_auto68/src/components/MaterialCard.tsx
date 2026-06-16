@@ -31,16 +31,13 @@ export const MaterialCard: React.FC<MaterialCardProps> = ({
           <p>
             <span className="label">库存:</span>
             <span className={`quantity ${isLowStock ? 'low' : ''}`}>
-              {material.quantity} {material.unit}
+              {material.quantity}
+              <span className="unit-tag">{material.unit}</span>
             </span>
           </p>
           <p>
             <span className="label">单价:</span>
             <span className="price">{formatCurrency(material.price)}/{material.unit}</span>
-          </p>
-          <p>
-            <span className="label">供应商:</span>
-            <span className="supplier">{material.supplier}</span>
           </p>
         </div>
         {isLowStock && (
@@ -48,6 +45,10 @@ export const MaterialCard: React.FC<MaterialCardProps> = ({
             !
           </div>
         )}
+      </div>
+      <div className="supplier-footer">
+        <span className="supplier-icon">🏪</span>
+        <span className="supplier-name">{material.supplier || '未指定'}</span>
       </div>
       <button
         className="delete-btn"

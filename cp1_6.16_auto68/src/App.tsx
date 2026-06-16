@@ -181,6 +181,7 @@ function App() {
         <AddMaterialForm
           onAdd={handleAddMaterial}
           onClose={() => setShowAddMaterial(false)}
+          materials={materials}
         />
       )}
 
