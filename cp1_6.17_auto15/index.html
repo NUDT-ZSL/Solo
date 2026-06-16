@@ -51,6 +51,36 @@
     #info-panel .price-up { color: #FF4444; }
     #info-panel .price-down { color: #44FF44; }
 
+    #info-panel .info-section {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(165, 180, 252, 0.15);
+    }
+
+    #info-panel .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #A5B4FC;
+      margin-bottom: 10px;
+    }
+
+    #info-panel .strength-bar {
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+
+    #info-panel .strength-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #6366F1 0%, #8B5CF6 50%, #EC4899 100%);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
     #info-panel .action-btn {
       width: 100%;
       margin-top: 14px;
@@ -195,7 +225,27 @@
         <span class="info-label">整体趋势</span>
         <span class="info-value" id="market-trend">-</span>
       </div>
-      <button class="action-btn" id="reset-view-btn">重置视角</button>
+
+      <div class="info-section">
+        <div class="section-title">⚡ 力场连接状态</div>
+        <div class="info-row">
+          <span class="info-label">活跃连线</span>
+          <span class="info-value" id="force-lines-count">-</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">平均相关系数</span>
+          <span class="info-value" id="force-avg-corr">-</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">力场强度</span>
+          <span class="info-value" id="force-strength">-</span>
+        </div>
+        <div class="strength-bar">
+          <div class="strength-bar-fill" id="strength-bar-fill"></div>
+        </div>
+      </div>
+
+      <button class="action-btn" id="reset-view-btn">🔄 重置视角</button>
       <button class="action-btn" id="toggle-lines-btn">切换力场线</button>
     </div>
 

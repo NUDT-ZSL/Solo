@@ -35,6 +35,7 @@
  */
 
 import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GUI } from 'dat.gui';
 import { DataManager } from './dataManager';
 import { ParticleSystem } from './particleSystem';
@@ -51,6 +52,7 @@ class FinanceForceFieldApp {
   private renderer!: THREE.WebGLRenderer;
   private canvas!: HTMLCanvasElement;
   private clock!: THREE.Clock;
+  private controls!: OrbitControls;
 
   // ============== 业务模块 ==============
   private dataManager!: DataManager;   // 数据层：模拟生成30×60=1800数据点
@@ -71,19 +73,12 @@ class FinanceForceFieldApp {
     showAxes: true                // 显示坐标轴
   };
 
-  // ============== 相机控制 ==============
-  private isDragging: boolean = false;
-  private previousMousePosition: { x: number; y: number } = { x: 0, y: 0 };
-  private spherical: { radius: number; theta: number; phi: number } = {
-    radius: 14,    // 缩放范围 2 - 20
-    theta: Math.PI / 4,
-    phi: Math.PI / 3
-  };
-  private targetSpherical = { ...this.spherical };
-
-  // ============== 鼠标与交互 ==============
+  // ============== 交互状态 ==============
   private mouse: THREE.Vector2 = new THREE.Vector2();
   private hoveredStockIndex: number = -1;
+  private isPointerDown: boolean = false;
+  private pointerDownPos: { x: number; y: number } = { x: 0, y: 0 };
+  private hasDragged: boolean = false;
 
   // ============== 性能统计 ==============
   private frameCount: number = 0;
@@ -123,7 +118,19 @@ class FinanceForceFieldApp {
       0.1,
       1000
     );
-    this.updateCameraPosition();
+    this.camera.position.set(8, 6, 10);
+    this.camera.lookAt(0, 0, 0);
+
+    // OrbitControls 轨道控制器 - 替代自定义球坐标控制
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.08;
+    this.controls.minDistance = 2;
+    this.controls.maxDistance = 20;
+    this.controls.target.set(0, 0, 0);
+    this.controls.enablePan = false;
+    this.controls.autoRotate = false;
+    this.controls.autoRotateSpeed = 0.5;
 
     // WebGL 渲染器：抗锯齿、高 DPI 适配、ACES 色调映射
     this.renderer = new THREE.WebGLRenderer({
@@ -264,18 +271,18 @@ class FinanceForceFieldApp {
 
   // ============================================================
   //  4. 事件监听器
+  //  OrbitControls 接管旋转/缩放，这里补充悬停与点击
   // ============================================================
   private setupEventListeners(): void {
     // 窗口尺寸变化 → 更新相机与渲染器
     window.addEventListener('resize', this.onWindowResize.bind(this));
 
-    // 鼠标交互
-    this.canvas.addEventListener('mousedown', this.onMouseDown.bind(this));
-    window.addEventListener('mouseup', this.onMouseUp.bind(this));
-    window.addEventListener('mousemove', this.onMouseMove.bind(this));
+    // 鼠标移动 → 悬停粒子检测
+    this.canvas.addEventListener('mousemove', this.onMouseMove.bind(this));
 
-    // 滚轮缩放
-    this.canvas.addEventListener('wheel', this.onWheel.bind(this), { passive: false });
+    // 指针按下/抬起 → 区分拖拽与点击
+    this.canvas.addEventListener('pointerdown', this.onPointerDown.bind(this));
+    window.addEventListener('pointerup', this.onPointerUp.bind(this));
 
     // 单击选中
     this.canvas.addEventListener('click', this.onClick.bind(this));
@@ -311,9 +318,9 @@ class FinanceForceFieldApp {
       trendEl.className = 'info-value';
     }
 
-    // 重置视角按钮
+    // 重置视角按钮 - 使用 OrbitControls.reset() 回到初始位置
     document.getElementById('reset-view-btn')!.addEventListener('click', () => {
-      this.targetSpherical = { radius: 14, theta: Math.PI / 4, phi: Math.PI / 3 };
+      this.controls.reset();
       this.clearSelection();
     });
 
@@ -342,59 +349,39 @@ class FinanceForceFieldApp {
   }
 
   // ============================================================
-  //  鼠标交互：拖拽旋转
+  //  指针事件：区分拖拽 vs 点击
+  //  旋转/缩放由 OrbitControls 接管，这里仅记录状态
   // ============================================================
-  private onMouseDown(e: MouseEvent): void {
-    this.isDragging = true;
-    this.previousMousePosition = { x: e.clientX, y: e.clientY };
-    this.canvas.style.cursor = 'grabbing';
+  private onPointerDown(e: PointerEvent): void {
+    this.isPointerDown = true;
+    this.pointerDownPos = { x: e.clientX, y: e.clientY };
+    this.hasDragged = false;
   }
 
-  private onMouseUp(): void {
-    if (this.isDragging) {
-      this.isDragging = false;
-      this.canvas.style.cursor = 'grab';
-    }
+  private onPointerUp(): void {
+    this.isPointerDown = false;
   }
 
   private onMouseMove(e: MouseEvent): void {
     this.updateMouse(e.clientX, e.clientY);
 
-    if (this.isDragging) {
-      const deltaX = e.clientX - this.previousMousePosition.x;
-      const deltaY = e.clientY - this.previousMousePosition.y;
-
-      this.targetSpherical.theta -= deltaX * 0.005;
-      this.targetSpherical.phi = Math.max(
-        0.08,
-        Math.min(Math.PI - 0.08, this.targetSpherical.phi - deltaY * 0.005)
-      );
-
-      this.previousMousePosition = { x: e.clientX, y: e.clientY };
+    if (this.isPointerDown) {
+      const dx = e.clientX - this.pointerDownPos.x;
+      const dy = e.clientY - this.pointerDownPos.y;
+      if (Math.sqrt(dx * dx + dy * dy) > 5) {
+        this.hasDragged = true;
+      }
     } else {
       this.handleHover();
     }
   }
 
   /**
-   * 滚轮缩放：缩放范围 2 - 20 单位
-   */
-  private onWheel(e: WheelEvent): void {
-    e.preventDefault();
-    e.stopPropagation();
-    const zoomFactor = e.deltaY > 0 ? 1.08 : 0.92;
-    this.targetSpherical.radius = Math.max(
-      2,
-      Math.min(20, this.targetSpherical.radius * zoomFactor)
-    );
-  }
-
-  /**
    * 单击粒子 → 选中股票，绘制轨迹，弹出信息面板
+   * 拖拽中不触发点击
    */
   private onClick(): void {
-    if (this.isDragging) return;
-
+    if (this.hasDragged) return;
     const result = this.particleSystem.detectClick(this.mouse, this.camera);
     if (result) {
       this.selectStock(result.stockIndex, result.dayIndex);

@@ -202,6 +202,38 @@ export class ForceField {
     return this.forceLines.length;
   }
 
+  getConnectionStats(): {
+    activeConnections: number;
+    avgCorrelation: number;
+    fieldStrength: number;
+  } {
+    if (this.forceLines.length === 0 || !this.enabled) {
+      return { activeConnections: 0, avgCorrelation: 0, fieldStrength: 0 };
+    }
+
+    let totalCorr = 0;
+    let activeCount = 0;
+    let totalOpacity = 0;
+
+    for (const fl of this.forceLines) {
+      if (fl.line.visible) {
+        activeCount++;
+        totalCorr += Math.abs(fl.correlation);
+        totalOpacity += (fl.line.material as THREE.LineBasicMaterial).opacity;
+      }
+    }
+
+    const avgCorr = activeCount > 0 ? totalCorr / activeCount : 0;
+    const avgOpacity = activeCount > 0 ? totalOpacity / activeCount : 0;
+    const fieldStrength = Math.min(100, avgCorr * 100 * (0.6 + avgOpacity * 0.8));
+
+    return {
+      activeConnections: activeCount,
+      avgCorrelation: parseFloat(avgCorr.toFixed(3)),
+      fieldStrength: parseFloat(fieldStrength.toFixed(1))
+    };
+  }
+
   private clearAllLines(): void {
     for (const forceLine of this.forceLines) {
       forceLine.line.geometry.dispose();
