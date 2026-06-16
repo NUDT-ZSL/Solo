@@ -11,41 +11,97 @@ import type {
 } from '../types';
 import { ALL_SKILLS } from '../types';
 
-const MATCH_THRESHOLD = 0.6;
+export interface SkillWeights {
+  [key: string]: number;
+}
+
+export interface MatchOptions {
+  threshold: number;
+  skillWeights?: SkillWeights;
+  urgencyWeight?: number;
+}
+
+const DEFAULT_SKILL_WEIGHTS: SkillWeights = {
+  教学: 1.2,
+  翻译: 1.0,
+  技术: 1.3,
+  设计: 1.1,
+  医疗: 1.5,
+};
+
+function getWeekNumber(date: Date): { year: number; week: number } {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return { year: d.getUTCFullYear(), week };
+}
+
+export function isSameWeek(dateStr: string, referenceDate: Date = new Date()): boolean {
+  const target = new Date(dateStr);
+  const refWeek = getWeekNumber(referenceDate);
+  const targetWeek = getWeekNumber(target);
+  return refWeek.year === targetWeek.year && refWeek.week === targetWeek.week;
+}
 
 export function calculateSkillMatch(
   volunteerSkills: Skill[],
-  requiredSkills: Skill[]
+  requiredSkills: Skill[],
+  skillWeights: SkillWeights = DEFAULT_SKILL_WEIGHTS
 ): number {
   if (requiredSkills.length === 0) return 1;
   if (volunteerSkills.length === 0) return 0;
 
   const volunteerSet = new Set(volunteerSkills);
-  let matched = 0;
+  let matchedWeight = 0;
+  let totalWeight = 0;
 
   for (const skill of requiredSkills) {
+    const weight = skillWeights[skill] ?? 1;
+    totalWeight += weight;
     if (volunteerSet.has(skill)) {
-      matched++;
+      matchedWeight += weight;
     }
   }
 
-  return matched / requiredSkills.length;
+  return totalWeight > 0 ? matchedWeight / totalWeight : 0;
+}
+
+function calculateUrgencyScore(activityDate: string): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const activityDay = new Date(activityDate);
+  activityDay.setHours(0, 0, 0, 0);
+
+  const daysUntil = Math.ceil((activityDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (daysUntil < 0) return 0;
+  if (daysUntil <= 3) return 1;
+  if (daysUntil <= 7) return 0.7;
+  if (daysUntil <= 14) return 0.4;
+  return 0.1;
 }
 
 export function matchActivitiesToVolunteer(
   activities: Activity[],
   volunteer: Volunteer | null,
-  volunteerSkills: Skill[]
+  volunteerSkills: Skill[],
+  options: MatchOptions = { threshold: 0.6 }
 ): MatchedActivity[] {
   const skills = volunteer?.skills.length ? volunteer.skills : volunteerSkills;
+  const { threshold, skillWeights, urgencyWeight = 0.15 } = options;
 
   return activities
     .map((activity) => {
-      const matchScore = calculateSkillMatch(skills, activity.requiredSkills);
+      const skillMatchScore = calculateSkillMatch(skills, activity.requiredSkills, skillWeights);
+      const urgencyScore = calculateUrgencyScore(activity.date);
+      const finalScore = skillMatchScore * (1 - urgencyWeight) + urgencyScore * urgencyWeight;
+
       return {
         ...activity,
-        matchScore,
-        isRecommended: matchScore >= MATCH_THRESHOLD,
+        matchScore: Math.min(1, finalScore),
+        isRecommended: finalScore >= threshold,
       };
     })
     .sort((a, b) => b.matchScore - a.matchScore);
@@ -59,20 +115,19 @@ export function calculateTotalHours(records: ServiceRecord[], volunteerName?: st
 }
 
 export function calculateWeeklyHours(records: ServiceRecord[]): number {
-  const now = new Date();
-  const weekStart = new Date(now);
-  weekStart.setDate(now.getDate() - 7);
-
   return records
-    .filter((r) => {
-      const recordDate = new Date(r.date);
-      return recordDate >= weekStart && recordDate <= now;
-    })
+    .filter((r) => isSameWeek(r.date))
     .reduce((sum, r) => sum + r.hours, 0);
 }
 
 export function countActiveVolunteers(records: ServiceRecord[]): number {
   const uniqueNames = new Set(records.map((r) => r.volunteerName));
+  return uniqueNames.size;
+}
+
+export function countWeeklyActiveVolunteers(records: ServiceRecord[]): number {
+  const weeklyRecords = records.filter((r) => isSameWeek(r.date));
+  const uniqueNames = new Set(weeklyRecords.map((r) => r.volunteerName));
   return uniqueNames.size;
 }
 
@@ -152,9 +207,11 @@ export function generateVolunteerReport(
 }
 
 export function generateDashboardStats(records: ServiceRecord[]): DashboardStats {
+  const weeklyRecords = records.filter((r) => isSameWeek(r.date));
+
   return {
     weeklyHours: calculateWeeklyHours(records),
-    activeVolunteers: countActiveVolunteers(records),
-    topActivities: getTopActivities(records),
+    activeVolunteers: countWeeklyActiveVolunteers(records),
+    topActivities: getTopActivities(weeklyRecords),
   };
 }

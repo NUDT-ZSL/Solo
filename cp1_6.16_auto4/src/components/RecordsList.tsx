@@ -6,38 +6,53 @@ interface RecordsListProps {
 }
 
 const ITEM_HEIGHT = 52;
-const BUFFER = 3;
+const BUFFER_SIZE = 5;
 
 const RecordsList: React.FC<RecordsListProps> = ({ records }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
-  const [containerHeight, setContainerHeight] = useState(360);
+  const [viewportHeight, setViewportHeight] = useState(360);
 
   useEffect(() => {
-    if (containerRef.current) {
-      setContainerHeight(containerRef.current.clientHeight);
-    }
+    const container = containerRef.current;
+    if (!container) return;
+
+    const updateHeight = () => {
+      if (container) {
+        setViewportHeight(container.clientHeight);
+      }
+    };
+
+    updateHeight();
+
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(container);
+
+    return () => {
+      observer.disconnect();
+    };
   }, []);
 
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     setScrollTop(e.currentTarget.scrollTop);
   }, []);
 
-  const { startIndex, endIndex, items, topOffset } = useMemo(() => {
+  const virtualState = useMemo(() => {
     const totalHeight = records.length * ITEM_HEIGHT;
-    const visibleCount = Math.ceil(containerHeight / ITEM_HEIGHT) + BUFFER * 2;
-    const start = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - BUFFER);
-    const end = Math.min(records.length, start + visibleCount);
-    const visibleItems = records.slice(start, end);
+    const visibleCount = Math.ceil(viewportHeight / ITEM_HEIGHT);
+    const startIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - BUFFER_SIZE);
+    const endIndex = Math.min(records.length, startIndex + visibleCount + BUFFER_SIZE * 2);
+    const visibleItems = records.slice(startIndex, endIndex);
+    const topPadding = startIndex * ITEM_HEIGHT;
 
     return {
-      startIndex: start,
-      endIndex: end,
-      items: visibleItems,
-      topOffset: start * ITEM_HEIGHT,
       totalHeight,
+      startIndex,
+      endIndex,
+      visibleItems,
+      topPadding,
     };
-  }, [scrollTop, containerHeight, records]);
+  }, [records, scrollTop, viewportHeight]);
 
   if (records.length === 0) {
     return (
@@ -56,15 +71,32 @@ const RecordsList: React.FC<RecordsListProps> = ({ records }) => {
         ref={containerRef}
         className="records-virtual-list"
         onScroll={handleScroll}
+        style={{ overflowY: 'auto' }}
       >
-        <div style={{ height: records.length * ITEM_HEIGHT, position: 'relative' }}>
-          <div style={{ transform: `translateY(${topOffset}px)` }}>
-            {items.map((record, index) => (
+        <div
+          style={{
+            height: virtualState.totalHeight,
+            position: 'relative',
+            width: '100%',
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              transform: `translateY(${virtualState.topPadding}px)`,
+            }}
+          >
+            {virtualState.visibleItems.map((record) => (
               <div
                 key={record.id}
                 className="record-item"
-                style={{ height: ITEM_HEIGHT }}
-                data-index={startIndex + index}
+                style={{
+                  height: ITEM_HEIGHT,
+                  boxSizing: 'border-box',
+                }}
               >
                 <div className="record-info">
                   <div style={{ fontWeight: 500, color: '#2D3748' }}>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   PieChart,
   Pie,
@@ -12,7 +12,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import type { VolunteerReport as VolunteerReportType } from '../types';
+import type { VolunteerReport as VolunteerReportType, Skill } from '../types';
 import { SKILL_COLORS } from '../types';
 
 interface VolunteerReportProps {
@@ -20,6 +20,29 @@ interface VolunteerReportProps {
   loading: boolean;
   onSearch: (name: string) => void;
 }
+
+const SkeletonLoader: React.FC = () => (
+  <>
+    <div className="report-stats">
+      {[0, 1].map((i) => (
+        <div key={i} className="report-stat-item">
+          <div className="skeleton skeleton-text" style={{ width: '40%' }} />
+          <div className="skeleton skeleton-text" style={{ width: '60%', height: 28 }} />
+        </div>
+      ))}
+    </div>
+    <div className="charts-container">
+      <div className="chart-wrapper">
+        <div className="skeleton skeleton-title" />
+        <div className="skeleton" style={{ height: 200 }} />
+      </div>
+      <div className="chart-wrapper">
+        <div className="skeleton skeleton-title" />
+        <div className="skeleton" style={{ height: 200 }} />
+      </div>
+    </div>
+  </>
+);
 
 const VolunteerReport: React.FC<VolunteerReportProps> = ({ report, loading, onSearch }) => {
   const [searchName, setSearchName] = useState<string>('');
@@ -31,28 +54,18 @@ const VolunteerReport: React.FC<VolunteerReportProps> = ({ report, loading, onSe
     }
   };
 
-  const SkeletonLoader = () => (
-    <>
-      <div className="report-stats">
-        {[0, 1].map((i) => (
-          <div key={i} className="report-stat-item">
-            <div className="skeleton skeleton-text" style={{ width: '40%' }} />
-            <div className="skeleton skeleton-text" style={{ width: '60%', height: 28 }} />
-          </div>
-        ))}
-      </div>
-      <div className="charts-container">
-        <div className="chart-wrapper">
-          <div className="skeleton skeleton-title" />
-          <div className="skeleton" style={{ height: 200 }} />
-        </div>
-        <div className="chart-wrapper">
-          <div className="skeleton skeleton-title" />
-          <div className="skeleton" style={{ height: 200 }} />
-        </div>
-      </div>
-    </>
-  );
+  const pieData = useMemo(() => {
+    if (!report) return [];
+    return report.skillDistribution.map((item) => ({
+      ...item,
+      fill: SKILL_COLORS[item.name as Skill] || '#999',
+    }));
+  }, [report]);
+
+  const lineData = useMemo(() => {
+    if (!report) return [];
+    return report.monthlyTrend;
+  }, [report]);
 
   return (
     <div className="report-section">
@@ -73,7 +86,7 @@ const VolunteerReport: React.FC<VolunteerReportProps> = ({ report, loading, onSe
       {loading ? (
         <SkeletonLoader />
       ) : report ? (
-        <>
+        <div className="report-content" key={`report-${report.volunteerName}-${report.totalHours}`}>
           <div className="report-stats">
             <div className="report-stat-item">
               <div className="report-stat-label">总服务时长</div>
@@ -86,13 +99,13 @@ const VolunteerReport: React.FC<VolunteerReportProps> = ({ report, loading, onSe
           </div>
 
           <div className="charts-container">
-            <div className="chart-wrapper" key={`pie-${report.volunteerName}-${report.skillDistribution.length}`}>
+            <div className="chart-wrapper">
               <div className="chart-title">技能分布</div>
-              {report.skillDistribution.length > 0 ? (
+              {pieData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={220}>
                   <PieChart>
                     <Pie
-                      data={report.skillDistribution}
+                      data={pieData}
                       cx="50%"
                       cy="50%"
                       innerRadius={40}
@@ -102,8 +115,8 @@ const VolunteerReport: React.FC<VolunteerReportProps> = ({ report, loading, onSe
                       nameKey="name"
                       label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                     >
-                      {report.skillDistribution.map((entry) => (
-                        <Cell key={`cell-${entry.name}`} fill={SKILL_COLORS[entry.name]} />
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} />
                       ))}
                     </Pie>
                     <Tooltip formatter={(value) => [`${value}小时`, '时长']} />
@@ -115,11 +128,11 @@ const VolunteerReport: React.FC<VolunteerReportProps> = ({ report, loading, onSe
               )}
             </div>
 
-            <div className="chart-wrapper" key={`line-${report.volunteerName}-${report.monthlyTrend.length}`}>
+            <div className="chart-wrapper">
               <div className="chart-title">月度服务趋势</div>
-              {report.monthlyTrend.length > 0 ? (
+              {lineData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={report.monthlyTrend} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                  <LineChart data={lineData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#EDF2F7" />
                     <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                     <YAxis tick={{ fontSize: 12 }} />
@@ -140,7 +153,7 @@ const VolunteerReport: React.FC<VolunteerReportProps> = ({ report, loading, onSe
               )}
             </div>
           </div>
-        </>
+        </div>
       ) : (
         <div className="empty-state">输入志愿者姓名查看其服务报告</div>
       )}
