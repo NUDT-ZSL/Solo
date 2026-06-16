@@ -1,0 +1,101 @@
+[
+  {
+    "id": "stop-001",
+    "city": "北京",
+    "lat": 39.9042,
+    "lng": 116.4074,
+    "playId": "play-001",
+    "date": "2026-03-15",
+    "venue": "国家大剧院",
+    "boxOffice": 285000,
+    "status": "已演出"
+  },
+  {
+    "id": "stop-002",
+    "city": "上海",
+    "lat": 31.2304,
+    "lng": 121.4737,
+    "playId": "play-001",
+    "date": "2026-03-22",
+    "venue": "上海话剧艺术中心",
+    "boxOffice": 312000,
+    "status": "已演出"
+  },
+  {
+    "id": "stop-003",
+    "city": "广州",
+    "lat": 23.1291,
+    "lng": 113.2644,
+    "playId": "play-002",
+    "date": "2026-04-05",
+    "venue": "广州大剧院",
+    "boxOffice": 198000,
+    "status": "已演出"
+  },
+  {
+    "id": "stop-004",
+    "city": "成都",
+    "lat": 30.5728,
+    "lng": 104.0668,
+    "playId": "play-002",
+    "date": "2026-04-12",
+    "venue": "四川大剧院",
+    "boxOffice": 176000,
+    "status": "已演出"
+  },
+  {
+    "id": "stop-005",
+    "city": "杭州",
+    "lat": 30.2741,
+    "lng": 120.1551,
+    "playId": "play-003",
+    "date": "2026-05-01",
+    "venue": "杭州大剧院",
+    "boxOffice": 156000,
+    "status": "已演出"
+  },
+  {
+    "id": "stop-006",
+    "city": "南京",
+    "lat": 32.0603,
+    "lng": 118.7969,
+    "playId": "play-003",
+    "date": "2026-05-10",
+    "venue": "南京保利大剧院",
+    "boxOffice": 0,
+    "status": "计划中"
+  },
+  {
+    "id": "stop-007",
+    "city": "武汉",
+    "lat": 30.5928,
+    "lng": 114.3055,
+    "playId": "play-004",
+    "date": "2026-05-18",
+    "venue": "武汉琴台大剧院",
+    "boxOffice": 0,
+    "status": "计划中"
+  },
+  {
+    "id": "stop-008",
+    "city": "西安",
+    "lat": 34.3416,
+    "lng": 108.9398,
+    "playId": "play-005",
+    "date": "2026-06-01",
+    "venue": "陕西大剧院",
+    "boxOffice": 0,
+    "status": "计划中"
+  },
+  {
+    "id": "stop-009",
+    "city": "深圳",
+    "lat": 22.5431,
+    "lng": 114.0579,
+    "playId": "play-006",
+    "date": "2026-06-15",
+    "venue": "深圳大剧院",
+    "boxOffice": 0,
+    "status": "计划中"
+  }
+]

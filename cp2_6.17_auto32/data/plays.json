@@ -1,0 +1,56 @@
+[
+  {
+    "id": "play-001",
+    "name": "雷雨",
+    "type": "话剧",
+    "duration": 150,
+    "cast": ["周萍", "繁漪", "周朴园", "鲁侍萍", "四凤"],
+    "posterUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=chinese%20drama%20thunderstorm%20poster%20dramatic%20stage%20dark%20atmosphere&image_size=portrait_4_3",
+    "description": "曹禺经典话剧，讲述封建大家庭的悲剧故事"
+  },
+  {
+    "id": "play-002",
+    "name": "牡丹亭",
+    "type": "戏曲",
+    "duration": 180,
+    "cast": ["杜丽娘", "柳梦梅", "春香", "杜宝"],
+    "posterUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=chinese%20opera%20peony%20pavilion%20traditional%20beautiful%20elegant&image_size=portrait_4_3",
+    "description": "汤显祖经典昆曲剧目，穿越生死的爱情传奇"
+  },
+  {
+    "id": "play-003",
+    "name": "彩虹鱼",
+    "type": "儿童剧",
+    "duration": 90,
+    "cast": ["彩虹鱼", "小海星", "章鱼博士", "小海龟"],
+    "posterUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=childrens%20theater%20rainbow%20fish%20colorful%20cute%20underwater%20adventure&image_size=portrait_4_3",
+    "description": "温馨有趣的儿童音乐剧，讲述分享与友谊的故事"
+  },
+  {
+    "id": "play-004",
+    "name": "茶馆",
+    "type": "话剧",
+    "duration": 170,
+    "cast": ["王利发", "松二爷", "常四爷", "秦仲义"],
+    "posterUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=chinese%20teahouse%20drama%20vintage%20beijing%20historical%20stage&image_size=portrait_4_3",
+    "description": "老舍经典话剧，见证时代变迁的人生百态"
+  },
+  {
+    "id": "play-005",
+    "name": "白蛇传",
+    "type": "戏曲",
+    "duration": 160,
+    "cast": ["白素贞", "许仙", "小青", "法海"],
+    "posterUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=chinese%20opera%20white%20snake%20legend%20elegant%20mythical%20romantic&image_size=portrait_4_3",
+    "description": "中国四大民间传说之一，人蛇之恋的凄美故事"
+  },
+  {
+    "id": "play-006",
+    "name": "恐龙历险记",
+    "type": "儿童剧",
+    "duration": 80,
+    "cast": ["霸王龙", "三角龙", "翼龙", "小恐龙嘟嘟"],
+    "posterUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=childrens%20dinosaur%20adventure%20colorful%20cute%20puppets%20theater&image_size=portrait_4_3",
+    "description": "带你穿越回恐龙时代的奇幻冒险之旅"
+  }
+]

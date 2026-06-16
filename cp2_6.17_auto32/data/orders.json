@@ -1,0 +1,32 @@
+[
+  {
+    "id": "order-001",
+    "playId": "play-001",
+    "stopId": "stop-001",
+    "seatNumber": "A-05",
+    "seatArea": "front",
+    "customerName": "张三",
+    "orderDate": "2026-02-10",
+    "price": 580
+  },
+  {
+    "id": "order-002",
+    "playId": "play-001",
+    "stopId": "stop-001",
+    "seatNumber": "A-06",
+    "seatArea": "front",
+    "customerName": "李四",
+    "orderDate": "2026-02-11",
+    "price": 580
+  },
+  {
+    "id": "order-003",
+    "playId": "play-001",
+    "stopId": "stop-002",
+    "seatNumber": "B-12",
+    "seatArea": "middle",
+    "customerName": "王五",
+    "orderDate": "2026-02-15",
+    "price": 380
+  }
+]
