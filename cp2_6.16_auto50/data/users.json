@@ -1,0 +1,26 @@
+[
+  {
+    "id": "user-1",
+    "name": "管理员张华",
+    "role": "管理员",
+    "registeredActivities": [],
+    "claimedTasks": [],
+    "totalHours": 0
+  },
+  {
+    "id": "user-2",
+    "name": "居民李明",
+    "role": "普通用户",
+    "registeredActivities": ["act-1", "act-2", "act-3"],
+    "claimedTasks": [],
+    "totalHours": 0
+  },
+  {
+    "id": "user-3",
+    "name": "志愿者王芳",
+    "role": "志愿者",
+    "registeredActivities": ["act-2", "act-3"],
+    "claimedTasks": ["act-1", "act-3"],
+    "totalHours": 8
+  }
+]

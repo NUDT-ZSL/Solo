@@ -1,0 +1,35 @@
+[
+  {
+    "id": "act-1",
+    "title": "社区清洁日",
+    "description": "一起动手清洁社区环境，捡拾垃圾，美化家园，让我们的社区更加干净整洁，共建美好居住环境",
+    "date": "2026-07-01",
+    "status": "进行中",
+    "registrations": ["user-2"],
+    "claimedBy": ["user-3"],
+    "hoursLogged": [{ "userId": "user-3", "hours": 3 }],
+    "createdAt": "2026-06-10T08:00:00.000Z"
+  },
+  {
+    "id": "act-2",
+    "title": "关爱老人志愿服务",
+    "description": "走进社区养老院，陪伴老人聊天、下棋、读报，为他们带去温暖与关怀，让爱在社区传递",
+    "date": "2026-06-20",
+    "status": "进行中",
+    "registrations": ["user-2", "user-3"],
+    "claimedBy": [],
+    "hoursLogged": [],
+    "createdAt": "2026-06-08T10:00:00.000Z"
+  },
+  {
+    "id": "act-3",
+    "title": "儿童阅读推广活动",
+    "description": "为社区儿童组织阅读分享会，培养孩子们的阅读兴趣和习惯，让书香浸润社区每一个角落",
+    "date": "2026-05-15",
+    "status": "已结束",
+    "registrations": ["user-2", "user-3"],
+    "claimedBy": ["user-3"],
+    "hoursLogged": [{ "userId": "user-3", "hours": 5 }],
+    "createdAt": "2026-05-01T09:00:00.000Z"
+  }
+]
