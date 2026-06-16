@@ -94,15 +94,24 @@ function CollectionPanel() {
 function AppContent() {
   const { state, selectBatch, setDrawer } = useStore();
   const [searchQuery, setSearchQuery] = useState('');
+  const [processFilter, setProcessFilter] = useState('');
   const selectedBatch = state.batches.find(b => b.id === state.selectedBatchId);
+
+  const processOptions = useMemo(() => {
+    const processes = new Set(state.batches.map(b => b.process).filter(Boolean));
+    return Array.from(processes).sort();
+  }, [state.batches]);
 
   const filteredBatches = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return state.batches;
-    return state.batches.filter(
-      b => b.origin.toLowerCase().includes(q) || b.farm.toLowerCase().includes(q)
-    );
-  }, [state.batches, searchQuery]);
+    return state.batches.filter(b => {
+      const matchSearch = !q ||
+        b.origin.toLowerCase().includes(q) ||
+        b.farm.toLowerCase().includes(q);
+      const matchProcess = !processFilter || b.process === processFilter;
+      return matchSearch && matchProcess;
+    });
+  }, [state.batches, searchQuery, processFilter]);
 
   const roastCountMap = useMemo(() => {
     const map: Record<string, number> = {};
@@ -112,6 +121,13 @@ function AppContent() {
     return map;
   }, [state.roasts]);
 
+  const hasActiveFilters = searchQuery || processFilter;
+
+  const handleReset = () => {
+    setSearchQuery('');
+    setProcessFilter('');
+  };
+
   return (
     <div className="app-container">
       <header className="app-header">
@@ -120,14 +136,38 @@ function AppContent() {
       </header>
       <div className="app-body">
         <aside className={`batch-panel ${state.drawerOpen ? 'drawer-open' : ''}`}>
-          <div className="search-wrapper">
-            <input
-              type="text"
-              className="batch-search"
-              placeholder="🔍 搜索产地或庄园..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-            />
+          <div className="search-filter-wrapper">
+            <div className="search-filter-row">
+              <input
+                type="text"
+                className="batch-search"
+                placeholder="🔍 搜索产地或庄园..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
+              <select
+                className="process-filter"
+                value={processFilter}
+                onChange={e => setProcessFilter(e.target.value)}
+              >
+                <option value="">全部处理法</option>
+                <option value="水洗">水洗</option>
+                <option value="日晒">日晒</option>
+                <option value="蜜处理">蜜处理</option>
+                <option value="厌氧">厌氧</option>
+                <option value="水洗处理">水洗处理</option>
+                <option value="日晒处理">日晒处理</option>
+                <option value="蜜处理法">蜜处理法</option>
+                {processOptions.filter(p => !['水洗', '日晒', '蜜处理', '厌氧', '水洗处理', '日晒处理', '蜜处理法'].includes(p)).map(p => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </div>
+            {hasActiveFilters && (
+              <button className="reset-filter-btn" onClick={handleReset}>
+                清除筛选条件
+              </button>
+            )}
           </div>
           <AddBatchForm />
           <div className="batch-list">
