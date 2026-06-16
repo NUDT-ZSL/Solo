@@ -1,0 +1,35 @@
+[
+  {
+    "id": "user-1",
+    "username": "alice",
+    "email": "alice@example.com",
+    "password": "123456",
+    "registeredWorkshops": ["workshop-1", "workshop-3"],
+    "attendedWorkshops": ["workshop-1"],
+    "skills": {
+      "carpentry": { "level": 2, "exp": 150 },
+      "pottery": { "level": 1, "exp": 30 }
+    }
+  },
+  {
+    "id": "user-2",
+    "username": "bob",
+    "email": "bob@example.com",
+    "password": "123456",
+    "registeredWorkshops": ["workshop-2"],
+    "attendedWorkshops": [],
+    "skills": {
+      "weaving": { "level": 1, "exp": 50 },
+      "embroidery": { "level": 3, "exp": 280 }
+    }
+  },
+  {
+    "id": "user-3",
+    "username": "carol",
+    "email": "carol@example.com",
+    "password": "123456",
+    "registeredWorkshops": [],
+    "attendedWorkshops": [],
+    "skills": {}
+  }
+]

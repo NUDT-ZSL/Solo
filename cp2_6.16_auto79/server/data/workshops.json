@@ -1,0 +1,76 @@
+[
+  {
+    "id": "workshop-1",
+    "title": "零基础木工入门：制作你的第一件木勺",
+    "date": "2026-07-15",
+    "location": "创意工坊 A室",
+    "maxParticipants": 8,
+    "materials": ["胡桃木毛坯", "雕刻刀套装", "砂纸", "木蜡油"],
+    "participants": ["user-1"],
+    "hostId": "user-2",
+    "category": "carpentry",
+    "submissions": [
+      { "userId": "user-1", "photo": "https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=800" }
+    ]
+  },
+  {
+    "id": "workshop-2",
+    "title": "陶艺拉坯体验课：手作咖啡杯",
+    "date": "2026-07-20",
+    "location": "陶艺工作室",
+    "maxParticipants": 6,
+    "materials": ["陶土", "拉坯机", "釉料", "烧制服务"],
+    "participants": ["user-2"],
+    "hostId": "user-1",
+    "category": "pottery",
+    "submissions": []
+  },
+  {
+    "id": "workshop-3",
+    "title": "传统编织技艺：手工挂毯制作",
+    "date": "2026-08-05",
+    "location": "纺织艺术空间",
+    "maxParticipants": 10,
+    "materials": ["木质织布架", "羊毛线", "棉线", "装饰流苏"],
+    "participants": ["user-1"],
+    "hostId": "user-2",
+    "category": "weaving",
+    "submissions": []
+  },
+  {
+    "id": "workshop-4",
+    "title": "刺绣初体验：花卉图案书签",
+    "date": "2026-08-12",
+    "location": "手作教室 B",
+    "maxParticipants": 12,
+    "materials": ["刺绣布", "绣线套装", "绣绷", "绣针"],
+    "participants": [],
+    "hostId": "user-1",
+    "category": "embroidery",
+    "submissions": []
+  },
+  {
+    "id": "workshop-5",
+    "title": "皮具手工课：缝制简约钱包",
+    "date": "2026-08-20",
+    "location": "皮具工坊",
+    "maxParticipants": 6,
+    "materials": ["植鞣革", "蜡线", "菱斩", "边油"],
+    "participants": [],
+    "hostId": "user-2",
+    "category": "leathercraft",
+    "submissions": []
+  },
+  {
+    "id": "workshop-6",
+    "title": "纸艺折叠艺术：立体贺卡制作",
+    "date": "2026-09-01",
+    "location": "创意空间 C",
+    "maxParticipants": 15,
+    "materials": ["特种卡纸", "美工刀", "切割垫", "胶水"],
+    "participants": [],
+    "hostId": "user-1",
+    "category": "papercraft",
+    "submissions": []
+  }
+]
