@@ -27,33 +27,18 @@ body {
   animation: shake 0.1s ease-in-out;
 }
 
-@keyframes damageFloat {
-  0% {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-    color: #FF1744;
-  }
-  50% {
-    opacity: 0.8;
-    color: #FF5252;
-  }
-  100% {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-50px);
-    color: rgba(255, 23, 68, 0);
-  }
-}
-
-.damage-float {
-  animation: damageFloat 1s ease-out forwards;
-}
-
 @keyframes slideInLeft {
-  from { opacity: 0; transform: translateX(-20px); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
-.slide-in-left {
+.battle-log-entry {
   animation: slideInLeft 0.3s ease-out forwards;
 }
 
@@ -84,7 +69,7 @@ body {
   padding: 12px 24px;
   cursor: pointer;
   font-size: 12px;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, transform 0.2s ease;
   letter-spacing: 1px;
 }
 
@@ -102,6 +87,18 @@ body {
   background-color: #616161;
   cursor: not-allowed;
   transform: none;
+}
+
+.assemble-part-tile:hover {
+  background-color: #FFE0B2 !important;
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(255, 224, 178, 0.4);
+}
+
+.assemble-part-tile[data-selected='true']:hover {
+  background-color: #FFE0B2 !important;
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4);
 }
 
 .scrollbar::-webkit-scrollbar {

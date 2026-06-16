@@ -26,14 +26,12 @@ const PART_CATEGORIES: { type: PartType; label: string; icon: string }[] = [
   { type: 'tail', label: '尾部', icon: '🐍' },
 ];
 
-interface Particle {
-  id: number;
+interface ParticleData {
   x: number;
   y: number;
   vx: number;
   vy: number;
-  life: number;
-  maxLife: number;
+  born: number;
 }
 
 export default function AssembleScreen({
@@ -54,13 +52,14 @@ export default function AssembleScreen({
   const [showCompleteBanner, setShowCompleteBanner] = useState(false);
   const [bannerKey, setBannerKey] = useState(0);
   const [prevComplete, setPrevComplete] = useState(false);
-  const [particles, setParticles] = useState<Particle[]>([]);
   const [dragOverType, setDragOverType] = useState<PartType | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [partsAnimating, setPartsAnimating] = useState<Set<PartType>>(new Set());
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const particleIdRef = useRef(0);
-  const animationRef = useRef<number>();
+  const particlesRef = useRef<ParticleData[]>([]);
+  const rafRef = useRef<number>(0);
+  const particlesActiveRef = useRef(false);
 
   const parts = getPartsByType(activeCategory);
   const isComplete = !!currentParts.head && !!currentParts.torso && !!currentParts.legs && !!currentParts.tail;
@@ -77,82 +76,104 @@ export default function AssembleScreen({
     setPrevComplete(isComplete);
   }, [isComplete, prevComplete]);
 
+  const startParticleAnimation = useCallback(() => {
+    if (particlesActiveRef.current) return;
+    particlesActiveRef.current = true;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const animate = () => {
+      const now = performance.now();
+      const alive = particlesRef.current.filter(p => now - p.born < 400);
+
+      if (alive.length === 0) {
+        particlesRef.current = [];
+        particlesActiveRef.current = false;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        return;
+      }
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (const p of alive) {
+        const elapsed = now - p.born;
+        const t = elapsed / 400;
+        const alpha = 1 - t;
+        const x = p.x + p.vx * t;
+        const y = p.y + p.vy * t;
+        const size = 3 * alpha + 1.5;
+
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+
+      particlesRef.current = alive;
+      rafRef.current = requestAnimationFrame(animate);
+    };
+
+    rafRef.current = requestAnimationFrame(animate);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
   const triggerParticles = useCallback((centerX: number, centerY: number) => {
     const count = 8 + Math.floor(Math.random() * 5);
-    const newParticles: Particle[] = [];
+    const now = performance.now();
+    const newParticles: ParticleData[] = [];
     for (let i = 0; i < count; i++) {
-      const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
-      const speed = 2 + Math.random() * 3;
+      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.8;
+      const speed = 30 + Math.random() * 50;
       newParticles.push({
-        id: particleIdRef.current++,
         x: centerX,
         y: centerY,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        life: 0,
-        maxLife: 400,
+        born: now,
       });
     }
-    setParticles(prev => [...prev, ...newParticles]);
-  }, []);
-
-  useEffect(() => {
-    if (particles.length === 0) {
-      if (animationRef.current) cancelAnimationFrame(animationRef.current);
-      return;
-    }
-
-    let lastTime = performance.now();
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-
-    const animate = (time: number) => {
-      const dt = time - lastTime;
-      lastTime = time;
-
-      setParticles(prev => {
-        const updated = prev
-          .map(p => ({ ...p, x: p.x + p.vx, y: p.y + p.vy, life: p.life + dt }))
-          .filter(p => p.life < p.maxLife);
-        return updated;
-      });
-
-      if (ctx && canvas) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        particles.forEach(p => {
-          const alpha = 1 - p.life / p.maxLife;
-          const size = 4 * alpha + 2;
-          ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-          ctx.shadowBlur = 8;
-          ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
-          ctx.fill();
-        });
-        ctx.shadowBlur = 0;
-      }
-
-      animationRef.current = requestAnimationFrame(animate);
-    };
-
-    animationRef.current = requestAnimationFrame(animate);
-    return () => {
-      if (animationRef.current) cancelAnimationFrame(animationRef.current);
-    };
-  }, [particles.length]);
+    particlesRef.current = [...particlesRef.current, ...newParticles];
+    startParticleAnimation();
+  }, [startParticleAnimation]);
 
   const handleDragStart = (e: React.DragEvent, part: Part) => {
     playDragStartSound();
-    e.dataTransfer.setData('application/json', JSON.stringify(part));
+    setIsDragging(true);
+    e.dataTransfer.setData('text/plain', JSON.stringify(part));
     e.dataTransfer.effectAllowed = 'copy';
+    if (e.currentTarget instanceof HTMLElement) {
+      e.dataTransfer.setDragImage(e.currentTarget, 64, 64);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+    setDragOverType(null);
   };
 
   const handleDropOnSlot = (e: React.DragEvent, slotType: PartType) => {
     e.preventDefault();
+    e.stopPropagation();
     setDragOverType(null);
+    setIsDragging(false);
     try {
-      const data = e.dataTransfer.getData('application/json');
-      const part = JSON.parse(data) as Part;
+      const raw = e.dataTransfer.getData('text/plain');
+      if (!raw) return;
+      const part = JSON.parse(raw) as Part;
       if (part.type === slotType) {
         playDropSound();
         setPart(slotType, part);
@@ -170,17 +191,16 @@ export default function AssembleScreen({
     }
   };
 
-  const handleDragOver = (e: React.DragEvent, slotType: PartType) => {
+  const handleDragOverSlot = (e: React.DragEvent, slotType: PartType) => {
     e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'copy';
     setDragOverType(slotType);
   };
 
-  const handleDragLeave = () => {
+  const handleDragLeaveSlot = (e: React.DragEvent) => {
+    e.stopPropagation();
     setDragOverType(null);
-  };
-
-  const handlePartClick = () => {
-    // 点击不做任何操作，必须使用拖拽
   };
 
   const handleSlotClick = (slotType: PartType) => {
@@ -273,33 +293,34 @@ export default function AssembleScreen({
             ))}
           </div>
 
-          <div style={{
-            flex: 1,
-            overflowY: 'auto',
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
-            gap: 10,
-            alignContent: 'start',
-          }} className="scrollbar">
+          <div
+            className="assemble-parts-grid scrollbar"
+            style={{
+              flex: 1,
+              overflowY: 'auto',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: 10,
+              alignContent: 'start',
+            }}
+          >
             {parts.map(part => {
               const isSelected = currentParts[part.type]?.id === part.id;
               return (
                 <div
                   key={part.id}
-                  draggable
+                  draggable={true}
                   onDragStart={(e) => handleDragStart(e, part)}
-                  onClick={handlePartClick}
+                  onDragEnd={handleDragEnd}
                   className="assemble-part-tile"
-                  data-selected={isSelected}
+                  data-selected={isSelected ? 'true' : 'false'}
                   style={{
-                    width: '100%',
-                    aspectRatio: '1 / 1',
-                    maxWidth: 128,
-                    maxHeight: 128,
+                    width: 128,
+                    height: 128,
                     backgroundColor: isSelected ? '#FFE0B2' : '#37474F',
-                    border: `1px solid #1A1A2E`,
+                    border: '1px solid #1A1A2E',
                     borderRadius: 4,
-                    cursor: 'grab',
+                    cursor: isDragging ? 'grabbing' : 'grab',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
@@ -308,30 +329,12 @@ export default function AssembleScreen({
                     transition: 'background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease',
                     userSelect: 'none',
                     position: 'relative',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isSelected) {
-                      e.currentTarget.style.backgroundColor = '#FFE0B2';
-                      e.currentTarget.style.transform = 'scale(1.1)';
-                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(255, 224, 178, 0.4)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isSelected) {
-                      e.currentTarget.style.backgroundColor = '#37474F';
-                      e.currentTarget.style.transform = 'scale(1)';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }
-                  }}
-                  onDragEnd={(e) => {
-                    e.currentTarget.style.backgroundColor = isSelected ? '#FFE0B2' : '#37474F';
-                    e.currentTarget.style.transform = 'scale(1)';
-                    e.currentTarget.style.boxShadow = 'none';
+                    boxSizing: 'border-box',
                   }}
                 >
                   <div style={{
                     width: '70%',
-                    height: '70%',
+                    height: '55%',
                     backgroundColor: part.color,
                     border: `2px solid ${part.accentColor}`,
                     borderRadius: 4,
@@ -351,6 +354,15 @@ export default function AssembleScreen({
                     lineHeight: 1.4,
                   }}>
                     {part.name}
+                  </div>
+                  <div style={{
+                    position: 'absolute',
+                    bottom: 4,
+                    fontSize: 7,
+                    color: isSelected ? '#5D4037' : '#90A4AE',
+                    fontFamily: "'Press Start 2P', cursive",
+                  }}>
+                    ⤓ 拖拽安装
                   </div>
                 </div>
               );
@@ -422,11 +434,8 @@ export default function AssembleScreen({
             alignItems: 'center',
             justifyContent: 'center',
           }}>
-            <div
-              onDragOver={(e) => e.preventDefault()}
-              style={{ position: 'relative', width: 260, height: 260 }}
-            >
-              {PART_CATEGORIES.map((cat, idx) => {
+            <div style={{ position: 'relative', width: 260, height: 260 }}>
+              {PART_CATEGORIES.map((cat) => {
                 const positions: { [key in PartType]: React.CSSProperties } = {
                   head: { top: 0, left: 30, width: 200, height: 80 },
                   torso: { top: 70, left: 10, width: 240, height: 100 },
@@ -442,8 +451,8 @@ export default function AssembleScreen({
                   <div
                     key={cat.type}
                     onDrop={(e) => handleDropOnSlot(e, cat.type)}
-                    onDragOver={(e) => handleDragOver(e, cat.type)}
-                    onDragLeave={handleDragLeave}
+                    onDragOver={(e) => handleDragOverSlot(e, cat.type)}
+                    onDragLeave={handleDragLeaveSlot}
                     onClick={() => handleSlotClick(cat.type)}
                     className={isAnimating ? 'part-snap' : ''}
                     style={{
@@ -453,21 +462,42 @@ export default function AssembleScreen({
                         ? `2px solid ${isOver ? '#FFD54F' : '#4CAF50'}`
                         : isOver
                           ? '3px dashed #FFD54F'
-                          : '2px dashed rgba(0,0,0,0.2)',
+                          : '2px dashed rgba(0,0,0,0.3)',
                       borderRadius: 8,
                       backgroundColor: part
                         ? 'rgba(255,255,255,0.1)'
                         : isOver
-                          ? 'rgba(255, 213, 79, 0.2)'
+                          ? 'rgba(255, 213, 79, 0.3)'
                           : 'rgba(255,255,255,0.05)',
                       cursor: part ? 'pointer' : isOver ? 'copy' : 'default',
                       transition: 'all 0.3s ease',
                       transform: isAnimating
-                        ? `translate(${idx % 2 === 0 ? -15 : 15}px, ${idx < 2 ? -15 : 15}px)`
+                        ? 'scale(1.05)'
                         : undefined,
                       zIndex: cat.type === 'tail' ? 1 : 3,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                     }}
                   >
+                    {!part && !isOver && (
+                      <span style={{
+                        fontSize: 10,
+                        color: 'rgba(0,0,0,0.3)',
+                        fontFamily: "'Press Start 2P', cursive",
+                      }}>
+                        {cat.label}
+                      </span>
+                    )}
+                    {isOver && !part && (
+                      <span style={{
+                        fontSize: 10,
+                        color: '#FFD54F',
+                        fontFamily: "'Press Start 2P', cursive",
+                      }}>
+                        放置
+                      </span>
+                    )}
                     {part && (
                       <div style={{
                         position: 'absolute',
@@ -483,6 +513,7 @@ export default function AssembleScreen({
                         alignItems: 'center',
                         justifyContent: 'center',
                         opacity: 0.7,
+                        cursor: 'pointer',
                       }}>
                         ×
                       </div>
@@ -498,6 +529,7 @@ export default function AssembleScreen({
                 width: 200,
                 height: 200,
                 pointerEvents: 'none',
+                zIndex: 2,
               }}>
                 <MonsterSprite parts={currentParts} size={200} showSlotLabels={false} />
               </div>
@@ -559,10 +591,7 @@ export default function AssembleScreen({
               fontFamily: "'Press Start 2P', cursive",
               textAlign: 'center',
             }}>
-              {PART_CATEGORIES
-                .filter(c => !currentParts[c.type])
-                .map(c => c.label)
-                .join(' · ')} 尚未安装
+              👆 拖拽部件到右侧槽位 · {PART_CATEGORIES.filter(c => !currentParts[c.type]).map(c => c.label).join(' · ')} 尚未安装
             </div>
           )}
         </div>

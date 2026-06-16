@@ -15,7 +15,6 @@ interface BattleScreenProps {
 interface LogEntry {
   id: number;
   text: string;
-  timestamp: number;
 }
 
 interface DamagePopup {
@@ -54,6 +53,11 @@ export default function BattleScreen({
   const logsRef = useRef<HTMLDivElement>(null);
   const battleEndedRef = useRef(false);
 
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const activePopupsRef = useRef<Map<number, { x: number; y: number; value: number; isCrit: boolean; born: number }>>(new Map());
+  const popupRafRef = useRef<number>(0);
+  const popupAnimatingRef = useRef(false);
+
   useEffect(() => {
     const pMonsters: BattleMonster[] = playerTeam.map((m, i) => ({
       ...m,
@@ -82,20 +86,113 @@ export default function BattleScreen({
   }, [logs]);
 
   const addLog = useCallback((text: string) => {
-    setLogs(prev => [...prev, {
-      id: logIdRef.current++,
-      text,
-      timestamp: Date.now(),
-    }]);
+    setLogs(prev => [...prev, { id: logIdRef.current++, text }]);
+  }, []);
+
+  const startPopupAnimation = useCallback(() => {
+    if (popupAnimatingRef.current) return;
+    popupAnimatingRef.current = true;
+
+    const canvas = canvasRef.current;
+    if (!canvas) { popupAnimatingRef.current = false; return; }
+    const ctx = canvas.getContext('2d');
+    if (!ctx) { popupAnimatingRef.current = false; return; }
+
+    const DURATION = 1000;
+
+    const animate = () => {
+      const now = performance.now();
+      const popups = activePopupsRef.current;
+
+      const alive = new Map<number, typeof popups extends Map<number, infer V> ? V : never>();
+      popups.forEach((v, k) => {
+        if (now - v.born < DURATION) alive.set(k, v);
+      });
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (alive.size === 0) {
+        activePopupsRef.current = new Map();
+        popupAnimatingRef.current = false;
+        return;
+      }
+
+      alive.forEach((p) => {
+        const elapsed = now - p.born;
+        const t = elapsed / DURATION;
+
+        const y = p.y - t * 50;
+        const alpha = 1 - t;
+
+        const r = 255;
+        const g = Math.floor(23 * (1 - t));
+        const b = Math.floor(68 * (1 - t));
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.font = `bold ${p.isCrit ? 24 : 18}px 'Press Start 2P', monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#000000';
+        ctx.fillText(`-${p.value}`, p.x + 2, y + 2);
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        ctx.fillText(`-${p.value}`, p.x, y);
+        ctx.restore();
+      });
+
+      activePopupsRef.current = alive;
+      popupRafRef.current = requestAnimationFrame(animate);
+    };
+
+    popupRafRef.current = requestAnimationFrame(animate);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (popupRafRef.current) cancelAnimationFrame(popupRafRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const parent = canvas.parentElement;
+    if (!parent) return;
+
+    const resize = () => {
+      const rect = parent.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+    };
+
+    resize();
+    const observer = new ResizeObserver(resize);
+    observer.observe(parent);
+    return () => observer.disconnect();
   }, []);
 
   const showDamage = useCallback((targetId: string, value: number) => {
     const id = damageIdRef.current++;
-    setDamagePopups(prev => [...prev, { id, targetId, value, isCrit: value > 30 }]);
+    const isCrit = value > 30;
+    setDamagePopups(prev => [...prev, { id, targetId, value, isCrit }]);
+
+    const el = document.querySelector(`[data-monster-id="${targetId}"]`);
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const canvasRect = canvas.getBoundingClientRect();
+        const x = rect.left + rect.width / 2 - canvasRect.left;
+        const y = rect.top + 10 - canvasRect.top;
+        activePopupsRef.current.set(id, { x, y, value, isCrit, born: performance.now() });
+        startPopupAnimation();
+      }
+    }
+
     setTimeout(() => {
       setDamagePopups(prev => prev.filter(d => d.id !== id));
     }, 1000);
-  }, []);
+  }, [startPopupAnimation]);
 
   const triggerShake = useCallback((targetId: string) => {
     setShakingId(targetId);
@@ -169,14 +266,14 @@ export default function BattleScreen({
       );
 
       if (action.isPlayerAttacker) {
-        setEnemyMonsters(prev => prev.map((m, i) => {
+        setEnemyMonsters(prev => prev.map((m) => {
           if (m.id !== action.target.id) return m;
           const newHp = Math.max(0, m.currentHp - damage);
           if (newHp === 0) addLog(`💀 ${m.name} 被击败了！`);
           return { ...m, currentHp: newHp };
         }));
       } else {
-        setPlayerMonsters(prev => prev.map((m, i) => {
+        setPlayerMonsters(prev => prev.map((m) => {
           if (m.id !== action.target.id) return m;
           const newHp = Math.max(0, m.currentHp - damage);
           if (newHp === 0) addLog(`💀 我方 ${m.name} 被击败了！`);
@@ -229,6 +326,7 @@ export default function BattleScreen({
       backgroundColor: '#1A1A2E',
       display: 'flex',
       flexDirection: 'column',
+      position: 'relative',
     }}>
       <div style={{
         padding: '12px 20px',
@@ -237,6 +335,8 @@ export default function BattleScreen({
         justifyContent: 'space-between',
         backgroundColor: '#2D2D44',
         borderBottom: '2px solid #455A64',
+        position: 'relative',
+        zIndex: 10,
       }}>
         <button className="btn-pixel" onClick={() => playSoundAndNav('prepare')}>
           ← 返回
@@ -313,7 +413,6 @@ export default function BattleScreen({
               isShaking={shakingId === m.id}
               isAttacking={attackingId === m.id}
               isLeft={true}
-              damagePopups={damagePopups.filter(d => d.targetId === m.id)}
             />
           ))}
         </div>
@@ -336,10 +435,22 @@ export default function BattleScreen({
               isShaking={shakingId === m.id}
               isAttacking={attackingId === m.id}
               isLeft={false}
-              damagePopups={damagePopups.filter(d => d.targetId === m.id)}
             />
           ))}
         </div>
+
+        <canvas
+          ref={canvasRef}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            pointerEvents: 'none',
+            zIndex: 50,
+          }}
+        />
 
         {battleEnded && (
           <div
@@ -402,14 +513,15 @@ export default function BattleScreen({
             backgroundColor: 'rgba(255, 255, 255, 0.08)',
             borderRadius: 8,
             fontFamily: "'Press Start 2P', cursive",
-            fontSize: 10,
+            fontSize: 12,
             lineHeight: 2.2,
+            color: '#757575',
           }}
         >
-          {logs.map((log, i) => (
+          {logs.map((log) => (
             <div
               key={log.id}
-              className="slide-in-left"
+              className="battle-log-entry"
               style={{
                 color: log.text.startsWith('---')
                   ? '#FFD54F'
@@ -419,8 +531,7 @@ export default function BattleScreen({
                       ? '#E53935'
                       : log.text.includes('击败')
                         ? '#FF9800'
-                        : '#B0BEC5',
-                animationDelay: `${0}ms`,
+                        : '#757575',
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word',
               }}
@@ -440,10 +551,9 @@ interface BattleMonsterCardProps {
   isShaking: boolean;
   isAttacking: boolean;
   isLeft: boolean;
-  damagePopups: DamagePopup[];
 }
 
-function BattleMonsterCard({ monster, isActive, isShaking, isAttacking, isLeft, damagePopups }: BattleMonsterCardProps) {
+function BattleMonsterCard({ monster, isActive, isShaking, isAttacking, isLeft }: BattleMonsterCardProps) {
   const hpPct = (monster.currentHp / monster.maxHp) * 100;
   const mpPct = (monster.currentMp / monster.maxMp) * 100;
   const isDead = monster.currentHp <= 0;
@@ -451,9 +561,12 @@ function BattleMonsterCard({ monster, isActive, isShaking, isAttacking, isLeft, 
   return (
     <div
       className={isShaking ? 'shake' : ''}
+      data-monster-id={monster.id}
       style={{
         position: 'relative',
-        width: 200,
+      }}
+    >
+      <div style={{
         opacity: isDead ? 0.3 : 1,
         filter: isDead ? 'grayscale(100%)' : 'none',
         transform: isAttacking
@@ -462,129 +575,110 @@ function BattleMonsterCard({ monster, isActive, isShaking, isAttacking, isLeft, 
             ? 'scale(1.02)'
             : 'scale(0.9)',
         transition: 'opacity 0.3s ease, filter 0.3s ease, transform 0.2s ease',
-      }}
-    >
-      {isActive && !isDead && (
-        <div style={{
-          position: 'absolute',
-          inset: -6,
-          border: `2px solid ${monster.isPlayer ? '#81D4FA' : '#EF5350'}`,
-          borderRadius: 12,
-          boxShadow: `0 0 20px ${monster.isPlayer ? 'rgba(129,212,250,0.6)' : 'rgba(239,83,80,0.6)'}`,
-          pointerEvents: 'none',
-          animation: 'pulse 1.5s ease-in-out infinite',
-        }} />
-      )}
-
-      <div style={{
-        backgroundColor: 'rgba(30, 30, 46, 0.9)',
-        border: `1px solid ${monster.isPlayer ? 'rgba(129,212,250,0.3)' : 'rgba(239,83,80,0.3)'}`,
-        borderRadius: 10,
-        padding: 10,
-        backdropFilter: 'blur(4px)',
+        position: 'relative',
+        width: 200,
       }}>
+        {isActive && !isDead && (
+          <div style={{
+            position: 'absolute',
+            inset: -6,
+            border: `2px solid ${monster.isPlayer ? '#81D4FA' : '#EF5350'}`,
+            borderRadius: 12,
+            boxShadow: `0 0 20px ${monster.isPlayer ? 'rgba(129,212,250,0.6)' : 'rgba(239,83,80,0.6)'}`,
+            pointerEvents: 'none',
+            animation: 'pulse 1.5s ease-in-out infinite',
+          }} />
+        )}
+
         <div style={{
-          fontSize: 10,
-          color: '#ECEFF1',
-          fontFamily: "'Press Start 2P', cursive",
-          marginBottom: 8,
-          textAlign: isLeft ? 'left' : 'right',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
+          backgroundColor: 'rgba(30, 30, 46, 0.9)',
+          border: `1px solid ${monster.isPlayer ? 'rgba(129,212,250,0.3)' : 'rgba(239,83,80,0.3)'}`,
+          borderRadius: 10,
+          padding: 10,
+          backdropFilter: 'blur(4px)',
         }}>
-          {monster.name}
-        </div>
+          <div style={{
+            fontSize: 10,
+            color: '#ECEFF1',
+            fontFamily: "'Press Start 2P', cursive",
+            marginBottom: 8,
+            textAlign: isLeft ? 'left' : 'right',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}>
+            {monster.name}
+          </div>
 
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: isLeft ? 'flex-start' : 'flex-end', gap: 8 }}>
-          <div style={{ position: 'relative' }}>
-            {damagePopups.map(dp => (
-              <div
-                key={dp.id}
-                className="damage-float"
-                style={{
-                  position: 'absolute',
-                  top: -20,
-                  left: '50%',
-                  fontFamily: "'Press Start 2P', cursive",
-                  fontSize: dp.isCrit ? 24 : 18,
-                  color: dp.isCrit ? '#FFEB3B' : '#FF1744',
-                  textShadow: '2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000',
-                  fontWeight: 'bold',
-                  zIndex: 10,
-                  whiteSpace: 'nowrap',
-                  pointerEvents: 'none',
-                }}
-              >
-                -{dp.value}
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: isLeft ? 'flex-start' : 'flex-end', gap: 8 }}>
+            <div style={{ position: 'relative' }}>
+              <div style={{
+                transform: isLeft ? 'none' : 'scaleX(-1)',
+                transition: 'transform 0.2s ease',
+              }}>
+                <MonsterSprite parts={monster.parts} size={80} />
               </div>
-            ))}
-            <div style={{
-              transform: isLeft ? 'none' : 'scaleX(-1)',
-              transition: 'transform 0.2s ease',
-            }}>
-              <MonsterSprite parts={monster.parts} size={80} />
+            </div>
+          </div>
+
+          <div style={{ marginTop: 8 }}>
+            <div style={{ marginBottom: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                <span style={{ fontSize: 8, color: '#EF9A9A', fontFamily: "'Press Start 2P', cursive" }}>HP</span>
+                <span style={{ fontSize: 8, color: '#FFFFFF', fontFamily: "'Press Start 2P', cursive" }}>
+                  {monster.currentHp}/{monster.maxHp}
+                </span>
+              </div>
+              <div style={{
+                width: 120,
+                height: 8,
+                backgroundColor: '#1A1A2E',
+                borderRadius: 2,
+                overflow: 'hidden',
+                marginLeft: isLeft ? 0 : 'auto',
+              }}>
+                <div style={{
+                  width: `${hpPct}%`,
+                  height: 8,
+                  backgroundColor: '#E53935',
+                  transition: 'width 0.3s ease',
+                }} />
+              </div>
+            </div>
+
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                <span style={{ fontSize: 8, color: '#90CAF9', fontFamily: "'Press Start 2P', cursive" }}>MP</span>
+                <span style={{ fontSize: 8, color: '#FFFFFF', fontFamily: "'Press Start 2P', cursive" }}>
+                  {monster.currentMp}/{monster.maxMp}
+                </span>
+              </div>
+              <div style={{
+                width: 120,
+                height: 8,
+                backgroundColor: '#1A1A2E',
+                borderRadius: 2,
+                overflow: 'hidden',
+                marginLeft: isLeft ? 0 : 'auto',
+              }}>
+                <div style={{
+                  width: `${mpPct}%`,
+                  height: 8,
+                  backgroundColor: '#42A5F5',
+                  transition: 'width 0.3s ease',
+                }} />
+              </div>
             </div>
           </div>
         </div>
 
-        <div style={{ marginTop: 8 }}>
-          <div style={{ marginBottom: 4 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-              <span style={{ fontSize: 8, color: '#EF9A9A', fontFamily: "'Press Start 2P', cursive" }}>HP</span>
-              <span style={{ fontSize: 8, color: '#FFFFFF', fontFamily: "'Press Start 2P', cursive" }}>
-                {monster.currentHp}/{monster.maxHp}
-              </span>
-            </div>
-            <div style={{
-              width: 120,
-              height: 8,
-              backgroundColor: '#1A1A2E',
-              borderRadius: 2,
-              overflow: 'hidden',
-              marginLeft: isLeft ? 0 : 'auto',
-            }}>
-              <div style={{
-                width: `${hpPct}%`,
-                height: '100%',
-                backgroundColor: hpPct > 50 ? '#E53935' : hpPct > 25 ? '#FF9800' : '#F44336',
-                transition: 'width 0.3s ease, background-color 0.3s ease',
-              }} />
-            </div>
-          </div>
-
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-              <span style={{ fontSize: 8, color: '#90CAF9', fontFamily: "'Press Start 2P', cursive" }}>MP</span>
-              <span style={{ fontSize: 8, color: '#FFFFFF', fontFamily: "'Press Start 2P', cursive" }}>
-                {monster.currentMp}/{monster.maxMp}
-              </span>
-            </div>
-            <div style={{
-              width: 120,
-              height: 8,
-              backgroundColor: '#1A1A2E',
-              borderRadius: 2,
-              overflow: 'hidden',
-              marginLeft: isLeft ? 0 : 'auto',
-            }}>
-              <div style={{
-                width: `${mpPct}%`,
-                height: '100%',
-                backgroundColor: '#42A5F5',
-                transition: 'width 0.3s ease',
-              }} />
-            </div>
-          </div>
-        </div>
+        <style>{`
+          @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+          }
+        `}</style>
       </div>
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 0.6; }
-          50% { opacity: 1; }
-        }
-      `}</style>
     </div>
   );
 }
