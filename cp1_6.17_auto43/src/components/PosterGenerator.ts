@@ -1,5 +1,5 @@
-import { getThemeById, getRandomGradient, getRandomFilterTag } from '../styles/themes';
-import type { Theme } from '../styles/themes';
+import { getThemeById, getRandomGradient, getRandomFilterTag, themes } from '../styles/themes';
+import type { Theme, CardThemeStyle } from '../styles/themes';
 import type { ParsedLyrics, ParsedLyricLine } from './LyricsParser';
 
 export interface PosterLayout {
@@ -34,6 +34,19 @@ export interface CardStyleData {
   shadow: string;
   borderRadius: number;
   fontFamily: string;
+}
+
+export interface CardThemeStyles {
+  themeId: string;
+  themeName: string;
+  primaryColor: string;
+  secondaryColor: string;
+  cardGradients: string[];
+  borderRadius: number;
+  fontFamily: string;
+  shadow: string;
+  texture: string;
+  cardLevelStyle: CardThemeStyle;
 }
 
 export const POSTER_WIDTH = 594;
@@ -158,6 +171,43 @@ export function generateCardStyles(
     gradient: getRandomGradient(theme),
     texture: theme.texturePattern,
     filterTag: getRandomFilterTag(),
+    shadow: theme.cardShadow,
+    borderRadius: theme.cardBorderRadius,
+    fontFamily: theme.fontFamily
+  }));
+}
+
+export function getCardThemeStyles(themeNameOrId: string): CardThemeStyles {
+  const theme = themes.find(
+    t => t.id === themeNameOrId || t.name === themeNameOrId
+  ) || themes[0];
+
+  return {
+    themeId: theme.id,
+    themeName: theme.name,
+    primaryColor: theme.primaryColor,
+    secondaryColor: theme.secondaryColor,
+    cardGradients: [...theme.cardGradients],
+    borderRadius: theme.cardBorderRadius,
+    fontFamily: theme.fontFamily,
+    shadow: theme.cardShadow,
+    texture: theme.texturePattern,
+    cardLevelStyle: { ...theme.cardStyle }
+  };
+}
+
+export function regenerateCardStylesByTheme(
+  lines: ParsedLyricLine[],
+  existingFilterTags: Map<string, string>,
+  themeId: string
+): CardStyleData[] {
+  const theme = getThemeById(themeId);
+
+  return lines.map(line => ({
+    id: line.id,
+    gradient: getRandomGradient(theme),
+    texture: theme.texturePattern,
+    filterTag: existingFilterTags.get(line.id) || getRandomFilterTag(),
     shadow: theme.cardShadow,
     borderRadius: theme.cardBorderRadius,
     fontFamily: theme.fontFamily

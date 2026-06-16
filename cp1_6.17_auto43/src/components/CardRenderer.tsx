@@ -1,31 +1,76 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import html2canvas from 'html2canvas';
 import type { ParsedLyricLine } from './LyricsParser';
-import type { CardStyleData } from './PosterGenerator';
-import { CARD_WIDTH, CARD_HEIGHT } from './PosterGenerator';
+import {
+  CARD_WIDTH,
+  CARD_HEIGHT,
+  getCardThemeStyles,
+  regenerateCardStylesByTheme,
+  type CardStyleData,
+  type CardThemeStyles
+} from './PosterGenerator';
 
 interface CardRendererProps {
   lyrics: ParsedLyricLine[];
   cardStyles: CardStyleData[];
   songName: string;
+  defaultThemeId?: string;
   onSelectionChange?: (selectedIds: string[]) => void;
 }
+
+const CARD_THEME_OPTIONS = [
+  { id: 'scifi', name: '科幻蓝紫', primary: '#6200EA', secondary: '#00E5FF' },
+  { id: 'retro', name: '复古暖黄', primary: '#FF8F00', secondary: '#FFE082' },
+  { id: 'minimal', name: '极简黑白', primary: '#212121', secondary: '#ECEFF1' }
+];
 
 const CardRenderer: React.FC<CardRendererProps> = ({
   lyrics,
   cardStyles,
   songName,
+  defaultThemeId = 'scifi',
   onSelectionChange
 }) => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [orderedLyrics, setOrderedLyrics] = useState<ParsedLyricLine[]>(lyrics);
   const [orderedStyles, setOrderedStyles] = useState<CardStyleData[]>(cardStyles);
+  const [cardThemeId, setCardThemeId] = useState<string>(defaultThemeId);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  const cardThemeStyles: CardThemeStyles = useMemo(
+    () => getCardThemeStyles(cardThemeId),
+    [cardThemeId]
+  );
 
   React.useEffect(() => {
     setOrderedLyrics(lyrics);
-    setOrderedStyles(cardStyles);
-  }, [lyrics, cardStyles]);
+
+    const filterTagMap = new Map<string, string>();
+    orderedStyles.forEach(s => filterTagMap.set(s.id, s.filterTag));
+    cardStyles.forEach(s => filterTagMap.set(s.id, s.filterTag));
+
+    const newStyles = lyrics.length > 0 && cardStyles.length > 0
+      ? regenerateCardStylesByTheme(lyrics, filterTagMap, cardThemeId)
+      : cardStyles;
+
+    setOrderedStyles(newStyles);
+  }, [lyrics]);
+
+  const handleCardThemeChange = (themeId: string) => {
+    if (themeId === cardThemeId) return;
+    setCardThemeId(themeId);
+
+    const filterTagMap = new Map<string, string>();
+    orderedStyles.forEach(s => filterTagMap.set(s.id, s.filterTag));
+
+    const newStyles = regenerateCardStylesByTheme(
+      orderedLyrics,
+      filterTagMap,
+      themeId
+    );
+    setOrderedStyles(newStyles);
+  };
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
@@ -132,8 +177,101 @@ const CardRenderer: React.FC<CardRendererProps> = ({
     );
   }
 
+  const levelStyle = cardThemeStyles.cardLevelStyle;
+
   return (
     <div>
+      <div style={{
+        display: 'flex',
+        gap: '12px',
+        marginBottom: '16px',
+        padding: '16px',
+        background: 'rgba(255,255,255,0.7)',
+        borderRadius: '12px',
+        border: '1px solid rgba(0,0,0,0.05)',
+        flexWrap: 'wrap',
+        alignItems: 'center'
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px'
+        }}>
+          <span style={{
+            fontSize: '13px',
+            fontWeight: 500,
+            color: '#555',
+            letterSpacing: '0.5px'
+          }}>
+            🎨 卡片主题：
+          </span>
+          <div style={{
+            display: 'flex',
+            gap: '10px',
+            alignItems: 'center'
+          }}>
+            {CARD_THEME_OPTIONS.map(theme => {
+              const isActive = cardThemeId === theme.id;
+              return (
+                <button
+                  key={theme.id}
+                  onClick={() => handleCardThemeChange(theme.id)}
+                  title={theme.name}
+                  style={{
+                    position: 'relative',
+                    width: '40px',
+                    height: '24px',
+                    borderRadius: '12px',
+                    border: isActive ? '2px solid #42A5F5' : '2px solid rgba(0,0,0,0.1)',
+                    cursor: 'pointer',
+                    padding: 0,
+                    overflow: 'hidden',
+                    transition: 'all 0.25s ease',
+                    transform: isActive ? 'scale(1.08)' : 'scale(1)',
+                    boxShadow: isActive
+                      ? `0 0 0 3px rgba(66,165,245,0.25), 0 2px 8px rgba(0,0,0,0.15)`
+                      : '0 1px 4px rgba(0,0,0,0.1)'
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%)`
+                  }} />
+                  {isActive && (
+                    <div style={{
+                      position: 'absolute',
+                      inset: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fff',
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      textShadow: '0 1px 3px rgba(0,0,0,0.5)'
+                    }}>
+                      ✓
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <span style={{
+            fontSize: '12px',
+            fontWeight: 500,
+            padding: '4px 12px',
+            borderRadius: '20px',
+            background: `linear-gradient(135deg, ${cardThemeStyles.primaryColor}22 0%, ${cardThemeStyles.secondaryColor}22 100%)`,
+            border: `1px solid ${cardThemeStyles.primaryColor}33`,
+            color: cardThemeStyles.primaryColor,
+            letterSpacing: '0.5px'
+          }}>
+            {cardThemeStyles.themeName}
+          </span>
+        </div>
+      </div>
+
       <div style={{
         display: 'flex',
         gap: '12px',
@@ -176,9 +314,19 @@ const CardRenderer: React.FC<CardRendererProps> = ({
         padding: '8px'
       }}>
         {orderedLyrics.map((line, index) => {
-          const styleData = orderedStyles[index];
+          const styleData = orderedStyles[index] || {
+            id: line.id,
+            gradient: cardThemeStyles.cardGradients[index % cardThemeStyles.cardGradients.length],
+            texture: cardThemeStyles.texture,
+            filterTag: '柔光',
+            shadow: cardThemeStyles.shadow,
+            borderRadius: cardThemeStyles.borderRadius,
+            fontFamily: cardThemeStyles.fontFamily
+          };
           const isSelected = selectedIds.includes(line.id);
-          const filterTagStyle = getFilterTagStyle(styleData.filterTag);
+          const isHovered = hoveredId === line.id;
+          const filterTagStyle = getFilterTagStyle(styleData.filterTag, levelStyle);
+          const hoverScale = isHovered ? levelStyle.hoverScale : 1;
 
           return (
             <div
@@ -191,21 +339,25 @@ const CardRenderer: React.FC<CardRendererProps> = ({
               onDragStart={handleDragStart(index)}
               onDragOver={handleDragOver}
               onDrop={handleDrop(index)}
+              onMouseEnter={() => setHoveredId(line.id)}
+              onMouseLeave={() => setHoveredId(null)}
               onClick={() => toggleSelect(line.id)}
               style={{
                 position: 'relative',
                 width: `${CARD_WIDTH}px`,
                 height: `${CARD_HEIGHT}px`,
-                borderRadius: `${styleData.borderRadius}px`,
+                borderRadius: `${cardThemeStyles.borderRadius}px`,
                 boxShadow: isSelected
-                  ? `0 0 0 2px #FF7043, 0 0 24px rgba(255, 112, 67, 0.6), ${styleData.shadow}`
-                  : styleData.shadow,
+                  ? `${levelStyle.selectedBorder}, ${levelStyle.selectedGlow}, ${cardThemeStyles.shadow}`
+                  : cardThemeStyles.shadow,
                 cursor: 'pointer',
                 overflow: 'hidden',
                 userSelect: 'none',
-                transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                transform: dragIndex === index ? 'scale(0.95) rotate(2deg)' : 'scale(1)',
-                fontFamily: styleData.fontFamily
+                transition: 'transform 0.2s ease, box-shadow 0.25s ease',
+                transform: dragIndex === index
+                  ? 'scale(0.95) rotate(2deg)'
+                  : `scale(${hoverScale})`,
+                fontFamily: cardThemeStyles.fontFamily
               }}
             >
               <div
@@ -219,7 +371,7 @@ const CardRenderer: React.FC<CardRendererProps> = ({
                 style={{
                   position: 'absolute',
                   inset: 0,
-                  backgroundImage: styleData.texture,
+                  backgroundImage: cardThemeStyles.texture,
                   backgroundRepeat: 'repeat',
                   opacity: 1
                 }}
@@ -243,9 +395,11 @@ const CardRenderer: React.FC<CardRendererProps> = ({
                   fontSize: '11px',
                   fontWeight: 600,
                   letterSpacing: '1px',
-                  ...filterTagStyle,
-                  backdropFilter: 'blur(8px)',
-                  zIndex: 10
+                  background: filterTagStyle.background,
+                  color: filterTagStyle.color,
+                  backdropFilter: levelStyle.badgeStyle.backdropFilter,
+                  zIndex: 10,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
                 }}
               >
                 {styleData.filterTag}
@@ -260,7 +414,7 @@ const CardRenderer: React.FC<CardRendererProps> = ({
                     width: '24px',
                     height: '24px',
                     borderRadius: '50%',
-                    background: '#FF7043',
+                    background: cardThemeStyles.primaryColor,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -268,7 +422,8 @@ const CardRenderer: React.FC<CardRendererProps> = ({
                     fontSize: '14px',
                     fontWeight: 700,
                     zIndex: 10,
-                    boxShadow: '0 2px 8px rgba(255,112,67,0.4)'
+                    boxShadow: `0 2px 10px ${cardThemeStyles.primaryColor}88`,
+                    border: `2px solid ${cardThemeStyles.secondaryColor}`
                   }}
                 >
                   ✓
@@ -289,11 +444,11 @@ const CardRenderer: React.FC<CardRendererProps> = ({
                 <div
                   style={{
                     textAlign: 'center',
-                    color: '#FFFFFF',
+                    color: levelStyle.textColor,
                     fontSize: '18px',
                     lineHeight: 1.8,
                     fontWeight: 500,
-                    textShadow: '0 2px 12px rgba(0,0,0,0.4)',
+                    textShadow: levelStyle.textShadow,
                     letterSpacing: '0.5px',
                     maxWidth: '100%',
                     wordBreak: 'break-word'
@@ -313,10 +468,11 @@ const CardRenderer: React.FC<CardRendererProps> = ({
                   bottom: '14px',
                   left: '50%',
                   transform: 'translateX(-50%)',
-                  color: 'rgba(255,255,255,0.5)',
+                  color: levelStyle.indexStyle.color,
                   fontSize: '11px',
                   letterSpacing: '2px',
-                  zIndex: 5
+                  zIndex: 5,
+                  fontWeight: 500
                 }}
               >
                 No.{String(index + 1).padStart(2, '0')}
@@ -340,28 +496,33 @@ const toolbarBtnStyle: React.CSSProperties = {
   transition: 'all 0.15s ease'
 };
 
-function getFilterTagStyle(tag: string): React.CSSProperties {
+interface BadgeStyle {
+  background: string;
+  color: string;
+}
+
+function getFilterTagStyle(
+  tag: string,
+  levelStyle: { badgeStyle: BadgeStyle }
+): BadgeStyle {
   switch (tag) {
     case '复古':
       return {
-        background: 'rgba(255, 143, 0, 0.85)',
+        background: 'rgba(255, 143, 0, 0.9)',
         color: '#FFF8E1'
       };
     case '冷峻':
       return {
-        background: 'rgba(3, 169, 244, 0.85)',
+        background: 'rgba(3, 169, 244, 0.9)',
         color: '#E1F5FE'
       };
     case '柔光':
       return {
-        background: 'rgba(255, 182, 193, 0.85)',
+        background: 'rgba(255, 182, 193, 0.9)',
         color: '#880E4F'
       };
     default:
-      return {
-        background: 'rgba(255,255,255,0.8)',
-        color: '#333'
-      };
+      return levelStyle.badgeStyle;
   }
 }
 
