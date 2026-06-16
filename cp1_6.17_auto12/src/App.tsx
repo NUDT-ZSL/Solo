@@ -142,16 +142,18 @@ export default function App() {
             left: '50%',
             transform: 'translate(-50%, -50%)',
             zIndex: 20,
-            animation: 'stormText 0.5s infinite',
           }}>
-            <div style={{
-              fontSize: '28px',
-              fontWeight: 700,
-              color: '#E63946',
-              textShadow: '0 0 10px #FF0000, 0 0 20px #FF0000, 0 0 30px #FF4444',
-              fontFamily: 'Cinzel, serif',
-              whiteSpace: 'nowrap',
-            }}>
+            <div
+              className="storm-text"
+              style={{
+                fontSize: '28px',
+                fontWeight: 700,
+                color: '#E63946',
+                fontFamily: 'Cinzel, serif',
+                whiteSpace: 'nowrap',
+                animation: 'stormText 0.5s infinite ease-in-out',
+              }}
+            >
               {stormMessage}
             </div>
           </div>

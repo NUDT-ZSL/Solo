@@ -112,11 +112,12 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
             resolved: true,
             result: 'defeat',
           };
-          const newDurability = Math.max(0, state.ship.durability - 10);
+          const durabilityLoss = Math.floor(state.ship.maxDurability * 0.1);
+          const newDurability = Math.max(0, state.ship.durability - durabilityLoss);
           set({
             voyage: { ...voyage, events: [...voyage.events, event] },
             ship: { ...state.ship, durability: newDurability },
-            stormMessage: '⛈️ 风暴来袭！耐久度-10%',
+            stormMessage: `⛈️ 风暴来袭！耐久度 -${durabilityLoss}%`,
           });
           return;
         }
@@ -132,10 +133,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   handleEncounter: (encounterType) => {
     if (encounterType === 'storm') {
       const state = get();
-      const newDurability = Math.max(0, state.ship.durability - 10);
+      const durabilityLoss = Math.floor(state.ship.maxDurability * 0.1);
+      const newDurability = Math.max(0, state.ship.durability - durabilityLoss);
       set({
         ship: { ...state.ship, durability: newDurability },
-        stormMessage: '⛈️ 风暴来袭！耐久度-10%',
+        stormMessage: `⛈️ 风暴来袭！耐久度 -${durabilityLoss}%`,
       });
     }
   },

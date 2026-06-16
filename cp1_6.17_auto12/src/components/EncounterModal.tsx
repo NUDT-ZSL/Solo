@@ -46,6 +46,7 @@ const EncounterModal: React.FC<EncounterModalProps> = ({ event, ship, onResolve 
             <div style={styles.winRateSection}>
               <div style={styles.winRateLabel}>胜率: {Math.round(winRate * 100)}%</div>
               <div style={styles.winRateTrack}>
+                <div style={{ ...styles.winRateGradient, width: `${winRate * 100}%` }} />
                 <div style={{ ...styles.winRateMarker, left: `${winRate * 100}%` }} />
               </div>
             </div>
@@ -182,20 +183,32 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: 'center' as const,
   },
   winRateTrack: {
-    height: 12,
-    background: 'linear-gradient(to right, #2ECC71, #E74C3C)',
-    borderRadius: 6,
+    height: 14,
+    background: 'rgba(0,0,0,0.4)',
+    borderRadius: 7,
     position: 'relative' as const,
+    overflow: 'hidden',
+  },
+  winRateGradient: {
+    height: '100%',
+    background: 'linear-gradient(to right, #2ECC71, #F1C40F, #E67E22, #E74C3C)',
+    borderRadius: 7,
+    transition: 'width 0.5s ease',
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
   },
   winRateMarker: {
     position: 'absolute' as const,
     top: -3,
     width: 4,
-    height: 18,
+    height: 20,
     background: '#F1FAEE',
     borderRadius: 2,
     transform: 'translateX(-50%)',
-    transition: 'left 0.3s ease',
+    transition: 'left 0.5s ease',
+    boxShadow: '0 0 4px rgba(255,255,255,0.8)',
+    zIndex: 2,
   },
   actions: {
     display: 'flex',

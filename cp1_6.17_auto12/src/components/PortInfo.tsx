@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import type { Port, CargoItem, Ship, Good } from '../types';
 import {
   calculateRouteDistance,
@@ -17,6 +17,9 @@ interface PortInfoProps {
   onClose: () => void;
 }
 
+const GOOD_ITEM_HEIGHT = 88;
+const GOODS_LIST_MAX_HEIGHT = 220;
+
 const PortInfo: React.FC<PortInfoProps> = ({
   port,
   destinationPort,
@@ -28,6 +31,21 @@ const PortInfo: React.FC<PortInfoProps> = ({
   onClose,
 }) => {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [scrollTop, setScrollTop] = useState(0);
+  const [listHeight, setListHeight] = useState(GOODS_LIST_MAX_HEIGHT);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (listRef.current) {
+      setListHeight(Math.min(GOODS_LIST_MAX_HEIGHT, port.goods.length * GOOD_ITEM_HEIGHT));
+    }
+  }, [port.goods.length]);
+
+  const handleScroll = useCallback(() => {
+    if (listRef.current) {
+      setScrollTop(listRef.current.scrollTop);
+    }
+  }, []);
 
   const currentWeight = cargo.reduce((sum, item) => sum + item.good.weight * item.quantity, 0);
   const remainingCapacity = ship.maxCapacity - currentWeight;
@@ -49,6 +67,116 @@ const PortInfo: React.FC<PortInfoProps> = ({
   const estimatedProfit = destinationPort ? calculateCargoProfit(cargo, destinationPort) : 0;
 
   const canSetSail = cargo.length > 0 && !!destinationPort;
+
+  const totalGoodsHeight = port.goods.length * GOOD_ITEM_HEIGHT;
+  const visibleCount = Math.ceil(listHeight / GOOD_ITEM_HEIGHT) + 1;
+  const startIndex = Math.max(0, Math.floor(scrollTop / GOOD_ITEM_HEIGHT) - 1);
+  const endIndex = Math.min(port.goods.length, startIndex + visibleCount + 2);
+  const offsetY = startIndex * GOOD_ITEM_HEIGHT;
+  const visibleGoods = port.goods.slice(startIndex, endIndex);
+
+  const renderGoodItem = (good: Good, index: number) => {
+    const maxQty = getMaxQuantity(good);
+    const qty = quantities[good.id] ?? 0;
+    const destPrice = getDestSellPrice(good);
+    const actualIndex = startIndex + index;
+
+    return (
+      <div
+        key={good.id}
+        style={{
+          position: 'absolute',
+          top: actualIndex * GOOD_ITEM_HEIGHT - offsetY,
+          left: 0,
+          right: 0,
+          height: GOOD_ITEM_HEIGHT,
+          boxSizing: 'border-box',
+          paddingBottom: 6,
+        }}
+      >
+        <div
+          style={{
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: 8,
+            padding: 8,
+            height: '100%',
+            boxSizing: 'border-box',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <span style={{ fontSize: 16 }}>{good.emoji}</span>
+            <span style={{ fontWeight: 600, fontSize: 13 }}>{good.name}</span>
+          </div>
+          <div style={{ fontSize: 11, color: 'rgba(241,250,238,0.7)', marginBottom: 4 }}>
+            <div>买入: {good.basePrice} 金</div>
+            <div>
+              卖出: {destPrice !== null ? `${destPrice} 金` : `${good.sellPrice} 金`}
+              {destPrice !== null && destinationPort && !destinationPort.goods.some((g) => g.id === good.id) && (
+                <span style={{ color: '#E63946', marginLeft: 4 }}>(-50%)</span>
+              )}
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input
+              type="number"
+              min={0}
+              max={maxQty}
+              value={qty}
+              onChange={(e) => {
+                const val = Math.min(maxQty, Math.max(0, Number(e.target.value) || 0));
+                setQuantities((prev) => ({ ...prev, [good.id]: val }));
+              }}
+              style={{
+                width: 50,
+                padding: '2px 4px',
+                borderRadius: 4,
+                border: '1px solid rgba(241,250,238,0.3)',
+                background: 'rgba(255,255,255,0.1)',
+                color: '#F1FAEE',
+                fontSize: 12,
+                textAlign: 'center',
+              }}
+            />
+            <button
+              onClick={() => {
+                if (qty > 0) {
+                  onAddCargo(good.id, qty, port.goods);
+                  setQuantities((prev) => ({ ...prev, [good.id]: 0 }));
+                }
+              }}
+              disabled={qty <= 0 || maxQty <= 0}
+              style={{
+                background: '#E63946',
+                color: '#F1FAEE',
+                border: 'none',
+                borderRadius: 4,
+                padding: '2px 8px',
+                fontSize: 11,
+                cursor: qty > 0 && maxQty > 0 ? 'pointer' : 'not-allowed',
+                opacity: qty > 0 && maxQty > 0 ? 1 : 0.5,
+                transition: 'all 0.1s ease',
+              }}
+              onMouseEnter={(e) => {
+                if (qty > 0 && maxQty > 0) (e.currentTarget as HTMLButtonElement).style.background = '#FF6B6B';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = '#E63946';
+                (e.currentTarget as HTMLButtonElement).style.transform = '';
+              }}
+              onMouseDown={(e) => {
+                if (qty > 0 && maxQty > 0) (e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.95)';
+              }}
+              onMouseUp={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.transform = '';
+              }}
+            >
+              装载
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div
@@ -93,94 +221,19 @@ const PortInfo: React.FC<PortInfoProps> = ({
 
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>港口货物</div>
-        {port.goods.map((good) => {
-          const maxQty = getMaxQuantity(good);
-          const qty = quantities[good.id] ?? 0;
-          const destPrice = getDestSellPrice(good);
-
-          return (
-            <div
-              key={good.id}
-              style={{
-                background: 'rgba(255,255,255,0.05)',
-                borderRadius: 8,
-                padding: 8,
-                marginBottom: 6,
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ fontSize: 16 }}>{good.emoji}</span>
-                <span style={{ fontWeight: 600, fontSize: 13 }}>{good.name}</span>
-              </div>
-              <div style={{ fontSize: 11, color: 'rgba(241,250,238,0.7)', marginBottom: 4 }}>
-                <div>买入: {good.basePrice} 金</div>
-                <div>
-                  卖出: {destPrice !== null ? `${destPrice} 金` : `${good.sellPrice} 金`}
-                  {destPrice !== null && destinationPort && !destinationPort.goods.some((g) => g.id === good.id) && (
-                    <span style={{ color: '#E63946', marginLeft: 4 }}>(-50%)</span>
-                  )}
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <input
-                  type="number"
-                  min={0}
-                  max={maxQty}
-                  value={qty}
-                  onChange={(e) => {
-                    const val = Math.min(maxQty, Math.max(0, Number(e.target.value) || 0));
-                    setQuantities((prev) => ({ ...prev, [good.id]: val }));
-                  }}
-                  style={{
-                    width: 50,
-                    padding: '2px 4px',
-                    borderRadius: 4,
-                    border: '1px solid rgba(241,250,238,0.3)',
-                    background: 'rgba(255,255,255,0.1)',
-                    color: '#F1FAEE',
-                    fontSize: 12,
-                    textAlign: 'center',
-                  }}
-                />
-                <button
-                  onClick={() => {
-                    if (qty > 0) {
-                      onAddCargo(good.id, qty, port.goods);
-                      setQuantities((prev) => ({ ...prev, [good.id]: 0 }));
-                    }
-                  }}
-                  disabled={qty <= 0 || maxQty <= 0}
-                  style={{
-                    background: '#E63946',
-                    color: '#F1FAEE',
-                    border: 'none',
-                    borderRadius: 4,
-                    padding: '2px 8px',
-                    fontSize: 11,
-                    cursor: qty > 0 && maxQty > 0 ? 'pointer' : 'not-allowed',
-                    opacity: qty > 0 && maxQty > 0 ? 1 : 0.5,
-                    transition: 'all 0.1s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (qty > 0 && maxQty > 0) (e.currentTarget as HTMLButtonElement).style.background = '#FF6B6B';
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.background = '#E63946';
-                    (e.currentTarget as HTMLButtonElement).style.transform = '';
-                  }}
-                  onMouseDown={(e) => {
-                    if (qty > 0 && maxQty > 0) (e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.95)';
-                  }}
-                  onMouseUp={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.transform = '';
-                  }}
-                >
-                  装载
-                </button>
-              </div>
-            </div>
-          );
-        })}
+        <div
+          ref={listRef}
+          onScroll={handleScroll}
+          style={{
+            position: 'relative',
+            overflowY: 'auto',
+            maxHeight: GOODS_LIST_MAX_HEIGHT,
+          }}
+        >
+          <div style={{ position: 'relative', height: totalGoodsHeight }}>
+            {visibleGoods.map((good, i) => renderGoodItem(good, i))}
+          </div>
+        </div>
       </div>
 
       {cargo.length > 0 && (

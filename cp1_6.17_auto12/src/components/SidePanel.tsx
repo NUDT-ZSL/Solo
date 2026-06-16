@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect, useLayoutEffect } from 'react';
 import type { Ship, TradeRecord } from '../types';
 
 interface SidePanelProps {
@@ -11,6 +11,7 @@ interface SidePanelProps {
 
 const ITEM_HEIGHT = 60;
 const MAX_LEVEL = 5;
+const LIST_MAX_HEIGHT = 300;
 
 const SidePanel: React.FC<SidePanelProps> = ({
   ship,
@@ -20,7 +21,25 @@ const SidePanel: React.FC<SidePanelProps> = ({
   onUpgradeCannon,
 }) => {
   const [scrollOffset, setScrollOffset] = useState(0);
+  const [containerHeight, setContainerHeight] = useState(LIST_MAX_HEIGHT);
   const listRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (listRef.current) {
+      const h = Math.min(LIST_MAX_HEIGHT, listRef.current.clientHeight);
+      setContainerHeight(h || LIST_MAX_HEIGHT);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (listRef.current) {
+        setContainerHeight(Math.min(LIST_MAX_HEIGHT, listRef.current.clientHeight));
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleScroll = useCallback(() => {
     if (listRef.current) {
@@ -49,65 +68,12 @@ const SidePanel: React.FC<SidePanelProps> = ({
     return `${hh}:${mm}`;
   };
 
-  const renderRecords = () => {
-    if (tradeRecords.length === 0) {
-      return (
-        <div style={{ textAlign: 'center', opacity: 0.5, padding: '16px 0', fontSize: 13 }}>
-          暂无记录
-        </div>
-      );
-    }
-
-    const containerHeight = listRef.current?.clientHeight ?? 300;
-    const visibleCount = Math.ceil(containerHeight / ITEM_HEIGHT);
-    const startIndex = Math.floor(scrollOffset / ITEM_HEIGHT);
-    const endIndex = Math.min(startIndex + visibleCount + 1, tradeRecords.length);
-    const totalHeight = tradeRecords.length * ITEM_HEIGHT;
-    const offsetY = startIndex * ITEM_HEIGHT;
-
-    const visibleRecords = tradeRecords.slice(startIndex, endIndex);
-
-    return (
-      <div style={{ position: 'relative', height: totalHeight }}>
-        <div style={{ position: 'absolute', top: offsetY, left: 0, right: 0 }}>
-          {visibleRecords.map((record) => (
-            <div
-              key={record.id}
-              style={{
-                height: ITEM_HEIGHT,
-                borderBottom: '1px solid rgba(241,250,238,0.1)',
-                padding: '6px 0',
-                boxSizing: 'border-box',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                <span style={{ fontSize: 12, opacity: 0.6 }}>
-                  {formatTime(record.timestamp)}
-                </span>
-                <span
-                  style={{
-                    fontWeight: 700,
-                    fontSize: 13,
-                    color: record.profit >= 0 ? '#2A9D8F' : '#E63946',
-                  }}
-                >
-                  {record.profit >= 0 ? '+' : ''}{record.profit} 金
-                </span>
-              </div>
-              <div style={{ fontSize: 12, marginBottom: 2 }}>
-                {record.fromPort} → {record.toPort}
-              </div>
-              {record.events.length > 0 && (
-                <div style={{ fontSize: 11, opacity: 0.6 }}>
-                  {record.events.join(', ')}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
+  const visibleCount = Math.ceil(containerHeight / ITEM_HEIGHT) + 2;
+  const startIndex = Math.max(0, Math.floor(scrollOffset / ITEM_HEIGHT) - 1);
+  const endIndex = Math.min(tradeRecords.length, startIndex + visibleCount + 2);
+  const totalHeight = tradeRecords.length * ITEM_HEIGHT;
+  const offsetY = startIndex * ITEM_HEIGHT;
+  const visibleRecords = tradeRecords.slice(startIndex, endIndex);
 
   const upgradeBtnStyle = (disabled: boolean): React.CSSProperties => ({
     width: '100%',
@@ -123,6 +89,64 @@ const SidePanel: React.FC<SidePanelProps> = ({
     marginBottom: 8,
     boxSizing: 'border-box',
   });
+
+  const renderRecords = () => {
+    if (tradeRecords.length === 0) {
+      return (
+        <div style={{ textAlign: 'center', opacity: 0.5, padding: '16px 0', fontSize: 13 }}>
+          暂无记录
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ position: 'relative', height: totalHeight }}>
+        <div style={{ position: 'absolute', top: offsetY, left: 0, right: 0 }}>
+          {visibleRecords.map((record, i) => {
+            const actualIndex = startIndex + i;
+            return (
+              <div
+                key={record.id}
+                style={{
+                  position: 'absolute',
+                  top: actualIndex * ITEM_HEIGHT - offsetY,
+                  left: 0,
+                  right: 0,
+                  height: ITEM_HEIGHT,
+                  borderBottom: '1px solid rgba(241,250,238,0.1)',
+                  padding: '6px 0',
+                  boxSizing: 'border-box',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                  <span style={{ fontSize: 12, opacity: 0.6 }}>
+                    {formatTime(record.timestamp)}
+                  </span>
+                  <span
+                    style={{
+                      fontWeight: 700,
+                      fontSize: 13,
+                      color: record.profit >= 0 ? '#2A9D8F' : '#E63946',
+                    }}
+                  >
+                    {record.profit >= 0 ? '+' : ''}{record.profit} 金
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, marginBottom: 2 }}>
+                  {record.fromPort} → {record.toPort}
+                </div>
+                {record.events.length > 0 && (
+                  <div style={{ fontSize: 11, opacity: 0.6 }}>
+                    {record.events.join(', ')}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div
@@ -154,7 +178,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
         火炮等级: {ship.cannonLevel}
       </div>
       <div style={{ fontSize: 13, marginBottom: 6 }}>
-        载重: {ship.maxCapacity}
+        载重: {ship.maxCapacity} 吨
       </div>
 
       <div style={{ fontSize: 13, marginBottom: 4 }}>耐久度</div>
@@ -236,7 +260,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
       <div
         ref={listRef}
         onScroll={handleScroll}
-        style={{ overflowY: 'auto', maxHeight: 300 }}
+        style={{ overflowY: 'auto', maxHeight: LIST_MAX_HEIGHT }}
       >
         {renderRecords()}
       </div>
