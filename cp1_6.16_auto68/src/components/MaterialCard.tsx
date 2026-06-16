@@ -2,6 +2,8 @@ import React from 'react';
 import type { Material } from '../types';
 import { formatCurrency } from '../logic/inventoryLogic';
 
+const LOW_STOCK_THRESHOLD = 5;
+
 interface MaterialCardProps {
   material: Material;
   isMissing?: boolean;
@@ -15,7 +17,7 @@ export const MaterialCard: React.FC<MaterialCardProps> = ({
   onDelete,
   isDeleting = false,
 }) => {
-  const isLowStock = material.quantity < 5;
+  const isLowStock = material.quantity < LOW_STOCK_THRESHOLD;
 
   return (
     <div

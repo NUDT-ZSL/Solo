@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { Material } from '../types';
 
 interface AddMaterialFormProps {
@@ -20,13 +20,33 @@ export const AddMaterialForm: React.FC<AddMaterialFormProps> = ({ onAdd, onClose
   const [supplier, setSupplier] = useState('');
   const [price, setPrice] = useState(0);
   const [showSupplierList, setShowSupplierList] = useState(false);
+  const supplierDropdownRef = useRef<HTMLDivElement>(null);
 
   const uniqueSuppliers = useMemo(() => {
     const suppliers = materials
-      .map((m) => m.supplier)
-      .filter((s) => s && s.trim() !== '');
+      .map((m) => m.supplier?.trim())
+      .filter((s): s is string => typeof s === 'string' && s.length > 0);
     return Array.from(new Set(suppliers));
   }, [materials]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        supplierDropdownRef.current &&
+        !supplierDropdownRef.current.contains(event.target as Node)
+      ) {
+        setShowSupplierList(false);
+      }
+    };
+
+    if (showSupplierList) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showSupplierList]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,7 +146,7 @@ export const AddMaterialForm: React.FC<AddMaterialFormProps> = ({ onAdd, onClose
                 </button>
               </div>
               {showSupplierList && (
-                <div className="supplier-list-dropdown" onClick={(e) => e.stopPropagation()}>
+                <div ref={supplierDropdownRef} className="supplier-list-dropdown" onClick={(e) => e.stopPropagation()}>
                   <div className="supplier-list-header">
                     <span>已有供应商</span>
                     <button
