@@ -68,12 +68,15 @@ function Bars({ frequencyData }: BarsProps) {
       mesh.scale.y = h;
       mesh.position.y = h / 2;
 
-      const t = (h - MIN_HEIGHT) / (MAX_HEIGHT - MIN_HEIGHT);
-      const color = COLOR_BOTTOM.clone().lerp(COLOR_TOP, Math.max(0, Math.min(1, t)));
+      const tRaw = (h - MIN_HEIGHT) / (MAX_HEIGHT - MIN_HEIGHT);
+      const t = Math.max(0, Math.min(1, tRaw));
+      const r = lerp(COLOR_BOTTOM.r, COLOR_TOP.r, t);
+      const g = lerp(COLOR_BOTTOM.g, COLOR_TOP.g, t);
+      const b = lerp(COLOR_BOTTOM.b, COLOR_TOP.b, t);
 
       const mat = barMaterials[i] as THREE.MeshStandardMaterial;
-      mat.color.copy(color);
-      mat.emissive.copy(color);
+      mat.color.setRGB(r, g, b);
+      mat.emissive.setRGB(r, g, b);
     }
 
     if (groupRef.current) {
@@ -161,15 +164,8 @@ function ParticleShell({ frequencyData }: ParticleShellProps) {
     colorPhase.current += delta * 0.8;
     const beatTime = state.clock.elapsedTime;
     const beatPulse = 0.5 + 0.5 * Math.sin(beatTime * Math.PI * 2 * 4);
+    const scaleFactor = 1 + beatPulse * 0.05;
 
-    let avg = 0;
-    const n = Math.min(frequencyData.length, BAR_COUNT);
-    for (let i = 0; i < n; i++) {
-      avg += frequencyData[i];
-    }
-    const avgNorm = n > 0 ? avg / n : 0;
-
-    const scaleFactor = 1 + beatPulse * 0.05 + avgNorm * 0.25;
     const t = (Math.sin(colorPhase.current * 0.5) + 1) / 2;
 
     const posAttr = pointsRef.current.geometry.getAttribute('position') as THREE.BufferAttribute;

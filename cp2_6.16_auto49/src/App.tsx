@@ -10,11 +10,18 @@ function App() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [frequencyData, setFrequencyData] = useState<number[]>(new Array(BAR_COUNT).fill(0));
+  const [fps, setFps] = useState<number>(0);
+  const [freqLatency, setFreqLatency] = useState<number>(0);
+  const [showPerf, setShowPerf] = useState<boolean>(true);
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const analyzerRef = useRef<AudioAnalyzer | null>(null);
   const rafRef = useRef<number | null>(null);
-  const lastUpdateRef = useRef<number>(0);
+  const perfRafRef = useRef<number | null>(null);
+  const lastFreqUpdateRef = useRef<number>(0);
+  const lastFrameRef = useRef<number>(0);
+  const fpsRef = useRef<number>(0);
+  const freqUpdateTimesRef = useRef<number[]>([]);
 
   const startLoop = useCallback(() => {
     const loop = (now: number) => {
@@ -23,11 +30,21 @@ function App() {
         return;
       }
 
-      if (now - lastUpdateRef.current >= 16) {
+      if (now - lastFreqUpdateRef.current >= 40) {
         const data = analyzerRef.current.getFrequencyDataNormalized(BAR_COUNT);
         setFrequencyData(data);
-        lastUpdateRef.current = now;
+        freqUpdateTimesRef.current.push(now);
+        if (freqUpdateTimesRef.current.length > 10) {
+          freqUpdateTimesRef.current.shift();
+        }
+        lastFreqUpdateRef.current = now;
       }
+
+      if (lastFrameRef.current > 0) {
+        const frameTime = now - lastFrameRef.current;
+        fpsRef.current = 1000 / frameTime;
+      }
+      lastFrameRef.current = now;
 
       if (audioRef.current && !audioRef.current.paused) {
         setCurrentTime(audioRef.current.currentTime);
@@ -47,11 +64,42 @@ function App() {
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
       }
+      if (perfRafRef.current) {
+        cancelAnimationFrame(perfRafRef.current);
+      }
       if (analyzerRef.current) {
         analyzerRef.current.dispose();
       }
     };
   }, [startLoop]);
+
+  useEffect(() => {
+    if (!showPerf) {
+      if (perfRafRef.current) {
+        cancelAnimationFrame(perfRafRef.current);
+        perfRafRef.current = null;
+      }
+      return;
+    }
+
+    const updatePerf = () => {
+      setFps(Math.round(fpsRef.current * 10) / 10);
+      const times = freqUpdateTimesRef.current;
+      if (times.length >= 2) {
+        const lastInterval = times[times.length - 1] - times[times.length - 2];
+        setFreqLatency(Math.round(lastInterval));
+      }
+      perfRafRef.current = requestAnimationFrame(updatePerf);
+    };
+
+    perfRafRef.current = requestAnimationFrame(updatePerf);
+
+    return () => {
+      if (perfRafRef.current) {
+        cancelAnimationFrame(perfRafRef.current);
+      }
+    };
+  }, [showPerf]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -174,7 +222,7 @@ function App() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M12 4v16m8-8H4" />
             </svg>
-            <span>上传</span>
+            <span className="desktop-only">上传</span>
             <input
               type="file"
               accept=".mp3,.wav,audio/mpeg,audio/wav"
@@ -189,12 +237,16 @@ function App() {
         </div>
 
         <div className="progress-container">
-          <div className="progress-info">
+          <div className="progress-info desktop-only">
             <span>{formatTime(currentTime)}</span>
             <span>{formatTime(duration)}</span>
           </div>
           <div className="progress-bar" onClick={handleProgressClick}>
             <div className="progress-fill" style={{ width: `${progressPercent}%` }} />
+          </div>
+          <div className="progress-info mobile-only">
+            <span className="mobile-file-name">{fileName || '未选择文件'}</span>
+            <span>{formatTime(currentTime)} / {formatTime(duration)}</span>
           </div>
         </div>
 
@@ -244,6 +296,17 @@ function App() {
               <path d="M6 6h12v12H6z" />
             </svg>
           </button>
+        </div>
+      </div>
+
+      <div className="perf-panel" onClick={() => setShowPerf(!showPerf)} title="点击切换性能监控">
+        <div className="perf-item">
+          <span className="perf-label">FPS</span>
+          <span className={`perf-value ${fps >= 30 ? 'ok' : 'warn'}`}>{fps.toFixed(1)}</span>
+        </div>
+        <div className="perf-item">
+          <span className="perf-label">延迟</span>
+          <span className={`perf-value ${freqLatency <= 50 ? 'ok' : 'warn'}`}>{freqLatency}ms</span>
         </div>
       </div>
 
