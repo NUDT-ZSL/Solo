@@ -186,38 +186,54 @@ function StatsDashboard({ userId }: StatsDashboardProps) {
     const canvas = canvasRef.current;
     if (!canvas || !stats) return;
 
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
     const mouseX = (e.clientX - rect.left) * scaleX;
+    const mouseY = (e.clientY - rect.top) * scaleY;
 
-    const padding = { left: 50, right: 30 };
-    const chartWidth = canvas.width - padding.left - padding.right;
     const scores = stats.recentScores;
-
     if (scores.length < 2) return;
 
-    const stepX = chartWidth / (scores.length - 1);
-    let closestIndex = -1;
-    let closestDist = Infinity;
+    let hoveredIdx = -1;
 
-    scores.forEach((_, i) => {
-      const pointX = padding.left + stepX * i;
-      const dist = Math.abs(mouseX - pointX);
-      if (dist < closestDist && dist < stepX / 2) {
-        closestDist = dist;
-        closestIndex = i;
+    for (let i = 0; i < pointPathsRef.current.length; i++) {
+      if (ctx.isPointInPath(pointPathsRef.current[i], mouseX, mouseY)) {
+        hoveredIdx = i;
+        break;
       }
-    });
+    }
 
-    if (closestIndex >= 0) {
-      setHoveredIndex(closestIndex);
-      const pointY = 30 + (canvas.height - 70) * (1 - scores[closestIndex].score / 100);
+    if (hoveredIdx < 0) {
+      const padding = { left: 50, right: 30 };
+      const chartWidth = canvas.width - padding.left - padding.right;
+      const stepX = chartWidth / (scores.length - 1);
+      let closestIdx = -1;
+      let closestDist = Infinity;
+
+      scores.forEach((_, i) => {
+        const pointX = padding.left + stepX * i;
+        const dist = Math.abs(mouseX - pointX);
+        if (dist < closestDist && dist < stepX / 2) {
+          closestDist = dist;
+          closestIdx = i;
+        }
+      });
+      hoveredIdx = closestIdx;
+    }
+
+    if (hoveredIdx >= 0) {
+      setHoveredIndex(hoveredIdx);
+      const point = pointsRef.current[hoveredIdx];
       setTooltip({
-        x: padding.left + stepX * closestIndex,
-        y: pointY,
-        score: scores[closestIndex].score,
-        date: new Date(stats.recentScores[closestIndex].date).toLocaleDateString('zh-CN'),
-        index: closestIndex
+        x: point.x,
+        y: point.y,
+        score: scores[hoveredIdx].score,
+        date: new Date(scores[hoveredIdx].date).toLocaleDateString('zh-CN'),
+        index: hoveredIdx
       });
     } else {
       setHoveredIndex(null);

@@ -158,6 +158,20 @@ function FeedbackView({ result, onRetry, onBack }: FeedbackViewProps) {
     setIsDragging(false);
   }, []);
 
+  const handleCanvasMouseLeave = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      setIsDragging(false);
+    };
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => {
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, []);
+
   const handleErrorClick = (index: number, e: React.MouseEvent) => {
     e.stopPropagation();
     setActiveErrorIndex(activeErrorIndex === index ? null : index);
@@ -248,7 +262,7 @@ function FeedbackView({ result, onRetry, onBack }: FeedbackViewProps) {
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
+            onMouseLeave={handleCanvasMouseLeave}
           />
         </div>
         <p style={styles.waveformHint}>

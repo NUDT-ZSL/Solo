@@ -597,21 +597,6 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     marginBottom: '16px'
   },
-  playButton: {
-    padding: '8px 16px',
-    border: 'none',
-    borderRadius: '8px',
-    backgroundColor: '#3498DB',
-    color: 'white',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: 500,
-    transition: 'all 0.3s ease'
-  },
-  playButtonDisabled: {
-    opacity: 0.5,
-    cursor: 'not-allowed'
-  },
   waveformContainer: {
     position: 'relative',
     borderRadius: '12px',
@@ -665,31 +650,6 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     alignItems: 'center',
     gap: '16px'
-  },
-  recordButton: {
-    width: '60px',
-    height: '60px',
-    borderRadius: '50%',
-    backgroundColor: '#E74C3C',
-    border: 'none',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: '0 4px 12px rgba(231, 76, 60, 0.4)',
-    transition: 'all 0.3s ease-in-out'
-  },
-  recordButtonDisabled: {
-    opacity: 0.5,
-    cursor: 'not-allowed'
-  },
-  recordButtonHover: {
-    transform: 'scale(1.1)',
-    boxShadow: '0 6px 20px rgba(231, 76, 60, 0.5)'
-  },
-  recordButtonActive: {
-    backgroundColor: '#C0392B',
-    animation: 'pulse 1.5s ease-in-out infinite'
   },
   micIcon: {
     filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.2))'

@@ -15,6 +15,7 @@ interface Sample {
   duration: number;
   phonemes: string[];
   features: number[][];
+  audioUrl: string;
 }
 
 interface Recording {
@@ -29,6 +30,27 @@ interface Recording {
 
 const users: Record<string, { name: string; points: number; avatar: string }> = {
   'user-001': { name: '学习者', points: 1280, avatar: '👤' }
+};
+
+const calculateAudioDuration = (text: string, language: string, level: number): number => {
+  let charCount = 0;
+  if (language === 'en') {
+    const words = text.toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/).filter(w => w.length > 0);
+    charCount = words.reduce((sum, w) => sum + w.length, 0);
+    const charsPerSecond = 3.0 + (level - 1) * 0.5;
+    const wordPauseCount = Math.max(0, words.length - 1);
+    const pauseTime = wordPauseCount * 0.15;
+    const baseDuration = charCount / charsPerSecond + pauseTime;
+    return Number(Math.max(3, Math.min(15, baseDuration * 1.1 + 0.5)).toFixed(2));
+  } else {
+    const japaneseChars = text.match(/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g) || [];
+    charCount = japaneseChars.length;
+    const charsPerSecond = 2.5 + (level - 1) * 0.5;
+    const punctuationCount = (text.match(/[、。！？，.]/g) || []).length;
+    const pauseTime = punctuationCount * 0.2;
+    const baseDuration = charCount / charsPerSecond + pauseTime;
+    return Number(Math.max(3, Math.min(15, baseDuration * 1.1 + 0.5)).toFixed(2));
+  }
 };
 
 const generateEnglishSamples = (level: number): Sample[] => {
@@ -74,7 +96,8 @@ const generateEnglishSamples = (level: number): Sample[] => {
 
   const texts = levelTexts[level] || levelTexts[1];
   texts.forEach((text, index) => {
-    const duration = 2.5 + Math.random() * 2;
+    const duration = calculateAudioDuration(text, 'en', level);
+    const sampleId = `en-${level}-${index + 1}`;
     const phonemes = text.toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/).filter(w => w.length > 0);
     const features: number[][] = [];
     const frameCount = Math.floor(duration * 100 / 10);
@@ -86,13 +109,14 @@ const generateEnglishSamples = (level: number): Sample[] => {
       features.push(frame);
     }
     samples.push({
-      id: `en-${level}-${index + 1}`,
+      id: sampleId,
       text,
       language: 'en',
       level,
-      duration: Number(duration.toFixed(2)),
+      duration,
       phonemes,
-      features
+      features,
+      audioUrl: `/api/samples/${sampleId}/audio`
     });
   });
   return samples;
@@ -141,7 +165,8 @@ const generateJapaneseSamples = (level: number): Sample[] => {
 
   const texts = levelTexts[level] || levelTexts[1];
   texts.forEach((text, index) => {
-    const duration = 3 + Math.random() * 2;
+    const duration = calculateAudioDuration(text, 'ja', level);
+    const sampleId = `ja-${level}-${index + 1}`;
     const phonemes = text.replace(/[^ぁ-んァ-ン\s]/g, '').split('').filter(c => c.trim());
     const features: number[][] = [];
     const frameCount = Math.floor(duration * 100 / 10);
@@ -153,13 +178,14 @@ const generateJapaneseSamples = (level: number): Sample[] => {
       features.push(frame);
     }
     samples.push({
-      id: `ja-${level}-${index + 1}`,
+      id: sampleId,
       text,
       language: 'ja',
       level,
-      duration: Number(duration.toFixed(2)),
+      duration,
       phonemes,
-      features
+      features,
+      audioUrl: `/api/samples/${sampleId}/audio`
     });
   });
   return samples;
