@@ -11,6 +11,8 @@ interface GameCardProps {
 export default function GameCard({ game }: GameCardProps) {
   const [hoverStar, setHoverStar] = useState(0)
   const [imgLoaded, setImgLoaded] = useState(false)
+  const [cardHovered, setCardHovered] = useState(false)
+  const [bouncingStar, setBouncingStar] = useState(0)
   const [showPreview, setShowPreview] = useState(false)
   const [previewVisible, setPreviewVisible] = useState(false)
   const [carouselIndex, setCarouselIndex] = useState(0)
@@ -18,6 +20,7 @@ export default function GameCard({ game }: GameCardProps) {
   const cardRef = useRef<HTMLDivElement>(null)
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const carouselTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const bounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const navigate = useNavigate()
   const { scores, rateGame } = useScoreStore()
   const currentScore = scores[game.id] || 0
@@ -27,6 +30,9 @@ export default function GameCard({ game }: GameCardProps) {
 
   const handleRate = (score: number) => {
     rateGame(game.id, score)
+    setBouncingStar(score)
+    if (bounceTimerRef.current) clearTimeout(bounceTimerRef.current)
+    bounceTimerRef.current = setTimeout(() => setBouncingStar(0), 300)
   }
 
   const startCarousel = useCallback(() => {
@@ -56,6 +62,7 @@ export default function GameCard({ game }: GameCardProps) {
   }
 
   const handleCardMouseEnter = useCallback(() => {
+    setCardHovered(true)
     if (hoverTimerRef.current) {
       clearTimeout(hoverTimerRef.current)
     }
@@ -72,6 +79,7 @@ export default function GameCard({ game }: GameCardProps) {
   }, [startCarousel])
 
   const handleCardMouseLeave = useCallback(() => {
+    setCardHovered(false)
     if (hoverTimerRef.current) {
       clearTimeout(hoverTimerRef.current)
       hoverTimerRef.current = null
@@ -108,8 +116,13 @@ export default function GameCard({ game }: GameCardProps) {
     return () => {
       if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
       if (carouselTimerRef.current) clearInterval(carouselTimerRef.current)
+      if (bounceTimerRef.current) clearTimeout(bounceTimerRef.current)
     }
   }, [])
+
+  const boxShadow = cardHovered
+    ? '0 12px 24px #1A252F, inset 0 0 20px rgba(231,76,60,0.3)'
+    : '0 4px 6px rgba(0,0,0,0.3), inset 0 0 0px rgba(231,76,60,0)'
 
   const previewStyle: React.CSSProperties = {
     position: 'absolute',
@@ -140,9 +153,7 @@ export default function GameCard({ game }: GameCardProps) {
     <div
       ref={cardRef}
       className="game-card group cursor-pointer relative"
-      style={{
-        width: '280px',
-      }}
+      style={{ width: '280px' }}
       onMouseEnter={handleCardMouseEnter}
       onMouseLeave={handleCardMouseLeave}
     >
@@ -152,16 +163,9 @@ export default function GameCard({ game }: GameCardProps) {
           background: 'linear-gradient(135deg, #2C3E50, #34495E)',
           borderRadius: '16px',
           overflow: 'hidden',
-          transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-          boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
-        }}
-        onMouseEnter={(e) => {
-          ;(e.currentTarget as HTMLDivElement).style.transform = 'translateY(-8px)'
-          ;(e.currentTarget as HTMLDivElement).style.boxShadow = '0 12px 24px #1A252F'
-        }}
-        onMouseLeave={(e) => {
-          ;(e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'
-          ;(e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 6px rgba(0,0,0,0.3)'
+          transition: 'transform 0.3s ease, box-shadow 0.4s ease',
+          boxShadow,
+          transform: cardHovered ? 'translateY(-8px)' : 'translateY(0)',
         }}
       >
         <div
@@ -221,25 +225,30 @@ export default function GameCard({ game }: GameCardProps) {
             </span>
             <div className="flex">
               {[1, 2, 3, 4, 5].map((star) => (
-                <Star
+                <span
                   key={star}
-                  size={16}
-                  className="cursor-pointer"
-                  style={{
-                    fill: star <= displayScore ? '#F1C40F' : 'transparent',
-                    color: star <= displayScore ? '#F1C40F' : '#BDC3C7',
-                    transition: 'fill 0.2s ease, color 0.2s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.stopPropagation()
-                    setHoverStar(star)
-                  }}
-                  onMouseLeave={() => setHoverStar(0)}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleRate(star)
-                  }}
-                />
+                  className={bouncingStar === star ? 'star-bounce' : ''}
+                  style={{ display: 'inline-flex', lineHeight: 0 }}
+                >
+                  <Star
+                    size={16}
+                    className="cursor-pointer"
+                    style={{
+                      fill: star <= displayScore ? '#F1C40F' : 'transparent',
+                      color: star <= displayScore ? '#F1C40F' : '#BDC3C7',
+                      transition: 'fill 0.2s ease, color 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.stopPropagation()
+                      setHoverStar(star)
+                    }}
+                    onMouseLeave={() => setHoverStar(0)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleRate(star)
+                    }}
+                  />
+                </span>
               ))}
             </div>
             <span className="text-xs ml-auto" style={{ color: '#7F8C8D' }}>

@@ -42,7 +42,7 @@ export default function Home() {
                     borderRadius: '20px',
                     background: genre === g ? '#E74C3C' : '#7F8C8D',
                     color: '#fff',
-                    transition: 'background 0.2s ease, transform 0.2s ease',
+                    transition: 'background 0.3s ease, color 0.3s ease, transform 0.2s ease',
                     transform: genre === g ? 'scale(1.05)' : 'scale(1)',
                   }}
                 >
