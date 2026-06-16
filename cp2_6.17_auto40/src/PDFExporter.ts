@@ -62,10 +62,10 @@ export function exportToPDF(state: PaperState, options: ExportOptions): void {
     const pts = layer.vertices.map(tx);
     if (pts.length < 3) continue;
 
-    doc.setLinePath(
-      pts.map((p) => ({ x: p.x, y: p.y }))
-    );
-    doc.line();
+    for (let i = 0; i < pts.length; i++) {
+      const j = (i + 1) % pts.length;
+      doc.line(pts[i].x, pts[i].y, pts[j].x, pts[j].y);
+    }
   }
 
   doc.setLineDashPattern([2, 2], 0);

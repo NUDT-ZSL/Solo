@@ -25,12 +25,19 @@ interface OrigamiStore {
   isAnimating: boolean;
   animationProgress: number;
   showExportModal: boolean;
+  hoverPoint: Point | null;
+  nearestGridPoint: Point | null;
+  highlightedCrease: Crease | null;
 
   setToolMode: (mode: ToolMode) => void;
   setRotation: (angle: number) => void;
   setIsRotating: (val: boolean) => void;
   setOffsetX: (offset: number) => void;
   setOffsetY: (offset: number) => void;
+  setHoverPoint: (point: Point | null) => void;
+  setNearestGridPoint: (point: Point | null) => void;
+  setHighlightedCrease: (crease: Crease | null) => void;
+  setRotationWithSnap: (angle: number) => void;
   selectGridPoint: (point: Point) => void;
   clearSelection: () => void;
   executeFold: (foldSide: Point) => void;
@@ -40,6 +47,27 @@ interface OrigamiStore {
   setAnimationProgress: (val: number) => void;
   getCurrentArea: () => number;
   getFoldCount: () => number;
+}
+
+export const SPECIAL_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
+const SNAP_THRESHOLD = 2;
+
+function snapToSpecialAngle(angle: number): number {
+  for (const special of SPECIAL_ANGLES) {
+    const diff = Math.abs(angle - special);
+    if (diff <= SNAP_THRESHOLD) {
+      return special;
+    }
+    const diff360 = Math.abs(angle - (special + 360));
+    if (diff360 <= SNAP_THRESHOLD) {
+      return special;
+    }
+    const diffNeg = Math.abs(angle - (special - 360));
+    if (diffNeg <= SNAP_THRESHOLD) {
+      return special;
+    }
+  }
+  return angle;
 }
 
 export const useOrigamiStore = create<OrigamiStore>((set, get) => ({
@@ -55,12 +83,22 @@ export const useOrigamiStore = create<OrigamiStore>((set, get) => ({
   isAnimating: false,
   animationProgress: 0,
   showExportModal: false,
+  hoverPoint: null,
+  nearestGridPoint: null,
+  highlightedCrease: null,
 
-  setToolMode: (mode) => set({ toolMode: mode, selectedPoints: [], currentCrease: null }),
+  setToolMode: (mode) => set({ toolMode: mode, selectedPoints: [], currentCrease: null, hoverPoint: null, nearestGridPoint: null, highlightedCrease: null }),
   setRotation: (angle) => set({ rotation: angle }),
   setIsRotating: (val) => set({ isRotating: val }),
   setOffsetX: (offset) => set({ offsetX: offset }),
   setOffsetY: (offset) => set({ offsetY: offset }),
+  setHoverPoint: (point) => set({ hoverPoint: point }),
+  setNearestGridPoint: (point) => set({ nearestGridPoint: point }),
+  setHighlightedCrease: (crease) => set({ highlightedCrease: crease }),
+  setRotationWithSnap: (angle) => {
+    const snapped = snapToSpecialAngle(angle);
+    set({ rotation: snapped });
+  },
 
   selectGridPoint: (point) => {
     const { selectedPoints, paperState } = get();

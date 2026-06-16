@@ -1,5 +1,5 @@
 import { MousePointer2, Scissors, RotateCw, Download } from "lucide-react";
-import { useOrigamiStore } from "./store";
+import { useOrigamiStore, SPECIAL_ANGLES } from "./store";
 import type { ToolMode } from "./store";
 
 const tools: { mode: ToolMode; icon: React.ReactNode; label: string }[] = [
@@ -9,8 +9,19 @@ const tools: { mode: ToolMode; icon: React.ReactNode; label: string }[] = [
 ];
 
 export default function FoldToolbar() {
-  const { toolMode, setToolMode, rotation, setRotation, setIsRotating, offsetX, setOffsetX, offsetY, setOffsetY, setShowExportModal } =
-    useOrigamiStore();
+  const {
+    toolMode,
+    setToolMode,
+    rotation,
+    setRotation,
+    setRotationWithSnap,
+    setIsRotating,
+    offsetX,
+    setOffsetX,
+    offsetY,
+    setOffsetY,
+    setShowExportModal,
+  } = useOrigamiStore();
 
   return (
     <div className="toolbar-card flex flex-col gap-4">
@@ -46,7 +57,8 @@ export default function FoldToolbar() {
           step={1}
           value={rotation}
           onChange={(e) => {
-            setRotation(Number(e.target.value));
+            const value = Number(e.target.value);
+            setRotationWithSnap(value);
             setIsRotating(true);
           }}
           onMouseUp={() => setIsRotating(false)}
@@ -60,6 +72,38 @@ export default function FoldToolbar() {
             (e.target as HTMLElement).style.transform = "scale(1)";
           }}
         />
+        <div className="mt-2 grid grid-cols-4 gap-1">
+          {SPECIAL_ANGLES.map((angle) => (
+            <button
+              key={angle}
+              onClick={() => {
+                setRotation(angle);
+                setIsRotating(true);
+                setTimeout(() => setIsRotating(false), 150);
+              }}
+              className={`px-1 py-1 text-xs rounded transition-all duration-150 ${
+                rotation === angle
+                  ? "bg-teal-500 text-white font-medium"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+              style={{
+                transform: rotation === angle ? "scale(1.05)" : "scale(1)",
+                transition: "all 0.15s ease-out",
+              }}
+              onMouseDown={(e) => {
+                (e.currentTarget as HTMLElement).style.transform = "scale(1.05)";
+              }}
+              onMouseUp={(e) => {
+                (e.currentTarget as HTMLElement).style.transform = rotation === angle ? "scale(1.05)" : "scale(1)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.transform = rotation === angle ? "scale(1.05)" : "scale(1)";
+              }}
+            >
+              {angle}°
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="border-t border-gray-100 pt-3">

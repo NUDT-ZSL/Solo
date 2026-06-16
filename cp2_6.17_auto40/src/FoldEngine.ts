@@ -216,3 +216,38 @@ function isPointInPolygon(point: Point, vertices: Point[]): boolean {
   }
   return inside;
 }
+
+export function distanceToLineSegment(
+  point: Point,
+  lineStart: Point,
+  lineEnd: Point
+): number {
+  const dx = lineEnd.x - lineStart.x;
+  const dy = lineEnd.y - lineStart.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) {
+    return Math.sqrt((point.x - lineStart.x) ** 2 + (point.y - lineStart.y) ** 2);
+  }
+  let t = ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  const px = lineStart.x + t * dx;
+  const py = lineStart.y + t * dy;
+  return Math.sqrt((point.x - px) ** 2 + (point.y - py) ** 2);
+}
+
+export function findNearestCrease(
+  point: Point,
+  creases: Crease[],
+  threshold: number = 8
+): Crease | null {
+  let nearest: Crease | null = null;
+  let minDist = Infinity;
+  for (const crease of creases) {
+    const dist = distanceToLineSegment(point, crease.start, crease.end);
+    if (dist < threshold && dist < minDist) {
+      minDist = dist;
+      nearest = crease;
+    }
+  }
+  return nearest;
+}
