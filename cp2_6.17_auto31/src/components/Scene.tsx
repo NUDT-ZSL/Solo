@@ -69,9 +69,12 @@ function ProtonSystem({ protons, animationPhase, params }: ProtonSystemProps) {
   const arrowQuat = useMemo(() => new THREE.Quaternion(), []);
   const arrowVec = useMemo(() => new THREE.Vector3(), []);
   const arrowColor = useMemo(() => new THREE.Color(), []);
-  const { flipAngle } = params;
+  const { TR, TE, flipAngle } = params;
   const flipRad = (flipAngle * Math.PI) / 180;
-  const flipFactor = Math.sin(flipRad);
+  const trFactor = 0.5 + (TR / 1000);
+  const teFactor = 0.5 + (TE / 100);
+  const speedFactor = teFactor / trFactor;
+  const flipFactor = Math.sin(flipRad) * speedFactor;
 
   const positions = useMemo(() => {
     const pos = new Float32Array(protons.length * 3);
@@ -141,8 +144,8 @@ function ProtonSystem({ protons, animationPhase, params }: ProtonSystemProps) {
         const dx = Math.cos(phase) * wobbleRadius;
         const dy = Math.sin(phase) * wobbleRadius;
 
-        const tiltAngle = flipRad * 0.5;
-        const precessionAngle = phase;
+        const tiltAngle = flipRad;
+        const precessionAngle = phase * 1.5;
 
         arrowVec.set(
           Math.sin(tiltAngle) * Math.sin(precessionAngle),

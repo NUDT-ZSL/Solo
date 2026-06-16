@@ -310,9 +310,14 @@ export function generateKspaceTrajectoryPoints(
   const points: KspacePoint[] = [];
   const linesCount = 24;
   const pointsPerLine = 32;
-  const totalProgress = (phase * 0.3) % 1;
+  const { TR, TE } = params;
 
-  for (let line = 0; line < linesCount; line++) {
+  const trSpeed = 0.15 + (1000 - TR) / 2000;
+  const teDensity = 1 - Math.min(0.5, TE / 200);
+  const activeLines = Math.max(8, Math.floor(linesCount * teDensity));
+  const totalProgress = (phase * trSpeed) % 1;
+
+  for (let line = 0; line < activeLines; line++) {
     const lineStart = line / linesCount;
     const lineProgress = (totalProgress - lineStart) * linesCount;
 
