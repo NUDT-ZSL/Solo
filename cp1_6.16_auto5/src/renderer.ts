@@ -79,6 +79,7 @@ export class Renderer {
   private saturnRings: Map<string, THREE.Points> = new Map();
   private saturnRingSizes: Map<string, Float32Array> = new Map();
   private saturnRingPhases: Map<string, Float32Array> = new Map();
+  private saturnRingBaseColors: Map<string, Float32Array> = new Map();
   private trajectoryLines: Map<string, THREE.Points> = new Map();
   private constellationGroup: THREE.Group | null = null;
   private constellationLabels: Map<string, HTMLDivElement> = new Map();
@@ -343,6 +344,7 @@ export class Renderer {
     this.saturnRings.set(saturnData.id, ring);
     this.saturnRingSizes.set(saturnData.id, baseSizes);
     this.saturnRingPhases.set(saturnData.id, phases);
+    this.saturnRingBaseColors.set(saturnData.id, new Float32Array(colors));
     this.scene.add(ring);
   }
 
@@ -526,7 +528,6 @@ export class Renderer {
       const axisLine = this.planetAxisLines.get(state.id);
       if (axisLine) {
         axisLine.position.set(state.x, state.y, state.z);
-        axisLine.rotation.y = state.rotationY;
       }
 
       const highlight = this.planetHighlights.get(state.id);
@@ -547,7 +548,8 @@ export class Renderer {
 
         const baseSizes = this.saturnRingSizes.get(state.id);
         const phases = this.saturnRingPhases.get(state.id);
-        if (baseSizes && phases) {
+        const baseColors = this.saturnRingBaseColors.get(state.id);
+        if (baseSizes && phases && baseColors) {
           const sizeAttr = ring.geometry.getAttribute('size') as THREE.BufferAttribute;
           const colorAttr = ring.geometry.getAttribute('color') as THREE.BufferAttribute;
           
@@ -556,9 +558,10 @@ export class Renderer {
             sizeAttr.setX(i, baseSizes[i] * flicker);
             
             const colorFlicker = 0.8 + flicker * 0.2;
-            colorAttr.setX(i, colorAttr.getX(i) * colorFlicker);
-            colorAttr.setY(i, colorAttr.getY(i) * colorFlicker);
-            colorAttr.setZ(i, colorAttr.getZ(i) * colorFlicker);
+            const baseIdx = i * 3;
+            colorAttr.setX(i, baseColors[baseIdx] * colorFlicker);
+            colorAttr.setY(i, baseColors[baseIdx + 1] * colorFlicker);
+            colorAttr.setZ(i, baseColors[baseIdx + 2] * colorFlicker);
           }
           sizeAttr.needsUpdate = true;
           colorAttr.needsUpdate = true;
@@ -668,5 +671,6 @@ export class Renderer {
     this.orbitPhases.clear();
     this.saturnRingSizes.clear();
     this.saturnRingPhases.clear();
+    this.saturnRingBaseColors.clear();
   }
 }
