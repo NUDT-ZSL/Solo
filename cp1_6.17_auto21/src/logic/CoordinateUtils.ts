@@ -1,0 +1,149 @@
+import type { Point, AnnotationData, StickyNoteData } from './DataModel';
+import { ANNOTATION_RADIUS, STICKY_NOTE_MAX_TEXT_LENGTH } from './DataModel';
+
+export interface ViewTransform {
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+}
+
+export function screenToWorld(
+  screenX: number,
+  screenY: number,
+  transform: ViewTransform
+): Point {
+  return {
+    x: (screenX - transform.offsetX) / transform.scale,
+    y: (screenY - transform.offsetY) / transform.scale
+  };
+}
+
+export function worldToScreen(
+  worldX: number,
+  worldY: number,
+  transform: ViewTransform
+): Point {
+  return {
+    x: worldX * transform.scale + transform.offsetX,
+    y: worldY * transform.scale + transform.offsetY
+  };
+}
+
+export function isPointInAnnotation(
+  pointX: number,
+  pointY: number,
+  annotation: AnnotationData,
+  transform: ViewTransform
+): boolean {
+  const screenPos = worldToScreen(annotation.x, annotation.y, transform);
+  const dx = pointX - screenPos.x;
+  const dy = pointY - screenPos.y;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  return distance <= ANNOTATION_RADIUS * transform.scale;
+}
+
+export function findAnnotationAtPoint(
+  pointX: number,
+  pointY: number,
+  annotations: AnnotationData[],
+  transform: ViewTransform
+): AnnotationData | null {
+  for (let i = annotations.length - 1; i >= 0; i--) {
+    if (isPointInAnnotation(pointX, pointY, annotations[i], transform)) {
+      return annotations[i];
+    }
+  }
+  return null;
+}
+
+export function isPointInStickyNote(
+  pointX: number,
+  pointY: number,
+  note: StickyNoteData,
+  transform: ViewTransform
+): boolean {
+  const screenPos = worldToScreen(note.x, note.y, transform);
+  const screenWidth = note.width * transform.scale;
+  const screenHeight = note.height * transform.scale;
+  
+  return (
+    pointX >= screenPos.x &&
+    pointX <= screenPos.x + screenWidth &&
+    pointY >= screenPos.y &&
+    pointY <= screenPos.y + screenHeight
+  );
+}
+
+export function findStickyNoteAtPoint(
+  pointX: number,
+  pointY: number,
+  notes: StickyNoteData[],
+  transform: ViewTransform
+): StickyNoteData | null {
+  for (let i = notes.length - 1; i >= 0; i--) {
+    if (isPointInStickyNote(pointX, pointY, notes[i], transform)) {
+      return notes[i];
+    }
+  }
+  return null;
+}
+
+export function validateStickyNoteText(text: string): {
+  valid: boolean;
+  sanitizedText: string;
+  error?: string;
+} {
+  const trimmed = text.trim();
+  
+  if (trimmed.length === 0) {
+    return {
+      valid: true,
+      sanitizedText: ''
+    };
+  }
+  
+  if (trimmed.length > STICKY_NOTE_MAX_TEXT_LENGTH) {
+    return {
+      valid: false,
+      sanitizedText: trimmed.substring(0, STICKY_NOTE_MAX_TEXT_LENGTH),
+      error: `文本长度不能超过${STICKY_NOTE_MAX_TEXT_LENGTH}个字符`
+    };
+  }
+  
+  return {
+    valid: true,
+    sanitizedText: text
+  };
+}
+
+export function isPointInResizeHandle(
+  pointX: number,
+  pointY: number,
+  note: StickyNoteData,
+  transform: ViewTransform,
+  handleSize: number = 12
+): boolean {
+  const screenPos = worldToScreen(note.x, note.y, transform);
+  const screenWidth = note.width * transform.scale;
+  const screenHeight = note.height * transform.scale;
+  
+  const handleX = screenPos.x + screenWidth - handleSize;
+  const handleY = screenPos.y + screenHeight - handleSize;
+  
+  return (
+    pointX >= handleX &&
+    pointX <= screenPos.x + screenWidth + handleSize &&
+    pointY >= handleY &&
+    pointY <= screenPos.y + screenHeight + handleSize
+  );
+}
+
+export function distance(p1: Point, p2: Point): number {
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+export function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}

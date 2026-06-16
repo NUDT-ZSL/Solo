@@ -1,0 +1,238 @@
+import express from 'express';
+import http from 'http';
+import { Server } from 'socket.io';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import { v4 as uuidv4 } from 'uuid';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
+app.use(express.json({ limit: '5mb' }));
+
+const whiteboards = new Map();
+const onlineUsers = new Map();
+
+const sampleProjects = [
+  {
+    id: 'board-1',
+    title: '产品设计评审',
+    lastEditTime: Date.now() - 3600000,
+    thumbnail: null
+  },
+  {
+    id: 'board-2',
+    title: 'UI组件讨论',
+    lastEditTime: Date.now() - 7200000,
+    thumbnail: null
+  },
+  {
+    id: 'board-3',
+    title: '需求头脑风暴',
+    lastEditTime: Date.now() - 86400000,
+    thumbnail: null
+  },
+  {
+    id: 'board-4',
+    title: '架构设计图',
+    lastEditTime: Date.now() - 172800000,
+    thumbnail: null
+  }
+];
+
+function initWhiteboard(boardId) {
+  if (!whiteboards.has(boardId)) {
+    whiteboards.set(boardId, {
+      graphics: [],
+      stickyNotes: [],
+      annotations: [],
+      designImage: null,
+      history: []
+    });
+  }
+  return whiteboards.get(boardId);
+}
+
+function addHistory(boardId, op, data) {
+  const board = whiteboards.get(boardId);
+  if (board) {
+    board.history.unshift({
+      id: uuidv4(),
+      op,
+      data,
+      timestamp: Date.now()
+    });
+    if (board.history.length > 100) {
+      board.history = board.history.slice(0, 100);
+    }
+  }
+}
+
+app.get('/api/projects', (req, res) => {
+  res.json(sampleProjects);
+});
+
+app.get('/api/whiteboards/:id', (req, res) => {
+  const { id } = req.params;
+  const board = initWhiteboard(id);
+  res.json(board);
+});
+
+io.on('connection', (socket) => {
+  console.log('User connected:', socket.id);
+
+  socket.on('join-board', ({ boardId, userName }) => {
+    socket.join(boardId);
+    
+    if (!onlineUsers.has(boardId)) {
+      onlineUsers.set(boardId, new Map());
+    }
+    const boardUsers = onlineUsers.get(boardId);
+    boardUsers.set(socket.id, {
+      id: socket.id,
+      name: userName || '匿名用户',
+      color: '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')
+    });
+
+    const userList = Array.from(boardUsers.values());
+    io.to(boardId).emit('online-users', userList);
+    io.to(boardId).emit('user-joined', { user: boardUsers.get(socket.id) });
+
+    const board = initWhiteboard(boardId);
+    socket.emit('board-data', board);
+  });
+
+  socket.on('add-graphic', ({ boardId, graphic }) => {
+    const board = whiteboards.get(boardId);
+    if (board) {
+      board.graphics.push(graphic);
+      addHistory(boardId, 'add-graphic', graphic);
+      socket.to(boardId).emit('graphic-added', graphic);
+    }
+  });
+
+  socket.on('update-graphic', ({ boardId, graphic }) => {
+    const board = whiteboards.get(boardId);
+    if (board) {
+      const idx = board.graphics.findIndex(g => g.id === graphic.id);
+      if (idx !== -1) {
+        board.graphics[idx] = graphic;
+        addHistory(boardId, 'update-graphic', graphic);
+        socket.to(boardId).emit('graphic-updated', graphic);
+      }
+    }
+  });
+
+  socket.on('delete-graphic', ({ boardId, graphicId }) => {
+    const board = whiteboards.get(boardId);
+    if (board) {
+      board.graphics = board.graphics.filter(g => g.id !== graphicId);
+      addHistory(boardId, 'delete-graphic', { id: graphicId });
+      socket.to(boardId).emit('graphic-deleted', graphicId);
+    }
+  });
+
+  socket.on('add-sticky-note', ({ boardId, note }) => {
+    const board = whiteboards.get(boardId);
+    if (board) {
+      board.stickyNotes.push(note);
+      addHistory(boardId, 'add-sticky-note', note);
+      socket.to(boardId).emit('sticky-note-added', note);
+    }
+  });
+
+  socket.on('update-sticky-note', ({ boardId, note }) => {
+    const board = whiteboards.get(boardId);
+    if (board) {
+      const idx = board.stickyNotes.findIndex(n => n.id === note.id);
+      if (idx !== -1) {
+        board.stickyNotes[idx] = note;
+        addHistory(boardId, 'update-sticky-note', note);
+        socket.to(boardId).emit('sticky-note-updated', note);
+      }
+    }
+  });
+
+  socket.on('delete-sticky-note', ({ boardId, noteId }) => {
+    const board = whiteboards.get(boardId);
+    if (board) {
+      board.stickyNotes = board.stickyNotes.filter(n => n.id !== noteId);
+      addHistory(boardId, 'delete-sticky-note', { id: noteId });
+      socket.to(boardId).emit('sticky-note-deleted', noteId);
+    }
+  });
+
+  socket.on('add-annotation', ({ boardId, annotation }) => {
+    const board = whiteboards.get(boardId);
+    if (board) {
+      board.annotations.push(annotation);
+      addHistory(boardId, 'add-annotation', annotation);
+      socket.to(boardId).emit('annotation-added', annotation);
+    }
+  });
+
+  socket.on('update-annotation', ({ boardId, annotation }) => {
+    const board = whiteboards.get(boardId);
+    if (board) {
+      const idx = board.annotations.findIndex(a => a.id === annotation.id);
+      if (idx !== -1) {
+        board.annotations[idx] = annotation;
+        addHistory(boardId, 'update-annotation', annotation);
+        socket.to(boardId).emit('annotation-updated', annotation);
+      }
+    }
+  });
+
+  socket.on('delete-annotation', ({ boardId, annotationId }) => {
+    const board = whiteboards.get(boardId);
+    if (board) {
+      board.annotations = board.annotations.filter(a => a.id !== annotationId);
+      addHistory(boardId, 'delete-annotation', { id: annotationId });
+      socket.to(boardId).emit('annotation-deleted', annotationId);
+    }
+  });
+
+  socket.on('upload-design', ({ boardId, imageData }) => {
+    const board = whiteboards.get(boardId);
+    if (board) {
+      board.designImage = imageData;
+      addHistory(boardId, 'upload-design', { hasImage: true });
+      io.to(boardId).emit('design-uploaded', imageData);
+    }
+  });
+
+  socket.on('get-history', ({ boardId }) => {
+    const board = whiteboards.get(boardId);
+    if (board) {
+      socket.emit('history-data', board.history);
+    }
+  });
+
+  socket.on('disconnect', () => {
+    console.log('User disconnected:', socket.id);
+    
+    for (const [boardId, users] of onlineUsers.entries()) {
+      if (users.has(socket.id)) {
+        const user = users.get(socket.id);
+        users.delete(socket.id);
+        const userList = Array.from(users.values());
+        io.to(boardId).emit('online-users', userList);
+        io.to(boardId).emit('user-left', { user });
+      }
+    }
+  });
+});
+
+const PORT = 3002;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
