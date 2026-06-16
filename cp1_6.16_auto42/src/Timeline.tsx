@@ -7,12 +7,14 @@ interface TimelineProps {
   selectedEpId: string | null
   onSelectEp: (epId: string | null) => void
   currentTrackId: string | null
+  currentPlayingEpId: string | null
   onPlayTrack: (epId: string, trackId: string) => void
   progress: number
   displayLyrics: string
   isPlaying: boolean
   onTagClick: (tag: string) => void
   activeMoodTag: string | null
+  progressBarColor: string | null
 }
 
 const PlayIcon = () => (
@@ -52,16 +54,20 @@ const Timeline: React.FC<TimelineProps> = ({
   selectedEpId,
   onSelectEp,
   currentTrackId,
+  currentPlayingEpId,
   onPlayTrack,
   progress,
   displayLyrics,
   isPlaying,
   onTagClick,
-  activeMoodTag
+  activeMoodTag,
+  progressBarColor
 }) => {
   const [visibleCards, setVisibleCards] = useState<Set<string>>(new Set())
   const horizontalRef = useRef<HTMLDivElement>(null)
+  const verticalRef = useRef<HTMLDivElement>(null)
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  const isScrollingRef = useRef(false)
 
   useEffect(() => {
     const timers: NodeJS.Timeout[] = []
@@ -75,22 +81,43 @@ const Timeline: React.FC<TimelineProps> = ({
   }, [eps])
 
   useEffect(() => {
-    const container = horizontalRef.current
+    const CARD_STEP = 280
+    const isMobile = window.innerWidth < 768
+    const container = isMobile ? verticalRef.current : horizontalRef.current
     if (!container) return
 
-    let ticking = false
-    const handleScroll = () => {
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          ticking = false
+    const handleWheel = (e: WheelEvent) => {
+      if (selectedEpId) return
+
+      e.preventDefault()
+
+      if (isScrollingRef.current) return
+      isScrollingRef.current = true
+
+      const delta = e.deltaY > 0 ? CARD_STEP : -CARD_STEP
+
+      if (isMobile) {
+        const targetScroll = container.scrollTop + delta
+        container.scrollTo({
+          top: targetScroll,
+          behavior: 'smooth'
         })
-        ticking = true
+      } else {
+        const targetScroll = container.scrollLeft + delta
+        container.scrollTo({
+          left: targetScroll,
+          behavior: 'smooth'
+        })
       }
+
+      setTimeout(() => {
+        isScrollingRef.current = false
+      }, 300)
     }
 
-    container.addEventListener('scroll', handleScroll, { passive: true })
-    return () => container.removeEventListener('scroll', handleScroll)
-  }, [])
+    container.addEventListener('wheel', handleWheel, { passive: false })
+    return () => container.removeEventListener('wheel', handleWheel)
+  }, [selectedEpId])
 
   const handleCardClick = useCallback((e: React.MouseEvent<HTMLDivElement>, epId: string) => {
     e.stopPropagation()
@@ -124,10 +151,21 @@ const Timeline: React.FC<TimelineProps> = ({
     return `#${(255 - r).toString(16).padStart(2, '0')}${(255 - g).toString(16).padStart(2, '0')}${(255 - b).toString(16).padStart(2, '0')}`
   }
 
+  const lightenColor = (hexColor: string, percent: number): string => {
+    const num = parseInt(hexColor.slice(1), 16)
+    const amt = Math.round(2.55 * percent)
+    const R = Math.min(255, (num >> 16) + amt)
+    const G = Math.min(255, ((num >> 8) & 0x00FF) + amt)
+    const B = Math.min(255, (num & 0x0000FF) + amt)
+    return `#${(0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1)}`
+  }
+
   const renderCard = (ep: EP) => {
     const isSelected = selectedEpId === ep.id
     const isBlurred = selectedEpId !== null && !isSelected
     const isVisible = visibleCards.has(ep.id)
+    const isCurrentPlayingEp = currentPlayingEpId === ep.id
+    const showProgress = isCurrentPlayingEp && (isPlaying || progress >= 100)
 
     const cardStyle: React.CSSProperties = {
       background: `linear-gradient(135deg, ${ep.coverColor.primary} 0%, ${ep.coverColor.secondary} 100%)`,
@@ -147,6 +185,13 @@ const Timeline: React.FC<TimelineProps> = ({
     ].filter(Boolean).join(' ')
 
     const selectedTrack = ep.tracks.find(t => t.id === currentTrackId)
+
+    const progressFillStyle: React.CSSProperties = {
+      width: `${showProgress ? progress : 0}%`,
+      background: progressBarColor
+        ? `linear-gradient(90deg, ${progressBarColor}, ${lightenColor(progressBarColor, 30)})`
+        : `linear-gradient(90deg, #8E44AD, #F1C40F)`
+    }
 
     return (
       <div
@@ -180,19 +225,26 @@ const Timeline: React.FC<TimelineProps> = ({
           <div className="ep-card-body">
             <p className="ep-description">{ep.description}</p>
             <div className="ep-tags">
-              {ep.moodTags.slice(0, 5).map(tag => (
-                <span
-                  key={tag}
-                  className="mood-tag"
-                  style={{
-                    backgroundColor: moodTagColors[tag] || getComplementaryColor(ep.coverColor.primary),
-                    color: '#1A1A2E'
-                  }}
-                  onClick={(e) => handleTagClick(e, tag)}
-                >
-                  {tag}
-                </span>
-              ))}
+              {ep.moodTags.slice(0, 5).map(tag => {
+                const isTagActive = activeMoodTag === tag
+                const tagColor = moodTagColors[tag] || getComplementaryColor(ep.coverColor.primary)
+                return (
+                  <span
+                    key={tag}
+                    className={`mood-tag ${isTagActive ? 'active' : ''}`}
+                    style={{
+                      backgroundColor: isTagActive ? tagColor : tagColor,
+                      color: '#1A1A2E',
+                      boxShadow: isTagActive ? `0 0 10px ${tagColor}, 0 0 20px ${tagColor}` : 'none',
+                      border: isTagActive ? `2px solid #ffffff` : '2px solid transparent',
+                      transform: isTagActive ? 'scale(1.1)' : 'scale(1)'
+                    }}
+                    onClick={(e) => handleTagClick(e, tag)}
+                  >
+                    {tag}
+                  </span>
+                )
+              })}
             </div>
           </div>
 
@@ -226,7 +278,7 @@ const Timeline: React.FC<TimelineProps> = ({
               >
                 <div
                   className="progress-fill"
-                  style={{ width: `${isPlaying ? progress : 0}%` }}
+                  style={progressFillStyle}
                 />
               </div>
             </div>
@@ -259,7 +311,7 @@ const Timeline: React.FC<TimelineProps> = ({
         {eps.map((ep) => renderCard(ep))}
       </div>
 
-      <div className="timeline-vertical">
+      <div className="timeline-vertical" ref={verticalRef}>
         <div className="timeline-line-vertical" />
         {eps.map((ep) => renderCard(ep))}
       </div>

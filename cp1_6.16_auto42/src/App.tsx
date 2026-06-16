@@ -9,6 +9,7 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTrackId, setCurrentTrackId] = useState<string | null>(null)
+  const [currentPlayingEpId, setCurrentPlayingEpId] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
   const [displayLyrics, setDisplayLyrics] = useState('')
 
@@ -28,10 +29,15 @@ const App: React.FC = () => {
       const matchesSearch = searchQuery === '' ||
         ep.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         ep.description.toLowerCase().includes(searchQuery.toLowerCase())
-      const matchesTag = activeMoodTag === null || ep.moodTags.includes(activeMoodTag)
-      return matchesSearch && matchesTag
+      return matchesSearch
     })
-  }, [searchQuery, activeMoodTag])
+  }, [searchQuery])
+
+  const currentEpPrimaryColor = useMemo(() => {
+    if (!currentPlayingEpId) return null
+    const ep = epsData.find(e => e.id === currentPlayingEpId)
+    return ep?.coverColor.primary || null
+  }, [currentPlayingEpId])
 
   const clearProgress = useCallback(() => {
     if (progressIntervalRef.current) {
@@ -75,6 +81,7 @@ const App: React.FC = () => {
     const track = ep.tracks.find(t => t.id === trackId)
     if (!track) return
 
+    setCurrentPlayingEpId(epId)
     setCurrentTrackId(trackId)
     setProgress(0)
     setIsPlaying(true)
@@ -105,6 +112,7 @@ const App: React.FC = () => {
       setIsPlaying(false)
       setProgress(0)
       setCurrentTrackId(null)
+      setCurrentPlayingEpId(null)
       setDisplayLyrics('')
     }
     setSelectedEpId(epId)
@@ -166,12 +174,14 @@ const App: React.FC = () => {
         selectedEpId={selectedEpId}
         onSelectEp={handleSelectEp}
         currentTrackId={currentTrackId}
+        currentPlayingEpId={currentPlayingEpId}
         onPlayTrack={handlePlayTrack}
         progress={progress}
         displayLyrics={displayLyrics}
         isPlaying={isPlaying}
         onTagClick={handleTagClick}
         activeMoodTag={activeMoodTag}
+        progressBarColor={currentEpPrimaryColor}
       />
     </div>
   )
