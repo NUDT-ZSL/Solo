@@ -1,0 +1,107 @@
+{
+  "北京": {
+    "attractions": [
+      { "name": "故宫博物院", "lat": 39.9163, "lng": 116.3972, "description": "中国明清两代的皇家宫殿，世界上现存规模最大的木质结构古建筑群", "duration": 3 },
+      { "name": "八达岭长城", "lat": 40.3588, "lng": 116.0204, "description": "万里长城最具代表性的段落，世界文化遗产", "duration": 4 },
+      { "name": "天坛公园", "lat": 39.8822, "lng": 116.4066, "description": "明清两代皇帝祭天祈谷的场所，世界文化遗产", "duration": 2 },
+      { "name": "颐和园", "lat": 39.9998, "lng": 116.2755, "description": "中国古典园林之首，皇家园林博物馆", "duration": 3 },
+      { "name": "天安门广场", "lat": 39.9055, "lng": 116.3976, "description": "世界上最大的城市广场之一，中国的象征", "duration": 1 },
+      { "name": "南锣鼓巷", "lat": 39.9371, "lng": 116.4029, "description": "北京最古老的街区之一，胡同文化的缩影", "duration": 2 }
+    ],
+    "restaurants": [
+      { "name": "全聚德烤鸭店", "lat": 39.9003, "lng": 116.3973, "description": "百年老字号，正宗北京烤鸭", "cuisine": "京菜" },
+      { "name": "东来顺饭庄", "lat": 39.9172, "lng": 116.4105, "description": "铜锅涮肉老字号，京城涮羊肉首选", "cuisine": "清真菜" },
+      { "name": "便宜坊烤鸭店", "lat": 39.8946, "lng": 116.3956, "description": "焖炉烤鸭代表，600年历史传承", "cuisine": "京菜" },
+      { "name": "护国寺小吃", "lat": 39.9345, "lng": 116.3737, "description": "老北京传统小吃荟萃之地", "cuisine": "小吃" }
+    ],
+    "hotels": [
+      { "name": "北京饭店", "lat": 39.9098, "lng": 116.4103, "description": "百年历史名店，地处长安街核心地段", "stars": 5 },
+      { "name": "王府井希尔顿酒店", "lat": 39.9148, "lng": 116.4127, "description": "位于繁华王府井商圈，出行便利", "stars": 5 },
+      { "name": "前门建国饭店", "lat": 39.8948, "lng": 116.3951, "description": "紧邻前门大街，感受老北京风情", "stars": 4 }
+    ]
+  },
+  "上海": {
+    "attractions": [
+      { "name": "外滩", "lat": 31.2400, "lng": 121.4900, "description": "上海的标志性景观带，万国建筑博览会", "duration": 2 },
+      { "name": "东方明珠塔", "lat": 31.2397, "lng": 121.4998, "description": "上海地标建筑，登高俯瞰浦江两岸", "duration": 2 },
+      { "name": "豫园", "lat": 31.2274, "lng": 121.4920, "description": "明代私家园林，江南古典园林代表", "duration": 2 },
+      { "name": "上海迪士尼乐园", "lat": 31.1440, "lng": 121.6570, "description": "中国大陆首座迪士尼主题乐园", "duration": 8 },
+      { "name": "田子坊", "lat": 31.2099, "lng": 121.4680, "description": "文艺气息浓厚的创意街区", "duration": 2 },
+      { "name": "南京路步行街", "lat": 31.2353, "lng": 121.4727, "description": "中华商业第一街，购物天堂", "duration": 2 }
+    ],
+    "restaurants": [
+      { "name": "南翔馒头店", "lat": 31.2273, "lng": 121.4923, "description": "百年老店，正宗南翔小笼包", "cuisine": "本帮菜" },
+      { "name": "老正兴菜馆", "lat": 31.2351, "lng": 121.4736, "description": "上海本帮菜鼻祖，百年传承", "cuisine": "本帮菜" },
+      { "name": "绿波廊酒楼", "lat": 31.2272, "lng": 121.4928, "description": "豫园内经典上海菜，接待过多国元首", "cuisine": "本帮菜" },
+      { "name": "小杨生煎", "lat": 31.2292, "lng": 121.4748, "description": "上海生煎包代表，皮脆汁鲜", "cuisine": "小吃" }
+    ],
+    "hotels": [
+      { "name": "和平饭店", "lat": 31.2420, "lng": 121.4880, "description": "外滩标志性建筑，百年奢华传奇", "stars": 5 },
+      { "name": "上海浦东香格里拉", "lat": 31.2380, "lng": 121.5020, "description": "陆家嘴核心地段，浦江美景尽收眼底", "stars": 5 },
+      { "name": "上海外滩茂悦大酒店", "lat": 31.2440, "lng": 121.4920, "description": "北外滩地标，270度无死角江景", "stars": 5 }
+    ]
+  },
+  "成都": {
+    "attractions": [
+      { "name": "大熊猫繁育研究基地", "lat": 30.7328, "lng": 104.1468, "description": "近距离观赏国宝大熊猫的绝佳去处", "duration": 3 },
+      { "name": "武侯祠", "lat": 30.6461, "lng": 104.0477, "description": "中国唯一的君臣合祀祠庙，三国文化圣地", "duration": 2 },
+      { "name": "锦里古街", "lat": 30.6451, "lng": 104.0488, "description": "西蜀历史上最古老的商业街之一", "duration": 2 },
+      { "name": "宽窄巷子", "lat": 30.6695, "lng": 104.0550, "description": "成都慢生活的代表，老成都的缩影", "duration": 2 },
+      { "name": "都江堰", "lat": 30.9985, "lng": 103.6070, "description": "世界文化遗产，两千年前的伟大水利工程", "duration": 4 },
+      { "name": "春熙路", "lat": 30.6571, "lng": 104.0815, "description": "成都最繁华的商业步行街", "duration": 2 }
+    ],
+    "restaurants": [
+      { "name": "陈麻婆豆腐", "lat": 30.6587, "lng": 104.0657, "description": "麻婆豆腐发源地，百年川菜老店", "cuisine": "川菜" },
+      { "name": "小龙坎火锅", "lat": 30.6549, "lng": 104.0793, "description": "成都人气火锅品牌，麻辣鲜香", "cuisine": "火锅" },
+      { "name": "蜀九香火锅", "lat": 30.6498, "lng": 104.0667, "description": "地道成都火锅，牛油锅底一绝", "cuisine": "火锅" },
+      { "name": "钟水饺", "lat": 30.6573, "lng": 104.0685, "description": "百年老字号，成都名小吃代表", "cuisine": "小吃" }
+    ],
+    "hotels": [
+      { "name": "成都香格里拉大酒店", "lat": 30.6475, "lng": 104.0852, "description": "市中心豪华酒店，俯瞰锦江", "stars": 5 },
+      { "name": "成都钓鱼台精品酒店", "lat": 30.6690, "lng": 104.0535, "description": "宽窄巷子旁，感受成都文化", "stars": 5 },
+      { "name": "成都太古里博舍酒店", "lat": 30.6513, "lng": 104.0842, "description": "时尚设计酒店，毗邻太古里", "stars": 5 }
+    ]
+  },
+  "西安": {
+    "attractions": [
+      { "name": "秦始皇兵马俑博物馆", "lat": 34.3842, "lng": 109.2785, "description": "世界第八大奇迹，秦始皇的地下军团", "duration": 4 },
+      { "name": "大雁塔", "lat": 34.2186, "lng": 108.9645, "description": "唐代高僧玄奘译经之地，西安地标", "duration": 2 },
+      { "name": "华清宫", "lat": 34.3624, "lng": 109.2140, "description": "唐代皇家温泉行宫，杨贵妃沐浴之地", "duration": 3 },
+      { "name": "西安城墙", "lat": 34.2613, "lng": 108.9463, "description": "中国现存最完整的古代城垣", "duration": 2 },
+      { "name": "回民街", "lat": 34.2654, "lng": 108.9421, "description": "西安著名的美食文化街区", "duration": 2 },
+      { "name": "陕西历史博物馆", "lat": 34.2275, "lng": 108.9568, "description": "华夏宝库，中国第一座大型现代化博物馆", "duration": 3 }
+    ],
+    "restaurants": [
+      { "name": "老孙家饭庄", "lat": 34.2658, "lng": 108.9425, "description": "百年老字号，西安泡馍扛把子", "cuisine": "清真菜" },
+      { "name": "贾三灌汤包", "lat": 34.2650, "lng": 108.9410, "description": "回民街名店，灌汤包一绝", "cuisine": "小吃" },
+      { "name": "子午路张记肉夹馍", "lat": 34.2310, "lng": 108.9480, "description": "西安肉夹馍代表，酥脆白吉馍", "cuisine": "小吃" },
+      { "name": "长安大牌档", "lat": 34.2563, "lng": 108.9512, "description": "陕菜文化体验餐厅，葫芦鸡必点", "cuisine": "陕菜" }
+    ],
+    "hotels": [
+      { "name": "西安威斯汀大酒店", "lat": 34.2217, "lng": 108.9612, "description": "大雁塔旁，坐拥曲江美景", "stars": 5 },
+      { "name": "西安索菲特人民大厦", "lat": 34.2647, "lng": 108.9468, "description": "古城中心的法式优雅", "stars": 5 },
+      { "name": "西安华清御汤酒店", "lat": 34.3630, "lng": 109.2150, "description": "华清宫畔，享受皇家温泉", "stars": 5 }
+    ]
+  },
+  "杭州": {
+    "attractions": [
+      { "name": "西湖", "lat": 30.2590, "lng": 120.1388, "description": "人间天堂，世界文化遗产", "duration": 4 },
+      { "name": "灵隐寺", "lat": 30.2400, "lng": 120.1000, "description": "江南名刹，千年古寺", "duration": 2 },
+      { "name": "雷峰塔", "lat": 30.2310, "lng": 120.1488, "description": "白蛇传故事发生地，西湖十景之一", "duration": 1 },
+      { "name": "千岛湖", "lat": 29.6000, "lng": 119.0000, "description": "天下第一秀水，碧波千岛", "duration": 6 },
+      { "name": "宋城", "lat": 30.1860, "lng": 120.1200, "description": "大型宋代文化主题公园，宋城千古情", "duration": 4 },
+      { "name": "河坊街", "lat": 30.2463, "lng": 120.1690, "description": "杭州历史文化街区，感受南宋风情", "duration": 2 }
+    ],
+    "restaurants": [
+      { "name": "楼外楼", "lat": 30.2560, "lng": 120.1420, "description": "西湖畔百年老店，西湖醋鱼闻名天下", "cuisine": "杭帮菜" },
+      { "name": "知味观", "lat": 30.2480, "lng": 120.1690, "description": "杭州名小吃汇聚，东坡肉必尝", "cuisine": "杭帮菜" },
+      { "name": "外婆家", "lat": 30.2520, "lng": 120.1550, "description": "高性价比杭帮菜，茶香虾招牌", "cuisine": "杭帮菜" },
+      { "name": "奎元馆", "lat": 30.2500, "lng": 120.1700, "description": "百年面馆，片儿川发源地", "cuisine": "面食" }
+    ],
+    "hotels": [
+      { "name": "杭州西湖国宾馆", "lat": 30.2380, "lng": 120.1380, "description": "西湖畔的园林式国宾馆，领袖下榻之地", "stars": 5 },
+      { "name": "杭州西子湖四季酒店", "lat": 30.2440, "lng": 120.1460, "description": "灵隐旁的江南庭院，西湖美景入室", "stars": 5 },
+      { "name": "杭州法云安缦", "lat": 30.2380, "lng": 120.1050, "description": "灵隐寺旁的古村落，隐世奢华", "stars": 5 }
+    ]
+  }
+}

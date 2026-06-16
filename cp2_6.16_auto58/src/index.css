@@ -1,0 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap');
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  font-family: 'Noto Sans SC', sans-serif;
+  background: #f5f7fa;
+  color: #333;
+}
+
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  z-index: 1;
+}
+
+@media (max-width: 767px) {
+  .app-container {
+    flex-direction: column !important;
+  }
+
+  .schedule-panel {
+    height: 50vh !important;
+    width: 100% !important;
+    overflow-y: auto;
+  }
+
+  .map-panel {
+    height: 50vh !important;
+    width: 100% !important;
+  }
+}
