@@ -1,29 +1,16 @@
-import type {
-  Movie,
-  Schedule,
-  ScheduleItem,
-  VoteResult,
-} from '@/types'
+import type { Movie, Schedule, ScheduleItem, VoteResult } from '@/types'
 
 const API_BASE_URL = '/api'
 
-async function request<T>(
-  url: string,
-  options: RequestInit = {},
-): Promise<T> {
+async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${url}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
   })
-
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`)
-  }
-
-  return response.json()
+  if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+  const json = await response.json()
+  if (json.success) return json.data as T
+  throw new Error(json.error || 'Request failed')
 }
 
 export function fetchMovies(): Promise<Movie[]> {
@@ -41,10 +28,7 @@ export function getSchedule(id: string): Promise<Schedule> {
   return request<Schedule>(`/schedules/${id}`)
 }
 
-export function updateSchedule(
-  id: string,
-  items: ScheduleItem[],
-): Promise<Schedule> {
+export function updateSchedule(id: string, items: ScheduleItem[]): Promise<Schedule> {
   return request<Schedule>(`/schedules/${id}`, {
     method: 'PUT',
     body: JSON.stringify({ items }),
@@ -52,22 +36,16 @@ export function updateSchedule(
 }
 
 export function closeSchedule(id: string): Promise<Schedule> {
-  return request<Schedule>(`/schedules/${id}/close`, {
-    method: 'POST',
-  })
+  return request<Schedule>(`/schedules/${id}/close`, { method: 'POST' })
 }
 
 export function getVotes(scheduleId: string): Promise<VoteResult[]> {
   return request<VoteResult[]>(`/schedules/${scheduleId}/votes`)
 }
 
-export function submitVote(
-  scheduleId: string,
-  voterId: string,
-  movieIds: string[],
-): Promise<void> {
+export function submitVote(scheduleId: string, voterId: string, movieIds: string[]): Promise<void> {
   return request<void>(`/schedules/${scheduleId}/votes`, {
     method: 'POST',
-    body: JSON.stringify({ voterId, movieIds }),
+    body: JSON.stringify({ scheduleId, voterId, movieIds }),
   })
 }

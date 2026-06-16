@@ -1,18 +1,18 @@
 import { Router, type Request, type Response } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { readJsonFile, writeJsonFile } from '../utils/fileStorage.js'
-import type { Schedule } from '../types.js'
+import type { Schedule, ScheduleItem } from '../types.js'
 
 const router = Router()
 
 router.post('/', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { movieId, startTime, endTime, votingDeadline } = req.body
+    const { items } = req.body as { items?: ScheduleItem[] }
 
-    if (!movieId || !startTime || !endTime || !votingDeadline) {
+    if (!items || !Array.isArray(items) || items.length === 0) {
       res.status(400).json({
         success: false,
-        error: '缺少必要字段'
+        error: '缺少必要字段 items'
       })
       return
     }
@@ -21,12 +21,9 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 
     const newSchedule: Schedule = {
       id: uuidv4(),
-      movieId,
-      startTime,
-      endTime,
-      votingDeadline,
-      isVotingClosed: false,
-      createdAt: new Date().toISOString()
+      items,
+      createdAt: new Date().toISOString(),
+      isClosed: false
     }
 
     schedules.push(newSchedule)
@@ -73,7 +70,15 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
 router.put('/:id', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params
-    const { movieId, startTime, endTime, votingDeadline, isVotingClosed } = req.body
+    const { items } = req.body as { items?: ScheduleItem[] }
+
+    if (!items || !Array.isArray(items)) {
+      res.status(400).json({
+        success: false,
+        error: '缺少必要字段 items'
+      })
+      return
+    }
 
     const schedules = await readJsonFile<Schedule[]>('schedules.json')
     const index = schedules.findIndex(s => s.id === id)
@@ -86,21 +91,15 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
       return
     }
 
-    const updatedSchedule: Schedule = {
+    schedules[index] = {
       ...schedules[index],
-      ...(movieId !== undefined && { movieId }),
-      ...(startTime !== undefined && { startTime }),
-      ...(endTime !== undefined && { endTime }),
-      ...(votingDeadline !== undefined && { votingDeadline }),
-      ...(isVotingClosed !== undefined && { isVotingClosed })
+      items
     }
-
-    schedules[index] = updatedSchedule
     await writeJsonFile('schedules.json', schedules)
 
     res.status(200).json({
       success: true,
-      data: updatedSchedule
+      data: schedules[index]
     })
   } catch (error) {
     res.status(500).json({
@@ -110,7 +109,7 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
   }
 })
 
-router.post('/:id/close-voting', async (req: Request, res: Response): Promise<void> => {
+router.post('/:id/close', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params
     const schedules = await readJsonFile<Schedule[]>('schedules.json')
@@ -124,7 +123,8 @@ router.post('/:id/close-voting', async (req: Request, res: Response): Promise<vo
       return
     }
 
-    schedules[index].isVotingClosed = true
+    schedules[index].isClosed = true
+    schedules[index].closedAt = new Date().toISOString()
     await writeJsonFile('schedules.json', schedules)
 
     res.status(200).json({

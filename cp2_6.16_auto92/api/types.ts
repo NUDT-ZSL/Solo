@@ -1,4 +1,4 @@
-export type Genre = '动作' | '喜剧' | '科幻' | '悬疑' | '动画'
+export type MovieGenre = '动作' | '喜剧' | '科幻' | '悬疑' | '动画'
 
 export interface Movie {
   id: string
@@ -6,25 +6,30 @@ export interface Movie {
   posterEmoji: string
   posterColor: string
   duration: number
-  genre: Genre
+  genre: MovieGenre
   synopsis: string
+}
+
+export interface ScheduleItem {
+  movieId: string
+  order: number
+  scheduledDate?: string
+  scheduledTime?: string
 }
 
 export interface Schedule {
   id: string
-  movieId: string
-  startTime: string
-  endTime: string
-  votingDeadline: string
-  isVotingClosed: boolean
+  items: ScheduleItem[]
   createdAt: string
+  closedAt?: string
+  isClosed: boolean
 }
 
 export interface Vote {
   id: string
   scheduleId: string
-  userId: string
-  movieId: string
+  voterId: string
+  movieIds: string[]
   createdAt: string
 }
 

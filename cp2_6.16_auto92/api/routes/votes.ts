@@ -5,9 +5,9 @@ import type { Vote, VoteResult, Schedule } from '../types.js'
 
 const router = Router()
 
-const MAX_VOTES_PER_USER = 3
+const MAX_VOTES = 3
 
-router.get('/:scheduleId', async (req: Request, res: Response): Promise<void> => {
+router.get('/:scheduleId/votes', async (req: Request, res: Response): Promise<void> => {
   try {
     const { scheduleId } = req.params
     const votes = await readJsonFile<Vote[]>('votes.json')
@@ -15,7 +15,9 @@ router.get('/:scheduleId', async (req: Request, res: Response): Promise<void> =>
 
     const voteCounts = new Map<string, number>()
     scheduleVotes.forEach(vote => {
-      voteCounts.set(vote.movieId, (voteCounts.get(vote.movieId) || 0) + 1)
+      vote.movieIds.forEach(movieId => {
+        voteCounts.set(movieId, (voteCounts.get(movieId) || 0) + 1)
+      })
     })
 
     const results: VoteResult[] = Array.from(voteCounts.entries()).map(([movieId, count]) => ({
@@ -25,11 +27,7 @@ router.get('/:scheduleId', async (req: Request, res: Response): Promise<void> =>
 
     res.status(200).json({
       success: true,
-      data: {
-        scheduleId,
-        totalVotes: scheduleVotes.length,
-        results
-      }
+      data: results
     })
   } catch (error) {
     res.status(500).json({
@@ -39,14 +37,23 @@ router.get('/:scheduleId', async (req: Request, res: Response): Promise<void> =>
   }
 })
 
-router.post('/', async (req: Request, res: Response): Promise<void> => {
+router.post('/:scheduleId/votes', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { scheduleId, userId, movieId } = req.body
+    const { scheduleId } = req.params
+    const { voterId, movieIds } = req.body as { voterId?: string; movieIds?: string[] }
 
-    if (!scheduleId || !userId || !movieId) {
+    if (!voterId || !movieIds || !Array.isArray(movieIds) || movieIds.length === 0) {
       res.status(400).json({
         success: false,
-        error: '缺少必要字段'
+        error: '缺少必要字段 voterId 或 movieIds'
+      })
+      return
+    }
+
+    if (movieIds.length > MAX_VOTES) {
+      res.status(400).json({
+        success: false,
+        error: `每人最多投 ${MAX_VOTES} 票`
       })
       return
     }
@@ -62,7 +69,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       return
     }
 
-    if (schedule.isVotingClosed) {
+    if (schedule.isClosed) {
       res.status(400).json({
         success: false,
         error: '投票已截止'
@@ -71,24 +78,12 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     }
 
     const votes = await readJsonFile<Vote[]>('votes.json')
-    const userVotesCount = votes.filter(v => v.scheduleId === scheduleId && v.userId === userId).length
-
-    if (userVotesCount >= MAX_VOTES_PER_USER) {
-      res.status(400).json({
-        success: false,
-        error: `每人最多投 ${MAX_VOTES_PER_USER} 票`
-      })
-      return
-    }
-
-    const alreadyVoted = votes.some(
-      v => v.scheduleId === scheduleId && v.userId === userId && v.movieId === movieId
-    )
+    const alreadyVoted = votes.some(v => v.scheduleId === scheduleId && v.voterId === voterId)
 
     if (alreadyVoted) {
       res.status(400).json({
         success: false,
-        error: '不能对同一电影重复投票'
+        error: '您已经投过票了'
       })
       return
     }
@@ -96,8 +91,8 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     const newVote: Vote = {
       id: uuidv4(),
       scheduleId,
-      userId,
-      movieId,
+      voterId,
+      movieIds,
       createdAt: new Date().toISOString()
     }
 
@@ -106,10 +101,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 
     res.status(201).json({
       success: true,
-      data: {
-        vote: newVote,
-        remainingVotes: MAX_VOTES_PER_USER - userVotesCount - 1
-      }
+      data: newVote
     })
   } catch (error) {
     res.status(500).json({
