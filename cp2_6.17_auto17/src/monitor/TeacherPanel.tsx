@@ -83,7 +83,7 @@ export default function TeacherPanel(props: TeacherPanelProps) {
 
   const {
     users,
-    metrics,
+    studentMetrics,
     isConnected,
     joinRoom,
     leaveRoom,
@@ -103,14 +103,14 @@ export default function TeacherPanel(props: TeacherPanelProps) {
     };
   }, [roomId, userId, teacherUser, joinRoom, leaveRoom]);
 
-  const studentMetrics: StudentMetrics[] = metrics.map((m) => ({
+  const processedMetrics: StudentMetrics[] = studentMetrics.map((m: any) => ({
     userId: m.userId,
     username: m.username,
-    connectedDuration: Math.floor(m.activeTime / 1000),
-    operationCount: m.operations,
-    cursorPosition: { row: 0, column: 0, position: 0 } as CursorPosition,
-    activityHistory: new Array(5).fill(0).map((_, i) =>
-      Math.floor((m.operations / 5) * (1 + Math.random() * 0.5 - 0.25)) + i
+    connectedDuration: m.connectedDuration ?? Math.floor((m.activeTime || 0) / 1000),
+    operationCount: m.operationCount ?? m.operations ?? 0,
+    cursorPosition: m.cursorPosition ?? { row: 0, column: 0, position: 0 } as CursorPosition,
+    activityHistory: m.activityHistory ?? new Array(5).fill(0).map((_, i) =>
+      Math.floor(((m.operations || m.operationCount || 0) / 5) * (1 + Math.random() * 0.5 - 0.25)) + i
     ),
   }));
 
@@ -143,7 +143,7 @@ export default function TeacherPanel(props: TeacherPanelProps) {
     const chartHeight = height - padding.top - padding.bottom;
 
     const mergedData = new Array(5).fill(0);
-    studentMetrics.forEach((m) => {
+    processedMetrics.forEach((m) => {
       const history = m.activityHistory || [];
       for (let i = 0; i < 5; i++) {
         mergedData[i] += history[i] || 0;
@@ -232,7 +232,7 @@ export default function TeacherPanel(props: TeacherPanelProps) {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillText('操作次数 (次)', 4, 8);
-  }, [studentMetrics]);
+  }, [processedMetrics]);
 
   useEffect(() => {
     drawChart();
@@ -241,7 +241,7 @@ export default function TeacherPanel(props: TeacherPanelProps) {
     return () => window.removeEventListener('resize', handleResize);
   }, [drawChart]);
 
-  const onlineStudentsCount = studentMetrics.length;
+  const onlineStudentsCount = processedMetrics.length;
 
   return (
     <div style={styles.page}>
@@ -275,6 +275,50 @@ export default function TeacherPanel(props: TeacherPanelProps) {
       </div>
 
       <div style={styles.content}>
+        <div style={styles.onlineUsersSection}>
+          <div style={styles.sectionHeader}>
+            <h2 style={styles.sectionTitle}>在线用户列表</h2>
+            <span style={styles.studentCount}>{users.length} 人在线</span>
+          </div>
+          <div style={styles.onlineUsersList}>
+            {users.map((user, index) => {
+              const userColor = getColorForIndex(index);
+              return (
+                <div key={user.id} style={styles.userListItem}>
+                  <div style={{
+                    ...styles.userAvatar,
+                    background: user.color || userColor,
+                  }}>
+                    <span style={styles.userAvatarText}>
+                      {user.username.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div style={styles.userInfo}>
+                    <span style={styles.userName}>{user.username}</span>
+                    <span style={styles.userId}>ID: {user.id.slice(0, 8)}...</span>
+                  </div>
+                  <div style={{
+                    ...styles.userRoleBadge,
+                    background: user.role === 'teacher'
+                      ? 'rgba(168, 85, 247, 0.15)'
+                      : 'rgba(59, 130, 246, 0.15)',
+                    borderColor: user.role === 'teacher'
+                      ? 'rgba(168, 85, 247, 0.3)'
+                      : 'rgba(59, 130, 246, 0.3)',
+                    color: user.role === 'teacher' ? '#a855f7' : '#3b82f6',
+                  }}>
+                    {user.role === 'teacher' ? '教师' : '学生'}
+                  </div>
+                  <div style={styles.userStatusIndicator}>
+                    <span style={styles.onlineDotSmall} />
+                    <span style={styles.userStatusText}>在线</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         <div style={styles.chartSection}>
           <div style={styles.sectionHeader}>
             <h2 style={styles.sectionTitle}>编辑活跃度 (近5分钟)</h2>
@@ -298,7 +342,7 @@ export default function TeacherPanel(props: TeacherPanelProps) {
             </div>
           ) : (
             <div style={styles.studentGrid}>
-              {studentMetrics.map((metric, index) => {
+              {processedMetrics.map((metric, index) => {
                 const userColor = getColorForIndex(index);
                 return (
                   <div key={metric.userId} style={styles.studentCard}>
@@ -376,6 +420,82 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'var(--bg-primary)',
     display: 'flex',
     flexDirection: 'column',
+  },
+  onlineUsersSection: {
+    background: 'var(--bg-secondary)',
+    borderRadius: 'var(--radius-lg)',
+    border: '1px solid var(--border-color)',
+    overflow: 'hidden',
+  },
+  onlineUsersList: {
+    padding: '12px 24px 16px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+  userListItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '10px 14px',
+    background: 'var(--bg-primary)',
+    borderRadius: 'var(--radius-md)',
+    border: '1px solid var(--border-color)',
+    transition: 'background-color 0.15s',
+  },
+  userAvatar: {
+    width: '38px',
+    height: '38px',
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  userAvatarText: {
+    fontSize: '16px',
+    fontWeight: 700,
+    color: '#fff',
+    textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+  },
+  userInfo: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    minWidth: 0,
+  },
+  userName: {
+    fontSize: '14px',
+    fontWeight: 600,
+    color: 'var(--text-primary)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  userId: {
+    fontSize: '11px',
+    color: 'var(--text-muted)',
+    fontFamily: 'monospace',
+  },
+  userRoleBadge: {
+    padding: '3px 10px',
+    borderRadius: '999px',
+    border: '1px solid',
+    fontSize: '11px',
+    fontWeight: 600,
+    flexShrink: 0,
+  },
+  userStatusIndicator: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '5px',
+    flexShrink: 0,
+  },
+  userStatusText: {
+    fontSize: '11px',
+    color: 'var(--accent-success)',
+    fontWeight: 500,
   },
   header: {
     display: 'flex',

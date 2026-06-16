@@ -14,6 +14,7 @@ function EditorPage() {
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [code, setCode] = useState<string>('// 在此输入代码\nconsole.log("Hello, World!");\n');
   const [language, setLanguage] = useState<'javascript' | 'python'>('javascript');
+  const [initialTemplate, setInitialTemplate] = useState<string>('');
 
   useEffect(() => {
     const savedUserId = localStorage.getItem('userId');
@@ -36,11 +37,22 @@ function EditorPage() {
     }
   }, [roomId]);
 
-  const handleBack = () => navigate('/');
+  useEffect(() => {
+    const template = language === 'javascript'
+      ? '// 在此输入 JavaScript 代码\nconsole.log("Hello, World!");\n'
+      : '# 在此输入 Python 代码\nprint("Hello, World!")\n';
+    setInitialTemplate(template);
+  }, [language]);
 
   const handleCodeChange = (newCode: string) => {
     setCode(newCode);
   };
+
+  const handleLanguageChange = (newLanguage: 'javascript' | 'python') => {
+    setLanguage(newLanguage);
+  };
+
+  const handleBack = () => navigate('/');
 
   return (
     <div className="app-container">
@@ -59,6 +71,9 @@ function EditorPage() {
               userId={userId}
               username={username}
               role={role}
+              language={language}
+              onLanguageChange={handleLanguageChange}
+              onCodeChange={handleCodeChange}
             />
           ) : (
             <div style={{

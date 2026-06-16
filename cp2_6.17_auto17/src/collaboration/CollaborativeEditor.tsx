@@ -12,6 +12,9 @@ interface CollaborativeEditorProps {
   userId: string;
   username: string;
   role: string;
+  language?: 'javascript' | 'python';
+  onLanguageChange?: (language: 'javascript' | 'python') => void;
+  onCodeChange?: (code: string) => void;
 }
 
 type Language = 'javascript' | 'python';
@@ -42,20 +45,18 @@ function computeDiff(oldText: string, newText: string): TextOperation[] {
   if (deleteLength > 0) {
     operations.push({
       type: 'delete',
-      index: start,
+      position: start,
       length: deleteLength,
-      userId: '',
-      timestamp: 0,
+      timestamp: Date.now(),
     });
   }
 
   if (insertText.length > 0) {
     operations.push({
       type: 'insert',
-      index: start,
+      position: start,
       text: insertText,
-      userId: '',
-      timestamp: 0,
+      timestamp: Date.now(),
     });
   }
 
@@ -82,6 +83,9 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
   userId,
   username,
   role,
+  language: externalLanguage,
+  onLanguageChange,
+  onCodeChange,
 }) => {
   const {
     users,
@@ -95,8 +99,16 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     setDocument,
   } = useWebSocket();
 
-  const [language, setLanguage] = useState<Language>('javascript');
+  const [internalLanguage, setInternalLanguage] = useState<Language>(externalLanguage || 'javascript');
   const [theme] = useState<Theme>('monokai');
+
+  const language = externalLanguage || internalLanguage;
+
+  useEffect(() => {
+    if (externalLanguage && externalLanguage !== internalLanguage) {
+      setInternalLanguage(externalLanguage);
+    }
+  }, [externalLanguage, internalLanguage]);
   const editorRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const prevDocumentRef = useRef<string>('');
@@ -143,11 +155,11 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
             const ops = computeDiff(currentDoc, newDoc);
             for (const op of ops) {
               if (op.type === 'insert' && op.text !== undefined) {
-                const pos = session.document.indexToPosition(op.index);
+                const pos = session.document.indexToPosition(op.position);
                 session.insert(pos, op.text);
               } else if (op.type === 'delete' && op.length !== undefined) {
-                const startPos = session.document.indexToPosition(op.index);
-                const endPos = session.document.indexToPosition(op.index + op.length);
+                const startPos = session.document.indexToPosition(op.position);
+                const endPos = session.document.indexToPosition(op.position + op.length);
                 const range = {
                   start: startPos,
                   end: endPos,
@@ -177,14 +189,14 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
       const diffs = computeDiff(oldValue, newValue);
 
       for (const diff of diffs) {
-        pendingOpsRef.current.push({
-          ...diff,
-          userId,
-        });
+        pendingOpsRef.current.push(diff);
       }
 
       prevDocumentRef.current = newValue;
       setDocument(newValue);
+      if (onCodeChange) {
+        onCodeChange(newValue);
+      }
 
       if (debounceTimerRef.current) {
         window.clearTimeout(debounceTimerRef.current);
@@ -195,9 +207,10 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
           const op = pendingOpsRef.current.shift()!;
           sendOp(roomId, {
             type: op.type,
-            index: op.index,
+            position: op.position,
             text: op.text,
             length: op.length,
+            timestamp: op.timestamp,
             userId,
           });
         }
@@ -212,9 +225,12 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
       const cursorPos: CursorPosition = {
         row: cursor.row,
         column: cursor.column,
-        userId,
+        position: 0,
       };
-      sendCursor(roomId, cursorPos);
+      sendCursor(roomId, {
+        ...cursorPos,
+        userId,
+      });
     },
     [roomId, userId, sendCursor]
   );
@@ -390,7 +406,15 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
             <label style={{ color: '#9ca3af', fontSize: '14px' }}>语言:</label>
             <select
               value={language}
-              onChange={(e) => setLanguage(e.target.value as Language)}
+              onChange={(e) => {
+                const newLang = e.target.value as Language;
+                if (!externalLanguage) {
+                  setInternalLanguage(newLang);
+                }
+                if (onLanguageChange) {
+                  onLanguageChange(newLang);
+                }
+              }}
               style={{
                 padding: '4px 10px',
                 backgroundColor: '#374151',

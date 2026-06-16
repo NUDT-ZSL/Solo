@@ -227,7 +227,8 @@ function createWsServer(server) {
         roomManager.sendToUser(roomId, userId, {
           type: 'init',
           document: roomManager.getRoom(roomId).document,
-          users: roomManager.getUsersList(roomId)
+          users: roomManager.getUsersList(roomId),
+          studentMetrics: roomManager.getStudentMetrics(roomId)
         });
 
         roomManager.broadcastToRoom(roomId, {
@@ -260,14 +261,14 @@ function createWsServer(server) {
       }
 
       if (type === 'cursor') {
-        const { position } = message;
+        const cursorPosition = message.cursorPosition || message.position;
         const user = roomManager.getRoom(currentRoomId)?.users.get(currentUserId);
         if (!user) return;
-        roomManager.updateCursor(currentRoomId, currentUserId, position);
+        roomManager.updateCursor(currentRoomId, currentUserId, cursorPosition);
         roomManager.broadcastToRoom(currentRoomId, {
           type: 'cursor',
           userId: currentUserId,
-          position,
+          cursorPosition,
           color: user.color
         }, currentUserId);
         return;
