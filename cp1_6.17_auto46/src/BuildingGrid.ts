@@ -26,6 +26,22 @@ export class BuildingGrid {
     this.generateBuildings();
   }
 
+  private getBuildingColor(height: number): THREE.Color {
+    const colorLow = new THREE.Color(0x5C6BC0);
+    const colorMid = new THREE.Color(0x7E57C2);
+    const colorHigh = new THREE.Color(0x6C63FF);
+
+    if (height <= 4) {
+      const t = (height - 2) / 2;
+      return colorLow.clone().lerp(colorMid, t);
+    } else if (height <= 6) {
+      const t = (height - 4) / 2;
+      return colorMid.clone().lerp(colorHigh, t);
+    } else {
+      return colorHigh;
+    }
+  }
+
   private generateBuildings(): void {
     const offset = (this.gridSize * this.cellSize) / 2 - this.cellSize / 2;
 
@@ -34,7 +50,7 @@ export class BuildingGrid {
         const height = 2 + Math.random() * 6;
         const geometry = new THREE.BoxGeometry(3, height, 3);
         const material = new THREE.MeshLambertMaterial({
-          color: 0x5C6BC0,
+          color: this.getBuildingColor(height),
           flatShading: true
         });
         const mesh = new THREE.Mesh(geometry, material);

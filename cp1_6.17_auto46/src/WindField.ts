@@ -15,6 +15,7 @@ interface WindParticle {
   eddyRadius: number;
   eddySpeed: number;
   eddyRounds: number;
+  baseColor: THREE.Color;
 }
 
 interface ContaminantParticle {
@@ -149,6 +150,12 @@ export class WindField {
   private createWindParticle(pathIndex: number, startProgress: number = 0): WindParticle {
     const path = this.paths[pathIndex];
     const position = path.getPoint(startProgress);
+    const colorT = Math.random();
+    const baseColor = new THREE.Color().lerpColors(
+      new THREE.Color(0xB0BEC5),
+      new THREE.Color(0x90CAF9),
+      colorT
+    );
     
     return {
       position: position.clone(),
@@ -163,7 +170,8 @@ export class WindField {
       eddyAngle: 0,
       eddyRadius: 0,
       eddySpeed: 0,
-      eddyRounds: 0
+      eddyRounds: 0,
+      baseColor
     };
   }
 
@@ -179,15 +187,9 @@ export class WindField {
       windPositions[i * 3 + 1] = particle.position.y;
       windPositions[i * 3 + 2] = particle.position.z;
 
-      const t = i / this.MAX_WIND_PARTICLES;
-      const color = new THREE.Color().lerpColors(
-        new THREE.Color(0xB0BEC5),
-        new THREE.Color(0x90CAF9),
-        t
-      );
-      windColors[i * 3] = color.r;
-      windColors[i * 3 + 1] = color.g;
-      windColors[i * 3 + 2] = color.b;
+      windColors[i * 3] = particle.baseColor.r;
+      windColors[i * 3 + 1] = particle.baseColor.g;
+      windColors[i * 3 + 2] = particle.baseColor.b;
 
       windSizes[i] = particle.size;
     }
@@ -479,17 +481,54 @@ export class WindField {
     return tangent.multiplyScalar(this.windSpeed / 5);
   }
 
+  private getPathCurvature(path: THREE.CatmullRomCurve3, progress: number): number {
+    const eps = 0.01;
+    const t1 = Math.max(0, progress - eps);
+    const t2 = Math.min(1, progress + eps);
+    
+    const tangent1 = path.getTangent(t1).normalize();
+    const tangent2 = path.getTangent(t2).normalize();
+    
+    const dot = Math.max(-1, Math.min(1, tangent1.dot(tangent2)));
+    const angle = Math.acos(dot);
+    
+    return angle / (t2 - t1);
+  }
+
+  private getDynamicColor(particle: WindParticle): THREE.Color {
+    const warmColor = new THREE.Color(0xFF8A65);
+    let warmMix = 0;
+
+    if (particle.eddyActive) {
+      warmMix = 0.5 + Math.min(0.5, particle.eddyRounds / 1.5 * 0.5);
+    } else {
+      const path = this.paths[particle.pathIndex];
+      const curvature = this.getPathCurvature(path, particle.pathProgress);
+      warmMix = Math.min(0.6, curvature * 0.8);
+    }
+
+    return particle.baseColor.clone().lerp(warmColor, warmMix);
+  }
+
   private updateParticleRenderers(): void {
     if (!this.windParticleSystem) return;
 
     const windPositions = this.windParticleSystem.geometry.attributes.position.array as Float32Array;
+    const windColors = this.windParticleSystem.geometry.attributes.color.array as Float32Array;
+    
     for (let i = 0; i < this.windParticles.length; i++) {
       const p = this.windParticles[i];
       windPositions[i * 3] = p.position.x;
       windPositions[i * 3 + 1] = p.position.y;
       windPositions[i * 3 + 2] = p.position.z;
+
+      const dynamicColor = this.getDynamicColor(p);
+      windColors[i * 3] = dynamicColor.r;
+      windColors[i * 3 + 1] = dynamicColor.g;
+      windColors[i * 3 + 2] = dynamicColor.b;
     }
     this.windParticleSystem.geometry.attributes.position.needsUpdate = true;
+    this.windParticleSystem.geometry.attributes.color.needsUpdate = true;
 
     if (this.contaminantSystem) {
       const positions = this.contaminantSystem.geometry.attributes.position.array as Float32Array;

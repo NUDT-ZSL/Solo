@@ -303,8 +303,8 @@ export class UIPanel {
 
       .control-divider {
         height: 1px;
-        background: linear-gradient(90deg, transparent, #2D2D44, transparent);
-        margin: 16px 0;
+        background: #3D3D5C;
+        margin: 16px 8px;
       }
 
       .control-label-row {
