@@ -1,0 +1,93 @@
+[
+  {
+    "id": "cinnabar",
+    "name": "朱砂",
+    "formula": "HgS",
+    "description": "硫磺与水银在高温下化合而成的红色矿物，古代炼丹术中的重要原料。",
+    "materials": ["sulfur", "mercury"],
+    "minTemp": 200,
+    "maxTemp": 500
+  },
+  {
+    "id": "bronze",
+    "name": "青铜",
+    "formula": "Cu-Sn",
+    "description": "铜与锡熔合而成的坚硬合金，象征着古老文明的工艺巅峰。",
+    "materials": ["copper", "tin"],
+    "minTemp": 300,
+    "maxTemp": 800
+  },
+  {
+    "id": "brass",
+    "name": "黄铜",
+    "formula": "Cu-Zn(模拟)",
+    "description": "铜与含锌物质在高温下反应生成的金色合金，闪耀如黄金。",
+    "materials": ["copper", "lead"],
+    "minTemp": 250,
+    "maxTemp": 600
+  },
+  {
+    "id": "steel",
+    "name": "钢",
+    "formula": "Fe-C",
+    "description": "铁在硫磺的催化下炼成的坚韧金属，刀锋所向披靡。",
+    "materials": ["iron", "sulfur"],
+    "minTemp": 400,
+    "maxTemp": 900
+  },
+  {
+    "id": "silver_nitrate_like",
+    "name": "银霜",
+    "formula": "Ag·Salt",
+    "description": "银与盐在低温下凝结成的白色晶霜，在月光下闪烁微光。",
+    "materials": ["silver", "salt"],
+    "minTemp": -50,
+    "maxTemp": 50
+  },
+  {
+    "id": "philosophers_stone_precursor",
+    "name": "贤者之石前驱",
+    "formula": "Complex",
+    "description": "硫磺、水银与盐三位一体融合而成的神秘物质，贤者之石的雏形。",
+    "materials": ["sulfur", "mercury", "salt"],
+    "minTemp": 150,
+    "maxTemp": 300
+  },
+  {
+    "id": "lead_silver_alloy",
+    "name": "铅银齐",
+    "formula": "Pb-Ag",
+    "description": "铅与银在高温下形成的合金，炼金术士认为这是转化的关键一步。",
+    "materials": ["lead", "silver"],
+    "minTemp": 350,
+    "maxTemp": 700
+  },
+  {
+    "id": "tin_iron_fusible",
+    "name": "易熔金",
+    "formula": "Sn-Fe",
+    "description": "锡与铁的低熔点合金，稍微加热便如流水般涌动。",
+    "materials": ["tin", "iron"],
+    "minTemp": 100,
+    "maxTemp": 250
+  },
+  {
+    "id": "quicksilver_silver_amalgam",
+    "name": "银汞膏",
+    "formula": "Ag-Hg",
+    "description": "水银溶解银形成的柔软膏体，是火法炼银的重要中间物。",
+    "materials": ["mercury", "silver"],
+    "minTemp": 20,
+    "maxTemp": 150
+  },
+  {
+    "id": "verdant_copper",
+    "name": "铜绿",
+    "formula": "Cu₂(OH)₂CO₃",
+    "description": "铜、盐与水气共同作用形成的绿色锈层，又名青铜病。",
+    "materials": ["copper", "salt"],
+    "minTemp": 60,
+    "maxTemp": 120,
+    "requireStir": true
+  }
+]
