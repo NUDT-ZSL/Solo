@@ -1,12 +1,15 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import Home from "@/pages/Home";
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import HomePage from './pages/HomePage';
+import CreateRecordPage from './pages/CreateRecordPage';
+import RecordDetailPage from './pages/RecordDetailPage';
 
 export default function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/other" element={<div className="text-center text-xl">Other Page - Coming Soon</div>} />
+        <Route path="/" element={<HomePage />} />
+        <Route path="/create" element={<CreateRecordPage />} />
+        <Route path="/record/:id" element={<RecordDetailPage />} />
       </Routes>
     </Router>
   );
