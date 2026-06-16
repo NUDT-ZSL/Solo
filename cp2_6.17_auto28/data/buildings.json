@@ -1,0 +1,15 @@
+[
+  { "id": "b1", "x": -6, "z": -4, "height": 5, "width": 3, "depth": 3 },
+  { "id": "b2", "x": -2, "z": -6, "height": 8, "width": 3, "depth": 3 },
+  { "id": "b3", "x": 2, "z": -3, "height": 11, "width": 3, "depth": 3 },
+  { "id": "b4", "x": 6, "z": -5, "height": 4, "width": 3, "depth": 3 },
+  { "id": "b5", "x": -8, "z": 0, "height": 7, "width": 3, "depth": 3 },
+  { "id": "b6", "x": -4, "z": 2, "height": 10, "width": 3, "depth": 3 },
+  { "id": "b7", "x": 0, "z": 0, "height": 12, "width": 3, "depth": 3 },
+  { "id": "b8", "x": 4, "z": 1, "height": 6, "width": 3, "depth": 3 },
+  { "id": "b9", "x": 8, "z": -1, "height": 9, "width": 3, "depth": 3 },
+  { "id": "b10", "x": -5, "z": 5, "height": 3, "width": 3, "depth": 3 },
+  { "id": "b11", "x": -1, "z": 4, "height": 7, "width": 3, "depth": 3 },
+  { "id": "b12", "x": 3, "z": 6, "height": 11, "width": 3, "depth": 3 },
+  { "id": "b13", "x": 7, "z": 4, "height": 5, "width": 3, "depth": 3 }
+]
