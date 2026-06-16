@@ -5,9 +5,25 @@ const CROP_GROWTH_DAYS: Record<string, number> = {
   lettuce: 30,
   eggplant: 80,
   chili: 90,
+  番茄: 60,
+  黄瓜: 50,
+  胡萝卜: 70,
+  生菜: 30,
+  茄子: 80,
+  辣椒: 90,
 };
 
-const WATER_COOLDOWN_SECONDS = 129600;
+const WATER_COOLDOWN_SECONDS = 36 * 60 * 60;
+
+export const WATER_COOLDOWN_MS = WATER_COOLDOWN_SECONDS * 1000;
+
+export function msToSeconds(ms: number): number {
+  return Math.ceil(ms / 1000);
+}
+
+export function secondsToMs(seconds: number): number {
+  return seconds * 1000;
+}
 
 export function getCropGrowthDays(cropType: string): number {
   return CROP_GROWTH_DAYS[cropType] ?? 60;
@@ -37,29 +53,66 @@ export function calculatePoints(action: 'water' | 'log' | 'harvest'): number {
   return points[action];
 }
 
-export function getUserLevel(points: number): { level: number; progress: number; color: string; gradient: string } {
+export function getUserLevel(points: number): {
+  level: number
+  progress: number
+  color: string
+  gradient: string
+  progressGradient: string
+} {
   const level = Math.floor(points / 100) + 1
   const progress = (points % 100) / 100
-  const levelStops: Array<[number, string]> = [
-    [1, '#8BC34A'],
-    [3, '#66BB6A'],
-    [5, '#4CAF50'],
-    [7, '#43A047'],
-    [10, '#388E3C'],
+
+  const gradientStops: Array<[number, string]> = [
+    [0, '#8BC34A'],
+    [0.33, '#7CB342'],
+    [0.5, '#66BB6A'],
+    [0.66, '#4CAF50'],
+    [0.83, '#43A047'],
+    [1, '#388E3C'],
   ]
-  let color: string
-  if (level <= 2) {
-    const t = Math.min(1, (level - 1) / 2 + progress / 2)
-    color = interpolateColor('#8BC34A', '#4CAF50', t)
-  } else if (level <= 4) {
-    const t = Math.min(1, (level - 3) / 2 + progress / 2)
-    color = interpolateColor('#4CAF50', '#388E3C', t)
-  } else {
-    color = '#388E3C'
+
+  const color = getColorAtProgress(points, gradientStops)
+
+  const fullGradient =
+    'linear-gradient(90deg, #8BC34A 0%, #7CB342 20%, #66BB6A 40%, #4CAF50 60%, #43A047 80%, #388E3C 100%)'
+
+  const progressGradient = buildProgressGradient(points, gradientStops)
+
+  return { level, progress, color, gradient: fullGradient, progressGradient }
+}
+
+function getColorAtProgress(
+  points: number,
+  stops: Array<[number, string]>,
+): string {
+  const normalizedPoints = Math.min(1, points / 500)
+  for (let i = 0; i < stops.length - 1; i++) {
+    const [pos1, color1] = stops[i]
+    const [pos2, color2] = stops[i + 1]
+    if (normalizedPoints >= pos1 && normalizedPoints <= pos2) {
+      const t = (normalizedPoints - pos1) / (pos2 - pos1)
+      return interpolateColor(color1, color2, t)
+    }
   }
-  const gradient = `linear-gradient(90deg, #8BC34A 0%, #66BB6A 25%, #4CAF50 55%, #43A047 80%, #388E3C 100%)`
-  void levelStops
-  return { level, progress, color, gradient }
+  return stops[stops.length - 1][1]
+}
+
+function buildProgressGradient(
+  points: number,
+  stops: Array<[number, string]>,
+): string {
+  const normalizedPoints = Math.min(1, points / 500)
+  if (normalizedPoints <= 0) return '#8BC34A'
+  const filtered = stops.filter(([pos]) => pos <= normalizedPoints)
+  const lastColor = getColorAtProgress(points, stops)
+  const segments = filtered.map(
+    ([pos, color]) => `${color} ${(pos / normalizedPoints) * 100}%`,
+  )
+  if (!filtered.length || filtered[filtered.length - 1][0] < normalizedPoints) {
+    segments.push(`${lastColor} 100%`)
+  }
+  return `linear-gradient(90deg, ${segments.join(', ')})`
 }
 
 function hexToRgb(hex: string): [number, number, number] {

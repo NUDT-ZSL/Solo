@@ -12,7 +12,7 @@ export default function Profile() {
     return null
   }
 
-  const { level, progress, color, gradient } = getUserLevel(user.points)
+  const { level, progress, color, gradient, progressGradient } = getUserLevel(user.points)
   const pointsToNext = 100 - (user.points % 100)
 
   const stats = [
@@ -66,15 +66,19 @@ export default function Profile() {
 
           <div className="w-full mt-2">
             <div
-              className="w-full rounded-full overflow-hidden"
-              style={{ height: 16, backgroundColor: '#E8F5E9' }}
+              className="w-full rounded-full overflow-hidden relative"
+              style={{ height: 20, backgroundColor: '#E8F5E9' }}
             >
               <div
-                className="h-full rounded-full transition-all duration-500 relative"
+                className="absolute inset-y-0 left-0 rounded-full transition-all duration-500 pointer-events-none"
+                style={{ width: '100%', background: gradient, opacity: 0.25 }}
+              />
+              <div
+                className="h-full rounded-full transition-all duration-700 relative"
                 style={{
                   width: `${progress * 100}%`,
-                  background: gradient,
-                  boxShadow: `0 0 6px ${color}`,
+                  background: progressGradient,
+                  boxShadow: `0 0 8px ${color}, inset 0 1px 0 rgba(255,255,255,0.3)`,
                 }}
               />
             </div>

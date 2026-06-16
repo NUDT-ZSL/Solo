@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, type FormEvent, type ChangeEvent } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Droplets, BookOpen, Leaf, ClipboardList, Plus, Check, Camera } from 'lucide-react'
-import { useGardenStore } from '@/store/gardenStore'
+import { useGardenStore, authHeaders } from '@/store/gardenStore'
 import { getHarvestCountdown, getWaterCooldown, formatCooldown, calculatePoints, getRegionStatus, getCropGrowthDays } from '@/utils/gardenLogic'
 import WaterDrops from '@/components/WaterDrops'
 import type { Member } from '@/types/garden'
@@ -38,7 +38,7 @@ export default function RegionDetail() {
   const [cooldownTick, setCooldownTick] = useState(0)
 
   const [logContent, setLogContent] = useState('')
-  const [logPhoto, setLogPhoto] = useState<string | null>(null)
+  const [logPhotoFile, setLogPhotoFile] = useState<File | null>(null)
   const [logPhotoPreview, setLogPhotoPreview] = useState<string | null>(null)
   const [submittingLog, setSubmittingLog] = useState(false)
 
@@ -119,11 +119,15 @@ export default function RegionDetail() {
   const handlePhotoChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    if (file.size > 2 * 1024 * 1024) {
+      alert('图片大小不能超过 2MB')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+    setLogPhotoFile(file)
     const reader = new FileReader()
     reader.onload = () => {
-      const dataUrl = reader.result as string
-      setLogPhoto(dataUrl)
-      setLogPhotoPreview(dataUrl)
+      setLogPhotoPreview(reader.result as string)
     }
     reader.readAsDataURL(file)
   }
@@ -133,20 +137,21 @@ export default function RegionDetail() {
     if (!user || !logContent.trim()) return
     setSubmittingLog(true)
     try {
+      const formData = new FormData()
+      formData.append('regionId', region.id)
+      formData.append('authorId', user.id)
+      formData.append('content', logContent)
+      if (logPhotoFile) {
+        formData.append('photo', logPhotoFile)
+      }
       const res = await fetch('/api/logs', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          regionId: region.id,
-          authorId: user.id,
-          content: logContent,
-          photoUrl: logPhoto,
-        }),
+        body: formData,
       })
       if (res.ok) {
         addPoints(calculatePoints('log'))
         setLogContent('')
-        setLogPhoto(null)
+        setLogPhotoFile(null)
         setLogPhotoPreview(null)
         if (fileInputRef.current) fileInputRef.current.value = ''
         await fetchRegion()
@@ -163,12 +168,11 @@ export default function RegionDetail() {
     try {
       const res = await fetch('/api/tasks', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({
           regionId: region.id,
           assigneeId: taskAssignee,
           type: taskType,
-          requesterId: user.id,
         }),
       })
       if (res.ok) {

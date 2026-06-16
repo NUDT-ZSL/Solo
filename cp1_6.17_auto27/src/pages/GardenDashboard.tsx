@@ -41,6 +41,15 @@ const STATUS_BG: Record<string, string> = {
   needsWater: '#FFCDD2',
 }
 
+function getReadableTextColor(bgHex: string): string {
+  const hex = bgHex.replace('#', '')
+  const r = parseInt(hex.substring(0, 2), 16)
+  const g = parseInt(hex.substring(2, 4), 16)
+  const b = parseInt(hex.substring(4, 6), 16)
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return luminance > 0.6 ? '#2E2E2E' : '#FFFFFF'
+}
+
 export default function GardenDashboard() {
   const navigate = useNavigate()
   const user = useGardenStore((s) => s.user)
@@ -92,6 +101,8 @@ export default function GardenDashboard() {
               const cooldown = getWaterCooldown(region.lastWateredAt)
               const status = getRegionStatus(region.lastWateredAt, harvestDate)
               const emoji = CROP_EMOJI[region.crop] ?? ''
+              const bgColor = STATUS_BG[status]
+              const textColor = getReadableTextColor(bgColor)
 
               return (
                 <div
@@ -99,9 +110,10 @@ export default function GardenDashboard() {
                   onClick={() => navigate(`/region/${region.id}`)}
                   className="rounded-[12px] p-5 cursor-pointer"
                   style={{
-                    backgroundColor: STATUS_BG[status],
+                    backgroundColor: bgColor,
                     boxShadow: '4px 4px 12px rgba(0,0,0,0.08)',
                     transition: 'all 0.3s ease',
+                    color: textColor,
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.border = '2px solid #66BB6A'
@@ -112,13 +124,13 @@ export default function GardenDashboard() {
                     e.currentTarget.style.transform = ''
                   }}
                 >
-                  <h2 className="text-lg font-bold text-garden-title mb-3">
+                  <h2 className="text-lg font-bold mb-3" style={{ color: textColor }}>
                     {region.name}
                   </h2>
 
-                  <div className="space-y-2 text-garden-text text-sm">
+                  <div className="space-y-2 text-sm">
                     <div className="flex items-center gap-2">
-                      <Leaf className="w-4 h-4" />
+                      <Leaf className="w-4 h-4" style={{ color: textColor }} />
                       <span>
                         {region.crop}
                         {emoji}
@@ -126,12 +138,12 @@ export default function GardenDashboard() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4" />
+                      <Clock className="w-4 h-4" style={{ color: textColor }} />
                       <span>种植日期：{formatDate(plantDate)}</span>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4" />
+                      <Clock className="w-4 h-4" style={{ color: textColor }} />
                       <span>预计收获：{formatDate(harvestDate)}</span>
                     </div>
 
@@ -145,7 +157,7 @@ export default function GardenDashboard() {
                     <div className="flex items-center gap-2">
                       <Droplets
                         className="w-4 h-4"
-                        style={{ color: cooldown > 0 ? '#EF5350' : '#42A5F5' }}
+                        style={{ color: cooldown > 0 ? '#C62828' : '#0D47A1' }}
                       />
                       <span>
                         {cooldown > 0 ? formatCooldown(cooldown) : '可以浇水'}

@@ -7,6 +7,7 @@ export default function Login() {
   const [username, setUsername] = useState('')
   const [role, setRole] = useState<'manager' | 'member'>('member')
   const setUser = useGardenStore((s) => s.setUser)
+  const setToken = useGardenStore((s) => s.setToken)
   const navigate = useNavigate()
 
   const handleSubmit = async (e: FormEvent) => {
@@ -19,6 +20,7 @@ export default function Login() {
     if (res.ok) {
       const data = await res.json()
       setUser(data.user)
+      setToken(data.token)
       navigate('/')
     }
   }

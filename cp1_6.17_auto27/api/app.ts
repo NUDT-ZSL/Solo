@@ -4,14 +4,56 @@ import express, {
   type NextFunction,
 } from 'express'
 import cors from 'cors'
+import multer from 'multer'
+import path from 'path'
+import fs from 'fs'
+import { fileURLToPath } from 'url'
 import { v4 as uuidv4 } from 'uuid'
 import authRoutes from './routes/auth.js'
 
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
 const app: express.Application = express()
 
+const UPLOAD_DIR = path.resolve(__dirname, '..', 'public', 'uploads')
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true })
+}
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase()
+    cb(null, `${Date.now()}-${uuidv4()}${ext}`)
+  },
+})
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = /^image\/(jpeg|png|gif|webp|svg\+xml)$/
+    if (allowed.test(file.mimetype)) cb(null, true)
+    else cb(new Error('仅支持图片上传 (JPG/PNG/GIF/WEBP/SVG)，且文件不超过 2MB'))
+  },
+})
+
 app.use(cors())
-app.use(express.json({ limit: '10mb' }))
-app.use(express.urlencoded({ extended: true, limit: '10mb' }))
+app.use(express.json({ limit: '2mb' }))
+app.use(express.urlencoded({ extended: true, limit: '2mb' }))
+app.use('/uploads', express.static(path.resolve(__dirname, '..', 'public', 'uploads')))
+
+const activeSessions: Record<string, string> = {}
+
+function authenticateRequest(req: Request): Member | null {
+  const header = req.headers.authorization ?? ''
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null
+  if (!token) return null
+  const userId = activeSessions[token]
+  if (!userId) return null
+  return findMember(userId) ?? null
+}
 
 interface Member {
   id: string
@@ -196,7 +238,8 @@ const gardens = [
   { id: 'g1', name: '阳光社区菜园', regions },
 ]
 
-const COOLDOWN_MS = 36 * 60 * 60 * 1000
+const COOLDOWN_SECONDS = 36 * 60 * 60
+const COOLDOWN_MS = COOLDOWN_SECONDS * 1000
 
 function findMember(id: string): Member | undefined {
   return members.find((m) => m.id === id)
@@ -223,6 +266,7 @@ app.post('/api/login', (req: Request, res: Response): void => {
   }
 
   const token = `token-${uuidv4()}`
+  activeSessions[token] = user.id
   res.json({ token, user })
 })
 
@@ -287,8 +331,8 @@ app.post('/api/water', (req: Request, res: Response): void => {
   })
 })
 
-app.post('/api/logs', (req: Request, res: Response): void => {
-  const { regionId, authorId, content, photoUrl } = req.body
+app.post('/api/logs', upload.single('photo'), (req: Request, res: Response): void => {
+  const { regionId, authorId, content } = req.body
   if (!regionId || !authorId || !content) {
     res.status(400).json({ success: false, error: '缺少必填字段' })
     return
@@ -300,6 +344,11 @@ app.post('/api/logs', (req: Request, res: Response): void => {
     return
   }
 
+  let photoUrl: string | null = null
+  if (req.file) {
+    photoUrl = `/uploads/${req.file.filename}`
+  }
+
   const author = findMember(authorId)
   const log: Log = {
     id: uuidv4(),
@@ -307,7 +356,7 @@ app.post('/api/logs', (req: Request, res: Response): void => {
     authorId,
     authorName: author?.username ?? '未知',
     content,
-    photoUrl: photoUrl ?? null,
+    photoUrl,
     createdAt: new Date().toISOString(),
   }
   region.logs.unshift(log)
@@ -315,15 +364,19 @@ app.post('/api/logs', (req: Request, res: Response): void => {
 })
 
 app.post('/api/tasks', (req: Request, res: Response): void => {
-  const { regionId, assigneeId, type, requesterId } = req.body
-  if (!regionId || !assigneeId || !type || !requesterId) {
-    res.status(400).json({ success: false, error: '缺少必填字段' })
+  const requester = authenticateRequest(req)
+  if (!requester) {
+    res.status(401).json({ success: false, error: '未登录，请先登录' })
+    return
+  }
+  if (requester.role !== 'manager') {
+    res.status(403).json({ success: false, error: '无权限：仅管理者可分配任务' })
     return
   }
 
-  const requester = findMember(requesterId)
-  if (!requester || requester.role !== 'manager') {
-    res.status(403).json({ success: false, error: '无权限：仅管理者可分配任务' })
+  const { regionId, assigneeId, type } = req.body
+  if (!regionId || !assigneeId || !type) {
+    res.status(400).json({ success: false, error: '缺少必填字段' })
     return
   }
 
