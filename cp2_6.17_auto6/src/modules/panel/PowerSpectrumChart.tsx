@@ -37,6 +37,7 @@ function computeFFT(data: number[]): number[] {
 
 function PowerSpectrumChart({ data, region, width = 280, height = 120 }: PowerSpectrumChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationFrameRef = useRef<number | null>(null);
   const info = REGION_INFO[region];
 
   const spectrum = useMemo(() => computeFFT(data), [data]);
@@ -55,66 +56,81 @@ function PowerSpectrumChart({ data, region, width = 280, height = 120 }: PowerSp
     canvas.style.height = `${height}px`;
     ctx.scale(dpr, dpr);
 
-    ctx.clearRect(0, 0, width, height);
+    const draw = () => {
+      ctx.clearRect(0, 0, width, height);
 
-    const padding = { top: 20, right: 10, bottom: 30, left: 40 };
-    const chartWidth = width - padding.left - padding.right;
-    const chartHeight = height - padding.top - padding.bottom;
-    const barWidth = chartWidth / FREQUENCY_BINS.length * 0.7;
-    const barGap = chartWidth / FREQUENCY_BINS.length * 0.3;
+      const padding = { top: 20, right: 10, bottom: 30, left: 40 };
+      const chartWidth = width - padding.left - padding.right;
+      const chartHeight = height - padding.top - padding.bottom;
+      const barWidth = chartWidth / FREQUENCY_BINS.length * 0.7;
+      const barGap = chartWidth / FREQUENCY_BINS.length * 0.3;
 
-    ctx.strokeStyle = '#2a2a5a';
-    ctx.lineWidth = 0.5;
-    for (let i = 0; i <= 4; i++) {
-      const y = padding.top + (chartHeight / 4) * i;
-      ctx.beginPath();
-      ctx.moveTo(padding.left, y);
-      ctx.lineTo(width - padding.right, y);
-      ctx.stroke();
-    }
+      ctx.strokeStyle = '#2a2a5a';
+      ctx.lineWidth = 0.5;
+      for (let i = 0; i <= 4; i++) {
+        const y = padding.top + (chartHeight / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(width - padding.right, y);
+        ctx.stroke();
+      }
 
-    const maxPower = Math.max(...spectrum) * 1.2 || 1;
+      const maxPower = Math.max(...spectrum) * 1.2 || 1;
 
-    const startColor = [0, 210, 255];
-    const endColor = [59, 7, 100];
+      const startColor = [0, 210, 255];
+      const endColor = [59, 7, 100];
 
-    spectrum.forEach((power, i) => {
-      const barHeight = (power / maxPower) * chartHeight;
-      const x = padding.left + i * (barWidth + barGap) + barGap / 2;
-      const y = padding.top + chartHeight - barHeight;
+      spectrum.forEach((power, i) => {
+        const barHeight = (power / maxPower) * chartHeight;
+        const x = padding.left + i * (barWidth + barGap) + barGap / 2;
+        const y = padding.top + chartHeight - barHeight;
 
-      const t = i / (FREQUENCY_BINS.length - 1);
-      const r = Math.round(startColor[0] + (endColor[0] - startColor[0]) * t);
-      const g = Math.round(startColor[1] + (endColor[1] - startColor[1]) * t);
-      const b = Math.round(startColor[2] + (endColor[2] - startColor[2]) * t);
+        const t = i / (FREQUENCY_BINS.length - 1);
+        const r = Math.round(startColor[0] + (endColor[0] - startColor[0]) * t);
+        const g = Math.round(startColor[1] + (endColor[1] - startColor[1]) * t);
+        const b = Math.round(startColor[2] + (endColor[2] - startColor[2]) * t);
 
-      const gradient = ctx.createLinearGradient(x, y, x, y + barHeight);
-      gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.9)`);
-      gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0.4)`);
+        const gradient = ctx.createLinearGradient(x, y, x, y + barHeight);
+        gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.9)`);
+        gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0.4)`);
 
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.roundRect(x, y, barWidth, barHeight, [3, 3, 0, 0]);
-      ctx.fill();
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        if (ctx.roundRect) {
+          ctx.roundRect(x, y, barWidth, barHeight, [3, 3, 0, 0]);
+        } else {
+          ctx.rect(x, y, barWidth, barHeight);
+        }
+        ctx.fill();
 
-      ctx.shadowColor = `rgba(${r}, ${g}, ${b}, 0.5)`;
-      ctx.shadowBlur = 8;
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    });
+        ctx.shadowColor = `rgba(${r}, ${g}, ${b}, 0.5)`;
+        ctx.shadowBlur = 8;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      });
 
-    ctx.fillStyle = '#8888aa';
-    ctx.font = '10px sans-serif';
-    ctx.textAlign = 'center';
-    FREQUENCY_BINS.forEach((bin, i) => {
-      const x = padding.left + i * (barWidth + barGap) + barGap / 2 + barWidth / 2;
-      ctx.fillText(bin.label, x, height - padding.bottom + 14);
-    });
+      ctx.fillStyle = '#8888aa';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'center';
+      FREQUENCY_BINS.forEach((bin, i) => {
+        const x = padding.left + i * (barWidth + barGap) + barGap / 2 + barWidth / 2;
+        ctx.fillText(bin.label, x, height - padding.bottom + 14);
+      });
 
-    ctx.fillStyle = '#6666aa';
-    ctx.font = '9px sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText('Power', padding.left - 5, padding.top - 5);
+      ctx.fillStyle = '#6666aa';
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText('Power', padding.left - 5, padding.top - 5);
+    };
+
+    draw();
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    };
   }, [spectrum, width, height]);
 
   return (

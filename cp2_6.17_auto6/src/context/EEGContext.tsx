@@ -15,9 +15,10 @@ export function EEGProvider({ children }: { children: React.ReactNode }) {
   const [historyData, setHistoryData] = useState<EEGData[]>([]);
   const [alertRegions, setAlertRegions] = useState<BrainRegion[]>([]);
 
-  const { getEEGData } = useEEGDataService();
+  const { getEEGData, getEEGHistory } = useEEGDataService();
   const isFetchingRef = useRef(false);
   const historyBufferRef = useRef<EEGData[]>([]);
+  const lastTimeOffsetRef = useRef(0);
 
   const checkAlertRegions = useCallback((data: EEGData) => {
     const regions: BrainRegion[] = ['frontal', 'parietal', 'temporal', 'occipital'];
@@ -78,15 +79,51 @@ export function EEGProvider({ children }: { children: React.ReactNode }) {
   }, [getEEGData, checkAlertRegions, timeOffset]);
 
   useEffect(() => {
-    if (timeOffset > 0 && historyData.length > 0) {
-      const index = Math.max(0, Math.min(historyData.length - 1, Math.floor(timeOffset / 0.2)));
-      const historicalData = historyData[historyData.length - 1 - index];
+    if (timeOffset === lastTimeOffsetRef.current) return;
+    lastTimeOffsetRef.current = timeOffset;
+
+    if (timeOffset === 0) {
+      if (historyBufferRef.current.length > 0) {
+        const latest = historyBufferRef.current[historyBufferRef.current.length - 1];
+        setEegData(latest);
+        checkAlertRegions(latest);
+      }
+      return;
+    }
+
+    const localIndex = Math.floor(timeOffset / 0.2);
+    if (localIndex < historyBufferRef.current.length) {
+      const historicalData = historyBufferRef.current[
+        historyBufferRef.current.length - 1 - localIndex
+      ];
       if (historicalData) {
         setEegData(historicalData);
         checkAlertRegions(historicalData);
+        return;
       }
     }
-  }, [timeOffset, historyData, checkAlertRegions]);
+
+    let isActive = true;
+    const fetchHistory = async () => {
+      try {
+        const data = await getEEGHistory(timeOffset);
+        if (isActive) {
+          setEegData(data);
+          checkAlertRegions(data);
+        }
+      } catch (err) {
+        if (isActive && (err as Error).name !== 'AbortError') {
+          console.error('Failed to fetch history:', err);
+        }
+      }
+    };
+
+    fetchHistory();
+
+    return () => {
+      isActive = false;
+    };
+  }, [timeOffset, getEEGHistory, checkAlertRegions]);
 
   const handleSetTimeOffset = useCallback((offset: number) => {
     setTimeOffset(Math.max(0, Math.min(60, offset)));
