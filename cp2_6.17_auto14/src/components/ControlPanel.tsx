@@ -14,15 +14,8 @@ interface ControlPanelProps {
   onSeasonChange: (season: Season) => void;
 }
 
-const seasonIcons: Record<Season, { icon: string; color: string }> = {
-  spring: { icon: '✿', color: '#86efac' },
-  summer: { icon: '☀', color: '#fbbf24' },
-  autumn: { icon: '🍂', color: '#f97316' },
-  winter: { icon: '❄', color: '#93c5fd' },
-};
-
-const WindowIcon: React.FC<{ type: WindowType; size?: number }> = ({ type, size = 28 }) => {
-  const common = { width: size, height: size, fill: 'none', strokeWidth: 1.5 };
+const WindowIcon: React.FC<{ type: WindowType; size?: number }> = ({ type, size = 32 }) => {
+  const common: React.CSSProperties = { width: size, height: size, fill: 'none', strokeWidth: 1.5, display: 'block' };
   if (type === 'circle') {
     return (
       <svg viewBox="0 0 24 24" style={{ ...common, stroke: 'currentColor' }}>
@@ -71,19 +64,63 @@ const CompassIndicator: React.FC<{ angle: number }> = ({ angle }) => {
 
   return (
     <div style={styles.compassContainer}>
-      <svg width="64" height="64" viewBox="0 0 64 64" style={styles.compassSvg}>
+      <svg width="56" height="56" viewBox="0 0 64 64" style={styles.compassSvg}>
         <circle cx="32" cy="32" r="28" fill="rgba(30,30,50,0.6)" stroke="#4a4a6a" strokeWidth="1.5" />
         <text x="32" y="10" fill="#818cf8" fontSize="10" textAnchor="middle" fontWeight="600">N</text>
         <text x="56" y="35" fill="#6a6a8a" fontSize="9" textAnchor="middle">E</text>
         <text x="32" y="60" fill="#6a6a8a" fontSize="9" textAnchor="middle">S</text>
         <text x="8" y="35" fill="#6a6a8a" fontSize="9" textAnchor="middle">W</text>
-        <g style={{ transform: `rotate(${rotation}deg)`, transformOrigin: '32px 32px', transition: 'transform 0.3s ease-out' }}>
+        <g style={{ transform: `rotate(${rotation}deg)`, transformOrigin: '32px 32px', transition: 'transform 0.25s ease-out' }}>
           <polygon points="32,14 36,28 32,25 28,28" fill="#ef4444" />
           <polygon points="32,50 36,36 32,39 28,36" fill="#6a6a8a" />
           <circle cx="32" cy="32" r="3" fill="#ffffff" />
         </g>
       </svg>
-      <span style={styles.compassDirection}>{direction}</span>
+      <div style={styles.compassValue}>
+        <span style={styles.compassAngle}>{angle}°</span>
+        <span style={styles.compassDirText}>{direction}</span>
+      </div>
+    </div>
+  );
+};
+
+const SliderWithValue: React.FC<{
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  label: string;
+  valueText: string;
+  onChange: (v: number) => void;
+  labels?: string[];
+}> = ({ min, max, step, value, label, valueText, onChange, labels }) => {
+  const percent = ((value - min) / (max - min)) * 100;
+
+  return (
+    <div style={styles.sliderWithValue}>
+      <div style={styles.sliderHeader}>
+        <span style={styles.sliderLabel}>{label}</span>
+        <span style={styles.sliderValueBadge}>{valueText}</span>
+      </div>
+      <div style={styles.sliderTrackContainer}>
+        <div style={{ ...styles.sliderTrackFill, width: `${percent}%` }} />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          style={styles.slider as React.CSSProperties}
+        />
+      </div>
+      {labels && (
+        <div style={styles.sliderLabels}>
+          {labels.map((l, i) => (
+            <span key={i}>{l}</span>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -119,7 +156,9 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   return (
     <div style={styles.panel}>
       <div style={styles.summary}>
-        <div style={styles.summaryIcon}>{currentConfig.icon}</div>
+        <div style={{ ...styles.summaryIcon, color: '#818cf8' }}>
+          <WindowIcon type={windowType} size={28} />
+        </div>
         <div style={styles.summaryText}>
           <div style={styles.summaryType}>{currentConfig.label}</div>
           <div style={styles.summaryMeta}>
@@ -132,65 +171,57 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
       <div style={styles.controlGroup}>
         <label style={styles.label}>窗户类型</label>
-        <div style={styles.windowButtonGrid}>
-          {WINDOW_TYPES.map((type) => (
-            <button
-              key={type}
-              style={{
-                ...styles.windowButton,
-                ...(windowType === type ? styles.windowButtonActive : {}),
-              }}
-              onClick={() => onWindowTypeChange(type)}
-            >
-              <div style={{ ...styles.windowIconWrapper, color: windowType === type ? '#ffffff' : '#818cf8' }}>
-                <WindowIcon type={type} size={28} />
-              </div>
-              <span style={{ ...styles.windowButtonLabel, color: windowType === type ? '#ffffff' : '#a0a0c0' }}>
-                {WINDOW_CONFIGS[type].label}
-              </span>
-            </button>
-          ))}
+        <div style={styles.windowCardGrid}>
+          {WINDOW_TYPES.map((type) => {
+            const isActive = windowType === type;
+            return (
+              <button
+                key={type}
+                style={{
+                  ...styles.windowCard,
+                  ...(isActive ? styles.windowCardActive : {}),
+                  borderColor: isActive ? '#3b82f6' : 'transparent',
+                  transform: isActive ? 'scale(1.03)' : 'scale(1)',
+                }}
+                onClick={() => onWindowTypeChange(type)}
+              >
+                <div style={{ ...styles.windowCardIcon, color: isActive ? '#ffffff' : '#818cf8' }}>
+                  <WindowIcon type={type} size={32} />
+                </div>
+                <span style={{ ...styles.windowCardLabel, color: isActive ? '#ffffff' : '#a0a0c0' }}>
+                  {WINDOW_CONFIGS[type].label}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
       <div style={styles.controlGroup}>
-        <label style={styles.label}>朝向角度: {orientation}°</label>
         <CompassIndicator angle={orientation} />
-        <div style={styles.sliderContainer}>
-          <input
-            type="range"
-            min={0}
-            max={360}
-            step={1}
-            value={orientation}
-            onChange={(e) => onOrientationChange(Number(e.target.value))}
-            style={styles.slider as React.CSSProperties}
-          />
-          <div style={styles.sliderLabels}>
-            <span>0° 北</span>
-            <span>90° 东</span>
-            <span>180° 南</span>
-            <span>270° 西</span>
-          </div>
-        </div>
+        <SliderWithValue
+          min={0}
+          max={360}
+          step={1}
+          value={orientation}
+          label="朝向"
+          valueText={`${orientation}°`}
+          onChange={onOrientationChange}
+          labels={['北', '东', '南', '西']}
+        />
       </div>
 
       <div style={styles.controlGroup}>
-        <label style={styles.label}>时间: {timeStr}</label>
-        <input
-          type="range"
+        <SliderWithValue
           min={6}
           max={18}
           step={0.25}
           value={time}
-          onChange={(e) => onTimeChange(Number(e.target.value))}
-          style={styles.slider as React.CSSProperties}
+          label="时间"
+          valueText={timeStr}
+          onChange={onTimeChange}
+          labels={['6:00', '12:00', '18:00']}
         />
-        <div style={styles.sliderLabels}>
-          <span>6:00</span>
-          <span>12:00</span>
-          <span>18:00</span>
-        </div>
         <div style={styles.altitudeTag}>
           <span style={styles.altitudeTagLabel}>预估太阳高度角</span>
           <span style={styles.altitudeTagValue}>{estimatedAltitude.toFixed(1)}°</span>
@@ -199,25 +230,22 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
       <div style={styles.controlGroup}>
         <label style={styles.label}>季节</label>
-        <div style={styles.seasonCardGrid}>
-          {SEASONS.map((s) => (
-            <button
-              key={s}
-              style={{
-                ...styles.seasonCard,
-                ...(season === s ? styles.seasonCardActive : {}),
-                borderColor: season === s ? '#3b82f6' : 'transparent',
-              }}
-              onClick={() => onSeasonChange(s)}
-            >
-              <div style={{ ...styles.seasonIcon, color: seasonIcons[s].color }}>
-                {seasonIcons[s].icon}
-              </div>
-              <span style={{ ...styles.seasonLabel, color: season === s ? '#ffffff' : '#a0a0c0' }}>
+        <div style={styles.seasonTagGroup}>
+          {SEASONS.map((s) => {
+            const isActive = season === s;
+            return (
+              <button
+                key={s}
+                style={{
+                  ...styles.seasonTag,
+                  ...(isActive ? styles.seasonTagActive : {}),
+                }}
+                onClick={() => onSeasonChange(s)}
+              >
                 {SEASON_SOLAR_DATA[s].label}
-              </span>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -258,8 +286,6 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 12,
   },
   summaryIcon: {
-    fontSize: 32,
-    color: '#818cf8',
     width: 48,
     height: 48,
     display: 'flex',
@@ -298,132 +324,174 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
     fontWeight: 500,
   },
-  windowButtonGrid: {
+  windowCardGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(2, 1fr)',
-    gap: 8,
+    gap: 10,
   },
-  windowButton: {
-    padding: '10px 8px',
-    borderRadius: 10,
+  windowCard: {
+    padding: '14px 10px',
+    borderRadius: 12,
     border: '2px solid transparent',
     background: '#2a2a4a',
     cursor: 'pointer',
-    fontSize: 12,
     transition: 'all 0.25s ease-out',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
   },
-  windowButtonActive: {
+  windowCardActive: {
     background: '#4f46e5',
-    borderColor: '#818cf8',
+    boxShadow: '0 4px 16px rgba(59, 130, 246, 0.35)',
   },
-  windowIconWrapper: {
+  windowCardIcon: {
+    height: 32,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 28,
     transition: 'color 0.25s ease-out',
   },
-  windowButtonLabel: {
-    fontSize: 12,
+  windowCardLabel: {
+    fontSize: 13,
     fontWeight: 500,
     transition: 'color 0.25s ease-out',
   },
   compassContainer: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    padding: '4px 0',
+    gap: 14,
+    padding: '6px 4px',
   },
   compassSvg: {
     display: 'block',
+    flexShrink: 0,
   },
-  compassDirection: {
-    color: '#818cf8',
-    fontSize: 18,
-    fontWeight: 600,
-    minWidth: 36,
-    textAlign: 'center' as const,
-  },
-  sliderContainer: {
+  compassValue: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 4,
+    gap: 2,
+  },
+  compassAngle: {
+    color: '#ffffff',
+    fontSize: 20,
+    fontWeight: 700,
+    fontFamily: '"Courier New", monospace',
+  },
+  compassDirText: {
+    color: '#818cf8',
+    fontSize: 14,
+    fontWeight: 500,
+  },
+  sliderWithValue: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+  },
+  sliderHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sliderLabel: {
+    color: '#e0e0e0',
+    fontSize: 13,
+    fontWeight: 500,
+  },
+  sliderValueBadge: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 600,
+    fontFamily: '"Courier New", monospace',
+    background: 'rgba(99, 102, 241, 0.25)',
+    padding: '2px 8px',
+    borderRadius: 6,
+    border: '1px solid rgba(99, 102, 241, 0.4)',
+  },
+  sliderTrackContainer: {
+    position: 'relative' as const,
+    height: 6,
+    background: '#3a3a5a',
+    borderRadius: 3,
+    width: '100%',
+  },
+  sliderTrackFill: {
+    position: 'absolute' as const,
+    left: 0,
+    top: 0,
+    height: '100%',
+    background: 'linear-gradient(90deg, #6366f1, #818cf8)',
+    borderRadius: 3,
+    pointerEvents: 'none',
+    transition: 'width 0.1s ease-out',
   },
   slider: {
+    position: 'absolute' as const,
+    top: '50%',
+    left: 0,
+    transform: 'translateY(-50%)',
     width: '100%',
     height: 6,
     appearance: 'none' as any,
     WebkitAppearance: 'none' as any,
-    background: '#3a3a5a',
-    borderRadius: 3,
+    background: 'transparent',
     outline: 'none',
     cursor: 'pointer',
+    margin: 0,
+    padding: 0,
   },
   sliderLabels: {
     display: 'flex',
     justifyContent: 'space-between',
     color: '#6a6a8a',
     fontSize: 10,
+    marginTop: 2,
   },
   altitudeTag: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '6px 10px',
+    padding: '7px 12px',
     background: 'rgba(34, 197, 94, 0.1)',
-    borderRadius: 6,
+    borderRadius: 8,
     border: '1px solid rgba(34, 197, 94, 0.3)',
-    marginTop: 4,
+    marginTop: 2,
   },
   altitudeTagLabel: {
     color: '#86efac',
-    fontSize: 11,
+    fontSize: 12,
   },
   altitudeTagValue: {
     color: '#22c55e',
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: 600,
     fontFamily: '"Courier New", monospace',
   },
-  seasonCardGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(2, 1fr)',
-    gap: 8,
-  },
-  seasonCard: {
-    padding: '12px 8px',
-    borderRadius: 10,
-    border: '2px solid transparent',
-    background: '#2a2a4a',
-    cursor: 'pointer',
-    transition: 'all 0.25s ease-out',
+  seasonTagGroup: {
     display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
     gap: 6,
+    flexWrap: 'wrap' as const,
   },
-  seasonCardActive: {
-    background: '#1e1e3a',
-  },
-  seasonIcon: {
-    fontSize: 24,
-    width: 40,
-    height: 40,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 10,
-  },
-  seasonLabel: {
+  seasonTag: {
+    flex: 1,
+    minWidth: 'auto',
+    padding: '8px 10px',
+    borderRadius: 8,
+    border: '1px solid #3a3a5a',
+    background: 'transparent',
+    color: '#a0a0c0',
+    cursor: 'pointer',
     fontSize: 13,
     fontWeight: 500,
-    transition: 'color 0.25s ease-out',
+    transition: 'all 0.25s ease-out',
+    textAlign: 'center' as const,
+  },
+  seasonTagActive: {
+    background: '#3b82f6',
+    borderColor: '#60a5fa',
+    color: '#ffffff',
+    boxShadow: '0 2px 10px rgba(59, 130, 246, 0.3)',
   },
   stats: {
     display: 'flex',
