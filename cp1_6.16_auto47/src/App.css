@@ -1,0 +1,59 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  overflow: hidden;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.fade-out {
+  animation: fadeOut 0.2s ease-out forwards;
+}
+
+.fade-in {
+  animation: fadeIn 0.2s ease-in forwards;
+}
+
+.blink {
+  animation: blink 0.3s step-end forwards;
+}
+
+.sticky-pulse {
+  animation: stickyPulse 0.5s ease-in-out infinite;
+}
+
+.sticky-input:focus {
+  outline: none;
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes blink {
+  0% { opacity: 1; }
+  25% { opacity: 0; }
+  50% { opacity: 1; }
+  75% { opacity: 0; }
+  100% { opacity: 0; }
+}
+
+@keyframes stickyPulse {
+  0% { stroke: #1ABC9C; stroke-width: 2; }
+  50% { stroke: #E74C3C; stroke-width: 3; }
+  100% { stroke: #1ABC9C; stroke-width: 2; }
+}
+
+button:focus {
+  outline: none;
+}
