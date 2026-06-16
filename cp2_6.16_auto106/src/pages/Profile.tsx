@@ -70,7 +70,7 @@ function BarChart({ data }: { data: BarData[] }) {
               style={{
                 fontSize: 11,
                 fontWeight: 700,
-                color: hasData ? 'var(--color-primary)' : 'var(--color-text-light)',
+                color: hasData ? 'var(--color-primary)' : '#9ca3af',
                 minHeight: 14,
               }}
             >
@@ -81,8 +81,8 @@ function BarChart({ data }: { data: BarData[] }) {
                 width: barWidth,
                 height: barHeight,
                 background: hasData
-                  ? `linear-gradient(to top, #f97316, #fb923c)`
-                  : 'var(--color-gray-200)',
+                  ? `linear-gradient(to top, #f97316 0%, #fb923c 100%)`
+                  : '#e5e7eb',
                 borderRadius: '4px 4px 2px 2px',
                 transition: 'height 0.5s ease',
                 minHeight: 4,
@@ -91,7 +91,7 @@ function BarChart({ data }: { data: BarData[] }) {
             <div
               style={{
                 fontSize: 11,
-                color: hasData ? 'var(--color-text)' : 'var(--color-text-light)',
+                color: hasData ? 'var(--color-text)' : '#9ca3af',
                 fontWeight: 500,
               }}
             >

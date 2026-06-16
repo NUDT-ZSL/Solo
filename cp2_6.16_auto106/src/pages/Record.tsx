@@ -154,9 +154,9 @@ export default function Record() {
         ref={formRef}
         onSubmit={handleSubmit}
         style={{
-          transition: 'opacity 0.5s ease, transform 0.5s ease',
+          transition: 'opacity 1s cubic-bezier(0.4, 0, 0.2, 1), transform 1s cubic-bezier(0.4, 0, 0.2, 1)',
           opacity: formVisible ? 1 : 0,
-          transform: formVisible ? 'scale(1)' : 'scale(0.92)',
+          transform: formVisible ? 'scale(1) translateY(0)' : 'scale(0.85) translateY(12px)',
           pointerEvents: submitting ? 'none' : 'auto',
         }}
       >

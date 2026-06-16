@@ -19,8 +19,9 @@ function DishCard({ record }: { record: DishRecord }) {
       onClick={() => navigate(`/history/${record.id}`)}
       className="card-hover"
       style={{
-        width: '100%',
+        width: 300,
         height: 160,
+        maxWidth: '100%',
         borderRadius: 12,
         background: getRatingGradient(record.rating),
         padding: 16,
@@ -30,6 +31,8 @@ function DishCard({ record }: { record: DishRecord }) {
         cursor: 'pointer',
         position: 'relative',
         overflow: 'hidden',
+        flexShrink: 0,
+        margin: '0 auto',
       }}
     >
       <div
@@ -251,7 +254,8 @@ export default function History() {
         <div
           className="grid"
           style={{
-            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fill, 300px)',
+            justifyContent: 'center',
             gap: 20,
           }}
         >

@@ -10,6 +10,7 @@ interface RadarChartProps {
 export default function RadarChart({ data, labels, size = 400 }: RadarChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number | null>(null);
+  const grainCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const currentRef = useRef<FlavorRating>({ spicy: 0, sweet: 0, salty: 0, sour: 0, umami: 0 });
   const targetRef = useRef<FlavorRating>(data);
   const startTimeRef = useRef<number>(0);
@@ -20,6 +21,47 @@ export default function RadarChart({ data, labels, size = 400 }: RadarChartProps
   const centerY = size / 2;
   const radius = size * 0.38;
   const animationDuration = 500;
+
+  useEffect(() => {
+    const grainCanvas = document.createElement('canvas');
+    const gSize = size;
+    grainCanvas.width = gSize;
+    grainCanvas.height = gSize;
+    const gCtx = grainCanvas.getContext('2d')!;
+    const bgGrad = gCtx.createRadialGradient(gSize / 2, gSize / 2, 0, gSize / 2, gSize / 2, gSize * 0.55);
+    bgGrad.addColorStop(0, 'rgba(20, 18, 16, 0.94)');
+    bgGrad.addColorStop(0.35, 'rgba(25, 22, 20, 0.91)');
+    bgGrad.addColorStop(0.7, 'rgba(32, 28, 25, 0.88)');
+    bgGrad.addColorStop(1, 'rgba(45, 40, 36, 0.85)');
+    gCtx.fillStyle = bgGrad;
+    gCtx.fillRect(0, 0, gSize, gSize);
+    const imgData = gCtx.getImageData(0, 0, gSize, gSize);
+    const cx = gSize / 2;
+    const cy = gSize / 2;
+    const maxDist = Math.sqrt(cx * cx + cy * cy);
+    for (let y = 0; y < gSize; y += 2) {
+      for (let x = 0; x < gSize; x += 2) {
+        const dx = x - cx;
+        const dy = y - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > gSize * 0.52) continue;
+        const distFactor = 1 - dist / maxDist;
+        const noiseVal = Math.random();
+        const threshold = 0.025 + distFactor * 0.035;
+        if (noiseVal < threshold) {
+          const idx = (y * gSize + x) * 4;
+          const brightness = 245 + Math.floor(Math.random() * 10);
+          const alpha = 0.05 + Math.random() * 0.11 + distFactor * 0.06;
+          imgData.data[idx] = brightness;
+          imgData.data[idx + 1] = brightness;
+          imgData.data[idx + 2] = brightness - 2;
+          imgData.data[idx + 3] = Math.floor(alpha * 255);
+        }
+      }
+    }
+    gCtx.putImageData(imgData, 0, 0);
+    grainCanvasRef.current = grainCanvas;
+  }, [size]);
 
   useEffect(() => {
     targetRef.current = data;
@@ -76,26 +118,22 @@ export default function RadarChart({ data, labels, size = 400 }: RadarChartProps
 
     ctx.clearRect(0, 0, size, size);
 
-    const bgGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius * 1.5);
-    bgGrad.addColorStop(0, 'rgba(30, 27, 24, 0.92)');
-    bgGrad.addColorStop(0.6, 'rgba(28, 25, 23, 0.88)');
-    bgGrad.addColorStop(1, 'rgba(41, 37, 34, 0.85)');
     ctx.beginPath();
     ctx.arc(centerX, centerY, radius * 1.45, 0, Math.PI * 2);
-    ctx.fillStyle = bgGrad;
-    ctx.fill();
-
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        const dx = x - centerX;
-        const dy = y - centerY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < radius * 1.45 && Math.random() < 0.015) {
-          ctx.fillStyle = `rgba(255,255,255,${0.03 + Math.random() * 0.06})`;
-          ctx.fillRect(x, y, 1, 1);
-        }
-      }
+    ctx.closePath();
+    ctx.save();
+    ctx.clip();
+    if (grainCanvasRef.current) {
+      ctx.drawImage(grainCanvasRef.current, 0, 0, size, size);
+    } else {
+      const fallbackGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius * 1.5);
+      fallbackGrad.addColorStop(0, 'rgba(20, 18, 16, 0.94)');
+      fallbackGrad.addColorStop(0.7, 'rgba(32, 28, 25, 0.88)');
+      fallbackGrad.addColorStop(1, 'rgba(45, 40, 36, 0.85)');
+      ctx.fillStyle = fallbackGrad;
+      ctx.fillRect(0, 0, size, size);
     }
+    ctx.restore();
 
     const levels = 5;
     for (let lv = 1; lv <= levels; lv++) {

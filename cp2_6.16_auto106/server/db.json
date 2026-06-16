@@ -5,5 +5,27 @@
     "avatar": "",
     "createdAt": "2026-06-16T10:09:19.966Z"
   },
-  "records": []
+  "records": [
+    {
+      "id": "51bbf42d-aff6-4d12-b3eb-5cbbea729cac",
+      "name": "麻婆豆腐",
+      "ingredients": [
+        "豆腐"
+      ],
+      "textureTags": [
+        "脆爽",
+        "多汁"
+      ],
+      "rating": 4,
+      "note": "",
+      "flavor": {
+        "spicy": 5,
+        "sweet": 5,
+        "salty": 5,
+        "sour": 5,
+        "umami": 5
+      },
+      "createdAt": "2026-06-16T10:28:11.812Z"
+    }
+  ]
 }

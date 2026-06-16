@@ -72,12 +72,12 @@ export default function Detail() {
         inset: 0,
         zIndex: 200,
         padding: 0,
-        background: 'rgba(28, 25, 23, 0.55)',
+        background: 'rgba(28, 25, 23, 0.45)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
+        backdropFilter: 'blur(8px) saturate(140%)',
+        WebkitBackdropFilter: 'blur(8px) saturate(140%)',
         animation: closing ? 'fadeOut 0.25s ease forwards' : 'fadeIn 0.3s ease',
       }}
       onClick={(e) => {
