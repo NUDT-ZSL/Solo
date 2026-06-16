@@ -7,16 +7,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      '@modules': path.resolve(__dirname, './src/modules'),
-      '@components': path.resolve(__dirname, './src/components'),
     },
   },
-  build: {
-    outDir: 'dist',
-    sourcemap: true,
-  },
   server: {
-    port: 5173,
-    open: true,
+    port: 3000,
   },
 });
