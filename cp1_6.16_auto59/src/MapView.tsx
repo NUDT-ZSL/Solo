@@ -48,6 +48,21 @@ const MapView: React.FC<MapViewProps> = ({
   const lastMoveTimeRef = useRef(0);
   const animFrameRef = useRef<number>();
   const pendingRenderRef = useRef(false);
+  const viewStateRef = useRef(viewState);
+  const hoveredProvinceRef = useRef(hoveredProvince);
+  const hoveredPinRef = useRef(hoveredPin);
+
+  useEffect(() => {
+    viewStateRef.current = viewState;
+  }, [viewState]);
+
+  useEffect(() => {
+    hoveredProvinceRef.current = hoveredProvince;
+  }, [hoveredProvince]);
+
+  useEffect(() => {
+    hoveredPinRef.current = hoveredPin;
+  }, [hoveredPin]);
 
   const currentProvince = provinces.find(p => p.id === currentProvinceId);
 
@@ -59,19 +74,12 @@ const MapView: React.FC<MapViewProps> = ({
     };
   }, []);
 
-  const screenToWorld = useCallback((screenX: number, screenY: number): { x: number; y: number } => {
+  const screenToWorld = useCallback((screenX: number, screenY: number, vs: ViewState): { x: number; y: number } => {
     const { width, height } = getCanvasSize();
-    const x = (screenX - width / 2 - viewState.offsetX) / viewState.scale;
-    const y = (screenY - height / 2 - viewState.offsetY) / viewState.scale;
+    const x = (screenX - width / 2 - vs.offsetX) / vs.scale;
+    const y = (screenY - height / 2 - vs.offsetY) / vs.scale;
     return { x, y };
-  }, [viewState, getCanvasSize]);
-
-  const worldToScreen = useCallback((worldX: number, worldY: number): { x: number; y: number } => {
-    const { width, height } = getCanvasSize();
-    const x = worldX * viewState.scale + width / 2 + viewState.offsetX;
-    const y = worldY * viewState.scale + height / 2 + viewState.offsetY;
-    return { x, y };
-  }, [viewState, getCanvasSize]);
+  }, [getCanvasSize]);
 
   const isPointInPolygon = useCallback((px: number, py: number, polygon: { x: number; y: number }[]): boolean => {
     let inside = false;
@@ -94,8 +102,8 @@ const MapView: React.FC<MapViewProps> = ({
     return null;
   }, [provinces, isPointInPolygon]);
 
-  const getPinAtPoint = useCallback((worldX: number, worldY: number): CheckInRecord | null => {
-    const threshold = PIN_RADIUS / viewState.scale;
+  const getPinAtPoint = useCallback((worldX: number, worldY: number, scale: number): CheckInRecord | null => {
+    const threshold = PIN_RADIUS / scale;
     for (let i = checkIns.length - 1; i >= 0; i--) {
       const pin = checkIns[i];
       const dx = worldX - pin.position.x;
@@ -105,16 +113,7 @@ const MapView: React.FC<MapViewProps> = ({
       }
     }
     return null;
-  }, [checkIns, viewState.scale]);
-
-  const requestRender = useCallback(() => {
-    if (pendingRenderRef.current) return;
-    pendingRenderRef.current = true;
-    animFrameRef.current = requestAnimationFrame(() => {
-      pendingRenderRef.current = false;
-      render();
-    });
-  }, []);
+  }, [checkIns]);
 
   const render = useCallback(() => {
     const canvas = canvasRef.current;
@@ -122,7 +121,13 @@ const MapView: React.FC<MapViewProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const vs = viewStateRef.current;
+    const hp = hoveredProvinceRef.current;
+    const hpin = hoveredPinRef.current;
+
     const { width, height } = getCanvasSize();
+    if (width === 0 || height === 0) return;
+
     const dpr = window.devicePixelRatio || 1;
     canvas.width = width * dpr;
     canvas.height = height * dpr;
@@ -133,8 +138,8 @@ const MapView: React.FC<MapViewProps> = ({
     ctx.clearRect(0, 0, width, height);
 
     ctx.save();
-    ctx.translate(width / 2 + viewState.offsetX, height / 2 + viewState.offsetY);
-    ctx.scale(viewState.scale, viewState.scale);
+    ctx.translate(width / 2 + vs.offsetX, height / 2 + vs.offsetY);
+    ctx.scale(vs.scale, vs.scale);
 
     const provinceCheckIns = currentProvinceId
       ? checkIns.filter(c => c.provinceId === currentProvinceId)
@@ -146,7 +151,7 @@ const MapView: React.FC<MapViewProps> = ({
       if (currentProvinceId && province.id !== currentProvinceId) return;
 
       const hasCheckIn = checkedProvinceIds.has(province.id);
-      const isHovered = hoveredProvince === province.id;
+      const isHovered = hp === province.id;
 
       ctx.beginPath();
       province.outline.forEach((point, index) => {
@@ -166,12 +171,12 @@ const MapView: React.FC<MapViewProps> = ({
       ctx.fill();
 
       ctx.strokeStyle = '#8B7355';
-      ctx.lineWidth = 1.5 / viewState.scale;
+      ctx.lineWidth = 1.5 / vs.scale;
       ctx.stroke();
 
       if (!currentProvinceId || province.id === currentProvinceId) {
         ctx.fillStyle = hasCheckIn ? '#FFFFFF' : '#7F8C8D';
-        ctx.font = `${12 / viewState.scale}px -apple-system, sans-serif`;
+        ctx.font = `${12 / vs.scale}px -apple-system, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(province.name, province.center.x, province.center.y);
@@ -183,7 +188,9 @@ const MapView: React.FC<MapViewProps> = ({
       : checkIns;
 
     displayCheckIns.forEach(record => {
-      const isHovered = hoveredPin?.id === record.id;
+      if (currentProvinceId && record.provinceId !== currentProvinceId) return;
+
+      const isHovered = hpin?.id === record.id;
       const scale = isHovered ? 1.3 : 1;
       const pinRadius = PIN_RADIUS * scale;
 
@@ -195,7 +202,7 @@ const MapView: React.FC<MapViewProps> = ({
       ctx.fillStyle = '#E74C3C';
       ctx.fill();
       ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 1.5 / viewState.scale;
+      ctx.lineWidth = 1.5 / vs.scale;
       ctx.stroke();
 
       ctx.beginPath();
@@ -210,15 +217,25 @@ const MapView: React.FC<MapViewProps> = ({
     });
 
     ctx.restore();
-  }, [viewState, provinces, checkIns, currentProvinceId, hoveredProvince, hoveredPin, getCanvasSize]);
+  }, [provinces, checkIns, currentProvinceId, getCanvasSize]);
+
+  const requestRender = useCallback(() => {
+    if (pendingRenderRef.current) return;
+    pendingRenderRef.current = true;
+    animFrameRef.current = requestAnimationFrame(() => {
+      pendingRenderRef.current = false;
+      render();
+    });
+  }, [render]);
 
   const zoomAt = useCallback((screenX: number, screenY: number, newScale: number) => {
     const clampedScale = Math.min(Math.max(newScale, MIN_SCALE), MAX_SCALE);
-    if (clampedScale === viewState.scale) return;
+    if (clampedScale === viewStateRef.current.scale) return;
 
     const { width, height } = getCanvasSize();
-    const worldX = (screenX - width / 2 - viewState.offsetX) / viewState.scale;
-    const worldY = (screenY - height / 2 - viewState.offsetY) / viewState.scale;
+    const vs = viewStateRef.current;
+    const worldX = (screenX - width / 2 - vs.offsetX) / vs.scale;
+    const worldY = (screenY - height / 2 - vs.offsetY) / vs.scale;
 
     const newOffsetX = screenX - width / 2 - worldX * clampedScale;
     const newOffsetY = screenY - height / 2 - worldY * clampedScale;
@@ -228,118 +245,7 @@ const MapView: React.FC<MapViewProps> = ({
       offsetX: newOffsetX,
       offsetY: newOffsetY
     });
-  }, [viewState, getCanvasSize]);
-
-  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    setIsDragging(true);
-    dragStartRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-      offsetX: viewState.offsetX,
-      offsetY: viewState.offsetY
-    };
-  }, [viewState]);
-
-  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    const now = performance.now();
-    if (now - lastMoveTimeRef.current < 16) return;
-    lastMoveTimeRef.current = now;
-
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-
-    if (isDragging) {
-      const dx = e.clientX - dragStartRef.current.x;
-      const dy = e.clientY - dragStartRef.current.y;
-      setViewState(prev => ({
-        ...prev,
-        offsetX: dragStartRef.current.offsetX + dx,
-        offsetY: dragStartRef.current.offsetY + dy
-      }));
-      return;
-    }
-
-    const worldPos = screenToWorld(screenX, screenY);
-
-    const pin = getPinAtPoint(worldPos.x, worldPos.y);
-    if (pin) {
-      setHoveredPin(pin);
-      setTooltipPos({ x: e.clientX, y: e.clientY });
-      setHoveredProvince(null);
-      if (onPinHover) onPinHover(pin);
-      return;
-    }
-
-    if (hoveredPin) {
-      setHoveredPin(null);
-      if (onPinHover) onPinHover(null);
-    }
-
-    if (!currentProvinceId) {
-      const province = getProvinceAtPoint(worldPos.x, worldPos.y);
-      if (province) {
-        setHoveredProvince(province.id);
-      } else if (hoveredProvince) {
-        setHoveredProvince(null);
-      }
-    }
-  }, [isDragging, screenToWorld, getPinAtPoint, getProvinceAtPoint, hoveredPin, hoveredProvince, currentProvinceId, onPinHover]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  const handleDoubleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (currentProvinceId) return;
-
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-    const worldPos = screenToWorld(screenX, screenY);
-
-    const province = getProvinceAtPoint(worldPos.x, worldPos.y);
-    if (province) {
-      onProvinceDoubleClick(province.id);
-    }
-  }, [screenToWorld, getProvinceAtPoint, currentProvinceId, onProvinceDoubleClick]);
-
-  const handleWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-
-    const delta = e.deltaY > 0 ? 1 / SCALE_STEP : SCALE_STEP;
-    zoomAt(screenX, screenY, viewState.scale * delta);
-  }, [viewState.scale, zoomAt]);
-
-  const handleZoomIn = useCallback(() => {
-    const { width, height } = getCanvasSize();
-    zoomAt(width / 2, height / 2, viewState.scale * SCALE_STEP);
-  }, [viewState.scale, zoomAt, getCanvasSize]);
-
-  const handleZoomOut = useCallback(() => {
-    const { width, height } = getCanvasSize();
-    zoomAt(width / 2, height / 2, viewState.scale / SCALE_STEP);
-  }, [viewState.scale, zoomAt, getCanvasSize]);
-
-  const handleResetView = useCallback(() => {
-    if (currentProvinceId) {
-      const province = provinces.find(p => p.id === currentProvinceId);
-      if (province) {
-        fitToProvince(province);
-      }
-    } else {
-      fitToCountry();
-    }
-  }, [currentProvinceId, provinces]);
+  }, [getCanvasSize]);
 
   const fitToCountry = useCallback(() => {
     const { width, height } = getCanvasSize();
@@ -386,23 +292,158 @@ const MapView: React.FC<MapViewProps> = ({
     });
   }, [getCanvasSize]);
 
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    setIsDragging(true);
+    const vs = viewStateRef.current;
+    dragStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      offsetX: vs.offsetX,
+      offsetY: vs.offsetY
+    };
+  }, []);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const now = performance.now();
+    if (now - lastMoveTimeRef.current < 16) return;
+    lastMoveTimeRef.current = now;
+
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+
+    if (isDragging) {
+      const dx = e.clientX - dragStartRef.current.x;
+      const dy = e.clientY - dragStartRef.current.y;
+      setViewState(prev => ({
+        ...prev,
+        offsetX: dragStartRef.current.offsetX + dx,
+        offsetY: dragStartRef.current.offsetY + dy
+      }));
+      return;
+    }
+
+    const vs = viewStateRef.current;
+    const worldPos = screenToWorld(screenX, screenY, vs);
+
+    const pin = getPinAtPoint(worldPos.x, worldPos.y, vs.scale);
+    if (pin) {
+      setHoveredPin(pin);
+      setTooltipPos({ x: e.clientX, y: e.clientY });
+      setHoveredProvince(null);
+      if (onPinHover) onPinHover(pin);
+      return;
+    }
+
+    if (hoveredPinRef.current) {
+      setHoveredPin(null);
+      if (onPinHover) onPinHover(null);
+    }
+
+    if (!currentProvinceId) {
+      const province = getProvinceAtPoint(worldPos.x, worldPos.y);
+      if (province) {
+        setHoveredProvince(province.id);
+      } else if (hoveredProvinceRef.current) {
+        setHoveredProvince(null);
+      }
+    }
+  }, [isDragging, screenToWorld, getPinAtPoint, getProvinceAtPoint, currentProvinceId, onPinHover]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  const handleDoubleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (currentProvinceId) return;
+
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+    const vs = viewStateRef.current;
+    const worldPos = screenToWorld(screenX, screenY, vs);
+
+    const province = getProvinceAtPoint(worldPos.x, worldPos.y);
+    if (province) {
+      onProvinceDoubleClick(province.id);
+    }
+  }, [screenToWorld, getProvinceAtPoint, currentProvinceId, onProvinceDoubleClick]);
+
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+
+    const delta = e.deltaY > 0 ? 1 / SCALE_STEP : SCALE_STEP;
+    const vs = viewStateRef.current;
+    zoomAt(screenX, screenY, vs.scale * delta);
+  }, [zoomAt]);
+
+  const handleZoomIn = useCallback(() => {
+    const { width, height } = getCanvasSize();
+    const vs = viewStateRef.current;
+    zoomAt(width / 2, height / 2, vs.scale * SCALE_STEP);
+  }, [zoomAt, getCanvasSize]);
+
+  const handleZoomOut = useCallback(() => {
+    const { width, height } = getCanvasSize();
+    const vs = viewStateRef.current;
+    zoomAt(width / 2, height / 2, vs.scale / SCALE_STEP);
+  }, [zoomAt, getCanvasSize]);
+
+  const handleResetView = useCallback(() => {
+    if (currentProvinceId) {
+      const province = provinces.find(p => p.id === currentProvinceId);
+      if (province) {
+        fitToProvince(province);
+      }
+    } else {
+      fitToCountry();
+    }
+  }, [currentProvinceId, provinces, fitToCountry, fitToProvince]);
+
+  useEffect(() => {
+    requestRender();
+  }, [viewState, hoveredProvince, hoveredPin, requestRender]);
+
+  useEffect(() => {
+    const initTimer = setTimeout(() => {
+      if (!currentProvinceId) {
+        fitToCountry();
+      }
+    }, 50);
+    return () => clearTimeout(initTimer);
+  }, []);
+
   useEffect(() => {
     if (currentProvinceId) {
       const province = provinces.find(p => p.id === currentProvinceId);
       if (province) {
-        setTimeout(() => fitToProvince(province), 50);
+        const timer = setTimeout(() => fitToProvince(province), 50);
+        return () => clearTimeout(timer);
       }
-    } else {
-      setTimeout(() => fitToCountry(), 50);
     }
-  }, [currentProvinceId]);
+  }, [currentProvinceId, provinces, fitToProvince]);
 
   useEffect(() => {
-    requestRender();
-  });
-
-  useEffect(() => {
-    const handleResize = () => requestRender();
+    const handleResize = () => {
+      requestRender();
+      if (!currentProvinceId) {
+        fitToCountry();
+      } else {
+        const province = provinces.find(p => p.id === currentProvinceId);
+        if (province) {
+          fitToProvince(province);
+        }
+      }
+    };
     window.addEventListener('resize', handleResize);
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -410,7 +451,7 @@ const MapView: React.FC<MapViewProps> = ({
         cancelAnimationFrame(animFrameRef.current);
       }
     };
-  }, [requestRender]);
+  }, [requestRender, currentProvinceId, provinces, fitToCountry, fitToProvince]);
 
   return (
     <div className="map-container" ref={containerRef}>
@@ -459,7 +500,8 @@ const MapView: React.FC<MapViewProps> = ({
           style={{
             left: tooltipPos.x + 15,
             top: tooltipPos.y - 10,
-            position: 'fixed'
+            position: 'fixed',
+            zIndex: 1000
           }}
         >
           <div className="pin-tooltip-name">{hoveredPin.restaurantName}</div>
@@ -467,7 +509,6 @@ const MapView: React.FC<MapViewProps> = ({
             {[1, 2, 3, 4, 5].map(i => (
               <span
                 key={i}
-                className="star filled"
                 style={{ fontSize: '14px', color: i <= hoveredPin.rating ? '#F1C40F' : '#D5D8DC' }}
               >
                 ★

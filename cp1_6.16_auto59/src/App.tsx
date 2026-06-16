@@ -29,11 +29,8 @@ const App: React.FC = () => {
   }, [checkIns, currentProvinceId]);
 
   const displayCheckIns = useMemo(() => {
-    if (currentProvinceId) {
-      return provinceCheckIns;
-    }
-    return checkIns;
-  }, [currentProvinceId, checkIns, provinceCheckIns]);
+    return provinceCheckIns;
+  }, [provinceCheckIns]);
 
   const totalCheckInCount = checkIns.length;
   const totalProvinceCount = new Set(checkIns.map(c => c.provinceId)).size;
