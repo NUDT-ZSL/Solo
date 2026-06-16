@@ -22,10 +22,18 @@ export interface SpellDefinition {
   color: string;
 }
 
+export interface ElementCooldownEntry {
+  remainingTurns: number;
+  sourceSpellId: string;
+}
+
+export interface PlayerCooldowns {
+  spellCooldowns: { [spellId: string]: number };
+  elementCooldowns: { [element in ElementType]?: ElementCooldownEntry };
+}
+
 export interface CooldownMap {
-  [playerId: number]: {
-    [spellId: string]: number;
-  };
+  [playerId: number]: PlayerCooldowns;
 }
 
 export interface CombatState {
@@ -143,25 +151,49 @@ export function selectElementsAndMatch(
   };
 }
 
+function isSpellOnCooldown(
+  cooldowns: PlayerCooldowns,
+  spell: SpellDefinition,
+): { blocked: boolean; reason: string } {
+  const spellCd = cooldowns.spellCooldowns[spell.id] ?? 0;
+  if (spellCd > 0) {
+    return { blocked: true, reason: `法术冷却中 ${spellCd} 回合` };
+  }
+  for (const elem of spell.elements) {
+    const elemCd = cooldowns.elementCooldowns[elem];
+    if (elemCd && elemCd.remainingTurns > 0) {
+      return { blocked: true, reason: `${elem}元素冷却中 (${elemCd.sourceSpellId})` };
+    }
+  }
+  return { blocked: false, reason: '' };
+}
+
 export function getAvailableSpellsForPlayer(
   state: CombatState,
   playerIndex: 0 | 1,
 ): Array<{ spell: SpellDefinition; canCast: boolean; remainingCooldown: number; reason: string }> {
   const player = state.characters[playerIndex];
-  const cooldowns = state.cooldowns[player.id] ?? {};
+  const pcd = state.cooldowns[player.id] ?? createEmptyPlayerCooldowns();
   return COMBO_SPELLS.map((spell) => {
-    const remainingCooldown = cooldowns[spell.id] ?? 0;
+    const remainingCooldown = pcd.spellCooldowns[spell.id] ?? 0;
     let canCast = true;
     let reason = '';
     if (player.mp < spell.mpCost) {
       canCast = false;
       reason = '蓝量不足';
-    } else if (remainingCooldown > 0) {
-      canCast = false;
-      reason = `冷却中 ${remainingCooldown} 回合`;
+    } else {
+      const cdCheck = isSpellOnCooldown(pcd, spell);
+      if (cdCheck.blocked) {
+        canCast = false;
+        reason = cdCheck.reason;
+      }
     }
     return { spell, canCast, remainingCooldown, reason };
   });
+}
+
+function createEmptyPlayerCooldowns(): PlayerCooldowns {
+  return { spellCooldowns: {}, elementCooldowns: {} };
 }
 
 export function createInitialCombatState(): CombatState {
@@ -172,7 +204,7 @@ export function createInitialCombatState(): CombatState {
     ],
     currentPlayerIndex: 0,
     turnNumber: 1,
-    cooldowns: { 0: {}, 1: {} },
+    cooldowns: { 0: createEmptyPlayerCooldowns(), 1: createEmptyPlayerCooldowns() },
     winner: null,
   };
 }
@@ -201,33 +233,48 @@ export function castSpell(
   if (caster.mp < spell.mpCost) {
     return { error: '蓝量不足' };
   }
-  const casterCooldowns = state.cooldowns[caster.id] ?? {};
-  if ((casterCooldowns[spell.id] ?? 0) > 0) {
-    return { error: '法术冷却中' };
+  const pcd = state.cooldowns[caster.id] ?? createEmptyPlayerCooldowns();
+  const cdCheck = isSpellOnCooldown(pcd, spell);
+  if (cdCheck.blocked) {
+    return { error: cdCheck.reason };
   }
 
   const targetIndex = (1 - casterIndex) as 0 | 1;
   const target = state.characters[targetIndex];
-
-  const primaryAttackElement = getPrimarySpellElement(spell.elements);
-  const primaryDefendElement = casterIndex === 0 ? 'ice' : 'fire';
+  const primaryDefendElement: ElementType = casterIndex === 0 ? 'ice' : 'fire';
 
   const isCountered = checkElementAdvantage(spell.elements, primaryDefendElement);
-  const damageResult = calculateDamage(spell.damageMin, spell.damageMax, isCountered);
+  const damageResult = calculateDamage(
+    spell.damageMin,
+    spell.damageMax,
+    spell.elements,
+    primaryDefendElement,
+  );
 
   const newCaster = consumeMp(caster, spell.mpCost);
   const newTarget = applyDamage(target, damageResult.totalDamage);
 
-  const newCharacters: [CharacterState, CharacterState] = [...state.characters] as [
-    CharacterState,
-    CharacterState,
-  ];
+  const newCharacters: [CharacterState, CharacterState] = [
+    ...state.characters,
+  ] as [CharacterState, CharacterState];
   newCharacters[casterIndex] = newCaster;
   newCharacters[targetIndex] = newTarget;
 
-  const newCooldowns: CooldownMap = JSON.parse(JSON.stringify(state.cooldowns));
-  if (!newCooldowns[caster.id]) newCooldowns[caster.id] = {};
-  newCooldowns[caster.id][spell.id] = spell.cooldownTurns;
+  const newCooldowns: CooldownMap = deepCloneCooldowns(state.cooldowns);
+  const npc = newCooldowns[caster.id] ?? createEmptyPlayerCooldowns();
+  npc.spellCooldowns[spell.id] = spell.cooldownTurns;
+
+  const uniqueElements = [...new Set(spell.elements)];
+  for (const elem of uniqueElements) {
+    const existing = npc.elementCooldowns[elem];
+    if (!existing || existing.remainingTurns < spell.cooldownTurns) {
+      npc.elementCooldowns[elem] = {
+        remainingTurns: spell.cooldownTurns,
+        sourceSpellId: spell.id,
+      };
+    }
+  }
+  newCooldowns[caster.id] = npc;
 
   const winner = checkVictory(newCharacters);
 
@@ -249,20 +296,39 @@ export function castSpell(
   };
 }
 
+function deepCloneCooldowns(cd: CooldownMap): CooldownMap {
+  const result: CooldownMap = {};
+  for (const pid of Object.keys(cd)) {
+    const pcd = cd[Number(pid)];
+    result[Number(pid)] = {
+      spellCooldowns: { ...pcd.spellCooldowns },
+      elementCooldowns: { ...pcd.elementCooldowns },
+    };
+  }
+  return result;
+}
+
 export function advanceTurn(state: CombatState): CombatState {
   if (state.winner !== null) return state;
 
-  const newCooldowns: CooldownMap = JSON.parse(JSON.stringify(state.cooldowns));
-  for (const pid of [0, 1]) {
-    const cd = newCooldowns[pid];
-    if (!cd) continue;
-    for (const sid of Object.keys(cd)) {
-      if (cd[sid] > 0) cd[sid] -= 1;
+  const newCooldowns: CooldownMap = deepCloneCooldowns(state.cooldowns);
+  for (const pid of Object.keys(newCooldowns)) {
+    const pcd = newCooldowns[Number(pid)];
+    for (const sid of Object.keys(pcd.spellCooldowns)) {
+      if (pcd.spellCooldowns[sid] > 0) {
+        pcd.spellCooldowns[sid] -= 1;
+      }
+    }
+    for (const elem of Object.keys(pcd.elementCooldowns) as ElementType[]) {
+      const entry = pcd.elementCooldowns[elem];
+      if (entry && entry.remainingTurns > 0) {
+        entry.remainingTurns -= 1;
+      }
     }
   }
 
-  const newCharacters: [CharacterState, CharacterState] = state.characters.map((c) =>
-    recoverMp(c, 5),
+  const newCharacters: [CharacterState, CharacterState] = state.characters.map(
+    (c) => recoverMp(c, 5),
   ) as [CharacterState, CharacterState];
 
   const nextPlayer = (1 - state.currentPlayerIndex) as 0 | 1;

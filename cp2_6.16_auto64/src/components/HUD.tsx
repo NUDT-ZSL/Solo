@@ -9,24 +9,24 @@ interface HUDProps {
 }
 
 const HUD: React.FC<HUDProps> = ({ combat, timeLeftMs, totalTimeMs, onTimeout }) => {
-  const [hpFlash, setHpFlash] = useState<{ [key: number]: boolean }>({});
-  const prevHpRef = useRef<{ [key: number]: number }>({
+  const [hpFlash, setHpFlash] = useState<Record<number, boolean>>({});
+  const prevHpRef = useRef<Record<number, number>>({
     0: combat.characters[0].hp,
     1: combat.characters[1].hp,
   });
 
   useEffect(() => {
-    const changes: { [key: number]: boolean } = {};
+    const ch: Record<number, boolean> = {};
     let any = false;
     for (let i = 0; i < 2; i++) {
       if (combat.characters[i].hp < prevHpRef.current[i]) {
-        changes[i] = true;
+        ch[i] = true;
         any = true;
       }
       prevHpRef.current[i] = combat.characters[i].hp;
     }
     if (any) {
-      setHpFlash((s) => ({ ...s, ...changes }));
+      setHpFlash((s) => ({ ...s, ...ch }));
       const t = window.setTimeout(() => setHpFlash({}), 400);
       return () => clearTimeout(t);
     }
@@ -40,34 +40,26 @@ const HUD: React.FC<HUDProps> = ({ combat, timeLeftMs, totalTimeMs, onTimeout })
 
   const pct = Math.max(0, Math.min(1, timeLeftMs / totalTimeMs));
   const warn = timeLeftMs <= 5000 && combat.winner === null;
-  const warnFlash = useWarningFlash(warn);
+  const flashOn = useWarningFlash(warn);
 
   return (
     <div style={styles.container}>
       <div style={styles.leftPanel}>
-        <PlayerHUD idx={0} combat={combat} hpFlash={!!hpFlash[0]} />
+        <PlayerHUD idx={0} combat={combat} flash={!!hpFlash[0]} />
       </div>
-
       <div style={styles.centerPanel}>
         <div style={styles.turnText}>
           回合 <span style={{ color: '#ffaa00', fontWeight: 'bold' }}>{combat.turnNumber}</span>
         </div>
-        <CountdownCircle
-          pct={pct}
-          warn={warn}
-          warnFlash={warnFlash}
-          totalSeconds={totalTimeMs / 1000}
-          secondsLeft={Math.max(0, Math.ceil(timeLeftMs / 1000))}
-        />
+        <CountdownCircle pct={pct} warn={warn} flash={flashOn} secondsLeft={Math.max(0, Math.ceil(timeLeftMs / 1000))} />
         {combat.winner !== null && (
-          <div style={{ ...styles.winnerText, color: '#ffd700' }}>
+          <div style={styles.winnerText}>
             🏆 {combat.characters[combat.winner].name} 胜利！
           </div>
         )}
       </div>
-
       <div style={{ ...styles.rightPanel, alignItems: 'flex-end' }}>
-        <PlayerHUD idx={1} combat={combat} hpFlash={!!hpFlash[1]} alignRight />
+        <PlayerHUD idx={1} combat={combat} flash={!!hpFlash[1]} right />
       </div>
     </div>
   );
@@ -76,11 +68,8 @@ const HUD: React.FC<HUDProps> = ({ combat, timeLeftMs, totalTimeMs, onTimeout })
 function useWarningFlash(enable: boolean): boolean {
   const [on, setOn] = useState(false);
   useEffect(() => {
-    if (!enable) {
-      setOn(false);
-      return;
-    }
-    const id = window.setInterval(() => setOn((v) => !v), 300);
+    if (!enable) { setOn(false); return; }
+    const id = window.setInterval(() => setOn((v) => !v), 250);
     return () => clearInterval(id);
   }, [enable]);
   return on;
@@ -89,171 +78,112 @@ function useWarningFlash(enable: boolean): boolean {
 const CountdownCircle: React.FC<{
   pct: number;
   warn: boolean;
-  warnFlash: boolean;
-  totalSeconds: number;
+  flash: boolean;
   secondsLeft: number;
-}> = ({ pct, warn, warnFlash, secondsLeft }) => {
+}> = ({ pct, warn, flash, secondsLeft }) => {
   const size = 40;
-  const stroke = 4;
-  const r = (size - stroke) / 2;
+  const sw = 4;
+  const r = (size - sw) / 2;
   const c = 2 * Math.PI * r;
   const offset = c * (1 - pct);
-
-  const color = warn && warnFlash ? '#ff3333' : `url(#countdownGrad)`;
+  const strokeColor = warn && flash ? '#ff3333' : '#ff8800';
+  const bgColor = warn && flash ? 'rgba(255,50,50,0.3)' : 'transparent';
 
   return (
-    <svg width={size} height={size} style={{ marginTop: 4 }}>
-      <defs>
-        <linearGradient id="countdownGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#ffaa00" />
-          <stop offset="100%" stopColor="#ff6600" />
-        </linearGradient>
-      </defs>
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke="#2a2a3e"
-        strokeWidth={stroke}
-      />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke={color}
-        strokeWidth={stroke}
-        strokeDasharray={c}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        style={{ transition: 'stroke-dashoffset 0.1s linear, stroke 0.1s' }}
-      />
-      <text
-        x={size / 2}
-        y={size / 2 + 4}
-        textAnchor="middle"
-        fontSize="12"
-        fontWeight="bold"
-        fill={warn && warnFlash ? '#ff3333' : '#e0e0ff'}
-      >
-        {secondsLeft}
-      </text>
-    </svg>
+    <div style={{
+      width: size + 8,
+      height: size + 8,
+      borderRadius: '50%',
+      background: bgColor,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      transition: 'background 0.15s',
+      marginTop: 4,
+    }}>
+      <svg width={size} height={size}>
+        <defs>
+          <linearGradient id="cdGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#ffaa00" />
+            <stop offset="100%" stopColor="#ff6600" />
+          </linearGradient>
+        </defs>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#2a2a3e" strokeWidth={sw} />
+        <circle
+          cx={size / 2} cy={size / 2} r={r} fill="none"
+          stroke={warn ? strokeColor : 'url(#cdGrad)'}
+          strokeWidth={sw}
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          style={{ transition: 'stroke-dashoffset 0.1s linear, stroke 0.15s' }}
+        />
+        <text
+          x={size / 2} y={size / 2 + 4}
+          textAnchor="middle" fontSize="12" fontWeight="bold"
+          fill={warn && flash ? '#ff3333' : '#e0e0ff'}
+          style={{ transition: 'fill 0.15s' }}
+        >
+          {secondsLeft}
+        </text>
+      </svg>
+    </div>
   );
 };
 
 const PlayerHUD: React.FC<{
   idx: 0 | 1;
   combat: CombatState;
-  hpFlash: boolean;
-  alignRight?: boolean;
-}> = ({ idx, combat, hpFlash, alignRight }) => {
-  const char = combat.characters[idx];
-  const hpPct = (char.hp / char.maxHp) * 100;
-  const mpPct = (char.mp / char.maxMp) * 100;
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: alignRight ? 'flex-end' : 'flex-start', gap: 6 }}>
-      <div style={{ color: '#e0e0ff', fontWeight: 'bold', fontSize: 14 }}>
-        {char.name}
-      </div>
-      <Bar width={180} pct={hpPct} gradFrom="#ff4444" gradTo="#cc0000" flash={hpFlash} alignRight={alignRight} label={`${char.hp}/${char.maxHp}`} labelColor="#fff" type="HP" />
-      <Bar width={180} pct={mpPct} gradFrom="#4488ff" gradTo="#0044cc" flash={false} alignRight={alignRight} label={`${char.mp}/${char.maxMp}`} labelColor="#fff" type="MP" />
-    </div>
-  );
-};
-
-const Bar: React.FC<{
-  width: number;
-  pct: number;
-  gradFrom: string;
-  gradTo: string;
   flash: boolean;
-  alignRight?: boolean;
-  label: string;
-  labelColor: string;
-  type: string;
-}> = ({ width, pct, gradFrom, gradTo, flash, alignRight, label, type }) => {
-  const id = useMemo(() => `bar-${Math.random().toString(36).slice(2, 8)}`, []);
+  right?: boolean;
+}> = ({ idx, combat, flash, right }) => {
+  const ch = combat.characters[idx];
+  const hp = (ch.hp / ch.maxHp) * 100;
+  const mp = (ch.mp / ch.maxMp) * 100;
   return (
-    <div
-      style={{
-        width,
-        height: 16,
-        borderRadius: 8,
-        background: '#1a1a2e',
-        overflow: 'hidden',
-        position: 'relative',
-        boxShadow: flash ? '0 0 12px #ff3333' : 'none',
-        border: flash ? '1px solid #ff3333' : '1px solid #2a2a3e',
-      }}
-    >
-      <div
-        style={{
-          width: `${pct}%`,
-          height: '100%',
-          background: `linear-gradient(90deg, ${gradFrom}, ${gradTo})`,
-          borderRadius: 8,
-          transition: 'width 0.3s ease',
-          float: alignRight ? 'right' : 'left',
-        }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 10,
-          fontWeight: 'bold',
-          color: '#fff',
-          textShadow: '0 1px 2px rgba(0,0,0,0.8)',
-          pointerEvents: 'none',
-        }}
-      >
-        {type}: {label}
-      </div>
-      <svg width="0" height="0" style={{ position: 'absolute' }}>
-        <defs>
-          <linearGradient id={id} x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor={gradFrom} />
-            <stop offset="100%" stopColor={gradTo} />
-          </linearGradient>
-        </defs>
-      </svg>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: right ? 'flex-end' : 'flex-start', gap: 6 }}>
+      <div style={{ color: '#e0e0ff', fontWeight: 'bold', fontSize: 14 }}>{ch.name}</div>
+      <StatBar w={180} pct={hp} from="#ff4444" to="#cc0000" flash={flash} right={right} label={`HP: ${ch.hp}/${ch.maxHp}`} />
+      <StatBar w={180} pct={mp} from="#4488ff" to="#0044cc" flash={false} right={right} label={`MP: ${ch.mp}/${ch.maxMp}`} />
     </div>
   );
 };
 
-const styles: { [key: string]: React.CSSProperties } = {
-  container: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    padding: '16px 24px',
-    color: '#e0e0ff',
-  },
+const StatBar: React.FC<{
+  w: number; pct: number; from: string; to: string; flash: boolean; right?: boolean; label: string;
+}> = ({ w, pct, from, to, flash, right, label }) => (
+  <div style={{
+    width: w, height: 16, borderRadius: 8, background: '#1a1a2e', overflow: 'hidden',
+    position: 'relative',
+    boxShadow: flash ? '0 0 12px #ff3333' : 'none',
+    border: flash ? '1px solid #ff3333' : '1px solid #2a2a3e',
+    transition: 'box-shadow 0.2s, border-color 0.2s',
+  }}>
+    <div style={{
+      width: `${pct}%`, height: '100%',
+      background: `linear-gradient(90deg, ${from}, ${to})`,
+      borderRadius: 8, transition: 'width 0.3s ease',
+      float: right ? 'right' : 'left',
+    }} />
+    <div style={{
+      position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: 10, fontWeight: 'bold', color: '#fff',
+      textShadow: '0 1px 2px rgba(0,0,0,0.8)', pointerEvents: 'none',
+    }}>
+      {label}
+    </div>
+  </div>
+);
+
+const styles: Record<string, React.CSSProperties> = {
+  container: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '16px 24px', color: '#e0e0ff' },
   leftPanel: { display: 'flex', flexDirection: 'column', gap: 4 },
   rightPanel: { display: 'flex', flexDirection: 'column', gap: 4 },
-  centerPanel: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 4,
-  },
+  centerPanel: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 },
   turnText: { fontSize: 14, letterSpacing: 1 },
-  winnerText: {
-    marginTop: 8,
-    fontSize: 16,
-    fontWeight: 'bold',
-    textShadow: '0 0 10px rgba(255, 215, 0, 0.6)',
-    animation: 'pulse 1s ease infinite',
-  },
+  winnerText: { marginTop: 8, fontSize: 16, fontWeight: 'bold', color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.6)' },
 };
 
 export default HUD;

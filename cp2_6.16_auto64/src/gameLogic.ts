@@ -28,13 +28,15 @@ export interface CharacterState {
 export interface DamageResult {
   baseDamage: number;
   isCountered: boolean;
-  totalDamage: number;
   counterBonus: number;
+  totalDamage: number;
+  advantageCount: number;
 }
 
 export const MAX_HP = 100;
 export const MAX_MP = 100;
-export const COUNTER_BONUS = 10;
+export const BASE_COUNTER_BONUS = 10;
+export const PER_ELEMENT_COUNTER_BONUS = 5;
 
 export const ELEMENT_ADVANTAGE: Record<ElementType, ElementType> = {
   fire: 'ice',
@@ -61,32 +63,46 @@ export function createCharacter(
   };
 }
 
-export function checkElementAdvantage(
+export function countElementAdvantages(
   attackElements: ElementType[],
-  defendPrimaryElement: ElementType,
-): boolean {
+  defendElement: ElementType,
+): number {
+  let count = 0;
   for (const elem of attackElements) {
-    if (ELEMENT_ADVANTAGE[elem] === defendPrimaryElement) {
-      return true;
+    if (ELEMENT_ADVANTAGE[elem] === defendElement) {
+      count++;
     }
   }
-  return false;
+  return count;
+}
+
+export function checkElementAdvantage(
+  attackElements: ElementType[],
+  defendElement: ElementType,
+): boolean {
+  return countElementAdvantages(attackElements, defendElement) > 0;
 }
 
 export function calculateDamage(
   baseDamageMin: number,
   baseDamageMax: number,
-  isCountered: boolean,
+  attackElements: ElementType[],
+  defendElement: ElementType,
 ): DamageResult {
+  const advantageCount = countElementAdvantages(attackElements, defendElement);
+  const isCountered = advantageCount > 0;
   const base = Math.floor(
     Math.random() * (baseDamageMax - baseDamageMin + 1) + baseDamageMin,
   );
-  const bonus = isCountered ? COUNTER_BONUS : 0;
+  const counterBonus = isCountered
+    ? BASE_COUNTER_BONUS + (advantageCount - 1) * PER_ELEMENT_COUNTER_BONUS
+    : 0;
   return {
     baseDamage: base,
     isCountered,
-    counterBonus: bonus,
-    totalDamage: base + bonus,
+    counterBonus,
+    totalDamage: base + counterBonus,
+    advantageCount,
   };
 }
 
