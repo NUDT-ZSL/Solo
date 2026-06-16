@@ -13,19 +13,37 @@ let state: PanelState = {
 let panelEl: HTMLElement | null = null;
 let drawerToggleBtn: HTMLElement | null = null;
 let drawerOpen = false;
+let touchStartY = 0;
 
 export function initPanel(container: HTMLElement) {
   panelEl = document.createElement('div');
   panelEl.className = 'info-panel';
+  panelEl.style.willChange = 'transform, max-height, opacity';
 
   drawerToggleBtn = document.createElement('button');
   drawerToggleBtn.className = 'drawer-toggle';
   drawerToggleBtn.innerHTML = '&#9776; 信息';
   drawerToggleBtn.style.display = 'none';
-  drawerToggleBtn.addEventListener('click', () => {
+  drawerToggleBtn.setAttribute('aria-expanded', 'false');
+
+  const toggleDrawer = () => {
     drawerOpen = !drawerOpen;
     if (panelEl) {
       panelEl.classList.toggle('drawer-open', drawerOpen);
+    }
+    if (drawerToggleBtn) {
+      drawerToggleBtn.setAttribute('aria-expanded', String(drawerOpen));
+    }
+  };
+
+  drawerToggleBtn.addEventListener('click', toggleDrawer);
+  drawerToggleBtn.addEventListener('touchstart', (e) => {
+    touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+  drawerToggleBtn.addEventListener('touchend', (e) => {
+    const touchEndY = e.changedTouches[0].clientY;
+    if (Math.abs(touchEndY - touchStartY) < 10) {
+      toggleDrawer();
     }
   });
 
@@ -40,7 +58,12 @@ function render() {
   if (!panelEl) return;
 
   const mol = state.molecule;
-  const atomCounts = mol ? countAtoms(mol) : { [AtomElement.C]: 0, [AtomElement.H]: 0, [AtomElement.O]: 0, [AtomElement.N]: 0 };
+  const atomCounts = mol ? countAtoms(mol) : {
+    [AtomElement.C]: 0,
+    [AtomElement.H]: 0,
+    [AtomElement.O]: 0,
+    [AtomElement.N]: 0,
+  };
   const activeBonds = mol ? countActiveBonds(mol) : 0;
 
   const atomList = [

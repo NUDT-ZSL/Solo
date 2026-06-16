@@ -1,23 +1,61 @@
 import * as THREE from 'three';
 import { SceneContext, getSceneContext, removeBondMesh } from './scene';
 
-export interface Particle {
-  mesh: THREE.Mesh;
-  velocity: THREE.Vector3;
-  life: number;
-  maxLife: number;
+interface ParticleState {
+  instancedMesh: THREE.InstancedMesh;
+  dummy: THREE.Object3D;
+  velocities: Float32Array;
+  lifes: Float32Array;
+  count: number;
+  maxCount: number;
+  aliveCount: number;
+  startTime: number;
+  frameId: number | null;
 }
 
 export function useClipper() {
   let ctx: SceneContext | null = null;
-  let particles: Particle[] = [];
   let active = false;
   let animatingBondId: number | null = null;
   let onBreakCallback: ((bondId: number, worldPos: THREE.Vector3) => void) | null = null;
 
+  let particleState: ParticleState | null = null;
+
+  function initParticleSystem(scene: THREE.Scene, maxCount: number = 60) {
+    const geometry = new THREE.SphereGeometry(0.05, 6, 6);
+    const material = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 1,
+      depthTest: false,
+    });
+
+    const instancedMesh = new THREE.InstancedMesh(geometry, material, maxCount);
+    instancedMesh.count = 0;
+    instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    scene.add(instancedMesh);
+
+    particleState = {
+      instancedMesh,
+      dummy: new THREE.Object3D(),
+      velocities: new Float32Array(maxCount * 3),
+      lifes: new Float32Array(maxCount),
+      count: maxCount,
+      maxCount,
+      aliveCount: 0,
+      startTime: 0,
+      frameId: null,
+    };
+  }
+
   function enable() {
     ctx = getSceneContext();
     if (!ctx) return;
+
+    if (!particleState) {
+      initParticleSystem(ctx.scene, 60);
+    }
+
     active = true;
     ctx.clipperActive = true;
     ctx.renderer.domElement.style.cursor = 'crosshair';
@@ -73,6 +111,7 @@ export function useClipper() {
 
     const bond = ctx.currentMolecule.bonds.find(b => b.id === bondId);
     if (!bond) { animatingBondId = null; return; }
+    const targetBond = bond;
 
     const atomMap = new Map(ctx.currentMolecule.atoms.map(a => [a.id, a]));
     const a1 = atomMap.get(bond.atom1Id);
@@ -125,12 +164,12 @@ export function useClipper() {
       if (t < 1) {
         requestAnimationFrame(stretchAnimation);
       } else {
-        spawnParticles(midPoint);
+        spawnParticles(midPoint, 15);
         separateGroups(bondId, bondDirection, atom1Id, atom2Id);
 
         removeBondMesh(bondId);
 
-        bond.broken = true;
+        targetBond.broken = true;
 
         if (ctx.onBondBroken) {
           ctx.onBondBroken(bondId);
@@ -146,72 +185,96 @@ export function useClipper() {
     requestAnimationFrame(stretchAnimation);
   }
 
-  function spawnParticles(origin: THREE.Vector3) {
-    if (!ctx) return;
+  function spawnParticles(origin: THREE.Vector3, count: number) {
+    if (!particleState || !ctx) return;
 
-    const particleCount = 15;
-    const particleGeometry = new THREE.SphereGeometry(0.05, 8, 8);
-    const particleMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 1,
-      depthTest: false,
-    });
+    const ps = particleState;
+    const startIdx = ps.aliveCount;
+    const spawnCount = Math.min(count, ps.maxCount - ps.aliveCount);
 
-    for (let i = 0; i < particleCount; i++) {
-      const direction = new THREE.Vector3(
+    for (let i = 0; i < spawnCount; i++) {
+      const idx = startIdx + i;
+      const dir = new THREE.Vector3(
         (Math.random() - 0.5) * 2,
         (Math.random() - 0.5) * 2,
         (Math.random() - 0.5) * 2
-      ).normalize();
+      ).normalize().multiplyScalar(0.5);
 
-      const speed = 0.5;
-      const mesh = new THREE.Mesh(particleGeometry, particleMaterial.clone());
-      mesh.position.copy(origin);
+      ps.velocities[idx * 3] = dir.x;
+      ps.velocities[idx * 3 + 1] = dir.y;
+      ps.velocities[idx * 3 + 2] = dir.z;
+      ps.lifes[idx] = 0;
 
-      ctx.scene.add(mesh);
-
-      particles.push({
-        mesh,
-        velocity: direction.multiplyScalar(speed),
-        life: 0,
-        maxLife: 0.3,
-      });
+      ps.dummy.position.copy(origin);
+      ps.dummy.rotation.set(0, 0, 0);
+      ps.dummy.scale.set(1, 1, 1);
+      ps.dummy.updateMatrix();
+      ps.instancedMesh.setMatrixAt(idx, ps.dummy.matrix);
+      ps.instancedMesh.setColorAt(idx, new THREE.Color(0xffffff));
     }
 
-    animateParticles();
+    ps.aliveCount += spawnCount;
+    ps.instancedMesh.count = ps.aliveCount;
+    ps.instancedMesh.instanceMatrix.needsUpdate = true;
+    if (ps.instancedMesh.instanceColor) {
+      ps.instancedMesh.instanceColor.needsUpdate = true;
+    }
+
+    if (!ps.frameId) {
+      ps.startTime = performance.now();
+      animateParticles(performance.now());
+    }
   }
 
-  let particleAnimFrame: number | null = null;
-  let lastParticleTime = 0;
+  function animateParticles(currentTime: number) {
+    if (!particleState || !ctx) return;
 
-  function animateParticles(currentTime?: number) {
-    if (!ctx) return;
+    const ps = particleState;
+    const delta = 0.016;
+    const maxLife = 0.3;
 
-    const now = currentTime ?? performance.now();
-    const delta = lastParticleTime ? (now - lastParticleTime) / 1000 : 0.016;
-    lastParticleTime = now;
+    let aliveIdx = 0;
+    for (let i = 0; i < ps.aliveCount; i++) {
+      ps.lifes[i] += delta;
 
-    particles = particles.filter(p => {
-      p.life += delta;
-      if (p.life >= p.maxLife) {
-        ctx!.scene.remove(p.mesh);
-        (p.mesh.material as THREE.Material).dispose();
-        return false;
+      if (ps.lifes[i] >= maxLife) {
+        continue;
       }
 
-      p.mesh.position.add(p.velocity.clone().multiplyScalar(delta));
+      if (aliveIdx !== i) {
+        ps.velocities[aliveIdx * 3] = ps.velocities[i * 3];
+        ps.velocities[aliveIdx * 3 + 1] = ps.velocities[i * 3 + 1];
+        ps.velocities[aliveIdx * 3 + 2] = ps.velocities[i * 3 + 2];
+        ps.lifes[aliveIdx] = ps.lifes[i];
+      }
 
-      const t = p.life / p.maxLife;
-      (p.mesh.material as THREE.MeshBasicMaterial).opacity = 1 - t;
-      return true;
-    });
+      const t = ps.lifes[aliveIdx] / maxLife;
+      const opacity = 1 - t;
 
-    if (particles.length > 0) {
-      particleAnimFrame = requestAnimationFrame(animateParticles);
+      ps.dummy.position.x += ps.velocities[aliveIdx * 3] * delta;
+      ps.dummy.position.y += ps.velocities[aliveIdx * 3 + 1] * delta;
+      ps.dummy.position.z += ps.velocities[aliveIdx * 3 + 2] * delta;
+      ps.dummy.rotation.set(0, 0, 0);
+      const scale = 0.8 + 0.2 * opacity;
+      ps.dummy.scale.set(scale, scale, scale);
+      ps.dummy.updateMatrix();
+      ps.instancedMesh.setMatrixAt(aliveIdx, ps.dummy.matrix);
+      ps.instancedMesh.setColorAt(aliveIdx, new THREE.Color().setRGB(opacity, opacity, opacity));
+
+      aliveIdx++;
+    }
+
+    ps.aliveCount = aliveIdx;
+    ps.instancedMesh.count = Math.max(0, aliveIdx);
+    ps.instancedMesh.instanceMatrix.needsUpdate = true;
+    if (ps.instancedMesh.instanceColor) {
+      ps.instancedMesh.instanceColor.needsUpdate = true;
+    }
+
+    if (aliveIdx > 0) {
+      ps.frameId = requestAnimationFrame(animateParticles);
     } else {
-      particleAnimFrame = null;
-      lastParticleTime = 0;
+      ps.frameId = null;
     }
   }
 
@@ -256,6 +319,8 @@ export function useClipper() {
     const startTime = performance.now();
     const duration = 400;
 
+    const radiusMap: Record<string, number> = { C: 0.3, H: 0.2, O: 0.3, N: 0.3 };
+
     function easeOutQuad(t: number) { return 1 - (1 - t) * (1 - t); }
 
     function animate(now: number) {
@@ -277,7 +342,7 @@ export function useClipper() {
         const label = ctx.labelSprites.get(id);
         if (label) {
           const atom = atomMap.get(id)!;
-          const r = 0.3;
+          const r = radiusMap[atom.element] ?? 0.3;
           label.position.set(
             atom.position[0] + offset.x * eased,
             atom.position[1] + offset.y * eased + r + 0.25,
@@ -299,7 +364,7 @@ export function useClipper() {
         const label = ctx.labelSprites.get(id);
         if (label) {
           const atom = atomMap.get(id)!;
-          const r = 0.3;
+          const r = radiusMap[atom.element] ?? 0.3;
           label.position.set(
             atom.position[0] - offset.x * eased,
             atom.position[1] - offset.y * eased + r + 0.25,
@@ -333,25 +398,28 @@ export function createFloatingText(
 ) {
   const el = document.createElement('div');
   el.textContent = text;
-  el.style.position = 'fixed';
-  el.style.left = `${startClientX}px`;
-  el.style.top = `${startClientY}px`;
-  el.style.color = '#90CAF9';
-  el.style.fontSize = '24px';
-  el.style.fontWeight = 'bold';
-  el.style.pointerEvents = 'none';
-  el.style.zIndex = '10000';
-  el.style.textShadow = '0 0 8px rgba(144, 202, 249, 0.8)';
-  el.style.fontFamily = 'monospace, sans-serif';
-  el.style.transform = 'translate(-50%, -50%)';
-  el.style.transition = 'all 5s ease-out';
+  el.style.cssText = [
+    'position: fixed',
+    `left: ${startClientX}px`,
+    `top: ${startClientY}px`,
+    'color: #90CAF9',
+    'font-size: 24px',
+    'font-weight: bold',
+    'pointer-events: none',
+    'z-index: 10000',
+    'text-shadow: 0 0 8px rgba(144, 202, 249, 0.8)',
+    'font-family: monospace, sans-serif',
+    'transform: translate(-50%, -50%)',
+    'opacity: 1',
+    'will-change: transform, opacity',
+    'transition: transform 5s cubic-bezier(0.16, 1, 0.3, 1), opacity 5s ease-out',
+  ].join(';');
 
   container.appendChild(el);
 
   requestAnimationFrame(() => {
-    el.style.transform = 'translate(-50%, -50%)';
     requestAnimationFrame(() => {
-      el.style.top = `${startClientY - 80}px`;
+      el.style.transform = `translate(-50%, calc(-50% - 80px))`;
       el.style.opacity = '0';
     });
   });
