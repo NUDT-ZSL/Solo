@@ -7,9 +7,18 @@ const DetailPanel: React.FC = () => {
   const { selectedWorkId, setSelectedWorkId, favorites, toggleFavorite } = useAppContext();
   const [isAnimating, setIsAnimating] = useState(false);
   const [isPulsing, setIsPulsing] = useState(false);
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
 
   const work = selectedWorkId ? origamiWorks.find(w => w.id === selectedWorkId) : null;
   const isFavorite = work ? favorites.includes(work.id) : false;
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     if (selectedWorkId) {
@@ -30,6 +39,20 @@ const DetailPanel: React.FC = () => {
       toggleFavorite(work.id);
       setTimeout(() => setIsPulsing(false), 200);
     }
+  };
+
+  const getBorderStyle = () => {
+    if (!work) return {};
+    if (isMobile) {
+      return {
+        borderTop: `3px solid ${work.primaryColor}`,
+        borderLeft: 'none'
+      };
+    }
+    return {
+      borderLeft: `3px solid ${work.primaryColor}`,
+      borderTop: 'none'
+    };
   };
 
   const getDifficultyGradient = (difficulty: Difficulty) => {
@@ -74,9 +97,7 @@ const DetailPanel: React.FC = () => {
       />
       <div 
         className={`detail-panel ${isAnimating ? 'slide-in' : 'slide-out'}`}
-        style={{
-          '--primary-color': work.primaryColor
-        } as React.CSSProperties}>
+        style={getBorderStyle()}>
         <div style={{
           position: 'relative',
           padding: '24px'
@@ -140,15 +161,16 @@ const DetailPanel: React.FC = () => {
             </h2>
             <button
               onClick={handleFavoriteClick}
-              className={isPulsing ? 'favorite-pulse-animation' : ''}
               style={{
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
                 fontSize: '32px',
                 padding: '8px',
-                lineHeight: 1
-              }}
+                lineHeight: 1,
+                animation: isPulsing ? 'favorite-pulse 0.2s ease-in-out' : 'none',
+                animationIterationCount: 1
+              } as React.CSSProperties}
             >
               <span style={{
                 color: isFavorite ? '#ef4444' : '#9ca3af',
