@@ -260,14 +260,86 @@ interface BattleCanvasProps {
   onAnimationComplete: () => void;
   battleTrigger: number;
   battleResult?: 'victory' | 'defeat' | null;
+  playerDamage?: number;
+  monsterDamage?: number;
 }
 
-const BattleCanvas: React.FC<BattleCanvasProps> = ({ monster, playerHp, playerMaxHp, onAnimationComplete, battleTrigger, battleResult }) => {
+function drawPlayerCharacter(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  ctx.fillStyle = '#3182ce';
+  ctx.fillRect(x, y, size, size);
+
+  ctx.fillStyle = '#ffffff';
+  const px = size / 8;
+  ctx.fillRect(x + px * 2, y + px * 1, px, px);
+  ctx.fillRect(x + px * 5, y + px * 1, px, px);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(x + px * 6, y + px * 2, px, px);
+  ctx.fillRect(x + px * 5, y + px * 3, px, px);
+  ctx.fillRect(x + px * 4, y + px * 4, px, px);
+  ctx.fillRect(x + px * 3, y + px * 5, px, px * 2);
+  ctx.fillRect(x + px * 4, y + px * 7, px * 2, px);
+
+  ctx.fillStyle = '#d69e2e';
+  ctx.fillRect(x + px * 2, y + px * 5, px, px * 2);
+  ctx.fillRect(x + px * 3, y + px * 7, px, px);
+}
+
+function drawMonsterCharacter(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, color: string) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, size, size);
+
+  ctx.fillStyle = '#1a202c';
+  const px = size / 8;
+
+  ctx.fillRect(x + px * 0, y + px * 0, px * 2, px * 2);
+  ctx.fillRect(x + px * 2, y + px * 1, px, px);
+  ctx.fillRect(x + px * 6, y + px * 0, px * 2, px * 2);
+  ctx.fillRect(x + px * 5, y + px * 1, px, px);
+
+  ctx.fillStyle = '#ff0000';
+  ctx.fillRect(x + px * 2, y + px * 2, px * 2, px * 2);
+  ctx.fillRect(x + px * 4, y + px * 2, px * 2, px * 2);
+
+  ctx.fillStyle = '#1a202c';
+  ctx.fillRect(x + px * 2, y + px * 5, px * 4, px);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(x + px * 2, y + px * 6, px, px);
+  ctx.fillRect(x + px * 5, y + px * 6, px, px);
+}
+
+function drawDamageNumber(ctx: CanvasRenderingContext2D, x: number, y: number, damage: number, progress: number) {
+  const alpha = 1 - progress;
+  const offsetY = -30 * progress;
+  const scale = 1 + progress * 0.5;
+
+  ctx.save();
+  ctx.translate(x, y + offsetY);
+  ctx.scale(scale, scale);
+  ctx.globalAlpha = alpha;
+
+  ctx.font = 'bold 20px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.strokeStyle = '#1a202c';
+  ctx.lineWidth = 3;
+  ctx.strokeText(`-${damage}`, 0, 0);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(`-${damage}`, 0, 0);
+
+  ctx.restore();
+}
+
+const BattleCanvas: React.FC<BattleCanvasProps> = ({ monster, playerHp, playerMaxHp, onAnimationComplete, battleTrigger, battleResult, playerDamage, monsterDamage }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number>(0);
   const flashRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
   const resultStartTimeRef = useRef<number>(0);
+  const shakeRef = useRef<number>(0);
+  const damageStartTimeRef = useRef<number>(0);
+  const shakeActiveRef = useRef<boolean>(false);
+  const damageActiveRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (battleResult) {
@@ -357,14 +429,45 @@ const BattleCanvas: React.FC<BattleCanvasProps> = ({ monster, playerHp, playerMa
     startTimeRef.current = performance.now();
     let phase = 'entering';
     flashRef.current = 0;
+    shakeActiveRef.current = false;
+    damageActiveRef.current = false;
+    shakeRef.current = 0;
+    damageStartTimeRef.current = 0;
 
     const animate = (time: number) => {
       const elapsed = time - startTimeRef.current;
       const enterDuration = 500;
       const flashDuration = 100;
+      const shakeDuration = 200;
+      const damageDuration = 500;
+
+      let shakeOffsetX = 0;
+      if (shakeActiveRef.current) {
+        const shakeElapsed = time - shakeRef.current;
+        if (shakeElapsed < shakeDuration) {
+          const shakeProgress = shakeElapsed / shakeDuration;
+          const shakeIntensity = 5 * (1 - shakeProgress);
+          shakeOffsetX = Math.sin(shakeElapsed * 0.05) * shakeIntensity;
+        } else {
+          shakeActiveRef.current = false;
+        }
+      }
+
+      let damageProgress = 0;
+      if (damageActiveRef.current) {
+        const damageElapsed = time - damageStartTimeRef.current;
+        if (damageElapsed < damageDuration) {
+          damageProgress = damageElapsed / damageDuration;
+        } else {
+          damageActiveRef.current = false;
+        }
+      }
+
+      ctx.save();
+      ctx.translate(shakeOffsetX, 0);
 
       ctx.fillStyle = '#1a202c';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(-shakeOffsetX, 0, canvas.width, canvas.height);
 
       const progress = Math.min(1, elapsed / enterDuration);
       const easeProgress = 1 - Math.pow(1 - progress, 3);
@@ -380,20 +483,30 @@ const BattleCanvas: React.FC<BattleCanvasProps> = ({ monster, playerHp, playerMa
       if (phase === 'flash') {
         const flashElapsed = performance.now() - flashRef.current;
         if (flashElapsed >= flashDuration) {
-          phase = 'idle';
-          setTimeout(() => onAnimationComplete(), 300);
+          phase = 'shake';
+          shakeRef.current = performance.now();
+          shakeActiveRef.current = true;
+          damageStartTimeRef.current = performance.now();
+          damageActiveRef.current = true;
         } else {
           const flashIntensity = 1 - flashElapsed / flashDuration;
           ctx.fillStyle = `rgba(255, 255, 255, ${flashIntensity})`;
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillRect(-shakeOffsetX, 0, canvas.width, canvas.height);
         }
       }
 
-      ctx.fillStyle = '#3182ce';
-      ctx.fillRect(playerX, 80, 40, 40);
+      if (phase === 'shake' && !shakeActiveRef.current && !damageActiveRef.current) {
+        phase = 'idle';
+        setTimeout(() => onAnimationComplete(), 100);
+      }
 
-      ctx.fillStyle = monster.color;
-      ctx.fillRect(monsterX, 80, 40, 40);
+      drawPlayerCharacter(ctx, playerX, 80, 40);
+      drawMonsterCharacter(ctx, monsterX, 80, 40, monster.color);
+
+      if (damageActiveRef.current && playerDamage !== undefined && monsterDamage !== undefined) {
+        drawDamageNumber(ctx, playerX + 20, 70, monsterDamage, damageProgress);
+        drawDamageNumber(ctx, monsterX + 20, 70, playerDamage, damageProgress);
+      }
 
       ctx.fillStyle = '#48bb78';
       ctx.font = '12px sans-serif';
@@ -414,6 +527,8 @@ const BattleCanvas: React.FC<BattleCanvasProps> = ({ monster, playerHp, playerMa
       ctx.fillStyle = `rgb(${Math.floor(255 * (1 - monsterHpPct))}, ${Math.floor(255 * monsterHpPct)}, 0)`;
       ctx.fillRect(monsterX, 130, 40 * monsterHpPct, 6);
 
+      ctx.restore();
+
       if (phase !== 'idle') {
         animRef.current = requestAnimationFrame(animate);
       }
@@ -424,7 +539,7 @@ const BattleCanvas: React.FC<BattleCanvasProps> = ({ monster, playerHp, playerMa
     return () => {
       if (animRef.current) cancelAnimationFrame(animRef.current);
     };
-  }, [monster, battleTrigger, battleResult]);
+  }, [monster, battleTrigger, battleResult, playerDamage, monsterDamage]);
 
   return (
     <canvas
@@ -599,6 +714,8 @@ const App: React.FC = () => {
   const [battleTrigger, setBattleTrigger] = useState(0);
   const [battleAnimating, setBattleAnimating] = useState(false);
   const [battleResult, setBattleResult] = useState<'victory' | 'defeat' | null>(null);
+  const [playerDamage, setPlayerDamage] = useState<number>(0);
+  const [monsterDamage, setMonsterDamage] = useState<number>(0);
   const [roomDetail, setRoomDetail] = useState<Room | null>(null);
   const [showRestart, setShowRestart] = useState(false);
 
@@ -652,6 +769,8 @@ const App: React.FC = () => {
     const result = playerAttack(state.currentRoom.monster);
     setBattleAnimating(true);
     setBattleResult(null);
+    setPlayerDamage(result.playerDamage);
+    setMonsterDamage(result.monsterDamage);
     setBattleTrigger(prev => prev + 1);
     setTimeout(() => {
       dispatch({ type: 'APPLY_BATTLE_RESULT', result });
@@ -763,6 +882,8 @@ const App: React.FC = () => {
                 onAnimationComplete={() => {}}
                 battleTrigger={battleTrigger}
                 battleResult={battleResult}
+                playerDamage={playerDamage}
+                monsterDamage={monsterDamage}
               />
               <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', padding: '0 40px' }}>
                 <div>
