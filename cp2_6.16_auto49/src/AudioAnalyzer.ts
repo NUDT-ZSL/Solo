@@ -10,6 +10,8 @@ export class AudioAnalyzer {
   private frequencyData: Uint8Array;
   private timeDomainData: Uint8Array;
   private fftSize: number;
+  private lastFftUpdate: number = 0;
+  private readonly FFT_INTERVAL: number = 38;
 
   constructor(options: AudioAnalyzerOptions = {}) {
     this.fftSize = options.fftSize ?? 256;
@@ -40,10 +42,16 @@ export class AudioAnalyzer {
   }
 
   getFrequencyData(): Uint8Array {
-    if (this.analyser) {
+    const now = performance.now();
+    if (this.analyser && now - this.lastFftUpdate >= this.FFT_INTERVAL) {
       this.analyser.getByteFrequencyData(this.frequencyData);
+      this.lastFftUpdate = now;
     }
     return this.frequencyData;
+  }
+
+  getLastFftInterval(): number {
+    return this.FFT_INTERVAL;
   }
 
   getFrequencyDataNormalized(count: number): number[] {

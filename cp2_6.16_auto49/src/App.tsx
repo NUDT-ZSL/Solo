@@ -11,7 +11,7 @@ function App() {
   const [duration, setDuration] = useState(0);
   const [frequencyData, setFrequencyData] = useState<number[]>(new Array(BAR_COUNT).fill(0));
   const [fps, setFps] = useState<number>(0);
-  const [freqLatency, setFreqLatency] = useState<number>(0);
+  const [freqLatency, setFreqLatency] = useState<number | null>(null);
   const [showPerf, setShowPerf] = useState<boolean>(true);
 
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -30,7 +30,10 @@ function App() {
         return;
       }
 
-      if (now - lastFreqUpdateRef.current >= 40) {
+      const audio = audioRef.current;
+      const isAudioPlaying = audio && !audio.paused && audio.duration > 0 && audio.currentTime < audio.duration;
+
+      if (isAudioPlaying && now - lastFreqUpdateRef.current >= 38) {
         const data = analyzerRef.current.getFrequencyDataNormalized(BAR_COUNT);
         setFrequencyData(data);
         freqUpdateTimesRef.current.push(now);
@@ -84,11 +87,34 @@ function App() {
 
     const updatePerf = () => {
       setFps(Math.round(fpsRef.current * 10) / 10);
-      const times = freqUpdateTimesRef.current;
-      if (times.length >= 2) {
-        const lastInterval = times[times.length - 1] - times[times.length - 2];
-        setFreqLatency(Math.round(lastInterval));
+
+      const audio = audioRef.current;
+      const isAudioPlaying = audio && !audio.paused && audio.duration > 0 && audio.currentTime < audio.duration;
+
+      if (!isAudioPlaying) {
+        setFreqLatency(null);
+        freqUpdateTimesRef.current = [];
+      } else {
+        const times = freqUpdateTimesRef.current;
+        if (times.length >= 3) {
+          const intervals: number[] = [];
+          for (let i = 1; i < times.length; i++) {
+            const interval = times[i] - times[i - 1];
+            if (interval > 0 && interval < 200) {
+              intervals.push(interval);
+            }
+          }
+          if (intervals.length > 0) {
+            const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+            setFreqLatency(Math.round(avgInterval));
+          } else {
+            setFreqLatency(null);
+          }
+        } else {
+          setFreqLatency(null);
+        }
       }
+
       perfRafRef.current = requestAnimationFrame(updatePerf);
     };
 
@@ -306,7 +332,9 @@ function App() {
         </div>
         <div className="perf-item">
           <span className="perf-label">延迟</span>
-          <span className={`perf-value ${freqLatency <= 50 ? 'ok' : 'warn'}`}>{freqLatency}ms</span>
+          <span className={`perf-value ${freqLatency !== null && freqLatency <= 50 ? 'ok' : 'warn'}`}>
+            {freqLatency !== null ? `${freqLatency}ms` : '--'}
+          </span>
         </div>
       </div>
 

@@ -14,10 +14,10 @@ function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t;
 }
 
-const COLOR_BOTTOM = new THREE.Color('#4a00e0');
-const COLOR_TOP = new THREE.Color('#ff006e');
-const COLOR_PURPLE = new THREE.Color('#8e2de2');
-const COLOR_CYAN = new THREE.Color('#00f2fe');
+const COLOR_BOTTOM = { r: 0.290, g: 0.000, b: 0.878 };
+const COLOR_TOP = { r: 1.000, g: 0.000, b: 0.431 };
+const COLOR_PURPLE = { r: 0.557, g: 0.176, b: 0.886 };
+const COLOR_CYAN = { r: 0.000, g: 0.949, b: 0.996 };
 
 interface BarsProps {
   frequencyData: number[];
@@ -129,10 +129,9 @@ function ParticleShell({ frequencyData }: ParticleShellProps) {
       positions[i * 3 + 1] = y;
       positions[i * 3 + 2] = z;
 
-      const c = COLOR_PURPLE.clone();
-      colors[i * 3] = c.r;
-      colors[i * 3 + 1] = c.g;
-      colors[i * 3 + 2] = c.b;
+      colors[i * 3] = COLOR_PURPLE.r;
+      colors[i * 3 + 1] = COLOR_PURPLE.g;
+      colors[i * 3 + 2] = COLOR_PURPLE.b;
     }
 
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -162,8 +161,9 @@ function ParticleShell({ frequencyData }: ParticleShellProps) {
     if (!pointsRef.current) return;
 
     colorPhase.current += delta * 0.8;
-    const beatTime = state.clock.elapsedTime;
-    const beatPulse = 0.5 + 0.5 * Math.sin(beatTime * Math.PI * 2 * 4);
+    const time = state.clock.elapsedTime;
+    const pulseFrequency = 4;
+    const beatPulse = 0.5 + 0.5 * Math.sin(time * Math.PI * 2 * pulseFrequency);
     const scaleFactor = 1 + beatPulse * 0.05;
 
     const t = (Math.sin(colorPhase.current * 0.5) + 1) / 2;
