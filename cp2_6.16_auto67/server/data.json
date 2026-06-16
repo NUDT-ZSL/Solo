@@ -1,0 +1,101 @@
+{
+  "users": [
+    {
+      "id": "user-001",
+      "name": "小明",
+      "points": 120,
+      "adoptedPlants": []
+    }
+  ],
+  "plants": [
+    {
+      "id": "plant-001",
+      "name": "银杏树",
+      "species": "Ginkgo biloba",
+      "description": "一棵生长在公园中央的百年银杏树，秋天金黄一片，是社区的标志性植物。",
+      "lat": 39.9082,
+      "lng": 116.4074,
+      "status": "available",
+      "location": "中央公园东门",
+      "plantedDate": "1985-03-15"
+    },
+    {
+      "id": "plant-002",
+      "name": "月季花",
+      "species": "Rosa chinensis",
+      "description": "小区花坛里的月季花，每月开花，色彩鲜艳。",
+      "lat": 39.9052,
+      "lng": 116.4094,
+      "status": "available",
+      "location": "阳光小区3号楼前",
+      "plantedDate": "2020-05-01"
+    },
+    {
+      "id": "plant-003",
+      "name": "法国梧桐",
+      "species": "Platanus orientalis",
+      "description": "沿街的行道树，夏天提供浓密的树荫。",
+      "lat": 39.9062,
+      "lng": 116.4050,
+      "status": "available",
+      "location": "绿萌街12号",
+      "plantedDate": "2010-04-10"
+    },
+    {
+      "id": "plant-004",
+      "name": "桂花树",
+      "species": "Osmanthus fragrans",
+      "description": "八月桂花香，社区里最香的树。",
+      "lat": 39.9032,
+      "lng": 116.4064,
+      "status": "available",
+      "location": "桂花苑小区内",
+      "plantedDate": "2015-09-20"
+    },
+    {
+      "id": "plant-005",
+      "name": "绿萝盆栽",
+      "species": "Epipremnum aureum",
+      "description": "社区活动室门口的绿萝盆栽，需要定期浇水。",
+      "lat": 39.9092,
+      "lng": 116.4104,
+      "status": "available",
+      "location": "社区服务中心门口",
+      "plantedDate": "2023-01-10"
+    },
+    {
+      "id": "plant-006",
+      "name": "樱花树",
+      "species": "Cerasus serrulata",
+      "description": "春天盛开的粉色樱花，是社区最美的风景。",
+      "lat": 39.9022,
+      "lng": 116.4084,
+      "status": "available",
+      "location": "樱花广场",
+      "plantedDate": "2018-03-25"
+    },
+    {
+      "id": "plant-007",
+      "name": "仙人掌",
+      "species": "Opuntia dillenii",
+      "description": "耐旱的沙漠植物，适合懒人养护。",
+      "lat": 39.9072,
+      "lng": 116.4034,
+      "status": "available",
+      "location": "绿萌街花坛",
+      "plantedDate": "2022-06-01"
+    },
+    {
+      "id": "plant-008",
+      "name": "吊兰",
+      "species": "Chlorophytum comosum",
+      "description": "空气净化小能手，悬挂在社区长廊上。",
+      "lat": 39.9042,
+      "lng": 116.4114,
+      "status": "available",
+      "location": "阳光长廊",
+      "plantedDate": "2023-04-15"
+    }
+  ],
+  "careLogs": []
+}
