@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/audio/audioengine.ts","./src/components/masterpanel.tsx","./src/components/mixerchannel.tsx","./src/samples/generateaudio.ts","./src/utils/mixdown.ts"],"version":"5.8.3"}
