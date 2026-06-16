@@ -37,12 +37,14 @@ body {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 12px;
-  padding: 10px 0;
+  gap: 16px;
+  padding: 12px 16px;
   margin-bottom: 10px;
+  background: rgba(26, 26, 36, 0.5);
+  border-radius: 12px;
 }
 
-.undo-btn, .redo-btn {
+.undo-btn, .redo-btn, .clear-btn {
   width: 40px;
   height: 40px;
   border-radius: 50%;
@@ -54,16 +56,19 @@ body {
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
 .undo-btn:hover:not(:disabled),
-.redo-btn:hover:not(:disabled) {
+.redo-btn:hover:not(:disabled),
+.clear-btn:hover:not(:disabled) {
   filter: brightness(1.2);
   transform: scale(1.05);
 }
 
 .undo-btn:disabled,
-.redo-btn:disabled {
+.redo-btn:disabled,
+.clear-btn:disabled {
   cursor: not-allowed;
 }
 
@@ -83,11 +88,13 @@ body {
 
 .save-btn:hover:not(:disabled) {
   filter: brightness(1.2);
+  transform: scale(1.05);
 }
 
 .save-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
+  transform: none;
 }
 
 .canvas-wrapper {
@@ -526,4 +533,98 @@ body {
 .close-preview:hover {
   background: #FF6347;
   transform: scale(1.1);
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  cursor: pointer;
+  animation: fade-in 0.2s ease;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.confirm-dialog {
+  background: #2A2A3A;
+  border-radius: 16px;
+  padding: 28px 32px;
+  min-width: 320px;
+  cursor: default;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  border: 1px solid #3A3A4A;
+  animation: dialog-pop 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes dialog-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.confirm-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #F5F5DC;
+  margin-bottom: 10px;
+}
+
+.confirm-message {
+  font-size: 12px;
+  color: #C0C0C0;
+  margin-bottom: 24px;
+}
+
+.confirm-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.confirm-cancel {
+  padding: 8px 20px;
+  border-radius: 8px;
+  border: 2px solid #555;
+  background: transparent;
+  color: #C0C0C0;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.confirm-cancel:hover {
+  border-color: #888;
+  color: #F5F5DC;
+  transform: scale(1.05);
+}
+
+.confirm-ok {
+  padding: 8px 20px;
+  border-radius: 8px;
+  border: none;
+  background: linear-gradient(135deg, #FF4500, #FF6347);
+  color: #FFFFFF;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.confirm-ok:hover {
+  filter: brightness(1.15);
+  transform: scale(1.05);
 }

@@ -22,6 +22,7 @@ export default function App() {
   const [canRedo, setCanRedo] = useState(false);
   const [isEmpty, setIsEmpty] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
+  const [showClearDialog, setShowClearDialog] = useState(false);
 
   const updateCanvasSize = useCallback(() => {
     if (containerRef.current) {
@@ -161,6 +162,23 @@ export default function App() {
     setPreviewArtwork(null);
   };
 
+  const handleClearClick = () => {
+    if (!isEmpty) {
+      setShowClearDialog(true);
+    }
+  };
+
+  const handleConfirmClear = () => {
+    if (engineRef.current) {
+      engineRef.current.clearCanvas();
+    }
+    setShowClearDialog(false);
+  };
+
+  const handleCancelClear = () => {
+    setShowClearDialog(false);
+  };
+
   const filteredGallery = galleryManager.searchArtworks(searchText);
   const matchedIds = searchText.trim() 
     ? new Set(filteredGallery.map(a => a.id))
@@ -173,7 +191,7 @@ export default function App() {
           <button
             className="undo-btn"
             onClick={handleUndo}
-            disabled={!canUndo}
+            disabled={!canUndo || isEmpty}
             style={{ opacity: !canUndo || isEmpty ? 0.3 : 1 }}
             title="撤销"
           >
@@ -187,6 +205,15 @@ export default function App() {
             title="重做"
           >
             ⏩
+          </button>
+          <button
+            className="clear-btn"
+            onClick={handleClearClick}
+            disabled={isEmpty}
+            style={{ opacity: isEmpty ? 0.3 : 1 }}
+            title="清空画布"
+          >
+            🗑️
           </button>
           <button className="save-btn" onClick={handleSave} disabled={isEmpty}>
             喷绘完成
@@ -334,6 +361,23 @@ export default function App() {
             <button className="close-preview" onClick={handleClosePreview}>
               ✕
             </button>
+          </div>
+        </div>
+      )}
+
+      {showClearDialog && (
+        <div className="confirm-overlay" onClick={handleCancelClear}>
+          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <p className="confirm-title">确认清空画布？</p>
+            <p className="confirm-message">清空后可通过撤销按钮恢复内容。</p>
+            <div className="confirm-buttons">
+              <button className="confirm-cancel" onClick={handleCancelClear}>
+                取消
+              </button>
+              <button className="confirm-ok" onClick={handleConfirmClear}>
+                确认清空
+              </button>
+            </div>
           </div>
         </div>
       )}

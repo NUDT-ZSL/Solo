@@ -24,9 +24,14 @@ interface StampData {
   animationDuration: number;
 }
 
+interface ClearData {
+  previousActions: DrawAction[];
+}
+
 type DrawAction = 
   | { type: 'line'; data: LineData }
-  | { type: 'stamp'; data: StampData };
+  | { type: 'stamp'; data: StampData }
+  | { type: 'clear'; data: ClearData };
 
 const MAX_HISTORY = 20;
 const MAX_POINTS_PER_FRAME = 200;
@@ -323,6 +328,9 @@ export class CanvasEngine {
     
     const action = this.history.pop();
     if (action) {
+      if (action.type === 'clear') {
+        this.history.push(...action.data.previousActions);
+      }
       this.redoStack.push(action);
       this.redraw();
       this.notifyChange();
@@ -336,6 +344,12 @@ export class CanvasEngine {
     
     const action = this.redoStack.pop();
     if (action) {
+      if (action.type === 'clear') {
+        const removeCount = action.data.previousActions.length;
+        for (let i = 0; i < removeCount; i++) {
+          this.history.pop();
+        }
+      }
       this.history.push(action);
       this.redraw();
       this.notifyChange();
@@ -353,11 +367,32 @@ export class CanvasEngine {
   }
 
   isEmpty(): boolean {
-    return this.history.length === 0;
+    if (this.history.length === 0) return true;
+    
+    let effectiveStartIndex = 0;
+    for (let i = this.history.length - 1; i >= 0; i--) {
+      if (this.history[i].type === 'clear') {
+        effectiveStartIndex = i + 1;
+        break;
+      }
+    }
+    
+    return effectiveStartIndex >= this.history.length;
   }
 
   clearCanvas(): void {
-    this.history = [];
+    if (this.history.length === 0) return;
+
+    const previousActions = [...this.history];
+    const clearAction: DrawAction = {
+      type: 'clear',
+      data: { previousActions },
+    };
+
+    if (this.history.length >= MAX_HISTORY) {
+      this.history.shift();
+    }
+    this.history.push(clearAction);
     this.redoStack = [];
     this.redraw();
     this.notifyChange();
@@ -405,7 +440,16 @@ export class CanvasEngine {
 
     const now = performance.now();
 
-    for (const action of this.history) {
+    let effectiveStartIndex = 0;
+    for (let i = this.history.length - 1; i >= 0; i--) {
+      if (this.history[i].type === 'clear') {
+        effectiveStartIndex = i + 1;
+        break;
+      }
+    }
+
+    for (let i = effectiveStartIndex; i < this.history.length; i++) {
+      const action = this.history[i];
       if (action.type === 'line') {
         this.drawLineAction(action.data, now);
       } else if (action.type === 'stamp') {
