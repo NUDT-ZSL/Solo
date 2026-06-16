@@ -1,14 +1,23 @@
 import { Cart, CartItem, PriceResult, Product, Stall } from '../types';
 
+const MIN_QUANTITY = 1;
+const MAX_QUANTITY = 99;
+const DISCOUNT_THRESHOLD = 100;
+const DISCOUNT_RATE = 0.1;
+
 export const createEmptyCart = (): Cart => ({ items: [] });
 
 export const addItem = (cart: Cart, product: Product, stall: Stall): Cart => {
   const existingIndex = cart.items.findIndex((item) => item.productId === product.id);
   if (existingIndex >= 0) {
+    const existing = cart.items[existingIndex];
+    if (existing.quantity >= MAX_QUANTITY) {
+      return cart;
+    }
     const newItems = [...cart.items];
     newItems[existingIndex] = {
-      ...newItems[existingIndex],
-      quantity: newItems[existingIndex].quantity + 1,
+      ...existing,
+      quantity: existing.quantity + 1,
     };
     return { items: newItems };
   }
@@ -30,21 +39,38 @@ export const removeItem = (cart: Cart, productId: string): Cart => {
 };
 
 export const updateQuantity = (cart: Cart, productId: string, quantity: number): Cart => {
-  if (quantity <= 0) {
+  const validatedQty = validateQuantity(quantity);
+  if (validatedQty <= 0) {
     return removeItem(cart, productId);
   }
-  const validQuantity = Math.max(1, Math.min(99, Math.floor(quantity)));
   const newItems = cart.items.map((item) =>
-    item.productId === productId ? { ...item, quantity: validQuantity } : item
+    item.productId === productId ? { ...item, quantity: validatedQty } : item
   );
   return { items: newItems };
 };
 
+const validateQuantity = (quantity: number): number => {
+  if (!Number.isFinite(quantity) || quantity <= 0) return 0;
+  return Math.min(MAX_QUANTITY, Math.max(MIN_QUANTITY, Math.floor(quantity)));
+};
+
 export const calculateTotal = (cart: Cart): PriceResult => {
-  const total = cart.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const discount = total >= 100 ? Math.floor(total * 0.1) : 0;
+  const total = cart.items.reduce((sum, item) => {
+    const lineTotal = item.price * item.quantity;
+    return sum + lineTotal;
+  }, 0);
+  const discount = applyDiscount(total);
   const finalTotal = total - discount;
-  return { total, discount, finalTotal };
+  return {
+    total: Math.round(total * 100) / 100,
+    discount,
+    finalTotal: Math.round((total - discount) * 100) / 100,
+  };
+};
+
+const applyDiscount = (total: number): number => {
+  if (total < DISCOUNT_THRESHOLD) return 0;
+  return Math.floor(total * DISCOUNT_RATE);
 };
 
 export const getItemCount = (cart: Cart): number => {
