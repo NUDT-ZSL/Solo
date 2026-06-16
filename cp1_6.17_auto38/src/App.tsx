@@ -22,6 +22,7 @@ function App() {
   const [destroyedMeteors, setDestroyedMeteors] = useState(0);
   const [completedLevels, setCompletedLevels] = useState(0);
   const [transitionLevelName, setTransitionLevelName] = useState('');
+  const [heartAnimKey, setHeartAnimKey] = useState<{ [key: number]: string }>({});
 
   const starfieldRef = useRef<StarfieldHandle>(null);
   const typingPanelRef = useRef<TypingPanelHandle>(null);
@@ -73,6 +74,20 @@ function App() {
     }, 600);
   }, [level]);
 
+  const triggerHeartDecreaseAnim = useCallback((heartIndex: number) => {
+    setHeartAnimKey(prev => ({
+      ...prev,
+      [heartIndex]: `decrease-${Date.now()}-${Math.random()}`
+    }));
+  }, []);
+
+  const triggerHeartIncreaseAnim = useCallback((heartIndex: number) => {
+    setHeartAnimKey(prev => ({
+      ...prev,
+      [heartIndex]: `increase-${Date.now()}-${Math.random()}`
+    }));
+  }, []);
+
   const handleCorrect = useCallback(() => {
     setCorrectChars(prev => prev + 1);
   }, []);
@@ -80,6 +95,10 @@ function App() {
   const handleWrong = useCallback(() => {
     setLives(prev => {
       const newLives = prev - 1;
+      const affectedHeart = Math.ceil(prev) - 1;
+      if (affectedHeart >= 0) {
+        triggerHeartDecreaseAnim(affectedHeart);
+      }
       if (isGameOver(newLives)) {
         setGameState('gameover');
         starfieldRef.current?.stop();
@@ -87,7 +106,7 @@ function App() {
       }
       return newLives;
     });
-  }, []);
+  }, [triggerHeartDecreaseAnim]);
 
   const handleComplete = useCallback(() => {
     if (gameState === 'playing') {
@@ -97,13 +116,26 @@ function App() {
 
   const handleMeteorDestroyed = useCallback(() => {
     setDestroyedMeteors(prev => prev + 1);
-    setLives(prev => Math.min(INITIAL_LIVES + 5, prev + 0.5));
-  }, []);
+    setLives(prev => {
+      const newLives = Math.min(INITIAL_LIVES + 5, prev + 0.5);
+      if (newLives > prev) {
+        const affectedHeart = Math.floor(newLives - 0.01);
+        if (affectedHeart >= 0) {
+          triggerHeartIncreaseAnim(affectedHeart);
+        }
+      }
+      return newLives;
+    });
+  }, [triggerHeartIncreaseAnim]);
 
   const handleMeteorHit = useCallback(() => {
     typingPanelRef.current?.triggerShake();
     setLives(prev => {
       const newLives = prev - 1;
+      const affectedHeart = Math.ceil(prev) - 1;
+      if (affectedHeart >= 0) {
+        triggerHeartDecreaseAnim(affectedHeart);
+      }
       if (isGameOver(newLives)) {
         setGameState('gameover');
         starfieldRef.current?.stop();
@@ -111,7 +143,7 @@ function App() {
       }
       return newLives;
     });
-  }, []);
+  }, [triggerHeartDecreaseAnim]);
 
   const getPanelRect = useCallback(() => {
     return typingPanelRef.current?.getPanelRect() || null;
@@ -124,22 +156,84 @@ function App() {
     };
   }, []);
 
-  const renderHearts = () => {
+  const renderHearts = (size: 'small' | 'large' = 'small') => {
     const hearts = [];
-    const fullHearts = Math.floor(lives);
-    const hasHalf = lives % 1 >= 0.5;
+    const displayLives = Math.min(INITIAL_LIVES, Math.max(0, lives));
+    const fontSize = size === 'large' ? '36px' : '22px';
+    const gap = size === 'large' ? '10px' : '6px';
+    const width = size === 'large' ? '44px' : '28px';
+    const height = size === 'large' ? '44px' : '28px';
 
-    for (let i = 0; i < fullHearts; i++) {
-      hearts.push(<span key={`h-${i}`} style={{ color: '#FF6B6B' }}>♥</span>);
+    for (let i = 0; i < INITIAL_LIVES; i++) {
+      const heartValue = i + 1;
+      let fillRatio = 0;
+      if (displayLives >= heartValue) {
+        fillRatio = 1;
+      } else if (displayLives >= heartValue - 0.5) {
+        fillRatio = 0.5;
+      }
+
+      let color: string;
+      if (fillRatio === 1) {
+        color = '#FF4757';
+      } else if (fillRatio === 0.5) {
+        color = '#FF8C94';
+      } else if (displayLives <= 1) {
+        color = '#2A2A2A';
+      } else {
+        color = '#3D3D3D';
+      }
+
+      const glowIntensityPx = displayLives <= 2 ? '30px' : '15px';
+      const animKey = heartAnimKey[i];
+      const animClass = animKey?.startsWith('decrease')
+        ? 'heart-decrease'
+        : animKey?.startsWith('increase')
+        ? 'heart-increase'
+        : '';
+
+      hearts.push(
+        <div
+          key={`h-${i}-${size}`}
+          className={animClass}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width,
+            height,
+            fontSize,
+            lineHeight: 1,
+            color,
+            textShadow: fillRatio > 0
+              ? `0 0 ${glowIntensityPx} ${color}, 0 0 ${glowIntensityPx} ${color}`
+              : 'none',
+            transition: 'color 0.4s ease, text-shadow 0.4s ease',
+            position: 'relative',
+            filter: fillRatio > 0 ? 'drop-shadow(0 0 4px rgba(255, 71, 87, 0.5))' : 'none'
+          }}
+        >
+          <span style={{ position: 'absolute', zIndex: 1, color: fillRatio === 0.5 ? color : 'transparent' }}>♥</span>
+          <span
+            style={{
+              position: 'absolute',
+              zIndex: 2,
+              overflow: 'hidden',
+              width: `${fillRatio * 100}%`,
+              whiteSpace: 'nowrap',
+              display: 'inline-block'
+            }}
+          >
+            ♥
+          </span>
+        </div>
+      );
     }
-    if (hasHalf) {
-      hearts.push(<span key="half" style={{ color: '#FF6B6B', opacity: 0.5 }}>♥</span>);
-    }
-    const emptyHearts = Math.max(0, INITIAL_LIVES - Math.ceil(lives));
-    for (let i = 0; i < emptyHearts; i++) {
-      hearts.push(<span key={`e-${i}`} style={{ color: '#333' }}>♥</span>);
-    }
-    return hearts;
+    return (
+      <div style={{ display: 'flex', gap, alignItems: 'center' }}>
+        {hearts}
+      </div>
+    );
   };
 
   return (
@@ -165,6 +259,31 @@ function App() {
         @keyframes pulseGlow {
           0%, 100% { text-shadow: 0 0 10px #66FCF1, 0 0 20px #66FCF1; }
           50% { text-shadow: 0 0 20px #66FCF1, 0 0 40px #66FCF1, 0 0 60px #45A29E; }
+        }
+        @keyframes heartDecrease {
+          0% { transform: scale(1); }
+          30% { transform: scale(0.55); opacity: 0.7; }
+          60% { transform: scale(1.1); }
+          100% { transform: scale(1); }
+        }
+        @keyframes heartIncrease {
+          0% { transform: scale(1); filter: brightness(1); }
+          30% { transform: scale(1.5); filter: brightness(2); }
+          60% { transform: scale(0.9); filter: brightness(1.5); }
+          100% { transform: scale(1); filter: brightness(1); }
+        }
+        .heart-decrease {
+          animation: heartDecrease 0.4s ease-out;
+        }
+        .heart-increase {
+          animation: heartIncrease 0.5s ease-out;
+        }
+        @keyframes livesPanelPulse {
+          0%, 100% { box-shadow: 0 0 15px rgba(255, 71, 87, 0.2); }
+          50% { box-shadow: 0 0 30px rgba(255, 71, 87, 0.4); }
+        }
+        .lives-panel {
+          animation: livesPanelPulse 3s ease-in-out infinite;
         }
         .ripple {
           position: fixed;
@@ -267,10 +386,47 @@ function App() {
             width: '100%',
             height: '100%',
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 2
+            zIndex: 2,
+            gap: '20px'
           }}>
+            <div
+              className="lives-panel"
+              style={{
+                background: 'rgba(31, 40, 51, 0.75)',
+                border: '1px solid rgba(255, 71, 87, 0.4)',
+                borderRadius: '14px',
+                padding: '14px 32px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '20px',
+                backdropFilter: 'blur(6px)',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              <span style={{
+                color: '#FF6B6B',
+                fontSize: '14px',
+                letterSpacing: '2px',
+                fontWeight: '600',
+                textTransform: 'uppercase'
+              }}>
+                生命值
+              </span>
+              {renderHearts('large')}
+              <span style={{
+                color: lives <= 1 ? '#FF4757' : '#C5C6C7',
+                fontSize: '18px',
+                fontWeight: 'bold',
+                minWidth: '50px',
+                textAlign: 'right',
+                transition: 'color 0.3s ease'
+              }}>
+                {lives.toFixed(1)}
+              </span>
+            </div>
             <TypingPanel
               ref={typingPanelRef}
               text={levelData.text}
