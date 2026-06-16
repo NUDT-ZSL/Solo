@@ -16,6 +16,7 @@ function App() {
   const [showLostPoster, setShowLostPoster] = useState(false);
   const [snackAnimation, setSnackAnimation] = useState(false);
   const [shakeButton, setShakeButton] = useState(false);
+  const [detailAnimationStart, setDetailAnimationStart] = useState(false);
   const detailRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,7 +31,13 @@ function App() {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setDetailCardRect(rect);
     setSelectedPet(pet);
+    setDetailAnimationStart(false);
     setCurrentView('detail');
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setDetailAnimationStart(true);
+      });
+    });
   };
 
   const handleBackToWall = () => {
@@ -274,8 +281,14 @@ function App() {
 
         {currentView === 'detail' && selectedPet && (
           <div
-            className={`detail-view ${detailCardRect ? 'entering' : ''}`}
+            className={`detail-view ${detailAnimationStart ? 'animating' : ''}`}
             ref={detailRef}
+            style={{
+              '--card-left': detailCardRect ? `${detailCardRect.left}px` : '50%',
+              '--card-top': detailCardRect ? `${detailCardRect.top}px` : '50%',
+              '--card-width': detailCardRect ? `${detailCardRect.width}px` : '200px',
+              '--card-height': detailCardRect ? `${detailCardRect.height}px` : '200px',
+            } as React.CSSProperties}
           >
             <div className="detail-card">
               {selectedPet.isLost && (
@@ -341,12 +354,10 @@ function App() {
                         className={`snack-btn ${snackAnimation ? 'animating' : ''}`}
                         onClick={handleGiveSnack}
                       >
-                        <span className="snack-heart">
-                          {snackAnimation ? '❤️' : '🤍'}
-                        </span>
+                        <span className={`snack-heart-icon ${snackAnimation ? 'filled' : ''}`}></span>
                         <span className="snack-btn-text">送零食</span>
                         {snackAnimation && (
-                          <span className="snack-plus">+1</span>
+                          <span key={selectedPet.snackCount} className="snack-plus">+1</span>
                         )}
                       </button>
 
