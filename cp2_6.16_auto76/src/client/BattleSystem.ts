@@ -179,4 +179,8 @@ export const generateChestLoot = (): Item => {
       id: uuidv4(),
       type: 'coin',
       name: '金币袋',
-      value: Math.floor(Math.random() *
+      value: Math.floor(Math.random() * 30) + 10,
+      description: '获得10-40枚金币'
+    };
+  }
+};
