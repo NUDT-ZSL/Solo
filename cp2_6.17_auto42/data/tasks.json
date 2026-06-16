@@ -1,0 +1,15 @@
+[
+  {
+    "id": "d263b169-9c70-405a-8eb3-fe25db7f8d26",
+    "type": "express",
+    "title": "帮忙取一下快递",
+    "description": "快递在小区东门菜鸟驿站，取件码3-2-0518，中等大小的纸箱，下班顺路带一下就行，谢谢！",
+    "expectedTime": "今天下午6点前",
+    "rewardPoints": 3,
+    "publisherId": "7207f014-e6db-4bc5-aaa3-58098f8428d2",
+    "acceptorId": null,
+    "status": "active",
+    "createdAt": "2026-06-16T22:13:33.242Z",
+    "completedAt": null
+  }
+]
