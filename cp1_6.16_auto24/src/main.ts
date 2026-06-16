@@ -13,6 +13,12 @@ interface CameraState {
   isPanning: boolean;
 }
 
+interface DampingConfig {
+  rotation: number;
+  pan: number;
+  zoom: number;
+}
+
 class TerrainEditorApp {
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
@@ -27,6 +33,7 @@ class TerrainEditorApp {
     octaves: 4
   };
   private currentPreset: TerrainPreset | null = null;
+  private pendingPreset: TerrainPreset | null = null;
   private gridSize: 128 | 64 = 128;
 
   private cameraTarget: THREE.Vector3;
@@ -42,16 +49,23 @@ class TerrainEditorApp {
 
   private velocity: { theta: number; phi: number; radius: number } = { theta: 0, phi: 0, radius: 0 };
   private panVelocity: THREE.Vector2 = new THREE.Vector2();
-  private damping: number = 0.92;
+  private damping: DampingConfig = {
+    rotation: 0.90,
+    pan: 0.92,
+    zoom: 0.88
+  };
 
   private clock: THREE.Clock;
   private fpsFrames: number = 0;
   private fpsLastTime: number = 0;
   private currentFps: number = 0;
   private regenerateDebounce: number | null = null;
+  private presetButtonsLocked: boolean = false;
+  private isLoading: boolean = false;
 
   private animationId: number = 0;
   private resizeObserver: ResizeObserver;
+  private loadingIndicatorEl: HTMLElement | null = null;
 
   constructor() {
     this.clock = new THREE.Clock();
@@ -83,11 +97,17 @@ class TerrainEditorApp {
     container.appendChild(this.renderer.domElement);
     (this.renderer.domElement as HTMLElement).style.touchAction = 'none';
 
+    this.loadingIndicatorEl = document.getElementById('loading-indicator');
+
     this.setupLighting();
     this.setupEnvironment();
 
     this.terrain = new TerrainGenerator(100, this.gridSize, 42);
+    this.terrain.onTransitionStart = () => this.onTerrainTransitionStart();
+    this.terrain.onTransitionComplete = () => this.onTerrainTransitionComplete();
+    this.terrain.onExpandComplete = () => this.onTerrainExpandComplete();
     this.scene.add(this.terrain.createMesh(this.currentParams));
+    this.setLoading(true);
 
     this.markerManager = new MarkerManager(this.scene, this.camera, this.renderer, this.terrain);
     this.markerManager.setMarkerCountCallback((c) => this.updateMarkerCountUI(c));
@@ -191,9 +211,13 @@ class TerrainEditorApp {
 
     const actions = {
       '重新生成（新种子）': () => {
+        this.setLoading(true);
         const params = { ...this.currentParams };
         this.terrain.dispose();
         this.terrain = new TerrainGenerator(100, this.gridSize, Math.random() * 99999);
+        this.terrain.onTransitionStart = () => this.onTerrainTransitionStart();
+        this.terrain.onTransitionComplete = () => this.onTerrainTransitionComplete();
+        this.terrain.onExpandComplete = () => this.onTerrainExpandComplete();
         const mesh = this.terrain.createMesh(params, this.currentPreset || undefined);
         this.scene.add(mesh);
         this.updateMarkerTerrainRef();
@@ -237,40 +261,93 @@ class TerrainEditorApp {
     buttons.forEach(btn => {
       btn.addEventListener('click', () => {
         const preset = btn.dataset.preset as TerrainPreset;
-        if (!preset) return;
+        if (!preset || this.presetButtonsLocked) return;
         this.applyPreset(preset);
       });
     });
   }
 
   private applyPreset(preset: TerrainPreset): void {
-    this.currentPreset = preset;
+    this.pendingPreset = preset;
     const params = TERRAIN_PRESETS[preset];
     Object.assign(this.currentParams, params);
-
-    document.querySelectorAll<HTMLButtonElement>('.preset-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.preset === preset);
-    });
-
+    this.setPresetButtonsVisual(preset);
     this.terrain.regenerate(this.currentParams, preset, true);
+  }
+
+  private setPresetButtonsVisual(activePreset: TerrainPreset | null): void {
+    document.querySelectorAll<HTMLButtonElement>('.preset-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.preset === activePreset);
+    });
+  }
+
+  private setPresetButtonsDisabled(disabled: boolean): void {
+    this.presetButtonsLocked = disabled;
+    document.querySelectorAll<HTMLButtonElement>('.preset-btn').forEach(btn => {
+      (btn as HTMLButtonElement).disabled = disabled;
+      btn.style.opacity = disabled ? '0.55' : '1';
+      btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
+    });
+  }
+
+  private onTerrainTransitionStart(): void {
+    this.setLoading(true);
+    this.setPresetButtonsDisabled(true);
+  }
+
+  private onTerrainTransitionComplete(): void {
+    if (this.pendingPreset) {
+      this.currentPreset = this.pendingPreset;
+      this.pendingPreset = null;
+    }
+    this.setPresetButtonsDisabled(false);
+    this.setLoading(false);
     this.updateUI();
   }
 
+  private onTerrainExpandComplete(): void {
+    this.setLoading(false);
+    this.updateUI();
+  }
+
+  private setLoading(loading: boolean): void {
+    this.isLoading = loading;
+    if (this.loadingIndicatorEl) {
+      this.loadingIndicatorEl.style.display = loading ? 'flex' : 'none';
+    }
+    const vertEl = document.getElementById('info-verts');
+    const loadingText = document.getElementById('loading-text');
+    if (loading) {
+      if (vertEl) vertEl.style.visibility = 'hidden';
+      if (loadingText) {
+        loadingText.style.display = 'inline';
+      }
+    } else {
+      if (vertEl) vertEl.style.visibility = 'visible';
+      if (loadingText) loadingText.style.display = 'none';
+    }
+  }
+
   private scheduleRegenerate(smooth: boolean): void {
-    this.currentPreset = null;
-    document.querySelectorAll<HTMLButtonElement>('.preset-btn').forEach(btn => {
-      btn.classList.remove('active');
-    });
+    if (this.currentPreset !== null) {
+      this.currentPreset = null;
+      this.setPresetButtonsVisual(null);
+    }
 
     if (this.regenerateDebounce !== null) {
       window.clearTimeout(this.regenerateDebounce);
     }
 
+    this.setLoading(true);
     this.regenerateDebounce = window.setTimeout(() => {
+      const bigChange = this.currentParams.octaves >= 5;
       this.terrain.regenerate(this.currentParams, undefined, smooth);
+      if (!smooth || !bigChange) {
+        this.setLoading(false);
+      }
       this.updateUI();
       this.regenerateDebounce = null;
-    }, 200);
+    }, 150);
   }
 
   private recreateTerrain(): void {
@@ -279,8 +356,12 @@ class TerrainEditorApp {
     const params = { ...this.currentParams };
     this.terrain.dispose();
     this.terrain = new TerrainGenerator(100, this.gridSize, Math.random() * 99999);
+    this.terrain.onTransitionStart = () => this.onTerrainTransitionStart();
+    this.terrain.onTransitionComplete = () => this.onTerrainTransitionComplete();
+    this.terrain.onExpandComplete = () => this.onTerrainExpandComplete();
     const mesh = this.terrain.createMesh(params, this.currentPreset || undefined);
     this.scene.add(mesh);
+    this.setLoading(true);
     this.updateMarkerTerrainRef();
     this.updateUI();
   }
@@ -309,20 +390,11 @@ class TerrainEditorApp {
         const rotSpeed = 0.005;
         this.velocity.theta = -dx * rotSpeed;
         this.velocity.phi = -dy * rotSpeed;
-        this.targetSpherical.theta += this.velocity.theta;
-        this.targetSpherical.phi = Math.max(0.12, Math.min(Math.PI / 2 - 0.05, this.targetSpherical.phi + this.velocity.phi));
       }
 
       if (this.camState.isPanning) {
         const panSpeed = 0.08;
         this.panVelocity.set(-dx * panSpeed, dy * panSpeed);
-        const right = new THREE.Vector3();
-        const up = new THREE.Vector3(0, 1, 0);
-        this.camera.getWorldDirection(right);
-        right.cross(up).normalize();
-        const pan = right.multiplyScalar(this.panVelocity.x)
-          .add(up.clone().multiplyScalar(this.panVelocity.y));
-        this.targetPanOffset.add(pan);
       }
     });
 
@@ -341,10 +413,8 @@ class TerrainEditorApp {
 
     dom.addEventListener('wheel', (e) => {
       e.preventDefault();
-      const zoomSpeed = 0.0015;
-      const delta = -e.deltaY * zoomSpeed * this.targetSpherical.radius;
-      this.velocity.radius = delta;
-      this.targetSpherical.radius = Math.max(20, Math.min(250, this.targetSpherical.radius + delta));
+      const zoomSpeed = 0.0012;
+      this.velocity.radius = -e.deltaY * zoomSpeed * this.targetSpherical.radius;
     }, { passive: false });
   }
 
@@ -357,14 +427,16 @@ class TerrainEditorApp {
 
   private updateCamera(delta: number): void {
     if (!this.camState.isRotating) {
-      this.velocity.theta *= this.damping;
-      this.velocity.phi *= this.damping;
-      this.targetSpherical.theta += this.velocity.theta;
-      this.targetSpherical.phi = Math.max(0.12, Math.min(Math.PI / 2 - 0.05, this.targetSpherical.phi + this.velocity.phi));
+      this.velocity.theta *= this.damping.rotation;
+      this.velocity.phi *= this.damping.rotation;
     }
+    this.targetSpherical.theta += this.velocity.theta;
+    this.targetSpherical.phi = Math.max(0.12, Math.min(Math.PI / 2 - 0.05, this.targetSpherical.phi + this.velocity.phi));
 
     if (!this.camState.isPanning) {
-      this.panVelocity.multiplyScalar(this.damping);
+      this.panVelocity.multiplyScalar(this.damping.pan);
+    }
+    if (Math.abs(this.panVelocity.x) > 0.0001 || Math.abs(this.panVelocity.y) > 0.0001) {
       const right = new THREE.Vector3();
       const up = new THREE.Vector3(0, 1, 0);
       this.camera.getWorldDirection(right);
@@ -374,10 +446,8 @@ class TerrainEditorApp {
       this.targetPanOffset.add(pan);
     }
 
-    if (Math.abs(this.velocity.radius) > 0.01) {
-      this.velocity.radius *= this.damping;
-      this.targetSpherical.radius = Math.max(20, Math.min(250, this.targetSpherical.radius + this.velocity.radius));
-    }
+    this.velocity.radius *= this.damping.zoom;
+    this.targetSpherical.radius = Math.max(20, Math.min(250, this.targetSpherical.radius + this.velocity.radius));
 
     const lerpFactor = 1 - Math.pow(0.001, delta);
     this.spherical.theta += (this.targetSpherical.theta - this.spherical.theta) * lerpFactor;

@@ -21,6 +21,9 @@ export const TERRAIN_PRESETS: Record<TerrainPreset, NoiseParams> = {
   basin: { frequency: 0.020, amplitude: 3.5, octaves: 5 }
 };
 
+export const TRANSITION_DURATION = 500;
+export const EXPAND_DURATION = 300;
+
 class PerlinNoise {
   private permutation: number[];
 
@@ -104,6 +107,8 @@ export class TerrainGenerator {
   private segments: number;
   private mesh: THREE.Mesh | null = null;
   private baseHeights: Float32Array | null = null;
+  private targetColors: Float32Array | null = null;
+  private oldColors: Float32Array | null = null;
   private animationProgress: number = 1;
   private animationTarget: number = 1;
   private animationStartTime: number = 0;
@@ -112,8 +117,12 @@ export class TerrainGenerator {
   private transitionStartTime: number = 0;
   private oldHeights: Float32Array | null = null;
   private newHeights: Float32Array | null = null;
+  private snowNoisePattern: Float32Array | null = null;
   private currentParams: NoiseParams;
   public stats: TerrainStats = { maxHeight: 0, minHeight: 0, vertexCount: 0 };
+  public onTransitionComplete: (() => void) | null = null;
+  public onTransitionStart: (() => void) | null = null;
+  public onExpandComplete: (() => void) | null = null;
 
   constructor(size: number = 100, segments: number = 128, seed?: number) {
     this.size = size;
@@ -170,46 +179,78 @@ export class TerrainGenerator {
     return heights;
   }
 
+  private generateSnowPattern(): Float32Array {
+    const count = (this.segments + 1) * (this.segments + 1);
+    const pattern = new Float32Array(count);
+    const half = this.segments / 2;
+    for (let i = 0; i <= this.segments; i++) {
+      for (let j = 0; j <= this.segments; j++) {
+        const idx = i * (this.segments + 1) + j;
+        const nx = (j - half) * 0.08;
+        const nz = (i - half) * 0.08;
+        const n1 = this.noise.noise2D(nx, nz);
+        const n2 = this.noise.noise2D(nx * 3.2 + 100, nz * 3.2 - 50);
+        const n3 = this.noise.noise2D(nx * 7.7 - 30, nz * 7.7 + 90);
+        pattern[idx] = (n1 * 0.55 + n2 * 0.3 + n3 * 0.15 + 1) * 0.5;
+      }
+    }
+    return pattern;
+  }
+
+  private computeColorsForHeights(heights: Float32Array, amplitude: number): Float32Array {
+    const count = heights.length;
+    const colors = new Float32Array(count * 3);
+    if (!this.snowNoisePattern || this.snowNoisePattern.length !== count) {
+      this.snowNoisePattern = this.generateSnowPattern();
+    }
+    for (let i = 0; i < count; i++) {
+      const y = heights[i];
+      const t = amplitude === 0 ? 0 : y / amplitude;
+      const color = getGradientColor(t);
+      if (t > 0.78) {
+        const elevationBand = (t - 0.78) / 0.22;
+        const snowNoiseVal = this.snowNoisePattern[i];
+        const threshold = 1.0 - elevationBand * 0.75;
+        if (snowNoiseVal > threshold) {
+          const coverage = Math.min(1, (snowNoiseVal - threshold) / (1 - threshold) * (0.4 + elevationBand * 0.6));
+          const edgeSoftness = Math.min(1, elevationBand * 2);
+          color.lerp(new THREE.Color('#FFFFFF'), Math.min(1, coverage * (0.7 + edgeSoftness * 0.3)));
+        }
+      }
+      colors[i * 3] = color.r;
+      colors[i * 3 + 1] = color.g;
+      colors[i * 3 + 2] = color.b;
+    }
+    return colors;
+  }
+
   createMesh(params: NoiseParams, preset?: TerrainPreset): THREE.Mesh {
     this.currentParams = { ...params };
     const isBasin = preset === 'basin';
     this.newHeights = this.generateHeightMap(params, isBasin);
     this.baseHeights = this.newHeights.slice();
+    this.targetColors = this.computeColorsForHeights(this.baseHeights, params.amplitude);
 
     const geometry = new THREE.PlaneGeometry(this.size, this.size, this.segments, this.segments);
     geometry.rotateX(-Math.PI / 2);
 
     const positions = geometry.attributes.position;
     const colors = new Float32Array(positions.count * 3);
-    this.vertexCount = positions.count;
     this.stats.vertexCount = positions.count;
 
-    const maxAmp = params.amplitude;
     let minH = Infinity;
     let maxH = -Infinity;
-
     for (let i = 0; i < positions.count; i++) {
-      const y = this.newHeights[i];
-      positions.setY(i, y);
+      const y = this.baseHeights[i];
+      positions.setY(i, 0);
       if (y < minH) minH = y;
       if (y > maxH) maxH = y;
-
-      const t = maxAmp === 0 ? 0 : y / maxAmp;
-      const color = getGradientColor(t);
-
-      if (t > 0.8) {
-        const snowNoise = this.noise.noise2D(i * 0.1, i * 0.15);
-        const snowFactor = Math.min(1, (t - 0.8) / 0.2 * (0.6 + snowNoise * 0.6));
-        color.lerp(new THREE.Color('#FFFFFF'), snowFactor);
-      }
-
-      colors[i * 3] = color.r;
-      colors[i * 3 + 1] = color.g;
-      colors[i * 3 + 2] = color.b;
+      colors[i * 3] = 0.02;
+      colors[i * 3 + 1] = 0.03;
+      colors[i * 3 + 2] = 0.02;
     }
-
-    this.stats.minHeight = minH;
-    this.stats.maxHeight = maxH;
+    this.stats.minHeight = 0;
+    this.stats.maxHeight = 0;
 
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geometry.computeVertexNormals();
@@ -233,26 +274,27 @@ export class TerrainGenerator {
     this.mesh.name = 'terrain';
 
     this.startExpandAnimation();
-
     return this.mesh;
   }
 
   regenerate(params: NoiseParams, preset?: TerrainPreset, smooth: boolean = true): void {
     if (!this.mesh) return;
-
     const isBasin = preset === 'basin';
-    this.oldHeights = this.baseHeights;
+    this.oldHeights = this.baseHeights ? this.baseHeights.slice() : null;
+    this.oldColors = this.targetColors ? this.targetColors.slice() : null;
     this.newHeights = this.generateHeightMap(params, isBasin);
     this.currentParams = { ...params };
+    this.targetColors = this.computeColorsForHeights(this.newHeights, params.amplitude);
 
-    if (smooth && this.oldHeights) {
+    if (smooth && this.oldHeights && this.oldColors) {
       this.transitionProgress = 0;
       this.transitionTarget = 1;
       this.transitionStartTime = performance.now();
+      if (this.onTransitionStart) this.onTransitionStart();
     } else {
       this.baseHeights = this.newHeights.slice();
-      this.applyHeights(this.newHeights);
-      this.updateColors();
+      this.applyHeights(this.baseHeights);
+      this.applyColorsDirect(this.targetColors);
       this.startExpandAnimation();
     }
   }
@@ -268,6 +310,39 @@ export class TerrainGenerator {
     this.updateStats(heights);
   }
 
+  private applyColorsDirect(colors: Float32Array): void {
+    if (!this.mesh) return;
+    const attr = this.mesh.geometry.attributes.color as THREE.BufferAttribute;
+    const arr = attr.array as Float32Array;
+    const prog = this.animationProgress;
+    for (let i = 0; i < colors.length; i += 3) {
+      arr[i] = 0.02 + (colors[i] - 0.02) * prog;
+      arr[i + 1] = 0.03 + (colors[i + 1] - 0.03) * prog;
+      arr[i + 2] = 0.02 + (colors[i + 2] - 0.02) * prog;
+    }
+    attr.needsUpdate = true;
+  }
+
+  private applyColorsWithProgress(target: Float32Array, expandT: number, transitionT: number = 1, oldTarget?: Float32Array | null): void {
+    if (!this.mesh) return;
+    const attr = this.mesh.geometry.attributes.color as THREE.BufferAttribute;
+    const arr = attr.array as Float32Array;
+    for (let i = 0; i < target.length; i += 3) {
+      let r = target[i];
+      let g = target[i + 1];
+      let b = target[i + 2];
+      if (oldTarget && transitionT < 1 && oldTarget.length === target.length) {
+        r = oldTarget[i] + (target[i] - oldTarget[i]) * transitionT;
+        g = oldTarget[i + 1] + (target[i + 1] - oldTarget[i + 1]) * transitionT;
+        b = oldTarget[i + 2] + (target[i + 2] - oldTarget[i + 2]) * transitionT;
+      }
+      arr[i] = 0.02 + (r - 0.02) * expandT;
+      arr[i + 1] = 0.03 + (g - 0.03) * expandT;
+      arr[i + 2] = 0.02 + (b - 0.02) * expandT;
+    }
+    attr.needsUpdate = true;
+  }
+
   private updateStats(heights: Float32Array): void {
     let minH = Infinity;
     let maxH = -Infinity;
@@ -280,24 +355,6 @@ export class TerrainGenerator {
     this.stats.maxHeight = maxH;
   }
 
-  private updateColors(): void {
-    if (!this.mesh || !this.baseHeights) return;
-    const colors = this.mesh.geometry.attributes.color as THREE.BufferAttribute;
-    const maxAmp = this.currentParams.amplitude;
-    for (let i = 0; i < this.baseHeights.length; i++) {
-      const y = this.baseHeights[i];
-      const t = maxAmp === 0 ? 0 : y / maxAmp;
-      const color = getGradientColor(t);
-      if (t > 0.8) {
-        const snowNoise = this.noise.noise2D(i * 0.1, i * 0.15);
-        const snowFactor = Math.min(1, (t - 0.8) / 0.2 * (0.6 + snowNoise * 0.6));
-        color.lerp(new THREE.Color('#FFFFFF'), snowFactor);
-      }
-      colors.setXYZ(i, color.r, color.g, color.b);
-    }
-    colors.needsUpdate = true;
-  }
-
   private startExpandAnimation(): void {
     this.animationProgress = 0;
     this.animationTarget = 1;
@@ -306,36 +363,50 @@ export class TerrainGenerator {
 
   update(deltaTime: number): void {
     const now = performance.now();
-    const expandDuration = 300;
-    const transitionDuration = 500;
+    let expandChanged = false;
+    let transitionChanged = false;
 
     if (this.animationProgress < this.animationTarget) {
       const elapsed = now - this.animationStartTime;
-      const t = Math.min(1, elapsed / expandDuration);
+      const t = Math.min(1, elapsed / EXPAND_DURATION);
       const eased = 1 - Math.pow(1 - t, 3);
       this.animationProgress = eased;
-      if (this.baseHeights) this.applyHeights(this.baseHeights);
+      expandChanged = true;
+      if (t >= 1 && this.onExpandComplete) {
+        this.onExpandComplete();
+        this.onExpandComplete = null;
+      }
     }
 
-    if (this.transitionProgress < this.transitionTarget && this.oldHeights && this.newHeights) {
+    if (this.transitionProgress < this.transitionTarget && this.oldHeights && this.newHeights && this.targetColors) {
       const elapsed = now - this.transitionStartTime;
-      const t = Math.min(1, elapsed / transitionDuration);
+      const t = Math.min(1, elapsed / TRANSITION_DURATION);
       const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
       this.transitionProgress = eased;
-
       const heights = new Float32Array(this.oldHeights.length);
       for (let i = 0; i < heights.length; i++) {
         heights[i] = this.oldHeights[i] + (this.newHeights[i] - this.oldHeights[i]) * this.transitionProgress;
       }
       this.baseHeights = heights;
       this.applyHeights(heights);
-      this.updateColors();
-
+      this.applyColorsWithProgress(this.targetColors, 1, this.transitionProgress, this.oldColors);
+      transitionChanged = true;
       if (this.transitionProgress >= 1) {
         this.baseHeights = this.newHeights.slice();
         this.oldHeights = null;
         this.newHeights = null;
+        this.oldColors = null;
+        if (this.onTransitionComplete) {
+          const cb = this.onTransitionComplete;
+          this.onTransitionComplete = null;
+          cb();
+        }
       }
+    }
+
+    if (expandChanged && !transitionChanged && this.baseHeights && this.targetColors) {
+      this.applyHeights(this.baseHeights);
+      this.applyColorsWithProgress(this.targetColors, this.animationProgress, 1, this.oldColors);
     }
   }
 
@@ -353,6 +424,10 @@ export class TerrainGenerator {
     const j = Math.floor(u * this.segments);
     const idx = i * (this.segments + 1) + j;
     return this.baseHeights[idx] * this.animationProgress;
+  }
+
+  isTransitioning(): boolean {
+    return this.transitionProgress < this.transitionTarget;
   }
 
   dispose(): void {
