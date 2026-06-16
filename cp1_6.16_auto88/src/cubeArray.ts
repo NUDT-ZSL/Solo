@@ -15,12 +15,22 @@ const COLD_COLOR = new THREE.Color('#4169E1');
 const WARM_COLOR = new THREE.Color('#FF4500');
 const MODE_TRANSITION_DURATION = 500;
 
+const EDGE_LINE_WIDTH = 0.02;
+
+const GLOW_BASE_SCALE = 1.15;
+const GLOW_MAX_SCALE = 1.5;
+const GLOW_BASE_OPACITY = 0.12;
+const GLOW_MAX_OPACITY = 0.35;
+
 export class CubeArray {
   public group: THREE.Group;
   public particleGroup: THREE.Group;
   private cubes: THREE.Mesh[] = [];
+  private glows: THREE.Mesh[] = [];
+  private edges: THREE.LineSegments[] = [];
   private particles: THREE.Points[] = [];
   private cubeStates: CubeState[] = [];
+  private cubeSizes: number[] = [];
   private mode: Mode = 'geometric';
   private modeTransitionStart: number = 0;
   private isTransitioning: boolean = false;
@@ -45,9 +55,13 @@ export class CubeArray {
   private createCubes(): void {
     const offset = (GRID_SIZE - 1) * SPACING / 2;
 
+    const glowGeometry = new THREE.SphereGeometry(1, 24, 16);
+
     for (let row = 0; row < GRID_SIZE; row++) {
       for (let col = 0; col < GRID_SIZE; col++) {
         const size = MIN_SIZE + Math.random() * (MAX_SIZE - MIN_SIZE);
+        this.cubeSizes.push(size);
+
         const geometry = new THREE.BoxGeometry(size, size, size);
         const material = new THREE.MeshStandardMaterial({
           color: '#8888ff',
@@ -63,9 +77,36 @@ export class CubeArray {
           0,
           row * SPACING - offset
         );
-
         this.cubes.push(cube);
         this.group.add(cube);
+
+        const glowMaterial = new THREE.MeshBasicMaterial({
+          color: 0x8888ff,
+          transparent: true,
+          opacity: GLOW_BASE_OPACITY,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          side: THREE.BackSide,
+        });
+        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+        glow.scale.setScalar(size * GLOW_BASE_SCALE);
+        glow.position.copy(cube.position);
+        this.glows.push(glow);
+        this.group.add(glow);
+
+        const edgesGeometry = new THREE.EdgesGeometry(geometry);
+        const edgesMaterial = new THREE.LineBasicMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.25,
+          linewidth: 1,
+        });
+        const edge = new THREE.LineSegments(edgesGeometry, edgesMaterial);
+        const edgeScale = 1 + EDGE_LINE_WIDTH / size;
+        edge.scale.setScalar(edgeScale);
+        edge.position.copy(cube.position);
+        this.edges.push(edge);
+        this.group.add(edge);
 
         const region = this.getRegion(row, col);
         this.cubeStates.push({
@@ -198,7 +239,10 @@ export class CubeArray {
 
     for (let i = 0; i < CUBE_COUNT; i++) {
       const cube = this.cubes[i];
+      const glow = this.glows[i];
+      const edge = this.edges[i];
       const state = this.cubeStates[i];
+      const cubeSize = this.cubeSizes[i];
       const particle = this.particles[i];
 
       switch (state.region) {
@@ -248,6 +292,26 @@ export class CubeArray {
       material.color.lerp(targetColorObj, 0.15);
       material.emissive.copy(targetColorObj);
       material.emissiveIntensity += (state.baseEmissiveIntensity - material.emissiveIntensity) * 0.15;
+
+      glow.position.copy(cube.position);
+      glow.rotation.copy(cube.rotation);
+      const glowScale = cubeSize * (GLOW_BASE_SCALE + this.easeOutBounce(Math.min(1, low * 1.5)) * (GLOW_MAX_SCALE - GLOW_BASE_SCALE));
+      glow.scale.x += (glowScale - glow.scale.x) * 0.2;
+      glow.scale.y += (glowScale - glow.scale.y) * 0.2;
+      glow.scale.z += (glowScale - glow.scale.z) * 0.2;
+      const glowMat = glow.material as THREE.MeshBasicMaterial;
+      glowMat.color.lerp(targetColorObj, 0.15);
+      const targetGlowOpacity = GLOW_BASE_OPACITY + this.easeOutBounce(Math.min(1, low * 1.3)) * (GLOW_MAX_OPACITY - GLOW_BASE_OPACITY);
+      glowMat.opacity += (targetGlowOpacity - glowMat.opacity) * 0.18;
+
+      edge.position.copy(cube.position);
+      edge.rotation.copy(cube.rotation);
+      const edgeMat = edge.material as THREE.LineBasicMaterial;
+      const baseEdgeOpacity = 0.25;
+      const boostEdgeOpacity = low * 0.2 + state.baseEmissiveIntensity * 0.08;
+      const targetEdgeOpacity = baseEdgeOpacity + boostEdgeOpacity;
+      edgeMat.opacity += (targetEdgeOpacity - edgeMat.opacity) * 0.12;
+      edgeMat.color.lerp(targetColorObj, 0.05);
 
       if (this.isTransitioning || this.mode === 'particle') {
         const particleMaterial = particle.material as THREE.PointsMaterial;
@@ -299,6 +363,14 @@ export class CubeArray {
     this.cubes.forEach(cube => {
       cube.geometry.dispose();
       (cube.material as THREE.Material).dispose();
+    });
+    this.glows.forEach(glow => {
+      glow.geometry.dispose();
+      (glow.material as THREE.Material).dispose();
+    });
+    this.edges.forEach(edge => {
+      edge.geometry.dispose();
+      (edge.material as THREE.Material).dispose();
     });
     this.particles.forEach(particle => {
       particle.geometry.dispose();
