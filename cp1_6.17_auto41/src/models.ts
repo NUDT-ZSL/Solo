@@ -1,8 +1,16 @@
-export type AtomType = 'C' | 'H' | 'O' | 'N';
+export enum AtomElement {
+  C = 'C',
+  H = 'H',
+  O = 'O',
+  N = 'N',
+}
+
+export type AtomType = AtomElement;
 
 export interface Atom {
   id: number;
-  element: AtomType;
+  element: AtomElement;
+  type: AtomElement;
   position: [number, number, number];
 }
 
@@ -21,32 +29,32 @@ export interface MoleculeData {
   bonds: Bond[];
 }
 
-export const CPK_COLORS: Record<AtomType, number> = {
-  C: 0x909090,
-  H: 0xffffff,
-  O: 0xff0d0d,
-  N: 0x3050f8,
+export const CPK_COLORS: Record<AtomElement, number> = {
+  [AtomElement.C]: 0x909090,
+  [AtomElement.H]: 0xffffff,
+  [AtomElement.O]: 0xff0d0d,
+  [AtomElement.N]: 0x3050f8,
 };
 
-export const CPK_CSS: Record<AtomType, string> = {
-  C: '#909090',
-  H: '#FFFFFF',
-  O: '#FF0D0D',
-  N: '#3050F8',
+export const CPK_CSS: Record<AtomElement, string> = {
+  [AtomElement.C]: '#909090',
+  [AtomElement.H]: '#FFFFFF',
+  [AtomElement.O]: '#FF0D0D',
+  [AtomElement.N]: '#3050F8',
 };
 
-export const ATOM_RADIUS: Record<AtomType, number> = {
-  C: 0.3,
-  H: 0.2,
-  O: 0.3,
-  N: 0.3,
+export const ATOM_RADIUS: Record<AtomElement, number> = {
+  [AtomElement.C]: 0.3,
+  [AtomElement.H]: 0.2,
+  [AtomElement.O]: 0.3,
+  [AtomElement.N]: 0.3,
 };
 
 let nextAtomId = 0;
 let nextBondId = 0;
 
-function atom(el: AtomType, x: number, y: number, z: number): Atom {
-  return { id: nextAtomId++, element: el, position: [x, y, z] };
+function atom(el: AtomElement, x: number, y: number, z: number): Atom {
+  return { id: nextAtomId++, element: el, type: el, position: [x, y, z] };
 }
 
 function bond(a1: number, a2: number, order: number = 1): Bond {
@@ -58,35 +66,35 @@ function createCaffeine(): MoleculeData {
   nextBondId = 0;
 
   const s = 1.5;
-  const N1 = atom('N', 0, s, 0);
-  const C2 = atom('C', s * 0.866, s * 0.5, 0);
-  const N3 = atom('N', s * 0.866, -s * 0.5, 0);
-  const C4 = atom('C', 0, -s, 0);
-  const C5 = atom('C', -s * 0.866, -s * 0.5, 0);
-  const C6 = atom('C', -s * 0.866, s * 0.5, 0);
+  const N1 = atom(AtomElement.N, 0, s, 0);
+  const C2 = atom(AtomElement.C, s * 0.866, s * 0.5, 0);
+  const N3 = atom(AtomElement.N, s * 0.866, -s * 0.5, 0);
+  const C4 = atom(AtomElement.C, 0, -s, 0);
+  const C5 = atom(AtomElement.C, -s * 0.866, -s * 0.5, 0);
+  const C6 = atom(AtomElement.C, -s * 0.866, s * 0.5, 0);
 
-  const O2 = atom('O', s * 1.73, s, 0);
-  const O6 = atom('O', -s * 1.73, s, 0);
+  const O2 = atom(AtomElement.O, s * 1.73, s, 0);
+  const O6 = atom(AtomElement.O, -s * 1.73, s, 0);
 
-  const N7 = atom('N', -s * 1.6, -s * 1.6, 0);
-  const C8 = atom('C', -s * 0.7, -s * 2.5, 0);
-  const N9 = atom('N', s * 0.3, -s * 1.8, 0);
-  const H8 = atom('H', -s * 0.9, -s * 3.5, 0);
+  const N7 = atom(AtomElement.N, -s * 1.6, -s * 1.6, 0);
+  const C8 = atom(AtomElement.C, -s * 0.7, -s * 2.5, 0);
+  const N9 = atom(AtomElement.N, s * 0.3, -s * 1.8, 0);
+  const H8 = atom(AtomElement.H, -s * 0.9, -s * 3.5, 0);
 
-  const C10 = atom('C', s * 0.0, s * 2.0, 0.3);
-  const H10a = atom('H', -s * 0.5, s * 2.5, 0.8);
-  const H10b = atom('H', s * 0.5, s * 2.5, 0.8);
-  const H10c = atom('H', 0, s * 2.5, -0.3);
+  const C10 = atom(AtomElement.C, s * 0.0, s * 2.0, 0.3);
+  const H10a = atom(AtomElement.H, -s * 0.5, s * 2.5, 0.8);
+  const H10b = atom(AtomElement.H, s * 0.5, s * 2.5, 0.8);
+  const H10c = atom(AtomElement.H, 0, s * 2.5, -0.3);
 
-  const C11 = atom('C', s * 1.73, -s * 1.0, 0.3);
-  const H11a = atom('H', s * 2.3, -s * 1.5, 0.8);
-  const H11b = atom('H', s * 2.3, -s * 0.5, 0.8);
-  const H11c = atom('H', s * 2.3, -s * 1.0, -0.3);
+  const C11 = atom(AtomElement.C, s * 1.73, -s * 1.0, 0.3);
+  const H11a = atom(AtomElement.H, s * 2.3, -s * 1.5, 0.8);
+  const H11b = atom(AtomElement.H, s * 2.3, -s * 0.5, 0.8);
+  const H11c = atom(AtomElement.H, s * 2.3, -s * 1.0, -0.3);
 
-  const C12 = atom('C', -s * 2.6, -s * 1.3, 0.3);
-  const H12a = atom('H', -s * 3.0, -s * 0.5, 0.8);
-  const H12b = atom('H', -s * 3.0, -s * 1.3, -0.3);
-  const H12c = atom('H', -s * 3.0, -s * 2.0, 0.8);
+  const C12 = atom(AtomElement.C, -s * 2.6, -s * 1.3, 0.3);
+  const H12a = atom(AtomElement.H, -s * 3.0, -s * 0.5, 0.8);
+  const H12b = atom(AtomElement.H, -s * 3.0, -s * 1.3, -0.3);
+  const H12c = atom(AtomElement.H, -s * 3.0, -s * 2.0, 0.8);
 
   const atoms = [N1, C2, N3, C4, C5, C6, O2, O6, N7, C8, N9, H8, C10, H10a, H10b, H10c, C11, H11a, H11b, H11c, C12, H12a, H12b, H12c];
 
@@ -126,33 +134,33 @@ function createGlucose(): MoleculeData {
   nextBondId = 0;
 
   const s = 1.5;
-  const C1 = atom('C', s * 0.5, s * 1.2, s * 0.3);
-  const C2 = atom('C', s * 1.3, s * 0.5, -s * 0.2);
-  const C3 = atom('C', s * 1.0, -s * 0.8, s * 0.1);
-  const C4 = atom('C', -s * 0.2, -s * 1.0, s * 0.4);
-  const C5 = atom('C', -s * 1.0, s * 0.0, s * 0.0);
-  const O5 = atom('O', -s * 0.5, s * 1.2, -s * 0.2);
+  const C1 = atom(AtomElement.C, s * 0.5, s * 1.2, s * 0.3);
+  const C2 = atom(AtomElement.C, s * 1.3, s * 0.5, -s * 0.2);
+  const C3 = atom(AtomElement.C, s * 1.0, -s * 0.8, s * 0.1);
+  const C4 = atom(AtomElement.C, -s * 0.2, -s * 1.0, s * 0.4);
+  const C5 = atom(AtomElement.C, -s * 1.0, s * 0.0, s * 0.0);
+  const O5 = atom(AtomElement.O, -s * 0.5, s * 1.2, -s * 0.2);
 
-  const O1 = atom('O', s * 0.8, s * 2.4, -s * 0.1);
-  const H1 = atom('H', s * 1.5, s * 2.7, -s * 0.4);
-  const O2h = atom('O', s * 2.5, s * 0.8, s * 0.1);
-  const H2h = atom('H', s * 2.9, s * 1.5, s * 0.3);
-  const O3h = atom('O', s * 1.8, -s * 1.5, -s * 0.3);
-  const H3h = atom('H', s * 2.5, -s * 1.2, -s * 0.6);
-  const O4h = atom('O', -s * 0.6, -s * 2.2, -s * 0.1);
-  const H4h = atom('H', -s * 1.3, -s * 2.6, s * 0.2);
+  const O1 = atom(AtomElement.O, s * 0.8, s * 2.4, -s * 0.1);
+  const H1 = atom(AtomElement.H, s * 1.5, s * 2.7, -s * 0.4);
+  const O2h = atom(AtomElement.O, s * 2.5, s * 0.8, s * 0.1);
+  const H2h = atom(AtomElement.H, s * 2.9, s * 1.5, s * 0.3);
+  const O3h = atom(AtomElement.O, s * 1.8, -s * 1.5, -s * 0.3);
+  const H3h = atom(AtomElement.H, s * 2.5, -s * 1.2, -s * 0.6);
+  const O4h = atom(AtomElement.O, -s * 0.6, -s * 2.2, -s * 0.1);
+  const H4h = atom(AtomElement.H, -s * 1.3, -s * 2.6, s * 0.2);
 
-  const C6 = atom('C', -s * 2.3, -s * 0.2, s * 0.2);
-  const O6h = atom('O', -s * 2.8, -s * 0.8, s * 1.2);
-  const H6h = atom('H', -s * 3.6, -s * 0.4, s * 1.3);
-  const H6a = atom('H', -s * 2.7, s * 0.7, s * 0.5);
-  const H6b = atom('H', -s * 2.5, -s * 0.6, -s * 0.7);
+  const C6 = atom(AtomElement.C, -s * 2.3, -s * 0.2, s * 0.2);
+  const O6h = atom(AtomElement.O, -s * 2.8, -s * 0.8, s * 1.2);
+  const H6h = atom(AtomElement.H, -s * 3.6, -s * 0.4, s * 1.3);
+  const H6a = atom(AtomElement.H, -s * 2.7, s * 0.7, s * 0.5);
+  const H6b = atom(AtomElement.H, -s * 2.5, -s * 0.6, -s * 0.7);
 
-  const H1c = atom('H', -s * 0.1, s * 1.0, s * 1.2);
-  const H2c = atom('H', s * 1.2, s * 0.7, -s * 1.2);
-  const H3c = atom('H', s * 0.9, -s * 1.0, s * 1.1);
-  const H4c = atom('H', -s * 0.3, -s * 0.8, s * 1.4);
-  const H5c = atom('H', -s * 1.0, s * 0.2, -s * 1.0);
+  const H1c = atom(AtomElement.H, -s * 0.1, s * 1.0, s * 1.2);
+  const H2c = atom(AtomElement.H, s * 1.2, s * 0.7, -s * 1.2);
+  const H3c = atom(AtomElement.H, s * 0.9, -s * 1.0, s * 1.1);
+  const H4c = atom(AtomElement.H, -s * 0.3, -s * 0.8, s * 1.4);
+  const H5c = atom(AtomElement.H, -s * 1.0, s * 0.2, -s * 1.0);
 
   const atoms = [C1, C2, C3, C4, C5, O5, O1, H1, O2h, H2h, O3h, H3h, O4h, H4h, C6, O6h, H6h, H6a, H6b, H1c, H2c, H3c, H4c, H5c];
 
@@ -191,29 +199,29 @@ function createAspirin(): MoleculeData {
   nextBondId = 0;
 
   const s = 1.5;
-  const C1 = atom('C', s * 1.3, s * 0.0, 0);
-  const C2 = atom('C', s * 0.65, s * 1.13, 0);
-  const C3 = atom('C', -s * 0.65, s * 1.13, 0);
-  const C4 = atom('C', -s * 1.3, s * 0.0, 0);
-  const C5 = atom('C', -s * 0.65, -s * 1.13, 0);
-  const C6 = atom('C', s * 0.65, -s * 1.13, 0);
+  const C1 = atom(AtomElement.C, s * 1.3, s * 0.0, 0);
+  const C2 = atom(AtomElement.C, s * 0.65, s * 1.13, 0);
+  const C3 = atom(AtomElement.C, -s * 0.65, s * 1.13, 0);
+  const C4 = atom(AtomElement.C, -s * 1.3, s * 0.0, 0);
+  const C5 = atom(AtomElement.C, -s * 0.65, -s * 1.13, 0);
+  const C6 = atom(AtomElement.C, s * 0.65, -s * 1.13, 0);
 
-  const H3 = atom('H', -s * 1.15, s * 2.0, 0);
-  const H4 = atom('H', -s * 2.3, s * 0.0, 0);
-  const H5 = atom('H', -s * 1.15, -s * 2.0, 0);
-  const H6 = atom('H', s * 1.15, -s * 2.0, 0);
+  const H3 = atom(AtomElement.H, -s * 1.15, s * 2.0, 0);
+  const H4 = atom(AtomElement.H, -s * 2.3, s * 0.0, 0);
+  const H5 = atom(AtomElement.H, -s * 1.15, -s * 2.0, 0);
+  const H6 = atom(AtomElement.H, s * 1.15, -s * 2.0, 0);
 
-  const C7 = atom('C', s * 2.7, s * 0.0, 0);
-  const O7a = atom('O', s * 3.2, s * 1.1, 0);
-  const O7b = atom('O', s * 3.5, -s * 0.9, 0);
-  const H7b = atom('H', s * 4.4, -s * 0.7, 0);
+  const C7 = atom(AtomElement.C, s * 2.7, s * 0.0, 0);
+  const O7a = atom(AtomElement.O, s * 3.2, s * 1.1, 0);
+  const O7b = atom(AtomElement.O, s * 3.5, -s * 0.9, 0);
+  const H7b = atom(AtomElement.H, s * 4.4, -s * 0.7, 0);
 
-  const O8 = atom('O', s * 1.3, s * 2.3, 0);
-  const C8 = atom('C', s * 0.7, s * 3.5, 0);
-  const C9 = atom('C', s * 1.5, s * 4.7, 0);
-  const H9a = atom('H', s * 2.5, s * 4.4, 0.4);
-  const H9b = atom('H', s * 1.5, s * 4.7, -s * 1.0);
-  const H9c = atom('H', s * 1.0, s * 5.6, s * 0.3);
+  const O8 = atom(AtomElement.O, s * 1.3, s * 2.3, 0);
+  const C8 = atom(AtomElement.C, s * 0.7, s * 3.5, 0);
+  const C9 = atom(AtomElement.C, s * 1.5, s * 4.7, 0);
+  const H9a = atom(AtomElement.H, s * 2.5, s * 4.4, 0.4);
+  const H9b = atom(AtomElement.H, s * 1.5, s * 4.7, -s * 1.0);
+  const H9c = atom(AtomElement.H, s * 1.0, s * 5.6, s * 0.3);
 
   const atoms = [C1, C2, C3, C4, C5, C6, H3, H4, H5, H6, C7, O7a, O7b, H7b, O8, C8, C9, H9a, H9b, H9c];
 
@@ -257,8 +265,13 @@ export function createMolecule(type: string): MoleculeData {
   }
 }
 
-export function countAtoms(mol: MoleculeData): Record<AtomType, number> {
-  const counts: Record<AtomType, number> = { C: 0, H: 0, O: 0, N: 0 };
+export function countAtoms(mol: MoleculeData): Record<AtomElement, number> {
+  const counts: Record<AtomElement, number> = {
+    [AtomElement.C]: 0,
+    [AtomElement.H]: 0,
+    [AtomElement.O]: 0,
+    [AtomElement.N]: 0,
+  };
   for (const a of mol.atoms) {
     counts[a.element]++;
   }

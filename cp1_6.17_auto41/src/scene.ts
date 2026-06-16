@@ -2,10 +2,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
   MoleculeData,
-  Atom,
-  Bond,
+  AtomElement,
   CPK_COLORS,
-  ATOM_RADIUS,
   createMolecule,
 } from './models';
 
@@ -39,13 +37,13 @@ function createBondGeometry(
   start: THREE.Vector3,
   end: THREE.Vector3,
   radius: number = 0.05
-): { mesh: THREE.Mesh; midpoint: THREE.Vector3; direction: THREE.Vector3 } {
+): { mesh: THREE.Mesh; midpoint: THREE.Vector3; direction: THREE.Vector3; originalLength: number } {
   const direction = new THREE.Vector3().subVectors(end, start);
   const length = direction.length();
   direction.normalize();
   const midpoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
 
-  const geometry = new THREE.CylinderGeometry(radius, radius, length, 8, 1);
+  const geometry = new THREE.CylinderGeometry(radius, radius, length, 6, 1);
   const material = new THREE.MeshPhongMaterial({
     color: 0xb0bec5,
     shininess: 60,
@@ -58,12 +56,18 @@ function createBondGeometry(
   const quaternion = new THREE.Quaternion().setFromUnitVectors(axis, direction);
   mesh.quaternion.copy(quaternion);
 
-  return { mesh, midpoint, direction };
+  return { mesh, midpoint, direction, originalLength: length };
 }
 
-function createAtomMesh(atom: Atom): THREE.Mesh {
-  const radius = ATOM_RADIUS[atom.element];
-  const geometry = new THREE.SphereGeometry(radius, 16, 12);
+function createAtomMesh(atom: { id: number; element: AtomElement; position: [number, number, number] }): THREE.Mesh {
+  const radiusMap: Record<AtomElement, number> = {
+    [AtomElement.C]: 0.3,
+    [AtomElement.H]: 0.2,
+    [AtomElement.O]: 0.3,
+    [AtomElement.N]: 0.3,
+  };
+  const radius = radiusMap[atom.element];
+  const geometry = new THREE.SphereGeometry(radius, 12, 10);
   const material = new THREE.MeshPhongMaterial({
     color: CPK_COLORS[atom.element],
     shininess: 80,
@@ -113,6 +117,13 @@ function buildMolecule(mol: MoleculeData, group: THREE.Group): {
   const bondMeshes = new Map<number, THREE.Mesh>();
   const labelSprites = new Map<number, THREE.Sprite>();
 
+  const radiusMap: Record<AtomElement, number> = {
+    [AtomElement.C]: 0.3,
+    [AtomElement.H]: 0.2,
+    [AtomElement.O]: 0.3,
+    [AtomElement.N]: 0.3,
+  };
+
   for (const atom of mol.atoms) {
     const mesh = createAtomMesh(atom);
     atomMeshes.set(atom.id, mesh);
@@ -121,7 +132,7 @@ function buildMolecule(mol: MoleculeData, group: THREE.Group): {
     const label = createLabelSprite(atom.element);
     label.position.set(
       atom.position[0],
-      atom.position[1] + ATOM_RADIUS[atom.element] + 0.25,
+      atom.position[1] + radiusMap[atom.element] + 0.25,
       atom.position[2]
     );
     labelSprites.set(atom.id, label);
@@ -187,10 +198,8 @@ export function initScene(container: HTMLElement): SceneContext {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.1;
-  controls.minDistance = 3;
-  controls.maxDistance = 20;
-  controls.minZoom = 0.3;
-  controls.maxZoom = 3;
+  controls.minDistance = 2;
+  controls.maxDistance = 25;
   controls.enablePan = true;
 
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
@@ -233,19 +242,21 @@ export function initScene(container: HTMLElement): SceneContext {
     animating: false,
   };
 
-  const clock = new THREE.Clock();
+  let lastHoverUpdate = 0;
+  const hoverThrottle = 32;
 
-  function animate() {
+  function animate(now: number) {
     requestAnimationFrame(animate);
     controls.update();
 
-    if (ctx!.clipperActive) {
+    if (ctx!.clipperActive && now - lastHoverUpdate > hoverThrottle) {
+      lastHoverUpdate = now;
       updateHover();
     }
 
     renderer.render(scene, camera);
   }
-  animate();
+  requestAnimationFrame(animate);
 
   window.addEventListener('resize', () => {
     if (!ctx) return;
@@ -262,36 +273,41 @@ export function initScene(container: HTMLElement): SceneContext {
 function updateHover() {
   if (!ctx) return;
 
-  const container = ctx.renderer.domElement.parentElement;
-  if (!container) return;
+  const prevHoveredAtom = ctx.hoveredAtom;
+  const prevHoveredBond = ctx.hoveredBond;
 
-  const atomArray = Array.from(ctx.atomMeshes.values());
-  const bondArray = Array.from(ctx.bondMeshes.values());
+  const radiusMap: Record<AtomElement, number> = {
+    [AtomElement.C]: 0.3,
+    [AtomElement.H]: 0.2,
+    [AtomElement.O]: 0.3,
+    [AtomElement.N]: 0.3,
+  };
 
-  if (ctx.hoveredAtom !== null) {
-    const prevMesh = ctx.atomMeshes.get(ctx.hoveredAtom);
+  if (prevHoveredAtom !== null) {
+    const prevMesh = ctx.atomMeshes.get(prevHoveredAtom);
     if (prevMesh) {
-      const atom = ctx.currentMolecule.atoms.find(a => a.id === ctx!.hoveredAtom);
-      if (atom) {
-        (prevMesh.material as THREE.MeshPhongMaterial).emissive.setHex(0x000000);
-      }
+      (prevMesh.material as THREE.MeshPhongMaterial).emissive.setHex(0x000000);
+      (prevMesh.material as THREE.MeshPhongMaterial).emissiveIntensity = 0;
     }
-    const prevLabel = ctx.labelSprites.get(ctx.hoveredAtom);
+    const prevLabel = ctx.labelSprites.get(prevHoveredAtom);
     if (prevLabel) prevLabel.visible = false;
     ctx.hoveredAtom = null;
   }
 
-  if (ctx.hoveredBond !== null) {
-    const prevMesh = ctx.bondMeshes.get(ctx.hoveredBond);
+  if (prevHoveredBond !== null) {
+    const prevMesh = ctx.bondMeshes.get(prevHoveredBond);
     if (prevMesh) {
       (prevMesh.material as THREE.MeshPhongMaterial).emissive.setHex(0x000000);
+      (prevMesh.material as THREE.MeshPhongMaterial).emissiveIntensity = 0;
     }
     ctx.hoveredBond = null;
   }
 
-  ctx.raycaster.setFromCamera(ctx.mouse, ctx.camera);
+  const atomArray = Array.from(ctx.atomMeshes.values());
+  const bondArray = Array.from(ctx.bondMeshes.values());
 
   if (ctx.clipperActive) {
+    ctx.raycaster.setFromCamera(ctx.mouse, ctx.camera);
     const bondIntersects = ctx.raycaster.intersectObjects(bondArray);
     if (bondIntersects.length > 0) {
       const bondId = bondIntersects[0].object.userData.bondId as number;
@@ -300,11 +316,13 @@ function updateHover() {
         const mesh = ctx.bondMeshes.get(bondId);
         if (mesh) {
           (mesh.material as THREE.MeshPhongMaterial).emissive.setHex(0x444444);
+          (mesh.material as THREE.MeshPhongMaterial).emissiveIntensity = 0.5;
         }
       }
     }
   }
 
+  ctx.raycaster.setFromCamera(ctx.mouse, ctx.camera);
   const atomIntersects = ctx.raycaster.intersectObjects(atomArray);
   if (atomIntersects.length > 0) {
     const atomId = atomIntersects[0].object.userData.atomId as number;
@@ -354,6 +372,7 @@ export function switchMolecule(type: string): Promise<void> {
           child.material.opacity = 1 - t;
         }
         if (child instanceof THREE.Sprite) {
+          child.material.transparent = true;
           child.material.opacity = 1 - t;
         }
       });
@@ -376,7 +395,8 @@ export function switchMolecule(type: string): Promise<void> {
         function fadeIn(time2: number) {
           const elapsed2 = time2 - fadeInStart;
           const t2 = Math.min(elapsed2 / fadeDuration, 1);
-          const s2 = 0.01 + (1 - 0.01) * easeOutCubic(t2);
+          const easeT = easeOutCubic(t2);
+          const s2 = 0.01 + (1 - 0.01) * easeT;
           group.scale.set(s2, s2, s2);
           group.traverse(child => {
             if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshPhongMaterial) {
@@ -384,6 +404,7 @@ export function switchMolecule(type: string): Promise<void> {
               child.material.opacity = t2;
             }
             if (child instanceof THREE.Sprite) {
+              child.material.transparent = true;
               child.material.opacity = t2;
             }
           });
@@ -453,111 +474,4 @@ export function removeBondMesh(bondId: number) {
     }
     ctx.bondMeshes.delete(secondKey);
   }
-}
-
-export function separateAtomGroups(
-  bondId: number,
-  atom1Id: number,
-  atom2Id: number
-) {
-  if (!ctx) return;
-  const mol = ctx.currentMolecule;
-  const atomMap = new Map(mol.atoms.map(a => [a.id, a]));
-
-  const visited1 = new Set<number>();
-  const visited2 = new Set<number>();
-
-  const activeBonds = mol.bonds.filter(b => !b.broken);
-
-  function bfs(startId: number, excludeId: number, visited: Set<number>) {
-    const queue = [startId];
-    visited.add(startId);
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      for (const b of activeBonds) {
-        if (b.id === bondId) continue;
-        let neighbor: number | null = null;
-        if (b.atom1Id === current && b.atom2Id !== excludeId) {
-          neighbor = b.atom2Id;
-        } else if (b.atom2Id === current && b.atom1Id !== excludeId) {
-          neighbor = b.atom1Id;
-        }
-        if (neighbor !== null && !visited.has(neighbor)) {
-          visited.add(neighbor);
-          queue.push(neighbor);
-        }
-      }
-    }
-  }
-
-  bfs(atom1Id, atom2Id, visited1);
-  bfs(atom2Id, atom1Id, visited2);
-
-  const a1 = atomMap.get(atom1Id);
-  const a2 = atomMap.get(atom2Id);
-  if (!a1 || !a2) return;
-
-  const dir = new THREE.Vector3(
-    a1.position[0] - a2.position[0],
-    a1.position[1] - a2.position[1],
-    a1.position[2] - a2.position[2]
-  ).normalize();
-
-  const offset = dir.clone().multiplyScalar(0.5);
-  const startTime = performance.now();
-  const duration = 400;
-
-  function animateSeparation(time: number) {
-    const elapsed = time - startTime;
-    const t = Math.min(elapsed / duration, 1);
-    const eased = easeOutCubic(t);
-
-    for (const id of visited1) {
-      const mesh = ctx!.atomMeshes.get(id);
-      if (mesh) {
-        const atom = atomMap.get(id)!;
-        mesh.position.set(
-          atom.position[0] + offset.x * eased,
-          atom.position[1] + offset.y * eased,
-          atom.position[2] + offset.z * eased
-        );
-      }
-      const label = ctx!.labelSprites.get(id);
-      if (label) {
-        const atom = atomMap.get(id)!;
-        label.position.set(
-          atom.position[0] + offset.x * eased,
-          atom.position[1] + offset.y * eased + ATOM_RADIUS[atom.element] + 0.25,
-          atom.position[2] + offset.z * eased
-        );
-      }
-    }
-
-    for (const id of visited2) {
-      const mesh = ctx!.atomMeshes.get(id);
-      if (mesh) {
-        const atom = atomMap.get(id)!;
-        mesh.position.set(
-          atom.position[0] - offset.x * eased,
-          atom.position[1] - offset.y * eased,
-          atom.position[2] - offset.z * eased
-        );
-      }
-      const label = ctx!.labelSprites.get(id);
-      if (label) {
-        const atom = atomMap.get(id)!;
-        label.position.set(
-          atom.position[0] - offset.x * eased,
-          atom.position[1] - offset.y * eased + ATOM_RADIUS[atom.element] + 0.25,
-          atom.position[2] - offset.z * eased
-        );
-      }
-    }
-
-    if (t < 1) {
-      requestAnimationFrame(animateSeparation);
-    }
-  }
-
-  requestAnimationFrame(animateSeparation);
 }
