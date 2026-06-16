@@ -1,12 +1,13 @@
 import express from 'express';
 import cors from 'cors';
-import { v4 as uuidv4 } from 'uuid';
 
 const app = express();
 const PORT = 3001;
 
 app.use(cors());
 app.use(express.json());
+
+type WaveState = 'idle' | 'preparing' | 'wave_active' | 'cooldown' | 'complete';
 
 interface EnemyWave {
   type: 'mummy' | 'skeleton' | 'scarab' | 'pharaoh';
@@ -29,14 +30,19 @@ interface Level {
 
 interface LevelState {
   levelId: string;
+  waveState: WaveState;
   currentWaveIndex: number;
-  isWaveActive: boolean;
+  totalWaves: number;
   isLevelComplete: boolean;
   isGameOver: boolean;
   lives: number;
   gold: number;
   score: number;
+  prepareStartTime: number | null;
+  prepareDuration: number;
 }
+
+const PREPARE_DURATION = 10000;
 
 const levels: Level[] = [
   {
@@ -45,10 +51,7 @@ const levels: Level[] = [
     difficulty: 'easy',
     initialGold: 200,
     waves: [
-      {
-        id: 'wave-1-1',
-        enemies: [{ type: 'mummy', count: 5, interval: 1200 }],
-      },
+      { id: 'wave-1-1', enemies: [{ type: 'mummy', count: 5, interval: 1200 }] },
       {
         id: 'wave-1-2',
         enemies: [
@@ -194,52 +197,162 @@ const levels: Level[] = [
 
 const levelStates: Map<string, LevelState> = new Map();
 
-app.get('/api/levels', (req, res) => {
-  res.json(levels.map(({ id, name, difficulty, initialGold, waves }) => ({
-    id,
-    name,
-    difficulty,
-    initialGold,
-    waveCount: waves.length,
-  })));
-});
-
-app.post('/api/levels/:levelId/waves', (req, res) => {
-  const { levelId } = req.params;
+function getOrCreateState(levelId: string): LevelState | null {
   const level = levels.find((l) => l.id === levelId);
-
-  if (!level) {
-    return res.status(404).json({ error: '关卡不存在' });
-  }
+  if (!level) return null;
 
   let state = levelStates.get(levelId);
   if (!state) {
     state = {
       levelId,
+      waveState: 'idle',
       currentWaveIndex: 0,
-      isWaveActive: false,
+      totalWaves: level.waves.length,
       isLevelComplete: false,
       isGameOver: false,
       lives: 20,
       gold: level.initialGold,
       score: 0,
+      prepareStartTime: null,
+      prepareDuration: PREPARE_DURATION,
     };
     levelStates.set(levelId, state);
   }
+  return state;
+}
 
-  if (state.isWaveActive) {
-    return res.status(400).json({ error: '当前波次进行中' });
+function getRemainingCountdown(state: LevelState): number {
+  if (state.waveState !== 'preparing' || !state.prepareStartTime) return 0;
+  const elapsed = Date.now() - state.prepareStartTime;
+  return Math.max(0, state.prepareDuration - elapsed);
+}
+
+app.get('/api/levels', (req, res) => {
+  res.json(
+    levels.map(({ id, name, difficulty, initialGold, waves }) => ({
+      id,
+      name,
+      difficulty,
+      initialGold,
+      waveCount: waves.length,
+    }))
+  );
+});
+
+app.post('/api/levels/:levelId/waves', (req, res) => {
+  const { levelId } = req.params;
+  const level = levels.find((l) => l.id === levelId);
+  if (!level) {
+    return res.status(404).json({ error: '关卡不存在' });
+  }
+
+  const state = getOrCreateState(levelId);
+  if (!state) {
+    return res.status(404).json({ error: '关卡状态初始化失败' });
+  }
+
+  switch (state.waveState) {
+    case 'idle': {
+      if (state.currentWaveIndex >= level.waves.length) {
+        return res.status(400).json({ error: '所有波次已完成', waveState: 'complete' });
+      }
+      state.waveState = 'preparing';
+      state.prepareStartTime = Date.now();
+      state.prepareDuration = PREPARE_DURATION;
+      return res.json({
+        waveState: 'preparing',
+        countdown: state.prepareDuration,
+        waveIndex: state.currentWaveIndex,
+        totalWaves: level.waves.length,
+      });
+    }
+
+    case 'preparing': {
+      const remaining = getRemainingCountdown(state);
+      if (remaining > 0) {
+        return res.status(400).json({
+          error: '准备倒计时未结束',
+          waveState: 'preparing',
+          countdown: remaining,
+        });
+      }
+      const wave = level.waves[state.currentWaveIndex];
+      state.waveState = 'wave_active';
+      state.currentWaveIndex++;
+      state.prepareStartTime = null;
+      return res.json({
+        waveState: 'wave_active',
+        wave,
+        waveIndex: state.currentWaveIndex,
+        totalWaves: level.waves.length,
+      });
+    }
+
+    case 'wave_active': {
+      return res.status(400).json({ error: '当前波次进行中', waveState: 'wave_active' });
+    }
+
+    case 'cooldown': {
+      state.waveState = 'preparing';
+      state.prepareStartTime = Date.now();
+      state.prepareDuration = PREPARE_DURATION;
+      return res.json({
+        waveState: 'preparing',
+        countdown: state.prepareDuration,
+        waveIndex: state.currentWaveIndex,
+        totalWaves: level.waves.length,
+      });
+    }
+
+    case 'complete': {
+      return res.status(400).json({ error: '关卡已完成', waveState: 'complete' });
+    }
+
+    default:
+      return res.status(500).json({ error: '未知状态' });
+  }
+});
+
+app.post('/api/levels/:levelId/waves/complete', (req, res) => {
+  const { levelId } = req.params;
+  const level = levels.find((l) => l.id === levelId);
+  if (!level) {
+    return res.status(404).json({ error: '关卡不存在' });
+  }
+
+  const state = getOrCreateState(levelId);
+  if (!state || state.waveState !== 'wave_active') {
+    return res.status(400).json({ error: '当前无进行中的波次' });
   }
 
   if (state.currentWaveIndex >= level.waves.length) {
-    return res.status(400).json({ error: '所有波次已完成' });
+    state.waveState = 'complete';
+    state.isLevelComplete = true;
+    return res.json({ waveState: 'complete', isLevelComplete: true });
+  }
+
+  state.waveState = 'cooldown';
+  return res.json({ waveState: 'cooldown' });
+});
+
+app.post('/api/levels/:levelId/waves/skip', (req, res) => {
+  const { levelId } = req.params;
+  const level = levels.find((l) => l.id === levelId);
+  if (!level) {
+    return res.status(404).json({ error: '关卡不存在' });
+  }
+
+  const state = getOrCreateState(levelId);
+  if (!state || state.waveState !== 'preparing') {
+    return res.status(400).json({ error: '当前不在准备阶段' });
   }
 
   const wave = level.waves[state.currentWaveIndex];
-  state.isWaveActive = true;
+  state.waveState = 'wave_active';
   state.currentWaveIndex++;
-
-  res.json({
+  state.prepareStartTime = null;
+  return res.json({
+    waveState: 'wave_active',
     wave,
     waveIndex: state.currentWaveIndex,
     totalWaves: level.waves.length,
@@ -248,27 +361,22 @@ app.post('/api/levels/:levelId/waves', (req, res) => {
 
 app.get('/api/levels/:levelId/state', (req, res) => {
   const { levelId } = req.params;
-  const level = levels.find((l) => l.id === levelId);
-
-  if (!level) {
+  const state = getOrCreateState(levelId);
+  if (!state) {
     return res.status(404).json({ error: '关卡不存在' });
   }
 
-  let state = levelStates.get(levelId);
-  if (!state) {
-    state = {
-      levelId,
-      currentWaveIndex: 0,
-      isWaveActive: false,
-      isLevelComplete: false,
-      isGameOver: false,
-      lives: 20,
-      gold: level.initialGold,
-      score: 0,
-    };
-    levelStates.set(levelId, state);
-  }
+  const countdown = getRemainingCountdown(state);
+  res.json({
+    ...state,
+    countdown,
+  });
+});
 
+app.post('/api/levels/:levelId/reset', (req, res) => {
+  const { levelId } = req.params;
+  levelStates.delete(levelId);
+  const state = getOrCreateState(levelId);
   res.json(state);
 });
 

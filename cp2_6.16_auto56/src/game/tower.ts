@@ -132,8 +132,15 @@ export function upgradeTower(tower: TowerInstance): TowerInstance {
 export const GRID_COLS = 9;
 export const GRID_ROWS = 6;
 export const CELL_SIZE = 80;
-export const CANVAS_WIDTH = GRID_COLS * CELL_SIZE;
-export const CANVAS_HEIGHT = GRID_ROWS * CELL_SIZE;
+
+export const GAME_WIDTH = GRID_COLS * CELL_SIZE;
+export const GAME_HEIGHT = GRID_ROWS * CELL_SIZE;
+
+export const CANVAS_WIDTH = 960;
+export const CANVAS_HEIGHT = 540;
+
+export const GRID_OFFSET_X = (CANVAS_WIDTH - GAME_WIDTH) / 2;
+export const GRID_OFFSET_Y = (CANVAS_HEIGHT - GAME_HEIGHT) / 2;
 
 export const PATH_ROWS = [2, 3, 4];
 

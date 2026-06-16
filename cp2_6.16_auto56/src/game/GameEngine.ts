@@ -47,6 +47,7 @@ export interface Particle {
 
 export interface TowerPlacementAnimation {
   id: string;
+  towerId: string;
   fromX: number;
   fromY: number;
   toX: number;
@@ -63,6 +64,7 @@ export interface GameState {
   projectiles: Projectile[];
   particles: Particle[];
   placementAnimations: TowerPlacementAnimation[];
+  placingTowerIds: string[];
   gold: number;
   lives: number;
   score: number;
@@ -98,6 +100,7 @@ export class GameEngine {
       projectiles: [],
       particles: [],
       placementAnimations: [],
+      placingTowerIds: [],
       gold: initialGold,
       lives: 20,
       score: 0,
@@ -112,7 +115,7 @@ export class GameEngine {
   }
 
   getState(): GameState {
-    return { ...this.state };
+    return { ...this.state, placingTowerIds: [...this.state.placingTowerIds] };
   }
 
   getPath(): PathPoint[] {
@@ -125,7 +128,8 @@ export class GameEngine {
   }
 
   private notifyListeners(): void {
-    this.listeners.forEach((listener) => listener(this.getState()));
+    const snapshot = this.getState();
+    this.listeners.forEach((listener) => listener(snapshot));
   }
 
   start(): void {
@@ -236,6 +240,8 @@ export class GameEngine {
 
   private updateTowers(dt: number): void {
     for (const tower of this.state.towers) {
+      if (this.state.placingTowerIds.includes(tower.id)) continue;
+
       if (tower.cooldown > 0) {
         tower.cooldown -= dt;
       }
@@ -331,20 +337,16 @@ export class GameEngine {
     }
 
     if (proj.slowFactor && proj.slowDuration) {
-      if (proj.splashRadius) {
-        for (const enemy of this.state.enemies) {
-          if (!enemy.alive) continue;
-          const dx = enemy.x - target.x;
-          const dy = enemy.y - target.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist <= (proj.splashRadius || 50)) {
-            enemy.speed = enemy.baseSpeed * proj.slowFactor;
-            enemy.slowTimer = proj.slowDuration;
-          }
+      const radius = proj.splashRadius || 50;
+      for (const enemy of this.state.enemies) {
+        if (!enemy.alive) continue;
+        const dx = enemy.x - target.x;
+        const dy = enemy.y - target.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist <= radius) {
+          enemy.speed = enemy.baseSpeed * proj.slowFactor;
+          enemy.slowTimer = proj.slowDuration;
         }
-      } else {
-        target.speed = target.baseSpeed * proj.slowFactor;
-        target.slowTimer = proj.slowDuration;
       }
     }
   }
@@ -363,7 +365,7 @@ export class GameEngine {
     for (let i = 0; i < 8; i++) {
       const angle = (Math.PI * 2 * i) / 8 + Math.random() * 0.5;
       const speed = 60 + Math.random() * 60;
-      const particle: Particle = {
+      this.state.particles.push({
         id: uuidv4(),
         x: enemy.x,
         y: enemy.y,
@@ -373,8 +375,7 @@ export class GameEngine {
         maxLife: 500,
         color: enemy.color,
         size: 3 + Math.random() * 3,
-      };
-      this.state.particles.push(particle);
+      });
     }
   }
 
@@ -397,17 +398,20 @@ export class GameEngine {
   }
 
   private updatePlacementAnimations(dt: number): void {
-    const toRemove: string[] = [];
+    const completedIds: string[] = [];
 
     for (const anim of this.state.placementAnimations) {
       anim.progress += dt / anim.duration;
       if (anim.progress >= 1) {
-        toRemove.push(anim.id);
+        completedIds.push(anim.id);
+        this.state.placingTowerIds = this.state.placingTowerIds.filter(
+          (id) => id !== anim.towerId
+        );
       }
     }
 
     this.state.placementAnimations = this.state.placementAnimations.filter(
-      (a) => !toRemove.includes(a.id)
+      (a) => !completedIds.includes(a.id)
     );
   }
 
@@ -435,13 +439,16 @@ export class GameEngine {
     if (this.state.gold < config.cost) return false;
 
     this.state.gold -= config.cost;
-    const tower = createTower(uuidv4(), type, gridX, gridY);
+    const towerId = uuidv4();
+    const tower = createTower(towerId, type, gridX, gridY);
     this.state.towers.push(tower);
+    this.state.placingTowerIds.push(towerId);
 
     const toX = gridX * CELL_SIZE + CELL_SIZE / 2;
     const toY = gridY * CELL_SIZE + CELL_SIZE / 2;
     this.state.placementAnimations.push({
       id: uuidv4(),
+      towerId,
       fromX,
       fromY,
       toX,
@@ -495,5 +502,30 @@ export class GameEngine {
 
   setTotalWaves(count: number): void {
     this.state.totalWaves = count;
+  }
+
+  reset(levelId: string, initialGold: number, totalWaves: number): void {
+    this.stop();
+    this.path = generatePath(GRID_COLS, GRID_ROWS, CELL_SIZE, [2, 3, 4]);
+    this.state = {
+      towers: [],
+      enemies: [],
+      projectiles: [],
+      particles: [],
+      placementAnimations: [],
+      placingTowerIds: [],
+      gold: initialGold,
+      lives: 20,
+      score: 0,
+      waveIndex: 0,
+      totalWaves,
+      isWaveActive: false,
+      isGameOver: false,
+      isLevelComplete: false,
+      countdown: 0,
+      selectedTowerId: null,
+    };
+    this.spawnQueue = [];
+    this.spawnTimer = 0;
   }
 }
