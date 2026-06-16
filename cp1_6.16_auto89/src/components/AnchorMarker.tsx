@@ -21,7 +21,7 @@ const AnchorMarker: React.FC<AnchorMarkerProps> = ({
   const [showTooltip, setShowTooltip] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const markerRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLElement | null>(null);
   const dragStartPos = useRef({ x: 0, y: 0, anchorX: 0, anchorY: 0 });
 
   const handleMouseEnter = useCallback(() => {
@@ -46,7 +46,6 @@ const AnchorMarker: React.FC<AnchorMarkerProps> = ({
       const container = markerRef.current?.parentElement;
       if (!container) return;
 
-      const rect = container.getBoundingClientRect();
       containerRef.current = container;
 
       setIsDragging(true);

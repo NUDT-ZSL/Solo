@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { WorkDetail, Anchor, CraftType, Review } from '../types';
 import { getWorkDetail, submitReview, addAnchor, updateAnchor, deleteAnchor } from '../utils/mockApi';
@@ -26,7 +26,7 @@ const typeOptions: { value: CraftType; label: string }[] = [
   { value: 'tool', label: '工具' },
 ];
 
-interface NewAnchorData {
+interface NewAnchorState {
   x: number;
   y: number;
   type: CraftType;
@@ -45,7 +45,8 @@ const Detail: React.FC = () => {
   const [userRating, setUserRating] = useState(0);
   const [reviewText, setReviewText] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [newAnchor, setNewAnchor] = useState<NewAnchorData | null>(null);
+  const [newAnchor, setNewAnchor] = useState<NewAnchorState | null>(null);
+  const imageContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -69,6 +70,12 @@ const Detail: React.FC = () => {
     fetchWorkDetail();
   }, [id]);
 
+  useEffect(() => {
+    if (!isEditMode) {
+      setNewAnchor(null);
+    }
+  }, [isEditMode]);
+
   const handleImageClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (!isEditMode || newAnchor) return;
@@ -78,8 +85,8 @@ const Detail: React.FC = () => {
       const y = ((e.clientY - rect.top) / rect.height) * 100;
 
       setNewAnchor({
-        x,
-        y,
+        x: Math.max(0, Math.min(100, x)),
+        y: Math.max(0, Math.min(100, y)),
         type: 'material',
         description: '',
       });
@@ -205,12 +212,13 @@ const Detail: React.FC = () => {
         <div className="detail-content">
           <div className="detail-image-section">
             <div
+              ref={imageContainerRef}
               className="detail-image-container"
               onClick={handleImageClick}
             >
               <img src={work.image} alt={work.title} />
 
-              {isEditMode && (
+              {isEditMode && !newAnchor && (
                 <div className="edit-mode-hint">
                   点击图片任意位置添加工艺锚点
                 </div>
@@ -228,7 +236,7 @@ const Detail: React.FC = () => {
               {newAnchor && (
                 <>
                   <div
-                    className={`anchor-marker ${newAnchor.type}`}
+                    className={`anchor-marker ${newAnchor.type} new-anchor`}
                     style={{
                       left: `${newAnchor.x}%`,
                       top: `${newAnchor.y}%`,
@@ -241,7 +249,10 @@ const Detail: React.FC = () => {
                         <button
                           key={opt.value}
                           className={`type-option-btn ${newAnchor.type === opt.value ? `active ${opt.value}` : ''}`}
-                          onClick={() => handleNewAnchorTypeChange(opt.value)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleNewAnchorTypeChange(opt.value);
+                          }}
                         >
                           {opt.label}
                         </button>
@@ -254,15 +265,25 @@ const Detail: React.FC = () => {
                       maxLength={50}
                       value={newAnchor.description}
                       onChange={handleNewAnchorDescriptionChange}
+                      onClick={(e) => e.stopPropagation()}
                     />
                     <div className="char-count">{newAnchor.description.length}/50</div>
                     <div className="popup-actions">
-                      <button className="popup-cancel-btn" onClick={handleCancelNewAnchor}>
+                      <button
+                        className="popup-cancel-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCancelNewAnchor();
+                        }}
+                      >
                         取消
                       </button>
                       <button
                         className="popup-save-btn"
-                        onClick={handleSaveNewAnchor}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSaveNewAnchor();
+                        }}
                         disabled={!newAnchor.description.trim()}
                       >
                         保存

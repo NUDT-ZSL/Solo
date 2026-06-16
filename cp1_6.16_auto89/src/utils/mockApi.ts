@@ -165,7 +165,7 @@ export const getWorkDetail = (id: string): Promise<WorkDetail | null> => {
   });
 };
 
-export const getAnchors = (workId: string): Promise<Anchor[]> => {
+export const getAnchors = (_workId: string): Promise<Anchor[]> => {
   return delay(mockAnchors.map(a => ({ ...a })));
 };
 
@@ -194,7 +194,7 @@ export const submitReview = (
 };
 
 export const addAnchor = (
-  workId: string,
+  _workId: string,
   anchor: Omit<Anchor, 'id'>
 ): Promise<Anchor> => {
   const newAnchor: Anchor = {
@@ -206,7 +206,7 @@ export const addAnchor = (
 };
 
 export const updateAnchor = (
-  workId: string,
+  _workId: string,
   anchorId: string,
   updates: Partial<Pick<Anchor, 'x' | 'y' | 'type' | 'description'>>
 ): Promise<Anchor | null> => {
@@ -217,7 +217,7 @@ export const updateAnchor = (
   return delay(anchor);
 };
 
-export const deleteAnchor = (workId: string, anchorId: string): Promise<boolean> => {
+export const deleteAnchor = (_workId: string, anchorId: string): Promise<boolean> => {
   const index = mockAnchors.findIndex(a => a.id === anchorId);
   if (index === -1) return delay(false);
   
