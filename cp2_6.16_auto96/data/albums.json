@@ -1,0 +1,47 @@
+[
+  {
+    "id": "album-001",
+    "title": "Midnight Echoes",
+    "year": 2019,
+    "coverColor": "#6366f1",
+    "sampleDuration": 30,
+    "audioFile": "midnight_echoes.mp3",
+    "trackList": ["Neon Dreams", "Silent Rain", "Electric Soul"]
+  },
+  {
+    "id": "album-002",
+    "title": "Ocean Depths",
+    "year": 2020,
+    "coverColor": "#0ea5e9",
+    "sampleDuration": 30,
+    "audioFile": "ocean_depths.mp3",
+    "trackList": ["Neon Dreams", "Silent Rain", "Electric Soul"]
+  },
+  {
+    "id": "album-003",
+    "title": "Urban Pulse",
+    "year": 2021,
+    "coverColor": "#f97316",
+    "sampleDuration": 30,
+    "audioFile": "urban_pulse.mp3",
+    "trackList": ["Neon Dreams", "Silent Rain", "Electric Soul"]
+  },
+  {
+    "id": "album-004",
+    "title": "Forest Whispers",
+    "year": 2022,
+    "coverColor": "#22c55e",
+    "sampleDuration": 30,
+    "audioFile": "forest_whispers.mp3",
+    "trackList": ["Neon Dreams", "Silent Rain", "Electric Soul"]
+  },
+  {
+    "id": "album-005",
+    "title": "Cosmic Journey",
+    "year": 2023,
+    "coverColor": "#a855f7",
+    "sampleDuration": 30,
+    "audioFile": "cosmic_journey.mp3",
+    "trackList": ["Neon Dreams", "Silent Rain", "Electric Soul"]
+  }
+]
