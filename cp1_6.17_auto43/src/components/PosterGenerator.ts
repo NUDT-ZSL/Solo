@@ -46,6 +46,9 @@ export interface CardThemeStyles {
   fontFamily: string;
   shadow: string;
   texture: string;
+  backgroundColor: string;
+  color: string;
+  boxShadow: string;
   cardLevelStyle: CardThemeStyle;
 }
 
@@ -188,10 +191,13 @@ export function getCardThemeStyles(themeNameOrId: string): CardThemeStyles {
     primaryColor: theme.primaryColor,
     secondaryColor: theme.secondaryColor,
     cardGradients: [...theme.cardGradients],
-    borderRadius: theme.cardBorderRadius,
+    borderRadius: theme.cardStyle.borderRadius,
     fontFamily: theme.fontFamily,
-    shadow: theme.cardShadow,
+    shadow: theme.cardStyle.boxShadow,
     texture: theme.texturePattern,
+    backgroundColor: theme.cardStyle.backgroundColor,
+    color: theme.cardStyle.color,
+    boxShadow: theme.cardStyle.boxShadow,
     cardLevelStyle: { ...theme.cardStyle }
   };
 }
@@ -208,8 +214,8 @@ export function regenerateCardStylesByTheme(
     gradient: getRandomGradient(theme),
     texture: theme.texturePattern,
     filterTag: existingFilterTags.get(line.id) || getRandomFilterTag(),
-    shadow: theme.cardShadow,
-    borderRadius: theme.cardBorderRadius,
+    shadow: theme.cardStyle.boxShadow,
+    borderRadius: theme.cardStyle.borderRadius,
     fontFamily: theme.fontFamily
   }));
 }

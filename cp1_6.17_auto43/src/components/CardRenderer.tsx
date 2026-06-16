@@ -185,91 +185,84 @@ const CardRenderer: React.FC<CardRendererProps> = ({
         display: 'flex',
         gap: '12px',
         marginBottom: '16px',
-        padding: '16px',
+        padding: '14px 16px',
         background: 'rgba(255,255,255,0.7)',
         borderRadius: '12px',
         border: '1px solid rgba(0,0,0,0.05)',
         flexWrap: 'wrap',
         alignItems: 'center'
       }}>
+        <span style={{
+          fontSize: '13px',
+          fontWeight: 500,
+          color: '#555',
+          letterSpacing: '0.5px',
+          marginRight: '4px'
+        }}>
+          🎨 卡片主题：
+        </span>
         <div style={{
           display: 'flex',
-          alignItems: 'center',
-          gap: '10px'
+          gap: '12px',
+          alignItems: 'center'
         }}>
-          <span style={{
-            fontSize: '13px',
-            fontWeight: 500,
-            color: '#555',
-            letterSpacing: '0.5px'
-          }}>
-            🎨 卡片主题：
-          </span>
-          <div style={{
-            display: 'flex',
-            gap: '10px',
-            alignItems: 'center'
-          }}>
-            {CARD_THEME_OPTIONS.map(theme => {
-              const isActive = cardThemeId === theme.id;
-              return (
-                <button
-                  key={theme.id}
-                  onClick={() => handleCardThemeChange(theme.id)}
-                  title={theme.name}
-                  style={{
-                    position: 'relative',
-                    width: '40px',
-                    height: '24px',
-                    borderRadius: '12px',
-                    border: isActive ? '2px solid #42A5F5' : '2px solid rgba(0,0,0,0.1)',
-                    cursor: 'pointer',
-                    padding: 0,
-                    overflow: 'hidden',
-                    transition: 'all 0.25s ease',
-                    transform: isActive ? 'scale(1.08)' : 'scale(1)',
-                    boxShadow: isActive
-                      ? `0 0 0 3px rgba(66,165,245,0.25), 0 2px 8px rgba(0,0,0,0.15)`
-                      : '0 1px 4px rgba(0,0,0,0.1)'
-                  }}
-                >
-                  <div style={{
+          {CARD_THEME_OPTIONS.map(theme => {
+            const isActive = cardThemeId === theme.id;
+            return (
+              <button
+                key={theme.id}
+                onClick={() => handleCardThemeChange(theme.id)}
+                title={theme.name}
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: theme.primary,
+                  border: isActive
+                    ? '3px solid #42A5F5'
+                    : '2px solid rgba(0,0,0,0.15)',
+                  cursor: 'pointer',
+                  padding: 0,
+                  transition: 'all 0.25s ease',
+                  transform: isActive ? 'scale(1.15)' : 'scale(1)',
+                  boxShadow: isActive
+                    ? `0 0 0 4px rgba(66,165,245,0.2), 0 2px 12px ${theme.primary}66`
+                    : `0 2px 6px ${theme.primary}33`,
+                  position: 'relative',
+                  outline: 'none'
+                }}
+              >
+                {isActive && (
+                  <span style={{
                     position: 'absolute',
                     inset: 0,
-                    background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%)`
-                  }} />
-                  {isActive && (
-                    <div style={{
-                      position: 'absolute',
-                      inset: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#fff',
-                      fontSize: '10px',
-                      fontWeight: 700,
-                      textShadow: '0 1px 3px rgba(0,0,0,0.5)'
-                    }}>
-                      ✓
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          <span style={{
-            fontSize: '12px',
-            fontWeight: 500,
-            padding: '4px 12px',
-            borderRadius: '20px',
-            background: `linear-gradient(135deg, ${cardThemeStyles.primaryColor}22 0%, ${cardThemeStyles.secondaryColor}22 100%)`,
-            border: `1px solid ${cardThemeStyles.primaryColor}33`,
-            color: cardThemeStyles.primaryColor,
-            letterSpacing: '0.5px'
-          }}>
-            {cardThemeStyles.themeName}
-          </span>
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fff',
+                    fontSize: '14px',
+                    fontWeight: 700,
+                    textShadow: '0 1px 4px rgba(0,0,0,0.6)'
+                  }}>
+                    ✓
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
+        <span style={{
+          fontSize: '12px',
+          fontWeight: 500,
+          padding: '4px 12px',
+          borderRadius: '20px',
+          background: `linear-gradient(135deg, ${cardThemeStyles.primaryColor}22 0%, ${cardThemeStyles.secondaryColor}22 100%)`,
+          border: `1px solid ${cardThemeStyles.primaryColor}33`,
+          color: cardThemeStyles.primaryColor,
+          letterSpacing: '0.5px'
+        }}>
+          {cardThemeStyles.themeName}
+        </span>
       </div>
 
       <div style={{
