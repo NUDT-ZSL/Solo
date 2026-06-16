@@ -6,7 +6,7 @@ import { useLazyLoad } from '../hooks/useLazyLoad';
 
 interface WorkCardProps {
   work: Work;
-  index: number;
+  delay?: number;
 }
 
 const categoryLabels: Record<string, string> = {
@@ -16,23 +16,34 @@ const categoryLabels: Record<string, string> = {
   metal: '金属',
 };
 
-const WorkCard: React.FC<WorkCardProps> = ({ work, index }) => {
+const WorkCard: React.FC<WorkCardProps> = ({ work, delay = 0 }) => {
   const navigate = useNavigate();
   const { ref, isLoaded } = useLazyLoad();
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const [show, setShow] = useState(false);
 
   useEffect(() => {
     if (isLoaded) {
-      const timer = setTimeout(() => setShow(true), index * 80);
+      const timer = setTimeout(() => setShow(true), delay * 1000);
       return () => clearTimeout(timer);
     }
-  }, [isLoaded, index]);
+  }, [isLoaded, delay]);
+
+  const handleImageLoad = () => {
+    setImageLoaded(true);
+    setImageError(false);
+  };
+
+  const handleImageError = () => {
+    setImageError(true);
+    setImageLoaded(true);
+  };
 
   return (
     <div
       ref={ref}
-      className={`work-card ${show ? 'fade-in' : ''}`}
+      className={`work-card ${show ? 'card-visible' : ''}`}
       style={{
         opacity: show ? 1 : 0,
         transform: show ? 'translateY(0)' : 'translateY(20px)',
@@ -42,13 +53,19 @@ const WorkCard: React.FC<WorkCardProps> = ({ work, index }) => {
     >
       <div className="work-card-image">
         {!imageLoaded && <div className="image-placeholder" />}
-        {isLoaded && (
+        {isLoaded && !imageError && (
           <img
             src={work.thumbnail}
             alt={work.title}
-            onLoad={() => setImageLoaded(true)}
+            onLoad={handleImageLoad}
+            onError={handleImageError}
             style={{ opacity: imageLoaded ? 1 : 0, transition: 'opacity 0.3s ease' }}
           />
+        )}
+        {imageError && (
+          <div className="image-error">
+            <span>图片加载失败</span>
+          </div>
         )}
         <span className="work-card-category">
           {categoryLabels[work.category]}

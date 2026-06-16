@@ -19,6 +19,23 @@ const Gallery: React.FC = () => {
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterKey, setFilterKey] = useState(0);
+  const [columnCount, setColumnCount] = useState(3);
+
+  useEffect(() => {
+    const updateColumnCount = () => {
+      if (window.innerWidth <= 768) {
+        setColumnCount(2);
+      } else if (window.innerWidth <= 1024) {
+        setColumnCount(3);
+      } else {
+        setColumnCount(3);
+      }
+    };
+
+    updateColumnCount();
+    window.addEventListener('resize', updateColumnCount);
+    return () => window.removeEventListener('resize', updateColumnCount);
+  }, []);
 
   useEffect(() => {
     const fetchWorks = async () => {
@@ -42,6 +59,7 @@ const Gallery: React.FC = () => {
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
         setSearchTerm(value);
+        setFilterKey((prev) => prev + 1);
       }, 300);
     };
   }, []);
@@ -59,6 +77,12 @@ const Gallery: React.FC = () => {
     setSelectedCategory(category);
     setFilterKey((prev) => prev + 1);
   }, []);
+
+  const getAnimationDelay = (index: number): number => {
+    const rowIndex = Math.floor(index / columnCount);
+    const colIndex = index % columnCount;
+    return rowIndex * 0.08 + colIndex * 0.06;
+  };
 
   return (
     <div className="gallery-page">
@@ -91,27 +115,11 @@ const Gallery: React.FC = () => {
         <div className="no-results">没有找到相关作品</div>
       ) : (
         <div className="gallery-masonry" key={filterKey}>
-          <div className="masonry-column">
-            {works
-              .filter((_, i) => i % 3 === 0)
-              .map((work, idx) => (
-                <WorkCard key={`${work.id}-${filterKey}`} work={work} index={idx * 3} />
-              ))}
-          </div>
-          <div className="masonry-column">
-            {works
-              .filter((_, i) => i % 3 === 1)
-              .map((work, idx) => (
-                <WorkCard key={`${work.id}-${filterKey}`} work={work} index={idx * 3 + 1} />
-              ))}
-          </div>
-          <div className="masonry-column">
-            {works
-              .filter((_, i) => i % 3 === 2)
-              .map((work, idx) => (
-                <WorkCard key={`${work.id}-${filterKey}`} work={work} index={idx * 3 + 2} />
-              ))}
-          </div>
+          {works.map((work, index) => (
+            <div key={`${work.id}-${filterKey}`} className="masonry-item">
+              <WorkCard work={work} delay={getAnimationDelay(index)} />
+            </div>
+          ))}
         </div>
       )}
     </div>

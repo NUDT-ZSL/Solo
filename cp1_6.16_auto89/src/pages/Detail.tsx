@@ -33,6 +33,9 @@ interface NewAnchorState {
   description: string;
 }
 
+const clamp = (value: number, min: number, max: number): number =>
+  Math.max(min, Math.min(max, value));
+
 const Detail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -46,7 +49,9 @@ const Detail: React.FC = () => {
   const [reviewText, setReviewText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [newAnchor, setNewAnchor] = useState<NewAnchorState | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const imageContainerRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -73,25 +78,66 @@ const Detail: React.FC = () => {
   useEffect(() => {
     if (!isEditMode) {
       setNewAnchor(null);
+      setDeleteConfirmId(null);
     }
   }, [isEditMode]);
+
+  const getPositionFromEvent = useCallback(
+    (clientX: number, clientY: number): { x: number; y: number } | null => {
+      const img = imageRef.current;
+      if (!img) return null;
+
+      const imgRect = img.getBoundingClientRect();
+
+      const offsetX = clientX - imgRect.left;
+      const offsetY = clientY - imgRect.top;
+
+      if (offsetX < 0 || offsetX > imgRect.width || offsetY < 0 || offsetY > imgRect.height) {
+        return null;
+      }
+
+      const x = clamp((offsetX / imgRect.width) * 100, 0, 100);
+      const y = clamp((offsetY / imgRect.height) * 100, 0, 100);
+
+      return { x, y };
+    },
+    []
+  );
 
   const handleImageClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (!isEditMode || newAnchor) return;
 
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
+      const pos = getPositionFromEvent(e.clientX, e.clientY);
+      if (!pos) return;
 
       setNewAnchor({
-        x: Math.max(0, Math.min(100, x)),
-        y: Math.max(0, Math.min(100, y)),
+        x: pos.x,
+        y: pos.y,
         type: 'material',
         description: '',
       });
     },
-    [isEditMode, newAnchor]
+    [isEditMode, newAnchor, getPositionFromEvent]
+  );
+
+  const handleImageTouch = useCallback(
+    (e: React.TouchEvent<HTMLDivElement>) => {
+      if (!isEditMode || newAnchor) return;
+      if (e.touches.length !== 1) return;
+
+      const touch = e.touches[0];
+      const pos = getPositionFromEvent(touch.clientX, touch.clientY);
+      if (!pos) return;
+
+      setNewAnchor({
+        x: pos.x,
+        y: pos.y,
+        type: 'material',
+        description: '',
+      });
+    },
+    [isEditMode, newAnchor, getPositionFromEvent]
   );
 
   const handleAnchorPositionChange = useCallback(
@@ -142,17 +188,27 @@ const Detail: React.FC = () => {
     setNewAnchor(null);
   };
 
-  const handleDeleteAnchor = async (anchorId: string) => {
-    if (!id) return;
+  const handleDeleteClick = (anchorId: string) => {
+    setDeleteConfirmId(anchorId);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!id || !deleteConfirmId) return;
 
     try {
-      const success = await deleteAnchor(id, anchorId);
+      const success = await deleteAnchor(id, deleteConfirmId);
       if (success) {
-        setAnchors((prev) => prev.filter((a) => a.id !== anchorId));
+        setAnchors((prev) => prev.filter((a) => a.id !== deleteConfirmId));
       }
     } catch (error) {
       console.error('Failed to delete anchor:', error);
+    } finally {
+      setDeleteConfirmId(null);
     }
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteConfirmId(null);
   };
 
   const handleRatingChange = (rating: number) => {
@@ -215,8 +271,9 @@ const Detail: React.FC = () => {
               ref={imageContainerRef}
               className="detail-image-container"
               onClick={handleImageClick}
+              onTouchEnd={handleImageTouch}
             >
-              <img src={work.image} alt={work.title} />
+              <img ref={imageRef} src={work.image} alt={work.title} />
 
               {isEditMode && !newAnchor && (
                 <div className="edit-mode-hint">
@@ -242,17 +299,14 @@ const Detail: React.FC = () => {
                       top: `${newAnchor.y}%`,
                     }}
                   />
-                  <div className="anchor-edit-popup">
+                  <div className="anchor-edit-popup" onClick={(e) => e.stopPropagation()}>
                     <h4>添加工艺锚点</h4>
                     <div className="anchor-type-selector">
                       {typeOptions.map((opt) => (
                         <button
                           key={opt.value}
                           className={`type-option-btn ${newAnchor.type === opt.value ? `active ${opt.value}` : ''}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleNewAnchorTypeChange(opt.value);
-                          }}
+                          onClick={() => handleNewAnchorTypeChange(opt.value)}
                         >
                           {opt.label}
                         </button>
@@ -265,25 +319,16 @@ const Detail: React.FC = () => {
                       maxLength={50}
                       value={newAnchor.description}
                       onChange={handleNewAnchorDescriptionChange}
-                      onClick={(e) => e.stopPropagation()}
+                      autoFocus
                     />
                     <div className="char-count">{newAnchor.description.length}/50</div>
                     <div className="popup-actions">
-                      <button
-                        className="popup-cancel-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCancelNewAnchor();
-                        }}
-                      >
+                      <button className="popup-cancel-btn" onClick={handleCancelNewAnchor}>
                         取消
                       </button>
                       <button
                         className="popup-save-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSaveNewAnchor();
-                        }}
+                        onClick={handleSaveNewAnchor}
                         disabled={!newAnchor.description.trim()}
                       >
                         保存
@@ -291,6 +336,21 @@ const Detail: React.FC = () => {
                     </div>
                   </div>
                 </>
+              )}
+
+              {deleteConfirmId && (
+                <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+                  <h4>确认删除</h4>
+                  <p>确定要删除这个工艺锚点吗？此操作不可撤销。</p>
+                  <div className="confirm-actions">
+                    <button className="popup-cancel-btn" onClick={handleCancelDelete}>
+                      取消
+                    </button>
+                    <button className="popup-save-btn" onClick={handleConfirmDelete}>
+                      确认删除
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>
@@ -394,7 +454,7 @@ const Detail: React.FC = () => {
                   {isEditMode && (
                     <button
                       className="anchor-delete-btn"
-                      onClick={() => handleDeleteAnchor(anchor.id)}
+                      onClick={() => handleDeleteClick(anchor.id)}
                     >
                       删除
                     </button>

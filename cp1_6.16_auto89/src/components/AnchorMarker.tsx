@@ -13,6 +13,9 @@ const typeLabels: Record<CraftType, string> = {
   tool: '工具',
 };
 
+const clamp = (value: number, min: number, max: number): number =>
+  Math.max(min, Math.min(max, value));
+
 const AnchorMarker: React.FC<AnchorMarkerProps> = ({
   anchor,
   isEditMode,
@@ -23,6 +26,62 @@ const AnchorMarker: React.FC<AnchorMarkerProps> = ({
   const markerRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLElement | null>(null);
   const dragStartPos = useRef({ x: 0, y: 0, anchorX: 0, anchorY: 0 });
+
+  const handleDragStart = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!isEditMode) return;
+
+      const container = markerRef.current?.parentElement;
+      if (!container) return;
+
+      containerRef.current = container;
+
+      setIsDragging(true);
+      setShowTooltip(false);
+      dragStartPos.current = {
+        x: clientX,
+        y: clientY,
+        anchorX: anchor.x,
+        anchorY: anchor.y,
+      };
+    },
+    [isEditMode, anchor.x, anchor.y]
+  );
+
+  const handleDragMove = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!isDragging) return;
+
+      const container = containerRef.current;
+      if (!container) return;
+
+      const rect = container.getBoundingClientRect();
+      const deltaX = clientX - dragStartPos.current.x;
+      const deltaY = clientY - dragStartPos.current.y;
+
+      const newX = clamp(
+        dragStartPos.current.anchorX + (deltaX / rect.width) * 100,
+        0,
+        100
+      );
+      const newY = clamp(
+        dragStartPos.current.anchorY + (deltaY / rect.height) * 100,
+        0,
+        100
+      );
+
+      if (onPositionChange) {
+        onPositionChange(anchor.id, newX, newY);
+      }
+    },
+    [isDragging, anchor.id, onPositionChange]
+  );
+
+  const handleDragEnd = useCallback(() => {
+    if (isDragging) {
+      setIsDragging(false);
+    }
+  }, [isDragging]);
 
   const handleMouseEnter = useCallback(() => {
     if (!isDragging) {
@@ -38,62 +97,60 @@ const AnchorMarker: React.FC<AnchorMarkerProps> = ({
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      if (!isEditMode) return;
-
       e.preventDefault();
       e.stopPropagation();
-
-      const container = markerRef.current?.parentElement;
-      if (!container) return;
-
-      containerRef.current = container;
-
-      setIsDragging(true);
-      dragStartPos.current = {
-        x: e.clientX,
-        y: e.clientY,
-        anchorX: anchor.x,
-        anchorY: anchor.y,
-      };
+      handleDragStart(e.clientX, e.clientY);
     },
-    [isEditMode, anchor.x, anchor.y]
+    [handleDragStart]
+  );
+
+  const handleTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const touch = e.touches[0];
+      handleDragStart(touch.clientX, touch.clientY);
+    },
+    [handleDragStart]
   );
 
   useEffect(() => {
     if (!isDragging) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      const container = containerRef.current;
-      if (!container) return;
-
-      const rect = container.getBoundingClientRect();
-      const deltaX = e.clientX - dragStartPos.current.x;
-      const deltaY = e.clientY - dragStartPos.current.y;
-
-      let newX = dragStartPos.current.anchorX + (deltaX / rect.width) * 100;
-      let newY = dragStartPos.current.anchorY + (deltaY / rect.height) * 100;
-
-      newX = Math.max(0, Math.min(100, newX));
-      newY = Math.max(0, Math.min(100, newY));
-
-      if (onPositionChange) {
-        onPositionChange(anchor.id, newX, newY);
-      }
+      handleDragMove(e.clientX, e.clientY);
     };
 
     const handleMouseUp = () => {
-      setIsDragging(false);
-      setShowTooltip(false);
+      handleDragEnd();
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      handleDragMove(touch.clientX, touch.clientY);
+    };
+
+    const handleTouchEnd = () => {
+      handleDragEnd();
+    };
+
+    document.addEventListener('mousemove', handleMouseMove, { passive: false });
     document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('touchend', handleTouchEnd);
+    document.addEventListener('touchcancel', handleTouchEnd);
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleTouchEnd);
+      document.removeEventListener('touchcancel', handleTouchEnd);
     };
-  }, [isDragging, anchor.id, onPositionChange]);
+  }, [isDragging, handleDragMove, handleDragEnd]);
 
   return (
     <div
@@ -102,10 +159,12 @@ const AnchorMarker: React.FC<AnchorMarkerProps> = ({
       style={{
         left: `${anchor.x}%`,
         top: `${anchor.y}%`,
+        transition: isDragging ? 'none' : 'transform 0.15s ease, box-shadow 0.2s ease',
       }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      onMouseDown={handleMouseDown}
+      onMouseDown={isEditMode ? handleMouseDown : undefined}
+      onTouchStart={isEditMode ? handleTouchStart : undefined}
     >
       <div
         className={`anchor-tooltip ${showTooltip ? 'visible' : ''}`}

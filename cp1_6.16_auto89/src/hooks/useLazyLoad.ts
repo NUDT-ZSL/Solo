@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-export const useLazyLoad = () => {
+export const useLazyLoad = (rootMargin = '100px') => {
   const [isLoaded, setIsLoaded] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -17,7 +17,7 @@ export const useLazyLoad = () => {
           }
         });
       },
-      { threshold: 0.1, rootMargin: '50px' }
+      { threshold: 0.01, rootMargin }
     );
 
     observer.observe(element);
@@ -25,7 +25,7 @@ export const useLazyLoad = () => {
     return () => {
       observer.disconnect();
     };
-  }, []);
+  }, [rootMargin]);
 
   return { ref, isLoaded };
 };
