@@ -5,6 +5,9 @@ import { WallShape, DragState, Wall, Exhibit } from '@/types';
 
 const GRID_SIZE = GRID_SIZE_CONST;
 const GRID_COLOR = 'rgba(208, 208, 208, 0.3)';
+const GRID_HIGHLIGHT_COLOR = 'rgba(99, 102, 241, 0.4)';
+const GRID_HIGHLIGHT_RADIUS = 3;
+const GRID_SNAP_THRESHOLD = 10;
 const CANVAS_BG = '#0f172a';
 const WALL_COLOR = '#475569';
 const WALL_SELECTED_COLOR = '#6366f1';
@@ -237,6 +240,68 @@ export default function CanvasBoard() {
     ctx.restore();
   }, [currentExhibition]);
 
+  const drawGridHighlights = useCallback((ctx: CanvasRenderingContext2D) => {
+    if (!dragState.isDragging && !previewWall) return;
+
+    let highlightPoints: { x: number; y: number }[] = [];
+
+    if (previewWall) {
+      const corners = [
+        { x: previewWall.startX, y: previewWall.startY },
+        { x: previewWall.endX, y: previewWall.startY },
+        { x: previewWall.startX, y: previewWall.endY },
+        { x: previewWall.endX, y: previewWall.endY },
+      ];
+      highlightPoints = corners;
+    } else if (dragState.isDragging && dragState.id) {
+      let element: Wall | Exhibit | undefined;
+      if (dragState.type === 'wall') {
+        element = currentExhibition.walls.find((w) => w.id === dragState.id);
+      } else if (dragState.type === 'exhibit') {
+        element = currentExhibition.exhibits.find((e) => e.id === dragState.id);
+      }
+      if (element) {
+        const corners = [
+          { x: element.x, y: element.y },
+          { x: element.x + element.width, y: element.y },
+          { x: element.x, y: element.y + element.height },
+          { x: element.x + element.width, y: element.y + element.height },
+        ];
+        highlightPoints = corners;
+      }
+    }
+
+    const highlightedGridPoints: { x: number; y: number }[] = [];
+    const addedPoints = new Set<string>();
+
+    for (const point of highlightPoints) {
+      const gridX = Math.round(point.x / GRID_SIZE) * GRID_SIZE;
+      const gridY = Math.round(point.y / GRID_SIZE) * GRID_SIZE;
+
+      const distX = Math.abs(point.x - gridX);
+      const distY = Math.abs(point.y - gridY);
+
+      if (distX < GRID_SNAP_THRESHOLD && distY < GRID_SNAP_THRESHOLD) {
+        const key = `${gridX},${gridY}`;
+        if (!addedPoints.has(key)) {
+          addedPoints.add(key);
+          highlightedGridPoints.push({ x: gridX, y: gridY });
+        }
+      }
+    }
+
+    if (highlightedGridPoints.length === 0) return;
+
+    ctx.save();
+    ctx.fillStyle = GRID_HIGHLIGHT_COLOR;
+    for (const point of highlightedGridPoints) {
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, GRID_HIGHLIGHT_RADIUS, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }, [dragState, previewWall, currentExhibition.walls, currentExhibition.exhibits]);
+
   const drawPreviewWall = useCallback((ctx: CanvasRenderingContext2D) => {
     if (!previewWall) return;
     ctx.save();
@@ -276,10 +341,11 @@ export default function CanvasBoard() {
     });
 
     drawPreviewWall(ctx);
+    drawGridHighlights(ctx);
 
     dashOffsetRef.current = (dashOffsetRef.current + 30 / 60) % 20;
     animationRef.current = requestAnimationFrame(render);
-  }, [canvasSize, drawGrid, drawPath, drawEntranceExit, drawWall, drawExhibit, drawPreviewWall, currentExhibition, selectedWallId, selectedExhibitId, exhibitImages]);
+  }, [canvasSize, drawGrid, drawPath, drawEntranceExit, drawWall, drawExhibit, drawPreviewWall, drawGridHighlights, currentExhibition, selectedWallId, selectedExhibitId, exhibitImages]);
 
   useEffect(() => {
     animationRef.current = requestAnimationFrame(render);
