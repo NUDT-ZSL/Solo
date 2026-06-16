@@ -1,4 +1,4 @@
-import React, { memo, useMemo } from 'react';
+import React, { memo, useMemo, useCallback } from 'react';
 import type { PaceEntry } from '../types';
 import { formatPace, formatTime } from '../utils/format';
 import { getPaceColor } from '../utils/paceCalculator';
@@ -22,8 +22,8 @@ const PaceTable: React.FC<PaceTableProps> = memo(function PaceTable({
     };
   }, [paceData]);
 
-  const handlePaceInputChange = useMemo(
-    () => (km: number, value: string) => {
+  const handlePaceInputChange = useCallback(
+    (km: number, value: string) => {
       const parts = value.split(':');
       if (parts.length === 2) {
         const minutes = parseInt(parts[0], 10);

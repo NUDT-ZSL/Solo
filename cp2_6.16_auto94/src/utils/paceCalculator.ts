@@ -1,7 +1,7 @@
 import type { ElevationPoint, PaceEntry } from '../types';
 
-const ASCEND_PENALTY = 0.3;
-const DESCEND_BONUS = 0.15;
+const ASCEND_PENALTY_PER_10M = 3;
+const DESCEND_BONUS_PER_10M = 1.5;
 const MARATHON_DISTANCE = 42.2;
 
 const getElevationChange = (
@@ -95,8 +95,8 @@ export const calculatePacePlan = (
     const elevationChange = getElevationChange(elevationData, km - 1, km);
     const adjustment =
       elevationChange > 0
-        ? (elevationChange / 10) * ASCEND_PENALTY * 10
-        : (elevationChange / 10) * DESCEND_BONUS * 10;
+        ? (elevationChange / 10) * ASCEND_PENALTY_PER_10M
+        : (elevationChange / 10) * DESCEND_BONUS_PER_10M;
 
     const recommendedPace = basePace + adjustment;
     cumulativeTime += recommendedPace;
@@ -114,8 +114,8 @@ export const calculatePacePlan = (
   const lastElevationChange = getElevationChange(elevationData, 42, 42.2);
   const lastAdjustment =
     lastElevationChange > 0
-      ? (lastElevationChange / 10) * ASCEND_PENALTY * 10 * lastKm
-      : (lastElevationChange / 10) * DESCEND_BONUS * 10 * lastKm;
+      ? (lastElevationChange / 10) * ASCEND_PENALTY_PER_10M * lastKm
+      : (lastElevationChange / 10) * DESCEND_BONUS_PER_10M * lastKm;
 
   const lastPace = (basePace + lastAdjustment) * lastKm;
   cumulativeTime += lastPace;
