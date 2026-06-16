@@ -8,7 +8,8 @@ import {
   healShip,
   stunShip,
   canUseSkill,
-  triggerSkillCooldown
+  executeShipSkill,
+  SkillEffectResult
 } from '../core/shipFactory'
 
 export interface AIState {
@@ -184,113 +185,26 @@ function executeSkill(
   const skill = ship.skills[0]
   if (!skill) return
 
-  triggerSkillCooldown(ship)
+  const skillResult: SkillEffectResult = executeShipSkill(ship, 0, allShips)
 
-  const affectedIds: string[] = []
-  let eventColor = skill.color
+  for (const log of skillResult.logs) result.logs.push(log)
 
-  switch (skill.type) {
-    case 'emp': {
-      eventColor = '#1E88E5'
-      for (const target of allShips) {
-        if (target.faction !== ship.faction && target.status.alive) {
-          if (ship.position.distanceTo(target.position) <= 3) {
-            stunShip(target, 3)
-            affectedIds.push(target.id)
-            result.logs.push({
-              id: `log_${Date.now()}_${++logIdCounter}`,
-              timestamp: Date.now(),
-              message: `${ship.name} 释放 EMP，${target.name} 被眩晕！`,
-              type: 'stun'
-            })
-          }
-        }
-      }
-      break
-    }
-    case 'repair': {
-      eventColor = '#81C784'
-      for (const target of allShips) {
-        if (target.faction === ship.faction && target.status.alive) {
-          if (ship.position.distanceTo(target.position) <= 4) {
-            const healAmount = Math.round(target.maxHp * 0.3)
-            const healed = healShip(target, healAmount)
-            if (healed > 0) {
-              affectedIds.push(target.id)
-              result.logs.push({
-                id: `log_${Date.now()}_${++logIdCounter}`,
-                timestamp: Date.now(),
-                message: `${ship.name} 修复光环恢复 ${target.name} ${healed} 点血量`,
-                type: 'heal'
-              })
-            }
-          }
-        }
-      }
-      break
-    }
-    case 'airstrike': {
-      eventColor = '#FF8A65'
-      const enemies = allShips.filter(s => s.faction !== ship.faction && s.status.alive)
-      if (enemies.length > 0) {
-        enemies.sort((a, b) => ship.position.distanceTo(a.position) - ship.position.distanceTo(b.position))
-        const primaryTarget = enemies[0]
-        const airstrikeCenter = primaryTarget.position.clone()
-
-        for (const target of enemies) {
-          if (airstrikeCenter.distanceTo(target.position) <= 2.5) {
-            const damage = Math.round(ship.stats.attack * 2.5)
-            const actualDamage = damageShip(target, damage)
-            if (actualDamage > 0) {
-              affectedIds.push(target.id)
-              result.logs.push({
-                id: `log_${Date.now()}_${++logIdCounter}`,
-                timestamp: Date.now(),
-                message: `${ship.name} 主炮齐射命中 ${target.name}，造成 ${actualDamage} 点伤害！`,
-                type: 'attack'
-              })
-              if (!target.status.alive) {
-                result.logs.push({
-                  id: `log_${Date.now()}_${++logIdCounter}`,
-                  timestamp: Date.now(),
-                  message: `💥 ${target.name} 被摧毁！`,
-                  type: 'death'
-                })
-              }
-            }
-          }
-        }
-      }
-      break
-    }
-    case 'shield': {
-      eventColor = '#CE93D8'
-      for (const target of allShips) {
-        if (target.faction === ship.faction && target.status.alive) {
-          if (ship.position.distanceTo(target.position) <= 5) {
-            state.shieldedShipIds.add(target.id)
-            affectedIds.push(target.id)
-            setTimeout(() => state.shieldedShipIds.delete(target.id), 3000)
-          }
-        }
-      }
-      result.logs.push({
-        id: `log_${Date.now()}_${++logIdCounter}`,
-        timestamp: Date.now(),
-        message: `${ship.name} 激活能量护盾，保护 ${affectedIds.length} 艘友舰！`,
-        type: 'skill'
-      })
-      break
-    }
+  for (const sid of skillResult.shieldGrantIds) {
+    state.shieldedShipIds.add(sid)
+    setTimeout(() => {
+      if (state.shieldedShipIds) state.shieldedShipIds.delete(sid)
+    }, 3000)
   }
 
-  result.events.push({
-    type: skill.type,
-    shipId: ship.id,
-    position: ship.position.clone(),
-    color: eventColor,
-    affectedIds
-  })
+  if (skillResult.affectedIds.length > 0 || skill.type === 'shield') {
+    result.events.push({
+      type: skill.type,
+      shipId: ship.id,
+      position: ship.position.clone(),
+      color: skill.color,
+      affectedIds: skillResult.affectedIds
+    })
+  }
 }
 
 export function processProjectileHits(
@@ -352,90 +266,18 @@ export function manualUseSkill(
   const skill = ship.skills[skillIndex]
   if (!skill) return { event: null, logs: [] }
 
-  triggerSkillCooldown(ship, skillIndex)
-
   const result: { event: AISkillEvent | null; logs: BattleLog[] } = {
     event: null,
     logs: []
   }
 
-  const affectedIds: string[] = []
+  const skillResult = executeShipSkill(ship, skillIndex, allShips, targetPosition)
 
-  switch (skill.type) {
-    case 'emp': {
-      for (const target of allShips) {
-        if (target.faction !== ship.faction && target.status.alive) {
-          if (ship.position.distanceTo(target.position) <= 3) {
-            stunShip(target, 3)
-            affectedIds.push(target.id)
-            result.logs.push({
-              id: `log_${Date.now()}_${++logIdCounter}`,
-              timestamp: Date.now(),
-              message: `${ship.name} 手动释放 EMP，${target.name} 被眩晕！`,
-              type: 'stun'
-            })
-          }
-        }
-      }
-      break
-    }
-    case 'repair': {
-      for (const target of allShips) {
-        if (target.faction === ship.faction && target.status.alive) {
-          if (ship.position.distanceTo(target.position) <= 4) {
-            const healAmount = Math.round(target.maxHp * 0.3)
-            const healed = healShip(target, healAmount)
-            if (healed > 0) {
-              affectedIds.push(target.id)
-              result.logs.push({
-                id: `log_${Date.now()}_${++logIdCounter}`,
-                timestamp: Date.now(),
-                message: `${ship.name} 修复光环恢复 ${target.name} ${healed} 点血量`,
-                type: 'heal'
-              })
-            }
-          }
-        }
-      }
-      break
-    }
-    case 'airstrike': {
-      const center = targetPosition || ship.position.clone()
-      for (const target of allShips) {
-        if (target.faction !== ship.faction && target.status.alive) {
-          if (center.distanceTo(target.position) <= 2.5) {
-            const damage = Math.round(ship.stats.attack * 2.5)
-            damageShip(target, damage)
-            affectedIds.push(target.id)
-          }
-        }
-      }
-      result.logs.push({
-        id: `log_${Date.now()}_${++logIdCounter}`,
-        timestamp: Date.now(),
-        message: `${ship.name} 手动呼叫主炮齐射！`,
-        type: 'skill'
-      })
-      break
-    }
-    case 'shield': {
-      for (const target of allShips) {
-        if (target.faction === ship.faction && target.status.alive) {
-          if (ship.position.distanceTo(target.position) <= 5) {
-            state.shieldedShipIds.add(target.id)
-            affectedIds.push(target.id)
-            setTimeout(() => state.shieldedShipIds.delete(target.id), 3000)
-          }
-        }
-      }
-      result.logs.push({
-        id: `log_${Date.now()}_${++logIdCounter}`,
-        timestamp: Date.now(),
-        message: `${ship.name} 手动激活能量护盾！`,
-        type: 'skill'
-      })
-      break
-    }
+  for (const log of skillResult.logs) result.logs.push(log)
+
+  for (const sid of skillResult.shieldGrantIds) {
+    state.shieldedShipIds.add(sid)
+    setTimeout(() => state.shieldedShipIds.delete(sid), 3000)
   }
 
   result.event = {
@@ -443,7 +285,7 @@ export function manualUseSkill(
     shipId: ship.id,
     position: skill.type === 'airstrike' && targetPosition ? targetPosition : ship.position.clone(),
     color: skill.color,
-    affectedIds
+    affectedIds: skillResult.affectedIds
   }
 
   return result

@@ -215,6 +215,43 @@ export class GameEngine {
     const totalEntities = this.ships.filter(s => s.status.alive).length
     const projLimit = totalEntities > 20 ? this.MAX_PROJECTILES_PER_FRAME : 10
 
+    const collisionInfo = this.preCollisionDetection()
+    this.emit('collisionDetected', collisionInfo)
+
+    const hitResult = processProjectileHits(this.projectiles, this.ships, this.aiState, deltaTime)
+    for (const log of hitResult.logs) this.addLog(log)
+
+    for (const pid of hitResult.hitProjectileIds) {
+      const idx = this.projectiles.findIndex(p => p.id === pid)
+      if (idx !== -1) {
+        const proj = this.projectiles[idx]
+        if (proj.mesh) this.ctx.projectileGroup.remove(proj.mesh)
+        if (proj.trail) this.ctx.projectileGroup.remove(proj.trail)
+        this.projectiles.splice(idx, 1)
+
+        const target = this.ships.find(s => s.id === proj.targetId)
+        if (target && target.status.alive) {
+          flashDamage(target)
+          this.stats.totalDamageDealt += proj.damage
+        }
+      }
+    }
+
+    for (const did of hitResult.destroyedIds) {
+      const ship = this.ships.find(s => s.id === did)
+      if (ship && ship.mesh) {
+        this.createExplosion(ship.position)
+        this.addLog({
+          id: `destroy_${Date.now()}_${did}`,
+          timestamp: Date.now(),
+          message: `💥 ${ship.name} (${ship.faction === 'player' ? '我方' : '敌方'}) 被摧毁！`,
+          type: 'death'
+        })
+      }
+    }
+
+    this.updateShipTimersAndState(deltaTime)
+
     const aiResult = updateAllShipsAI(
       this.ships,
       this.aiState,
@@ -242,32 +279,6 @@ export class GameEngine {
       this.stats.skillUsageCount++
     }
 
-    const hitResult = processProjectileHits(this.projectiles, this.ships, this.aiState, deltaTime)
-    for (const log of hitResult.logs) this.addLog(log)
-
-    for (const pid of hitResult.hitProjectileIds) {
-      const idx = this.projectiles.findIndex(p => p.id === pid)
-      if (idx !== -1) {
-        const proj = this.projectiles[idx]
-        if (proj.mesh) this.ctx.projectileGroup.remove(proj.mesh)
-        if (proj.trail) this.ctx.projectileGroup.remove(proj.trail)
-        this.projectiles.splice(idx, 1)
-
-        const target = this.ships.find(s => s.id === proj.targetId)
-        if (target && target.status.alive) {
-          flashDamage(target)
-          this.stats.totalDamageDealt += proj.damage
-        }
-      }
-    }
-
-    for (const did of hitResult.destroyedIds) {
-      const ship = this.ships.find(s => s.id === did)
-      if (ship && ship.mesh) {
-        this.createExplosion(ship.position)
-      }
-    }
-
     for (const proj of this.projectiles) {
       if (proj.mesh) {
         const pos = proj.from.clone().lerp(proj.to, Math.min(proj.progress, 1))
@@ -277,7 +288,6 @@ export class GameEngine {
     }
 
     for (const ship of this.ships) {
-      updateShipTimers(ship, deltaTime)
       updateHealthBar(ship)
       checkAndUpdateLOD(ship, this.ctx.camera.position)
 
@@ -290,8 +300,62 @@ export class GameEngine {
 
     this.updateSkillEffects(deltaTime)
 
+    this.emitMovementLogs()
+
     this.currentFrame++
     this.emit('frameUpdate', { frame: this.currentFrame, deltaTime })
+  }
+
+  private preCollisionDetection(): Map<string, { inRange: string[]; distances: Map<string, number> }> {
+    const collisionInfo = new Map<string, { inRange: string[]; distances: Map<string, number> }>()
+
+    for (const ship of this.ships) {
+      if (!ship.status.alive) continue
+      const inRange: string[] = []
+      const distances = new Map<string, number>()
+
+      for (const other of this.ships) {
+        if (other.id === ship.id || !other.status.alive) continue
+        if (other.faction === ship.faction) continue
+        const dist = ship.position.distanceTo(other.position)
+        distances.set(other.id, dist)
+        if (dist <= ship.stats.range) {
+          inRange.push(other.id)
+        }
+      }
+
+      collisionInfo.set(ship.id, { inRange, distances })
+      ;(ship as any)._collisionInfo = { inRange, distances }
+    }
+
+    return collisionInfo
+  }
+
+  private updateShipTimersAndState(deltaTime: number): void {
+    for (const ship of this.ships) {
+      updateShipTimers(ship, deltaTime)
+    }
+  }
+
+  private lastMovementEmit: number = 0
+  private emitMovementLogs(): void {
+    if (this.currentFrame - this.lastMovementEmit < 60) return
+    this.lastMovementEmit = this.currentFrame
+
+    const movingShips = this.ships.filter(
+      s => s.status.alive && s.targetPosition && s.position.distanceTo(s.targetPosition) > 0.5
+    )
+    if (movingShips.length > 0) {
+      const sample = movingShips.slice(0, 2)
+      for (const ship of sample) {
+        this.addLog({
+          id: `move_${Date.now()}_${ship.id}`,
+          timestamp: Date.now(),
+          message: `🚀 ${ship.name} 正在机动中...`,
+          type: 'info'
+        })
+      }
+    }
   }
 
   private handleSkillEvent(evt: AISkillEvent): void {
@@ -319,7 +383,7 @@ export class GameEngine {
 
     for (const sid of evt.affectedIds) {
       const ship = this.ships.find(s => s.id === sid)
-      if (ship && evt.type === 'heal') {
+      if (ship && evt.type === 'repair') {
         updateHealthBar(ship)
       }
     }
@@ -446,29 +510,53 @@ export class GameEngine {
 
   private calculateResult(): GameResult {
     const playerShips = this.ships.filter(s => s.faction === 'player')
+    const enemyShips = this.ships.filter(s => s.faction === 'enemy')
     const playerAlive = playerShips.filter(s => s.status.alive)
-    const enemyAlive = this.ships.filter(s => s.faction === 'enemy' && s.status.alive)
+    const enemyAlive = enemyShips.filter(s => s.status.alive)
     const playerFlagship = playerShips.find(s => s.isFlagship)
+    const enemyFlagship = enemyShips.find(s => s.isFlagship)
 
     let winner: Faction | 'draw' = 'draw'
     if (playerAlive.length > 0 && enemyAlive.length === 0) winner = 'player'
     else if (enemyAlive.length > 0 && playerAlive.length === 0) winner = 'enemy'
     else if (playerFlagship && !playerFlagship.status.alive) winner = 'enemy'
+    else if (enemyFlagship && !enemyFlagship.status.alive && playerAlive.length > 0) winner = 'player'
     else if (playerAlive.length > enemyAlive.length) winner = 'player'
     else if (enemyAlive.length > playerAlive.length) winner = 'enemy'
 
     const survivalRate = playerAlive.length / Math.max(1, playerShips.length)
     const avgHpRatio = playerAlive.reduce((sum, s) => sum + s.hp / s.maxHp, 0) / Math.max(1, playerAlive.length)
     const efficiency = (this.stats.totalDamageDealt / Math.max(1, this.stats.battleDuration)) / 100
+    const enemyKillRate = 1 - enemyAlive.length / Math.max(1, enemyShips.length)
 
-    const score = survivalRate * 50 + avgHpRatio * 30 + Math.min(efficiency, 1) * 20
+    const flagshipBonus = (playerFlagship && playerFlagship.status.alive) ? 10 : 0
+    const enemyFlagshipKillBonus = (enemyFlagship && !enemyFlagship.status.alive) ? 8 : 0
+    const skillEfficiency = Math.min(1, this.stats.skillUsageCount / Math.max(1, playerShips.length) / 2) * 5
+    const timeBonus = this.stats.battleDuration < 60 ? 5 : this.stats.battleDuration < 120 ? 2 : 0
+
+    const score = Math.min(100,
+      survivalRate * 40
+      + avgHpRatio * 15
+      + Math.min(efficiency, 1) * 15
+      + enemyKillRate * 15
+      + flagshipBonus
+      + enemyFlagshipKillBonus
+      + skillEfficiency
+      + timeBonus
+    )
+
     let rating: 'S' | 'A' | 'B' | 'C' = 'C'
     if (winner === 'player') {
-      if (score > 85) rating = 'S'
-      else if (score > 70) rating = 'A'
-      else if (score > 50) rating = 'B'
+      if (score >= 90) rating = 'S'
+      else if (score >= 75) rating = 'A'
+      else if (score >= 55) rating = 'B'
+      else rating = 'C'
     } else if (winner === 'draw') {
-      if (score > 60) rating = 'B'
+      if (score >= 70) rating = 'B'
+      else rating = 'C'
+    } else {
+      if (score >= 70) rating = 'B'
+      else if (score >= 45) rating = 'C'
     }
 
     return {
