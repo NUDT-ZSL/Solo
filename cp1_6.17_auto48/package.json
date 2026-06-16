@@ -1,0 +1,21 @@
+{
+  "name": "star-legend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.164.1",
+    "@tweenjs/tween.js": "^23.1.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vite": "^5.2.11",
+    "@vitejs/plugin-react": "^4.3.0",
+    "@types/three": "^0.164.0"
+  }
+}
