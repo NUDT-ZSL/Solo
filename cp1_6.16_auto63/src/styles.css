@@ -1,3 +1,25 @@
+/* ============================================================
+   动画设计方案说明
+   ============================================================
+   1. CSS @keyframes 定义：
+      - slideOutRight: 面板向右滑出并淡出（0.3s，配合leaving状态）
+      - slideInRight:  面板从右侧滑入并淡入（0.4s，配合entering状态）
+      - cardFadeInUp:  卡片从下方淡入上浮（动态时长，stagger效果）
+
+   2. 组件状态管理逻辑（useSlideAnimation Hook）：
+      - idle:    静态展示，无动画
+      - leaving: 旧内容正在滑出，触发setTimeout(300ms)后切换数据
+      - entering:新内容正在滑入，触发setTimeout(400ms)后回到idle
+      数据流：props.city → useSlideAnimation → displayCity → 渲染
+      确保新旧内容不会同时出现在视口中。
+
+   3. 动画与数据流解耦架构：
+      - useSlideAnimation: 通用Hook，管理值切换的动画生命周期
+      - CityPanel:         纯展示组件，从Hook获取displayValue和phase
+      - TimelineContainer: 自包含scroll监听，mask透明度与滚动解耦计算
+      所有动画逻辑封装在Hook或样式层，不影响组件props传递链。
+   ============================================================ */
+
 * {
   margin: 0;
   padding: 0;
@@ -81,6 +103,25 @@ body {
 .timeline-wrapper::-webkit-scrollbar-thumb {
   background: #34495E;
   border-radius: 4px;
+}
+
+.timeline-mask {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 80px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.timeline-mask-left {
+  left: 0;
+  background: linear-gradient(90deg, #1A252F 0%, rgba(26, 37, 47, 0) 100%);
+}
+
+.timeline-mask-right {
+  right: 0;
+  background: linear-gradient(-90deg, #1A252F 0%, rgba(26, 37, 47, 0) 100%);
 }
 
 .timeline {
@@ -231,7 +272,7 @@ body {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  animation: panelFadeIn 0.5s ease-out;
+  animation: panelFadeIn 0.4s ease-out;
 }
 
 .city-panel::-webkit-scrollbar {
@@ -247,6 +288,14 @@ body {
   border-radius: 3px;
 }
 
+.city-panel.panel-leaving {
+  animation: slideOutRight 0.3s ease-in forwards;
+}
+
+.city-panel.panel-entering {
+  animation: slideInRight 0.4s ease-out forwards;
+}
+
 @keyframes panelFadeIn {
   from {
     opacity: 0;
@@ -255,6 +304,28 @@ body {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 
@@ -291,17 +362,19 @@ body {
   border-radius: 10px;
   padding: 16px;
   margin-bottom: 12px;
-  animation: cardFadeIn 0.5s ease-out;
+  opacity: 0;
+  animation: cardFadeInUp 0.4s ease-out forwards;
+  animation-fill-mode: forwards;
 }
 
-@keyframes cardFadeIn {
+@keyframes cardFadeInUp {
   from {
     opacity: 0;
-    transform: translateX(10px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateY(0);
   }
 }
 
@@ -354,6 +427,10 @@ body {
   .timeline-track {
     left: 30px;
     right: 30px;
+  }
+
+  .timeline-mask {
+    width: 50px;
   }
 
   .year-group {
