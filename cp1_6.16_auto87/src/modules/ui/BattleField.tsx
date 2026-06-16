@@ -245,6 +245,12 @@ const BattleField: React.FC<BattleFieldProps> = ({
     }
   }
 
+  const getGridCoordLabel = (q: number, r: number): string => {
+    const colLetter = String.fromCharCode(65 + q)
+    const rowNumber = r + 1
+    return `${colLetter}${rowNumber}`
+  }
+
   const renderUnit = (unit: Unit, pixelX: number, pixelY: number) => {
     const isSelected = selectedUnit?.id === unit.id
     const isAnimating = animatingUnits[unit.id]
@@ -389,6 +395,64 @@ const BattleField: React.FC<BattleFieldProps> = ({
         </defs>
 
         <g transform="translate(20, 20)">
+          <g className="battlefield-border">
+            {(() => {
+              const size = engine.getGridSize()
+              const borderCells: { q: number; r: number }[] = []
+              for (let r = 0; r < size; r++) {
+                for (let q = 0; q < size; q++) {
+                  if (r === 0 || r === size - 1 || q === 0 || q === size - 1) {
+                    borderCells.push({ q, r })
+                  }
+                }
+              }
+              return borderCells.map(({ q, r }) => {
+                const pos = engine.hexToPixel({ q, r }, HEX_SIZE)
+                const cx = pos.x + HEX_SIZE
+                const cy = pos.y + HEX_SIZE
+                return (
+                  <path
+                    key={`border-${q}-${r}`}
+                    d={getHexPath(cx, cy, HEX_SIZE - 0.5)}
+                    fill="none"
+                    stroke="#8B7355"
+                    strokeWidth={2}
+                    opacity={0.8}
+                    style={{ pointerEvents: 'none' }}
+                  />
+                )
+              })
+            })()}
+          </g>
+
+          {selectedUnit && selectedUnit.side === 'player' && movableRange.length > 0 && (
+            <g className="adjacency-lines">
+              {(() => {
+                const fromPos = engine.hexToPixel(selectedUnit.position, HEX_SIZE)
+                const fromX = fromPos.x + HEX_SIZE
+                const fromY = fromPos.y + HEX_SIZE
+                return movableRange.map((coord, index) => {
+                  const toPos = engine.hexToPixel(coord, HEX_SIZE)
+                  const toX = toPos.x + HEX_SIZE
+                  const toY = toPos.y + HEX_SIZE
+                  return (
+                    <line
+                      key={`adj-line-${index}`}
+                      x1={fromX}
+                      y1={fromY}
+                      x2={toX}
+                      y2={toY}
+                      stroke="rgba(192, 192, 192, 0.25)"
+                      strokeWidth={1}
+                      strokeDasharray="4,3"
+                      style={{ pointerEvents: 'none' }}
+                    />
+                  )
+                })
+              })()}
+            </g>
+          )}
+
           {state.grid.map((row, r) =>
             row.map((cell, q) => {
               const pos = engine.hexToPixel(cell.coord, HEX_SIZE)
@@ -464,6 +528,18 @@ const BattleField: React.FC<BattleFieldProps> = ({
                     textAnchor="middle"
                   >
                     {cell.terrain === 'forest' ? '🌲' : cell.terrain === 'river' ? '🌊' : cell.terrain === 'highland' ? '⛰' : ''}
+                  </text>
+                  <text
+                    x={cx}
+                    y={cy - HEX_SIZE * 0.3}
+                    fontSize={12}
+                    fill="#8B7355"
+                    opacity={0.7}
+                    textAnchor="middle"
+                    fontWeight="500"
+                    style={{ pointerEvents: 'none' }}
+                  >
+                    {getGridCoordLabel(q, r)}
                   </text>
                 </g>
               )
