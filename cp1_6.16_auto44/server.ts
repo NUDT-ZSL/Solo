@@ -76,30 +76,31 @@ app.post('/api/clients/:id/logs', (req: Request, res: Response) => {
 });
 
 app.get('/api/health', (req: Request, res: Response) => {
-  res.json({ status: 'ok', port: server.address() });
+  const addr = server.address();
+  res.json({ status: 'ok', port: addr });
 });
 
-function findAvailablePort(startPort: number, maxTries: number): Promise<number> {
-  return new Promise((resolve, reject) => {
-    let attempts = 0;
-    const tryPort = (port: number) => {
-      const testServer = createServer();
-      testServer.unref();
-      testServer.once('error', (err: any) => {
-        if (err.code === 'EADDRINUSE' && attempts < maxTries) {
-          attempts++;
-          tryPort(port + 1);
-        } else {
-          reject(err);
-        }
-      });
-      testServer.once('listening', () => {
-        testServer.close(() => resolve(port));
-      });
-      testServer.listen(port, '127.0.0.1');
-    };
-    tryPort(startPort);
+function checkPortAvailable(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const tester = createServer();
+    tester.unref();
+    tester.once('error', () => resolve(false));
+    tester.once('listening', () => {
+      tester.close(() => resolve(true));
+    });
+    tester.listen(port, '127.0.0.1');
   });
+}
+
+async function findAvailablePort(startPort: number, maxTries: number): Promise<number> {
+  for (let i = 0; i < maxTries; i++) {
+    const port = startPort + i;
+    const available = await checkPortAvailable(port);
+    if (available) {
+      return port;
+    }
+  }
+  throw new Error(`No available port found after ${maxTries} attempts`);
 }
 
 let server: ReturnType<typeof createServer>;

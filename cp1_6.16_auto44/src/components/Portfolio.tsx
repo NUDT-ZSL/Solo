@@ -66,7 +66,7 @@ const LazyImage: React.FC<{ src: string; alt: string; style?: React.CSSPropertie
             inset: 0,
             background: 'linear-gradient(90deg, var(--bg-card) 25%, var(--bg-secondary) 50%, var(--bg-card) 75%)',
             backgroundSize: '200% 100%',
-            animation: 'pulse 1.5s infinite',
+            animation: 'shimmer 1.5s infinite',
           }}
         />
       )}
@@ -74,27 +74,13 @@ const LazyImage: React.FC<{ src: string; alt: string; style?: React.CSSPropertie
   );
 };
 
-const PricingTooltip: React.FC<{ pricing: PricingSuggestion }> = ({ pricing }) => {
+const PricingTooltip: React.FC<{
+  pricing: PricingSuggestion;
+  visible: boolean;
+}> = ({ pricing, visible }) => {
   return (
     <div
-      style={{
-        position: 'absolute',
-        bottom: '100%',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        marginBottom: '12px',
-        background: 'var(--bg-secondary)',
-        border: '1px solid var(--accent)',
-        borderRadius: '12px',
-        padding: '16px',
-        minWidth: '280px',
-        zIndex: 100,
-        opacity: 0,
-        visibility: 'hidden',
-        transition: 'all 0.25s ease-out',
-        pointerEvents: 'none',
-      }}
-      className="pricing-tooltip"
+      className={`pricing-tooltip ${visible ? 'pricing-tooltip-visible' : ''}`}
     >
       <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: 'var(--text-primary)' }}>
         定价计算明细
@@ -106,15 +92,23 @@ const PricingTooltip: React.FC<{ pricing: PricingSuggestion }> = ({ pricing }) =
         <span style={{ color: 'var(--text-secondary)' }}>中位数</span>
         <span style={{ color: 'var(--gold)', fontWeight: '600' }}>¥{pricing.median.toLocaleString()}</span>
       </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', fontSize: '13px' }}>
+        <span style={{ color: 'var(--text-secondary)' }}>建议区间</span>
+        <span style={{ color: 'var(--text-primary)', fontWeight: '500' }}>
+          ¥{pricing.min.toLocaleString()} - ¥{pricing.max.toLocaleString()}
+        </span>
+      </div>
       <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '12px' }}>
         <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-          各类型参考价
+          各授权类型参考中位数
         </div>
         {pricing.breakdown.map((item) => (
           <div key={item.type} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-            <span style={{ color: authTypeColors[item.type] }}>{authorizationLabels[item.type]}</span>
+            <span style={{ color: authTypeColors[item.type], fontWeight: '500' }}>
+              {authorizationLabels[item.type]}
+            </span>
             <span style={{ color: 'var(--text-primary)' }}>
-              ¥{item.medianFee.toLocaleString()} ({item.count}笔)
+              ¥{item.medianFee.toLocaleString()} <span style={{ color: 'var(--text-secondary)' }}>({item.count}笔)</span>
             </span>
           </div>
         ))}
@@ -390,6 +384,7 @@ const EditModal: React.FC<{
               <button
                 key={type}
                 onClick={() => setAuthType(type)}
+                className={`auth-tag ${authType === type ? 'auth-tag-animated' : ''}`}
                 style={{
                   flex: 1,
                   padding: '12px 16px',
@@ -400,8 +395,7 @@ const EditModal: React.FC<{
                   fontSize: '14px',
                   fontWeight: '500',
                   cursor: 'pointer',
-                  transition: 'all 0.25s ease-out',
-                  animation: authType === type ? 'tagPulse 0.3s ease-out' : 'none',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                 }}
               >
                 {authorizationLabels[type]}
@@ -557,6 +551,7 @@ const Portfolio: React.FC<PortfolioProps> = ({ portfolio, onPortfolioUpdate }) =
   const [isDragging, setIsDragging] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [editingItem, setEditingItem] = useState<PortfolioItem | null>(null);
+  const [hoveredPricingId, setHoveredPricingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -566,7 +561,12 @@ const Portfolio: React.FC<PortfolioProps> = ({ portfolio, onPortfolioUpdate }) =
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(false);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+      setIsDragging(false);
+    }
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -646,17 +646,7 @@ const Portfolio: React.FC<PortfolioProps> = ({ portfolio, onPortfolioUpdate }) =
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
-        style={{
-          border: `3px dashed ${isDragging ? 'var(--accent)' : 'rgba(255,255,255,0.2)'}`,
-          borderRadius: '16px',
-          padding: '48px',
-          textAlign: 'center',
-          marginBottom: '32px',
-          cursor: 'pointer',
-          transition: 'all 0.25s ease-out',
-          animation: isDragging ? 'dashAnimation 1.5s infinite' : 'none',
-          background: isDragging ? 'rgba(233, 69, 96, 0.1)' : 'transparent',
-        }}
+        className={`upload-zone ${isDragging ? 'upload-zone-dragging' : ''}`}
       >
         <div style={{ fontSize: '48px', marginBottom: '16px' }}>📷</div>
         <div style={{ fontSize: '16px', color: 'var(--text-primary)', marginBottom: '8px' }}>
@@ -668,6 +658,7 @@ const Portfolio: React.FC<PortfolioProps> = ({ portfolio, onPortfolioUpdate }) =
       </div>
 
       <div
+        className="portfolio-grid"
         style={{
           columnCount: 4,
           columnGap: '16px',
@@ -702,6 +693,7 @@ const Portfolio: React.FC<PortfolioProps> = ({ portfolio, onPortfolioUpdate }) =
                 onClick={() => setLightboxIndex(index)}
               />
               <div
+                className={`auth-tag auth-tag-${item.authorizationType} auth-tag-transition`}
                 style={{
                   position: 'absolute',
                   top: '12px',
@@ -712,7 +704,7 @@ const Portfolio: React.FC<PortfolioProps> = ({ portfolio, onPortfolioUpdate }) =
                   fontWeight: '500',
                   color: 'white',
                   background: authTypeColors[item.authorizationType],
-                  animation: 'tagPulse 0.3s ease-out',
+                  boxShadow: `0 2px 8px ${authTypeColors[item.authorizationType]}40`,
                 }}
               >
                 {authorizationLabels[item.authorizationType]}
@@ -728,39 +720,18 @@ const Portfolio: React.FC<PortfolioProps> = ({ portfolio, onPortfolioUpdate }) =
               </div>
 
               {item.pricingSuggestion && (
-                <div style={{ position: 'relative', display: 'inline-block', marginBottom: '12px' }}
-                  onMouseEnter={(e) => {
-                    const tooltip = e.currentTarget.querySelector('.pricing-tooltip') as HTMLElement;
-                    if (tooltip) {
-                      tooltip.style.opacity = '1';
-                      tooltip.style.visibility = 'visible';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    const tooltip = e.currentTarget.querySelector('.pricing-tooltip') as HTMLElement;
-                    if (tooltip) {
-                      tooltip.style.opacity = '0';
-                      tooltip.style.visibility = 'hidden';
-                    }
-                  }}
+                <div
+                  style={{ position: 'relative', display: 'inline-block', marginBottom: '12px' }}
+                  onMouseEnter={() => setHoveredPricingId(item.id)}
+                  onMouseLeave={() => setHoveredPricingId(null)}
                 >
-                  <div
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '6px 12px',
-                      background: 'rgba(243, 156, 18, 0.2)',
-                      border: '1px solid var(--gold)',
-                      borderRadius: '20px',
-                      fontSize: '12px',
-                      color: 'var(--gold)',
-                      fontWeight: '500',
-                    }}
-                  >
+                  <div className="pricing-tag">
                     💰 ¥{item.pricingSuggestion.min.toLocaleString()} - ¥{item.pricingSuggestion.max.toLocaleString()}
                   </div>
-                  <PricingTooltip pricing={item.pricingSuggestion} />
+                  <PricingTooltip
+                    pricing={item.pricingSuggestion}
+                    visible={hoveredPricingId === item.id}
+                  />
                 </div>
               )}
 
@@ -825,19 +796,6 @@ const Portfolio: React.FC<PortfolioProps> = ({ portfolio, onPortfolioUpdate }) =
           allPortfolio={portfolio}
         />
       )}
-
-      <style>{`
-        @media (max-width: 1024px) {
-          div[style*="columnCount: 4"] {
-            column-count: 2 !important;
-          }
-        }
-        @media (max-width: 640px) {
-          div[style*="columnCount: 4"] {
-            column-count: 1 !important;
-          }
-        }
-      `}</style>
     </div>
   );
 };

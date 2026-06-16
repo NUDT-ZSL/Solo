@@ -12,43 +12,59 @@ interface StatCardProps {
   prefix?: string;
   suffix?: string;
   icon: string;
+  delay?: number;
 }
 
-const AnimatedNumber: React.FC<{ value: number; duration?: number; prefix?: string; suffix?: string }> = ({
-  value,
-  duration = 1500,
-  prefix = '',
-  suffix = '',
-}) => {
+const AnimatedCounter: React.FC<{
+  value: number;
+  duration?: number;
+  prefix?: string;
+  suffix?: string;
+  delay?: number;
+}> = ({ value, duration = 1500, prefix = '', suffix = '', delay = 0 }) => {
   const [displayValue, setDisplayValue] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
 
   useEffect(() => {
-    let startTime: number | null = null;
-    let animationFrame: number;
+    const timeout = setTimeout(() => {
+      setIsAnimating(true);
+      let startTime: number | null = null;
+      let animationFrame: number;
 
-    const animate = (timestamp: number) => {
-      if (!startTime) startTime = timestamp;
-      const progress = Math.min((timestamp - startTime) / duration, 1);
-      const easeOutQuart = 1 - Math.pow(1 - progress, 4);
-      setDisplayValue(Math.floor(easeOutQuart * value));
+      const animate = (timestamp: number) => {
+        if (!startTime) startTime = timestamp;
+        const elapsed = timestamp - startTime;
+        const progress = Math.min(elapsed / duration, 1);
 
-      if (progress < 1) {
-        animationFrame = requestAnimationFrame(animate);
-      }
-    };
+        const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+        const currentValue = Math.floor(easeOutQuart * value);
+        setDisplayValue(currentValue);
 
-    animationFrame = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animationFrame);
-  }, [value, duration]);
+        if (progress < 1) {
+          animationFrame = requestAnimationFrame(animate);
+        } else {
+          setDisplayValue(value);
+        }
+      };
+
+      animationFrame = requestAnimationFrame(animate);
+
+      return () => {
+        cancelAnimationFrame(animationFrame);
+      };
+    }, delay);
+
+    return () => clearTimeout(timeout);
+  }, [value, duration, delay]);
 
   return (
-    <span style={{ animation: 'countUp 0.6s ease-out forwards' }}>
+    <span className="counter-number" style={{ animationDelay: `${delay}ms` }}>
       {prefix}{displayValue.toLocaleString()}{suffix}
     </span>
   );
 };
 
-const StatCard: React.FC<StatCardProps> = ({ title, value, prefix, suffix, icon }) => {
+const StatCard: React.FC<StatCardProps> = ({ title, value, prefix, suffix, icon, delay = 0 }) => {
   return (
     <div
       style={{
@@ -77,13 +93,19 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, prefix, suffix, icon 
         <span style={{ fontSize: '28px' }}>{icon}</span>
       </div>
       <div style={{ fontSize: '36px', fontWeight: 'bold', color: 'var(--accent)', lineHeight: 1.2 }}>
-        <AnimatedNumber value={value} prefix={prefix} suffix={suffix} />
+        <AnimatedCounter value={value} prefix={prefix} suffix={suffix} delay={delay} />
       </div>
     </div>
   );
 };
 
 const Dashboard: React.FC<DashboardProps> = ({ portfolio, clients }) => {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const totalWorks = portfolio.length;
   const totalRevenue = portfolio.reduce((sum, item) => {
     return sum + item.authorizations.reduce((s, auth) => s + auth.fee, 0);
@@ -113,9 +135,13 @@ const Dashboard: React.FC<DashboardProps> = ({ portfolio, clients }) => {
       </h1>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '32px' }}>
-        <StatCard title="总作品数" value={totalWorks} icon="📸" />
-        <StatCard title="总授权收入" value={totalRevenue} prefix="¥" icon="💰" />
-        <StatCard title="活跃客户数" value={activeClients} icon="👥" />
+        {mounted && (
+          <>
+            <StatCard title="总作品数" value={totalWorks} icon="📸" delay={0} />
+            <StatCard title="总授权收入" value={totalRevenue} prefix="¥" icon="💰" delay={200} />
+            <StatCard title="活跃客户数" value={activeClients} icon="👥" delay={400} />
+          </>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
@@ -146,7 +172,8 @@ const Dashboard: React.FC<DashboardProps> = ({ portfolio, clients }) => {
                     background: 'rgba(26, 26, 46, 0.6)',
                     borderRadius: '12px',
                     transition: 'all 0.25s ease-out',
-                    animation: `fadeIn 0.5s ease-out ${index * 0.1}s both`,
+                    animation: `fadeIn 0.5s ease-out ${600 + index * 100}ms both`,
+                    opacity: 0,
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = 'rgba(26, 26, 46, 0.9)';
@@ -187,11 +214,11 @@ const Dashboard: React.FC<DashboardProps> = ({ portfolio, clients }) => {
               { type: 'exclusive', label: '独家', color: 'var(--exclusive)' },
               { type: 'non-exclusive', label: '非独家', color: 'var(--non-exclusive)' },
               { type: 'buyout', label: '买断', color: 'var(--buyout)' },
-            ].map((item) => {
+            ].map((item, index) => {
               const count = typeDistribution[item.type] || 0;
               const percentage = totalWorks > 0 ? (count / totalWorks) * 100 : 0;
               return (
-                <div key={item.type}>
+                <div key={item.type} style={{ animation: `fadeIn 0.5s ease-out ${900 + index * 100}ms both`, opacity: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                     <span style={{ color: 'var(--text-primary)', fontSize: '14px' }}>{item.label}</span>
                     <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>{count} 件 ({percentage.toFixed(0)}%)</span>
@@ -208,11 +235,16 @@ const Dashboard: React.FC<DashboardProps> = ({ portfolio, clients }) => {
                       style={{
                         height: '100%',
                         background: item.color,
-                        width: `${percentage}%`,
+                        width: '0%',
                         borderRadius: '4px',
-                        transition: 'width 1s ease-out',
+                        animation: `widthGrow 1s ease-out ${1100 + index * 100}ms forwards`,
                       }}
                     />
+                    <style>{`
+                      @keyframes widthGrow {
+                        to { width: ${percentage}%; }
+                      }
+                    `}</style>
                   </div>
                 </div>
               );

@@ -16,6 +16,7 @@ interface DrawerProps {
 const StatusBadge: React.FC<{ status: CommunicationStatus }> = ({ status }) => {
   return (
     <div
+      className="status-gradient"
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -26,18 +27,20 @@ const StatusBadge: React.FC<{ status: CommunicationStatus }> = ({ status }) => {
         fontWeight: '500',
         color: 'white',
         background: `linear-gradient(135deg, ${statusColors[status]}, ${statusColors[status]}dd)`,
-        animation: 'pulse 2s infinite',
+        animation: 'statusGradientPulse 2s ease-in-out infinite',
       }}
     >
-      <div
-        style={{
-          width: '6px',
-          height: '6px',
-          borderRadius: '50%',
-          background: 'white',
-          animation: 'pulse 1.5s infinite',
-        }}
-      />
+      <div className="status-badge-dot">
+        <div
+          style={{
+            width: '6px',
+            height: '6px',
+            borderRadius: '50%',
+            background: 'white',
+            position: 'relative',
+          }}
+        />
+      </div>
       {statusLabels[status]}
     </div>
   );
@@ -77,6 +80,7 @@ const ClientDrawer: React.FC<DrawerProps> = ({ client, onClose, onAddLog }) => {
   return (
     <>
       <div
+        className="drawer-overlay"
         style={{
           position: 'fixed',
           inset: 0,
@@ -88,6 +92,7 @@ const ClientDrawer: React.FC<DrawerProps> = ({ client, onClose, onAddLog }) => {
       />
 
       <div
+        className="drawer-panel"
         style={{
           position: 'fixed',
           top: 0,
@@ -99,8 +104,10 @@ const ClientDrawer: React.FC<DrawerProps> = ({ client, onClose, onAddLog }) => {
           zIndex: 999,
           display: 'flex',
           flexDirection: 'column',
-          animation: 'slideInRight 0.35s ease-out',
+          animation: 'drawerSlideIn 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+          transition: 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
           boxShadow: '-4px 0 20px rgba(0, 0, 0, 0.3)',
+          willChange: 'transform',
         }}
       >
         <div
@@ -187,7 +194,8 @@ const ClientDrawer: React.FC<DrawerProps> = ({ client, onClose, onAddLog }) => {
                     color: 'white',
                     fontSize: '12px',
                     cursor: 'pointer',
-                    transition: 'all 0.25s ease-out',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    animation: newLogStatus === status ? 'authTagTransition 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none',
                   }}
                 >
                   {statusLabels[status]}
@@ -265,7 +273,8 @@ const ClientDrawer: React.FC<DrawerProps> = ({ client, onClose, onAddLog }) => {
                     position: 'relative',
                     paddingLeft: '40px',
                     marginBottom: '20px',
-                    animation: `fadeIn 0.5s ease-out ${index * 0.1}s both`,
+                    animation: `fadeIn 0.5s ease-out ${index * 100}ms both`,
+                    opacity: 0,
                   }}
                 >
                   <div
@@ -279,7 +288,7 @@ const ClientDrawer: React.FC<DrawerProps> = ({ client, onClose, onAddLog }) => {
                       background: statusColors[log.status],
                       border: '3px solid var(--bg-secondary)',
                       boxShadow: `0 0 0 2px ${statusColors[log.status]}40`,
-                      animation: 'pulse 2s infinite',
+                      animation: 'pulse 2s ease-in-out infinite',
                     }}
                   />
                   <div
@@ -353,7 +362,8 @@ const ClientLog: React.FC<ClientLogProps> = ({ clients, onClientsUpdate }) => {
                 padding: '24px',
                 cursor: 'pointer',
                 transition: 'all 0.25s ease-out',
-                animation: `fadeIn 0.5s ease-out ${index * 0.1}s both`,
+                animation: `fadeIn 0.5s ease-out ${index * 100}ms both`,
+                opacity: 0,
                 border: '1px solid transparent',
               }}
               onClick={() => setSelectedClientId(client.id)}
@@ -389,6 +399,7 @@ const ClientLog: React.FC<ClientLogProps> = ({ clients, onClientsUpdate }) => {
                     color: 'white',
                     fontSize: '18px',
                     fontWeight: 'bold',
+                    animation: 'statusGradientPulse 2s ease-in-out infinite',
                   }}
                 >
                   {client.name.charAt(0)}
