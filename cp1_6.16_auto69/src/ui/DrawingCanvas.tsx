@@ -8,11 +8,15 @@ interface DrawingCanvasProps {
   disabled?: boolean;
   height?: number;
   showInvalid?: boolean;
+  isCooldownMode?: boolean;
+  cooldownSpellName?: string;
 }
 
 const MAX_POINTS = 100;
-const FADE_DURATION = 500;
+const FADE_DURATION_NORMAL = 500;
+const FADE_DURATION_COOLDOWN = 300;
 const INVALID_MESSAGE_DURATION = 500;
+const COOLDOWN_FLASH_INTERVAL = 150;
 
 const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   onDrawingComplete,
@@ -20,16 +24,32 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   speedMultiplier = 1,
   disabled = false,
   height = 250,
-  showInvalid = false
+  showInvalid = false,
+  isCooldownMode = false,
+  cooldownSpellName = ''
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
+  const [showCooldownMsg, setShowCooldownMsg] = useState(false);
   const pathRef = useRef<Point[]>([]);
   const fadeStartTimeRef = useRef<number | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const lastPointRef = useRef<Point | null>(null);
+  const cooldownModeRef = useRef(isCooldownMode);
+
+  useEffect(() => {
+    cooldownModeRef.current = isCooldownMode;
+  }, [isCooldownMode]);
+
+  useEffect(() => {
+    if (isCooldownMode && isDrawing) {
+      setShowCooldownMsg(true);
+      const timer = setTimeout(() => setShowCooldownMsg(false), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [isCooldownMode, isDrawing]);
 
   const getCanvasPoint = useCallback((e: React.MouseEvent | MouseEvent): Point | null => {
     const canvas = canvasRef.current;
@@ -61,17 +81,29 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     lastPointRef.current = point;
   }, []);
 
-  const drawPath = useCallback((ctx: CanvasRenderingContext2D, path: Point[], opacity: number = 1) => {
+  const drawPath = useCallback((ctx: CanvasRenderingContext2D, path: Point[], opacity: number = 1, cooldown: boolean = false) => {
     if (path.length < 2) return;
+    
+    const flashPhase = cooldown 
+      ? Math.floor(Date.now() / COOLDOWN_FLASH_INTERVAL) % 2 
+      : 0;
+    
+    const strokeColor = cooldown 
+      ? (flashPhase === 0 ? '#E74C3C' : '#FF6B6B')
+      : '#00D4FF';
+    const pointColor = cooldown
+      ? (flashPhase === 0 ? '#FFFFFF' : '#FFCCCC')
+      : '#FFFFFF';
+    const shadowColor = cooldown ? '#E74C3C' : '#00D4FF';
     
     ctx.save();
     ctx.globalAlpha = opacity;
-    ctx.strokeStyle = '#00D4FF';
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = cooldown ? 4 : 3;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.shadowColor = '#00D4FF';
-    ctx.shadowBlur = 10;
+    ctx.shadowColor = shadowColor;
+    ctx.shadowBlur = cooldown ? 15 : 10;
     
     ctx.beginPath();
     ctx.moveTo(path[0].x, path[0].y);
@@ -85,27 +117,34 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     
     ctx.save();
     ctx.globalAlpha = opacity;
-    ctx.fillStyle = '#FFFFFF';
-    ctx.shadowColor = '#FFFFFF';
-    ctx.shadowBlur = 5;
+    ctx.fillStyle = pointColor;
+    ctx.shadowColor = pointColor;
+    ctx.shadowBlur = cooldown ? 8 : 5;
     
-    for (let i = 0; i < path.length; i += 3) {
+    const step = cooldown ? 2 : 3;
+    for (let i = 0; i < path.length; i += step) {
+      const pointSize = cooldown ? (flashPhase === 0 ? 3 : 2) : 2;
       ctx.beginPath();
-      ctx.arc(path[i].x, path[i].y, 2, 0, Math.PI * 2);
+      ctx.arc(path[i].x, path[i].y, pointSize, 0, Math.PI * 2);
       ctx.fill();
     }
     
     ctx.restore();
   }, []);
 
-  const drawBackground = useCallback((ctx: CanvasRenderingContext2D, width: number, height: number) => {
+  const drawBackground = useCallback((ctx: CanvasRenderingContext2D, width: number, height: number, cooldown: boolean) => {
     const gradient = ctx.createLinearGradient(0, 0, 0, height);
-    gradient.addColorStop(0, '#2C1B4D');
-    gradient.addColorStop(1, '#1A0E2E');
+    if (cooldown) {
+      gradient.addColorStop(0, '#3D1B1B');
+      gradient.addColorStop(1, '#2E0E0E');
+    } else {
+      gradient.addColorStop(0, '#2C1B4D');
+      gradient.addColorStop(1, '#1A0E2E');
+    }
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
     
-    ctx.strokeStyle = 'rgba(0, 212, 255, 0.3)';
+    ctx.strokeStyle = cooldown ? 'rgba(231, 76, 60, 0.4)' : 'rgba(0, 212, 255, 0.3)';
     ctx.lineWidth = 2;
     ctx.strokeRect(1, 1, width - 2, height - 2);
   }, []);
@@ -118,26 +157,28 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     if (!ctx) return;
     
     const { width, height } = canvas;
+    const cooldown = cooldownModeRef.current;
+    const fadeDuration = cooldown ? FADE_DURATION_COOLDOWN : FADE_DURATION_NORMAL;
     
     ctx.clearRect(0, 0, width, height);
-    drawBackground(ctx, width, height);
+    drawBackground(ctx, width, height, cooldown);
     
     const path = pathRef.current;
     
     if (fadeStartTimeRef.current !== null) {
       const elapsed = Date.now() - fadeStartTimeRef.current;
-      const progress = Math.min(1, elapsed / FADE_DURATION);
+      const progress = Math.min(1, elapsed / fadeDuration);
       const opacity = 1 - progress;
       
       if (opacity > 0) {
-        drawPath(ctx, path, opacity);
+        drawPath(ctx, path, opacity, cooldown);
         animationFrameRef.current = requestAnimationFrame(render);
       } else {
         fadeStartTimeRef.current = null;
         pathRef.current = [];
       }
     } else if (path.length > 0) {
-      drawPath(ctx, path, 1);
+      drawPath(ctx, path, 1, cooldown);
       
       if (isDrawing) {
         animationFrameRef.current = requestAnimationFrame(render);
@@ -276,13 +317,35 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
             top: '50%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
-            color: 'rgba(255, 255, 255, 0.5)',
+            color: isCooldownMode ? 'rgba(231, 76, 60, 0.6)' : 'rgba(255, 255, 255, 0.5)',
             fontSize: '16px',
             pointerEvents: 'none',
             transition: 'opacity 0.3s ease'
           }}
         >
-          绘制咒语
+          {isCooldownMode ? '绘制咒语（冷却中）' : '绘制咒语'}
+        </div>
+      )}
+      
+      {showCooldownMsg && (
+        <div 
+          className="cooldown-message"
+          style={{
+            position: 'absolute',
+            top: '12px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            color: '#E74C3C',
+            fontSize: '16px',
+            fontWeight: 'bold',
+            textShadow: '0 0 10px rgba(231, 76, 60, 0.8)',
+            pointerEvents: 'none',
+            animation: 'cooldownFade 0.8s ease-out forwards',
+            whiteSpace: 'nowrap',
+            zIndex: 10
+          }}
+        >
+          {cooldownSpellName ? `${cooldownSpellName}冷却中` : '冷却中'}
         </div>
       )}
       
@@ -315,6 +378,24 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
           100% {
             opacity: 0;
             transform: translate(-50%, -50%) scale(1.2);
+          }
+        }
+        @keyframes cooldownFade {
+          0% {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-10px);
+          }
+          20% {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+          }
+          80% {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+          }
+          100% {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-5px);
           }
         }
       `}</style>

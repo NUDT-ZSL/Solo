@@ -2,6 +2,8 @@ import { SpellType, SPELLS } from './SpellMatcher';
 
 export type PlayerId = 'player1' | 'player2';
 
+export type SpellCooldowns = Record<SpellType, number>;
+
 export interface PlayerState {
   id: PlayerId;
   name: string;
@@ -13,7 +15,7 @@ export interface PlayerState {
   slowEndTime: number;
   isHasted: boolean;
   hasteEndTime: number;
-  cooldownEndTime: number;
+  spellCooldowns: SpellCooldowns;
   combo: number;
   lastSpellTime: number;
 }
@@ -36,13 +38,16 @@ export interface SpellResult {
     slow?: boolean;
     haste?: boolean;
   };
+  onCooldown?: boolean;
 }
 
-const COOLDOWN_DURATION = 1000;
+const SPELL_COOLDOWN_DURATION = 3000;
 const SHIELD_DURATION = 2000;
 const SLOW_DURATION = 1500;
 const HASTE_DURATION = 1000;
 const COMBO_TIMEOUT = 3000;
+
+const ALL_SPELLS: SpellType[] = ['fireball', 'iceSpike', 'thunder', 'shield', 'heal', 'haste'];
 
 export function createInitialState(): GameState {
   const now = Date.now();
@@ -57,6 +62,14 @@ export function createInitialState(): GameState {
   };
 }
 
+function createInitialCooldowns(): SpellCooldowns {
+  const cooldowns: Partial<SpellCooldowns> = {};
+  for (const spell of ALL_SPELLS) {
+    cooldowns[spell] = 0;
+  }
+  return cooldowns as SpellCooldowns;
+}
+
 function createPlayer(id: PlayerId, name: string, now: number): PlayerState {
   return {
     id,
@@ -69,7 +82,7 @@ function createPlayer(id: PlayerId, name: string, now: number): PlayerState {
     slowEndTime: 0,
     isHasted: false,
     hasteEndTime: 0,
-    cooldownEndTime: now,
+    spellCooldowns: createInitialCooldowns(),
     combo: 0,
     lastSpellTime: 0
   };
@@ -79,12 +92,29 @@ export function getOpponent(playerId: PlayerId): PlayerId {
   return playerId === 'player1' ? 'player2' : 'player1';
 }
 
-export function isCooldownActive(player: PlayerState, now: number): boolean {
-  return player.cooldownEndTime > now;
+export function isSpellOnCooldown(player: PlayerState, spell: SpellType, now: number): boolean {
+  return player.spellCooldowns[spell] > now;
 }
 
-export function getCooldownRemaining(player: PlayerState, now: number): number {
-  return Math.max(0, player.cooldownEndTime - now);
+export function getSpellCooldownRemaining(player: PlayerState, spell: SpellType, now: number): number {
+  return Math.max(0, player.spellCooldowns[spell] - now);
+}
+
+export function getAllCooldownRemaining(player: PlayerState, now: number): Record<SpellType, number> {
+  const result: Partial<Record<SpellType, number>> = {};
+  for (const spell of ALL_SPELLS) {
+    result[spell] = getSpellCooldownRemaining(player, spell, now);
+  }
+  return result as Record<SpellType, number>;
+}
+
+export function getAnySpellOnCooldown(player: PlayerState, now: number): SpellType | null {
+  for (const spell of ALL_SPELLS) {
+    if (isSpellOnCooldown(player, spell, now)) {
+      return spell;
+    }
+  }
+  return null;
 }
 
 export function castSpell(
@@ -108,15 +138,16 @@ export function castSpell(
 
   const caster = state.players[casterId];
   
-  if (isCooldownActive(caster, now)) {
+  if (isSpellOnCooldown(caster, spell, now)) {
     return {
       newState: state,
       result: {
         success: false,
-        spell: null,
+        spell: spell,
         damage: 0,
         target: null,
-        effects: {}
+        effects: {},
+        onCooldown: true
       }
     };
   }
@@ -131,7 +162,10 @@ export function castSpell(
   };
 
   const newPlayers = { ...state.players };
-  const newCaster = { ...caster };
+  const newCaster = { 
+    ...caster, 
+    spellCooldowns: { ...caster.spellCooldowns }
+  };
   
   const timeSinceLastSpell = now - newCaster.lastSpellTime;
   if (timeSinceLastSpell < COMBO_TIMEOUT && newCaster.combo > 0) {
@@ -140,7 +174,7 @@ export function castSpell(
     newCaster.combo = 1;
   }
   newCaster.lastSpellTime = now;
-  newCaster.cooldownEndTime = now + COOLDOWN_DURATION;
+  newCaster.spellCooldowns[spell] = now + SPELL_COOLDOWN_DURATION;
 
   if (spell === 'shield') {
     newCaster.hasShield = true;
@@ -157,7 +191,10 @@ export function castSpell(
     result.effects.haste = true;
   } else {
     const targetId = getOpponent(casterId);
-    const target = { ...newPlayers[targetId] };
+    const target = { 
+      ...newPlayers[targetId],
+      spellCooldowns: { ...newPlayers[targetId].spellCooldowns }
+    };
     
     let damage = spellInfo.damage;
     
@@ -214,7 +251,10 @@ export function updatePlayerStatuses(state: GameState, now: number): GameState {
   const newPlayers = { ...state.players };
   
   for (const playerId of Object.keys(newPlayers) as PlayerId[]) {
-    const player = { ...newPlayers[playerId] };
+    const player = { 
+      ...newPlayers[playerId],
+      spellCooldowns: { ...newPlayers[playerId].spellCooldowns }
+    };
     
     if (player.hasShield && player.shieldEndTime <= now) {
       player.hasShield = false;
@@ -258,3 +298,21 @@ export function getSpeedMultiplier(player: PlayerState, now: number): number {
   
   return multiplier;
 }
+
+export const SPELL_ICONS: Record<SpellType, string> = {
+  fireball: '🔥',
+  iceSpike: '❄️',
+  thunder: '⚡',
+  shield: '🛡️',
+  heal: '💚',
+  haste: '💨'
+};
+
+export const SPELL_NAMES: Record<SpellType, string> = {
+  fireball: '火球',
+  iceSpike: '冰锥',
+  thunder: '雷电',
+  shield: '护盾',
+  heal: '治疗',
+  haste: '加速'
+};
