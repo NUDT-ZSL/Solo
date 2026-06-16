@@ -190,7 +190,10 @@ export class GameEngine {
 
   private acquireParticle(): Particle {
     if (this.state.particlePool.length > 0) {
-      return this.state.particlePool.pop()!;
+      const p = this.state.particlePool.pop()!;
+      p.x = 0; p.y = 0; p.vx = 0; p.vy = 0;
+      p.size = 0; p.color = ''; p.life = 0; p.maxLife = 0;
+      return p;
     }
     return {
       x: 0, y: 0, vx: 0, vy: 0, size: 0, color: '',
@@ -199,7 +202,7 @@ export class GameEngine {
   }
 
   private releaseParticle(particle: Particle): void {
-    if (this.state.particlePool.length < MAX_PARTICLES * 2) {
+    if (this.state.particlePool.length < MAX_PARTICLES) {
       this.state.particlePool.push(particle);
     }
   }
@@ -631,8 +634,9 @@ export class GameEngine {
     const ship = this.state.ship;
     const station = this.state.station;
     const dist = this.distance(ship.x, ship.y, station.x, station.y);
+    const inRange = dist < STATION_GLOW_RADIUS;
 
-    if (dist < STATION_GLOW_RADIUS) {
+    if (inRange && this.input.collect) {
       ship.energy = 100;
 
       if (ship.minerals > 0) {
@@ -650,14 +654,25 @@ export class GameEngine {
             this.state.mineSpawnMin - DIFFICULTY_MINE_REDUCTION
           );
           this.state.mineSpawnMax = Math.max(
-            MIN_MINE_SPAWN_INTERVAL + 1,
+            MIN_MINE_SPAWN_INTERVAL,
             this.state.mineSpawnMax - DIFFICULTY_MINE_REDUCTION
           );
 
-          this.state.mineSpawnInterval = Math.min(
-            this.state.mineSpawnInterval,
-            this.randomFloat(this.state.mineSpawnMin, this.state.mineSpawnMax)
-          );
+          if (this.state.mineSpawnMin > this.state.mineSpawnMax) {
+            this.state.mineSpawnMin = this.state.mineSpawnMax;
+          }
+
+          if (this.state.mineSpawnMin === this.state.mineSpawnMax) {
+            this.state.mineSpawnInterval = Math.min(
+              this.state.mineSpawnInterval,
+              this.state.mineSpawnMin
+            );
+          } else {
+            this.state.mineSpawnInterval = Math.min(
+              this.state.mineSpawnInterval,
+              this.randomFloat(this.state.mineSpawnMin, this.state.mineSpawnMax)
+            );
+          }
 
           this.state.mineralPulseSpeed = 1 + DIFFICULTY_PULSE_BOOST;
           this.state.stormDensity = 1 + DIFFICULTY_STORM_BOOST;
@@ -933,13 +948,37 @@ export class GameEngine {
     });
   }
 
+  private lastRadarData: UIState['radarData'] | null = null;
+  private lastUiState: UIState | null = null;
+
   private updateUI(): void {
     const state = this.state;
     const shouldUpdateRadar = state.frameCount % RADAR_REFRESH_INTERVAL === 0;
 
-    if (shouldUpdateRadar || state.showLowEnergyWarning || state.gameOver) {
+    let radarData = this.lastRadarData;
+    if (shouldUpdateRadar || !radarData) {
       const scanAngle = (state.currentTime % RADAR_SCAN_PERIOD) / RADAR_SCAN_PERIOD * Math.PI * 2;
+      radarData = {
+        ship: { x: state.ship.x, y: state.ship.y },
+        minerals: state.minerals.map(m => ({ x: m.x, y: m.y })),
+        mines: state.mines.map(m => ({ x: m.x, y: m.y })),
+        station: { x: state.station.x, y: state.station.y },
+        scanAngle
+      };
+      this.lastRadarData = radarData;
+    }
 
+    const needsFullUpdate = shouldUpdateRadar ||
+      !this.lastUiState ||
+      this.lastUiState.health !== state.ship.health ||
+      this.lastUiState.minerals !== state.ship.minerals ||
+      this.lastUiState.energy !== state.ship.energy ||
+      this.lastUiState.score !== state.ship.score ||
+      this.lastUiState.showLowEnergyWarning !== state.showLowEnergyWarning ||
+      this.lastUiState.gameOver !== state.gameOver ||
+      this.lastUiState.radarData !== radarData;
+
+    if (needsFullUpdate) {
       const uiState: UIState = {
         health: state.ship.health,
         minerals: state.ship.minerals,
@@ -947,21 +986,17 @@ export class GameEngine {
         score: state.ship.score,
         showLowEnergyWarning: state.showLowEnergyWarning,
         gameOver: state.gameOver,
-        radarData: {
-          ship: { x: state.ship.x, y: state.ship.y },
-          minerals: state.minerals.map(m => ({ x: m.x, y: m.y })),
-          mines: state.mines.map(m => ({ x: m.x, y: m.y })),
-          station: { x: state.station.x, y: state.station.y },
-          scanAngle
-        }
+        radarData
       };
-
+      this.lastUiState = uiState;
       this.uiCallback(uiState);
     }
   }
 
   public restart(): void {
     this.state = this.createInitialState();
+    this.lastRadarData = null;
+    this.lastUiState = null;
   }
 
   public destroy(): void {
