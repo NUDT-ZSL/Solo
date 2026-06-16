@@ -1,0 +1,574 @@
+{
+  "id": "28d911cf-bbed-4f3c-bb43-20ea81f577ee",
+  "name": "花瓣层叠",
+  "sculpture": {
+    "id": "1b53fb2b-4699-4283-86f5-24a360eb535a",
+    "name": "花瓣层叠",
+    "nodes": [
+      {
+        "id": "a2f0960e-e0d5-42c1-9ef4-2c623c0d0a48",
+        "position": {
+          "x": 3,
+          "y": 0,
+          "z": 0
+        },
+        "size": 1.3718393439521792,
+        "color": "#ff69b4",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 3,
+          "y": 0,
+          "z": 0
+        }
+      },
+      {
+        "id": "71b8c4bd-cdc3-4e94-a093-f83ed1eebcb7",
+        "position": {
+          "x": 0.9270509831248424,
+          "y": 0,
+          "z": 2.8531695488854605
+        },
+        "size": 1.3277132054912706,
+        "color": "#ffb6c1",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 0.9270509831248424,
+          "y": 0,
+          "z": 2.8531695488854605
+        }
+      },
+      {
+        "id": "1c753422-6e73-44b4-a4f3-a45c8734477a",
+        "position": {
+          "x": -2.427050983124842,
+          "y": 0,
+          "z": 1.7633557568774196
+        },
+        "size": 1.20017853375475,
+        "color": "#dda0dd",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": -2.427050983124842,
+          "y": 0,
+          "z": 1.7633557568774196
+        }
+      },
+      {
+        "id": "60d2142a-9f54-488a-8fb0-8c2e846e52f1",
+        "position": {
+          "x": -2.4270509831248424,
+          "y": 0,
+          "z": -1.7633557568774192
+        },
+        "size": 1.3636462976214243,
+        "color": "#ff1493",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": -2.4270509831248424,
+          "y": 0,
+          "z": -1.7633557568774192
+        }
+      },
+      {
+        "id": "87f6abd4-41b6-45b4-931a-2c0df2bb15b2",
+        "position": {
+          "x": 0.9270509831248417,
+          "y": 0,
+          "z": -2.853169548885461
+        },
+        "size": 1.0798764202554234,
+        "color": "#c71585",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 0.9270509831248417,
+          "y": 0,
+          "z": -2.853169548885461
+        }
+      },
+      {
+        "id": "160ae4c3-d82e-4c77-addd-354dfd0e034a",
+        "position": {
+          "x": 4.045084971874737,
+          "y": 4,
+          "z": 2.938926261462366
+        },
+        "size": 1.4131332787912176,
+        "color": "#ff69b4",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 4.045084971874737,
+          "y": 4,
+          "z": 2.938926261462366
+        }
+      },
+      {
+        "id": "b6a77df5-1848-433e-9ec9-b0c650850658",
+        "position": {
+          "x": -1.5450849718747368,
+          "y": 4,
+          "z": 4.755282581475768
+        },
+        "size": 1.28175654521477,
+        "color": "#ffb6c1",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": -1.5450849718747368,
+          "y": 4,
+          "z": 4.755282581475768
+        }
+      },
+      {
+        "id": "1085eb5c-d871-44c5-a553-08478d5915c3",
+        "position": {
+          "x": -5,
+          "y": 4,
+          "z": 6.123233995736766e-16
+        },
+        "size": 1.4923272579527553,
+        "color": "#dda0dd",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": -5,
+          "y": 4,
+          "z": 6.123233995736766e-16
+        }
+      },
+      {
+        "id": "d317e75f-8390-4582-9533-0adc8dc7c213",
+        "position": {
+          "x": -1.5450849718747377,
+          "y": 4,
+          "z": -4.755282581475767
+        },
+        "size": 1.0378619728604948,
+        "color": "#ff1493",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": -1.5450849718747377,
+          "y": 4,
+          "z": -4.755282581475767
+        }
+      },
+      {
+        "id": "a719f23f-97d5-4027-a0c6-2fc51f1c0695",
+        "position": {
+          "x": 4.045084971874736,
+          "y": 4,
+          "z": -2.938926261462367
+        },
+        "size": 1.3803834425499288,
+        "color": "#c71585",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 4.045084971874736,
+          "y": 4,
+          "z": -2.938926261462367
+        }
+      },
+      {
+        "id": "56de9130-3cd6-4bd4-a084-5dfda14342e8",
+        "position": {
+          "x": 7,
+          "y": 8,
+          "z": 0
+        },
+        "size": 1.0127166414473332,
+        "color": "#ff69b4",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 7,
+          "y": 8,
+          "z": 0
+        }
+      },
+      {
+        "id": "8aed8ebe-f26b-4bc7-9ffb-943216f24784",
+        "position": {
+          "x": 2.163118960624632,
+          "y": 8,
+          "z": 6.657395614066075
+        },
+        "size": 1.471371603449973,
+        "color": "#ffb6c1",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 2.163118960624632,
+          "y": 8,
+          "z": 6.657395614066075
+        }
+      },
+      {
+        "id": "aa3d8541-3bb1-43e1-a71c-182714bce370",
+        "position": {
+          "x": -5.663118960624631,
+          "y": 8,
+          "z": 4.114496766047313
+        },
+        "size": 1.2021878101659496,
+        "color": "#dda0dd",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": -5.663118960624631,
+          "y": 8,
+          "z": 4.114496766047313
+        }
+      },
+      {
+        "id": "3b37410f-9ee6-44d5-a485-2d2577dde0f8",
+        "position": {
+          "x": -5.663118960624632,
+          "y": 8,
+          "z": -4.114496766047311
+        },
+        "size": 1.057735237145171,
+        "color": "#ff1493",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": -5.663118960624632,
+          "y": 8,
+          "z": -4.114496766047311
+        }
+      },
+      {
+        "id": "ee80ea8a-c7d8-4608-b056-b86a5da45d71",
+        "position": {
+          "x": 2.1631189606246304,
+          "y": 8,
+          "z": -6.6573956140660755
+        },
+        "size": 1.484100732448838,
+        "color": "#c71585",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 2.1631189606246304,
+          "y": 8,
+          "z": -6.6573956140660755
+        }
+      }
+    ],
+    "connections": [
+      {
+        "fromId": "a2f0960e-e0d5-42c1-9ef4-2c623c0d0a48",
+        "toId": "71b8c4bd-cdc3-4e94-a093-f83ed1eebcb7",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 3.5267115137548384
+      },
+      {
+        "fromId": "71b8c4bd-cdc3-4e94-a093-f83ed1eebcb7",
+        "toId": "1c753422-6e73-44b4-a4f3-a45c8734477a",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 3.5267115137548384
+      },
+      {
+        "fromId": "1c753422-6e73-44b4-a4f3-a45c8734477a",
+        "toId": "60d2142a-9f54-488a-8fb0-8c2e846e52f1",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 3.526711513754839
+      },
+      {
+        "fromId": "60d2142a-9f54-488a-8fb0-8c2e846e52f1",
+        "toId": "87f6abd4-41b6-45b4-931a-2c0df2bb15b2",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 3.5267115137548384
+      },
+      {
+        "fromId": "87f6abd4-41b6-45b4-931a-2c0df2bb15b2",
+        "toId": "a2f0960e-e0d5-42c1-9ef4-2c623c0d0a48",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 3.5267115137548393
+      },
+      {
+        "fromId": "160ae4c3-d82e-4c77-addd-354dfd0e034a",
+        "toId": "b6a77df5-1848-433e-9ec9-b0c650850658",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 5.877852522924732
+      },
+      {
+        "fromId": "b6a77df5-1848-433e-9ec9-b0c650850658",
+        "toId": "1085eb5c-d871-44c5-a553-08478d5915c3",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 5.877852522924731
+      },
+      {
+        "fromId": "1085eb5c-d871-44c5-a553-08478d5915c3",
+        "toId": "d317e75f-8390-4582-9533-0adc8dc7c213",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 5.877852522924731
+      },
+      {
+        "fromId": "d317e75f-8390-4582-9533-0adc8dc7c213",
+        "toId": "a719f23f-97d5-4027-a0c6-2fc51f1c0695",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 5.877852522924731
+      },
+      {
+        "fromId": "a719f23f-97d5-4027-a0c6-2fc51f1c0695",
+        "toId": "160ae4c3-d82e-4c77-addd-354dfd0e034a",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 5.877852522924733
+      },
+      {
+        "fromId": "56de9130-3cd6-4bd4-a084-5dfda14342e8",
+        "toId": "8aed8ebe-f26b-4bc7-9ffb-943216f24784",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 8.228993532094623
+      },
+      {
+        "fromId": "8aed8ebe-f26b-4bc7-9ffb-943216f24784",
+        "toId": "aa3d8541-3bb1-43e1-a71c-182714bce370",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 8.228993532094623
+      },
+      {
+        "fromId": "aa3d8541-3bb1-43e1-a71c-182714bce370",
+        "toId": "3b37410f-9ee6-44d5-a485-2d2577dde0f8",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 8.228993532094623
+      },
+      {
+        "fromId": "3b37410f-9ee6-44d5-a485-2d2577dde0f8",
+        "toId": "ee80ea8a-c7d8-4608-b056-b86a5da45d71",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 8.228993532094623
+      },
+      {
+        "fromId": "ee80ea8a-c7d8-4608-b056-b86a5da45d71",
+        "toId": "56de9130-3cd6-4bd4-a084-5dfda14342e8",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 8.228993532094625
+      },
+      {
+        "fromId": "a2f0960e-e0d5-42c1-9ef4-2c623c0d0a48",
+        "toId": "160ae4c3-d82e-4c77-addd-354dfd0e034a",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 5.0724244862542385
+      },
+      {
+        "fromId": "a2f0960e-e0d5-42c1-9ef4-2c623c0d0a48",
+        "toId": "b6a77df5-1848-433e-9ec9-b0c650850658",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 7.698734300600873
+      },
+      {
+        "fromId": "71b8c4bd-cdc3-4e94-a093-f83ed1eebcb7",
+        "toId": "b6a77df5-1848-433e-9ec9-b0c650850658",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 5.0724244862542385
+      },
+      {
+        "fromId": "71b8c4bd-cdc3-4e94-a093-f83ed1eebcb7",
+        "toId": "1085eb5c-d871-44c5-a553-08478d5915c3",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 7.698734300600873
+      },
+      {
+        "fromId": "1c753422-6e73-44b4-a4f3-a45c8734477a",
+        "toId": "1085eb5c-d871-44c5-a553-08478d5915c3",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 5.0724244862542385
+      },
+      {
+        "fromId": "1c753422-6e73-44b4-a4f3-a45c8734477a",
+        "toId": "d317e75f-8390-4582-9533-0adc8dc7c213",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 7.698734300600873
+      },
+      {
+        "fromId": "60d2142a-9f54-488a-8fb0-8c2e846e52f1",
+        "toId": "d317e75f-8390-4582-9533-0adc8dc7c213",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 5.0724244862542385
+      },
+      {
+        "fromId": "60d2142a-9f54-488a-8fb0-8c2e846e52f1",
+        "toId": "a719f23f-97d5-4027-a0c6-2fc51f1c0695",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 7.698734300600873
+      },
+      {
+        "fromId": "87f6abd4-41b6-45b4-931a-2c0df2bb15b2",
+        "toId": "a719f23f-97d5-4027-a0c6-2fc51f1c0695",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 5.0724244862542385
+      },
+      {
+        "fromId": "87f6abd4-41b6-45b4-931a-2c0df2bb15b2",
+        "toId": "160ae4c3-d82e-4c77-addd-354dfd0e034a",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 7.698734300600874
+      },
+      {
+        "fromId": "160ae4c3-d82e-4c77-addd-354dfd0e034a",
+        "toId": "56de9130-3cd6-4bd4-a084-5dfda14342e8",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 5.776574278389717
+      },
+      {
+        "fromId": "160ae4c3-d82e-4c77-addd-354dfd0e034a",
+        "toId": "8aed8ebe-f26b-4bc7-9ffb-943216f24784",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 5.776574278389717
+      },
+      {
+        "fromId": "b6a77df5-1848-433e-9ec9-b0c650850658",
+        "toId": "8aed8ebe-f26b-4bc7-9ffb-943216f24784",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 5.776574278389717
+      },
+      {
+        "fromId": "b6a77df5-1848-433e-9ec9-b0c650850658",
+        "toId": "aa3d8541-3bb1-43e1-a71c-182714bce370",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 5.776574278389718
+      },
+      {
+        "fromId": "1085eb5c-d871-44c5-a553-08478d5915c3",
+        "toId": "aa3d8541-3bb1-43e1-a71c-182714bce370",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 5.776574278389717
+      },
+      {
+        "fromId": "1085eb5c-d871-44c5-a553-08478d5915c3",
+        "toId": "3b37410f-9ee6-44d5-a485-2d2577dde0f8",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 5.776574278389717
+      },
+      {
+        "fromId": "d317e75f-8390-4582-9533-0adc8dc7c213",
+        "toId": "3b37410f-9ee6-44d5-a485-2d2577dde0f8",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 5.776574278389718
+      },
+      {
+        "fromId": "d317e75f-8390-4582-9533-0adc8dc7c213",
+        "toId": "ee80ea8a-c7d8-4608-b056-b86a5da45d71",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 5.776574278389717
+      },
+      {
+        "fromId": "a719f23f-97d5-4027-a0c6-2fc51f1c0695",
+        "toId": "ee80ea8a-c7d8-4608-b056-b86a5da45d71",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 5.776574278389717
+      },
+      {
+        "fromId": "a719f23f-97d5-4027-a0c6-2fc51f1c0695",
+        "toId": "56de9130-3cd6-4bd4-a084-5dfda14342e8",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 5.776574278389718
+      }
+    ],
+    "colorSchemeId": "petal"
+  },
+  "createdAt": "2026-06-16T03:51:46.903Z"
+}

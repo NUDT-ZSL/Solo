@@ -1,0 +1,287 @@
+{
+  "id": "5fbaf690-b7cc-4c2b-90ae-79dcdf14bb53",
+  "name": "珊瑚分支",
+  "sculpture": {
+    "id": "c04941b9-8f68-4b7f-9927-1d7a976ec9a7",
+    "name": "珊瑚分支",
+    "nodes": [
+      {
+        "id": "9c7ae1ae-38e4-42b3-988b-d732c7c69d2d",
+        "position": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "size": 1.0163163314361743,
+        "color": "#ff6b6b",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        }
+      },
+      {
+        "id": "fbc87b90-3d18-48a8-83ac-2dfb48bf6892",
+        "position": {
+          "x": 2,
+          "y": 3,
+          "z": 1
+        },
+        "size": 1.0209424475913698,
+        "color": "#ffa07a",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 2,
+          "y": 3,
+          "z": 1
+        }
+      },
+      {
+        "id": "7c539b6b-741e-4698-89fd-c8fa40ad331d",
+        "position": {
+          "x": -2,
+          "y": 3,
+          "z": -1
+        },
+        "size": 1.2387593073915586,
+        "color": "#ff4757",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": -2,
+          "y": 3,
+          "z": -1
+        }
+      },
+      {
+        "id": "d18e696c-41e3-4198-925d-a4cfc55e7a27",
+        "position": {
+          "x": 4,
+          "y": 6,
+          "z": 2
+        },
+        "size": 1.4639486440108076,
+        "color": "#ff7675",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 4,
+          "y": 6,
+          "z": 2
+        }
+      },
+      {
+        "id": "b23b9123-6510-4920-a00f-653ba77e612e",
+        "position": {
+          "x": 1,
+          "y": 6,
+          "z": 0
+        },
+        "size": 1.3010642560123749,
+        "color": "#e17055",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 1,
+          "y": 6,
+          "z": 0
+        }
+      },
+      {
+        "id": "2b729e7a-be51-4496-b421-185e3c9a7656",
+        "position": {
+          "x": -4,
+          "y": 6,
+          "z": -2
+        },
+        "size": 1.353336498904395,
+        "color": "#ff6b6b",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": -4,
+          "y": 6,
+          "z": -2
+        }
+      },
+      {
+        "id": "ded4f5c7-2dfc-47b8-b225-f5341ce00f2b",
+        "position": {
+          "x": -1,
+          "y": 6,
+          "z": 0
+        },
+        "size": 1.1961417967988561,
+        "color": "#ffa07a",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": -1,
+          "y": 6,
+          "z": 0
+        }
+      },
+      {
+        "id": "42d74fbb-3411-417a-b8ea-6a63b0eba9d4",
+        "position": {
+          "x": 5,
+          "y": 9,
+          "z": 3
+        },
+        "size": 1.3911488113817239,
+        "color": "#ff4757",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 5,
+          "y": 9,
+          "z": 3
+        }
+      },
+      {
+        "id": "ccbae753-88eb-4b47-829e-9d07fc48cc58",
+        "position": {
+          "x": 3,
+          "y": 9,
+          "z": 1
+        },
+        "size": 1.3396069411616995,
+        "color": "#ff7675",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 3,
+          "y": 9,
+          "z": 1
+        }
+      },
+      {
+        "id": "dc67922e-8460-4250-87d3-0a82c3abec22",
+        "position": {
+          "x": -5,
+          "y": 9,
+          "z": -3
+        },
+        "size": 1.4841617686328232,
+        "color": "#e17055",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": -5,
+          "y": 9,
+          "z": -3
+        }
+      }
+    ],
+    "connections": [
+      {
+        "fromId": "9c7ae1ae-38e4-42b3-988b-d732c7c69d2d",
+        "toId": "fbc87b90-3d18-48a8-83ac-2dfb48bf6892",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 3.7416573867739413
+      },
+      {
+        "fromId": "9c7ae1ae-38e4-42b3-988b-d732c7c69d2d",
+        "toId": "7c539b6b-741e-4698-89fd-c8fa40ad331d",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 3.7416573867739413
+      },
+      {
+        "fromId": "fbc87b90-3d18-48a8-83ac-2dfb48bf6892",
+        "toId": "d18e696c-41e3-4198-925d-a4cfc55e7a27",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 3.7416573867739413
+      },
+      {
+        "fromId": "fbc87b90-3d18-48a8-83ac-2dfb48bf6892",
+        "toId": "b23b9123-6510-4920-a00f-653ba77e612e",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 3.3166247903554
+      },
+      {
+        "fromId": "7c539b6b-741e-4698-89fd-c8fa40ad331d",
+        "toId": "2b729e7a-be51-4496-b421-185e3c9a7656",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 3.7416573867739413
+      },
+      {
+        "fromId": "7c539b6b-741e-4698-89fd-c8fa40ad331d",
+        "toId": "ded4f5c7-2dfc-47b8-b225-f5341ce00f2b",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 3.3166247903554
+      },
+      {
+        "fromId": "d18e696c-41e3-4198-925d-a4cfc55e7a27",
+        "toId": "42d74fbb-3411-417a-b8ea-6a63b0eba9d4",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 3.3166247903554
+      },
+      {
+        "fromId": "d18e696c-41e3-4198-925d-a4cfc55e7a27",
+        "toId": "ccbae753-88eb-4b47-829e-9d07fc48cc58",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 3.3166247903554
+      },
+      {
+        "fromId": "2b729e7a-be51-4496-b421-185e3c9a7656",
+        "toId": "dc67922e-8460-4250-87d3-0a82c3abec22",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 3.3166247903554
+      }
+    ],
+    "colorSchemeId": "coral"
+  },
+  "createdAt": "2026-06-16T03:51:46.900Z"
+}

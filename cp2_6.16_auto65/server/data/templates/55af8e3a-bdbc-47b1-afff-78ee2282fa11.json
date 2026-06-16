@@ -1,0 +1,364 @@
+{
+  "id": "55af8e3a-bdbc-47b1-afff-78ee2282fa11",
+  "name": "水母触须",
+  "sculpture": {
+    "id": "075bb40b-3ee8-4e7b-8891-3d426d65e9d8",
+    "name": "水母触须",
+    "nodes": [
+      {
+        "id": "6630a270-d9b6-4df7-a54e-43f42bee8304",
+        "position": {
+          "x": 0,
+          "y": 4,
+          "z": 0
+        },
+        "size": 1.0526629650609145,
+        "color": "#00bfff",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 0,
+          "y": 4,
+          "z": 0
+        }
+      },
+      {
+        "id": "1e4750cf-1394-4402-a1bc-2ce740dd0db4",
+        "position": {
+          "x": -3,
+          "y": 2,
+          "z": 0
+        },
+        "size": 1.3330274987168198,
+        "color": "#1e90ff",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": -3,
+          "y": 2,
+          "z": 0
+        }
+      },
+      {
+        "id": "9bd143cb-5947-4e48-833b-de983425ae8c",
+        "position": {
+          "x": 3,
+          "y": 2,
+          "z": 0
+        },
+        "size": 1.299751648924382,
+        "color": "#00ced1",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 3,
+          "y": 2,
+          "z": 0
+        }
+      },
+      {
+        "id": "873c549f-f235-419f-ae9f-1a0c4ea06dc9",
+        "position": {
+          "x": 0,
+          "y": 2,
+          "z": -3
+        },
+        "size": 1.1452316924990666,
+        "color": "#48d1cc",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 0,
+          "y": 2,
+          "z": -3
+        }
+      },
+      {
+        "id": "c06dcde6-99f0-43f9-acc7-93cb51585431",
+        "position": {
+          "x": -2,
+          "y": -1,
+          "z": 0
+        },
+        "size": 1.2870823894326038,
+        "color": "#7fffd4",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": -2,
+          "y": -1,
+          "z": 0
+        }
+      },
+      {
+        "id": "57c02cc6-eafe-4e20-878e-098bcb0df526",
+        "position": {
+          "x": -1,
+          "y": -3,
+          "z": 0
+        },
+        "size": 1.2111132565631715,
+        "color": "#00bfff",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": -1,
+          "y": -3,
+          "z": 0
+        }
+      },
+      {
+        "id": "9258e0c0-9f21-43c1-b022-aec334526a6f",
+        "position": {
+          "x": 2,
+          "y": -1,
+          "z": 0
+        },
+        "size": 1.3878727090743757,
+        "color": "#1e90ff",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 2,
+          "y": -1,
+          "z": 0
+        }
+      },
+      {
+        "id": "ff0d25cd-2da8-4e15-a56c-5cbb5c424699",
+        "position": {
+          "x": 1,
+          "y": -3,
+          "z": 0
+        },
+        "size": 1.1620594245554785,
+        "color": "#00ced1",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 1,
+          "y": -3,
+          "z": 0
+        }
+      },
+      {
+        "id": "48c50da2-3462-4780-b882-64c1313dddc2",
+        "position": {
+          "x": 0,
+          "y": -1,
+          "z": -2
+        },
+        "size": 1.3702378370523218,
+        "color": "#48d1cc",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 0,
+          "y": -1,
+          "z": -2
+        }
+      },
+      {
+        "id": "4413a35f-a967-4883-8857-adefa86773f1",
+        "position": {
+          "x": 0,
+          "y": -3,
+          "z": -1
+        },
+        "size": 1.067622351905533,
+        "color": "#7fffd4",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 0,
+          "y": -3,
+          "z": -1
+        }
+      },
+      {
+        "id": "dbed3078-2ab0-4c25-9a5a-f0b77a60e7b6",
+        "position": {
+          "x": -1,
+          "y": -5,
+          "z": 0
+        },
+        "size": 1.2909381018216115,
+        "color": "#00bfff",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": -1,
+          "y": -5,
+          "z": 0
+        }
+      },
+      {
+        "id": "69d66c2f-9849-436d-ab47-10d699527a29",
+        "position": {
+          "x": 1,
+          "y": -5,
+          "z": 0
+        },
+        "size": 1.093847280632406,
+        "color": "#1e90ff",
+        "emissiveIntensity": 2,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "restPosition": {
+          "x": 1,
+          "y": -5,
+          "z": 0
+        }
+      }
+    ],
+    "connections": [
+      {
+        "fromId": "6630a270-d9b6-4df7-a54e-43f42bee8304",
+        "toId": "1e4750cf-1394-4402-a1bc-2ce740dd0db4",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 3.605551275463989
+      },
+      {
+        "fromId": "6630a270-d9b6-4df7-a54e-43f42bee8304",
+        "toId": "9bd143cb-5947-4e48-833b-de983425ae8c",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 3.605551275463989
+      },
+      {
+        "fromId": "6630a270-d9b6-4df7-a54e-43f42bee8304",
+        "toId": "873c549f-f235-419f-ae9f-1a0c4ea06dc9",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 3.605551275463989
+      },
+      {
+        "fromId": "1e4750cf-1394-4402-a1bc-2ce740dd0db4",
+        "toId": "9bd143cb-5947-4e48-833b-de983425ae8c",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 6
+      },
+      {
+        "fromId": "9bd143cb-5947-4e48-833b-de983425ae8c",
+        "toId": "873c549f-f235-419f-ae9f-1a0c4ea06dc9",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 4.242640687119285
+      },
+      {
+        "fromId": "1e4750cf-1394-4402-a1bc-2ce740dd0db4",
+        "toId": "873c549f-f235-419f-ae9f-1a0c4ea06dc9",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 4.242640687119285
+      },
+      {
+        "fromId": "1e4750cf-1394-4402-a1bc-2ce740dd0db4",
+        "toId": "c06dcde6-99f0-43f9-acc7-93cb51585431",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 3.1622776601683795
+      },
+      {
+        "fromId": "c06dcde6-99f0-43f9-acc7-93cb51585431",
+        "toId": "57c02cc6-eafe-4e20-878e-098bcb0df526",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 2.23606797749979
+      },
+      {
+        "fromId": "57c02cc6-eafe-4e20-878e-098bcb0df526",
+        "toId": "dbed3078-2ab0-4c25-9a5a-f0b77a60e7b6",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 2
+      },
+      {
+        "fromId": "9bd143cb-5947-4e48-833b-de983425ae8c",
+        "toId": "9258e0c0-9f21-43c1-b022-aec334526a6f",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 3.1622776601683795
+      },
+      {
+        "fromId": "9258e0c0-9f21-43c1-b022-aec334526a6f",
+        "toId": "ff0d25cd-2da8-4e15-a56c-5cbb5c424699",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 2.23606797749979
+      },
+      {
+        "fromId": "ff0d25cd-2da8-4e15-a56c-5cbb5c424699",
+        "toId": "69d66c2f-9849-436d-ab47-10d699527a29",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 2
+      },
+      {
+        "fromId": "873c549f-f235-419f-ae9f-1a0c4ea06dc9",
+        "toId": "48c50da2-3462-4780-b882-64c1313dddc2",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 3.1622776601683795
+      },
+      {
+        "fromId": "48c50da2-3462-4780-b882-64c1313dddc2",
+        "toId": "4413a35f-a967-4883-8857-adefa86773f1",
+        "strength": 0.5,
+        "opacity": 0.5,
+        "restLength": 2.23606797749979
+      }
+    ],
+    "colorSchemeId": "jelly"
+  },
+  "createdAt": "2026-06-16T03:51:46.904Z"
+}
