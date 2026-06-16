@@ -1,0 +1,46 @@
+export interface Star {
+  id: number;
+  x: number;
+  y: number;
+  size: number;
+  breathPhase: number;
+  breathSpeed: number;
+  constellationId: number | null;
+}
+
+export interface Constellation {
+  id: number;
+  name: string;
+  zodiac: string;
+  starIds: number[];
+}
+
+export interface DivinationResult {
+  id: number;
+  constellationId: number;
+  constellationName: string;
+  zodiac: string;
+  text: string;
+  weather: string;
+  date: string;
+  timestamp: number;
+}
+
+export interface LogEntry {
+  date: string;
+  constellationName: string;
+  result: string;
+}
+
+export interface Firefly {
+  id: number;
+  x: number;
+  y: number;
+  size: number;
+  opacity: number;
+  vx: number;
+  vy: number;
+  blinkTimer: number;
+  blinkInterval: number;
+  isBlinking: boolean;
+}
