@@ -1,0 +1,37 @@
+{
+  "name": "light-sculpture",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "client:dev": "vite",
+    "server:dev": "node server/index.js",
+    "dev": "concurrently \"npm run client:dev\" \"npm run server:dev\"",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.170.0",
+    "@react-three/fiber": "^8.17.10",
+    "@react-three/drei": "^9.117.3",
+    "@react-three/postprocessing": "^2.16.3",
+    "express": "^4.21.2",
+    "ws": "^8.18.0",
+    "cors": "^2.8.5",
+    "uuid": "^10.0.0",
+    "zustand": "^5.0.3",
+    "lucide-react": "^0.511.0"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "@vitejs/plugin-react": "^4.4.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/ws": "^8.5.14",
+    "@types/uuid": "^10.0.0",
+    "@types/three": "^0.170.0",
+    "concurrently": "^9.2.0"
+  }
+}
