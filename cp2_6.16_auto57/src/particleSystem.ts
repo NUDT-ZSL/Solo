@@ -9,6 +9,50 @@ const GRAVITY_COEFFICIENT = 0.8;
 const REPULSION_COEFFICIENT = 0.3;
 const REPULSION_DISTANCE = 2;
 const MAX_SPEED = 3;
+const GRID_CELL_SIZE = REPULSION_DISTANCE;
+
+const particleVertexShader = `
+  attribute float size;
+  attribute vec3 color;
+  varying vec3 vColor;
+  void main() {
+    vColor = color;
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    gl_PointSize = size * (300.0 / -mvPosition.z);
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`;
+
+const particleFragmentShader = `
+  varying vec3 vColor;
+  void main() {
+    float dist = length(gl_PointCoord - vec2(0.5));
+    if (dist > 0.5) discard;
+    float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
+    gl_FragColor = vec4(vColor, alpha * 0.9);
+  }
+`;
+
+const trailVertexShader = `
+  attribute vec3 color;
+  attribute float alpha;
+  varying vec3 vColor;
+  varying float vAlpha;
+  void main() {
+    vColor = color;
+    vAlpha = alpha;
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`;
+
+const trailFragmentShader = `
+  varying vec3 vColor;
+  varying float vAlpha;
+  void main() {
+    gl_FragColor = vec4(vColor, vAlpha);
+  }
+`;
 
 export class ParticleSystem {
   public particles: THREE.Points;
@@ -20,6 +64,7 @@ export class ParticleSystem {
   private sizes: Float32Array;
   private trailPositions: Float32Array;
   private trailColors: Float32Array;
+  private trailAlphas: Float32Array;
   private trailHistory: THREE.Vector3[][];
 
   private colorMode: ColorMode = 'distance';
@@ -30,6 +75,8 @@ export class ParticleSystem {
   private coolColor = new THREE.Color('#00d4ff');
   private lowSpeedColor = new THREE.Color('#00e5ff');
   private highSpeedColor = new THREE.Color('#ff1744');
+
+  private gridMap: Map<string, number[]> = new Map();
 
   constructor() {
     this.positions = new Float32Array(PARTICLE_COUNT * 3);
@@ -45,31 +92,34 @@ export class ParticleSystem {
     geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 3));
     geometry.setAttribute('size', new THREE.BufferAttribute(this.sizes, 1));
 
-    const material = new THREE.PointsMaterial({
-      size: 2,
-      vertexColors: true,
+    const material = new THREE.ShaderMaterial({
+      vertexShader: particleVertexShader,
+      fragmentShader: particleFragmentShader,
       transparent: true,
-      opacity: 0.9,
-      sizeAttenuation: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending
+      blending: THREE.AdditiveBlending,
+      vertexColors: false
     });
 
     this.particles = new THREE.Points(geometry, material);
 
-    this.trailPositions = new Float32Array(PARTICLE_COUNT * TRAIL_LENGTH * 2 * 3);
-    this.trailColors = new Float32Array(PARTICLE_COUNT * TRAIL_LENGTH * 2 * 3);
+    const trailSegmentCount = PARTICLE_COUNT * (TRAIL_LENGTH - 1);
+    this.trailPositions = new Float32Array(trailSegmentCount * 2 * 3);
+    this.trailColors = new Float32Array(trailSegmentCount * 2 * 3);
+    this.trailAlphas = new Float32Array(trailSegmentCount * 2);
 
     const trailGeometry = new THREE.BufferGeometry();
     trailGeometry.setAttribute('position', new THREE.BufferAttribute(this.trailPositions, 3));
     trailGeometry.setAttribute('color', new THREE.BufferAttribute(this.trailColors, 3));
+    trailGeometry.setAttribute('alpha', new THREE.BufferAttribute(this.trailAlphas, 1));
 
-    const trailMaterial = new THREE.LineBasicMaterial({
-      vertexColors: true,
+    const trailMaterial = new THREE.ShaderMaterial({
+      vertexShader: trailVertexShader,
+      fragmentShader: trailFragmentShader,
       transparent: true,
-      opacity: 0.4,
+      depthWrite: false,
       blending: THREE.AdditiveBlending,
-      depthWrite: false
+      vertexColors: false
     });
 
     this.trails = new THREE.LineSegments(trailGeometry, trailMaterial);
@@ -138,6 +188,47 @@ export class ParticleSystem {
     this.updateColors();
     (this.particles.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
     (this.particles.geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true;
+    (this.particles.geometry.attributes.size as THREE.BufferAttribute).needsUpdate = true;
+  }
+
+  private buildSpatialGrid(): void {
+    this.gridMap.clear();
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      const i3 = i * 3;
+      const gx = Math.floor(this.positions[i3] / GRID_CELL_SIZE);
+      const gy = Math.floor(this.positions[i3 + 1] / GRID_CELL_SIZE);
+      const gz = Math.floor(this.positions[i3 + 2] / GRID_CELL_SIZE);
+      const key = `${gx},${gy},${gz}`;
+      if (!this.gridMap.has(key)) {
+        this.gridMap.set(key, []);
+      }
+      this.gridMap.get(key)!.push(i);
+    }
+  }
+
+  private getNearbyParticles(i: number): number[] {
+    const i3 = i * 3;
+    const gx = Math.floor(this.positions[i3] / GRID_CELL_SIZE);
+    const gy = Math.floor(this.positions[i3 + 1] / GRID_CELL_SIZE);
+    const gz = Math.floor(this.positions[i3 + 2] / GRID_CELL_SIZE);
+
+    const nearby: number[] = [];
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          const key = `${gx + dx},${gy + dy},${gz + dz}`;
+          const cell = this.gridMap.get(key);
+          if (cell) {
+            for (const j of cell) {
+              if (j !== i) {
+                nearby.push(j);
+              }
+            }
+          }
+        }
+      }
+    }
+    return nearby;
   }
 
   private updateColors(): void {
@@ -200,6 +291,8 @@ export class ParticleSystem {
   public update(deltaTime: number): void {
     const dt = Math.min(deltaTime, 0.05);
 
+    this.buildSpatialGrid();
+
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const i3 = i * 3;
 
@@ -220,8 +313,9 @@ export class ParticleSystem {
       this.velocities[i3 + 2] += (dz / dist) * gravityForce * dt;
 
       let repX = 0, repY = 0, repZ = 0;
-      for (let j = 0; j < PARTICLE_COUNT; j++) {
-        if (i === j) continue;
+      const nearby = this.getNearbyParticles(i);
+
+      for (const j of nearby) {
         const j3 = j * 3;
         const rdx = px - this.positions[j3];
         const rdy = py - this.positions[j3 + 1];
@@ -265,8 +359,10 @@ export class ParticleSystem {
 
     (this.particles.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
     (this.particles.geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true;
+    (this.particles.geometry.attributes.size as THREE.BufferAttribute).needsUpdate = true;
     (this.trails.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
     (this.trails.geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true;
+    (this.trails.geometry.attributes.alpha as THREE.BufferAttribute).needsUpdate = true;
   }
 
   private updateTrails(): void {
@@ -277,29 +373,34 @@ export class ParticleSystem {
       const colorB = this.colors[i * 3 + 2];
 
       for (let t = 0; t < TRAIL_LENGTH - 1; t++) {
-        const segmentIndex = (i * TRAIL_LENGTH + t) * 2 * 3;
+        const segmentIndex = (i * (TRAIL_LENGTH - 1) + t) * 2;
+        const posIndex = segmentIndex * 3;
+        const alphaIndex = segmentIndex;
 
         const p1 = history[t];
         const p2 = history[t + 1];
 
-        this.trailPositions[segmentIndex] = p1.x;
-        this.trailPositions[segmentIndex + 1] = p1.y;
-        this.trailPositions[segmentIndex + 2] = p1.z;
+        this.trailPositions[posIndex] = p1.x;
+        this.trailPositions[posIndex + 1] = p1.y;
+        this.trailPositions[posIndex + 2] = p1.z;
 
-        this.trailPositions[segmentIndex + 3] = p2.x;
-        this.trailPositions[segmentIndex + 4] = p2.y;
-        this.trailPositions[segmentIndex + 5] = p2.z;
+        this.trailPositions[posIndex + 3] = p2.x;
+        this.trailPositions[posIndex + 4] = p2.y;
+        this.trailPositions[posIndex + 5] = p2.z;
 
-        const alpha1 = 0.5 - t * 0.06;
-        const alpha2 = 0.5 - (t + 1) * 0.06;
+        this.trailColors[posIndex] = colorR;
+        this.trailColors[posIndex + 1] = colorG;
+        this.trailColors[posIndex + 2] = colorB;
 
-        this.trailColors[segmentIndex] = colorR;
-        this.trailColors[segmentIndex + 1] = colorG;
-        this.trailColors[segmentIndex + 2] = colorB;
+        this.trailColors[posIndex + 3] = colorR;
+        this.trailColors[posIndex + 4] = colorG;
+        this.trailColors[posIndex + 5] = colorB;
 
-        this.trailColors[segmentIndex + 3] = colorR;
-        this.trailColors[segmentIndex + 4] = colorG;
-        this.trailColors[segmentIndex + 5] = colorB;
+        const alpha1 = 0.5 - t * 0.08;
+        const alpha2 = 0.5 - (t + 1) * 0.08;
+
+        this.trailAlphas[alphaIndex] = Math.max(alpha1, 0.1);
+        this.trailAlphas[alphaIndex + 1] = Math.max(alpha2, 0.1);
       }
     }
   }

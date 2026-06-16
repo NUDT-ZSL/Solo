@@ -13,10 +13,16 @@ export class GravitySource {
   private mouse: THREE.Vector2;
   private camera: THREE.PerspectiveCamera;
   private domElement: HTMLElement;
+  private scene: THREE.Scene;
 
-  constructor(camera: THREE.PerspectiveCamera, domElement: HTMLElement) {
+  private boundMouseDown: (e: MouseEvent) => void;
+  private boundMouseMove: (e: MouseEvent) => void;
+  private boundMouseUp: (e: MouseEvent) => void;
+
+  constructor(camera: THREE.PerspectiveCamera, domElement: HTMLElement, scene: THREE.Scene) {
     this.camera = camera;
     this.domElement = domElement;
+    this.scene = scene;
     this.position = new THREE.Vector3(0, 0, 0);
     this.dragPlane = new THREE.Plane();
     this.raycaster = new THREE.Raycaster();
@@ -33,14 +39,24 @@ export class GravitySource {
     this.mesh = new THREE.Mesh(geometry, material);
     this.mesh.position.copy(this.position);
 
+    this.boundMouseDown = this.onMouseDown.bind(this);
+    this.boundMouseMove = this.onMouseMove.bind(this);
+    this.boundMouseUp = this.onMouseUp.bind(this);
+
     this.setupEventListeners();
   }
 
   private setupEventListeners(): void {
-    this.domElement.addEventListener('mousedown', this.onMouseDown.bind(this));
-    this.domElement.addEventListener('mousemove', this.onMouseMove.bind(this));
-    this.domElement.addEventListener('mouseup', this.onMouseUp.bind(this));
-    this.domElement.addEventListener('mouseleave', this.onMouseUp.bind(this));
+    this.domElement.addEventListener('mousedown', this.boundMouseDown);
+    this.domElement.addEventListener('mousemove', this.boundMouseMove);
+    this.domElement.addEventListener('mouseup', this.boundMouseUp);
+    this.domElement.addEventListener('mouseleave', this.boundMouseUp);
+  }
+
+  private updateMouse(event: MouseEvent): void {
+    const rect = this.domElement.getBoundingClientRect();
+    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   }
 
   private onMouseDown(event: MouseEvent): void {
@@ -52,10 +68,12 @@ export class GravitySource {
     const intersects = this.raycaster.intersectObject(this.mesh);
     if (intersects.length > 0) {
       this.isDragging = true;
-      this.dragPlane.setFromNormalAndCoplanarPoint(
-        new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion),
-        this.position
-      );
+
+      const normal = new THREE.Vector3();
+      this.camera.getWorldDirection(normal);
+      normal.negate();
+
+      this.dragPlane.setFromNormalAndCoplanarPoint(normal, this.position);
       this.domElement.style.cursor = 'grabbing';
     }
   }
@@ -73,9 +91,9 @@ export class GravitySource {
     this.raycaster.setFromCamera(this.mouse, this.camera);
 
     const intersection = new THREE.Vector3();
-    this.raycaster.ray.intersectPlane(this.dragPlane, intersection);
+    const result = this.raycaster.ray.intersectPlane(this.dragPlane, intersection);
 
-    if (intersection) {
+    if (result) {
       const distance = intersection.length();
       if (distance > MAX_RANGE) {
         intersection.normalize().multiplyScalar(MAX_RANGE);
@@ -86,14 +104,10 @@ export class GravitySource {
   }
 
   private onMouseUp(): void {
-    this.isDragging = false;
-    this.domElement.style.cursor = 'default';
-  }
-
-  private updateMouse(event: MouseEvent): void {
-    const rect = this.domElement.getBoundingClientRect();
-    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    if (this.isDragging) {
+      this.isDragging = false;
+      this.domElement.style.cursor = 'default';
+    }
   }
 
   public getPosition(): THREE.Vector3 {
@@ -106,9 +120,9 @@ export class GravitySource {
   }
 
   public dispose(): void {
-    this.domElement.removeEventListener('mousedown', this.onMouseDown.bind(this));
-    this.domElement.removeEventListener('mousemove', this.onMouseMove.bind(this));
-    this.domElement.removeEventListener('mouseup', this.onMouseUp.bind(this));
-    this.domElement.removeEventListener('mouseleave', this.onMouseUp.bind(this));
+    this.domElement.removeEventListener('mousedown', this.boundMouseDown);
+    this.domElement.removeEventListener('mousemove', this.boundMouseMove);
+    this.domElement.removeEventListener('mouseup', this.boundMouseUp);
+    this.domElement.removeEventListener('mouseleave', this.boundMouseUp);
   }
 }

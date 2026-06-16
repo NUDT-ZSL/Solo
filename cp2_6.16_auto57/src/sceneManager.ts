@@ -15,8 +15,6 @@ export class SceneManager {
   private particleSystem: ParticleSystem;
   private gravitySource: GravitySource;
 
-  private rotationGroup: THREE.Group;
-
   private isRightDragging: boolean = false;
   private lastMouseX: number = 0;
   private lastMouseY: number = 0;
@@ -26,6 +24,8 @@ export class SceneManager {
   private autoRotation: number = 0;
 
   private clock: THREE.Clock;
+  private smoothedFps: number = 60;
+  private fpsAlpha: number = 0.1;
 
   constructor(containerId: string) {
     const container = document.getElementById(containerId);
@@ -53,15 +53,12 @@ export class SceneManager {
     this.renderer.setClearColor(0x000000, 0);
     this.container.appendChild(this.renderer.domElement);
 
-    this.rotationGroup = new THREE.Group();
-    this.scene.add(this.rotationGroup);
-
     this.particleSystem = new ParticleSystem();
-    this.rotationGroup.add(this.particleSystem.particles);
-    this.rotationGroup.add(this.particleSystem.trails);
+    this.scene.add(this.particleSystem.particles);
+    this.scene.add(this.particleSystem.trails);
 
-    this.gravitySource = new GravitySource(this.camera, this.renderer.domElement);
-    this.rotationGroup.add(this.gravitySource.mesh);
+    this.gravitySource = new GravitySource(this.camera, this.renderer.domElement, this.scene);
+    this.scene.add(this.gravitySource.mesh);
 
     this.clock = new THREE.Clock();
 
@@ -69,9 +66,10 @@ export class SceneManager {
   }
 
   private updateCameraPosition(): void {
-    const x = this.cameraDistance * Math.sin(this.cameraAngleY) * Math.cos(this.cameraAngleX);
+    const totalAngleY = this.cameraAngleY + this.autoRotation;
+    const x = this.cameraDistance * Math.sin(totalAngleY) * Math.cos(this.cameraAngleX);
     const y = this.cameraDistance * Math.sin(this.cameraAngleX);
-    const z = this.cameraDistance * Math.cos(this.cameraAngleY) * Math.cos(this.cameraAngleX);
+    const z = this.cameraDistance * Math.cos(totalAngleY) * Math.cos(this.cameraAngleX);
     this.camera.position.set(x, y, z);
     this.camera.lookAt(0, 0, 0);
   }
@@ -140,19 +138,19 @@ export class SceneManager {
     const deltaTime = this.clock.getDelta();
 
     this.autoRotation += AUTO_ROTATION_SPEED * (Math.PI / 180) * deltaTime;
-    this.rotationGroup.rotation.y = this.autoRotation;
+    this.updateCameraPosition();
 
-    this.particleSystem.setGravityPosition(
-      this.gravitySource.getPosition().applyAxisAngle(new THREE.Vector3(0, 1, 0), this.autoRotation)
-    );
-
+    this.particleSystem.setGravityPosition(this.gravitySource.getPosition());
     this.particleSystem.update(deltaTime);
+
+    const instantFps = 1 / Math.max(deltaTime, 0.001);
+    this.smoothedFps = this.smoothedFps * (1 - this.fpsAlpha) + instantFps * this.fpsAlpha;
 
     this.renderer.render(this.scene, this.camera);
   }
 
   public getFPS(): number {
-    return Math.round(1 / Math.max(this.clock.getDelta(), 0.001));
+    return Math.round(this.smoothedFps);
   }
 
   public reset(): void {
@@ -162,6 +160,7 @@ export class SceneManager {
     this.cameraAngleX = 0;
     this.cameraAngleY = 0;
     this.cameraDistance = 100;
+    this.smoothedFps = 60;
     this.updateCameraPosition();
   }
 
