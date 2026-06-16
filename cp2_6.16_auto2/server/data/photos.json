@@ -1,0 +1,23 @@
+[
+  {
+    "id": "photo-001",
+    "date": "2026-06-14",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=small%20green%20plant%20seedling%20in%20a%20pot%20on%20sunny%20windowsill%20soft%20natural%20light&image_size=landscape_4_3",
+    "mood": "happy",
+    "text": "今天小嫩芽终于破土而出了！两片嫩绿的小叶子舒展开来，看起来精神极了。阳光正好，给它浇了一点点水。"
+  },
+  {
+    "id": "photo-002",
+    "date": "2026-06-15",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=young%20plant%20with%20several%20leaves%20growing%20in%20ceramic%20pot%20warm%20morning%20light&image_size=landscape_4_3",
+    "mood": "calm",
+    "text": "第二片叶子长大了一些，茎也长高了。今天天气有些阴天，植物看起来很安静，慢慢生长的感觉真好。"
+  },
+  {
+    "id": "photo-003",
+    "date": "2026-06-16",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=lush%20healthy%20green%20plant%20with%20multiple%20leaves%20in%20terracotta%20pot%20cozy%20indoor%20garden&image_size=landscape_4_3",
+    "mood": "happy",
+    "text": "太棒了！第三片新叶子冒出来了，颜色是鲜嫩的浅绿色。整株植物显得生机勃勃，期待它继续茁壮成长！"
+  }
+]
