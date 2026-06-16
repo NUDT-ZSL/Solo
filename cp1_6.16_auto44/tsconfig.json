@@ -16,7 +16,9 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleDetection": "force"
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]

@@ -6,7 +6,14 @@
     "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
     "strict": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "target": "ES2020",
+    "lib": ["ES2020"],
+    "types": ["node"],
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "moduleDetection": "force",
+    "resolveJsonModule": true
   },
   "include": ["vite.config.js", "server.ts"]
 }

@@ -1,11 +1,20 @@
 import express from 'express';
 import type { Request, Response } from 'express';
 import cors from 'cors';
+import { createServer } from 'http';
 import { v4 as uuidv4 } from 'uuid';
 import { generateMockData, calculatePricingRange } from './src/api/dataService.ts';
+import { writeFileSync, existsSync, readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app = express();
-const PORT = 3010;
+const DEFAULT_PORT = 3010;
+const MAX_PORT_TRIES = 50;
+const PORT_FILE = join(__dirname, '.server-port');
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -66,6 +75,48 @@ app.post('/api/clients/:id/logs', (req: Request, res: Response) => {
   res.json(newLog);
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+app.get('/api/health', (req: Request, res: Response) => {
+  res.json({ status: 'ok', port: server.address() });
 });
+
+function findAvailablePort(startPort: number, maxTries: number): Promise<number> {
+  return new Promise((resolve, reject) => {
+    let attempts = 0;
+    const tryPort = (port: number) => {
+      const testServer = createServer();
+      testServer.unref();
+      testServer.once('error', (err: any) => {
+        if (err.code === 'EADDRINUSE' && attempts < maxTries) {
+          attempts++;
+          tryPort(port + 1);
+        } else {
+          reject(err);
+        }
+      });
+      testServer.once('listening', () => {
+        testServer.close(() => resolve(port));
+      });
+      testServer.listen(port, '127.0.0.1');
+    };
+    tryPort(startPort);
+  });
+}
+
+let server: ReturnType<typeof createServer>;
+
+async function startServer() {
+  try {
+    const availablePort = await findAvailablePort(DEFAULT_PORT, MAX_PORT_TRIES);
+    server = createServer(app);
+    server.listen(availablePort, '127.0.0.1', () => {
+      const addr = server.address() as { port: number };
+      console.log(`Server running on http://localhost:${addr.port}`);
+      writeFileSync(PORT_FILE, String(addr.port), 'utf-8');
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
