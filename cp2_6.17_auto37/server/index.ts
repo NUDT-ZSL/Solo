@@ -36,6 +36,21 @@ const getUserById = (id: string): User | undefined => {
   return users.find(u => u.id === id);
 };
 
+const lockMap = new Map<string, Promise<any>>();
+
+const withLock = async <T>(key: string, fn: () => T | Promise<T>): Promise<T> => {
+  while (lockMap.has(key)) {
+    await lockMap.get(key);
+  }
+  const promise = Promise.resolve().then(fn);
+  lockMap.set(key, promise);
+  try {
+    return await promise;
+  } finally {
+    lockMap.delete(key);
+  }
+};
+
 app.get('/api/records', (req: Request, res: Response) => {
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 10;
@@ -91,79 +106,153 @@ app.post('/api/records', (req: Request, res: Response) => {
   res.json(newRecord);
 });
 
-app.post('/api/records/:id/like', (req: Request, res: Response) => {
+app.post('/api/records/:id/like', async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { userId } = req.body;
+  const { userId, action } = req.body;
   
-  const { records } = readJsonFile<{ records: RoastRecord[] }>('records.json');
-  const recordIndex = records.findIndex(r => r.id === id);
-  
-  if (recordIndex === -1) {
-    return res.status(404).json({ error: '记录不存在' });
+  if (!userId) {
+    return res.status(400).json({ error: '缺少 userId 参数' });
   }
   
-  const record = records[recordIndex];
-  const likedIndex = record.likedBy.indexOf(userId);
-  let liked = false;
-  
-  if (likedIndex === -1) {
-    record.likedBy.push(userId);
-    record.likes++;
-    liked = true;
-  } else {
-    record.likedBy.splice(likedIndex, 1);
-    record.likes--;
-    liked = false;
+  if (action && action !== 'like' && action !== 'unlike') {
+    return res.status(400).json({ error: 'action 参数必须是 like 或 unlike' });
   }
   
-  records[recordIndex] = record;
-  writeJsonFile('records.json', { records });
+  const lockKey = `like:${id}`;
   
-  res.json({ success: true, likes: record.likes, liked });
+  try {
+    const result = await withLock(lockKey, () => {
+      const { records } = readJsonFile<{ records: RoastRecord[] }>('records.json');
+      const recordIndex = records.findIndex(r => r.id === id);
+      
+      if (recordIndex === -1) {
+        return { status: 404, body: { error: '记录不存在' } };
+      }
+      
+      const record = records[recordIndex];
+      const likedIndex = record.likedBy.indexOf(userId);
+      const isCurrentlyLiked = likedIndex !== -1;
+      let liked = isCurrentlyLiked;
+      
+      if (action === 'like') {
+        if (!isCurrentlyLiked) {
+          record.likedBy.push(userId);
+          record.likes++;
+          liked = true;
+        }
+      } else if (action === 'unlike') {
+        if (isCurrentlyLiked) {
+          record.likedBy.splice(likedIndex, 1);
+          record.likes--;
+          liked = false;
+        }
+      } else {
+        if (likedIndex === -1) {
+          record.likedBy.push(userId);
+          record.likes++;
+          liked = true;
+        } else {
+          record.likedBy.splice(likedIndex, 1);
+          record.likes--;
+          liked = false;
+        }
+      }
+      
+      records[recordIndex] = record;
+      writeJsonFile('records.json', { records });
+      
+      return { status: 200, body: { success: true, likes: record.likes, liked } };
+    });
+    
+    res.status(result.status).json(result.body);
+  } catch (error) {
+    res.status(500).json({ error: '服务器内部错误' });
+  }
 });
 
-app.post('/api/users/:id/follow', (req: Request, res: Response) => {
+app.post('/api/users/:id/follow', async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { followerId } = req.body;
+  const { followerId, action } = req.body;
+  
+  if (!followerId) {
+    return res.status(400).json({ error: '缺少 followerId 参数' });
+  }
+  
+  if (action && action !== 'follow' && action !== 'unfollow') {
+    return res.status(400).json({ error: 'action 参数必须是 follow 或 unfollow' });
+  }
   
   if (id === followerId) {
     return res.status(400).json({ error: '不能关注自己' });
   }
   
-  const { users } = readJsonFile<{ users: User[] }>('users.json');
-  const targetUser = users.find(u => u.id === id);
-  const followerUser = users.find(u => u.id === followerId);
+  const lockKey = `follow:${followerId}:${id}`;
   
-  if (!targetUser || !followerUser) {
-    return res.status(404).json({ error: '用户不存在' });
+  try {
+    const result = await withLock(lockKey, () => {
+      const { users } = readJsonFile<{ users: User[] }>('users.json');
+      const targetUser = users.find(u => u.id === id);
+      const followerUser = users.find(u => u.id === followerId);
+      
+      if (!targetUser || !followerUser) {
+        return { status: 404, body: { error: '用户不存在' } };
+      }
+      
+      const { follows } = readJsonFile<{ follows: Follow[] }>('follows.json');
+      const followIndex = follows.findIndex(f => f.followerId === followerId && f.followingId === id);
+      const isCurrentlyFollowing = followIndex !== -1;
+      let following = isCurrentlyFollowing;
+      
+      if (action === 'follow') {
+        if (!isCurrentlyFollowing) {
+          const newFollow: Follow = {
+            id: uuidv4(),
+            followerId,
+            followingId: id,
+            createdAt: new Date().toISOString(),
+          };
+          follows.push(newFollow);
+          targetUser.followers++;
+          followerUser.following++;
+          following = true;
+        }
+      } else if (action === 'unfollow') {
+        if (isCurrentlyFollowing) {
+          follows.splice(followIndex, 1);
+          targetUser.followers--;
+          followerUser.following--;
+          following = false;
+        }
+      } else {
+        if (followIndex === -1) {
+          const newFollow: Follow = {
+            id: uuidv4(),
+            followerId,
+            followingId: id,
+            createdAt: new Date().toISOString(),
+          };
+          follows.push(newFollow);
+          targetUser.followers++;
+          followerUser.following++;
+          following = true;
+        } else {
+          follows.splice(followIndex, 1);
+          targetUser.followers--;
+          followerUser.following--;
+          following = false;
+        }
+      }
+      
+      writeJsonFile('follows.json', { follows });
+      writeJsonFile('users.json', { users });
+      
+      return { status: 200, body: { success: true, following } };
+    });
+    
+    res.status(result.status).json(result.body);
+  } catch (error) {
+    res.status(500).json({ error: '服务器内部错误' });
   }
-  
-  const { follows } = readJsonFile<{ follows: Follow[] }>('follows.json');
-  const followIndex = follows.findIndex(f => f.followerId === followerId && f.followingId === id);
-  let following = false;
-  
-  if (followIndex === -1) {
-    const newFollow: Follow = {
-      id: uuidv4(),
-      followerId,
-      followingId: id,
-      createdAt: new Date().toISOString(),
-    };
-    follows.push(newFollow);
-    targetUser.followers++;
-    followerUser.following++;
-    following = true;
-  } else {
-    follows.splice(followIndex, 1);
-    targetUser.followers--;
-    followerUser.following--;
-    following = false;
-  }
-  
-  writeJsonFile('follows.json', { follows });
-  writeJsonFile('users.json', { users });
-  
-  res.json({ success: true, following });
 });
 
 app.get('/api/users/:id/feed', (req: Request, res: Response) => {

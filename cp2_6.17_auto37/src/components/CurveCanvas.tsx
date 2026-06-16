@@ -34,7 +34,8 @@ const timeToX = (time: number): number => {
 
 const xToTime = (x: number): number => {
   const clamped = Math.max(X_MIN, Math.min(X_MAX, x));
-  return TIME_MIN + ((clamped - X_MIN) / (X_MAX - X_MIN)) * (TIME_MAX - TIME_MIN);
+  const time = TIME_MIN + ((clamped - X_MIN) / (X_MAX - X_MIN)) * (TIME_MAX - TIME_MIN);
+  return Math.max(TIME_MIN, Math.min(TIME_MAX, time));
 };
 
 const tempToY = (temp: number): number => {
@@ -375,17 +376,22 @@ const CurveCanvas = forwardRef<CurveCanvasHandle, CurveCanvasProps>(
           temperature: newTemp,
         };
 
+        const minInterval = 0.5;
+
+        newPoints[draggingIndex].time = Math.max(TIME_MIN, newPoints[draggingIndex].time);
+        newPoints[draggingIndex].time = Math.min(TIME_MAX, newPoints[draggingIndex].time);
+
         if (draggingIndex > 0) {
-          newPoints[draggingIndex].time = Math.max(
-            newPoints[draggingIndex - 1].time,
-            newPoints[draggingIndex].time
-          );
+          const minTime = newPoints[draggingIndex - 1].time + minInterval;
+          if (newPoints[draggingIndex].time < minTime) {
+            newPoints[draggingIndex].time = minTime;
+          }
         }
         if (draggingIndex < newPoints.length - 1) {
-          newPoints[draggingIndex].time = Math.min(
-            newPoints[draggingIndex + 1].time,
-            newPoints[draggingIndex].time
-          );
+          const maxTime = newPoints[draggingIndex + 1].time - minInterval;
+          if (newPoints[draggingIndex].time > maxTime) {
+            newPoints[draggingIndex].time = maxTime;
+          }
         }
 
         setPoints(newPoints);

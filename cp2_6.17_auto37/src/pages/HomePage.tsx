@@ -251,6 +251,9 @@ interface HomeRecordCardProps {
   followingUsers: Set<string>;
   bouncingHearts: Set<string>;
   onNavigate: (id: string) => void;
+  style?: React.CSSProperties;
+  onCardRef?: (el: HTMLDivElement | null) => void;
+  onImageLoad?: (recordId: string) => void;
 }
 
 const HomeRecordCard: React.FC<HomeRecordCardProps> = ({
@@ -263,6 +266,9 @@ const HomeRecordCard: React.FC<HomeRecordCardProps> = ({
   followingUsers,
   bouncingHearts,
   onNavigate,
+  style,
+  onCardRef,
+  onImageLoad,
 }) => {
   const isLiked = likedRecords.has(record.id);
   const isFollowing = record.userId ? followingUsers.has(record.userId) : false;
@@ -297,11 +303,33 @@ const HomeRecordCard: React.FC<HomeRecordCardProps> = ({
     e.stopPropagation();
   };
 
+  const setRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      if (onCardRef) {
+        onCardRef(el);
+      }
+      if (isLast && onLastRef) {
+        onLastRef(el);
+      }
+    },
+    [onCardRef, isLast, onLastRef]
+  );
+
+  const handleImgLoad = useCallback(() => {
+    if (onImageLoad) {
+      onImageLoad(record.id);
+    }
+  }, [onImageLoad, record.id]);
+
   return (
     <div
-      ref={isLast ? onLastRef : null}
-      className="masonry-item fade-in"
+      ref={setRef}
+      className="fade-in"
       onClick={handleCardClick}
+      style={{
+        position: 'absolute',
+        ...style,
+      }}
     >
       <div
         style={cardStyle}
@@ -321,6 +349,7 @@ const HomeRecordCard: React.FC<HomeRecordCardProps> = ({
             alt={record.beanOrigin}
             style={cardImageStyle}
             loading="lazy"
+            onLoad={handleImgLoad}
           />
         </div>
 
@@ -442,6 +471,20 @@ const HomeRecordCard: React.FC<HomeRecordCardProps> = ({
   );
 };
 
+const GAP = 24;
+
+const getColumnCount = (width: number): number => {
+  if (width >= 1024) return 3;
+  if (width >= 768) return 2;
+  return 1;
+};
+
+interface CardPosition {
+  top: number;
+  left: number;
+  width: number;
+}
+
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const { request } = useApi<PaginatedResponse>();
@@ -457,8 +500,124 @@ const HomePage: React.FC = () => {
   const [bouncingHearts, setBouncingHearts] = useState<Set<string>>(new Set());
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
 
+  const [cardPositions, setCardPositions] = useState<CardPosition[]>([]);
+  const [containerHeight, setContainerHeight] = useState(0);
+
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const observerRef = useRef<IntersectionObserver | null>(null);
   const lastElementRef = useRef<HTMLDivElement | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const layoutScheduledRef = useRef(false);
+
+  const estimateCardHeight = (record: RoastRecordWithUser, cardWidth: number): number => {
+    const imageHeight = cardWidth * 0.5625;
+    const contentPadding = 16 * 2;
+    const beanOriginHeight = 25.2;
+    const tagsRowHeight = 28;
+    const tagsGap = 12;
+    const userRowPaddingTop = 4;
+    const userRowBorderTop = 1;
+    const userRowHeight = 36;
+    const actionRowPaddingTop = 4;
+    const actionRowHeight = 28;
+    const gaps = 12 * 3;
+
+    const totalHeight = imageHeight + contentPadding + beanOriginHeight + tagsRowHeight + tagsGap +
+      userRowPaddingTop + userRowBorderTop + userRowHeight +
+      actionRowPaddingTop + actionRowHeight + gaps;
+
+    return totalHeight;
+  };
+
+  const calculateLayout = useCallback(() => {
+    const container = containerRef.current;
+    if (!container || records.length === 0) return;
+
+    const containerWidth = container.offsetWidth;
+    const columns = getColumnCount(containerWidth);
+    const cardWidth = (containerWidth - GAP * (columns - 1)) / columns;
+
+    const columnHeights = new Array(columns).fill(0);
+    const positions: CardPosition[] = [];
+
+    records.forEach((record) => {
+      const cardEl = cardRefs.current.get(record.id);
+      let cardHeight: number;
+
+      if (cardEl) {
+        cardHeight = cardEl.offsetHeight;
+      } else {
+        cardHeight = estimateCardHeight(record, cardWidth);
+      }
+
+      let shortestColIndex = 0;
+      let shortestHeight = columnHeights[0];
+      for (let i = 1; i < columns; i++) {
+        if (columnHeights[i] < shortestHeight) {
+          shortestHeight = columnHeights[i];
+          shortestColIndex = i;
+        }
+      }
+
+      const top = columnHeights[shortestColIndex];
+      const left = shortestColIndex * (cardWidth + GAP);
+
+      positions.push({ top, left, width: cardWidth });
+
+      columnHeights[shortestColIndex] += cardHeight + GAP;
+    });
+
+    setCardPositions(positions);
+    setContainerHeight(Math.max(...columnHeights) - GAP);
+  }, [records]);
+
+  const scheduleLayout = useCallback(() => {
+    if (layoutScheduledRef.current) return;
+    layoutScheduledRef.current = true;
+    requestAnimationFrame(() => {
+      layoutScheduledRef.current = false;
+      calculateLayout();
+    });
+  }, [calculateLayout]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    resizeObserverRef.current = new ResizeObserver(() => {
+      scheduleLayout();
+    });
+
+    resizeObserverRef.current.observe(container);
+
+    return () => {
+      if (resizeObserverRef.current) {
+        resizeObserverRef.current.disconnect();
+      }
+    };
+  }, [scheduleLayout]);
+
+  useEffect(() => {
+    scheduleLayout();
+  }, [records, scheduleLayout]);
+
+  const handleImageLoad = useCallback((recordId: string) => {
+    setLoadedImages((prev) => {
+      const next = new Set(prev);
+      next.add(recordId);
+      return next;
+    });
+    scheduleLayout();
+  }, [scheduleLayout]);
+
+  const setCardRef = useCallback((recordId: string, el: HTMLDivElement | null) => {
+    if (el) {
+      cardRefs.current.set(recordId, el);
+    } else {
+      cardRefs.current.delete(recordId);
+    }
+  }, []);
 
   const fetchRecords = useCallback(
     async (pageNum: number) => {
@@ -522,6 +681,8 @@ const HomePage: React.FC = () => {
     const record = records.find((r) => r.id === recordId);
     if (!record) return;
 
+    const action = isCurrentlyLiked ? 'unlike' : 'like';
+
     setBouncingHearts((prev) => new Set(prev).add(recordId));
     setTimeout(() => {
       setBouncingHearts((prev) => {
@@ -558,7 +719,7 @@ const HomePage: React.FC = () => {
     try {
       await likeApi.request(`http://localhost:3001/api/records/${recordId}/like`, {
         method: 'POST',
-        body: JSON.stringify({ userId: CURRENT_USER_ID }),
+        body: JSON.stringify({ userId: CURRENT_USER_ID, action }),
       });
     } catch (err) {
       console.error('Failed to like record:', err);
@@ -588,6 +749,7 @@ const HomePage: React.FC = () => {
     if (userId === CURRENT_USER_ID) return;
 
     const isCurrentlyFollowing = followingUsers.has(userId);
+    const action = isCurrentlyFollowing ? 'unfollow' : 'follow';
 
     setFollowingUsers((prev) => {
       const next = new Set(prev);
@@ -602,7 +764,7 @@ const HomePage: React.FC = () => {
     try {
       await followApi.request(`http://localhost:3001/api/users/${userId}/follow`, {
         method: 'POST',
-        body: JSON.stringify({ followerId: CURRENT_USER_ID }),
+        body: JSON.stringify({ followerId: CURRENT_USER_ID, action }),
       });
     } catch (err) {
       console.error('Failed to follow user:', err);
@@ -640,21 +802,38 @@ const HomePage: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="masonry-grid">
-              {records.map((record, index) => (
-                <HomeRecordCard
-                  key={record.id}
-                  record={record}
-                  isLast={index === records.length - 1}
-                  onLastRef={handleLastRef}
-                  onLike={handleLike}
-                  onFollow={handleFollow}
-                  likedRecords={likedRecords}
-                  followingUsers={followingUsers}
-                  bouncingHearts={bouncingHearts}
-                  onNavigate={handleNavigate}
-                />
-              ))}
+            <div
+              ref={containerRef}
+              style={{
+                position: 'relative',
+                width: '100%',
+                height: containerHeight,
+              }}
+            >
+              {records.map((record, index) => {
+                const pos = cardPositions[index] || { top: 0, left: index * 100, width: 200 };
+                return (
+                  <HomeRecordCard
+                    key={record.id}
+                    record={record}
+                    isLast={index === records.length - 1}
+                    onLastRef={handleLastRef}
+                    onLike={handleLike}
+                    onFollow={handleFollow}
+                    likedRecords={likedRecords}
+                    followingUsers={followingUsers}
+                    bouncingHearts={bouncingHearts}
+                    onNavigate={handleNavigate}
+                    style={{
+                      top: pos.top,
+                      left: pos.left,
+                      width: pos.width,
+                    }}
+                    onCardRef={(el) => setCardRef(record.id, el)}
+                    onImageLoad={handleImageLoad}
+                  />
+                );
+              })}
             </div>
 
             {loading && (

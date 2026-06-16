@@ -537,6 +537,7 @@ const RecordDetailPage: React.FC = () => {
     if (!record) return;
 
     const wasLiked = isLiked;
+    const action = wasLiked ? 'unlike' : 'like';
 
     setIsHeartBouncing(true);
     setTimeout(() => setIsHeartBouncing(false), 200);
@@ -556,7 +557,7 @@ const RecordDetailPage: React.FC = () => {
     try {
       await likeApi.request(`${API_BASE}/api/records/${record.id}/like`, {
         method: 'POST',
-        body: JSON.stringify({ userId: CURRENT_USER_ID }),
+        body: JSON.stringify({ userId: CURRENT_USER_ID, action }),
       });
     } catch (err) {
       console.error('Failed to like record:', err);
@@ -575,13 +576,14 @@ const RecordDetailPage: React.FC = () => {
     if (!record?.userId || record.userId === CURRENT_USER_ID) return;
 
     const wasFollowing = isFollowing;
+    const action = wasFollowing ? 'unfollow' : 'follow';
 
     setIsFollowing(!wasFollowing);
 
     try {
       await followApi.request(`${API_BASE}/api/users/${record.userId}/follow`, {
         method: 'POST',
-        body: JSON.stringify({ followerId: CURRENT_USER_ID }),
+        body: JSON.stringify({ followerId: CURRENT_USER_ID, action }),
       });
     } catch (err) {
       console.error('Failed to follow user:', err);

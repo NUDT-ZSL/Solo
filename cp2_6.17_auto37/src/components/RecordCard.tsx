@@ -76,11 +76,12 @@ export default function RecordCard({ record, currentUserId = 'user-1', onComment
 
   const handleLike = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    const action = liked ? 'unlike' : 'like';
     const result = await request(
       `/api/records/${record.id}/like`,
       {
         method: 'POST',
-        body: JSON.stringify({ userId: currentUserId }),
+        body: JSON.stringify({ userId: currentUserId, action }),
       }
     );
     if (result) {
