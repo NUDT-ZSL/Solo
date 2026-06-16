@@ -98,7 +98,8 @@ export class AudioAnalyzer {
   private analyze(): void {
     if (!this._isPlaying || !this.analyser || !this.frequencyData || !this.audioBuffer) return;
 
-    const frameStart = performance.now();
+    const analysisStart = performance.now();
+    const MAX_ANALYSIS_TIME = 5;
 
     this.analyser.getByteFrequencyData(this.frequencyData);
 
@@ -106,9 +107,31 @@ export class AudioAnalyzer {
     const fftSize = this.analyser.fftSize;
     const resolution = sampleRate / fftSize;
 
-    const low = this.computeBandRMS(this.frequencyData, resolution, 20, 250);
-    const mid = this.computeBandRMS(this.frequencyData, resolution, 250, 4000);
-    const high = this.computeBandRMS(this.frequencyData, resolution, 4000, 20000);
+    let low = 0;
+    let mid = 0;
+    let high = 0;
+    let timedOut = false;
+
+    const checkTimeout = (): boolean => {
+      if (timedOut) return true;
+      if (performance.now() - analysisStart > MAX_ANALYSIS_TIME) {
+        timedOut = true;
+        return true;
+      }
+      return false;
+    };
+
+    low = this.computeBandRMS(this.frequencyData, resolution, 20, 250, checkTimeout);
+    if (!timedOut) {
+      mid = this.computeBandRMS(this.frequencyData, resolution, 250, 4000, checkTimeout);
+    }
+    if (!timedOut) {
+      high = this.computeBandRMS(this.frequencyData, resolution, 4000, 20000, checkTimeout);
+    }
+
+    if (timedOut) {
+      console.warn('Audio analysis timed out, truncating results');
+    }
 
     if (this.onFrequencyData) {
       this.onFrequencyData({ low, mid, high });
@@ -120,17 +143,25 @@ export class AudioAnalyzer {
       this.onProgress(currentTime / duration, duration);
     }
 
-    const frameEnd = performance.now();
-    const elapsed = frameEnd - frameStart;
+    const analysisEnd = performance.now();
+    const analysisElapsed = analysisEnd - analysisStart;
 
-    void elapsed;
+    if (analysisElapsed > MAX_ANALYSIS_TIME) {
+      console.warn(`Audio analysis took ${analysisElapsed.toFixed(2)}ms, exceeds ${MAX_ANALYSIS_TIME}ms limit`);
+    }
 
     if (currentTime < duration) {
       this.animationFrameId = requestAnimationFrame(() => this.analyze());
     }
   }
 
-  private computeBandRMS(data: Uint8Array, resolution: number, lowFreq: number, highFreq: number): number {
+  private computeBandRMS(
+    data: Uint8Array,
+    resolution: number,
+    lowFreq: number,
+    highFreq: number,
+    checkTimeout?: () => boolean
+  ): number {
     const startBin = Math.max(1, Math.floor(lowFreq / resolution));
     const endBin = Math.min(data.length - 1, Math.floor(highFreq / resolution));
 
@@ -139,6 +170,9 @@ export class AudioAnalyzer {
     let sumSquares = 0;
     let count = 0;
     for (let i = startBin; i <= endBin; i++) {
+      if (checkTimeout && checkTimeout()) {
+        break;
+      }
       const normalized = data[i] / 255;
       sumSquares += normalized * normalized;
       count++;

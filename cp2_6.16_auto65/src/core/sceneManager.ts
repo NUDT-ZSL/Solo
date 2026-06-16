@@ -18,8 +18,16 @@ import { useStore } from '@/store/useStore';
 
 class SceneManager {
   private animationPaused: boolean = false;
+  private physicsPaused: boolean = false;
+  private audioPaused: boolean = false;
+  private externalAudioAnalyzer: { getIsPlaying: () => boolean; pause: () => void; play: () => void } | null = null;
+
+  setAudioAnalyzer(analyzer: { getIsPlaying: () => boolean; pause: () => void; play: () => void }): void {
+    this.externalAudioAnalyzer = analyzer;
+  }
 
   updatePhysics(deltaTime: number): void {
+    if (this.physicsPaused || this.animationPaused) return;
     const state = useStore.getState();
     const { connections, isDraggingNode, selectedNodeId } = state;
     let nodes = state.nodes.map((n) => ({
@@ -267,24 +275,35 @@ class SceneManager {
   }
 
   applyAudioData(data: FrequencyData): void {
+    if (this.audioPaused || this.animationPaused) return;
     const state = useStore.getState();
     const { nodes, connections } = state;
 
     if (nodes.length === 0 && connections.length === 0) return;
+
+    const targetHue = 0;
+    const hueShiftAmount = data.low * 0.3;
 
     const updatedNodes = nodes.map((node) => {
       const color = new THREE.Color(node.color);
       const hsl = { h: 0, s: 0, l: 0 };
       color.getHSL(hsl);
 
-      const newHue = hsl.h + (data.low * 0.08);
-      const newSaturation = Math.min(1, hsl.s + hsl.s * data.low * 0.3);
+      let hueDiff = targetHue - hsl.h;
+      if (hueDiff > 0.5) hueDiff -= 1;
+      if (hueDiff < -0.5) hueDiff += 1;
+      const newHue = (hsl.h + hueDiff * hueShiftAmount + 1) % 1;
+
+      const saturationBoost = data.low * 0.3;
+      const newSaturation = Math.min(1, hsl.s * (1 + saturationBoost));
+
       color.setHSL(newHue, newSaturation, hsl.l);
 
-      const baseSize = node.restPosition ? node.size : node.size;
+      const baseSize = node.size;
+      const sizeMultiplier = 0.5 + data.mid * 1.0;
       const newSize = Math.min(
         MAX_NODE_SIZE,
-        Math.max(MIN_NODE_SIZE, baseSize * (1 + data.mid * 0.5))
+        Math.max(MIN_NODE_SIZE, baseSize * sizeMultiplier)
       );
 
       return {
@@ -322,6 +341,13 @@ class SceneManager {
     camera: THREE.Camera
   ): Promise<void> {
     this.animationPaused = true;
+    this.physicsPaused = true;
+    this.audioPaused = true;
+
+    const audioWasPlaying = this.externalAudioAnalyzer?.getIsPlaying() ?? false;
+    if (audioWasPlaying) {
+      this.externalAudioAnalyzer?.pause();
+    }
 
     await new Promise<void>((resolve) => setTimeout(resolve, 200));
 
@@ -345,10 +371,24 @@ class SceneManager {
     gl.setPixelRatio(originalPixelRatio);
 
     this.animationPaused = false;
+    this.physicsPaused = false;
+    this.audioPaused = false;
+
+    if (audioWasPlaying) {
+      this.externalAudioAnalyzer?.play();
+    }
   }
 
   isAnimationPaused(): boolean {
     return this.animationPaused;
+  }
+
+  isPhysicsPaused(): boolean {
+    return this.physicsPaused;
+  }
+
+  isAudioPaused(): boolean {
+    return this.audioPaused;
   }
 
   lerpColor(color1: string, color2: string, t: number): string {
