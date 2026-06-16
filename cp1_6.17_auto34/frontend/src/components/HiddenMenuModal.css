@@ -1,0 +1,133 @@
+.hm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  z-index: 600;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.hm-card {
+  width: 100%;
+  max-width: 440px;
+  background: linear-gradient(160deg, #4E342E 0%, #3E2723 100%);
+  color: var(--color-cream);
+  border-radius: 24px 24px 0 0;
+  padding: 28px 24px 32px;
+  box-shadow: 0px -8px 40px rgba(0, 0, 0, 0.35);
+  animation: slideUp 0.5s ease-out;
+  max-height: 85vh;
+  overflow-y: auto;
+  position: relative;
+}
+
+.hm-card.closing {
+  animation: slideDown 0.4s ease-in forwards;
+}
+
+.hm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.hm-badge {
+  display: inline-block;
+  padding: 6px 14px;
+  background-color: rgba(255, 138, 101, 0.2);
+  color: #FFCC80;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.hm-close {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: #BCAAA4;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.hm-close:hover {
+  color: #fff;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.hm-image {
+  text-align: center;
+  margin-bottom: 20px;
+  padding: 20px 0;
+  background: radial-gradient(circle, rgba(255, 138, 101, 0.2) 0%, transparent 70%);
+}
+
+.hm-name {
+  font-size: 26px;
+  font-weight: 700;
+  color: #FFF8E1;
+  text-align: center;
+  margin-bottom: 14px;
+  letter-spacing: 1px;
+}
+
+.hm-story {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #D7CCC8;
+  text-align: center;
+  margin-bottom: 28px;
+  padding: 0 8px;
+}
+
+.hm-actions {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+}
+
+.hm-btn {
+  flex: 1;
+  max-width: 160px;
+  padding: 12px 20px;
+  border-radius: 22px;
+  font-size: 15px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.hm-btn.fav {
+  background-color: #FF8A65;
+  color: #fff;
+}
+
+.hm-btn.fav:hover:not(:disabled) {
+  background-color: #FF7043;
+}
+
+.hm-btn.fav.done {
+  background-color: rgba(255, 138, 101, 0.5);
+  cursor: default;
+}
+
+.hm-btn.share {
+  background-color: #8D6E63;
+  color: #fff;
+}
+
+.hm-btn.share:hover:not(:disabled) {
+  background-color: #6D4C41;
+}
+
+.hm-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

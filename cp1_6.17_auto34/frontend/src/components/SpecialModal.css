@@ -1,0 +1,141 @@
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.25);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.special-modal {
+  width: 100%;
+  max-width: 420px;
+  background-color: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0px 12px 40px rgba(0, 0, 0, 0.25);
+  animation: fadeInUp 0.3s ease;
+  position: relative;
+}
+
+.modal-close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: #9E9E9E;
+  z-index: 10;
+  transition: color 0.2s ease;
+  border-radius: 50%;
+}
+
+.modal-close:hover {
+  color: #333;
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.special-modal-image {
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.special-modal-image-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.special-modal-content {
+  padding: 20px 24px 24px;
+}
+
+.special-modal-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  margin-bottom: 16px;
+}
+
+.special-modal-flavors {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.flavor-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.flavor-label {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  width: 36px;
+}
+
+.flavor-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.flavor-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+}
+
+.special-modal-note {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  margin-bottom: 20px;
+  background-color: var(--color-cream);
+  padding: 12px 14px;
+  border-radius: 10px;
+}
+
+.note-label {
+  font-weight: 600;
+  color: var(--color-primary-medium);
+}
+
+.special-modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-light);
+}
+
+.special-modal-limited {
+  font-size: 13px;
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.special-modal-price {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-primary-dark);
+}

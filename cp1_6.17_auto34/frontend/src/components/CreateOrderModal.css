@@ -1,0 +1,119 @@
+.create-order-modal {
+  width: 100%;
+  max-width: 400px;
+  background-color: #fff;
+  border-radius: 16px;
+  padding: 28px 24px;
+  box-shadow: 0px 12px 40px rgba(0, 0, 0, 0.25);
+  animation: fadeInUp 0.3s ease;
+  position: relative;
+}
+
+.create-order-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  margin-bottom: 24px;
+}
+
+.create-order-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-primary-medium);
+}
+
+.form-select {
+  padding: 12px 14px;
+  font-size: 15px;
+  color: var(--color-text);
+  background-color: var(--color-cream);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.form-select:focus {
+  border-color: var(--color-primary-medium);
+  background-color: #fff;
+}
+
+.form-input {
+  padding: 12px 14px;
+  font-size: 15px;
+  color: var(--color-text);
+  background-color: var(--color-cream);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  width: 100%;
+}
+
+.form-input:focus {
+  border-color: var(--color-primary-medium);
+  background-color: #fff;
+}
+
+.radio-group {
+  display: flex;
+  gap: 10px;
+}
+
+.radio-item {
+  flex: 1;
+  position: relative;
+}
+
+.radio-item input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.radio-item span {
+  display: block;
+  text-align: center;
+  padding: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background-color: var(--color-cream);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.radio-item:hover span {
+  border-color: var(--color-secondary);
+}
+
+.radio-item.active span {
+  color: var(--color-cream);
+  background-color: var(--color-primary-light);
+  border-color: var(--color-primary-light);
+}
+
+.form-error {
+  font-size: 13px;
+  color: #E53935;
+  margin-top: -8px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}

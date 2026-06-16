@@ -1,0 +1,138 @@
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #FFF8E1 0%, #FFECB3 50%, #FFE0B2 100%);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  background-color: #fff;
+  border-radius: 16px;
+  padding: 36px 28px;
+  box-shadow: 0px 4px 20px rgba(78, 52, 46, 0.15);
+}
+
+.auth-header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.auth-logo {
+  font-size: 48px;
+  margin-bottom: 8px;
+}
+
+.auth-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  margin-bottom: 6px;
+}
+
+.auth-subtitle {
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+.auth-tabs {
+  display: flex;
+  background-color: var(--color-cream);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 24px;
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 10px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.auth-tab.active {
+  background-color: #fff;
+  color: var(--color-primary-dark);
+  box-shadow: 0px 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.auth-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary-medium);
+  padding-left: 2px;
+}
+
+.auth-input {
+  padding: 12px 4px;
+  font-size: 15px;
+  color: var(--color-text);
+  background-color: transparent;
+  border: none;
+  border-bottom: 1.5px solid #E0E0E0;
+  transition: border-color 0.3s ease;
+}
+
+.auth-input::placeholder {
+  color: var(--color-disabled);
+}
+
+.auth-input:focus {
+  border-bottom-color: #795548;
+}
+
+.auth-submit {
+  margin-top: 8px;
+  padding: 14px;
+  background-color: var(--color-primary-medium);
+  color: #fff;
+  border-radius: 24px;
+  font-size: 16px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.auth-submit:hover:not(:disabled) {
+  background-color: var(--color-primary);
+}
+
+.auth-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-footer {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+.auth-switch {
+  color: var(--color-primary-light);
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.auth-switch:hover {
+  color: var(--color-primary-dark);
+  text-decoration: underline;
+}

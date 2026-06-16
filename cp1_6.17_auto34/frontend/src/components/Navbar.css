@@ -1,0 +1,163 @@
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background-color: var(--color-primary);
+  z-index: 100;
+  box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.navbar-content {
+  height: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.navbar-logo {
+  font-size: 22px;
+}
+
+.navbar-title {
+  color: var(--color-cream);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.navbar-links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  justify-content: center;
+}
+
+.nav-link {
+  position: relative;
+  padding: 8px 14px;
+  color: #BCAAA4;
+  font-size: 14px;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.nav-link:hover {
+  color: var(--color-cream);
+}
+
+.nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background-color: var(--color-accent);
+  transition: all 0.2s ease;
+  transform: translateX(-50%);
+}
+
+.nav-link:hover::after {
+  width: 70%;
+  left: 15%;
+  transform: none;
+}
+
+.nav-link.active {
+  color: var(--color-cream);
+}
+
+.nav-link.active::after {
+  width: 100%;
+  left: 0;
+  transform: none;
+}
+
+.navbar-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.navbar-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--color-secondary);
+}
+
+.navbar-avatar-placeholder {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: var(--color-secondary-dark);
+  color: var(--color-cream);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.navbar-nickname {
+  color: var(--color-cream);
+  font-size: 13px;
+  font-weight: 500;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navbar-logout {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #BCAAA4;
+  border: 1px solid var(--color-secondary-dark);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.navbar-logout:hover {
+  color: var(--color-cream);
+  border-color: var(--color-accent);
+  background-color: rgba(255, 138, 101, 0.15);
+}
+
+@media (max-width: 640px) {
+  .navbar-content {
+    padding: 0 10px;
+    gap: 8px;
+  }
+  .navbar-title {
+    font-size: 15px;
+  }
+  .nav-link {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  .navbar-nickname {
+    display: none;
+  }
+  .navbar-links {
+    gap: 0;
+  }
+}
