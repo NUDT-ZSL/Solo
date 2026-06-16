@@ -1,0 +1,122 @@
+[
+  {
+    "id": "item-garden-1",
+    "name": "园艺剪刀",
+    "description": "高品质不锈钢园艺修枝剪刀，适合修剪花草和灌木，轻巧耐用，附带防滑握把设计。",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=garden%20pruning%20shears%20tool%20on%20wooden%20background%20warm%20tone&image_size=square",
+    "category": "园艺",
+    "status": "available",
+    "borrower": null,
+    "borrowDate": null
+  },
+  {
+    "id": "item-garden-2",
+    "name": "浇水壶套装",
+    "description": "2升容量塑料浇水壶，带长嘴设计，可精准浇灌植物根部，另有小喷壶用于叶面喷洒。",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=green%20watering%20can%20garden%20tool%20warm%20wooden%20background&image_size=square",
+    "category": "园艺",
+    "status": "borrowed",
+    "borrower": "张小明",
+    "borrowDate": "2026-06-10"
+  },
+  {
+    "id": "item-garden-3",
+    "name": "花园小铲子",
+    "description": "迷你园艺三件套：小铲子、小耙子、小锄头，适合室内盆栽和阳台种植使用。",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=mini%20garden%20shovel%20rake%20tools%20set%20terracotta%20pot%20warm&image_size=square",
+    "category": "园艺",
+    "status": "available",
+    "borrower": null,
+    "borrowDate": null
+  },
+  {
+    "id": "item-repair-1",
+    "name": "电动螺丝刀",
+    "description": "可充电式锂电电动螺丝刀套装，含20个批头组合，扭力可调，家具组装必备工具。",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=electric%20screwdriver%20cordless%20tool%20wooden%20desk%20warm%20light&image_size=square",
+    "category": "修理",
+    "status": "available",
+    "borrower": null,
+    "borrowDate": null
+  },
+  {
+    "id": "item-repair-2",
+    "name": "活动扳手",
+    "description": "10寸优质铬钒钢活动扳手，开口范围0-30mm，表面镀铬防锈，管道维修必备。",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=adjustable%20wrench%20tool%20metal%20craftsmanship%20warm%20background&image_size=square",
+    "category": "修理",
+    "status": "borrowed",
+    "borrower": "李华",
+    "borrowDate": "2026-06-12"
+  },
+  {
+    "id": "item-repair-3",
+    "name": "多功能工具箱",
+    "description": "含锤子、螺丝刀套装、卷尺、美工刀、内六角等30件常用工具，家用维修一应俱全。",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=toolbox%20filled%20with%20hand%20tools%20organized%20warm%20garage%20light&image_size=square",
+    "category": "修理",
+    "status": "available",
+    "borrower": null,
+    "borrowDate": null
+  },
+  {
+    "id": "item-craft-1",
+    "name": "缝纫机",
+    "description": "家用电动缝纫机，支持直线、曲折等多种针迹，自带穿线器，适合布料修补和手工创作。",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=vintage%20sewing%20machine%20fabric%20craft%20warm%20cozy%20workshop&image_size=square",
+    "category": "手工",
+    "status": "available",
+    "borrower": null,
+    "borrowDate": null
+  },
+  {
+    "id": "item-craft-2",
+    "name": "热胶枪套装",
+    "description": "60W恒温热胶枪，含50根高粘度环保胶棒，手工DIY、粘贴修复的得力帮手。",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=hot%20glue%20gun%20craft%20supplies%20wooden%20craft%20table%20warm&image_size=square",
+    "category": "手工",
+    "status": "available",
+    "borrower": null,
+    "borrowDate": null
+  },
+  {
+    "id": "item-craft-3",
+    "name": "编织毛线套装",
+    "description": "12色中粗腈纶毛线+环形针+棒针全套，适合围巾、帽子、玩偶等手工编织创作。",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=colorful%20yarn%20balls%20knitting%20needles%20craft%20cozy%20warm%20light&image_size=square",
+    "category": "手工",
+    "status": "borrowed",
+    "borrower": "王芳",
+    "borrowDate": "2026-06-08"
+  },
+  {
+    "id": "item-cooking-1",
+    "name": "电饼铛",
+    "description": "双面加热电饼铛，可做煎饼、披萨、烤肉，不粘涂层易清洁，社区聚餐好帮手。",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=electric%20griddle%20pancake%20maker%20kitchen%20appliance%20warm%20tone&image_size=square",
+    "category": "烹饪",
+    "status": "available",
+    "borrower": null,
+    "borrowDate": null
+  },
+  {
+    "id": "item-cooking-2",
+    "name": "烧烤炉",
+    "description": "折叠式便携户外烧烤炉，配烤网和炭夹，适合社区花园露台的周末烧烤派对。",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=portable%20barbecue%20grill%20outdoor%20cooking%20summer%20warm%20light&image_size=square",
+    "category": "烹饪",
+    "status": "available",
+    "borrower": null,
+    "borrowDate": null
+  },
+  {
+    "id": "item-electronic-1",
+    "name": "投影仪",
+    "description": "1080P高清家用投影仪，支持手机无线投屏，内置音响，社区电影放映活动专用。",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=home%20projector%20device%20movie%20night%20cozy%20warm%20dark%20room&image_size=square",
+    "category": "电子设备",
+    "status": "borrowed",
+    "borrower": "陈磊",
+    "borrowDate": "2026-06-14"
+  }
+]
