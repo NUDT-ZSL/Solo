@@ -1,0 +1,180 @@
+[
+  {
+    "id": "aeaebc81-6fa3-4bc4-bda8-a2d2c1906e30",
+    "name": "Test Room",
+    "rounds": 5,
+    "difficulty": "easy",
+    "creatorId": "c7b6b466-a4e2-452d-ae02-03ff3a7b700c",
+    "status": "playing",
+    "currentRound": 2,
+    "players": [
+      {
+        "userId": "c7b6b466-a4e2-452d-ae02-03ff3a7b700c",
+        "name": "Player1",
+        "color": "#3b82f6",
+        "score": 10,
+        "answers": [
+          {
+            "questionId": "79493c67-ebd4-40c3-998f-1d8958f273e6",
+            "answer": "快的",
+            "correct": true,
+            "submitted": true,
+            "timeout": false,
+            "timestamp": 1781588268446
+          }
+        ]
+      },
+      {
+        "userId": "c1ecb19f-40e0-4a18-a1eb-5ebe1474740d",
+        "name": "Player2",
+        "color": "#3b82f6",
+        "score": 0,
+        "answers": [
+          {
+            "questionId": "79493c67-ebd4-40c3-998f-1d8958f273e6",
+            "answer": "wrong_answer",
+            "correct": false,
+            "submitted": true,
+            "timeout": false,
+            "timestamp": 1781588268449
+          }
+        ]
+      }
+    ],
+    "currentQuestion": {
+      "id": "00868fff-0028-48aa-bde8-e445844ca8c9",
+      "type": "cn2en",
+      "question": "给",
+      "correctAnswer": "give",
+      "word": "give",
+      "meaning": "给",
+      "pos": "v.",
+      "startTime": 1781588268453,
+      "timeLimit": 20000
+    },
+    "createdAt": 1781588268430,
+    "startedAt": 1781588268441,
+    "endedAt": null
+  },
+  {
+    "id": "c2f4ada4-0926-4082-9b8b-fa61baed0eb3",
+    "name": "Championship",
+    "rounds": 5,
+    "difficulty": "easy",
+    "creatorId": "469a3078-8e6a-4fe5-9a39-c389a60b1014",
+    "status": "finished",
+    "currentRound": 5,
+    "players": [
+      {
+        "userId": "469a3078-8e6a-4fe5-9a39-c389a60b1014",
+        "name": "Alice",
+        "color": "#ef4444",
+        "score": 50,
+        "answers": [
+          {
+            "questionId": "2caa2b17-804e-4399-b158-25f89cfe1fb8",
+            "answer": "speak",
+            "correct": true,
+            "submitted": true,
+            "timeout": false,
+            "timestamp": 1781588302744
+          },
+          {
+            "questionId": "e9e242e8-ce6a-4835-8339-9be8ae2504b8",
+            "answer": "read",
+            "correct": true,
+            "submitted": true,
+            "timeout": false,
+            "timestamp": 1781588302755
+          },
+          {
+            "questionId": "e6b15d32-dd34-4761-96b3-862dbfd752d5",
+            "answer": "do",
+            "correct": true,
+            "submitted": true,
+            "timeout": false,
+            "timestamp": 1781588302765
+          },
+          {
+            "questionId": "27bd2d53-03ad-456d-86aa-b155ef0efbbd",
+            "answer": "cold",
+            "correct": true,
+            "submitted": true,
+            "timeout": false,
+            "timestamp": 1781588302776
+          },
+          {
+            "questionId": "ab87c1b8-8b2e-4a0a-a98b-8fa8677a0b6b",
+            "answer": "鸡蛋",
+            "correct": true,
+            "submitted": true,
+            "timeout": false,
+            "timestamp": 1781588302783
+          }
+        ]
+      },
+      {
+        "userId": "0e840910-b5e4-49d2-9be6-07802bcae7af",
+        "name": "Bob",
+        "color": "#ef4444",
+        "score": 20,
+        "answers": [
+          {
+            "questionId": "2caa2b17-804e-4399-b158-25f89cfe1fb8",
+            "answer": "wrong",
+            "correct": false,
+            "submitted": true,
+            "timeout": false,
+            "timestamp": 1781588302746
+          },
+          {
+            "questionId": "e9e242e8-ce6a-4835-8339-9be8ae2504b8",
+            "answer": "read",
+            "correct": true,
+            "submitted": true,
+            "timeout": false,
+            "timestamp": 1781588302759
+          },
+          {
+            "questionId": "e6b15d32-dd34-4761-96b3-862dbfd752d5",
+            "answer": "wrong",
+            "correct": false,
+            "submitted": true,
+            "timeout": false,
+            "timestamp": 1781588302769
+          },
+          {
+            "questionId": "27bd2d53-03ad-456d-86aa-b155ef0efbbd",
+            "answer": "cold",
+            "correct": true,
+            "submitted": true,
+            "timeout": false,
+            "timestamp": 1781588302778
+          },
+          {
+            "questionId": "ab87c1b8-8b2e-4a0a-a98b-8fa8677a0b6b",
+            "answer": "wrong",
+            "correct": false,
+            "submitted": true,
+            "timeout": false,
+            "timestamp": 1781588302787
+          }
+        ]
+      }
+    ],
+    "currentQuestion": {
+      "id": "ab87c1b8-8b2e-4a0a-a98b-8fa8677a0b6b",
+      "type": "en2cn",
+      "question": "egg",
+      "correctAnswer": "鸡蛋",
+      "word": "egg",
+      "meaning": "鸡蛋",
+      "pos": "n.",
+      "startTime": 1781588302780,
+      "timeLimit": 20000
+    },
+    "createdAt": 1781588302735,
+    "startedAt": 1781588302741,
+    "endedAt": 1781588302787
+  }
+]

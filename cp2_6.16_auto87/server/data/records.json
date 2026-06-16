@@ -1,0 +1,28 @@
+[
+  {
+    "id": "bed35af6-a858-46c8-9acc-ad9007e39647",
+    "roomId": "c2f4ada4-0926-4082-9b8b-fa61baed0eb3",
+    "roomName": "Championship",
+    "difficulty": "easy",
+    "rounds": 5,
+    "players": [
+      {
+        "userId": "469a3078-8e6a-4fe5-9a39-c389a60b1014",
+        "name": "Alice",
+        "color": "#ef4444",
+        "score": 50
+      },
+      {
+        "userId": "0e840910-b5e4-49d2-9be6-07802bcae7af",
+        "name": "Bob",
+        "color": "#ef4444",
+        "score": 20
+      }
+    ],
+    "winners": [
+      "469a3078-8e6a-4fe5-9a39-c389a60b1014"
+    ],
+    "startedAt": 1781588302741,
+    "endedAt": 1781588302787
+  }
+]

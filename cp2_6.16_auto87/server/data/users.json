@@ -1,0 +1,214 @@
+[
+  {
+    "id": "c7b6b466-a4e2-452d-ae02-03ff3a7b700c",
+    "name": "Player1",
+    "color": "#3b82f6",
+    "totalGames": 0,
+    "wins": 0,
+    "vocabulary": 1000,
+    "history": [
+      {
+        "date": "2026-06-10",
+        "games": 5,
+        "wins": 2,
+        "vocabulary": 1009
+      },
+      {
+        "date": "2026-06-11",
+        "games": 5,
+        "wins": 1,
+        "vocabulary": 1031
+      },
+      {
+        "date": "2026-06-12",
+        "games": 1,
+        "wins": 2,
+        "vocabulary": 1041
+      },
+      {
+        "date": "2026-06-13",
+        "games": 1,
+        "wins": 0,
+        "vocabulary": 1041
+      },
+      {
+        "date": "2026-06-14",
+        "games": 2,
+        "wins": 0,
+        "vocabulary": 1027
+      },
+      {
+        "date": "2026-06-15",
+        "games": 1,
+        "wins": 0,
+        "vocabulary": 1007
+      },
+      {
+        "date": "2026-06-16",
+        "games": 5,
+        "wins": 2,
+        "vocabulary": 1025
+      }
+    ],
+    "createdAt": 1781588268416
+  },
+  {
+    "id": "c1ecb19f-40e0-4a18-a1eb-5ebe1474740d",
+    "name": "Player2",
+    "color": "#3b82f6",
+    "totalGames": 0,
+    "wins": 0,
+    "vocabulary": 1000,
+    "history": [
+      {
+        "date": "2026-06-10",
+        "games": 5,
+        "wins": 2,
+        "vocabulary": 1036
+      },
+      {
+        "date": "2026-06-11",
+        "games": 1,
+        "wins": 2,
+        "vocabulary": 1041
+      },
+      {
+        "date": "2026-06-12",
+        "games": 5,
+        "wins": 0,
+        "vocabulary": 1043
+      },
+      {
+        "date": "2026-06-13",
+        "games": 1,
+        "wins": 0,
+        "vocabulary": 1012
+      },
+      {
+        "date": "2026-06-14",
+        "games": 5,
+        "wins": 1,
+        "vocabulary": 1027
+      },
+      {
+        "date": "2026-06-15",
+        "games": 4,
+        "wins": 1,
+        "vocabulary": 1013
+      },
+      {
+        "date": "2026-06-16",
+        "games": 4,
+        "wins": 1,
+        "vocabulary": 1012
+      }
+    ],
+    "createdAt": 1781588268422
+  },
+  {
+    "id": "469a3078-8e6a-4fe5-9a39-c389a60b1014",
+    "name": "Alice",
+    "color": "#ef4444",
+    "totalGames": 1,
+    "wins": 1,
+    "vocabulary": 1010,
+    "history": [
+      {
+        "date": "2026-06-10",
+        "games": 2,
+        "wins": 0,
+        "vocabulary": 1008
+      },
+      {
+        "date": "2026-06-11",
+        "games": 1,
+        "wins": 0,
+        "vocabulary": 1019
+      },
+      {
+        "date": "2026-06-12",
+        "games": 3,
+        "wins": 2,
+        "vocabulary": 1004
+      },
+      {
+        "date": "2026-06-13",
+        "games": 5,
+        "wins": 2,
+        "vocabulary": 1010
+      },
+      {
+        "date": "2026-06-14",
+        "games": 4,
+        "wins": 1,
+        "vocabulary": 1036
+      },
+      {
+        "date": "2026-06-15",
+        "games": 2,
+        "wins": 1,
+        "vocabulary": 1016
+      },
+      {
+        "date": "2026-06-16",
+        "games": 6,
+        "wins": 3,
+        "vocabulary": 1010
+      }
+    ],
+    "createdAt": 1781588302725
+  },
+  {
+    "id": "0e840910-b5e4-49d2-9be6-07802bcae7af",
+    "name": "Bob",
+    "color": "#ef4444",
+    "totalGames": 1,
+    "wins": 0,
+    "vocabulary": 1001,
+    "history": [
+      {
+        "date": "2026-06-10",
+        "games": 4,
+        "wins": 1,
+        "vocabulary": 1034
+      },
+      {
+        "date": "2026-06-11",
+        "games": 5,
+        "wins": 2,
+        "vocabulary": 1035
+      },
+      {
+        "date": "2026-06-12",
+        "games": 5,
+        "wins": 2,
+        "vocabulary": 1008
+      },
+      {
+        "date": "2026-06-13",
+        "games": 1,
+        "wins": 1,
+        "vocabulary": 1048
+      },
+      {
+        "date": "2026-06-14",
+        "games": 3,
+        "wins": 1,
+        "vocabulary": 1037
+      },
+      {
+        "date": "2026-06-15",
+        "games": 5,
+        "wins": 1,
+        "vocabulary": 1019
+      },
+      {
+        "date": "2026-06-16",
+        "games": 3,
+        "wins": 2,
+        "vocabulary": 1001
+      }
+    ],
+    "createdAt": 1781588302731
+  }
+]
