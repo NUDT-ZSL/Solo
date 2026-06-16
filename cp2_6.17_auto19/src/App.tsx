@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import './styles.css';
-import { Plant, EnvironmentThreat, LineageNode, MutationDeltas } from './types';
+import { Plant, EnvironmentThreat, LineageNode, MutationDeltas, Genes } from './types';
 import {
   createSeedPlant,
   growPlant,
@@ -59,6 +59,7 @@ export default function App() {
   const [canvasSize, setCanvasSize] = useState({ w: 1000, h: 700 });
   const [lineageExpanded, setLineageExpanded] = useState(false);
   const [latestMutation, setLatestMutation] = useState<MutationDeltas | null>(null);
+  const [lastChildGenes, setLastChildGenes] = useState<Genes | null>(null);
   const [achievementUnlocked, setAchievementUnlocked] = useState<boolean>(false);
   const [showAchievement, setShowAchievement] = useState(false);
   const [hasCheckedAchievement, setHasCheckedAchievement] = useState(false);
@@ -262,6 +263,7 @@ export default function App() {
     const child = crossBreed(p1, p2, cycle + 1, x, y);
     setPlants((prev) => [...prev, child]);
     setLatestMutation(child.mutationDeltas);
+    setLastChildGenes({ ...child.genes });
     setSelectedPlantIds([child.id]);
     setViewedPlantId(child.id);
   }, [selectedPlants, cycle]);
@@ -357,6 +359,7 @@ export default function App() {
         lineageExpanded={lineageExpanded}
         onLineageToggle={() => setLineageExpanded((v) => !v)}
         latestMutation={latestMutation}
+        lastChildGenes={lastChildGenes}
       />
 
       {showAchievement && (

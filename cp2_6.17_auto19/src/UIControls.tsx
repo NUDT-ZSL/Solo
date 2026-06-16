@@ -1,11 +1,11 @@
 import React from 'react';
 import { Plant, Genes, EnvironmentThreat, LineageNode, MutationDeltas } from './types';
 
-const GENE_LABELS: { key: keyof Genes; label: string; from: string; to: string }[] = [
-  { key: 'rootStrength', label: '根强度', from: '#a16207', to: '#ca8a04' },
-  { key: 'stemToughness', label: '茎韧性', from: '#065f46', to: '#059669' },
-  { key: 'leafArea', label: '叶面积', from: '#1e40af', to: '#3b82f6' },
-  { key: 'flowerColor', label: '花色值', from: '#9f1239', to: '#f472b6' },
+const GENE_LABELS: { key: keyof Genes; label: string; from: string; to: string; desc: string }[] = [
+  { key: 'rootStrength', label: '根强度', from: '#a16207', to: '#ca8a04', desc: '影响主茎粗细（2-8px），值越高茎越粗壮' },
+  { key: 'stemToughness', label: '茎韧性', from: '#065f46', to: '#059669', desc: '影响分支密度（2-8条），值越高分支越多' },
+  { key: 'leafArea', label: '叶面积', from: '#1e40af', to: '#3b82f6', desc: '影响叶子大小（10-30px），颜色从绿到蓝渐变' },
+  { key: 'flowerColor', label: '花色值', from: '#9f1239', to: '#f472b6', desc: '决定花朵彩度，花瓣半径8-16px随值增大' },
 ];
 
 function GeneBar({
@@ -13,18 +13,33 @@ function GeneBar({
   value,
   from,
   to,
+  desc,
 }: {
   label: string;
   value: number;
   from: string;
   to: string;
+  desc?: string;
 }) {
   const pct = ((value / 255) * 100).toFixed(1);
   const display = Math.round((value / 255) * 100);
   return (
     <div className="gene-row">
       <div className="gene-row-header">
-        <span className="name">{label}</span>
+        <span className="name">
+          {desc ? (
+            <span className="tooltip-wrap">
+              {label}
+              <span className="tip-icon">i</span>
+              <span className="tooltip">
+                <div className="tooltip-title">{label}</div>
+                <div>{desc}</div>
+              </span>
+            </span>
+          ) : (
+              label
+            )}
+        </span>
         <span className="value">
           {display}/100
           <span className="sub">({value})</span>
@@ -54,8 +69,180 @@ function GeneEditor({ genes }: { genes: Genes }) {
           value={genes[g.key]}
           from={g.from}
           to={g.to}
+          desc={g.desc}
         />
       ))}
+    </div>
+  );
+}
+
+function RadarChart({
+  parent1,
+  parent2,
+  child,
+}: {
+  parent1: Genes | null;
+  parent2: Genes | null;
+  child: Genes | null;
+}) {
+  const size = 240;
+  const cx = size / 2;
+  const cy = size / 2;
+  const radius = 85;
+  const axes = GENE_LABELS.length;
+
+  const angleForAxis = (i: number) => (-Math.PI / 2) + (i * 2 * Math.PI) / axes;
+
+  const pointForValue = (value: number, axisIdx: number) => {
+    const norm = Math.min(1, Math.max(0, value / 255));
+    const r = radius * norm;
+    const a = angleForAxis(axisIdx);
+    return { x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r };
+  };
+
+  const buildPolygon = (genes: Genes) =>
+    GENE_LABELS.map((g, i) => {
+      const pt = pointForValue(genes[g.key], i);
+      return `${pt.x},${pt.y}`;
+    }).join(' ');
+
+  const hasData = parent1 || parent2 || child;
+
+  const datasets: { name: string; color: string; genes: Genes | null }[] = [
+    { name: '父本', color: '#3b82f6', genes: parent1 },
+    { name: '母本', color: '#ef4444', genes: parent2 },
+    { name: '子代', color: '#22c55e', genes: child },
+  ];
+
+  return (
+    <div className="radar-wrap">
+      <div className="radar-title">
+        <span>📊 基因雷达对比图</span>
+        <span style={{ color: '#64748b', fontSize: 10 }}>归一化 0-100</span>
+      </div>
+      {!hasData ? (
+        <div className="radar-empty">选择 2 株亲本执行杂交后显示对比</div>
+      ) : (
+        <>
+          <svg
+            className="radar-svg"
+            width={size}
+            height={size}
+            viewBox={`0 0 ${size} ${size}`}
+          >
+            {[0.25, 0.5, 0.75, 1].map((scale, idx) => (
+              <polygon
+                key={`grid-${idx}`}
+                points={GENE_LABELS.map((_, i) => {
+                  const a = angleForAxis(i);
+                  const r = radius * scale;
+                  return `${cx + Math.cos(a) * r},${cy + Math.sin(a) * r}`;
+                }).join(' ')}
+                fill="none"
+                stroke="#334155"
+                strokeWidth={1}
+                strokeDasharray={scale === 1 ? 'none' : '2 3'}
+              />
+            ))}
+
+            {GENE_LABELS.map((_, i) => {
+              const a = angleForAxis(i);
+              return (
+                <line
+                  key={`axis-${i}`}
+                  x1={cx}
+                  y1={cy}
+                  x2={cx + Math.cos(a) * radius}
+                  y2={cy + Math.sin(a) * radius}
+                  stroke="#334155"
+                  strokeWidth={1}
+                />
+              );
+            })}
+
+            {datasets.map((ds) =>
+              ds.genes ? (
+                <polygon
+                  key={ds.name}
+                  points={buildPolygon(ds.genes)}
+                  fill={ds.color}
+                  fillOpacity={0.15}
+                  stroke={ds.color}
+                  strokeWidth={2}
+                />
+              ) : null
+            )}
+
+            {datasets.map((ds) =>
+              ds.genes
+                ? GENE_LABELS.map((g, i) => {
+                    const pt = pointForValue(ds.genes![g.key], i);
+                    return (
+                      <circle
+                        key={`${ds.name}-${i}`}
+                        cx={pt.x}
+                        cy={pt.y}
+                        r={3}
+                        fill={ds.color}
+                        stroke="#0f172a"
+                        strokeWidth={1}
+                      />
+                    );
+                  })
+                : null
+            )}
+
+            {GENE_LABELS.map((g, i) => {
+              const a = angleForAxis(i);
+              const lr = radius + 18;
+              const lx = cx + Math.cos(a) * lr;
+              const ly = cy + Math.sin(a) * lr;
+              const valDisplay = child
+                ? Math.round((child[g.key] / 255) * 100)
+                : parent1
+                  ? Math.round((parent1[g.key] / 255) * 100)
+                  : 0;
+              return (
+                <g key={`label-${i}`}>
+                  <text
+                    x={lx}
+                    y={ly}
+                    fill="#e2e8f0"
+                    fontSize={11}
+                    fontWeight={600}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                  >
+                    {g.label}
+                  </text>
+                  <text
+                    x={lx}
+                    y={ly + 12}
+                    fill="#64748b"
+                    fontSize={9}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                  >
+                    {valDisplay}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+
+          <div className="radar-legend">
+            {datasets.filter((d) => d.genes).map((d) => (
+              <div key={d.name} className="radar-legend-item">
+                <span
+                  className="radar-legend-dot"
+                  style={{ background: d.color }}
+                />
+                <span>{d.name}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -165,10 +352,12 @@ function HybridPanel({
   selected,
   onHybrid,
   plants,
+  lastChildGenes,
 }: {
   selected: Plant[];
   onHybrid: () => void;
   plants: Plant[];
+  lastChildGenes: Genes | null;
 }) {
   const canHybrid = selected.length === 2;
   const p1 = selected[0];
@@ -230,6 +419,12 @@ function HybridPanel({
       </button>
 
       <div className="plant-count">当前植物总数：{plants.length}</div>
+
+      <RadarChart
+        parent1={p1?.genes ?? null}
+        parent2={p2?.genes ?? null}
+        child={lastChildGenes}
+      />
     </div>
   );
 }
@@ -388,6 +583,7 @@ export default function UIControls({
   lineageExpanded,
   onLineageToggle,
   latestMutation,
+  lastChildGenes,
 }: {
   speedMultiplier: number;
   onSpeedChange: (v: number) => void;
@@ -401,6 +597,7 @@ export default function UIControls({
   lineageExpanded: boolean;
   onLineageToggle: () => void;
   latestMutation: MutationDeltas | null;
+  lastChildGenes: Genes | null;
 }) {
   const plantsMap = new Map(plants.map((p) => [p.id, p]));
   void React;
@@ -441,7 +638,7 @@ export default function UIControls({
         <ThreatStatus threat={threat} currentTime={currentTime} />
         <SelectedPlantInfo plant={viewedPlant} />
         <GeneEditor genes={editorGenes} />
-        <HybridPanel selected={selectedPlants} onHybrid={onHybrid} plants={plants} />
+        <HybridPanel selected={selectedPlants} onHybrid={onHybrid} plants={plants} lastChildGenes={lastChildGenes} />
         <LineageTree
           nodes={lineageTree}
           expanded={lineageExpanded}

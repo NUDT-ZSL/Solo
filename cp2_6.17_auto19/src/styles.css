@@ -689,6 +689,116 @@ input[type='range']::-moz-range-thumb {
 }
 .achievement-close:active { transform: scale(0.95); }
 
+/* Radar Chart */
+.radar-wrap {
+  background: #1e293b;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.radar-title {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.radar-svg {
+  display: block;
+  margin: 0 auto;
+}
+.radar-legend {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.radar-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+.radar-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+.radar-empty {
+  text-align: center;
+  color: #64748b;
+  font-size: 12px;
+  padding: 20px 0;
+}
+
+/* Tooltip */
+.tooltip-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: help;
+  border-bottom: 1px dashed #475569;
+}
+.tooltip-wrap .tip-icon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #475569;
+  color: #e2e8f0;
+  font-size: 9px;
+  font-weight: 700;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  line-height: 1;
+}
+.tooltip {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #334155;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.15s, transform 0.15s;
+  z-index: 20;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  max-width: 260px;
+  white-space: normal;
+}
+.tooltip::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  bottom: -4px;
+  width: 8px;
+  height: 8px;
+  background: #0f172a;
+  border-right: 1px solid #334155;
+  border-bottom: 1px solid #334155;
+  transform: rotate(45deg);
+}
+.tooltip-wrap:hover .tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+.tooltip-title {
+  font-weight: 700;
+  color: #fbbf24;
+  margin-bottom: 4px;
+}
+
 /* Responsive */
 @media (max-width: 900px) {
   .app-container {
