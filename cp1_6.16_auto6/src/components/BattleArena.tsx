@@ -494,7 +494,7 @@ const BattleArena: React.FC<BattleArenaProps> = ({
       overflow: 'hidden'
     }}>
       {effectFlash && (
-        <div style={{
+        <div className="effect-flash-container" style={{
           position: 'absolute',
           top: 0,
           left: 0,
@@ -504,16 +504,22 @@ const BattleArena: React.FC<BattleArenaProps> = ({
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 100,
-          pointerEvents: 'none',
-          background: 'linear-gradient(135deg, rgba(255, 165, 0, 0.3), rgba(255, 69, 0, 0.3))',
-          animation: 'flashEffect 0.8s ease-out'
+          pointerEvents: 'none'
         }}>
-          <div style={{
+          <div className="effect-flash-overlay" style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0
+          }} />
+          <div className="effect-flash-text" style={{
             fontSize: '48px',
             fontWeight: 900,
             color: '#fff',
             textShadow: '0 0 30px #FF6347, 0 0 60px #FFA500',
-            animation: 'pulseText 0.8s ease-out'
+            position: 'relative',
+            zIndex: 1
           }}>
             ⚡ {effectFlash}
           </div>
@@ -829,10 +835,33 @@ const BattleArena: React.FC<BattleArenaProps> = ({
       </div>
 
       <style>{`
-        @keyframes flashEffect {
-          0% { opacity: 0; }
-          30% { opacity: 1; }
-          100% { opacity: 0; }
+        .effect-flash-overlay {
+          animation: gradientFlash 0.8s ease-out;
+        }
+        .effect-flash-text {
+          animation: pulseText 0.8s ease-out;
+        }
+        @keyframes gradientFlash {
+          0% { 
+            opacity: 0; 
+            background: linear-gradient(135deg, rgba(255, 165, 0, 0.1), rgba(255, 69, 0, 0.1));
+          }
+          20% { 
+            opacity: 1; 
+            background: linear-gradient(135deg, rgba(255, 165, 0, 0.6), rgba(255, 69, 0, 0.5));
+          }
+          50% { 
+            opacity: 1; 
+            background: linear-gradient(135deg, rgba(255, 165, 0, 0.8), rgba(255, 69, 0, 0.7));
+          }
+          80% { 
+            opacity: 0.8; 
+            background: linear-gradient(135deg, rgba(255, 165, 0, 0.4), rgba(255, 69, 0, 0.3));
+          }
+          100% { 
+            opacity: 0; 
+            background: linear-gradient(135deg, rgba(255, 165, 0, 0.1), rgba(255, 69, 0, 0.1));
+          }
         }
         @keyframes pulseText {
           0% { transform: scale(0.5); opacity: 0; }

@@ -195,7 +195,7 @@ export function playCard(
     return { success: false, message: '无效的位置' };
   }
   
-  const cardIndex = hand.findIndex(c => c === card);
+  const cardIndex = hand.findIndex(c => c.id === card.id);
   if (cardIndex === -1) {
     return { success: false, message: '卡牌不在手牌中' };
   }
@@ -237,33 +237,35 @@ export function attack(
   const attackerField = attacker.owner === 'player' ? state.playerField : state.aiField;
   const defenderField = defender.owner === 'player' ? state.playerField : state.aiField;
   
-  if (!attackerField.some(u => u.instanceId === attacker.instanceId)) {
+  const attackerRef = attackerField.find(u => u.instanceId === attacker.instanceId);
+  if (!attackerRef) {
     return { success: false, message: '攻击者不在场上' };
   }
   
-  if (!defenderField.some(u => u.instanceId === defender.instanceId)) {
+  const defenderRef = defenderField.find(u => u.instanceId === defender.instanceId);
+  if (!defenderRef) {
     return { success: false, message: '防御者不在场上' };
   }
   
-  defender.currentHealth -= attacker.currentAttack;
-  attacker.currentHealth -= defender.currentAttack;
-  attacker.hasAttacked = true;
+  defenderRef.currentHealth -= attackerRef.currentAttack;
+  attackerRef.currentHealth -= defenderRef.currentAttack;
+  attackerRef.hasAttacked = true;
   
-  addLog(state, attacker.owner, '攻击', `${attacker.name} 攻击 ${defender.name}`);
+  addLog(state, attacker.owner, '攻击', `${attackerRef.name} 攻击 ${defenderRef.name}`);
   
-  if (attacker.currentHealth <= 0) {
-    const index = attackerField.findIndex(u => u.instanceId === attacker.instanceId);
+  if (attackerRef.currentHealth <= 0) {
+    const index = attackerField.findIndex(u => u.instanceId === attackerRef.instanceId);
     if (index !== -1) {
       attackerField.splice(index, 1);
-      addLog(state, attacker.owner, '消灭', `${attacker.name} 被消灭`);
+      addLog(state, attacker.owner, '消灭', `${attackerRef.name} 被消灭`);
     }
   }
   
-  if (defender.currentHealth <= 0) {
-    const index = defenderField.findIndex(u => u.instanceId === defender.instanceId);
+  if (defenderRef.currentHealth <= 0) {
+    const index = defenderField.findIndex(u => u.instanceId === defenderRef.instanceId);
     if (index !== -1) {
       defenderField.splice(index, 1);
-      addLog(state, defender.owner, '消灭', `${defender.name} 被消灭`);
+      addLog(state, defender.owner, '消灭', `${defenderRef.name} 被消灭`);
     }
   }
   
@@ -273,32 +275,34 @@ export function attack(
 }
 
 export function attackHero(state: BattleState, attacker: BattleUnit, target: 'player' | 'ai'): { success: boolean; message: string } {
-  if (attacker.hasAttacked) {
-    return { success: false, message: '该单位本回合已攻击' };
-  }
-  
   const attackerField = attacker.owner === 'player' ? state.playerField : state.aiField;
-  if (!attackerField.some(u => u.instanceId === attacker.instanceId)) {
+  const attackerRef = attackerField.find(u => u.instanceId === attacker.instanceId);
+  
+  if (!attackerRef) {
     return { success: false, message: '攻击者不在场上' };
   }
   
-  if (attacker.owner === target) {
+  if (attackerRef.hasAttacked) {
+    return { success: false, message: '该单位本回合已攻击' };
+  }
+  
+  if (attackerRef.owner === target) {
     return { success: false, message: '不能攻击己方英雄' };
   }
   
   const enemyField = target === 'player' ? state.playerField : state.aiField;
   if (enemyField.length > 0) {
-    return { success: false, message: '敌方有嘲讽单位，必须先消灭它们' };
+    return { success: false, message: '敌方有单位，必须先消灭它们' };
   }
   
   if (target === 'player') {
-    state.playerHealth -= attacker.currentAttack;
+    state.playerHealth -= attackerRef.currentAttack;
   } else {
-    state.aiHealth -= attacker.currentAttack;
+    state.aiHealth -= attackerRef.currentAttack;
   }
   
-  attacker.hasAttacked = true;
-  addLog(state, attacker.owner, '攻击英雄', `${attacker.name} 对敌方英雄造成 ${attacker.currentAttack} 点伤害`);
+  attackerRef.hasAttacked = true;
+  addLog(state, attackerRef.owner, '攻击英雄', `${attackerRef.name} 对敌方英雄造成 ${attackerRef.currentAttack} 点伤害`);
   
   checkGameOver(state);
   state.selectedFieldUnit = null;
