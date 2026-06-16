@@ -114,17 +114,14 @@ export class Player {
     if (this.state.potionActive) {
       this.state.targetVisibility = 0.15;
     } else if (this.state.isSneaking) {
-      if (lightIntensity >= 0.4) {
-        this.state.targetVisibility = 1.0;
-      } else {
-        this.state.targetVisibility = 1.0 - (0.4 - lightIntensity) / 0.4;
-      }
+      this.state.targetVisibility = this.calculateVisibilityFromLight(lightIntensity);
     } else {
       this.state.targetVisibility = 1.0;
     }
 
     const visibilitySpeed = 1 / 0.8;
     this.state.visibility += (this.state.targetVisibility - this.state.visibility) * Math.min(1, dt * visibilitySpeed);
+    this.state.visibility = Math.max(0, Math.min(1, this.state.visibility));
     this.state.opacity = this.state.visibility;
   }
 
@@ -186,5 +183,17 @@ export class Player {
 
   getAverageOpacity(): number {
     return this.state.opacity;
+  }
+
+  private calculateVisibilityFromLight(lightIntensity: number): number {
+    const clampedLight = Math.max(0, Math.min(1, lightIntensity));
+    if (clampedLight >= 0.4) {
+      return 1.0;
+    } else if (clampedLight <= 0) {
+      return 0.0;
+    } else {
+      const normalizedLight = clampedLight / 0.4;
+      return normalizedLight;
+    }
   }
 }

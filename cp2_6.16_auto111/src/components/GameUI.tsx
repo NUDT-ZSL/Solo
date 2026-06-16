@@ -18,7 +18,7 @@ function GameUI() {
 
   if (!gameState) return null;
 
-  const { player, enemies, map, time, score, lightIntensityAtPlayer } = gameState;
+  const { player, enemies, map, time, score, lightIntensityAtPlayer, screenEffect } = gameState;
 
   const healthPercent = player.health / player.maxHealth;
   const healthColor = `rgb(${Math.floor(239 - healthPercent * 205)}, ${Math.floor(68 + healthPercent * 129)}, ${Math.floor(68 + healthPercent * 26)})`;
@@ -110,6 +110,12 @@ function GameUI() {
             height: '32px',
           }}>
             <svg width="32" height="32" viewBox="0 0 32 32">
+              <defs>
+                <clipPath id="potionClip">
+                  <circle cx="16" cy="16" r="14" />
+                </clipPath>
+              </defs>
+              
               <circle
                 cx="16"
                 cy="16"
@@ -120,15 +126,36 @@ function GameUI() {
               />
               
               {potionCooldownPercent > 0 && (
+                <g clipPath="url(#potionClip)">
+                  <rect
+                    x="2"
+                    y="2"
+                    width="28"
+                    height="28"
+                    fill="rgba(100, 100, 100, 0.6)"
+                    style={{
+                      transformOrigin: '16px 16px',
+                      transform: `rotate(${(1 - potionCooldownPercent) * 360}deg)`,
+                      clipPath: 'polygon(50% 50%, 50% 0%, 100% 0%, 100% 100%, 50% 100%)',
+                    }}
+                  />
+                </g>
+              )}
+              
+              {potionCooldownPercent > 0 && (
                 <circle
                   cx="16"
                   cy="16"
                   r="14"
                   fill="none"
-                  stroke="rgba(100, 100, 100, 0.8)"
-                  strokeWidth="4"
-                  strokeDasharray={`${potionCooldownPercent * 88} 88`}
-                  transform="rotate(-90 16 16)"
+                  stroke="rgba(100, 200, 255, 0.6)"
+                  strokeWidth="2"
+                  strokeDasharray={`${(1 - potionCooldownPercent) * 88} 88`}
+                  style={{
+                    transformOrigin: '16px 16px',
+                    transform: 'rotate(-90deg)',
+                    transition: 'stroke-dasharray 0.1s linear',
+                  }}
                 />
               )}
               
@@ -137,6 +164,10 @@ function GameUI() {
                 cy="16"
                 r="10"
                 fill={potionReady ? 'rgba(100, 200, 255, 0.8)' : 'rgba(100, 100, 100, 0.5)'}
+                style={{
+                  filter: potionReady ? 'drop-shadow(0 0 4px rgba(100, 200, 255, 0.8))' : 'none',
+                  transition: 'filter 0.2s ease-out',
+                }}
               />
               
               {player.hasPotion && (
@@ -147,6 +178,9 @@ function GameUI() {
                   fill="#fff"
                   fontSize="12"
                   fontWeight="bold"
+                  style={{
+                    animation: potionReady ? 'pulse 1s infinite' : 'none',
+                  }}
                 >
                   E
                 </text>
@@ -349,15 +383,56 @@ function GameUI() {
           textShadow: '0 0 20px rgba(100, 200, 255, 0.8)',
           animation: 'pulse 1s infinite',
           pointerEvents: 'none',
+          zIndex: 100,
         }}>
           ✨ 隐身中... {player.potionTimer.toFixed(1)}s ✨
         </div>
+      )}
+
+      {screenEffect.type === 'danger' && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          pointerEvents: 'none',
+          background: `radial-gradient(ellipse at center, transparent 40%, rgba(255, 0, 0, ${screenEffect.intensity}) 100%)`,
+          animation: 'dangerPulse 0.8s infinite',
+          zIndex: 50,
+        }} />
+      )}
+
+      {screenEffect.type === 'success' && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          pointerEvents: 'none',
+          background: `radial-gradient(ellipse at center, transparent 40%, rgba(100, 200, 255, ${screenEffect.intensity}) 100%)`,
+          animation: 'successPulse 1s infinite',
+          zIndex: 50,
+        }} />
       )}
 
       <style>{`
         @keyframes pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.6; }
+        }
+        @keyframes dangerPulse {
+          0%, 100% { opacity: 0.7; }
+          50% { opacity: 1; }
+        }
+        @keyframes successPulse {
+          0%, 100% { opacity: 0.5; }
+          50% { opacity: 1; }
+        }
+        @keyframes rotate {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
       `}</style>
     </div>

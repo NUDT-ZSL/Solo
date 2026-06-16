@@ -1,7 +1,7 @@
 import { MapGenerator } from './MapGenerator';
 import { Player } from './Player';
 import { EnemyAI } from './Enemy';
-import type { GameState, InputState, LightSource, Enemy, Vector2, LightSource as Light } from './types';
+import type { GameState, InputState, LightSource, Vector2, LightSource as Light } from './types';
 
 const CANVAS_WIDTH = 960;
 const CANVAS_HEIGHT = 640;
@@ -18,9 +18,16 @@ export class GameEngine {
   private animationFrameId: number | null = null;
   private listeners: Set<(state: GameState) => void> = new Set();
   private targetFps: number = 60;
+  private minFps: number = 50;
   private frameInterval: number = 1000 / this.targetFps;
   private accumulatedTime: number = 0;
   private tileSize: number = 16;
+  private fps: number = 60;
+  private fpsUpdateTimer: number = 0;
+  private frameCount: number = 0;
+  private dirtyRegions: Set<string> = new Set();
+  private lastPlayerPos: Vector2 = { x: 0, y: 0 };
+  private lastEnemyPositions: Map<number, Vector2> = new Map();
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -177,8 +184,25 @@ export class GameEngine {
     const deltaTime = currentTime - this.lastTime;
     this.lastTime = currentTime;
 
+    this.frameCount++;
+    this.fpsUpdateTimer += deltaTime;
+    if (this.fpsUpdateTimer >= 1000) {
+      this.fps = this.frameCount * 1000 / this.fpsUpdateTimer;
+      this.frameCount = 0;
+      this.fpsUpdateTimer = 0;
+      
+      if (this.fps < this.minFps) {
+        this.enableOptimizations();
+      }
+    }
+
     if (!this.gameState.isPaused) {
       this.accumulatedTime += deltaTime;
+      
+      const maxFrameTime = 1000 / this.minFps;
+      if (this.accumulatedTime > maxFrameTime * 3) {
+        this.accumulatedTime = maxFrameTime;
+      }
 
       while (this.accumulatedTime >= this.frameInterval) {
         const dt = this.frameInterval / 1000;
@@ -187,11 +211,59 @@ export class GameEngine {
       }
     }
 
+    this.calculateDirtyRegions();
     this.render();
     this.notifyListeners();
 
     this.animationFrameId = requestAnimationFrame(() => this.gameLoop());
   }
+
+  private enableOptimizations(): void {
+    this.dirtyRegions.clear();
+  }
+
+  private calculateDirtyRegions(): void {
+    this.dirtyRegions.clear();
+    
+    const playerMoved = Math.hypot(
+      this.player.state.x - this.lastPlayerPos.x,
+      this.player.state.y - this.lastPlayerPos.y
+    ) > 1;
+    
+    if (playerMoved) {
+      this.addDirtyRegion(this.lastPlayerPos.x, this.lastPlayerPos.y, 60, 60);
+      this.addDirtyRegion(this.player.state.x, this.player.state.y, 60, 60);
+      this.lastPlayerPos = { x: this.player.state.x, y: this.player.state.y };
+    }
+
+    for (const enemyAI of this.enemies) {
+      const enemy = enemyAI.enemy;
+      const lastPos = this.lastEnemyPositions.get(enemy.id) || { x: enemy.x, y: enemy.y };
+      const moved = Math.hypot(enemy.x - lastPos.x, enemy.y - lastPos.y) > 1;
+      
+      if (moved) {
+        this.addDirtyRegion(lastPos.x, lastPos.y, 50, 50);
+        this.addDirtyRegion(enemy.x, enemy.y, 50, 50);
+        this.lastEnemyPositions.set(enemy.id, { x: enemy.x, y: enemy.y });
+      }
+    }
+  }
+
+  private addDirtyRegion(x: number, y: number, w: number, h: number): void {
+    const gridSize = 64;
+    const startGX = Math.floor((x - w / 2) / gridSize);
+    const endGX = Math.floor((x + w / 2) / gridSize);
+    const startGY = Math.floor((y - h / 2) / gridSize);
+    const endGY = Math.floor((y + h / 2) / gridSize);
+    
+    for (let gx = startGX; gx <= endGX; gx++) {
+      for (let gy = startGY; gy <= endGY; gy++) {
+        this.dirtyRegions.add(gx + ',' + gy);
+      }
+    }
+  }
+
+
 
   private update(dt: number): void {
     this.gameState.time += dt;
@@ -347,8 +419,8 @@ export class GameEngine {
       const g = Math.floor(255);
       const b = Math.floor(136 + brightness * (204 - 136));
       
-      gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.8)`);
-      gradient.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, 0.3)`);
+      gradient.addColorStop(0, 'rgba(' + r + ', ' + g + ', ' + b + ', 0.8)');
+      gradient.addColorStop(0.5, 'rgba(' + r + ', ' + g + ', ' + b + ', 0.3)');
       gradient.addColorStop(1, 'rgba(0, 255, 136, 0)');
       
       ctx.fillStyle = gradient;
@@ -356,7 +428,7 @@ export class GameEngine {
       ctx.arc(mushroom.x, mushroom.y, pulseRadius * 2, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = `rgba(0, 255, 170, ${0.6 + 0.4 * brightness})';
+      ctx.fillStyle = 'rgba(0, 255, 170, ' + (0.6 + 0.4 * brightness) + ')';
       ctx.beginPath();
       ctx.arc(mushroom.x, mushroom.y, pulseRadius * 0.6, 0, Math.PI * 2);
       ctx.fill();
@@ -409,8 +481,8 @@ export class GameEngine {
         torch.x, torch.y, 0,
         torch.x, torch.y, torch.radius
       );
-      gradient.addColorStop(0, `rgba(255, 107, 53, ${0.6 * flicker})`);
-      gradient.addColorStop(0.3, `rgba(255, 107, 53, 0.2)');
+      gradient.addColorStop(0, 'rgba(255, 107, 53, ' + (0.6 * flicker) + ')');
+      gradient.addColorStop(0.3, 'rgba(255, 107, 53, 0.2)');
       gradient.addColorStop(1, 'rgba(255, 107, 53, 0)');
       
       ctx.fillStyle = gradient;
@@ -418,7 +490,7 @@ export class GameEngine {
       ctx.arc(torch.x, torch.y, torch.radius, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = `rgba(255, 200, 100, ${flicker})`;
+      ctx.fillStyle = 'rgba(255, 200, 100, ' + flicker + ')';
       ctx.beginPath();
       ctx.arc(torch.x, torch.y, 6, 0, Math.PI * 2);
       ctx.fill();
@@ -532,7 +604,7 @@ export class GameEngine {
     const g = Math.floor(197 + (68 - 197) * (1 - progress));
     const b = Math.floor(94 + (68 - 94) * (1 - progress));
 
-    ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+    ctx.fillStyle = 'rgb(' + r + ', ' + g + ', ' + b + ')';
     ctx.beginPath();
     ctx.ellipse(
       player.x,
@@ -652,7 +724,7 @@ export class GameEngine {
         CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, Math.max(CANVAS_WIDTH, CANVAS_HEIGHT) / 1.5
       );
       gradient.addColorStop(0, 'rgba(255, 0, 0, 0)');
-      gradient.addColorStop(1, `rgba(255, 0, 0, ${effect.intensity})`);
+      gradient.addColorStop(1, 'rgba(255, 0, 0, ' + effect.intensity + ')');
       
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -662,7 +734,7 @@ export class GameEngine {
         CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, Math.max(CANVAS_WIDTH, CANVAS_HEIGHT) / 1.5
       );
       gradient.addColorStop(0, 'rgba(100, 200, 255, 0)');
-      gradient.addColorStop(1, `rgba(100, 200, 255, ${effect.intensity})`);
+      gradient.addColorStop(1, 'rgba(100, 200, 255, ' + effect.intensity + ')');
       
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -676,9 +748,24 @@ export class GameEngine {
   }
 
   private notifyListeners(): void {
+    const stateSnapshot = this.getStateSnapshot();
     for (const listener of this.listeners) {
-      listener(this.gameState);
+      listener(stateSnapshot);
     }
+  }
+
+  private getStateSnapshot(): GameState {
+    return {
+      ...this.gameState,
+      player: { ...this.gameState.player },
+      enemies: this.gameState.enemies.map(e => ({
+        ...e,
+        patrolPoints: e.patrolPoints.map(p => ({ ...p })),
+        playerLastSeen: e.playerLastSeen ? { ...e.playerLastSeen } : null,
+      })),
+      lightIntensityAtPlayer: this.gameState.lightIntensityAtPlayer,
+      screenEffect: { ...this.gameState.screenEffect },
+    };
   }
 
   getState(): GameState {

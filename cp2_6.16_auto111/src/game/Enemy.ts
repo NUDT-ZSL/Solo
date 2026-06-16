@@ -141,7 +141,7 @@ export class EnemyAI {
   }
 
   private canSeePlayer(player: PlayerState, playerAverageOpacity: number): boolean {
-    if (playerAverageOpacity >= 0.3) return false;
+    if (playerAverageOpacity < 0.3) return false;
 
     const dx = player.x - this.enemy.x;
     const dy = player.y - this.enemy.y;
@@ -159,6 +159,9 @@ export class EnemyAI {
     if (!this.hasLineOfSight(this.enemy.x, this.enemy.y, player.x, player.y)) {
       return false;
     }
+
+    const detectionChance = playerAverageOpacity;
+    if (Math.random() > detectionChance) return false;
 
     return true;
   }
