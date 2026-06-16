@@ -299,18 +299,23 @@ export class ErosionEngine {
   }
 
   getErosionStats(): ErosionStats {
+    let maxDepth = 0;
+    let maxPos: [number, number, number] = [0, 0, 0];
     const removed = this.vertices.filter((v) => !v.alive).length;
-    const maxDepth = this.vertices.reduce(
-      (max, v) => Math.max(max, v.displacement),
-      0
-    );
+    for (const v of this.vertices) {
+      if (v.displacement > maxDepth) {
+        maxDepth = v.displacement;
+        maxPos = v.position;
+      }
+    }
     return {
       totalVertices: this.vertices.length,
       removedVertices: removed,
       maxErosionDepth: parseFloat(maxDepth.toFixed(3)),
       erosionProgress: parseFloat(
         ((removed / this.initialVertexCount) * 100).toFixed(2)
-      )
+      ),
+      maxErosionPosition: maxPos
     };
   }
 

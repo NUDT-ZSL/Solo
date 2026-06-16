@@ -21,6 +21,7 @@ export interface ErosionStats {
   removedVertices: number;
   maxErosionDepth: number;
   erosionProgress: number;
+  maxErosionPosition: [number, number, number];
 }
 
 export interface MeshUpdateData {
