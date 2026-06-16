@@ -1,0 +1,29 @@
+{
+  "microbe": {
+    "initialCount": 50,
+    "minRadius": 6,
+    "maxRadius": 12,
+    "minSpeed": 40,
+    "maxSpeed": 80,
+    "minTurnFrequency": 1,
+    "maxTurnFrequency": 3,
+    "energyDecayRate": 0.5
+  },
+  "chemical": {
+    "maxAttractors": 5,
+    "maxRepellents": 5,
+    "radius": 80,
+    "duration": 8000,
+    "highConcentrationThreshold": 70,
+    "speedBoost": 1.5,
+    "speedBoostDuration": 2000
+  },
+  "collision": {
+    "bounceSpeedFactor": 0.6,
+    "flashDuration": 300,
+    "flashRadiusMultiplier": 1.5,
+    "fusionEnergyThreshold": 20,
+    "fusionEnergyFactor": 0.7,
+    "fusionRadiusBonus": 2
+  }
+}
