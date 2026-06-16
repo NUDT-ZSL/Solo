@@ -1,0 +1,98 @@
+.server-card {
+  width: 48%;
+  height: 320px;
+  background: #1e293b;
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  border: 2px solid transparent;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.server-card-alert {
+  border: 2px solid #ef4444 !important;
+  animation: pulseBorder 0.5s ease-in-out infinite;
+}
+
+@keyframes pulseBorder {
+  0%, 100% {
+    box-shadow: 0 0 4px #ef4444, 0 0 8px rgba(239, 68, 68, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 16px #ef4444, 0 0 32px rgba(239, 68, 68, 0.5);
+  }
+}
+
+.server-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.server-card-name {
+  font-size: 16px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.server-card-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.metric-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.metric-label {
+  font-size: 12px;
+  color: #94a3b8;
+  width: 32px;
+  flex-shrink: 0;
+}
+
+.progress-bar {
+  width: 100%;
+  flex: 1;
+  height: 6px;
+  background: #334155;
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease, background 0.2s ease;
+}
+
+.metric-value {
+  font-size: 12px;
+  color: #e2e8f0;
+  width: 52px;
+  text-align: right;
+  flex-shrink: 0;
+  margin-left: auto;
+  transition: color 0.2s ease;
+}
+
+.metric-value.metric-alert {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.server-card-chart {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+}

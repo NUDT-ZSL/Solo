@@ -1,6 +1,7 @@
 import React from 'react';
 import { ServerData, ALERT_RULES, HealthStatus } from '../types';
 import MetricChart from './MetricChart';
+import './ServerCard.css';
 
 interface ServerCardProps {
   server: ServerData;
@@ -38,35 +39,16 @@ const METRIC_CONFIG = [
   { key: 'network' as const, label: '网络', color: '#f59e0b' },
 ];
 
-export const ServerCard: React.FC<ServerCardProps> = React.memo(({ server, hasAlert, alertMessages }) => {
+export const ServerCard: React.FC<ServerCardProps> = React.memo(({ server, hasAlert }) => {
   const status = getHealthStatus(server);
   const statusColor = getStatusColor(status);
 
+  const cardClass = hasAlert ? 'server-card server-card-alert' : 'server-card';
+
   return (
-    <div
-      style={{
-        width: '48%',
-        height: 320,
-        background: '#1e293b',
-        borderRadius: 16,
-        padding: 16,
-        display: 'flex',
-        flexDirection: 'column',
-        boxSizing: 'border-box',
-        border: hasAlert ? '2px solid #ef4444' : '2px solid transparent',
-        animation: hasAlert ? 'pulseBorder 0.5s ease-in-out infinite' : 'none',
-        transition: 'border-color 0.2s, box-shadow 0.2s',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 12,
-        }}
-      >
-        <span style={{ fontSize: 16, color: '#94a3b8', fontWeight: 500 }}>{server.name}</span>
+    <div className={cardClass}>
+      <div className="server-card-header">
+        <span className="server-card-name">{server.name}</span>
         <div
           style={{
             width: 10,
@@ -74,49 +56,30 @@ export const ServerCard: React.FC<ServerCardProps> = React.memo(({ server, hasAl
             borderRadius: '50%',
             background: statusColor,
             boxShadow: `0 0 6px ${statusColor}80`,
+            flexShrink: 0,
             transition: 'background 0.2s, box-shadow 0.2s',
           }}
         />
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+      <div className="server-card-metrics">
         {METRIC_CONFIG.map((metric) => {
           const value = server[metric.key];
-          const isOver = ALERT_RULES.find((r) => r.metric === metric.key)!;
-          const isAlert = value > isOver.threshold;
+          const rule = ALERT_RULES.find((r) => r.metric === metric.key)!;
+          const isAlert = value > rule.threshold;
           return (
-            <div key={metric.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12, color: '#94a3b8', width: 32, flexShrink: 0 }}>{metric.label}</span>
-              <div
-                style={{
-                  flex: 1,
-                  height: 6,
-                  background: '#334155',
-                  borderRadius: 3,
-                  overflow: 'hidden',
-                  position: 'relative',
-                }}
-              >
+            <div key={metric.key} className="metric-row">
+              <span className="metric-label">{metric.label}</span>
+              <div className="progress-bar">
                 <div
+                  className="progress-fill"
                   style={{
                     width: `${value}%`,
-                    height: '100%',
                     background: metric.color,
-                    borderRadius: 3,
-                    transition: 'width 0.5s ease',
                   }}
                 />
               </div>
-              <span
-                style={{
-                  fontSize: 12,
-                  color: isAlert ? '#ef4444' : '#e2e8f0',
-                  width: 48,
-                  textAlign: 'right',
-                  flexShrink: 0,
-                  transition: 'color 0.2s',
-                }}
-              >
+              <span className={`metric-value ${isAlert ? 'metric-alert' : ''}`}>
                 {value.toFixed(1)}%
               </span>
             </div>
@@ -124,8 +87,8 @@ export const ServerCard: React.FC<ServerCardProps> = React.memo(({ server, hasAl
         })}
       </div>
 
-      <div style={{ flex: 1, minHeight: 0 }}>
-        <MetricChart title="CPU" data={server.cpuHistory} color="#3b82f6" />
+      <div className="server-card-chart">
+        <MetricChart title="CPU使用率" data={server.cpuHistory} color="#3b82f6" />
       </div>
     </div>
   );
