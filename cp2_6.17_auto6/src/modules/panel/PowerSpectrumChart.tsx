@@ -126,10 +126,25 @@ function PowerSpectrumChart({ data, region, width = 280, height = 120 }: PowerSp
     draw();
 
     return () => {
-      if (animationFrameRef.current) {
+      if (animationFrameRef.current !== null) {
         cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
       }
+
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+
+      ctx.beginPath();
+      ctx.closePath();
+
+      const w = canvas.width;
+      const h = canvas.height;
+      canvas.width = 0;
+      canvas.height = 0;
+      canvas.width = w;
+      canvas.height = h;
     };
   }, [spectrum, width, height]);
 

@@ -9,107 +9,203 @@ interface BrainModelProps {
 }
 
 const REGION_POSITIONS: Record<string, [number, number, number]> = {
-  frontal: [0, 0.4, 0.7],
-  parietal: [0, 0.7, -0.1],
-  temporal: [0.7, 0.1, 0.15],
-  occipital: [0, 0.2, -0.9]
+  frontal: [0, 0.5, 0.75],
+  parietal: [0, 0.75, -0.05],
+  temporal: [0.75, 0.1, 0.2],
+  occipital: [0, 0.3, -0.95]
 };
 
-function createBrainGeometry(): THREE.BufferGeometry {
-  const brainGroup = new THREE.Group();
-
-  const leftHemisphere = new THREE.SphereGeometry(1.0, 48, 48);
-  deformHemisphere(leftHemisphere, -0.08);
-  const leftMesh = new THREE.Mesh(leftHemisphere);
-  leftMesh.position.x = -0.25;
-  leftMesh.position.z = 0.05;
-  brainGroup.add(leftMesh);
-
-  const rightHemisphere = new THREE.SphereGeometry(1.0, 48, 48);
-  deformHemisphere(rightHemisphere, 0.08);
-  const rightMesh = new THREE.Mesh(rightHemisphere);
-  rightMesh.position.x = 0.25;
-  rightMesh.position.z = 0.05;
-  brainGroup.add(rightMesh);
-
-  const cerebellum = new THREE.SphereGeometry(0.45, 32, 32);
-  const cerebellumPositions = cerebellum.attributes.position;
-  for (let i = 0; i < cerebellumPositions.count; i++) {
-    const v = new THREE.Vector3().fromBufferAttribute(cerebellumPositions, i);
-    v.y *= 0.7;
-    v.z *= 1.3;
-    cerebellumPositions.setXYZ(i, v.x, v.y, v.z);
-  }
-  cerebellum.computeVertexNormals();
-  const cerebellumMesh = new THREE.Mesh(cerebellum);
-  cerebellumMesh.position.set(0, -0.3, -0.75);
-  brainGroup.add(cerebellumMesh);
-
-  const brainStem = new THREE.CylinderGeometry(0.18, 0.22, 0.5, 24);
-  const brainStemMesh = new THREE.Mesh(brainStem);
-  brainStemMesh.position.set(0, -0.65, -0.4);
-  brainGroup.add(brainStemMesh);
-
-  brainGroup.updateMatrixWorld(true);
-  const mergedGeo = new THREE.BufferGeometry();
-
-  const positions: number[] = [];
-  const normals: number[] = [];
-
-  brainGroup.traverse((child) => {
-    if (child instanceof THREE.Mesh) {
-      const geom = child.geometry;
-      const posAttr = geom.attributes.position;
-      const normAttr = geom.attributes.normal;
-      const matrix = child.matrixWorld;
-
-      const normalMatrix = new THREE.Matrix3().getNormalMatrix(matrix);
-
-      for (let i = 0; i < posAttr.count; i++) {
-        const v = new THREE.Vector3().fromBufferAttribute(posAttr, i);
-        v.applyMatrix4(matrix);
-        positions.push(v.x, v.y, v.z);
-
-        const n = new THREE.Vector3().fromBufferAttribute(normAttr, i);
-        n.applyMatrix3(normalMatrix);
-        normals.push(n.x, n.y, n.z);
-      }
-    }
-  });
-
-  mergedGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  mergedGeo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-  mergedGeo.computeVertexNormals();
-  mergedGeo.computeBoundingSphere();
-
-  return mergedGeo;
+function noise3D(x: number, y: number, z: number, scale: number): number {
+  const nx = x * scale;
+  const ny = y * scale;
+  const nz = z * scale;
+  return (
+    Math.sin(nx * 2.1) * Math.cos(ny * 1.7) * Math.sin(nz * 2.3) +
+    Math.sin(nx * 4.5 + 1.0) * Math.cos(ny * 3.2 + 0.5) * Math.sin(nz * 3.8 + 1.2) * 0.5
+  ) * 0.5;
 }
 
-function deformHemisphere(geometry: THREE.SphereGeometry, sideOffset: number) {
+function createHemisphereGeometry(isLeft: boolean): THREE.BufferGeometry {
+  const geometry = new THREE.SphereGeometry(1.0, 64, 48);
   const positions = geometry.attributes.position;
   const vertex = new THREE.Vector3();
 
   for (let i = 0; i < positions.count; i++) {
     vertex.fromBufferAttribute(positions, i);
 
-    const noise = 
-      Math.sin(vertex.x * 2.5) * Math.cos(vertex.y * 2) * Math.sin(vertex.z * 3) * 0.06;
+    const x = vertex.x;
+    const y = vertex.y;
+    const z = vertex.z;
 
-    const frontBias = Math.max(0, vertex.z + 0.2) * 0.2;
-    const backBias = Math.min(0, vertex.z + 0.3) * -0.1;
-    const topBias = Math.max(0, vertex.y - 0.3) * 0.15;
+    if ((isLeft && x > 0.02) || (!isLeft && x < -0.02)) {
+      vertex.x = isLeft ? 0.02 : -0.02;
+    }
 
-    const scale = 1 + noise + frontBias + backBias + topBias;
-    vertex.multiplyScalar(scale);
+    const frontBias = Math.max(0, z + 0.1) * 0.25;
+    const backBias = Math.min(0, z + 0.4) * -0.12;
+    const topBias = Math.max(0, y - 0.2) * 0.2;
+    const bottomCompress = Math.min(0, y + 0.3) * 0.4;
 
-    vertex.z *= 1.15;
-    vertex.y *= 1.1;
-    vertex.x += sideOffset * 0.3;
+    const temporalBulge = 
+      Math.max(0, 1 - Math.abs(z - 0.1) * 1.5) * 
+      Math.max(0, 0.5 - Math.abs(y - 0.1) * 1.8) * 
+      0.35;
+
+    let totalScale = 1 + frontBias + backBias + topBias + bottomCompress + temporalBulge * 0.3;
+
+    const sulcusNoise = noise3D(x, y, z, 4.0) * 0.04;
+    const gyrusNoise = noise3D(x, y * 1.5, z * 1.2, 6.0) * 0.02;
+    totalScale += sulcusNoise + gyrusNoise;
+
+    vertex.multiplyScalar(totalScale);
+
+    vertex.z *= 1.2;
+    vertex.y *= 1.15;
+
+    if (Math.abs(z - 0.15) < 0.4 && y < 0.4 && y > -0.2) {
+      const bulge = (1 - Math.abs(z - 0.15) / 0.4) * (1 - Math.abs(y - 0.1) / 0.3) * 0.3;
+      vertex.x += (isLeft ? -1 : 1) * bulge * Math.abs(x);
+    }
+
+    if (isLeft) {
+      vertex.x -= 0.02;
+    } else {
+      vertex.x += 0.02;
+    }
 
     positions.setXYZ(i, vertex.x, vertex.y, vertex.z);
   }
 
   geometry.computeVertexNormals();
+  return geometry;
+}
+
+function createCerebellumGeometry(): THREE.BufferGeometry {
+  const geometry = new THREE.SphereGeometry(0.4, 32, 24);
+  const positions = geometry.attributes.position;
+  const vertex = new THREE.Vector3();
+
+  for (let i = 0; i < positions.count; i++) {
+    vertex.fromBufferAttribute(positions, i);
+
+    vertex.y *= 0.65;
+    vertex.z *= 1.4;
+    vertex.x *= 0.9;
+
+    const folia = Math.sin(vertex.y * 15) * 0.03 + Math.sin(vertex.x * 12) * 0.02;
+    vertex.multiplyScalar(1 + folia * 0.5);
+
+    positions.setXYZ(i, vertex.x, vertex.y, vertex.z);
+  }
+
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function createBrainstemGeometry(): THREE.BufferGeometry {
+  const geometry = new THREE.CylinderGeometry(0.16, 0.22, 0.55, 20, 8);
+  const positions = geometry.attributes.position;
+  const vertex = new THREE.Vector3();
+
+  for (let i = 0; i < positions.count; i++) {
+    vertex.fromBufferAttribute(positions, i);
+
+    if (vertex.y < 0) {
+      vertex.z -= Math.abs(vertex.y) * 0.3;
+    }
+
+    positions.setXYZ(i, vertex.x, vertex.y, vertex.z);
+  }
+
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function createLongitudinalFissure(): THREE.BufferGeometry {
+  const geometry = new THREE.PlaneGeometry(0.02, 1.8, 1, 10);
+  const positions = geometry.attributes.position;
+  const vertex = new THREE.Vector3();
+
+  for (let i = 0; i < positions.count; i++) {
+    vertex.fromBufferAttribute(positions, i);
+    vertex.z += Math.sin(vertex.y * 2.5) * 0.15;
+    positions.setXYZ(i, vertex.x, vertex.y, vertex.z);
+  }
+
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function mergeGeometries(
+  geometries: THREE.BufferGeometry[],
+  matrices: THREE.Matrix4[]
+): THREE.BufferGeometry {
+  const mergedGeo = new THREE.BufferGeometry();
+  const allPositions: number[] = [];
+  const allNormals: number[] = [];
+
+  geometries.forEach((geo, idx) => {
+    const matrix = matrices[idx] || new THREE.Matrix4();
+    const normalMatrix = new THREE.Matrix3().getNormalMatrix(matrix);
+
+    const posAttr = geo.attributes.position;
+    const normAttr = geo.attributes.normal;
+
+    const v = new THREE.Vector3();
+    const n = new THREE.Vector3();
+
+    for (let i = 0; i < posAttr.count; i++) {
+      v.fromBufferAttribute(posAttr, i);
+      v.applyMatrix4(matrix);
+      allPositions.push(v.x, v.y, v.z);
+
+      n.fromBufferAttribute(normAttr, i);
+      n.applyMatrix3(normalMatrix);
+      allNormals.push(n.x, n.y, n.z);
+    }
+
+    const indexAttr = geo.index;
+    if (indexAttr) {
+      const indices = indexAttr.array;
+      for (let i = 0; i < indices.length; i++) {
+        const vi = indices[i];
+        v.fromBufferAttribute(posAttr, vi);
+        v.applyMatrix4(matrix);
+        allPositions.push(v.x, v.y, v.z);
+
+        n.fromBufferAttribute(normAttr, vi);
+        n.applyMatrix3(normalMatrix);
+        allNormals.push(n.x, n.y, n.z);
+      }
+    }
+  });
+
+  mergedGeo.setAttribute('position', new THREE.Float32BufferAttribute(allPositions, 3));
+  mergedGeo.setAttribute('normal', new THREE.Float32BufferAttribute(allNormals, 3));
+  mergedGeo.computeVertexNormals();
+  mergedGeo.computeBoundingSphere();
+  mergedGeo.computeBoundingBox();
+
+  return mergedGeo;
+}
+
+function createBrainGeometry(): THREE.BufferGeometry {
+  const leftHemisphere = createHemisphereGeometry(true);
+  const rightHemisphere = createHemisphereGeometry(false);
+  const cerebellum = createCerebellumGeometry();
+  const brainstem = createBrainstemGeometry();
+  const fissure = createLongitudinalFissure();
+
+  const leftMatrix = new THREE.Matrix4().makeTranslation(-0.28, 0, 0.05);
+  const rightMatrix = new THREE.Matrix4().makeTranslation(0.28, 0, 0.05);
+  const cerebellumMatrix = new THREE.Matrix4().makeTranslation(0, -0.25, -0.75);
+  const brainstemMatrix = new THREE.Matrix4().makeTranslation(0, -0.65, -0.35);
+  const fissureMatrix = new THREE.Matrix4().makeTranslation(0, 0.15, 0.05);
+
+  const geometries = [leftHemisphere, rightHemisphere, cerebellum, brainstem, fissure];
+  const matrices = [leftMatrix, rightMatrix, cerebellumMatrix, brainstemMatrix, fissureMatrix];
+
+  return mergeGeometries(geometries, matrices);
 }
 
 function BrainModel({ hoveredRegion, onRegionHover }: BrainModelProps) {
@@ -119,19 +215,23 @@ function BrainModel({ hoveredRegion, onRegionHover }: BrainModelProps) {
   const brainGeometry = useMemo(() => createBrainGeometry(), []);
 
   const regionGeometry = useMemo(() => {
-    return new THREE.SphereGeometry(0.28, 32, 32);
+    return new THREE.SphereGeometry(0.3, 32, 24);
   }, []);
 
   useFrame((state) => {
     if (groupRef.current) {
-      groupRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.1) * 0.05;
+      groupRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.08) * 0.06;
+      groupRef.current.rotation.x = Math.sin(state.clock.elapsedTime * 0.12) * 0.02;
     }
 
     Object.entries(regionMeshesRef.current).forEach(([region, mesh]) => {
       if (mesh && mesh.material) {
         const material = mesh.material as THREE.MeshPhongMaterial;
-        const targetOpacity = hoveredRegion === region ? 0.7 : 0.3;
-        material.opacity += (targetOpacity - material.opacity) * 0.1;
+        const targetOpacity = hoveredRegion === region ? 0.75 : 0.35;
+        material.opacity += (targetOpacity - material.opacity) * 0.12;
+
+        const targetEmissive = hoveredRegion === region ? 0.5 : 0.25;
+        material.emissiveIntensity += (targetEmissive - material.emissiveIntensity) * 0.1;
       }
     });
   });
@@ -161,15 +261,15 @@ function BrainModel({ hoveredRegion, onRegionHover }: BrainModelProps) {
     <group ref={groupRef}>
       <mesh geometry={brainGeometry}>
         <meshPhongMaterial
-        color="#1a1a3a"
-        transparent
-        opacity={0.65}
-        side={THREE.DoubleSide}
-        shininess={25}
-        specular="#2a2a5a"
-        flatShading={false}
-      />
-      <Edges color="#3a3a6a" threshold={25} scale={1.005} />
+          color="#1a1a3a"
+          transparent
+          opacity={0.65}
+          side={THREE.DoubleSide}
+          shininess={20}
+          specular="#2a2a5a"
+          flatShading={false}
+        />
+        <Edges color="#3a3a6a" threshold={30} scale={1.008} />
       </mesh>
 
       {Object.entries(REGION_POSITIONS).map(([region, pos]) => (
@@ -186,7 +286,7 @@ function BrainModel({ hoveredRegion, onRegionHover }: BrainModelProps) {
           <meshPhongMaterial
             color={getRegionColor(region)}
             transparent
-            opacity={0.3}
+            opacity={0.35}
             emissive={getRegionColor(region)}
             emissiveIntensity={0.25}
           />

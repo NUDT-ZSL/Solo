@@ -14,11 +14,14 @@ export function EEGProvider({ children }: { children: React.ReactNode }) {
   const [hoveredRegion, setHoveredRegion] = useState<BrainRegion | null>(null);
   const [historyData, setHistoryData] = useState<EEGData[]>([]);
   const [alertRegions, setAlertRegions] = useState<BrainRegion[]>([]);
+  const [isAlertFlashing, setIsAlertFlashing] = useState(false);
 
   const { getEEGData, getEEGHistory } = useEEGDataService();
   const isFetchingRef = useRef(false);
   const historyBufferRef = useRef<EEGData[]>([]);
   const lastTimeOffsetRef = useRef(0);
+  const flashIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasAlertRef = useRef(false);
 
   const checkAlertRegions = useCallback((data: EEGData) => {
     const regions: BrainRegion[] = ['frontal', 'parietal', 'temporal', 'occipital'];
@@ -125,6 +128,39 @@ export function EEGProvider({ children }: { children: React.ReactNode }) {
     };
   }, [timeOffset, getEEGHistory, checkAlertRegions]);
 
+  useEffect(() => {
+    const hasAlerts = alertRegions.length > 0;
+
+    if (hasAlerts && !hasAlertRef.current) {
+      hasAlertRef.current = true;
+      setIsAlertFlashing(true);
+
+      if (flashIntervalRef.current) {
+        clearInterval(flashIntervalRef.current);
+      }
+
+      flashIntervalRef.current = setInterval(() => {
+        setIsAlertFlashing((prev) => !prev);
+      }, 500);
+    } else if (!hasAlerts && hasAlertRef.current) {
+      hasAlertRef.current = false;
+
+      if (flashIntervalRef.current) {
+        clearInterval(flashIntervalRef.current);
+        flashIntervalRef.current = null;
+      }
+
+      setIsAlertFlashing(false);
+    }
+
+    return () => {
+      if (flashIntervalRef.current) {
+        clearInterval(flashIntervalRef.current);
+        flashIntervalRef.current = null;
+      }
+    };
+  }, [alertRegions]);
+
   const handleSetTimeOffset = useCallback((offset: number) => {
     setTimeOffset(Math.max(0, Math.min(60, offset)));
   }, []);
@@ -144,6 +180,7 @@ export function EEGProvider({ children }: { children: React.ReactNode }) {
     hoveredRegion,
     setHoveredRegion,
     alertRegions,
+    isAlertFlashing,
     historyData
   }), [
     eegData,
@@ -155,6 +192,7 @@ export function EEGProvider({ children }: { children: React.ReactNode }) {
     handleSetFlowSpeed,
     hoveredRegion,
     alertRegions,
+    isAlertFlashing,
     historyData
   ]);
 

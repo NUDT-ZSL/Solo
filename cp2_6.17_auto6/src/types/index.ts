@@ -36,6 +36,7 @@ export interface EEGContextType {
   hoveredRegion: BrainRegion | null;
   setHoveredRegion: (region: BrainRegion | null) => void;
   alertRegions: BrainRegion[];
+  isAlertFlashing: boolean;
   historyData: EEGData[];
 }
 

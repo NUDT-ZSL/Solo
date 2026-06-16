@@ -94,6 +94,8 @@ function EEGArc({
     };
   }, [mainLine, glowLine]);
 
+  const prevAlertRef = useRef(false);
+
   useFrame((_state, delta) => {
     timeRef.current += delta * speed;
 
@@ -108,17 +110,26 @@ function EEGArc({
       const flash = Math.sin(alertPhaseRef.current * Math.PI) > 0;
       mainMat.color.set(flash ? '#ffffff' : '#ff4757');
       mainMat.opacity = 0.8 + Math.sin(alertPhaseRef.current * Math.PI * 2) * 0.1;
-      mainMat.vertexColors = false;
 
       glowMat.color.set(flash ? '#ffffff' : '#ff4757');
       glowMat.opacity = 0.35 + Math.sin(alertPhaseRef.current * Math.PI * 2) * 0.15;
+
+      if (!prevAlertRef.current) {
+        mainMat.vertexColors = false;
+        mainMat.needsUpdate = true;
+        prevAlertRef.current = true;
+      }
     } else {
-      mainMat.color.set(color);
       mainMat.opacity = 0.9;
-      mainMat.vertexColors = true;
 
       glowMat.color.set(color);
       glowMat.opacity = 0.25 + Math.sin(timeRef.current * 2) * 0.1;
+
+      if (prevAlertRef.current) {
+        mainMat.vertexColors = true;
+        mainMat.needsUpdate = true;
+        prevAlertRef.current = false;
+      }
     }
   });
 
