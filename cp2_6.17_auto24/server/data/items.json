@@ -1,0 +1,180 @@
+[
+  {
+    "id": "85e129d1-61b9-4cb6-9bf3-5ee8046219ea",
+    "type": "lost",
+    "title": "黑色钱包",
+    "description": "黑色皮质钱包，内有身份证和银行卡，约300元现金",
+    "stationId": "s1",
+    "stationName": "市中心",
+    "location": "1号线站台",
+    "time": "2026-06-16 02:37",
+    "contact": "138****8000",
+    "imageUrl": "https://images.unsplash.com/photo-1627123424574-724758594e93?w=400&h=300&fit=crop",
+    "userId": "40e836ed-769b-4d13-915a-a917eff7b8d4",
+    "username": "demo",
+    "status": "open",
+    "createdAt": "2026-06-15T18:37:34.713Z",
+    "keywords": [
+      "钱包",
+      "黑色",
+      "皮质",
+      "身份证",
+      "银行卡"
+    ]
+  },
+  {
+    "id": "1d403975-280d-4cc2-b08c-7cb866272a76",
+    "type": "found",
+    "title": "苹果手机",
+    "description": "黑色iPhone 13，屏幕有轻微划痕，已关机",
+    "stationId": "s2",
+    "stationName": "人民广场",
+    "location": "2号线换乘通道",
+    "time": "2026-06-15 02:37",
+    "contact": "139****9000",
+    "imageUrl": "https://images.unsplash.com/photo-1591337676887-a217a6970a8a?w=400&h=300&fit=crop",
+    "userId": "40e836ed-769b-4d13-915a-a917eff7b8d4",
+    "username": "demo",
+    "status": "open",
+    "createdAt": "2026-06-14T18:37:34.714Z",
+    "keywords": [
+      "手机",
+      "苹果",
+      "iPhone",
+      "黑色"
+    ]
+  },
+  {
+    "id": "4f7e8d28-d845-4e7b-84d7-3a354770655f",
+    "type": "lost",
+    "title": "蓝色双肩包",
+    "description": "蓝色Nike双肩包，内有笔记本电脑和书籍",
+    "stationId": "s3",
+    "stationName": "火车站",
+    "location": "安检口",
+    "time": "2026-06-14 02:37",
+    "contact": "137****7000",
+    "imageUrl": "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=300&fit=crop",
+    "userId": "40e836ed-769b-4d13-915a-a917eff7b8d4",
+    "username": "demo",
+    "status": "open",
+    "createdAt": "2026-06-13T18:37:34.714Z",
+    "keywords": [
+      "双肩包",
+      "背包",
+      "蓝色",
+      "电脑",
+      "笔记本"
+    ]
+  },
+  {
+    "id": "20bfd9c4-cfbc-46c1-8b6d-3532a65ed822",
+    "type": "found",
+    "title": "钥匙一串",
+    "description": "约5把钥匙，有一个小熊挂件",
+    "stationId": "s4",
+    "stationName": "科技园",
+    "location": "A出口",
+    "time": "2026-06-16 02:37",
+    "contact": "136****6000",
+    "imageUrl": "https://images.unsplash.com/photo-1582139329536-e7284fece509?w=400&h=300&fit=crop",
+    "userId": "40e836ed-769b-4d13-915a-a917eff7b8d4",
+    "username": "demo",
+    "status": "open",
+    "createdAt": "2026-06-15T18:37:34.714Z",
+    "keywords": [
+      "钥匙",
+      "挂件",
+      "小熊"
+    ]
+  },
+  {
+    "id": "35a0b233-2dd4-4e4a-a830-bf9889d4b28d",
+    "type": "lost",
+    "title": "雨伞",
+    "description": "黑色长柄雨伞，伞面有白色条纹",
+    "stationId": "s5",
+    "stationName": "大学城",
+    "location": "3号线站台",
+    "time": "2026-06-13 02:37",
+    "contact": "135****5000",
+    "imageUrl": "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=400&h=300&fit=crop",
+    "userId": "40e836ed-769b-4d13-915a-a917eff7b8d4",
+    "username": "demo",
+    "status": "open",
+    "createdAt": "2026-06-12T18:37:34.714Z",
+    "keywords": [
+      "雨伞",
+      "阳伞",
+      "黑色",
+      "条纹"
+    ]
+  },
+  {
+    "id": "4484a25d-a84d-4181-8cfa-6c8b9278e83b",
+    "type": "found",
+    "title": "黑色钱包",
+    "description": "捡到黑色皮质钱包一个，内有若干现金和卡片",
+    "stationId": "s1",
+    "stationName": "市中心",
+    "location": "1号线座椅",
+    "time": "2026-06-16 04:37",
+    "contact": "134****4000",
+    "imageUrl": "https://images.unsplash.com/photo-1627123424574-724758594e93?w=400&h=300&fit=crop",
+    "userId": "40e836ed-769b-4d13-915a-a917eff7b8d4",
+    "username": "demo",
+    "status": "open",
+    "createdAt": "2026-06-15T20:37:34.714Z",
+    "keywords": [
+      "钱包",
+      "黑色",
+      "皮质",
+      "现金"
+    ]
+  },
+  {
+    "id": "a744b17a-d562-4b13-8efa-44d45ff76f0e",
+    "type": "lost",
+    "title": "眼镜",
+    "description": "黑框近视眼镜，蓝色眼镜盒",
+    "stationId": "s6",
+    "stationName": "体育馆",
+    "location": "B出口",
+    "time": "2026-06-15 02:37",
+    "contact": "133****3000",
+    "imageUrl": "https://images.unsplash.com/photo-1574258495973-f010dfbb5371?w=400&h=300&fit=crop",
+    "userId": "40e836ed-769b-4d13-915a-a917eff7b8d4",
+    "username": "demo",
+    "status": "open",
+    "createdAt": "2026-06-14T18:37:34.714Z",
+    "keywords": [
+      "眼镜",
+      "近视镜",
+      "黑框",
+      "眼镜盒"
+    ]
+  },
+  {
+    "id": "7f64ec4e-1810-48e9-8873-0d364936c232",
+    "type": "found",
+    "title": "耳机",
+    "description": "白色AirPods Pro，充电盒有划痕",
+    "stationId": "s7",
+    "stationName": "商业街",
+    "location": "商业街入口",
+    "time": "2026-06-16 02:37",
+    "contact": "132****2000",
+    "imageUrl": "https://images.unsplash.com/photo-1600294037681-c80b4cb5b434?w=400&h=300&fit=crop",
+    "userId": "40e836ed-769b-4d13-915a-a917eff7b8d4",
+    "username": "demo",
+    "status": "open",
+    "createdAt": "2026-06-15T18:37:34.714Z",
+    "keywords": [
+      "耳机",
+      "AirPods",
+      "蓝牙",
+      "白色",
+      "苹果"
+    ]
+  }
+]
