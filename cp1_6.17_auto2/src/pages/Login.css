@@ -1,0 +1,170 @@
+.login-page {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  background: linear-gradient(135deg, var(--vinyl-black) 0%, #2a1f14 50%, var(--vinyl-black) 100%);
+  position: relative;
+}
+
+.login-page::before {
+  content: '';
+  position: absolute;
+  top: 20%;
+  left: 10%;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(212, 165, 116, 0.08) 0%, transparent 70%);
+}
+
+.login-page::after {
+  content: '♪';
+  position: absolute;
+  bottom: 10%;
+  right: 15%;
+  font-size: 150px;
+  color: rgba(212, 165, 116, 0.05);
+}
+
+.login-container {
+  width: 100%;
+  max-width: 420px;
+  position: relative;
+  z-index: 1;
+}
+
+.login-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: 40px;
+  box-shadow: var(--shadow-lg);
+  animation: slideUp 0.4s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.login-logo {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.login-logo .logo-icon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.logo-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--classical-copper);
+  letter-spacing: 4px;
+  font-family: 'Noto Serif SC', serif;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 28px;
+  background: var(--vinyl-black-light);
+  padding: 4px;
+  border-radius: var(--radius-md);
+}
+
+.tab {
+  flex: 1;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 15px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.tab:hover {
+  color: var(--text-primary);
+}
+
+.tab.active {
+  background: var(--classical-copper);
+  color: var(--vinyl-black);
+  font-weight: 600;
+}
+
+.error-tip {
+  background: rgba(231, 76, 60, 0.15);
+  color: var(--condition-damaged);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(231, 76, 60, 0.3);
+}
+
+.login-form {
+  margin-bottom: 20px;
+}
+
+.submit-btn {
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  margin-top: 8px;
+  justify-content: center;
+}
+
+.demo-tip {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  padding: 10px;
+  background: var(--vinyl-black-light);
+  border-radius: var(--radius-sm);
+}
+
+.demo-tip p {
+  margin: 0;
+}
+
+.back-home {
+  text-align: center;
+}
+
+.back-home a {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.back-home a:hover {
+  color: var(--classical-copper);
+}
+
+@media (max-width: 480px) {
+  .login-card {
+    padding: 28px 20px;
+  }
+  
+  .logo-title {
+    font-size: 24px;
+  }
+  
+  .login-logo .logo-icon {
+    font-size: 40px;
+  }
+}
