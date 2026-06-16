@@ -1,0 +1,22 @@
+[
+  {
+    "id": "admin-001",
+    "email": "admin@farm.com",
+    "password": "admin123",
+    "name": "农场管理员",
+    "phone": "13800138000",
+    "address": "阳光社区农场",
+    "isAdmin": true,
+    "createdAt": "2024-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "member-001",
+    "email": "user@example.com",
+    "password": "123456",
+    "name": "张小明",
+    "phone": "13900139000",
+    "address": "阳光花园A栋302室",
+    "isAdmin": false,
+    "createdAt": "2024-02-15T10:30:00.000Z"
+  }
+]

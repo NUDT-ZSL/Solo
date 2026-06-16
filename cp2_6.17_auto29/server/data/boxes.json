@@ -1,0 +1,74 @@
+[
+  {
+    "id": "box-small",
+    "name": "精选小箱",
+    "size": "small",
+    "price": 28,
+    "description": "适合1-2人家庭，精选6种当季新鲜蔬菜",
+    "veggies": [
+      { "id": "v1", "name": "青菜", "icon": "🥬", "color": "#86efac" },
+      { "id": "v2", "name": "番茄", "icon": "🍅", "color": "#fca5a5" },
+      { "id": "v3", "name": "黄瓜", "icon": "🥒", "color": "#86efac" },
+      { "id": "v4", "name": "胡萝卜", "icon": "🥕", "color": "#fdba74" },
+      { "id": "v5", "name": "土豆", "icon": "🥔", "color": "#fde68a" },
+      { "id": "v6", "name": "茄子", "icon": "🍆", "color": "#c4b5fd" }
+    ],
+    "swapOptions": [
+      { "from": "青菜", "to": "菠菜" },
+      { "from": "黄瓜", "to": "丝瓜" }
+    ],
+    "isActive": true,
+    "sortOrder": 1
+  },
+  {
+    "id": "box-medium",
+    "name": "家庭中箱",
+    "size": "medium",
+    "price": 48,
+    "description": "适合3-4人家庭，8种新鲜蔬菜营养均衡",
+    "veggies": [
+      { "id": "v1", "name": "青菜", "icon": "🥬", "color": "#86efac" },
+      { "id": "v2", "name": "番茄", "icon": "🍅", "color": "#fca5a5" },
+      { "id": "v3", "name": "黄瓜", "icon": "🥒", "color": "#86efac" },
+      { "id": "v4", "name": "胡萝卜", "icon": "🥕", "color": "#fdba74" },
+      { "id": "v5", "name": "土豆", "icon": "🥔", "color": "#fde68a" },
+      { "id": "v6", "name": "茄子", "icon": "🍆", "color": "#c4b5fd" },
+      { "id": "v7", "name": "青椒", "icon": "🫑", "color": "#86efac" },
+      { "id": "v8", "name": "玉米", "icon": "🌽", "color": "#fde047" }
+    ],
+    "swapOptions": [
+      { "from": "青菜", "to": "菠菜" },
+      { "from": "黄瓜", "to": "丝瓜" },
+      { "from": "茄子", "to": "西葫芦" }
+    ],
+    "isActive": true,
+    "sortOrder": 2
+  },
+  {
+    "id": "box-large",
+    "name": "丰盛大箱",
+    "size": "large",
+    "price": 68,
+    "description": "适合5人以上家庭，10种蔬菜种类丰富",
+    "veggies": [
+      { "id": "v1", "name": "青菜", "icon": "🥬", "color": "#86efac" },
+      { "id": "v2", "name": "番茄", "icon": "🍅", "color": "#fca5a5" },
+      { "id": "v3", "name": "黄瓜", "icon": "🥒", "color": "#86efac" },
+      { "id": "v4", "name": "胡萝卜", "icon": "🥕", "color": "#fdba74" },
+      { "id": "v5", "name": "土豆", "icon": "🥔", "color": "#fde68a" },
+      { "id": "v6", "name": "茄子", "icon": "🍆", "color": "#c4b5fd" },
+      { "id": "v7", "name": "青椒", "icon": "🫑", "color": "#86efac" },
+      { "id": "v8", "name": "玉米", "icon": "🌽", "color": "#fde047" },
+      { "id": "v9", "name": "西兰花", "icon": "🥦", "color": "#86efac" },
+      { "id": "v10", "name": "南瓜", "icon": "🎃", "color": "#fb923c" }
+    ],
+    "swapOptions": [
+      { "from": "青菜", "to": "菠菜" },
+      { "from": "黄瓜", "to": "丝瓜" },
+      { "from": "茄子", "to": "西葫芦" },
+      { "from": "南瓜", "to": "冬瓜" }
+    ],
+    "isActive": true,
+    "sortOrder": 3
+  }
+]

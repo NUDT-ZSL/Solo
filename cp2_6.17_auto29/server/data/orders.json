@@ -1,0 +1,48 @@
+[
+  {
+    "id": "order-001",
+    "memberId": "member-001",
+    "memberName": "张小明",
+    "items": [
+      {
+        "boxId": "box-medium",
+        "boxName": "家庭中箱",
+        "price": 48,
+        "quantity": 1,
+        "swaps": [{ "from": "青菜", "to": "菠菜" }]
+      }
+    ],
+    "totalPrice": 48,
+    "frequency": "weekly",
+    "deliveryDate": "2024-06-20",
+    "status": "confirmed",
+    "address": "阳光花园A栋302室",
+    "phone": "13900139000",
+    "note": "请放在门卫处",
+    "createdAt": "2024-06-15T10:00:00.000Z",
+    "updatedAt": "2024-06-15T10:00:00.000Z"
+  },
+  {
+    "id": "order-002",
+    "memberId": "member-001",
+    "memberName": "张小明",
+    "items": [
+      {
+        "boxId": "box-large",
+        "boxName": "丰盛大箱",
+        "price": 68,
+        "quantity": 1,
+        "swaps": []
+      }
+    ],
+    "totalPrice": 68,
+    "frequency": "biweekly",
+    "deliveryDate": "2024-06-25",
+    "status": "pending",
+    "address": "阳光花园A栋302室",
+    "phone": "13900139000",
+    "note": "",
+    "createdAt": "2024-06-16T14:30:00.000Z",
+    "updatedAt": "2024-06-16T14:30:00.000Z"
+  }
+]
