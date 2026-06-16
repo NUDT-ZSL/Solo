@@ -14,6 +14,8 @@ function App() {
 
   const handleStartBrew = useCallback((ingredientIds: string[]) => {
     setSelectedIngredients(ingredientIds);
+    setIsBrewing(true);
+    setNewPotion(null);
   }, []);
 
   const handleBrewStart = useCallback(() => {
