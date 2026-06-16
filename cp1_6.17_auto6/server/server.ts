@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid'
 import type { Event, Participant, EventStats, CreateEventDto, RegisterDto, CheckInDto } from '../src/types'
 
 const app = express()
-const PORT = 3001
+const PORT = 3003
 
 app.use(cors())
 app.use(bodyParser.json())
