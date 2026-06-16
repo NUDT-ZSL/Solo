@@ -99,11 +99,14 @@ const RoomCell: React.FC<RoomCellProps> = React.memo(({ room, isCurrentRoom, isT
   return (
     <div
       onClick={onClick}
+      className={isCurrentRoom ? 'current-room' : ''}
       style={{
         width: ROOM_SIZE,
         height: ROOM_SIZE,
-        border: `${ROOM_BORDER}px solid #4a5568`,
-        background: `linear-gradient(135deg, #2d3748, #1a202c)`,
+        border: `${ROOM_BORDER}px solid ${isCurrentRoom ? '#d69e2e' : '#4a5568'}`,
+        background: isCurrentRoom
+          ? `linear-gradient(135deg, #3d4a5c, #2a3444)`
+          : `linear-gradient(135deg, #2d3748, #1a202c)`,
         position: 'relative',
         cursor: canMove ? 'pointer' : 'default',
         transform: `scale(${scale})`,
@@ -256,15 +259,96 @@ interface BattleCanvasProps {
   playerMaxHp: number;
   onAnimationComplete: () => void;
   battleTrigger: number;
+  battleResult?: 'victory' | 'defeat' | null;
 }
 
-const BattleCanvas: React.FC<BattleCanvasProps> = ({ monster, playerHp, playerMaxHp, onAnimationComplete, battleTrigger }) => {
+const BattleCanvas: React.FC<BattleCanvasProps> = ({ monster, playerHp, playerMaxHp, onAnimationComplete, battleTrigger, battleResult }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number>(0);
   const flashRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
+  const resultStartTimeRef = useRef<number>(0);
 
   useEffect(() => {
+    if (battleResult) {
+      resultStartTimeRef.current = performance.now();
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const resultDuration = 300;
+
+      const drawResult = () => {
+        const elapsed = performance.now() - resultStartTimeRef.current;
+        const progress = Math.min(1, elapsed / resultDuration);
+
+        ctx.fillStyle = '#1a202c';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+
+        if (battleResult === 'victory') {
+          const maxRadius = Math.max(canvas.width, canvas.height);
+          const radius = maxRadius * progress;
+          const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
+          gradient.addColorStop(0, `rgba(214, 158, 46, ${1 - progress})`);
+          gradient.addColorStop(0.5, `rgba(255, 215, 0, ${0.5 * (1 - progress)})`);
+          gradient.addColorStop(1, 'rgba(214, 158, 46, 0)');
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          ctx.fillStyle = `rgba(214, 158, 46, ${progress})`;
+          ctx.font = 'bold 32px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('胜 利 !', centerX, centerY + 10);
+          ctx.textAlign = 'left';
+        } else {
+          const shards = 8;
+          ctx.save();
+          ctx.translate(centerX, centerY);
+          for (let i = 0; i < shards; i++) {
+            const angle = (Math.PI * 2 * i) / shards;
+            const dist = 80 * progress;
+            const alpha = 1 - progress;
+            ctx.save();
+            ctx.rotate(angle + progress * 0.5);
+            ctx.translate(dist, 0);
+            ctx.fillStyle = `rgba(229, 62, 62, ${alpha})`;
+            ctx.beginPath();
+            ctx.moveTo(-15, -10);
+            ctx.lineTo(15, -10);
+            ctx.lineTo(0, 20);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+          }
+          ctx.restore();
+
+          ctx.fillStyle = `rgba(229, 62, 62, ${progress})`;
+          ctx.font = 'bold 32px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('失 败...', centerX, centerY + 10);
+          ctx.textAlign = 'left';
+        }
+
+        if (progress < 1) {
+          animRef.current = requestAnimationFrame(drawResult);
+        }
+      };
+
+      animRef.current = requestAnimationFrame(drawResult);
+
+      return () => {
+        if (animRef.current) cancelAnimationFrame(animRef.current);
+      };
+    }
+  }, [battleResult]);
+
+  useEffect(() => {
+    if (battleResult) return;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -340,7 +424,7 @@ const BattleCanvas: React.FC<BattleCanvasProps> = ({ monster, playerHp, playerMa
     return () => {
       if (animRef.current) cancelAnimationFrame(animRef.current);
     };
-  }, [monster, battleTrigger]);
+  }, [monster, battleTrigger, battleResult]);
 
   return (
     <canvas
@@ -514,6 +598,7 @@ const App: React.FC = () => {
   const [state, dispatch] = useReducer(reducer, undefined, createInitialState);
   const [battleTrigger, setBattleTrigger] = useState(0);
   const [battleAnimating, setBattleAnimating] = useState(false);
+  const [battleResult, setBattleResult] = useState<'victory' | 'defeat' | null>(null);
   const [roomDetail, setRoomDetail] = useState<Room | null>(null);
   const [showRestart, setShowRestart] = useState(false);
 
@@ -548,6 +633,12 @@ const App: React.FC = () => {
     }
   }, [state.transitioning, state.currentRoom]);
 
+  useEffect(() => {
+    if (state.inBattle) {
+      setBattleResult(null);
+    }
+  }, [state.inBattle]);
+
   const handleRoomClick = useCallback((room: Room) => {
     if (canMoveTo(state.player, room.x, room.y)) {
       dispatch({ type: 'MOVE', x: room.x, y: room.y });
@@ -560,12 +651,18 @@ const App: React.FC = () => {
     if (!state.currentRoom?.monster || battleAnimating) return;
     const result = playerAttack(state.currentRoom.monster);
     setBattleAnimating(true);
+    setBattleResult(null);
     setBattleTrigger(prev => prev + 1);
     setTimeout(() => {
       dispatch({ type: 'APPLY_BATTLE_RESULT', result });
       setBattleAnimating(false);
+      if (result.monsterDead) {
+        setBattleResult('victory');
+      } else if (state.player.hp - result.monsterDamage <= 0) {
+        setBattleResult('defeat');
+      }
     }, 1000);
-  }, [state.currentRoom, battleAnimating]);
+  }, [state.currentRoom, state.player.hp, battleAnimating]);
 
   const currentRoom = state.rooms[state.player.position.y][state.player.position.x];
 
@@ -583,6 +680,17 @@ const App: React.FC = () => {
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: #1a202c; }
         #root { min-height: 100vh; }
+        @keyframes pulse-gold {
+          0%, 100% { box-shadow: 0 0 8px 2px rgba(214, 158, 46, 0.4), inset 0 0 6px rgba(214, 158, 46, 0.2); }
+          50% { box-shadow: 0 0 16px 4px rgba(214, 158, 46, 0.7), inset 0 0 12px rgba(214, 158, 46, 0.4); }
+        }
+        @keyframes glow-soft {
+          0%, 100% { filter: brightness(1); }
+          50% { filter: brightness(1.2); }
+        }
+        .current-room {
+          animation: pulse-gold 1.5s ease-in-out infinite, glow-soft 2s ease-in-out infinite;
+        }
       `}</style>
 
       <div style={{ display: 'flex', minHeight: '100vh' }}>
@@ -654,6 +762,7 @@ const App: React.FC = () => {
                 playerMaxHp={state.player.maxHp}
                 onAnimationComplete={() => {}}
                 battleTrigger={battleTrigger}
+                battleResult={battleResult}
               />
               <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', padding: '0 40px' }}>
                 <div>
@@ -847,6 +956,12 @@ const App: React.FC = () => {
           <h3 style={{ color: '#d69e2e', marginBottom: 16, fontSize: 20 }}>
             🏠 房间详情 ({roomDetail.x}, {roomDetail.y})
           </h3>
+          <div style={{ marginBottom: 16, padding: 16, backgroundColor: '#2d3748', borderRadius: 8, borderLeft: '4px solid #d69e2e' }}>
+            <div style={{ color: '#a0aec0', fontSize: 12, marginBottom: 6, letterSpacing: 1 }}>📖 房间描述</div>
+            <p style={{ color: '#f7fafc', fontSize: 15, lineHeight: 1.7, fontStyle: 'italic' }}>
+              "{roomDetail.description}"
+            </p>
+          </div>
           <div style={{ marginBottom: 12 }}>
             <span style={{ color: '#a0aec0' }}>类型：</span>
             <span style={{ color: getRoomColor(roomDetail.type) }}>{getRoomTypeName(roomDetail.type)}</span>

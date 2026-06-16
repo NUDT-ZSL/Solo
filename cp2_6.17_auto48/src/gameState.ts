@@ -1,4 +1,4 @@
-import { Room, RoomType, Player, Monster, Item, GameState, ITEM_POOL, NORMAL_MONSTERS, ELITE_MONSTERS } from './types';
+import { Room, RoomType, Player, Monster, Item, GameState, ITEM_POOL, NORMAL_MONSTERS, ELITE_MONSTERS, ROOM_DESCRIPTIONS } from './types';
 
 function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -37,6 +37,9 @@ export function generateRooms(): Room[][] {
         eventText = `你发现了一个宝物房间！`;
       }
 
+      const descriptions = ROOM_DESCRIPTIONS[type];
+      const description = pickRandom(descriptions);
+
       row.push({
         x,
         y,
@@ -46,6 +49,7 @@ export function generateRooms(): Room[][] {
         visited: false,
         cleared: false,
         eventText,
+        description,
       });
     }
     rooms.push(row);
@@ -54,6 +58,7 @@ export function generateRooms(): Room[][] {
   rooms[0][0].visited = true;
   rooms[0][0].cleared = true;
   rooms[0][0].eventText = '你站在地下城的入口。';
+  rooms[0][0].description = '地下城的入口处，火把的光芒驱散了些许黑暗，前方的走廊通向未知的深处。';
   return rooms;
 }
 

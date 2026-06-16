@@ -32,7 +32,32 @@ export interface Room {
   visited: boolean;
   cleared: boolean;
   eventText: string;
+  description: string;
 }
+
+export const ROOM_DESCRIPTIONS: Record<RoomType, string[]> = {
+  [RoomType.NormalMonster]: [
+    '一间散发着霉味的石室，角落里传来低沉的咆哮声。',
+    '潮湿的地面上布满了奇怪的爪印，空气中弥漫着血腥味。',
+    '火把忽明忽暗，你隐约看到阴影中有东西在蠕动。',
+    '残破的盔甲散落在地上，显然曾有冒险者在此陨落。',
+    '令人不安的嘶嘶声从天花板的裂缝中传来。',
+  ],
+  [RoomType.EliteMonster]: [
+    '一股强大的压迫感扑面而来，地面在微微震颤。',
+    '幽紫色的火焰在石台上燃烧，黑暗中似乎有双眼睛在注视着你。',
+    '古老的符文在墙壁上发出诡异的红光，空气中充满魔力波动。',
+    '巨大的骸骨散落在王座周围，一股寒意从脊梁升起。',
+    '你感觉到了——这里的主人绝非等闲之辈。',
+  ],
+  [RoomType.Treasure]: [
+    '金色的光芒从石缝中透出，这里似乎藏着什么宝贝。',
+    '精美的宝箱安静地躺在祭坛上，周围没有任何陷阱的痕迹。',
+    '空气中飘着淡淡的香气，墙上的宝石闪烁着迷人的光泽。',
+    '一张古老的藏宝图指示这里就是终点！',
+    '铺满金币的地面让你几乎无法下脚。',
+  ],
+};
 
 export interface Player {
   hp: number;
