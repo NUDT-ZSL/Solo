@@ -1,16 +1,17 @@
 import {
-  GameState, Ship, Mineral, Mine, SpaceStation, Particle, Explosion, UIState,
+  GameState, Ship, Mineral, Mine, SpaceStation, Particle, Explosion, UIState, PendingMineral,
   CANVAS_WIDTH, CANVAS_HEIGHT, SHIP_SPEED, SHIP_BASE, SHIP_HEIGHT, SHIP_COLOR,
   MINERAL_RADIUS, MINERAL_COLOR, MINE_RADIUS, MINE_COLOR,
   STATION_BASE, STATION_HEIGHT, STATION_COLOR,
   EXHAUST_LIFE, EXPLOSION_LIFE, ENERGY_DRAIN_RATE, COLLECT_DURATION,
   WARNING_DURATION, DIFFICULTY_DURATION, SCREEN_SHAKE_DURATION,
   MINE_SPAWN_MIN, MINE_SPAWN_MAX, MIN_MINE_SPAWN_INTERVAL, MAX_PARTICLES,
-  COLLECT_DISTANCE, STATION_INTERACT_DISTANCE, MINERAL_COUNT_MIN, MINERAL_COUNT_MAX,
+  COLLECT_DISTANCE, MINERAL_COUNT_MIN, MINERAL_COUNT_MAX,
   MINE_SPAWN_COUNT_MIN, MINE_SPAWN_COUNT_MAX, STORM_PARTICLE_BASE_INTERVAL,
   DIFFICULTY_MINE_REDUCTION, DIFFICULTY_PULSE_BOOST, DIFFICULTY_STORM_BOOST,
   SCORE_PER_MINERAL, MINE_DAMAGE, SCREEN_SHAKE_INTENSITY,
-  RADAR_REFRESH_INTERVAL, RADAR_SCAN_PERIOD, DIFFICULTY_MINERAL_BONUS
+  RADAR_REFRESH_INTERVAL, RADAR_SCAN_PERIOD, DIFFICULTY_MINERAL_BONUS,
+  MINERAL_RESPAWN_DELAY, MINERAL_OVERLAP_DISTANCE, STATION_GLOW_RADIUS
 } from './entities';
 
 interface InputState {
@@ -78,21 +79,20 @@ export class GameEngine {
       propellerAngle: 0
     };
 
-    const minerals: Mineral[] = [];
-    const mineralCount = this.randomInt(MINERAL_COUNT_MIN, MINERAL_COUNT_MAX);
-    for (let i = 0; i < mineralCount; i++) {
-      minerals.push(this.createMineral(station));
-    }
-
-    return {
+    const state: GameState = {
       ship,
-      minerals,
+      minerals: [],
+      pendingMinerals: [],
       mines: [],
       station,
       particles: [],
+      particlePool: [],
       explosions: [],
       lastMineSpawn: 0,
-      mineSpawnInterval: this.randomFloat(MINE_SPAWN_MIN, MINE_SPAWN_MAX),
+      mineSpawnInterval: 0,
+      mineSpawnMin: MINE_SPAWN_MIN,
+      mineSpawnMax: MINE_SPAWN_MAX,
+      difficultyLevel: 0,
       mineralPulseSpeed: 1,
       stormDensity: 1,
       difficultyBoostEnd: 0,
@@ -102,27 +102,58 @@ export class GameEngine {
       frameCount: 0,
       gameOver: false,
       deliveryCount: 0,
-      currentTime: 0
+      currentTime: 0,
+      mineralNextId: 0
     };
+
+    const mineralCount = this.randomInt(MINERAL_COUNT_MIN, MINERAL_COUNT_MAX);
+    for (let i = 0; i < mineralCount; i++) {
+      state.minerals.push(this.createMineral(state));
+    }
+
+    state.mineSpawnInterval = this.randomFloat(state.mineSpawnMin, state.mineSpawnMax);
+
+    return state;
   }
 
-  private createMineral(station?: SpaceStation): Mineral {
-    const targetStation = station || this.state.station;
+  private createMineral(state: GameState, station?: SpaceStation): Mineral {
+    const targetStation = station || state.station;
     let x: number, y: number;
     let attempts = 0;
-    do {
+    let valid = false;
+
+    while (!valid && attempts < 100) {
       x = this.randomFloat(100, CANVAS_WIDTH - 150);
       y = this.randomFloat(50, CANVAS_HEIGHT - 50);
       attempts++;
-    } while (this.distance(x, y, targetStation.x, targetStation.y) < 100 && attempts < 50);
+      valid = true;
+
+      if (this.distance(x, y, targetStation.x, targetStation.y) < MINERAL_OVERLAP_DISTANCE) {
+        valid = false;
+        continue;
+      }
+
+      if (this.distance(x, y, state.ship.x, state.ship.y) < MINERAL_OVERLAP_DISTANCE) {
+        valid = false;
+        continue;
+      }
+
+      for (const existing of state.minerals) {
+        if (this.distance(x, y, existing.x, existing.y) < MINERAL_OVERLAP_DISTANCE) {
+          valid = false;
+          break;
+        }
+      }
+    }
 
     return {
-      x,
-      y,
+      x: x!,
+      y: y!,
       radius: MINERAL_RADIUS,
       pulsePhase: Math.random() * Math.PI * 2,
       isCollecting: false,
-      collectProgress: 0
+      collectProgress: 0,
+      id: state.mineralNextId++
     };
   }
 
@@ -155,6 +186,22 @@ export class GameEngine {
       pulsePhase: Math.random() * Math.PI * 2,
       opacity: 0.7
     };
+  }
+
+  private acquireParticle(): Particle {
+    if (this.state.particlePool.length > 0) {
+      return this.state.particlePool.pop()!;
+    }
+    return {
+      x: 0, y: 0, vx: 0, vy: 0, size: 0, color: '',
+      life: 0, maxLife: 0, type: 'exhaust'
+    };
+  }
+
+  private releaseParticle(particle: Particle): void {
+    if (this.state.particlePool.length < MAX_PARTICLES * 2) {
+      this.state.particlePool.push(particle);
+    }
   }
 
   private randomInt(min: number, max: number): number {
@@ -292,6 +339,8 @@ export class GameEngine {
 
     this.updateShip(dt);
     this.updateMinerals(dt);
+    this.updatePendingMinerals(currentTime);
+    this.ensureMineralCount();
     this.updateMines(dt);
     this.updateStation(dt);
     this.updateParticles(dt);
@@ -345,9 +394,13 @@ export class GameEngine {
   }
 
   private emitExhaustParticles(x: number, y: number, angle: number): void {
+    if (this.state.particles.length >= MAX_PARTICLES) return;
+
     const backAngle = angle + Math.PI;
 
     for (let i = 0; i < 5; i++) {
+      if (this.state.particles.length >= MAX_PARTICLES) break;
+
       const spread = this.randomFloat(-0.3, 0.3);
       const particleAngle = backAngle + spread;
       const speed = this.randomFloat(30, 60);
@@ -359,17 +412,17 @@ export class GameEngine {
       const b = Math.floor(0 + (59 - 0) * colorT);
       const color = `rgb(${r}, ${g}, ${b})`;
 
-      this.addParticle({
-        x: x + Math.cos(backAngle) * 15,
-        y: y + Math.sin(backAngle) * 15,
-        vx: Math.cos(particleAngle) * speed,
-        vy: Math.sin(particleAngle) * speed,
-        size,
-        color,
-        life: EXHAUST_LIFE,
-        maxLife: EXHAUST_LIFE,
-        type: 'exhaust'
-      });
+      const p = this.acquireParticle();
+      p.x = x + Math.cos(backAngle) * 15;
+      p.y = y + Math.sin(backAngle) * 15;
+      p.vx = Math.cos(particleAngle) * speed;
+      p.vy = Math.sin(particleAngle) * speed;
+      p.size = size;
+      p.color = color;
+      p.life = EXHAUST_LIFE;
+      p.maxLife = EXHAUST_LIFE;
+      p.type = 'exhaust';
+      this.state.particles.push(p);
     }
   }
 
@@ -385,21 +438,21 @@ export class GameEngine {
 
         if (mineral.collectProgress >= 1) {
           ship.minerals++;
-          mineral.collectProgress = 0;
-          mineral.isCollecting = false;
 
-          const idx = this.state.minerals.indexOf(mineral);
+          const idx = this.state.minerals.findIndex(m => m.id === mineral.id);
           if (idx > -1) {
             this.state.minerals.splice(idx, 1);
           }
-          this.state.minerals.push(this.createMineral());
+
+          this.state.pendingMinerals.push({
+            spawnTime: this.state.currentTime + MINERAL_RESPAWN_DELAY
+          });
+
           break;
         }
       } else {
-        if (!this.input.collect) {
-          mineral.isCollecting = false;
-          mineral.collectProgress = 0;
-        }
+        mineral.isCollecting = false;
+        mineral.collectProgress = 0;
       }
     }
   }
@@ -408,6 +461,35 @@ export class GameEngine {
     this.state.minerals.forEach(mineral => {
       mineral.pulsePhase += dt * Math.PI * this.state.mineralPulseSpeed;
     });
+  }
+
+  private updatePendingMinerals(currentTime: number): void {
+    const toSpawn: PendingMineral[] = [];
+    this.state.pendingMinerals = this.state.pendingMinerals.filter(p => {
+      if (currentTime >= p.spawnTime) {
+        toSpawn.push(p);
+        return false;
+      }
+      return true;
+    });
+
+    for (const _ of toSpawn) {
+      if (this.state.minerals.length < MINERAL_COUNT_MAX) {
+        this.state.minerals.push(this.createMineral(this.state));
+      }
+    }
+  }
+
+  private ensureMineralCount(): void {
+    const total = this.state.minerals.length + this.state.pendingMinerals.length;
+    const target = this.randomInt(MINERAL_COUNT_MIN, MINERAL_COUNT_MAX);
+    const deficit = Math.max(0, target - total);
+
+    for (let i = 0; i < deficit; i++) {
+      this.state.pendingMinerals.push({
+        spawnTime: this.state.currentTime + this.randomFloat(0, 2)
+      });
+    }
   }
 
   private updateMines(dt: number): void {
@@ -422,11 +504,12 @@ export class GameEngine {
   }
 
   private updateParticles(dt: number): void {
-    this.state.particles.forEach(p => {
+    for (let i = this.state.particles.length - 1; i >= 0; i--) {
+      const p = this.state.particles[i];
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.life -= dt;
-    });
+    }
   }
 
   private updateExplosions(dt: number): void {
@@ -452,39 +535,39 @@ export class GameEngine {
         this.state.mines.push(this.createMine());
       }
       this.state.lastMineSpawn = currentTime;
-      this.state.mineSpawnInterval = this.randomFloat(MINE_SPAWN_MIN, MINE_SPAWN_MAX);
+      this.state.mineSpawnInterval = this.randomFloat(
+        this.state.mineSpawnMin,
+        this.state.mineSpawnMax
+      );
     }
   }
 
   private spawnStormParticles(): void {
-    const interval = Math.max(5, STORM_PARTICLE_BASE_INTERVAL / this.state.stormDensity);
+    if (this.state.particles.length >= MAX_PARTICLES) return;
 
-    if (this.state.frameCount % Math.floor(interval) === 0) {
+    const interval = Math.max(5, Math.floor(STORM_PARTICLE_BASE_INTERVAL / this.state.stormDensity));
+
+    if (this.state.frameCount % interval === 0) {
       const count = Math.floor(1 + this.state.stormDensity * 2);
       for (let i = 0; i < count; i++) {
+        if (this.state.particles.length >= MAX_PARTICLES) break;
+
         const size = this.randomFloat(1, 3);
         const speed = this.randomFloat(30, 80);
 
-        this.addParticle({
-          x: CANVAS_WIDTH + 10,
-          y: this.randomFloat(0, CANVAS_HEIGHT),
-          vx: -speed,
-          vy: this.randomFloat(-10, 10),
-          size,
-          color: 'rgba(20, 20, 30, 0.8)',
-          life: 10,
-          maxLife: 10,
-          type: 'storm'
-        });
+        const p = this.acquireParticle();
+        p.x = CANVAS_WIDTH + 10;
+        p.y = this.randomFloat(0, CANVAS_HEIGHT);
+        p.vx = -speed;
+        p.vy = this.randomFloat(-10, 10);
+        p.size = size;
+        p.color = 'rgba(20, 20, 30, 0.8)';
+        p.life = 10;
+        p.maxLife = 10;
+        p.type = 'storm';
+        this.state.particles.push(p);
       }
     }
-  }
-
-  private addParticle(particle: Omit<Particle, 'type'> & { type: Particle['type'] }): void {
-    if (this.state.particles.length >= MAX_PARTICLES) {
-      this.state.particles.shift();
-    }
-    this.state.particles.push(particle as Particle);
   }
 
   private checkCollisions(): void {
@@ -518,6 +601,8 @@ export class GameEngine {
     });
 
     for (let i = 0; i < 20; i++) {
+      if (this.state.particles.length >= MAX_PARTICLES) break;
+
       const angle = this.randomFloat(0, Math.PI * 2);
       const speed = this.randomFloat(50, 150);
       const size = this.randomFloat(2, 5);
@@ -528,17 +613,17 @@ export class GameEngine {
       const b = Math.floor(68 + (0 - 68) * colorT);
       const color = `rgb(${r}, ${g}, ${b})`;
 
-      this.addParticle({
-        x,
-        y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        size,
-        color,
-        life: 0.5,
-        maxLife: 0.5,
-        type: 'explosion'
-      });
+      const p = this.acquireParticle();
+      p.x = x;
+      p.y = y;
+      p.vx = Math.cos(angle) * speed;
+      p.vy = Math.sin(angle) * speed;
+      p.size = size;
+      p.color = color;
+      p.life = 0.5;
+      p.maxLife = 0.5;
+      p.type = 'explosion';
+      this.state.particles.push(p);
     }
   }
 
@@ -547,22 +632,37 @@ export class GameEngine {
     const station = this.state.station;
     const dist = this.distance(ship.x, ship.y, station.x, station.y);
 
-    if (dist < STATION_INTERACT_DISTANCE && ship.minerals > 0) {
-      const delivered = ship.minerals;
-      ship.score += delivered * SCORE_PER_MINERAL;
-      this.state.deliveryCount += delivered;
-      ship.minerals = 0;
+    if (dist < STATION_GLOW_RADIUS) {
       ship.energy = 100;
 
-      if (this.state.deliveryCount >= DIFFICULTY_MINERAL_BONUS) {
-        this.state.deliveryCount = 0;
-        this.state.mineSpawnInterval = Math.max(
-          MIN_MINE_SPAWN_INTERVAL,
-          this.state.mineSpawnInterval - DIFFICULTY_MINE_REDUCTION
-        );
-        this.state.mineralPulseSpeed = 1 + DIFFICULTY_PULSE_BOOST;
-        this.state.stormDensity = 1 + DIFFICULTY_STORM_BOOST;
-        this.state.difficultyBoostEnd = this.state.currentTime + DIFFICULTY_DURATION;
+      if (ship.minerals > 0) {
+        const delivered = ship.minerals;
+        ship.score += delivered * SCORE_PER_MINERAL;
+        this.state.deliveryCount += delivered;
+        ship.minerals = 0;
+
+        while (this.state.deliveryCount >= DIFFICULTY_MINERAL_BONUS) {
+          this.state.deliveryCount -= DIFFICULTY_MINERAL_BONUS;
+          this.state.difficultyLevel++;
+
+          this.state.mineSpawnMin = Math.max(
+            MIN_MINE_SPAWN_INTERVAL,
+            this.state.mineSpawnMin - DIFFICULTY_MINE_REDUCTION
+          );
+          this.state.mineSpawnMax = Math.max(
+            MIN_MINE_SPAWN_INTERVAL + 1,
+            this.state.mineSpawnMax - DIFFICULTY_MINE_REDUCTION
+          );
+
+          this.state.mineSpawnInterval = Math.min(
+            this.state.mineSpawnInterval,
+            this.randomFloat(this.state.mineSpawnMin, this.state.mineSpawnMax)
+          );
+
+          this.state.mineralPulseSpeed = 1 + DIFFICULTY_PULSE_BOOST;
+          this.state.stormDensity = 1 + DIFFICULTY_STORM_BOOST;
+          this.state.difficultyBoostEnd = this.state.currentTime + DIFFICULTY_DURATION;
+        }
       }
     }
   }
@@ -589,7 +689,17 @@ export class GameEngine {
   }
 
   private cleanupParticles(): void {
-    this.state.particles = this.state.particles.filter(p => p.life > 0);
+    const alive: Particle[] = [];
+    for (let i = this.state.particles.length - 1; i >= 0; i--) {
+      const p = this.state.particles[i];
+      if (p.life > 0) {
+        alive.push(p);
+      } else {
+        this.releaseParticle(p);
+      }
+    }
+    this.state.particles = alive;
+
     this.state.explosions = this.state.explosions.filter(e => e.life > 0);
     this.state.mines = this.state.mines.filter(m =>
       m.x > -50 && m.x < CANVAS_WIDTH + 50 && m.y > -50 && m.y < CANVAS_HEIGHT + 50
@@ -729,12 +839,12 @@ export class GameEngine {
     ctx.save();
     ctx.translate(station.x, station.y);
 
-    const glowGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, 50);
+    const glowGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, STATION_GLOW_RADIUS);
     glowGradient.addColorStop(0, `rgba(0, 230, 118, ${0.3 * glowPulse})`);
     glowGradient.addColorStop(1, 'rgba(0, 230, 118, 0)');
     ctx.fillStyle = glowGradient;
     ctx.beginPath();
-    ctx.arc(0, 0, 50, 0, Math.PI * 2);
+    ctx.arc(0, 0, STATION_GLOW_RADIUS, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.fillStyle = STATION_COLOR;
@@ -758,7 +868,7 @@ export class GameEngine {
     const ctx = this.ctx;
 
     this.state.particles.forEach(p => {
-      const alpha = p.life / p.maxLife;
+      const alpha = Math.max(0, p.life / p.maxLife);
 
       if (p.type === 'storm') {
         ctx.fillStyle = p.color;
@@ -770,7 +880,7 @@ export class GameEngine {
         ctx.fillStyle = p.color;
         ctx.globalAlpha = alpha;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, Math.max(0.5, p.size * alpha), 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -783,7 +893,7 @@ export class GameEngine {
 
     this.state.explosions.forEach(exp => {
       const t = 1 - exp.life / exp.maxLife;
-      const alpha = 1 - t;
+      const alpha = Math.max(0, 1 - t);
 
       const gradient = ctx.createRadialGradient(exp.x, exp.y, 0, exp.x, exp.y, exp.radius);
       gradient.addColorStop(0, `rgba(255, 145, 0, ${alpha})`);
@@ -810,8 +920,11 @@ export class GameEngine {
         ctx.fillStyle = '#444444';
         ctx.fillRect(x, y, barWidth, barHeight);
 
+        const progress = Math.min(1, mineral.collectProgress);
+        const fillWidth = barWidth * progress;
+
         ctx.fillStyle = '#76ff03';
-        ctx.fillRect(x, y, barWidth * mineral.collectProgress, barHeight);
+        ctx.fillRect(x, y, fillWidth, barHeight);
 
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1;

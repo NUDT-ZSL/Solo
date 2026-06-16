@@ -18,6 +18,11 @@ export interface Mineral extends Position {
   pulsePhase: number;
   isCollecting: boolean;
   collectProgress: number;
+  id: number;
+}
+
+export interface PendingMineral {
+  spawnTime: number;
 }
 
 export interface Mine extends Position {
@@ -54,12 +59,17 @@ export interface Explosion extends Position {
 export interface GameState {
   ship: Ship;
   minerals: Mineral[];
+  pendingMinerals: PendingMineral[];
   mines: Mine[];
   station: SpaceStation;
   particles: Particle[];
+  particlePool: Particle[];
   explosions: Explosion[];
   lastMineSpawn: number;
   mineSpawnInterval: number;
+  mineSpawnMin: number;
+  mineSpawnMax: number;
+  difficultyLevel: number;
   mineralPulseSpeed: number;
   stormDensity: number;
   difficultyBoostEnd: number;
@@ -70,6 +80,7 @@ export interface GameState {
   gameOver: boolean;
   deliveryCount: number;
   currentTime: number;
+  mineralNextId: number;
 }
 
 export interface UIState {
@@ -129,3 +140,6 @@ export const SCREEN_SHAKE_INTENSITY = 2;
 export const RADAR_SIZE = 150;
 export const RADAR_REFRESH_INTERVAL = 5;
 export const RADAR_SCAN_PERIOD = 1;
+export const MINERAL_RESPAWN_DELAY = 5;
+export const MINERAL_OVERLAP_DISTANCE = 80;
+export const STATION_GLOW_RADIUS = 50;
