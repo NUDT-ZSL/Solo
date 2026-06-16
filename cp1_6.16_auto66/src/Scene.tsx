@@ -400,6 +400,173 @@ function Bubbles({ enabled }: { enabled: boolean }) {
   );
 }
 
+function DynamicLighting() {
+  const ambientRef = useRef<THREE.AmbientLight>(null);
+  const directionalRef = useRef<THREE.DirectionalLight>(null);
+  const topLightRef = useRef<THREE.PointLight>(null);
+  const bottomLightRef = useRef<THREE.PointLight>(null);
+  const cyclePhase = useRef(0);
+  
+  const colorA = useMemo(() => new THREE.Color('#87CEEB'), []);
+  const colorB = useMemo(() => new THREE.Color('#FFD93D'), []);
+  const tempColor = useMemo(() => new THREE.Color(), []);
+  
+  useFrame((_, delta) => {
+    cyclePhase.current += delta * 0.05;
+    
+    const t = (Math.sin(cyclePhase.current) + 1) * 0.5;
+    
+    tempColor.copy(colorA).lerp(colorB, t);
+    
+    if (ambientRef.current) {
+      ambientRef.current.color.copy(tempColor).lerp(new THREE.Color('#ffffff'), 0.6);
+      ambientRef.current.intensity = 0.35 + t * 0.15;
+    }
+    
+    if (directionalRef.current) {
+      directionalRef.current.color.copy(tempColor).lerp(new THREE.Color('#FFFFFF'), 0.7);
+      directionalRef.current.intensity = 0.8 + t * 0.4;
+    }
+    
+    if (topLightRef.current) {
+      topLightRef.current.color.copy(tempColor);
+      topLightRef.current.intensity = 0.4 + t * 0.3;
+    }
+    
+    if (bottomLightRef.current) {
+      const warmT = (Math.sin(cyclePhase.current * 0.7 + Math.PI) + 1) * 0.5;
+      bottomLightRef.current.color.lerpColors(
+        new THREE.Color('#FFA07A'),
+        new THREE.Color('#FF6B6B'),
+        warmT
+      );
+      bottomLightRef.current.intensity = 0.2 + warmT * 0.2;
+    }
+  });
+  
+  return (
+    <>
+      <ambientLight ref={ambientRef} intensity={0.4} />
+      <directionalLight 
+        ref={directionalRef}
+        position={[5, 10, 5]} 
+        intensity={1} 
+        castShadow
+      />
+      <pointLight ref={topLightRef} position={[0, 4.5, 0]} intensity={0.5} color="#87CEEB" distance={20} />
+      <pointLight ref={bottomLightRef} position={[0, -2.5, 0]} intensity={0.3} color="#FFD93D" distance={15} />
+    </>
+  );
+}
+
+function WaterSurface() {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const materialRef = useRef<THREE.ShaderMaterial>(null);
+  
+  const uniforms = useMemo(() => ({
+    time: { value: 0 },
+    colorA: { value: new THREE.Color('#87CEEB') },
+    colorB: { value: new THREE.Color('#4ECDC4') },
+    surfaceColor: { value: new THREE.Color('#B0E0E6') }
+  }), []);
+  
+  const vertexShader = `
+    uniform float time;
+    varying vec2 vUv;
+    varying float vWaveHeight;
+    varying vec3 vNormal;
+    varying vec3 vViewPosition;
+    
+    void main() {
+      vUv = uv;
+      vec3 pos = position;
+      
+      float wave1 = sin(pos.x * 3.0 + time * 1.5) * 0.06;
+      float wave2 = sin(pos.z * 2.5 + time * 1.2) * 0.05;
+      float wave3 = sin((pos.x + pos.z) * 2.0 + time * 0.8) * 0.04;
+      float wave4 = sin((pos.x - pos.z) * 3.5 + time * 2.0) * 0.03;
+      
+      float totalWave = wave1 + wave2 + wave3 + wave4;
+      pos.y += totalWave;
+      vWaveHeight = totalWave;
+      
+      float dx = cos(pos.x * 3.0 + time * 1.5) * 3.0 * 0.06
+               + cos((pos.x + pos.z) * 2.0 + time * 0.8) * 2.0 * 0.04
+               + cos((pos.x - pos.z) * 3.5 + time * 2.0) * 3.5 * 0.03;
+      float dz = cos(pos.z * 2.5 + time * 1.2) * 2.5 * 0.05
+               + cos((pos.x + pos.z) * 2.0 + time * 0.8) * 2.0 * 0.04
+               - cos((pos.x - pos.z) * 3.5 + time * 2.0) * 3.5 * 0.03;
+      
+      vNormal = normalize(vec3(-dx, 1.0, -dz));
+      
+      vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+      vViewPosition = -mvPosition.xyz;
+      
+      gl_Position = projectionMatrix * mvPosition;
+    }
+  `;
+  
+  const fragmentShader = `
+    uniform float time;
+    uniform vec3 colorA;
+    uniform vec3 colorB;
+    uniform vec3 surfaceColor;
+    
+    varying vec2 vUv;
+    varying float vWaveHeight;
+    varying vec3 vNormal;
+    varying vec3 vViewPosition;
+    
+    void main() {
+      vec3 normal = normalize(vNormal);
+      vec3 viewDir = normalize(vViewPosition);
+      
+      float fresnel = pow(1.0 - max(dot(viewDir, normal), 0.0), 3.0);
+      
+      float colorMix = (vWaveHeight + 0.18) * 2.5;
+      colorMix = clamp(colorMix, 0.0, 1.0);
+      vec3 baseColor = mix(colorA, colorB, colorMix * 0.3 + 0.35);
+      
+      float highlight1 = smoothstep(0.08, 0.15, vWaveHeight);
+      float highlight2 = smoothstep(0.05, 0.12, vWaveHeight) * (1.0 - smoothstep(0.1, 0.15, vWaveHeight));
+      vec3 highlight = surfaceColor * (highlight1 * 0.5 + highlight2 * 0.3);
+      
+      float ripple1 = sin(vUv.x * 50.0 + time * 3.0) * 0.5 + 0.5;
+      float ripple2 = sin(vUv.y * 45.0 + time * 2.5) * 0.5 + 0.5;
+      float ripples = ripple1 * ripple2 * 0.15;
+      
+      vec3 finalColor = baseColor + highlight + vec3(ripples);
+      float finalAlpha = mix(0.25, 0.55, fresnel);
+      
+      finalColor = mix(finalColor, vec3(1.0), fresnel * 0.3);
+      
+      gl_FragColor = vec4(finalColor, finalAlpha);
+    }
+  `;
+  
+  useFrame(() => {
+    if (materialRef.current && materialRef.current.uniforms) {
+      materialRef.current.uniforms.time.value = Date.now() * 0.001;
+    }
+  });
+  
+  const waterMaterial = useMemo(() => new THREE.ShaderMaterial({
+    uniforms,
+    vertexShader,
+    fragmentShader,
+    transparent: true,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  }), [uniforms, vertexShader, fragmentShader]);
+  
+  return (
+    <mesh ref={meshRef} position={[0, 4.7, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <planeGeometry args={[17, 11, 64, 64]} />
+      <primitive object={waterMaterial} ref={materialRef} attach="material" />
+    </mesh>
+  );
+}
+
 function TankGlass() {
   const glassMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
     color: '#ffffff',
