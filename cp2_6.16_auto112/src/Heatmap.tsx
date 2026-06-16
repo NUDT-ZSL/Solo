@@ -5,6 +5,7 @@ interface HeatmapProps {
   data: IntersectionData[];
   width: number;
   height: number;
+  containerHeight?: number;
 }
 
 interface TooltipState {
@@ -17,6 +18,7 @@ interface TooltipState {
 const COLOR_LOW = { r: 59, g: 130, b: 246 };
 const COLOR_HIGH = { r: 239, g: 68, b: 68 };
 const MAX_TRAFFIC = 500;
+const BLUR_RADIUS = 8;
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
@@ -30,7 +32,7 @@ function getColor(value: number, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-const Heatmap: React.FC<HeatmapProps> = ({ data, width, height }) => {
+const Heatmap: React.FC<HeatmapProps> = ({ data, width, height, containerHeight = 800 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<TooltipState>({
@@ -39,15 +41,30 @@ const Heatmap: React.FC<HeatmapProps> = ({ data, width, height }) => {
     y: 0,
     traffic: 0
   });
-  const [opacity, setOpacity] = useState(1);
+  const [displayOpacity, setDisplayOpacity] = useState(1);
   const dataRef = useRef(data);
-  const animFrameRef = useRef<number>(0);
+  const renderPendingRef = useRef(false);
+  const offscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const blurredCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const hotspotRadiusRef = useRef(30);
+
+  useEffect(() => {
+    hotspotRadiusRef.current = Math.max(25, Math.min(width, height) / 14);
+  }, [width, height]);
 
   useEffect(() => {
     dataRef.current = data;
-    setOpacity(0);
-    const timer = setTimeout(() => setOpacity(1), 10);
-    return () => clearTimeout(timer);
+    renderPendingRef.current = true;
+  }, [data]);
+
+  useEffect(() => {
+    setDisplayOpacity(0);
+    const rafId = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setDisplayOpacity(1);
+      });
+    });
+    return () => cancelAnimationFrame(rafId);
   }, [data]);
 
   const drawHeatmap = useCallback(() => {
@@ -57,68 +74,102 @@ const Heatmap: React.FC<HeatmapProps> = ({ data, width, height }) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, width, height);
+    if (!offscreenCanvasRef.current) {
+      offscreenCanvasRef.current = document.createElement('canvas');
+    }
+    if (!blurredCanvasRef.current) {
+      blurredCanvasRef.current = document.createElement('canvas');
+    }
 
-    const offCanvas = document.createElement('canvas');
-    offCanvas.width = width;
-    offCanvas.height = height;
+    const offCanvas = offscreenCanvasRef.current;
+    const blurredCanvas = blurredCanvasRef.current;
+
+    if (offCanvas.width !== width || offCanvas.height !== height) {
+      offCanvas.width = width;
+      offCanvas.height = height;
+    }
+    if (blurredCanvas.width !== width || blurredCanvas.height !== height) {
+      blurredCanvas.width = width;
+      blurredCanvas.height = height;
+    }
+
     const offCtx = offCanvas.getContext('2d');
-    if (!offCtx) return;
+    const blurCtx = blurredCanvas.getContext('2d');
+    if (!offCtx || !blurCtx) return;
+
+    offCtx.clearRect(0, 0, width, height);
+    blurCtx.clearRect(0, 0, width, height);
 
     const currentData = dataRef.current;
-    const hotspotRadius = Math.max(25, Math.min(width, height) / 16);
+    const hotspotRadius = hotspotRadiusRef.current;
 
-    currentData.forEach((point) => {
+    for (let i = 0; i < currentData.length; i++) {
+      const point = currentData[i];
+      const alpha = Math.min(0.85, point.traffic / MAX_TRAFFIC);
+
       const gradient = offCtx.createRadialGradient(
         point.x, point.y, 0,
         point.x, point.y, hotspotRadius
       );
-      const alpha = Math.min(0.85, point.traffic / MAX_TRAFFIC);
       gradient.addColorStop(0, getColor(point.traffic, alpha));
-      gradient.addColorStop(0.5, getColor(point.traffic, alpha * 0.5));
+      gradient.addColorStop(0.4, getColor(point.traffic, alpha * 0.55));
+      gradient.addColorStop(0.75, getColor(point.traffic, alpha * 0.2));
       gradient.addColorStop(1, getColor(point.traffic, 0));
+
       offCtx.fillStyle = gradient;
       offCtx.beginPath();
       offCtx.arc(point.x, point.y, hotspotRadius, 0, Math.PI * 2);
       offCtx.fill();
-    });
+    }
 
-    ctx.filter = 'blur(8px)';
-    ctx.drawImage(offCanvas, 0, 0);
-    ctx.filter = 'none';
+    blurCtx.filter = `blur(${BLUR_RADIUS}px)`;
+    blurCtx.drawImage(offCanvas, 0, 0);
+
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(blurredCanvas, 0, 0);
   }, [width, height]);
 
   useEffect(() => {
     let running = true;
-    let lastTime = 0;
-    const targetFPS = 30;
-    const frameInterval = 1000 / targetFPS;
+    let rafId = 0;
 
-    const render = (time: number) => {
+    const render = () => {
       if (!running) return;
-      if (time - lastTime >= frameInterval) {
+
+      if (renderPendingRef.current) {
+        const start = performance.now();
         drawHeatmap();
-        lastTime = time;
+        const elapsed = performance.now() - start;
+        if (elapsed > 50) {
+          console.warn(`Heatmap render took ${elapsed.toFixed(1)}ms (target <50ms)`);
+        }
+        renderPendingRef.current = false;
       }
-      animFrameRef.current = requestAnimationFrame(render);
+
+      rafId = requestAnimationFrame(render);
     };
 
-    animFrameRef.current = requestAnimationFrame(render);
+    rafId = requestAnimationFrame(render);
 
     return () => {
       running = false;
-      cancelAnimationFrame(animFrameRef.current);
+      cancelAnimationFrame(rafId);
     };
   }, [drawHeatmap]);
+
+  useEffect(() => {
+    renderPendingRef.current = true;
+  }, [width, height]);
 
   const findNearestIntersection = useCallback(
     (mouseX: number, mouseY: number): IntersectionData | null => {
       const currentData = dataRef.current;
       let nearest: IntersectionData | null = null;
       let minDist = Infinity;
-      const threshold = 30;
+      const threshold = hotspotRadiusRef.current;
 
-      for (const point of currentData) {
+      for (let i = 0; i < currentData.length; i++) {
+        const point = currentData[i];
         const dist = Math.sqrt((point.x - mouseX) ** 2 + (point.y - mouseY) ** 2);
         if (dist < minDist && dist < threshold) {
           minDist = dist;
@@ -145,14 +196,25 @@ const Heatmap: React.FC<HeatmapProps> = ({ data, width, height }) => {
       const point = findNearestIntersection(mouseX, mouseY);
       if (point) {
         const containerRect = container.getBoundingClientRect();
-        let tooltipX = e.clientX - containerRect.left + 15;
-        let tooltipY = e.clientY - containerRect.top - 30;
+        const tooltipWidth = 145;
+        const tooltipHeight = 36;
+        const offsetX = 18;
+        const offsetY = 12;
 
-        if (tooltipX + 100 > containerRect.width) {
-          tooltipX = e.clientX - containerRect.left - 115;
+        let tooltipX = e.clientX - containerRect.left + offsetX;
+        let tooltipY = e.clientY - containerRect.top - tooltipHeight - offsetY;
+
+        if (tooltipX + tooltipWidth > containerRect.width - 8) {
+          tooltipX = e.clientX - containerRect.left - tooltipWidth - offsetX;
         }
-        if (tooltipY < 0) {
-          tooltipY = e.clientY - containerRect.top + 15;
+        if (tooltipY < 8) {
+          tooltipY = e.clientY - containerRect.top + offsetY;
+        }
+        if (tooltipY + tooltipHeight > containerRect.height - 8) {
+          tooltipY = e.clientY - containerRect.top - tooltipHeight - offsetY;
+        }
+        if (tooltipX < 8) {
+          tooltipX = e.clientX - containerRect.left + offsetX;
         }
 
         setTooltip({
@@ -178,10 +240,11 @@ const Heatmap: React.FC<HeatmapProps> = ({ data, width, height }) => {
       style={{
         position: 'relative',
         width: '100%',
-        height: 800,
+        height: containerHeight,
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        overflow: 'hidden'
       }}
     >
       <canvas
@@ -195,9 +258,10 @@ const Heatmap: React.FC<HeatmapProps> = ({ data, width, height }) => {
           maxWidth: width,
           height: 'auto',
           borderRadius: 12,
-          transition: 'opacity 0.3s ease',
-          opacity,
-          cursor: 'crosshair'
+          transition: 'opacity 0.3s ease-in-out',
+          opacity: displayOpacity,
+          cursor: 'crosshair',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.3)'
         }}
       />
 
@@ -208,24 +272,27 @@ const Heatmap: React.FC<HeatmapProps> = ({ data, width, height }) => {
           left: 20,
           display: 'flex',
           flexDirection: 'column',
-          gap: 4
+          gap: 6,
+          pointerEvents: 'none'
         }}
       >
         <div
           style={{
-            width: 150,
-            height: 12,
-            borderRadius: 6,
-            background: 'linear-gradient(to right, #3b82f6, #ef4444)'
+            width: 160,
+            height: 14,
+            borderRadius: 7,
+            background: 'linear-gradient(to right, #3b82f6, #a855f7, #ef4444)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
           }}
         />
         <div
           style={{
             display: 'flex',
             justifyContent: 'space-between',
-            width: 150,
+            width: 160,
             fontSize: 10,
-            color: '#9ca3af'
+            color: '#9ca3af',
+            fontWeight: 500
           }}
         >
           <span>低流量</span>
@@ -240,15 +307,18 @@ const Heatmap: React.FC<HeatmapProps> = ({ data, width, height }) => {
             left: tooltip.x,
             top: tooltip.y,
             backgroundColor: '#1f2937',
-            opacity: 0.95,
+            opacity: 0.96,
             borderRadius: 8,
-            padding: '6px 12px',
+            padding: '8px 14px',
             color: '#ffffff',
             fontSize: 12,
+            fontWeight: 500,
             pointerEvents: 'none',
             whiteSpace: 'nowrap',
             fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-            zIndex: 10
+            zIndex: 10,
+            boxShadow: '0 6px 20px rgba(0,0,0,0.5)',
+            transition: 'opacity 0.12s ease, transform 0.08s ease'
           }}
         >
           车流量: {tooltip.traffic} 辆/小时
