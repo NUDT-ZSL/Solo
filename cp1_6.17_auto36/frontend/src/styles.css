@@ -359,12 +359,15 @@ body {
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
-  transition: all var(--transition-fast);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  border: 2px solid transparent;
+  will-change: border-color, box-shadow;
 }
 
-.kanban-column.drop-target {
-  background: #E3F2FD;
-  border: 2px dashed var(--info-color);
+.kanban-column.column-highlight {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(255, 143, 0, 0.15), var(--shadow-sm);
+  background: linear-gradient(180deg, rgba(255, 143, 0, 0.03) 0%, var(--card-bg) 100%);
 }
 
 .column-header {
@@ -405,10 +408,11 @@ body {
   padding: 12px;
   box-shadow: var(--shadow-sm);
   cursor: grab;
-  transition: all var(--transition-fast);
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease, opacity 0.15s ease;
   position: relative;
   border: 1px solid transparent;
   user-select: none;
+  will-change: transform, opacity, box-shadow;
 }
 
 .kanban-card:hover {
@@ -417,18 +421,35 @@ body {
   border-color: var(--accent-color);
 }
 
-.kanban-card.dragging {
+.kanban-card:active {
   cursor: grabbing;
-  opacity: 0.5;
 }
 
-.kanban-card.pulsing {
-  animation: pulse 0.3s ease-in-out;
+.kanban-card.card-source-hidden {
+  visibility: hidden;
+  opacity: 0;
+  transform: scale(0.98);
+  transition: opacity 0.1s ease, transform 0.1s ease;
 }
 
-@keyframes pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
+.kanban-card.card-drop-pulse {
+  animation: drop-pulse 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: center center;
+}
+
+@keyframes drop-pulse {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(0.95);
+  }
+  70% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .risk-pulse {
@@ -531,25 +552,54 @@ body {
   color: var(--text-secondary);
 }
 
-.drop-placeholder {
-  height: 80px;
-  border: 2px dashed var(--accent-color);
+.drop-placeholder-source {
+  border: 2px dashed #CFD8DC;
   border-radius: var(--radius);
-  background: rgba(255, 143, 0, 0.05);
-  transition: all var(--transition-fast);
+  background: repeating-linear-gradient(
+    45deg,
+    #F5F7FA,
+    #F5F7FA 6px,
+    #ECEFF1 6px,
+    #ECEFF1 12px
+  );
+  transition: all 0.15s ease;
+  will-change: height;
 }
 
-.ghost-card {
+.drop-placeholder {
+  height: 100px;
+  border: 2px dashed var(--accent-color);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(255, 143, 0, 0.08) 0%, rgba(255, 143, 0, 0.02) 100%);
+  transition: all 0.15s ease;
+  animation: placeholder-breathe 1.5s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes placeholder-breathe {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(0.99);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.ghost-card-following {
   position: absolute;
-  width: 200px;
   background: white;
   border-radius: var(--radius);
   padding: 12px;
-  box-shadow: var(--shadow-md);
-  z-index: 1000;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18), 0 4px 8px rgba(0, 0, 0, 0.1);
+  z-index: 9999;
   pointer-events: none;
-  opacity: 0.8;
-  transform: rotate(2deg);
+  opacity: 0.7;
+  transform-origin: center center;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .modal-overlay {

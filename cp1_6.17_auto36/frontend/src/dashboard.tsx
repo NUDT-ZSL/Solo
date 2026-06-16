@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { ProgressStats, WorkloadItem, RiskAlert, TeamMember, Card } from './types';
+import type { ProgressStats, WorkloadItem, RiskAlert, TeamMember } from './types';
 import { api } from './api';
 
 interface DashboardProps {

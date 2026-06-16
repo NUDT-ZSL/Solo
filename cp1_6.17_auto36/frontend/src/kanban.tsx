@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import type { Card, CardStatus, CardTag, TeamMember } from './types';
 import { COLUMN_LABELS, TAG_COLORS, TAG_LABELS } from './types';
 import { api } from './api';
@@ -20,12 +20,12 @@ interface DragData {
   cardHeight: number;
   offsetX: number;
   offsetY: number;
-  startX: number;
-  startY: number;
   sourceColumn: CardStatus;
   sourceIndex: number;
   targetColumn: CardStatus;
   targetIndex: number;
+  lastClientX: number;
+  lastClientY: number;
 }
 
 export const Kanban: React.FC<KanbanProps> = ({
@@ -40,6 +40,7 @@ export const Kanban: React.FC<KanbanProps> = ({
   const [targetColumn, setTargetColumn] = useState<CardStatus | null>(null);
   const [targetIndex, setTargetIndex] = useState<number>(-1);
   const [pulsingCardId, setPulsingCardId] = useState<string | null>(null);
+  const [cardHeight, setCardHeight] = useState<number>(100);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newCard, setNewCard] = useState({
     title: '',
@@ -49,151 +50,143 @@ export const Kanban: React.FC<KanbanProps> = ({
     tag: 'feature' as CardTag,
     assignee: ''
   });
-  
+
   const boardRef = useRef<HTMLDivElement>(null);
   const ghostRef = useRef<HTMLDivElement>(null);
   const dragDataRef = useRef<DragData | null>(null);
   const rafIdRef = useRef<number | null>(null);
   const columnRefs = useRef<Map<CardStatus, HTMLDivElement>>(new Map());
-  
+
   const getMemberName = useCallback((id: string) => {
     return teamMembers.find(m => m.id === id)?.name || id;
   }, [teamMembers]);
-  
+
   const getCardsByStatus = useCallback((status: CardStatus) => {
     return cards.filter(c => c.status === status);
   }, [cards]);
-  
-  const updateGhostPosition = useCallback((clientX: number, clientY: number) => {
+
+  const updateGhostPosition = useCallback(() => {
     if (!ghostRef.current || !dragDataRef.current || !boardRef.current) return;
-    
+    const data = dragDataRef.current;
     const boardRect = boardRef.current.getBoundingClientRect();
-    const x = clientX - boardRect.left - dragDataRef.current.offsetX;
-    const y = clientY - boardRect.top - dragDataRef.current.offsetY;
-    
+    const x = data.lastClientX - boardRect.left - data.offsetX;
+    const y = data.lastClientY - boardRect.top - data.offsetY;
     ghostRef.current.style.transform = `translate3d(${x}px, ${y}px, 0)`;
   }, []);
-  
-  const detectDropTarget = useCallback((clientX: number, clientY: number) => {
+
+  const detectDropTarget = useCallback(() => {
     if (!dragDataRef.current) return;
-    
+    const data = dragDataRef.current;
     let foundColumn: CardStatus | null = null;
     let foundIndex = -1;
-    
+
     columnRefs.current.forEach((colEl, colStatus) => {
       const colRect = colEl.getBoundingClientRect();
-      
-      if (clientX >= colRect.left && clientX <= colRect.right) {
+      if (data.lastClientX >= colRect.left && data.lastClientX <= colRect.right) {
         foundColumn = colStatus;
-        
         const contentEl = colEl.querySelector<HTMLDivElement>('.column-content');
         if (!contentEl) return;
-        
-        const cardEls = contentEl.querySelectorAll<HTMLDivElement>('[data-card]');
-        const placeholderEl = contentEl.querySelector<HTMLDivElement>('.drop-placeholder');
-        
-        if (cardEls.length === 0) {
+        const cardEls = Array.from(contentEl.querySelectorAll<HTMLDivElement>('[data-card]'));
+        const nonDraggingCards = cardEls.filter(el => el.dataset.card !== data.cardId);
+
+        if (nonDraggingCards.length === 0) {
           foundIndex = 0;
           return;
         }
-        
-        let closestIdx = cardEls.length;
-        let closestDistance = Infinity;
-        
-        cardEls.forEach((cardEl, idx) => {
+
+        let closestIdx = nonDraggingCards.length;
+        for (let idx = 0; idx < nonDraggingCards.length; idx++) {
+          const cardEl = nonDraggingCards[idx];
           const cardRect = cardEl.getBoundingClientRect();
           const cardMiddle = cardRect.top + cardRect.height / 2;
-          const distance = Math.abs(clientY - cardMiddle);
-          
-          if (distance < closestDistance) {
-            closestDistance = distance;
-            closestIdx = clientY < cardMiddle ? idx : idx + 1;
+          if (data.lastClientY < cardMiddle) {
+            closestIdx = idx;
+            break;
           }
-        });
-        
+        }
         foundIndex = closestIdx;
       }
     });
-    
-    if (foundColumn && (foundColumn !== dragDataRef.current.targetColumn || foundIndex !== dragDataRef.current.targetIndex)) {
-      dragDataRef.current.targetColumn = foundColumn;
-      dragDataRef.current.targetIndex = foundIndex;
-      setTargetColumn(foundColumn);
-      setTargetIndex(foundIndex);
+
+    if (foundColumn) {
+      const columnChanged = foundColumn !== data.targetColumn;
+      const indexChanged = foundIndex !== data.targetIndex;
+      if (columnChanged || indexChanged) {
+        data.targetColumn = foundColumn;
+        data.targetIndex = foundIndex;
+        setTargetColumn(foundColumn);
+        setTargetIndex(foundIndex);
+      }
     }
   }, []);
-  
+
+  const animationLoop = useCallback(() => {
+    updateGhostPosition();
+    detectDropTarget();
+    rafIdRef.current = requestAnimationFrame(animationLoop);
+  }, [updateGhostPosition, detectDropTarget]);
+
   const handleDragStart = useCallback((e: React.MouseEvent, card: Card) => {
     e.preventDefault();
     e.stopPropagation();
-    
     const cardEl = e.currentTarget as HTMLDivElement;
     const cardRect = cardEl.getBoundingClientRect();
     const boardRect = boardRef.current?.getBoundingClientRect();
-    
     if (!boardRect) return;
-    
+
     const sourceCards = getCardsByStatus(card.status);
     const sourceIndex = sourceCards.findIndex(c => c.id === card.id);
-    
+
     dragDataRef.current = {
       cardId: card.id,
       cardWidth: cardRect.width,
       cardHeight: cardRect.height,
       offsetX: e.clientX - cardRect.left,
       offsetY: e.clientY - cardRect.top,
-      startX: e.clientX,
-      startY: e.clientY,
       sourceColumn: card.status,
       sourceIndex,
       targetColumn: card.status,
-      targetIndex: sourceIndex
+      targetIndex: sourceIndex,
+      lastClientX: e.clientX,
+      lastClientY: e.clientY
     };
-    
+
+    setCardHeight(cardRect.height);
     setDraggingCardId(card.id);
     setTargetColumn(card.status);
     setTargetIndex(sourceIndex);
-    
+
     if (ghostRef.current) {
       ghostRef.current.style.width = `${cardRect.width}px`;
+      ghostRef.current.style.height = `${cardRect.height}px`;
       ghostRef.current.style.display = 'block';
-      ghostRef.current.style.transform = `translate3d(${cardRect.left - boardRect.left}px, ${cardRect.top - boardRect.top}px, 0)`;
+      const startX = cardRect.left - boardRect.left;
+      const startY = cardRect.top - boardRect.top;
+      ghostRef.current.style.transform = `translate3d(${startX}px, ${startY}px, 0)`;
     }
-    
+
     const handleMouseMove = (moveEvent: MouseEvent) => {
       moveEvent.preventDefault();
-      
-      if (rafIdRef.current) {
-        cancelAnimationFrame(rafIdRef.current);
-      }
-      
-      rafIdRef.current = requestAnimationFrame(() => {
-        updateGhostPosition(moveEvent.clientX, moveEvent.clientY);
-        detectDropTarget(moveEvent.clientX, moveEvent.clientY);
-      });
+      if (!dragDataRef.current) return;
+      dragDataRef.current.lastClientX = moveEvent.clientX;
+      dragDataRef.current.lastClientY = moveEvent.clientY;
     };
-    
-    const handleMouseUp = async (_upEvent: MouseEvent) => {
+
+    const handleMouseUp = async () => {
       if (rafIdRef.current) {
         cancelAnimationFrame(rafIdRef.current);
         rafIdRef.current = null;
       }
-      
       const dragData = dragDataRef.current;
-      const currentDraggingId = draggingCardId;
-      
       if (ghostRef.current) {
         ghostRef.current.style.display = 'none';
       }
-      
       if (dragData && dragData.sourceColumn !== dragData.targetColumn) {
         try {
           const updatedCard = await api.updateCardStatus(dragData.cardId, dragData.targetColumn);
           const newCards = cards.map(c => c.id === dragData.cardId ? updatedCard : c);
           onCardsChange(newCards);
-          
           setPulsingCardId(dragData.cardId);
-          
           setTimeout(() => {
             setPulsingCardId(null);
           }, 300);
@@ -201,25 +194,23 @@ export const Kanban: React.FC<KanbanProps> = ({
           console.error('Failed to update card status:', err);
         }
       }
-      
       dragDataRef.current = null;
       setDraggingCardId(null);
       setTargetColumn(null);
       setTargetIndex(-1);
-      
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-    
+
+    rafIdRef.current = requestAnimationFrame(animationLoop);
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  }, [cards, draggingCardId, getCardsByStatus, onCardsChange, updateGhostPosition, detectDropTarget]);
-  
+  }, [cards, getCardsByStatus, onCardsChange, animationLoop]);
+
   const handleAddCard = async () => {
     if (!newCard.title.trim() || !newCard.assignee) return;
-    
     try {
-      const card = await api.createCard({
+      const createdCard = await api.createCard({
         title: newCard.title,
         description: newCard.description,
         estimateDays: newCard.estimateDays,
@@ -228,8 +219,7 @@ export const Kanban: React.FC<KanbanProps> = ({
         assignee: newCard.assignee,
         projectId
       });
-      
-      onCardsChange([...cards, card]);
+      onCardsChange([...cards, createdCard]);
       setShowAddModal(false);
       setNewCard({
         title: '',
@@ -243,17 +233,17 @@ export const Kanban: React.FC<KanbanProps> = ({
       console.error('Failed to create card:', err);
     }
   };
-  
-  const renderCard = (card: Card, index: number) => {
+
+  const renderCard = (card: Card) => {
     const isDragging = draggingCardId === card.id;
     const isPulsing = pulsingCardId === card.id;
     const isHighRisk = highRiskCardIds.has(card.id);
-    
+
     return (
       <div
         key={card.id}
         data-card={card.id}
-        className={`kanban-card ${isDragging ? 'card-source' : ''} ${isPulsing ? 'card-pulse' : ''}`}
+        className={`kanban-card ${isDragging ? 'card-source-hidden' : ''} ${isPulsing ? 'card-drop-pulse' : ''}`}
         onMouseDown={(e) => handleDragStart(e, card)}
       >
         {isHighRisk && (
@@ -261,21 +251,14 @@ export const Kanban: React.FC<KanbanProps> = ({
             <span className="risk-icon">!</span>
           </div>
         )}
-        
         <div className="card-header">
-          <span 
-            className="card-tag" 
-            style={{ backgroundColor: TAG_COLORS[card.tag] }}
-          >
+          <span className="card-tag" style={{ backgroundColor: TAG_COLORS[card.tag] }}>
             {TAG_LABELS[card.tag]}
           </span>
           <span className="card-estimate">{card.estimateDays}天</span>
         </div>
-        
         <h4 className="card-title">{card.title}</h4>
-        
         <p className="card-description">{card.description}</p>
-        
         {card.dependencyId && (
           <div className="card-dependency">
             <span className="dependency-label">依赖: </span>
@@ -284,7 +267,6 @@ export const Kanban: React.FC<KanbanProps> = ({
             </span>
           </div>
         )}
-        
         <div className="card-footer">
           <span className="card-assignee">
             👤 {getMemberName(card.assignee)}
@@ -293,24 +275,20 @@ export const Kanban: React.FC<KanbanProps> = ({
       </div>
     );
   };
-  
+
   const renderGhostCard = () => {
     if (!draggingCardId) return null;
-    
     const card = cards.find(c => c.id === draggingCardId);
     if (!card) return null;
-    
+
     return (
       <div
         ref={ghostRef}
-        className="ghost-card"
+        className="ghost-card-following"
         style={{ display: 'none' }}
       >
         <div className="card-header">
-          <span 
-            className="card-tag" 
-            style={{ backgroundColor: TAG_COLORS[card.tag] }}
-          >
+          <span className="card-tag" style={{ backgroundColor: TAG_COLORS[card.tag] }}>
             {TAG_LABELS[card.tag]}
           </span>
           <span className="card-estimate">{card.estimateDays}天</span>
@@ -325,7 +303,7 @@ export const Kanban: React.FC<KanbanProps> = ({
       </div>
     );
   };
-  
+
   return (
     <div className="kanban-container">
       <div className="kanban-header">
@@ -339,53 +317,89 @@ export const Kanban: React.FC<KanbanProps> = ({
           </button>
         </div>
       </div>
-      
+
       <div className="kanban-board" ref={boardRef}>
         {COLUMNS.map(status => {
           const columnCards = getCardsByStatus(status);
           const isDropTarget = targetColumn === status && draggingCardId !== null;
-          const isSourceColumn = dragDataRef.current?.sourceColumn === status;
-          
+
+          const renderCardsWithPlaceholders = () => {
+            const elements: React.ReactNode[] = [];
+            let placeholderInserted = false;
+
+            columnCards.forEach((card) => {
+              const isCurrentDragging = card.id === draggingCardId;
+
+              if (isCurrentDragging) {
+                elements.push(
+                  <div
+                    key={`placeholder-source-${card.id}`}
+                    className="drop-placeholder-source"
+                    style={{ height: `${cardHeight}px` }}
+                  />
+                );
+                return;
+              }
+
+              const currentIndex = elements.filter(el => 
+                el && typeof el === 'object' && 'key' in el && 
+                String((el as any).key).startsWith('placeholder-target-')
+              ).length + elements.filter(el =>
+                el && typeof el === 'object' && 'key' in el &&
+                !String((el as any).key).startsWith('placeholder-')
+              ).length;
+
+              if (isDropTarget && targetIndex === currentIndex && !placeholderInserted) {
+                elements.push(
+                  <div
+                    key={`placeholder-target-${status}-${currentIndex}`}
+                    className="drop-placeholder"
+                  />
+                );
+                placeholderInserted = true;
+              }
+
+              elements.push(renderCard(card));
+            });
+
+            const nonDraggingCount = columnCards.filter(c => c.id !== draggingCardId).length;
+            if (isDropTarget && targetIndex >= nonDraggingCount && !placeholderInserted) {
+              elements.push(
+                <div
+                  key={`placeholder-target-${status}-end`}
+                  className="drop-placeholder"
+                />
+              );
+            }
+
+            return elements;
+          };
+
           return (
             <div
               key={status}
               data-column={status}
               ref={el => { if (el) columnRefs.current.set(status, el); }}
-              className={`kanban-column ${isDropTarget ? 'column-drop-highlight' : ''}`}
+              className={`kanban-column ${isDropTarget ? 'column-highlight' : ''}`}
             >
               <div className="column-header">
                 <h3>{COLUMN_LABELS[status]}</h3>
                 <span className="column-count">{columnCards.length}</span>
               </div>
-              
               <div className="column-content">
-                {columnCards.map((card, index) => {
-                  const showPlaceholder = isDropTarget && targetIndex === index && draggingCardId !== card.id;
-                  
-                  return (
-                    <React.Fragment key={card.id}>
-                      {showPlaceholder && <div className="drop-placeholder" />}
-                      {renderCard(card, index)}
-                    </React.Fragment>
-                  );
-                })}
-                
-                {isDropTarget && targetIndex >= columnCards.length && (
-                  <div className="drop-placeholder" />
-                )}
+                {renderCardsWithPlaceholders()}
               </div>
             </div>
           );
         })}
-        
+
         {renderGhostCard()}
       </div>
-      
+
       {showAddModal && (
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <h3>添加新需求</h3>
-            
             <div className="form-group">
               <label>标题 *</label>
               <input
@@ -395,7 +409,6 @@ export const Kanban: React.FC<KanbanProps> = ({
                 placeholder="输入需求标题"
               />
             </div>
-            
             <div className="form-group">
               <label>描述</label>
               <textarea
@@ -405,7 +418,6 @@ export const Kanban: React.FC<KanbanProps> = ({
                 rows={3}
               />
             </div>
-            
             <div className="form-row">
               <div className="form-group">
                 <label>估时 (人天) *</label>
@@ -417,7 +429,6 @@ export const Kanban: React.FC<KanbanProps> = ({
                   onChange={e => setNewCard({ ...newCard, estimateDays: parseFloat(e.target.value) || 0 })}
                 />
               </div>
-              
               <div className="form-group">
                 <label>标签 *</label>
                 <select
@@ -431,7 +442,6 @@ export const Kanban: React.FC<KanbanProps> = ({
                 </select>
               </div>
             </div>
-            
             <div className="form-group">
               <label>前置依赖</label>
               <select
@@ -444,7 +454,6 @@ export const Kanban: React.FC<KanbanProps> = ({
                 ))}
               </select>
             </div>
-            
             <div className="form-group">
               <label>负责人 *</label>
               <select
@@ -457,13 +466,12 @@ export const Kanban: React.FC<KanbanProps> = ({
                 ))}
               </select>
             </div>
-            
             <div className="modal-actions">
               <button className="btn btn-default" onClick={() => setShowAddModal(false)}>
                 取消
               </button>
-              <button 
-                className="btn btn-primary" 
+              <button
+                className="btn btn-primary"
                 onClick={handleAddCard}
                 disabled={!newCard.title.trim() || !newCard.assignee}
               >
