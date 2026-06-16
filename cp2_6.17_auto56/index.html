@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>延迟补偿卡牌对战</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0d1117;
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      color: #ffffff;
+      user-select: none;
+    }
+
+    #gameRoot {
+      width: 100vw;
+      height: 100vh;
+      min-width: 1280px;
+      min-height: 720px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .game-container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      background: #0d1117;
+      overflow: hidden;
+    }
+
+    .table-area {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 800px;
+      height: 550px;
+      background: #1a1a2e;
+      border-radius: 16px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.5), inset 0 0 60px rgba(0, 0, 0, 0.3);
+    }
+
+    .stats-panel {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 100;
+    }
+
+    .latency-indicator, .queue-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    .latency-label, .queue-label {
+      color: #8b949e;
+    }
+
+    .latency-value, .queue-value {
+      font-weight: bold;
+      font-family: 'Consolas', monospace;
+    }
+
+    .latency-green .latency-value { color: #66bb6a; }
+    .latency-yellow .latency-value { color: #ffa726; }
+    .latency-red .latency-value { color: #ef5350; }
+
+    .player-panel {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 12px;
+    }
+
+    .ai-panel {
+      top: 80px;
+      left: 20px;
+    }
+
+    .local-panel {
+      bottom: 220px;
+      left: 20px;
+    }
+
+    .player-avatar {
+      flex-shrink: 0;
+    }
+
+    .avatar-circle {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #6e7681;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 16px;
+    }
+
+    .avatar-circle.local {
+      background: linear-gradient(135deg, #448aff, #2979ff);
+      box-shadow: 0 0 12px rgba(68, 138, 255, 0.4);
+    }
+
+    .ai-avatar .avatar-circle {
+      background: linear-gradient(135deg, #6e7681, #484f58);
+    }
+
+    .player-info {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .player-name {
+      font-size: 16px;
+      font-weight: bold;
+    }
+
+    .player-status {
+      font-size: 12px;
+      color: #8b949e;
+    }
+
+    .hand-count {
+      font-size: 13px;
+      color: #c9d1d9;
+    }
+
+    .hp-bar-container {
+      position: relative;
+      width: 160px;
+      height: 16px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .hp-bar {
+      height: 100%;
+      border-radius: 8px;
+      transition: width 0.3s ease-out, background-color 0.3s;
+    }
+
+    .hp-green { background: linear-gradient(90deg, #66bb6a, #43a047); }
+    .hp-orange { background: linear-gradient(90deg, #ffa726, #fb8c00); }
+    .hp-red { background: linear-gradient(90deg, #ef5350, #e53935); }
+
+    .hp-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 11px;
+      font-weight: bold;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    }
+
+    .turn-indicator {
+      position: absolute;
+      bottom: 190px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 24px;
+      background: rgba(68, 138, 255, 0.15);
+      border: 2px solid rgba(68, 138, 255, 0.5);
+      border-radius: 24px;
+      font-size: 16px;
+      font-weight: bold;
+      color: #448aff;
+      animation: pulse 0.6s ease-in-out infinite alternate;
+    }
+
+    @keyframes pulse {
+      from { transform: translateX(-50%) scale(1); }
+      to { transform: translateX(-50%) scale(1.08); }
+    }
+
+    .play-area {
+      position: absolute;
+      left: 50%;
+      top: 42%;
+      transform: translate(-50%, -50%);
+      width: 240px;
+      height: 120px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      border: 2px dashed rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .play-flash {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      border-radius: 12px;
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .play-flash.play {
+      background: rgba(68, 138, 255, 0.4);
+      animation: playFlash 0.15s ease-out;
+    }
+
+    .play-flash.rollback {
+      background: rgba(255, 82, 82, 0.4);
+      animation: rollbackFlash 0.3s ease-out;
+    }
+
+    @keyframes playFlash {
+      0% { opacity: 0; }
+      50% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    @keyframes rollbackFlash {
+      0% { opacity: 0; }
+      30% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    .last-played {
+      position: relative;
+      z-index: 1;
+    }
+
+    .played-card {
+      width: 80px;
+      height: 100px;
+      background: linear-gradient(145deg, #2a3a5a, #1a2744);
+      border-radius: 8px;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+
+    .played-card-name {
+      font-size: 12px;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .played-card-type {
+      font-size: 10px;
+      color: #8b949e;
+    }
+
+    .played-card-attack {
+      font-size: 18px;
+      font-weight: bold;
+      color: #ff6b6b;
+    }
+
+    .hand-area {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      padding: 20px;
+      z-index: 10;
+    }
+
+    .card {
+      width: 60px;
+      height: 90px;
+      background: linear-gradient(145deg, #1a237e, #0d1442);
+      border-radius: 8px;
+      border: 2px solid transparent;
+      cursor: grab;
+      transition: transform 0.15s ease-out, border-color 0.15s ease-out, box-shadow 0.15s ease-out;
+      flex-shrink: 0;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .card:hover {
+      transform: translateY(-12px) scale(1.1);
+      border-color: #ffd700;
+      box-shadow: 0 8px 20px rgba(255, 215, 0, 0.3);
+      cursor: grab;
+      z-index: 20;
+    }
+
+    .card.dragging {
+      cursor: grabbing;
+      transform: scale(1.05);
+      box-shadow: 0 12px 30px rgba(68, 138, 255, 0.5);
+      border-color: #448aff;
+    }
+
+    .card-inner {
+      width: 100%;
+      height: 100%;
+      padding: 6px 4px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-name {
+      font-size: 11px;
+      font-weight: bold;
+      text-align: center;
+      line-height: 1.2;
+      word-break: break-all;
+    }
+
+    .card-type {
+      font-size: 9px;
+      color: #a0a8c0;
+    }
+
+    .card-attack {
+      font-size: 14px;
+      font-weight: bold;
+      color: #ff6b6b;
+    }
+
+    .ai-card {
+      pointer-events: none;
+    }
+
+    .game-over-screen {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 32px;
+      padding: 48px 64px;
+      background: rgba(26, 26, 46, 0.95);
+      border-radius: 16px;
+      box-shadow: 0 0 40px rgba(68, 138, 255, 0.3);
+    }
+
+    .game-over-title {
+      font-size: 36px;
+      font-weight: bold;
+      background: linear-gradient(135deg, #ffd700, #ff8c00);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .game-over-stats {
+      display: flex;
+      gap: 32px;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #8b949e;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #448aff;
+    }
+
+    .restart-btn {
+      padding: 12px 48px;
+      font-size: 16px;
+      font-weight: bold;
+      color: white;
+      background: linear-gradient(135deg, #448aff, #2979ff);
+      border: none;
+      border-radius: 24px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 4px 15px rgba(68, 138, 255, 0.4);
+    }
+
+    .restart-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(68, 138, 255, 0.6);
+    }
+
+    .restart-btn:active {
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <div id="gameRoot"></div>
+
+  <script type="module">
+    import { NetworkManager } from './src/client/network.ts';
+    import { CardGame } from './src/client/cardGame.ts';
+
+    async function main() {
+      const container = document.getElementById('gameRoot');
+      if (!container) {
+        console.error('Game root not found');
+        return;
+      }
+
+      const network = new NetworkManager();
+      
+      try {
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
+        await network.connect(wsUrl);
+        console.log('Network connected');
+      } catch (error) {
+        console.error('Failed to connect:', error);
+      }
+
+      const game = new CardGame(container, network);
+    }
+
+    main();
+  </script>
+</body>
+</html>
