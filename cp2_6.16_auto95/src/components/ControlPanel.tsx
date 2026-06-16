@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react'
+import { useRef, useEffect, useCallback, useState, useMemo } from 'react'
 import type { Earthquake } from '@/hooks/useEarthquakeData'
 import './ControlPanel.css'
 
@@ -9,6 +9,9 @@ interface ControlPanelProps {
   onMinMagnitudeChange: (value: number) => void
   onEarthquakeClick: (earthquake: Earthquake) => void
 }
+
+const ITEM_HEIGHT = 48
+const BUFFER_ITEMS = 3
 
 function formatTime(timestamp: number): string {
   const date = new Date(timestamp)
@@ -25,6 +28,39 @@ function getMagnitudeColor(magnitude: number): string {
   return '#ffdd55'
 }
 
+function getEarthquakeKey(eq: Earthquake): string {
+  return `${eq.longitude}-${eq.latitude}-${eq.timestamp}`
+}
+
+interface ListItemProps {
+  earthquake: Earthquake
+  isSelected: boolean
+  onClick: (eq: Earthquake) => void
+  onRef: (key: string, el: HTMLDivElement | null) => void
+}
+
+function ListItem({ earthquake, isSelected, onClick, onRef }: ListItemProps) {
+  const key = getEarthquakeKey(earthquake)
+
+  return (
+    <div
+      ref={(el) => onRef(key, el)}
+      className={`list-item ${isSelected ? 'selected' : ''}`}
+      onClick={() => onClick(earthquake)}
+    >
+      <div className="item-time">{formatTime(earthquake.timestamp)}</div>
+      <div
+        className="item-magnitude"
+        style={{ color: getMagnitudeColor(earthquake.magnitude) }}
+      >
+        M {earthquake.magnitude.toFixed(1)}
+      </div>
+      <div className="item-depth">{Math.round(earthquake.depth)} km</div>
+      <div className="item-region">{earthquake.region}</div>
+    </div>
+  )
+}
+
 export function ControlPanel({
   earthquakes,
   selectedEarthquake,
@@ -34,29 +70,81 @@ export function ControlPanel({
 }: ControlPanelProps) {
   const listRef = useRef<HTMLDivElement>(null)
   const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  const [scrollTop, setScrollTop] = useState(0)
+  const [containerHeight, setContainerHeight] = useState(0)
+
+  const { startIndex, endIndex, offsetY, totalHeight } = useMemo(() => {
+    const total = earthquakes.length
+    const totalHeight = total * ITEM_HEIGHT
+    const visibleCount = Math.ceil(containerHeight / ITEM_HEIGHT) + BUFFER_ITEMS * 2
+
+    let start = Math.floor(scrollTop / ITEM_HEIGHT) - BUFFER_ITEMS
+    start = Math.max(0, start)
+    let end = start + visibleCount
+    end = Math.min(total, end)
+
+    const offset = start * ITEM_HEIGHT
+
+    return {
+      startIndex: start,
+      endIndex: end,
+      offsetY: offset,
+      totalHeight
+    }
+  }, [earthquakes.length, scrollTop, containerHeight])
+
+  const visibleItems = useMemo(() => {
+    return earthquakes.slice(startIndex, endIndex)
+  }, [earthquakes, startIndex, endIndex])
+
+  useEffect(() => {
+    if (!listRef.current) return
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerHeight(entry.contentRect.height)
+      }
+    })
+
+    observer.observe(listRef.current)
+    return () => observer.disconnect()
+  }, [])
+
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    setScrollTop(e.currentTarget.scrollTop)
+  }, [])
+
+  const handleItemRef = useCallback((key: string, el: HTMLDivElement | null) => {
+    if (el) {
+      itemRefs.current.set(key, el)
+    } else {
+      itemRefs.current.delete(key)
+    }
+  }, [])
 
   useEffect(() => {
     if (selectedEarthquake && listRef.current) {
-      const key = `${selectedEarthquake.longitude}-${selectedEarthquake.latitude}-${selectedEarthquake.timestamp}`
-      const element = itemRefs.current.get(key)
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      const key = getEarthquakeKey(selectedEarthquake)
+      const index = earthquakes.findIndex((eq) => getEarthquakeKey(eq) === key)
+      if (index >= 0) {
+        const targetScroll = index * ITEM_HEIGHT - containerHeight / 2 + ITEM_HEIGHT / 2
+        listRef.current.scrollTo({
+          top: Math.max(0, targetScroll),
+          behavior: 'smooth'
+        })
       }
     }
-  }, [selectedEarthquake])
+  }, [selectedEarthquake, earthquakes, containerHeight])
 
   const handleSliderChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       onMinMagnitudeChange(parseFloat(e.target.value))
+      if (listRef.current) {
+        listRef.current.scrollTop = 0
+        setScrollTop(0)
+      }
     },
     [onMinMagnitudeChange]
-  )
-
-  const handleItemClick = useCallback(
-    (earthquake: Earthquake) => {
-      onEarthquakeClick(earthquake)
-    },
-    [onEarthquakeClick]
   )
 
   const isSelected = (eq: Earthquake) => {
@@ -93,35 +181,23 @@ export function ControlPanel({
         </div>
       </div>
 
-      <div className="list-container" ref={listRef}>
+      <div className="list-container" ref={listRef} onScroll={handleScroll}>
         {earthquakes.length === 0 ? (
           <div className="empty-state">暂无符合条件的地震记录</div>
         ) : (
-          earthquakes.map((eq) => {
-            const key = `${eq.longitude}-${eq.latitude}-${eq.timestamp}`
-            return (
-              <div
-                key={key}
-                ref={(el) => {
-                  if (el) {
-                    itemRefs.current.set(key, el)
-                  }
-                }}
-                className={`list-item ${isSelected(eq) ? 'selected' : ''}`}
-                onClick={() => handleItemClick(eq)}
-              >
-                <div className="item-time">{formatTime(eq.timestamp)}</div>
-                <div
-                  className="item-magnitude"
-                  style={{ color: getMagnitudeColor(eq.magnitude) }}
-                >
-                  M {eq.magnitude.toFixed(1)}
-                </div>
-                <div className="item-depth">{Math.round(eq.depth)} km</div>
-                <div className="item-region">{eq.region}</div>
-              </div>
-            )
-          })
+          <div style={{ height: totalHeight, position: 'relative' }}>
+            <div style={{ transform: `translateY(${offsetY}px)` }}>
+              {visibleItems.map((eq) => (
+                <ListItem
+                  key={getEarthquakeKey(eq)}
+                  earthquake={eq}
+                  isSelected={isSelected(eq)}
+                  onClick={onEarthquakeClick}
+                  onRef={handleItemRef}
+                />
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>
