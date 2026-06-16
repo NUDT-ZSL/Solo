@@ -49,51 +49,45 @@ export default function Cauldron({
   const [flashEffect, setFlashEffect] = useState(false);
   const [shakeEffect, setShakeEffect] = useState<'' | 'minor' | 'major'>('');
 
-  const animationRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const intervalIdRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
   const particleIdRef = useRef(0);
   const resultTriggeredRef = useRef(false);
+  const lastParticleTimeRef = useRef(0);
+  const brewResultDataRef = useRef<BrewResult | null>(null);
+  const isActiveRef = useRef(false);
+  const isBrewingRef = useRef(false);
   const liquidColor = mixIngredientColors(ingredientIds);
 
-  const createDefaultParticle = useCallback((): Particle => {
-    const centerX = 128;
-    const centerY = 130;
-    const angle = Math.random() * Math.PI * 2;
-    const speed = 0.8 + Math.random() * 1.8;
+  const onBrewStartRef = useRef(onBrewStart);
+  const onBrewCompleteRef = useRef(onBrewComplete);
+  const onInvalidRecipeRef = useRef(onInvalidRecipe);
 
-    return {
-      id: particleIdRef.current++,
-      x: centerX + (Math.random() - 0.5) * 70,
-      y: centerY,
-      vx: Math.cos(angle) * speed * 0.5,
-      vy: -speed,
-      size: 3 + Math.random() * 4,
-      opacity: 0.7,
-      color: liquidColor,
-      type: 'default',
-    };
-  }, [liquidColor]);
+  useEffect(() => { onBrewStartRef.current = onBrewStart; }, [onBrewStart]);
+  useEffect(() => { onBrewCompleteRef.current = onBrewComplete; }, [onBrewComplete]);
+  useEffect(() => { onInvalidRecipeRef.current = onInvalidRecipe; }, [onInvalidRecipe]);
+  useEffect(() => { isBrewingRef.current = isBrewing; }, [isBrewing]);
 
-  const createEventParticles = useCallback((type: EventType): Particle[] => {
+  const makeEventParticles = useCallback((type: EventType): Particle[] => {
     const newParticles: Particle[] = [];
-    const centerX = 128;
-    const centerY = 128;
-
+    const cx = 128;
+    const cy = 128;
     switch (type) {
       case 'success': {
+        const goldColors = ['#FFD700', '#FFA500', '#FFEC8B', '#FFF8DC'];
         for (let i = 0; i < 25; i++) {
           const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.2;
           const speed = 2 + Math.random() * 4;
-          const colors = ['#FFD700', '#FFA500', '#FFEC8B', '#FFF8DC'];
           newParticles.push({
             id: particleIdRef.current++,
-            x: centerX + (Math.random() - 0.5) * 60,
-            y: centerY,
+            x: cx + (Math.random() - 0.5) * 60,
+            y: cy,
             vx: Math.cos(angle) * speed + (Math.random() - 0.5) * 1.5,
             vy: Math.sin(angle) * speed,
             size: 4 + Math.random() * 6,
             opacity: 1,
-            color: colors[Math.floor(Math.random() * colors.length)],
+            color: goldColors[Math.floor(Math.random() * goldColors.length)],
             type: 'rise',
             gravity: 0.02,
           });
@@ -101,19 +95,19 @@ export default function Cauldron({
         break;
       }
       case 'minorBoom': {
+        const orangeColors = ['#FF6B35', '#FF8C42', '#FFA726', '#FFD54F'];
         for (let i = 0; i < 35; i++) {
           const angle = Math.random() * Math.PI * 2;
           const speed = 3 + Math.random() * 5;
-          const colors = ['#FF6B35', '#FF8C42', '#FFA726', '#FFD54F'];
           newParticles.push({
             id: particleIdRef.current++,
-            x: centerX,
-            y: centerY,
+            x: cx,
+            y: cy,
             vx: Math.cos(angle) * speed,
             vy: Math.sin(angle) * speed - 1,
             size: 3 + Math.random() * 5,
             opacity: 1,
-            color: colors[Math.floor(Math.random() * colors.length)],
+            color: orangeColors[Math.floor(Math.random() * orangeColors.length)],
             type: 'spark',
             gravity: 0.12,
           });
@@ -121,19 +115,20 @@ export default function Cauldron({
         break;
       }
       case 'majorBoom': {
+        const redColors = ['#8B0000', '#A52A2A', '#CD5C5C', '#F08080'];
+        const brownColors = ['#4A3728', '#5D4037', '#6D4C41', '#8D6E63'];
         for (let i = 0; i < 20; i++) {
           const angle = Math.random() * Math.PI * 2;
           const speed = 2 + Math.random() * 4;
-          const colors = ['#8B0000', '#A52A2A', '#CD5C5C', '#F08080'];
           newParticles.push({
             id: particleIdRef.current++,
-            x: centerX,
-            y: centerY,
+            x: cx,
+            y: cy,
             vx: Math.cos(angle) * speed,
             vy: Math.sin(angle) * speed - 2,
             size: 10 + Math.random() * 15,
             opacity: 0.9,
-            color: colors[Math.floor(Math.random() * colors.length)],
+            color: redColors[Math.floor(Math.random() * redColors.length)],
             type: 'smoke',
             gravity: -0.03,
           });
@@ -141,16 +136,15 @@ export default function Cauldron({
         for (let i = 0; i < 25; i++) {
           const angle = Math.random() * Math.PI * 2;
           const speed = 4 + Math.random() * 6;
-          const colors = ['#4A3728', '#5D4037', '#6D4C41', '#8D6E63'];
           newParticles.push({
             id: particleIdRef.current++,
-            x: centerX,
-            y: centerY,
+            x: cx,
+            y: cy,
             vx: Math.cos(angle) * speed,
             vy: Math.sin(angle) * speed,
             size: 5 + Math.random() * 7,
             opacity: 1,
-            color: colors[Math.floor(Math.random() * colors.length)],
+            color: brownColors[Math.floor(Math.random() * brownColors.length)],
             type: 'debris',
             rotation: Math.random() * 360,
             rotationSpeed: (Math.random() - 0.5) * 20,
@@ -160,22 +154,19 @@ export default function Cauldron({
         break;
       }
       case 'perfect': {
+        const rainbowColors = ['#FF6B9D', '#C084FC', '#818CF8', '#38BDF8', '#34D399', '#FBBF24', '#FB923C', '#F87171'];
         for (let i = 0; i < 40; i++) {
           const angle = (Math.PI * 2 * i) / 40 + Math.random() * 0.3;
           const speed = 4 + Math.random() * 6;
-          const colors = [
-            '#FF6B9D', '#C084FC', '#818CF8', '#38BDF8',
-            '#34D399', '#FBBF24', '#FB923C', '#F87171',
-          ];
           newParticles.push({
             id: particleIdRef.current++,
-            x: centerX,
-            y: centerY,
+            x: cx,
+            y: cy,
             vx: Math.cos(angle) * speed,
             vy: Math.sin(angle) * speed,
             size: 5 + Math.random() * 7,
             opacity: 1,
-            color: colors[Math.floor(Math.random() * colors.length)],
+            color: rainbowColors[Math.floor(Math.random() * rainbowColors.length)],
             type: 'star',
             rotation: Math.random() * 360,
             rotationSpeed: (Math.random() - 0.5) * 10,
@@ -187,8 +178,8 @@ export default function Cauldron({
           const speed = 6 + Math.random() * 4;
           newParticles.push({
             id: particleIdRef.current++,
-            x: centerX,
-            y: centerY,
+            x: cx,
+            y: cy,
             vx: Math.cos(angle) * speed,
             vy: Math.sin(angle) * speed,
             size: 3 + Math.random() * 4,
@@ -204,26 +195,91 @@ export default function Cauldron({
     return newParticles;
   }, []);
 
-  const startBrewing = useCallback(() => {
-    const result = brewPotion(ingredientIds);
-    if (!result) {
-      onInvalidRecipe();
-      animationRef.current = null;
-      setTimeout(() => {
-        onBrewComplete({
-          eventType: 'success',
-          potionName: '',
-          quality: 'common',
-          quantity: 0,
-          goldPenalty: 0,
-          stopProgress: 0,
-        });
-      }, 100);
+  const particleCreatorRef = useRef(makeEventParticles);
+  useEffect(() => { particleCreatorRef.current = makeEventParticles; }, [makeEventParticles]);
+
+  const makeDefaultParticle = useCallback((): Particle => {
+    const cx = 128;
+    const cy = 130;
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 0.8 + Math.random() * 1.8;
+    return {
+      id: particleIdRef.current++,
+      x: cx + (Math.random() - 0.5) * 70,
+      y: cy,
+      vx: Math.cos(angle) * speed * 0.5,
+      vy: -speed,
+      size: 3 + Math.random() * 4,
+      opacity: 0.7,
+      color: liquidColor,
+      type: 'default',
+    };
+  }, [liquidColor]);
+
+  const defaultParticleRef = useRef(makeDefaultParticle);
+  useEffect(() => { defaultParticleRef.current = makeDefaultParticle; }, [makeDefaultParticle]);
+
+  const stepParticles = useCallback((prev: Particle[], addNew: boolean): Particle[] => {
+    const updated = prev
+      .map((p) => {
+        const g = p.gravity ?? 0.04;
+        let nVy = p.vy - g;
+        let nVx = p.vx;
+        if (p.type === 'smoke') {
+          nVx += (Math.random() - 0.5) * 0.25;
+        }
+        return {
+          ...p,
+          x: p.x + nVx,
+          y: p.y + nVy,
+          vy: nVy,
+          vx: nVx,
+          opacity: p.opacity - (p.type === 'smoke' ? 0.007 : 0.015),
+          size: p.type === 'smoke' ? p.size * 1.014 : p.size * 0.995,
+          rotation: p.rotation !== undefined ? p.rotation + (p.rotationSpeed ?? 0) : undefined,
+        };
+      })
+      .filter((p) => p.opacity > 0 && p.y < 330 && p.y > -60 && p.x > -60 && p.x < 330);
+    if (addNew) {
+      return [...updated.slice(-45), defaultParticleRef.current()];
+    }
+    return updated;
+  }, []);
+
+  const particleUpdaterRef = useRef(stepParticles);
+  useEffect(() => { particleUpdaterRef.current = stepParticles; }, [stepParticles]);
+
+  useEffect(() => {
+    if (!isBrewing) {
       return;
     }
 
-    onBrewStart();
-    console.log('[DEBUG] startBrewing called, result.stopProgress:', result.stopProgress);
+    const ids = ingredientIds;
+    const result = brewPotion(ids);
+
+    if (!result) {
+      onInvalidRecipeRef.current();
+      const empty: BrewResult = {
+        eventType: 'success',
+        potionName: '',
+        quality: 'common',
+        quantity: 0,
+        goldPenalty: 0,
+        stopProgress: 0,
+      };
+      const t = window.setTimeout(() => {
+        onBrewCompleteRef.current(empty);
+      }, 100);
+      return () => window.clearTimeout(t);
+    }
+
+    onBrewStartRef.current();
+    brewResultDataRef.current = result;
+    isActiveRef.current = true;
+    startTimeRef.current = performance.now();
+    resultTriggeredRef.current = false;
+    lastParticleTimeRef.current = 0;
+
     setProgress(0);
     setShowResult(false);
     setBrewResult(null);
@@ -231,188 +287,115 @@ export default function Cauldron({
     setBurstEffect(false);
     setFlashEffect(false);
     setShakeEffect('');
-    resultTriggeredRef.current = false;
-    startTimeRef.current = performance.now();
-    console.log('[DEBUG] startTimeRef set to:', startTimeRef.current);
     setParticles([]);
 
-    let lastParticleTime = 0;
-    let animateFrameCount = 0;
+    const duration = 3000;
+    const stopProgress = result.stopProgress;
+    const stopTime = (stopProgress / 100) * duration;
+    const totalEnd = stopTime + 2000;
 
-    const animate = (timestamp: number) => {
-      animateFrameCount++;
-      console.log(`[DEBUG-ANIMATE] ENTER frame=${animateFrameCount}, ts=${timestamp.toFixed(0)}`);
-      const elapsed = timestamp - startTimeRef.current;
-      const duration = 3000;
-      const stopProgress = result.stopProgress;
-      const stopTime = (stopProgress / 100) * duration;
+    let timeoutsToClear: number[] = [];
 
-      const currentProgress = Math.min((elapsed / duration) * 100, stopProgress);
-      console.log(`[DEBUG-ANIMATE] elapsed=${elapsed.toFixed(0)}, progress=${currentProgress.toFixed(2)}, stopTime=${stopTime}`);
-      setProgress(currentProgress);
-
-      if (currentProgress >= 5 && timestamp - lastParticleTime > 80) {
-        lastParticleTime = timestamp;
-        setParticles((prev) => {
-          const newParticle = createDefaultParticle();
-          const updated = prev
-            .map((p) => {
-              const gravity = p.gravity ?? 0.05;
-              let newVy = p.vy - gravity;
-              let newVx = p.vx;
-              if (p.type === 'smoke') {
-                newVx += (Math.random() - 0.5) * 0.3;
-              }
-              return {
-                ...p,
-                x: p.x + newVx,
-                y: p.y + newVy,
-                vy: newVy,
-                vx: newVx,
-                opacity: p.opacity - (p.type === 'smoke' ? 0.008 : 0.018),
-                size: p.type === 'smoke' ? p.size * 1.015 : p.size * 0.99,
-                rotation: p.rotation !== undefined ? p.rotation + (p.rotationSpeed ?? 0) : undefined,
-              };
-            })
-            .filter((p) => p.opacity > 0 && p.y < 320 && p.y > -50 && p.x > -50 && p.x < 320);
-          return [...updated.slice(-40), newParticle];
-        });
-      } else {
-        setParticles((prev) =>
-          prev
-            .map((p) => {
-              const gravity = p.gravity ?? 0.03;
-              let newVy = p.vy - gravity;
-              let newVx = p.vx;
-              if (p.type === 'smoke') {
-                newVx += (Math.random() - 0.5) * 0.2;
-              }
-              return {
-                ...p,
-                x: p.x + newVx,
-                y: p.y + newVy,
-                vy: newVy,
-                vx: newVx,
-                opacity: p.opacity - (p.type === 'smoke' ? 0.006 : 0.012),
-                size: p.type === 'smoke' ? p.size * 1.012 : p.size * 0.995,
-                rotation: p.rotation !== undefined ? p.rotation + (p.rotationSpeed ?? 0) : undefined,
-              };
-            })
-            .filter((p) => p.opacity > 0)
-        );
+    const tick = () => {
+      if (!isActiveRef.current) {
+        return;
       }
+
+      const now = performance.now();
+      const elapsed = now - startTimeRef.current;
+      const curProg = Math.min((elapsed / duration) * 100, stopProgress);
+      setProgress(curProg);
+
+      const addP = curProg >= 5 && now - lastParticleTimeRef.current > 80;
+      if (addP) {
+        lastParticleTimeRef.current = now;
+      }
+      setParticles((p) => particleUpdaterRef.current(p, addP));
 
       if (elapsed >= stopTime && !resultTriggeredRef.current) {
         resultTriggeredRef.current = true;
-        setEventType(result.eventType);
-        setBrewResult(result);
+        const r = brewResultDataRef.current!;
+        setEventType(r.eventType);
+        setBrewResult(r);
         setShowResult(true);
         setFlashEffect(true);
 
-        if (result.eventType === 'majorBoom') {
+        if (r.eventType === 'majorBoom') {
           setShakeEffect('major');
-        } else if (result.eventType === 'minorBoom') {
+        } else if (r.eventType === 'minorBoom') {
           setShakeEffect('minor');
         }
 
-        if (result.eventType === 'perfect') {
+        if (r.eventType === 'perfect') {
           setBurstEffect(true);
         }
 
-        setParticles(createEventParticles(result.eventType));
+        setParticles(particleCreatorRef.current(r.eventType));
 
-        setTimeout(() => {
-          setFlashEffect(false);
-        }, 200);
-
-        setTimeout(() => {
-          setShakeEffect('');
-        }, 500);
-
-        setTimeout(() => {
-          onBrewComplete(result);
-          animationRef.current = null;
-        }, 1800);
-      }
-
-      if (elapsed < stopTime + 2000) {
-        animationRef.current = requestAnimationFrame(animate);
-      } else {
-        animationRef.current = null;
-      }
-    };
-
-    const rafId = requestAnimationFrame(animate);
-    animationRef.current = rafId;
-    console.log('[DEBUG] startBrewing END, animationRef.current =', rafId);
-  }, [ingredientIds, onBrewStart, onBrewComplete, onInvalidRecipe, createDefaultParticle, createEventParticles]);
-
-  const hasStartedRef = useRef(false);
-
-  useEffect(() => {
-    if (isBrewing) {
-      if (!hasStartedRef.current) {
-        hasStartedRef.current = true;
-        queueMicrotask(() => {
-          if (!animationRef.current) {
-            startBrewing();
+        const t1 = window.setTimeout(() => setFlashEffect(false), 200);
+        const t2 = window.setTimeout(() => setShakeEffect(''), 500);
+        const t3 = window.setTimeout(() => {
+          if (isActiveRef.current) {
+            isActiveRef.current = false;
+            onBrewCompleteRef.current(r);
           }
-        });
+        }, 1800);
+        timeoutsToClear.push(t1, t2, t3);
       }
-    } else {
-      hasStartedRef.current = false;
-    }
-  }, [isBrewing, startBrewing]);
 
-  useEffect(() => {
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-        animationRef.current = null;
+      if (elapsed >= totalEnd) {
+        isActiveRef.current = false;
+        if (intervalIdRef.current !== null) {
+          window.clearInterval(intervalIdRef.current);
+          intervalIdRef.current = null;
+        }
       }
     };
-  }, []);
 
-  const remainingRatio = 1 - progress / 100;
-  const hue = 220 * remainingRatio + 0 * (progress / 100);
-  const saturation = 70 + (progress / 100) * 20;
-  const lightness = 50 + (progress / 100) * 10;
+    intervalIdRef.current = window.setInterval(tick, 16);
+    tick();
+
+    return () => {
+      isActiveRef.current = false;
+      if (intervalIdRef.current !== null) {
+        window.clearInterval(intervalIdRef.current);
+        intervalIdRef.current = null;
+      }
+      timeoutsToClear.forEach((id) => window.clearTimeout(id));
+    };
+  }, [isBrewing, ingredientIds]);
+
+  const ratio = progress / 100;
+  const startHue = 217;
+  const endHue = 0;
+  const hue = startHue + (endHue - startHue) * ratio;
+  const saturation = 72 + 18 * ratio;
+  const lightness = 48 + 14 * ratio;
   const progressColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 
   const getEventLabel = (type: EventType) => {
     switch (type) {
-      case 'success':
-        return '✨ 炼制成功！';
-      case 'minorBoom':
-        return '💥 小爆炸！';
-      case 'majorBoom':
-        return '🔥 大爆炸！';
-      case 'perfect':
-        return '🌟 完美品质！';
+      case 'success': return '✨ 炼制成功！';
+      case 'minorBoom': return '💥 小爆炸！';
+      case 'majorBoom': return '🔥 大爆炸！';
+      case 'perfect': return '🌟 完美品质！';
     }
   };
 
   const getParticleClassName = (type: ParticleType) => {
     switch (type) {
-      case 'rise':
-        return 'particle particle-rise';
-      case 'spark':
-        return 'particle particle-spark';
-      case 'smoke':
-        return 'particle particle-smoke';
-      case 'debris':
-        return 'particle particle-debris';
-      case 'star':
-        return 'particle particle-star';
-      default:
-        return 'particle';
+      case 'rise': return 'particle particle-rise';
+      case 'spark': return 'particle particle-spark';
+      case 'smoke': return 'particle particle-smoke';
+      case 'debris': return 'particle particle-debris';
+      case 'star': return 'particle particle-star';
+      default: return 'particle';
     }
   };
 
   return (
     <div className="cauldron-container">
       <h2 className="cauldron-title">⚗️ 炼药台</h2>
-
       <div className="cauldron-wrapper">
         <div
           className={`cauldron-svg-container ${shakeEffect === 'minor' ? 'shake-minor' : ''} ${
@@ -420,7 +403,6 @@ export default function Cauldron({
           }`}
         >
           {flashEffect && <div className="flash-overlay" />}
-
           {isBrewing && (
             <div className="fire-container">
               <div className="fire fire-back">
@@ -435,18 +417,15 @@ export default function Cauldron({
                 <div className="flame flame-7" />
               </div>
               <div className="ember-container">
-                {[...Array(8)].map((_, i) => (
+                {Array.from({ length: 8 }).map((_, i) => (
                   <div key={i} className={`ember ember-${i + 1}`} />
                 ))}
               </div>
             </div>
           )}
-
           {isBrewing && <div className="cauldron-glow" />}
-
           <svg width="256" height="256" viewBox="0 0 256 256" className={`cauldron-svg ${isBrewing ? 'brewing-active' : ''}`}>
             <ellipse cx="128" cy="200" rx="80" ry="12" fill="rgba(0,0,0,0.3)" />
-
             <defs>
               <linearGradient id="fireGradient" x1="0%" y1="100%" x2="0%" y2="0%">
                 <stop offset="0%" stopColor="#FF4500" />
@@ -454,20 +433,16 @@ export default function Cauldron({
                 <stop offset="100%" stopColor="#FFD700" />
               </linearGradient>
             </defs>
-
             <path
               d="M50 100 L50 160 Q50 200 128 200 Q206 200 206 160 L206 100 Z"
               fill="#4A3728"
               stroke="#2E1F15"
               strokeWidth="4"
             />
-
             <ellipse cx="128" cy="100" rx="78" ry="18" fill="#3E2723" stroke="#2E1F15" strokeWidth="3" />
-
             <clipPath id="liquidClip">
               <path d="M54 105 L54 160 Q54 196 128 196 Q202 196 202 160 L202 105 Z" />
             </clipPath>
-
             <g clipPath="url(#liquidClip)">
               <rect
                 x="40"
@@ -486,7 +461,7 @@ export default function Cauldron({
               />
               {isBrewing && progress > 30 && (
                 <g className="swirl-group">
-                  {[...Array(3)].map((_, i) => (
+                  {Array.from({ length: 3 }).map((_, i) => (
                     <circle
                       key={i}
                       cx={100 + i * 30}
@@ -501,16 +476,8 @@ export default function Cauldron({
                 </g>
               )}
             </g>
-
             <ellipse cx="128" cy="100" rx="78" ry="18" fill="none" stroke="#FFD700" strokeWidth="2" opacity={isBrewing ? 0.8 : 0.5} />
-
-            <path
-              d="M50 100 L50 160 Q50 200 128 200 Q206 200 206 160 L206 100"
-              fill="none"
-              stroke="rgba(255,255,255,0.2)"
-              strokeWidth="3"
-            />
-
+            <path d="M50 100 L50 160 Q50 200 128 200 Q206 200 206 160 L206 100" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="3" />
             <path
               d="M50 100 L50 160 Q50 200 128 200 Q206 200 206 160 L206 100"
               fill="none"
@@ -519,15 +486,14 @@ export default function Cauldron({
               opacity={isBrewing ? progress / 200 : 0}
               className="fire-outline"
             />
-
             {isBrewing && (
               <g className="bubble-group">
-                {[...Array(7)].map((_, i) => (
+                {Array.from({ length: 7 }).map((_, i) => (
                   <circle
                     key={i}
                     cx={70 + i * 20}
                     cy={130 + (progress / 100) * 40}
-                    r={2 + Math.random() * 4}
+                    r={2 + (i % 3) * 1.5}
                     fill="rgba(255,255,255,0.5)"
                     className="bubble"
                     style={{ animationDelay: `${i * 0.2}s` }}
@@ -535,27 +501,10 @@ export default function Cauldron({
                 ))}
               </g>
             )}
-
             {burstEffect && (
               <>
-                <circle
-                  cx="128"
-                  cy="128"
-                  r="10"
-                  fill="none"
-                  stroke="#FFD700"
-                  strokeWidth="4"
-                  className="burst-ring"
-                />
-                <circle
-                  cx="128"
-                  cy="128"
-                  r="10"
-                  fill="none"
-                  stroke="#FFFFFF"
-                  strokeWidth="2"
-                  className="burst-ring burst-ring-2"
-                />
+                <circle cx="128" cy="128" r="10" fill="none" stroke="#FFD700" strokeWidth="4" className="burst-ring" />
+                <circle cx="128" cy="128" r="10" fill="none" stroke="#FFFFFF" strokeWidth="2" className="burst-ring burst-ring-2" />
                 {[0, 60, 120, 180, 240, 300].map((angle, i) => (
                   <line
                     key={i}
@@ -572,7 +521,6 @@ export default function Cauldron({
               </>
             )}
           </svg>
-
           {particles.map((p) => (
             <div
               key={p.id}
@@ -581,7 +529,7 @@ export default function Cauldron({
                 left: p.x,
                 top: p.y,
                 width: p.size,
-                height: p.type === 'star' ? p.size : p.size,
+                height: p.size,
                 backgroundColor: p.type === 'star' ? 'transparent' : p.color,
                 opacity: p.opacity,
                 transform: p.rotation !== undefined
@@ -600,7 +548,6 @@ export default function Cauldron({
               )}
             </div>
           ))}
-
           {showResult && brewResult && (
             <div className={`result-overlay event-${eventType}`}>
               <div className="result-content">
@@ -619,7 +566,6 @@ export default function Cauldron({
             </div>
           )}
         </div>
-
         <div className="progress-container">
           <div className="progress-bar">
             <div
@@ -641,7 +587,6 @@ export default function Cauldron({
           </div>
           <div className="progress-text">{Math.floor(progress)}%</div>
         </div>
-
         <div className="status-text">
           {!isBrewing && !showResult && '选择药材后点击开始炼药'}
           {isBrewing && !showResult && (
