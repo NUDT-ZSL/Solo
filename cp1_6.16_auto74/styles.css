@@ -75,10 +75,12 @@ body {
 .batch-card {
   border-radius: 12px;
   padding: 14px;
+  padding-top: 14px;
   cursor: pointer;
   position: relative;
   transition: transform 0.3s ease, box-shadow 0.3s ease;
   box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  overflow: hidden;
 }
 
 .batch-card:hover {
@@ -86,9 +88,35 @@ body {
   box-shadow: 0 8px 16px #333;
 }
 
+.batch-card:hover .batch-left-accent {
+  opacity: 1;
+}
+
 .batch-card-selected {
   outline: 3px solid #FF9800;
   outline-offset: 2px;
+}
+
+.batch-left-accent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: 12px 0 0 12px;
+  box-shadow: 0 0 10px currentColor;
+}
+
+.roast-count {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.65);
+  font-weight: 500;
+  letter-spacing: 0.3px;
 }
 
 .batch-card-body {
@@ -121,15 +149,23 @@ body {
 
 .low-weight-warning {
   position: absolute;
-  top: 8px;
-  left: 8px;
+  top: 0;
+  left: 0;
+  width: 100%;
   background: #E74C3C;
   color: #fff;
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: 3px 0;
+  border-radius: 12px 12px 0 0;
   font-size: 11px;
   font-weight: 700;
+  text-align: center;
+  z-index: 2;
+  letter-spacing: 0.5px;
   animation: blink 0.5s ease-in-out infinite alternate;
+}
+
+.batch-card:has(.low-weight-warning) {
+  padding-top: 28px;
 }
 
 @keyframes blink {
@@ -142,6 +178,31 @@ body {
   color: #7f8c8d;
   padding: 20px;
   font-size: 14px;
+}
+
+.search-wrapper {
+  margin-bottom: 4px;
+}
+
+.batch-search {
+  width: 100%;
+  padding: 10px 14px;
+  background: #0F3460;
+  border: 1px solid #533483;
+  border-radius: 8px;
+  color: #E0E0E0;
+  font-size: 13px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.batch-search:focus {
+  outline: none;
+  border-color: #FF9800;
+  box-shadow: 0 0 0 2px rgba(255, 152, 0, 0.2);
+}
+
+.batch-search::placeholder {
+  color: #7f8c8d;
 }
 
 .add-batch-wrapper {

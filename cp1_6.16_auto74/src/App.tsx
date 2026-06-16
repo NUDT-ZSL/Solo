@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { StoreProvider, useStore } from './store';
 import { BatchCard } from './BatchCard';
 import { RoastPage } from './RoastPage';
@@ -93,7 +93,24 @@ function CollectionPanel() {
 
 function AppContent() {
   const { state, selectBatch, setDrawer } = useStore();
+  const [searchQuery, setSearchQuery] = useState('');
   const selectedBatch = state.batches.find(b => b.id === state.selectedBatchId);
+
+  const filteredBatches = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return state.batches;
+    return state.batches.filter(
+      b => b.origin.toLowerCase().includes(q) || b.farm.toLowerCase().includes(q)
+    );
+  }, [state.batches, searchQuery]);
+
+  const roastCountMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    state.roasts.forEach(r => {
+      map[r.batchId] = (map[r.batchId] || 0) + 1;
+    });
+    return map;
+  }, [state.roasts]);
 
   return (
     <div className="app-container">
@@ -103,17 +120,31 @@ function AppContent() {
       </header>
       <div className="app-body">
         <aside className={`batch-panel ${state.drawerOpen ? 'drawer-open' : ''}`}>
+          <div className="search-wrapper">
+            <input
+              type="text"
+              className="batch-search"
+              placeholder="🔍 搜索产地或庄园..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+          </div>
           <AddBatchForm />
           <div className="batch-list">
-            {state.batches.map(batch => (
+            {filteredBatches.map(batch => (
               <BatchCard
                 key={batch.id}
                 batch={batch}
                 selected={batch.id === state.selectedBatchId}
+                roastCount={roastCountMap[batch.id] || 0}
                 onSelect={() => selectBatch(batch.id === state.selectedBatchId ? null : batch.id)}
               />
             ))}
-            {state.batches.length === 0 && <p className="empty-hint">暂无生豆批次，请添加</p>}
+            {filteredBatches.length === 0 && (
+              <p className="empty-hint">
+                {state.batches.length === 0 ? '暂无生豆批次，请添加' : '未找到匹配的批次'}
+              </p>
+            )}
           </div>
           <CollectionPanel />
         </aside>

@@ -22,10 +22,11 @@ function getOriginColor(origin: string): string {
 interface BatchCardProps {
   batch: Batch;
   selected: boolean;
+  roastCount: number;
   onSelect: () => void;
 }
 
-export function BatchCard({ batch, selected, onSelect }: BatchCardProps) {
+export function BatchCard({ batch, selected, roastCount, onSelect }: BatchCardProps) {
   const bgColor = getOriginColor(batch.origin);
   const isLowWeight = batch.weight < 5;
 
@@ -35,9 +36,10 @@ export function BatchCard({ batch, selected, onSelect }: BatchCardProps) {
       style={{ background: bgColor }}
       onClick={onSelect}
     >
+      <div className="batch-left-accent" style={{ background: bgColor }} />
       {isLowWeight && (
         <div className="low-weight-warning">
-          ⚠ 低库存
+          ⚠ 库存不足 {batch.weight}kg
         </div>
       )}
       <div className="batch-card-body">
@@ -48,6 +50,7 @@ export function BatchCard({ batch, selected, onSelect }: BatchCardProps) {
         <p className="batch-info weight">库存：{batch.weight} kg</p>
         <p className="batch-info date">采购：{batch.purchaseDate}</p>
       </div>
+      <span className="roast-count">已烘焙 {roastCount} 次</span>
     </div>
   );
 }
