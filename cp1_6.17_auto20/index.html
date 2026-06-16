@@ -250,6 +250,74 @@
       z-index: 10;
       pointer-events: none;
     }
+
+    .sun-indicator {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin: 10px 0 4px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .sun-sky-canvas {
+      width: 80px;
+      height: 60px;
+      flex-shrink: 0;
+    }
+
+    .sun-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .sun-info-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .sun-info-label {
+      color: #8A8AA8;
+      font-size: 11px;
+    }
+
+    .sun-info-value {
+      color: #D0D0E8;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+    }
+
+    .color-bar {
+      width: 100%;
+      height: 8px;
+      border-radius: 4px;
+      margin-top: 2px;
+      box-shadow: 0 0 8px currentColor;
+      transition: background-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .intensity-bar {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 2px;
+    }
+
+    .intensity-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #FFD700, #FFFFFF);
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
   </style>
 </head>
 <body>
@@ -276,6 +344,23 @@
       <div class="divider"></div>
 
       <div class="section-label">太阳光</div>
+      <div class="sun-indicator">
+        <canvas class="sun-sky-canvas" id="sunSkyCanvas" width="160" height="120"></canvas>
+        <div class="sun-info">
+          <div class="sun-info-row">
+            <span class="sun-info-label">色温</span>
+            <span class="sun-info-value" id="sunColorValue">#FFFFFF</span>
+          </div>
+          <div class="color-bar" id="sunColorBar"></div>
+          <div class="sun-info-row" style="margin-top: 2px;">
+            <span class="sun-info-label">强度</span>
+            <span class="sun-info-value" id="sunIntDisplay">1.50</span>
+          </div>
+          <div class="intensity-bar">
+            <div class="intensity-bar-fill" id="sunIntBar" style="width: 75%;"></div>
+          </div>
+        </div>
+      </div>
       <div class="control-row">
         <label>强度</label>
         <input type="range" id="sunIntensity" min="0" max="2" step="0.05" value="1.5" />

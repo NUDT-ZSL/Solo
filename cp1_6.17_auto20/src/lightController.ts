@@ -3,6 +3,8 @@ import * as THREE from 'three';
 export interface PointLightConfig {
   light: THREE.PointLight;
   helper: THREE.Mesh;
+  glowInner: THREE.Mesh;
+  glowOuter: THREE.Mesh;
   position: THREE.Vector3;
   color: string;
   intensity: number;
@@ -45,11 +47,35 @@ export function initLights(scene: THREE.Scene): LightControllerState {
   pointLightA.shadow.mapSize.height = 512;
   scene.add(pointLightA);
 
-  const helperGeoA = new THREE.SphereGeometry(0.06, 16, 16);
-  const helperMatA = new THREE.MeshBasicMaterial({ color: 0xffe4b5 });
-  const helperA = new THREE.Mesh(helperGeoA, helperMatA);
+  const coreGeoA = new THREE.SphereGeometry(0.06, 24, 24);
+  const coreMatA = new THREE.MeshBasicMaterial({
+    color: 0xffe4b5,
+  });
+  const helperA = new THREE.Mesh(coreGeoA, coreMatA);
   helperA.position.copy(pointLightA.position);
   scene.add(helperA);
+
+  const glowInnerGeoA = new THREE.SphereGeometry(0.15, 24, 24);
+  const glowInnerMatA = new THREE.MeshBasicMaterial({
+    color: 0xffe4b5,
+    transparent: true,
+    opacity: 0.45,
+    depthWrite: false,
+  });
+  const glowInnerA = new THREE.Mesh(glowInnerGeoA, glowInnerMatA);
+  glowInnerA.position.copy(pointLightA.position);
+  scene.add(glowInnerA);
+
+  const glowOuterGeoA = new THREE.SphereGeometry(0.28, 24, 24);
+  const glowOuterMatA = new THREE.MeshBasicMaterial({
+    color: 0xffe4b5,
+    transparent: true,
+    opacity: 0.18,
+    depthWrite: false,
+  });
+  const glowOuterA = new THREE.Mesh(glowOuterGeoA, glowOuterMatA);
+  glowOuterA.position.copy(pointLightA.position);
+  scene.add(glowOuterA);
 
   const pointLightB = new THREE.PointLight(0xb5d4ff, 2, 8);
   pointLightB.position.set(-1, 2.2, -0.8);
@@ -58,11 +84,35 @@ export function initLights(scene: THREE.Scene): LightControllerState {
   pointLightB.shadow.mapSize.height = 512;
   scene.add(pointLightB);
 
-  const helperGeoB = new THREE.SphereGeometry(0.06, 16, 16);
-  const helperMatB = new THREE.MeshBasicMaterial({ color: 0xb5d4ff });
-  const helperB = new THREE.Mesh(helperGeoB, helperMatB);
+  const coreGeoB = new THREE.SphereGeometry(0.06, 24, 24);
+  const coreMatB = new THREE.MeshBasicMaterial({
+    color: 0xb5d4ff,
+  });
+  const helperB = new THREE.Mesh(coreGeoB, coreMatB);
   helperB.position.copy(pointLightB.position);
   scene.add(helperB);
+
+  const glowInnerGeoB = new THREE.SphereGeometry(0.15, 24, 24);
+  const glowInnerMatB = new THREE.MeshBasicMaterial({
+    color: 0xb5d4ff,
+    transparent: true,
+    opacity: 0.45,
+    depthWrite: false,
+  });
+  const glowInnerB = new THREE.Mesh(glowInnerGeoB, glowInnerMatB);
+  glowInnerB.position.copy(pointLightB.position);
+  scene.add(glowInnerB);
+
+  const glowOuterGeoB = new THREE.SphereGeometry(0.28, 24, 24);
+  const glowOuterMatB = new THREE.MeshBasicMaterial({
+    color: 0xb5d4ff,
+    transparent: true,
+    opacity: 0.18,
+    depthWrite: false,
+  });
+  const glowOuterB = new THREE.Mesh(glowOuterGeoB, glowOuterMatB);
+  glowOuterB.position.copy(pointLightB.position);
+  scene.add(glowOuterB);
 
   state = {
     sunLight,
@@ -71,6 +121,8 @@ export function initLights(scene: THREE.Scene): LightControllerState {
       {
         light: pointLightA,
         helper: helperA,
+        glowInner: glowInnerA,
+        glowOuter: glowOuterA,
         position: pointLightA.position.clone(),
         color: '#ffe4b5',
         intensity: 3,
@@ -78,6 +130,8 @@ export function initLights(scene: THREE.Scene): LightControllerState {
       {
         light: pointLightB,
         helper: helperB,
+        glowInner: glowInnerB,
+        glowOuter: glowOuterB,
         position: pointLightB.position.clone(),
         color: '#b5d4ff',
         intensity: 2,
@@ -181,6 +235,8 @@ export function setPointLightPosition(index: number, x: number, y: number, z: nu
   pl.position.set(x, y, z);
   pl.light.position.set(x, y, z);
   pl.helper.position.set(x, y, z);
+  pl.glowInner.position.set(x, y, z);
+  pl.glowOuter.position.set(x, y, z);
 }
 
 export function setPointLightColor(index: number, color: string): void {
@@ -189,6 +245,8 @@ export function setPointLightColor(index: number, color: string): void {
   pl.color = color;
   pl.light.color.set(color);
   (pl.helper.material as THREE.MeshBasicMaterial).color.set(color);
+  (pl.glowInner.material as THREE.MeshBasicMaterial).color.set(color);
+  (pl.glowOuter.material as THREE.MeshBasicMaterial).color.set(color);
 }
 
 export function setPointLightIntensity(index: number, intensity: number): void {
@@ -234,8 +292,20 @@ export function updateTransition(): void {
 export function updateHelperPulse(time: number): void {
   if (!state) return;
   for (const pl of state.pointLights) {
-    const scale = 1 + 0.2 * Math.sin(time * (2 * Math.PI / 0.3));
-    pl.helper.scale.setScalar(scale);
+    const coreScale = 1 + 0.15 * Math.sin(time * (2 * Math.PI / 0.3));
+    pl.helper.scale.setScalar(coreScale);
+
+    const innerScale = 1 + 0.25 * Math.sin(time * (2 * Math.PI / 0.3));
+    pl.glowInner.scale.setScalar(innerScale);
+
+    const outerScale = 1 + 0.35 * Math.sin(time * (2 * Math.PI / 0.3) + 0.5);
+    pl.glowOuter.scale.setScalar(outerScale);
+
+    const innerMat = pl.glowInner.material as THREE.MeshBasicMaterial;
+    innerMat.opacity = 0.3 + 0.1 * Math.sin(time * (2 * Math.PI / 0.3));
+
+    const outerMat = pl.glowOuter.material as THREE.MeshBasicMaterial;
+    outerMat.opacity = 0.1 + 0.05 * Math.sin(time * (2 * Math.PI / 0.3) + 1);
   }
 }
 
