@@ -153,7 +153,7 @@ const StickyNoteComponent: React.FC<StickyNoteProps> = ({
   return (
     <div
       ref={noteRef}
-      className={`sticky-note ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''}`}
+      className={`sticky-note ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''} ${isResizing ? 'resizing' : ''}`}
       style={{
         left: note.x,
         top: note.y,
@@ -225,13 +225,15 @@ const StickyNoteComponent: React.FC<StickyNoteProps> = ({
           cursor: move;
           user-select: none;
           box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.15);
-          transition: box-shadow 0.1s ease;
+          transition: box-shadow 0.1s ease-out, transform 0.1s ease-out;
           overflow: hidden;
         }
 
-        .sticky-note.dragging {
-          box-shadow: 6px 6px 16px rgba(0, 0, 0, 0.25);
+        .sticky-note.dragging,
+        .sticky-note.resizing {
+          box-shadow: 8px 8px 24px rgba(0, 0, 0, 0.3), 0 0 0 4px rgba(79, 195, 247, 0.1);
           z-index: 100;
+          transform: scale(1.01);
         }
 
         .sticky-note.selected {

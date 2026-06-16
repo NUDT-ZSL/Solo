@@ -181,16 +181,18 @@ const Toolbar: React.FC<ToolbarProps> = ({
         }
 
         .color-circle {
-          width: 32px;
-          height: 32px;
+          width: 24px;
+          height: 24px;
           border-radius: 50%;
-          border: 2px solid #e0e0e0;
+          border: 1px solid #bdbdbd;
           cursor: pointer;
-          transition: transform 0.2s ease;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+          box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05);
         }
 
         .color-circle:hover {
-          transform: scale(1.1);
+          transform: scale(1.15);
+          box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.3);
         }
 
         .color-picker-popup {

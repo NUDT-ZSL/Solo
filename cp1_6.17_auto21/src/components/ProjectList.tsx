@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { formatRelativeTime } from '../logic/CoordinateUtils';
 
 interface Project {
   id: string;
@@ -31,21 +32,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ userName }) => {
   }, []);
 
   const formatTime = (timestamp: number) => {
-    const now = Date.now();
-    const diff = now - timestamp;
-    
-    if (diff < 60000) {
-      return '刚刚';
-    } else if (diff < 3600000) {
-      return `${Math.floor(diff / 60000)} 分钟前`;
-    } else if (diff < 86400000) {
-      return `${Math.floor(diff / 3600000)} 小时前`;
-    } else if (diff < 604800000) {
-      return `${Math.floor(diff / 86400000)} 天前`;
-    } else {
-      const date = new Date(timestamp);
-      return date.toLocaleDateString('zh-CN');
-    }
+    return formatRelativeTime(timestamp);
   };
 
   const handleProjectClick = (projectId: string) => {
@@ -88,11 +75,10 @@ const ProjectList: React.FC<ProjectListProps> = ({ userName }) => {
                     <img src={project.thumbnail} alt={project.title} />
                   ) : (
                     <div className="thumbnail-placeholder">
-                      <div className="placeholder-shapes">
-                        <div className="shape-circle" />
-                        <div className="shape-rect" />
-                        <div className="shape-line" />
-                        <div className="shape-note" />
+                      <div className="thumbnail-gradient" />
+                      <div className="thumbnail-content">
+                        <span className="thumbnail-icon">🎨</span>
+                        <span className="thumbnail-title">{project.title}</span>
                       </div>
                     </div>
                   )}
@@ -235,70 +221,68 @@ const ProjectList: React.FC<ProjectListProps> = ({ userName }) => {
           display: flex;
           align-items: center;
           justify-content: center;
+          padding: 10px;
         }
 
         .card-thumbnail img {
           width: 200px;
-          height: 150px;
+          height: 110px;
           object-fit: cover;
+          border-radius: 4px;
         }
 
         .thumbnail-placeholder {
           width: 200px;
           height: 110px;
+          border-radius: 4px;
+          position: relative;
+          overflow: hidden;
           display: flex;
           align-items: center;
           justify-content: center;
-          background: #fafafa;
-          border-radius: 4px;
-          border: 1px dashed #e0e0e0;
         }
 
-        .placeholder-shapes {
+        .thumbnail-gradient {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: linear-gradient(
+            135deg,
+            #E0F7FA 0%,
+            #B2EBF2 25%,
+            #80DEEA 50%,
+            #E1F5FE 75%,
+            #F3E5F5 100%
+          );
+        }
+
+        .thumbnail-content {
           position: relative;
-          width: 100%;
-          height: 100%;
+          z-index: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 6px;
         }
 
-        .shape-circle {
-          position: absolute;
-          top: 20px;
-          left: 30px;
-          width: 30px;
-          height: 30px;
-          border: 2px solid #4FC3F7;
-          border-radius: 50%;
+        .thumbnail-icon {
+          font-size: 28px;
+          opacity: 0.85;
         }
 
-        .shape-rect {
-          position: absolute;
-          top: 25px;
-          right: 40px;
-          width: 40px;
-          height: 25px;
-          border: 2px solid #E74C3C;
-          border-radius: 2px;
-        }
-
-        .shape-line {
-          position: absolute;
-          bottom: 35px;
-          left: 25px;
-          width: 50px;
-          height: 2px;
-          background: #212121;
-          transform: rotate(-20deg);
-        }
-
-        .shape-note {
-          position: absolute;
-          bottom: 20px;
-          right: 30px;
-          width: 35px;
-          height: 30px;
-          background: #FFF9C4;
-          border: 1.5px solid #FDD835;
-          border-radius: 2px;
+        .thumbnail-title {
+          font-size: 12px;
+          color: #212121;
+          font-weight: 500;
+          max-width: 160px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          background: rgba(255, 255, 255, 0.7);
+          padding: 2px 8px;
+          border-radius: 10px;
         }
 
         .card-info {

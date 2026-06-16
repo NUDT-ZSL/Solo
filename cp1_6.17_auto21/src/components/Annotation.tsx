@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { AnnotationData, Comment } from '../logic/DataModel';
 import { ANNOTATION_COLOR } from '../logic/DataModel';
+import { formatShortDateTime } from '../logic/CoordinateUtils';
 
 interface AnnotationProps {
   annotation: AnnotationData;
@@ -78,13 +79,7 @@ const AnnotationComponent: React.FC<AnnotationProps> = ({
   };
 
   const formatTime = (timestamp: number) => {
-    const date = new Date(timestamp);
-    return date.toLocaleString('zh-CN', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return formatShortDateTime(timestamp);
   };
 
   const getReplies = (parentId: string) => {
@@ -237,6 +232,26 @@ const AnnotationComponent: React.FC<AnnotationProps> = ({
           border: 2px solid #ffffff;
           box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
           z-index: 2;
+          transition: all 0.3s ease;
+        }
+
+        .annotation-marker:hover .marker-dot {
+          animation: markerBreathe 1.5s ease-in-out infinite;
+        }
+
+        @keyframes markerBreathe {
+          0%, 100% {
+            transform: translate(-50%, -50%) scale(1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(231, 76, 60, 0.5);
+          }
+          50% {
+            transform: translate(-50%, -50%) scale(1.3);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4), 0 0 0 8px rgba(231, 76, 60, 0);
+          }
+        }
+
+        .annotation-marker:hover .marker-count {
+          animation: markerBreathe 1.5s ease-in-out infinite;
         }
 
         .marker-pulse {

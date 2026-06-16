@@ -22,7 +22,9 @@ import {
   findAnnotationAtPoint,
   findStickyNoteAtPoint,
   isPointInResizeHandle,
-  type ViewTransform
+  type ViewTransform,
+  formatDateTime,
+  formatRelativeTime
 } from '../logic/CoordinateUtils';
 
 interface WhiteboardProps {
@@ -472,14 +474,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ boardId, socket, userName }) =>
   };
 
   const formatHistoryTime = (timestamp: number) => {
-    const date = new Date(timestamp);
-    return date.toLocaleString('zh-CN', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
+    return formatDateTime(timestamp);
   };
 
   const getHistorySummary = (item: HistoryItem) => {
