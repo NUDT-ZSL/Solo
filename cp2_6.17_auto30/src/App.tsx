@@ -57,6 +57,7 @@ function App() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [allVotes, setAllVotes] = useState<Vote[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pulseMap, setPulseMap] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const onHash = () => setRoute(parseRoute(window.location.hash));
@@ -205,8 +206,10 @@ function App() {
         {route.name === 'home' && (
           <HomePage
             topics={topics}
+            allVotes={allVotes}
             voteCountByTopic={voteCountByTopic}
             userVotedTopics={userVotedTopics}
+            pulseMap={pulseMap}
             onSelect={id => navigate({ name: 'vote', topicId: id })}
           />
         )}
@@ -217,6 +220,8 @@ function App() {
             fingerprint={fingerprint}
             onBack={() => navigate({ name: 'home' })}
             onVoted={() => {
+              const tid = route.topicId;
+              setPulseMap(prev => ({ ...prev, [tid]: (prev[tid] || 0) + 1 }));
               refreshVotes();
               navigate({ name: 'result', topicId: route.topicId });
             }}
@@ -241,12 +246,14 @@ function App() {
 
 interface HomePageProps {
   topics: Topic[];
+  allVotes: Vote[];
   voteCountByTopic: Map<string, number>;
   userVotedTopics: Set<string>;
+  pulseMap: Record<string, number>;
   onSelect: (id: string) => void;
 }
 
-const HomePage: React.FC<HomePageProps> = ({ topics, voteCountByTopic, userVotedTopics, onSelect }) => {
+const HomePage: React.FC<HomePageProps> = ({ topics, allVotes, voteCountByTopic, userVotedTopics, pulseMap, onSelect }) => {
   return (
     <div style={{ maxWidth: 1400, margin: '0 auto' }}>
       <div style={{ marginBottom: 32, textAlign: 'center' }}>
@@ -272,7 +279,9 @@ const HomePage: React.FC<HomePageProps> = ({ topics, voteCountByTopic, userVoted
             key={topic.id}
             topic={topic}
             voteCount={voteCountByTopic.get(topic.id) || 0}
+            votes={allVotes.filter(v => v.topicId === topic.id)}
             userVoted={userVotedTopics.has(topic.id)}
+            pulseTrigger={pulseMap[topic.id]}
             onClick={() => onSelect(topic.id)}
           />
         ))}

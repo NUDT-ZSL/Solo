@@ -13,6 +13,39 @@ function formatTime(d: Date): string {
   return `${h}:${m}:${s}`;
 }
 
+interface StatItemProps {
+  icon: string;
+  iconAriaLabel: string;
+  label: string;
+  value: React.ReactNode;
+  align?: 'left' | 'center' | 'right';
+}
+
+const StatItem: React.FC<StatItemProps> = ({ icon, iconAriaLabel, label, value, align = 'left' }) => {
+  const justifyContent = align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start';
+  const alignItems = align === 'center' ? 'center' : 'flex-start';
+  return (
+    <div
+      role="group"
+      aria-label={`${label}：${typeof value === 'number' ? value : ''}`}
+      title={`${label}`}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, justifyContent }}>
+        <span aria-hidden="true" title={iconAriaLabel} style={{ fontSize: 13 }}>
+          {icon}
+        </span>
+        <span style={{ fontSize: 11, color: '#9ca3af', letterSpacing: 0.5 }}>{label}</span>
+      </div>
+      <div aria-label={`${label}值`}>{value}</div>
+    </div>
+  );
+};
+
 const StatsBar: React.FC<StatsBarProps> = ({ totalVotes, activeTopics, avgDivergence }) => {
   const [now, setNow] = useState(new Date());
 
@@ -23,6 +56,8 @@ const StatsBar: React.FC<StatsBarProps> = ({ totalVotes, activeTopics, avgDiverg
 
   return (
     <div
+      role="status"
+      aria-label="全局统计数据栏"
       style={{
         position: 'fixed',
         bottom: 0,
@@ -41,33 +76,47 @@ const StatsBar: React.FC<StatsBarProps> = ({ totalVotes, activeTopics, avgDiverg
       }}
     >
       <div style={{ display: 'flex', gap: 32 }}>
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: 11, color: '#9ca3af', letterSpacing: 0.5 }}>总投票数</span>
-          <span style={{ fontSize: 18, fontWeight: 700 }}>{totalVotes}</span>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: 11, color: '#9ca3af', letterSpacing: 0.5 }}>活跃话题</span>
-          <span style={{ fontSize: 18, fontWeight: 700 }}>{activeTopics}</span>
-        </div>
+        <StatItem
+          icon="📊"
+          iconAriaLabel="总投票数图标"
+          label="总投票数"
+          value={<span style={{ fontSize: 18, fontWeight: 700 }}>{totalVotes}</span>}
+        />
+        <StatItem
+          icon="💬"
+          iconAriaLabel="活跃话题数图标"
+          label="活跃话题"
+          value={<span style={{ fontSize: 18, fontWeight: 700 }}>{activeTopics}</span>}
+        />
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <span style={{ fontSize: 11, color: '#9ca3af', letterSpacing: 0.5 }}>平均分歧指数</span>
-        <span
-          style={{
-            fontSize: 18,
-            fontWeight: 700,
-            color: avgDivergence > 60 ? '#f87171' : avgDivergence > 30 ? '#fbbf24' : '#4ade80',
-          }}
-        >
-          {avgDivergence}
-        </span>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-        <span style={{ fontSize: 11, color: '#9ca3af', letterSpacing: 0.5 }}>更新时间</span>
-        <span style={{ fontSize: 18, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-          {formatTime(now)}
-        </span>
-      </div>
+      <StatItem
+        icon="📈"
+        iconAriaLabel="平均分歧指数图标"
+        label="平均分歧指数"
+        align="center"
+        value={
+          <span
+            style={{
+              fontSize: 18,
+              fontWeight: 700,
+              color: avgDivergence > 60 ? '#f87171' : avgDivergence > 30 ? '#fbbf24' : '#4ade80',
+            }}
+          >
+            {avgDivergence}
+          </span>
+        }
+      />
+      <StatItem
+        icon="🕐"
+        iconAriaLabel="更新时间图标"
+        label="更新时间"
+        align="right"
+        value={
+          <span style={{ fontSize: 18, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+            {formatTime(now)}
+          </span>
+        }
+      />
     </div>
   );
 };

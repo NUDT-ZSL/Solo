@@ -33,3 +33,25 @@ body {
 .btn-bounce:active {
   animation: bounceIn 0.15s ease;
 }
+
+@keyframes cardPulse {
+  0%   { background-color: #ffffff; }
+  30%  { background-color: #e8f5e9; }
+  60%  { background-color: #f0fdf4; }
+  100% { background-color: #ffffff; }
+}
+
+.card-pulse {
+  animation: cardPulse 600ms ease-out forwards;
+}
+
+@keyframes voteBtnPulse {
+  0%   { filter: brightness(1); }
+  40%  { filter: brightness(1.35); }
+  70%  { filter: brightness(1.15); }
+  100% { filter: brightness(1); }
+}
+
+.vote-btn-pulse {
+  animation: voteBtnPulse 500ms ease-out;
+}
