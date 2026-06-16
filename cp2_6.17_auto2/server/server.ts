@@ -432,6 +432,27 @@ function loadOrGenerateLevel(id: string): LevelData | null {
   return levelData;
 }
 
+app.get('/api/levels', (_req, res) => {
+  const levels: Array<{ id: string; name: string; enemiesCount: number; itemsCount: number }> = [];
+
+  for (const id of Object.keys(levelGenerators)) {
+    const data = loadOrGenerateLevel(id);
+    if (data) {
+      levels.push({
+        id: data.id,
+        name: data.name,
+        enemiesCount: data.enemies.length,
+        itemsCount: data.targetItems.length
+      });
+    }
+  }
+
+  res.json({
+    levels,
+    totalLevels: levels.length
+  });
+});
+
 app.get('/api/levels/:id', (req, res) => {
   const startTime = Date.now();
   const { id } = req.params;
@@ -459,27 +480,6 @@ app.get('/api/levels/:id', (req, res) => {
       message: '加载关卡数据失败'
     });
   }
-});
-
-app.get('/api/levels', (_req, res) => {
-  const levels: Array<{ id: string; name: string; enemiesCount: number; itemsCount: number }> = [];
-
-  for (const id of Object.keys(levelGenerators)) {
-    const data = loadOrGenerateLevel(id);
-    if (data) {
-      levels.push({
-        id: data.id,
-        name: data.name,
-        enemiesCount: data.enemies.length,
-        itemsCount: data.targetItems.length
-      });
-    }
-  }
-
-  res.json({
-    levels,
-    totalLevels: levels.length
-  });
 });
 
 app.post('/api/progress/save', (req, res) => {
