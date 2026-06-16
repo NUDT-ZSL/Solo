@@ -59,6 +59,7 @@ const App: React.FC = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date(2024, 5, 1));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedExhibition, setSelectedExhibition] = useState<Exhibition | null>(null);
+  const [isCalendarAnimating, setIsCalendarAnimating] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -157,11 +158,29 @@ const App: React.FC = () => {
   };
 
   const prevMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+    if (isCalendarAnimating) return;
+    setIsCalendarAnimating(true);
+    setTimeout(() => {
+      setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+      setSelectedDate(null);
+      setSelectedExhibition(null);
+      setTimeout(() => {
+        setIsCalendarAnimating(false);
+      }, 50);
+    }, 300);
   };
 
   const nextMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+    if (isCalendarAnimating) return;
+    setIsCalendarAnimating(true);
+    setTimeout(() => {
+      setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+      setSelectedDate(null);
+      setSelectedExhibition(null);
+      setTimeout(() => {
+        setIsCalendarAnimating(false);
+      }, 50);
+    }, 300);
   };
 
   const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
@@ -258,23 +277,26 @@ const App: React.FC = () => {
               <button
                 onClick={prevMonth}
                 style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '8px',
-                  border: '1px solid #D5DBDB',
-                  backgroundColor: 'white',
-                  cursor: 'pointer',
-                  fontSize: '16px',
-                  transition: 'all 0.2s',
+                  background: 'none',
+                  border: 'none',
+                  padding: '6px 4px',
+                  cursor: isCalendarAnimating ? 'not-allowed' : 'pointer',
+                  fontSize: '15px',
+                  color: '#4A90D9',
+                  transition: 'text-decoration 0.2s',
+                  textDecoration: 'none',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#F8F9F9';
+                  if (!isCalendarAnimating) {
+                    e.currentTarget.style.textDecoration = 'underline';
+                  }
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'white';
+                  e.currentTarget.style.textDecoration = 'none';
                 }}
+                disabled={isCalendarAnimating}
               >
-                ◀
+                ◀ 上一月
               </button>
               <h3 style={{ fontSize: '18px', color: '#2C3E50', margin: 0 }}>
                 {currentMonth.getFullYear()}年{currentMonth.getMonth() + 1}月
@@ -282,23 +304,26 @@ const App: React.FC = () => {
               <button
                 onClick={nextMonth}
                 style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '8px',
-                  border: '1px solid #D5DBDB',
-                  backgroundColor: 'white',
-                  cursor: 'pointer',
-                  fontSize: '16px',
-                  transition: 'all 0.2s',
+                  background: 'none',
+                  border: 'none',
+                  padding: '6px 4px',
+                  cursor: isCalendarAnimating ? 'not-allowed' : 'pointer',
+                  fontSize: '15px',
+                  color: '#4A90D9',
+                  transition: 'text-decoration 0.2s',
+                  textDecoration: 'none',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#F8F9F9';
+                  if (!isCalendarAnimating) {
+                    e.currentTarget.style.textDecoration = 'underline';
+                  }
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'white';
+                  e.currentTarget.style.textDecoration = 'none';
                 }}
+                disabled={isCalendarAnimating}
               >
-                ▶
+                下一月 ▶
               </button>
             </div>
 
@@ -307,6 +332,8 @@ const App: React.FC = () => {
                 display: 'grid',
                 gridTemplateColumns: 'repeat(7, 1fr)',
                 gap: '4px',
+                opacity: isCalendarAnimating ? 0 : 1,
+                transition: 'opacity 0.3s ease',
               }}
             >
               {weekDays.map(day => (

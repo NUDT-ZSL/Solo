@@ -275,7 +275,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={dailyData}
-              margin={{ top: 20, right: 60, left: 20, bottom: 20 }}
+              margin={{ top: 20, right: 60, left: 20, bottom: 0 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#E8E8E8" />
               <XAxis
@@ -298,17 +298,11 @@ const Dashboard: React.FC<DashboardProps> = ({
                 label={{ value: '预约排队数', angle: 90, position: 'insideRight', fill: '#8E44AD', fontSize: 12 }}
               />
               <Tooltip content={<CustomTooltip />} />
-              <Legend
-                wrapperStyle={{ paddingTop: '10px' }}
-                iconType="line"
-                iconSize={14}
-                formatter={(value: string) => <span style={{ fontSize: '12px', color: '#2C3E50' }}>{value}</span>}
-              />
               <Line
                 yAxisId="left"
                 type="monotone"
                 dataKey="borrowCount"
-                name="借阅量"
+                name="每日借阅量"
                 stroke="#4A90D9"
                 strokeWidth={2.5}
                 dot={(props) => <CustomDot {...props} topThree={topThree} />}
@@ -320,7 +314,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 yAxisId="right"
                 type="monotone"
                 dataKey="reservationCount"
-                name="预约排队数"
+                name="预约排队人数"
                 stroke="#8E44AD"
                 strokeWidth={2.5}
                 dot={{ r: 3, fill: '#8E44AD' }}
@@ -331,11 +325,44 @@ const Dashboard: React.FC<DashboardProps> = ({
             </ComposedChart>
           </ResponsiveContainer>
         </div>
-        <div style={{ marginTop: '16px', padding: '12px', backgroundColor: '#F8F9FA', borderRadius: '8px' }}>
-          <p style={{ fontSize: '13px', color: '#7F8C8D', margin: 0 }}>
-            <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#F39C12', marginRight: '8px' }}></span>
-            金色圆点标记热度最高的三天
-          </p>
+
+        <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '32px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span
+              style={{
+                display: 'inline-block',
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                backgroundColor: '#4A90D9',
+              }}
+            />
+            <span style={{ fontSize: '14px', color: '#2C3E50' }}>每日借阅量</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span
+              style={{
+                display: 'inline-block',
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                backgroundColor: '#8E44AD',
+              }}
+            />
+            <span style={{ fontSize: '14px', color: '#2C3E50' }}>预约排队人数</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span
+              style={{
+                display: 'inline-block',
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                backgroundColor: '#F39C12',
+              }}
+            />
+            <span style={{ fontSize: '14px', color: '#2C3E50' }}>热度最高三天</span>
+          </div>
         </div>
       </div>
     </div>

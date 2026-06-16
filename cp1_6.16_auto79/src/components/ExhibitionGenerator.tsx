@@ -328,16 +328,22 @@ const BookCard: React.FC<BookCardProps> = ({ book, selected, gradient, onClick, 
         cursor: 'pointer',
         position: 'relative',
         overflow: 'hidden',
-        boxShadow: selected ? '0 4px 16px rgba(74, 144, 217, 0.3)' : '0 2px 8px rgba(0, 0, 0, 0.1)',
-        transition: 'transform 0.2s, box-shadow 0.2s',
+        boxShadow: selected ? '0 4px 16px rgba(74, 144, 217, 0.3)' : '0 4px 4px #A0A0A0',
+        transition: 'transform 0.3s ease, box-shadow 0.3s ease',
         animation: `scaleIn 0.3s ease-out ${delay}s both`,
-        transform: selected ? 'scale(1.02)' : 'scale(1)',
+        transform: selected ? 'translateY(-2px)' : 'translateY(0)',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.transform = selected ? 'scale(1.05)' : 'scale(1.03)';
+        e.currentTarget.style.transform = 'translateY(-2px)';
+        e.currentTarget.style.boxShadow = selected
+          ? '0 8px 20px rgba(74, 144, 217, 0.4)'
+          : '0 8px 8px rgba(0, 0, 0, 0.2)';
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.transform = selected ? 'scale(1.02)' : 'scale(1)';
+        e.currentTarget.style.transform = selected ? 'translateY(-2px)' : 'translateY(0)';
+        e.currentTarget.style.boxShadow = selected
+          ? '0 4px 16px rgba(74, 144, 217, 0.3)'
+          : '0 4px 4px #A0A0A0';
       }}
     >
       <div
