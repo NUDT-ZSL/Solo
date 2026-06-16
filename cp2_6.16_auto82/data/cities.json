@@ -1,0 +1,102 @@
+[
+  {
+    "id": "tokyo",
+    "name": "Tokyo",
+    "nameZh": "东京",
+    "lat": 35.68,
+    "lng": 139.69,
+    "population": 37800000,
+    "timezone": 9,
+    "landmark": "东京塔与涩谷十字路口"
+  },
+  {
+    "id": "newyork",
+    "name": "New York",
+    "nameZh": "纽约",
+    "lat": 40.71,
+    "lng": -74.01,
+    "population": 18800000,
+    "timezone": -5,
+    "landmark": "自由女神像与时代广场"
+  },
+  {
+    "id": "london",
+    "name": "London",
+    "nameZh": "伦敦",
+    "lat": 51.51,
+    "lng": -0.13,
+    "population": 9500000,
+    "timezone": 0,
+    "landmark": "大本钟与伦敦眼"
+  },
+  {
+    "id": "paris",
+    "name": "Paris",
+    "nameZh": "巴黎",
+    "lat": 48.86,
+    "lng": 2.35,
+    "population": 11000000,
+    "timezone": 1,
+    "landmark": "埃菲尔铁塔与卢浮宫"
+  },
+  {
+    "id": "sydney",
+    "name": "Sydney",
+    "nameZh": "悉尼",
+    "lat": -33.87,
+    "lng": 151.21,
+    "population": 5300000,
+    "timezone": 10,
+    "landmark": "悉尼歌剧院与海港大桥"
+  },
+  {
+    "id": "cairo",
+    "name": "Cairo",
+    "nameZh": "开罗",
+    "lat": 30.04,
+    "lng": 31.24,
+    "population": 9600000,
+    "timezone": 2,
+    "landmark": "吉萨金字塔群"
+  },
+  {
+    "id": "rio",
+    "name": "Rio de Janeiro",
+    "nameZh": "里约热内卢",
+    "lat": -22.91,
+    "lng": -43.17,
+    "population": 13500000,
+    "timezone": -3,
+    "landmark": "基督像与科帕卡巴纳海滩"
+  },
+  {
+    "id": "moscow",
+    "name": "Moscow",
+    "nameZh": "莫斯科",
+    "lat": 55.76,
+    "lng": 37.62,
+    "population": 12500000,
+    "timezone": 3,
+    "landmark": "红场与克里姆林宫"
+  },
+  {
+    "id": "dubai",
+    "name": "Dubai",
+    "nameZh": "迪拜",
+    "lat": 25.20,
+    "lng": 55.27,
+    "population": 3400000,
+    "timezone": 4,
+    "landmark": "哈利法塔与棕榈岛"
+  },
+  {
+    "id": "singapore",
+    "name": "Singapore",
+    "nameZh": "新加坡",
+    "lat": 1.35,
+    "lng": 103.82,
+    "population": 5700000,
+    "timezone": 8,
+    "landmark": "滨海湾金沙与鱼尾狮"
+  }
+]

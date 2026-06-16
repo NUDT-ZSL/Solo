@@ -1,0 +1,23 @@
+[
+  {
+    "condition": "sunny",
+    "instruments": ["piano", "acoustic_guitar"],
+    "scaleOffset": 0,
+    "baseBPM": 80,
+    "description": "晴天：钢琴+木吉他，明亮温暖的音色"
+  },
+  {
+    "condition": "cloudy",
+    "instruments": ["synth", "strings"],
+    "scaleOffset": -2,
+    "baseBPM": 70,
+    "description": "多云：电子琴+弦乐，柔和沉稳的氛围"
+  },
+  {
+    "condition": "rainy",
+    "instruments": ["piano", "rain_noise"],
+    "scaleOffset": -5,
+    "baseBPM": 60,
+    "description": "雨天：钢琴+雨声白噪音，忧郁宁静的质感"
+  }
+]
