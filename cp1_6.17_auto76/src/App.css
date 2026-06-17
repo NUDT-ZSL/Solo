@@ -1,0 +1,187 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: #1A237E;
+  color: #333;
+}
+
+.app {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-nav {
+  display: none;
+}
+
+.app-layout {
+  flex: 1;
+  display: flex;
+  max-width: 1440px;
+  width: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+  background: #F5F5F5;
+}
+
+.sidebar-panel {
+  width: 15%;
+  min-width: 220px;
+  max-width: 280px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.map-panel {
+  width: 70%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.map-panel > .map-container {
+  flex: 1;
+}
+
+.map-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #FFFFFF;
+  border-top: 1px solid #e0e0e0;
+}
+
+.action-summary {
+  display: flex;
+  gap: 16px;
+}
+
+.summary-item {
+  font-size: 13px;
+  color: #666;
+}
+
+.summary-item.highlight {
+  color: #2196F3;
+  font-weight: 600;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn {
+  padding: 6px 14px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: white;
+  color: #666;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-btn:hover {
+  background: #F5F5F5;
+  border-color: #1A237E;
+  color: #1A237E;
+}
+
+.route-panel-wrapper {
+  width: 15%;
+  min-width: 220px;
+  max-width: 300px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.mobile-overlay {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: #1A237E;
+    color: white;
+    z-index: 1000;
+  }
+
+  .mobile-nav-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 4px 12px;
+    border-radius: 6px;
+    transition: background 0.2s;
+  }
+
+  .mobile-nav-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .nav-icon {
+    font-size: 18px;
+  }
+
+  .nav-label {
+    font-size: 11px;
+  }
+
+  .mobile-nav-title {
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .app-layout {
+    flex-direction: column;
+  }
+
+  .sidebar-panel {
+    display: none;
+  }
+
+  .route-panel-wrapper {
+    display: none;
+  }
+
+  .map-panel {
+    width: 100%;
+  }
+
+  .map-action-bar {
+    display: none;
+  }
+
+  .mobile-overlay {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 1050;
+  }
+}
