@@ -1,14 +1,129 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-  line-height: 1.5;
-  font-weight: 400;
+  --color-primary: #f5deb3;
+  --color-secondary: #8b4513;
+  --color-bg: #fdf5e6;
+  --color-card-bg: #fff8e7;
+  --color-hover: #fff3e0;
+  --color-focus: #ffb74d;
+  --color-main-branch: #4caf50;
+  --color-feature-branch: #ff9800;
+  --color-merge: #9c27b0;
+  --color-diff-added: #c8e6c9;
+  --color-diff-removed: #ffcdd2;
+  --color-text-primary: #3e2723;
+  --color-text-secondary: #6d4c41;
+}
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+body {
+  font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Noto Serif SC', serif;
+  color: var(--color-text-primary);
+}
+
+button {
+  font-family: 'Noto Sans SC', sans-serif;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  background: none;
+  transition: all 0.15s ease;
+}
+
+button:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+button:active:not(:disabled) {
+  transform: scale(1);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input, textarea, select {
+  font-family: 'Noto Sans SC', sans-serif;
+  outline: none;
+  transition: all 0.3s ease;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: white;
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 3px rgba(255, 183, 77, 0.15);
+}
+
+.btn-primary {
+  background-color: var(--color-secondary);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.btn-secondary {
+  background-color: var(--color-primary);
+  color: var(--color-text-primary);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.btn-outline {
+  background-color: transparent;
+  color: var(--color-secondary);
+  border: 1px solid var(--color-secondary);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-primary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-secondary);
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .recipe-card-print,
+  .recipe-card-print * {
+    visibility: visible;
+  }
+  .recipe-card-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+  }
 }

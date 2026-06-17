@@ -1,7 +1,7 @@
 export interface User {
   id: string;
   username: string;
-  password: string;
+  password?: string;
   createdAt: string;
 }
 
@@ -57,9 +57,20 @@ export interface VersionDiff {
   notes: DiffChange;
 }
 
-export interface AuthState {
-  user: User | null;
-  isAuthenticated: boolean;
+export interface GraphNode {
+  id: string;
+  x: number;
+  y: number;
+  vx?: number;
+  vy?: number;
+  version: Version;
+  fx?: number | null;
+  fy?: number | null;
+}
+
+export interface GraphLink {
+  source: string | GraphNode;
+  target: string | GraphNode;
 }
 
 export type ViewMode = 'editor' | 'versions' | 'card';
