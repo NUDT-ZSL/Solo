@@ -408,14 +408,94 @@ body {
   filter: none;
 }
 
+.input-mode-tabs {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.input-mode-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--primary-dark);
+}
+
+.batch-hint {
+  font-size: 12px;
+  color: var(--gray-dark);
+}
+
+.batch-section {
+  border-top: 1px dashed var(--gray-medium);
+  padding-top: 20px;
+  margin-top: 20px;
+}
+
+.batch-input-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.batch-textarea {
+  flex: 1;
+  padding: 12px 16px;
+  border: 2px solid var(--gray-medium);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 100px;
+  transition: var(--transition);
+  background: var(--bg-white);
+  color: var(--text-color);
+  line-height: 1.6;
+}
+
+.batch-textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(255, 140, 66, 0.15);
+}
+
+.batch-textarea::placeholder {
+  color: var(--gray-dark);
+  font-size: 13px;
+}
+
+.batch-add-btn {
+  align-self: stretch;
+  min-width: 120px;
+  padding: 12px 20px;
+}
+
 .selected-ingredients {
   margin-bottom: 20px;
+}
+
+.selected-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
 }
 
 .selected-title {
   font-size: 14px;
   color: var(--text-light);
-  margin-bottom: 12px;
+  margin-bottom: 0;
+}
+
+.ingredient-count {
+  font-size: 14px;
+  color: var(--text-light);
+}
+
+.ingredient-count strong {
+  color: var(--primary-color);
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .ingredient-tags {
@@ -1004,6 +1084,25 @@ body {
 
   .quantity-selector {
     justify-content: space-between;
+  }
+
+  .batch-input-row {
+    flex-direction: column;
+  }
+
+  .batch-add-btn {
+    width: 100%;
+    align-self: center;
+  }
+
+  .input-mode-tabs {
+    flex-wrap: wrap;
+  }
+
+  .selected-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
   }
 
   .match-section {

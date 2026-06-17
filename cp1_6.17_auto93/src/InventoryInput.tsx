@@ -12,6 +12,7 @@ function InventoryInput({ onMatch }: InventoryInputProps) {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [batchInput, setBatchInput] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -109,6 +110,44 @@ function InventoryInput({ onMatch }: InventoryInputProps) {
     }
   };
 
+  const handleBatchAdd = () => {
+    if (!batchInput.trim()) {
+      alert('请输入要添加的食材');
+      return;
+    }
+
+    const names = batchInput
+      .split(/[,，\n\r]+/)
+      .map(name => name.trim())
+      .filter(name => name.length > 0);
+
+    if (names.length === 0) {
+      alert('没有解析到有效的食材名称');
+      return;
+    }
+
+    setSelectedIngredients(prev => {
+      let updated = [...prev];
+      names.forEach(name => {
+        const exists = updated.find(
+          ing => ing.name.toLowerCase() === name.toLowerCase()
+        );
+        if (exists) {
+          updated = updated.map(ing =>
+            ing.name.toLowerCase() === name.toLowerCase()
+              ? { ...ing, quantity: ing.quantity + 1 }
+              : ing
+          );
+        } else {
+          updated.push({ name, quantity: 1 });
+        }
+      });
+      return updated;
+    });
+
+    setBatchInput('');
+  };
+
   const handleMatch = () => {
     if (selectedIngredients.length === 0) {
       alert('请先添加至少一种食材');
@@ -123,6 +162,9 @@ function InventoryInput({ onMatch }: InventoryInputProps) {
       <p className="input-hint">输入你冰箱里有的食材，系统会为你匹配可制作的食谱</p>
       
       <div className="input-section">
+        <div className="input-mode-tabs">
+          <span className="input-mode-label">📝 单个添加</span>
+        </div>
         <div className="input-row">
           <div className="ingredient-input-wrapper" ref={suggestionsRef}>
             <input
@@ -179,9 +221,37 @@ function InventoryInput({ onMatch }: InventoryInputProps) {
         </div>
       </div>
 
+      <div className="input-section batch-section">
+        <div className="input-mode-tabs">
+          <span className="input-mode-label">⚡ 批量添加</span>
+          <span className="batch-hint">用逗号或换行分隔多个食材</span>
+        </div>
+        <div className="batch-input-row">
+          <textarea
+            className="batch-textarea"
+            placeholder="例如：鸡蛋、番茄、洋葱、鸡胸肉&#10;或者每行一个：&#10;土豆&#10;胡萝卜&#10;青椒"
+            value={batchInput}
+            onChange={(e) => setBatchInput(e.target.value)}
+            rows={4}
+          />
+          <button 
+            className="btn ripple-btn batch-add-btn"
+            onClick={handleBatchAdd}
+            disabled={!batchInput.trim()}
+          >
+            📦 批量添加
+          </button>
+        </div>
+      </div>
+
       {selectedIngredients.length > 0 && (
         <div className="selected-ingredients">
-          <p className="selected-title">已选择的食材：</p>
+          <div className="selected-header">
+            <p className="selected-title">已选择的食材：</p>
+            <p className="ingredient-count">
+              共 <strong>{selectedIngredients.length}</strong> 种食材
+            </p>
+          </div>
           <div className="ingredient-tags">
             {selectedIngredients.map((ing, index) => (
               <div key={`${ing.name}-${index}`} className="ingredient-tag">
@@ -190,6 +260,7 @@ function InventoryInput({ onMatch }: InventoryInputProps) {
                 <button 
                   className="tag-remove"
                   onClick={() => handleRemoveIngredient(ing.name)}
+                  title="删除此食材"
                 >
                   ×
                 </button>

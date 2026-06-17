@@ -1,11 +1,12 @@
-require('ts-node/register');
+require('ts-node').register({
+  project: './tsconfig.server.json'
+});
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 
-const { INGREDIENT_LIBRARY, RECIPES, getRecipeById, getAllRecipes } = require('./recipesData.ts');
-const { matchRecipes } = require('./matchingEngine.ts');
-const { generateShoppingList, generateShoppingListForSingleRecipe } = require('./shoppingList.ts');
+const { INGREDIENT_LIBRARY, RECIPES, getRecipeById, getAllRecipes } = require('./recipesData');
+const { matchRecipes } = require('./matchingEngine');
+const { generateShoppingList, generateShoppingListForSingleRecipe } = require('./shoppingList');
 
 const app = express();
 const PORT = 3001;
