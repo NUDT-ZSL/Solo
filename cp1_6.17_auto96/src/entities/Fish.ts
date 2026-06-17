@@ -17,7 +17,7 @@ export default class Fish {
   spawnProgress: number;
   isEndangered: boolean;
 
-  static readonly MAX_SPEED = 2;
+  static MAX_SPEED: number = 2;
   static readonly MIN_SPEED = 0.5;
   static readonly PERCEPTION_RADIUS = 100;
   static readonly SEPARATION_RADIUS = 30;

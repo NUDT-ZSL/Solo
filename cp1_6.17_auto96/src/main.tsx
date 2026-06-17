@@ -24,6 +24,7 @@ const App: React.FC = () => {
   const waveOffsetRef = useRef<number>(0);
   const panelRef = useRef<HTMLDivElement>(null);
   const canvasSizeRef = useRef(calcCanvasSize());
+  const speedRef = useRef<number>(1);
 
   const [stats, setStats] = useState<EcosystemStats>({
     fishCount: 0,
@@ -33,6 +34,7 @@ const App: React.FC = () => {
     events: [],
   });
   const [canvasSize, setCanvasSize] = useState(calcCanvasSize());
+  const [speedMultiplier, setSpeedMultiplier] = useState<number>(1);
 
   const handleResize = useCallback(() => {
     const newSize = calcCanvasSize();
@@ -150,7 +152,7 @@ const App: React.FC = () => {
       ctx.restore();
     };
 
-    const drawHUD = () => {
+    const drawHUD = (currentSpeed: number) => {
       ctx.save();
       ctx.font = '16px monospace';
       ctx.fillStyle = '#FFFFFF';
@@ -180,6 +182,10 @@ const App: React.FC = () => {
 
       ctx.fillStyle = isLowScore ? '#FF0000' : '#FFFFFF';
       ctx.fillText(scoreText, padding, y);
+      y += lineHeight;
+
+      ctx.fillStyle = currentSpeed > 3 ? '#FFA500' : '#00D4FF';
+      ctx.fillText(`速度: ${currentSpeed.toFixed(1)}x`, padding, y);
 
       ctx.restore();
     };
@@ -202,10 +208,18 @@ const App: React.FC = () => {
       drawBackground(w, h);
       drawWaves(w);
 
-      ecosystem.update();
+      const currentSpeed = speedRef.current;
+      const fullUpdates = Math.floor(currentSpeed);
+      const fractionalUpdate = currentSpeed - fullUpdates;
+      for (let i = 0; i < fullUpdates; i++) {
+        ecosystem.update();
+      }
+      if (fractionalUpdate > 0 && Math.random() < fractionalUpdate) {
+        ecosystem.update();
+      }
       ecosystem.draw(ctx);
 
-      drawHUD();
+      drawHUD(currentSpeed);
       drawBoomFlash(w, h);
 
       animationRef.current = requestAnimationFrame(render);
@@ -233,6 +247,11 @@ const App: React.FC = () => {
 
   const handleReset = () => {
     ecosystemRef.current?.reset();
+  };
+
+  const handleSpeedChange = (speed: number) => {
+    setSpeedMultiplier(speed);
+    speedRef.current = speed;
   };
 
   return (
@@ -280,10 +299,12 @@ const App: React.FC = () => {
             predatorCount={stats.predatorCount}
             algaeCount={stats.algaeCount}
             stabilityScore={stats.stabilityScore}
+            speedMultiplier={speedMultiplier}
             onSpawnFish={handleSpawnFish}
             onSpawnPredator={handleSpawnPredator}
             onSpawnAlgae={handleSpawnAlgae}
             onReset={handleReset}
+            onSpeedChange={handleSpeedChange}
           />
         </div>
       </div>

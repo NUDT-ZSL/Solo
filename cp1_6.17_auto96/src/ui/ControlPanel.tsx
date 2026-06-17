@@ -5,10 +5,12 @@ interface ControlPanelProps {
   predatorCount: number;
   algaeCount: number;
   stabilityScore: number;
+  speedMultiplier: number;
   onSpawnFish: () => void;
   onSpawnPredator: () => void;
   onSpawnAlgae: () => void;
   onReset: () => void;
+  onSpeedChange: (speed: number) => void;
 }
 
 const ControlPanel: React.FC<ControlPanelProps> = ({
@@ -16,10 +18,12 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   predatorCount,
   algaeCount,
   stabilityScore,
+  speedMultiplier,
   onSpawnFish,
   onSpawnPredator,
   onSpawnAlgae,
   onReset,
+  onSpeedChange,
 }) => {
   const isLowScore = stabilityScore < 30;
   
@@ -106,6 +110,78 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           <div style={{ fontSize: '12px', opacity: 0.6 }}>
             / 100
           </div>
+        </div>
+      </div>
+
+      <div style={{
+        padding: '10px',
+        backgroundColor: 'rgba(0, 0, 0, 0.2)',
+        borderRadius: '8px',
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: '8px' }}>
+          <span style={{ fontSize: '12px', opacity: 0.8 }}>模拟速度</span>
+          <span style={{ marginLeft: '8px', fontWeight: 'bold', color: '#00D4FF', fontSize: '14px' }}>
+            {speedMultiplier.toFixed(1)}x
+          </span>
+        </div>
+        <div style={{ position: 'relative', width: '100%', height: '24px', display: 'flex', alignItems: 'center' }}>
+          <div style={{
+            width: '100%',
+            height: '6px',
+            backgroundColor: 'rgba(255, 255, 255, 0.15)',
+            borderRadius: '3px',
+            position: 'relative',
+          }}>
+            <div style={{
+              height: '6px',
+              borderRadius: '3px',
+              background: 'linear-gradient(90deg, #00D4FF, #0088CC)',
+              width: `${((speedMultiplier - 0.5) / 4.5) * 100}%`,
+              transition: 'width 0.15s ease',
+            }} />
+          </div>
+          <input
+            type="range"
+            min="0.5"
+            max="5"
+            step="0.5"
+            value={speedMultiplier}
+            onChange={(e) => onSpeedChange(parseFloat(e.target.value))}
+            style={{
+              position: 'absolute',
+              width: '100%',
+              height: '24px',
+              top: 0,
+              left: 0,
+              margin: 0,
+              padding: 0,
+              opacity: 0,
+              cursor: 'pointer',
+            }}
+          />
+          <div style={{
+            position: 'absolute',
+            left: `${((speedMultiplier - 0.5) / 4.5) * 100}%`,
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: '16px',
+            height: '16px',
+            borderRadius: '50%',
+            backgroundColor: '#FFFFFF',
+            boxShadow: '0 0 6px rgba(0, 212, 255, 0.6)',
+            pointerEvents: 'none',
+            transition: 'left 0.15s ease',
+          }} />
+        </div>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          fontSize: '10px',
+          opacity: 0.4,
+          marginTop: '4px',
+        }}>
+          <span>0.5x</span>
+          <span>5.0x</span>
         </div>
       </div>
 
