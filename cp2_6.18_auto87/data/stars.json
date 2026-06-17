@@ -42,8 +42,22 @@
       {
         "id": "s5",
         "name": "织女星",
-        "constellation": "天鹅座",
+        "constellation": "天琴座",
         "magnitude": 0.03,
+        "observationMethod": "肉眼"
+      },
+      {
+        "id": "s11",
+        "name": "南河三",
+        "constellation": "小犬座",
+        "magnitude": 0.34,
+        "observationMethod": "肉眼"
+      },
+      {
+        "id": "s12",
+        "name": "牛郎星",
+        "constellation": "天鹰座",
+        "magnitude": 0.77,
         "observationMethod": "肉眼"
       }
     ]
@@ -94,6 +108,69 @@
         "constellation": "天鹅座",
         "magnitude": 1.25,
         "observationMethod": "天文望远镜"
+      },
+      {
+        "id": "s13",
+        "name": "天枢",
+        "constellation": "大熊座",
+        "magnitude": 1.79,
+        "observationMethod": "肉眼"
+      },
+      {
+        "id": "s14",
+        "name": "天璇",
+        "constellation": "大熊座",
+        "magnitude": 2.37,
+        "observationMethod": "肉眼"
+      },
+      {
+        "id": "s15",
+        "name": "天玑",
+        "constellation": "大熊座",
+        "magnitude": 2.44,
+        "observationMethod": "肉眼"
+      }
+    ]
+  },
+  {
+    "id": "sample-3",
+    "createdAt": "2024-05-10T21:00:00.000Z",
+    "date": "2024-05-10",
+    "location": {
+      "name": "内蒙古乌兰察布火山公园",
+      "latitude": 41.6833,
+      "longitude": 113.1500
+    },
+    "weather": "多云",
+    "photos": [],
+    "stars": [
+      {
+        "id": "s16",
+        "name": "心宿二",
+        "constellation": "天蝎座",
+        "magnitude": 0.96,
+        "observationMethod": "肉眼"
+      },
+      {
+        "id": "s17",
+        "name": "角宿一",
+        "constellation": "室女座",
+        "magnitude": 0.97,
+        "observationMethod": "天文望远镜"
+      },
+      {
+        "id": "s18",
+        "name": "大角星",
+        "constellation": "牧夫座",
+        "magnitude": -0.04,
+        "observationMethod": "肉眼"
+      },
+      {
+        "id": "s19",
+        "name": "轩辕十四",
+        "constellation": "狮子座",
+        "magnitude": 1.35,
+        "observationMethod": "双筒望远镜"
       }
     ]
   }

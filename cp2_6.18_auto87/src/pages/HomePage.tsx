@@ -111,12 +111,20 @@ export default function HomePage() {
     if (!search.trim() && !selectedConstellation) return;
     if (filteredStars.length === 0) return;
     const firstId = filteredStars[0].id;
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       const el = cardRefs.current.get(firstId);
-      if (el) {
+      const container = document.getElementById('star-cards-container');
+      if (el && container) {
+        const rect = el.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        if (rect.top < containerRect.top || rect.bottom > containerRect.bottom) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        }
+      } else if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
-    }, 50);
+    }, 100);
+    return () => clearTimeout(timer);
   }, [search, selectedConstellation, filteredStars]);
 
   const starPositions = useMemo(() => {
@@ -200,33 +208,6 @@ export default function HomePage() {
           </div>
         </div>
 
-        {selectedConstellation && (
-          <div style={{
-            background: '#132333', borderRadius: '12px', padding: '12px',
-            border: `1px solid ${getConstellationColor(selectedConstellation)}33`
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ color: getConstellationColor(selectedConstellation), fontWeight: 600, fontSize: '13px' }}>
-                {selectedConstellation}
-              </span>
-              <button onClick={() => setSelectedConstellation(null)} style={{
-                background: 'transparent', border: 'none', color: '#9e9e9e', fontSize: '16px', cursor: 'pointer'
-              }}>×</button>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '200px', overflowY: 'auto' }}>
-              {filteredStars.filter(s => s.constellation === selectedConstellation).map((s) => (
-                <div key={s.id} onClick={() => setSelectedStar(s)} style={{
-                  padding: '6px 8px', borderRadius: '6px', fontSize: '12px', color: '#e0e0e0',
-                  background: 'rgba(255,255,255,0.03)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between'
-                }}>
-                  <span>{s.name}</span>
-                  <span style={{ color: '#ffd54f' }}>{s.magnitude.toFixed(2)}m</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {records.length > 0 && (
           <div>
             <div style={{ fontSize: '13px', color: '#90caf9', marginBottom: '10px', fontWeight: 600 }}>历史活动</div>
@@ -305,28 +286,125 @@ export default function HomePage() {
           )}
         </div>
 
+        {selectedConstellation && (
+          <div style={{
+            background: '#1b2838', borderRadius: '16px', padding: '20px',
+            border: `1px solid ${getConstellationColor(selectedConstellation)}44`,
+            marginBottom: '24px', transition: 'all 0.3s ease',
+            boxShadow: `0 4px 20px ${getConstellationColor(selectedConstellation)}15`
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: '40px', height: '40px', borderRadius: '50%',
+                  background: `linear-gradient(135deg, ${getConstellationColor(selectedConstellation)}40, ${getConstellationColor(selectedConstellation)}10)`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '20px'
+                }}>
+                  ✦
+                </div>
+                <div>
+                  <h2 style={{ color: getConstellationColor(selectedConstellation), fontSize: '18px', fontWeight: 700 }}>
+                    {selectedConstellation}
+                  </h2>
+                  <div style={{ fontSize: '12px', color: '#90caf9' }}>
+                    共观测 {allStars.filter(s => s.constellation === selectedConstellation).length} 颗星星
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => setSelectedConstellation(null)} style={{
+                background: 'rgba(124,77,255,0.15)', border: '1px solid rgba(124,77,255,0.3)',
+                color: '#b388ff', borderRadius: '8px', padding: '8px 16px',
+                fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s ease'
+              }} onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(239,83,80,0.2)';
+                e.currentTarget.style.color = '#ef5350';
+                e.currentTarget.style.borderColor = 'rgba(239,83,80,0.3)';
+              }} onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(124,77,255,0.15)';
+                e.currentTarget.style.color = '#b388ff';
+                e.currentTarget.style.borderColor = 'rgba(124,77,255,0.3)';
+              }}>
+                查看全部 ✕
+              </button>
+            </div>
+            <div style={{
+              display: 'flex', gap: '12px', overflowX: 'auto', padding: '8px 4px',
+              scrollbarWidth: 'thin'
+            }}>
+              {allStars.filter(s => s.constellation === selectedConstellation).map((s) => {
+                const dates = [...s.dates].sort();
+                return (
+                  <div key={s.id} onClick={() => setSelectedStar(s)} ref={(el) => { if (el) cardRefs.current.set(s.id, el); }}
+                    style={{
+                      flexShrink: 0, width: '200px', borderRadius: '12px',
+                      background: 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)',
+                      border: `1px solid ${getConstellationColor(s.constellation)}33`,
+                      padding: '14px', cursor: 'pointer',
+                      transition: 'all 0.3s ease'
+                    }} onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-3px)';
+                      e.currentTarget.style.boxShadow = `0 8px 24px ${getConstellationColor(s.constellation)}30`;
+                      e.currentTarget.style.borderColor = getConstellationColor(s.constellation);
+                    }} onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = 'none';
+                      e.currentTarget.style.borderColor = `${getConstellationColor(s.constellation)}33`;
+                    }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                      <div style={{
+                        width: `${getMagnitudeSize(s.magnitude)}px`, height: `${getMagnitudeSize(s.magnitude)}px`,
+                        borderRadius: '50%', background: '#ffd54f', flexShrink: 0,
+                        boxShadow: `0 0 ${getMagnitudeSize(s.magnitude) + 8}px rgba(255,213,79,0.6)`
+                      }} />
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#e0e0e0' }}>{s.name}</div>
+                        <div style={{ fontSize: '11px', color: getConstellationColor(s.constellation) }}>{s.constellation}</div>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#78909c', lineHeight: 1.6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>星等</span>
+                        <span style={{ color: '#ffd54f', fontFamily: 'monospace' }}>{s.magnitude.toFixed(2)}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+                        <span>观测次数</span>
+                        <span style={{ color: '#90caf9' }}>{s.dates.length}次</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div>
           <div style={{ fontSize: '14px', color: '#90caf9', marginBottom: '12px', fontWeight: 600 }}>
             星星列表 {filteredStars.length !== allStars.length && `(匹配 ${filteredStars.length}/${allStars.length})`}
+            {selectedConstellation && ` · ${selectedConstellation}`}
           </div>
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '16px'
+          <div id="star-cards-container" style={{
+            display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '16px',
+            transition: 'all 0.3s ease', scrollBehavior: 'smooth'
           }}>
             {filteredStars.map((s) => {
               const dates = [...s.dates].sort();
               return (
-                <div key={s.id} onClick={() => setSelectedStar(s)} style={{
-                  width: '240px', height: '160px', borderRadius: '12px', background: 'white',
-                  border: '0.5px solid #e0e0e0', padding: '16px', position: 'relative',
-                  cursor: 'pointer', overflow: 'hidden', display: 'flex', flexDirection: 'column',
-                  transition: 'transform 0.3s ease, box-shadow 0.3s ease'
-                }} onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.15)';
-                }} onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'none';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}>
+                <div key={s.id} onClick={() => setSelectedStar(s)} ref={(el) => { if (el) cardRefs.current.set(s.id, el); }}
+                  style={{
+                    width: '240px', height: '160px', borderRadius: '12px', background: 'white',
+                    border: '0.5px solid #e0e0e0', padding: '16px', position: 'relative',
+                    cursor: 'pointer', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+                    transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+                    scrollMarginTop: '20px'
+                  }} onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.15)';
+                  }} onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'none';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '8px' }}>
                     <div style={{
                       width: `${Math.min(20, getMagnitudeSize(s.magnitude) + 4)}px`,

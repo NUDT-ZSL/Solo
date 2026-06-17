@@ -283,14 +283,17 @@ export default function DetailPage() {
                     <td style={{ padding: '14px 16px', textAlign: 'center' }}>
                       <button onClick={() => setActiveStar(star.name)} style={{
                         background: 'transparent', border: 'none', fontSize: '18px', cursor: 'pointer',
-                        transition: 'all 0.2s ease', color: '#78909c', lineHeight: 1, padding: '4px 8px'
+                        transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s ease',
+                        color: '#78909c', lineHeight: 1, padding: '4px 8px',
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        transformOrigin: 'center center',
                       }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = 'rotate(15deg)';
+                          e.currentTarget.style.transform = 'rotate(15deg) scale(1.1)';
                           e.currentTarget.style.color = '#7c4dff';
                         }}
                         onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = 'rotate(0deg)';
+                          e.currentTarget.style.transform = 'rotate(0deg) scale(1)';
                           e.currentTarget.style.color = '#78909c';
                         }}
                         title="查看星空模拟">
