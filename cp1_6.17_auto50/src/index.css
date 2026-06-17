@@ -1139,7 +1139,7 @@ input, textarea {
 }
 
 .artwork-modal {
-  background: var(--color-white);
+  background: var(--color-warm-gray);
   border-radius: 16px;
   width: 100%;
   max-width: 900px;
@@ -1210,13 +1210,21 @@ input, textarea {
   font-weight: 700;
   color: var(--color-deep-green);
   line-height: 1.3;
+  margin-bottom: 4px;
+}
+
+.artwork-modal-subtitle {
+  font-size: 14px;
+  color: var(--color-medium-gray);
+  font-weight: 400;
 }
 
 .artwork-modal-author {
   display: flex;
   gap: 14px;
   padding: 16px;
-  background: var(--color-warm-gray);
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(45, 74, 62, 0.1);
   border-radius: var(--radius-md);
 }
 

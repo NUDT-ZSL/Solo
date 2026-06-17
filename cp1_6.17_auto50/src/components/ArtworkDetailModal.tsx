@@ -34,6 +34,7 @@ export default function ArtworkDetailModal({ artwork, onClose, onCommission }: A
         </div>
         <div className="artwork-modal-content">
           <h2 className="artwork-modal-title">{artwork.title}</h2>
+          <p className="artwork-modal-subtitle">{artwork.shortTitle}</p>
 
           <div className="artwork-modal-author">
             <img src={artwork.author.avatar} alt={artwork.author.name} />

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import type { Artwork } from '../data/mockData';
 import { styleTags } from '../data/mockData';
@@ -9,10 +9,14 @@ interface PortfolioGridProps {
 }
 
 export default function PortfolioGrid({ onCommission }: PortfolioGridProps) {
-  const getFilteredArtworks = useStore((state) => state.getFilteredArtworks);
+  const artworks = useStore((state) => state.artworks);
   const activeFilter = useStore((state) => state.activeFilter);
   const toggleFilter = useStore((state) => state.toggleFilter);
-  const artworks = getFilteredArtworks();
+
+  const filteredArtworks = useMemo(() => {
+    if (!activeFilter) return artworks;
+    return artworks.filter((a) => a.styles.includes(activeFilter));
+  }, [artworks, activeFilter]);
 
   const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
 
@@ -41,6 +45,7 @@ export default function PortfolioGrid({ onCommission }: PortfolioGridProps) {
           {styleTags.map((tag) => (
             <button
               key={tag}
+              type="button"
               className={`filter-tag ${activeFilter === tag ? 'active' : ''}`}
               onClick={() => toggleFilter(tag)}
             >
@@ -57,14 +62,14 @@ export default function PortfolioGrid({ onCommission }: PortfolioGridProps) {
 
       <div className="portfolio-result-info">
         {activeFilter ? (
-          <span>筛选「{activeFilter}」共 {artworks.length} 件作品</span>
+          <span>筛选「{activeFilter}」共 {filteredArtworks.length} 件作品</span>
         ) : (
-          <span>共 {artworks.length} 件作品</span>
+          <span>共 {filteredArtworks.length} 件作品</span>
         )}
       </div>
 
       <div className="masonry-grid">
-        {artworks.map((artwork, index) => (
+        {filteredArtworks.map((artwork, index) => (
           <div
             key={artwork.id}
             className="artwork-card"
@@ -72,8 +77,9 @@ export default function PortfolioGrid({ onCommission }: PortfolioGridProps) {
             onClick={() => setSelectedArtwork(artwork)}
           >
             <div className="artwork-thumbnail">
-              <img src={artwork.thumbnail} alt={artwork.title} loading="lazy" />
+              <img src={artwork.thumbnail} alt={artwork.shortTitle} loading="lazy" />
               <button
+                type="button"
                 className="commission-btn"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -88,11 +94,12 @@ export default function PortfolioGrid({ onCommission }: PortfolioGridProps) {
                 <img src={artwork.author.avatar} alt={artwork.author.name} />
                 <span>{artwork.author.name}</span>
               </div>
-              <h3 className="artwork-title">{artwork.title}</h3>
+              <h3 className="artwork-title">{artwork.shortTitle}</h3>
               <div className="artwork-tags">
                 {artwork.styles.map((style) => (
                   <button
                     key={style}
+                    type="button"
                     className={`tag tag-btn ${activeFilter === style ? 'active' : ''}`}
                     onClick={(e) => handleTagClick(style, e)}
                   >
