@@ -1,14 +1,1 @@
-{
-  "relations": [
-    { "id": "rel-1", "sourceId": "point-1", "targetId": "point-4", "type": "prerequisite" },
-    { "id": "rel-2", "sourceId": "point-2", "targetId": "point-4", "type": "prerequisite" },
-    { "id": "rel-3", "sourceId": "point-3", "targetId": "point-5", "type": "prerequisite" },
-    { "id": "rel-4", "sourceId": "point-1", "targetId": "point-5", "type": "prerequisite" },
-    { "id": "rel-5", "sourceId": "point-5", "targetId": "point-6", "type": "prerequisite" },
-    { "id": "rel-6", "sourceId": "point-5", "targetId": "point-7", "type": "prerequisite" },
-    { "id": "rel-7", "sourceId": "point-4", "targetId": "point-8", "type": "prerequisite" },
-    { "id": "rel-8", "sourceId": "point-6", "targetId": "point-8", "type": "prerequisite" },
-    { "id": "rel-9", "sourceId": "point-7", "targetId": "point-9", "type": "prerequisite" },
-    { "id": "rel-10", "sourceId": "point-8", "targetId": "point-9", "type": "prerequisite" }
-  ]
-}
+[]

@@ -1,353 +1,504 @@
-import { useState, useEffect } from 'react'
-import KnowledgeGraph from '../components/KnowledgeGraph'
-import { useRecommendPath } from '../hooks/useRecommendPath'
-import type { Course, KnowledgePoint, Relation, User } from '../types'
-import { DIFFICULTY_COLORS } from '../types'
+import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Sparkles, ChevronRight, BookOpen, Target, TrendingUp } from 'lucide-react';
+import { Header } from '../components/Header';
+import { KnowledgeGraph } from '../components/KnowledgeGraph';
+import { PointDetailModal } from '../components/PointDetailModal';
+import { AddPointModal } from '../components/AddPointModal';
+import { useRecommendPath } from '../hooks/useRecommendPath';
+import { useAppStore } from '../store';
+import { KnowledgePoint, KnowledgeRelation, Difficulty } from '../types';
 
-export default function MapPage() {
-  const [courses, setCourses] = useState<Course[]>([])
-  const [points, setPoints] = useState<KnowledgePoint[]>([])
-  const [relations, setRelations] = useState<Relation[]>([])
-  const [users, setUsers] = useState<User[]>([])
-  const [currentUser, setCurrentUser] = useState<User | null>(null)
-  const [selectedCourseId, setSelectedCourseId] = useState<string>('')
-  const [filterTag, setFilterTag] = useState<string>('')
-  const [selectedPoint, setSelectedPoint] = useState<KnowledgePoint | null>(null)
-  const [pathTrigger, setPathTrigger] = useState(0)
+const DIFFICULTY_COLORS: Record<Difficulty, string> = {
+  '初级': '#81c784',
+  '中级': '#ffb74d',
+  '高级': '#e57373',
+};
 
-  const isTeacher = currentUser?.role === 'teacher'
+export const MapPage: React.FC = () => {
+  const navigate = useNavigate();
+  const {
+    currentUser,
+    currentCourse,
+    knowledgePoints,
+    relations,
+    assessments,
+    reviewRecords,
+    selectedPoint,
+    recommendPath,
+    filterTag,
+    setKnowledgePoints,
+    setRelations,
+    setAssessments,
+    setReviewRecords,
+    setSelectedPoint,
+    setRecommendPath,
+    setFilterTag,
+    addKnowledgePoint,
+    updateKnowledgePoint,
+    addRelation,
+    removeFromPath,
+    addReviewRecord,
+  } = useAppStore();
 
-  const allTags = Array.from(new Set(points.flatMap(p => p.tags))).sort()
-
-  const coursePoints = points.filter(p => p.courseId === selectedCourseId)
-  const courseRelations = relations.filter(r => {
-    const src = points.find(p => p.id === r.sourceId)
-    const tgt = points.find(p => p.id === r.targetId)
-    return src?.courseId === selectedCourseId && tgt?.courseId === selectedCourseId
-  })
-
-  const recommendPath = useRecommendPath(
-    coursePoints,
-    courseRelations,
-    currentUser?.scores || {},
-    currentUser?.reviewed || [],
-    pathTrigger
-  )
-
-  const currentCourse = courses.find(c => c.id === selectedCourseId)
-
-  useEffect(() => {
-    Promise.all([
-      fetch('/api/courses').then(r => r.json()),
-      fetch('/api/points').then(r => r.json()).catch(() => []),
-      fetch('/api/relations').then(r => r.json()).catch(() => []),
-      fetch('/api/users').then(r => r.json())
-    ]).then(([c, p, rel, u]) => {
-      setCourses(c)
-      if (Array.isArray(p)) setPoints(p)
-      if (Array.isArray(rel)) setRelations(rel)
-      setUsers(u)
-      if (u.length > 0) setCurrentUser(u.find((x: User) => x.role === 'student') || u[0])
-      if (c.length > 0) setSelectedCourseId(c[0].id)
-    })
-  }, [])
+  const { path, isLoading, generatePath, setPath } = useRecommendPath();
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
-    if (!selectedCourseId || courses.length === 0) return
-    Promise.all([
-      fetch(`/api/courses/${selectedCourseId}/points`).then(r => r.json()),
-      fetch(`/api/courses/${selectedCourseId}/relations`).then(r => r.json())
-    ]).then(([p, rel]) => {
-      setPoints(prev => {
-        const others = prev.filter(x => x.courseId !== selectedCourseId)
-        return [...others, ...p]
-      })
-      setRelations(rel)
-    })
-  }, [selectedCourseId, courses.length])
-
-  const handlePointMove = async (id: string, x: number, y: number) => {
-    setPoints(prev => prev.map(p => (p.id === id ? { ...p, x, y } : p)))
-    try {
-      await fetch(`/api/points/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ x, y })
-      })
-    } catch {}
-  }
-
-  const handleRelationCreate = async (sourceId: string, targetId: string) => {
-    try {
-      const res = await fetch('/api/relations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceId, targetId })
-      })
-      if (res.ok) {
-        const newRel = await res.json()
-        setRelations(prev => [...prev, newRel])
-      }
-    } catch {}
-  }
-
-  const handleMarkReviewed = async (pointId: string) => {
-    if (!currentUser) return
-    const nextReviewed = currentUser.reviewed.includes(pointId)
-      ? currentUser.reviewed
-      : [...currentUser.reviewed, pointId]
-    const updated = { ...currentUser, reviewed: nextReviewed }
-    setCurrentUser(updated)
-    setUsers(prev => prev.map(u => (u.id === currentUser.id ? updated : u)))
-    try {
-      await fetch(`/api/users/${currentUser.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reviewed: nextReviewed })
-      })
-    } catch {}
-    setSelectedPoint(null)
-  }
-
-  const handleAddPoint = async () => {
-    if (!selectedCourseId) return
-    const title = prompt('请输入知识点标题：')
-    if (!title) return
-    const description = prompt('请输入知识点详情：') || ''
-    const difficulty = (prompt('请输入难度（初级/中级/高级）：') as '初级' | '中级' | '高级') || '初级'
-    const tagsInput = prompt('请输入标签（用逗号分隔，最多5个）：') || ''
-    const tags = tagsInput.split(/[,，]/).map(t => t.trim()).filter(Boolean).slice(0, 5)
-    const newPoint: Omit<KnowledgePoint, 'id'> = {
-      courseId: selectedCourseId,
-      title,
-      description,
-      difficulty,
-      tags,
-      x: 200 + Math.random() * 300,
-      y: 200 + Math.random() * 200
+    if (!currentUser || !currentCourse) {
+      navigate('/user');
+      return;
     }
+    loadData();
+  }, [currentUser, currentCourse, navigate]);
+
+  const loadData = async () => {
+    if (!currentCourse) return;
+    
     try {
-      const res = await fetch('/api/points', {
+      const [pointsRes, relationsRes, assessmentsRes, reviewsRes] = await Promise.all([
+        fetch(`/api/courses/${currentCourse.id}/points`),
+        fetch(`/api/courses/${currentCourse.id}/relations`),
+        fetch(`/api/users/${currentUser?.id}/assessments`),
+        fetch(`/api/users/${currentUser?.id}/reviews`),
+      ]);
+      
+      const points = await pointsRes.json();
+      const rels = await relationsRes.json();
+      const asses = await assessmentsRes.json();
+      const reviews = await reviewsRes.json();
+      
+      setKnowledgePoints(points);
+      setRelations(rels);
+      setAssessments(asses);
+      setReviewRecords(reviews);
+    } catch (e) {
+      console.error('Failed to load data', e);
+    }
+  };
+
+  const allTags = Array.from(
+    new Set(knowledgePoints.flatMap((p) => p.tags))
+  ).filter(Boolean);
+
+  const isTeacher = currentUser?.role === 'teacher';
+  const coursePoints = knowledgePoints.filter((p) => p.courseId === currentCourse?.id);
+  const courseRelations = relations.filter((r) => r.courseId === currentCourse?.id);
+
+  const handlePointClick = useCallback((point: KnowledgePoint) => {
+    setSelectedPoint(point);
+  }, [setSelectedPoint]);
+
+  const handlePointMove = useCallback(
+    async (pointId: string, x: number, y: number) => {
+      const point = knowledgePoints.find((p) => p.id === pointId);
+      if (point) {
+        const updated = { ...point, x, y };
+        updateKnowledgePoint(updated);
+        try {
+          await fetch(`/api/points/${pointId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ x, y }),
+          });
+        } catch (e) {
+          console.error('Failed to update point position', e);
+        }
+      }
+    },
+    [knowledgePoints, updateKnowledgePoint]
+  );
+
+  const handleRelationCreate = useCallback(
+    async (sourceId: string, targetId: string) => {
+      const exists = relations.some(
+        (r) => r.sourceId === sourceId && r.targetId === targetId
+      );
+      if (exists || !currentCourse) return;
+
+      try {
+        const response = await fetch('/api/relations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            courseId: currentCourse.id,
+            sourceId,
+            targetId,
+            curvature: 0.5,
+          }),
+        });
+        const newRelation = await response.json();
+        addRelation(newRelation);
+      } catch (e) {
+        console.error('Failed to create relation', e);
+      }
+    },
+    [relations, currentCourse, addRelation]
+  );
+
+  const handleRelationUpdate = useCallback(
+    async (relationId: string, curvature: number) => {
+      try {
+        await fetch(`/api/relations/${relationId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ curvature }),
+        });
+        setRelations(
+          relations.map((r) =>
+            r.id === relationId ? { ...r, curvature } : r
+          )
+        );
+      } catch (e) {
+        console.error('Failed to update relation', e);
+      }
+    },
+    [relations, setRelations]
+  );
+
+  const handleGeneratePath = async () => {
+    if (!currentUser || !currentCourse) return;
+    setIsGenerating(true);
+    try {
+      await generatePath(
+        currentUser.id,
+        currentCourse.id,
+        knowledgePoints,
+        relations,
+        assessments,
+        reviewRecords,
+        5
+      );
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleMarkReviewed = async () => {
+    if (!currentUser || !selectedPoint) return;
+    try {
+      const response = await fetch('/api/reviews', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newPoint)
-      })
-      if (res.ok) {
-        const p = await res.json()
-        setPoints(prev => [...prev, p])
-      }
-    } catch {}
-  }
+        body: JSON.stringify({
+          userId: currentUser.id,
+          pointId: selectedPoint.id,
+        }),
+      });
+      const record = await response.json();
+      addReviewRecord(record);
+      removeFromPath(selectedPoint.id);
+      setPath(path.filter((id) => id !== selectedPoint.id));
+      setRecommendPath(path.filter((id) => id !== selectedPoint.id));
+      setSelectedPoint(null);
+    } catch (e) {
+      console.error('Failed to mark reviewed', e);
+    }
+  };
 
-  const currentPathIndex = recommendPath.findIndex(id => !currentUser?.reviewed.includes(id))
+  const handleAddPoint = async (data: {
+    title: string;
+    description: string;
+    difficulty: Difficulty;
+    tags: string[];
+  }) => {
+    if (!currentCourse) return;
+    try {
+      const response = await fetch('/api/points', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...data,
+          courseId: currentCourse.id,
+          x: 300 + Math.random() * 200,
+          y: 200 + Math.random() * 200,
+        }),
+      });
+      const newPoint = await response.json();
+      addKnowledgePoint(newPoint);
+      setShowAddModal(false);
+    } catch (e) {
+      console.error('Failed to add point', e);
+    }
+  };
+
+  const handleNavigateToNext = () => {
+    const currentIndex = path.findIndex((id) => id === selectedPoint?.id);
+    if (currentIndex >= 0 && currentIndex < path.length - 1) {
+      const nextPoint = knowledgePoints.find((p) => p.id === path[currentIndex + 1]);
+      if (nextPoint) {
+        setSelectedPoint(nextPoint);
+      }
+    }
+  };
+
+  const getAssessmentScore = (pointId: string): number | null => {
+    const assessment = assessments.find(
+      (a) => a.pointId === pointId && a.userId === currentUser?.id
+    );
+    return assessment?.score ?? null;
+  };
+
+  const isReviewed = (pointId: string): boolean => {
+    return reviewRecords.some(
+      (r) => r.pointId === pointId && r.userId === currentUser?.id
+    );
+  };
+
+  const currentPath = recommendPath.length > 0 ? recommendPath : path;
+  const weakPoints = assessments.filter(
+    (a) => a.score < 60 && a.userId === currentUser?.id && a.courseId === currentCourse?.id
+  );
 
   return (
-    <>
-      <div className="graph-area">
-        <KnowledgeGraph
-          points={coursePoints}
-          relations={courseRelations}
-          recommendPath={recommendPath}
-          filterTag={filterTag}
-          isTeacher={isTeacher}
-          onPointClick={setSelectedPoint}
-          onPointMove={handlePointMove}
-          onRelationCreate={handleRelationCreate}
-        />
-      </div>
+    <div className="min-h-screen bg-white">
+      <Header
+        course={currentCourse}
+        currentUser={currentUser}
+        allTags={allTags}
+        filterTag={filterTag}
+        onFilterChange={setFilterTag}
+        onUserClick={() => navigate('/user')}
+      />
 
-      <div className="info-panel">
-        <div className="panel-section">
-          <div className="panel-title">🎯 课程信息</div>
-          <select
-            className="filter-select"
-            style={{ width: '100%', marginBottom: 10 }}
-            value={selectedCourseId}
-            onChange={e => setSelectedCourseId(e.target.value)}
-          >
-            {courses.map(c => (
-              <option key={c.id} value={c.id}>
-                {c.title}
-              </option>
-            ))}
-          </select>
-          <div style={{ fontSize: 12, color: '#616161', lineHeight: 1.6 }}>
-            {currentCourse?.description}
+      <div className="pt-14 min-h-screen flex flex-col lg:flex-row">
+        <div className="flex-1 lg:w-[70%] bg-white p-4 lg:p-6">
+          <div className="h-[60vh] lg:h-[calc(100vh-56px-48px)] rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+            <KnowledgeGraph
+              points={coursePoints}
+              relations={courseRelations}
+              recommendPath={currentPath}
+              filterTag={filterTag}
+              isTeacher={isTeacher}
+              onPointClick={handlePointClick}
+              onPointMove={handlePointMove}
+              onRelationCreate={handleRelationCreate}
+              onRelationUpdate={handleRelationUpdate}
+            />
           </div>
         </div>
 
-        <div className="panel-section">
-          <div className="panel-title">👤 当前用户</div>
-          <select
-            className="filter-select"
-            style={{ width: '100%' }}
-            value={currentUser?.id || ''}
-            onChange={e => {
-              const u = users.find(x => x.id === e.target.value)
-              if (u) setCurrentUser(u)
-              setPathTrigger(t => t + 1)
-            }}
-          >
-            {users.map(u => (
-              <option key={u.id} value={u.id}>
-                {u.name} ({u.role === 'teacher' ? '教师' : '学生'})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="panel-section">
-          <div className="panel-title">🏷️ 标签过滤</div>
-          <select
-            className="filter-select"
-            style={{ width: '100%' }}
-            value={filterTag}
-            onChange={e => setFilterTag(e.target.value)}
-          >
-            <option value="">显示全部标签</option>
-            {allTags.map(tag => (
-              <option key={tag} value={tag}>
-                {tag}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {isTeacher && (
-          <div className="panel-section">
-            <div className="panel-title">✏️ 教师操作</div>
-            <button className="secondary-btn" style={{ width: '100%' }} onClick={handleAddPoint}>
-              + 添加知识点
-            </button>
-          </div>
-        )}
-
-        <div className="panel-section">
-          <div className="panel-title">📝 复习路径</div>
-          <button
-            className="primary-btn"
-            style={{ marginBottom: 12 }}
-            onClick={() => setPathTrigger(t => t + 1)}
-            disabled={!currentUser || currentUser.role !== 'student'}
-          >
-            {pathTrigger === 0 ? '生成复习路径' : '重新生成路径'}
-          </button>
-          {recommendPath.length > 0 ? (
-            <div className="path-list">
-              {recommendPath.map((pid, idx) => {
-                const p = coursePoints.find(x => x.id === pid)
-                if (!p) return null
-                const isDone = currentUser?.reviewed.includes(pid)
-                const isCurrent = idx === currentPathIndex
-                return (
+        <div
+          className="lg:w-[30%] p-4 lg:p-6 lg:border-l"
+          style={{ backgroundColor: '#f5f5f5', borderColor: '#e0e0e0' }}
+        >
+          <div className="space-y-4">
+            {currentCourse && (
+              <div className="bg-white rounded-xl p-4 shadow-sm">
+                <div className="flex items-center gap-3 mb-3">
                   <div
-                    key={pid}
-                    className={`path-item ${isCurrent ? 'current' : ''} ${isDone ? 'done' : ''}`}
-                    onClick={() => setSelectedPoint(p)}
+                    className="w-10 h-10 rounded-lg flex items-center justify-center"
+                    style={{ backgroundColor: 'rgba(26, 35, 126, 0.1)' }}
                   >
-                    <div className="path-order">{idx + 1}</div>
-                    <div className="path-info">
-                      <div className="path-title">{p.title} {isDone && '✓'}</div>
-                      <div className="path-difficulty">{p.difficulty}</div>
-                    </div>
+                    <BookOpen size={20} style={{ color: '#1a237e' }} />
                   </div>
-                )
-              })}
-            </div>
-          ) : (
-            <div className="empty-tip">
-              {pathTrigger === 0 ? '点击上方按钮生成复习路径' : '暂无需要复习的知识点'}
-            </div>
-          )}
-          {currentPathIndex >= 0 && recommendPath[currentPathIndex] && (
-            <button
-              className="success-btn"
-              style={{ marginTop: 12 }}
-              onClick={() => {
-                const p = coursePoints.find(x => x.id === recommendPath[currentPathIndex])
-                if (p) setSelectedPoint(p)
-              }}
-            >
-              ▶ 开始复习下一节
-            </button>
-          )}
-        </div>
+                  <div>
+                    <h3 className="font-semibold" style={{ color: '#212121' }}>
+                      {currentCourse.title}
+                    </h3>
+                    <p className="text-xs" style={{ color: '#757575' }}>
+                      {coursePoints.length} 个知识点
+                    </p>
+                  </div>
+                </div>
+                <p className="text-sm" style={{ color: '#424242' }}>
+                  {currentCourse.description}
+                </p>
+              </div>
+            )}
 
-        <div className="panel-section">
-          <div className="panel-title">🎨 图例</div>
-          <div className="legend-list">
-            <div className="legend-item">
-              <span className="legend-dot" style={{ background: DIFFICULTY_COLORS['初级'] }}></span>
-              初级知识点
+            <div className="bg-white rounded-xl p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <Target size={18} style={{ color: '#00bcd4' }} />
+                <h3 className="font-semibold" style={{ color: '#212121' }}>
+                  学习统计
+                </h3>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center">
+                  <p className="text-2xl font-bold" style={{ color: '#1a237e' }}>
+                    {coursePoints.length}
+                  </p>
+                  <p className="text-xs" style={{ color: '#757575' }}>
+                    总知识点
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold" style={{ color: '#e57373' }}>
+                    {weakPoints.length}
+                  </p>
+                  <p className="text-xs" style={{ color: '#757575' }}>
+                    薄弱点
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold" style={{ color: '#81c784' }}>
+                    {reviewRecords.filter((r) => r.userId === currentUser?.id).length}
+                  </p>
+                  <p className="text-xs" style={{ color: '#757575' }}>
+                    已复习
+                  </p>
+                </div>
+              </div>
             </div>
-            <div className="legend-item">
-              <span className="legend-dot" style={{ background: DIFFICULTY_COLORS['中级'] }}></span>
-              中级知识点
+
+            <div className="bg-white rounded-xl p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <TrendingUp size={18} style={{ color: '#00bcd4' }} />
+                <h3 className="font-semibold" style={{ color: '#212121' }}>
+                  复习路径
+                </h3>
+              </div>
+
+              {currentPath.length > 0 ? (
+                <div className="space-y-2">
+                  {currentPath.map((pointId, index) => {
+                    const point = knowledgePoints.find((p) => p.id === pointId);
+                    if (!point) return null;
+                    const isCurrent = selectedPoint?.id === pointId;
+                    const isPointReviewed = isReviewed(pointId);
+
+                    return (
+                      <button
+                        key={pointId}
+                        onClick={() => setSelectedPoint(point)}
+                        className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all hover:bg-gray-50`}
+                        style={{
+                          backgroundColor: isCurrent ? 'rgba(26, 35, 126, 0.05)' : 'transparent',
+                          boxShadow: isCurrent ? '0 0 0 2px #1a237e' : 'none',
+                        }}
+                      >
+                        <div
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold"
+                          style={{ backgroundColor: DIFFICULTY_COLORS[point.difficulty] }}
+                        >
+                          {index + 1}
+                        </div>
+                        <div className="flex-1 text-left">
+                          <p className="text-sm font-medium" style={{ color: '#212121' }}>
+                            {point.title}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="text-xs px-2 py-0.5 rounded-full text-white"
+                              style={{ backgroundColor: DIFFICULTY_COLORS[point.difficulty] }}
+                            >
+                              {point.difficulty}
+                            </span>
+                            {isPointReviewed && (
+                              <span className="text-xs text-green-600">已复习</span>
+                            )}
+                          </div>
+                        </div>
+                        <ChevronRight size={16} style={{ color: '#bdbdbd' }} />
+                      </button>
+                    );
+                  })}
+
+                  {selectedPoint && path.findIndex((id) => id === selectedPoint.id) < path.length - 1 && (
+                    <button
+                      onClick={handleNavigateToNext}
+                      className="w-full py-2 rounded-lg text-sm font-medium text-white mt-2 transition-all hover:scale-[1.02]"
+                      style={{ backgroundColor: '#00bcd4' }}
+                    >
+                      下一节 →
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-6">
+                  <p className="text-sm mb-4" style={{ color: '#757575' }}>
+                    点击按钮生成个性化复习路径
+                  </p>
+                </div>
+              )}
+
+              <button
+                onClick={handleGeneratePath}
+                disabled={isLoading || isGenerating}
+                className="w-full py-3 rounded-xl font-medium text-white flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 mt-4"
+                style={{ backgroundColor: '#1a237e' }}
+              >
+                <Sparkles size={18} />
+                {isLoading || isGenerating ? '生成中...' : '生成复习路径'}
+              </button>
             </div>
-            <div className="legend-item">
-              <span className="legend-dot" style={{ background: DIFFICULTY_COLORS['高级'] }}></span>
-              高级知识点
-            </div>
-            <div className="legend-item">
-              <span className="legend-dot" style={{ background: '#1976d2', borderRadius: 0, height: 3 }}></span>
-              前置关系
-            </div>
-            <div className="legend-item">
-              <span className="legend-dot" style={{ background: '#f44336', borderRadius: 0, height: 3 }}></span>
-              推荐复习路径
+
+            {isTeacher && (
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="w-full py-3 rounded-xl font-medium text-white flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                style={{ backgroundColor: '#00bcd4' }}
+              >
+                <Plus size={18} />
+                添加知识点
+              </button>
+            )}
+
+            <div className="bg-white rounded-xl p-4 shadow-sm">
+              <h3 className="font-semibold mb-3" style={{ color: '#212121' }}>
+                图例说明
+              </h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-4 h-4 rounded-full"
+                    style={{ backgroundColor: '#81c784' }}
+                  />
+                  <span style={{ color: '#424242' }}>初级难度</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-4 h-4 rounded-full"
+                    style={{ backgroundColor: '#ffb74d' }}
+                  />
+                  <span style={{ color: '#424242' }}>中级难度</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-4 h-4 rounded-full"
+                    style={{ backgroundColor: '#e57373' }}
+                  />
+                  <span style={{ color: '#424242' }}>高级难度</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-8 h-0.5"
+                    style={{ backgroundColor: '#1976d2' }}
+                  />
+                  <span style={{ color: '#424242' }}>知识点关系</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-8 h-0.5 border-t-2 border-dashed"
+                    style={{ borderColor: '#f44336' }}
+                  />
+                  <span style={{ color: '#424242' }}>复习路径</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {selectedPoint && (
-        <div className="detail-modal-overlay" onClick={() => setSelectedPoint(null)}>
-          <div className="detail-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <div className="modal-title">{selectedPoint.title}</div>
-              <button className="modal-close" onClick={() => setSelectedPoint(null)}>
-                ×
-              </button>
-            </div>
-            <span
-              className="difficulty-badge"
-              style={{ background: DIFFICULTY_COLORS[selectedPoint.difficulty] }}
-            >
-              {selectedPoint.difficulty}
-            </span>
-            <div className="modal-description">{selectedPoint.description}</div>
-            <div className="modal-tags">
-              {selectedPoint.tags.map(tag => (
-                <span key={tag} className="tag-item">
-                  #{tag}
-                </span>
-              ))}
-            </div>
-            <div className="modal-footer">
-              {currentUser?.role === 'student' && currentUser.scores[selectedPoint.id] !== undefined && (
-                <div className="score-info">
-                  <span>测评得分</span>
-                  <span
-                    className={`score-value ${currentUser.scores[selectedPoint.id] < 60 ? 'weak' : ''}`}
-                  >
-                    {currentUser.scores[selectedPoint.id]} 分
-                    {currentUser.scores[selectedPoint.id] < 60 && '（薄弱点）'}
-                  </span>
-                </div>
-              )}
-              {currentUser?.role === 'student' && (
-                <button
-                  className="success-btn"
-                  disabled={currentUser.reviewed.includes(selectedPoint.id)}
-                  onClick={() => handleMarkReviewed(selectedPoint.id)}
-                >
-                  {currentUser.reviewed.includes(selectedPoint.id) ? '✓ 已完成复习' : '完成复习'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+        <PointDetailModal
+          point={selectedPoint}
+          isInPath={currentPath.includes(selectedPoint.id)}
+          isReviewed={isReviewed(selectedPoint.id)}
+          assessmentScore={getAssessmentScore(selectedPoint.id)}
+          onClose={() => setSelectedPoint(null)}
+          onMarkReviewed={handleMarkReviewed}
+        />
       )}
-    </>
-  )
-}
+
+      {showAddModal && (
+        <AddPointModal
+          onClose={() => setShowAddModal(false)}
+          onAdd={handleAddPoint}
+        />
+      )}
+    </div>
+  );
+};
