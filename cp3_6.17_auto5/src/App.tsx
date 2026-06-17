@@ -1,17 +1,21 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Header from './components/Header';
 import MapPage from './pages/MapPage';
 import UserPage from './pages/UserPage';
 import type { Course, KnowledgePoint, User } from './types';
 
-function App() {
-  const [currentPage, setCurrentPage] = useState<'map' | 'users'>('map');
+function AppContent() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [knowledgePoints, setKnowledgePoints] = useState<KnowledgePoint[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [filterTag, setFilterTag] = useState<string>('all');
   const [users, setUsers] = useState<User[]>([]);
+
+  const currentPage = location.pathname === '/users' ? 'users' : 'map';
 
   useEffect(() => {
     fetchInitialData();
@@ -49,6 +53,10 @@ function App() {
     }
   };
 
+  const handleNavigate = (page: 'map' | 'users') => {
+    navigate(page === 'map' ? '/' : '/users');
+  };
+
   const allTags = useMemo(() => {
     const tagSet = new Set<string>();
     knowledgePoints.forEach((kp) => {
@@ -66,21 +74,43 @@ function App() {
         filterTag={filterTag}
         onFilterChange={setFilterTag}
         currentPage={currentPage}
-        onNavigate={setCurrentPage}
+        onNavigate={handleNavigate}
       />
 
       <main className="main-content">
-        {currentPage === 'map' ? (
-          <MapPage course={selectedCourse} currentUser={currentUser} />
-        ) : (
-          <UserPage
-            currentUser={currentUser}
-            onSwitchUser={handleSwitchUser}
-            courses={courses}
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <MapPage
+                course={selectedCourse}
+                currentUser={currentUser}
+                filterTag={filterTag}
+              />
+            }
           />
-        )}
+          <Route
+            path="/users"
+            element={
+              <UserPage
+                currentUser={currentUser}
+                onSwitchUser={handleSwitchUser}
+                courses={courses}
+              />
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </main>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AppContent />
+    </BrowserRouter>
   );
 }
 

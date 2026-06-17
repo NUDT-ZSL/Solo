@@ -6,18 +6,18 @@ import useRecommendPath from '../hooks/useRecommendPath';
 interface MapPageProps {
   course: Course | null;
   currentUser: User | null;
+  filterTag?: string;
 }
 
 const SAMPLE_USER_ID = 'user-1';
 const SAMPLE_TEACHER_ID = 'teacher-1';
 
-const MapPage: React.FC<MapPageProps> = ({ course, currentUser }) => {
+const MapPage: React.FC<MapPageProps> = ({ course, currentUser, filterTag = 'all' }) => {
   const graphRef = React.useRef<KnowledgeGraphHandle>(null);
   const [knowledgePoints, setKnowledgePoints] = useState<KnowledgePoint[]>([]);
   const [relations, setRelations] = useState<Relation[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedKp, setSelectedKp] = useState<KnowledgePoint | null>(null);
-  const [filterTag, setFilterTag] = useState<string>('all');
   const [allTags, setAllTags] = useState<string[]>([]);
   const [scores, setScores] = useState<Record<string, number>>({});
   const [reviewedIds, setReviewedIds] = useState<string[]>([]);
