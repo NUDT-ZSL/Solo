@@ -80,11 +80,18 @@ function formatDate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+function generateRandomAvatarColor(): string {
+  const hue = Math.floor(Math.random() * 360);
+  const saturation = 55 + Math.floor(Math.random() * 20);
+  const lightness = 55 + Math.floor(Math.random() * 15);
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+}
+
 export function generateStudents(): Student[] {
   return studentNames.map((name, index) => ({
     id: `student-${index + 1}`,
     name,
-    avatarColor: avatarColors[index % avatarColors.length]
+    avatarColor: generateRandomAvatarColor()
   }));
 }
 

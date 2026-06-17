@@ -53,10 +53,14 @@ const CourseCard: FC<CourseCardProps> = ({
       <div className="course-schedule">⏰ {course.schedule}</div>
       <div className="card-footer">
         <span className="stat stat-green">
-          <span className="stat-icon">👥</span> {studentCount} 人
+          <span className="stat-icon">👥</span>
+          <span className="stat-number stat-number-green">{studentCount}</span>
+          <span className="stat-unit">人</span>
         </span>
         <span className="stat stat-red">
-          <span className="stat-icon">📝</span> {unsubmittedCount} 份未交
+          <span className="stat-icon">📝</span>
+          <span className="stat-number stat-number-red">{unsubmittedCount}</span>
+          <span className="stat-unit">份未交</span>
         </span>
       </div>
     </div>
