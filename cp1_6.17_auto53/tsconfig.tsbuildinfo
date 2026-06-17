@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/eventbus.ts","./src/gamelogic.ts","./src/mazeengine.ts","./src/soundengine.ts","./src/main.tsx","./src/types.ts","./src/vite-env.d.ts","./src/components/mazeview.tsx","./src/components/soundcontrol.tsx"],"version":"5.8.3"}

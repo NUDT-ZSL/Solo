@@ -219,6 +219,13 @@ export default class MazeEngine {
     const shuffled = deadEnds.sort(() => Math.random() - 0.5)
     const selected = shuffled.slice(0, Math.min(count, shuffled.length))
 
+    const dirs = [
+      { dx: 0, dy: -1 },
+      { dx: 0, dy: 1 },
+      { dx: -1, dy: 0 },
+      { dx: 1, dy: 0 },
+    ]
+
     for (let i = 0; i < selected.length; i++) {
       const pos = selected[i]
       const freq = FREQUENCIES[Math.floor(Math.random() * FREQUENCIES.length)]
@@ -226,6 +233,16 @@ export default class MazeEngine {
 
       this.grid[pos.y][pos.x].type = 'fragment'
       this.grid[pos.y][pos.x].fragmentId = id
+
+      for (const d of dirs) {
+        const wx = pos.x + d.dx
+        const wy = pos.y + d.dy
+        if (wx >= 0 && wx < this.gridW && wy >= 0 && wy < this.gridH) {
+          if (this.grid[wy][wx].type === 'wall') {
+            this.grid[wy][wx].isFragmentWall = true
+          }
+        }
+      }
 
       this.fragments.push({
         id,
@@ -253,6 +270,8 @@ export default class MazeEngine {
       tile.doorId = id
       tile.doorFrequency = frag.frequency
       tile.isOpen = false
+      tile.hasTuningFork = true
+      tile.tuningForkActivated = false
 
       this.doors.push({
         id,
@@ -308,14 +327,56 @@ export default class MazeEngine {
     return false
   }
 
+  private _markFragmentWalls(): void {
+    const dirs = [
+      { dx: 0, dy: -1 },
+      { dx: 0, dy: 1 },
+      { dx: -1, dy: 0 },
+      { dx: 1, dy: 0 },
+    ]
+
+    for (const frag of this.fragments) {
+      for (const d of dirs) {
+        const nx = frag.position.x + d.dx
+        const ny = frag.position.y + d.dy
+        if (nx >= 0 && nx < this.gridW && ny >= 0 && ny < this.gridH) {
+          const neighbor = this.grid[ny][nx]
+          if (neighbor.type === 'wall') {
+            neighbor.isFragmentWall = true
+          }
+        }
+      }
+    }
+  }
+
+  getFragmentWalls(): Position[] {
+    const result: Position[] = []
+    for (let r = 0; r < this.gridH; r++) {
+      for (let c = 0; c < this.gridW; c++) {
+        const tile = this.grid[r][c]
+        if (tile.isFragmentWall === true) {
+          result.push({ x: c, y: r })
+        }
+      }
+    }
+    return result
+  }
+
   private _assignWallTypes(level: number): void {
+    this._markFragmentWalls()
+
     const wallTiles: Position[] = []
 
     for (let r = 0; r < this.gridH; r++) {
       for (let c = 0; c < this.gridW; c++) {
-        if (this.grid[r][c].type === 'wall' && this._hasAdjacentPathCell(c, r)) {
-          wallTiles.push({ x: c, y: r })
-        }
+        const tile = this.grid[r][c]
+        if (tile.type !== 'wall') continue
+        if (tile.isFragmentWall) continue
+
+        const pathNeighborCount = this._countOpenNeighbors(c, r)
+        if (pathNeighborCount < 2) continue
+
+        wallTiles.push({ x: c, y: r })
       }
     }
 

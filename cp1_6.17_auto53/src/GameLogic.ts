@@ -66,6 +66,9 @@ interface GameStore {
   getGrid: () => Tile[][]
   getGridSize: () => { w: number; h: number }
   getDoors: () => { id: string; position: Position; frequency: number; isOpen: boolean; openProgress: number }[]
+  attemptUnlockDoor: (doorId: string) => void
+  onTuningForkClick: (doorId: string) => void
+  getPlayerFragments: () => string[]
 }
 
 let waveIdCounter = 0
@@ -119,38 +122,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
         score: newState.score + levelScore,
         totalTime: newState.totalTime + (MAX_TIME - newState.timeRemaining),
       })
-    }
-
-    if (tile.type === 'fragment' && tile.fragmentId) {
-      const frag = state.mazeEngine.getFragments().find(f => f.id === tile.fragmentId)
-      if (frag && !frag.collected) {
-        const freq = state.mazeEngine.collectFragment(tile.fragmentId)
-        const angles = [...get().collectedFragmentAngles, 0]
-        set(s => ({
-          collectedFragments: s.collectedFragments + 1,
-          timeRemaining: s.timeRemaining + FRAGMENT_BONUS,
-          collectedFragmentAngles: angles,
-          particles: [
-            ...s.particles,
-            ...Array.from({ length: 12 }, (_, i) => ({
-              x: newX,
-              y: newY,
-              vx: Math.cos((i / 12) * Math.PI * 2) * 2,
-              vy: Math.sin((i / 12) * Math.PI * 2) * 2,
-              life: 1,
-              maxLife: 1,
-              color: '#FFD54F',
-              size: 3,
-            })),
-          ],
-        }))
-        if (get().soundEngine) {
-          get().soundEngine!.start(freq, 'sine')
-          setTimeout(() => {
-            if (get().soundEngine) get().soundEngine!.stop()
-          }, 1000)
-        }
-      }
     }
   },
 
@@ -315,7 +286,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const freqDiff = Math.abs(wave.frequency - (tile.doorFrequency || 0))
         const tolerance = 30
 
-        if (freqDiff <= tolerance) {
+        if (tile.tuningForkActivated && freqDiff <= tolerance) {
           state.mazeEngine.unlockDoor(tile.doorId || '')
           const anims = new Map(state.doorAnimations)
           anims.set(tile.doorId || '', 0)
@@ -326,20 +297,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           newWaves.push({
             ...wave,
             trail: wave.trail.map(t => ({ ...t })),
-            particles: [
-              ...get().particles,
-              ...Array.from({ length: 20 }, (_, i) => ({
-                x: gridX,
-                y: gridY,
-                vx: (Math.random() - 0.5) * 4,
-                vy: (Math.random() - 0.5) * 4,
-                life: 0.8,
-                maxLife: 0.8,
-                color: '#3F51B5',
-                size: 2 + Math.random() * 3,
-              })),
-            ],
-          } as any)
+          })
           continue
         } else {
           if (wave.direction.dx !== 0) {
@@ -348,13 +306,50 @@ export const useGameStore = create<GameStore>((set, get) => ({
             wave.direction = { dx: wave.direction.dx, dy: -wave.direction.dy }
           }
           wave.bounces++
+          wave.trail.push({ x: gridX, y: gridY, alpha: 1, timestamp: now })
+        }
+      } else if (tile.type === 'fragment' && tile.fragmentId) {
+        const frag = state.mazeEngine.getFragments().find(f => f.id === tile.fragmentId)
+        if (frag && !frag.collected) {
+          const freqDiff = Math.abs(wave.frequency - frag.frequency)
+          const tolerance = 30
 
-          set(s => ({
-            wrongFrequencyCount: s.wrongFrequencyCount + 1,
-            timeRemaining: s.wrongFrequencyCount + 1 > WRONG_FREQ_THRESHOLD
-              ? s.timeRemaining - WRONG_FREQ_PENALTY
-              : s.timeRemaining,
-          }))
+          if (freqDiff <= tolerance) {
+            const freq = state.mazeEngine.collectFragment(tile.fragmentId)
+            const angles = [...get().collectedFragmentAngles, 0]
+            set(s => ({
+              collectedFragments: s.collectedFragments + 1,
+              timeRemaining: s.timeRemaining + FRAGMENT_BONUS,
+              collectedFragmentAngles: angles,
+              particles: [
+                ...s.particles,
+                ...Array.from({ length: 20 }, (_, i) => ({
+                  x: gridX,
+                  y: gridY,
+                  vx: Math.cos((i / 20) * Math.PI * 2) * 2.5,
+                  vy: Math.sin((i / 20) * Math.PI * 2) * 2.5,
+                  life: 1,
+                  maxLife: 1,
+                  color: '#FFD54F',
+                  size: 3,
+                })),
+              ],
+            }))
+            if (get().soundEngine) {
+              get().soundEngine!.start(freq, 'sine')
+              setTimeout(() => {
+                if (get().soundEngine) get().soundEngine!.stop()
+              }, 1000)
+            }
+
+            wave.active = false
+            wave.trail.push({ x: gridX, y: gridY, alpha: 1, timestamp: now })
+            newWaves.push({
+              ...wave,
+              trail: wave.trail.map(t => ({ ...t })),
+            })
+            continue
+          }
         }
       }
 
@@ -435,5 +430,100 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   getDoors: () => {
     return get().mazeEngine?.getDoors() || []
+  },
+
+  attemptUnlockDoor: (doorId: string) => {
+    const state = get()
+    if (!state.mazeEngine) return
+
+    const doors = state.mazeEngine.getDoors()
+    const door = doors.find(d => d.id === doorId)
+    if (!door || door.isOpen) return
+
+    const freqDiff = Math.abs(state.currentFrequency - door.frequency)
+    const tolerance = 30
+
+    if (freqDiff <= tolerance) {
+      state.mazeEngine.unlockDoor(doorId)
+      const anims = new Map(state.doorAnimations)
+      anims.set(doorId, 0)
+      set({
+        doorAnimations: anims,
+        wrongFrequencyCount: 0,
+        particles: [
+          ...state.particles,
+          ...Array.from({ length: 30 }, (_, i) => ({
+            x: door.position.x,
+            y: door.position.y,
+            vx: (Math.random() - 0.5) * 5,
+            vy: (Math.random() - 0.5) * 5,
+            life: 1,
+            maxLife: 1,
+            color: '#3F51B5',
+            size: 2 + Math.random() * 3,
+          })),
+        ],
+      })
+    } else {
+      const newCount = state.wrongFrequencyCount + 1
+      set({
+        wrongFrequencyCount: newCount,
+        timeRemaining: newCount > WRONG_FREQ_THRESHOLD
+          ? state.timeRemaining - WRONG_FREQ_PENALTY
+          : state.timeRemaining,
+        particles: [
+          ...state.particles,
+          ...Array.from({ length: 5 }, (_, i) => ({
+            x: door.position.x,
+            y: door.position.y,
+            vx: (Math.random() - 0.5) * 3,
+            vy: (Math.random() - 0.5) * 3,
+            life: 0.6,
+            maxLife: 0.6,
+            color: '#FF5722',
+            size: 2,
+          })),
+        ],
+      })
+    }
+  },
+
+  onTuningForkClick: (doorId: string) => {
+    const state = get()
+    if (!state.mazeEngine) return
+
+    const grid = state.mazeEngine.getGrid()
+    for (let y = 0; y < grid.length; y++) {
+      for (let x = 0; x < grid[y].length; x++) {
+        const tile = grid[y][x]
+        if (tile.doorId === doorId) {
+          tile.tuningForkActivated = true
+          set({
+            particles: [
+              ...state.particles,
+              ...Array.from({ length: 8 }, (_, i) => ({
+                x,
+                y,
+                vx: Math.cos((i / 8) * Math.PI * 2) * 1.5,
+                vy: Math.sin((i / 8) * Math.PI * 2) * 1.5,
+                life: 0.5,
+                maxLife: 0.5,
+                color: '#9C27B0',
+                size: 1.5,
+              })),
+            ],
+          })
+          return
+        }
+      }
+    }
+  },
+
+  getPlayerFragments: () => {
+    const state = get()
+    if (!state.mazeEngine) return []
+    return state.mazeEngine.getFragments()
+      .filter(f => f.collected)
+      .map(f => f.id)
   },
 }))

@@ -16,6 +16,9 @@ export interface Tile {
   doorFrequency?: number
   fragmentId?: string
   isOpen?: boolean
+  isFragmentWall?: boolean
+  hasTuningFork?: boolean
+  tuningForkActivated?: boolean
 }
 
 export interface Fragment {
