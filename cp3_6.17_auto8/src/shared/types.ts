@@ -1,63 +1,49 @@
 export interface Card {
   id: string;
+  value: number;
+  type: 'attack' | 'defense' | 'skill';
   name: string;
-  attack: number;
-  cost: number;
-  description: string;
 }
 
-export interface Player {
+export interface PlayerState {
   id: string;
-  nickname: string;
+  name: string;
   hand: Card[];
   hp: number;
   maxHp: number;
 }
 
 export interface GameState {
-  gameId: string;
-  players: [Player, Player];
+  players: Record<string, PlayerState>;
+  currentTurn: string;
   discardPile: Card[];
-  currentTurnIndex: 0 | 1;
   turnCount: number;
-  status: 'waiting' | 'playing' | 'finished';
-  winnerId: string | null;
+  gameOver: boolean;
+  winner: string | null;
 }
 
-export type PlayerActionType = 'play_card' | 'ai_play_card';
-
-export interface PlayerAction {
-  type: PlayerActionType;
+export interface GameAction {
+  type: 'play_card' | 'draw_card' | 'end_turn';
   playerId: string;
-  cardId: string;
   sequence: number;
   timestamp: number;
-}
-
-export interface ServerAck {
-  type: 'ack' | 'rollback';
-  sequence: number;
-  actionType: PlayerActionType;
-  message?: string;
   cardId?: string;
+  card?: Card;
 }
 
-export interface GameStateUpdate {
-  type: 'state_update';
-  state: GameState;
-  lastPlayedCard?: {
-    card: Card;
-    playerId: string;
-  };
+export interface ServerMessage {
+  type: 'ack' | 'rollback' | 'state_update' | 'game_start' | 'game_over';
+  sequence?: number;
+  state?: GameState;
+  action?: GameAction;
+  reason?: string;
+  winner?: string;
 }
 
-export interface StatsUpdate {
-  type: 'stats';
-  avgLatency: number;
+export interface GameStats {
+  totalLatency: number;
+  latencySamples: number;
   rollbackCount: number;
-  effectivePlayRate: number;
-  currentLatency: number;
-  queueSize: number;
+  totalPlays: number;
+  successfulPlays: number;
 }
-
-export type ServerMessage = ServerAck | GameStateUpdate | StatsUpdate;

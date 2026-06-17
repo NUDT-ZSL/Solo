@@ -2,8 +2,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   server: {
-    port: 3002,
-    strictPort: true,
+    port: 3000,
     proxy: {
       '/api': {
         target: 'http://localhost:3001',
@@ -15,5 +14,9 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+  },
+  build: {
+    outDir: 'dist/client',
+    sourcemap: true,
   },
 });

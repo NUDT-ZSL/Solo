@@ -1,171 +1,281 @@
-import { GameState, Player, Card, PlayerAction } from '../shared/types';
-import { createDeck } from '../shared/cards';
 import { v4 as uuidv4 } from 'uuid';
-import * as fs from 'fs';
-import * as path from 'path';
+import { Card, GameState, PlayerState, GameAction } from '../shared/types';
 
-const STATE_FILE = path.join(__dirname, '..', '..', 'data', 'gameState.json');
+const CARD_TYPES: Array<'attack' | 'defense' | 'skill'> = ['attack', 'attack', 'defense', 'skill'];
+const INITIAL_HAND_SIZE = 7;
+const MAX_HP = 30;
 
-function ensureDataDir(): void {
-  const dir = path.dirname(STATE_FILE);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+export class GameStateManager {
+  private gameState: GameState | null = null;
+  
+  createNewGame(player1Id: string, player1Name: string, player2Id: string, player2Name: string): GameState {
+    const player1: PlayerState = {
+      id: player1Id,
+      name: player1Name,
+      hand: this.generateHand(INITIAL_HAND_SIZE),
+      hp: MAX_HP,
+      maxHp: MAX_HP,
+    };
+    
+    const player2: PlayerState = {
+      id: player2Id,
+      name: player2Name,
+      hand: this.generateHand(INITIAL_HAND_SIZE),
+      hp: MAX_HP,
+      maxHp: MAX_HP,
+    };
+    
+    this.gameState = {
+      players: {
+        [player1Id]: player1,
+        [player2Id]: player2,
+      },
+      currentTurn: player1Id,
+      discardPile: [],
+      turnCount: 1,
+      gameOver: false,
+      winner: null,
+    };
+    
+    return { ...this.gameState };
   }
-}
-
-export function createInitialGameState(): GameState {
-  const deck1 = createDeck(7);
-  const deck2 = createDeck(7);
-
-  const player1: Player = {
-    id: 'player_local',
-    nickname: '本地玩家',
-    hand: deck1,
-    hp: 30,
-    maxHp: 30,
-  };
-
-  const player2: Player = {
-    id: 'player_ai',
-    nickname: 'AI对手',
-    hand: deck2,
-    hp: 30,
-    maxHp: 30,
-  };
-
-  const state: GameState = {
-    gameId: uuidv4(),
-    players: [player1, player2],
-    discardPile: [],
-    currentTurnIndex: 0,
-    turnCount: 1,
-    status: 'playing',
-    winnerId: null,
-  };
-
-  saveGameState(state);
-  return state;
-}
-
-export function saveGameState(state: GameState): void {
-  ensureDataDir();
-  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
-}
-
-export function loadGameState(): GameState | null {
-  try {
-    if (fs.existsSync(STATE_FILE)) {
-      const data = fs.readFileSync(STATE_FILE, 'utf-8');
-      return JSON.parse(data) as GameState;
+  
+  private generateHand(count: number): Card[] {
+    const hand: Card[] = [];
+    for (let i = 0; i < count; i++) {
+      hand.push(this.generateCard());
     }
-  } catch (e) {
-    console.error('加载游戏状态失败:', e);
+    return hand;
   }
-  return null;
-}
-
-export function getPlayerIndex(state: GameState, playerId: string): 0 | 1 | -1 {
-  if (state.players[0].id === playerId) return 0;
-  if (state.players[1].id === playerId) return 1;
-  return -1;
-}
-
-export function findCardInHand(player: Player, cardId: string): Card | null {
-  return player.hand.find((c) => c.id === cardId) || null;
-}
-
-export function validateAction(state: GameState, action: PlayerAction): {
-  valid: boolean;
-  reason?: string;
-  card?: Card;
-} {
-  if (state.status !== 'playing') {
-    return { valid: false, reason: '游戏已结束' };
+  
+  private generateCard(): Card {
+    const type = CARD_TYPES[Math.floor(Math.random() * CARD_TYPES.length)];
+    const value = Math.floor(Math.random() * 5) + 1;
+    
+    return {
+      id: uuidv4(),
+      value,
+      type,
+      name: this.getCardName(type, value),
+    };
   }
-
-  const playerIdx = getPlayerIndex(state, action.playerId);
-  if (playerIdx === -1) {
-    return { valid: false, reason: '玩家不存在' };
+  
+  private getCardName(type: string, value: number): string {
+    const names: Record<string, string[]> = {
+      attack: ['打击', '重击', '猛击', '致命一击', '毁灭打击'],
+      defense: ['格挡', '闪避', '护盾', '铁壁', '无敌'],
+      skill: ['治疗', '抽牌', '强化', '削弱', '诅咒'],
+    };
+    const typeNames = names[type] || ['未知'];
+    return typeNames[Math.min(value - 1, typeNames.length - 1)];
   }
-
-  if (state.currentTurnIndex !== playerIdx) {
-    return { valid: false, reason: '当前不是你的回合' };
+  
+  getState(): GameState | null {
+    if (!this.gameState) return null;
+    return JSON.parse(JSON.stringify(this.gameState));
   }
-
-  const player = state.players[playerIdx];
-  const card = findCardInHand(player, action.cardId);
-  if (!card) {
-    return { valid: false, reason: '手牌中不存在该牌' };
-  }
-
-  return { valid: true, card };
-}
-
-export function applyAction(
-  state: GameState,
-  action: PlayerAction
-): {
-  newState: GameState;
-  playedCard: Card | null;
-  damaged: number;
-} {
-  const newState: GameState = JSON.parse(JSON.stringify(state));
-  const playerIdx = getPlayerIndex(newState, action.playerId) as 0 | 1;
-  const player = newState.players[playerIdx];
-  const opponentIdx = (1 - playerIdx) as 0 | 1;
-  const opponent = newState.players[opponentIdx];
-
-  const cardIdx = player.hand.findIndex((c) => c.id === action.cardId);
-  if (cardIdx === -1) {
-    return { newState, playedCard: null, damaged: 0 };
-  }
-
-  const [playedCard] = player.hand.splice(cardIdx, 1);
-  newState.discardPile.push(playedCard);
-
-  const damage = playedCard.attack;
-  opponent.hp = Math.max(0, opponent.hp - damage);
-
-  newState.currentTurnIndex = opponentIdx;
-  newState.turnCount++;
-
-  if (opponent.hp <= 0) {
-    newState.status = 'finished';
-    newState.winnerId = player.id;
-  }
-
-  saveGameState(newState);
-  return { newState, playedCard, damaged: damage };
-}
-
-export function chooseAICard(state: GameState): Card | null {
-  const aiPlayer = state.players[1];
-  if (aiPlayer.hand.length === 0) return null;
-
-  const localPlayer = state.players[0];
-
-  let bestCard: Card | null = null;
-  let bestScore = -Infinity;
-
-  for (const card of aiPlayer.hand) {
-    let score = card.attack * 2;
-
-    if (localPlayer.hp <= card.attack) {
-      score += 100;
+  
+  validateAction(action: GameAction): { valid: boolean; reason?: string } {
+    if (!this.gameState) {
+      return { valid: false, reason: '游戏未开始' };
     }
-
-    if (localPlayer.hp <= localPlayer.maxHp * 0.3) {
-      score += card.attack;
+    
+    if (this.gameState.gameOver) {
+      return { valid: false, reason: '游戏已结束' };
     }
-
-    score += (aiPlayer.hand.length - 1) * 0.5;
-    score -= card.cost * 0.3;
-
-    if (score > bestScore) {
-      bestScore = score;
-      bestCard = card;
+    
+    const player = this.gameState.players[action.playerId];
+    if (!player) {
+      return { valid: false, reason: '玩家不存在' };
+    }
+    
+    if (action.type === 'play_card') {
+      if (this.gameState.currentTurn !== action.playerId) {
+        return { valid: false, reason: '不是你的回合' };
+      }
+      
+      if (!action.cardId) {
+        return { valid: false, reason: '缺少卡牌ID' };
+      }
+      
+      const hasCard = player.hand.some(c => c.id === action.cardId);
+      if (!hasCard) {
+        return { valid: false, reason: '手牌中没有这张牌' };
+      }
+    }
+    
+    return { valid: true };
+  }
+  
+  processAction(action: GameAction): GameState | null {
+    if (!this.gameState) return null;
+    
+    const validation = this.validateAction(action);
+    if (!validation.valid) {
+      return null;
+    }
+    
+    switch (action.type) {
+      case 'play_card':
+        this.processPlayCard(action);
+        break;
+      case 'end_turn':
+        this.processEndTurn(action.playerId);
+        break;
+    }
+    
+    return JSON.parse(JSON.stringify(this.gameState));
+  }
+  
+  private processPlayCard(action: GameAction): void {
+    if (!this.gameState || !action.cardId) return;
+    
+    const player = this.gameState.players[action.playerId];
+    const cardIndex = player.hand.findIndex(c => c.id === action.cardId);
+    
+    if (cardIndex === -1) return;
+    
+    const card = player.hand.splice(cardIndex, 1)[0];
+    this.gameState.discardPile.push(card);
+    
+    const opponent = this.getOpponent(action.playerId);
+    if (opponent) {
+      switch (card.type) {
+        case 'attack':
+          opponent.hp = Math.max(0, opponent.hp - card.value);
+          break;
+        case 'defense':
+          player.hp = Math.min(player.maxHp, player.hp + card.value);
+          break;
+        case 'skill':
+          opponent.hp = Math.max(0, opponent.hp - Math.floor(card.value / 2));
+          player.hp = Math.min(player.maxHp, player.hp + Math.floor(card.value / 2));
+          break;
+      }
+    }
+    
+    if (opponent && opponent.hp <= 0) {
+      this.gameState.gameOver = true;
+      this.gameState.winner = action.playerId;
+    } else {
+      this.switchTurn();
     }
   }
-
-  return bestCard;
+  
+  private processEndTurn(playerId: string): void {
+    if (!this.gameState) return;
+    if (this.gameState.currentTurn !== playerId) return;
+    
+    this.switchTurn();
+  }
+  
+  private switchTurn(): void {
+    if (!this.gameState) return;
+    
+    const playerIds = Object.keys(this.gameState.players);
+    const currentIndex = playerIds.indexOf(this.gameState.currentTurn);
+    const nextIndex = (currentIndex + 1) % playerIds.length;
+    this.gameState.currentTurn = playerIds[nextIndex];
+    
+    if (nextIndex === 0) {
+      this.gameState.turnCount++;
+    }
+    
+    const nextPlayer = this.gameState.players[this.gameState.currentTurn];
+    if (nextPlayer.hand.length < 5) {
+      nextPlayer.hand.push(this.generateCard());
+    }
+  }
+  
+  private getOpponent(playerId: string): PlayerState | null {
+    if (!this.gameState) return null;
+    
+    const opponentId = Object.keys(this.gameState.players).find(id => id !== playerId);
+    if (!opponentId) return null;
+    
+    return this.gameState.players[opponentId];
+  }
+  
+  generateAIAction(aiPlayerId: string): GameAction | null {
+    if (!this.gameState) return null;
+    if (this.gameState.currentTurn !== aiPlayerId) return null;
+    if (this.gameState.gameOver) return null;
+    
+    const aiPlayer = this.gameState.players[aiPlayerId];
+    if (!aiPlayer || aiPlayer.hand.length === 0) return null;
+    
+    const bestCard = this.chooseBestCard(aiPlayerId);
+    if (!bestCard) return null;
+    
+    return {
+      type: 'play_card',
+      playerId: aiPlayerId,
+      sequence: 0,
+      timestamp: Date.now(),
+      cardId: bestCard.id,
+      card: bestCard,
+    };
+  }
+  
+  private chooseBestCard(aiPlayerId: string): Card | null {
+    if (!this.gameState) return null;
+    
+    const aiPlayer = this.gameState.players[aiPlayerId];
+    const opponent = this.getOpponent(aiPlayerId);
+    
+    if (!aiPlayer || !opponent || aiPlayer.hand.length === 0) {
+      return null;
+    }
+    
+    let bestCard: Card | null = null;
+    let bestScore = -Infinity;
+    
+    for (const card of aiPlayer.hand) {
+      const score = this.evaluateCard(card, aiPlayer, opponent);
+      if (score > bestScore) {
+        bestScore = score;
+        bestCard = card;
+      }
+    }
+    
+    return bestCard;
+  }
+  
+  private evaluateCard(card: Card, aiPlayer: PlayerState, opponent: PlayerState): number {
+    let score = 0;
+    
+    switch (card.type) {
+      case 'attack':
+        score += card.value * 2;
+        
+        if (opponent.hp <= card.value) {
+          score += 100;
+        } else if (opponent.hp <= 10) {
+          score += 30;
+        }
+        break;
+        
+      case 'defense':
+        score += card.value;
+        
+        if (aiPlayer.hp <= 10) {
+          score += 40;
+        } else if (aiPlayer.hp <= 20) {
+          score += 15;
+        }
+        break;
+        
+      case 'skill':
+        score += card.value * 1.5;
+        break;
+    }
+    
+    score += Math.random() * 3;
+    
+    return score;
+  }
+  
+  reset(): void {
+    this.gameState = null;
+  }
 }

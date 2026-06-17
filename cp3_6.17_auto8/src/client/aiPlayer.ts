@@ -1,111 +1,138 @@
-import { GameState, Card } from '../shared/types';
-
-export type PlayCardCallback = (card: Card) => void;
+import { Card, GameState } from '../shared/types';
+import { NetworkManager } from './network';
+import { CardGame } from './cardGame';
 
 export class AIPlayer {
-  private playerId: string = 'player_ai';
-  private onPlayCard: PlayCardCallback;
-  private currentState: GameState | null = null;
-  private isThinking: boolean = false;
-  private thinkTimer: number | null = null;
-
-  constructor(onPlayCard: PlayCardCallback) {
-    this.onPlayCard = onPlayCard;
+  private network: NetworkManager;
+  private cardGame: CardGame;
+  private playerId: string;
+  private aiPlayerId: string | null = null;
+  
+  private isAITurn: boolean = false;
+  private aiDelayMin: number = 100;
+  private aiDelayMax: number = 300;
+  
+  constructor(network: NetworkManager, cardGame: CardGame) {
+    this.network = network;
+    this.cardGame = cardGame;
+    this.playerId = network.getPlayerId();
+    
+    this.setupCallbacks();
   }
-
-  public updateState(state: GameState): void {
-    this.currentState = state;
-
-    if (
-      state.status === 'playing' &&
-      state.currentTurnIndex === 1 &&
-      !this.isThinking
-    ) {
-      this.schedulePlay();
+  
+  private setupCallbacks(): void {
+    this.network.setOnStateUpdate((state: GameState) => {
+      this.handleStateUpdate(state);
+    });
+    
+    this.network.setOnGameStart((state: GameState) => {
+      this.handleStateUpdate(state);
+    });
+  }
+  
+  private handleStateUpdate(state: GameState): void {
+    const aiPlayer = Object.values(state.players).find(p => p.id !== this.playerId);
+    if (aiPlayer) {
+      this.aiPlayerId = aiPlayer.id;
+    }
+    
+    const wasAITurn = this.isAITurn;
+    this.isAITurn = state.currentTurn !== this.playerId && !state.gameOver;
+    
+    if (this.isAITurn && !wasAITurn) {
+      this.scheduleAIPlay(state);
     }
   }
-
-  private schedulePlay(): void {
-    if (!this.currentState || this.currentState.status !== 'playing') return;
-
-    this.isThinking = true;
-    const delay = 100 + Math.random() * 200;
-
-    if (this.thinkTimer) {
-      window.clearTimeout(this.thinkTimer);
-    }
-
-    this.thinkTimer = window.setTimeout(() => {
-      this.playBestCard();
+  
+  private scheduleAIPlay(state: GameState): void {
+    const aiPlayer = Object.values(state.players).find(p => p.id !== this.playerId);
+    if (!aiPlayer || aiPlayer.hand.length === 0) return;
+    
+    const delay = this.getRandomDelay();
+    
+    setTimeout(() => {
+      if (this.isAITurn && this.aiPlayerId) {
+        const bestCard = this.calculateBestPlay(state);
+        if (bestCard) {
+          this.cardGame.animateAIPlayCard(bestCard);
+        }
+      }
     }, delay);
   }
-
-  private playBestCard(): void {
-    if (!this.currentState || this.currentState.status !== 'playing') {
-      this.isThinking = false;
-      return;
+  
+  private calculateBestPlay(state: GameState): Card | null {
+    const aiPlayer = Object.values(state.players).find(p => p.id !== this.playerId);
+    const localPlayer = state.players[this.playerId];
+    
+    if (!aiPlayer || !localPlayer || aiPlayer.hand.length === 0) {
+      return null;
     }
-
-    if (this.currentState.currentTurnIndex !== 1) {
-      this.isThinking = false;
-      return;
-    }
-
-    const aiPlayer = this.currentState.players[1];
-    const localPlayer = this.currentState.players[0];
-
-    if (aiPlayer.hand.length === 0) {
-      this.isThinking = false;
-      return;
-    }
-
+    
+    const hand = aiPlayer.hand;
+    
     let bestCard: Card | null = null;
     let bestScore = -Infinity;
-
-    for (const card of aiPlayer.hand) {
-      let score = card.attack * 2;
-
-      if (localPlayer.hp <= card.attack) {
-        score += 1000;
-      }
-
-      if (localPlayer.hp <= localPlayer.maxHp * 0.3) {
-        score += card.attack * 2;
-      }
-
-      if (localPlayer.hp <= localPlayer.maxHp * 0.6) {
-        score += card.attack * 0.5;
-      }
-
-      score += (this.currentState.discardPile.length) * 0.1;
-
-      score -= card.cost * 0.3;
-
-      score += Math.random() * 2;
-
+    
+    for (const card of hand) {
+      const score = this.evaluateCard(card, state, aiPlayer, localPlayer);
       if (score > bestScore) {
         bestScore = score;
         bestCard = card;
       }
     }
-
-    if (bestCard) {
-      this.onPlayCard(bestCard);
-    }
-
-    this.isThinking = false;
+    
+    return bestCard;
   }
-
-  public cancelThinking(): void {
-    if (this.thinkTimer) {
-      window.clearTimeout(this.thinkTimer);
-      this.thinkTimer = null;
+  
+  private evaluateCard(card: Card, state: GameState, aiPlayer: any, opponent: any): number {
+    let score = 0;
+    
+    switch (card.type) {
+      case 'attack':
+        score += card.value * 2;
+        
+        if (opponent.hp <= card.value * 2) {
+          score += 50;
+        }
+        
+        if (opponent.hp <= 10) {
+          score += 20;
+        }
+        break;
+        
+      case 'defense':
+        score += card.value;
+        
+        if (aiPlayer.hp <= 10) {
+          score += 30;
+        }
+        
+        if (opponent.hand.length > aiPlayer.hand.length) {
+          score += 10;
+        }
+        break;
+        
+      case 'skill':
+        score += card.value * 1.5;
+        
+        score += state.discardPile.length * 0.5;
+        break;
+        
+      default:
+        score += card.value;
     }
-    this.isThinking = false;
+    
+    score += Math.random() * 5;
+    
+    return score;
   }
-
-  public reset(): void {
-    this.cancelThinking();
-    this.currentState = null;
+  
+  private getRandomDelay(): number {
+    return Math.floor(Math.random() * (this.aiDelayMax - this.aiDelayMin + 1)) + this.aiDelayMin;
+  }
+  
+  setDelayRange(min: number, max: number): void {
+    this.aiDelayMin = min;
+    this.aiDelayMax = max;
   }
 }
