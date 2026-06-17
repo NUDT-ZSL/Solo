@@ -4,7 +4,7 @@ import { IVideoClip, EffectType } from './types';
 interface PreviewPanelProps {
   clips: IVideoClip[];
   transitions: Record<string, EffectType>;
-  previewTransition: { key: string; effect: EffectType } | null;
+  previewTransition: { key: string; effect: EffectType; id: number } | null;
   resetKey: number;
 }
 
@@ -41,6 +41,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [animationClass, setAnimationClass] = useState('');
   const [progress, setProgress] = useState(0);
+  const [previewAnimKey, setPreviewAnimKey] = useState(0);
 
   const playStateRef = useRef({
     clipIndex: 0,
@@ -163,7 +164,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
 
   useEffect(() => {
     if (previewTransition && clips.length >= 2) {
-      const { key, effect } = previewTransition;
+      const { key, effect, id } = previewTransition;
       const parts = key.split('->');
       const fromIndex = clips.findIndex((c) => c.id === parts[0]);
       const toIndex = clips.findIndex((c) => c.id === parts[1]);
@@ -172,6 +173,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
         stopPlayback();
         setCurrentIndex(toIndex);
         setAnimationClass(getEffectClass(effect));
+        setPreviewAnimKey(id);
 
         const timer = setTimeout(() => {
           setAnimationClass('');
@@ -219,7 +221,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
       <div className="preview-canvas-wrap">
         {currentClip && (
           <div
-            key={`preview-${currentClip.id}-${animationClass}`}
+            key={`preview-${currentClip.id}-${animationClass}-${previewAnimKey}`}
             className={`preview-clip ${animationClass}`}
             style={{ background: currentClip.color }}
           >

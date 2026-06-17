@@ -20,7 +20,18 @@ const createInitialTransitions = (clips: IVideoClip[]): Record<string, EffectTyp
   return t;
 };
 
+const rebuildTransitions = (clips: IVideoClip[], oldTransitions: Record<string, EffectType>): Record<string, EffectType> => {
+  const t: Record<string, EffectType> = {};
+  for (let i = 0; i < clips.length - 1; i++) {
+    const key = `${clips[i].id}->${clips[i + 1].id}`;
+    t[key] = oldTransitions[key] ?? EffectType.None;
+  }
+  return t;
+};
+
 const CLIP_LABELS = ['片段1', '片段2', '片段3', '片段4'];
+
+let clipCounter = 4;
 
 const App: React.FC = () => {
   const [initialClips] = useState(createInitialClips);
@@ -31,7 +42,11 @@ const App: React.FC = () => {
   const [previewTransition, setPreviewTransition] = useState<{
     key: string;
     effect: EffectType;
+    id: number;
   } | null>(null);
+  const [resetKey, setResetKey] = useState(0);
+  const [libraryDragId, setLibraryDragId] = useState<string | null>(null);
+  const [previewId, setPreviewId] = useState(0);
 
   const handleReorder = useCallback((fromIndex: number, toIndex: number) => {
     setClips((prev) => {
@@ -42,6 +57,33 @@ const App: React.FC = () => {
     });
   }, []);
 
+  const handleAddClip = useCallback(
+    (sourceClipId: string, atIndex: number) => {
+      const sourceClip = initialClips.find((c) => c.id === sourceClipId);
+      if (!sourceClip) return;
+
+      clipCounter++;
+      const newClip: IVideoClip = {
+        id: `clip-${clipCounter}`,
+        color: sourceClip.color,
+        duration: sourceClip.duration,
+      };
+
+      setClips((prev) => {
+        const next = [...prev];
+        next.splice(atIndex, 0, newClip);
+        return next;
+      });
+
+      setTransitions((prev) => {
+        const tempClips = [...clips];
+        tempClips.splice(atIndex, 0, newClip);
+        return rebuildTransitions(tempClips, prev);
+      });
+    },
+    [initialClips, clips]
+  );
+
   const handleTransitionChange = useCallback(
     (key: string, effect: EffectType) => {
       setTransitions((prev) => ({ ...prev, [key]: effect }));
@@ -51,12 +93,11 @@ const App: React.FC = () => {
 
   const handleTransitionPreview = useCallback(
     (key: string, effect: EffectType) => {
-      setPreviewTransition({ key, effect });
+      setPreviewId((id) => id + 1);
+      setPreviewTransition({ key, effect, id: previewId + 1 });
     },
-    []
+    [previewId]
   );
-
-  const [resetKey, setResetKey] = useState(0);
 
   const handleReset = useCallback(() => {
     setClips([...initialClips]);
@@ -83,11 +124,16 @@ const App: React.FC = () => {
           {materialItems.map(({ clip, label }) => (
             <div
               key={clip.id}
-              className="material-item"
+              className={`material-item ${libraryDragId === clip.id ? 'dragging' : ''}`}
               style={{ background: clip.color }}
               draggable
               onDragStart={(e) => {
                 e.dataTransfer.setData('text/plain', clip.id);
+                e.dataTransfer.effectAllowed = 'copy';
+                setLibraryDragId(clip.id);
+              }}
+              onDragEnd={() => {
+                setLibraryDragId(null);
               }}
             >
               <span className="clip-label">{label}</span>
@@ -100,6 +146,7 @@ const App: React.FC = () => {
             clips={clips}
             transitions={transitions}
             onReorder={handleReorder}
+            onAddClip={handleAddClip}
             onTransitionChange={handleTransitionChange}
             onTransitionPreview={handleTransitionPreview}
           />

@@ -70,6 +70,10 @@ body {
   cursor: grabbing;
 }
 
+.material-item.dragging {
+  opacity: 0.5;
+}
+
 .material-item .clip-label {
   font-size: 13px;
   font-weight: 600;
@@ -135,7 +139,7 @@ body {
 }
 
 .timeline-clip.dragging {
-  opacity: 0.6;
+  opacity: 0.5;
 }
 
 .timeline-clip .clip-label {

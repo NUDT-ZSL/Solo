@@ -5,6 +5,7 @@ interface TimelineProps {
   clips: IVideoClip[];
   transitions: Record<string, EffectType>;
   onReorder: (fromIndex: number, toIndex: number) => void;
+  onAddClip: (clipId: string, atIndex: number) => void;
   onTransitionChange: (key: string, effect: EffectType) => void;
   onTransitionPreview: (key: string, effect: EffectType) => void;
 }
@@ -23,27 +24,57 @@ const Timeline: React.FC<TimelineProps> = ({
   clips,
   transitions,
   onReorder,
+  onAddClip,
   onTransitionChange,
   onTransitionPreview,
 }) => {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [isExternalDrag, setIsExternalDrag] = useState(false);
   const dragRef = useRef<number | null>(null);
+  const trackRef = useRef<HTMLDivElement | null>(null);
 
   const handleDragStart = useCallback((index: number) => {
-    setDragIndex(index);
     dragRef.current = index;
+    setDragIndex(index);
+    setIsExternalDrag(false);
   }, []);
 
   const handleDragOver = useCallback(
     (e: React.DragEvent, index: number) => {
       e.preventDefault();
-      if (dragRef.current !== null && dragRef.current !== index) {
+      e.dataTransfer.dropEffect = 'move';
+      if (dragRef.current !== null) {
+        if (dragRef.current !== index) {
+          setDropIndex(index);
+        }
+      } else {
+        setIsExternalDrag(true);
         setDropIndex(index);
       }
     },
     []
   );
+
+  const handleTrackDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragRef.current === null) {
+      setIsExternalDrag(true);
+      if (dropIndex === null) {
+        setDropIndex(clips.length);
+      }
+    }
+  }, [clips.length, dropIndex]);
+
+  const handleTrackDragLeave = useCallback((e: React.DragEvent) => {
+    if (trackRef.current && !trackRef.current.contains(e.relatedTarget as Node)) {
+      if (dragRef.current === null) {
+        setIsExternalDrag(false);
+        setDropIndex(null);
+      }
+    }
+  }, []);
 
   const handleDragEnd = useCallback(() => {
     if (dragRef.current !== null && dropIndex !== null && dragRef.current !== dropIndex) {
@@ -51,8 +82,43 @@ const Timeline: React.FC<TimelineProps> = ({
     }
     setDragIndex(null);
     setDropIndex(null);
+    setIsExternalDrag(false);
     dragRef.current = null;
   }, [dropIndex, onReorder]);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent, index: number) => {
+      e.preventDefault();
+      if (dragRef.current === null) {
+        const clipId = e.dataTransfer.getData('text/plain');
+        if (clipId) {
+          onAddClip(clipId, index);
+        }
+      }
+      setDragIndex(null);
+      setDropIndex(null);
+      setIsExternalDrag(false);
+      dragRef.current = null;
+    },
+    [onAddClip]
+  );
+
+  const handleTrackDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      if (dragRef.current === null) {
+        const clipId = e.dataTransfer.getData('text/plain');
+        if (clipId) {
+          onAddClip(clipId, clips.length);
+        }
+      }
+      setDragIndex(null);
+      setDropIndex(null);
+      setIsExternalDrag(false);
+      dragRef.current = null;
+    },
+    [onAddClip, clips.length]
+  );
 
   const handleTransitionChange = useCallback(
     (key: string, effect: EffectType) => {
@@ -64,18 +130,31 @@ const Timeline: React.FC<TimelineProps> = ({
 
   const getTransitionKey = (i: number) => `${clips[i].id}->${clips[i + 1].id}`;
 
+  const showPlaceholder = (index: number) => {
+    if (dropIndex !== index) return false;
+    if (dragRef.current !== null) return dragRef.current !== index;
+    return isExternalDrag;
+  };
+
+  const showEndPlaceholder = dropIndex === clips.length && (dragRef.current !== null || isExternalDrag);
+
   return (
     <div className="timeline-container">
       <h3>时间线</h3>
-      <div className="timeline-track">
+      <div
+        className="timeline-track"
+        ref={trackRef}
+        onDragOver={handleTrackDragOver}
+        onDragLeave={handleTrackDragLeave}
+        onDrop={handleTrackDrop}
+      >
         {clips.map((clip, index) => {
           const isDragging = dragIndex === index;
-          const showPlaceholder = dropIndex === index && dragIndex !== null && dragIndex !== index;
           const transitionKey = index < clips.length - 1 ? getTransitionKey(index) : null;
 
           return (
             <React.Fragment key={clip.id}>
-              {showPlaceholder && <div className="drop-placeholder" />}
+              {showPlaceholder(index) && <div className="drop-placeholder" />}
               <div
                 className={`timeline-clip ${isDragging ? 'dragging' : ''}`}
                 style={{ background: clip.color }}
@@ -83,6 +162,7 @@ const Timeline: React.FC<TimelineProps> = ({
                 onDragStart={() => handleDragStart(index)}
                 onDragOver={(e) => handleDragOver(e, index)}
                 onDragEnd={handleDragEnd}
+                onDrop={(e) => handleDrop(e, index)}
               >
                 <span className="clip-label">{getClipLabel(clip.id)}</span>
                 <span className="clip-duration">{clip.duration.toFixed(1)}s</span>
@@ -104,9 +184,7 @@ const Timeline: React.FC<TimelineProps> = ({
             </React.Fragment>
           );
         })}
-        {dropIndex === clips.length && dragIndex !== null && (
-          <div className="drop-placeholder" />
-        )}
+        {showEndPlaceholder && <div className="drop-placeholder" />}
       </div>
     </div>
   );
