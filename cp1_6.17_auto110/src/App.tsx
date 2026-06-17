@@ -9,8 +9,9 @@ import type { JumpState } from './types'
 
 const GAME_WIDTH = 800
 const GAME_HEIGHT = 600
-const FPS_WINDOW_SECONDS = 60
+const FPS_SAMPLE_WINDOW = 60
 const FPS_WARNING_THRESHOLD = 55
+const SAMPLE_INTERVAL_MS = 1000
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -19,7 +20,10 @@ export default function App() {
   const inputRef = useRef<InputManager | null>(null)
   const rafRef = useRef<number | null>(null)
   const lastTimeRef = useRef<number>(0)
-  const frameTimesRef = useRef<number[]>([])
+  const fpsSamplesRef = useRef<number[]>([])
+  const sampleFramesRef = useRef<number>(0)
+  const sampleStartRef = useRef<number>(0)
+  const warningActiveRef = useRef<boolean>(false)
   const [currentJumpState, setCurrentJumpState] = useState<JumpState | null>(null)
 
   const params = useGameStore((s) => s.params)
@@ -44,22 +48,34 @@ export default function App() {
     rendererRef.current.render(initialResult.player, initialResult.platforms)
 
     lastTimeRef.current = performance.now()
+    sampleStartRef.current = performance.now()
+    sampleFramesRef.current = 0
+    fpsSamplesRef.current = []
+    warningActiveRef.current = false
 
     const loop = (now: number) => {
       const dt = Math.min(0.05, (now - lastTimeRef.current) / 1000)
       lastTimeRef.current = now
 
-      frameTimesRef.current.push(now)
-      const cutoff = now - FPS_WINDOW_SECONDS * 1000
-      while (frameTimesRef.current.length > 0 && frameTimesRef.current[0] < cutoff) {
-        frameTimesRef.current.shift()
-      }
+      sampleFramesRef.current += 1
+      if (now - sampleStartRef.current >= SAMPLE_INTERVAL_MS) {
+        const elapsedSec = (now - sampleStartRef.current) / 1000
+        const instantFps = sampleFramesRef.current / elapsedSec
+        fpsSamplesRef.current.push(instantFps)
+        if (fpsSamplesRef.current.length > FPS_SAMPLE_WINDOW) {
+          fpsSamplesRef.current.shift()
+        }
+        sampleFramesRef.current = 0
+        sampleStartRef.current = now
 
-      if (frameTimesRef.current.length > 1) {
-        const elapsed = (frameTimesRef.current[frameTimesRef.current.length - 1] - frameTimesRef.current[0]) / 1000
-        if (elapsed > 0) {
-          const avgFps = (frameTimesRef.current.length - 1) / elapsed
-          setLowFpsWarning(avgFps < FPS_WARNING_THRESHOLD)
+        if (fpsSamplesRef.current.length >= FPS_SAMPLE_WINDOW) {
+          const avg =
+            fpsSamplesRef.current.reduce((a, b) => a + b, 0) / fpsSamplesRef.current.length
+          const shouldWarn = avg < FPS_WARNING_THRESHOLD
+          if (shouldWarn !== warningActiveRef.current) {
+            warningActiveRef.current = shouldWarn
+            setLowFpsWarning(shouldWarn)
+          }
         }
       }
 

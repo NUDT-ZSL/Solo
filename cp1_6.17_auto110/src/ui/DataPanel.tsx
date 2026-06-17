@@ -1,120 +1,60 @@
 import { useEffect, useRef } from 'react'
 import { useGameStore } from '../store'
-import type { JumpState } from '../types'
+import type { JumpState, TrajectoryData } from '../types'
 
 interface DataPanelProps {
   currentJumpState: JumpState | null
 }
 
+const FADE_DURATION = 300
+
 export function DataPanel({ currentJumpState }: DataPanelProps) {
   const { trajectories, lowFpsWarning } = useGameStore()
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const animatingIdRef = useRef<number | null>(null)
-  const fadeStartTimeRef = useRef<number>(0)
-  const lastTrajCountRef = useRef<number>(0)
+  const rafIdRef = useRef<number | null>(null)
+  const fadeStartMapRef = useRef<Map<number, number>>(new Map())
+  const lastTrajIdsRef = useRef<Set<number>>(new Set())
+  const trajectoriesRef = useRef<TrajectoryData[]>([])
 
-  const latestTrajectory = trajectories[trajectories.length - 1]
+  trajectoriesRef.current = trajectories
 
   useEffect(() => {
-    if (trajectories.length > lastTrajCountRef.current) {
-      lastTrajCountRef.current = trajectories.length
-      fadeStartTimeRef.current = performance.now()
+    const currentIds = new Set(trajectories.map((t) => t.id))
+    const now = performance.now()
+    for (const t of trajectories) {
+      if (!lastTrajIdsRef.current.has(t.id)) {
+        fadeStartMapRef.current.set(t.id, now)
+      }
     }
-    drawChart()
+    for (const oldId of lastTrajIdsRef.current) {
+      if (!currentIds.has(oldId)) {
+        fadeStartMapRef.current.delete(oldId)
+      }
+    }
+    lastTrajIdsRef.current = currentIds
   }, [trajectories])
 
   useEffect(() => {
-    drawChart()
-  }, [])
-
-  const drawChart = () => {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const w = canvas.width
-    const h = canvas.height
-    const padL = 40
-    const padR = 10
-    const padT = 10
-    const padB = 28
-
-    ctx.clearRect(0, 0, w, h)
-
-    const maxAir = Math.max(1500, ...trajectories.map((t) => t.airTimeMs))
-    const chartW = w - padL - padR
-    const chartH = h - padT - padB
-    const barGap = 4
-    const barCount = 10
-    const barW = Math.max(8, (chartW - barGap * (barCount - 1)) / barCount)
-
-    ctx.strokeStyle = 'rgba(255,255,255,0.15)'
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    ctx.moveTo(padL, padT)
-    ctx.lineTo(padL, padT + chartH)
-    ctx.lineTo(padL + chartW, padT + chartH)
-    ctx.stroke()
-
-    ctx.fillStyle = 'rgba(255,255,255,0.5)'
-    ctx.font = '10px sans-serif'
-    ctx.textAlign = 'right'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(`${maxAir}ms`, padL - 4, padT)
-    ctx.fillText('0', padL - 4, padT + chartH)
-
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'top'
-    for (let i = 0; i < barCount; i++) {
-      const label = i < trajectories.length ? `#${trajectories.length - barCount + i + 1}` : ''
-      const x = padL + i * (barW + barGap) + barW / 2
-      ctx.fillStyle = 'rgba(255,255,255,0.4)'
-      ctx.fillText(label, x, padT + chartH + 6)
+    const render = () => {
+      drawChart(ctx, canvas.width, canvas.height, trajectoriesRef.current, fadeStartMapRef.current)
+      rafIdRef.current = requestAnimationFrame(render)
     }
 
-    const now = performance.now()
-    const fadeDuration = 300
+    rafIdRef.current = requestAnimationFrame(render)
 
-    for (let i = 0; i < barCount; i++) {
-      const trajIndex = trajectories.length - barCount + i
-      if (trajIndex < 0) continue
-      const traj = trajectories[trajIndex]
-      const isLatest = trajIndex === trajectories.length - 1
-      let alpha = 1
-
-      if (isLatest && fadeStartTimeRef.current > 0) {
-        const elapsed = now - fadeStartTimeRef.current
-        if (elapsed < fadeDuration) {
-          alpha = elapsed / fadeDuration
-          if (animatingIdRef.current === null) {
-            animatingIdRef.current = requestAnimationFrame(function anim() {
-              drawChart()
-              const el = performance.now() - fadeStartTimeRef.current
-              if (el < fadeDuration) {
-                animatingIdRef.current = requestAnimationFrame(anim)
-              } else {
-                animatingIdRef.current = null
-              }
-            })
-          }
-        }
+    return () => {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current)
       }
-
-      const barH = (traj.airTimeMs / maxAir) * chartH
-      const x = padL + i * (barW + barGap)
-      const y = padT + chartH - barH
-
-      ctx.fillStyle = `rgba(66, 165, 245, ${alpha})`
-      ctx.fillRect(x, y, barW, barH)
     }
+  }, [])
 
-    ctx.fillStyle = 'rgba(255,255,255,0.7)'
-    ctx.font = 'bold 11px sans-serif'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'bottom'
-    ctx.fillText('最近10次滞空时间 (ms)', w / 2, h - 2)
-  }
+  const latestTrajectory = trajectories[trajectories.length - 1]
 
   const displayHighestY = currentJumpState
     ? currentJumpState.currentHighestY.toFixed(1)
@@ -221,6 +161,81 @@ export function DataPanel({ currentJumpState }: DataPanelProps) {
       )}
     </div>
   )
+}
+
+function drawChart(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  trajectories: TrajectoryData[],
+  fadeStartMap: Map<number, number>
+) {
+  const now = performance.now()
+  const padL = 40
+  const padR = 10
+  const padT = 10
+  const padB = 28
+
+  ctx.clearRect(0, 0, w, h)
+
+  const maxAir = Math.max(1500, ...trajectories.map((t) => t.airTimeMs))
+  const chartW = w - padL - padR
+  const chartH = h - padT - padB
+  const barGap = 4
+  const barCount = 10
+  const barW = Math.max(8, (chartW - barGap * (barCount - 1)) / barCount)
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)'
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(padL, padT)
+  ctx.lineTo(padL, padT + chartH)
+  ctx.lineTo(padL + chartW, padT + chartH)
+  ctx.stroke()
+
+  ctx.fillStyle = 'rgba(255,255,255,0.5)'
+  ctx.font = '10px sans-serif'
+  ctx.textAlign = 'right'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(`${maxAir}ms`, padL - 4, padT)
+  ctx.fillText('0', padL - 4, padT + chartH)
+
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'top'
+  for (let i = 0; i < barCount; i++) {
+    const label = i < trajectories.length ? `#${trajectories.length - barCount + i + 1}` : ''
+    const x = padL + i * (barW + barGap) + barW / 2
+    ctx.fillStyle = 'rgba(255,255,255,0.4)'
+    ctx.fillText(label, x, padT + chartH + 6)
+  }
+
+  for (let i = 0; i < barCount; i++) {
+    const trajIndex = trajectories.length - barCount + i
+    if (trajIndex < 0) continue
+    const traj = trajectories[trajIndex]
+
+    let alpha = 1
+    const fadeStart = fadeStartMap.get(traj.id)
+    if (fadeStart !== undefined) {
+      const elapsed = now - fadeStart
+      if (elapsed < FADE_DURATION) {
+        alpha = Math.max(0, elapsed / FADE_DURATION)
+      }
+    }
+
+    const barH = (traj.airTimeMs / maxAir) * chartH
+    const x = padL + i * (barW + barGap)
+    const y = padT + chartH - barH
+
+    ctx.fillStyle = `rgba(66, 165, 245, ${alpha})`
+    ctx.fillRect(x, y, barW, barH)
+  }
+
+  ctx.fillStyle = 'rgba(255,255,255,0.7)'
+  ctx.font = 'bold 11px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'bottom'
+  ctx.fillText('最近10次滞空时间 (ms)', w / 2, h - 2)
 }
 
 function DataRow({

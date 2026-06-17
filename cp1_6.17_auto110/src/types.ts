@@ -31,9 +31,11 @@ export interface Platform {
   moveEndX?: number
   moveSpeed?: number
   moveDirection?: number
+  moveElapsed?: number
   crumbleState?: 'intact' | 'triggered' | 'disappeared' | 'resetting'
   crumbleTimer?: number
   flashTimer?: number
+  flashCount?: number
   flashOpacity?: number
 }
 
