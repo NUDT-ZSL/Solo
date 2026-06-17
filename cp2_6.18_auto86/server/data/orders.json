@@ -1,0 +1,62 @@
+[
+  {
+    "id": "order-demo-1",
+    "orderNo": "BK20260617090101",
+    "customerName": "张女士",
+    "phone": "13800138001",
+    "items": [
+      { "name": "可颂面包", "quantity": 6 },
+      { "name": "美式咖啡", "quantity": 2 }
+    ],
+    "status": "making",
+    "createdAt": "2026-06-17T09:01:01.000Z"
+  },
+  {
+    "id": "order-demo-2",
+    "orderNo": "BK20260617101532",
+    "customerName": "李先生",
+    "phone": "13900139002",
+    "items": [
+      { "name": "巧克力蛋糕", "quantity": 1 },
+      { "name": "抹茶曲奇", "quantity": 12 }
+    ],
+    "status": "new",
+    "createdAt": "2026-06-17T10:15:32.000Z"
+  },
+  {
+    "id": "order-demo-3",
+    "orderNo": "BK20260618074512",
+    "customerName": "王阿姨",
+    "phone": "13700137003",
+    "items": [
+      { "name": "全麦吐司", "quantity": 2 },
+      { "name": "奶油泡芙", "quantity": 8 },
+      { "name": "手工饼干礼盒", "quantity": 1 }
+    ],
+    "status": "new",
+    "createdAt": "2026-06-18T07:45:12.000Z"
+  },
+  {
+    "id": "order-demo-4",
+    "orderNo": "BK20260618083045",
+    "customerName": "陈小姐",
+    "phone": "13600136004",
+    "items": [
+      { "name": "草莓慕斯", "quantity": 2 },
+      { "name": "拿铁咖啡", "quantity": 3 }
+    ],
+    "status": "new",
+    "createdAt": "2026-06-18T08:30:45.000Z"
+  },
+  {
+    "id": "order-demo-5",
+    "orderNo": "BK20260616162010",
+    "customerName": "赵先生",
+    "phone": "13500135005",
+    "items": [
+      { "name": "生日蛋糕(8寸)", "quantity": 1 }
+    ],
+    "status": "completed",
+    "createdAt": "2026-06-16T16:20:10.000Z"
+  }
+]

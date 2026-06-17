@@ -1,0 +1,104 @@
+[
+  {
+    "id": "log-demo-1",
+    "date": "2026-06-12",
+    "materials": [
+      { "name": "高筋面粉", "quantity": 5, "unit": "kg" },
+      { "name": "黄油", "quantity": 2, "unit": "kg" },
+      { "name": "细砂糖", "quantity": 1.5, "unit": "kg" },
+      { "name": "鸡蛋", "quantity": 30, "unit": "个" }
+    ],
+    "products": [
+      { "name": "可颂面包", "quantity": 40 },
+      { "name": "全麦吐司", "quantity": 20 }
+    ],
+    "notes": "今天温度较高，面团发酵时间缩短了15分钟，成品口感依然松软。",
+    "createdAt": "2026-06-12T18:00:00.000Z"
+  },
+  {
+    "id": "log-demo-2",
+    "date": "2026-06-13",
+    "materials": [
+      { "name": "低筋面粉", "quantity": 4, "unit": "kg" },
+      { "name": "淡奶油", "quantity": 3, "unit": "L" },
+      { "name": "可可粉", "quantity": 500, "unit": "g" },
+      { "name": "黄油", "quantity": 1.5, "unit": "kg" }
+    ],
+    "products": [
+      { "name": "巧克力蛋糕", "quantity": 15 },
+      { "name": "奶油泡芙", "quantity": 60 },
+      { "name": "抹茶曲奇", "quantity": 100 }
+    ],
+    "notes": "周末订单较多，提前准备了蛋糕胚。",
+    "createdAt": "2026-06-13T18:30:00.000Z"
+  },
+  {
+    "id": "log-demo-3",
+    "date": "2026-06-14",
+    "materials": [
+      { "name": "高筋面粉", "quantity": 6, "unit": "kg" },
+      { "name": "黄油", "quantity": 2.5, "unit": "kg" },
+      { "name": "牛奶", "quantity": 4, "unit": "L" },
+      { "name": "细砂糖", "quantity": 2, "unit": "kg" },
+      { "name": "草莓", "quantity": 3, "unit": "kg" }
+    ],
+    "products": [
+      { "name": "草莓慕斯", "quantity": 20 },
+      { "name": "可颂面包", "quantity": 50 },
+      { "name": "手工饼干礼盒", "quantity": 10 }
+    ],
+    "notes": "新进货的草莓品质很好，慕斯销量超出预期。",
+    "createdAt": "2026-06-14T19:00:00.000Z"
+  },
+  {
+    "id": "log-demo-4",
+    "date": "2026-06-15",
+    "materials": [
+      { "name": "全麦粉", "quantity": 4, "unit": "kg" },
+      { "name": "高筋面粉", "quantity": 3, "unit": "kg" },
+      { "name": "黄油", "quantity": 1, "unit": "kg" },
+      { "name": "鸡蛋", "quantity": 20, "unit": "个" }
+    ],
+    "products": [
+      { "name": "全麦吐司", "quantity": 25 },
+      { "name": "美式松饼", "quantity": 30 }
+    ],
+    "notes": "周一客流较少，适当减少了产量，避免浪费。",
+    "createdAt": "2026-06-15T17:30:00.000Z"
+  },
+  {
+    "id": "log-demo-5",
+    "date": "2026-06-16",
+    "materials": [
+      { "name": "低筋面粉", "quantity": 6, "unit": "kg" },
+      { "name": "淡奶油", "quantity": 5, "unit": "L" },
+      { "name": "细砂糖", "quantity": 2.5, "unit": "kg" },
+      { "name": "鸡蛋", "quantity": 40, "unit": "个" },
+      { "name": "水果装饰", "quantity": 2, "unit": "kg" }
+    ],
+    "products": [
+      { "name": "生日蛋糕(8寸)", "quantity": 3 },
+      { "name": "奶油泡芙", "quantity": 80 },
+      { "name": "草莓慕斯", "quantity": 15 }
+    ],
+    "notes": "今天完成了赵先生的生日蛋糕订单，顾客反馈非常满意！",
+    "createdAt": "2026-06-16T20:00:00.000Z"
+  },
+  {
+    "id": "log-demo-6",
+    "date": "2026-06-17",
+    "materials": [
+      { "name": "高筋面粉", "quantity": 5.5, "unit": "kg" },
+      { "name": "黄油", "quantity": 2.2, "unit": "kg" },
+      { "name": "抹茶粉", "quantity": 300, "unit": "g" },
+      { "name": "低筋面粉", "quantity": 2, "unit": "kg" }
+    ],
+    "products": [
+      { "name": "可颂面包", "quantity": 45 },
+      { "name": "抹茶曲奇", "quantity": 120 },
+      { "name": "全麦吐司", "quantity": 15 }
+    ],
+    "notes": "尝试了新的抹茶供应商，色泽和香气都有提升。",
+    "createdAt": "2026-06-17T18:45:00.000Z"
+  }
+]
