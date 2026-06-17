@@ -1,0 +1,29 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column !important;
+  }
+  .app-canvas-area {
+    width: 100% !important;
+    height: 50% !important;
+  }
+  .app-divider {
+    width: 100% !important;
+    height: 2px !important;
+  }
+  .app-panel-area {
+    width: 100% !important;
+    height: 50% !important;
+  }
+}
