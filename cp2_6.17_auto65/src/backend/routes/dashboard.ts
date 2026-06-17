@@ -102,19 +102,36 @@ function generateWordCloud(ratings: Rating[]): WordCloudItem[] {
   
   ratings.forEach(r => {
     if (!r.comment) return;
-    const words = r.comment
-      .replace(/[，。！？、；：""''（）\[\]【】\s]+/g, ' ')
-      .split(' ')
-      .filter(w => w.length >= 2 && !STOP_WORDS.has(w));
     
-    words.forEach(word => {
-      wordCount.set(word, (wordCount.get(word) || 0) + 1);
+    const chinesePattern = /[\u4e00-\u9fa5]{2,}/g;
+    const matches = r.comment.match(chinesePattern) || [];
+    
+    matches.forEach(word => {
+      if (!STOP_WORDS.has(word)) {
+        wordCount.set(word, (wordCount.get(word) || 0) + 1);
+      }
+    });
+    
+    const bigrams: string[] = [];
+    for (let i = 0; i < r.comment.length - 1; i++) {
+      const char1 = r.comment[i];
+      const char2 = r.comment[i + 1];
+      if (/[\u4e00-\u9fa5]/.test(char1) && /[\u4e00-\u9fa5]/.test(char2)) {
+        const bigram = char1 + char2;
+        if (!STOP_WORDS.has(bigram)) {
+          bigrams.push(bigram);
+        }
+      }
+    }
+    
+    bigrams.forEach(bigram => {
+      wordCount.set(bigram, (wordCount.get(bigram) || 0) + 1);
     });
   });
   
   const wordCloud: WordCloudItem[] = [];
   wordCount.forEach((count, word) => {
-    if (count > 3) {
+    if (count >= 2) {
       wordCloud.push({ text: word, weight: count });
     }
   });

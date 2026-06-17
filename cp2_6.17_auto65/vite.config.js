@@ -1,22 +1,23 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import path from 'path';
+import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
-      '@frontend': path.resolve(__dirname, './src/frontend'),
-      '@backend': path.resolve(__dirname, './src/backend'),
-      '@data': path.resolve(__dirname, './data'),
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '@frontend': fileURLToPath(new URL('./src/frontend', import.meta.url)),
+      '@backend': fileURLToPath(new URL('./src/backend', import.meta.url)),
+      '@data': fileURLToPath(new URL('./data', import.meta.url)),
     },
   },
   server: {
-    port: 5173,
+    port: 5175,
+    host: '0.0.0.0',
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://127.0.0.1:3001',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },

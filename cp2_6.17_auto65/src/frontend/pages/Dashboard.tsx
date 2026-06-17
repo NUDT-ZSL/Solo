@@ -275,11 +275,11 @@ const Dashboard: React.FC = () => {
             <XAxis dataKey="category" stroke="#5d4037" />
             <YAxis stroke="#5d4037" />
             <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="heat" name="热度" fill="url(#barGradient)" radius={[4, 4, 0, 0]} cursor="pointer" onClick={(data: any) => data?.payload?.category && handleBarClick(data.payload.category)}>
+            <Bar dataKey="heat" name="热度" radius={[4, 4, 0, 0]} cursor="pointer" onClick={(data: any) => data?.payload?.category && handleBarClick(data.payload.category)}>
               {data.categoryHeats.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
-                  fill={showFilmList === entry.category ? COLORS.barEnd : undefined}
+                  fill={showFilmList === entry.category ? COLORS.barEnd : 'url(#barGradient)'}
                 />
               ))}
             </Bar>
@@ -332,7 +332,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div className="wordcloud-container" ref={wordCloudContainerRef}>
-        <canvas ref={wordCloudRef} />
+        <canvas ref={wordCloudRef} id="wordCloudCanvas" />
       </div>
 
       {showComments && (

@@ -14,6 +14,6 @@ app.use('/films', filmsRouter);
 app.use('/ratings', ratingsRouter);
 app.use('/dashboard', dashboardRouter);
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on port ${PORT}`);
 });
