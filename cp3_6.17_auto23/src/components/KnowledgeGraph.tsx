@@ -16,6 +16,8 @@ interface KnowledgeGraphProps {
   reviewedIds?: string[];
 }
 
+type InteractionMode = 'move' | 'connect';
+
 const NODE_RADIUS = 18;
 const DIFFICULTY_COLORS: Record<Difficulty, string> = {
   '初级': '#81c784',
@@ -42,6 +44,9 @@ function KnowledgeGraph({
   const [hoveredPointId, setHoveredPointId] = useState<string | null>(null);
   const [draggingPointId, setDraggingPointId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
+  const [isShiftPressed, setIsShiftPressed] = useState(false);
+  const [interactionMode, setInteractionMode] = useState<InteractionMode>('move');
   const [creatingRelation, setCreatingRelation] = useState<{
     sourceId: string;
     startX: number;
@@ -95,6 +100,25 @@ function KnowledgeGraph({
     }
     animationRef.current = requestAnimationFrame(animatePulse);
     return () => cancelAnimationFrame(animationRef.current);
+  }, []);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Shift') {
+        setIsShiftPressed(true);
+      }
+    }
+    function handleKeyUp(e: KeyboardEvent) {
+      if (e.key === 'Shift') {
+        setIsShiftPressed(false);
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
   }, []);
 
   const getPointMap = useCallback((): Map<string, KnowledgePoint> => {
@@ -156,12 +180,13 @@ function KnowledgeGraph({
     curvature: number,
     color: string,
     lineWidth: number,
-    dashed: boolean = false
+    dashed: boolean = false,
+    highlighted: boolean = false
   ) => {
     const control = getControlPoint(source, target, curvature);
 
-    ctx.strokeStyle = color;
-    ctx.lineWidth = lineWidth;
+    ctx.strokeStyle = highlighted ? '#1976d2' : color;
+    ctx.lineWidth = highlighted ? lineWidth + 1 : lineWidth;
     if (dashed) {
       ctx.setLineDash([8, 6]);
     } else {
@@ -178,7 +203,7 @@ function KnowledgeGraph({
     const arrowStartX = (1 - t) * (1 - t) * source.x + 2 * (1 - t) * t * control.x + t * t * target.x;
     const arrowStartY = (1 - t) * (1 - t) * source.y + 2 * (1 - t) * t * control.y + t * t * target.y;
 
-    drawArrow(ctx, arrowStartX, arrowStartY, target.x, target.y, color);
+    drawArrow(ctx, arrowStartX, arrowStartY, target.x, target.y, highlighted ? '#1976d2' : color);
   }, [getControlPoint, drawArrow]);
 
   useEffect(() => {
@@ -236,12 +261,12 @@ function KnowledgeGraph({
           highlightPath[idx + 1] === rel.targetId
         );
 
+      ctx.globalAlpha = 1;
       if (isInPath) {
-        ctx.globalAlpha = 1;
-        drawBezierCurve(ctx, source, target, rel.curvature, '#f44336', 3, true);
+        drawBezierCurve(ctx, source, target, rel.curvature, '#f44336', 3, true, false);
       } else {
         ctx.globalAlpha = opacity;
-        drawBezierCurve(ctx, source, target, rel.curvature, '#bdbdbd', 2, false);
+        drawBezierCurve(ctx, source, target, rel.curvature, '#bdbdbd', 2, false, false);
       }
       ctx.globalAlpha = 1;
     });
@@ -250,13 +275,22 @@ function KnowledgeGraph({
       const source = pointMap.get(creatingRelation.sourceId);
       if (source) {
         ctx.strokeStyle = '#1976d2';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 5]);
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([8, 5]);
         ctx.beginPath();
         ctx.moveTo(source.x, source.y);
         ctx.lineTo(creatingRelation.mouseX, creatingRelation.mouseY);
         ctx.stroke();
         ctx.setLineDash([]);
+
+        drawArrow(ctx, source.x, source.y, creatingRelation.mouseX, creatingRelation.mouseY, '#1976d2');
+
+        ctx.fillStyle = '#1976d2';
+        ctx.beginPath();
+        ctx.arc(source.x, source.y, NODE_RADIUS + 4, 0, Math.PI * 2);
+        ctx.strokeStyle = '#1976d2';
+        ctx.lineWidth = 2;
+        ctx.stroke();
       }
     }
 
@@ -269,13 +303,14 @@ function KnowledgeGraph({
       const isInPath = highlightPath.includes(point.id);
       const isHovered = hoveredPointId === point.id;
       const isReviewed = reviewedIds.includes(point.id);
+      const isConnectingSource = creatingRelation?.sourceId === point.id;
 
       const scale = isHovered ? 1.2 : 1;
       const radius = NODE_RADIUS * scale;
 
       ctx.globalAlpha = opacity;
 
-      if (isHovered) {
+      if (isHovered || isConnectingSource) {
         ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
         ctx.shadowBlur = 10;
         ctx.shadowOffsetY = 3;
@@ -306,6 +341,12 @@ function KnowledgeGraph({
 
         if (isReviewed) {
           ctx.strokeStyle = '#4caf50';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+        }
+
+        if (isConnectingSource) {
+          ctx.strokeStyle = '#1976d2';
           ctx.lineWidth = 3;
           ctx.stroke();
         }
@@ -355,7 +396,7 @@ function KnowledgeGraph({
 
         ctx.fillStyle = '#1976d2';
         ctx.beginPath();
-        ctx.arc(control.x, control.y, 6, 0, Math.PI * 2);
+        ctx.arc(control.x, control.y, 7, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.fillStyle = '#ffffff';
@@ -400,7 +441,7 @@ function KnowledgeGraph({
       const control = getControlPoint(source, target, rel.curvature);
       const dx = x - control.x;
       const dy = y - control.y;
-      if (dx * dx + dy * dy <= 36) {
+      if (dx * dx + dy * dy <= 49) {
         return rel;
       }
     }
@@ -425,6 +466,22 @@ function KnowledgeGraph({
       return;
     }
 
+    if (mode === 'edit' && point) {
+      const shouldCreateRelation = isShiftPressed || interactionMode === 'connect';
+
+      if (shouldCreateRelation) {
+        setCreatingRelation({
+          sourceId: point.id,
+          startX: point.x,
+          startY: point.y,
+          mouseX: x,
+          mouseY: y
+        });
+        setDraggingPointId(null);
+        return;
+      }
+    }
+
     if (mode === 'edit') {
       const anchor = findAnchorAtPos(x, y);
       if (anchor) {
@@ -439,8 +496,9 @@ function KnowledgeGraph({
         x: x - point.x,
         y: y - point.y
       });
+      setDragStartPos({ x, y });
     }
-  }, [getMousePos, findPointAtPos, findAnchorAtPos, mode]);
+  }, [getMousePos, findPointAtPos, findAnchorAtPos, mode, isShiftPressed, interactionMode]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const { x, y } = getMousePos(e);
@@ -500,7 +558,11 @@ function KnowledgeGraph({
     }
 
     if (draggingPointId) {
-      if (!onPointMove || Math.abs(x - dragOffset.x - (points.find(p => p.id === draggingPointId)?.x || 0)) < 3) {
+      const totalDragDist = Math.sqrt(
+        Math.pow(x - dragStartPos.x, 2) + Math.pow(y - dragStartPos.y, 2)
+      );
+
+      if (totalDragDist < 5) {
         const point = points.find(p => p.id === draggingPointId);
         if (point) {
           setSelectedPoint(point);
@@ -513,7 +575,7 @@ function KnowledgeGraph({
     if (draggingAnchor) {
       setDraggingAnchor(null);
     }
-  }, [creatingRelation, draggingPointId, dragOffset, findPointAtPos, onRelationCreate,
+  }, [creatingRelation, draggingPointId, dragStartPos, findPointAtPos, onRelationCreate,
       onPointMove, points, onPointClick, draggingAnchor]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
@@ -524,19 +586,49 @@ function KnowledgeGraph({
     setSelectedPoint(null);
   }, []);
 
+  const toggleInteractionMode = useCallback(() => {
+    setInteractionMode(prev => prev === 'move' ? 'connect' : 'move');
+  }, []);
+
   return (
     <div ref={containerRef} className="knowledge-graph-container">
+      {mode === 'edit' && (
+        <div className="graph-toolbar">
+          <div className="interaction-mode-toggle">
+            <button
+              className={`mode-toggle-btn ${interactionMode === 'move' ? 'active' : ''}`}
+              onClick={toggleInteractionMode}
+              title="移动节点"
+            >
+              ✋ 移动
+            </button>
+            <button
+              className={`mode-toggle-btn ${interactionMode === 'connect' ? 'active' : ''}`}
+              onClick={toggleInteractionMode}
+              title="创建关系连线"
+            >
+              🔗 连线
+            </button>
+          </div>
+        </div>
+      )}
       <canvas
         ref={canvasRef}
-        className="knowledge-graph-canvas"
+        className={`knowledge-graph-canvas ${mode === 'edit' && interactionMode === 'connect' ? 'connect-mode' : ''}`}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
+        onMouseLeave={() => {
+          if (creatingRelation) setCreatingRelation(null);
+          setHoveredPointId(null);
+        }}
         onContextMenu={handleContextMenu}
       />
       {mode === 'edit' && (
         <div className="graph-edit-hint">
-          💡 提示：右键拖拽节点创建关系，拖拽蓝色锚点调整曲线
+          {interactionMode === 'connect'
+            ? '💡 连线模式：从源节点拖拽到目标节点创建关系（或按住Shift键拖拽）'
+            : '💡 移动模式：拖拽节点调整位置，右键拖拽创建关系，拖拽蓝色锚点调整曲线'}
         </div>
       )}
       <KnowledgeDetailModal

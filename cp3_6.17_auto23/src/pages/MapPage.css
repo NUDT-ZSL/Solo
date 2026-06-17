@@ -15,6 +15,7 @@
   background-color: #ffffff;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  flex-shrink: 0;
 }
 
 .toolbar-left {
@@ -98,12 +99,14 @@
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   overflow: hidden;
+  position: relative;
 }
 
 .panel-section {
   flex: 3;
   min-width: 280px;
   max-width: 400px;
+  min-height: 0;
 }
 
 .info-panel {
@@ -361,29 +364,114 @@
   color: #616161;
 }
 
-@media (max-width: 1024px) and (min-width: 768px) {
+@media (min-width: 768px) and (max-width: 1024px) {
+  .map-page {
+    height: calc(100vh - 56px);
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .map-toolbar {
+    padding: 10px 14px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .toolbar-left {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .filter-select {
+    min-width: 120px;
+  }
+
   .map-content {
     flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    overflow-y: auto;
   }
 
   .graph-section {
     flex: none;
     height: 60vh;
+    min-height: 400px;
+    width: 100%;
   }
 
   .panel-section {
     flex: none;
     max-width: none;
+    width: 100%;
+    min-height: auto;
     height: auto;
-    min-height: 200px;
   }
 
   .info-panel {
     height: auto;
+    max-height: none;
+    overflow-y: visible;
   }
 
   .stats-grid {
     grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .map-page {
+    height: calc(100vh - 56px);
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .map-toolbar {
+    padding: 10px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .toolbar-left,
+  .toolbar-right {
+    justify-content: center;
+  }
+
+  .map-content {
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .graph-section {
+    flex: none;
+    height: 50vh;
+    min-height: 300px;
+    width: 100%;
+  }
+
+  .panel-section {
+    flex: none;
+    max-width: none;
+    width: 100%;
+    min-height: auto;
+  }
+
+  .info-panel {
+    height: auto;
+    padding: 14px;
+    overflow-y: visible;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .stat-number {
+    font-size: 18px;
   }
 }
 

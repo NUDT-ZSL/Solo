@@ -13,15 +13,61 @@
   cursor: default;
 }
 
+.knowledge-graph-canvas.connect-mode {
+  cursor: crosshair;
+}
+
+.graph-toolbar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 20;
+}
+
+.interaction-mode-toggle {
+  display: flex;
+  background-color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  border: 1px solid #e0e0e0;
+}
+
+.mode-toggle-btn {
+  padding: 8px 14px;
+  background-color: #ffffff;
+  color: #616161;
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mode-toggle-btn:hover {
+  background-color: #f5f5f5;
+}
+
+.mode-toggle-btn.active {
+  background: linear-gradient(135deg, #1a237e, #00bcd4);
+  color: #ffffff;
+}
+
 .graph-edit-hint {
   position: absolute;
   bottom: 16px;
   left: 16px;
-  padding: 8px 16px;
-  background-color: rgba(26, 35, 126, 0.9);
+  padding: 10px 16px;
+  background-color: rgba(26, 35, 126, 0.92);
   color: #ffffff;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 12px;
   pointer-events: none;
   z-index: 10;
+  max-width: 380px;
+  line-height: 1.5;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }

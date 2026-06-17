@@ -45,6 +45,34 @@ function topologicalSort(points: KnowledgePoint[], relations: Relation[]): strin
   return result;
 }
 
+function calculateDependencyDepth(
+  nodeId: string,
+  reverseAdjacency: Map<string, string[]>,
+  weakPointIds: string[],
+  memo: Map<string, number>
+): number {
+  if (memo.has(nodeId)) {
+    return memo.get(nodeId)!;
+  }
+
+  const prereqs = reverseAdjacency.get(nodeId) || [];
+  const weakPrereqs = prereqs.filter(p => weakPointIds.includes(p));
+
+  if (weakPrereqs.length === 0) {
+    memo.set(nodeId, 0);
+    return 0;
+  }
+
+  let maxDepth = 0;
+  for (const prereq of weakPrereqs) {
+    const depth = calculateDependencyDepth(prereq, reverseAdjacency, weakPointIds, memo);
+    maxDepth = Math.max(maxDepth, depth + 1);
+  }
+
+  memo.set(nodeId, maxDepth);
+  return maxDepth;
+}
+
 function dfsCollectPath(
   startId: string,
   adjacencyMap: Map<string, string[]>,
@@ -96,6 +124,20 @@ function dfsCollectPath(
 
   collectDependents(startId);
 
+  if (path.length < maxNodes) {
+    const remainingWeak = weakPointIds
+      .filter(id => !visited.has(id))
+      .sort((a, b) => topoOrder.indexOf(a) - topoOrder.indexOf(b));
+
+    for (const wp of remainingWeak) {
+      if (path.length >= maxNodes) break;
+      if (!visited.has(wp)) {
+        visited.add(wp);
+        path.push(wp);
+      }
+    }
+  }
+
   return path.slice(0, maxNodes);
 }
 
@@ -119,12 +161,9 @@ export function useRecommendPath() {
       .filter(p => {
         const score = scoreMap.get(p.id);
         return score !== undefined && score < 60;
-      })
-      .sort((a, b) => (scoreMap.get(a.id) || 0) - (scoreMap.get(b.id) || 0));
+      });
 
-    const weakPointIds = weakPointList.map(p => p.id);
-
-    if (weakPointIds.length === 0) {
+    if (weakPointList.length === 0) {
       setPath([]);
       setWeakPoints([]);
       return { path: [], weakPoints: [] };
@@ -148,19 +187,39 @@ export function useRecommendPath() {
       reverseAdjacency.get(r.targetId)!.push(r.sourceId);
     });
 
+    const weakPointIds = weakPointList.map(p => p.id);
+    const depthMemo = new Map<string, number>();
+
+    const sortedByDepth = [...weakPointList].sort((a, b) => {
+      const depthA = calculateDependencyDepth(a.id, reverseAdjacency, weakPointIds, depthMemo);
+      const depthB = calculateDependencyDepth(b.id, reverseAdjacency, weakPointIds, depthMemo);
+
+      if (depthB !== depthA) {
+        return depthB - depthA;
+      }
+
+      const scoreA = scoreMap.get(a.id) || 0;
+      const scoreB = scoreMap.get(b.id) || 0;
+      return scoreA - scoreB;
+    });
+
+    const sortedWeakPointIds = sortedByDepth.map(p => p.id);
+
     const resultPath = dfsCollectPath(
-      weakPointIds[0],
+      sortedWeakPointIds[0],
       adjacencyMap,
       reverseAdjacency,
-      weakPointIds,
+      sortedWeakPointIds,
       topoOrder,
       5
     );
 
-    setPath(resultPath);
-    setWeakPoints(weakPointIds);
+    const finalWeakOrder = sortedWeakPointIds;
 
-    return { path: resultPath, weakPoints: weakPointIds };
+    setPath(resultPath);
+    setWeakPoints(finalWeakOrder);
+
+    return { path: resultPath, weakPoints: finalWeakOrder };
   }, []);
 
   const fetchAndCalculate = useCallback(async (
@@ -195,7 +254,10 @@ export function useRecommendPath() {
   }, []);
 
   const removeFromPath = useCallback((nodeId: string) => {
-    setPath(prev => prev.filter(id => id !== nodeId));
+    setPath(prev => {
+      const newPath = prev.filter(id => id !== nodeId);
+      return newPath;
+    });
   }, []);
 
   return {

@@ -114,10 +114,27 @@ function MapPage({ courseId, userId, userRole }: MapPageProps) {
       setScores(prev => prev.map(s =>
         s.knowledgePointId === pointId ? { ...s, reviewed: true } : s
       ));
+
+      const currentIndex = reviewPath.indexOf(pointId);
       removeFromPath(pointId);
-      setSelectedPoint(null);
+
+      setTimeout(() => {
+        const newPath = reviewPath.filter(id => id !== pointId);
+        if (newPath.length > 0) {
+          const nextIndex = Math.min(currentIndex, newPath.length - 1);
+          const nextPointId = newPath[nextIndex];
+          const nextPoint = points.find(p => p.id === nextPointId);
+          if (nextPoint) {
+            setSelectedPoint(nextPoint);
+          } else {
+            setSelectedPoint(null);
+          }
+        } else {
+          setSelectedPoint(null);
+        }
+      }, 50);
     }).catch(err => console.error('Failed to mark reviewed:', err));
-  }, [userId, removeFromPath]);
+  }, [userId, removeFromPath, reviewPath, points]);
 
   const handleNextReview = useCallback(() => {
     if (reviewPath.length > 0) {

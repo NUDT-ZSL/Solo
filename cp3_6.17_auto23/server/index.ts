@@ -213,14 +213,14 @@ function topologicalSort(points: KnowledgePoint[], relations: Relation[]): strin
     }
   });
 
-  const queue: string[] = [];
+  const stack: string[] = [];
   inDegree.forEach((deg, id) => {
-    if (deg === 0) queue.push(id);
+    if (deg === 0) stack.push(id);
   });
 
   const result: string[] = [];
-  while (queue.length > 0) {
-    const current = queue.shift()!;
+  while (stack.length > 0) {
+    const current = stack.pop()!;
     result.push(current);
     const neighbors = adjacencyMap.get(current) || [];
     neighbors.forEach(neighbor => {
@@ -228,13 +228,41 @@ function topologicalSort(points: KnowledgePoint[], relations: Relation[]): strin
       if (deg !== undefined) {
         inDegree.set(neighbor, deg - 1);
         if (deg - 1 === 0) {
-          queue.push(neighbor);
+          stack.push(neighbor);
         }
       }
     });
   }
 
   return result;
+}
+
+function calculateDependencyDepth(
+  nodeId: string,
+  reverseAdjacency: Map<string, string[]>,
+  weakPointIds: string[],
+  memo: Map<string, number>
+): number {
+  if (memo.has(nodeId)) {
+    return memo.get(nodeId)!;
+  }
+
+  const prereqs = reverseAdjacency.get(nodeId) || [];
+  const weakPrereqs = prereqs.filter(p => weakPointIds.includes(p));
+
+  if (weakPrereqs.length === 0) {
+    memo.set(nodeId, 0);
+    return 0;
+  }
+
+  let maxDepth = 0;
+  for (const prereq of weakPrereqs) {
+    const depth = calculateDependencyDepth(prereq, reverseAdjacency, weakPointIds, memo);
+    maxDepth = Math.max(maxDepth, depth + 1);
+  }
+
+  memo.set(nodeId, maxDepth);
+  return maxDepth;
 }
 
 app.post('/api/review-path', (req, res) => {
@@ -247,15 +275,13 @@ app.post('/api/review-path', (req, res) => {
   const scoreMap: Map<string, number> = new Map();
   scores.forEach(s => scoreMap.set(s.knowledgePointId, s.score));
 
-  const weakPoints = points
+  const weakPointList = points
     .filter(p => {
       const score = scoreMap.get(p.id);
       return score !== undefined && score < 60;
-    })
-    .sort((a, b) => (scoreMap.get(a.id) || 0) - (scoreMap.get(b.id) || 0))
-    .map(p => p.id);
+    });
 
-  if (weakPoints.length === 0) {
+  if (weakPointList.length === 0) {
     res.json({ path: [], weakPoints: [] } as ReviewPathResult);
     return;
   }
@@ -278,19 +304,43 @@ app.post('/api/review-path', (req, res) => {
     reverseAdjacency.get(r.targetId)!.push(r.sourceId);
   });
 
-  const startPoint = weakPoints[0];
+  const weakPointIds = weakPointList.map(p => p.id);
+  const depthMemo = new Map<string, number>();
+
+  const sortedByDepth = [...weakPointList].sort((a, b) => {
+    const depthA = calculateDependencyDepth(a.id, reverseAdjacency, weakPointIds, depthMemo);
+    const depthB = calculateDependencyDepth(b.id, reverseAdjacency, weakPointIds, depthMemo);
+
+    if (depthB !== depthA) {
+      return depthB - depthA;
+    }
+
+    const scoreA = scoreMap.get(a.id) || 0;
+    const scoreB = scoreMap.get(b.id) || 0;
+    return scoreA - scoreB;
+  });
+
+  const sortedWeakPointIds = sortedByDepth.map(p => p.id);
+
+  const startPoint = sortedWeakPointIds[0];
   const path: string[] = [];
   const visited = new Set<string>();
 
   function collectPrerequisites(nodeId: string): void {
+    if (path.length >= 5) return;
     const prereqs = reverseAdjacency.get(nodeId) || [];
-    prereqs.forEach(prereq => {
-      if (!visited.has(prereq) && weakPoints.includes(prereq)) {
+    const sortedPrereqs = prereqs
+      .filter(p => sortedWeakPointIds.includes(p) && !visited.has(p))
+      .sort((a, b) => topoOrder.indexOf(a) - topoOrder.indexOf(b));
+
+    for (const prereq of sortedPrereqs) {
+      if (path.length >= 5) break;
+      if (!visited.has(prereq)) {
         visited.add(prereq);
         collectPrerequisites(prereq);
         path.push(prereq);
       }
-    });
+    }
   }
 
   visited.add(startPoint);
@@ -298,28 +348,42 @@ app.post('/api/review-path', (req, res) => {
   path.push(startPoint);
 
   function collectDependents(nodeId: string): void {
+    if (path.length >= 5) return;
     const dependents = adjacencyMap.get(nodeId) || [];
     const sortedDependents = dependents
-      .filter(d => weakPoints.includes(d) && !visited.has(d))
+      .filter(d => sortedWeakPointIds.includes(d) && !visited.has(d))
       .sort((a, b) => topoOrder.indexOf(a) - topoOrder.indexOf(b));
 
-    sortedDependents.forEach(dep => {
-      if (path.length >= 5) return;
+    for (const dep of sortedDependents) {
+      if (path.length >= 5) break;
       if (!visited.has(dep)) {
         visited.add(dep);
         path.push(dep);
         collectDependents(dep);
       }
-    });
+    }
   }
 
   collectDependents(startPoint);
+
+  if (path.length < 5) {
+    const remainingWeak = sortedWeakPointIds
+      .filter(id => !visited.has(id));
+
+    for (const wp of remainingWeak) {
+      if (path.length >= 5) break;
+      if (!visited.has(wp)) {
+        visited.add(wp);
+        path.push(wp);
+      }
+    }
+  }
 
   const finalPath = path.slice(0, 5);
 
   res.json({
     path: finalPath,
-    weakPoints
+    weakPoints: sortedWeakPointIds
   } as ReviewPathResult);
 });
 
