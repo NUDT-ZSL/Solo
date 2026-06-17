@@ -412,10 +412,16 @@ body {
 
 .sort-toggle {
   display: flex;
-  border: 1px solid #E5D5C0;
+  border: 1px solid #D4C4B0;
   border-radius: 8px;
   overflow: hidden;
   background: #FFF8F0;
+  transition: all 0.2s ease;
+}
+
+.sort-toggle--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .sort-btn {
@@ -424,22 +430,31 @@ body {
   background: transparent;
   font-size: 13px;
   font-weight: 500;
-  color: #6B7280;
+  color: #8B7355;
   cursor: pointer;
-  transition: all 0.2s;
-  border-right: 1px solid #E5D5C0;
+  transition: all 0.2s ease;
+  border-right: 1px solid #D4C4B0;
 }
 
 .sort-btn:last-child {
   border-right: none;
 }
 
-.sort-btn--active {
-  background: #6B4226;
-  color: #FFF8F0;
+.sort-btn:not(:disabled):hover {
+  background: #F5E6D3;
+  color: #6B4226;
 }
 
-.sort-btn:active {
+.sort-btn--active {
+  background: #6B4226 !important;
+  color: #FFF8F0 !important;
+}
+
+.sort-btn:disabled {
+  cursor: not-allowed;
+}
+
+.sort-btn:active:not(:disabled) {
   transform: scale(0.97);
 }
 

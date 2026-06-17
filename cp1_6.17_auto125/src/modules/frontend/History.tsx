@@ -81,20 +81,27 @@ export default function History() {
 
   const handleSortChange = (newSort: SortType) => {
     if (newSort === sort) return;
+    if (brews.length === 0) return;
     setSort(newSort);
     setPage(1);
   };
+
+  const isSortDisabled = brews.length === 0 && !loading;
 
   return (
     <div className="history-page">
       <div className="history-header">
         <h2 className="page-title">冲煮历史</h2>
-        <div className="sort-toggle">
+        <div
+          className={`sort-toggle ${isSortDisabled ? 'sort-toggle--disabled' : ''}`}
+          title={isSortDisabled ? '暂无记录' : undefined}
+        >
           {SORT_OPTIONS.map(({ key, label }) => (
             <button
               key={key}
               className={`sort-btn ${sort === key ? 'sort-btn--active' : ''}`}
               onClick={() => handleSortChange(key)}
+              disabled={isSortDisabled}
             >
               {label}
             </button>

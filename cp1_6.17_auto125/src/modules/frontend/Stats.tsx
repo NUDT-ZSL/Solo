@@ -73,7 +73,11 @@ export default function Stats() {
   };
 
   const handleExportChart = async () => {
-    if (!chartContainerRef.current || ratingTrend.length === 0) {
+    if (!chartContainerRef.current) {
+      return;
+    }
+
+    if (ratingTrend.length === 0) {
       alert('暂无数据可导出');
       return;
     }
