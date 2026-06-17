@@ -55,104 +55,147 @@ export function Sidebar() {
 
   if (sidebarCollapsed) {
     return (
-      <div
-        style={{
-          height: 64,
-          background: '#1E293B',
-          color: '#CBD5E1',
-          display: 'flex',
-          alignItems: 'center',
-          padding: '0 16px',
-          gap: 8,
-          width: '100%',
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 100,
-        }}
-      >
-        <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', marginRight: 24 }}>小店仪表盘</div>
-        {navItems.map((item) => (
-          <button
-            key={item.page}
-            onClick={() => setCurrentPage(item.page)}
-            style={{
-              background: currentPage === item.page ? '#3B82F6' : 'transparent',
-              color: currentPage === item.page ? '#fff' : '#CBD5E1',
-              border: 'none',
-              borderRadius: 8,
-              padding: '8px 12px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              cursor: 'pointer',
-              fontSize: 14,
-              transition: 'transform 0.2s, background 0.2s',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.02)')}
-            onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-          >
-            {item.icon}
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <>
+        <div className="sidebar-topbar">
+          <div className="sidebar-brand-topbar">小店仪表盘</div>
+          {navItems.map((item) => (
+            <button
+              key={item.page}
+              className={`sidebar-nav-btn-topbar ${currentPage === item.page ? 'sidebar-nav-btn-active' : ''}`}
+              onClick={() => setCurrentPage(item.page)}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </div>
+        <SidebarStyles />
+      </>
     )
   }
 
   return (
-    <div
-      style={{
-        width: 240,
-        background: '#1E293B',
-        color: '#CBD5E1',
-        height: '100vh',
-        padding: '24px 16px',
-        boxSizing: 'border-box',
-        display: 'flex',
-        flexDirection: 'column',
-        flexShrink: 0,
-        position: 'fixed',
-        left: 0,
-        top: 0,
-        zIndex: 100,
-      }}
-    >
-      <div style={{ fontSize: 20, fontWeight: 700, color: '#fff', marginBottom: 32, padding: '0 8px' }}>
-        🍜 小店仪表盘
-      </div>
-      <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {navItems.map((item) => (
-          <button
-            key={item.page}
-            onClick={() => setCurrentPage(item.page)}
-            style={{
-              background: currentPage === item.page ? '#3B82F6' : 'transparent',
-              color: currentPage === item.page ? '#fff' : '#CBD5E1',
-              border: 'none',
-              borderRadius: 8,
-              padding: '12px 12px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              cursor: 'pointer',
-              fontSize: 15,
-              width: '100%',
-              textAlign: 'left',
-              transition: 'transform 0.2s, background 0.2s',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.02)')}
-            onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-          >
-            {item.icon}
-            {item.label}
-          </button>
-        ))}
-      </nav>
-      <div style={{ marginTop: 'auto', fontSize: 12, color: '#64748B', padding: '0 8px' }}>
-        v1.0.0 · 模拟数据
-      </div>
-    </div>
+    <>
+      <aside className="sidebar">
+        <div className="sidebar-brand">🍜 小店仪表盘</div>
+        <nav className="sidebar-nav">
+          {navItems.map((item) => (
+            <button
+              key={item.page}
+              className={`sidebar-nav-btn ${currentPage === item.page ? 'sidebar-nav-btn-active' : ''}`}
+              onClick={() => setCurrentPage(item.page)}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-footer">v1.0.0 · 模拟数据</div>
+      </aside>
+      <SidebarStyles />
+    </>
+  )
+}
+
+function SidebarStyles() {
+  return (
+    <style>{`
+      .sidebar {
+        width: 240px;
+        background: #1E293B;
+        color: #CBD5E1;
+        height: 100vh;
+        padding: 24px 16px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+        position: fixed;
+        left: 0;
+        top: 0;
+        z-index: 100;
+        overflow-y: auto;
+      }
+      .sidebar-brand {
+        font-size: 20px;
+        font-weight: 700;
+        color: #fff;
+        margin-bottom: 32px;
+        padding: 0 8px;
+      }
+      .sidebar-nav {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .sidebar-nav-btn {
+        background: transparent;
+        color: #CBD5E1;
+        border: none;
+        border-radius: 8px;
+        padding: 12px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        cursor: pointer;
+        font-size: 15px;
+        width: 100%;
+        text-align: left;
+        transition: transform 0.2s ease, background 0.2s ease;
+        font-family: inherit;
+      }
+      .sidebar-nav-btn:hover {
+        transform: scale(1.02);
+      }
+      .sidebar-nav-btn-active {
+        background: #3B82F6 !important;
+        color: #fff !important;
+      }
+      .sidebar-footer {
+        margin-top: auto;
+        font-size: 12px;
+        color: #64748B;
+        padding: 0 8px;
+      }
+      .sidebar-topbar {
+        height: 64px;
+        background: #1E293B;
+        color: #CBD5E1;
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        gap: 8px;
+        width: 100%;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        box-sizing: border-box;
+      }
+      .sidebar-brand-topbar {
+        font-size: 18px;
+        font-weight: 700;
+        color: #fff;
+        margin-right: 24px;
+      }
+      .sidebar-nav-btn-topbar {
+        background: transparent;
+        color: #CBD5E1;
+        border: none;
+        border-radius: 8px;
+        padding: 8px 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: transform 0.2s ease, background 0.2s ease;
+        font-family: inherit;
+      }
+      .sidebar-nav-btn-topbar:hover {
+        transform: scale(1.02);
+      }
+    `}</style>
   )
 }

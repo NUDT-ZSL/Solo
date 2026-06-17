@@ -13,12 +13,11 @@ import { OrderTimeline } from './OrderTimeline'
 
 function AnimatedNumber({ value, prefix = '' }: { value: number; prefix?: string }) {
   const [displayValue, setDisplayValue] = useState(value)
-  const [isAnimating, setIsAnimating] = useState(false)
+  const [animatingKey, setAnimatingKey] = useState(0)
   const prevValue = useRef(value)
 
   useEffect(() => {
     if (prevValue.current === value) return
-    setIsAnimating(true)
     const startValue = prevValue.current
     const endValue = value
     const duration = 300
@@ -32,24 +31,69 @@ function AnimatedNumber({ value, prefix = '' }: { value: number; prefix?: string
       setDisplayValue(current)
       if (progress < 1) {
         requestAnimationFrame(animate)
-      } else {
-        setIsAnimating(false)
       }
     }
+    setAnimatingKey((k) => k + 1)
     requestAnimationFrame(animate)
     prevValue.current = value
   }, [value])
 
+  const formatted = displayValue.toLocaleString()
+
   return (
     <span
-      className="animated-number"
+      className="animated-number-wrapper"
       style={{
-        display: 'inline-block',
-        transform: isAnimating ? 'translateY(-2px)' : 'translateY(0)',
-        transition: 'transform 0.15s ease-out',
+        display: 'inline-flex',
+        alignItems: 'flex-end',
+        overflow: 'hidden',
+        verticalAlign: 'bottom',
       }}
     >
-      {prefix}{displayValue.toLocaleString()}
+      {prefix && <span style={{ display: 'inline-block' }}>{prefix}</span>}
+      {formatted.split('').map((char, idx) => {
+        if (/\d/.test(char)) {
+          return (
+            <span
+              key={`${animatingKey}-${idx}`}
+              className="animated-digit"
+              style={{
+                display: 'inline-block',
+                height: '1em',
+                lineHeight: '1em',
+                overflow: 'hidden',
+                verticalAlign: 'bottom',
+                animation: 'digitRollUp 0.3s ease-out',
+              }}
+            >
+              {char}
+            </span>
+          )
+        }
+        return (
+          <span
+            key={`${animatingKey}-${idx}`}
+            style={{ display: 'inline-block', verticalAlign: 'bottom' }}
+          >
+            {char}
+          </span>
+        )
+      })}
+      <style>{`
+        @keyframes digitRollUp {
+          0% {
+            transform: translateY(100%);
+            opacity: 0;
+          }
+          60% {
+            opacity: 1;
+          }
+          100% {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+      `}</style>
     </span>
   )
 }
@@ -83,23 +127,20 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 }
 
 function CustomDot(props: any) {
-  const { cx, cy, stroke, payload, active } = props
-  const isActive = active
+  const { cx, cy, active } = props
   return (
     <circle
       cx={cx}
       cy={cy}
-      r={isActive ? 4 : 0}
+      r={active ? 4 : 0}
       fill="#6366F1"
-      stroke="#fff"
+      stroke="#ffffff"
       strokeWidth={2}
-      style={{ transition: 'r 0.15s ease-out' }}
+      style={{
+        transition: 'r 0.15s ease-out',
+      }}
     />
   )
-}
-
-function ActiveDot() {
-  return null
 }
 
 function DataCards() {
@@ -207,14 +248,23 @@ function RevenueChart() {
               height={60}
             />
             <YAxis tick={{ fontSize: 12, fill: '#64748B' }} axisLine={false} tickLine={false} tickFormatter={(v) => `¥${v}`} />
-            <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#6366F1', strokeWidth: 1, strokeDasharray: '4 4' }} />
+            <Tooltip
+              content={<CustomTooltip />}
+              cursor={{ stroke: '#6366F1', strokeWidth: 1, strokeDasharray: '4 4' }}
+              contentStyle={{
+                background: '#1E293B',
+                border: 'none',
+                borderRadius: 8,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              }}
+            />
             <Line
               type="monotone"
               dataKey="amount"
               stroke="#6366F1"
               strokeWidth={2}
               dot={<CustomDot />}
-              activeDot={{ r: 6, fill: '#6366F1', stroke: '#fff', strokeWidth: 2 }}
+              activeDot={{ r: 4, fill: '#6366F1', stroke: '#ffffff', strokeWidth: 2 }}
             />
           </LineChart>
         </ResponsiveContainer>
