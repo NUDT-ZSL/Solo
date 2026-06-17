@@ -4,9 +4,11 @@ import { useStore } from '../../store/useStore'
 import { eventBus } from '../clip/ClipManager'
 
 let offscreenDonut: HTMLCanvasElement | null = null
-let offscreenCurve: HTMLCanvasElement | null = null
+let offscreenCurveBg: HTMLCanvasElement | null = null
 let cachedCurveData: CurvePoint[] = []
 let cachedCurvePoints: { x: number; y: number }[] = []
+let lastDonutHash: string = ''
+let lastCurveHash: string = ''
 
 export const getEmotionRatios = (clips: TimelineClip[]): EmotionRatio[] => {
   if (clips.length === 0) {
@@ -91,7 +93,21 @@ export const getCurveData = (clips: TimelineClip[], sampleCount?: number): Curve
   return points
 }
 
-const drawDonutToOffscreen = (ratios: EmotionRatio[]): void => {
+const hashRatios = (ratios: EmotionRatio[]): string => {
+  return ratios.map(r => `${r.label}:${r.percentage.toFixed(2)}`).join('|')
+}
+
+const hashCurveData = (data: CurvePoint[]): string => {
+  return data.map(p => `${p.x}:${p.y}:${p.emotion}`).join('|')
+}
+
+const drawDonutToOffscreen = (ratios: EmotionRatio[]): boolean => {
+  const hash = hashRatios(ratios)
+  if (hash === lastDonutHash && offscreenDonut) {
+    return false
+  }
+  lastDonutHash = hash
+
   const size = 120
   if (!offscreenDonut) {
     offscreenDonut = document.createElement('canvas')
@@ -100,7 +116,7 @@ const drawDonutToOffscreen = (ratios: EmotionRatio[]): void => {
   }
 
   const ctx = offscreenDonut.getContext('2d')
-  if (!ctx) return
+  if (!ctx) return false
 
   const center = size / 2
   const outerRadius = size / 2 - 4
@@ -129,21 +145,29 @@ const drawDonutToOffscreen = (ratios: EmotionRatio[]): void => {
   ctx.arc(center, center, innerRadius, 0, 2 * Math.PI)
   ctx.fillStyle = '#1A1A2E'
   ctx.fill()
+
+  return true
 }
 
-const drawCurveToOffscreen = (data: CurvePoint[]): void => {
+const drawCurveBackgroundToOffscreen = (data: CurvePoint[]): boolean => {
+  const hash = hashCurveData(data)
+  if (hash === lastCurveHash && offscreenCurveBg) {
+    return false
+  }
+  lastCurveHash = hash
+
   const width = 280
   const height = 180
-  if (!offscreenCurve) {
-    offscreenCurve = document.createElement('canvas')
-    offscreenCurve.width = width
-    offscreenCurve.height = height
+  if (!offscreenCurveBg) {
+    offscreenCurveBg = document.createElement('canvas')
+    offscreenCurveBg.width = width
+    offscreenCurveBg.height = height
   }
 
-  if (data.length < 2) return
+  if (data.length < 2) return false
 
-  const ctx = offscreenCurve.getContext('2d')
-  if (!ctx) return
+  const ctx = offscreenCurveBg.getContext('2d')
+  if (!ctx) return false
 
   const padding = { top: 20, right: 20, bottom: 30, left: 40 }
   const chartWidth = width - padding.left - padding.right
@@ -221,22 +245,54 @@ const drawCurveToOffscreen = (data: CurvePoint[]): void => {
   ctx.fillStyle = '#E0E0E0'
   ctx.font = 'bold 11px sans-serif'
   ctx.fillText('情绪强度', 20, padding.top - 5)
+
+  return true
 }
 
-const drawCurveHighlight = (
-  targetCanvas: HTMLCanvasElement,
-  highlightIndex: number | null,
-  playbackInfo: { playbackPosition: number; totalDuration: number } | null
-): void => {
-  const ctx = targetCanvas.getContext('2d')
-  if (!ctx || !offscreenCurve) return
+export const renderDonutChart = (canvas: HTMLCanvasElement, ratios: EmotionRatio[]): void => {
+  if (!canvas) return
+  const redrawn = drawDonutToOffscreen(ratios)
+  const ctx = canvas.getContext('2d')
+  if (!ctx || !offscreenDonut) return
+  if (!redrawn && canvas.dataset.drawn === 'true') return
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  ctx.drawImage(offscreenDonut, 0, 0)
+  canvas.dataset.drawn = 'true'
+}
 
-  ctx.clearRect(0, 0, targetCanvas.width, targetCanvas.height)
-  ctx.drawImage(offscreenCurve, 0, 0)
+export const renderCurveBackground = (canvas: HTMLCanvasElement, data: CurvePoint[]): boolean => {
+  if (!canvas || data.length < 2) return false
+  const redrawn = drawCurveBackgroundToOffscreen(data)
+  cachedCurveData = data
+  return redrawn
+}
 
-  if (playbackInfo && cachedCurvePoints.length > 0 && cachedCurveData.length > 1) {
+export const renderCurveOverlay = (
+  canvas: HTMLCanvasElement,
+  options: {
+    hoverIndex?: number | null
+    playbackInfo?: { playbackPosition: number; totalDuration: number } | null
+  } = {}
+): { hoverIndex: number | null } => {
+  if (!canvas || !offscreenCurveBg) return { hoverIndex: null }
+
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return { hoverIndex: null }
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  ctx.drawImage(offscreenCurveBg, 0, 0)
+
+  let resultHoverIndex: number | null = null
+
+  const { hoverIndex: rawHoverIndex, playbackInfo } = options
+
+  if (playbackInfo && playbackInfo.totalDuration > 0 && cachedCurvePoints.length > 0) {
     const progress = playbackInfo.playbackPosition / playbackInfo.totalDuration
-    const dataIndex = Math.min(Math.round(progress * (cachedCurveData.length - 1)), cachedCurveData.length - 1)
+    const dataIndex = Math.min(
+      Math.round(progress * (cachedCurveData.length - 1)),
+      cachedCurveData.length - 1
+    )
+    resultHoverIndex = dataIndex
     const point = cachedCurvePoints[dataIndex]
     if (point) {
       ctx.beginPath()
@@ -247,8 +303,9 @@ const drawCurveHighlight = (
       ctx.lineWidth = 2
       ctx.stroke()
     }
-  } else if (highlightIndex !== null && highlightIndex >= 0 && highlightIndex < cachedCurvePoints.length) {
-    const point = cachedCurvePoints[highlightIndex]
+  } else if (rawHoverIndex !== null && rawHoverIndex !== undefined && rawHoverIndex >= 0 && rawHoverIndex < cachedCurvePoints.length) {
+    resultHoverIndex = rawHoverIndex
+    const point = cachedCurvePoints[rawHoverIndex]
     if (point) {
       ctx.beginPath()
       ctx.arc(point.x, point.y, 7, 0, 2 * Math.PI)
@@ -258,17 +315,37 @@ const drawCurveHighlight = (
       ctx.lineWidth = 2
       ctx.stroke()
 
-      const data = cachedCurveData[highlightIndex]
+      const data = cachedCurveData[rawHoverIndex]
       if (data) {
-        const labelText = `${data.y} - ${data.emotion}`
+        const emotionLabel = {
+          excited: '兴奋',
+          calm: '平静',
+          nostalgic: '怀旧',
+          tense: '紧张'
+        }[data.emotion] || data.emotion
+        const labelText = `${data.y} · ${emotionLabel}`
         ctx.font = 'bold 10px sans-serif'
         const textWidth = ctx.measureText(labelText).width
-        const labelX = Math.min(point.x - textWidth / 2, targetCanvas.width - textWidth - 8)
+        const labelX = Math.min(point.x - textWidth / 2, canvas.width - textWidth - 8)
         const labelY = point.y - 14
 
         ctx.fillStyle = 'rgba(0,0,0,0.85)'
         ctx.beginPath()
-        ctx.roundRect(Math.max(2, labelX - 4), labelY - 10, textWidth + 8, 16, 4)
+        const rx = Math.max(2, labelX - 4)
+        const ry = labelY - 10
+        const rw = textWidth + 8
+        const rh = 16
+        const radius = 4
+        ctx.moveTo(rx + radius, ry)
+        ctx.lineTo(rx + rw - radius, ry)
+        ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + radius)
+        ctx.lineTo(rx + rw, ry + rh - radius)
+        ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - radius, ry + rh)
+        ctx.lineTo(rx + radius, ry + rh)
+        ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - radius)
+        ctx.lineTo(rx, ry + radius)
+        ctx.quadraticCurveTo(rx, ry, rx + radius, ry)
+        ctx.closePath()
         ctx.fill()
 
         ctx.fillStyle = '#FFFFFF'
@@ -277,49 +354,32 @@ const drawCurveHighlight = (
       }
     }
   }
+
+  return { hoverIndex: resultHoverIndex }
 }
 
-export const renderDonutChart = (canvas: HTMLCanvasElement, ratios: EmotionRatio[]): void => {
-  drawDonutToOffscreen(ratios)
-  const ctx = canvas.getContext('2d')
-  if (!ctx || !offscreenDonut) return
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
-  ctx.drawImage(offscreenDonut, 0, 0)
+export const getCurvePointAtIndex = (index: number): { x: number; y: number } | null => {
+  return cachedCurvePoints[index] || null
 }
 
-export const renderCurveChart = (
-  canvas: HTMLCanvasElement,
-  data: CurvePoint[],
-  playbackPosition: number = -1,
-  totalDuration: number = 0
-): { points: { x: number; y: number }[]; hoverIndex: number | null } => {
-  if (data.length < 2) return { points: [], hoverIndex: null }
+export const findNearestCurvePoint = (
+  canvasX: number,
+  canvasY: number,
+  threshold: number = 20
+): number | null => {
+  let closest: number | null = null
+  let closestDist = Infinity
 
-  const needsRedraw = data !== cachedCurveData || data.length !== cachedCurveData.length
-  if (needsRedraw) {
-    cachedCurveData = data
-    drawCurveToOffscreen(data)
+  for (let i = 0; i < cachedCurvePoints.length; i++) {
+    const point = cachedCurvePoints[i]
+    const dist = Math.sqrt((canvasX - point.x) ** 2 + (canvasY - point.y) ** 2)
+    if (dist < threshold && dist < closestDist) {
+      closestDist = dist
+      closest = i
+    }
   }
 
-  let hoverIndex: number | null = null
-  let playbackInfo: { playbackPosition: number; totalDuration: number } | null = null
-
-  if (playbackPosition >= 0 && totalDuration > 0) {
-    playbackInfo = { playbackPosition, totalDuration }
-    const progress = playbackPosition / totalDuration
-    hoverIndex = Math.min(Math.round(progress * (data.length - 1)), data.length - 1)
-  }
-
-  drawCurveHighlight(canvas, null, playbackInfo)
-
-  return { points: cachedCurvePoints, hoverIndex }
-}
-
-export const renderCurveWithHover = (
-  canvas: HTMLCanvasElement,
-  hoverIndex: number | null
-): void => {
-  drawCurveHighlight(canvas, hoverIndex, null)
+  return closest
 }
 
 export const analyzeTimeline = (clips: TimelineClip[]): void => {
@@ -329,53 +389,32 @@ export const analyzeTimeline = (clips: TimelineClip[]): void => {
   useStore.getState().setCurveData(curveData)
 }
 
-export const analyzeAndRender = (
+export const renderToCanvases = (
   clips: TimelineClip[],
-  hoverIndex: number | null,
-  playbackInfo: { playbackPosition: number; totalDuration: number } | null
+  donutCanvas: HTMLCanvasElement | null,
+  curveCanvas: HTMLCanvasElement | null,
+  options: {
+    hoverIndex?: number | null
+    playbackInfo?: { playbackPosition: number; totalDuration: number } | null
+  } = {}
 ): void => {
   const ratios = getEmotionRatios(clips)
   const curveData = getCurveData(clips)
 
-  const prevRatios = useStore.getState().emotionRatios
-  const prevCurveData = useStore.getState().curveData
-  const ratiosChanged = prevRatios.length !== ratios.length ||
-    prevRatios.some((r, i) => r.percentage !== ratios[i].percentage || r.label !== ratios[i].label)
-  const curveChanged = prevCurveData !== curveData || prevCurveData.length !== curveData.length
-
   useStore.getState().setEmotionRatios(ratios)
   useStore.getState().setCurveData(curveData)
 
-  const donutCanvas = document.getElementById('donut-canvas') as HTMLCanvasElement | null
-  const curveCanvas = document.getElementById('curve-canvas') as HTMLCanvasElement | null
-
   if (donutCanvas) {
-    if (ratiosChanged || !offscreenDonut) {
-      renderDonutChart(donutCanvas, ratios)
-    }
+    renderDonutChart(donutCanvas, ratios)
   }
 
   if (curveCanvas) {
-    if (curveChanged || !offscreenCurve) {
-      cachedCurveData = curveData
-      drawCurveToOffscreen(curveData)
-    }
-
-    if (playbackInfo) {
-      drawCurveHighlight(curveCanvas, null, playbackInfo)
-    } else if (hoverIndex !== null) {
-      drawCurveHighlight(curveCanvas, hoverIndex, null)
-    } else {
-      const ctx = curveCanvas.getContext('2d')
-      if (ctx && offscreenCurve) {
-        ctx.clearRect(0, 0, curveCanvas.width, curveCanvas.height)
-        ctx.drawImage(offscreenCurve, 0, 0)
-      }
-    }
+    renderCurveBackground(curveCanvas, curveData)
+    renderCurveOverlay(curveCanvas, options)
   }
 }
 
 eventBus.on('timelineChanged', () => {
   const state = useStore.getState()
-  analyzeAndRender(state.timelineClips, null, null)
+  analyzeTimeline(state.timelineClips)
 })

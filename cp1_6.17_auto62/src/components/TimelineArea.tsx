@@ -3,7 +3,6 @@ import type { TimelineClip } from '../types'
 import { GRID_WIDTH, EMOTION_LABELS_CN } from '../types'
 import { useStore } from '../store/useStore'
 import {
-  addClip,
   removeClip,
   moveClip,
   resizeClip,
@@ -14,10 +13,13 @@ import {
 interface DragState {
   type: 'move' | 'resize' | null
   instanceId: string | null
-  startX: number
+  startClientX: number
+  startScrollLeft: number
   startPosition: number
   startDuration: number
-  currentX: number
+  startRightEdge: number
+  currentClientX: number
+  currentScrollLeft: number
 }
 
 export const TimelineArea: React.FC = () => {
@@ -30,18 +32,26 @@ export const TimelineArea: React.FC = () => {
   const dragStateRef = useRef<DragState>({
     type: null,
     instanceId: null,
-    startX: 0,
+    startClientX: 0,
+    startScrollLeft: 0,
     startPosition: 0,
     startDuration: 0,
-    currentX: 0
+    startRightEdge: 0,
+    currentClientX: 0,
+    currentScrollLeft: 0
   })
   const rafRef = useRef<number>(0)
-  const [activeDrag, setActiveDrag] = useState<DragState | null>(null)
+  const [previewState, setPreviewState] = useState<{
+    instanceId: string | null
+    type: 'move' | 'resize' | null
+    position: number
+    duration: number
+  } | null>(null)
 
   const totalDuration = calculateTotalDuration(timelineClips)
   const trackWidth = Math.max(20, totalDuration + 10) * GRID_WIDTH
 
-  const getTrackPosition = useCallback((clientX: number): number => {
+  const getTrackPositionFromClientX = useCallback((clientX: number): number => {
     if (!trackRef.current) return 0
     const rect = trackRef.current.getBoundingClientRect()
     const scrollLeft = scrollRef.current?.scrollLeft || 0
@@ -50,18 +60,43 @@ export const TimelineArea: React.FC = () => {
 
   const processDragFrame = useCallback(() => {
     const ds = dragStateRef.current
-    if (ds.type === null) return
+    if (ds.type === null || ds.instanceId === null) {
+      rafRef.current = requestAnimationFrame(processDragFrame)
+      return
+    }
 
-    const deltaX = (ds.currentX - ds.startX) / GRID_WIDTH
+    const currentScrollLeft = scrollRef.current?.scrollLeft || 0
 
-    setActiveDrag({
-      ...ds,
-      startPosition: ds.startPosition,
-      startDuration: ds.startDuration
-    })
+    if (ds.type === 'move') {
+      const deltaClientX = ds.currentClientX - ds.startClientX
+      const deltaScroll = currentScrollLeft - ds.startScrollLeft
+      const deltaGrids = (deltaClientX + deltaScroll) / GRID_WIDTH
+      const newPosition = Math.max(0, snapToGrid(ds.startPosition + deltaGrids))
+
+      setPreviewState({
+        instanceId: ds.instanceId,
+        type: 'move',
+        position: newPosition,
+        duration: ds.startDuration
+      })
+    } else if (ds.type === 'resize') {
+      const mouseTrackPosition = getTrackPositionFromClientX(ds.currentClientX)
+      const newLeftPosition = Math.max(0, snapToGrid(mouseTrackPosition))
+      const rightEdge = ds.startRightEdge
+      let newDuration = Math.round(rightEdge - newLeftPosition)
+      newDuration = Math.min(5, Math.max(1, newDuration))
+      const actualLeftPosition = rightEdge - newDuration
+
+      setPreviewState({
+        instanceId: ds.instanceId,
+        type: 'resize',
+        position: actualLeftPosition,
+        duration: newDuration
+      })
+    }
 
     rafRef.current = requestAnimationFrame(processDragFrame)
-  }, [])
+  }, [getTrackPositionFromClientX])
 
   const handleClipPointerDown = useCallback((
     e: React.PointerEvent,
@@ -72,16 +107,26 @@ export const TimelineArea: React.FC = () => {
     e.stopPropagation()
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
 
+    const scrollLeft = scrollRef.current?.scrollLeft || 0
     const ds: DragState = {
       type,
       instanceId: clip.instanceId,
-      startX: e.clientX,
+      startClientX: e.clientX,
+      startScrollLeft: scrollLeft,
       startPosition: clip.position,
       startDuration: clip.duration,
-      currentX: e.clientX
+      startRightEdge: clip.position + clip.duration,
+      currentClientX: e.clientX,
+      currentScrollLeft: scrollLeft
     }
     dragStateRef.current = ds
-    setActiveDrag(ds)
+
+    setPreviewState({
+      instanceId: clip.instanceId,
+      type,
+      position: clip.position,
+      duration: clip.duration
+    })
 
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
     rafRef.current = requestAnimationFrame(processDragFrame)
@@ -90,7 +135,11 @@ export const TimelineArea: React.FC = () => {
   const handleClipPointerMove = useCallback((e: React.PointerEvent) => {
     const ds = dragStateRef.current
     if (ds.type === null) return
-    dragStateRef.current = { ...ds, currentX: e.clientX }
+    dragStateRef.current = {
+      ...ds,
+      currentClientX: e.clientX,
+      currentScrollLeft: scrollRef.current?.scrollLeft || 0
+    }
   }, [])
 
   const handleClipPointerUp = useCallback((e: React.PointerEvent) => {
@@ -102,25 +151,50 @@ export const TimelineArea: React.FC = () => {
       rafRef.current = 0
     }
 
-    const deltaX = (e.clientX - ds.startX) / GRID_WIDTH
+    const currentScrollLeft = scrollRef.current?.scrollLeft || 0
 
     if (ds.type === 'move') {
-      const newPosition = snapToGrid(Math.max(0, ds.startPosition + deltaX))
-      moveClip(ds.instanceId, newPosition)
+      const deltaClientX = e.clientX - ds.startClientX
+      const deltaScroll = currentScrollLeft - ds.startScrollLeft
+      const deltaGrids = (deltaClientX + deltaScroll) / GRID_WIDTH
+      const newPosition = Math.max(0, snapToGrid(ds.startPosition + deltaGrids))
+      if (newPosition !== ds.startPosition) {
+        moveClip(ds.instanceId, newPosition)
+      }
     } else if (ds.type === 'resize') {
-      const newDuration = Math.min(5, Math.max(1, snapToGrid(ds.startDuration + deltaX)))
-      resizeClip(ds.instanceId, newDuration)
+      const mouseTrackPosition = getTrackPositionFromClientX(e.clientX)
+      const newLeftPosition = Math.max(0, snapToGrid(mouseTrackPosition))
+      const rightEdge = ds.startRightEdge
+      let newDuration = Math.round(rightEdge - newLeftPosition)
+      newDuration = Math.min(5, Math.max(1, newDuration))
+      const actualLeftPosition = rightEdge - newDuration
+
+      if (newDuration !== ds.startDuration) {
+        moveClip(ds.instanceId, actualLeftPosition)
+        resizeClip(ds.instanceId, newDuration)
+      }
     }
 
-    dragStateRef.current = { type: null, instanceId: null, startX: 0, startPosition: 0, startDuration: 0, currentX: 0 }
-    setActiveDrag(null)
-  }, [])
+    dragStateRef.current = {
+      type: null,
+      instanceId: null,
+      startClientX: 0,
+      startScrollLeft: 0,
+      startPosition: 0,
+      startDuration: 0,
+      startRightEdge: 0,
+      currentClientX: 0,
+      currentScrollLeft: 0
+    }
+    setPreviewState(null)
+  }, [getTrackPositionFromClientX])
 
   useEffect(() => {
+    rafRef.current = requestAnimationFrame(processDragFrame)
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
     }
-  }, [])
+  }, [processDragFrame])
 
   const handleClipDoubleClick = useCallback((instanceId: string) => {
     removeClip(instanceId)
@@ -131,20 +205,20 @@ export const TimelineArea: React.FC = () => {
     return playbackPosition >= clip.position && playbackPosition < clip.position + clip.duration
   }
 
-  const getPreviewPosition = (): number | null => {
-    if (!activeDrag || activeDrag.type !== 'move') return null
-    const deltaX = (activeDrag.currentX - activeDrag.startX) / GRID_WIDTH
-    return snapToGrid(Math.max(0, activeDrag.startPosition + deltaX))
+  const getClipDisplayState = (clip: TimelineClip) => {
+    if (previewState && previewState.instanceId === clip.instanceId) {
+      return {
+        position: previewState.position,
+        duration: previewState.duration,
+        opacity: previewState.type === 'move' ? 0.5 : 1
+      }
+    }
+    return {
+      position: clip.position,
+      duration: clip.duration,
+      opacity: 1
+    }
   }
-
-  const getPreviewDuration = (): number | null => {
-    if (!activeDrag || activeDrag.type !== 'resize') return null
-    const deltaX = (activeDrag.currentX - activeDrag.startX) / GRID_WIDTH
-    return Math.min(5, Math.max(1, snapToGrid(activeDrag.startDuration + deltaX)))
-  }
-
-  const previewPosition = getPreviewPosition()
-  const previewDuration = getPreviewDuration()
 
   const renderRuler = () => {
     const marks = []
@@ -230,13 +304,9 @@ export const TimelineArea: React.FC = () => {
             pointerEvents: 'none'
           }}>
             {timelineClips.map((clip) => {
-              const isMoving = activeDrag?.instanceId === clip.instanceId && activeDrag.type === 'move'
-              const isResizing = activeDrag?.instanceId === clip.instanceId && activeDrag.type === 'resize'
+              const display = getClipDisplayState(clip)
               const isHighlighted = isClipHighlighted(clip)
-
-              const displayPosition = isMoving && previewPosition !== null ? previewPosition : clip.position
-              const displayDuration = isResizing && previewDuration !== null ? previewDuration : clip.duration
-              const displayOpacity = isMoving ? 0.4 : 1
+              const isResizing = previewState?.instanceId === clip.instanceId && previewState.type === 'resize'
 
               return (
                 <div
@@ -245,15 +315,17 @@ export const TimelineArea: React.FC = () => {
                   style={{
                     position: 'absolute',
                     top: '10px',
-                    left: displayPosition * GRID_WIDTH,
-                    width: displayDuration * GRID_WIDTH - 2,
+                    left: display.position * GRID_WIDTH,
+                    width: display.duration * GRID_WIDTH - 2,
                     height: '40px',
                     backgroundColor: clip.color,
                     borderRadius: '6px',
-                    cursor: isMoving ? 'grabbing' : 'grab',
-                    opacity: displayOpacity,
+                    cursor: previewState?.instanceId === clip.instanceId ? 'grabbing' : 'grab',
+                    opacity: display.opacity,
                     border: isHighlighted ? '1px solid #FFFFFF' : '1px solid rgba(255,255,255,0.2)',
-                    transition: isMoving || isResizing ? 'opacity 0.1s ease' : 'opacity 0.2s ease, border 0.2s ease',
+                    transition: isResizing || previewState?.type === 'move'
+                      ? 'opacity 0.1s ease'
+                      : 'opacity 0.2s ease, border 0.2s ease',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -263,9 +335,10 @@ export const TimelineArea: React.FC = () => {
                     textShadow: '0 1px 2px rgba(0,0,0,0.5)',
                     userSelect: 'none',
                     boxShadow: isHighlighted ? '0 0 10px rgba(255,255,255,0.3)' : 'none',
-                    zIndex: isHighlighted ? 2 : 1,
+                    zIndex: isHighlighted || isResizing ? 3 : 1,
                     pointerEvents: 'auto',
-                    touchAction: 'none'
+                    touchAction: 'none',
+                    willChange: isResizing || previewState?.type === 'move' ? 'left, width' : 'auto'
                   }}
                   onPointerDown={(e) => handleClipPointerDown(e, clip, 'move')}
                   onPointerMove={handleClipPointerMove}
@@ -315,9 +388,10 @@ export const TimelineArea: React.FC = () => {
                       color: '#FF6B6B',
                       fontWeight: 600,
                       whiteSpace: 'nowrap',
-                      pointerEvents: 'none'
+                      pointerEvents: 'none',
+                      textShadow: '0 1px 2px rgba(0,0,0,0.5)'
                     }}>
-                      {displayDuration}s
+                      {previewState?.duration}s
                     </span>
                   )}
                 </div>

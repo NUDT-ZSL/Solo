@@ -4,7 +4,7 @@ import { TimelineArea } from './components/TimelineArea'
 import { useStore } from './store/useStore'
 import { initializePresetClips, setEmotion, eventBus } from './modules/clip/ClipManager'
 import { addClip, startPlayback, stopPlayback, calculateTotalDuration } from './modules/timeline/TimelineManager'
-import { analyzeAndRender } from './modules/emotion/EmotionAnalyzer'
+import { renderToCanvases, renderCurveOverlay, findNearestCurvePoint } from './modules/emotion/EmotionAnalyzer'
 import type { EmotionLabel, PresetClip } from './types'
 import { EMOTION_LABELS_CN, EMOTION_COLORS, GRID_WIDTH } from './types'
 import './App.css'
@@ -18,19 +18,52 @@ export const App: React.FC = () => {
   const resetPlayback = useStore((state) => state.resetPlayback)
 
   const appRef = useRef<HTMLDivElement>(null)
+  const donutCanvasRef = useRef<HTMLCanvasElement>(null)
+  const curveCanvasRef = useRef<HTMLCanvasElement>(null)
+  const timelineSectionRef = useRef<HTMLElement>(null)
+
   const [showComplete, setShowComplete] = useState(false)
   const [draggedClip, setDraggedClip] = useState<PresetClip | null>(null)
   const [clonePos, setClonePos] = useState<{ x: number; y: number } | null>(null)
   const cloneRafRef = useRef<number>(0)
   const pendingPointerRef = useRef<{ x: number; y: number } | null>(null)
   const curveHoverIndexRef = useRef<number | null>(null)
+  const isExportingRef = useRef(false)
 
   const totalDuration = calculateTotalDuration(timelineClips)
 
   useEffect(() => {
     initializePresetClips()
-    analyzeAndRender([], null, null)
+  }, [])
 
+  useEffect(() => {
+    if (donutCanvasRef.current && curveCanvasRef.current) {
+      renderToCanvases([], donutCanvasRef.current, curveCanvasRef.current, { hoverIndex: null })
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!donutCanvasRef.current || !curveCanvasRef.current) return
+    if (timelineClips.length === 0) {
+      renderToCanvases([], donutCanvasRef.current, curveCanvasRef.current, { hoverIndex: null })
+      return
+    }
+    if (!isPlaying) {
+      renderToCanvases(timelineClips, donutCanvasRef.current, curveCanvasRef.current, {
+        hoverIndex: curveHoverIndexRef.current
+      })
+    }
+  }, [timelineClips, isPlaying])
+
+  useEffect(() => {
+    if (isPlaying && curveCanvasRef.current) {
+      renderCurveOverlay(curveCanvasRef.current, {
+        playbackInfo: { playbackPosition, totalDuration }
+      })
+    }
+  }, [playbackPosition, isPlaying, totalDuration])
+
+  useEffect(() => {
     const handlePlaybackComplete = () => {
       setShowComplete(true)
       setTimeout(() => setShowComplete(false), 3000)
@@ -43,21 +76,12 @@ export const App: React.FC = () => {
     }
   }, [])
 
-  useEffect(() => {
-    if (!isPlaying) {
-      analyzeAndRender(timelineClips, curveHoverIndexRef.current, null)
-    }
-  }, [timelineClips, isPlaying])
-
-  useEffect(() => {
-    if (isPlaying) {
-      analyzeAndRender(timelineClips, null, { playbackPosition, totalDuration })
-    }
-  }, [playbackPosition, isPlaying, timelineClips, totalDuration])
-
   const handlePlayClick = useCallback(() => {
     if (isPlaying) {
       stopPlayback()
+      if (curveCanvasRef.current) {
+        renderCurveOverlay(curveCanvasRef.current, { hoverIndex: null })
+      }
     } else {
       resetPlayback()
       startPlayback()
@@ -65,9 +89,18 @@ export const App: React.FC = () => {
   }, [isPlaying, resetPlayback])
 
   const handleExport = useCallback(async () => {
-    if (!appRef.current) return
+    if (!appRef.current || !donutCanvasRef.current || !curveCanvasRef.current) return
+    if (isExportingRef.current) return
+    isExportingRef.current = true
 
     try {
+      const wasPlaying = isPlaying
+      if (wasPlaying) stopPlayback()
+
+      renderToCanvases(timelineClips, donutCanvasRef.current, curveCanvasRef.current, {
+        hoverIndex: null
+      })
+
       await new Promise<void>((resolve) => {
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
@@ -76,14 +109,8 @@ export const App: React.FC = () => {
         })
       })
 
-      analyzeAndRender(timelineClips, null, null)
-
-      await new Promise<void>((resolve) => {
-        requestAnimationFrame(() => resolve())
-      })
-
       const scrollContainers = appRef.current.querySelectorAll('*')
-      const scrollStates: { el: Element; overflow: string }[] = []
+      const scrollStates: { el: HTMLElement; overflow: string; scrollLeft?: number; scrollTop?: number }[] = []
       scrollContainers.forEach((el) => {
         const htmlEl = el as HTMLElement
         if (htmlEl.scrollHeight > htmlEl.clientHeight + 2 || htmlEl.scrollWidth > htmlEl.clientWidth + 2) {
@@ -91,40 +118,67 @@ export const App: React.FC = () => {
           if (computed.overflow === 'auto' || computed.overflow === 'scroll' ||
               computed.overflowX === 'auto' || computed.overflowX === 'scroll' ||
               computed.overflowY === 'auto' || computed.overflowY === 'scroll') {
-            scrollStates.push({ el: htmlEl, overflow: htmlEl.style.overflow })
+            scrollStates.push({
+              el: htmlEl,
+              overflow: htmlEl.style.overflow,
+              scrollLeft: htmlEl.scrollLeft,
+              scrollTop: htmlEl.scrollTop
+            })
             htmlEl.style.overflow = 'hidden'
+            if (htmlEl.scrollLeft > 0) htmlEl.scrollLeft = 0
+            if (htmlEl.scrollTop > 0) htmlEl.scrollTop = 0
           }
         }
       })
+
+      const clipRect = appRef.current.getBoundingClientRect()
 
       const canvas = await html2canvas(appRef.current, {
         backgroundColor: '#1A1A2E',
         scale: 2,
         useCORS: true,
-        windowWidth: appRef.current.scrollWidth,
-        windowHeight: appRef.current.scrollHeight,
+        windowWidth: Math.ceil(clipRect.width),
+        windowHeight: Math.ceil(clipRect.height),
+        x: 0,
+        y: 0,
+        width: Math.ceil(clipRect.width),
+        height: Math.ceil(clipRect.height),
         ignoreElements: (element) => {
-          return element.classList.contains('drag-clone')
-        }
+          if (element.classList.contains('drag-clone')) return true
+          if ((element as HTMLElement).style.zIndex === '10000') return true
+          return false
+        },
+        logging: false
       })
 
-      scrollStates.forEach(({ el, overflow }) => {
-        ;(el as HTMLElement).style.overflow = overflow
+      scrollStates.forEach(({ el, overflow, scrollLeft, scrollTop }) => {
+        el.style.overflow = overflow
+        if (scrollLeft !== undefined) el.scrollLeft = scrollLeft
+        if (scrollTop !== undefined) el.scrollTop = scrollTop
       })
 
       const link = document.createElement('a')
-      link.download = `混剪报告_${new Date().toLocaleDateString()}.png`
+      link.download = `混剪报告_${new Date().toISOString().slice(0, 10)}.png`
       link.href = canvas.toDataURL('image/png')
       link.click()
+
+      if (wasPlaying) startPlayback()
     } catch (error) {
       console.error('导出失败:', error)
+    } finally {
+      isExportingRef.current = false
     }
-  }, [timelineClips])
+  }, [timelineClips, isPlaying])
 
   const updateClonePosition = useCallback(() => {
     const pos = pendingPointerRef.current
     if (pos) {
-      setClonePos({ x: pos.x, y: pos.y })
+      const margin = 8
+      const cloneW = 130
+      const cloneH = 80
+      const x = Math.max(margin, Math.min(window.innerWidth - cloneW - margin, pos.x - cloneW / 2))
+      const y = Math.max(margin, Math.min(window.innerHeight - cloneH - margin, pos.y - cloneH / 2))
+      setClonePos({ x, y })
     }
     cloneRafRef.current = requestAnimationFrame(updateClonePosition)
   }, [])
@@ -136,7 +190,7 @@ export const App: React.FC = () => {
 
     setDraggedClip(clip)
     pendingPointerRef.current = { x: e.clientX, y: e.clientY }
-    setClonePos({ x: e.clientX, y: e.clientY })
+    setClonePos({ x: e.clientX - 65, y: e.clientY - 40 })
     cloneRafRef.current = requestAnimationFrame(updateClonePosition)
   }, [updateClonePosition])
 
@@ -155,21 +209,28 @@ export const App: React.FC = () => {
     pendingPointerRef.current = null
     setClonePos(null)
 
-    const timelineSection = document.querySelector('.timeline-section')
-    if (timelineSection) {
-      const rect = timelineSection.getBoundingClientRect()
+    const sectionEl = timelineSectionRef.current
+    if (sectionEl) {
+      const sectionRect = sectionEl.getBoundingClientRect()
       if (
-        e.clientX >= rect.left &&
-        e.clientX <= rect.right &&
-        e.clientY >= rect.top &&
-        e.clientY <= rect.bottom
+        e.clientX >= sectionRect.left &&
+        e.clientX <= sectionRect.right &&
+        e.clientY >= sectionRect.top &&
+        e.clientY <= sectionRect.bottom
       ) {
-        const scrollEl = timelineSection.querySelector('.timeline-scroll-container')
-        const scrollLeft = scrollEl ? (scrollEl as HTMLElement).scrollLeft : 0
-        const trackEl = timelineSection.querySelector('.timeline-track')
-        const trackRect = trackEl ? trackEl.getBoundingClientRect() : rect
+        const scrollEl = sectionEl.querySelector('.timeline-scroll-container') as HTMLElement | null
+        const scrollLeft = scrollEl?.scrollLeft ?? 0
+        const trackEl = sectionEl.querySelector('.timeline-track') as HTMLElement | null
+        const trackRect = trackEl ? trackEl.getBoundingClientRect() : sectionRect
         const position = Math.max(0, Math.round((e.clientX - trackRect.left + scrollLeft) / GRID_WIDTH))
         addClip(draggedClip, position)
+
+        if (scrollEl && position * GRID_WIDTH > scrollEl.clientWidth * 0.7) {
+          scrollEl.scrollTo({
+            left: Math.max(scrollEl.scrollLeft, position * GRID_WIDTH - scrollEl.clientWidth / 2),
+            behavior: 'smooth'
+          })
+        }
       }
     }
 
@@ -178,52 +239,38 @@ export const App: React.FC = () => {
 
   const handleEmotionChange = useCallback((clipId: string, label: EmotionLabel) => {
     setEmotion(clipId, label)
-  }, [])
+    setTimeout(() => {
+      if (donutCanvasRef.current && curveCanvasRef.current) {
+        renderToCanvases(timelineClips, donutCanvasRef.current, curveCanvasRef.current, {
+          hoverIndex: curveHoverIndexRef.current
+        })
+      }
+    }, 0)
+  }, [timelineClips])
 
   const handleCurveCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = e.currentTarget
+    if (!curveCanvasRef.current || isPlaying) return
+    const canvas = curveCanvasRef.current
     const rect = canvas.getBoundingClientRect()
     const scaleX = canvas.width / rect.width
     const scaleY = canvas.height / rect.height
     const x = (e.clientX - rect.left) * scaleX
     const y = (e.clientY - rect.top) * scaleY
 
-    const padding = { top: 20, right: 20, bottom: 30, left: 40 }
-    const chartWidth = canvas.width - padding.left - padding.right
-    const chartHeight = canvas.height - padding.top - padding.bottom
-    const curveData = useStore.getState().curveData
-    if (curveData.length < 2) return
-
-    const points = curveData.map((_, i) => ({
-      px: padding.left + (chartWidth / (curveData.length - 1)) * i,
-      py: 0
-    }))
-
-    let closest: number | null = null
-    let closestDist = Infinity
-    for (let i = 0; i < curveData.length; i++) {
-      const px = points[i].px
-      const py = padding.top + chartHeight - (curveData[i].y / 100) * chartHeight
-      const dist = Math.sqrt((x - px) ** 2 + (y - py) ** 2)
-      if (dist < 20 && dist < closestDist) {
-        closestDist = dist
-        closest = i
-      }
+    const nearest = findNearestCurvePoint(x, y, 20)
+    if (nearest !== curveHoverIndexRef.current) {
+      curveHoverIndexRef.current = nearest
+      renderCurveOverlay(canvas, { hoverIndex: nearest })
     }
-
-    const prevHover = curveHoverIndexRef.current
-    curveHoverIndexRef.current = closest
-    if (prevHover !== closest && !isPlaying) {
-      analyzeAndRender(timelineClips, closest, null)
-    }
-  }, [isPlaying, timelineClips])
+  }, [isPlaying])
 
   const handleCurveCanvasMouseLeave = useCallback(() => {
+    if (isPlaying) return
     curveHoverIndexRef.current = null
-    if (!isPlaying) {
-      analyzeAndRender(timelineClips, null, null)
+    if (curveCanvasRef.current) {
+      renderCurveOverlay(curveCanvasRef.current, { hoverIndex: null })
     }
-  }, [isPlaying, timelineClips])
+  }, [isPlaying])
 
   return (
     <div className="app-container" ref={appRef}>
@@ -277,7 +324,7 @@ export const App: React.FC = () => {
           <p className="library-hint">拖拽素材到时间线轨道</p>
         </section>
 
-        <section className="timeline-section">
+        <section className="timeline-section" ref={timelineSectionRef}>
           <TimelineArea />
 
           <div className="playback-controls">
@@ -307,7 +354,7 @@ export const App: React.FC = () => {
         <section className="emotion-panel">
           <h2 className="section-title">情绪分析</h2>
           <div className="emotion-donut-section">
-            <canvas id="donut-canvas" className="donut-canvas" width={120} height={120} />
+            <canvas ref={donutCanvasRef} className="donut-canvas" width={120} height={120} />
             <div className="emotion-legend">
               {emotionRatios.map((ratio) => (
                 <div key={ratio.label} className="legend-item">
@@ -328,7 +375,7 @@ export const App: React.FC = () => {
             <h3 className="subsection-title">情绪曲线</h3>
             <div className="curve-container" style={{ position: 'relative' }}>
               <canvas
-                id="curve-canvas"
+                ref={curveCanvasRef}
                 width={280}
                 height={180}
                 className="curve-canvas"
@@ -354,8 +401,8 @@ export const App: React.FC = () => {
           className="drag-clone"
           style={{
             position: 'fixed',
-            left: clonePos.x - 65,
-            top: clonePos.y - 40,
+            left: clonePos.x,
+            top: clonePos.y,
             width: '130px',
             height: '80px',
             backgroundColor: draggedClip.color,
@@ -372,7 +419,8 @@ export const App: React.FC = () => {
             textShadow: '0 1px 2px rgba(0,0,0,0.5)',
             boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
             transform: 'scale(0.9)',
-            willChange: 'left, top'
+            willChange: 'left, top',
+            userSelect: 'none'
           }}
         >
           {draggedClip.name}
