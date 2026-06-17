@@ -86,23 +86,8 @@ canvas {
   height: 100%;
   background: linear-gradient(90deg, #44AAFF, #66CCFF, #88DDFF);
   border-radius: 4px;
-  transition: width 0.3s ease, background 0.3s ease;
+  transition: width 0.3s ease;
   box-shadow: 0 0 10px rgba(68, 170, 255, 0.5);
-}
-
-.time-progress-bar.warning {
-  background: linear-gradient(90deg, #FF4444, #FF6644, #FF8866);
-  box-shadow: 0 0 15px rgba(255, 68, 68, 0.7);
-  animation: progressBarPulse 0.5s ease-in-out infinite alternate;
-}
-
-@keyframes progressBarPulse {
-  from {
-    box-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
-  }
-  to {
-    box-shadow: 0 0 22px rgba(255, 68, 68, 0.9);
-  }
 }
 
 .timer {

@@ -255,15 +255,6 @@ export default function App() {
     ctx.arc(x, y, radius - 4, 0, Math.PI * 2);
     ctx.stroke();
 
-    if (progress >= 1) {
-      const pulse = (Math.sin(performance.now() / 100) + 1) / 2;
-      ctx.strokeStyle = `rgba(255, 102, 0, ${0.3 + pulse * 0.3})`;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(x, y, radius + 4 + pulse * 3, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-
     const arrowCount = 8;
     for (let i = 0; i < arrowCount; i++) {
       const angle = (i / arrowCount) * Math.PI * 2 + performance.now() / 500;
@@ -339,7 +330,7 @@ export default function App() {
     if (isGlowing && gem.glowStartTime !== null) {
       const glowElapsed = now - gem.glowStartTime;
       const t = (glowElapsed / 400) * Math.PI * 2;
-      glowPulseScale = 1 + Math.sin(t) * 0.15;
+      glowPulseScale = 1 + Math.sin(t) * 0.05;
     }
 
     const finalScale = scale * glowPulseScale;
@@ -538,7 +529,7 @@ export default function App() {
           <div className="timer-container">
             <div className="time-progress-bar-wrap">
               <div
-                className={`time-progress-bar ${isLast10 ? 'warning' : ''}`}
+                className="time-progress-bar"
                 style={{ width: `${timeProgress * 100}%` }}
               />
             </div>
