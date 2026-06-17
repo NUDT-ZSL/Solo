@@ -21,6 +21,8 @@ export class Renderer {
   private mouseX: number = 0;
   private mouseY: number = 0;
   private restartButtonHovered: boolean = false;
+  private clickMessage: string | null = null;
+  private clickMessageTimer: number = 0;
 
   readonly MIN_WIDTH: number = 900;
   readonly MAX_WIDTH: number = 1200;
@@ -139,11 +141,29 @@ export class Renderer {
       const restartBtn = this.getRestartButtonRect();
       if (this.pointInRect(x, y, restartBtn.x, restartBtn.y, restartBtn.width, restartBtn.height)) {
         this.controller.restart(['橘子', '小黑', '小花']);
+        this.clickMessage = '游戏已重新开始！';
+        this.clickMessageTimer = 2000;
       }
       return;
     }
 
-    const { nextButton } = layout;
+    const { catPanels, nextButton } = layout;
+
+    for (let i = 0; i < catPanels.length; i++) {
+      const panel = catPanels[i];
+      if (i < this.controller.cats.length && this.pointInRect(x, y, panel.x, panel.y, panel.width, panel.height)) {
+        const cat = this.controller.cats[i];
+        if (cat.isAway) {
+          this.clickMessage = `${cat.name} 正在休息恢复中...`;
+          this.clickMessageTimer = 2000;
+        } else {
+          this.clickMessage = `${cat.name}：健康${cat.health} 饱腹${cat.hunger} 心情${cat.happiness}`;
+          this.clickMessageTimer = 2000;
+        }
+        return;
+      }
+    }
+
     if (this.pointInRect(x, y, nextButton.x, nextButton.y, nextButton.width, nextButton.height)) {
       if (this.controller.canAdvanceTurn()) {
         this.controller.nextTurn();
@@ -167,6 +187,13 @@ export class Renderer {
     } else {
       this.buttonHoverTime = Math.max(0, this.buttonHoverTime - deltaTime);
     }
+
+    if (this.clickMessageTimer > 0) {
+      this.clickMessageTimer -= deltaTime;
+      if (this.clickMessageTimer <= 0) {
+        this.clickMessage = null;
+      }
+    }
   }
 
   render(): void {
@@ -189,6 +216,10 @@ export class Renderer {
 
     if (this.controller.isGameOver) {
       this.drawGameOverScreen();
+    }
+
+    if (this.clickMessage !== null) {
+      this.drawClickMessage(this.clickMessage, this.clickMessageTimer);
     }
   }
 
@@ -468,8 +499,9 @@ export class Renderer {
     let currentY = dividerY + 10;
     const maxVisibleHeight = rect.y + rect.height - 20;
 
-    for (let i = 0; i < this.controller.logs.length; i++) {
-      const log = this.controller.logs[i];
+    const logs = this.controller.getLogs();
+    for (let i = 0; i < logs.length; i++) {
+      const log = logs[i];
       const cardHeight = this.estimateLogCardHeight(log);
 
       if (currentY + cardHeight > maxVisibleHeight) break;
@@ -478,7 +510,7 @@ export class Renderer {
       currentY += cardHeight + 8;
     }
 
-    if (this.controller.logs.length === 0) {
+    if (logs.length === 0) {
       ctx.save();
       ctx.font = '12px "Microsoft YaHei", sans-serif';
       ctx.textAlign = 'center';
@@ -703,5 +735,36 @@ export class Renderer {
     ctx.lineTo(x, y + r);
     ctx.quadraticCurveTo(x, y, x + r, y);
     ctx.closePath();
+  }
+
+  private drawClickMessage(message: string, timer: number): void {
+    const ctx = this.ctx;
+    const alpha = Math.min(1, timer / 500);
+
+    const padding = 16;
+    ctx.font = '14px "Microsoft YaHei", sans-serif';
+    const textWidth = ctx.measureText(message).width;
+    const w = textWidth + padding * 2;
+    const h = 40;
+    const x = this.canvas.width / 2 - w / 2;
+    const y = 120;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    this.drawRoundedRect(x, y, w, h, 8);
+    ctx.fillStyle = 'rgba(93, 64, 55, 0.95)';
+    ctx.fill();
+    ctx.strokeStyle = '#ffcc80';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.font = '14px "Microsoft YaHei", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(message, x + w / 2, y + h / 2);
+
+    ctx.restore();
   }
 }

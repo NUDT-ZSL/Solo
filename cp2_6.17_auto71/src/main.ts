@@ -29,6 +29,20 @@ canvas.addEventListener('click', (e) => {
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
+
+  if (controller.isGameOver) {
+    const restartBtnX = canvas.width / 2 - 70;
+    const restartBtnY = canvas.height / 2 + 60;
+    const restartBtnW = 140;
+    const restartBtnH = 44;
+
+    if (x >= restartBtnX && x <= restartBtnX + restartBtnW &&
+        y >= restartBtnY && y <= restartBtnY + restartBtnH) {
+      controller.restart(['橘子', '小黑', '小花']);
+      return;
+    }
+  }
+
   renderer.handleClick(x, y);
 });
 

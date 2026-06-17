@@ -184,9 +184,11 @@ export class GameController {
     }
 
     if (this.currentEvent !== null) {
+      const prevTimer = this.eventTimer;
       this.eventTimer -= deltaTime;
 
-      if (this.eventTimer <= 0) {
+      if (prevTimer > 0 && this.eventTimer <= 0) {
+        this.eventTimer = 0;
         this.applyEvent(this.currentEvent);
         this.currentEvent = null;
         this.waitingForTurn = true;
@@ -216,6 +218,10 @@ export class GameController {
     if (this.logs.length > this.MAX_LOGS) {
       this.logs.pop();
     }
+  }
+
+  getLogs(): LogEntry[] {
+    return this.logs.slice();
   }
 
   private checkGameOver(): void {
