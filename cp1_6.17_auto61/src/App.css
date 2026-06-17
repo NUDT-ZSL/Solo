@@ -29,43 +29,106 @@ canvas {
   top: 0;
   left: 0;
   right: 0;
-  height: 60px;
-  background-color: rgba(0, 0, 0, 0.53);
+  height: 90px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.65) 70%, rgba(0, 0, 0, 0) 100%);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 32px;
   z-index: 10;
 }
 
-.score {
+.score-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 140px;
+}
+
+.score-label {
+  font-size: 13px;
+  color: #888888;
+  letter-spacing: 2px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.score-value {
+  font-size: 32px;
+  font-weight: 700;
   color: #FFFFFF;
-  font-size: 20px;
-  font-weight: 600;
-  min-width: 120px;
+  text-shadow: 0 0 12px rgba(255, 136, 0, 0.4);
+  line-height: 1;
+}
+
+.timer-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.time-progress-bar-wrap {
+  width: 100%;
+  max-width: 360px;
+  height: 8px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.time-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #44AAFF, #66CCFF, #88DDFF);
+  border-radius: 4px;
+  transition: width 0.3s ease, background 0.3s ease;
+  box-shadow: 0 0 10px rgba(68, 170, 255, 0.5);
+}
+
+.time-progress-bar.warning {
+  background: linear-gradient(90deg, #FF4444, #FF6644, #FF8866);
+  box-shadow: 0 0 15px rgba(255, 68, 68, 0.7);
+  animation: progressBarPulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes progressBarPulse {
+  from {
+    box-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
+  }
+  to {
+    box-shadow: 0 0 22px rgba(255, 68, 68, 0.9);
+  }
 }
 
 .timer {
-  font-size: 36px;
-  font-weight: 700;
+  font-size: 52px;
+  font-weight: 800;
   color: #FFFFFF;
   text-align: center;
-  text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+  text-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
   transition: color 0.3s ease;
+  line-height: 1;
+  letter-spacing: 2px;
+  font-variant-numeric: tabular-nums;
 }
 
 .timer.pulse {
-  animation: pulse 0.5s ease-in-out infinite alternate;
+  animation: timerPulse 0.5s ease-in-out infinite alternate;
 }
 
-@keyframes pulse {
+@keyframes timerPulse {
   from {
     transform: scale(1);
-    text-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+    text-shadow: 0 0 15px rgba(255, 0, 0, 0.5);
   }
   to {
-    transform: scale(1.15);
-    text-shadow: 0 0 20px rgba(255, 0, 0, 0.8);
+    transform: scale(1.12);
+    text-shadow: 0 0 30px rgba(255, 0, 0, 0.9), 0 0 60px rgba(255, 0, 0, 0.4);
   }
 }
 
@@ -73,16 +136,24 @@ canvas {
   background-color: #424242;
   color: #FFFFFF;
   border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
+  padding: 12px 24px;
+  border-radius: 10px;
   font-size: 16px;
+  font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s ease;
-  min-width: 80px;
+  transition: all 0.2s ease;
+  min-width: 90px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .reset-btn:hover {
   background-color: #616161;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.reset-btn:active {
+  transform: translateY(0);
 }
 
 .game-over-overlay {
@@ -91,12 +162,13 @@ canvas {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.7);
+  background-color: rgba(0, 0, 0, 0.75);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 100;
   animation: fadeIn 0.5s ease-out;
+  backdrop-filter: blur(4px);
 }
 
 @keyframes fadeIn {
@@ -109,14 +181,14 @@ canvas {
 }
 
 .game-over-panel {
-  background-color: rgba(0, 0, 0, 0.85);
-  border-radius: 20px;
-  padding: 48px 64px;
+  background-color: rgba(0, 0, 0, 0.9);
+  border-radius: 24px;
+  padding: 56px 72px;
   text-align: center;
   color: #FFFFFF;
   animation: scaleIn 0.5s ease-out;
-  box-shadow: 0 0 40px rgba(255, 136, 0, 0.2);
-  border: 1px solid rgba(255, 136, 0, 0.3);
+  box-shadow: 0 0 60px rgba(255, 136, 0, 0.25);
+  border: 1px solid rgba(255, 136, 0, 0.35);
 }
 
 @keyframes scaleIn {
@@ -131,48 +203,52 @@ canvas {
 }
 
 .game-over-panel h2 {
-  font-size: 36px;
-  margin-bottom: 32px;
+  font-size: 42px;
+  margin-bottom: 36px;
   color: #FF8800;
-  text-shadow: 0 0 20px rgba(255, 136, 0, 0.5);
+  text-shadow: 0 0 30px rgba(255, 136, 0, 0.6);
+  letter-spacing: 4px;
 }
 
 .result-text {
-  font-size: 22px;
-  margin-bottom: 16px;
-  color: #CCCCCC;
+  font-size: 24px;
+  margin-bottom: 18px;
+  color: #BBBBBB;
 }
 
 .result-text span {
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 700;
   color: #FFFFFF;
+  margin: 0 6px;
 }
 
 .result-text .score-highlight {
   color: #FFD700;
-  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+  text-shadow: 0 0 15px rgba(255, 215, 0, 0.6);
+  font-size: 40px;
 }
 
 .restart-btn {
-  margin-top: 32px;
+  margin-top: 40px;
   background: linear-gradient(135deg, #FF8800, #FF6600);
   color: #FFFFFF;
   border: none;
-  padding: 14px 40px;
-  border-radius: 12px;
-  font-size: 20px;
-  font-weight: 600;
+  padding: 16px 48px;
+  border-radius: 14px;
+  font-size: 22px;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 15px rgba(255, 136, 0, 0.4);
+  box-shadow: 0 6px 20px rgba(255, 136, 0, 0.5);
+  letter-spacing: 2px;
 }
 
 .restart-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(255, 136, 0, 0.6);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 30px rgba(255, 136, 0, 0.7);
 }
 
 .restart-btn:active {
-  transform: translateY(0);
+  transform: translateY(-1px);
 }
