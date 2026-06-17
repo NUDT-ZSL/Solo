@@ -31,6 +31,7 @@ interface Vote {
   voterId: string;
   timestamp: string;
   region: string;
+  device: string;
 }
 
 interface Report {
@@ -41,8 +42,20 @@ interface Report {
   totalVotes: number;
 }
 
+interface DetailedReport extends Report {
+  hourlyTrend: { hour: string; count: number }[];
+  deviceDistribution: { device: string; count: number; percentage: number }[];
+  commentKeywords: { keyword: string; frequency: number; sentiment: 'positive' | 'neutral' | 'negative' }[];
+  optionPerformance: { optionId: string; text: string; votes: number; percentage: number; color: string }[];
+  peakVotingTime: { time: string; count: number };
+  averageVotesPerHour: number;
+  engagementRate: number;
+}
+
 const OPTION_COLORS = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#95E1D3', '#F38181', '#AAE3E2'];
 const REGIONS = ['北京', '上海', '广州', '深圳', '杭州', '成都', '武汉', '西安', '南京', '重庆'];
+const DEVICES = ['iPhone', 'Android', 'Windows PC', 'Mac', 'iPad', '其他'];
+const COMMENT_KEYWORDS = ['创意', '有趣', '支持', '期待', '精彩', '互动', '选择', '讨论', '参与', '设计', '活动', '投票', '话题', '结果', '分享'];
 const HOT_COMMENTS_POOL = [
   '非常有创意的话题',
   '这个选项最棒了',
@@ -80,7 +93,8 @@ const generateMockVotes = (topicId: string, count: number): Vote[] => {
       optionId: topic.options[Math.floor(Math.random() * topic.options.length)].id,
       voterId: uuidv4(),
       timestamp: new Date(randomTime).toISOString(),
-      region: REGIONS[Math.floor(Math.random() * REGIONS.length)]
+      region: REGIONS[Math.floor(Math.random() * REGIONS.length)],
+      device: DEVICES[Math.floor(Math.random() * DEVICES.length)]
     });
   }
   return mockVotes;
@@ -234,7 +248,8 @@ app.post('/api/vote', (req: Request, res: Response) => {
     optionId,
     voterId,
     timestamp: new Date().toISOString(),
-    region: REGIONS[Math.floor(Math.random() * REGIONS.length)]
+    region: REGIONS[Math.floor(Math.random() * REGIONS.length)],
+    device: DEVICES[Math.floor(Math.random() * DEVICES.length)]
   };
 
   votes.push(newVote);
@@ -312,6 +327,156 @@ app.get('/api/report/:topicId', (req: Request, res: Response) => {
     hotComments,
     totalVotes
   };
+
+  res.json(report);
+});
+
+const getDetailedReport = (topicId: string): DetailedReport | null => {
+  const topic = topics.find(t => t.id === topicId);
+  if (!topic) return null;
+
+  const topicVotes = votes.filter(v => v.topicId === topicId);
+  const totalVotes = topicVotes.length;
+
+  const voteTrend: { time: string; count: number }[] = [];
+  if (topicVotes.length > 0) {
+    const sortedVotes = [...topicVotes].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+    const startTime = new Date(sortedVotes[0].timestamp).getTime();
+    const endTime = new Date(sortedVotes[sortedVotes.length - 1].timestamp).getTime();
+    const interval = Math.max((endTime - startTime) / 12, 3600000);
+
+    let currentTime = startTime;
+    let count = 0;
+    let voteIndex = 0;
+
+    while (currentTime <= endTime + interval) {
+      while (voteIndex < sortedVotes.length && new Date(sortedVotes[voteIndex].timestamp).getTime() <= currentTime) {
+        count++;
+        voteIndex++;
+      }
+      voteTrend.push({
+        time: new Date(currentTime).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit' }),
+        count
+      });
+      currentTime += interval;
+    }
+  }
+
+  const hourlyTrend: { hour: string; count: number }[] = [];
+  const hourMap = new Map<string, number>();
+  topicVotes.forEach(v => {
+    const hour = new Date(v.timestamp).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit' });
+    hourMap.set(hour, (hourMap.get(hour) || 0) + 1);
+  });
+  Array.from(hourMap.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .forEach(([hour, count]) => {
+      hourlyTrend.push({ hour, count });
+    });
+
+  let peakVotingTime = { time: '', count: 0 };
+  if (hourlyTrend.length > 0) {
+    const peak = hourlyTrend.reduce((max, curr) => curr.count > max.count ? curr : max, hourlyTrend[0]);
+    peakVotingTime = { time: peak.hour, count: peak.count };
+  }
+
+  const regionMap = new Map<string, number>();
+  topicVotes.forEach(v => {
+    regionMap.set(v.region, (regionMap.get(v.region) || 0) + 1);
+  });
+  const regionDistribution = Array.from(regionMap.entries())
+    .map(([region, count]) => ({ region, count }))
+    .sort((a, b) => b.count - a.count);
+
+  const deviceMap = new Map<string, number>();
+  topicVotes.forEach(v => {
+    deviceMap.set(v.device, (deviceMap.get(v.device) || 0) + 1);
+  });
+  const deviceDistribution = Array.from(deviceMap.entries())
+    .map(([device, count]) => ({
+      device,
+      count,
+      percentage: totalVotes > 0 ? Math.round((count / totalVotes) * 100 * 10) / 10 : 0
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  const commentKeywords: { keyword: string; frequency: number; sentiment: 'positive' | 'neutral' | 'negative' }[] = [];
+  const usedKeywords = new Set<string>();
+  const sentimentPool: ('positive' | 'neutral' | 'negative')[] = ['positive', 'positive', 'positive', 'neutral', 'neutral', 'negative'];
+  
+  for (let i = 0; i < Math.min(12, COMMENT_KEYWORDS.length); i++) {
+    let keyword: string;
+    do {
+      keyword = COMMENT_KEYWORDS[Math.floor(Math.random() * COMMENT_KEYWORDS.length)];
+    } while (usedKeywords.has(keyword));
+    usedKeywords.add(keyword);
+    commentKeywords.push({
+      keyword,
+      frequency: Math.floor(Math.random() * 30) + 10,
+      sentiment: sentimentPool[Math.floor(Math.random() * sentimentPool.length)]
+    });
+  }
+  commentKeywords.sort((a, b) => b.frequency - a.frequency);
+
+  const optionPerformance = topic.options.map(opt => {
+    const optVotes = votes.filter(v => v.topicId === topicId && v.optionId === opt.id).length;
+    return {
+      optionId: opt.id,
+      text: opt.text,
+      votes: optVotes,
+      percentage: totalVotes > 0 ? Math.round((optVotes / totalVotes) * 100 * 10) / 10 : 0,
+      color: opt.color
+    };
+  }).sort((a, b) => b.votes - a.votes);
+
+  const commentCount = Math.min(15, Math.floor(totalVotes / 5) + 5);
+  const hotComments: { text: string; frequency: number }[] = [];
+  const usedComments = new Set<string>();
+
+  for (let i = 0; i < commentCount; i++) {
+    let comment: string;
+    do {
+      comment = HOT_COMMENTS_POOL[Math.floor(Math.random() * HOT_COMMENTS_POOL.length)];
+    } while (usedComments.has(comment) && usedComments.size < HOT_COMMENTS_POOL.length);
+    usedComments.add(comment);
+    hotComments.push({
+      text: comment,
+      frequency: Math.floor(Math.random() * 20) + 5
+    });
+  }
+  hotComments.sort((a, b) => b.frequency - a.frequency);
+
+  const topicDurationHours = (new Date(topic.deadline).getTime() - new Date(topic.createdAt).getTime()) / (1000 * 60 * 60);
+  const averageVotesPerHour = topicDurationHours > 0 ? Math.round((totalVotes / topicDurationHours) * 10) / 10 : 0;
+
+  const engagementRate = Math.min(100, Math.round((totalVotes / (Math.random() * 500 + 100)) * 100 * 10) / 10);
+
+  return {
+    topicId,
+    voteTrend,
+    hourlyTrend,
+    regionDistribution,
+    deviceDistribution,
+    commentKeywords,
+    hotComments,
+    optionPerformance,
+    peakVotingTime,
+    averageVotesPerHour,
+    engagementRate,
+    totalVotes
+  };
+};
+
+app.get('/api/detailed-report/:topicId', (req: Request, res: Response) => {
+  const { topicId } = req.params;
+
+  const report = getDetailedReport(topicId);
+  if (!report) {
+    return res.status(404).json({ error: '话题不存在' });
+  }
 
   res.json(report);
 });

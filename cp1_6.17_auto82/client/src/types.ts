@@ -23,6 +23,16 @@ export interface Report {
   totalVotes: number;
 }
 
+export interface DetailedReport extends Report {
+  hourlyTrend: { hour: string; count: number }[];
+  deviceDistribution: { device: string; count: number; percentage: number }[];
+  commentKeywords: { keyword: string; frequency: number; sentiment: 'positive' | 'neutral' | 'negative' }[];
+  optionPerformance: { optionId: string; text: string; votes: number; percentage: number; color: string }[];
+  peakVotingTime: { time: string; count: number };
+  averageVotesPerHour: number;
+  engagementRate: number;
+}
+
 export interface CreateTopicRequest {
   title: string;
   options: string[];

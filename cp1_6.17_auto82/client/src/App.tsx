@@ -3,7 +3,7 @@ import { TopicList } from './components/TopicList';
 import { VotingPanel } from './components/VotingPanel';
 import { ReportPanel } from './components/ReportPanel';
 import { api, getVoterId } from './api';
-import type { Topic, Report, CreateTopicRequest } from './types';
+import type { Topic, DetailedReport, CreateTopicRequest } from './types';
 
 type View = 'list' | 'voting' | 'report';
 
@@ -19,7 +19,7 @@ export const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>('list');
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
-  const [report, setReport] = useState<Report | null>(null);
+  const [report, setReport] = useState<DetailedReport | null>(null);
   const [votedTopics, setVotedTopics] = useState<Set<string>>(new Set());
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingTopic, setEditingTopic] = useState<Topic | null>(null);
@@ -91,7 +91,7 @@ export const App: React.FC = () => {
   const handleGenerateReport = async (topic: Topic) => {
     try {
       setError(null);
-      const reportData = await api.getReport(topic.id);
+      const reportData = await api.fetchDetailedReport(topic.id);
       setSelectedTopic(topic);
       setReport(reportData);
       setView('report');

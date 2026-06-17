@@ -1,4 +1,4 @@
-import type { Topic, Report, CreateTopicRequest, VoteRequest, VoteResponse } from './types';
+import type { Topic, Report, DetailedReport, CreateTopicRequest, VoteRequest, VoteResponse } from './types';
 
 const API_BASE = '/api';
 
@@ -72,6 +72,15 @@ export const api = {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || '获取报告失败');
+    }
+    return response.json();
+  },
+
+  fetchDetailedReport: async (topicId: string): Promise<DetailedReport> => {
+    const response = await fetch(`${API_BASE}/detailed-report/${topicId}`);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || '获取详细报告失败');
     }
     return response.json();
   },
