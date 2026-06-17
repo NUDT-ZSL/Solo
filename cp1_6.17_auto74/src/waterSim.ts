@@ -15,6 +15,8 @@ export interface WaterSimulation {
   lastAbsorptionTime: number
   timeScale: number
   totalWaterAbsorbed: { wheat: number; corn: number }
+  cumulativeWaterRemoved: number
+  drynessFront: number
 }
 
 const WATER_COLOR = 0x00BFFF
@@ -22,10 +24,72 @@ const MOLECULE_RADIUS = 0.05
 const GRAVITY_SPEED = 0.5
 const MAX_MOLECULES = 500
 const INITIAL_MOLECULES = 200
-const ABSORPTION_RADIUS = 0.25
+const ABSORPTION_RADIUS = 0.3
+const GRID_CELL_SIZE = 0.8
 
 const WET_SOIL_COLOR = new THREE.Color(0x4E342E)
 const DRY_SOIL_COLOR = new THREE.Color(0xA1887F)
+
+class SpatialHashGrid<T extends { position: THREE.Vector3 }> {
+  private cellSize: number
+  private cells: Map<string, T[]>
+
+  constructor(cellSize: number = GRID_CELL_SIZE) {
+    this.cellSize = cellSize
+    this.cells = new Map()
+  }
+
+  clear(): void {
+    this.cells.clear()
+  }
+
+  private getCellKey(x: number, y: number, z: number): string {
+    return `${Math.floor(x / this.cellSize)}_${Math.floor(y / this.cellSize)}_${Math.floor(z / this.cellSize)}`
+  }
+
+  insert(item: T): void {
+    const key = this.getCellKey(item.position.x, item.position.y, item.position.z)
+    let cell = this.cells.get(key)
+    if (!cell) {
+      cell = []
+      this.cells.set(key, cell)
+    }
+    cell.push(item)
+  }
+
+  query(position: THREE.Vector3, radius: number): T[] {
+    const results: T[] = []
+    const minX = Math.floor((position.x - radius) / this.cellSize)
+    const maxX = Math.floor((position.x + radius) / this.cellSize)
+    const minY = Math.floor((position.y - radius) / this.cellSize)
+    const maxY = Math.floor((position.y + radius) / this.cellSize)
+    const minZ = Math.floor((position.z - radius) / this.cellSize)
+    const maxZ = Math.floor((position.z + radius) / this.cellSize)
+
+    for (let x = minX; x <= maxX; x++) {
+      for (let y = minY; y <= maxY; y++) {
+        for (let z = minZ; z <= maxZ; z++) {
+          const key = `${x}_${y}_${z}`
+          const cell = this.cells.get(key)
+          if (cell) {
+            for (const item of cell) {
+              if (item.position.distanceTo(position) <= radius) {
+                results.push(item)
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return results
+  }
+}
+
+interface RootNodeWrapper {
+  position: THREE.Vector3
+  node: RootNode
+}
 
 export function createWaterSimulation(
   scene: THREE.Scene,
@@ -62,7 +126,9 @@ export function createWaterSimulation(
     absorptionCount: { wheat: 0, corn: 0 },
     lastAbsorptionTime: performance.now(),
     timeScale: 1,
-    totalWaterAbsorbed: { wheat: 0, corn: 0 }
+    totalWaterAbsorbed: { wheat: 0, corn: 0 },
+    cumulativeWaterRemoved: 0,
+    drynessFront: 0
   }
 }
 
@@ -127,14 +193,23 @@ export function updateWater(
     spawnMolecule(sim, containerSize)
   }
 
-  const rootNodes = Array.from(rootSystem.nodes.values())
+  const rootWrappers: RootNodeWrapper[] = []
+  rootSystem.nodes.forEach((node) => {
+    rootWrappers.push({ position: node.mesh.position, node })
+  })
+
+  const rootGrid = new SpatialHashGrid<RootNodeWrapper>()
+  for (const wrapper of rootWrappers) {
+    rootGrid.insert(wrapper)
+  }
 
   let wheatAbsorbed = 0
   let cornAbsorbed = 0
+  let waterRemoved = 0
 
-  sim.molecules.forEach((molecule) => {
-    if (!molecule.active) return
+  const activeMolecules = sim.molecules.filter((m) => m.active)
 
+  for (const molecule of activeMolecules) {
     molecule.mesh.position.y += molecule.velocity.y * dt
 
     molecule.mesh.position.x += (Math.random() - 0.5) * 0.05 * dt
@@ -146,15 +221,17 @@ export function updateWater(
       molecule.mesh.position.z = (Math.random() - 0.5) * (containerSize.depth - 1)
     }
 
-    for (const node of rootNodes) {
-      const distance = molecule.mesh.position.distanceTo(node.mesh.position)
+    const nearbyRoots = rootGrid.query(molecule.mesh.position, ABSORPTION_RADIUS)
+    for (const wrapper of nearbyRoots) {
+      const distance = molecule.mesh.position.distanceTo(wrapper.node.mesh.position)
       if (distance < ABSORPTION_RADIUS) {
         molecule.active = false
         molecule.mesh.visible = false
+        waterRemoved++
 
-        updateNodeWaterContent(node, 1)
+        updateNodeWaterContent(wrapper.node, 1)
 
-        if (node.plantType === 'wheat') {
+        if (wrapper.node.plantType === 'wheat') {
           wheatAbsorbed++
           sim.totalWaterAbsorbed.wheat++
         } else {
@@ -164,13 +241,15 @@ export function updateWater(
         break
       }
     }
-  })
+  }
 
   rootSystem.wheatWaterRate = wheatAbsorbed / deltaTime
   rootSystem.cornWaterRate = cornAbsorbed / deltaTime
 
   rootSystem.wheatTotalWater = sim.totalWaterAbsorbed.wheat
   rootSystem.cornTotalWater = sim.totalWaterAbsorbed.corn
+
+  sim.cumulativeWaterRemoved += waterRemoved
 
   updateSoilDryness(sim, soilMaterial, containerSize)
 }
@@ -181,10 +260,18 @@ function updateSoilDryness(
   containerSize: { width: number; height: number; depth: number }
 ): void {
   const totalAbsorbed = sim.totalWaterAbsorbed.wheat + sim.totalWaterAbsorbed.corn
-  const maxWater = INITIAL_MOLECULES * 2
-  const dryness = Math.min(1, totalAbsorbed / maxWater)
+  const maxWater = INITIAL_MOLECULES * 3
+  const overallDryness = Math.min(1, totalAbsorbed / maxWater)
 
-  const currentColor = WET_SOIL_COLOR.clone().lerp(DRY_SOIL_COLOR, dryness)
+  const timeFactor = 0.0001 * sim.timeScale
+  sim.drynessFront = Math.min(1, sim.drynessFront + timeFactor * (0.5 + overallDryness))
+
+  const targetDryness = Math.max(overallDryness, sim.drynessFront)
+  const currentDryness = (soilMaterial.color.r - WET_SOIL_COLOR.r) / (DRY_SOIL_COLOR.r - WET_SOIL_COLOR.r)
+  const smoothDryness = currentDryness + (targetDryness - currentDryness) * 0.05
+
+  const finalDryness = Math.max(0, Math.min(1, smoothDryness))
+  const currentColor = WET_SOIL_COLOR.clone().lerp(DRY_SOIL_COLOR, finalDryness)
   soilMaterial.color.copy(currentColor)
 }
 

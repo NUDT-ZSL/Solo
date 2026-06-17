@@ -11,6 +11,7 @@ export interface RootNode {
   plantType: 'wheat' | 'corn'
   waterContent: number
   originalColor: THREE.Color
+  originalEmissiveIntensity: number
   capillaryCount: number
   highlighted: boolean
 }
@@ -28,6 +29,8 @@ const NODE_RADIUS = 0.15
 const CONNECTION_RADIUS = 0.05
 const WHEAT_COLOR = 0x8B5E3C
 const CORN_COLOR = 0x2E8B57
+const MIN_DISTANCE = 0.35
+const MAX_POSITION_ATTEMPTS = 15
 
 export function addRoots(
   scene: THREE.Scene,
@@ -36,10 +39,12 @@ export function addRoots(
   const rootGroup = new THREE.Group()
   const nodes = new Map<string, RootNode>()
 
-  const wheatNodes = generateWheatRoots(containerSize)
+  const existingPositions: THREE.Vector3[] = []
+
+  const wheatNodes = generateWheatRoots(containerSize, existingPositions)
   wheatNodes.forEach((node) => nodes.set(node.id, node))
 
-  const cornNodes = generateCornRoots(containerSize)
+  const cornNodes = generateCornRoots(containerSize, existingPositions)
   cornNodes.forEach((node) => nodes.set(node.id, node))
 
   wheatNodes.forEach((node) => {
@@ -63,8 +68,22 @@ export function addRoots(
   }
 }
 
+function isPositionValid(
+  pos: THREE.Vector3,
+  existingPositions: THREE.Vector3[],
+  minDistance: number = MIN_DISTANCE
+): boolean {
+  for (const existing of existingPositions) {
+    if (pos.distanceTo(existing) < minDistance) {
+      return false
+    }
+  }
+  return true
+}
+
 function generateWheatRoots(
-  containerSize: { width: number; height: number; depth: number }
+  containerSize: { width: number; height: number; depth: number },
+  existingPositions: THREE.Vector3[]
 ): RootNode[] {
   const nodes: RootNode[] = []
   const baseX = -3
@@ -72,32 +91,54 @@ function generateWheatRoots(
   const surfaceY = 0
   const maxDepth = 6
 
-  const rootPositions: { pos: THREE.Vector3; depth: number; parent: RootNode | null }[] = []
-
   const mainRootCount = 3
   for (let i = 0; i < mainRootCount; i++) {
     const angle = (i / mainRootCount) * Math.PI * 2
-    const startX = baseX + Math.cos(angle) * 0.3
-    const startZ = baseZ + Math.sin(angle) * 0.3
+    const startX = baseX + Math.cos(angle) * 0.5
+    const startZ = baseZ + Math.sin(angle) * 0.5
 
     const startPos = new THREE.Vector3(startX, surfaceY, startZ)
-    rootPositions.push({ pos: startPos, depth: 0, parent: null })
+    if (!isPositionValid(startPos, existingPositions, 0.2)) {
+      continue
+    }
+    existingPositions.push(startPos)
 
     const segments = 12
-    let currentPos = startPos.clone()
     let parentNode: RootNode | null = null
+    let lastValidPos = startPos.clone()
 
     for (let j = 1; j <= segments; j++) {
       const t = j / segments
       const depthY = -t * maxDepth
-      const wobbleX = Math.sin(t * Math.PI * 2 + i) * 0.3 * t
-      const wobbleZ = Math.cos(t * Math.PI * 1.5 + i * 0.7) * 0.2 * t
+      const wobbleX = Math.sin(t * Math.PI * 2 + i * 1.3) * 0.4 * t
+      const wobbleZ = Math.cos(t * Math.PI * 1.5 + i * 0.9) * 0.3 * t
 
-      const newPos = new THREE.Vector3(
-        baseX + wobbleX + (startX - baseX) * (1 - t * 0.5),
-        depthY,
-        baseZ + wobbleZ + (startZ - baseZ) * (1 - t * 0.5)
-      )
+      let newPos: THREE.Vector3 | null = null
+      for (let attempt = 0; attempt < MAX_POSITION_ATTEMPTS; attempt++) {
+        const attemptWobbleX = wobbleX + (Math.random() - 0.5) * 0.15 * attempt
+        const attemptWobbleZ = wobbleZ + (Math.random() - 0.5) * 0.15 * attempt
+
+        const candidatePos = new THREE.Vector3(
+          baseX + attemptWobbleX + (startX - baseX) * (1 - t * 0.4),
+          depthY,
+          baseZ + attemptWobbleZ + (startZ - baseZ) * (1 - t * 0.4)
+        )
+
+        const toParent = new THREE.Vector3().subVectors(candidatePos, lastValidPos)
+        if (toParent.length() > 0.8) {
+          toParent.setLength(0.7)
+          candidatePos.copy(lastValidPos).add(toParent)
+        }
+
+        if (isPositionValid(candidatePos, existingPositions)) {
+          newPos = candidatePos
+          break
+        }
+      }
+
+      if (!newPos) continue
+
+      existingPositions.push(newPos)
 
       const nodeId = `wheat_main_${i}_${j}`
       const node = createRootNode(nodeId, newPos, 'wheat', parentNode, j)
@@ -111,27 +152,49 @@ function generateWheatRoots(
       if (j >= 3 && j <= 10 && j % 2 === 0) {
         const lateralCount = 2 + Math.floor(Math.random() * 2)
         for (let k = 0; k < lateralCount; k++) {
-          const lateralAngle = Math.random() * Math.PI * 2
-          const lateralLength = 0.8 + Math.random() * 1.5
-          const lateralSegments = 3 + Math.floor(Math.random() * 3)
+          const lateralAngle = (k / lateralCount) * Math.PI * 2 + i * 0.5 + Math.random() * 0.3
+          const lateralLength = 1.0 + Math.random() * 1.2
+          const lateralSegments = 3 + Math.floor(Math.random() * 2)
 
-          let latCurrentPos = newPos.clone()
           let latParent = node
+          let latLastPos = newPos.clone()
 
           for (let l = 1; l <= lateralSegments; l++) {
             const latT = l / lateralSegments
             const latDist = lateralLength * latT
-            const latDepthOffset = -latDist * 0.3
+            const latDepthOffset = -latDist * 0.4
 
-            const latX = newPos.x + Math.cos(lateralAngle) * latDist
-            const latZ = newPos.z + Math.sin(lateralAngle) * latDist
-            const latY = newPos.y + latDepthOffset
+            let latNodePos: THREE.Vector3 | null = null
+            for (let attempt = 0; attempt < MAX_POSITION_ATTEMPTS; attempt++) {
+              const angleOffset = (Math.random() - 0.5) * 0.4 * attempt
+              const currentAngle = lateralAngle + angleOffset
 
-            const clampedX = Math.max(-containerSize.width / 2 + 0.5, Math.min(containerSize.width / 2 - 0.5, latX))
-            const clampedZ = Math.max(-containerSize.depth / 2 + 0.5, Math.min(containerSize.depth / 2 - 0.5, latZ))
-            const clampedY = Math.max(-containerSize.height + 0.5, Math.min(0, latY))
+              const candidateX = newPos.x + Math.cos(currentAngle) * latDist
+              const candidateZ = newPos.z + Math.sin(currentAngle) * latDist
+              const candidateY = newPos.y + latDepthOffset - Math.random() * 0.1 * attempt
 
-            const latNodePos = new THREE.Vector3(clampedX, clampedY, clampedZ)
+              const clampedX = Math.max(-containerSize.width / 2 + 0.5, Math.min(containerSize.width / 2 - 0.5, candidateX))
+              const clampedZ = Math.max(-containerSize.depth / 2 + 0.5, Math.min(containerSize.depth / 2 - 0.5, candidateZ))
+              const clampedY = Math.max(-containerSize.height + 0.5, Math.min(0, candidateY))
+
+              const candidatePos = new THREE.Vector3(clampedX, clampedY, clampedZ)
+
+              const toParent = new THREE.Vector3().subVectors(candidatePos, latLastPos)
+              if (toParent.length() > 0.6) {
+                toParent.setLength(0.5)
+                candidatePos.copy(latLastPos).add(toParent)
+              }
+
+              if (isPositionValid(candidatePos, existingPositions, 0.3)) {
+                latNodePos = candidatePos
+                break
+              }
+            }
+
+            if (!latNodePos) break
+
+            existingPositions.push(latNodePos)
+
             const latNodeId = `wheat_lat_${i}_${j}_${k}_${l}`
             const latNode = createRootNode(latNodeId, latNodePos, 'wheat', latParent, j + l)
             nodes.push(latNode)
@@ -140,12 +203,13 @@ function generateWheatRoots(
             latParent.connections.push(latConnection)
 
             latParent = latNode
+            latLastPos = latNodePos.clone()
           }
         }
       }
 
       parentNode = node
-      currentPos = newPos
+      lastValidPos = newPos.clone()
     }
   }
 
@@ -153,7 +217,8 @@ function generateWheatRoots(
 }
 
 function generateCornRoots(
-  containerSize: { width: number; height: number; depth: number }
+  containerSize: { width: number; height: number; depth: number },
+  existingPositions: THREE.Vector3[]
 ): RootNode[] {
   const nodes: RootNode[] = []
   const baseX = 3
@@ -164,29 +229,52 @@ function generateCornRoots(
   const mainRootCount = 5
   for (let i = 0; i < mainRootCount; i++) {
     const angle = (i / mainRootCount) * Math.PI * 2 + Math.PI / mainRootCount
-    const startX = baseX + Math.cos(angle) * 0.4
-    const startZ = baseZ + Math.sin(angle) * 0.4
+    const startX = baseX + Math.cos(angle) * 0.5
+    const startZ = baseZ + Math.sin(angle) * 0.5
 
     const startPos = new THREE.Vector3(startX, surfaceY, startZ)
+    if (!isPositionValid(startPos, existingPositions, 0.2)) {
+      continue
+    }
+    existingPositions.push(startPos)
 
     const segments = 8
-    let currentPos = startPos.clone()
     let parentNode: RootNode | null = null
+    let lastValidPos = startPos.clone()
 
     for (let j = 1; j <= segments; j++) {
       const t = j / segments
       const depthY = -t * maxDepth
 
-      const horizontalSpread = t * 2.5
-      const newX = baseX + Math.cos(angle) * horizontalSpread
-      const newZ = baseZ + Math.sin(angle) * horizontalSpread
-      const wobbleY = Math.sin(t * Math.PI * 3 + i) * 0.15
+      let newPos: THREE.Vector3 | null = null
+      for (let attempt = 0; attempt < MAX_POSITION_ATTEMPTS; attempt++) {
+        const horizontalSpread = t * (2.8 + Math.random() * 0.4 * attempt)
+        const wobbleY = Math.sin(t * Math.PI * 3 + i + attempt * 0.2) * 0.15
 
-      const clampedX = Math.max(-containerSize.width / 2 + 0.5, Math.min(containerSize.width / 2 - 0.5, newX))
-      const clampedZ = Math.max(-containerSize.depth / 2 + 0.5, Math.min(containerSize.depth / 2 - 0.5, newZ))
-      const clampedY = Math.max(-containerSize.height + 0.5, Math.min(0, depthY + wobbleY))
+        const candidateX = baseX + Math.cos(angle) * horizontalSpread + (Math.random() - 0.5) * 0.1 * attempt
+        const candidateZ = baseZ + Math.sin(angle) * horizontalSpread + (Math.random() - 0.5) * 0.1 * attempt
 
-      const newPos = new THREE.Vector3(clampedX, clampedY, clampedZ)
+        const clampedX = Math.max(-containerSize.width / 2 + 0.5, Math.min(containerSize.width / 2 - 0.5, candidateX))
+        const clampedZ = Math.max(-containerSize.depth / 2 + 0.5, Math.min(containerSize.depth / 2 - 0.5, candidateZ))
+        const clampedY = Math.max(-containerSize.height + 0.5, Math.min(0, depthY + wobbleY))
+
+        const candidatePos = new THREE.Vector3(clampedX, clampedY, clampedZ)
+
+        const toParent = new THREE.Vector3().subVectors(candidatePos, lastValidPos)
+        if (toParent.length() > 0.7) {
+          toParent.setLength(0.6)
+          candidatePos.copy(lastValidPos).add(toParent)
+        }
+
+        if (isPositionValid(candidatePos, existingPositions)) {
+          newPos = candidatePos
+          break
+        }
+      }
+
+      if (!newPos) continue
+
+      existingPositions.push(newPos)
 
       const nodeId = `corn_main_${i}_${j}`
       const node = createRootNode(nodeId, newPos, 'corn', parentNode, j)
@@ -200,18 +288,35 @@ function generateCornRoots(
       if (j >= 2 && j <= 6) {
         const fibrousCount = 3 + Math.floor(Math.random() * 3)
         for (let k = 0; k < fibrousCount; k++) {
-          const fibAngle = angle + (Math.random() - 0.5) * Math.PI * 0.8
-          const fibLength = 0.3 + Math.random() * 0.8
-          const fibY = newPos.y - 0.1 - Math.random() * 0.3
+          const fibAngle = angle + (k / fibrousCount - 0.5) * Math.PI * 0.9 + (Math.random() - 0.5) * 0.2
+          const fibLength = 0.4 + Math.random() * 0.7
 
-          const fibX = newPos.x + Math.cos(fibAngle) * fibLength
-          const fibZ = newPos.z + Math.sin(fibAngle) * fibLength
+          let fibPos: THREE.Vector3 | null = null
+          for (let attempt = 0; attempt < MAX_POSITION_ATTEMPTS; attempt++) {
+            const angleOffset = (Math.random() - 0.5) * 0.3 * attempt
+            const currentAngle = fibAngle + angleOffset
+            const lengthVariation = fibLength * (0.8 + Math.random() * 0.4)
 
-          const clampedFibX = Math.max(-containerSize.width / 2 + 0.3, Math.min(containerSize.width / 2 - 0.3, fibX))
-          const clampedFibZ = Math.max(-containerSize.depth / 2 + 0.3, Math.min(containerSize.depth / 2 - 0.3, fibZ))
-          const clampedFibY = Math.max(-containerSize.height + 0.3, Math.min(0, fibY))
+            const fibX = newPos.x + Math.cos(currentAngle) * lengthVariation
+            const fibZ = newPos.z + Math.sin(currentAngle) * lengthVariation
+            const fibY = newPos.y - 0.15 - Math.random() * 0.4
 
-          const fibPos = new THREE.Vector3(clampedFibX, clampedFibY, clampedFibZ)
+            const clampedFibX = Math.max(-containerSize.width / 2 + 0.3, Math.min(containerSize.width / 2 - 0.3, fibX))
+            const clampedFibZ = Math.max(-containerSize.depth / 2 + 0.3, Math.min(containerSize.depth / 2 - 0.3, fibZ))
+            const clampedFibY = Math.max(-containerSize.height + 0.3, Math.min(0, fibY))
+
+            const candidatePos = new THREE.Vector3(clampedFibX, clampedFibY, clampedFibZ)
+
+            if (isPositionValid(candidatePos, existingPositions, 0.25)) {
+              fibPos = candidatePos
+              break
+            }
+          }
+
+          if (!fibPos) continue
+
+          existingPositions.push(fibPos)
+
           const fibNodeId = `corn_fib_${i}_${j}_${k}`
           const fibNode = createRootNode(fibNodeId, fibPos, 'corn', node, j + 1)
           nodes.push(fibNode)
@@ -222,7 +327,7 @@ function generateCornRoots(
       }
 
       parentNode = node
-      currentPos = newPos
+      lastValidPos = newPos.clone()
     }
   }
 
@@ -243,7 +348,7 @@ function createRootNode(
     roughness: 0.7,
     metalness: 0.1,
     emissive: color,
-    emissiveIntensity: 0.1
+    emissiveIntensity: 0.05
   })
   const mesh = new THREE.Mesh(geometry, material)
   mesh.position.copy(position)
@@ -263,6 +368,7 @@ function createRootNode(
     plantType,
     waterContent: Math.random() * 20 + 10,
     originalColor: new THREE.Color(color),
+    originalEmissiveIntensity: 0.05,
     capillaryCount,
     highlighted: false
   }
@@ -302,30 +408,55 @@ function createConnection(
   return mesh
 }
 
-export function highlightRoot(node: RootNode, scene: THREE.Scene): void {
+export function highlightRoot(node: RootNode, _scene: THREE.Scene): void {
   const nodesToHighlight: RootNode[] = []
+  const originalIntensities: Map<RootNode, number> = new Map()
+  const originalColors: Map<RootNode, THREE.Color> = new Map()
 
   const collectNodes = (n: RootNode, level: number) => {
     if (level > 2) return
     nodesToHighlight.push(n)
+    originalIntensities.set(n, (n.mesh.material as THREE.MeshStandardMaterial).emissiveIntensity)
+    originalColors.set(n, (n.mesh.material as THREE.MeshStandardMaterial).emissive.clone())
     n.children.forEach((child) => collectNodes(child, level + 1))
   }
 
   collectNodes(node, 0)
 
+  const HIGHLIGHT_DURATION = 1500
+  const startTime = performance.now()
+  const highlightIntensity = 1.5
+
   nodesToHighlight.forEach((n) => {
     const material = n.mesh.material as THREE.MeshStandardMaterial
-    material.emissiveIntensity = 0.5
+    material.emissiveIntensity = n.originalEmissiveIntensity * highlightIntensity
+    const brightColor = n.originalColor.clone()
+    brightColor.multiplyScalar(1.2)
+    material.emissive.copy(brightColor)
+    material.color.copy(brightColor)
     n.highlighted = true
   })
 
-  setTimeout(() => {
+  const restoreNodes = () => {
+    const elapsed = performance.now() - startTime
+    if (elapsed < HIGHLIGHT_DURATION) {
+      requestAnimationFrame(restoreNodes)
+      return
+    }
+
     nodesToHighlight.forEach((n) => {
       const material = n.mesh.material as THREE.MeshStandardMaterial
-      material.emissiveIntensity = 0.1
+      const originalIntensity = originalIntensities.get(n) ?? n.originalEmissiveIntensity
+      const originalEmissive = originalColors.get(n) ?? n.originalColor.clone()
+
+      material.emissiveIntensity = originalIntensity
+      material.emissive.copy(originalEmissive)
+      material.color.copy(n.originalColor)
       n.highlighted = false
     })
-  }, 1500)
+  }
+
+  requestAnimationFrame(restoreNodes)
 }
 
 export function updateNodeWaterContent(node: RootNode, amount: number): void {

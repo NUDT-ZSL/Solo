@@ -235,9 +235,10 @@ function createHoverTooltip(): HTMLDivElement {
     boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
     border: '1px solid rgba(255, 255, 255, 0.1)',
     opacity: '0',
-    transition: 'opacity 0.2s ease',
+    transition: 'opacity 200ms ease-in-out',
+    WebkitTransition: 'opacity 200ms ease-in-out',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-    display: 'none'
+    visibility: 'hidden'
   })
 
   tooltip.innerHTML = `
@@ -370,13 +371,10 @@ export function showHoverTooltip(node: RootNode, x: number, y: number): void {
 
   hoverTooltip.style.left = `${x + 15}px`
   hoverTooltip.style.top = `${y + 15}px`
-  hoverTooltip.style.display = 'block'
+  hoverTooltip.style.visibility = 'visible'
 
-  requestAnimationFrame(() => {
-    if (hoverTooltip) {
-      hoverTooltip.style.opacity = '1'
-    }
-  })
+  void hoverTooltip.offsetWidth
+  hoverTooltip.style.opacity = '1'
 }
 
 export function hideHoverTooltip(): void {
@@ -384,7 +382,7 @@ export function hideHoverTooltip(): void {
   hoverTooltip.style.opacity = '0'
   setTimeout(() => {
     if (hoverTooltip && hoverTooltip.style.opacity === '0') {
-      hoverTooltip.style.display = 'none'
+      hoverTooltip.style.visibility = 'hidden'
     }
   }, 200)
 }
