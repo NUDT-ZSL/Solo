@@ -50,6 +50,7 @@ const UserBooking = () => {
         <div className="events-grid">
           {events.map((event) => {
             const percent = Math.round((event.bookedStalls / event.totalStalls) * 100);
+            const remaining = event.totalStalls - event.bookedStalls;
             return (
               <div
                 key={event.id}
@@ -64,11 +65,15 @@ const UserBooking = () => {
                   <div className="event-card-location">📍 {event.location}</div>
                 </div>
                 <div className="event-card-footer">
-                  <div className="progress-bar">
-                    <div className="progress-fill" style={{ width: `${percent}%` }}></div>
+                  <div className="progress-row">
+                    <div className="progress-bar">
+                      <div className="progress-fill" style={{ width: `${percent}%` }}></div>
+                    </div>
+                    <span className="price-text">¥{event.pricePerStall}/个</span>
                   </div>
-                  <div className="progress-text">
-                    已预订 {event.bookedStalls}/{event.totalStalls} · ¥{event.pricePerStall}/摊位
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span className="remaining-text">剩余 {remaining} 个</span>
+                    <span className="progress-text">已预订 {event.bookedStalls}/{event.totalStalls}</span>
                   </div>
                 </div>
               </div>

@@ -206,6 +206,8 @@ const MarketManage = () => {
             <div className="events-grid">
               {events.map((event) => {
                 const percent = Math.round((event.bookedStalls / event.totalStalls) * 100);
+                const remaining = event.totalStalls - event.bookedStalls;
+                const revenue = event.bookedStalls * event.pricePerStall;
                 return (
                   <div key={event.id} className="event-card">
                     <div className="event-card-header">
@@ -216,14 +218,18 @@ const MarketManage = () => {
                       <div className="event-card-location">📍 {event.location}</div>
                     </div>
                     <div className="event-card-footer">
-                      <div className="progress-bar">
-                        <div className="progress-fill" style={{ width: `${percent}%` }}></div>
+                      <div className="progress-row">
+                        <div className="progress-bar">
+                          <div className="progress-fill" style={{ width: `${percent}%` }}></div>
+                        </div>
+                        <span className="price-text">¥{event.pricePerStall}/个</span>
                       </div>
-                      <div className="progress-text">
-                        已预订 {event.bookedStalls}/{event.totalStalls} · ¥{event.pricePerStall}/个
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span className="remaining-text">剩余 {remaining} 个</span>
+                        <span className="progress-text">已预订 {event.bookedStalls}/{event.totalStalls}</span>
                       </div>
-                      <div className="progress-text" style={{ color: '#2e7d32', fontWeight: 700 }}>
-                        收入：¥{event.bookedStalls * event.pricePerStall}
+                      <div className="progress-text" style={{ color: '#2e7d32', fontWeight: 700, textAlign: 'right' }}>
+                        收入：¥{revenue}
                       </div>
                     </div>
                   </div>
