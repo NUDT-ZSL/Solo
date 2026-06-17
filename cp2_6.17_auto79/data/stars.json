@@ -1,0 +1,65 @@
+[
+  {
+    "id": "a1b2c3d4",
+    "date": "2025-06-10",
+    "location": { "lat": 40.3744, "lng": 116.8875, "name": "密云水库观测点" },
+    "weather": "晴朗",
+    "stars": [
+      { "name": "天狼星", "constellation": "大犬座", "magnitude": -1.46, "observationMethod": "肉眼", "photos": [] },
+      { "name": "参宿四", "constellation": "猎户座", "magnitude": 0.42, "observationMethod": "肉眼", "photos": [] },
+      { "name": "参宿七", "constellation": "猎户座", "magnitude": 0.13, "observationMethod": "双筒望远镜", "photos": [] },
+      { "name": "南河三", "constellation": "小犬座", "magnitude": 0.34, "observationMethod": "肉眼", "photos": [] }
+    ],
+    "photos": []
+  },
+  {
+    "id": "e5f6g7h8",
+    "date": "2025-05-22",
+    "location": { "lat": 40.5216, "lng": 115.9538, "name": "延庆松山" },
+    "weather": "多云",
+    "stars": [
+      { "name": "北极星", "constellation": "小熊座", "magnitude": 1.98, "observationMethod": "肉眼", "photos": [] },
+      { "name": "北河三", "constellation": "双子座", "magnitude": 1.14, "observationMethod": "肉眼", "photos": [] },
+      { "name": "五车二", "constellation": "御夫座", "magnitude": 0.08, "observationMethod": "双筒望远镜", "photos": [] }
+    ],
+    "photos": []
+  },
+  {
+    "id": "i9j0k1l2",
+    "date": "2025-04-05",
+    "location": { "lat": 40.3163, "lng": 116.6218, "name": "怀柔水库" },
+    "weather": "有月光",
+    "stars": [
+      { "name": "织女星", "constellation": "天琴座", "magnitude": 0.03, "observationMethod": "双筒望远镜", "photos": [] },
+      { "name": "天津四", "constellation": "天鹅座", "magnitude": 1.25, "observationMethod": "天文望远镜", "photos": [] },
+      { "name": "牛郎星", "constellation": "天鹰座", "magnitude": 0.77, "observationMethod": "肉眼", "photos": [] },
+      { "name": "心宿二", "constellation": "天蝎座", "magnitude": 0.96, "observationMethod": "肉眼", "photos": [] }
+    ],
+    "photos": []
+  },
+  {
+    "id": "m3n4o5p6",
+    "date": "2025-03-15",
+    "location": { "lat": 39.9242, "lng": 116.3897, "name": "门头沟灵山" },
+    "weather": "晴朗",
+    "stars": [
+      { "name": "大角星", "constellation": "牧夫座", "magnitude": -0.05, "observationMethod": "肉眼", "photos": [] },
+      { "name": "角宿一", "constellation": "室女座", "magnitude": 0.97, "observationMethod": "双筒望远镜", "photos": [] },
+      { "name": "轩辕十四", "constellation": "狮子座", "magnitude": 1.35, "observationMethod": "肉眼", "photos": [] },
+      { "name": "北落师门", "constellation": "南鱼座", "magnitude": 1.16, "observationMethod": "天文望远镜", "photos": [] }
+    ],
+    "photos": []
+  },
+  {
+    "id": "q7r8s9t0",
+    "date": "2026-01-20",
+    "location": { "lat": 40.0899, "lng": 116.5587, "name": "昌平十三陵" },
+    "weather": "有云",
+    "stars": [
+      { "name": "天枢", "constellation": "大熊座", "magnitude": 1.79, "observationMethod": "肉眼", "photos": [] },
+      { "name": "天璇", "constellation": "大熊座", "magnitude": 2.37, "observationMethod": "双筒望远镜", "photos": [] },
+      { "name": "策", "constellation": "仙后座", "magnitude": 2.23, "observationMethod": "肉眼", "photos": [] }
+    ],
+    "photos": []
+  }
+]
