@@ -1,8 +1,10 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useGameStore } from './store';
 import { createBeatAnalyzer, updateBeat, checkHitAccuracy, getBeatPulse, getCurrentBeatTime, getNextBeatTime } from './节拍分析器';
 import type { Diamond } from './轨道系统';
 import { generateDiamond, checkCollision, resetDiamondIdCounter } from './轨道系统';
+import HUD from './components/HUD';
+import type { HUDProps } from './components/HUD';
 
 const TRACK_COUNT = 3;
 const TRACK_WIDTH = 120;
@@ -40,11 +42,13 @@ let diamondIdCounter = 0;
 
 const App = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [, forceRender] = useState(0);
   const gameStateRef = useRef({
     lastTime: 0,
     beatAnalyzer: createBeatAnalyzer(BPM),
     diamonds: [] as Diamond[],
     particles: [] as Particle[],
+    actionParticles: [] as Particle[],
     playerTrack: 1,
     playerTargetTrack: 1,
     trackTransitionProgress: 1,
@@ -59,6 +63,9 @@ const App = () => {
     energy: 0,
     perfectHits: 0,
     consecutiveHits: 0,
+    combo: 0,
+    comboBroken: false,
+    comboBrokenTimer: 0,
     gameStatus: 'countdown' as 'countdown' | 'playing' | 'gameover',
     countdown: 3,
     isPowerUp: false,
@@ -136,6 +143,28 @@ const App = () => {
     }
   }, []);
 
+  const createActionParticles = useCallback((x: number, y: number) => {
+    const state = gameStateRef.current;
+    const count = 8;
+    
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3;
+      const speed = 60 + Math.random() * 40;
+      const particle: Particle = {
+        id: ++particleIdCounter,
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: 2 + Math.random() * 3,
+        color: '#FFFFFF',
+        life: 0.35,
+        maxLife: 0.35,
+      };
+      state.actionParticles.push(particle);
+    }
+  }, []);
+
   const triggerPowerUp = useCallback(() => {
     const state = gameStateRef.current;
     
@@ -193,6 +222,8 @@ const App = () => {
       state.energy = Math.min(100, state.energy + PERFECT_ENERGY);
       state.perfectHits++;
       state.consecutiveHits = 0;
+      state.combo++;
+      state.comboBroken = false;
       state.scoreAnimation = true;
       state.scoreAnimationTimer = 0.3;
     } else if (result === 'normal') {
@@ -205,6 +236,11 @@ const App = () => {
       state.score = Math.max(0, state.score + HIT_PENALTY);
       state.energy = Math.max(0, state.energy + HIT_ENERGY_PENALTY);
       state.consecutiveHits++;
+      if (state.combo > 0) {
+        state.combo = 0;
+        state.comboBroken = true;
+        state.comboBrokenTimer = 0.4;
+      }
       state.isFlashing = true;
       state.flashTimer = FLASH_DURATION;
       state.flashPhase = 0;
@@ -222,10 +258,16 @@ const App = () => {
       return;
     }
     
+    const centerX = state.canvasWidth / 2;
+    const totalWidth = TRACK_COUNT * TRACK_WIDTH;
+    const startX = centerX - totalWidth / 2;
+    
     switch (e.code) {
       case 'ArrowLeft':
       case 'KeyA':
         if (state.playerTargetTrack > 0) {
+          const currentX = startX + state.playerTargetTrack * TRACK_WIDTH + TRACK_WIDTH / 2;
+          createActionParticles(currentX, state.playerY - state.jumpHeight);
           state.playerTrack = state.playerTargetTrack;
           state.playerTargetTrack = state.playerTargetTrack - 1;
           state.trackTransitionProgress = 0;
@@ -234,6 +276,8 @@ const App = () => {
       case 'ArrowRight':
       case 'KeyD':
         if (state.playerTargetTrack < TRACK_COUNT - 1) {
+          const currentX = startX + state.playerTargetTrack * TRACK_WIDTH + TRACK_WIDTH / 2;
+          createActionParticles(currentX, state.playerY - state.jumpHeight);
           state.playerTrack = state.playerTargetTrack;
           state.playerTargetTrack = state.playerTargetTrack + 1;
           state.trackTransitionProgress = 0;
@@ -241,6 +285,8 @@ const App = () => {
         break;
       case 'Space':
         if (!state.isJumping) {
+          const currentX = startX + state.playerTargetTrack * TRACK_WIDTH + TRACK_WIDTH / 2;
+          createActionParticles(currentX, state.playerY);
           state.isJumping = true;
           state.jumpProgress = 0;
         }
@@ -252,7 +298,7 @@ const App = () => {
         }
         break;
     }
-  }, [triggerPowerUp]);
+  }, [triggerPowerUp, createActionParticles]);
 
   const updateGame = useCallback((deltaTime: number) => {
     const state = gameStateRef.current;
@@ -294,6 +340,20 @@ const App = () => {
       particle.life -= deltaTime;
       return particle.life > 0;
     });
+
+    state.actionParticles = state.actionParticles.filter(particle => {
+      particle.x += particle.vx * deltaTime;
+      particle.y += particle.vy * deltaTime;
+      particle.life -= deltaTime;
+      return particle.life > 0;
+    });
+    
+    if (state.comboBroken) {
+      state.comboBrokenTimer -= deltaTime;
+      if (state.comboBrokenTimer <= 0) {
+        state.comboBroken = false;
+      }
+    }
     
     if (state.trackTransitionProgress < 1) {
       state.trackTransitionProgress = Math.min(1, state.trackTransitionProgress + deltaTime / TRACK_TRANSITION_DURATION);
@@ -460,6 +520,19 @@ const App = () => {
         ctx.fill();
         ctx.restore();
       }
+      
+      for (const particle of state.actionParticles) {
+        const alpha = particle.life / particle.maxLife;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = particle.color;
+        ctx.shadowColor = particle.color;
+        ctx.shadowBlur = 3;
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
     }
     
     if (state.gameStatus !== 'countdown') {
@@ -497,6 +570,8 @@ const App = () => {
     
     render();
     
+    forceRender(n => n + 1);
+    
     requestAnimationFrame(gameLoop);
   }, [updateGame, render]);
 
@@ -522,6 +597,7 @@ const App = () => {
     
     state.diamonds = [];
     state.particles = [];
+    state.actionParticles = [];
     state.playerTrack = 1;
     state.playerTargetTrack = 1;
     state.trackTransitionProgress = 1;
@@ -535,6 +611,9 @@ const App = () => {
     state.energy = 0;
     state.perfectHits = 0;
     state.consecutiveHits = 0;
+    state.combo = 0;
+    state.comboBroken = false;
+    state.comboBrokenTimer = 0;
     state.gameStatus = 'countdown';
     state.countdown = 3;
     state.isPowerUp = false;
@@ -567,26 +646,21 @@ const App = () => {
   const state = gameStateRef.current;
   const scoreScale = state.scoreAnimation ? 1.2 : 1;
 
+  const hudProps: HUDProps = {
+    energy: state.energy,
+    score: state.score,
+    combo: state.combo,
+    comboBroken: state.comboBroken,
+    currentBeat: state.beatAnalyzer.currentBeat,
+    beatProgress: state.beatAnalyzer.beatProgress,
+    isBeat: state.beatAnalyzer.isBeat,
+  };
+
   return (
     <div className="game-container">
       <canvas ref={canvasRef} className="game-canvas" />
       
-      <div className="energy-bar-container">
-        <div
-          className="energy-bar"
-          style={{ 
-            width: `${state.energy}%`,
-            transition: 'width 0.2s ease-out',
-          }}
-        />
-      </div>
-      
-      <div
-        className={`score-display ${state.scoreAnimation ? 'animate' : ''}`}
-        style={{ transform: `scale(${scoreScale})` }}
-      >
-        得分: {Math.floor(state.score)}
-      </div>
+      <HUD {...hudProps} />
       
       {state.isPowerUp && (
         <div className="power-up-text">

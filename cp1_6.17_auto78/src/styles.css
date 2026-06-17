@@ -258,3 +258,226 @@ body {
   border-radius: 50%;
   pointer-events: none;
 }
+
+.hud-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 50;
+}
+
+.hud-top-left {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+}
+
+.hud-top-center {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.hud-top-right {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  text-align: right;
+}
+
+.hud-bottom-center {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.combo-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.combo-counter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.combo-counter.combo-broken .combo-number {
+  animation: combo-break-flash 0.4s ease-out;
+}
+
+@keyframes combo-break-flash {
+  0%, 100% { color: #FFFFFF; }
+  25%, 75% { color: #FF3333; text-shadow: 0 0 15px #FF3333; }
+  50% { color: #FF0000; text-shadow: 0 0 25px #FF0000; transform: scale(1.3); }
+}
+
+.combo-label {
+  font-family: monospace;
+  font-size: 14px;
+  color: #AAAAAA;
+  letter-spacing: 2px;
+}
+
+.combo-number {
+  font-family: monospace;
+  font-size: 32px;
+  font-weight: bold;
+  text-shadow: 0 0 8px currentColor, 0 0 16px currentColor;
+  transition: color 0.3s ease-out, transform 0.1s ease-out;
+}
+
+.energy-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  backdrop-filter: blur(4px);
+}
+
+.energy-container.energy-full {
+  animation: energy-full-glow 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes energy-full-glow {
+  0% {
+    box-shadow: 0 0 10px rgba(138, 43, 226, 0.5), 0 0 20px rgba(30, 144, 255, 0.3);
+  }
+  100% {
+    box-shadow: 0 0 25px rgba(138, 43, 226, 0.9), 0 0 40px rgba(30, 144, 255, 0.6), 0 0 60px rgba(138, 43, 226, 0.4);
+  }
+}
+
+.energy-label {
+  font-family: monospace;
+  font-size: 12px;
+  color: #AAAAAA;
+  letter-spacing: 2px;
+}
+
+.energy-bar-wrapper {
+  position: relative;
+  width: 260px;
+  height: 18px;
+  background: rgba(51, 51, 51, 0.8);
+  border-radius: 9px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.energy-bar-new {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #1E90FF 0%, #6A5ACD 50%, #8A2BE2 100%);
+  border-radius: 9px;
+  transition: width 0.2s ease-out;
+  box-shadow: 0 0 12px rgba(106, 90, 205, 0.8);
+}
+
+.energy-bar-shine {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  animation: shine-slide 2s ease-in-out infinite;
+}
+
+@keyframes shine-slide {
+  0% { left: -50%; }
+  50% { left: 100%; }
+  100% { left: 100%; }
+}
+
+.energy-percent {
+  font-family: monospace;
+  font-size: 14px;
+  color: #FFFFFF;
+  text-shadow: 0 0 5px rgba(138, 43, 226, 0.8);
+}
+
+.score-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 10px 20px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  backdrop-filter: blur(4px);
+}
+
+.score-label {
+  font-family: monospace;
+  font-size: 12px;
+  color: #AAAAAA;
+  letter-spacing: 2px;
+}
+
+.score-value {
+  font-family: monospace;
+  font-size: 28px;
+  font-weight: bold;
+  color: #00FFFF;
+  text-shadow: 0 0 8px #00FFFF, 0 0 16px #00FFFF, 0 0 24px rgba(0, 255, 255, 0.5);
+  transition: transform 0.2s ease-out;
+}
+
+.beat-indicator {
+  display: flex;
+  gap: 12px;
+  padding: 10px 20px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 20px;
+  backdrop-filter: blur(4px);
+}
+
+.beat-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.1s ease-out;
+}
+
+.beat-dot-active {
+  background: #00FFFF;
+  border-color: #00FFFF;
+  box-shadow: 0 0 10px #00FFFF, 0 0 20px #00FFFF;
+  animation: beat-pulse 0.3s ease-out;
+}
+
+.beat-dot-pending {
+  background: rgba(0, 255, 255, 0.4);
+  border-color: rgba(0, 255, 255, 0.6);
+  box-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+}
+
+@keyframes beat-pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.5);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
