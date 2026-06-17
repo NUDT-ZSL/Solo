@@ -24,24 +24,6 @@ const PortfolioGrid: React.FC<PortfolioGridProps> = ({
 }) => {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [isLightboxClosing, setIsLightboxClosing] = useState(false);
-  const [columns, setColumns] = useState<number>(3);
-
-  useEffect(() => {
-    const updateColumns = () => {
-      const width = window.innerWidth;
-      if (width < 480) {
-        setColumns(1);
-      } else if (width < 768) {
-        setColumns(2);
-      } else {
-        setColumns(3);
-      }
-    };
-
-    updateColumns();
-    window.addEventListener('resize', updateColumns);
-    return () => window.removeEventListener('resize', updateColumns);
-  }, []);
 
   const handleCardClick = useCallback((artwork: Artwork, index: number) => {
     setLightboxIndex(index);
@@ -63,17 +45,21 @@ const PortfolioGrid: React.FC<PortfolioGridProps> = ({
   }, [handleCloseLightbox]);
 
   const handlePrevArtwork = useCallback(() => {
-    if (lightboxIndex === null) return;
+    if (lightboxIndex === null || artworks.length <= 1) return;
     const newIndex = lightboxIndex > 0 ? lightboxIndex - 1 : artworks.length - 1;
-    setLightboxIndex(newIndex);
-    onArtworkClick(artworks[newIndex]);
+    if (newIndex >= 0 && newIndex < artworks.length && artworks[newIndex]) {
+      setLightboxIndex(newIndex);
+      onArtworkClick(artworks[newIndex]);
+    }
   }, [lightboxIndex, artworks, onArtworkClick]);
 
   const handleNextArtwork = useCallback(() => {
-    if (lightboxIndex === null) return;
+    if (lightboxIndex === null || artworks.length <= 1) return;
     const newIndex = lightboxIndex < artworks.length - 1 ? lightboxIndex + 1 : 0;
-    setLightboxIndex(newIndex);
-    onArtworkClick(artworks[newIndex]);
+    if (newIndex >= 0 && newIndex < artworks.length && artworks[newIndex]) {
+      setLightboxIndex(newIndex);
+      onArtworkClick(artworks[newIndex]);
+    }
   }, [lightboxIndex, artworks, onArtworkClick]);
 
   useEffect(() => {
@@ -107,18 +93,12 @@ const PortfolioGrid: React.FC<PortfolioGridProps> = ({
 
   return (
     <>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: `repeat(${columns}, 1fr)`,
-          gap: columns === 1 ? '16px' : '20px',
-          transition: 'grid-template-columns 0.3s ease',
-        }}
-      >
+      <div className="portfolio-grid">
         {artworks.map((artwork, index) => (
           <div
             key={artwork.id}
             onClick={() => handleCardClick(artwork, index)}
+            className="portfolio-card"
             style={{
               backgroundColor: 'var(--color-surface)',
               border: '1px solid var(--color-border)',
@@ -169,9 +149,8 @@ const PortfolioGrid: React.FC<PortfolioGridProps> = ({
                 }}
               >
                 <div
+                  className="portfolio-thumbnail"
                   style={{
-                    width: columns === 1 ? '180px' : columns === 2 ? '160px' : '150px',
-                    height: columns === 1 ? '180px' : columns === 2 ? '160px' : '150px',
                     maxWidth: '80%',
                     maxHeight: '80%',
                     aspectRatio: '1',
@@ -201,15 +180,13 @@ const PortfolioGrid: React.FC<PortfolioGridProps> = ({
               </div>
             </div>
             <div
-              style={{
-                padding: columns === 1 ? '18px' : '16px',
-              }}
+              className="portfolio-card-content"
             >
               <h3
+                className="portfolio-card-title"
                 style={{
                   fontFamily: "'Playfair Display', serif",
                   fontWeight: 700,
-                  fontSize: columns === 1 ? '20px' : '17px',
                   margin: '0 0 10px 0',
                   color: 'var(--color-text)',
                   transition: 'color 0.3s ease',
@@ -304,81 +281,85 @@ const PortfolioGrid: React.FC<PortfolioGridProps> = ({
               ×
             </button>
 
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handlePrevArtwork();
-              }}
-              style={{
-                position: 'absolute',
-                left: '24px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                width: '56px',
-                height: '56px',
-                borderRadius: '50%',
-                backgroundColor: 'rgba(255,255,255,0.12)',
-                color: '#FFFFFF',
-                border: 'none',
-                fontSize: '28px',
-                cursor: 'pointer',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                zIndex: 1002,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backdropFilter: 'blur(12px)',
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,255,255,0.25)';
-                (e.currentTarget as HTMLElement).style.transform = 'translateY(-50%) translateX(-6px) scale(1.1)';
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,255,255,0.12)';
-                (e.currentTarget as HTMLElement).style.transform = 'translateY(-50%) translateX(0) scale(1)';
-              }}
-              title="上一张 (←)"
-            >
-              ‹
-            </button>
+            {artworks.length > 1 && (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handlePrevArtwork();
+                  }}
+                  style={{
+                    position: 'absolute',
+                    left: '24px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(255,255,255,0.12)',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    fontSize: '28px',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    zIndex: 1002,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backdropFilter: 'blur(12px)',
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,255,255,0.25)';
+                    (e.currentTarget as HTMLElement).style.transform = 'translateY(-50%) translateX(-6px) scale(1.1)';
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,255,255,0.12)';
+                    (e.currentTarget as HTMLElement).style.transform = 'translateY(-50%) translateX(0) scale(1)';
+                  }}
+                  title="上一张 (←)"
+                >
+                  ‹
+                </button>
 
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleNextArtwork();
-              }}
-              style={{
-                position: 'absolute',
-                right: '24px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                width: '56px',
-                height: '56px',
-                borderRadius: '50%',
-                backgroundColor: 'rgba(255,255,255,0.12)',
-                color: '#FFFFFF',
-                border: 'none',
-                fontSize: '28px',
-                cursor: 'pointer',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                zIndex: 1002,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backdropFilter: 'blur(12px)',
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,255,255,0.25)';
-                (e.currentTarget as HTMLElement).style.transform = 'translateY(-50%) translateX(6px) scale(1.1)';
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,255,255,0.12)';
-                (e.currentTarget as HTMLElement).style.transform = 'translateY(-50%) translateX(0) scale(1)';
-              }}
-              title="下一张 (→)"
-            >
-              ›
-            </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleNextArtwork();
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: '24px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(255,255,255,0.12)',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    fontSize: '28px',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    zIndex: 1002,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backdropFilter: 'blur(12px)',
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,255,255,0.25)';
+                    (e.currentTarget as HTMLElement).style.transform = 'translateY(-50%) translateX(6px) scale(1.1)';
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,255,255,0.12)';
+                    (e.currentTarget as HTMLElement).style.transform = 'translateY(-50%) translateX(0) scale(1)';
+                  }}
+                  title="下一张 (→)"
+                >
+                  ›
+                </button>
+              </>
+            )}
 
             <div
               style={{
@@ -530,6 +511,60 @@ const PortfolioGrid: React.FC<PortfolioGridProps> = ({
           </div>
 
           <style>{`
+            .portfolio-grid {
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              gap: 20px;
+              transition: grid-template-columns 0.3s ease;
+            }
+            @media (max-width: 768px) {
+              .portfolio-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 18px;
+              }
+            }
+            @media (max-width: 480px) {
+              .portfolio-grid {
+                grid-template-columns: 1fr;
+                gap: 16px;
+              }
+            }
+
+            .portfolio-thumbnail {
+              width: 150px;
+              height: 150px;
+            }
+            @media (max-width: 768px) {
+              .portfolio-thumbnail {
+                width: 160px;
+                height: 160px;
+              }
+            }
+            @media (max-width: 480px) {
+              .portfolio-thumbnail {
+                width: 180px;
+                height: 180px;
+              }
+            }
+
+            .portfolio-card-content {
+              padding: 16px;
+            }
+            @media (max-width: 480px) {
+              .portfolio-card-content {
+                padding: 18px;
+              }
+            }
+
+            .portfolio-card-title {
+              font-size: 17px;
+            }
+            @media (max-width: 480px) {
+              .portfolio-card-title {
+                font-size: 20px;
+              }
+            }
+
             @keyframes fadeIn {
               from { opacity: 0; }
               to { opacity: 1; }

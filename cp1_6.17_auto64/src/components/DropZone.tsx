@@ -11,9 +11,11 @@ interface DropZoneProps {
   onDropUpload: (preset: PresetColorBlock) => void;
   currentThemePrimary: string;
   isUploading: boolean;
+  uploadError?: string | null;
+  presetBlocks?: PresetColorBlock[];
 }
 
-const presetBlocks: PresetColorBlock[] = [
+const defaultPresetBlocks: PresetColorBlock[] = [
   { id: 'p1', title: '活力糖果', colors: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7'], thumbnailColor: '#FF6B6B' },
   { id: 'p2', title: '都市灰调', colors: ['#2C3E50', '#34495E', '#7F8C8D', '#BDC3C7', '#ECF0F1'], thumbnailColor: '#2C3E50' },
   { id: 'p3', title: '彩虹交响', colors: ['#F39C12', '#E74C3C', '#9B59B6', '#3498DB', '#2ECC71'], thumbnailColor: '#F39C12' },
@@ -26,6 +28,8 @@ const DropZone: React.FC<DropZoneProps> = ({
   onDropUpload,
   currentThemePrimary,
   isUploading,
+  uploadError,
+  presetBlocks = defaultPresetBlocks,
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [draggedPreset, setDraggedPreset] = useState<PresetColorBlock | null>(null);
@@ -272,6 +276,34 @@ const DropZone: React.FC<DropZoneProps> = ({
         )}
       </div>
 
+      {uploadError && (
+        <div
+          style={{
+            marginTop: '16px',
+            padding: '12px 16px',
+            backgroundColor: '#FFF5F5',
+            border: '1px solid #FFCCC9',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            animation: 'shake 0.4s ease-in-out',
+          }}
+        >
+          <span style={{ fontSize: '18px' }}>⚠️</span>
+          <span
+            style={{
+              fontFamily: "'Inter', sans-serif",
+              fontSize: '13px',
+              color: '#D93025',
+              fontWeight: 500,
+            }}
+          >
+            {uploadError}
+          </span>
+        </div>
+      )}
+
       <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }
@@ -280,6 +312,11 @@ const DropZone: React.FC<DropZoneProps> = ({
         @keyframes pulse-border {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.7; }
+        }
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-6px); }
+          75% { transform: translateX(6px); }
         }
       `}</style>
     </div>

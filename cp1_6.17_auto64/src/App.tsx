@@ -39,6 +39,7 @@ const App: React.FC = () => {
   });
   const [savedThemes, setSavedThemes] = useState<SavedTheme[]>([]);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [currentArtworkTitle, setCurrentArtworkTitle] = useState<string>('春日樱花');
   const rafIdRef = useRef<number | null>(null);
 
@@ -94,8 +95,12 @@ const App: React.FC = () => {
     colors: string[],
     title: string,
     thumbnailColor: string
-  ) => {
+  ): Promise<{ success: boolean; error?: string }> => {
     setIsExtracting(true);
+    setUploadError(null);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
     
     try {
       const startTime = performance.now();
@@ -110,24 +115,55 @@ const App: React.FC = () => {
           title,
           thumbnailColor,
         }),
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`服务器错误: ${response.status} ${response.statusText}`);
+      }
       
       const data = await response.json();
       
       const elapsed = performance.now() - startTime;
       console.log(`颜色提取总耗时: ${elapsed.toFixed(2)}ms`);
       
-      if (data.colors) {
-        setExtractedColors(data.colors);
-        
-        const newTheme = generateTheme(data.colors, adjustments);
-        setCurrentTheme(newTheme);
-        
-        await fetchArtworks();
+      if (data.error) {
+        throw new Error(data.error);
       }
+      
+      if (!data.colors || data.colors.length === 0) {
+        throw new Error('颜色提取失败，未找到有效颜色');
+      }
+      
+      setExtractedColors(data.colors);
+      
+      const newTheme = generateTheme(data.colors, adjustments);
+      setCurrentTheme(newTheme);
+      
+      await fetchArtworks();
+      
+      return { success: true };
     } catch (error) {
+      let errorMessage = '上传失败，请稍后重试';
+      
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          errorMessage = '请求超时，请检查网络连接后重试';
+        } else if (error.message.includes('Failed to fetch')) {
+          errorMessage = '无法连接到服务器，请检查后端服务是否启动';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       console.error('Failed to extract colors:', error);
+      setUploadError(errorMessage);
+      
+      return { success: false, error: errorMessage };
     } finally {
+      clearTimeout(timeoutId);
       setIsExtracting(false);
     }
   }, [adjustments]);
@@ -199,8 +235,10 @@ const App: React.FC = () => {
   }, []);
 
   const handleDropUpload = useCallback(async (preset: PresetColorBlock) => {
-    await extractColorsFromColors(preset.colors, preset.title, preset.thumbnailColor);
-    setCurrentArtworkTitle(preset.title);
+    const result = await extractColorsFromColors(preset.colors, preset.title, preset.thumbnailColor);
+    if (result.success) {
+      setCurrentArtworkTitle(preset.title);
+    }
   }, [extractColorsFromColors]);
 
   return (
@@ -265,6 +303,7 @@ const App: React.FC = () => {
             onDropUpload={handleDropUpload}
             currentThemePrimary={currentTheme.primary}
             isUploading={isExtracting}
+            uploadError={uploadError}
           />
           <PortfolioGrid
             artworks={artworks}
