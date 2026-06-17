@@ -124,21 +124,30 @@ export class WaveformRenderer {
 
       this.drawWaveformFromSamples(channelData, width, height, color);
 
-      if (options.fadeInSec !== undefined && options.fadeOutSec !== undefined
-          && options.totalDurationSec !== undefined && options.totalDurationSec > 0) {
-        this.drawFadeOverlay(options.fadeInSec, options.fadeOutSec, options.totalDurationSec, opts.fadeOverlayStartOpacity);
-      }
-
-      if (options.isMuted) {
-        this.applyMuteOverlay(opts.mutedOpacity);
-      }
-
-      if (options.isSoloStripe) {
-        this.applySoloStripeOverlay();
-      }
+      this.applyAllOverlays(options, opts);
     } catch (err) {
       console.warn('Waveform decode failed, showing placeholder:', err);
       this.drawPlaceholder(options.waveColor || opts.waveColor);
+      this.applyAllOverlays(options, opts);
+    }
+  }
+
+  private applyAllOverlays(options: StaticRenderOptions, opts: Required<RenderOptions>): void {
+    const fadeIn = options.fadeInSec;
+    const fadeOut = options.fadeOutSec;
+    const totalDur = options.totalDurationSec;
+
+    if (fadeIn !== undefined && fadeOut !== undefined
+        && totalDur !== undefined && totalDur > 0) {
+      this.drawFadeOverlay(fadeIn, fadeOut, totalDur, opts.fadeOverlayStartOpacity);
+    }
+
+    if (options.isMuted) {
+      this.applyMuteOverlay(opts.mutedOpacity);
+    }
+
+    if (options.isSoloStripe) {
+      this.applySoloStripeOverlay();
     }
   }
 
@@ -266,24 +275,40 @@ export class WaveformRenderer {
 
     const width = this.getWidth();
     const height = this.getHeight();
-    const fadeInWidth = (fadeInSec / totalDurationSec) * width;
-    const fadeOutWidth = (fadeOutSec / totalDurationSec) * width;
+    const fadeInWidth = Math.max(1, (fadeInSec / totalDurationSec) * width);
+    const fadeOutWidth = Math.max(1, (fadeOutSec / totalDurationSec) * width);
 
-    if (fadeInWidth > 1) {
+    if (fadeInWidth > 2 && fadeInSec > 0) {
       const grad = this.ctx.createLinearGradient(0, 0, fadeInWidth, 0);
       grad.addColorStop(0, `rgba(0, 0, 0, ${startOpacity})`);
+      grad.addColorStop(0.6, `rgba(0, 0, 0, ${startOpacity * 0.35})`);
       grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
       this.ctx.fillStyle = grad;
       this.ctx.fillRect(0, 0, fadeInWidth, height);
+
+      this.ctx.strokeStyle = `rgba(255, 255, 255, 0.25)`;
+      this.ctx.lineWidth = 1;
+      this.ctx.beginPath();
+      this.ctx.moveTo(fadeInWidth, 0);
+      this.ctx.lineTo(fadeInWidth, height);
+      this.ctx.stroke();
     }
 
-    if (fadeOutWidth > 1) {
+    if (fadeOutWidth > 2 && fadeOutSec > 0) {
       const startX = width - fadeOutWidth;
       const grad = this.ctx.createLinearGradient(startX, 0, width, 0);
       grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      grad.addColorStop(0.4, `rgba(0, 0, 0, ${startOpacity * 0.35})`);
       grad.addColorStop(1, `rgba(0, 0, 0, ${startOpacity})`);
       this.ctx.fillStyle = grad;
       this.ctx.fillRect(startX, 0, fadeOutWidth, height);
+
+      this.ctx.strokeStyle = `rgba(255, 255, 255, 0.25)`;
+      this.ctx.lineWidth = 1;
+      this.ctx.beginPath();
+      this.ctx.moveTo(startX, 0);
+      this.ctx.lineTo(startX, height);
+      this.ctx.stroke();
     }
   }
 
@@ -309,22 +334,27 @@ export class WaveformRenderer {
   private applySoloStripeOverlay(): void {
     const width = this.getWidth();
     const height = this.getHeight();
-    const stripeWidth = 6;
-    const gap = 6;
+    const stripeWidth = 8;
+    const gap = 10;
 
     this.ctx.save();
-    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
 
-    for (let x = -height; x < width + height; x += stripeWidth + gap) {
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    this.ctx.fillRect(0, 0, width, height);
+
+    this.ctx.globalCompositeOperation = 'source-over';
+    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+    this.ctx.save();
+
+    for (let x = -height * 2; x < width + height * 2; x += stripeWidth + gap) {
       this.ctx.save();
       this.ctx.translate(x, 0);
       this.ctx.rotate(Math.PI / 4);
-      this.ctx.fillRect(0, -height, stripeWidth, height * 3);
+      this.ctx.fillRect(0, -height * 2, stripeWidth, height * 4);
       this.ctx.restore();
     }
 
-    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-    this.ctx.fillRect(0, 0, width, height);
+    this.ctx.restore();
     this.ctx.restore();
   }
 

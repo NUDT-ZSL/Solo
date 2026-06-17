@@ -367,20 +367,22 @@ input[type="number"]:focus {
 }
 
 .record-btn.recording {
-  background-color: var(--btn-record-active);
+  background-color: var(--btn-record-active) !important;
   animation: record-pulse 0.6s ease-in-out infinite;
-  box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.5);
 }
 
 @keyframes record-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.6), 0 0 12px 2px rgba(255, 68, 68, 0.4);
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.7), 0 0 14px 3px rgba(255, 68, 68, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.2);
   }
   50% {
-    box-shadow: 0 0 0 10px rgba(255, 68, 68, 0), 0 0 20px 6px rgba(255, 68, 68, 0.25);
+    transform: scale(1.06);
+    box-shadow: 0 0 0 8px rgba(255, 68, 68, 0), 0 0 24px 8px rgba(255, 68, 68, 0.35), inset 0 1px 2px rgba(255, 255, 255, 0.3);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.6), 0 0 12px 2px rgba(255, 68, 68, 0.4);
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.7), 0 0 14px 3px rgba(255, 68, 68, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.2);
   }
 }
 
@@ -454,18 +456,41 @@ input[type="number"]:focus {
 
 .mobile-panel-toggle {
   display: none;
-  padding: 10px 16px;
+  padding: 12px 16px;
   background-color: var(--bg-card);
   color: var(--text-primary);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   font-size: 13px;
   font-weight: 600;
   border: 1px solid var(--border-color);
   margin-top: 4px;
+  width: 100%;
+  text-align: center;
+  transition: all var(--transition-fast);
+  position: relative;
+  overflow: hidden;
 }
 
 .mobile-panel-toggle:hover {
   background-color: #343434;
+  border-color: #555;
+}
+
+.mobile-panel-toggle:active {
+  transform: scale(0.98);
+}
+
+.mobile-panel-toggle::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 4px;
+  background: var(--text-secondary);
+  border-radius: 2px;
+  opacity: 0.5;
 }
 
 .control-panel {
@@ -728,19 +753,26 @@ input[type="number"]:focus {
 .export-button:disabled {
   background-color: #446677;
   box-shadow: none;
+  cursor: wait;
+  opacity: 1;
+  pointer-events: none;
 }
 
 .export-spinner {
-  width: 18px;
-  height: 18px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  width: 20px;
+  height: 20px;
+  border: 3px solid rgba(255, 255, 255, 0.25);
   border-top-color: #FFFFFF;
+  border-right-color: #FFFFFF;
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.3));
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .error-toast {
@@ -776,38 +808,62 @@ input[type="number"]:focus {
 @media (max-width: 768px) {
   .app-main {
     flex-direction: column;
-    position: relative;
+    position: static;
+    overflow: visible;
   }
 
   .tracks-container {
     width: 100%;
     flex: 1;
-    padding-bottom: 60px;
+    padding-bottom: 12px;
+    min-height: 0;
   }
 
   .mobile-panel-toggle {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 18px;
+    order: 10;
+    margin-bottom: 8px;
   }
 
   .control-panel {
     width: 100%;
     min-width: unset;
-    position: absolute;
+    position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
     top: auto;
-    max-height: 55vh;
+    max-height: 65vh;
     border-left: none;
     border-top: 1px solid var(--border-color);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     transform: translateY(100%);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    z-index: 20;
-    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 100;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.6), 0 -2px 8px rgba(0, 0, 0, 0.4);
+    padding-top: 24px;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0));
+    background-color: var(--bg-sidebar);
   }
 
   .control-panel.mobile-open {
     transform: translateY(0);
+  }
+
+  .control-panel::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 5px;
+    background: var(--text-secondary);
+    border-radius: 3px;
+    opacity: 0.5;
   }
 
   .track-controls {
