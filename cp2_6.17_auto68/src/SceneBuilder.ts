@@ -4,13 +4,14 @@ import { PlanetData, DisplayMode } from './types';
 interface PlanetObject {
   mesh: THREE.Mesh;
   data: PlanetData;
+  scaledOrbitRadius: number;
   angle: number;
   angularSpeed: number;
   orbitLine: THREE.Line;
   label: THREE.Sprite;
   ring?: THREE.Mesh;
-  baseMaterial: THREE.MeshStandardMaterial;
-  textureMaterial: THREE.MeshStandardMaterial | null;
+  material: THREE.MeshStandardMaterial;
+  texture: THREE.CanvasTexture | null;
 }
 
 export class SceneBuilder {
@@ -24,7 +25,7 @@ export class SceneBuilder {
 
   constructor() {
     this.scene = new THREE.Scene();
-    this.buildStarField();
+    this.starField = this.buildStarField();
     this.sun = this.buildSun();
     this.sunLight = this.buildSunLight();
     this.sunGlow = this.buildSunGlow();
@@ -75,7 +76,7 @@ export class SceneBuilder {
     return sprite;
   }
 
-  private buildStarField(): void {
+  private buildStarField(): THREE.Points {
     const count = 2000;
     const positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
@@ -104,31 +105,40 @@ export class SceneBuilder {
       sizeAttenuation: true,
     });
 
-    this.starField = new THREE.Points(geo, mat);
-    this.scene.add(this.starField);
+    const points = new THREE.Points(geo, mat);
+    this.scene.add(points);
+    return points;
+  }
+
+  private getScaledOrbitRadius(data: PlanetData, index: number): number {
+    const baseOrbits = [25, 42, 60, 82, 120, 160, 200, 240];
+    return baseOrbits[index];
   }
 
   private buildPlanet(data: PlanetData, index: number): PlanetObject {
+    const scaledOrbitRadius = this.getScaledOrbitRadius(data, index);
     const geo = new THREE.SphereGeometry(data.radius, 32, 32);
-    const baseMat = new THREE.MeshStandardMaterial({
+    const mat = new THREE.MeshStandardMaterial({
       color: data.color,
       roughness: 0.7,
       metalness: 0.1,
+      emissive: 0x000000,
     });
-    const mesh = new THREE.Mesh(geo, baseMat);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.userData.planetName = data.name;
 
     const startAngle = (index / 8) * Math.PI * 2 + Math.random() * 0.5;
     mesh.position.set(
-      data.orbitRadius * Math.cos(startAngle),
+      scaledOrbitRadius * Math.cos(startAngle),
       0,
-      data.orbitRadius * Math.sin(startAngle)
+      scaledOrbitRadius * Math.sin(startAngle)
     );
     this.scene.add(mesh);
 
-    const textureMat = this.createTextureMaterial(data);
+    const texture = this.createTexture(data);
 
-    const orbitLine = this.buildOrbitLine(data);
-    const label = this.buildLabel(data);
+    const orbitLine = this.buildOrbitLine(scaledOrbitRadius);
+    const label = this.buildLabel(data, scaledOrbitRadius, data.radius);
     label.visible = this.displayMode.labels;
 
     let ring: THREE.Mesh | undefined;
@@ -136,30 +146,31 @@ export class SceneBuilder {
       ring = this.buildRing(data, mesh);
     }
 
-    const angularSpeed = 0.5 / data.orbitalPeriod;
+    const angularSpeed = Math.PI * 0.8 / Math.pow(data.distanceFromSun, 1.5);
 
     return {
       mesh,
       data,
+      scaledOrbitRadius,
       angle: startAngle,
       angularSpeed,
       orbitLine,
       label,
       ring,
-      baseMaterial: baseMat,
-      textureMaterial: textureMat,
+      material: mat,
+      texture,
     };
   }
 
-  private buildOrbitLine(data: PlanetData): THREE.Line {
+  private buildOrbitLine(scaledRadius: number): THREE.Line {
     const segments = 128;
     const points: THREE.Vector3[] = [];
     for (let i = 0; i <= segments; i++) {
       const theta = (i / segments) * Math.PI * 2;
       points.push(new THREE.Vector3(
-        data.orbitRadius * Math.cos(theta),
+        scaledRadius * Math.cos(theta),
         0,
-        data.orbitRadius * Math.sin(theta)
+        scaledRadius * Math.sin(theta)
       ));
     }
     const geo = new THREE.BufferGeometry().setFromPoints(points);
@@ -170,7 +181,7 @@ export class SceneBuilder {
     return line;
   }
 
-  private buildLabel(data: PlanetData): THREE.Sprite {
+  private buildLabel(data: PlanetData, scaledRadius: number, planetRadius: number): THREE.Sprite {
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 64;
@@ -190,22 +201,22 @@ export class SceneBuilder {
     const sprite = new THREE.Sprite(mat);
     sprite.scale.set(8, 2, 1);
     sprite.position.set(
-      data.orbitRadius * Math.cos(0),
-      data.radius + 3,
-      data.orbitRadius * Math.sin(0)
+      scaledRadius,
+      planetRadius + 3,
+      0
     );
     this.scene.add(sprite);
     return sprite;
   }
 
   private buildRing(data: PlanetData, parentMesh: THREE.Mesh): THREE.Mesh {
-    const innerRadius = data.radius * 1.1;
-    const outerRadius = data.radius * 1.2;
+    const innerRadius = data.radius * 1.4;
+    const outerRadius = data.radius * 2.6;
     const geo = new THREE.TorusGeometry(
       (innerRadius + outerRadius) / 2,
       (outerRadius - innerRadius) / 2,
       2,
-      64
+      96
     );
     const mat = new THREE.MeshStandardMaterial({
       color: data.ringColor || 0xd7ccc8,
@@ -215,13 +226,13 @@ export class SceneBuilder {
       roughness: 0.8,
     });
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = Math.PI / 2;
+    mesh.rotation.x = Math.PI / 2 - (27 * Math.PI / 180);
     mesh.position.copy(parentMesh.position);
     this.scene.add(mesh);
     return mesh;
   }
 
-  private createTextureMaterial(data: PlanetData): THREE.MeshStandardMaterial {
+  private createTexture(data: PlanetData): THREE.CanvasTexture {
     const size = 256;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -267,19 +278,14 @@ export class SceneBuilder {
       }
     }
 
-    const tex = new THREE.CanvasTexture(canvas);
-    return new THREE.MeshStandardMaterial({
-      map: tex,
-      roughness: 0.7,
-      metalness: 0.1,
-    });
+    return new THREE.CanvasTexture(canvas);
   }
 
   update(deltaTime: number, timeMultiplier: number): void {
     for (const planet of this.planets) {
       planet.angle += planet.angularSpeed * deltaTime * timeMultiplier;
-      const x = planet.data.orbitRadius * Math.cos(planet.angle);
-      const z = planet.data.orbitRadius * Math.sin(planet.angle);
+      const x = planet.scaledOrbitRadius * Math.cos(planet.angle);
+      const z = planet.scaledOrbitRadius * Math.sin(planet.angle);
       planet.mesh.position.set(x, 0, z);
       planet.mesh.rotation.y += 0.01 * timeMultiplier;
 
@@ -310,27 +316,28 @@ export class SceneBuilder {
   toggleTexture(enabled: boolean): void {
     this.displayMode.texture = enabled;
     for (const planet of this.planets) {
-      if (enabled && planet.textureMaterial) {
-        planet.mesh.material = planet.textureMaterial;
+      if (enabled && planet.texture) {
+        planet.material.map = planet.texture;
       } else {
-        planet.mesh.material = planet.baseMaterial;
+        planet.material.map = null;
       }
+      planet.material.needsUpdate = true;
     }
   }
 
   highlightPlanet(name: string): void {
     for (const planet of this.planets) {
       if (planet.data.name === name) {
-        (planet.mesh.material as THREE.MeshStandardMaterial).emissive = new THREE.Color(0x333333);
+        planet.material.emissive = new THREE.Color(0x333333);
       } else {
-        (planet.mesh.material as THREE.MeshStandardMaterial).emissive = new THREE.Color(0x000000);
+        planet.material.emissive = new THREE.Color(0x000000);
       }
     }
   }
 
   clearHighlight(): void {
     for (const planet of this.planets) {
-      (planet.mesh.material as THREE.MeshStandardMaterial).emissive = new THREE.Color(0x000000);
+      planet.material.emissive = new THREE.Color(0x000000);
     }
   }
 

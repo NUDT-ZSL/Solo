@@ -46,18 +46,24 @@ export class InteractionManager {
     this.raycaster.setFromCamera(this.mouse, this.camera);
 
     const meshes = this.sceneBuilder.getPlanetMeshes();
-    const intersects = this.raycaster.intersectObjects(meshes);
+    const intersects = this.raycaster.intersectObjects(meshes, false);
 
     if (intersects.length > 0) {
-      const hitMesh = intersects[0].object as THREE.Mesh;
-      const data = this.sceneBuilder.getPlanetDataByMesh(hitMesh);
-      if (data) {
-        this.sceneBuilder.highlightPlanet(data.name);
-        this.onPlanetSelect?.(data.name);
+      let hitObject = intersects[0].object;
+      while (hitObject && !hitObject.userData.planetName && hitObject.parent) {
+        hitObject = hitObject.parent;
       }
-    } else {
-      this.sceneBuilder.clearHighlight();
-      this.onPlanetSelect?.(null);
+      const hitMesh = hitObject as THREE.Mesh;
+      if (hitMesh && hitMesh.userData.planetName) {
+        const data = this.sceneBuilder.getPlanetDataByMesh(hitMesh);
+        if (data) {
+          this.sceneBuilder.highlightPlanet(data.name);
+          this.onPlanetSelect?.(data.name);
+          return;
+        }
+      }
     }
+    this.sceneBuilder.clearHighlight();
+    this.onPlanetSelect?.(null);
   }
 }
