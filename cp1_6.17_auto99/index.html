@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>全球气温可视化</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;600&display=swap" rel="stylesheet">
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body, #root { width: 100%; height: 100%; overflow: hidden; }
+      body { background: linear-gradient(135deg, #0D1B2A 0%, #1B263B 100%); font-family: 'Inter', sans-serif; }
+
+      @keyframes yearFlash {
+        0% { opacity: 1; transform: translateX(-50%) scale(1); }
+        70% { opacity: 0.8; transform: translateX(-50%) scale(1); }
+        100% { opacity: 0; transform: translateX(-50%) scale(0.8); }
+      }
+
+      .range-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #FFFFFF;
+        cursor: pointer;
+        box-shadow: 0 0 0 3px rgba(0, 255, 255, 0);
+        transition: box-shadow 0.2s;
+      }
+      .range-slider::-webkit-slider-thumb:hover {
+        box-shadow: 0 0 0 4px rgba(0, 255, 255, 0.4), 0 0 12px rgba(0, 255, 255, 0.3);
+      }
+      .range-slider::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #FFFFFF;
+        cursor: pointer;
+        border: none;
+        box-shadow: 0 0 0 3px rgba(0, 255, 255, 0);
+        transition: box-shadow 0.2s;
+      }
+      .range-slider::-moz-range-thumb:hover {
+        box-shadow: 0 0 0 4px rgba(0, 255, 255, 0.4), 0 0 12px rgba(0, 255, 255, 0.3);
+      }
+      .range-slider::-webkit-slider-runnable-track {
+        height: 4px;
+        background: transparent;
+      }
+      .range-slider::-moz-range-track {
+        height: 4px;
+        background: transparent;
+      }
+      .range-slider:focus {
+        outline: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
