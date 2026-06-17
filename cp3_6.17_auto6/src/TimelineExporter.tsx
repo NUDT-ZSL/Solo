@@ -11,6 +11,10 @@ interface TimelineExporterProps {
 
 const FPS = 30;
 
+function secondsToFrames(seconds: number): number {
+  return Math.round(seconds * FPS);
+}
+
 function TimelineExporter({ videos, markers, selectedMarkerIds, disabled }: TimelineExporterProps) {
   const [isExporting, setIsExporting] = useState(false);
 
@@ -23,7 +27,7 @@ function TimelineExporter({ videos, markers, selectedMarkerIds, disabled }: Time
       .filter(m => selectedMarkerIds.includes(m.id))
       .sort((a, b) => {
         if (a.videoId !== b.videoId) return a.videoId.localeCompare(b.videoId);
-        return a.timestamp - b.timestamp;
+        return a.order - b.order;
       });
 
     const clips: TimelineClip[] = selectedMarkers.map((marker, index) => {
@@ -40,24 +44,24 @@ function TimelineExporter({ videos, markers, selectedMarkerIds, disabled }: Time
         endTime = marker.timestamp + 5;
       }
 
-      const startTimeRounded = Math.round(marker.timestamp * FPS) / FPS;
-      const endTimeRounded = Math.round(endTime * FPS) / FPS;
-
       return {
         videoPath: video?.path || '',
         videoName: video?.name || '',
-        startTime: startTimeRounded,
-        endTime: endTimeRounded,
+        startTime: Number(marker.timestamp.toFixed(3)),
+        endTime: Number(endTime.toFixed(3)),
+        startFrame: secondsToFrames(marker.timestamp),
+        endFrame: secondsToFrames(endTime),
         label: marker.label,
         color: marker.color,
       };
-    });
+    }) as (TimelineClip & { startFrame: number; endFrame: number })[];
 
     return {
       version: '1.0.0',
       exportedAt: new Date().toISOString(),
+      fps: FPS,
       clips,
-    };
+    } as TimelineExport & { fps: number; clips: (TimelineClip & { startFrame: number; endFrame: number })[] };
   };
 
   const handleExport = async () => {

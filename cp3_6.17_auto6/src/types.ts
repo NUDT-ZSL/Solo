@@ -21,6 +21,8 @@ export interface TimelineClip {
   videoName: string;
   startTime: number;
   endTime: number;
+  startFrame: number;
+  endFrame: number;
   label: string;
   color: string;
 }
@@ -28,6 +30,7 @@ export interface TimelineClip {
 export interface TimelineExport {
   version: string;
   exportedAt: string;
+  fps: number;
   clips: TimelineClip[];
 }
 
