@@ -1,35 +1,95 @@
 import type { BoardElement, ScoreResult, ElementItem } from '../types';
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result
-    ? {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16),
-      }
-    : null;
+  const clean = hex.replace('#', '');
+  if (clean.length === 3) {
+    const r = parseInt(clean[0] + clean[0], 16);
+    const g = parseInt(clean[1] + clean[1], 16);
+    const b = parseInt(clean[2] + clean[2], 16);
+    return { r, g, b };
+  }
+  if (clean.length === 6) {
+    const r = parseInt(clean.substring(0, 2), 16);
+    const g = parseInt(clean.substring(2, 4), 16);
+    const b = parseInt(clean.substring(4, 6), 16);
+    return { r, g, b };
+  }
+  return null;
 }
 
-function getLuminance(r: number, g: number, b: number): number {
-  const rsRGB = r / 255;
-  const gsRGB = g / 255;
-  const bsRGB = b / 255;
-  const R = rsRGB <= 0.03928 ? rsRGB / 12.92 : Math.pow((rsRGB + 0.055) / 1.055, 2.4);
-  const G = gsRGB <= 0.03928 ? gsRGB / 12.92 : Math.pow((gsRGB + 0.055) / 1.055, 2.4);
-  const B = bsRGB <= 0.03928 ? bsRGB / 12.92 : Math.pow((bsRGB + 0.055) / 1.055, 2.4);
+function sRGBtoLinear(value: number): number {
+  const v = value / 255;
+  return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+}
+
+function getRelativeLuminance(r: number, g: number, b: number): number {
+  const R = sRGBtoLinear(r);
+  const G = sRGBtoLinear(g);
+  const B = sRGBtoLinear(b);
   return 0.2126 * R + 0.7152 * G + 0.0722 * B;
 }
 
-function getContrastRatio(color1: string, color2: string): number {
+export function getContrastRatio(color1: string, color2: string): number {
   const rgb1 = hexToRgb(color1);
   const rgb2 = hexToRgb(color2);
   if (!rgb1 || !rgb2) return 1;
-  const l1 = getLuminance(rgb1.r, rgb1.g, rgb1.b);
-  const l2 = getLuminance(rgb2.r, rgb2.g, rgb2.b);
+
+  const l1 = getRelativeLuminance(rgb1.r, rgb1.g, rgb1.b);
+  const l2 = getRelativeLuminance(rgb2.r, rgb2.g, rgb2.b);
+
   const lighter = Math.max(l1, l2);
   const darker = Math.min(l1, l2);
+
   return (lighter + 0.05) / (darker + 0.05);
+}
+
+function getPrimaryColor(elements: BoardElement[], elementMap: Map<string, ElementItem>): string | null {
+  for (const el of elements) {
+    const item = elementMap.get(el.elementId);
+    if (item && item.category === 'primaryColor') {
+      return item.value;
+    }
+  }
+  return null;
+}
+
+function getSecondaryColor(elements: BoardElement[], elementMap: Map<string, ElementItem>): string | null {
+  for (const el of elements) {
+    const item = elementMap.get(el.elementId);
+    if (item && item.category === 'secondaryColor') {
+      return item.value;
+    }
+  }
+  return null;
+}
+
+function getUniqueFontCount(elements: BoardElement[], elementMap: Map<string, ElementItem>): number {
+  const fontIds = new Set<string>();
+  for (const el of elements) {
+    const item = elementMap.get(el.elementId);
+    if (item && item.category === 'font') {
+      fontIds.add(item.id);
+    }
+  }
+  return fontIds.size;
+}
+
+function calculateCoverageRatio(
+  elements: BoardElement[],
+  canvasWidth: number,
+  canvasHeight: number
+): number {
+  if (canvasWidth <= 0 || canvasHeight <= 0) return 0;
+
+  let totalArea = 0;
+  for (const el of elements) {
+    const scaledWidth = el.width * el.scale;
+    const scaledHeight = el.height * el.scale;
+    totalArea += scaledWidth * scaledHeight;
+  }
+
+  const canvasArea = canvasWidth * canvasHeight;
+  return Math.min(totalArea / canvasArea, 1);
 }
 
 export function calculateScore(
@@ -38,71 +98,57 @@ export function calculateScore(
   canvasWidth: number,
   canvasHeight: number
 ): ScoreResult {
-  const colorElements: ElementItem[] = [];
-  const fontElements: ElementItem[] = [];
-  let totalArea = 0;
-
-  elements.forEach((el) => {
-    const item = elementMap.get(el.elementId);
-    if (!item) return;
-    if (item.category === 'primaryColor' || item.category === 'secondaryColor') {
-      colorElements.push(item);
-    }
-    if (item.category === 'font') {
-      fontElements.push(item);
-    }
-    totalArea += el.width * el.scale * el.height * el.scale;
-  });
+  const primaryColor = getPrimaryColor(elements, elementMap);
+  const secondaryColor = getSecondaryColor(elements, elementMap);
 
   let contrastScore = 0;
-  if (colorElements.length >= 2) {
-    const primary = colorElements.find((c) => c.category === 'primaryColor');
-    const secondary = colorElements.find((c) => c.category === 'secondaryColor');
-    if (primary && secondary) {
-      const ratio = getContrastRatio(primary.value, secondary.value);
-      if (ratio >= 4.5) {
-        contrastScore = 20;
-      } else if (ratio >= 3) {
-        contrastScore = Math.round((ratio / 4.5) * 20);
-      } else {
-        contrastScore = Math.round((ratio / 3) * 10);
-      }
+  if (primaryColor && secondaryColor) {
+    const ratio = getContrastRatio(primaryColor, secondaryColor);
+    if (ratio >= 4.5) {
+      contrastScore = 20;
+    } else if (ratio >= 3) {
+      contrastScore = Math.round(10 + ((ratio - 3) / 1.5) * 10);
     } else {
-      contrastScore = 10;
+      contrastScore = Math.round((ratio / 3) * 10);
     }
-  } else if (colorElements.length === 1) {
+  } else if (primaryColor || secondaryColor) {
     contrastScore = 8;
   }
 
-  const uniqueFonts = new Set(fontElements.map((f) => f.id)).size;
+  const fontCount = getUniqueFontCount(elements, elementMap);
   let fontScore = 0;
-  if (uniqueFonts === 0) {
+  if (fontCount === 0) {
     fontScore = 5;
-  } else if (uniqueFonts <= 3) {
+  } else if (fontCount <= 3) {
     fontScore = 15;
-  } else if (uniqueFonts <= 5) {
-    fontScore = 10;
+  } else if (fontCount <= 5) {
+    fontScore = 8;
   } else {
-    fontScore = 5;
+    fontScore = 3;
   }
 
-  const canvasArea = canvasWidth * canvasHeight;
-  const coverageRatio = totalArea / canvasArea;
+  const coverageRatio = calculateCoverageRatio(elements, canvasWidth, canvasHeight);
   let densityScore = 0;
-  if (coverageRatio >= 0.3 && coverageRatio <= 0.6) {
+  if (coverageRatio === 0) {
+    densityScore = 0;
+  } else if (coverageRatio >= 0.3 && coverageRatio <= 0.6) {
     densityScore = 30;
-  } else if (coverageRatio > 0 && coverageRatio < 0.3) {
+  } else if (coverageRatio < 0.3) {
     densityScore = Math.round((coverageRatio / 0.3) * 25);
   } else if (coverageRatio > 0.6 && coverageRatio <= 1) {
     densityScore = Math.round(((1 - coverageRatio) / 0.4) * 25);
   }
 
-  const varietyBonus = Math.min(
-    new Set(elements.map((e) => elementMap.get(e.elementId)?.category).filter(Boolean)).size * 5,
-    35
-  );
+  const categories = new Set<string>();
+  for (const el of elements) {
+    const item = elementMap.get(el.elementId);
+    if (item) {
+      categories.add(item.category);
+    }
+  }
+  const varietyScore = Math.min(categories.size * 6, 35);
 
-  const total = Math.min(contrastScore + fontScore + densityScore + varietyBonus, 100);
+  const total = Math.min(contrastScore + fontScore + densityScore + varietyScore, 100);
 
   return {
     total,

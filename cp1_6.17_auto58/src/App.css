@@ -5,7 +5,7 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Microsoft YaHei', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: #333;
@@ -13,19 +13,28 @@ body {
 }
 
 .app-container {
-  display: flex;
-  height: 100vh;
   width: 100vw;
+  height: 100vh;
   overflow: hidden;
+}
+
+.app-container.desktop {
+  display: flex;
+}
+
+.app-container.mobile {
+  display: flex;
+  flex-direction: column;
 }
 
 .left-panel {
   width: 320px;
-  display: flex;
-  flex-direction: column;
+  flex-shrink: 0;
   background: #F5F5F5;
   border-right: 1px solid #E0E0E0;
-  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .panel-tabs {
@@ -37,7 +46,7 @@ body {
 
 .panel-tab {
   flex: 1;
-  padding: 14px 16px;
+  padding: 16px 12px;
   border: none;
   background: none;
   cursor: pointer;
@@ -45,6 +54,10 @@ body {
   color: #666;
   border-bottom: 2px solid transparent;
   transition: all 0.2s ease-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .panel-tab:hover {
@@ -58,6 +71,10 @@ body {
   font-weight: 500;
 }
 
+.tab-icon {
+  font-size: 16px;
+}
+
 .panel-content {
   flex: 1;
   overflow: hidden;
@@ -69,6 +86,7 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .main-area {
@@ -76,6 +94,11 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  background-color: #F0F0F0;
+  background-image:
+    linear-gradient(#E0E0E0 1px, transparent 1px),
+    linear-gradient(90deg, #E0E0E0 1px, transparent 1px);
+  background-size: 40px 40px;
 }
 
 .top-bar {
@@ -86,6 +109,7 @@ body {
   background: white;
   border-bottom: 1px solid #E0E0E0;
   gap: 16px;
+  flex-shrink: 0;
 }
 
 .board-title {
@@ -95,7 +119,7 @@ body {
 
 .title-input {
   width: 100%;
-  max-width: 300px;
+  max-width: 320px;
   border: 1px solid transparent;
   background: transparent;
   font-size: 18px;
@@ -119,6 +143,7 @@ body {
 .top-actions {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .action-btn {
@@ -131,6 +156,7 @@ body {
   font-size: 14px;
   cursor: pointer;
   transition: all 0.2s ease-out;
+  white-space: nowrap;
 }
 
 .action-btn.primary {
@@ -165,6 +191,10 @@ body {
   flex: 1;
   position: relative;
   overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
 }
 
 .score-overlay {
@@ -264,68 +294,146 @@ body {
   background: #EEEEEE;
 }
 
-@media (max-width: 1024px) {
-  .app-container {
-    flex-direction: column;
-  }
+.mobile-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: white;
+  border-bottom: 1px solid #E0E0E0;
+  flex-shrink: 0;
+}
 
-  .left-panel {
-    width: 100%;
-    height: auto;
-    border-right: none;
-    border-bottom: 1px solid #E0E0E0;
-  }
+.mobile-tabs {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
 
-  .panel-content {
-    max-height: 200px;
-    overflow-y: auto;
-  }
+.mobile-tabs::-webkit-scrollbar {
+  display: none;
+}
 
-  .top-bar {
-    padding: 10px 16px;
-  }
+.mobile-tab {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 16px;
+  background: #F5F5F5;
+  color: #666;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease-out;
+  flex-shrink: 0;
+}
 
-  .title-input {
-    font-size: 16px;
-    max-width: 200px;
-  }
+.mobile-tab.active {
+  background: #1976D2;
+  color: white;
+}
 
-  .action-btn {
-    padding: 6px 12px;
-    font-size: 13px;
-  }
+.mobile-score-mini {
+  flex-shrink: 0;
+  margin-left: 12px;
+}
 
-  .score-overlay {
-    top: 12px;
-    right: 12px;
-  }
+.mini-score-value {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.mobile-element-panel,
+.mobile-saved-panel {
+  flex-shrink: 0;
+  max-height: 220px;
+  border-bottom: 1px solid #E0E0E0;
+  overflow: hidden;
+}
+
+.mobile-main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background-color: #F0F0F0;
+  background-image:
+    linear-gradient(#E0E0E0 1px, transparent 1px),
+    linear-gradient(90deg, #E0E0E0 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.mobile-board-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: white;
+  border-bottom: 1px solid #E0E0E0;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.mobile-title-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #E0E0E0;
+  background: #FAFAFA;
+  font-size: 15px;
+  font-weight: 500;
+  color: #333;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: all 0.2s ease-out;
+}
+
+.mobile-title-input:focus {
+  outline: none;
+  border-color: #1976D2;
+  background: white;
+}
+
+.mobile-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.mobile-action-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 6px;
+  background: #F5F5F5;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease-out;
+}
+
+.mobile-action-btn.primary {
+  background: #1976D2;
+}
+
+.mobile-action-btn:active {
+  transform: scale(0.95);
+}
+
+.mobile-canvas-wrapper {
+  flex: 1;
+  position: relative;
+  overflow: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 20px;
 }
 
 @media (max-width: 640px) {
-  .top-bar {
-    flex-wrap: wrap;
-  }
-
-  .board-title {
-    order: 1;
-    width: 100%;
-  }
-
-  .top-actions {
-    order: 2;
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .action-btn {
-    flex: 1;
-    justify-content: center;
-  }
-
-  .score-overlay {
-    position: static;
+  .mobile-canvas-wrapper {
     padding: 12px;
-    display: flex;
-    justify-content: center;
   }
 }

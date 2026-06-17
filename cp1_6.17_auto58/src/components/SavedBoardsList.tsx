@@ -6,7 +6,7 @@ interface SavedBoardsListProps {
 }
 
 export function SavedBoardsList({ onLoadBoard }: SavedBoardsListProps) {
-  const { savedBoards, loadBoard, deleteBoard, setActiveCategory } = useMoodBoardStore();
+  const { savedBoards, loadBoard, deleteBoard } = useMoodBoardStore();
 
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -89,36 +89,6 @@ export function SavedBoardsList({ onLoadBoard }: SavedBoardsListProps) {
             ))}
           </div>
         )}
-      </div>
-
-      <div className="quick-categories">
-        <span className="quick-label">快速切换元素库:</span>
-        <div className="quick-tag-list">
-          <button
-            className="quick-tag-btn"
-            onClick={() => setActiveCategory('primaryColor')}
-          >
-            🎨 颜色
-          </button>
-          <button
-            className="quick-tag-btn"
-            onClick={() => setActiveCategory('font')}
-          >
-            🔤 字体
-          </button>
-          <button
-            className="quick-tag-btn"
-            onClick={() => setActiveCategory('pattern')}
-          >
-            🔷 图案
-          </button>
-          <button
-            className="quick-tag-btn"
-            onClick={() => setActiveCategory('layout')}
-          >
-            📐 布局
-          </button>
-        </div>
       </div>
     </div>
   );

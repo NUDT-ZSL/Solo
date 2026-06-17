@@ -29,7 +29,6 @@
   cursor: move;
   transition: box-shadow 0.2s ease-out, border-color 0.2s ease-out;
   background: white;
-  overflow: hidden;
 }
 
 .board-element:hover {
