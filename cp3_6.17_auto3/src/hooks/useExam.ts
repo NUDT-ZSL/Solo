@@ -12,9 +12,14 @@ export interface UseExamReturn {
   selectedAnswer: number | null;
   timeLeft: number;
   formattedTime: string;
+  markedQuestions: Set<string>;
+  markedCount: number;
+  currentIsMarked: boolean;
+  answeredCount: number;
   goToPrev: () => void;
   goToNext: () => void;
   selectAnswer: (index: number) => void;
+  toggleMark: () => void;
   canSubmit: boolean;
   submitting: boolean;
   submitExam: () => void;
@@ -33,11 +38,17 @@ export function useExam(subjectId: string, subjectName: string): UseExamReturn {
   const [timeLeft, setTimeLeft] = useState(TOTAL_TIME);
   const [submitting, setSubmitting] = useState(false);
   const [examResult, setExamResult] = useState<ExamRecord | null>(null);
+  const [markedQuestions, setMarkedQuestions] = useState<Set<string>>(new Set());
   const startTimeRef = useRef<number>(Date.now());
 
   const totalQuestions = questions.length;
   const currentQ = questions[currentIndex];
   const selectedAnswer = currentQ ? answers.get(currentQ.id) ?? null : null;
+  const currentIsMarked = currentQ ? markedQuestions.has(currentQ.id) : false;
+  const markedCount = markedQuestions.size;
+  const answeredCount = Array.from(answers.values()).filter(
+    (a) => a !== null
+  ).length;
 
   const fetchQuestions = useCallback(async () => {
     try {
@@ -97,6 +108,19 @@ export function useExam(subjectId: string, subjectName: string): UseExamReturn {
     },
     [currentQ]
   );
+
+  const toggleMark = useCallback(() => {
+    if (!currentQ) return;
+    setMarkedQuestions((prev) => {
+      const next = new Set(prev);
+      if (next.has(currentQ.id)) {
+        next.delete(currentQ.id);
+      } else {
+        next.add(currentQ.id);
+      }
+      return next;
+    });
+  }, [currentQ]);
 
   const canSubmit =
     questions.length > 0 &&
@@ -159,9 +183,14 @@ export function useExam(subjectId: string, subjectName: string): UseExamReturn {
     selectedAnswer,
     timeLeft,
     formattedTime: formatTime(timeLeft),
+    markedQuestions,
+    markedCount,
+    currentIsMarked,
+    answeredCount,
     goToPrev,
     goToNext,
     selectAnswer,
+    toggleMark,
     canSubmit,
     submitting,
     submitExam: () => submitExam(false),

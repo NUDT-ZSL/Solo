@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Send, Clock, AlertCircle, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Send, Clock, AlertCircle, Loader2, Flag } from 'lucide-react';
 import { useExam } from '../hooks/useExam';
 
 export function ExamPanel() {
@@ -29,9 +29,13 @@ export function ExamPanel() {
     questions,
     selectedAnswer,
     formattedTime,
+    markedCount,
+    currentIsMarked,
+    answeredCount,
     goToPrev,
     goToNext,
     selectAnswer,
+    toggleMark,
     canSubmit,
     submitting,
     submitExam,
@@ -39,9 +43,7 @@ export function ExamPanel() {
 
   const currentQ = questions[currentIndex];
   const progressPercent = ((currentIndex + 1) / totalQuestions) * 100;
-  const answeredCount = Array.from(exam.answers.values()).filter(
-    (a) => a !== null
-  ).length;
+  const answeredPercent = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0;
 
   if (loading) {
     return (
@@ -182,32 +184,102 @@ export function ExamPanel() {
           <div
             className="mb-6"
             style={{
-              fontSize: 14,
-              color: '#718096',
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
+              justifyContent: 'space-between',
+              gap: 16,
             }}
           >
-            <span
+            <div
               style={{
-                padding: '4px 12px',
-                background: '#e6fffa',
-                color: '#00b5d8',
-                borderRadius: 6,
-                fontSize: 12,
-                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 14,
+                color: '#718096',
               }}
             >
-              {currentQ.category}
-            </span>
-            <span>
-              第{' '}
-              <span style={{ color: '#3182ce', fontWeight: 700 }}>
-                {currentIndex + 1}
-              </span>{' '}
-              / {totalQuestions} 题
-            </span>
+              <span
+                style={{
+                  padding: '4px 12px',
+                  background: '#e6fffa',
+                  color: '#00b5d8',
+                  borderRadius: 6,
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                {currentQ.category}
+              </span>
+              <span>
+                第{' '}
+                <span style={{ color: '#3182ce', fontWeight: 700 }}>
+                  {currentIndex + 1}
+                </span>{' '}
+                / {totalQuestions} 题
+              </span>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginLeft: 8,
+                  paddingLeft: 12,
+                  borderLeft: '1px solid #e2e8f0',
+                }}
+              >
+                <span style={{ fontSize: 13, color: '#718096' }}>
+                  答题进度
+                </span>
+                <div
+                  style={{
+                    width: 100,
+                    height: 6,
+                    background: '#e2e8f0',
+                    borderRadius: 3,
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${answeredPercent}%`,
+                      background: '#3182ce',
+                      borderRadius: 3,
+                      transition: 'width 0.3s ease',
+                    }}
+                  />
+                </div>
+                <span
+                  style={{
+                    fontSize: 13,
+                    color: '#3182ce',
+                    fontWeight: 600,
+                    minWidth: 32,
+                  }}
+                >
+                  {answeredCount}题
+                </span>
+              </div>
+            </div>
+            {currentIsMarked && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '4px 10px',
+                  background: '#fff5f5',
+                  borderRadius: 6,
+                  color: '#e53e3e',
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                <Flag style={{ width: 14, height: 14 }} />
+                已标记
+              </div>
+            )}
           </div>
 
           <div
@@ -294,85 +366,18 @@ export function ExamPanel() {
             boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
           }}
         >
-          <button
-            onClick={goToPrev}
-            disabled={currentIndex === 0}
-            onMouseDown={(e) => {
-              if (currentIndex !== 0)
-                (e.currentTarget as HTMLElement).style.transform = 'scale(0.97)';
-            }}
-            onMouseUp={(e) => {
-              (e.currentTarget as HTMLElement).style.transform = '';
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.transform = '';
-            }}
+          <div
             style={{
-              padding: '12px 22px',
-              borderRadius: 8,
-              border: currentIndex === 0 ? '1px solid #e2e8f0' : '1px solid #cbd5e0',
-              background: 'white',
-              color: currentIndex === 0 ? '#a0aec0' : '#4a5568',
-              cursor: currentIndex === 0 ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: 6,
-              fontSize: 14,
-              fontWeight: 500,
-              transition: 'transform 0.1s, opacity 0.2s',
-              opacity: currentIndex === 0 ? 0.6 : 1,
+              gap: 12,
             }}
           >
-            <ChevronLeft style={{ width: 18, height: 18 }} />
-            上一题
-          </button>
-
-          {currentIndex === totalQuestions - 1 ? (
             <button
-              onClick={submitExam}
-              disabled={!canSubmit || submitting}
+              onClick={goToPrev}
+              disabled={currentIndex === 0}
               onMouseDown={(e) => {
-                if (canSubmit && !submitting)
-                  (e.currentTarget as HTMLElement).style.transform = 'scale(0.97)';
-              }}
-              onMouseUp={(e) => {
-                (e.currentTarget as HTMLElement).style.transform = '';
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.transform = '';
-              }}
-              style={{
-                padding: '12px 28px',
-                borderRadius: 8,
-                border: 'none',
-                background: canSubmit && !submitting ? '#3182ce' : '#cbd5e0',
-                color: 'white',
-                cursor:
-                  canSubmit && !submitting ? 'pointer' : 'not-allowed',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                fontSize: 15,
-                fontWeight: 600,
-                transition: 'background 0.2s, transform 0.1s',
-              }}
-            >
-              {submitting ? (
-                <Loader2
-                  className="animate-spin"
-                  style={{ width: 18, height: 18 }}
-                />
-              ) : (
-                <Send style={{ width: 18, height: 18 }} />
-              )}
-              {submitting ? '提交中...' : canSubmit ? '提交试卷' : '请答完所有题目'}
-            </button>
-          ) : (
-            <button
-              onClick={goToNext}
-              disabled={currentIndex === totalQuestions - 1}
-              onMouseDown={(e) => {
-                if (currentIndex !== totalQuestions - 1)
+                if (currentIndex !== 0)
                   (e.currentTarget as HTMLElement).style.transform = 'scale(0.97)';
               }}
               onMouseUp={(e) => {
@@ -384,26 +389,159 @@ export function ExamPanel() {
               style={{
                 padding: '12px 22px',
                 borderRadius: 8,
-                border: 'none',
-                background: currentIndex === totalQuestions - 1 ? '#cbd5e0' : '#3182ce',
-                color: 'white',
-                cursor:
-                  currentIndex === totalQuestions - 1
-                    ? 'not-allowed'
-                    : 'pointer',
+                border: currentIndex === 0 ? '1px solid #e2e8f0' : '1px solid #cbd5e0',
+                background: 'white',
+                color: currentIndex === 0 ? '#a0aec0' : '#4a5568',
+                cursor: currentIndex === 0 ? 'not-allowed' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
                 fontSize: 14,
                 fontWeight: 500,
-                transition: 'transform 0.1s, background 0.2s',
-                opacity: currentIndex === totalQuestions - 1 ? 0.6 : 1,
+                transition: 'transform 0.1s, opacity 0.2s',
+                opacity: currentIndex === 0 ? 0.6 : 1,
               }}
             >
-              下一题
-              <ChevronRight style={{ width: 18, height: 18 }} />
+              <ChevronLeft style={{ width: 18, height: 18 }} />
+              上一题
             </button>
-          )}
+            <button
+              onClick={toggleMark}
+              onMouseDown={(e) => {
+                (e.currentTarget as HTMLElement).style.transform = 'scale(0.97)';
+              }}
+              onMouseUp={(e) => {
+                (e.currentTarget as HTMLElement).style.transform = '';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.transform = '';
+              }}
+              style={{
+                padding: '12px 20px',
+                borderRadius: 8,
+                border: currentIsMarked ? '1px solid #fc8181' : '1px solid #e2e8f0',
+                background: currentIsMarked ? '#fff5f5' : 'white',
+                color: currentIsMarked ? '#e53e3e' : '#4a5568',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 14,
+                fontWeight: 500,
+                transition: 'transform 0.1s, background 0.2s, color 0.2s, border-color 0.2s',
+              }}
+            >
+              <Flag
+                style={{
+                  width: 16,
+                  height: 16,
+                  fill: currentIsMarked ? '#e53e3e' : 'none',
+                }}
+              />
+              {currentIsMarked ? '取消标记' : '标记本题'}
+            </button>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 16,
+            }}
+          >
+            {currentIndex === totalQuestions - 1 && canSubmit && markedCount > 0 && (
+              <span
+                style={{
+                  fontSize: 14,
+                  color: '#e53e3e',
+                  fontWeight: 500,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <Flag style={{ width: 14, height: 14, fill: '#e53e3e' }} />
+                还有 {markedCount} 道标记题目待复查
+              </span>
+            )}
+            {currentIndex === totalQuestions - 1 ? (
+              <button
+                onClick={submitExam}
+                disabled={!canSubmit || submitting}
+                onMouseDown={(e) => {
+                  if (canSubmit && !submitting)
+                    (e.currentTarget as HTMLElement).style.transform = 'scale(0.97)';
+                }}
+                onMouseUp={(e) => {
+                  (e.currentTarget as HTMLElement).style.transform = '';
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.transform = '';
+                }}
+                style={{
+                  padding: '12px 28px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: canSubmit && !submitting ? '#3182ce' : '#cbd5e0',
+                  color: 'white',
+                  cursor:
+                    canSubmit && !submitting ? 'pointer' : 'not-allowed',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: 15,
+                  fontWeight: 600,
+                  transition: 'background 0.2s, transform 0.1s',
+                }}
+              >
+                {submitting ? (
+                  <Loader2
+                    className="animate-spin"
+                    style={{ width: 18, height: 18 }}
+                  />
+                ) : (
+                  <Send style={{ width: 18, height: 18 }} />
+                )}
+                {submitting ? '提交中...' : canSubmit ? '提交试卷' : '请答完所有题目'}
+              </button>
+            ) : (
+              <button
+                onClick={goToNext}
+                disabled={currentIndex === totalQuestions - 1}
+                onMouseDown={(e) => {
+                  if (currentIndex !== totalQuestions - 1)
+                    (e.currentTarget as HTMLElement).style.transform = 'scale(0.97)';
+                }}
+                onMouseUp={(e) => {
+                  (e.currentTarget as HTMLElement).style.transform = '';
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.transform = '';
+                }}
+                style={{
+                  padding: '12px 22px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: currentIndex === totalQuestions - 1 ? '#cbd5e0' : '#3182ce',
+                  color: 'white',
+                  cursor:
+                    currentIndex === totalQuestions - 1
+                      ? 'not-allowed'
+                      : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: 14,
+                  fontWeight: 500,
+                  transition: 'transform 0.1s, background 0.2s',
+                  opacity: currentIndex === totalQuestions - 1 ? 0.6 : 1,
+                }}
+              >
+                下一题
+                <ChevronRight style={{ width: 18, height: 18 }} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

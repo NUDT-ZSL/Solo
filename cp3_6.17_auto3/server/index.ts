@@ -21,7 +21,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const PORT = 3001;
+const PORT = 5000;
 const DATA_DIR = path.join(__dirname, 'data');
 
 const SUBJECTS_FILE = path.join(DATA_DIR, 'subjects.json');

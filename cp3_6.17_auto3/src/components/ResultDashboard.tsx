@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
-import {
-  useLocation, useNavigate, useParams,
-} from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Home, ChevronRight, CheckCircle2, XCircle, Lightbulb,
   Trophy, Target, Calendar, Clock,
@@ -13,7 +11,7 @@ interface LocationState {
   questions?: Question[];
 }
 
-const CATEGORIES: QuestionCategory[] = [
+const CATEGORIES = [
   '基础知识',
   '逻辑分析',
   '代码理解',
@@ -198,7 +196,7 @@ function RadarChart({
       const origKey = (Object.keys(CATEGORY_MAP).find(
         (k) => CATEGORY_MAP[k] === cat
       ) ?? cat) as QuestionCategory;
-      return (scores[origKey] ?? 0);
+      return scores[origKey] ?? 0;
     });
 
     ctx.beginPath();
@@ -228,20 +226,15 @@ function RadarChart({
     });
 
     ctx.fillStyle = '#4a5568';
-    ctx.font = '600 13px "system-ui, sans-serif';
+    ctx.font = '600 13px system-ui, sans-serif';
     ctx.textAlign = 'center';
     CATEGORIES.forEach((cat, i) => {
       const p = getPoint(levels + 1.3, i);
-      ctx.fillText(cat, p.x, p.y + 4);
+      ctx.fillText(cat as unknown as string, p.x, p.y + 4);
     });
   }, [scores, size]);
 
-  return (
-    <canvas
-      ref={canvasRef}
-      style={{ maxWidth: '100%' }}
-    />
-  );
+  return <canvas ref={canvasRef} style={{ maxWidth: '100%' }} />;
 }
 
 function formatTime(seconds: number): string {
@@ -300,7 +293,7 @@ export function ResultDashboard() {
         (x): x is { answer: ExamRecord['answers'][number]; question: Question } =>
           !!x
       );
-  }, [record, questions, record?.answers]);
+  }, [record, questions]);
 
   if (loading) {
     return (
@@ -365,10 +358,7 @@ export function ResultDashboard() {
       className="min-h-screen py-8 px-4"
       style={{ background: '#f7fafc' }}
     >
-      <div
-        className="mx-auto"
-        style={{ maxWidth: 1200 }}
-      >
+      <div className="mx-auto" style={{ maxWidth: 1200 }}>
         <div
           className="flex items-center justify-between mb-6"
         >
@@ -426,9 +416,10 @@ export function ResultDashboard() {
         </div>
 
         <div
-          className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"
           style={{
+            display: 'grid',
             gridTemplateColumns: '1fr 1fr',
+            gap: 24,
           }}
         >
           <div className="flex flex-col gap-6">
@@ -441,31 +432,33 @@ export function ResultDashboard() {
               }}
             >
               <div
-              className="flex items-center gap-2 mb-2"
-              style={{
-                padding: '6px 14px',
-                borderRadius: 100,
-                background: pass ? '#f0fff4' : '#fff5f5',
-                color: pass ? '#38a169' : '#e53e3e',
-                fontSize: 13,
-                fontWeight: 600,
-              }}
-            >
-              {pass ? <Trophy style={{ width: 14, height: 14 }} /> : <Target style={{ width: 14, height: 14 }} />}
-              {pass ? '恭喜通过考试' : '未通过，继续加油'}
-            </div>
+                className="flex items-center gap-2 mb-2"
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: 100,
+                  background: pass ? '#f0fff4' : '#fff5f5',
+                  color: pass ? '#38a169' : '#e53e3e',
+                  fontSize: 13,
+                  fontWeight: 600,
+                }}
+              >
+                {pass ? (
+                  <Trophy style={{ width: 14, height: 14 }} />
+                ) : (
+                  <Target style={{ width: 14, height: 14 }} />
+                )}
+                {pass ? '恭喜通过考试' : '未通过，继续加油'}
+              </div>
               <ScoreRing score={record.totalScore} />
               <div
-                className="grid grid-cols-2 gap-6 mt-6 w-full"
+                className="grid grid-cols-2 gap-6 mt-6"
                 style={{ width: '100%' }}
               >
                 <div
                   className="text-center p-4 rounded-lg"
                   style={{ background: '#f7fafc' }}
                 >
-                  <div
-                    style={{ fontSize: 13, color: '#718096' }}
-                  >
+                  <div style={{ fontSize: 13, color: '#718096' }}>
                     正确题数
                   </div>
                   <div
@@ -483,9 +476,7 @@ export function ResultDashboard() {
                   className="text-center p-4 rounded-lg"
                   style={{ background: '#f7fafc' }}
                 >
-                  <div
-                    style={{ fontSize: 13, color: '#718096' }}
-                  >
+                  <div style={{ fontSize: 13, color: '#718096' }}>
                     用时
                   </div>
                   <div
@@ -510,7 +501,9 @@ export function ResultDashboard() {
                 }}
               >
                 <Calendar style={{ width: 16, height: 16, flexShrink: 0 }} />
-                <span>考试时间：{record.subjectName} | {record.date}</span>
+                <span>
+                  考试时间：{record.subjectName} | {record.date}
+                </span>
               </div>
             </div>
 
@@ -524,24 +517,22 @@ export function ResultDashboard() {
             >
               <h3
                 style={{
-                fontSize: 16,
-                fontWeight: 600,
-                color: '#2d3748',
-                marginBottom: 20,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-              }}
-            >
+                  fontSize: 16,
+                  fontWeight: 600,
+                  color: '#2d3748',
+                  marginBottom: 20,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
                 <Target style={{ color: '#3182ce', width: 20, height: 20 }} />
                 知识点掌握分析
               </h3>
               <div className="flex justify-center mb-4">
                 <RadarChart scores={record.categoryScores} />
               </div>
-              <div
-                className="mt-4 space-y-3"
-              >
+              <div className="mt-4 space-y-3">
                 <div
                   style={{
                     display: 'flex',
@@ -603,21 +594,24 @@ export function ResultDashboard() {
                   gap: 8,
                 }}
               >
-                <XCircle
-                  style={{ color: '#e53e3e', width: 20, height: 20 }} />
-                错题分析 ({wrongList.length > 0
-                  ? `共 ${wrongList.length} 道错题
-                  : '全部正确，太棒了！'
+                <XCircle style={{ color: '#e53e3e', width: 20, height: 20 }} />
+                错题分析 (
+                {wrongList.length > 0
+                  ? `共 ${wrongList.length} 道错题`
+                  : '全部正确，太棒了！'}
+                )
               </h3>
               {wrongList.length === 0 ? (
-                <div
-                  className="flex flex-col items-center justify-center py-16">
+                <div className="flex flex-col items-center justify-center py-16">
                   <CheckCircle2
-                    style={{ color: '#38a169', width: 64, height: 64, marginBottom: 16 }}
+                    style={{
+                      color: '#38a169',
+                      width: 64,
+                      height: 64,
+                      marginBottom: 16,
+                    }}
                   />
-                  <p
-                    style={{ color: '#4a5568', fontSize: 15 }}
-                  >
+                  <p style={{ color: '#4a5568', fontSize: 15 }}>
                     全部答对了！知识掌握非常扎实 💪
                   </p>
                 </div>
@@ -625,12 +619,12 @@ export function ResultDashboard() {
                 <div
                   className="space-y-4"
                   style={{
-                    maxHeight: 'calc(100vh - 280px',
+                    maxHeight: 'calc(100vh - 280px)',
                     overflowY: 'auto',
                     paddingRight: 4,
                   }}
                 >
-                  {wrongList.map(({ question, idx) => {
+                  {wrongList.map(({ question }, idx) => {
                     const q = question;
                     const userAnswer = record.answers.find(
                       (a) => a.questionId === q.id
@@ -764,7 +758,7 @@ export function ResultDashboard() {
                           {q.explanation}
                         </div>
                         {userAnswer !== undefined &&
-                            userAnswer !== q.correctAnswer && (
+                          userAnswer !== q.correctAnswer && (
                             <div
                               className="mt-2"
                               style={{
@@ -786,15 +780,7 @@ export function ResultDashboard() {
             </div>
           </div>
         </div>
-        </div>
       </div>
-      <style>{`
-        @media (max-width: 768px) {
-          [style*="grid-template-columns"] {
-            grid-template-columns: 1fr !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }
