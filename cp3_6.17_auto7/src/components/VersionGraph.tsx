@@ -1,22 +1,22 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import * as d3 from 'd3';
-import type { Recipe, Version, RecipeDiff } from '../types';
-import { useApi } from '../hooks/useApi';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import type { RecipeVersion, VersionDiff } from '../types';
 import dayjs from 'dayjs';
 
 interface VersionGraphProps {
-  recipe: Recipe;
+  versions: RecipeVersion[];
+  onDiff: (v1: RecipeVersion, v2: RecipeVersion) => Promise<VersionDiff | null>;
+  onSelectVersion?: (version: RecipeVersion) => void;
 }
 
 interface GraphNode {
   id: string;
-  version: Version;
-  x?: number;
-  y?: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  version: RecipeVersion;
   fx?: number | null;
   fy?: number | null;
-  vx?: number;
-  vy?: number;
 }
 
 interface GraphLink {
@@ -24,22 +24,30 @@ interface GraphLink {
   target: string;
 }
 
-function VersionGraph({ recipe }: VersionGraphProps) {
+export const VersionGraph: React.FC<VersionGraphProps> = ({ versions, onDiff, onSelectVersion }) => {
   const svgRef = useRef<SVGSVGElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const { getDiff } = useApi();
-  const [selectedVersions, setSelectedVersions] = useState<string[]>([]);
-  const [diff, setDiff] = useState<RecipeDiff | null>(null);
-  const [showDiff, setShowDiff] = useState(false);
-  const [dimensions, setDimensions] = useState({ width: 800, height: 300 });
+  const [nodes, setNodes] = useState<GraphNode[]>([]);
+  const [links, setLinks] = useState<GraphLink[]>([]);
+  const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
+  const [diffResult, setDiffResult] = useState<VersionDiff | null>(null);
+  const [loadingDiff, setLoadingDiff] = useState(false);
+  const animationRef = useRef<number>();
+  const draggingRef = useRef<string | null>(null);
+  const [dimensions, setDimensions] = useState({ width: 800, height: 400 });
+
+  const getNodeColor = useCallback((version: RecipeVersion) => {
+    if (version.isMerge) return '#9c27b0';
+    if (version.branch === 'main') return '#4caf50';
+    return '#ff9800';
+  }, []);
 
   useEffect(() => {
     const updateDimensions = () => {
-      if (containerRef.current) {
-        setDimensions({
-          width: containerRef.current.offsetWidth,
-          height: 300,
-        });
+      if (svgRef.current) {
+        const rect = svgRef.current.parentElement?.getBoundingClientRect();
+        if (rect) {
+          setDimensions({ width: rect.width, height: 400 });
+        }
       }
     };
     updateDimensions();
@@ -47,482 +55,370 @@ function VersionGraph({ recipe }: VersionGraphProps) {
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
-  const versions = recipe.versions || [];
+  useEffect(() => {
+    const versionMap = new Map(versions.map((v) => [v.id, v]));
+    const branchMap = new Map<string, number>();
+    const sortedVersions = [...versions].sort((a, b) =>
+      dayjs(a.timestamp).valueOf() - dayjs(b.timestamp).valueOf()
+    );
 
-  const buildGraphData = useCallback(() => {
-    const nodes: GraphNode[] = versions.map((v) => ({
-      id: v.id,
-      version: v,
-    }));
+    const newNodes: GraphNode[] = sortedVersions.map((version, index) => {
+      if (!branchMap.has(version.branch)) {
+        branchMap.set(version.branch, branchMap.size);
+      }
+      const branchIndex = branchMap.get(version.branch) || 0;
+      return {
+        id: version.id,
+        x: 100 + index * 80,
+        y: 80 + branchIndex * 100,
+        vx: 0,
+        vy: 0,
+        version,
+      };
+    });
 
-    const links: GraphLink[] = [];
-    versions.forEach((v) => {
-      v.parentIds.forEach((parentId) => {
-        if (versions.find((ver) => ver.id === parentId)) {
-          links.push({ source: parentId, target: v.id });
+    const newLinks: GraphLink[] = [];
+    sortedVersions.forEach((version) => {
+      version.parentIds.forEach((parentId) => {
+        if (versionMap.has(parentId)) {
+          newLinks.push({ source: parentId, target: version.id });
         }
       });
     });
 
-    return { nodes, links };
+    setNodes(newNodes);
+    setLinks(newLinks);
   }, [versions]);
 
   useEffect(() => {
-    if (!svgRef.current || versions.length === 0) return;
+    if (nodes.length === 0) return;
 
-    const { width, height } = dimensions;
-    const { nodes, links } = buildGraphData();
+    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+    const alpha = 0.3;
+    const alphaDecay = 0.02;
+    const linkDistance = 100;
+    const chargeStrength = -200;
+    const centerX = dimensions.width / 2;
+    const centerY = dimensions.height / 2;
 
-    const svg = d3.select(svgRef.current);
-    svg.selectAll('*').remove();
+    let currentAlpha = alpha;
 
-    const defs = svg.append('defs');
-    const arrow = defs
-      .append('marker')
-      .attr('id', 'arrow')
-      .attr('viewBox', '0 -5 10 10')
-      .attr('refX', 18)
-      .attr('refY', 0)
-      .attr('markerWidth', 6)
-      .attr('markerHeight', 6)
-      .attr('orient', 'auto');
-    arrow.append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', '#9e9e9e');
+    const simulate = () => {
+      const newNodes = nodes.map((node) => ({ ...node }));
 
-    const g = svg.append('g');
-
-    const zoom = d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.5, 2])
-      .on('zoom', (event) => {
-        g.attr('transform', event.transform);
-      });
-    svg.call(zoom);
-
-    const linkGroup = g.append('g').attr('class', 'links');
-    const nodeGroup = g.append('g').attr('class', 'nodes');
-    const labelGroup = g.append('g').attr('class', 'labels');
-
-    const simulation = d3
-      .forceSimulation<GraphNode>(nodes)
-      .force(
-        'link',
-        d3
-          .forceLink<GraphNode, d3.SimulationLinkDatum<GraphNode>>(links as any)
-          .id((d: any) => d.id)
-          .distance(80)
-      )
-      .force('charge', d3.forceManyBody().strength(-300))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius(40));
-
-    const linkElements = linkGroup
-      .selectAll('line')
-      .data(links)
-      .enter()
-      .append('line')
-      .attr('stroke', '#bdbdbd')
-      .attr('stroke-width', 2)
-      .attr('marker-end', 'url(#arrow)');
-
-    const nodeElements = nodeGroup
-      .selectAll('circle')
-      .data(nodes)
-      .enter()
-      .append('circle')
-      .attr('r', 12)
-      .attr('fill', (d) => {
-        if (d.version.isMerge) return '#9c27b0';
-        if (d.version.branch === 'main') return '#4caf50';
-        return '#ff9800';
-      })
-      .attr('stroke', '#fff')
-      .attr('stroke-width', 2)
-      .style('cursor', 'pointer')
-      .on('click', (event, d) => handleNodeClick(d.id));
-
-    const labelElements = labelGroup
-      .selectAll('text')
-      .data(nodes)
-      .enter()
-      .append('text')
-      .text((d) => d.version.versionNumber)
-      .attr('text-anchor', 'middle')
-      .attr('dy', -20)
-      .attr('font-size', '11px')
-      .attr('fill', '#5d4037')
-      .style('pointer-events', 'none')
-      .style('font-weight', '600');
-
-    const drag = d3
-      .drag<SVGCircleElement, GraphNode>()
-      .on('start', (event, d) => {
-        if (!event.active) simulation.alphaTarget(0.3).restart();
-        d.fx = d.x;
-        d.fy = d.y;
-      })
-      .on('drag', (event, d) => {
-        d.fx = event.x;
-        d.fy = event.y;
-      })
-      .on('end', (event, d) => {
-        if (!event.active) simulation.alphaTarget(0);
-        d.fx = null;
-        d.fy = null;
+      newNodes.forEach((node) => {
+        if (node.fx !== undefined && node.fx !== null) node.x = node.fx;
+        if (node.fy !== undefined && node.fy !== null) node.y = node.fy;
       });
 
-    nodeElements.call(drag);
+      newNodes.forEach((node, i) => {
+        if (node.fx !== undefined && node.fx !== null) return;
+        newNodes.forEach((other, j) => {
+          if (i === j) return;
+          const dx = node.x - other.x;
+          const dy = node.y - other.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const force = chargeStrength / (dist * dist);
+          node.vx += (dx / dist) * force * currentAlpha;
+          node.vy += (dy / dist) * force * currentAlpha;
+        });
+      });
 
-    simulation.on('tick', () => {
-      linkElements
-        .attr('x1', (d: any) => d.source.x)
-        .attr('y1', (d: any) => d.source.y)
-        .attr('x2', (d: any) => d.target.x)
-        .attr('y2', (d: any) => d.target.y);
+      links.forEach((link) => {
+        const source = nodeMap.get(link.source);
+        const target = nodeMap.get(link.target);
+        if (!source || !target) return;
+        const sourceNode = newNodes.find((n) => n.id === source.id);
+        const targetNode = newNodes.find((n) => n.id === target.id);
+        if (!sourceNode || !targetNode) return;
 
-      nodeElements.attr('cx', (d) => d.x || 0).attr('cy', (d) => d.y || 0);
+        const dx = targetNode.x - sourceNode.x;
+        const dy = targetNode.y - sourceNode.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const force = (dist - linkDistance) * 0.05 * currentAlpha;
 
-      labelElements.attr('x', (d) => d.x || 0).attr('y', (d) => d.y || 0);
-    });
+        if (sourceNode.fx === undefined || sourceNode.fx === null) {
+          sourceNode.vx += (dx / dist) * force;
+          sourceNode.vy += (dy / dist) * force;
+        }
+        if (targetNode.fx === undefined || targetNode.fx === null) {
+          targetNode.vx -= (dx / dist) * force;
+          targetNode.vy -= (dy / dist) * force;
+        }
+      });
+
+      newNodes.forEach((node) => {
+        if (node.fx === undefined || node.fx === null) {
+          node.vx += (centerX - node.x) * 0.005 * currentAlpha;
+          node.vy += (centerY - node.y) * 0.005 * currentAlpha;
+        }
+      });
+
+      newNodes.forEach((node) => {
+        if (node.fx === undefined || node.fx === null) {
+          node.vx *= 0.9;
+          node.vy *= 0.9;
+          node.x += node.vx;
+          node.y += node.vy;
+          node.x = Math.max(40, Math.min(dimensions.width - 40, node.x));
+          node.y = Math.max(40, Math.min(dimensions.height - 40, node.y));
+        }
+      });
+
+      setNodes(newNodes);
+      currentAlpha -= alphaDecay;
+
+      if (currentAlpha > 0.001) {
+        animationRef.current = requestAnimationFrame(simulate);
+      }
+    };
+
+    animationRef.current = requestAnimationFrame(simulate);
 
     return () => {
-      simulation.stop();
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
     };
-  }, [versions, dimensions, buildGraphData]);
+  }, [links.length, dimensions]);
 
-  const handleNodeClick = async (versionId: string) => {
-    if (selectedVersions.length === 0) {
-      setSelectedVersions([versionId]);
-      setShowDiff(false);
-      return;
-    }
+  const handleNodeClick = async (node: GraphNode) => {
+    onSelectVersion?.(node.version);
 
-    if (selectedVersions.length === 1) {
-      if (selectedVersions[0] === versionId) {
-        setSelectedVersions([]);
-        setShowDiff(false);
-        return;
+    if (selectedNodes.length === 0) {
+      setSelectedNodes([node.id]);
+      setDiffResult(null);
+    } else if (selectedNodes.length === 1 && selectedNodes[0] !== node.id) {
+      const newSelected = [...selectedNodes, node.id];
+      setSelectedNodes(newSelected);
+      setLoadingDiff(true);
+
+      const v1 = versions.find((v) => v.id === selectedNodes[0]);
+      const v2 = versions.find((v) => v.id === node.id);
+      if (v1 && v2) {
+        const diff = await onDiff(v1, v2);
+        setDiffResult(diff);
       }
-      setSelectedVersions([...selectedVersions, versionId]);
-      try {
-        const diffData = await getDiff(selectedVersions[0], versionId);
-        setDiff(diffData as RecipeDiff);
-        setShowDiff(true);
-      } catch (err) {
-        console.error('获取差异失败', err);
-      }
-      return;
+      setLoadingDiff(false);
+    } else {
+      setSelectedNodes([node.id]);
+      setDiffResult(null);
     }
-
-    setSelectedVersions([versionId]);
-    setShowDiff(false);
   };
 
-  const getVersionById = (id: string) => versions.find((v) => v.id === id);
+  const handleMouseDown = (e: React.MouseEvent, nodeId: string) => {
+    e.preventDefault();
+    draggingRef.current = nodeId;
+    setNodes((prev) =>
+      prev.map((n) =>
+        n.id === nodeId
+          ? { ...n, fx: n.x, fy: n.y }
+          : n
+      )
+    );
+  };
 
-  const renderDiffPart = (changes: { type: string; value: string }[]) => {
-    return changes.map((part, index) => (
-      <span
-        key={index}
-        className={`diff-${part.type}`}
-      >
-        {part.value}
-      </span>
-    ));
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!draggingRef.current || !svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setNodes((prev) =>
+      prev.map((n) =>
+        n.id === draggingRef.current
+          ? { ...n, fx: x, fy: y }
+          : n
+      )
+    );
+  };
+
+  const handleMouseUp = () => {
+    if (draggingRef.current) {
+      setNodes((prev) =>
+        prev.map((n) =>
+          n.id === draggingRef.current
+            ? { ...n, fx: null, fy: null }
+            : n
+        )
+      );
+      draggingRef.current = null;
+    }
+  };
+
+  const renderDiff = (changes: { type: string; value: string }[] | undefined, label: string) => {
+    if (!changes || changes.length === 0) return null;
+    return (
+      <div style={{ marginBottom: '12px' }}>
+        <h4 style={{ color: '#3e2723', marginBottom: '6px', fontSize: '13px' }}>{label}</h4>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '12px' }}>
+          {changes.map((change, idx) => (
+            <div
+              key={idx}
+              style={{
+                padding: '4px 8px',
+                borderRadius: '4px',
+                backgroundColor:
+                  change.type === 'added'
+                    ? '#c8e6c9'
+                    : change.type === 'removed'
+                    ? '#ffcdd2'
+                    : 'transparent',
+                color:
+                  change.type === 'added'
+                    ? '#1b5e20'
+                    : change.type === 'removed'
+                    ? '#b71c1c'
+                    : '#5d4037',
+                textDecoration: change.type === 'removed' ? 'line-through' : 'none',
+              }}
+            >
+              {change.type === 'added' ? '+' : change.type === 'removed' ? '-' : ' '} {change.value}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   return (
-    <div className="version-graph-section">
-      <div className="section-header">
-        <h3>🌲 版本历史图</h3>
-        <div className="legend">
-          <span className="legend-item">
-            <span className="legend-dot main" /> 主分支
-          </span>
-          <span className="legend-item">
-            <span className="legend-dot branch" /> 分支
-          </span>
-          <span className="legend-item">
-            <span className="legend-dot merge" /> 合并
-          </span>
+    <div style={{ padding: '16px' }}>
+      <div style={{ marginBottom: '16px' }}>
+        <h3 style={{ color: '#3e2723', marginBottom: '8px' }}>版本历史图</h3>
+        <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: '#5d4037' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#4caf50' }} />
+            <span>主分支</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#ff9800' }} />
+            <span>功能分支</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#9c27b0' }} />
+            <span>合并节点</span>
+          </div>
         </div>
-      </div>
-      <p className="graph-hint">点击节点选择两个版本查看差异，可拖拽节点调整位置</p>
-
-      <div ref={containerRef} className="graph-container">
-        <svg ref={svgRef} width={dimensions.width} height={dimensions.height} />
-      </div>
-
-      {selectedVersions.length > 0 && (
-        <div className="selected-info">
-          <span>已选择: </span>
-          {selectedVersions.map((id) => {
-            const v = getVersionById(id);
-            return (
-              <span key={id} className="selected-tag">
-                {v?.versionNumber}
-              </span>
-            );
-          })}
-          {selectedVersions.length === 2 && showDiff && (
+        {selectedNodes.length > 0 && (
+          <p style={{ marginTop: '8px', fontSize: '13px', color: '#8b4513' }}>
+            已选择 {selectedNodes.length}/2 个节点。点击两个节点查看差异。
             <button
-              className="btn-clear"
-              onClick={() => {
-                setSelectedVersions([]);
-                setShowDiff(false);
-              }}
+              onClick={() => { setSelectedNodes([]); setDiffResult(null); }}
+              style={{ marginLeft: '8px', padding: '2px 8px', fontSize: '11px', borderRadius: '4px', border: '1px solid #d7ccc8', backgroundColor: '#fff', cursor: 'pointer' }}
             >
               清除选择
             </button>
-          )}
+          </p>
+        )}
+      </div>
+
+      <svg
+        ref={svgRef}
+        width={dimensions.width}
+        height={dimensions.height}
+        style={{ backgroundColor: '#fff8e7', borderRadius: '8px', cursor: 'default' }}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      >
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#999" />
+          </marker>
+        </defs>
+
+        {links.map((link, idx) => {
+          const source = nodes.find((n) => n.id === link.source);
+          const target = nodes.find((n) => n.id === link.target);
+          if (!source || !target) return null;
+
+          const midX = (source.x + target.x) / 2;
+          const midY = (source.y + target.y) / 2 - 30;
+
+          return (
+            <path
+              key={idx}
+              d={`M ${source.x} ${source.y} Q ${midX} ${midY} ${target.x} ${target.y}`}
+              fill="none"
+              stroke="#999"
+              strokeWidth="1.5"
+              markerEnd="url(#arrowhead)"
+            />
+          );
+        })}
+
+        {nodes.map((node) => {
+          const isSelected = selectedNodes.includes(node.id);
+          return (
+            <g
+              key={node.id}
+              style={{ cursor: 'pointer' }}
+              onClick={() => handleNodeClick(node)}
+              onMouseDown={(e) => handleMouseDown(e, node.id)}
+            >
+              <circle
+                cx={node.x}
+                cy={node.y}
+                r={isSelected ? 14 : 12}
+                fill={getNodeColor(node.version)}
+                stroke={isSelected ? '#3e2723' : '#fff'}
+                strokeWidth={isSelected ? 3 : 2}
+                style={{ transition: 'r 0.15s ease' }}
+              />
+              <text
+                x={node.x}
+                y={node.y + 4}
+                textAnchor="middle"
+                fill="#fff"
+                fontSize="10"
+                fontWeight="bold"
+                pointerEvents="none"
+              >
+                {node.version.version}
+              </text>
+              <text
+                x={node.x}
+                y={node.y + 28}
+                textAnchor="middle"
+                fill="#5d4037"
+                fontSize="10"
+                pointerEvents="none"
+              >
+                {node.version.authorName}
+              </text>
+              <text
+                x={node.x}
+                y={node.y + 40}
+                textAnchor="middle"
+                fill="#8d6e63"
+                fontSize="9"
+                pointerEvents="none"
+              >
+                {dayjs(node.version.timestamp).format('MM-DD HH:mm')}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+
+      {(diffResult || loadingDiff) && (
+        <div style={{ marginTop: '20px', padding: '16px', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #d7ccc8' }}>
+          <h4 style={{ color: '#3e2723', marginBottom: '12px' }}>版本差异对比</h4>
+          {loadingDiff ? (
+            <p style={{ color: '#8d6e63' }}>正在计算差异...</p>
+          ) : diffResult ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div>
+                {renderDiff(diffResult.ingredients, '食材变更')}
+                {renderDiff(diffResult.notes, '备注变更')}
+              </div>
+              <div>
+                {renderDiff(diffResult.steps, '步骤变更')}
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
-
-      {showDiff && diff && (
-        <div className="diff-panel">
-          <h4>📊 版本差异对比</h4>
-          
-          <div className="diff-section">
-            <h5>食谱名称</h5>
-            <div className="diff-content">{renderDiffPart(diff.name)}</div>
-          </div>
-
-          <div className="diff-section">
-            <h5>食材变更</h5>
-            {diff.ingredients.added.length > 0 && (
-              <div className="diff-added">
-                <strong>新增:</strong>
-                <ul>
-                  {diff.ingredients.added.map((ing, i) => (
-                    <li key={i}>
-                      + {ing.name} ({ing.amount} {ing.unit})
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {diff.ingredients.removed.length > 0 && (
-              <div className="diff-removed">
-                <strong>删除:</strong>
-                <ul>
-                  {diff.ingredients.removed.map((ing, i) => (
-                    <li key={i}>
-                      - {ing.name} ({ing.amount} {ing.unit})
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {diff.ingredients.modified.length > 0 && (
-              <div className="diff-modified">
-                <strong>修改:</strong>
-                <ul>
-                  {diff.ingredients.modified.map((mod, i) => (
-                    <li key={i}>
-                      {mod.old.name}: {mod.old.amount} {mod.old.unit} →{' '}
-                      {mod.new.amount} {mod.new.unit}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {diff.ingredients.added.length === 0 &&
-              diff.ingredients.removed.length === 0 &&
-              diff.ingredients.modified.length === 0 && (
-                <p className="diff-no-change">无变更</p>
-              )}
-          </div>
-
-          <div className="diff-section">
-            <h5>步骤变更</h5>
-            {diff.steps.added.length > 0 && (
-              <div className="diff-added">
-                <strong>新增步骤:</strong>
-                <ul>
-                  {diff.steps.added.map((step, i) => (
-                    <li key={i}>+ 步骤{step.order}: {step.description}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {diff.steps.removed.length > 0 && (
-              <div className="diff-removed">
-                <strong>删除步骤:</strong>
-                <ul>
-                  {diff.steps.removed.map((step, i) => (
-                    <li key={i}>- 步骤{step.order}: {step.description}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {diff.steps.added.length === 0 && diff.steps.removed.length === 0 && (
-              <p className="diff-no-change">无变更</p>
-            )}
-          </div>
-        </div>
-      )}
-
-      <style>{`
-        .version-graph-section {
-          background: #fff;
-          border-radius: 8px;
-          padding: 20px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        }
-
-        .section-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 8px;
-        }
-
-        .section-header h3 {
-          color: #8b4513;
-          font-size: 16px;
-        }
-
-        .legend {
-          display: flex;
-          gap: 16px;
-          font-size: 12px;
-          color: #6d4c41;
-        }
-
-        .legend-item {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-
-        .legend-dot {
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-        }
-
-        .legend-dot.main {
-          background: #4caf50;
-        }
-
-        .legend-dot.branch {
-          background: #ff9800;
-        }
-
-        .legend-dot.merge {
-          background: #9c27b0;
-        }
-
-        .graph-hint {
-          font-size: 12px;
-          color: #8d6e63;
-          margin-bottom: 12px;
-        }
-
-        .graph-container {
-          background: #fafafa;
-          border-radius: 8px;
-          border: 1px solid #eee;
-          overflow: hidden;
-        }
-
-        .selected-info {
-          margin-top: 12px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 14px;
-          color: #5d4037;
-        }
-
-        .selected-tag {
-          background: #f5deb3;
-          color: #8b4513;
-          padding: 4px 10px;
-          border-radius: 12px;
-          font-size: 12px;
-          font-weight: 600;
-        }
-
-        .btn-clear {
-          background: none;
-          color: #8d6e63;
-          text-decoration: underline;
-          font-size: 12px;
-          padding: 0;
-        }
-
-        .diff-panel {
-          margin-top: 16px;
-          padding: 16px;
-          background: #fafafa;
-          border-radius: 8px;
-        }
-
-        .diff-panel h4 {
-          color: #8b4513;
-          margin-bottom: 12px;
-        }
-
-        .diff-section {
-          margin-bottom: 14px;
-        }
-
-        .diff-section h5 {
-          font-size: 13px;
-          color: #6d4c41;
-          margin-bottom: 8px;
-        }
-
-        .diff-content {
-          padding: 8px;
-          background: #fff;
-          border-radius: 4px;
-          font-size: 14px;
-        }
-
-        .diff-added {
-          color: #2e7d32;
-        }
-
-        .diff-added ul {
-          list-style: none;
-          padding-left: 8px;
-        }
-
-        .diff-removed {
-          color: #c62828;
-        }
-
-        .diff-removed ul {
-          list-style: none;
-          padding-left: 8px;
-        }
-
-        .diff-modified {
-          color: #e65100;
-        }
-
-        .diff-modified ul {
-          list-style: none;
-          padding-left: 8px;
-        }
-
-        .diff-no-change {
-          color: #9e9e9e;
-          font-size: 13px;
-        }
-
-        .diff-unchanged {
-          color: #424242;
-        }
-
-        .diff-added > strong,
-        .diff-removed > strong,
-        .diff-modified > strong {
-          font-size: 13px;
-        }
-      `}</style>
     </div>
   );
-}
-
-export default VersionGraph;
+};

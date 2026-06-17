@@ -6,12 +6,14 @@ export interface User {
 }
 
 export interface Ingredient {
+  id: string;
   name: string;
-  amount: string;
+  quantity: string;
   unit: string;
 }
 
 export interface Step {
+  id: string;
   order: number;
   description: string;
 }
@@ -23,29 +25,28 @@ export interface RecipeContent {
   notes: string;
 }
 
-export interface Version {
+export interface RecipeVersion {
   id: string;
   recipeId: string;
-  versionNumber: string;
+  version: string;
   branch: string;
   content: RecipeContent;
+  parentIds: string[];
   authorId: string;
   authorName: string;
   message: string;
   timestamp: string;
-  parentIds: string[];
   isMerge?: boolean;
 }
 
 export interface Recipe {
   id: string;
-  name: string;
   ownerId: string;
-  createdAt: string;
-  updatedAt: string;
   currentVersionId: string;
   currentBranch: string;
-  versions: Version[];
+  versions: RecipeVersion[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface DiffChange {
@@ -53,18 +54,10 @@ export interface DiffChange {
   value: string;
 }
 
-export interface RecipeDiff {
+export interface VersionDiff {
   name: DiffChange[];
-  ingredients: {
-    added: Ingredient[];
-    removed: Ingredient[];
-    modified: { old: Ingredient; new: Ingredient }[];
-  };
-  steps: {
-    added: Step[];
-    removed: Step[];
-    modified: { old: Step; new: Step }[];
-  };
+  ingredients: DiffChange[];
+  steps: DiffChange[];
   notes: DiffChange[];
 }
 

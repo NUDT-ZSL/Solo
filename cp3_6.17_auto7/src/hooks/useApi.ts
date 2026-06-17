@@ -1,125 +1,221 @@
 import { useState, useCallback } from 'react';
-import type { User, Recipe, Version, RecipeDiff, RecipeContent } from '../types';
+import type { User, Recipe, RecipeVersion, RecipeContent, VersionDiff } from '../types';
 
 const API_BASE = '/api';
 
-interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
+async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetch(`${API_BASE}${url}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+    ...options,
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
 }
 
 export function useApi() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const request = useCallback(async <T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> => {
+  const register = useCallback(async (username: string, password: string): Promise<User> => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE}${endpoint}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
-        ...options,
+      return await request<User>('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
       });
-      const data: ApiResponse<T> = await response.json();
-      if (!data.success || !data.data) {
-        throw new Error(data.error || '请求失败');
-      }
-      return data.data;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : '未知错误';
-      setError(message);
-      throw err;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '注册失败');
+      throw e;
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const login = (username: string, password: string) =>
-    request<User>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ username, password }),
-    });
+  const login = useCallback(async (username: string, password: string): Promise<User> => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await request<User>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '登录失败');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const register = (username: string, password: string) =>
-    request<User>('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({ username, password }),
-    });
+  const getRecipes = useCallback(async (userId: string): Promise<Recipe[]> => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await request<Recipe[]>(`/recipes?userId=${userId}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '获取食谱列表失败');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const getRecipes = (userId: string) =>
-    request<Recipe[]>(`/recipes?userId=${userId}`);
+  const getRecipe = useCallback(async (recipeId: string): Promise<Recipe> => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await request<Recipe>(`/recipes/${recipeId}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '获取食谱失败');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const getRecipe = (recipeId: string) =>
-    request<Recipe>(`/recipes/${recipeId}`);
+  const createRecipe = useCallback(async (userId: string, content: RecipeContent, authorName: string): Promise<Recipe> => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await request<Recipe>('/recipes', {
+        method: 'POST',
+        body: JSON.stringify({ userId, content, authorName }),
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '创建食谱失败');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const createRecipe = (userId: string, name: string, content: RecipeContent) =>
-    request<Recipe>('/recipes', {
-      method: 'POST',
-      body: JSON.stringify({ userId, name, content }),
-    });
-
-  const saveVersion = (
+  const createVersion = useCallback(async (
     recipeId: string,
     content: RecipeContent,
+    parentVersionId: string,
     message: string,
-    branch: string,
-    parentIds: string[]
-  ) =>
-    request<Version>('/versions', {
-      method: 'POST',
-      body: JSON.stringify({ recipeId, content, message, branch, parentIds }),
-    });
+    authorId: string,
+    authorName: string,
+  ): Promise<RecipeVersion> => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await request<RecipeVersion>(`/recipes/${recipeId}/versions`, {
+        method: 'POST',
+        body: JSON.stringify({ content, parentVersionId, message, authorId, authorName }),
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '创建版本失败');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const createBranch = (
+  const createBranch = useCallback(async (
+    recipeId: string,
+    fromVersionId: string,
+    branchName: string,
+    authorId: string,
+    authorName: string,
+  ): Promise<RecipeVersion> => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await request<RecipeVersion>(`/recipes/${recipeId}/branch`, {
+        method: 'POST',
+        body: JSON.stringify({ fromVersionId, branchName, authorId, authorName }),
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '创建分支失败');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const mergeVersions = useCallback(async (
+    recipeId: string,
+    targetVersionId: string,
+    sourceVersionId: string,
+    authorId: string,
+    authorName: string,
+  ): Promise<RecipeVersion> => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await request<RecipeVersion>(`/recipes/${recipeId}/merge`, {
+        method: 'POST',
+        body: JSON.stringify({ targetVersionId, sourceVersionId, authorId, authorName }),
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '合并失败');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const getVersionDiff = useCallback(async (
+    recipeId: string,
+    versionId1: string,
+    versionId2: string,
+  ): Promise<VersionDiff> => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await request<VersionDiff>(
+        `/recipes/${recipeId}/diff?versionId1=${versionId1}&versionId2=${versionId2}`,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '获取差异失败');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const rollbackToVersion = useCallback(async (
     recipeId: string,
     versionId: string,
-    branchName: string
-  ) =>
-    request<Version>(`/versions/${versionId}/branch`, {
-      method: 'POST',
-      body: JSON.stringify({ recipeId, branchName }),
-    });
-
-  const mergeVersions = (
-    recipeId: string,
-    targetBranch: string,
-    sourceVersionId: string,
-    message: string
-  ) =>
-    request<Version>(`/versions/${sourceVersionId}/merge`, {
-      method: 'POST',
-      body: JSON.stringify({ recipeId, targetBranch, message }),
-    });
-
-  const getVersion = (versionId: string) =>
-    request<Version>(`/versions/${versionId}`);
-
-  const getVersions = (recipeId: string) =>
-    request<Version[]>(`/versions?recipeId=${recipeId}`);
-
-  const getDiff = (version1Id: string, version2Id: string) =>
-    request<RecipeDiff>(`/versions/diff?version1Id=${version1Id}&version2Id=${version2Id}`);
+    authorId: string,
+    authorName: string,
+  ): Promise<RecipeVersion> => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await request<RecipeVersion>(`/recipes/${recipeId}/rollback`, {
+        method: 'POST',
+        body: JSON.stringify({ versionId, authorId, authorName }),
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '回滚失败');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   return {
     loading,
     error,
-    login,
     register,
+    login,
     getRecipes,
     getRecipe,
     createRecipe,
-    saveVersion,
+    createVersion,
     createBranch,
     mergeVersions,
-    getVersion,
-    getVersions,
-    getDiff,
+    getVersionDiff,
+    rollbackToVersion,
   };
 }

@@ -1,10 +1,11 @@
 import express from 'express';
 import cors from 'cors';
+import { v4 as uuidv4 } from 'uuid';
+import dayjs from 'dayjs';
+import { diffLines } from 'diff';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { v4 as uuidv4 } from 'uuid';
-import { diffChars } from 'diff';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,448 +13,440 @@ const __dirname = path.dirname(__filename);
 const DATA_DIR = path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const RECIPES_FILE = path.join(DATA_DIR, 'recipes.json');
-const VERSIONS_FILE = path.join(DATA_DIR, 'versions.json');
+
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+const readJsonFile = (filePath) => {
+  if (!fs.existsSync(filePath)) {
+    return [];
+  }
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    return JSON.parse(content);
+  } catch (e) {
+    return [];
+  }
+};
+
+const writeJsonFile = (filePath, data) => {
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+};
 
 const app = express();
-const PORT = 3002;
+const PORT = 4001;
 
 app.use(cors());
 app.use(express.json());
 
-function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+const generateVersion = (branch, existingVersions, fromVersion = null) => {
+  const branchVersions = existingVersions.filter((v) => v.branch === branch);
+
+  if (branch === 'main') {
+    const mainNums = branchVersions
+      .map((v) => {
+        const match = v.version.match(/^v(\d+)$/);
+        return match ? parseInt(match[1]) : 0;
+      })
+      .filter((n) => n > 0);
+    const nextNum = mainNums.length > 0 ? Math.max(...mainNums) + 1 : 1;
+    return `v${nextNum}`;
+  } else {
+    if (fromVersion) {
+      const baseMatch = fromVersion.match(/^v(\d+)$/);
+      if (baseMatch) {
+        const baseNum = baseMatch[1];
+        const branchSuffixes = branchVersions
+          .map((v) => {
+            const match = v.version.match(new RegExp(`^v${baseNum}\\.(\\d+)$`));
+            return match ? parseInt(match[1]) : 0;
+          })
+          .filter((n) => n > 0);
+        const nextSuffix = branchSuffixes.length > 0 ? Math.max(...branchSuffixes) + 1 : 1;
+        return `v${baseNum}.${nextSuffix}`;
+      }
+    }
+    const fallbackNums = branchVersions
+      .map((v) => {
+        const match = v.version.match(/^v(\d+\.\d+)$/);
+        return match ? match[1] : null;
+      })
+      .filter(Boolean);
+    if (fallbackNums.length === 0) return 'v1.1';
+    const maxParts = fallbackNums
+      .map((v) => v.split('.').map(Number))
+      .reduce((max, curr) => (curr[0] > max[0] || (curr[0] === max[0] && curr[1] > max[1]) ? curr : max));
+    return `v${maxParts[0]}.${maxParts[1] + 1}`;
   }
-  if (!fs.existsSync(USERS_FILE)) {
-    fs.writeFileSync(USERS_FILE, JSON.stringify([], null, 2));
-  }
-  if (!fs.existsSync(RECIPES_FILE)) {
-    fs.writeFileSync(RECIPES_FILE, JSON.stringify([], null, 2));
-  }
-  if (!fs.existsSync(VERSIONS_FILE)) {
-    fs.writeFileSync(VERSIONS_FILE, JSON.stringify([], null, 2));
-  }
-}
+};
 
-function readJSON(filePath) {
-  try {
-    const data = fs.readFileSync(filePath, 'utf-8');
-    return JSON.parse(data);
-  } catch {
-    return [];
-  }
-}
+const computeDiff = (content1, content2) => {
+  const serializeIngredients = (ings) =>
+    (ings || [])
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((i) => `${i.quantity}${i.unit} ${i.name}`)
+      .join('\n');
 
-function writeJSON(filePath, data) {
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-}
+  const serializeSteps = (steps) =>
+    (steps || [])
+      .sort((a, b) => a.order - b.order)
+      .map((s) => `${s.order}. ${s.description}`)
+      .join('\n');
 
-function success(data) {
-  return { success: true, data };
-}
+  const processDiff = (diffResult) => {
+    return diffResult.map((part) => ({
+      type: part.added ? 'added' : part.removed ? 'removed' : 'unchanged',
+      value: part.value.trim() ? part.value : '(空行)',
+    }));
+  };
 
-function error(message) {
-  return { success: false, error: message };
-}
+  return {
+    name: processDiff(diffLines(content1.name || '', content2.name || '')),
+    ingredients: processDiff(
+      diffLines(serializeIngredients(content1.ingredients), serializeIngredients(content2.ingredients))
+    ),
+    steps: processDiff(diffLines(serializeSteps(content1.steps), serializeSteps(content2.steps))),
+    notes: processDiff(diffLines(content1.notes || '', content2.notes || '')),
+  };
+};
 
-ensureDataDir();
-
-// Auth routes
 app.post('/api/auth/register', (req, res) => {
   const { username, password } = req.body;
-  const users = readJSON(USERS_FILE);
+  if (!username || !password) {
+    return res.status(400).json({ error: '用户名和密码不能为空' });
+  }
 
+  const users = readJsonFile(USERS_FILE);
   if (users.find((u) => u.username === username)) {
-    return res.json(error('用户名已存在'));
+    return res.status(400).json({ error: '用户名已存在' });
   }
 
   const newUser = {
     id: uuidv4(),
     username,
     password,
-    createdAt: new Date().toISOString(),
+    createdAt: dayjs().toISOString(),
   };
-
   users.push(newUser);
-  writeJSON(USERS_FILE, users);
+  writeJsonFile(USERS_FILE, users);
 
   const { password: _, ...userWithoutPassword } = newUser;
-  res.json(success(userWithoutPassword));
+  res.json(userWithoutPassword);
 });
 
 app.post('/api/auth/login', (req, res) => {
   const { username, password } = req.body;
-  const users = readJSON(USERS_FILE);
+  if (!username || !password) {
+    return res.status(400).json({ error: '用户名和密码不能为空' });
+  }
 
-  const user = users.find(
-    (u) => u.username === username && u.password === password
-  );
+  const users = readJsonFile(USERS_FILE);
+  const user = users.find((u) => u.username === username && u.password === password);
 
   if (!user) {
-    return res.json(error('用户名或密码错误'));
+    return res.status(401).json({ error: '用户名或密码错误' });
   }
 
   const { password: _, ...userWithoutPassword } = user;
-  res.json(success(userWithoutPassword));
+  res.json(userWithoutPassword);
 });
 
-// Recipe routes
 app.get('/api/recipes', (req, res) => {
   const { userId } = req.query;
-  const recipes = readJSON(RECIPES_FILE);
-  const versions = readJSON(VERSIONS_FILE);
-
-  let filtered = recipes;
-  if (userId) {
-    filtered = recipes.filter((r) => r.ownerId === userId);
+  if (!userId) {
+    return res.status(400).json({ error: 'userId 参数缺失' });
   }
 
-  const result = filtered.map((recipe) => {
-    const recipeVersions = versions.filter((v) => v.recipeId === recipe.id);
-    return { ...recipe, versions: recipeVersions };
-  });
-
-  res.json(success(result));
+  const recipes = readJsonFile(RECIPES_FILE);
+  const userRecipes = recipes.filter((r) => r.ownerId === userId);
+  const simplified = userRecipes.map((r) => ({
+    id: r.id,
+    ownerId: r.ownerId,
+    currentVersionId: r.currentVersionId,
+    currentBranch: r.currentBranch,
+    versions: r.versions.slice(-1),
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+  }));
+  res.json(simplified);
 });
 
-app.get('/api/recipes/:id', (req, res) => {
-  const { id } = req.params;
-  const recipes = readJSON(RECIPES_FILE);
-  const versions = readJSON(VERSIONS_FILE);
+app.get('/api/recipes/:recipeId', (req, res) => {
+  const { recipeId } = req.params;
+  const recipes = readJsonFile(RECIPES_FILE);
+  const recipe = recipes.find((r) => r.id === recipeId);
 
-  const recipe = recipes.find((r) => r.id === id);
   if (!recipe) {
-    return res.json(error('食谱不存在'));
+    return res.status(404).json({ error: '食谱不存在' });
   }
 
-  const recipeVersions = versions.filter((v) => v.recipeId === id);
-  res.json(success({ ...recipe, versions: recipeVersions }));
+  res.json(recipe);
 });
 
 app.post('/api/recipes', (req, res) => {
-  const { userId, name, content } = req.body;
-  const recipes = readJSON(RECIPES_FILE);
-  const versions = readJSON(VERSIONS_FILE);
-  const users = readJSON(USERS_FILE);
-
-  const user = users.find((u) => u.id === userId);
-  if (!user) {
-    return res.json(error('用户不存在'));
+  const { userId, content, authorName } = req.body;
+  if (!userId || !content) {
+    return res.status(400).json({ error: '参数缺失' });
   }
 
-  const recipeId = uuidv4();
+  const recipes = readJsonFile(RECIPES_FILE);
   const versionId = uuidv4();
-  const now = new Date().toISOString();
 
-  const newVersion = {
+  const initialVersion = {
     id: versionId,
-    recipeId,
-    versionNumber: 'v1',
+    recipeId: '',
+    version: 'v1',
     branch: 'main',
     content,
-    authorId: userId,
-    authorName: user.username,
-    message: '初始版本',
-    timestamp: now,
     parentIds: [],
+    authorId: userId,
+    authorName: authorName || '匿名',
+    message: '初始版本',
+    timestamp: dayjs().toISOString(),
   };
 
   const newRecipe = {
-    id: recipeId,
-    name: content.name || name,
+    id: uuidv4(),
     ownerId: userId,
-    createdAt: now,
-    updatedAt: now,
     currentVersionId: versionId,
     currentBranch: 'main',
+    versions: [],
+    createdAt: dayjs().toISOString(),
+    updatedAt: dayjs().toISOString(),
   };
 
-  versions.push(newVersion);
+  initialVersion.recipeId = newRecipe.id;
+  newRecipe.versions.push(initialVersion);
+
   recipes.push(newRecipe);
-  writeJSON(VERSIONS_FILE, versions);
-  writeJSON(RECIPES_FILE, recipes);
+  writeJsonFile(RECIPES_FILE, recipes);
 
-  res.json(success({ ...newRecipe, versions: [newVersion] }));
+  res.json(newRecipe);
 });
 
-// Version routes
-app.get('/api/versions', (req, res) => {
-  const { recipeId } = req.query;
-  const versions = readJSON(VERSIONS_FILE);
+app.post('/api/recipes/:recipeId/versions', (req, res) => {
+  const { recipeId } = req.params;
+  const { content, parentVersionId, message, authorId, authorName } = req.body;
 
-  let filtered = versions;
-  if (recipeId) {
-    filtered = versions.filter((v) => v.recipeId === recipeId);
+  const recipes = readJsonFile(RECIPES_FILE);
+  const recipeIndex = recipes.findIndex((r) => r.id === recipeId);
+
+  if (recipeIndex === -1) {
+    return res.status(404).json({ error: '食谱不存在' });
   }
 
-  filtered.sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  );
+  const recipe = recipes[recipeIndex];
+  const parentVersion = recipe.versions.find((v) => v.id === parentVersionId);
+  const branch = parentVersion ? parentVersion.branch : recipe.currentBranch;
 
-  res.json(success(filtered));
-});
-
-app.get('/api/versions/:id', (req, res) => {
-  const { id } = req.params;
-  const versions = readJSON(VERSIONS_FILE);
-
-  const version = versions.find((v) => v.id === id);
-  if (!version) {
-    return res.json(error('版本不存在'));
-  }
-
-  res.json(success(version));
-});
-
-function getNextVersionNumber(versions, branch) {
-  const branchVersions = versions.filter((v) => v.branch === branch);
-  
-  if (branch === 'main') {
-    const maxNum = branchVersions.reduce((max, v) => {
-      const num = parseInt(v.versionNumber.slice(1), 10);
-      return isNaN(num) ? max : Math.max(max, num);
-    }, 0);
-    return `v${maxNum + 1}`;
-  } else {
-    const maxNum = branchVersions.reduce((max, v) => {
-      const parts = v.versionNumber.split('.');
-      if (parts.length >= 2) {
-        const num = parseInt(parts[1], 10);
-        return isNaN(num) ? max : Math.max(max, num);
-      }
-      return max;
-    }, 0);
-    const baseParts = branch.split('.');
-    const base = baseParts[baseParts.length - 1] || '0';
-    return `v${base}.${maxNum + 1}`;
-  }
-}
-
-app.post('/api/versions', (req, res) => {
-  const { recipeId, content, message, branch, parentIds } = req.body;
-  const recipes = readJSON(RECIPES_FILE);
-  const versions = readJSON(VERSIONS_FILE);
-  const users = readJSON(USERS_FILE);
-
-  const recipe = recipes.find((r) => r.id === recipeId);
-  if (!recipe) {
-    return res.json(error('食谱不存在'));
-  }
-
-  const parentVersion = versions.find((v) => v.id === parentIds[0]);
-  if (!parentVersion) {
-    return res.json(error('父版本不存在'));
-  }
-
-  const user = users.find((u) => u.id === parentVersion.authorId);
-
-  const versionId = uuidv4();
-  const now = new Date().toISOString();
-  
-  const recipeVersions = versions.filter((v) => v.recipeId === recipeId);
-  const versionNumber = getNextVersionNumber(recipeVersions, branch || 'main');
+  const versionStr = generateVersion(branch, recipe.versions);
 
   const newVersion = {
-    id: versionId,
+    id: uuidv4(),
     recipeId,
-    versionNumber,
-    branch: branch || 'main',
+    version: versionStr,
+    branch,
     content,
-    authorId: parentVersion.authorId,
-    authorName: user?.username || parentVersion.authorName,
-    message: message || '更新版本',
-    timestamp: now,
-    parentIds: parentIds || [],
+    parentIds: parentVersionId ? [parentVersionId] : [],
+    authorId,
+    authorName: authorName || '匿名',
+    message: message || `更新版本`,
+    timestamp: dayjs().toISOString(),
   };
 
-  versions.push(newVersion);
-
-  if (branch === 'main' || !branch) {
-    recipe.currentVersionId = versionId;
-    recipe.updatedAt = now;
+  recipe.versions.push(newVersion);
+  if (branch === recipe.currentBranch) {
+    recipe.currentVersionId = newVersion.id;
   }
-  recipe.name = content.name || recipe.name;
+  recipe.updatedAt = dayjs().toISOString();
 
-  writeJSON(VERSIONS_FILE, versions);
-  writeJSON(RECIPES_FILE, recipes);
+  recipes[recipeIndex] = recipe;
+  writeJsonFile(RECIPES_FILE, recipes);
 
-  res.json(success(newVersion));
+  res.json(newVersion);
 });
 
-app.post('/api/versions/:id/branch', (req, res) => {
-  const { id } = req.params;
-  const { recipeId, branchName } = req.body;
-  const versions = readJSON(VERSIONS_FILE);
-  const recipes = readJSON(RECIPES_FILE);
+app.post('/api/recipes/:recipeId/branch', (req, res) => {
+  const { recipeId } = req.params;
+  const { fromVersionId, branchName, authorId, authorName } = req.body;
 
-  const parentVersion = versions.find((v) => v.id === id);
-  if (!parentVersion) {
-    return res.json(error('父版本不存在'));
+  if (!fromVersionId || !branchName) {
+    return res.status(400).json({ error: '参数缺失' });
   }
 
-  const recipe = recipes.find((r) => r.id === recipeId);
-  if (!recipe) {
-    return res.json(error('食谱不存在'));
+  const recipes = readJsonFile(RECIPES_FILE);
+  const recipeIndex = recipes.findIndex((r) => r.id === recipeId);
+
+  if (recipeIndex === -1) {
+    return res.status(404).json({ error: '食谱不存在' });
   }
 
-  const branchId = uuidv4();
-  const now = new Date().toISOString();
-  const versionNumber = `v${parentVersion.versionNumber.slice(1)}.1`;
+  const recipe = recipes[recipeIndex];
+  const fromVersion = recipe.versions.find((v) => v.id === fromVersionId);
+
+  if (!fromVersion) {
+    return res.status(400).json({ error: '源版本不存在' });
+  }
+
+  const versionStr = generateVersion(branchName, recipe.versions, fromVersion.version);
 
   const newBranchVersion = {
-    id: branchId,
+    id: uuidv4(),
     recipeId,
-    versionNumber,
-    branch: branchName || `branch-${uuidv4().slice(0, 6)}`,
-    content: { ...parentVersion.content },
-    authorId: parentVersion.authorId,
-    authorName: parentVersion.authorName,
-    message: `从 ${parentVersion.versionNumber} 创建分支`,
-    timestamp: now,
-    parentIds: [id],
+    version: versionStr,
+    branch: branchName,
+    content: JSON.parse(JSON.stringify(fromVersion.content)),
+    parentIds: [fromVersionId],
+    authorId,
+    authorName: authorName || '匿名',
+    message: `创建分支 ${branchName}`,
+    timestamp: dayjs().toISOString(),
   };
 
-  versions.push(newBranchVersion);
-  writeJSON(VERSIONS_FILE, versions);
+  recipe.versions.push(newBranchVersion);
+  recipe.updatedAt = dayjs().toISOString();
 
-  res.json(success(newBranchVersion));
+  recipes[recipeIndex] = recipe;
+  writeJsonFile(RECIPES_FILE, recipes);
+
+  res.json(newBranchVersion);
 });
 
-app.post('/api/versions/:id/merge', (req, res) => {
-  const { id } = req.params;
-  const { recipeId, targetBranch, message } = req.body;
-  const versions = readJSON(VERSIONS_FILE);
-  const recipes = readJSON(RECIPES_FILE);
+app.post('/api/recipes/:recipeId/merge', (req, res) => {
+  const { recipeId } = req.params;
+  const { targetVersionId, sourceVersionId, authorId, authorName } = req.body;
 
-  const sourceVersion = versions.find((v) => v.id === id);
-  if (!sourceVersion) {
-    return res.json(error('源版本不存在'));
+  if (!targetVersionId || !sourceVersionId) {
+    return res.status(400).json({ error: '参数缺失' });
   }
 
-  const recipe = recipes.find((r) => r.id === recipeId);
-  if (!recipe) {
-    return res.json(error('食谱不存在'));
+  const recipes = readJsonFile(RECIPES_FILE);
+  const recipeIndex = recipes.findIndex((r) => r.id === recipeId);
+
+  if (recipeIndex === -1) {
+    return res.status(404).json({ error: '食谱不存在' });
   }
 
-  const targetVersions = versions
-    .filter((v) => v.recipeId === recipeId && v.branch === (targetBranch || 'main'))
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  const recipe = recipes[recipeIndex];
+  const targetVersion = recipe.versions.find((v) => v.id === targetVersionId);
+  const sourceVersion = recipe.versions.find((v) => v.id === sourceVersionId);
 
-  const targetVersion = targetVersions[0];
-  if (!targetVersion) {
-    return res.json(error('目标分支不存在'));
+  if (!targetVersion || !sourceVersion) {
+    return res.status(400).json({ error: '目标版本或源版本不存在' });
   }
-
-  const recipeVersions = versions.filter((v) => v.recipeId === recipeId);
-  const mainVersions = recipeVersions.filter((v) => v.branch === (targetBranch || 'main'));
-  const maxMainNum = mainVersions.reduce((max, v) => {
-    const num = parseInt(v.versionNumber.slice(1), 10);
-    return isNaN(num) ? max : Math.max(max, num);
-  }, 0);
-  const versionNumber = `v${maxMainNum + 1}`;
-
-  const mergeId = uuidv4();
-  const now = new Date().toISOString();
 
   const mergedContent = {
-    ...targetVersion.content,
-    ...sourceVersion.content,
-    ingredients: sourceVersion.content.ingredients,
-    steps: sourceVersion.content.steps,
+    name: sourceVersion.content.name || targetVersion.content.name,
+    ingredients: sourceVersion.content.ingredients.length > 0
+      ? sourceVersion.content.ingredients
+      : targetVersion.content.ingredients,
+    steps: sourceVersion.content.steps.length > 0
+      ? sourceVersion.content.steps
+      : targetVersion.content.steps,
+    notes: sourceVersion.content.notes || targetVersion.content.notes,
   };
 
-  const mergeVersion = {
-    id: mergeId,
+  const versionStr = generateVersion('main', recipe.versions);
+
+  const mergedVersion = {
+    id: uuidv4(),
     recipeId,
-    versionNumber,
-    branch: targetBranch || 'main',
+    version: versionStr,
+    branch: 'main',
     content: mergedContent,
-    authorId: sourceVersion.authorId,
-    authorName: sourceVersion.authorName,
-    message: message || `合并分支 ${sourceVersion.branch}`,
-    timestamp: now,
-    parentIds: [targetVersion.id, sourceVersion.id],
+    parentIds: [targetVersionId, sourceVersionId],
+    authorId,
+    authorName: authorName || '匿名',
+    message: `合并 ${sourceVersion.branch} 到 main`,
+    timestamp: dayjs().toISOString(),
     isMerge: true,
   };
 
-  versions.push(mergeVersion);
+  recipe.versions.push(mergedVersion);
+  recipe.currentVersionId = mergedVersion.id;
+  recipe.currentBranch = 'main';
+  recipe.updatedAt = dayjs().toISOString();
 
-  if (targetBranch === 'main' || !targetBranch) {
-    recipe.currentVersionId = mergeId;
-    recipe.updatedAt = now;
-  }
+  recipes[recipeIndex] = recipe;
+  writeJsonFile(RECIPES_FILE, recipes);
 
-  writeJSON(VERSIONS_FILE, versions);
-  writeJSON(RECIPES_FILE, recipes);
-
-  res.json(success(mergeVersion));
+  res.json(mergedVersion);
 });
 
-app.get('/api/versions/diff', (req, res) => {
-  const { version1Id, version2Id } = req.query;
-  const versions = readJSON(VERSIONS_FILE);
+app.post('/api/recipes/:recipeId/rollback', (req, res) => {
+  const { recipeId } = req.params;
+  const { versionId, authorId, authorName } = req.body;
 
-  const v1 = versions.find((v) => v.id === version1Id);
-  const v2 = versions.find((v) => v.id === version2Id);
-
-  if (!v1 || !v2) {
-    return res.json(error('版本不存在'));
+  if (!versionId) {
+    return res.status(400).json({ error: '参数缺失' });
   }
 
-  const nameDiff = diffChars(v1.content.name || '', v2.content.name || '').map((part) => ({
-    type: part.added ? 'added' : part.removed ? 'removed' : 'unchanged',
-    value: part.value,
-  }));
+  const recipes = readJsonFile(RECIPES_FILE);
+  const recipeIndex = recipes.findIndex((r) => r.id === recipeId);
 
-  const notesDiff = diffChars(v1.content.notes || '', v2.content.notes || '').map((part) => ({
-    type: part.added ? 'added' : part.removed ? 'removed' : 'unchanged',
-    value: part.value,
-  }));
+  if (recipeIndex === -1) {
+    return res.status(404).json({ error: '食谱不存在' });
+  }
 
-  const ingredients1 = v1.content.ingredients || [];
-  const ingredients2 = v2.content.ingredients || [];
+  const recipe = recipes[recipeIndex];
+  const rollbackFrom = recipe.versions.find((v) => v.id === versionId);
 
-  const ing1Names = new Set(ingredients1.map((i) => i.name));
-  const ing2Names = new Set(ingredients2.map((i) => i.name));
+  if (!rollbackFrom) {
+    return res.status(400).json({ error: '回滚版本不存在' });
+  }
 
-  const addedIngredients = ingredients2.filter((i) => !ing1Names.has(i.name));
-  const removedIngredients = ingredients1.filter((i) => !ing2Names.has(i.name));
-  const modifiedIngredients = [];
-  
-  ingredients1.forEach((ing1) => {
-    const ing2 = ingredients2.find((i) => i.name === ing1.name);
-    if (ing2 && (ing1.amount !== ing2.amount || ing1.unit !== ing2.unit)) {
-      modifiedIngredients.push({ old: ing1, new: ing2 });
-    }
-  });
+  const versionStr = generateVersion('main', recipe.versions);
 
-  const steps1 = v1.content.steps || [];
-  const steps2 = v2.content.steps || [];
-
-  const stepChanges = {
-    added: steps2.filter(
-      (s, i) => !steps1[i] || steps1[i].description !== s.description
-    ),
-    removed: steps1.filter(
-      (s, i) => !steps2[i] || steps2[i].description !== s.description
-    ),
-    modified: [],
+  const rollbackVersion = {
+    id: uuidv4(),
+    recipeId,
+    version: versionStr,
+    branch: 'main',
+    content: JSON.parse(JSON.stringify(rollbackFrom.content)),
+    parentIds: recipe.currentVersionId ? [recipe.currentVersionId] : [],
+    authorId,
+    authorName: authorName || '匿名',
+    message: `回滚到版本 ${rollbackFrom.version}`,
+    timestamp: dayjs().toISOString(),
   };
 
-  res.json(
-    success({
-      name: nameDiff,
-      ingredients: {
-        added: addedIngredients,
-        removed: removedIngredients,
-        modified: modifiedIngredients,
-      },
-      steps: stepChanges,
-      notes: notesDiff,
-    })
-  );
+  recipe.versions.push(rollbackVersion);
+  recipe.currentVersionId = rollbackVersion.id;
+  recipe.updatedAt = dayjs().toISOString();
+
+  recipes[recipeIndex] = recipe;
+  writeJsonFile(RECIPES_FILE, recipes);
+
+  res.json(rollbackVersion);
+});
+
+app.get('/api/recipes/:recipeId/diff', (req, res) => {
+  const { recipeId } = req.params;
+  const { versionId1, versionId2 } = req.query;
+
+  if (!versionId1 || !versionId2) {
+    return res.status(400).json({ error: '参数缺失' });
+  }
+
+  const recipes = readJsonFile(RECIPES_FILE);
+  const recipe = recipes.find((r) => r.id === recipeId);
+
+  if (!recipe) {
+    return res.status(404).json({ error: '食谱不存在' });
+  }
+
+  const v1 = recipe.versions.find((v) => v.id === versionId1);
+  const v2 = recipe.versions.find((v) => v.id === versionId2);
+
+  if (!v1 || !v2) {
+    return res.status(400).json({ error: '版本不存在' });
+  }
+
+  const diffResult = computeDiff(v1.content, v2.content);
+  res.json(diffResult);
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`🍳 食谱版本管理后端服务已启动: http://localhost:${PORT}`);
 });
