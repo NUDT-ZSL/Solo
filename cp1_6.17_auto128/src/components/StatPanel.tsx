@@ -120,14 +120,18 @@ function LineChart({ data, width = 280, height = 160 }: { data: { date: string; 
   const chartHeight = height - padding.top - padding.bottom
 
   const maxCount = Math.max(...data.map(d => d.count), 1)
-  const stepX = chartWidth / (data.length - 1)
+  const stepX = data.length > 1 ? chartWidth / (data.length - 1) : 0
 
   const points = data.map((d, i) => ({
     x: padding.left + i * stepX,
     y: padding.top + chartHeight - (d.count / maxCount) * chartHeight
   }))
 
-  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+  const linePathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+
+  const areaPathD = points.length > 0
+    ? `${linePathD} L ${points[points.length - 1].x} ${padding.top + chartHeight} L ${points[0].x} ${padding.top + chartHeight} Z`
+    : ''
 
   const yTicks = 4
   const yLabels = []
@@ -138,7 +142,7 @@ function LineChart({ data, width = 280, height = 160 }: { data: { date: string; 
   }
 
   return (
-    <svg width={width} height={height}>
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
       {yLabels.map((tick, i) => (
         <g key={i}>
           <line
@@ -146,7 +150,7 @@ function LineChart({ data, width = 280, height = 160 }: { data: { date: string; 
             y1={tick.y}
             x2={width - padding.right}
             y2={tick.y}
-            stroke="#eee"
+            stroke="#E8E8E8"
             strokeWidth="1"
           />
           <text
@@ -161,8 +165,23 @@ function LineChart({ data, width = 280, height = 160 }: { data: { date: string; 
         </g>
       ))}
 
+      {areaPathD && (
+        <path
+          d={areaPathD}
+          fill="url(#areaGradient)"
+          opacity="0.15"
+        />
+      )}
+
+      <defs>
+        <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#3498DB" />
+          <stop offset="100%" stopColor="#3498DB" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+
       <path
-        d={pathD}
+        d={linePathD}
         fill="none"
         stroke="#3498DB"
         strokeWidth="2"
@@ -176,6 +195,8 @@ function LineChart({ data, width = 280, height = 160 }: { data: { date: string; 
           cy={p.y}
           r={4}
           fill="#2E86C1"
+          stroke="#fff"
+          strokeWidth="2"
           style={{ transition: 'all 0.3s ease' }}
         />
       ))}
@@ -184,7 +205,7 @@ function LineChart({ data, width = 280, height = 160 }: { data: { date: string; 
         <text
           key={i}
           x={padding.left + i * stepX}
-          y={height - 10}
+          y={height - 8}
           fontSize="10"
           fill="#999"
           textAnchor="middle"
@@ -203,6 +224,7 @@ const StatPanel: React.FC<StatPanelProps> = ({ feedbacks, isOpen, onToggle }) =>
     <>
       <button
         onClick={onToggle}
+        className="stat-toggle-btn-mobile"
         style={{
           position: 'fixed',
           top: 20,
@@ -229,6 +251,7 @@ const StatPanel: React.FC<StatPanelProps> = ({ feedbacks, isOpen, onToggle }) =>
       </button>
 
       <div
+        className={`stat-panel-desktop stat-panel-mobile ${isOpen ? 'stat-panel-mobile-open' : 'stat-panel-mobile-closed'}`}
         style={{
           position: 'fixed',
           top: 0,
@@ -239,11 +262,9 @@ const StatPanel: React.FC<StatPanelProps> = ({ feedbacks, isOpen, onToggle }) =>
           borderRadius: '12px 0 0 12px',
           boxShadow: '4px 4px 16px rgba(0,0,0,0.1)',
           zIndex: 100,
-          transition: 'right 0.4s ease',
           overflowY: 'auto',
           padding: '70px 20px 20px'
         }}
-        className="stat-panel"
       >
         <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 20, color: '#333' }}>
           数据统计

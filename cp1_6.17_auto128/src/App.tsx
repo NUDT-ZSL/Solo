@@ -324,48 +324,6 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
-
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes slideUp {
-          from { transform: translateY(20px); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
-        }
-        @media (max-width: 768px) {
-          .kanban-board {
-            flex-direction: column !important;
-            align-items: stretch !important;
-          }
-          .kanban-board > div {
-            width: 100% !important;
-            max-height: none !important;
-          }
-          .kanban-board > div > div:last-child {
-            flex-direction: row !important;
-            overflow-x: auto !important;
-            overflow-y: hidden !important;
-            flex-wrap: wrap !important;
-          }
-          .stat-panel {
-            top: auto !important;
-            bottom: 0 !important;
-            right: 0 !important;
-            left: 0 !important;
-            width: 100% !important;
-            height: auto !important;
-            max-height: 70vh !important;
-            border-radius: 12px 12px 0 0 !important;
-            transform: translateY(100%);
-            transition: transform 0.4s ease !important;
-          }
-          .stat-panel[style*="right: 0"] {
-            transform: translateY(0) !important;
-          }
-        }
-      `}</style>
     </div>
   )
 }

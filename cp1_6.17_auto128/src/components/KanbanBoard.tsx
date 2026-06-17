@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { Feedback, FeedbackStatus, FeedbackType } from '../utils/api'
 import { sentimentEmoji } from '../utils/analysis'
 
@@ -38,49 +38,69 @@ function formatDate(isoString: string): string {
 interface CardProps {
   feedback: Feedback
   columnColor: string
+  isDragging: boolean
   onDragStart: (e: React.DragEvent, id: string) => void
+  onDragEnd: () => void
 }
 
-const FeedbackCard: React.FC<CardProps> = ({ feedback, columnColor, onDragStart }) => {
+const FeedbackCard: React.FC<CardProps> = ({ feedback, columnColor, isDragging, onDragStart, onDragEnd }) => {
   const [expanded, setExpanded] = useState(false)
   const [flash, setFlash] = useState(false)
+  const prevStatusRef = useRef<FeedbackStatus>(feedback.status)
+  const mountedRef = useRef(false)
+
+  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true
+      prevStatusRef.current = feedback.status
+      return
+    }
+    if (prevStatusRef.current !== feedback.status) {
+      prevStatusRef.current = feedback.status
+      setFlash(true)
+      const timer = setTimeout(() => setFlash(false), 500)
+      return () => clearTimeout(timer)
+    }
+  }, [feedback.status])
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', feedback.id)
+    const el = e.currentTarget as HTMLElement
+    requestAnimationFrame(() => {
+      el.style.opacity = '0.5'
+    })
     onDragStart(e, feedback.id)
   }
 
-  React.useEffect(() => {
-    setFlash(true)
-    const timer = setTimeout(() => setFlash(false), 500)
-    return () => clearTimeout(timer)
-  }, [feedback.status])
+  const handleDragEnd = (e: React.DragEvent) => {
+    const el = e.currentTarget as HTMLElement
+    el.style.opacity = '1'
+    onDragEnd()
+  }
+
+  const boxShadow = isDragging
+    ? '2px 2px 8px rgba(0,0,0,0.2)'
+    : '0 1px 3px rgba(0,0,0,0.1)'
+
+  const bgColor = flash ? '#F9E79F' : '#FFFFFF'
 
   return (
     <div
       draggable
       onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      className="feedback-card"
       style={{
-        width: 280,
-        backgroundColor: flash ? '#F9E79F' : '#FFFFFF',
+        backgroundColor: bgColor,
         borderRadius: 8,
         padding: 16,
         borderLeft: `5px solid ${columnColor}`,
         cursor: 'grab',
-        transition: 'box-shadow 0.2s, background-color 0.5s',
+        transition: 'box-shadow 0.2s ease, background-color 0.5s ease',
         userSelect: 'none',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-      }}
-      onDragStartCapture={(e) => {
-        const target = e.currentTarget as HTMLElement
-        target.style.boxShadow = '2px 2px 8px rgba(0,0,0,0.2)'
-        target.style.opacity = '0.8'
-      }}
-      onDragEnd={(e) => {
-        const target = e.currentTarget as HTMLElement
-        target.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)'
-        target.style.opacity = '1'
+        boxShadow,
+        opacity: 1
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
@@ -97,6 +117,9 @@ const FeedbackCard: React.FC<CardProps> = ({ feedback, columnColor, onDragStart 
           }}
         >
           {feedback.title}
+          <span style={{ fontSize: 10, color: '#aaa', marginLeft: 6, fontWeight: 400 }}>
+            {expanded ? '▲ 收起' : '▼ 展开'}
+          </span>
         </h4>
         <span style={{ fontSize: 16, color: '#888', flexShrink: 0 }} title={feedback.sentiment}>
           {sentimentEmoji[feedback.sentiment]}
@@ -126,30 +149,32 @@ const FeedbackCard: React.FC<CardProps> = ({ feedback, columnColor, onDragStart 
         style={{
           maxHeight: expanded ? '500px' : 0,
           overflow: 'hidden',
-          transition: 'max-height 0.3s ease-out',
+          transition: 'max-height 0.3s ease-out, margin-top 0.3s ease-out',
           marginTop: expanded ? 12 : 0
         }}
       >
         <p style={{ fontSize: 13, color: '#555', lineHeight: 1.6, marginBottom: 12 }}>
           {feedback.description}
         </p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {feedback.keywords.map((kw, idx) => (
-            <span
-              key={idx}
-              style={{
-                backgroundColor: '#F0F0F0',
-                borderRadius: 12,
-                padding: '4px 12px',
-                fontSize: 12,
-                color: '#666',
-                marginRight: 8
-              }}
-            >
-              {kw}
-            </span>
-          ))}
-        </div>
+        {feedback.keywords.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {feedback.keywords.map((kw, idx) => (
+              <span
+                key={idx}
+                style={{
+                  backgroundColor: '#F0F0F0',
+                  borderRadius: 12,
+                  padding: '4px 12px',
+                  fontSize: 12,
+                  color: '#666',
+                  display: 'inline-block'
+                }}
+              >
+                {kw}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -161,6 +186,10 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ feedbacks, onStatusChange }) 
 
   const handleDragStart = useCallback((_e: React.DragEvent, id: string) => {
     setDraggedId(id)
+  }, [])
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedId(null)
   }, [])
 
   const handleDragOver = useCallback((e: React.DragEvent, status: FeedbackStatus) => {
@@ -276,7 +305,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ feedbacks, onStatusChange }) 
                   key={fb.id}
                   feedback={fb}
                   columnColor={col.color}
+                  isDragging={draggedId === fb.id}
                   onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
                 />
               ))}
             </div>
