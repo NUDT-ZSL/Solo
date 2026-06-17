@@ -80,21 +80,44 @@ const quadBezier = (
   };
 };
 
+const buildPolyline = (stroke: Stroke): StrokePoint[] => {
+  const pts: StrokePoint[] = [stroke.startPoint];
+  if (stroke.type === 'curve') {
+    if (stroke.controlPoints && stroke.controlPoints.length > 0) {
+      pts.push(...stroke.controlPoints);
+    }
+  } else {
+    if (stroke.controlPoints && stroke.controlPoints.length > 0) {
+      pts.push(...stroke.controlPoints);
+    }
+  }
+  pts.push(stroke.endPoint);
+  return pts;
+};
+
+const pointAtProgress = (stroke: Stroke, progress: number): StrokePoint => {
+  const pts = buildPolyline(stroke);
+  if (pts.length === 1) return pts[0];
+  if (stroke.type === 'curve' && stroke.controlPoints && stroke.controlPoints.length === 1) {
+    return quadBezier(pts[0], pts[1], pts[2], progress);
+  }
+  const segs = pts.length - 1;
+  const totalT = progress * segs;
+  const segIdx = Math.min(Math.floor(totalT), segs - 1);
+  const segT = totalT - segIdx;
+  return lerpPoint(pts[segIdx], pts[segIdx + 1], segT);
+};
+
 const sampleCurveDistance = (
   px: number,
   py: number,
   stroke: Stroke,
-  samples = 20,
+  samples = 40,
 ): number => {
   let minDist = Infinity;
   for (let i = 0; i <= samples; i++) {
     const t = i / samples;
-    let pt: StrokePoint;
-    if (stroke.type === 'curve' && stroke.controlPoints && stroke.controlPoints[0]) {
-      pt = quadBezier(stroke.startPoint, stroke.controlPoints[0], stroke.endPoint, t);
-    } else {
-      pt = lerpPoint(stroke.startPoint, stroke.endPoint, t);
-    }
+    const pt = pointAtProgress(stroke, t);
     const d = Math.hypot(px - pt.x, py - pt.y);
     if (d < minDist) minDist = d;
   }
@@ -108,6 +131,9 @@ const drawStrokeSegment = (
   color: string,
   lineWidth: number,
 ) => {
+  if (progress <= 0) return;
+  const clamped = Math.min(1, progress);
+
   ctx.save();
   ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
@@ -115,37 +141,33 @@ const drawStrokeSegment = (
   ctx.lineJoin = 'round';
   ctx.beginPath();
 
-  if (progress <= 0) {
-    ctx.restore();
-    return;
-  }
+  const pts = buildPolyline(stroke);
 
-  const clamped = Math.min(1, progress);
-  const start = stroke.startPoint;
-
-  if (stroke.type === 'curve' && stroke.controlPoints && stroke.controlPoints[0]) {
-    const cp = stroke.controlPoints[0];
-    const end = stroke.endPoint;
+  if (stroke.type === 'curve' && stroke.controlPoints && stroke.controlPoints.length === 1) {
     if (clamped >= 1) {
-      ctx.moveTo(start.x, start.y);
-      ctx.quadraticCurveTo(cp.x, cp.y, end.x, end.y);
+      ctx.moveTo(pts[0].x, pts[0].y);
+      ctx.quadraticCurveTo(pts[1].x, pts[1].y, pts[2].x, pts[2].y);
     } else {
       const steps = 40;
       for (let i = 0; i <= steps; i++) {
         const t = (i / steps) * clamped;
-        const pt = quadBezier(start, cp, end, t);
+        const pt = quadBezier(pts[0], pts[1], pts[2], t);
         if (i === 0) ctx.moveTo(pt.x, pt.y);
         else ctx.lineTo(pt.x, pt.y);
       }
     }
   } else {
-    const end = stroke.endPoint;
-    if (clamped >= 1) {
-      ctx.moveTo(start.x, start.y);
-      ctx.lineTo(end.x, end.y);
-    } else {
-      const cur = lerpPoint(start, end, clamped);
-      ctx.moveTo(start.x, start.y);
+    const segs = pts.length - 1;
+    const totalT = clamped * segs;
+    const fullSegs = Math.floor(totalT);
+    const lastSegT = totalT - fullSegs;
+
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 0; i < fullSegs && i < segs; i++) {
+      ctx.lineTo(pts[i + 1].x, pts[i + 1].y);
+    }
+    if (fullSegs < segs) {
+      const cur = lerpPoint(pts[fullSegs], pts[fullSegs + 1], lastSegT);
       ctx.lineTo(cur.x, cur.y);
     }
   }
@@ -238,7 +260,8 @@ export default function StrokeCanvas({
   const notifyState = useCallback(() => {
     if (!onPlayStateChange) return;
     onPlayStateChange({
-      currentStrokeGlobal: animRef.current.currentIdx + (animRef.current.progress > 0 ? 1 : 0),
+      currentStrokeGlobal:
+        animRef.current.currentIdx + (animRef.current.progress > 0 ? 1 : 0),
       totalStrokes,
       completed: animRef.current.completed,
     });
@@ -287,21 +310,26 @@ export default function StrokeCanvas({
         hoverInfo.globalIndex === globalIdx &&
         (isPausedState || anim.completed);
       const scaleEff = isHover ? 1.15 : 1;
-      const color =
-        isHover
-          ? COLOR.hoverStroke
-          : state === 'done'
-            ? COLOR.strokeDone
-            : state === 'active'
-              ? COLOR.strokeActive
-              : 'transparent';
+      const color = isHover
+        ? COLOR.hoverStroke
+        : state === 'done'
+          ? COLOR.strokeDone
+          : state === 'active'
+            ? COLOR.strokeActive
+            : 'transparent';
 
       if (state !== 'pending') {
         drawStrokeSegment(ctx, stroke, drawProgress, color, STROKE_WIDTH * scaleEff);
       }
 
       if (isHover) {
-        drawStrokeSegment(ctx, stroke, 1, 'rgba(21, 101, 192, 0.25)', STROKE_WIDTH * 2.5);
+        drawStrokeSegment(
+          ctx,
+          stroke,
+          1,
+          'rgba(21, 101, 192, 0.25)',
+          STROKE_WIDTH * 2.5,
+        );
       }
 
       if (state !== 'pending' || isPausedState || anim.completed) {
@@ -315,12 +343,25 @@ export default function StrokeCanvas({
       }
     });
 
-    if (anim.completed && totalStrokes === 0) {
+    if (!anim.completed && totalStrokes === 0 && characters.length > 0) {
       ctx.fillStyle = COLOR.infoText;
+      ctx.font = '16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(
+        `暂不支持的汉字「${characters}」，请尝试：大小上中下 人水火山石 田日月明 子女子学 国我你他她们 是的了不在 有和也就这那 前后里外 左右`,
+        CANVAS_WIDTH / 2,
+        CANVAS_HEIGHT / 2,
+        CANVAS_WIDTH - 40,
+      );
+    }
+
+    if (characters.length === 0) {
+      ctx.fillStyle = '#9e9e9e';
       ctx.font = '18px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('请输入支持的汉字（大、小、上、下、中、人、水、火、山、石）', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+      ctx.fillText('请在上方输入框输入简体汉字', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
     }
 
     const tDpr = window.devicePixelRatio || 1;
@@ -372,7 +413,7 @@ export default function StrokeCanvas({
         tStrokeW,
       );
     });
-  }, [flatStrokes, hoverInfo, isPausedState, totalStrokes]);
+  }, [flatStrokes, hoverInfo, isPausedState, totalStrokes, characters]);
 
   useEffect(() => {
     render();
@@ -478,6 +519,14 @@ export default function StrokeCanvas({
 
   const handleMouseLeave = () => setHoverInfo(null);
 
+  const currentDisplayNum =
+    totalStrokes > 0
+      ? Math.min(
+          animRef.current.currentIdx + (animRef.current.progress > 0 ? 1 : 0),
+          totalStrokes,
+        )
+      : 0;
+
   return (
     <div
       ref={wrapRef}
@@ -541,9 +590,11 @@ export default function StrokeCanvas({
             }}
           >
             <div>
-              第 <span style={{ color: COLOR.marker, fontWeight: 700 }}>
-                {totalStrokes > 0 ? Math.min(animRef.current.currentIdx + (animRef.current.progress > 0 ? 1 : 0), totalStrokes) : 0}
-              </span> 笔 / 共 {totalStrokes} 笔
+              第{' '}
+              <span style={{ color: COLOR.marker, fontWeight: 700 }}>
+                {currentDisplayNum}
+              </span>{' '}
+              笔 / 共 {totalStrokes} 笔
             </div>
             {characters && (
               <div style={{ marginTop: '2px', fontSize: '12px', opacity: 0.7 }}>
@@ -557,28 +608,31 @@ export default function StrokeCanvas({
           <div
             style={{
               position: 'absolute',
-              left: Math.min(hoverInfo.mouseX + 12, CANVAS_WIDTH - 140),
-              top: Math.max(hoverInfo.mouseY - 50, 8),
-              background: 'rgba(33, 33, 33, 0.92)',
+              left: Math.min(hoverInfo.mouseX + 12, CANVAS_WIDTH - 260),
+              top: Math.max(hoverInfo.mouseY - 74, 8),
+              background: 'rgba(33, 33, 33, 0.94)',
               color: '#ffffff',
               fontSize: '13px',
-              padding: '8px 12px',
-              borderRadius: '8px',
+              padding: '10px 14px',
+              borderRadius: '10px',
               pointerEvents: 'none',
-              whiteSpace: 'nowrap',
-              transform: 'scale(1)',
+              whiteSpace: 'normal',
+              maxWidth: '260px',
+              transform: hoverInfo ? 'scale(1)' : 'scale(0.9)',
               transformOrigin: 'left bottom',
               transition: 'transform 0.2s ease, opacity 0.2s ease',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              boxShadow: '0 6px 16px rgba(0,0,0,0.25)',
               fontFamily: 'sans-serif',
               zIndex: 10,
+              lineHeight: 1.5,
             }}
           >
-            <div style={{ fontWeight: 700, color: '#90caf9' }}>
+            <div style={{ fontWeight: 700, color: '#90caf9', marginBottom: 4 }}>
               第 {hoverInfo.globalIndex + 1} 笔 · 编号 {hoverInfo.stroke.id}
             </div>
-            <div style={{ marginTop: '2px' }}>
-              笔画类型：{hoverInfo.stroke.direction}
+            <div style={{ color: '#ffe0b2' }}>笔画类型：{hoverInfo.stroke.kind}</div>
+            <div style={{ marginTop: 4, opacity: 0.92 }}>
+              方向：{hoverInfo.stroke.hint}
             </div>
           </div>
         )}
