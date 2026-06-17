@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { addBrew, getBrews, deleteBrew, getStats } from './dataStore.js';
+import { addBrew, getBrews, deleteBrew, getStats, SortType } from './dataStore.js';
 
 const app = express();
 const PORT = 3001;
@@ -23,7 +23,11 @@ app.post('/api/brews', (req, res) => {
 app.get('/api/brews', (req, res) => {
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 12;
-  const result = getBrews(page, limit);
+  const sort = (req.query.sort as string) || 'date_desc';
+  const validSort = ['date_desc', 'rating_desc', 'rating_asc'].includes(sort)
+    ? (sort as SortType)
+    : 'date_desc';
+  const result = getBrews(page, limit, validSort);
   res.json(result);
 });
 

@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { Download } from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -42,6 +43,7 @@ export default function Stats() {
   const [originStats, setOriginStats] = useState<OriginStatItem[]>([]);
   const [selectedOrigin, setSelectedOrigin] = useState<string | null>(null);
   const [filteredRecords, setFilteredRecords] = useState<OriginStatItem[]>([]);
+  const chartContainerRef = useRef<HTMLDivElement>(null);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -70,9 +72,67 @@ export default function Stats() {
     }
   };
 
+  const handleExportChart = async () => {
+    if (!chartContainerRef.current || ratingTrend.length === 0) {
+      alert('暂无数据可导出');
+      return;
+    }
+
+    const svg = chartContainerRef.current.querySelector('svg');
+    if (!svg) {
+      alert('图表加载中，请稍后再试');
+      return;
+    }
+
+    try {
+      const svgData = new XMLSerializer().serializeToString(svg);
+      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const scale = 2;
+        canvas.width = svg.clientWidth * scale;
+        canvas.height = svg.clientHeight * scale;
+        const ctx = canvas.getContext('2d');
+
+        if (ctx) {
+          ctx.fillStyle = '#FFF8F0';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.scale(scale, scale);
+          ctx.drawImage(img, 0, 0);
+
+          const pngUrl = canvas.toDataURL('image/png');
+          const link = document.createElement('a');
+          const rangeLabel =
+            range === 'all' ? '全部' : range === '30d' ? '近30天' : '近7天';
+          link.download = `评分趋势图_${rangeLabel}.png`;
+          link.href = pngUrl;
+          link.click();
+        }
+
+        URL.revokeObjectURL(url);
+      };
+      img.onerror = () => {
+        alert('导出失败，请重试');
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    } catch {
+      alert('导出失败，请重试');
+    }
+  };
+
   return (
     <div className="stats-page">
-      <h2 className="page-title">数据统计</h2>
+      <div className="stats-header">
+        <h2 className="page-title">数据统计</h2>
+        <button className="btn btn-export" onClick={handleExportChart}>
+          <Download size={16} />
+          导出图表
+        </button>
+      </div>
 
       <div className="range-tabs">
         {TIME_RANGES.map(({ key, label }) => (
@@ -88,9 +148,10 @@ export default function Stats() {
 
       <div className="chart-section">
         <h3 className="section-title">评分趋势</h3>
-        {ratingTrend.length > 0 ? (
-          <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={ratingTrend}>
+        <div ref={chartContainerRef}>
+          {ratingTrend.length > 0 ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={ratingTrend}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e0d8" />
               <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#6B7280' }} />
               <YAxis
@@ -118,6 +179,7 @@ export default function Stats() {
         ) : (
           <p className="no-data">暂无评分数据</p>
         )}
+        </div>
       </div>
 
       <div className="chart-section">

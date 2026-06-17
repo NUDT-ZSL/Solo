@@ -21,18 +21,27 @@ const FLAVOR_COLORS: Record<string, string> = {
   醇: '#10B981',
 };
 
+type SortType = 'date_desc' | 'rating_desc' | 'rating_asc';
+
+const SORT_OPTIONS: { key: SortType; label: string }[] = [
+  { key: 'date_desc', label: '按日期' },
+  { key: 'rating_desc', label: '评分高→低' },
+  { key: 'rating_asc', label: '评分低→高' },
+];
+
 export default function History() {
   const [brews, setBrews] = useState<Brew[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [sort, setSort] = useState<SortType>('date_desc');
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  const fetchBrews = useCallback(async (p: number) => {
+  const fetchBrews = useCallback(async (p: number, s: SortType) => {
     if (loading) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/brews?page=${p}&limit=12`);
+      const res = await fetch(`/api/brews?page=${p}&limit=12&sort=${s}`);
       const data = await res.json();
       if (p === 1) {
         setBrews(data.data);
@@ -48,8 +57,8 @@ export default function History() {
   }, [loading]);
 
   useEffect(() => {
-    fetchBrews(1);
-  }, []);
+    fetchBrews(1, sort);
+  }, [sort]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -57,7 +66,7 @@ export default function History() {
         if (entries[0].isIntersecting && page < totalPages && !loading) {
           const nextPage = page + 1;
           setPage(nextPage);
-          fetchBrews(nextPage);
+          fetchBrews(nextPage, sort);
         }
       },
       { rootMargin: '300px' }
@@ -68,11 +77,30 @@ export default function History() {
     }
 
     return () => observer.disconnect();
-  }, [page, totalPages, loading, fetchBrews]);
+  }, [page, totalPages, loading, sort, fetchBrews]);
+
+  const handleSortChange = (newSort: SortType) => {
+    if (newSort === sort) return;
+    setSort(newSort);
+    setPage(1);
+  };
 
   return (
     <div className="history-page">
-      <h2 className="page-title">冲煮历史</h2>
+      <div className="history-header">
+        <h2 className="page-title">冲煮历史</h2>
+        <div className="sort-toggle">
+          {SORT_OPTIONS.map(({ key, label }) => (
+            <button
+              key={key}
+              className={`sort-btn ${sort === key ? 'sort-btn--active' : ''}`}
+              onClick={() => handleSortChange(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {brews.length === 0 && !loading && (
         <div className="empty-state">

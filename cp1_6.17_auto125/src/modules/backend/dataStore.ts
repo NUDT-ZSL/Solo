@@ -29,11 +29,25 @@ export function addBrew(data: Omit<Brew, 'id' | 'createdAt'>): Brew {
   return brew;
 }
 
-export function getBrews(page: number = 1, limit: number = 12) {
-  const total = brews.length;
+export type SortType = 'date_desc' | 'rating_desc' | 'rating_asc';
+
+export function getBrews(page: number = 1, limit: number = 12, sort: SortType = 'date_desc') {
+  let sorted = [...brews];
+
+  if (sort === 'date_desc') {
+    sorted.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  } else if (sort === 'rating_desc') {
+    sorted.sort((a, b) => b.rating - a.rating || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  } else if (sort === 'rating_asc') {
+    sorted.sort((a, b) => a.rating - b.rating || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  const total = sorted.length;
   const totalPages = Math.ceil(total / limit);
   const start = (page - 1) * limit;
-  const data = brews.slice(start, start + limit);
+  const data = sorted.slice(start, start + limit);
   return { data, page, totalPages, total };
 }
 

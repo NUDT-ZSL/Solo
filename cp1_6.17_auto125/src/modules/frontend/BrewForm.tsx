@@ -227,23 +227,26 @@ export default function BrewForm() {
       <div className="form-group">
         <label className="form-label">风味标签（最多3个）</label>
         <div className="flavor-options">
-          {FLAVORS.map(({ key, color }) => (
-            <button
-              key={key}
-              type="button"
-              className={`flavor-tag ${flavorTags.includes(key) ? 'flavor-tag--active' : ''} ${
-                errors.flavorTags && !flavorTags.length ? 'input-error' : ''
-              }`}
-              style={{
-                backgroundColor: flavorTags.includes(key) ? color : 'transparent',
-                borderColor: color,
-                color: flavorTags.includes(key) ? '#fff' : color,
-              }}
-              onClick={() => toggleFlavor(key)}
-            >
-              {key}
-            </button>
-          ))}
+          {FLAVORS.map(({ key, color }) => {
+            const isActive = flavorTags.includes(key);
+            return (
+              <button
+                key={key}
+                type="button"
+                className={`flavor-tag ${isActive ? 'flavor-tag--active' : ''} ${
+                  errors.flavorTags && !flavorTags.length ? 'input-error' : ''
+                }`}
+                style={{
+                  backgroundColor: isActive ? color : '#E5E7EB',
+                  borderColor: isActive ? color : '#E5E7EB',
+                  color: isActive ? '#fff' : '#6B7280',
+                }}
+                onClick={() => toggleFlavor(key)}
+              >
+                {key}
+              </button>
+            );
+          })}
         </div>
         {errors.flavorTags && <span className="error-text">{errors.flavorTags}</span>}
       </div>
