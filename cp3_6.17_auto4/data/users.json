@@ -1,0 +1,5 @@
+[
+  {"id":"u1","name":"张明","avatar":"张","creditScore":95,"role":"user"},
+  {"id":"u2","name":"李华","avatar":"李","creditScore":72,"role":"user"},
+  {"id":"u3","name":"管理员","avatar":"管","creditScore":100,"role":"admin"}
+]
