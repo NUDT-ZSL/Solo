@@ -4,9 +4,12 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "predev": "node scripts/check-port.js",
+    "dev": "concurrently -k -n server,client -c blue,green \"npm:server\" \"npm:client-wait\"",
     "client": "vite",
+    "client-wait": "node scripts/wait-server.js && vite",
     "server": "tsx watch server/app.ts",
+    "wait-server": "node scripts/wait-server.js",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },

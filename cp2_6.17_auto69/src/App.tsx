@@ -13,6 +13,7 @@ function App() {
           <Route path="/" element={<Navigate to="/session" replace />} />
           <Route path="/session" element={<SessionManager />} />
           <Route path="/session/:id" element={<SessionManager />} />
+          <Route path="/player" element={<Navigate to="/player/demo" replace />} />
           <Route path="/player/:id" element={<PlayerDashboard />} />
           <Route path="/rankings" element={<GameRankings />} />
         </Routes>

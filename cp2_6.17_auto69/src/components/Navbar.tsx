@@ -28,12 +28,12 @@ export default function Navbar() {
 
   const navItems = [
     { path: '/session', label: '游戏桌' },
-    { path: '/player/demo', label: '个人中心' },
+    { path: '/player', label: '个人中心' },
     { path: '/rankings', label: '热门排行' }
   ];
 
   const isActive = (path: string) => {
-    if (path === '/player/demo') {
+    if (path === '/player') {
       return location.pathname.startsWith('/player');
     }
     return location.pathname === path;

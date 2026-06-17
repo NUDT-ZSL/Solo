@@ -41,6 +41,7 @@ export default function SessionManager() {
   const [currentRound, setCurrentRound] = useState(1);
   const [selectedPlayer, setSelectedPlayer] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [endScores, setEndScores] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -73,67 +74,79 @@ export default function SessionManager() {
   }, [session]);
 
   async function loadSession(sessionId: string) {
-    try {
-      const data = await sessionApi.getSession(sessionId);
-      setSession(data);
-    } catch (error) {
-      console.error('Failed to load session:', error);
+    setLoading(true);
+    setError(null);
+    const result = await sessionApi.getSession(sessionId);
+    if (result.error) {
+      setError(result.error);
+    } else if (result.data) {
+      setSession(result.data);
     }
+    setLoading(false);
   }
 
   function updatePlayer(playerId: string, field: 'name' | 'role', value: string) {
-    setPlayers(players.map(p =>
-      p.id === playerId ? { ...p, [field]: value } : p
-    ));
+    setPlayers(players.map(p => (p.id === playerId ? { ...p, [field]: value } : p)));
   }
 
   async function startGame(e: React.MouseEvent<HTMLButtonElement>) {
     createRipple(e);
     setLoading(true);
-    try {
-      const newSession = await sessionApi.createSession({
-        gameName,
-        playerCount,
-        players
-      });
-      const startedSession = await sessionApi.updateSession(newSession.id, {
-        status: 'playing'
-      });
-      setSession(startedSession);
-      navigate(`/session/${startedSession.id}`);
-    } catch (error) {
-      console.error('Failed to start game:', error);
-    } finally {
+    setError(null);
+    const createResult = await sessionApi.createSession({
+      gameName,
+      playerCount,
+      players
+    });
+    if (createResult.error) {
+      setError(createResult.error);
       setLoading(false);
+      return;
     }
+    if (!createResult.data) {
+      setLoading(false);
+      return;
+    }
+    const updateResult = await sessionApi.updateSession(createResult.data.id, {
+      status: 'playing'
+    });
+    if (updateResult.error) {
+      setError(updateResult.error);
+    } else if (updateResult.data) {
+      setSession(updateResult.data);
+      navigate(`/session/${updateResult.data.id}`);
+    }
+    setLoading(false);
   }
 
   async function submitNote(e: React.MouseEvent<HTMLButtonElement>) {
     createRipple(e);
     if (!session || !noteContent.trim() || !selectedPlayer) return;
     if (noteContent.length > 150) {
-      alert('笔记内容不能超过150字');
+      setError('笔记内容不能超过150字');
+      setTimeout(() => setError(null), 3000);
       return;
     }
 
     const player = session.players.find(p => p.id === selectedPlayer);
     if (!player) return;
 
-    try {
-      const newNote = await sessionApi.addNote(session.id, {
-        playerId: selectedPlayer,
-        playerName: player.name,
-        playerAvatar: player.avatar,
-        round: currentRound,
-        content: noteContent.trim()
-      });
+    const result = await sessionApi.addNote(session.id, {
+      playerId: selectedPlayer,
+      playerName: player.name,
+      playerAvatar: player.avatar,
+      round: currentRound,
+      content: noteContent.trim()
+    });
+    if (result.error) {
+      setError(result.error);
+      setTimeout(() => setError(null), 3000);
+    } else if (result.data) {
       setSession({
         ...session,
-        notes: [...session.notes, newNote]
+        notes: [...session.notes, result.data]
       });
       setNoteContent('');
-    } catch (error) {
-      console.error('Failed to add note:', error);
     }
   }
 
@@ -142,16 +155,15 @@ export default function SessionManager() {
     const currentPlayerId = selectedPlayer || session.players[0]?.id;
     if (!currentPlayerId) return;
 
-    try {
-      const updatedNote = await sessionApi.likeNote(session.id, note.id, currentPlayerId);
+    const result = await sessionApi.likeNote(session.id, note.id, currentPlayerId);
+    if (result.error) {
+      setError(result.error);
+      setTimeout(() => setError(null), 3000);
+    } else if (result.data) {
       setSession({
         ...session,
-        notes: session.notes.map(n =>
-          n.id === note.id ? updatedNote : n
-        )
+        notes: session.notes.map(n => (n.id === note.id ? result.data! : n))
       });
-    } catch (error) {
-      console.error('Failed to like note:', error);
     }
   }
 
@@ -170,16 +182,19 @@ export default function SessionManager() {
       .sort((a, b) => b.score - a.score)
       .map((r, idx) => ({ ...r, rank: idx + 1 }));
 
-    try {
-      const finishedSession = await sessionApi.updateSession(session.id, {
-        status: 'finished',
-        rounds: currentRound,
-        results
-      });
-      setSession(finishedSession);
-    } catch (error) {
-      console.error('Failed to end game:', error);
+    setLoading(true);
+    setError(null);
+    const result = await sessionApi.updateSession(session.id, {
+      status: 'finished',
+      rounds: currentRound,
+      results
+    });
+    if (result.error) {
+      setError(result.error);
+    } else if (result.data) {
+      setSession(result.data);
     }
+    setLoading(false);
   }
 
   const sortedNotes = [...(session?.notes || [])].sort(
@@ -190,12 +205,40 @@ export default function SessionManager() {
     .sort((a, b) => b.likes - a.likes)
     .slice(0, 3);
 
+  if (loading && !session && id) {
+    return (
+      <div className="session-page">
+        <div className="card">
+          <div className="empty-state">
+            <div className="empty-state-icon">⏳</div>
+            <p>加载中...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!session) {
     return (
       <div className="session-page">
         <div className="session-main">
           <div className="card">
             <h1 className="page-title">创建游戏桌</h1>
+
+            {error && (
+              <div
+                className="card"
+                style={{
+                  marginBottom: 16,
+                  padding: '12px 16px',
+                  background: '#ffebee',
+                  color: '#c62828',
+                  borderLeft: '4px solid #f44336'
+                }}
+              >
+                ⚠️ {error}
+              </div>
+            )}
 
             <div className="form-group">
               <label className="form-label">选择桌游</label>
@@ -205,7 +248,9 @@ export default function SessionManager() {
                 onChange={e => setGameName(e.target.value)}
               >
                 {gameNames.map(name => (
-                  <option key={name} value={name}>{name}</option>
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -218,7 +263,9 @@ export default function SessionManager() {
                 onChange={e => setPlayerCount(Number(e.target.value))}
               >
                 {[2, 3, 4, 5, 6].map(n => (
-                  <option key={n} value={n}>{n}人</option>
+                  <option key={n} value={n}>
+                    {n}人
+                  </option>
                 ))}
               </select>
             </div>
@@ -273,6 +320,21 @@ export default function SessionManager() {
   if (session.status === 'finished') {
     return (
       <div className="card">
+        {error && (
+          <div
+            className="card"
+            style={{
+              marginBottom: 16,
+              padding: '12px 16px',
+              background: '#ffebee',
+              color: '#c62828',
+              borderLeft: '4px solid #f44336'
+            }}
+          >
+            ⚠️ {error}
+          </div>
+        )}
+
         <h1 className="page-title">📋 对局战报 - {session.gameName}</h1>
 
         <div className="war-report">
@@ -296,8 +358,7 @@ export default function SessionManager() {
               <div className="timeline-item">
                 <div className="timeline-round">游戏结束</div>
                 <div className="timeline-event">
-                  {dayjs(session.endTime).format('HH:mm')} 游戏结束，
-                  共{session.rounds}回合，
+                  {dayjs(session.endTime).format('HH:mm')} 游戏结束，共{session.rounds}回合，
                   历时{session.durationMinutes}分钟
                 </div>
               </div>
@@ -352,13 +413,24 @@ export default function SessionManager() {
               )}
             </div>
 
-            <div style={{ marginTop: 24, padding: 16, background: '#f5f5f5', borderRadius: 8 }}>
+            <div
+              style={{
+                marginTop: 24,
+                padding: 16,
+                background: '#f5f5f5',
+                borderRadius: 8
+              }}
+            >
               <div style={{ fontSize: 12, color: '#888', marginBottom: 4 }}>评分规则</div>
               <div style={{ fontSize: 12, color: '#666', lineHeight: 1.8 }}>
-                胜利: +10分<br />
-                第二名: +6分<br />
-                第三名: +3分<br />
-                其余: +1分<br />
+                胜利: +10分
+                <br />
+                第二名: +6分
+                <br />
+                第三名: +3分
+                <br />
+                其余: +1分
+                <br />
                 每分钟游戏时长: +0.5分
               </div>
             </div>
@@ -380,6 +452,27 @@ export default function SessionManager() {
     <div className="session-page">
       <div className="session-main">
         <div className="card">
+          {error && (
+            <div
+              className="card"
+              style={{
+                marginBottom: 16,
+                padding: '12px 16px',
+                background: '#ffebee',
+                color: '#c62828',
+                borderLeft: '4px solid #f44336',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}
+            >
+              <span>⚠️ {error}</span>
+              <span onClick={() => setError(null)} style={{ cursor: 'pointer' }}>
+                ✕
+              </span>
+            </div>
+          )}
+
           <h1 className="page-title">🎮 {session.gameName}</h1>
 
           <div style={{ marginBottom: 20 }}>
@@ -397,7 +490,7 @@ export default function SessionManager() {
               <button
                 className="btn btn-secondary"
                 style={{ padding: '8px 16px' }}
-                onClick={(e) => {
+                onClick={e => {
                   createRipple(e);
                   if (currentRound > 1) setCurrentRound(currentRound - 1);
                 }}
@@ -410,7 +503,7 @@ export default function SessionManager() {
               <button
                 className="btn btn-secondary"
                 style={{ padding: '8px 16px' }}
-                onClick={(e) => {
+                onClick={e => {
                   createRipple(e);
                   setCurrentRound(currentRound + 1);
                 }}
@@ -434,10 +527,12 @@ export default function SessionManager() {
                   className="form-input"
                   style={{ width: 80 }}
                   value={endScores[player.id] || 0}
-                  onChange={e => setEndScores({
-                    ...endScores,
-                    [player.id]: Number(e.target.value)
-                  })}
+                  onChange={e =>
+                    setEndScores({
+                      ...endScores,
+                      [player.id]: Number(e.target.value)
+                    })
+                  }
                 />
               </div>
             ))}
@@ -447,8 +542,9 @@ export default function SessionManager() {
             className="btn btn-primary"
             style={{ width: '100%', marginTop: 16 }}
             onClick={endGame}
+            disabled={loading}
           >
-            结束对局，生成战报
+            {loading ? '生成中...' : '结束对局，生成战报'}
           </button>
         </div>
       </div>
@@ -465,7 +561,9 @@ export default function SessionManager() {
               style={{ marginBottom: 8 }}
             >
               {session.players.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
               ))}
             </select>
             <textarea
@@ -483,7 +581,7 @@ export default function SessionManager() {
                 className="btn btn-primary"
                 style={{ marginLeft: 'auto' }}
                 onClick={submitNote}
-                disabled={!noteContent.trim()}
+                disabled={!noteContent.trim() || loading}
               >
                 发布
               </button>
@@ -508,7 +606,9 @@ export default function SessionManager() {
                     <div className="note-content">{note.content}</div>
                     <div className="note-footer">
                       <button
-                        className={`like-btn ${note.likedBy.includes(selectedPlayer) ? 'active' : ''}`}
+                        className={`like-btn ${
+                          note.likedBy.includes(selectedPlayer) ? 'active' : ''
+                        }`}
                         onClick={() => toggleLike(note)}
                       >
                         ❤️ {note.likes}

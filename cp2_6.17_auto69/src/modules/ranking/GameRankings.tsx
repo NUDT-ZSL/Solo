@@ -29,31 +29,32 @@ export default function GameRankings() {
   const [sortKey, setSortKey] = useState<SortKey>('totalSessions');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadRankings();
   }, []);
 
   async function loadRankings() {
-    try {
-      const data = await gameApi.getRankings();
-      setGames(data);
-    } catch (error) {
-      console.error('Failed to load rankings:', error);
-    } finally {
-      setLoading(false);
+    setLoading(true);
+    setError(null);
+    const result = await gameApi.getRankings();
+    if (result.error) {
+      setError(result.error);
+    } else if (result.data) {
+      setGames(result.data);
     }
+    setLoading(false);
   }
 
   async function toggleFavorite(game: GameRanking, e: React.MouseEvent<HTMLButtonElement>) {
     createRipple(e);
-    try {
-      const updated = await gameApi.toggleFavorite(game.name);
-      setGames(games.map(g =>
-        g.name === game.name ? updated : g
-      ));
-    } catch (error) {
-      console.error('Failed to toggle favorite:', error);
+    const result = await gameApi.toggleFavorite(game.name);
+    if (result.error) {
+      setError(result.error);
+      setTimeout(() => setError(null), 3000);
+    } else if (result.data) {
+      setGames(games.map(g => (g.name === game.name ? result.data! : g)));
     }
   }
 
@@ -95,7 +96,7 @@ export default function GameRankings() {
       <div className="rankings-container">
         <div className="card">
           <div className="empty-state">
-            <div className="empty-state-icon">📊</div>
+            <div className="empty-state-icon">⏳</div>
             <p>加载中...</p>
           </div>
         </div>
@@ -106,6 +107,31 @@ export default function GameRankings() {
   return (
     <div className="rankings-container">
       <h1 className="page-title">🏆 桌游热门度排名</h1>
+
+      {error && (
+        <div
+          className="card"
+          style={{
+            marginBottom: 16,
+            padding: '12px 16px',
+            background: '#ffebee',
+            color: '#c62828',
+            borderLeft: '4px solid #f44336',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}
+        >
+          <span>⚠️ {error}</span>
+          <button
+            className="btn btn-secondary"
+            style={{ padding: '6px 12px', fontSize: 12 }}
+            onClick={loadRankings}
+          >
+            重试
+          </button>
+        </div>
+      )}
 
       <div className="card">
         <table className="rankings-table">
@@ -125,11 +151,14 @@ export default function GameRankings() {
           </thead>
           <tbody>
             {sortedGames.map(game => (
-              <tr key={game.name} className="rankings-row">
-                <div
-                  className="progress-bar-wrapper"
-                  style={{ width: `${(game.totalSessions / maxSessions) * 100}%` }}
-                />
+              <tr
+                key={game.name}
+                className="rankings-row"
+                style={{
+                  position: 'relative',
+                  backgroundImage: `linear-gradient(90deg, rgba(187,222,251,0.3) 0%, rgba(21,101,192,0.3) ${(game.totalSessions / maxSessions) * 100}%, transparent ${(game.totalSessions / maxSessions) * 100}%)`
+                }}
+              >
                 <td className="game-name-cell">{game.name}</td>
                 <td>{game.totalSessions}</td>
                 <td>{game.averageDuration}</td>
@@ -138,7 +167,7 @@ export default function GameRankings() {
                 <td style={{ textAlign: 'center' }}>
                   <button
                     className={`favorite-btn ${game.isFavorite ? 'active' : ''}`}
-                    onClick={(e) => toggleFavorite(game, e)}
+                    onClick={e => toggleFavorite(game, e)}
                     title={game.isFavorite ? '取消收藏' : '收藏'}
                   >
                     {game.isFavorite ? '⭐' : '☆'}
@@ -150,38 +179,35 @@ export default function GameRankings() {
         </table>
       </div>
 
-      <div style={{ marginTop: 24, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+      <div
+        style={{
+          marginTop: 24,
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: 16
+        }}
+      >
         <div className="card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 32, fontWeight: 'bold', color: '#64b5f6' }}>
-            {games.length}
-          </div>
-          <div style={{ fontSize: 14, color: '#888', marginTop: 4 }}>
-            桌游总数
-          </div>
+          <div style={{ fontSize: 32, fontWeight: 'bold', color: '#64b5f6' }}>{games.length}</div>
+          <div style={{ fontSize: 14, color: '#888', marginTop: 4 }}>桌游总数</div>
         </div>
         <div className="card" style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 32, fontWeight: 'bold', color: '#4caf50' }}>
             {games.reduce((sum, g) => sum + g.totalSessions, 0)}
           </div>
-          <div style={{ fontSize: 14, color: '#888', marginTop: 4 }}>
-            总对局数
-          </div>
+          <div style={{ fontSize: 14, color: '#888', marginTop: 4 }}>总对局数</div>
         </div>
         <div className="card" style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 32, fontWeight: 'bold', color: '#ff9800' }}>
             {games.reduce((sum, g) => sum + g.totalNotes, 0)}
           </div>
-          <div style={{ fontSize: 14, color: '#888', marginTop: 4 }}>
-            策略笔记
-          </div>
+          <div style={{ fontSize: 14, color: '#888', marginTop: 4 }}>策略笔记</div>
         </div>
         <div className="card" style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 32, fontWeight: 'bold', color: '#9c27b0' }}>
             {games.filter(g => g.isFavorite).length}
           </div>
-          <div style={{ fontSize: 14, color: '#888', marginTop: 4 }}>
-            已收藏
-          </div>
+          <div style={{ fontSize: 14, color: '#888', marginTop: 4 }}>已收藏</div>
         </div>
       </div>
     </div>

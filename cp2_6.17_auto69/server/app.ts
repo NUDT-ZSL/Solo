@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 3001;
+const PORT = 4000;
 
 app.use(cors());
 app.use(express.json());
@@ -358,8 +358,81 @@ app.get('/players/:id/stats', (req, res) => {
 });
 
 app.get('/games/rankings', (_req, res) => {
-  const games = readJSONFile<GameRanking[]>('games.json');
-  res.json(games);
+  try {
+    const sessions = readJSONFile<GameSession[]>('sessions.json');
+    const gamesData = readJSONFile<GameRanking[]>('games.json');
+    const gameMap = new Map<string, {
+      name: string;
+      totalSessions: number;
+      totalDuration: number;
+      durationCount: number;
+      totalRounds: number;
+      roundsCount: number;
+      totalNotes: number;
+      isFavorite: boolean;
+    }>();
+
+    gamesData.forEach(g => {
+      gameMap.set(g.name, {
+        name: g.name,
+        totalSessions: 0,
+        totalDuration: 0,
+        durationCount: 0,
+        totalRounds: 0,
+        roundsCount: 0,
+        totalNotes: 0,
+        isFavorite: g.isFavorite
+      });
+    });
+
+    const finishedSessions = sessions.filter(s => s.status === 'finished');
+    finishedSessions.forEach(session => {
+      let game = gameMap.get(session.gameName);
+      if (!game) {
+        game = {
+          name: session.gameName,
+          totalSessions: 0,
+          totalDuration: 0,
+          durationCount: 0,
+          totalRounds: 0,
+          roundsCount: 0,
+          totalNotes: 0,
+          isFavorite: false
+        };
+        gameMap.set(session.gameName, game);
+      }
+      game.totalSessions += 1;
+      if (session.durationMinutes) {
+        game.totalDuration += session.durationMinutes;
+        game.durationCount += 1;
+      }
+      if (session.rounds) {
+        game.totalRounds += session.rounds;
+        game.roundsCount += 1;
+      }
+      game.totalNotes += session.notes.length;
+    });
+
+    const result: GameRanking[] = Array.from(gameMap.values()).map(g => ({
+      name: g.name,
+      totalSessions: g.totalSessions > 0 ? g.totalSessions : (gamesData.find(x => x.name === g.name)?.totalSessions || 0),
+      averageDuration: g.durationCount > 0
+        ? Math.round(g.totalDuration / g.durationCount)
+        : (gamesData.find(x => x.name === g.name)?.averageDuration || 0),
+      averageRounds: g.roundsCount > 0
+        ? Math.round(g.totalRounds / g.roundsCount)
+        : (gamesData.find(x => x.name === g.name)?.averageRounds || 0),
+      totalNotes: g.totalNotes > 0 ? g.totalNotes : (gamesData.find(x => x.name === g.name)?.totalNotes || 0),
+      isFavorite: g.isFavorite
+    }));
+
+    result.sort((a, b) => b.totalSessions - a.totalSessions);
+    res.json(result);
+  } catch (error) {
+    console.error('Error computing rankings:', error);
+    const games = readJSONFile<GameRanking[]>('games.json');
+    res.json(games);
+  }
 });
 
 app.post('/games/:name/favorite', (req, res) => {

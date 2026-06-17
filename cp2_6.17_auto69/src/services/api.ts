@@ -1,19 +1,72 @@
 const BASE_URL = '/api';
 
-async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${BASE_URL}${url}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers
-    }
-  });
+export interface ApiResult<T> {
+  data: T | null;
+  error: string | null;
+  loading: boolean;
+}
 
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+    this.name = 'ApiError';
   }
+}
 
-  return response.json();
+async function request<T>(url: string, options?: RequestInit): Promise<T> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    const response = await fetch(`${BASE_URL}${url}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers
+      },
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      let errorMessage = `请求失败 (状态码: ${response.status})`;
+      try {
+        const errData = await response.json();
+        if (errData?.error) {
+          errorMessage = errData.error;
+        }
+      } catch {
+        // ignore parse error
+      }
+      if (response.status === 404) {
+        errorMessage = '请求的资源不存在';
+      } else if (response.status === 500) {
+        errorMessage = '服务器内部错误，请稍后重试';
+      } else if (response.status === 0) {
+        errorMessage = '网络连接失败，请检查网络';
+      }
+      throw new ApiError(errorMessage, response.status);
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new ApiError('请求超时，请稍后重试', 408);
+    }
+    if (error instanceof TypeError) {
+      throw new ApiError('网络连接失败，请检查服务器是否启动', 0);
+    }
+    if (error instanceof Error) {
+      throw new ApiError(error.message, 500);
+    }
+    throw new ApiError('未知错误', 500);
+  }
 }
 
 export interface PlayerInSession {
@@ -88,28 +141,74 @@ export interface GameRanking {
 
 export const gameNames = ['卡坦岛', '璀璨宝石', '七大奇迹', '殖民火星', '冷战热斗'];
 
+async function safeCall<T>(fn: () => Promise<T>): Promise<{ data: T | null; error: string | null }> {
+  try {
+    const data = await fn();
+    return { data, error: null };
+  } catch (error) {
+    if (error instanceof Error) {
+      return { data: null, error: error.message };
+    }
+    return { data: null, error: '请求失败' };
+  }
+}
+
 export const sessionApi = {
-  getSessions: () => request<GameSession[]>('/sessions'),
-  getSession: (id: string) => request<GameSession>(`/sessions/${id}`),
+  getSessions: () =>
+    safeCall(() => request<GameSession[]>('/sessions')),
+
+  getSession: (id: string) =>
+    safeCall(() => request<GameSession>(`/sessions/${id}`)),
+
   createSession: (data: { gameName: string; playerCount: number; players: PlayerInSession[] }) =>
-    request<GameSession>('/sessions', { method: 'POST', body: JSON.stringify(data) }),
+    safeCall(() =>
+      request<GameSession>('/sessions', {
+        method: 'POST',
+        body: JSON.stringify(data)
+      })
+    ),
+
   updateSession: (id: string, data: Partial<GameSession>) =>
-    request<GameSession>(`/sessions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  addNote: (sessionId: string, note: Omit<StrategyNote, 'id' | 'likes' | 'likedBy' | 'timestamp'>) =>
-    request<StrategyNote>(`/sessions/${sessionId}/notes`, { method: 'POST', body: JSON.stringify(note) }),
+    safeCall(() =>
+      request<GameSession>(`/sessions/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data)
+      })
+    ),
+
+  addNote: (
+    sessionId: string,
+    note: Omit<StrategyNote, 'id' | 'likes' | 'likedBy' | 'timestamp'>
+  ) =>
+    safeCall(() =>
+      request<StrategyNote>(`/sessions/${sessionId}/notes`, {
+        method: 'POST',
+        body: JSON.stringify(note)
+      })
+    ),
+
   likeNote: (sessionId: string, noteId: string, playerId: string) =>
-    request<StrategyNote>(`/sessions/${sessionId}/notes/${noteId}/like`, {
-      method: 'POST',
-      body: JSON.stringify({ playerId })
-    })
+    safeCall(() =>
+      request<StrategyNote>(`/sessions/${sessionId}/notes/${noteId}/like`, {
+        method: 'POST',
+        body: JSON.stringify({ playerId })
+      })
+    )
 };
 
 export const playerApi = {
-  getPlayerStats: (id: string) => request<PlayerStats>(`/players/${id}/stats`)
+  getPlayerStats: (id: string) =>
+    safeCall(() => request<PlayerStats>(`/players/${id}/stats`))
 };
 
 export const gameApi = {
-  getRankings: () => request<GameRanking[]>('/games/rankings'),
+  getRankings: () =>
+    safeCall(() => request<GameRanking[]>('/games/rankings')),
+
   toggleFavorite: (name: string) =>
-    request<GameRanking>(`/games/${name}/favorite`, { method: 'POST' })
+    safeCall(() =>
+      request<GameRanking>(`/games/${encodeURIComponent(name)}/favorite`, {
+        method: 'POST'
+      })
+    )
 };
