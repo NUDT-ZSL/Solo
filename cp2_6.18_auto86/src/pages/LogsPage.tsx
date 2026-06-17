@@ -7,7 +7,6 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  Cell,
   LabelList,
 } from 'recharts';
 import DateSelector, { DateRange } from '../components/DateSelector';
@@ -37,18 +36,6 @@ const weekdayColorMap: Record<number, string> = {
 };
 
 const weekdayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-
-function getBarColor(index: number, total: number): string {
-  if (total <= 1) return '#388e3c';
-  const ratio = index / (total - 1);
-  return ratio < 0.5
-    ? `rgb(${Math.round(165 + (56 - 165) * ratio * 2)}, ${Math.round(
-        214 + (142 - 214) * ratio * 2
-      )}, ${Math.round(167 + (60 - 167) * ratio * 2)})`
-    : `rgb(${Math.round(56 + (56 - 56) * (ratio - 0.5) * 2)}, ${Math.round(
-        142 + (142 - 142) * (ratio - 0.5) * 2
-      )}, ${Math.round(60 + (60 - 60) * (ratio - 0.5) * 2)})`;
-}
 
 export default function LogsPage() {
   const [logs, setLogs] = useState<BakingLog[]>([]);
@@ -238,16 +225,19 @@ export default function LogsPage() {
           <div style={{ width: '100%', height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={statsData} margin={{ top: 30, right: 30, left: 20, bottom: 10 }}>
+                <defs>
+                  <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#a5d6a7" />
+                    <stop offset="100%" stopColor="#388e3c" />
+                  </linearGradient>
+                </defs>
                 <XAxis dataKey="name" tick={{ fill: '#555', fontSize: 13 }} />
                 <YAxis tick={{ fill: '#555', fontSize: 12 }} />
                 <Tooltip
                   formatter={(value: number) => [`${value} kg`, '消耗量']}
                   contentStyle={{ borderRadius: 8, border: '1px solid #eee' }}
                 />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                  {statsData.map((_, index) => (
-                    <Cell key={index} fill={getBarColor(index, statsData.length)} />
-                  ))}
+                <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="url(#barGradient)">
                   <LabelList
                     dataKey="value"
                     position="top"
@@ -271,11 +261,8 @@ export default function LogsPage() {
           {filteredLogs.map((log) => {
             const dayIdx = dayjs(log.date).day();
             return (
-              <div key={log.id} className="timeline-item">
-                <div
-                  className="timeline-dot"
-                  style={{ backgroundColor: weekdayColorMap[dayIdx] }}
-                />
+              <div key={log.id} className={`timeline-item day-${dayIdx}`}>
+                <div className="timeline-dot" />
                 <div className={`log-card day-${dayIdx}`}>
                   <div className="log-date">
                     {log.date} {weekdayNames[dayIdx]}

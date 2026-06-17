@@ -484,6 +484,14 @@ body {
   z-index: 1;
 }
 
+.timeline-item.day-0 .timeline-dot { background-color: #e53935; }
+.timeline-item.day-1 .timeline-dot { background-color: #fb8c00; }
+.timeline-item.day-2 .timeline-dot { background-color: #fdd835; }
+.timeline-item.day-3 .timeline-dot { background-color: #43a047; }
+.timeline-item.day-4 .timeline-dot { background-color: #1e88e5; }
+.timeline-item.day-5 .timeline-dot { background-color: #8e24aa; }
+.timeline-item.day-6 .timeline-dot { background-color: #6d4c41; }
+
 .log-card {
   width: 600px;
   background-color: #ffffff;
@@ -493,25 +501,16 @@ body {
   position: relative;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
   transition: transform 0.2s ease;
+  border-left: 4px solid transparent;
 }
 
-.log-card::before {
-  content: '';
-  position: absolute;
-  left: -4px;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  border-radius: 4px 0 0 4px;
-}
-
-.log-card.day-0::before, .log-card.day-0 .timeline-dot { background-color: #e53935; }
-.log-card.day-1::before, .log-card.day-1 .timeline-dot { background-color: #fb8c00; }
-.log-card.day-2::before, .log-card.day-2 .timeline-dot { background-color: #fdd835; }
-.log-card.day-3::before, .log-card.day-3 .timeline-dot { background-color: #43a047; }
-.log-card.day-4::before, .log-card.day-4 .timeline-dot { background-color: #1e88e5; }
-.log-card.day-5::before, .log-card.day-5 .timeline-dot { background-color: #8e24aa; }
-.log-card.day-6::before, .log-card.day-6 .timeline-dot { background-color: #6d4c41; }
+.log-card.day-0 { border-left-color: #e53935; }
+.log-card.day-1 { border-left-color: #fb8c00; }
+.log-card.day-2 { border-left-color: #fdd835; }
+.log-card.day-3 { border-left-color: #43a047; }
+.log-card.day-4 { border-left-color: #1e88e5; }
+.log-card.day-5 { border-left-color: #8e24aa; }
+.log-card.day-6 { border-left-color: #6d4c41; }
 
 .log-date {
   font-size: 17px;
@@ -642,17 +641,17 @@ body {
     width: 95%;
     margin: 0 2.5%;
     padding-top: 4px;
+    border-left: none;
+    border-top: 4px solid transparent;
   }
 
-  .log-card::before {
-    left: 0;
-    top: -4px;
-    right: 0;
-    bottom: auto;
-    width: auto;
-    height: 4px;
-    border-radius: 4px 4px 0 0;
-  }
+  .log-card.day-0 { border-top-color: #e53935; border-left-color: transparent; }
+  .log-card.day-1 { border-top-color: #fb8c00; border-left-color: transparent; }
+  .log-card.day-2 { border-top-color: #fdd835; border-left-color: transparent; }
+  .log-card.day-3 { border-top-color: #43a047; border-left-color: transparent; }
+  .log-card.day-4 { border-top-color: #1e88e5; border-left-color: transparent; }
+  .log-card.day-5 { border-top-color: #8e24aa; border-left-color: transparent; }
+  .log-card.day-6 { border-top-color: #6d4c41; border-left-color: transparent; }
 
   .modal-content {
     padding: 20px;
