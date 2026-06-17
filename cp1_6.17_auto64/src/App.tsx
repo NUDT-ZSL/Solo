@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import PortfolioGrid, { Artwork } from './components/PortfolioGrid';
 import ColorExtractor from './components/ColorExtractor';
+import DropZone, { PresetColorBlock } from './components/DropZone';
 import {
   ExtractedColor,
   Theme,
@@ -38,6 +39,7 @@ const App: React.FC = () => {
   });
   const [savedThemes, setSavedThemes] = useState<SavedTheme[]>([]);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [currentArtworkTitle, setCurrentArtworkTitle] = useState<string>('春日樱花');
   const rafIdRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -81,6 +83,7 @@ const App: React.FC = () => {
         setExtractedColors(colors);
         const theme = generateTheme(colors, adjustments);
         setCurrentTheme(theme);
+        setCurrentArtworkTitle(firstArtwork.title);
       }
     } catch (error) {
       console.error('Failed to fetch artworks:', error);
@@ -135,6 +138,7 @@ const App: React.FC = () => {
       rgb: { r: 0, g: 0, b: 0 },
     }));
     setExtractedColors(colors);
+    setCurrentArtworkTitle(artwork.title);
     
     const newTheme = generateTheme(colors, adjustments);
     setCurrentTheme(newTheme);
@@ -190,9 +194,14 @@ const App: React.FC = () => {
     }
   }, [savedThemes]);
 
-  const handlePreviewAreaClick = useCallback(() => {
-    console.log('Preview area clicked - for file upload implementation');
+  const handleDeleteSavedTheme = useCallback((index: number) => {
+    setSavedThemes(prev => prev.filter((_, i) => i !== index));
   }, []);
+
+  const handleDropUpload = useCallback(async (preset: PresetColorBlock) => {
+    await extractColorsFromColors(preset.colors, preset.title, preset.thumbnailColor);
+    setCurrentArtworkTitle(preset.title);
+  }, [extractColorsFromColors]);
 
   return (
     <div
@@ -247,8 +256,16 @@ const App: React.FC = () => {
           style={{
             flex: 1,
             minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '24px',
           }}
         >
+          <DropZone
+            onDropUpload={handleDropUpload}
+            currentThemePrimary={currentTheme.primary}
+            isUploading={isExtracting}
+          />
           <PortfolioGrid
             artworks={artworks}
             currentTheme={currentTheme}
@@ -262,13 +279,12 @@ const App: React.FC = () => {
           currentTheme={currentTheme}
           adjustments={adjustments}
           savedThemes={savedThemes}
-          isExtracting={isExtracting}
-          onExtractFromColors={extractColorsFromColors}
+          currentArtworkTitle={currentArtworkTitle}
           onThemeColorClick={handleThemeColorClick}
           onAdjustmentsChange={handleAdjustmentsChange}
           onSaveTheme={handleSaveTheme}
           onSavedThemeClick={handleSavedThemeClick}
-          onPreviewAreaClick={handlePreviewAreaClick}
+          onDeleteSavedTheme={handleDeleteSavedTheme}
         />
       </main>
 

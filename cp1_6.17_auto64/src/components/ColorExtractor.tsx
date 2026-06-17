@@ -1,44 +1,34 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { ExtractedColor, ThemeAdjustments, Theme } from '../themeEngine';
 
 interface ColorExtractorProps {
   extractedColors: ExtractedColor[];
   currentTheme: Theme;
+  currentArtworkTitle: string;
   adjustments: ThemeAdjustments;
   savedThemes: Array<{ id: string; colors: ExtractedColor[]; theme: Theme }>;
-  isExtracting: boolean;
-  onExtractFromColors: (colors: string[], title: string, thumbnailColor: string) => void;
   onThemeColorClick: (colorIndex: number) => void;
   onAdjustmentsChange: (adjustments: ThemeAdjustments) => void;
   onSaveTheme: () => void;
   onSavedThemeClick: (index: number) => void;
-  onPreviewAreaClick: () => void;
+  onDeleteSavedTheme: (index: number) => void;
 }
-
-const presetColorSquares = [
-  { colors: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7'], title: '活力糖果', thumbnail: '#FF6B6B' },
-  { colors: ['#2C3E50', '#34495E', '#7F8C8D', '#BDC3C7', '#ECF0F1'], title: '都市灰调', thumbnail: '#2C3E50' },
-  { colors: ['#F39C12', '#E74C3C', '#9B59B6', '#3498DB', '#2ECC71'], title: '彩虹交响', thumbnail: '#F39C12' },
-  { colors: ['#D4A574', '#C19A6B', '#8B7355', '#6B4423', '#3E2723'], title: '大地温暖', thumbnail: '#D4A574' },
-];
 
 const ColorExtractor: React.FC<ColorExtractorProps> = ({
   extractedColors,
   currentTheme,
+  currentArtworkTitle,
   adjustments,
   savedThemes,
-  isExtracting,
-  onExtractFromColors,
   onThemeColorClick,
   onAdjustmentsChange,
   onSaveTheme,
   onSavedThemeClick,
-  onPreviewAreaClick,
+  onDeleteSavedTheme,
 }) => {
-  const [isDragging, setIsDragging] = useState(false);
   const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [activeColorIndex, setActiveColorIndex] = useState<number | null>(null);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -46,25 +36,6 @@ const ColorExtractor: React.FC<ColorExtractorProps> = ({
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const handlePresetClick = useCallback((preset: typeof presetColorSquares[0]) => {
-    onExtractFromColors(preset.colors, preset.title, preset.thumbnail);
-  }, [onExtractFromColors]);
 
   const handleHueChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     onAdjustmentsChange({ ...adjustments, hueOffset: parseInt(e.target.value) });
@@ -78,195 +49,265 @@ const ColorExtractor: React.FC<ColorExtractorProps> = ({
     onAdjustmentsChange({ ...adjustments, lightness: parseInt(e.target.value) });
   }, [adjustments, onAdjustmentsChange]);
 
-  const sliderStyle: React.CSSProperties = {
+  const handleColorClick = useCallback((index: number) => {
+    setActiveColorIndex(index);
+    onThemeColorClick(index);
+    setTimeout(() => setActiveColorIndex(null), 500);
+  }, [onThemeColorClick]);
+
+  const huePercent = adjustments.hueOffset / 360 * 100;
+
+  const sliderBaseStyle: React.CSSProperties = {
     WebkitAppearance: 'none',
     appearance: 'none',
     width: '100%',
     height: '4px',
     borderRadius: '2px',
-    background: `linear-gradient(to right, ${currentTheme.primary} 0%, ${currentTheme.primary} ${adjustments.hueOffset / 3.6}%, #E0E0E0 ${adjustments.hueOffset / 3.6}%, #E0E0E0 100%)`,
     outline: 'none',
     cursor: 'pointer',
   };
 
-  const saturationSliderStyle: React.CSSProperties = {
-    ...sliderStyle,
-    background: `linear-gradient(to right, ${currentTheme.primary} 0%, ${currentTheme.primary} ${adjustments.saturation}%, #E0E0E0 ${adjustments.saturation}%, #E0E0E0 100%)`,
+  const hueSliderStyle: React.CSSProperties = {
+    ...sliderBaseStyle,
+    background: `linear-gradient(to right, ${currentTheme.primary} 0%, ${currentTheme.primary} ${huePercent}%, #E5E5E5 ${huePercent}%, #E5E5E5 100%)`,
   };
 
-  const lightnessSliderStyle: React.CSSProperties = {
-    ...sliderStyle,
-    background: `linear-gradient(to right, ${currentTheme.primary} 0%, ${currentTheme.primary} ${adjustments.lightness}%, #E0E0E0 ${adjustments.lightness}%, #E0E0E0 100%)`,
+  const satSliderStyle: React.CSSProperties = {
+    ...sliderBaseStyle,
+    background: `linear-gradient(to right, ${currentTheme.primary} 0%, ${currentTheme.primary} ${adjustments.saturation}%, #E5E5E5 ${adjustments.saturation}%, #E5E5E5 100%)`,
+  };
+
+  const lightSliderStyle: React.CSSProperties = {
+    ...sliderBaseStyle,
+    background: `linear-gradient(to right, ${currentTheme.primary} 0%, ${currentTheme.primary} ${adjustments.lightness}%, #E5E5E5 ${adjustments.lightness}%, #E5E5E5 100%)`,
   };
 
   const panelContent = (
-    <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '28px' }}>
       <div>
-        <h3 style={{ 
-          fontFamily: "'Playfair Display', serif", 
-          fontWeight: 700, 
-          fontSize: '18px', 
-          margin: '0 0 12px 0',
-          color: 'var(--color-text)'
-        }}>
-          上传新作品
-        </h3>
-        
-        <div
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={onPreviewAreaClick}
-          style={{
-            width: '100%',
-            height: '120px',
-            backgroundColor: '#E8E8E8',
-            border: `2px dashed ${isDragging ? currentTheme.primary : '#CCCCCC'}`,
-            borderRadius: '12px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            transition: 'all 0.3s ease',
-            marginBottom: '12px',
-          }}
-        >
-          {isExtracting ? (
-            <span style={{ color: '#666', fontFamily: "'Inter', sans-serif" }}>提取中...</span>
-          ) : (
-            <>
-              <span style={{ fontSize: '24px', marginBottom: '8px' }}>📁</span>
-              <span style={{ color: '#666', fontFamily: "'Inter', sans-serif", fontSize: '14px' }}>
-                拖拽或点击选择预设
-              </span>
-            </>
-          )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+          <span style={{ fontSize: '20px' }}>🎨</span>
+          <h3 style={{ 
+            fontFamily: "'Playfair Display', serif",
+            fontWeight: 700,
+            fontSize: '20px',
+            margin: 0,
+            color: 'var(--color-text)',
+          }}>
+            主题控制面板
+          </h3>
         </div>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          style={{ display: 'none' }}
-        />
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-          {presetColorSquares.map((preset, index) => (
-            <div
-              key={index}
-              onClick={() => handlePresetClick(preset)}
-              style={{
-                height: '60px',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#FFFFFF',
-                fontFamily: "'Inter', sans-serif",
-                fontSize: '12px',
-                fontWeight: 600,
-                textShadow: '0 1px 2px rgba(0,0,0,0.3)',
-                transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                background: `linear-gradient(135deg, ${preset.colors.join(', ')})`,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'scale(1.02)';
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-            >
-              {preset.title}
-            </div>
-          ))}
-        </div>
+        {currentArtworkTitle && (
+          <div style={{
+            padding: '10px 14px',
+            backgroundColor: `${currentTheme.primary}18`,
+            borderRadius: '8px',
+            borderLeft: `3px solid ${currentTheme.primary}`,
+          }}>
+            <span style={{
+              fontFamily: "'Inter', sans-serif",
+              fontSize: '13px',
+              color: 'var(--color-text-secondary)',
+            }}>
+              当前作品：
+            </span>
+            <span style={{
+              fontFamily: "'Inter', sans-serif",
+              fontSize: '13px',
+              fontWeight: 600,
+              color: 'var(--color-text)',
+              marginLeft: '4px',
+            }}>
+              {currentArtworkTitle}
+            </span>
+          </div>
+        )}
       </div>
 
-      {extractedColors.length > 0 && (
+      {extractedColors.length > 0 ? (
         <>
           <div>
-            <h3 style={{ 
-              fontFamily: "'Playfair Display', serif", 
-              fontWeight: 700, 
-              fontSize: '18px', 
-              margin: '0 0 12px 0',
-              color: 'var(--color-text)'
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+              <h4 style={{
+                fontFamily: "'Inter', sans-serif",
+                fontWeight: 600,
+                fontSize: '14px',
+                margin: 0,
+                color: 'var(--color-text)',
+              }}>
+                提取的 5 种主色调
+              </h4>
+              <span style={{
+                fontFamily: "'Inter', sans-serif",
+                fontSize: '11px',
+                color: 'var(--color-text-secondary)',
+              }}>
+                点击色块应用
+              </span>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              gap: '6px',
+              height: '120px',
+              borderRadius: '10px',
+              overflow: 'hidden',
+              boxShadow: 'inset 0 0 0 1px var(--color-border)',
             }}>
-              提取的主色调
-            </h3>
-            <div style={{ display: 'flex', gap: '4px', height: '160px', marginBottom: '16px' }}>
               {extractedColors.map((color, index) => (
                 <div
                   key={index}
+                  onClick={() => handleColorClick(index)}
                   style={{
                     flex: 1,
                     backgroundColor: color.hex,
-                    borderRadius: '4px',
-                    transition: 'transform 0.2s ease',
                     cursor: 'pointer',
+                    position: 'relative',
+                    transition: 'flex 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+                    display: 'flex',
+                    alignItems: 'flex-end',
+                    justifyContent: 'center',
+                    paddingBottom: '8px',
+                    transform: activeColorIndex === index ? 'scaleY(1.02)' : 'scaleY(1)',
+                    boxShadow: activeColorIndex === index
+                      ? `0 0 0 2px ${color.hex}, 0 4px 14px ${color.hex}50`
+                      : 'none',
+                    zIndex: activeColorIndex === index ? 2 : 1,
                   }}
-                  title={color.hex}
-                  onClick={() => onThemeColorClick(index)}
+                  title={`${index + 1}. ${color.hex.toUpperCase()}`}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'scaleY(1.05)';
+                    (e.currentTarget as HTMLElement).style.flex = '1.6';
+                    (e.currentTarget as HTMLElement).style.zIndex = '3';
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'scaleY(1)';
+                    (e.currentTarget as HTMLElement).style.flex = '1';
+                    (e.currentTarget as HTMLElement).style.zIndex = '1';
                   }}
-                />
+                >
+                  <span style={{
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    color: 'rgba(255,255,255,0.95)',
+                    textShadow: '0 1px 3px rgba(0,0,0,0.4)',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    backgroundColor: 'rgba(0,0,0,0.2)',
+                    backdropFilter: 'blur(4px)',
+                  }}>
+                    {color.hex.toUpperCase()}
+                  </span>
+                </div>
               ))}
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '16px' }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '12px',
+              marginTop: '16px',
+            }}>
               {extractedColors.map((color, index) => (
                 <button
                   key={index}
-                  onClick={() => onThemeColorClick(index)}
+                  onClick={() => handleColorClick(index)}
                   style={{
-                    width: '40px',
-                    height: '40px',
+                    width: '44px',
+                    height: '44px',
                     borderRadius: '50%',
                     backgroundColor: color.hex,
-                    border: 'none',
+                    border: activeColorIndex === index
+                      ? `3px solid var(--color-text)`
+                      : '3px solid var(--color-surface)',
                     cursor: 'pointer',
-                    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                    boxShadow: activeColorIndex === index
+                      ? `0 0 0 2px ${color.hex}, 0 6px 18px ${color.hex}50`
+                      : '0 3px 10px rgba(0,0,0,0.12)',
+                    position: 'relative',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'scale(1.1)';
-                    e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.2)';
+                    (e.currentTarget as HTMLElement).style.transform = 'scale(1.15) translateY(-2px)';
+                    (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 20px rgba(0,0,0,0.2)`;
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'scale(1)';
-                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+                    (e.currentTarget as HTMLElement).style.transform = 'scale(1) translateY(0)';
+                    (e.currentTarget as HTMLElement).style.boxShadow = activeColorIndex === index
+                      ? `0 0 0 2px ${color.hex}, 0 6px 18px ${color.hex}50`
+                      : '0 3px 10px rgba(0,0,0,0.12)';
                   }}
-                  title={`主题 ${index + 1}: ${color.hex}`}
-                />
+                  title={`应用主题色 ${index + 1}：${color.hex.toUpperCase()}`}
+                >
+                  <span style={{
+                    position: 'absolute',
+                    top: '-6px',
+                    right: '-6px',
+                    width: '18px',
+                    height: '18px',
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--color-surface)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    color: 'var(--color-text)',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
+                    fontFamily: "'Inter', sans-serif",
+                  }}>
+                    {index + 1}
+                  </span>
+                </button>
               ))}
             </div>
           </div>
 
-          <div>
-            <h3 style={{ 
-              fontFamily: "'Playfair Display', serif", 
-              fontWeight: 700, 
-              fontSize: '18px', 
+          <div style={{
+            backgroundColor: 'var(--color-background)',
+            borderRadius: '12px',
+            padding: '16px',
+            border: '1px solid var(--color-border)',
+          }}>
+            <h4 style={{
+              fontFamily: "'Inter', sans-serif",
+              fontWeight: 600,
+              fontSize: '14px',
               margin: '0 0 16px 0',
-              color: 'var(--color-text)'
+              color: 'var(--color-text)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
             }}>
-              主题参数调节
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <span>🎛️</span> 主题参数微调
+            </h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span style={{ fontFamily: "'Inter', sans-serif", fontSize: '14px', color: 'var(--color-text-secondary)' }}>
-                    色相偏移
-                  </span>
-                  <span style={{ fontFamily: "'Inter', sans-serif", fontSize: '14px', color: 'var(--color-text)', fontWeight: 600 }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '10px',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '14px' }}>🌈</span>
+                    <span style={{
+                      fontFamily: "'Inter', sans-serif",
+                      fontSize: '13px',
+                      color: 'var(--color-text-secondary)',
+                      fontWeight: 500,
+                    }}>
+                      色相偏移
+                    </span>
+                  </div>
+                  <span style={{
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    color: 'var(--color-primary)',
+                    padding: '2px 8px',
+                    backgroundColor: 'var(--color-primary)15',
+                    borderRadius: '6px',
+                  }}>
                     {adjustments.hueOffset}°
                   </span>
                 </div>
@@ -276,38 +317,38 @@ const ColorExtractor: React.FC<ColorExtractorProps> = ({
                   max="360"
                   value={adjustments.hueOffset}
                   onChange={handleHueChange}
-                  style={sliderStyle}
+                  style={hueSliderStyle}
                   className="custom-slider"
                 />
-                <style>{`
-                  .custom-slider::-webkit-slider-thumb {
-                    -webkit-appearance: none;
-                    width: 24px;
-                    height: 24px;
-                    border-radius: 50%;
-                    background: #FFFFFF;
-                    cursor: pointer;
-                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-                    border: none;
-                  }
-                  .custom-slider::-moz-range-thumb {
-                    width: 24px;
-                    height: 24px;
-                    border-radius: 50%;
-                    background: #FFFFFF;
-                    cursor: pointer;
-                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-                    border: none;
-                  }
-                `}</style>
               </div>
 
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span style={{ fontFamily: "'Inter', sans-serif", fontSize: '14px', color: 'var(--color-text-secondary)' }}>
-                    饱和度
-                  </span>
-                  <span style={{ fontFamily: "'Inter', sans-serif", fontSize: '14px', color: 'var(--color-text)', fontWeight: 600 }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '10px',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '14px' }}>💧</span>
+                    <span style={{
+                      fontFamily: "'Inter', sans-serif",
+                      fontSize: '13px',
+                      color: 'var(--color-text-secondary)',
+                      fontWeight: 500,
+                    }}>
+                      饱和度
+                    </span>
+                  </div>
+                  <span style={{
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    color: 'var(--color-primary)',
+                    padding: '2px 8px',
+                    backgroundColor: 'var(--color-primary)15',
+                    borderRadius: '6px',
+                  }}>
                     {adjustments.saturation}%
                   </span>
                 </div>
@@ -317,17 +358,38 @@ const ColorExtractor: React.FC<ColorExtractorProps> = ({
                   max="100"
                   value={adjustments.saturation}
                   onChange={handleSaturationChange}
-                  style={saturationSliderStyle}
+                  style={satSliderStyle}
                   className="custom-slider"
                 />
               </div>
 
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span style={{ fontFamily: "'Inter', sans-serif", fontSize: '14px', color: 'var(--color-text-secondary)' }}>
-                    亮度
-                  </span>
-                  <span style={{ fontFamily: "'Inter', sans-serif", fontSize: '14px', color: 'var(--color-text)', fontWeight: 600 }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '10px',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '14px' }}>☀️</span>
+                    <span style={{
+                      fontFamily: "'Inter', sans-serif",
+                      fontSize: '13px',
+                      color: 'var(--color-text-secondary)',
+                      fontWeight: 500,
+                    }}>
+                      亮度
+                    </span>
+                  </div>
+                  <span style={{
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    color: 'var(--color-primary)',
+                    padding: '2px 8px',
+                    backgroundColor: 'var(--color-primary)15',
+                    borderRadius: '6px',
+                  }}>
                     {adjustments.lightness}%
                   </span>
                 </div>
@@ -337,7 +399,7 @@ const ColorExtractor: React.FC<ColorExtractorProps> = ({
                   max="100"
                   value={adjustments.lightness}
                   onChange={handleLightnessChange}
-                  style={lightnessSliderStyle}
+                  style={lightSliderStyle}
                   className="custom-slider"
                 />
               </div>
@@ -346,81 +408,225 @@ const ColorExtractor: React.FC<ColorExtractorProps> = ({
 
           <button
             onClick={onSaveTheme}
+            disabled={savedThemes.length >= 6}
             style={{
               width: '100%',
-              padding: '12px 24px',
-              backgroundColor: 'var(--color-primary)',
+              padding: '14px 20px',
+              backgroundColor: savedThemes.length >= 6 ? '#CCC' : 'var(--color-primary)',
               color: '#FFFFFF',
               border: 'none',
-              borderRadius: '8px',
+              borderRadius: '10px',
               fontFamily: "'Inter', sans-serif",
               fontSize: '14px',
               fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'background-color 0.3s ease, box-shadow 0.2s ease',
+              cursor: savedThemes.length >= 6 ? 'not-allowed' : 'pointer',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              boxShadow: savedThemes.length >= 6
+                ? 'none'
+                : `0 4px 14px ${currentTheme.primary}40`,
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'var(--color-button-hover)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+              if (savedThemes.length < 6) {
+                (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
+                (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-button-hover)';
+                (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 22px ${currentTheme.primary}55`;
+              }
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'var(--color-primary)';
-              e.currentTarget.style.boxShadow = 'none';
+              (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
+              if (savedThemes.length < 6) {
+                (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-primary)';
+                (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 14px ${currentTheme.primary}40`;
+              }
             }}
           >
-            保存当前主题
+            <span>💾</span>
+            {savedThemes.length >= 6 ? '已达保存上限' : '保存当前主题'}
+            <span style={{
+              fontSize: '11px',
+              opacity: 0.85,
+              backgroundColor: 'rgba(255,255,255,0.25)',
+              padding: '2px 8px',
+              borderRadius: '10px',
+            }}>
+              {savedThemes.length}/6
+            </span>
           </button>
 
-          {savedThemes.length > 0 && (
-            <div>
-              <h3 style={{ 
-                fontFamily: "'Playfair Display', serif", 
-                fontWeight: 700, 
-                fontSize: '18px', 
-                margin: '0 0 12px 0',
-                color: 'var(--color-text)'
+          <div>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '14px',
+            }}>
+              <h4 style={{
+                fontFamily: "'Inter', sans-serif",
+                fontWeight: 600,
+                fontSize: '14px',
+                margin: 0,
+                color: 'var(--color-text)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
               }}>
-                已存主题 ({savedThemes.length}/6)
-              </h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                {savedThemes.map((saved, index) => (
-                  <div
-                    key={saved.id}
-                    onClick={() => onSavedThemeClick(index)}
-                    style={{
-                      height: '50px',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      overflow: 'hidden',
-                      transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                      border: '1px solid var(--color-border)',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'scale(1.05)';
-                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'scale(1)';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
-                  >
-                    {saved.colors.map((color, ci) => (
-                      <div
-                        key={ci}
-                        style={{
-                          flex: 1,
-                          backgroundColor: color.hex,
-                        }}
-                      />
-                    ))}
-                  </div>
-                ))}
-              </div>
+                <span>📚</span> 已存主题
+              </h4>
+              <span style={{
+                fontFamily: "'Inter', sans-serif",
+                fontSize: '11px',
+                color: 'var(--color-text-secondary)',
+              }}>
+                右键删除
+              </span>
             </div>
-          )}
+            {savedThemes.length === 0 ? (
+              <div style={{
+                padding: '24px 16px',
+                textAlign: 'center',
+                backgroundColor: 'var(--color-background)',
+                borderRadius: '10px',
+                border: '2px dashed var(--color-border)',
+              }}>
+                <span style={{ fontSize: '28px', display: 'block', marginBottom: '8px' }}>🗂️</span>
+                <span style={{
+                  fontFamily: "'Inter', sans-serif",
+                  fontSize: '13px',
+                  color: 'var(--color-text-secondary)',
+                }}>
+                  暂无保存的主题<br/>点击上方按钮保存
+                </span>
+              </div>
+            ) : (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: '10px',
+                }}>
+                  {savedThemes.map((saved, index) => (
+                    <div
+                      key={saved.id}
+                      onClick={() => onSavedThemeClick(index)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        onDeleteSavedTheme(index);
+                      }}
+                      style={{
+                        aspectRatio: '1',
+                        borderRadius: '10px',
+                        cursor: 'pointer',
+                        overflow: 'hidden',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        border: '2px solid var(--color-border)',
+                        transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                        position: 'relative',
+                        backgroundColor: 'var(--color-surface)',
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.transform = 'scale(1.06) translateY(-3px)';
+                        (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 20px rgba(0,0,0,0.15)';
+                        (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-primary)';
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.transform = 'scale(1) translateY(0)';
+                        (e.currentTarget as HTMLElement).style.boxShadow = 'none';
+                        (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-border)';
+                      }}
+                      title={`主题 ${index + 1} - 点击应用，右键删除`}
+                    >
+                      <div style={{ flex: 1, display: 'flex' }}>
+                        {saved.colors.map((color, ci) => (
+                          <div
+                            key={ci}
+                            style={{
+                              flex: 1,
+                              backgroundColor: color.hex,
+                            }}
+                          />
+                        ))}
+                      </div>
+                      <div style={{
+                        padding: '4px 6px',
+                        textAlign: 'center',
+                        backgroundColor: 'var(--color-surface)',
+                        borderTop: '1px solid var(--color-border)',
+                      }}>
+                        <span style={{
+                          fontFamily: "'Inter', sans-serif",
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          color: 'var(--color-text-secondary)',
+                        }}>
+                          主题 {index + 1}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  </div>
+              )}
+          </div>
         </>
+      ) : (
+        <div style={{
+          padding: '40px 20px',
+          textAlign: 'center',
+          backgroundColor: 'var(--color-background)',
+          borderRadius: '12px',
+          border: '2px dashed var(--color-border)',
+        }}>
+          <span style={{ fontSize: '48px', display: 'block', marginBottom: '16px' }}>👆</span>
+          <h4 style={{
+            fontFamily: "'Playfair Display', serif",
+            fontWeight: 700,
+            fontSize: '18px',
+            margin: '0 0 8px 0',
+            color: 'var(--color-text)',
+          }}>
+            选择一个作品
+          </h4>
+          <span style={{
+            fontFamily: "'Inter', sans-serif",
+            fontSize: '13px',
+            color: 'var(--color-text-secondary)',
+            lineHeight: 1.6,
+          }}>
+            点击左侧任意作品卡片<br/>即可提取主题色彩
+          </span>
+        </div>
       )}
+
+      <style>{`
+        .custom-slider::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          background: #FFFFFF;
+          cursor: pointer;
+          box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2), 0 0 0 3px var(--color-primary)30;
+          border: none;
+          transition: all 0.2s ease;
+        }
+        .custom-slider::-webkit-slider-thumb:hover {
+          transform: scale(1.1);
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25), 0 0 0 5px var(--color-primary)40;
+        }
+        .custom-slider::-moz-range-thumb {
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          background: #FFFFFF;
+          cursor: pointer;
+          box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2), 0 0 0 3px var(--color-primary)30;
+          border: none;
+          transition: all 0.2s ease;
+        }
+      `}</style>
     </div>
   );
 
@@ -431,25 +637,30 @@ const ColorExtractor: React.FC<ColorExtractorProps> = ({
           onClick={() => setIsMobilePanelOpen(true)}
           style={{
             position: 'fixed',
-            bottom: '20px',
-            right: '20px',
-            width: '56px',
-            height: '56px',
+            bottom: '24px',
+            right: '24px',
+            width: '60px',
+            height: '60px',
             borderRadius: '50%',
             backgroundColor: 'var(--color-primary)',
             color: '#FFFFFF',
             border: 'none',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+            boxShadow: `0 8px 24px ${currentTheme.primary}55`,
             cursor: 'pointer',
-            fontSize: '24px',
+            fontSize: '26px',
             zIndex: 100,
-            transition: 'transform 0.2s ease',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'scale(1.1)';
+            (e.currentTarget as HTMLElement).style.transform = 'scale(1.1)';
+            (e.currentTarget as HTMLElement).style.boxShadow = `0 12px 30px ${currentTheme.primary}70`;
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'scale(1)';
+            (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
+            (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 24px ${currentTheme.primary}55`;
           }}
         >
           🎨
@@ -465,9 +676,10 @@ const ColorExtractor: React.FC<ColorExtractorProps> = ({
                 left: 0,
                 right: 0,
                 bottom: 0,
-                backgroundColor: 'rgba(0,0,0,0.5)',
+                backgroundColor: 'rgba(0,0,0,0.55)',
                 zIndex: 200,
                 animation: 'fadeIn 0.3s ease',
+                backdropFilter: 'blur(4px)',
               }}
             />
             <div
@@ -476,23 +688,26 @@ const ColorExtractor: React.FC<ColorExtractorProps> = ({
                 bottom: 0,
                 left: 0,
                 right: 0,
-                height: '70vh',
-                backgroundColor: '#FAFAFA',
-                borderTopLeftRadius: '20px',
-                borderTopRightRadius: '20px',
+                maxHeight: '80vh',
+                backgroundColor: 'var(--color-surface)',
+                borderTopLeftRadius: '24px',
+                borderTopRightRadius: '24px',
                 zIndex: 201,
-                animation: 'slideUp 0.3s ease',
+                animation: 'slideUp 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
                 overflowY: 'auto',
+                boxShadow: '0 -10px 40px rgba(0,0,0,0.2)',
               }}
             >
               <div
                 style={{
-                  width: '40px',
-                  height: '4px',
-                  backgroundColor: '#DDD',
-                  borderRadius: '2px',
-                  margin: '12px auto',
+                  width: '48px',
+                  height: '5px',
+                  backgroundColor: '#D1D1D1',
+                  borderRadius: '3px',
+                  margin: '14px auto',
+                  cursor: 'pointer',
                 }}
+                onClick={() => setIsMobilePanelOpen(false)}
               />
               {panelContent}
             </div>
@@ -513,20 +728,22 @@ const ColorExtractor: React.FC<ColorExtractorProps> = ({
   }
 
   return (
-    <div
+    <aside
       style={{
-        width: '320px',
+        width: '340px',
+        flexShrink: 0,
         backgroundColor: 'var(--color-surface)',
         border: '1px solid var(--color-border)',
-        borderRadius: '12px',
+        borderRadius: '16px',
         overflowY: 'auto',
         maxHeight: 'calc(100vh - 40px)',
         position: 'sticky',
         top: '20px',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
       }}
     >
       {panelContent}
-    </div>
+    </aside>
   );
 };
 
