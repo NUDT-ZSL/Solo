@@ -10,6 +10,8 @@ export function App() {
   const particleSystemRef = useRef<ParticleSystem | null>(null)
   const animationIdRef = useRef<number>(0)
   const lastTimeRef = useRef<number>(0)
+  const hasLoadedRef = useRef(false)
+  const prevProgressRef = useRef(0)
 
   const {
     water,
@@ -20,7 +22,9 @@ export function App() {
     fruitSize,
     particleCount,
     updateGrowth,
-    setParticleCount
+    setParticleCount,
+    resetPlant,
+    getSnapshots
   } = usePlantStore()
 
   useEffect(() => {
@@ -36,6 +40,16 @@ export function App() {
     particleSystemRef.current = new ParticleSystem()
     particleSystemRef.current.setWater(water)
     particleSystemRef.current.setNutrient(nutrient)
+
+    if (!hasLoadedRef.current) {
+      hasLoadedRef.current = true
+      const snapshots = getSnapshots()
+      const existingSnapshot = snapshots.find(s => s.exists)
+      if (existingSnapshot) {
+        const { loadSnapshot } = usePlantStore.getState()
+        loadSnapshot(existingSnapshot.index)
+      }
+    }
 
     return () => {
       particleSystemRef.current = null
@@ -53,6 +67,15 @@ export function App() {
       particleSystemRef.current.setNutrient(nutrient)
     }
   }, [nutrient])
+
+  useEffect(() => {
+    if (prevProgressRef.current > 0 && growthProgress === 0) {
+      if (particleSystemRef.current) {
+        particleSystemRef.current.reset()
+      }
+    }
+    prevProgressRef.current = growthProgress
+  }, [growthProgress])
 
   useEffect(() => {
     const animate = (time: number) => {

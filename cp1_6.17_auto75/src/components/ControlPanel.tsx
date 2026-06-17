@@ -115,8 +115,18 @@ export function ControlPanel({ isMobile = false, isOpen = true, onClose }: Contr
   }
 
   const secondaryButtonStyle: React.CSSProperties = {
-    ...buttonStyle,
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+    padding: '8px 16px',
+    border: 'none',
+    borderRadius: '6px',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    color: 'white',
+    fontSize: '12px',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    transition: 'filter 0.2s ease, transform 0.1s ease',
+    filter: 'brightness(1)',
+    flexShrink: 0,
+    width: 'auto'
   }
 
   return (
@@ -274,6 +284,18 @@ export function ControlPanel({ isMobile = false, isOpen = true, onClose }: Contr
             <button
               onClick={() => handleSaveSnapshot(snapshot.index)}
               style={secondaryButtonStyle}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.filter = 'brightness(1.1)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.filter = 'brightness(1)'
+              }}
+              onMouseDown={(e) => {
+                e.currentTarget.style.transform = 'scale(0.95)'
+              }}
+              onMouseUp={(e) => {
+                e.currentTarget.style.transform = 'scale(1)'
+              }}
             >
               保存
             </button>
