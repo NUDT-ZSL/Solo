@@ -8,12 +8,12 @@ export interface TypographyParams {
   textColor: string;
 }
 
-export const FONT_OPTIONS: { value: string; label: string; fallback: string }[] = [
-  { value: 'Inter', label: 'Inter', fallback: 'sans-serif' },
-  { value: 'Playfair Display', label: 'Playfair Display', fallback: 'serif' },
-  { value: 'Roboto Mono', label: 'Roboto Mono', fallback: 'monospace' },
-  { value: 'Pacifico', label: 'Pacifico', fallback: 'cursive' },
-  { value: 'Lora', label: 'Lora', fallback: 'serif' },
+export const FONT_OPTIONS: { value: string; label: string; fallback: string; variableWeight: boolean; defaultWeight: number }[] = [
+  { value: 'Inter', label: 'Inter', fallback: 'sans-serif', variableWeight: true, defaultWeight: 400 },
+  { value: 'Playfair Display', label: 'Playfair Display', fallback: 'serif', variableWeight: true, defaultWeight: 400 },
+  { value: 'Roboto Mono', label: 'Roboto Mono', fallback: 'monospace', variableWeight: true, defaultWeight: 400 },
+  { value: 'Pacifico', label: 'Pacifico', fallback: 'cursive', variableWeight: false, defaultWeight: 400 },
+  { value: 'Lora', label: 'Lora', fallback: 'serif', variableWeight: true, defaultWeight: 400 },
 ];
 
 export function generateCSS(params: TypographyParams): string {
@@ -40,6 +40,28 @@ export function debounce<T extends (...args: any[]) => void>(
     }
     timer = window.setTimeout(() => fn(...args), delay);
   };
+}
+
+export function rafThrottle<T extends (...args: any[]) => void>(
+  fn: T
+): (...args: Parameters<T>) => void {
+  let rafId: number | null = null;
+  let lastArgs: Parameters<T> | null = null;
+  return (...args: Parameters<T>) => {
+    lastArgs = args;
+    if (rafId === null) {
+      rafId = window.requestAnimationFrame(() => {
+        if (lastArgs !== null) {
+          fn(...lastArgs);
+        }
+        rafId = null;
+      });
+    }
+  };
+}
+
+export function getFontInfo(fontFamily: string) {
+  return FONT_OPTIONS.find((f) => f.value === fontFamily);
 }
 
 export async function copyToClipboard(text: string): Promise<boolean> {

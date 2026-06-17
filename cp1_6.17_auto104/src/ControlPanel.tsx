@@ -1,5 +1,5 @@
-import React from 'react';
-import { TypographyParams, FONT_OPTIONS } from './helpers';
+import React, { useMemo, useCallback } from 'react';
+import { TypographyParams, FONT_OPTIONS, getFontInfo, rafThrottle } from './helpers';
 
 interface ControlPanelProps {
   params: TypographyParams;
@@ -8,32 +8,50 @@ interface ControlPanelProps {
 }
 
 const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange, isCompact }) => {
+  const fontInfo = useMemo(() => getFontInfo(params.fontFamily), [params.fontFamily]);
+  const weightDisabled = !(fontInfo?.variableWeight ?? true);
+
   const handleFontFamily = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onChange({ fontFamily: e.target.value });
+    const fontFamily = e.target.value;
+    const newFontInfo = getFontInfo(fontFamily);
+    const updates: Partial<TypographyParams> = { fontFamily };
+    if (newFontInfo && !newFontInfo.variableWeight) {
+      updates.fontWeight = newFontInfo.defaultWeight;
+    }
+    onChange(updates);
   };
 
+  const throttledChange = useCallback(
+    rafThrottle((partial: Partial<TypographyParams>) => {
+      onChange(partial);
+    }),
+    [onChange]
+  );
+
   const handleFontWeight = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange({ fontWeight: Number(e.target.value) });
+    if (!weightDisabled) {
+      throttledChange({ fontWeight: Number(e.target.value) });
+    }
   };
 
   const handleFontSize = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange({ fontSize: Number(e.target.value) });
+    throttledChange({ fontSize: Number(e.target.value) });
   };
 
   const handleLineHeight = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange({ lineHeight: Number(e.target.value) });
+    throttledChange({ lineHeight: Number(e.target.value) });
   };
 
   const handleLetterSpacing = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange({ letterSpacing: Number(e.target.value) });
+    throttledChange({ letterSpacing: Number(e.target.value) });
   };
 
   const handleBackgroundColor = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange({ backgroundColor: e.target.value });
+    throttledChange({ backgroundColor: e.target.value });
   };
 
   const handleTextColor = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange({ textColor: e.target.value });
+    throttledChange({ textColor: e.target.value });
   };
 
   const sliderStyle = isCompact
@@ -90,9 +108,9 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange, isCompact
       </div>
 
       <div style={rowStyle}>
-        <label style={{ display: isCompact ? 'inline' : 'block', marginRight: 8, fontSize: 13, color: '#AAAAAA' }}>
+        <label style={{ display: isCompact ? 'inline' : 'block', marginRight: 8, fontSize: 13, color: weightDisabled ? '#888' : '#AAAAAA' }}>
           字重
-          <span style={{ marginLeft: 6, color: '#569CD6', fontWeight: 600 }}>
+          <span style={{ marginLeft: 6, color: weightDisabled ? '#888' : '#569CD6', fontWeight: 600 }}>
             {params.fontWeight}
           </span>
         </label>
@@ -103,8 +121,22 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange, isCompact
           step={100}
           value={params.fontWeight}
           onChange={handleFontWeight}
-          style={sliderStyle}
+          disabled={weightDisabled}
+          style={{
+            ...sliderStyle,
+            opacity: weightDisabled ? 0.5 : 1,
+            cursor: weightDisabled ? 'not-allowed' : 'pointer',
+            accentColor: weightDisabled ? '#888' : undefined,
+          }}
         />
+        {weightDisabled && !isCompact && (
+          <div style={{ fontSize: 11, color: '#DCDCAA', marginTop: 4 }}>
+            该字体仅支持固定字重
+          </div>
+        )}
+        {weightDisabled && isCompact && (
+          <span style={{ fontSize: 10, color: '#DCDCAA', marginLeft: 4 }}>（固定）</span>
+        )}
       </div>
 
       <div style={rowStyle}>
@@ -162,43 +194,85 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange, isCompact
       </div>
 
       <div style={colorPickerWrap}>
-        <label style={{ fontSize: 13, color: '#AAAAAA', marginRight: 8 }}>背景色</label>
-        <input
-          type="color"
-          value={params.backgroundColor}
-          onChange={handleBackgroundColor}
+        <label style={{ fontSize: 13, color: '#AAAAAA', marginRight: 8, verticalAlign: 'middle' }}>背景色</label>
+        <label
           style={{
+            display: 'inline-block',
             width: isCompact ? 28 : 36,
             height: isCompact ? 28 : 36,
             borderRadius: '50%',
             border: '2px solid #555',
-            padding: 0,
-            backgroundColor: 'transparent',
+            backgroundColor: params.backgroundColor,
             cursor: 'pointer',
             verticalAlign: 'middle',
+            boxSizing: 'border-box',
+            overflow: 'hidden',
+            position: 'relative',
           }}
-        />
-        <span style={{ fontSize: 12, color: '#888', marginLeft: 4 }}>{params.backgroundColor}</span>
+          title="选择背景色"
+        >
+          <input
+            type="color"
+            value={params.backgroundColor}
+            onChange={handleBackgroundColor}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '150%',
+              height: '150%',
+              padding: 0,
+              margin: '-25%',
+              border: 'none',
+              cursor: 'pointer',
+              opacity: 0,
+            }}
+          />
+        </label>
+        <span style={{ fontSize: 12, color: '#888', marginLeft: 4, verticalAlign: 'middle' }}>
+          {params.backgroundColor}
+        </span>
       </div>
 
       <div style={colorPickerWrap}>
-        <label style={{ fontSize: 13, color: '#AAAAAA', marginRight: 8 }}>文字色</label>
-        <input
-          type="color"
-          value={params.textColor}
-          onChange={handleTextColor}
+        <label style={{ fontSize: 13, color: '#AAAAAA', marginRight: 8, verticalAlign: 'middle' }}>文字色</label>
+        <label
           style={{
+            display: 'inline-block',
             width: isCompact ? 28 : 36,
             height: isCompact ? 28 : 36,
             borderRadius: '50%',
             border: '2px solid #555',
-            padding: 0,
-            backgroundColor: 'transparent',
+            backgroundColor: params.textColor,
             cursor: 'pointer',
             verticalAlign: 'middle',
+            boxSizing: 'border-box',
+            overflow: 'hidden',
+            position: 'relative',
           }}
-        />
-        <span style={{ fontSize: 12, color: '#888', marginLeft: 4 }}>{params.textColor}</span>
+          title="选择文字色"
+        >
+          <input
+            type="color"
+            value={params.textColor}
+            onChange={handleTextColor}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '150%',
+              height: '150%',
+              padding: 0,
+              margin: '-25%',
+              border: 'none',
+              cursor: 'pointer',
+              opacity: 0,
+            }}
+          />
+        </label>
+        <span style={{ fontSize: 12, color: '#888', marginLeft: 4, verticalAlign: 'middle' }}>
+          {params.textColor}
+        </span>
       </div>
     </div>
   );

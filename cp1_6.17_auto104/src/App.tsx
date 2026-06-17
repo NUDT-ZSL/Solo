@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import ControlPanel from './ControlPanel';
 import PreviewArea from './PreviewArea';
-import { TypographyParams, generateCSS, copyToClipboard, debounce } from './helpers';
+import { TypographyParams, generateCSS, copyToClipboard, SAMPLE_TEXT } from './helpers';
 
 const App: React.FC = () => {
   const [params, setParams] = useState<TypographyParams>({
@@ -24,6 +24,8 @@ const App: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<number | null>(null);
 
+  const sampleText = useMemo(() => SAMPLE_TEXT, []);
+
   useEffect(() => {
     const handleResize = () => {
       setIsCompact(window.innerWidth < 960);
@@ -32,12 +34,9 @@ const App: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const handleChange = useCallback(
-    debounce((partial: Partial<TypographyParams>) => {
-      setParams((prev) => ({ ...prev, ...partial }));
-    }, 10),
-    []
-  );
+  const handleChange = useCallback((partial: Partial<TypographyParams>) => {
+    setParams((prev) => ({ ...prev, ...partial }));
+  }, []);
 
   const cssCode = useMemo(() => generateCSS(params), [params]);
 
@@ -105,7 +104,7 @@ const App: React.FC = () => {
         }}
       >
         <ControlPanel params={params} onChange={handleChange} isCompact={isCompact} />
-        <PreviewArea params={params} />
+        <PreviewArea params={params} text={sampleText} />
       </div>
 
       <div
@@ -142,7 +141,18 @@ const App: React.FC = () => {
             }}
           >
             {copied ? (
-              <span style={{ color: '#4EC9B0', fontWeight: 600 }}>✓ 已复制</span>
+              <span
+                style={{
+                  color: '#FFFFFF',
+                  backgroundColor: '#4CAF50',
+                  padding: '2px 8px',
+                  borderRadius: 4,
+                  fontWeight: 600,
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                }}
+              >
+                ✓ 已复制
+              </span>
             ) : (
               '点击复制'
             )}
