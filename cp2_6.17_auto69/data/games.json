@@ -1,0 +1,42 @@
+[
+  {
+    "name": "卡坦岛",
+    "totalSessions": 12,
+    "averageDuration": 75,
+    "averageRounds": 12,
+    "totalNotes": 45,
+    "isFavorite": false
+  },
+  {
+    "name": "璀璨宝石",
+    "totalSessions": 18,
+    "averageDuration": 45,
+    "averageRounds": 20,
+    "totalNotes": 62,
+    "isFavorite": true
+  },
+  {
+    "name": "七大奇迹",
+    "totalSessions": 8,
+    "averageDuration": 60,
+    "averageRounds": 8,
+    "totalNotes": 28,
+    "isFavorite": false
+  },
+  {
+    "name": "殖民火星",
+    "totalSessions": 5,
+    "averageDuration": 120,
+    "averageRounds": 14,
+    "totalNotes": 35,
+    "isFavorite": false
+  },
+  {
+    "name": "冷战热斗",
+    "totalSessions": 3,
+    "averageDuration": 180,
+    "averageRounds": 10,
+    "totalNotes": 22,
+    "isFavorite": true
+  }
+]
