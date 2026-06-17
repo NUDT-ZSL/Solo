@@ -1,324 +1,272 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
+import { X, Play, Pause, Flag, Tag } from 'lucide-react';
+import { api } from './api';
+import { useAppStore } from './store';
+import { formatDuration, PRESET_TAGS } from './types';
 import type { Video, Marker } from './types';
-import { PRESET_LABELS } from './types';
-import './VideoPlayer.css';
 
 interface VideoPlayerProps {
   video: Video;
-  markers: Marker[];
-  initialTimestamp: number | null;
   onClose: () => void;
-  onMarkerAdded: (marker: Marker) => void;
-  onMarkerDeleted: (markerId: string) => void;
 }
 
-function formatTime(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  const ms = Math.floor((seconds % 1) * 100);
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
-}
-
-function VideoPlayer({ video, markers, initialTimestamp, onClose, onMarkerAdded, onMarkerDeleted }: VideoPlayerProps) {
+export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [showLabelPopup, setShowLabelPopup] = useState(false);
-  const [popupPosition, setPopupPosition] = useState(0);
-  const [customLabel, setCustomLabel] = useState('');
-  const [hoveredMarker, setHoveredMarker] = useState<Marker | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  const [showTagPopup, setShowTagPopup] = useState(false);
+  const [tagPopupTime, setTagPopupTime] = useState(0);
+  const [customTag, setCustomTag] = useState('');
+  const [hoverMarker, setHoverMarker] = useState<Marker | null>(null);
+  const [hoverPos, setHoverPos] = useState({ x: 0, y: 0 });
+
+  const markers = useAppStore(s => s.markers.filter(m => m.videoId === video.id));
+  const addMarker = useAppStore(s => s.addMarker);
+  const seekTimestamp = useAppStore(s => s.seekTimestamp);
+  const setSeekTimestamp = useAppStore(s => s.setSeekTimestamp);
+
+  const videoMarkers = markers.sort((a, b) => a.timestamp - b.timestamp);
 
   useEffect(() => {
-    const videoEl = videoRef.current;
-    if (!videoEl) return;
-
-    const handleLoadedMetadata = () => {
-      setDuration(videoEl.duration);
-      if (initialTimestamp !== null) {
-        videoEl.currentTime = initialTimestamp;
-        setCurrentTime(initialTimestamp);
-      }
-    };
-
-    const handleTimeUpdate = () => {
-      if (!isDragging) {
-        setCurrentTime(videoEl.currentTime);
-      }
-    };
-
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
-
-    videoEl.addEventListener('loadedmetadata', handleLoadedMetadata);
-    videoEl.addEventListener('timeupdate', handleTimeUpdate);
-    videoEl.addEventListener('play', handlePlay);
-    videoEl.addEventListener('pause', handlePause);
-
+    const v = videoRef.current;
+    if (!v) return;
+    const onTime = () => setCurrentTime(v.currentTime);
+    const onMeta = () => setDuration(v.duration);
+    const onPlay = () => setPlaying(true);
+    const onPause = () => setPlaying(false);
+    v.addEventListener('timeupdate', onTime);
+    v.addEventListener('loadedmetadata', onMeta);
+    v.addEventListener('play', onPlay);
+    v.addEventListener('pause', onPause);
     return () => {
-      videoEl.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      videoEl.removeEventListener('timeupdate', handleTimeUpdate);
-      videoEl.removeEventListener('play', handlePlay);
-      videoEl.removeEventListener('pause', handlePause);
+      v.removeEventListener('timeupdate', onTime);
+      v.removeEventListener('loadedmetadata', onMeta);
+      v.removeEventListener('play', onPlay);
+      v.removeEventListener('pause', onPause);
     };
-  }, [initialTimestamp, isDragging]);
+  }, []);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() === 'm' && !showLabelPopup) {
+    if (seekTimestamp !== null && videoRef.current) {
+      videoRef.current.currentTime = seekTimestamp;
+      setSeekTimestamp(null);
+    }
+  }, [seekTimestamp, setSeekTimestamp]);
+
+  const togglePlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) v.play();
+    else v.pause();
+  };
+
+  const openTagPopup = useCallback((time?: number) => {
+    setTagPopupTime(time ?? currentTime);
+    setShowTagPopup(true);
+    setCustomTag('');
+  }, [currentTime]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 'm' && !showTagPopup) {
         e.preventDefault();
-        openLabelPopup();
+        openTagPopup();
       }
       if (e.key === 'Escape') {
-        if (showLabelPopup) {
-          setShowLabelPopup(false);
-        } else {
-          onClose();
-        }
+        if (showTagPopup) setShowTagPopup(false);
+        else onClose();
       }
-      if (e.key === ' ') {
+      if (e.key === ' ' && !showTagPopup) {
         e.preventDefault();
         togglePlay();
       }
     };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showTagPopup, openTagPopup, onClose]);
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showLabelPopup]);
-
-  const togglePlay = useCallback(() => {
-    const videoEl = videoRef.current;
-    if (!videoEl) return;
-
-    if (isPlaying) {
-      videoEl.pause();
-    } else {
-      videoEl.play();
-    }
-  }, [isPlaying]);
-
-  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const videoEl = videoRef.current;
-    const progressEl = progressRef.current;
-    if (!videoEl || !progressEl || duration === 0) return;
-
-    const rect = progressEl.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const percentage = Math.max(0, Math.min(1, x / rect.width));
-    const newTime = percentage * duration;
-    videoEl.currentTime = newTime;
-    setCurrentTime(newTime);
+  const addMarkerWithTag = async (label: string, color: string) => {
+    if (!label.trim()) return;
+    const marker = await api.createMarker({
+      videoId: video.id,
+      timestamp: tagPopupTime,
+      label: label.trim(),
+      color
+    });
+    addMarker(marker);
+    setShowTagPopup(false);
   };
 
-  const handleProgressMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    setIsDragging(true);
-    handleProgressClick(e);
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const progressEl = progressRef.current;
-      const videoEl = videoRef.current;
-      if (!progressEl || !videoEl || duration === 0) return;
-
-      const rect = progressEl.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const percentage = Math.max(0, Math.min(1, x / rect.width));
-      const newTime = percentage * duration;
-      videoEl.currentTime = newTime;
-      setCurrentTime(newTime);
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+  const handleProgressClick = (e: React.MouseEvent) => {
+    if (!progressRef.current || !duration) return;
+    const rect = progressRef.current.getBoundingClientRect();
+    const ratio = (e.clientX - rect.left) / rect.width;
+    videoRef.current!.currentTime = Math.max(0, Math.min(duration, ratio * duration));
   };
 
-  const openLabelPopup = useCallback(() => {
-    const progressEl = progressRef.current;
-    if (!progressEl || duration === 0) return;
-
-    const percentage = currentTime / duration;
-    setPopupPosition(percentage * 100);
-    setCustomLabel('');
-    setShowLabelPopup(true);
-  }, [currentTime, duration]);
-
-  const handleAddMarker = async (label: string, color: string) => {
-    try {
-      const res = await fetch(`/api/videos/${video.id}/markers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          timestamp: currentTime,
-          label,
-          color,
-        }),
-      });
-
-      if (res.ok) {
-        const marker = await res.json();
-        onMarkerAdded(marker);
-      }
-    } catch (err) {
-      console.error('添加标记失败:', err);
-    }
-    setShowLabelPopup(false);
-  };
-
-  const handleCustomLabelSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (customLabel.trim()) {
-      handleAddMarker(customLabel.trim(), '#ff5722');
+  const handleMarkerHover = (marker: Marker, e: React.MouseEvent) => {
+    setHoverMarker(marker);
+    const rect = progressRef.current?.getBoundingClientRect();
+    if (rect) {
+      setHoverPos({ x: e.clientX - rect.left, y: -8 });
     }
   };
-
-  const handleDeleteMarker = async (markerId: string) => {
-    try {
-      const res = await fetch(`/api/markers/${markerId}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) {
-        onMarkerDeleted(markerId);
-      }
-    } catch (err) {
-      console.error('删除标记失败:', err);
-    }
-  };
-
-  const sortedMarkers = [...markers].sort((a, b) => a.timestamp - b.timestamp);
 
   return (
-    <div className="player-modal-overlay" onClick={onClose}>
-      <div className="player-modal" onClick={e => e.stopPropagation()}>
-        <div className="player-header">
-          <h2 className="player-title">{video.name}</h2>
-          <button className="close-button" onClick={onClose}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+    <div
+      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
+      onClick={onClose}
+    >
+      <div
+        className="rounded-lg overflow-hidden bg-[#1e1e1e] shadow-2xl"
+        style={{ width: 640 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-2 border-b border-[#333]">
+          <span className="text-sm truncate flex-1 pr-4">{video.originalName}</span>
+          <button onClick={onClose} className="p-1 hover:bg-[#333] rounded">
+            <X size={18} />
           </button>
         </div>
 
-        <div className="player-video-container">
+        <div style={{ width: 640, height: 360 }} className="relative bg-black">
           <video
             ref={videoRef}
             src={video.path}
+            className="w-full h-full object-contain"
             onClick={togglePlay}
-            playsInline
           />
         </div>
 
-        <div className="player-controls">
-          <button className="control-button play-pause" onClick={togglePlay}>
-            {isPlaying ? (
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <rect x="6" y="4" width="4" height="16" />
-                <rect x="14" y="4" width="4" height="16" />
-              </svg>
-            ) : (
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <polygon points="5 3 19 12 5 21 5 3" />
-              </svg>
+        <div className="px-4 py-3">
+          <div className="text-xs text-gray-400 mb-1">
+            {formatDuration(currentTime)} / {formatDuration(duration)}
+          </div>
+          <div className="relative">
+            {videoMarkers.map((m) => {
+              const pos = duration ? (m.timestamp / duration) * 100 : 0;
+              return (
+                <div
+                  key={m.id}
+                  className="absolute top-0 cursor-pointer"
+                  style={{
+                    left: `${pos}%`,
+                    width: 3,
+                    height: 24,
+                    background: m.color,
+                    transform: 'translateX(-50%)',
+                    zIndex: 10
+                  }}
+                  onMouseEnter={(e) => handleMarkerHover(m, e)}
+                  onMouseMove={(e) => handleMarkerHover(m, e)}
+                  onMouseLeave={() => setHoverMarker(null)}
+                />
+              );
+            })}
+            {hoverMarker && (
+              <div
+                className="absolute bg-[#333] text-white text-xs px-2 py-1 rounded pointer-events-none whitespace-nowrap z-20"
+                style={{ left: hoverPos.x, top: hoverPos.y - 28, transform: 'translateX(-50%)' }}
+              >
+                <span className="mr-2" style={{ color: hoverMarker.color }}>●</span>
+                {hoverMarker.label} - {formatDuration(hoverMarker.timestamp)}
+              </div>
             )}
-          </button>
-
-          <div className="progress-wrapper">
             <div
               ref={progressRef}
-              className="progress-bar"
               onClick={handleProgressClick}
-              onMouseDown={handleProgressMouseDown}
+              className="h-2 bg-[#333] rounded cursor-pointer relative"
             >
               <div
-                className="progress-fill"
-                style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }}
+                className="h-full rounded"
+                style={{
+                  width: duration ? `${(currentTime / duration) * 100}%` : '0%',
+                  background: '#ff5722'
+                }}
               />
-              {sortedMarkers.map(marker => (
-                <div
-                  key={marker.id}
-                  className="progress-marker"
-                  style={{
-                    left: `${(marker.timestamp / duration) * 100}%`,
-                    backgroundColor: marker.color,
-                  }}
-                  onMouseEnter={() => setHoveredMarker(marker)}
-                  onMouseLeave={() => setHoveredMarker(null)}
-                  onDoubleClick={() => handleDeleteMarker(marker.id)}
-                  title={`${marker.label} - ${formatTime(marker.timestamp)}`}
-                >
-                  {hoveredMarker?.id === marker.id && (
-                    <div className="marker-tooltip">
-                      <span className="marker-tooltip-label" style={{ backgroundColor: marker.color }}>{marker.label}</span>
-                      <span className="marker-tooltip-time">{formatTime(marker.timestamp)}</span>
-                    </div>
-                  )}
-                </div>
-              ))}
-              {showLabelPopup && (
-                <div
-                  className="label-popup"
-                  style={{ left: `${popupPosition}%` }}
-                  onClick={e => e.stopPropagation()}
-                >
-                  <div className="label-popup-content">
-                    <div className="preset-labels">
-                      {PRESET_LABELS.map(preset => (
-                        <button
-                          key={preset.label}
-                          className="preset-label"
-                          style={{ backgroundColor: preset.color }}
-                          onClick={() => handleAddMarker(preset.label, preset.color)}
-                        >
-                          {preset.label}
-                        </button>
-                      ))}
-                    </div>
-                    <form className="custom-label-form" onSubmit={handleCustomLabelSubmit}>
-                      <input
-                        type="text"
-                        value={customLabel}
-                        onChange={e => setCustomLabel(e.target.value)}
-                        placeholder="或输入自定义标签..."
-                        autoFocus
-                      />
-                      <button type="submit" disabled={!customLabel.trim()}>
-                        添加
-                      </button>
-                    </form>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
-          <div className="time-display">
-            <span className="current-time">{formatTime(currentTime)}</span>
-            <span className="time-separator">/</span>
-            <span className="duration">{formatTime(duration)}</span>
+          <div className="flex items-center gap-2 mt-3">
+            <button
+              onClick={togglePlay}
+              className="p-2 rounded hover:bg-[#333]"
+            >
+              {playing ? <Pause size={20} /> : <Play size={20} />}
+            </button>
+            <button
+              onClick={() => openTagPopup()}
+              className="flex items-center gap-1 px-3 py-1.5 rounded text-sm"
+              style={{ background: '#ff5722' }}
+            >
+              <Flag size={14} />
+              添加标记 (M)
+            </button>
           </div>
-
-          <button className="control-button add-marker" onClick={openLabelPopup} title="添加标记 (M)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            <span>添加标记</span>
-          </button>
-        </div>
-
-        <div className="player-hint">
-          快捷键：空格 播放/暂停 · M 添加标记 · ESC 关闭
         </div>
       </div>
+
+      {showTagPopup && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]"
+          onClick={() => setShowTagPopup(false)}
+        >
+          <div
+            className="bg-[#252525] rounded-lg p-5 w-96 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <Tag size={18} color="#ff5722" />
+              <h3 className="font-medium">添加标签标记</h3>
+              <span className="ml-auto text-sm text-gray-400">
+                {formatDuration(tagPopupTime)}
+              </span>
+            </div>
+            <input
+              type="text"
+              value={customTag}
+              onChange={(e) => setCustomTag(e.target.value)}
+              placeholder="输入自定义标签..."
+              className="w-full px-3 py-2 rounded bg-[#1e1e1e] border border-[#444] text-sm outline-none focus:border-[#ff5722] mb-4"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && customTag.trim()) {
+                  addMarkerWithTag(customTag, '#ff5722');
+                }
+              }}
+              autoFocus
+            />
+            <p className="text-xs text-gray-400 mb-2">预设标签：</p>
+            <div className="flex flex-wrap gap-2">
+              {PRESET_TAGS.map((tag) => (
+                <button
+                  key={tag.label}
+                  onClick={() => addMarkerWithTag(tag.label, tag.color)}
+                  className="text-xs text-white flex items-center justify-center"
+                  style={{
+                    width: 60,
+                    height: 24,
+                    borderRadius: 12,
+                    background: tag.color
+                  }}
+                >
+                  {tag.label}
+                </button>
+              ))}
+            </div>
+            {customTag.trim() && (
+              <button
+                onClick={() => addMarkerWithTag(customTag, '#ff5722')}
+                className="mt-4 w-full py-2 rounded text-sm"
+                style={{ background: '#ff5722' }}
+              >
+                添加自定义标签
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
-export default VideoPlayer;

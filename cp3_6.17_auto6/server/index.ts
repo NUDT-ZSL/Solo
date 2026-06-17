@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
@@ -10,9 +10,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 4000;
+const PORT = 4001;
 const DATA_FILE = path.join(__dirname, 'data.json');
-const UPLOAD_DIR = path.join(__dirname, 'uploads');
+const UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
 
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -22,27 +22,30 @@ app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(UPLOAD_DIR));
 
-interface Video {
+interface VideoData {
   id: string;
-  name: string;
+  filename: string;
+  originalName: string;
   path: string;
   size: number;
   duration: number;
+  width: number;
+  height: number;
   createdAt: string;
 }
 
-interface Marker {
+interface MarkerData {
   id: string;
   videoId: string;
   timestamp: number;
   label: string;
   color: string;
-  order: number;
+  createdAt: string;
 }
 
 interface DataStore {
-  videos: Video[];
-  markers: Marker[];
+  videos: VideoData[];
+  markers: MarkerData[];
 }
 
 function readData(): DataStore {
@@ -64,8 +67,7 @@ const storage = multer.diskStorage({
   },
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname);
-    const id = uuidv4();
-    cb(null, `${id}${ext}`);
+    cb(null, `${uuidv4()}${ext}`);
   }
 });
 
@@ -73,170 +75,117 @@ const upload = multer({
   storage,
   limits: { fileSize: 200 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (ext === '.mp4' || ext === '.mov') {
+    const allowedTypes = ['.mp4', '.mov', '.MP4', '.MOV'];
+    const ext = path.extname(file.originalname);
+    if (allowedTypes.includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error('仅支持 MP4 和 MOV 格式'));
+      cb(new Error('仅支持 MP4/MOV 格式'));
     }
   }
 });
 
-app.get('/api/videos', (_req, res) => {
+app.get('/api/videos', (_req: Request, res: Response) => {
   const data = readData();
   res.json(data.videos);
 });
 
-app.post('/api/videos/upload', upload.single('video'), (req, res) => {
+app.post('/api/videos', upload.single('video'), (req: Request, res: Response) => {
   if (!req.file) {
-    return res.status(400).json({ error: '未找到文件' });
+    return res.status(400).json({ error: '未上传文件' });
   }
-
   const data = readData();
-  const video: Video = {
+  const video: VideoData = {
     id: uuidv4(),
-    name: req.file.originalname,
+    filename: req.file.filename,
+    originalName: req.file.originalname,
     path: `/uploads/${req.file.filename}`,
     size: req.file.size,
     duration: 0,
+    width: 0,
+    height: 0,
     createdAt: new Date().toISOString()
   };
-
   data.videos.push(video);
   writeData(data);
-  res.status(201).json(video);
+  res.json(video);
 });
 
-app.put('/api/videos/:id', (req, res) => {
+app.delete('/api/videos/:id', (req: Request, res: Response) => {
   const data = readData();
-  const videoIndex = data.videos.findIndex(v => v.id === req.params.id);
-
-  if (videoIndex === -1) {
+  const video = data.videos.find(v => v.id === req.params.id);
+  if (!video) {
     return res.status(404).json({ error: '视频不存在' });
   }
-
-  const { duration, name } = req.body;
-
-  if (typeof duration === 'number') {
-    data.videos[videoIndex].duration = duration;
-  }
-  if (typeof name === 'string') {
-    data.videos[videoIndex].name = name;
-  }
-
-  writeData(data);
-  res.json(data.videos[videoIndex]);
-});
-
-app.delete('/api/videos/:id', (req, res) => {
-  const data = readData();
-  const videoIndex = data.videos.findIndex(v => v.id === req.params.id);
-
-  if (videoIndex === -1) {
-    return res.status(404).json({ error: '视频不存在' });
-  }
-
-  const video = data.videos[videoIndex];
-  const filePath = path.join(__dirname, video.path);
-
+  const filePath = path.join(UPLOAD_DIR, video.filename);
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath);
   }
-
-  data.videos.splice(videoIndex, 1);
+  data.videos = data.videos.filter(v => v.id !== req.params.id);
   data.markers = data.markers.filter(m => m.videoId !== req.params.id);
   writeData(data);
-
-  res.json({ message: '删除成功' });
+  res.json({ success: true });
 });
 
-app.get('/api/videos/:videoId/markers', (req, res) => {
+app.get('/api/videos/:id/markers', (req: Request, res: Response) => {
   const data = readData();
   const markers = data.markers
-    .filter(m => m.videoId === req.params.videoId)
+    .filter(m => m.videoId === req.params.id)
     .sort((a, b) => a.timestamp - b.timestamp);
   res.json(markers);
 });
 
-app.post('/api/videos/:videoId/markers', (req, res) => {
-  const data = readData();
-  const timestamp = req.body.timestamp;
-  const label = req.body.label;
-  const color = req.body.color;
-
-  if (typeof timestamp !== 'number' || !label || !color) {
+app.post('/api/markers', (req: Request, res: Response) => {
+  const { videoId, timestamp, label, color } = req.body;
+  if (!videoId || timestamp === undefined || !label) {
     return res.status(400).json({ error: '参数不完整' });
   }
-
-  const marker: Marker = {
+  const data = readData();
+  const marker: MarkerData = {
     id: uuidv4(),
-    videoId: req.params.videoId,
+    videoId,
     timestamp,
     label,
-    color,
-    order: data.markers.filter(m => m.videoId === req.params.videoId).length
+    color: color || '#ff5722',
+    createdAt: new Date().toISOString()
   };
-
   data.markers.push(marker);
   writeData(data);
-  res.status(201).json(marker);
+  res.json(marker);
 });
 
-app.put('/api/markers/:id', (req, res) => {
+app.put('/api/markers/:id', (req: Request, res: Response) => {
   const data = readData();
-  const markerIndex = data.markers.findIndex(m => m.id === req.params.id);
-
-  if (markerIndex === -1) {
+  const index = data.markers.findIndex(m => m.id === req.params.id);
+  if (index === -1) {
     return res.status(404).json({ error: '标记不存在' });
   }
-
-  data.markers[markerIndex] = {
-    ...data.markers[markerIndex],
-    ...req.body,
-    id: data.markers[markerIndex].id
-  };
-
+  data.markers[index] = { ...data.markers[index], ...req.body };
   writeData(data);
-  res.json(data.markers[markerIndex]);
+  res.json(data.markers[index]);
 });
 
-app.delete('/api/markers/:id', (req, res) => {
+app.delete('/api/markers/:id', (req: Request, res: Response) => {
   const data = readData();
-  const markerIndex = data.markers.findIndex(m => m.id === req.params.id);
+  data.markers = data.markers.filter(m => m.id !== req.params.id);
+  writeData(data);
+  res.json({ success: true });
+});
 
-  if (markerIndex === -1) {
-    return res.status(404).json({ error: '标记不存在' });
+app.post('/api/markers/reorder', (req: Request, res: Response) => {
+  const { ids } = req.body as { ids: string[] };
+  if (!ids) {
+    return res.status(400).json({ error: '缺少 ids 参数' });
   }
-
-  const deleted = data.markers.splice(markerIndex, 1)[0];
-  writeData(data);
-  res.json(deleted);
-});
-
-app.put('/api/markers/reorder', (req, res) => {
   const data = readData();
-  const { markerIds }: { markerIds: string[] } = req.body;
-
-  if (!Array.isArray(markerIds)) {
-    return res.status(400).json({ error: '参数错误' });
-  }
-
-  markerIds.forEach((id, index) => {
-    const marker = data.markers.find(m => m.id === id);
-    if (marker) {
-      marker.order = index;
-    }
-  });
-
+  const idSet = new Set(ids);
+  const reordered = ids.map(id => data.markers.find(m => m.id === id)).filter(Boolean) as MarkerData[];
+  const remaining = data.markers.filter(m => !idSet.has(m.id));
+  data.markers = [...reordered, ...remaining];
   writeData(data);
-  res.json({ message: '排序已更新' });
-});
-
-app.get('/api/markers', (_req, res) => {
-  const data = readData();
-  res.json(data.markers);
+  res.json({ success: true });
 });
 
 app.listen(PORT, () => {
-  console.log(`ClipMarker server running on port ${PORT}`);
+  console.log(`ClipMarker 后端服务运行在 http://localhost:${PORT}`);
 });

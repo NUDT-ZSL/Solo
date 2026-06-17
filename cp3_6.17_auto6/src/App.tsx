@@ -1,159 +1,76 @@
 import { useState, useEffect } from 'react';
-import VideoUploader from './VideoUploader';
-import VideoPlayer from './VideoPlayer';
-import MarkerPanel from './MarkerPanel';
-import TimelineExporter from './TimelineExporter';
-import type { Video, Marker } from './types';
-import './App.css';
+import { Film } from 'lucide-react';
+import { VideoUploader } from './VideoUploader';
+import { VideoPlayer } from './VideoPlayer';
+import { MarkerPanel } from './MarkerPanel';
+import { TimelineExporter } from './TimelineExporter';
+import { api } from './api';
+import { useAppStore } from './store';
+import type { Video } from './types';
 
-function App() {
-  const [videos, setVideos] = useState<Video[]>([]);
-  const [markers, setMarkers] = useState<Marker[]>([]);
-  const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
-  const [isPlayerOpen, setIsPlayerOpen] = useState(false);
-  const [selectedMarkerIds, setSelectedMarkerIds] = useState<string[]>([]);
-  const [initialTimestamp, setInitialTimestamp] = useState<number | null>(null);
+export default function App() {
+  const [playingVideo, setPlayingVideo] = useState<Video | null>(null);
+  const setVideos = useAppStore(s => s.setVideos);
+  const setMarkers = useAppStore(s => s.setMarkers);
+  const setPlayingVideoId = useAppStore(s => s.setPlayingVideo);
+  const setSeekTimestamp = useAppStore(s => s.setSeekTimestamp);
+  const videos = useAppStore(s => s.videos);
 
   useEffect(() => {
-    fetchVideos();
-    fetchMarkers();
-  }, []);
+    const load = async () => {
+      try {
+        const vs = await api.getVideos();
+        setVideos(vs);
+        const allMarkers = [];
+        for (const v of vs) {
+          const ms = await api.getMarkers(v.id);
+          allMarkers.push(...ms);
+        }
+        setMarkers(allMarkers);
+      } catch (e) {
+        console.error('加载数据失败', e);
+      }
+    };
+    load();
+  }, [setVideos, setMarkers]);
 
-  const fetchVideos = async () => {
-    try {
-      const res = await fetch('/api/videos');
-      const data = await res.json();
-      setVideos(data);
-    } catch (err) {
-      console.error('获取视频列表失败:', err);
-    }
-  };
-
-  const fetchMarkers = async () => {
-    try {
-      const res = await fetch('/api/markers');
-      const data = await res.json();
-      setMarkers(data);
-    } catch (err) {
-      console.error('获取标记列表失败:', err);
-    }
-  };
-
-  const handleVideoUploaded = (video: Video) => {
-    setVideos(prev => [...prev, video]);
-  };
-
-  const handlePlayVideo = (video: Video, timestamp?: number) => {
-    setSelectedVideo(video);
-    setIsPlayerOpen(true);
-    if (timestamp !== undefined) {
-      setInitialTimestamp(timestamp);
-    } else {
-      setInitialTimestamp(null);
-    }
+  const handlePlay = (video: Video) => {
+    setPlayingVideo(video);
+    setPlayingVideoId(video.id);
   };
 
   const handleClosePlayer = () => {
-    setIsPlayerOpen(false);
-    setSelectedVideo(null);
-    setInitialTimestamp(null);
+    setPlayingVideo(null);
+    setPlayingVideoId(null);
   };
 
-  const handleMarkerAdded = (marker: Marker) => {
-    setMarkers(prev => [...prev, marker]);
+  const handlePlayMarker = (video: Video, timestamp: number) => {
+    setPlayingVideo(video);
+    setPlayingVideoId(video.id);
+    setSeekTimestamp(timestamp);
   };
-
-  const handleMarkerDeleted = (markerId: string) => {
-    setMarkers(prev => prev.filter(m => m.id !== markerId));
-    setSelectedMarkerIds(prev => prev.filter(id => id !== markerId));
-  };
-
-  const handleMarkersReordered = (newMarkers: Marker[]) => {
-    setMarkers(newMarkers);
-  };
-
-  const handleToggleMarkerSelect = (markerId: string) => {
-    setSelectedMarkerIds(prev =>
-      prev.includes(markerId)
-        ? prev.filter(id => id !== markerId)
-        : [...prev, markerId]
-    );
-  };
-
-  const handleSelectAllMarkers = () => {
-    if (selectedMarkerIds.length === markers.length) {
-      setSelectedMarkerIds([]);
-    } else {
-      setSelectedMarkerIds(markers.map(m => m.id));
-    }
-  };
-
-  const markersByVideo = videos.reduce((acc, video) => {
-    const videoMarkers = markers
-      .filter(m => m.videoId === video.id)
-      .sort((a, b) => a.timestamp - b.timestamp);
-    if (videoMarkers.length > 0) {
-      acc[video.id] = videoMarkers;
-    }
-    return acc;
-  }, {} as Record<string, Marker[]>);
 
   return (
-    <div className="app-container">
-      <header className="app-header">
-        <div className="app-title">
-          <div className="app-logo">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="23 7 16 12 23 17 23 7" />
-              <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-            </svg>
-          </div>
-          <h1>ClipMarker</h1>
+    <div className="w-full h-full flex flex-col md:flex-row" style={{ background: '#121212' }}>
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <header className="flex items-center gap-2 px-6 py-3 border-b border-[#333]">
+          <Film size={22} color="#ff5722" />
+          <h1 className="font-semibold text-lg">ClipMarker</h1>
+          <span className="text-xs text-gray-400 ml-2">视频素材标记工具</span>
+        </header>
+        <TimelineExporter />
+        <div className="flex-1 overflow-y-auto">
+          <VideoUploader onPlay={handlePlay} />
         </div>
-        <TimelineExporter
-          videos={videos}
-          markers={markers}
-          selectedMarkerIds={selectedMarkerIds}
-          disabled={selectedMarkerIds.length === 0}
-        />
-      </header>
-
-      <div className="app-content">
-        <main className="main-content">
-          <VideoUploader
-            videos={videos}
-            onVideoUploaded={handleVideoUploaded}
-            onPlayVideo={handlePlayVideo}
-          />
-        </main>
-
-        <aside className="sidebar">
-          <MarkerPanel
-            videos={videos}
-            markers={markers}
-            markersByVideo={markersByVideo}
-            selectedMarkerIds={selectedMarkerIds}
-            onToggleSelect={handleToggleMarkerSelect}
-            onSelectAll={handleSelectAllMarkers}
-            onPlayMarker={handlePlayVideo}
-            onMarkerDeleted={handleMarkerDeleted}
-            onMarkersReordered={handleMarkersReordered}
-          />
-        </aside>
       </div>
 
-      {isPlayerOpen && selectedVideo && (
-        <VideoPlayer
-          video={selectedVideo}
-          markers={markers.filter(m => m.videoId === selectedVideo.id)}
-          initialTimestamp={initialTimestamp}
-          onClose={handleClosePlayer}
-          onMarkerAdded={handleMarkerAdded}
-          onMarkerDeleted={handleMarkerDeleted}
-        />
+      <div className="border-t md:border-t-0 md:border-l border-[#333] flex-shrink-0 md:h-auto h-1/2 overflow-hidden">
+        <MarkerPanel onPlayMarker={handlePlayMarker} />
+      </div>
+
+      {playingVideo && (
+        <VideoPlayer video={playingVideo} onClose={handleClosePlayer} />
       )}
     </div>
   );
 }
-
-export default App;

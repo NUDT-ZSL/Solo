@@ -1,234 +1,187 @@
 import { useState, useRef } from 'react';
+import { Play, Trash2, GripVertical, ImageIcon } from 'lucide-react';
+import { api } from './api';
+import { useAppStore } from './store';
+import { formatDuration } from './types';
 import type { Video, Marker } from './types';
-import './MarkerPanel.css';
 
 interface MarkerPanelProps {
-  videos: Video[];
-  markers: Marker[];
-  markersByVideo: Record<string, Marker[]>;
-  selectedMarkerIds: string[];
-  onToggleSelect: (markerId: string) => void;
-  onSelectAll: () => void;
   onPlayMarker: (video: Video, timestamp: number) => void;
-  onMarkerDeleted: (markerId: string) => void;
-  onMarkersReordered: (markers: Marker[]) => void;
 }
 
-function formatTime(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-}
+export function MarkerPanel({ onPlayMarker }: MarkerPanelProps) {
+  const videos = useAppStore(s => s.videos);
+  const markers = useAppStore(s => s.markers);
+  const removeMarker = useAppStore(s => s.removeMarker);
+  const updateMarker = useAppStore(s => s.updateMarker);
+  const selectedMarkerIds = useAppStore(s => s.selectedMarkerIds);
+  const toggleMarkerSelection = useAppStore(s => s.toggleMarkerSelection);
 
-function MarkerPanel({
-  videos,
-  markers,
-  markersByVideo,
-  selectedMarkerIds,
-  onToggleSelect,
-  onSelectAll,
-  onPlayMarker,
-  onMarkerDeleted,
-  onMarkersReordered,
-}: MarkerPanelProps) {
-  const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
-  const dragOverRef = useRef<HTMLDivElement | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  const thumbCache = useRef<Map<string, string>>(new Map());
 
-  const getVideoById = (id: string): Video | undefined => {
-    return videos.find(v => v.id === id);
+  const grouped = videos.map(v => ({
+    video: v,
+    markers: markers.filter(m => m.videoId === v.id)
+  })).filter(g => g.markers.length > 0);
+
+  const allVideoMap = new Map(videos.map(v => [v.id, v]));
+
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    await api.deleteMarker(id);
+    removeMarker(id);
   };
 
-  const handleDragStart = (e: React.DragEvent, markerId: string) => {
-    setDraggedId(markerId);
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    setDragId(id);
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  const handleDragOver = (e: React.DragEvent, markerId: string) => {
+  const handleDragOver = (e: React.DragEvent, id: string) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (dragOverId !== markerId) {
-      setDragOverId(markerId);
-    }
+    setOverId(id);
   };
 
-  const handleDragLeave = () => {
-    setDragOverId(null);
-  };
-
-  const handleDrop = async (e: React.DragEvent, targetMarkerId: string) => {
+  const handleDrop = async (e: React.DragEvent, targetId: string) => {
     e.preventDefault();
-    if (!draggedId || draggedId === targetMarkerId) {
-      setDraggedId(null);
-      setDragOverId(null);
+    if (!dragId || dragId === targetId) {
+      setDragId(null);
+      setOverId(null);
       return;
     }
-
-    const draggedMarker = markers.find(m => m.id === draggedId);
-    const targetMarker = markers.find(m => m.id === targetMarkerId);
-
-    if (!draggedMarker || !targetMarker || draggedMarker.videoId !== targetMarker.videoId) {
-      setDraggedId(null);
-      setDragOverId(null);
-      return;
+    const currentList = markers.map(m => m.id);
+    const fromIdx = currentList.indexOf(dragId);
+    const toIdx = currentList.indexOf(targetId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const newList = [...currentList];
+    const [removed] = newList.splice(fromIdx, 1);
+    newList.splice(toIdx, 0, removed);
+    await api.reorderMarkers(newList);
+    const dragMarker = markers.find(m => m.id === dragId);
+    const overMarker = markers.find(m => m.id === targetId);
+    if (dragMarker && overMarker) {
+      const tempOrder = [...markers];
+      const fIdx = tempOrder.findIndex(m => m.id === dragId);
+      const tIdx = tempOrder.findIndex(m => m.id === targetId);
+      const [mov] = tempOrder.splice(fIdx, 1);
+      tempOrder.splice(tIdx, 0, mov);
+      useAppStore.setState({ markers: tempOrder });
     }
-
-    const videoMarkers = markers
-      .filter(m => m.videoId === draggedMarker.videoId)
-      .sort((a, b) => a.timestamp - b.timestamp);
-
-    const draggedIndex = videoMarkers.findIndex(m => m.id === draggedId);
-    const targetIndex = videoMarkers.findIndex(m => m.id === targetMarkerId);
-
-    const newVideoMarkers = [...videoMarkers];
-    const [removed] = newVideoMarkers.splice(draggedIndex, 1);
-    newVideoMarkers.splice(targetIndex, 0, removed);
-
-    const updatedVideoMarkers = newVideoMarkers.map((m, i) => ({ ...m, order: i }));
-
-    const otherMarkers = markers.filter(m => m.videoId !== draggedMarker.videoId);
-    const finalMarkers = [...otherMarkers, ...updatedVideoMarkers];
-
-    try {
-      await fetch('/api/markers/reorder', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          markerIds: updatedVideoMarkers.map(m => m.id),
-        }),
-      });
-    } catch (err) {
-      console.error('排序更新失败:', err);
-    }
-
-    onMarkersReordered(finalMarkers);
-    setDraggedId(null);
-    setDragOverId(null);
+    setDragId(null);
+    setOverId(null);
   };
 
   const handleDragEnd = () => {
-    setDraggedId(null);
-    setDragOverId(null);
+    setDragId(null);
+    setOverId(null);
   };
 
-  const handleDeleteMarker = async (markerId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!confirm('确定要删除这个标记吗？')) return;
-
-    try {
-      const res = await fetch(`/api/markers/${markerId}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) {
-        onMarkerDeleted(markerId);
-      }
-    } catch (err) {
-      console.error('删除标记失败:', err);
+  const getThumbnail = (video: Video): string => {
+    const cached = thumbCache.current.get(video.id);
+    if (cached) return cached;
+    const canvas = document.createElement('canvas');
+    canvas.width = 32;
+    canvas.height = 32;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#1e1e1e';
+      ctx.fillRect(0, 0, 32, 32);
     }
+    const url = canvas.toDataURL();
+    thumbCache.current.set(video.id, url);
+    return url;
   };
-
-  const videoEntries = Object.entries(markersByVideo);
 
   return (
-    <div className="marker-panel">
-      <div className="panel-header">
-        <h3 className="panel-title">标记列表</h3>
-        <button
-          className="select-all-button"
-          onClick={onSelectAll}
-          disabled={markers.length === 0}
-        >
-          {selectedMarkerIds.length === markers.length && markers.length > 0 ? '取消全选' : '全选'}
-        </button>
-      </div>
-
-      <div className="marker-list">
-        {videoEntries.length === 0 && (
-          <div className="empty-markers">
-            <p>暂无标记</p>
-            <p className="empty-hint">播放视频并按 M 键添加标记</p>
-          </div>
-        )}
-
-        {videoEntries.map(([videoId, videoMarkers]) => {
-          const video = getVideoById(videoId);
-          if (!video) return null;
-
-          return (
-            <div key={videoId} className="video-group">
-              <div className="video-group-header">
-                <span className="video-group-name" title={video.name}>
-                  {video.name}
-                </span>
-                <span className="video-group-count">
-                  {videoMarkers.length}
-                </span>
-              </div>
-              <div className="marker-items">
-                {videoMarkers.map(marker => (
-                  <div
-                    key={marker.id}
-                    className={`marker-item ${selectedMarkerIds.includes(marker.id) ? 'selected' : ''} ${draggedId === marker.id ? 'dragging' : ''} ${dragOverId === marker.id ? 'drag-over' : ''}`}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, marker.id)}
-                    onDragOver={(e) => handleDragOver(e, marker.id)}
-                    onDragLeave={handleDragLeave}
-                    onDrop={(e) => handleDrop(e, marker.id)}
-                    onDragEnd={handleDragEnd}
-                    onClick={() => onToggleSelect(marker.id)}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedMarkerIds.includes(marker.id)}
-                      onChange={() => onToggleSelect(marker.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="marker-checkbox"
+    <div
+      className="h-full overflow-y-auto"
+      style={{ width: 240, background: '#252525', padding: 12 }}
+    >
+      <h3 className="font-medium mb-3 text-sm">标记列表</h3>
+      {grouped.length === 0 && (
+        <p className="text-xs text-gray-500 text-center py-8">
+          暂无标记<br />播放视频时按 M 键添加
+        </p>
+      )}
+      {grouped.map(({ video, markers: vMarkers }) => (
+        <div key={video.id} className="mb-4">
+          <p className="text-xs text-gray-400 mb-2 truncate" title={video.originalName}>
+            {video.originalName}
+          </p>
+          <div className="space-y-2">
+            {vMarkers.map((marker) => (
+              <div
+                key={marker.id}
+                draggable
+                onDragStart={(e) => handleDragStart(e, marker.id)}
+                onDragOver={(e) => handleDragOver(e, marker.id)}
+                onDrop={(e) => handleDrop(e, marker.id)}
+                onDragEnd={handleDragEnd}
+                onClick={() => onPlayMarker(video, marker.timestamp)}
+                className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-all ${
+                  dragId === marker.id ? 'opacity-50' : ''
+                } ${overId === marker.id ? 'border border-[#ff5722]' : 'hover:bg-[#1e1e1e]'} ${
+                  selectedMarkerIds.has(marker.id) ? 'bg-[#2a2a2a] ring-1 ring-[#ff5722]' : 'bg-[#1a1a1a]'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedMarkerIds.has(marker.id)}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    toggleMarkerSelection(marker.id);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-3.5 h-3.5 accent-[#ff5722] flex-shrink-0"
+                />
+                <GripVertical size={14} className="text-gray-500 flex-shrink-0 cursor-grab" />
+                <img
+                  src={getThumbnail(video)}
+                  alt=""
+                  className="rounded flex-shrink-0 bg-black"
+                  style={{ width: 32, height: 32 }}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ background: marker.color }}
                     />
-                    <div
-                      className="marker-thumbnail"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onPlayMarker(video, marker.timestamp);
-                      }}
-                      style={{ borderLeftColor: marker.color }}
-                    >
-                      <div className="thumbnail-placeholder">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polygon points="5 3 19 12 5 21 5 3" />
-                        </svg>
-                      </div>
-                    </div>
-                    <div className="marker-info">
-                      <span className="marker-label" style={{ color: marker.color }}>
-                        {marker.label}
-                      </span>
-                      <span className="marker-time">{formatTime(marker.timestamp)}</span>
-                    </div>
-                    <button
-                      className="delete-marker-button"
-                      onClick={(e) => handleDeleteMarker(marker.id, e)}
-                      title="删除标记"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />
-                      </svg>
-                    </button>
+                    <span className="text-xs truncate">{marker.label}</span>
                   </div>
-                ))}
+                  <p className="text-xs text-gray-400">{formatDuration(marker.timestamp)}</p>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPlayMarker(video, marker.timestamp);
+                  }}
+                  className="p-1 rounded hover:bg-[#333] flex-shrink-0"
+                  title="跳转到此处"
+                >
+                  <Play size={12} fill="white" />
+                </button>
+                <button
+                  onClick={(e) => handleDelete(marker.id, e)}
+                  className="p-1 rounded hover:bg-[#333] text-gray-400 hover:text-red-400 flex-shrink-0"
+                  title="删除"
+                >
+                  <Trash2 size={12} />
+                </button>
               </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="panel-footer">
-        <span className="selected-count">
-          已选择 {selectedMarkerIds.length} 个标记
-        </span>
-      </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      {markers.length > 0 && (
+        <div className="mt-4 pt-3 border-t border-[#333]">
+          <p className="text-xs text-gray-400 mb-2">
+            共 {markers.length} 个标记，已选 {selectedMarkerIds.size} 个
+          </p>
+        </div>
+      )}
     </div>
   );
 }
-
-export default MarkerPanel;
