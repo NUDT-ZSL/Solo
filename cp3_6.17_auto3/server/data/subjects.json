@@ -1,23 +1,23 @@
 [
   {
-    "id": "java-basic",
+    "id": "java",
     "name": "Java基础",
-    "description": "Java语言基础语法、面向对象、集合框架等核心知识",
-    "questionCount": 10,
-    "duration": 60
+    "description": "涵盖Java语法、面向对象、集合框架等核心知识",
+    "icon": "☕",
+    "questionCount": 30
   },
   {
-    "id": "project-management",
+    "id": "pm",
     "name": "项目管理",
-    "description": "项目管理知识体系、进度管理、质量管理等",
-    "questionCount": 10,
-    "duration": 60
+    "description": "PMP项目管理五大过程组与十大知识领域",
+    "icon": "📊",
+    "questionCount": 30
   },
   {
-    "id": "network-security",
+    "id": "security",
     "name": "网络安全",
-    "description": "网络安全基础、加密技术、安全协议等",
-    "questionCount": 10,
-    "duration": 60
+    "description": "网络安全基础、加密协议、攻防策略等",
+    "icon": "🔒",
+    "questionCount": 30
   }
 ]

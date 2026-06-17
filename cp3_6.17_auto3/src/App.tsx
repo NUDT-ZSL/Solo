@@ -1,30 +1,13 @@
-import { Routes, Route, useParams } from 'react-router-dom';
-import HomePage from './pages/HomePage';
-import ExamPanel from './components/ExamPanel';
-import ResultDashboard from './components/ResultDashboard';
-import HistoryPage from './pages/HistoryPage';
-import AdminPage from './pages/AdminPage';
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import Home from "@/pages/Home";
 
-const ExamPage = () => {
-  const { subjectId } = useParams<{ subjectId: string }>();
-  return <ExamPanel subjectId={subjectId || ''} />;
-};
-
-const ResultPage = () => {
-  const { recordId } = useParams<{ recordId: string }>();
-  return <ResultDashboard recordId={recordId || ''} />;
-};
-
-const App = () => {
+export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<HomePage />} />
-      <Route path="/exam/:subjectId" element={<ExamPage />} />
-      <Route path="/result/:recordId" element={<ResultPage />} />
-      <Route path="/history" element={<HistoryPage />} />
-      <Route path="/admin" element={<AdminPage />} />
-    </Routes>
+    <Router>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/other" element={<div className="text-center text-xl">Other Page - Coming Soon</div>} />
+      </Routes>
+    </Router>
   );
-};
-
-export default App;
+}

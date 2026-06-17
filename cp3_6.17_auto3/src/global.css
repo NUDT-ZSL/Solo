@@ -1,0 +1,38 @@
+:root {
+  --color-primary: #3182ce;
+  --color-cyan: #00b5d8;
+  --color-bg: #f7fafc;
+  --color-red: #e53e3e;
+}
+
+body {
+  background-color: var(--color-bg);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.btn {
+  border-radius: 8px;
+  height: 48px;
+  transition: all 0.2s ease;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.card {
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+@media (max-width: 768px) {
+  .two-column {
+    flex-direction: column;
+  }
+}
+
+.mono-red {
+  font-family: monospace;
+  color: var(--color-red);
+}

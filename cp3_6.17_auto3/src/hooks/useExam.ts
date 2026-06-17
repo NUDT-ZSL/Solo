@@ -1,147 +1,123 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Question, Subject, ExamResult } from '../types';
+import { Question, ExamState, ExamRecord } from '../types';
 
-interface UseExamReturn {
-  questions: Question[];
-  currentIndex: number;
-  answers: (number | null)[];
-  timeLeft: number;
-  isLoading: boolean;
-  isSubmitted: boolean;
-  result: ExamResult | null;
-  subject: Subject | null;
-  goToQuestion: (index: number) => void;
-  selectAnswer: (answerIndex: number) => void;
-  submitExam: () => Promise<void>;
-  formatTime: (seconds: number) => string;
-}
+const EXAM_DURATION = 60 * 60;
 
-const useExam = (subjectId: string): UseExamReturn => {
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [subject, setSubject] = useState<Subject | null>(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<(number | null)[]>([]);
-  const [timeLeft, setTimeLeft] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [result, setResult] = useState<ExamResult | null>(null);
-  const startTimeRef = useRef<number>(0);
+export function useExam() {
+  const [state, setState] = useState<ExamState>({
+    status: 'idle',
+    questions: [],
+    currentIndex: 0,
+    answers: {},
+    timeRemaining: EXAM_DURATION,
+    totalTime: EXAM_DURATION,
+    examResult: null,
+    error: null,
+  });
+
   const timerRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const [subjectsRes, questionsRes] = await Promise.all([
-          fetch('/api/subjects'),
-          fetch(`/api/questions?subjectId=${subjectId}`),
-        ]);
-        
-        const subjects = await subjectsRes.json();
-        const questionsData = await questionsRes.json();
-        
-        const currentSubject = subjects.find((s: Subject) => s.id === subjectId);
-        setSubject(currentSubject || null);
-        setQuestions(questionsData);
-        setAnswers(new Array(questionsData.length).fill(null));
-        setTimeLeft((currentSubject?.duration || 60) * 60);
-        startTimeRef.current = Date.now();
-      } catch (error) {
-        console.error('获取数据失败', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const startExam = useCallback(async (subjectId: string) => {
+    setState(s => ({ ...s, status: 'loading', error: null }));
+    try {
+      const res = await fetch(`/api/questions?subject=${subjectId}`);
+      const data = await res.json();
+      const questions: Question[] = data.questions || [];
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = window.setInterval(() => {
+        setState(s => {
+          if (s.timeRemaining <= 1) {
+            return { ...s, timeRemaining: 0 };
+          }
+          return { ...s, timeRemaining: s.timeRemaining - 1 };
+        });
+      }, 1000);
+      
+      setState(s => ({
+        ...s,
+        status: 'in_progress',
+        questions,
+        currentIndex: 0,
+        answers: {},
+        timeRemaining: EXAM_DURATION,
+      }));
+    } catch (err) {
+      setState(s => ({ ...s, status: 'error', error: '加载题目失败' }));
+    }
+  }, []);
 
-    fetchData();
-  }, [subjectId]);
-
-  useEffect(() => {
-    if (isLoading || isSubmitted || timeLeft <= 0) return;
-
-    timerRef.current = window.setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          if (timerRef.current) clearInterval(timerRef.current);
-          void submitExam();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
-  }, [isLoading, isSubmitted]);
+  const selectAnswer = useCallback((questionId: string, answerIndex: number) => {
+    setState(s => ({
+      ...s,
+      answers: { ...s.answers, [questionId]: answerIndex },
+    }));
+  }, []);
 
   const goToQuestion = useCallback((index: number) => {
-    if (index >= 0 && index < questions.length) {
-      setCurrentIndex(index);
-    }
-  }, [questions.length]);
+    setState(s => ({
+      ...s,
+      currentIndex: Math.max(0, Math.min(index, s.questions.length - 1)),
+    }));
+  }, []);
 
-  const selectAnswer = useCallback((answerIndex: number) => {
-    setAnswers((prev) => {
-      const newAnswers = [...prev];
-      newAnswers[currentIndex] = answerIndex;
-      return newAnswers;
-    });
-  }, [currentIndex]);
-
-  const submitExam = useCallback(async () => {
-    if (isSubmitted) return;
-    
-    setIsSubmitted(true);
+  const submitExam = useCallback(async (subjectId: string): Promise<ExamRecord | null> => {
+    setState(s => ({ ...s, status: 'submitting' }));
     if (timerRef.current) {
       clearInterval(timerRef.current);
+      timerRef.current = null;
     }
-
-    const duration = Math.floor((Date.now() - startTimeRef.current) / 1000);
-    const finalAnswers = answers.map((a) => (a === null ? -1 : a));
-
     try {
-      const response = await fetch('/api/submit', {
+      const timeTaken = EXAM_DURATION - state.timeRemaining;
+      const res = await fetch('/api/exam/submit', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          answers: finalAnswers,
           subjectId,
-          duration,
+          answers: state.answers,
+          timeTaken,
         }),
       });
-
-      const data = await response.json();
-      setResult({ ...data, duration });
-    } catch (error) {
-      console.error('提交失败', error);
+      const data = await res.json();
+      const recordRes = await fetch(`/api/exam/${data.examId}`);
+      const record: ExamRecord = await recordRes.json();
+      setState(s => ({ ...s, status: 'completed', examResult: record }));
+      return record;
+    } catch (err) {
+      setState(s => ({ ...s, status: 'error', error: '提交失败' }));
+      return null;
     }
-  }, [answers, subjectId, isSubmitted]);
+  }, [state.answers, state.timeRemaining]);
 
-  const formatTime = useCallback((seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  const resetExam = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setState({
+      status: 'idle',
+      questions: [],
+      currentIndex: 0,
+      answers: {},
+      timeRemaining: EXAM_DURATION,
+      totalTime: EXAM_DURATION,
+      examResult: null,
+      error: null,
+    });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
   }, []);
 
   return {
-    questions,
-    currentIndex,
-    answers,
-    timeLeft,
-    isLoading,
-    isSubmitted,
-    result,
-    subject,
-    goToQuestion,
+    state,
+    startExam,
     selectAnswer,
+    goToQuestion,
     submitExam,
-    formatTime,
+    resetExam,
+    EXAM_DURATION,
   };
-};
-
-export default useExam;
+}

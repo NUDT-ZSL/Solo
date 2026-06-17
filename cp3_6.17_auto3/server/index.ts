@@ -2,201 +2,277 @@ import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
-import dayjs from 'dayjs';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+interface Question {
+  id: string;
+  subject: string;
+  text: string;
+  options: string[];
+  correctAnswer: number;
+  category: 'basic' | 'logic' | 'code' | 'security' | 'management';
+  analysis: string;
+}
+
+interface Subject {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  questionCount: number;
+}
+
+interface WrongAnswer {
+  questionId: string;
+  text: string;
+  userAnswer: number;
+  correctAnswer: number;
+  options: string[];
+  category: string;
+  analysis: string;
+}
+
+interface DimensionScores {
+  basic: { total: number; correct: number; score: number };
+  logic: { total: number; correct: number; score: number };
+  code: { total: number; correct: number; score: number };
+  security: { total: number; correct: number; score: number };
+  management: { total: number; correct: number; score: number };
+}
+
+interface ExamRecord {
+  id: string;
+  subjectId: string;
+  subjectName: string;
+  score: number;
+  correctCount: number;
+  totalQuestions: number;
+  timeTaken: number;
+  wrongAnswers: WrongAnswer[];
+  dimensionScores: DimensionScores;
+  createdAt: string;
+}
+
+interface SubmitRequest {
+  subjectId: string;
+  answers: { questionId: string; answer: number }[];
+  timeTaken: number;
+}
 
 const app = express();
-const PORT = 5050;
+const PORT = 3001;
+const DATA_DIR = path.join(__dirname, 'data');
 
 app.use(cors());
 app.use(express.json());
 
-const dataDir = path.join(__dirname, 'data');
+function readJSON<T>(filename: string): T {
+  const filePath = path.join(DATA_DIR, filename);
+  const raw = fs.readFileSync(filePath, 'utf-8');
+  return JSON.parse(raw) as T;
+}
 
-const readJsonFile = (filename: string) => {
-  const filePath = path.join(dataDir, filename);
-  const content = fs.readFileSync(filePath, 'utf-8');
-  return JSON.parse(content);
-};
-
-const writeJsonFile = (filename: string, data: any) => {
-  const filePath = path.join(dataDir, filename);
+function writeJSON<T>(filename: string, data: T): void {
+  const filePath = path.join(DATA_DIR, filename);
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
-};
+}
 
-const DIMENSIONS = ['基础知识', '逻辑分析', '代码理解', '安全规范', '项目管理'];
+function calculateDimensionScores(
+  questions: Question[],
+  answers: Map<string, number>
+): DimensionScores {
+  const dimensions: DimensionScores = {
+    basic: { total: 0, correct: 0, score: 0 },
+    logic: { total: 0, correct: 0, score: 0 },
+    code: { total: 0, correct: 0, score: 0 },
+    security: { total: 0, correct: 0, score: 0 },
+    management: { total: 0, correct: 0, score: 0 },
+  };
 
-app.get('/api/subjects', (req, res) => {
+  for (const q of questions) {
+    const dim = dimensions[q.category];
+    dim.total++;
+    const userAnswer = answers.get(q.id);
+    if (userAnswer !== undefined && userAnswer === q.correctAnswer) {
+      dim.correct++;
+    }
+  }
+
+  for (const key of Object.keys(dimensions) as (keyof DimensionScores)[]) {
+    const dim = dimensions[key];
+    dim.score = dim.total > 0 ? Math.round((dim.correct / dim.total) * 100) : 0;
+  }
+
+  return dimensions;
+}
+
+function shuffleArray<T>(array: T[]): T[] {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+app.get('/api/subjects', (_req, res) => {
   try {
-    const subjects = readJsonFile('subjects.json');
+    const subjects = readJSON<Subject[]>('subjects.json');
     res.json(subjects);
-  } catch (error) {
-    res.status(500).json({ error: '获取科目列表失败' });
+  } catch (err) {
+    res.status(500).json({ error: '读取科目数据失败' });
   }
 });
 
 app.get('/api/questions', (req, res) => {
   try {
-    const { subjectId } = req.query;
-    let questions = readJsonFile('questions.json');
-    
-    if (subjectId) {
-      questions = questions.filter((q: any) => q.subject === subjectId);
+    const subject = req.query.subject as string;
+    if (!subject) {
+      return res.status(400).json({ error: '缺少subject参数' });
     }
-    
-    res.json(questions);
-  } catch (error) {
-    res.status(500).json({ error: '获取题目失败' });
+    const questions = readJSON<Question[]>('questions.json');
+    const filtered = questions.filter((q) => q.subject === subject);
+    const shuffled = shuffleArray(filtered).slice(0, 30);
+    res.json(shuffled);
+  } catch (err) {
+    res.status(500).json({ error: '读取题目数据失败' });
   }
 });
 
-app.post('/api/submit', (req, res) => {
+app.post('/api/exam/submit', (req, res) => {
   try {
-    const { answers, subjectId, duration } = req.body;
-    const questions = readJsonFile('questions.json').filter((q: any) => q.subject === subjectId);
-    const subjects = readJsonFile('subjects.json');
-    const subject = subjects.find((s: any) => s.id === subjectId);
-    
+    const { subjectId, answers, timeTaken } = req.body as SubmitRequest;
+    if (!subjectId || !answers) {
+      return res.status(400).json({ error: '参数不完整' });
+    }
+
+    const subjects = readJSON<Subject[]>('subjects.json');
+    const subject = subjects.find((s) => s.id === subjectId);
+    if (!subject) {
+      return res.status(404).json({ error: '科目不存在' });
+    }
+
+    const questions = readJSON<Question[]>('questions.json');
+    const subjectQuestions = questions.filter((q) => q.subject === subjectId);
+    const questionMap = new Map<string, Question>();
+    subjectQuestions.forEach((q) => questionMap.set(q.id, q));
+
+    const answerMap = new Map<string, number>();
+    answers.forEach((a) => answerMap.set(a.questionId, a.answer));
+
     let correctCount = 0;
-    const wrongQuestions: any[] = [];
-    const dimensionStats: Record<string, { correct: number; total: number }> = {};
-    
-    DIMENSIONS.forEach(d => {
-      dimensionStats[d] = { correct: 0, total: 0 };
-    });
-    
-    questions.forEach((q: any, index: number) => {
-      const userAnswer = answers[index];
-      const dimension = q.dimension;
-      
-      if (dimensionStats[dimension]) {
-        dimensionStats[dimension].total++;
-      }
-      
-      if (userAnswer === q.correctAnswer) {
+    const wrongAnswers: WrongAnswer[] = [];
+
+    for (const a of answers) {
+      const q = questionMap.get(a.questionId);
+      if (!q) continue;
+      if (a.answer === q.correctAnswer) {
         correctCount++;
-        if (dimensionStats[dimension]) {
-          dimensionStats[dimension].correct++;
-        }
       } else {
-        wrongQuestions.push(q);
+        wrongAnswers.push({
+          questionId: q.id,
+          text: q.text,
+          userAnswer: a.answer,
+          correctAnswer: q.correctAnswer,
+          options: q.options,
+          category: q.category,
+          analysis: q.analysis,
+        });
       }
-    });
-    
-    const score = Math.round((correctCount / questions.length) * 100);
-    
-    const dimensionScores: Record<string, number> = {};
-    Object.entries(dimensionStats).forEach(([name, stats]) => {
-      dimensionScores[name] = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
-    });
-    
-    const record = {
+    }
+
+    const totalQuestions = answers.length;
+    const score = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
+    const dimensionScores = calculateDimensionScores(subjectQuestions, answerMap);
+
+    const examRecord: ExamRecord = {
       id: uuidv4(),
       subjectId,
-      subjectName: subject?.name || '',
+      subjectName: subject.name,
       score,
-      totalQuestions: questions.length,
       correctCount,
-      duration: duration || 0,
-      answers,
-      date: new Date().toISOString(),
+      totalQuestions,
+      timeTaken,
+      wrongAnswers,
       dimensionScores,
+      createdAt: new Date().toISOString(),
     };
-    
-    const records = readJsonFile('records.json');
-    records.unshift(record);
-    if (records.length > 50) {
-      records.length = 50;
-    }
-    writeJsonFile('records.json', records);
-    
+
+    const records = readJSON<ExamRecord[]>('exam-records.json');
+    records.unshift(examRecord);
+    const trimmedRecords = records.slice(0, 50);
+    writeJSON('exam-records.json', trimmedRecords);
+
     res.json({
+      examId: examRecord.id,
       score,
       correctCount,
-      totalQuestions: questions.length,
-      wrongQuestions,
+      totalQuestions,
+      wrongAnswers,
       dimensionScores,
-      recordId: record.id,
     });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: '评分失败' });
+  } catch (err) {
+    res.status(500).json({ error: '提交考试失败' });
   }
 });
 
-app.get('/api/records', (req, res) => {
-  try {
-    const records = readJsonFile('records.json');
-    res.json(records.slice(0, 10));
-  } catch (error) {
-    res.status(500).json({ error: '获取记录失败' });
-  }
-});
-
-app.get('/api/records/:id', (req, res) => {
+app.get('/api/exam/:id', (req, res) => {
   try {
     const { id } = req.params;
-    const records = readJsonFile('records.json');
-    const record = records.find((r: any) => r.id === id);
-    
+    const records = readJSON<ExamRecord[]>('exam-records.json');
+    const record = records.find((r) => r.id === id);
     if (!record) {
-      res.status(404).json({ error: '记录不存在' });
-      return;
+      return res.status(404).json({ error: '考试记录不存在' });
     }
-    
-    const questions = readJsonFile('questions.json').filter((q: any) => q.subject === record.subjectId);
-    const wrongQuestions = questions.filter((q: any, idx: number) => record.answers[idx] !== q.correctAnswer);
-    
-    res.json({
-      ...record,
-      wrongQuestions,
-    });
-  } catch (error) {
-    res.status(500).json({ error: '获取记录失败' });
+    res.json(record);
+  } catch (err) {
+    res.status(500).json({ error: '读取考试记录失败' });
   }
 });
 
-app.post('/api/questions', (req, res) => {
+app.get('/api/history', (_req, res) => {
   try {
-    const question = {
+    const records = readJSON<ExamRecord[]>('exam-records.json');
+    res.json(records.slice(0, 10));
+  } catch (err) {
+    res.status(500).json({ error: '读取历史记录失败' });
+  }
+});
+
+app.get('/api/admin/scores', (_req, res) => {
+  try {
+    const records = readJSON<ExamRecord[]>('exam-records.json');
+    res.json(records);
+  } catch (err) {
+    res.status(500).json({ error: '读取成绩数据失败' });
+  }
+});
+
+app.post('/api/admin/questions', (req, res) => {
+  try {
+    const questionData = req.body as Omit<Question, 'id'>;
+    if (
+      !questionData.subject ||
+      !questionData.text ||
+      !questionData.options ||
+      questionData.correctAnswer === undefined ||
+      !questionData.category
+    ) {
+      return res.status(400).json({ error: '题目数据不完整' });
+    }
+    const newQuestion: Question = {
+      ...questionData,
       id: uuidv4(),
-      ...req.body,
     };
-    
-    const questions = readJsonFile('questions.json');
-    questions.push(question);
-    writeJsonFile('questions.json', questions);
-    
-    res.status(201).json(question);
-  } catch (error) {
+    const questions = readJSON<Question[]>('questions.json');
+    questions.push(newQuestion);
+    writeJSON('questions.json', questions);
+    res.json({ success: true, id: newQuestion.id, message: '题目添加成功' });
+  } catch (err) {
     res.status(500).json({ error: '添加题目失败' });
   }
 });
 
-app.get('/api/admin/records', (req, res) => {
-  try {
-    const records = readJsonFile('records.json');
-    const formatted = records.map((r: any) => ({
-      ...r,
-      dateFormatted: dayjs(r.date).format('YYYY-MM-DD HH:mm:ss'),
-      durationFormatted: formatDuration(r.duration),
-    }));
-    res.json(formatted);
-  } catch (error) {
-    res.status(500).json({ error: '获取记录失败' });
-  }
-});
-
-const formatDuration = (seconds: number) => {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}分${secs}秒`;
-};
-
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`职业资格考试系统后端服务已启动: http://localhost:${PORT}`);
 });
