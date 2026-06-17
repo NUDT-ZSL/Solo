@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { FC } from 'react';
 import type { Course, Homework } from '../data';
 import { getEnrolledCount, isStudentEnrolled, enrollStudent, getTotalUnsubmittedForCourse } from '../logic/courseManager';
+import AnimatedNumber from './AnimatedNumber';
 
 interface CourseCardProps {
   course: Course;
@@ -54,12 +55,12 @@ const CourseCard: FC<CourseCardProps> = ({
       <div className="card-footer">
         <span className="stat stat-green">
           <span className="stat-icon">👥</span>
-          <span className="stat-number stat-number-green">{studentCount}</span>
+          <AnimatedNumber value={studentCount} className="stat-number stat-number-green" />
           <span className="stat-unit">人</span>
         </span>
         <span className="stat stat-red">
           <span className="stat-icon">📝</span>
-          <span className="stat-number stat-number-red">{unsubmittedCount}</span>
+          <AnimatedNumber value={unsubmittedCount} className="stat-number stat-number-red" />
           <span className="stat-unit">份未交</span>
         </span>
       </div>

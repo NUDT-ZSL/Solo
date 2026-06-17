@@ -72,8 +72,9 @@ body {
 }
 
 .nav-item.active {
-  background-color: #303047;
+  background-color: #3A3A5C;
   border-left: 3px solid #3949AB;
+  font-weight: 700;
 }
 
 .nav-icon {
@@ -236,17 +237,17 @@ body {
   padding: 20px;
   color: #fff;
   cursor: pointer;
-  transition: transform 0.3s ease-out, box-shadow 0.3s ease-out;
+  transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
   will-change: transform, box-shadow;
 }
 
 .course-card:hover {
   transform: translateY(-6px);
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18), 0 6px 12px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.15), 0 6px 12px rgba(0, 0, 0, 0.15);
 }
 
 .card-header {
@@ -355,6 +356,7 @@ body {
   font-size: 15px;
   font-weight: 700;
   line-height: 1;
+  display: inline-block;
 }
 
 .stat-number-green {
@@ -365,6 +367,22 @@ body {
 .stat-number-red {
   color: #E53935;
   text-shadow: 0 0 2px rgba(255, 255, 255, 0.3);
+}
+
+.number-bounce {
+  animation: numberBounce 0.3s ease-out;
+}
+
+@keyframes numberBounce {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .stat-unit {
