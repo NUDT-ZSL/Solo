@@ -114,12 +114,12 @@ const SliderControl: React.FC<SliderControlProps> = ({
         />
         <input
           type="range"
+          className="md-slider"
           min={min}
           max={max}
           step={step}
           value={value}
           onChange={(e) => onChange(parseFloat(e.target.value))}
-          style={styles.sliderInput}
         />
       </div>
     </div>
@@ -222,17 +222,6 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: '#1976D2',
     borderRadius: '2px',
     pointerEvents: 'none',
-  },
-  sliderInput: {
-    width: '100%',
-    height: '20px',
-    WebkitAppearance: 'none',
-    appearance: 'none',
-    background: 'transparent',
-    outline: 'none',
-    cursor: 'pointer',
-    position: 'relative',
-    zIndex: 1,
   },
   colorPickerContainer: {
     display: 'flex',

@@ -50,7 +50,7 @@ const ButtonComponent: React.FC<ComponentProps> = ({ token, isBase }) => {
     padding: '12px 32px',
     border: 'none',
     borderRadius: `${token.borderRadius}px`,
-    backgroundColor: isBase ? '#9E9E9E' : token.backgroundColor,
+    backgroundColor: isBase ? '#E0E0E0' : token.backgroundColor,
     color: '#fff',
     fontSize: '14px',
     fontWeight: 500,
@@ -128,7 +128,7 @@ const InputComponent: React.FC<ComponentProps> = ({ token, isBase }) => {
 };
 
 const SwitchComponent: React.FC<ComponentProps> = ({ token, isBase }) => {
-  const switchBgColor = isBase ? '#9E9E9E' : token.backgroundColor;
+  const switchBgColor = isBase ? '#E0E0E0' : token.backgroundColor;
 
   const trackStyle: React.CSSProperties = {
     width: '52px',

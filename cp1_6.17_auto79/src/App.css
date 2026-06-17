@@ -1,0 +1,90 @@
+.app-container {
+  min-height: 100vh;
+  padding: 24px 32px;
+  background-color: #F5F5F5;
+}
+
+.app-header {
+  margin-bottom: 24px;
+}
+
+.app-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #212121;
+  margin: 0 0 4px 0;
+}
+
+.app-subtitle {
+  font-size: 14px;
+  color: #757575;
+  margin: 0;
+}
+
+.app-main {
+  display: flex;
+  gap: 24px;
+  height: calc(100vh - 140px);
+}
+
+.canvas-section {
+  flex: 6;
+  min-height: 400px;
+}
+
+.panel-section {
+  flex: 4;
+  min-height: 400px;
+}
+
+.export-button {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  padding: 12px 24px;
+  background-color: #333;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: background-color 0.2s ease-out, transform 0.15s ease-out;
+  z-index: 10;
+}
+
+.export-button:hover {
+  background-color: #555;
+  transform: translateY(-1px);
+}
+
+.export-button:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    padding: 16px;
+  }
+
+  .app-main {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .canvas-section {
+    flex: none;
+    min-height: 360px;
+  }
+
+  .panel-section {
+    flex: none;
+    min-height: 300px;
+  }
+
+  .export-button {
+    bottom: 16px;
+    right: 16px;
+  }
+}
