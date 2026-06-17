@@ -1,0 +1,23 @@
+[
+  {
+    "id": "java-basic",
+    "name": "Java基础",
+    "icon": "☕",
+    "questionCount": 30,
+    "description": "Java语言核心概念、语法与面向对象编程"
+  },
+  {
+    "id": "project-management",
+    "name": "项目管理",
+    "icon": "📊",
+    "questionCount": 30,
+    "description": "项目管理知识体系、流程管控与团队协作"
+  },
+  {
+    "id": "network-security",
+    "name": "网络安全",
+    "icon": "🔒",
+    "questionCount": 30,
+    "description": "网络安全基础、攻防技术与合规规范"
+  }
+]
