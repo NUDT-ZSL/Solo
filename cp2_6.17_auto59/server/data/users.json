@@ -1,0 +1,23 @@
+[
+  {
+    "id": "user-1",
+    "name": "张伟",
+    "avatarUrl": "https://i.pravatar.cc/150?img=1",
+    "role": "manager",
+    "password": "123456"
+  },
+  {
+    "id": "user-2",
+    "name": "李娜",
+    "avatarUrl": "https://i.pravatar.cc/150?img=5",
+    "role": "member",
+    "password": "123456"
+  },
+  {
+    "id": "user-3",
+    "name": "王强",
+    "avatarUrl": "https://i.pravatar.cc/150?img=12",
+    "role": "member",
+    "password": "123456"
+  }
+]

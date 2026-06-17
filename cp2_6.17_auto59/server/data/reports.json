@@ -1,0 +1,142 @@
+[
+  {
+    "id": "report-1",
+    "userId": "user-2",
+    "type": "daily",
+    "content": {
+      "done": "完成了用户登录模块的前端开发，包括登录页面样式、表单验证和API对接。修复了3个UI交互bug。",
+      "plan": "继续完成用户注册页面开发，对接后端注册API。",
+      "blocker": "后端注册接口文档不完整，需要与后端同事确认参数格式。"
+    },
+    "blockerType": "沟通协调",
+    "likes": 2,
+    "rating": 4,
+    "createdAt": "2026-06-17T08:30:00.000Z"
+  },
+  {
+    "id": "report-2",
+    "userId": "user-3",
+    "type": "daily",
+    "content": {
+      "done": "完成数据库表结构设计，编写了5张核心表的DDL语句，并完成了初步的索引优化方案。",
+      "plan": "开始编写用户模块的后端API接口，包括增删改查四个基本接口。",
+      "blocker": "暂无"
+    },
+    "blockerType": "无",
+    "likes": 1,
+    "rating": 5,
+    "createdAt": "2026-06-17T08:45:00.000Z"
+  },
+  {
+    "id": "report-3",
+    "userId": "user-2",
+    "type": "daily",
+    "content": {
+      "done": "完成了注册页面开发和API对接，通过了自测。参与了下午的技术评审会议。",
+      "plan": "开始用户信息编辑页面的开发工作。",
+      "blocker": "设计稿有部分细节不明确，需要设计师补充。"
+    },
+    "blockerType": "资源缺失",
+    "likes": 0,
+    "rating": 3,
+    "createdAt": "2026-06-16T08:20:00.000Z"
+  },
+  {
+    "id": "report-4",
+    "userId": "user-3",
+    "type": "daily",
+    "content": {
+      "done": "完成用户模块增删改查API开发，并编写了对应的单元测试，覆盖率达到85%。",
+      "plan": "开始权限模块的设计与开发。",
+      "blocker": "暂无"
+    },
+    "blockerType": "无",
+    "likes": 3,
+    "rating": 5,
+    "createdAt": "2026-06-16T09:00:00.000Z"
+  },
+  {
+    "id": "report-5",
+    "userId": "user-1",
+    "type": "weekly",
+    "content": {
+      "done": "完成本周项目进度跟踪，组织了3次团队会议，解决了5个阻塞问题。完成了Q2季度目标拆解。",
+      "plan": "下周启动新功能模块开发，安排人员分工，跟进设计进度。",
+      "blocker": "设计资源紧张，需要协调增加设计人力。"
+    },
+    "blockerType": "资源缺失",
+    "likes": 5,
+    "rating": 5,
+    "createdAt": "2026-06-14T10:00:00.000Z"
+  },
+  {
+    "id": "report-6",
+    "userId": "user-2",
+    "type": "daily",
+    "content": {
+      "done": "完成用户信息编辑页面，修复了2个已知bug，进行了代码review。",
+      "plan": "开始密码修改和退出登录功能开发。",
+      "blocker": "暂无"
+    },
+    "blockerType": "无",
+    "likes": 1,
+    "rating": 4,
+    "createdAt": "2026-06-15T08:15:00.000Z"
+  },
+  {
+    "id": "report-7",
+    "userId": "user-3",
+    "type": "daily",
+    "content": {
+      "done": "完成权限模块基础架构搭建，设计了RBAC权限模型，完成数据表创建。",
+      "plan": "继续完成角色管理API开发。",
+      "blocker": "权限模型中数据权限部分需求不清晰，需要产品确认。"
+    },
+    "blockerType": "需求不明确",
+    "likes": 2,
+    "rating": 4,
+    "createdAt": "2026-06-15T08:50:00.000Z"
+  },
+  {
+    "id": "report-8",
+    "userId": "user-2",
+    "type": "weekly",
+    "content": {
+      "done": "本周完成用户模块全部页面开发（登录、注册、编辑、密码修改），共完成8个页面，修复15个bug。",
+      "plan": "下周开始订单模块页面开发，预计完成3个核心页面。",
+      "blocker": "需要后端尽快提供订单模块的API文档。"
+    },
+    "blockerType": "沟通协调",
+    "likes": 4,
+    "rating": 5,
+    "createdAt": "2026-06-13T17:30:00.000Z"
+  },
+  {
+    "id": "report-9",
+    "userId": "user-3",
+    "type": "weekly",
+    "content": {
+      "done": "本周完成用户模块后端API和权限模块基础架构，编写了20个API接口，单元测试覆盖率80%以上。",
+      "plan": "下周完成权限模块全部API开发，开始订单模块后端设计。",
+      "blocker": "暂无"
+    },
+    "blockerType": "无",
+    "likes": 3,
+    "rating": 5,
+    "createdAt": "2026-06-13T18:00:00.000Z"
+  },
+  {
+    "id": "report-10",
+    "userId": "user-1",
+    "type": "daily",
+    "content": {
+      "done": "审核了上周团队周报，与产品经理确认了下一阶段需求优先级，安排了本周任务分配。",
+      "plan": "跟进项目进度，组织每日站会，解决团队遇到的问题。",
+      "blocker": "暂无"
+    },
+    "blockerType": "无",
+    "likes": 0,
+    "rating": 0,
+    "createdAt": "2026-06-17T09:10:00.000Z"
+  }
+]
