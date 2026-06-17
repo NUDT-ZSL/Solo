@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { useAppStore } from './store'
 
 export const PerformanceMonitor: React.FC = () => {
@@ -14,7 +14,6 @@ export const PerformanceMonitor: React.FC = () => {
     setEmissionRate,
   } = useAppStore()
 
-  const [blink, setBlink] = useState(false)
   const frameCountRef = useRef(0)
   const lastTimeRef = useRef(performance.now())
   const cpuUpdateTimeRef = useRef(0)
@@ -34,12 +33,6 @@ export const PerformanceMonitor: React.FC = () => {
         setFps(currentFps)
         frameCountRef.current = 0
         lastTimeRef.current = now
-
-        if (currentFps < 30) {
-          setBlink((b) => !b)
-        } else {
-          setBlink(false)
-        }
 
         if (currentFps < 25) {
           if (lowFpsStartTimeRef.current === null) {
@@ -76,7 +69,7 @@ export const PerformanceMonitor: React.FC = () => {
   }, [setFps, setCpuUsage, setLowFpsDuration, setIsThrottled, setEmissionRate, isThrottled])
 
   const fpsColor = fps < 30 ? '#FF3333' : '#00FF00'
-  const fpsStyle = fps < 30 && blink ? { opacity: 0.5 } : {}
+  const fpsClassName = fps < 30 ? 'fps-low' : ''
 
   return (
     <div
@@ -98,7 +91,7 @@ export const PerformanceMonitor: React.FC = () => {
       <div style={{ marginBottom: 6 }}>
         粒子数: <span style={{ color: '#00BFFF' }}>{particles.length}</span>
       </div>
-      <div style={{ marginBottom: 6, color: fpsColor, ...fpsStyle }}>
+      <div className={fpsClassName} style={{ marginBottom: 6, color: fpsColor }}>
         FPS: <span>{fps}</span>
       </div>
       <div style={{ marginBottom: isThrottled ? 6 : 0 }}>

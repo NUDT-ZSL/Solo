@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useEffect, useCallback } from 'react'
+import React, { useRef, useMemo, useEffect, useCallback, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei'
 import * as THREE from 'three'
@@ -297,26 +297,74 @@ interface SparkEffectsProps {}
 
 const SparkEffects: React.FC<SparkEffectsProps> = () => {
   const { sparkEffects } = useAppStore()
+  const groupRef = useRef<THREE.Group>(null)
+  const [, forceUpdate] = useState(0)
+
+  useFrame(() => {
+    forceUpdate((n) => n + 1)
+  })
+
   const now = Date.now()
+  const validSparks = sparkEffects.filter((s) => now - s.timestamp < 100)
 
   return (
-    <>
-      {sparkEffects.map((spark) => {
+    <group ref={groupRef}>
+      {validSparks.map((spark) => {
         const age = now - spark.timestamp
         const opacity = Math.max(0, 1 - age / 100)
+        const scale = 0.5 + age / 200
         return (
-          <mesh key={spark.id} position={spark.position}>
-            <sphereGeometry attach="geometry" args={[0.05, 8, 8]} />
-            <meshBasicMaterial
+          <sprite key={spark.id} position={spark.position} scale={[scale * 0.05, scale * 0.05, 1]}>
+            <spriteMaterial
               attach="material"
               color="#ffffff"
               transparent
               opacity={opacity}
+              depthTest={false}
+            />
+          </sprite>
+        )
+      })}
+    </group>
+  )
+}
+
+interface RippleEffectsProps {}
+
+const RippleEffects: React.FC<RippleEffectsProps> = () => {
+  const { rippleEffects } = useAppStore()
+  const [, forceUpdate] = useState(0)
+
+  useFrame(() => {
+    forceUpdate((n) => n + 1)
+  })
+
+  const now = Date.now()
+  const validRipples = rippleEffects.filter((r) => now - r.timestamp < 200)
+
+  return (
+    <group>
+      {validRipples.map((ripple) => {
+        const age = now - ripple.timestamp
+        const progress = age / 200
+        const opacity = Math.max(0, 1 - progress)
+        const radius = 0.1 + progress * 0.5
+
+        return (
+          <mesh key={ripple.id} position={ripple.position}>
+            <ringGeometry attach="geometry" args={[radius * 0.7, radius, 32]} />
+            <meshBasicMaterial
+              attach="material"
+              color="#ffffff"
+              transparent
+              opacity={opacity * 0.8}
+              side={THREE.DoubleSide}
+              depthTest={false}
             />
           </mesh>
         )
       })}
-    </>
+    </group>
   )
 }
 
@@ -512,6 +560,7 @@ const SceneInteraction: React.FC<SceneInteractionProps> = ({
 
       <Particles physicsEngine={physicsEngine} collisionManager={collisionManager} />
       <SparkEffects />
+      <RippleEffects />
     </group>
   )
 }
