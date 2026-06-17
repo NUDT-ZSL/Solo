@@ -1,163 +1,171 @@
+import { GameState, Player, Card, PlayerAction } from '../shared/types';
+import { createDeck } from '../shared/cards';
 import { v4 as uuidv4 } from 'uuid';
-import type { Card, GameStateData, PlayerState } from '../shared/types';
+import * as fs from 'fs';
+import * as path from 'path';
 
-const SUITS = ['♠', '♥', '♦', '♣'];
-const VALUES = [
-  { name: 'A', value: 14 },
-  { name: '2', value: 2 },
-  { name: '3', value: 3 },
-  { name: '4', value: 4 },
-  { name: '5', value: 5 },
-  { name: '6', value: 6 },
-  { name: '7', value: 7 },
-  { name: '8', value: 8 },
-  { name: '9', value: 9 },
-  { name: '10', value: 10 },
-  { name: 'J', value: 11 },
-  { name: 'Q', value: 12 },
-  { name: 'K', value: 13 },
-];
+const STATE_FILE = path.join(__dirname, '..', '..', 'data', 'gameState.json');
 
-export class GameStateManager {
-  private state: GameStateData;
-  private lastPlayedCard: Card | null = null;
-  private lastPlayerId: string | null = null;
+function ensureDataDir(): void {
+  const dir = path.dirname(STATE_FILE);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+}
 
-  constructor() {
-    this.state = this.initializeState();
+export function createInitialGameState(): GameState {
+  const deck1 = createDeck(7);
+  const deck2 = createDeck(7);
+
+  const player1: Player = {
+    id: 'player_local',
+    nickname: '本地玩家',
+    hand: deck1,
+    hp: 30,
+    maxHp: 30,
+  };
+
+  const player2: Player = {
+    id: 'player_ai',
+    nickname: 'AI对手',
+    hand: deck2,
+    hp: 30,
+    maxHp: 30,
+  };
+
+  const state: GameState = {
+    gameId: uuidv4(),
+    players: [player1, player2],
+    discardPile: [],
+    currentTurnIndex: 0,
+    turnCount: 1,
+    status: 'playing',
+    winnerId: null,
+  };
+
+  saveGameState(state);
+  return state;
+}
+
+export function saveGameState(state: GameState): void {
+  ensureDataDir();
+  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
+}
+
+export function loadGameState(): GameState | null {
+  try {
+    if (fs.existsSync(STATE_FILE)) {
+      const data = fs.readFileSync(STATE_FILE, 'utf-8');
+      return JSON.parse(data) as GameState;
+    }
+  } catch (e) {
+    console.error('加载游戏状态失败:', e);
+  }
+  return null;
+}
+
+export function getPlayerIndex(state: GameState, playerId: string): 0 | 1 | -1 {
+  if (state.players[0].id === playerId) return 0;
+  if (state.players[1].id === playerId) return 1;
+  return -1;
+}
+
+export function findCardInHand(player: Player, cardId: string): Card | null {
+  return player.hand.find((c) => c.id === cardId) || null;
+}
+
+export function validateAction(state: GameState, action: PlayerAction): {
+  valid: boolean;
+  reason?: string;
+  card?: Card;
+} {
+  if (state.status !== 'playing') {
+    return { valid: false, reason: '游戏已结束' };
   }
 
-  private initializeState(): GameStateData {
-    const deck = this.createDeck();
-    this.shuffleDeck(deck);
-
-    const playerHand = deck.splice(0, 7);
-    const aiHand = deck.splice(0, 7);
-
-    return {
-      players: {
-        'local-player': {
-          id: 'local-player',
-          name: '本地玩家',
-          hand: playerHand,
-          health: 30,
-          maxHealth: 30,
-        },
-        'ai-player': {
-          id: 'ai-player',
-          name: 'AI对手',
-          hand: aiHand,
-          health: 30,
-          maxHealth: 30,
-        },
-      },
-      discardPile: [],
-      currentTurn: 'local-player',
-      turnCount: 1,
-      gameOver: false,
-      winner: null,
-    };
+  const playerIdx = getPlayerIndex(state, action.playerId);
+  if (playerIdx === -1) {
+    return { valid: false, reason: '玩家不存在' };
   }
 
-  private createDeck(): Card[] {
-    const deck: Card[] = [];
-    for (const suit of SUITS) {
-      for (const val of VALUES) {
-        deck.push({
-          id: uuidv4(),
-          value: val.value,
-          suit,
-          name: val.name,
-        });
-      }
-    }
-    return deck;
+  if (state.currentTurnIndex !== playerIdx) {
+    return { valid: false, reason: '当前不是你的回合' };
   }
 
-  private shuffleDeck(deck: Card[]): void {
-    for (let i = deck.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [deck[i], deck[j]] = [deck[j], deck[i]];
+  const player = state.players[playerIdx];
+  const card = findCardInHand(player, action.cardId);
+  if (!card) {
+    return { valid: false, reason: '手牌中不存在该牌' };
+  }
+
+  return { valid: true, card };
+}
+
+export function applyAction(
+  state: GameState,
+  action: PlayerAction
+): {
+  newState: GameState;
+  playedCard: Card | null;
+  damaged: number;
+} {
+  const newState: GameState = JSON.parse(JSON.stringify(state));
+  const playerIdx = getPlayerIndex(newState, action.playerId) as 0 | 1;
+  const player = newState.players[playerIdx];
+  const opponentIdx = (1 - playerIdx) as 0 | 1;
+  const opponent = newState.players[opponentIdx];
+
+  const cardIdx = player.hand.findIndex((c) => c.id === action.cardId);
+  if (cardIdx === -1) {
+    return { newState, playedCard: null, damaged: 0 };
+  }
+
+  const [playedCard] = player.hand.splice(cardIdx, 1);
+  newState.discardPile.push(playedCard);
+
+  const damage = playedCard.attack;
+  opponent.hp = Math.max(0, opponent.hp - damage);
+
+  newState.currentTurnIndex = opponentIdx;
+  newState.turnCount++;
+
+  if (opponent.hp <= 0) {
+    newState.status = 'finished';
+    newState.winnerId = player.id;
+  }
+
+  saveGameState(newState);
+  return { newState, playedCard, damaged: damage };
+}
+
+export function chooseAICard(state: GameState): Card | null {
+  const aiPlayer = state.players[1];
+  if (aiPlayer.hand.length === 0) return null;
+
+  const localPlayer = state.players[0];
+
+  let bestCard: Card | null = null;
+  let bestScore = -Infinity;
+
+  for (const card of aiPlayer.hand) {
+    let score = card.attack * 2;
+
+    if (localPlayer.hp <= card.attack) {
+      score += 100;
+    }
+
+    if (localPlayer.hp <= localPlayer.maxHp * 0.3) {
+      score += card.attack;
+    }
+
+    score += (aiPlayer.hand.length - 1) * 0.5;
+    score -= card.cost * 0.3;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestCard = card;
     }
   }
 
-  public validatePlay(playerId: string, cardId: string): { valid: boolean; reason?: string } {
-    if (this.state.gameOver) {
-      return { valid: false, reason: '游戏已结束' };
-    }
-
-    if (this.state.currentTurn !== playerId) {
-      return { valid: false, reason: '当前不是你的回合' };
-    }
-
-    const player = this.state.players[playerId];
-    if (!player) {
-      return { valid: false, reason: '玩家不存在' };
-    }
-
-    const card = player.hand.find((c) => c.id === cardId);
-    if (!card) {
-      return { valid: false, reason: '卡牌不在手牌中' };
-    }
-
-    return { valid: true };
-  }
-
-  public applyPlay(playerId: string, cardId: string): GameStateData {
-    const player = this.state.players[playerId];
-    const cardIndex = player.hand.findIndex((c) => c.id === cardId);
-    const card = player.hand[cardIndex];
-
-    player.hand.splice(cardIndex, 1);
-    this.state.discardPile.push(card);
-
-    const opponentId = Object.keys(this.state.players).find((id) => id !== playerId)!;
-    const opponent = this.state.players[opponentId];
-
-    if (this.lastPlayedCard && this.lastPlayerId !== playerId) {
-      const diff = card.value - this.lastPlayedCard.value;
-      if (diff > 0) {
-        opponent.health = Math.max(0, opponent.health - diff * 2);
-      } else if (diff < 0) {
-        player.health = Math.max(0, player.health - Math.abs(diff));
-      }
-    } else if (!this.lastPlayedCard) {
-      opponent.health = Math.max(0, opponent.health - Math.floor(card.value / 2));
-    }
-
-    this.lastPlayedCard = card;
-    this.lastPlayerId = playerId;
-
-    this.state.currentTurn = opponentId;
-    if (this.state.currentTurn === 'local-player') {
-      this.state.turnCount++;
-    }
-
-    if (player.hand.length === 0) {
-      this.state.gameOver = true;
-      this.state.winner = playerId;
-    } else if (opponent.health <= 0) {
-      this.state.gameOver = true;
-      this.state.winner = playerId;
-    } else if (player.health <= 0) {
-      this.state.gameOver = true;
-      this.state.winner = opponentId;
-    }
-
-    return this.getPublicState();
-  }
-
-  public getPublicState(): GameStateData {
-    return JSON.parse(JSON.stringify(this.state));
-  }
-
-  public getState(): GameStateData {
-    return this.state;
-  }
-
-  public reset(): void {
-    this.state = this.initializeState();
-    this.lastPlayedCard = null;
-    this.lastPlayerId = null;
-  }
+  return bestCard;
 }

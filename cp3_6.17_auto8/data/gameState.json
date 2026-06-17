@@ -1,0 +1,124 @@
+{
+  "gameId": "d0fa0128-8694-4d24-bb87-7e77d12090cc",
+  "players": [
+    {
+      "id": "player_local",
+      "nickname": "本地玩家",
+      "hand": [
+        {
+          "name": "腐蚀术",
+          "attack": 3,
+          "cost": 1,
+          "description": "造成3点伤害",
+          "id": "72e54376-3840-4c05-88d9-83402d4050db"
+        },
+        {
+          "name": "暗言术痛",
+          "attack": 6,
+          "cost": 3,
+          "description": "造成6点伤害",
+          "id": "7d7eae26-4020-4f68-be80-96e123cbb623"
+        },
+        {
+          "name": "奥术飞弹",
+          "attack": 2,
+          "cost": 1,
+          "description": "造成2点伤害",
+          "id": "6c1866b5-f521-4b5c-a0f6-60b34ebfdec4"
+        },
+        {
+          "name": "闪电链",
+          "attack": 5,
+          "cost": 3,
+          "description": "造成5点伤害",
+          "id": "f9665c63-aa12-4dae-843b-cca79a9754b8"
+        },
+        {
+          "name": "死亡缠绕",
+          "attack": 7,
+          "cost": 4,
+          "description": "造成7点伤害",
+          "id": "293e13bc-e22f-41ac-87a9-52c0666a66ec"
+        },
+        {
+          "name": "火球术",
+          "attack": 8,
+          "cost": 4,
+          "description": "造成8点伤害",
+          "id": "9dc6e0d4-acd9-4f4d-bc7c-0a6517e27bd5"
+        },
+        {
+          "name": "寒冰箭",
+          "attack": 4,
+          "cost": 2,
+          "description": "造成4点伤害",
+          "id": "73010be2-79de-4ee0-a949-5b964cff8675"
+        }
+      ],
+      "hp": 30,
+      "maxHp": 30
+    },
+    {
+      "id": "player_ai",
+      "nickname": "AI对手",
+      "hand": [
+        {
+          "name": "烈焰风暴",
+          "attack": 10,
+          "cost": 5,
+          "description": "造成10点伤害",
+          "id": "cd333502-fbe3-47f3-bc31-3dbdc6f9663e"
+        },
+        {
+          "name": "闪电链",
+          "attack": 5,
+          "cost": 3,
+          "description": "造成5点伤害",
+          "id": "a6e7834a-354a-441e-871c-34145ecfad83"
+        },
+        {
+          "name": "暗影箭",
+          "attack": 3,
+          "cost": 2,
+          "description": "造成3点伤害",
+          "id": "ff3c14c6-5e1b-4531-a778-ba73316bdc1d"
+        },
+        {
+          "name": "炎爆术",
+          "attack": 12,
+          "cost": 6,
+          "description": "造成12点伤害",
+          "id": "6b8287e4-e546-45ba-9c9e-10251747cbfe"
+        },
+        {
+          "name": "烈焰风暴",
+          "attack": 10,
+          "cost": 5,
+          "description": "造成10点伤害",
+          "id": "3dd616b1-757c-4125-8aa3-05d698c94e42"
+        },
+        {
+          "name": "愤怒",
+          "attack": 4,
+          "cost": 2,
+          "description": "造成4点伤害",
+          "id": "8a61913e-d5dc-44af-af8e-84d46a98976a"
+        },
+        {
+          "name": "寒冰箭",
+          "attack": 4,
+          "cost": 2,
+          "description": "造成4点伤害",
+          "id": "a127427d-06d1-49f1-b508-77869a1bbedd"
+        }
+      ],
+      "hp": 30,
+      "maxHp": 30
+    }
+  ],
+  "discardPile": [],
+  "currentTurnIndex": 0,
+  "turnCount": 1,
+  "status": "playing",
+  "winnerId": null
+}

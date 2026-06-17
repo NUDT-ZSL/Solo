@@ -1,141 +1,147 @@
-import type { GameAction } from '../shared/types';
-import { GameStateManager } from './gameState';
+import { PlayerAction, ServerAck, GameState } from '../shared/types';
+import { validateAction, applyAction } from './gameState';
+import { EventEmitter } from 'events';
 
 interface QueuedMessage {
-  action: GameAction;
-  ws: any;
-  broadcast: (action: GameAction) => void;
+  action: PlayerAction;
+  resolve: (ack: ServerAck) => void;
+  receivedAt: number;
 }
 
-export class QueueHandler {
-  private queue: QueuedMessage[] = [];
-  private lastProcessedSequence: Record<string, number> = {};
-  private gameState: GameStateManager;
-  private processing = false;
+export interface ProcessResult {
+  ack: ServerAck;
+  newState?: GameState;
+  playedCard?: {
+    card: any;
+    playerId: string;
+  };
+}
 
-  constructor(gameState: GameStateManager) {
-    this.gameState = gameState;
+export class QueueHandler extends EventEmitter {
+  private queue: QueuedMessage[] = [];
+  private nextExpectedSequence: number = 0;
+  private processing: boolean = false;
+  private maxQueueSize = 50;
+
+  constructor() {
+    super();
   }
 
-  public enqueue(message: QueuedMessage): void {
-    this.queue.push(message);
-    this.queue.sort((a, b) => {
-      if (a.action.playerId === b.action.playerId) {
-        return a.action.sequence - b.action.sequence;
+  public enqueue(action: PlayerAction): Promise<ProcessResult> {
+    return new Promise((resolve) => {
+      if (this.queue.length >= this.maxQueueSize) {
+        const oldest = this.queue.shift();
+        if (oldest) {
+          oldest.resolve({
+            type: 'rollback',
+            sequence: oldest.action.sequence,
+            actionType: oldest.action.type,
+            message: '队列已满，消息被丢弃',
+            cardId: oldest.action.cardId,
+          });
+        }
       }
-      return a.action.timestamp - b.action.timestamp;
+
+      const msg: QueuedMessage = {
+        action,
+        resolve: (ack) => {
+          resolve({ ack });
+        },
+        receivedAt: Date.now(),
+      };
+
+      this.queue.push(msg);
+      this.sortQueue();
+      this.processQueue().catch((e) => console.error('处理队列错误:', e));
     });
-    this.processQueue();
+  }
+
+  private sortQueue(): void {
+    this.queue.sort((a, b) => a.action.sequence - b.action.sequence);
   }
 
   private async processQueue(): Promise<void> {
     if (this.processing) return;
     this.processing = true;
 
-    while (this.queue.length > 0) {
-      const msg = this.queue[0];
+    try {
+      while (this.queue.length > 0) {
+        const front = this.queue[0];
 
-      const lastSeq = this.lastProcessedSequence[msg.action.playerId] ?? -1;
-      if (msg.action.sequence !== lastSeq + 1) {
-        if (msg.action.sequence <= lastSeq) {
-          this.queue.shift();
-          continue;
+        if (front.action.sequence > this.nextExpectedSequence) {
+          break;
         }
-        break;
+
+        this.queue.shift();
+
+        const result: ProcessResult = await this.processAction(front.action);
+        front.resolve(result.ack);
+
+        if (result.newState && result.playedCard) {
+          this.emit('state_changed', {
+            newState: result.newState,
+            playedCard: result.playedCard,
+          });
+        }
+
+        if (front.action.sequence === this.nextExpectedSequence) {
+          this.nextExpectedSequence++;
+        } else if (front.action.sequence < this.nextExpectedSequence) {
+          // 重复或过期消息
+        }
       }
-
-      this.queue.shift();
-      this.lastProcessedSequence[msg.action.playerId] = msg.action.sequence;
-      this.processMessage(msg);
-    }
-
-    this.processing = false;
-  }
-
-  private processMessage(msg: QueuedMessage): void {
-    const { action, ws, broadcast } = msg;
-
-    switch (action.type) {
-      case 'HELLO':
-        this.handleHello(action, ws);
-        break;
-      case 'PLAY_CARD':
-        this.handlePlayCard(action, ws, broadcast);
-        break;
+    } finally {
+      this.processing = false;
     }
   }
 
-  private handleHello(action: GameAction, ws: any): void {
-    const state = this.gameState.getPublicState();
-    const syncAction: GameAction = {
-      type: 'SYNC_STATE',
-      sequence: action.sequence,
-      playerId: 'server',
-      timestamp: Date.now(),
-      payload: { state },
-    };
-    ws.send(JSON.stringify(syncAction));
+  private processAction(action: PlayerAction): Promise<ProcessResult> {
+    return new Promise((resolve) => {
+      this.emit('get_state', (state: GameState) => {
+        const validation = validateAction(state, action);
+
+        if (!validation.valid || !validation.card) {
+          resolve({
+            ack: {
+              type: 'rollback',
+              sequence: action.sequence,
+              actionType: action.type,
+              message: validation.reason || '操作无效',
+              cardId: action.cardId,
+            },
+          });
+          return;
+        }
+
+        const { newState, playedCard, damaged } = applyAction(state, action);
+
+        resolve({
+          ack: {
+            type: 'ack',
+            sequence: action.sequence,
+            actionType: action.type,
+            cardId: action.cardId,
+          },
+          newState,
+          playedCard: playedCard
+            ? { card: playedCard, playerId: action.playerId }
+            : undefined,
+        });
+      });
+    });
   }
 
-  private handlePlayCard(action: GameAction, ws: any, broadcast: (action: GameAction) => void): void {
-    const cardId = action.payload?.cardId;
-    if (!cardId) {
-      this.sendRollback(action, ws, '缺少卡牌ID');
-      return;
-    }
-
-    const validation = this.gameState.validatePlay(action.playerId, cardId);
-    if (!validation.valid) {
-      this.sendRollback(action, ws, validation.reason || '操作无效');
-      return;
-    }
-
-    const newState = this.gameState.applyPlay(action.playerId, cardId);
-
-    const ackAction: GameAction = {
-      type: 'ACK',
-      sequence: action.sequence,
-      playerId: 'server',
-      timestamp: Date.now(),
-      payload: { state: newState },
-    };
-    ws.send(JSON.stringify(ackAction));
-
-    const syncAction: GameAction = {
-      type: 'SYNC_STATE',
-      sequence: action.sequence,
-      playerId: 'server',
-      timestamp: Date.now(),
-      payload: { state: newState },
-    };
-    broadcast(syncAction);
-
-    if (newState.gameOver) {
-      const gameOverAction: GameAction = {
-        type: 'GAME_OVER',
-        sequence: action.sequence + 1,
-        playerId: 'server',
-        timestamp: Date.now(),
-        payload: { state: newState },
-      };
-      broadcast(gameOverAction);
-    }
+  public getQueueSize(): number {
+    return this.queue.length;
   }
 
-  private sendRollback(action: GameAction, ws: any, reason: string): void {
-    const rollbackAction: GameAction = {
-      type: 'ROLLBACK',
-      sequence: action.sequence,
-      playerId: 'server',
-      timestamp: Date.now(),
-      payload: { reason },
-    };
-    ws.send(JSON.stringify(rollbackAction));
+  public getNextExpectedSequence(): number {
+    return this.nextExpectedSequence;
   }
 
   public reset(): void {
     this.queue = [];
-    this.lastProcessedSequence = {};
+    this.nextExpectedSequence = 0;
     this.processing = false;
   }
 }

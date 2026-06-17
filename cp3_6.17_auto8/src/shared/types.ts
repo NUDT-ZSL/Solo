@@ -1,51 +1,63 @@
 export interface Card {
   id: string;
-  value: number;
-  suit: string;
   name: string;
+  attack: number;
+  cost: number;
+  description: string;
 }
 
-export interface PlayerState {
+export interface Player {
   id: string;
-  name: string;
+  nickname: string;
   hand: Card[];
-  health: number;
-  maxHealth: number;
+  hp: number;
+  maxHp: number;
 }
 
-export interface GameStateData {
-  players: Record<string, PlayerState>;
+export interface GameState {
+  gameId: string;
+  players: [Player, Player];
   discardPile: Card[];
-  currentTurn: string;
+  currentTurnIndex: 0 | 1;
   turnCount: number;
-  gameOver: boolean;
-  winner: string | null;
+  status: 'waiting' | 'playing' | 'finished';
+  winnerId: string | null;
 }
 
-export interface GameAction {
-  type: 'PLAY_CARD' | 'SYNC_STATE' | 'ACK' | 'ROLLBACK' | 'GAME_OVER' | 'HELLO';
-  sequence: number;
+export type PlayerActionType = 'play_card' | 'ai_play_card';
+
+export interface PlayerAction {
+  type: PlayerActionType;
   playerId: string;
+  cardId: string;
+  sequence: number;
   timestamp: number;
-  payload?: {
-    cardId?: string;
-    card?: Card;
-    state?: GameStateData;
-    reason?: string;
+}
+
+export interface ServerAck {
+  type: 'ack' | 'rollback';
+  sequence: number;
+  actionType: PlayerActionType;
+  message?: string;
+  cardId?: string;
+}
+
+export interface GameStateUpdate {
+  type: 'state_update';
+  state: GameState;
+  lastPlayedCard?: {
+    card: Card;
+    playerId: string;
   };
 }
 
-export interface PendingAction {
-  action: GameAction;
-  cardSnapshot?: Card;
-  handSnapshot?: Card[];
-  sentAt: number;
-  resolved: boolean;
+export interface StatsUpdate {
+  type: 'stats';
+  avgLatency: number;
+  rollbackCount: number;
+  effectivePlayRate: number;
+  currentLatency: number;
+  queueSize: number;
 }
 
-export interface GameStats {
-  totalPlays: number;
-  rollbackCount: number;
-  totalLatency: number;
-  latencySamples: number;
-}
+export type ServerMessage = ServerAck | GameStateUpdate | StatsUpdate;
