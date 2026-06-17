@@ -33,7 +33,7 @@ export const SKILLS: SkillConfig[] = [
     projectileSize: 20,
     color: '#FFD700',
     chargeTime: 300,
-    projectileSpeed: 8,
+    projectileSpeed: 10.4,
   },
   {
     type: 'heavy',
@@ -45,7 +45,7 @@ export const SKILLS: SkillConfig[] = [
     projectileSize: 30,
     color: '#FF4500',
     chargeTime: 300,
-    projectileSpeed: 6,
+    projectileSpeed: 7.8,
   },
   {
     type: 'special',
@@ -57,7 +57,7 @@ export const SKILLS: SkillConfig[] = [
     projectileSize: 40,
     color: '#8A2BE2',
     chargeTime: 300,
-    projectileSpeed: 5,
+    projectileSpeed: 6.5,
   },
 ];
 

@@ -12,6 +12,7 @@ export interface ComboRecord {
   name: string;
   count: number;
   color: string;
+  totalDamage: number;
 }
 
 export interface GameEngineCallbacks {
@@ -58,6 +59,17 @@ interface ComboText {
   shape: Konva.Text;
 }
 
+interface Shockwave {
+  id: number;
+  x: number;
+  y: number;
+  startTime: number;
+  duration: number;
+  maxRadius: number;
+  color: string;
+  shape: Konva.Circle;
+}
+
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
 const GROUND_Y = 550;
@@ -99,6 +111,12 @@ export class GameEngine {
   private enemyBaseX: number = 650;
 
   private comboTexts: ComboText[] = [];
+  private shockwaves: Shockwave[] = [];
+  private shockwaveId: number = 0;
+
+  private screenShakeStartTime: number = 0;
+  private screenShakeDuration: number = 0;
+  private screenShakeIntensity: number = 0;
 
   private animationFrame: number | null = null;
   private lastTime: number = 0;
@@ -242,12 +260,21 @@ export class GameEngine {
     this.cooldowns.heavy = 0;
     this.cooldowns.special = 0;
 
+    let totalDamage = 0;
+    for (const skillType of rule.sequence) {
+      const skill = getSkillByType(skillType);
+      if (skill) {
+        totalDamage += skill.damage * rule.damageMultiplier;
+      }
+    }
+
     this.comboRecordId++;
     this.callbacks.onComboRecord({
       id: this.comboRecordId,
       name: rule.name,
       count: rule.sequence.length,
       color: rule.color,
+      totalDamage: totalDamage,
     });
 
     this.playerGlow.fill('#FFD700');
@@ -257,6 +284,14 @@ export class GameEngine {
     this.playerGlow.radius(80);
 
     this.showComboText(rule.name);
+    this.triggerScreenShake(150, 4);
+    this.spawnShockwave(
+      this.player.x() + PLAYER_WIDTH / 2,
+      this.player.y() + PLAYER_HEIGHT / 2,
+      150,
+      400,
+      '#FFD700'
+    );
 
     this.callbacks.onCooldownUpdate({ ...this.cooldowns });
   }
@@ -286,6 +321,45 @@ export class GameEngine {
       startTime: performance.now(),
       duration: 1500,
       shape: comboTextShape,
+    });
+  }
+
+  private triggerScreenShake(duration: number, intensity: number) {
+    this.screenShakeStartTime = performance.now();
+    this.screenShakeDuration = duration;
+    this.screenShakeIntensity = intensity;
+  }
+
+  private spawnShockwave(
+    x: number,
+    y: number,
+    maxRadius: number,
+    duration: number,
+    color: string
+  ) {
+    this.shockwaveId++;
+
+    const shockwaveShape = new Konva.Circle({
+      x: x,
+      y: y,
+      radius: 10,
+      stroke: color,
+      strokeWidth: 3,
+      opacity: 0.5,
+      listening: false,
+    });
+    this.layer.add(shockwaveShape);
+    shockwaveShape.moveToTop();
+
+    this.shockwaves.push({
+      id: this.shockwaveId,
+      x: x,
+      y: y,
+      startTime: performance.now(),
+      duration: duration,
+      maxRadius: maxRadius,
+      color: color,
+      shape: shockwaveShape,
     });
   }
 
@@ -399,6 +473,8 @@ export class GameEngine {
     this.updateEnemy(deltaTime);
     this.updateGlow(deltaTime, currentTime);
     this.updateComboTexts(currentTime);
+    this.updateShockwaves(currentTime);
+    this.applyScreenShake(currentTime);
 
     this.layer.batchDraw();
   }
@@ -445,6 +521,7 @@ export class GameEngine {
           name: skill.name,
           count: 1,
           color: skill.color,
+          totalDamage: skill.damage,
         });
       }
     }
@@ -604,6 +681,55 @@ export class GameEngine {
       this.comboTexts[idx].shape.destroy();
       this.comboTexts.splice(idx, 1);
     }
+  }
+
+  private updateShockwaves(currentTime: number) {
+    const toRemove: number[] = [];
+
+    for (let i = 0; i < this.shockwaves.length; i++) {
+      const sw = this.shockwaves[i];
+      const elapsed = currentTime - sw.startTime;
+      const progress = elapsed / sw.duration;
+
+      if (progress >= 1) {
+        toRemove.push(i);
+        continue;
+      }
+
+      const radius = 10 + (sw.maxRadius - 10) * progress;
+      const opacity = 0.5 * (1 - progress);
+
+      sw.shape.radius(radius);
+      sw.shape.opacity(opacity);
+    }
+
+    for (let i = toRemove.length - 1; i >= 0; i--) {
+      const idx = toRemove[i];
+      this.shockwaves[idx].shape.destroy();
+      this.shockwaves.splice(idx, 1);
+    }
+  }
+
+  private applyScreenShake(currentTime: number) {
+    if (this.screenShakeDuration <= 0) {
+      this.layer.x(0);
+      this.layer.y(0);
+      return;
+    }
+
+    const elapsed = currentTime - this.screenShakeStartTime;
+    if (elapsed >= this.screenShakeDuration) {
+      this.screenShakeDuration = 0;
+      this.layer.x(0);
+      this.layer.y(0);
+      return;
+    }
+
+    const progress = elapsed / this.screenShakeDuration;
+    const decay = 1 - progress;
+    const offsetX = (Math.random() - 0.5) * 2 * this.screenShakeIntensity * decay;
+
+    this.layer.x(offsetX);
   }
 
   public destroy() {

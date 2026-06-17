@@ -26,6 +26,7 @@ const ComboItem: React.FC<ComboItemProps> = ({ record, isNew }) => {
       style={{
         display: 'flex',
         alignItems: 'center',
+        justifyContent: 'space-between',
         backgroundColor: visible ? '#2C2C2C' : 'rgba(44, 44, 44, 0)',
         borderRadius: 6,
         padding: '6px 10px',
@@ -35,27 +36,40 @@ const ComboItem: React.FC<ComboItemProps> = ({ record, isNew }) => {
         transition: 'transform 0.3s ease-out, opacity 0.3s ease-out, background-color 0.3s ease-out',
       }}
     >
-      <div
-        style={{
-          width: 4,
-          height: 20,
-          borderRadius: 2,
-          backgroundColor: record.color,
-          marginRight: 8,
-          flexShrink: 0,
-        }}
-      />
+      <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            width: 4,
+            height: 20,
+            borderRadius: 2,
+            backgroundColor: record.color,
+            marginRight: 8,
+            flexShrink: 0,
+          }}
+        />
+        <span
+          style={{
+            color: '#FFFFFF',
+            fontSize: 13,
+            fontWeight: 500,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {record.name} x{record.count}
+        </span>
+      </div>
       <span
         style={{
-          color: '#FFFFFF',
-          fontSize: 13,
-          fontWeight: 500,
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
+          color: '#FFD700',
+          fontSize: 14,
+          fontWeight: 'bold',
+          flexShrink: 0,
+          marginLeft: 8,
         }}
       >
-        {record.name} x{record.count}
+        总伤害: {Math.round(record.totalDamage)}
       </span>
     </div>
   );
