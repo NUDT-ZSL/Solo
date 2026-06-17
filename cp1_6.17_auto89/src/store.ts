@@ -3,6 +3,7 @@ import { create } from 'zustand'
 export type ProductType = 'bracelet' | 'necklace' | 'pendant'
 export type MaterialType = 'leather' | 'metal' | 'cord'
 export type AccessoryType = 'bead' | 'charm' | 'hook'
+export type AccessoryAnimationState = 'idle' | 'adding' | 'removing'
 
 export interface ColorSwatch {
   name: string
@@ -66,6 +67,11 @@ export const ACCESSORY_NAMES: Record<AccessoryType, string> = {
   hook: '挂钩',
 }
 
+const VALID_PRODUCT_TYPES: ProductType[] = ['bracelet', 'necklace', 'pendant']
+const VALID_MATERIALS: MaterialType[] = ['leather', 'metal', 'cord']
+const VALID_ACCESSORIES: AccessoryType[] = ['bead', 'charm', 'hook']
+const HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/
+
 export interface ExportedConfig {
   productType: ProductType
   material: MaterialType
@@ -74,21 +80,54 @@ export interface ExportedConfig {
   exportedAt?: string
 }
 
+export interface ConfigValidationResult {
+  valid: boolean
+  errors: string[]
+  warnings: string[]
+}
+
+const ANIMATION_DURATION = 400
+
 interface ConfigState {
   selectedType: ProductType
   material: MaterialType
   color: string
   accessories: AccessoryType[]
-  accessoryStates: Record<AccessoryType, 'idle' | 'adding' | 'removing'>
-  updateConfig: <K extends keyof Omit<ConfigState, 'updateConfig' | 'toggleAccessory' | 'getConfigJSON' | 'loadConfig' | 'accessoryStates' | 'setAccessoryState'>>(
+  accessoryStates: Record<AccessoryType, AccessoryAnimationState>
+  configLoaded: boolean
+  lastLoadedAt: string | null
+  loadError: string | null
+
+  updateConfig: <K extends keyof Omit<ConfigState,
+    | 'updateConfig'
+    | 'toggleAccessory'
+    | 'getConfigJSON'
+    | 'getExportedConfig'
+    | 'loadConfig'
+    | 'validateConfig'
+    | 'accessoryStates'
+    | 'setAccessoryState'
+    | 'configLoaded'
+    | 'lastLoadedAt'
+    | 'loadError'
+    | 'clearLoadStatus'
+  >>(
     key: K,
     value: ConfigState[K]
   ) => void
-  toggleAccessory: (accessory: AccessoryType) => void
-  setAccessoryState: (accessory: AccessoryType, state: 'idle' | 'adding' | 'removing') => void
+
+  setAccessoryState: (accessory: AccessoryType, state: AccessoryAnimationState) => void
+
+  toggleAccessory: (accessory: AccessoryType) => Promise<{ success: boolean; reason?: string }>
+
+  validateConfig: (data: unknown) => ConfigValidationResult
+
   getConfigJSON: () => string
   getExportedConfig: () => ExportedConfig
-  loadConfig: (config: ExportedConfig) => void
+
+  loadConfig: (data: unknown) => Promise<{ success: boolean; errors?: string[] }>
+
+  clearLoadStatus: () => void
 }
 
 export const useConfigStore = create<ConfigState>((set, get) => ({
@@ -97,6 +136,9 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   color: COLOR_SWATCHES[0].value,
   accessories: [],
   accessoryStates: { bead: 'idle', charm: 'idle', hook: 'idle' },
+  configLoaded: false,
+  lastLoadedAt: null,
+  loadError: null,
 
   updateConfig: (key, value) => set({ [key]: value } as any),
 
@@ -106,31 +148,93 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     }))
   },
 
-  toggleAccessory: (accessory) => {
+  toggleAccessory: async (accessory) => {
     const { accessories, accessoryStates } = get()
+    const currentState = accessoryStates[accessory]
     const isPresent = accessories.includes(accessory)
+
+    if (currentState !== 'idle') {
+      return {
+        success: false,
+        reason: `配件"${ACCESSORY_NAMES[accessory]}"正在动画中，请稍候`,
+      }
+    }
 
     if (isPresent) {
       set((prev) => ({
         accessoryStates: { ...prev.accessoryStates, [accessory]: 'removing' },
       }))
-      setTimeout(() => {
-        set((prev) => ({
-          accessories: prev.accessories.filter((a) => a !== accessory),
-          accessoryStates: { ...prev.accessoryStates, [accessory]: 'idle' },
-        }))
-      }, 400)
+
+      await new Promise((resolve) => setTimeout(resolve, ANIMATION_DURATION))
+
+      set((prev) => ({
+        accessories: prev.accessories.filter((a) => a !== accessory),
+        accessoryStates: { ...prev.accessoryStates, [accessory]: 'idle' },
+      }))
+
+      return { success: true }
     } else {
       set((prev) => ({
         accessories: [...prev.accessories, accessory],
         accessoryStates: { ...prev.accessoryStates, [accessory]: 'adding' },
       }))
-      setTimeout(() => {
-        set((prev) => ({
-          accessoryStates: { ...prev.accessoryStates, [accessory]: 'idle' },
-        }))
-      }, 400)
+
+      await new Promise((resolve) => setTimeout(resolve, ANIMATION_DURATION))
+
+      set((prev) => ({
+        accessoryStates: { ...prev.accessoryStates, [accessory]: 'idle' },
+      }))
+
+      return { success: true }
     }
+  },
+
+  validateConfig: (data) => {
+    const errors: string[] = []
+    const warnings: string[] = []
+
+    if (!data || typeof data !== 'object') {
+      return { valid: false, errors: ['配置数据不是有效的对象'], warnings: [] }
+    }
+
+    const d = data as Record<string, unknown>
+
+    if (!('productType' in d)) {
+      errors.push('缺少必填字段: productType')
+    } else if (!VALID_PRODUCT_TYPES.includes(d.productType as ProductType)) {
+      errors.push(`productType 值无效: ${d.productType}，有效值为: ${VALID_PRODUCT_TYPES.join(', ')}`)
+    }
+
+    if (!('material' in d)) {
+      errors.push('缺少必填字段: material')
+    } else if (!VALID_MATERIALS.includes(d.material as MaterialType)) {
+      errors.push(`material 值无效: ${d.material}，有效值为: ${VALID_MATERIALS.join(', ')}`)
+    }
+
+    if (!('color' in d)) {
+      errors.push('缺少必填字段: color')
+    } else if (typeof d.color !== 'string' || !HEX_COLOR_REGEX.test(d.color)) {
+      errors.push(`color 格式无效: ${d.color}，应为十六进制颜色值，如 #D4A574`)
+    }
+
+    if (!('accessories' in d)) {
+      warnings.push('缺少 accessories 字段，将使用空数组')
+    } else if (!Array.isArray(d.accessories)) {
+      errors.push('accessories 应为数组')
+    } else {
+      const accArr = d.accessories as unknown[]
+      accArr.forEach((acc, idx) => {
+        if (!VALID_ACCESSORIES.includes(acc as AccessoryType)) {
+          errors.push(`accessories[${idx}] 值无效: ${acc}，有效值为: ${VALID_ACCESSORIES.join(', ')}`)
+        }
+      })
+    }
+
+    if ('exportedAt' in d && typeof d.exportedAt !== 'string') {
+      warnings.push('exportedAt 字段格式异常')
+    }
+
+    return { valid: errors.length === 0, errors, warnings }
   },
 
   getConfigJSON: () => {
@@ -148,17 +252,44 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     }
   },
 
-  loadConfig: (config) => {
-    if (!config) return
-    const validTypes: ProductType[] = ['bracelet', 'necklace', 'pendant']
-    const validMaterials: MaterialType[] = ['leather', 'metal', 'cord']
-    const validAccessories: AccessoryType[] = ['bead', 'charm', 'hook']
+  loadConfig: async (data) => {
+    const validation = get().validateConfig(data)
+
+    if (!validation.valid) {
+      set({
+        configLoaded: false,
+        loadError: validation.errors.join('; '),
+      })
+      return { success: false, errors: validation.errors }
+    }
+
+    const d = data as ExportedConfig
+
+    const validAccessories = (d.accessories || []).filter((a) =>
+      VALID_ACCESSORIES.includes(a)
+    ) as AccessoryType[]
+
+    const newAccessoryStates: Record<AccessoryType, AccessoryAnimationState> = {
+      bead: 'idle',
+      charm: 'idle',
+      hook: 'idle',
+    }
 
     set({
-      selectedType: validTypes.includes(config.productType) ? config.productType : 'bracelet',
-      material: validMaterials.includes(config.material) ? config.material : 'leather',
-      color: /^#[0-9A-Fa-f]{6}$/.test(config.color) ? config.color : COLOR_SWATCHES[0].value,
-      accessories: (config.accessories || []).filter((a) => validAccessories.includes(a)),
+      selectedType: VALID_PRODUCT_TYPES.includes(d.productType) ? d.productType : 'bracelet',
+      material: VALID_MATERIALS.includes(d.material) ? d.material : 'leather',
+      color: HEX_COLOR_REGEX.test(d.color) ? d.color : COLOR_SWATCHES[0].value,
+      accessories: validAccessories,
+      accessoryStates: newAccessoryStates,
+      configLoaded: true,
+      lastLoadedAt: new Date().toISOString(),
+      loadError: null,
     })
+
+    return { success: true }
+  },
+
+  clearLoadStatus: () => {
+    set({ configLoaded: false, loadError: null })
   },
 }))

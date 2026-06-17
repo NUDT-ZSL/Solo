@@ -1,5 +1,5 @@
-import { useRef, useState, useEffect, useMemo } from 'react'
-import { Canvas, useThree, useFrame } from '@react-three/fiber'
+import { useRef, useState, useEffect, useMemo, useCallback } from 'react'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, Environment } from '@react-three/drei'
 import * as THREE from 'three'
 import JSZip from 'jszip'
@@ -9,14 +9,16 @@ import {
   AccessoryType,
   ProductType,
   MaterialType,
+  ExportedConfig,
 } from '@/store'
 import {
   createBraceletBaseGeometry,
+  createBraceletConnectorCords,
   getBraceletBeadPositions,
-  createChainLinkGeometry,
-  getNecklaceChainPositions,
-  createPendantGeometry,
+  getNecklaceChainData,
+  createDetailedPendantGeometry,
   getAccessoryMountPoints,
+  createClaspGeometry,
 } from '@/utils/models'
 import {
   createLeatherTexture,
@@ -24,12 +26,21 @@ import {
   createCordTexture,
   createCordBumpMap,
   createMetalEnvironmentMap,
+  createCylinderCompatibleUVs,
 } from '@/utils/textures'
+
+const COLOR_TRANSITION_DURATION = 0.3
 
 function ProductPreview() {
   const [fadeKey, setFadeKey] = useState(0)
   const [isFading, setIsFading] = useState(false)
+  const [canvasReady, setCanvasReady] = useState(false)
+  const [loadMessage, setLoadMessage] = useState<string | null>(null)
   const currentType = useConfigStore((s) => s.selectedType)
+  const configLoaded = useConfigStore((s) => s.configLoaded)
+  const loadError = useConfigStore((s) => s.loadError)
+  const clearLoadStatus = useConfigStore((s) => s.clearLoadStatus)
+
   const controlsRef = useRef<any>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -43,6 +54,28 @@ function ProductPreview() {
     return () => clearTimeout(timer)
   }, [currentType])
 
+  useEffect(() => {
+    if (configLoaded) {
+      setLoadMessage('配置已加载，可继续修改')
+      const t = setTimeout(() => {
+        setLoadMessage(null)
+        clearLoadStatus()
+      }, 3000)
+      return () => clearTimeout(t)
+    }
+  }, [configLoaded, clearLoadStatus])
+
+  useEffect(() => {
+    if (loadError) {
+      setLoadMessage(`加载失败: ${loadError}`)
+      const t = setTimeout(() => {
+        setLoadMessage(null)
+        clearLoadStatus()
+      }, 4000)
+      return () => clearTimeout(t)
+    }
+  }, [loadError, clearLoadStatus])
+
   const handleResetView = () => {
     if (controlsRef.current) {
       controlsRef.current.reset()
@@ -53,14 +86,34 @@ function ProductPreview() {
     if (!containerRef.current) return
 
     const canvas = containerRef.current.querySelector('canvas')
-    if (!canvas) return
+    if (!canvas || !canvasReady) {
+      alert('3D场景尚未完成渲染，请稍候再试')
+      return
+    }
+
+    try {
+      const gl = canvas.getContext('webgl') || canvas.getContext('webgl2')
+      if (gl) {
+        const pixels = new Uint8Array(canvas.width * canvas.height * 4)
+        gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixels)
+        const hasContent = pixels.some((p, i) => (i + 1) % 4 !== 0 && p > 0)
+        if (!hasContent) {
+          await new Promise((r) => setTimeout(r, 500))
+        }
+      }
+    } catch (_) {
+    }
 
     const exportedConfig = useConfigStore.getState().getExportedConfig()
     const configJSON = JSON.stringify(exportedConfig, null, 2)
-
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
 
     const dataURL = canvas.toDataURL('image/png')
+    if (!dataURL || dataURL.length < 100) {
+      alert('截图生成失败，场景可能未完全渲染')
+      return
+    }
+
     const base64Data = dataURL.replace(/^data:image\/png;base64,/, '')
 
     const zip = new JSZip()
@@ -72,7 +125,9 @@ function ProductPreview() {
     const link = document.createElement('a')
     link.download = `handcraft-customization-${timestamp}.zip`
     link.href = url
+    document.body.appendChild(link)
     link.click()
+    document.body.removeChild(link)
     URL.revokeObjectURL(url)
   }
 
@@ -85,28 +140,43 @@ function ProductPreview() {
     if (!file) return
 
     try {
+      let config: ExportedConfig | null = null
+
       if (file.name.endsWith('.zip')) {
         const zip = await JSZip.loadAsync(file)
         const jsonFile = Object.values(zip.files).find((f) =>
-          f.name.endsWith('.json')
+          f.name.endsWith('.json') && !f.dir
         )
         if (jsonFile) {
           const jsonContent = await jsonFile.async('string')
-          const config = JSON.parse(jsonContent)
-          useConfigStore.getState().loadConfig(config)
+          config = JSON.parse(jsonContent) as ExportedConfig
+        } else {
+          alert('ZIP包中未找到配置JSON文件')
+          return
         }
       } else if (file.name.endsWith('.json')) {
         const text = await file.text()
-        const config = JSON.parse(text)
-        useConfigStore.getState().loadConfig(config)
+        config = JSON.parse(text) as ExportedConfig
+      } else {
+        alert('仅支持 .json 或 .zip 格式的配置文件')
+        return
+      }
+
+      const result = await useConfigStore.getState().loadConfig(config)
+      if (!result.success && result.errors) {
+        alert(`配置文件校验失败:\n${result.errors.join('\n')}`)
       }
     } catch (err) {
       console.error('Failed to load config:', err)
-      alert('配置文件加载失败，请检查文件格式')
+      alert('配置文件加载失败，请检查文件格式是否正确')
     }
 
     e.target.value = ''
   }
+
+  const onCanvasCreated = useCallback(() => {
+    setTimeout(() => setCanvasReady(true), 800)
+  }, [])
 
   return (
     <div className="preview-container" ref={containerRef}>
@@ -117,6 +187,27 @@ function ProductPreview() {
         style={{ display: 'none' }}
         onChange={handleFileChange}
       />
+
+      {loadMessage && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 20,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            padding: '10px 20px',
+            background: loadError ? '#E8877E' : '#5B8A5B',
+            color: '#FFFFFF',
+            borderRadius: 8,
+            fontSize: 14,
+            zIndex: 100,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            animation: 'fadeIn 0.3s ease',
+          }}
+        >
+          {loadMessage}
+        </div>
+      )}
 
       <div style={{ position: 'absolute', top: 20, right: 20, display: 'flex', gap: 10, zIndex: 10 }}>
         <button className="action-btn" onClick={handleUploadConfig}>
@@ -137,6 +228,7 @@ function ProductPreview() {
         className="preview-canvas"
         camera={{ position: [0, 0.5, 5], fov: 45 }}
         gl={{ preserveDrawingBuffer: true, antialias: true }}
+        onCreated={onCanvasCreated}
       >
         <color attach="background" args={['#FFFFFF']} />
         <ambientLight intensity={0.5} />
@@ -189,24 +281,29 @@ function ProductModel({ isFading }: { isFading: boolean }) {
   const accessoryStates = useConfigStore((s) => s.accessoryStates)
   const groupRef = useRef<THREE.Group>(null)
 
-  const [currentColor, setCurrentColor] = useState(targetColor)
-  const colorProgressRef = useRef(1)
+  const animStartTimeRef = useRef<number>(0)
+  const animatingColorRef = useRef(false)
+  const currentColorRef = useRef(new THREE.Color(targetColor))
   const startColorRef = useRef(new THREE.Color(targetColor))
   const endColorRef = useRef(new THREE.Color(targetColor))
 
+  const [, forceUpdate] = useState(0)
+
   useEffect(() => {
-    if (currentColor !== targetColor) {
-      startColorRef.current = new THREE.Color(currentColor)
-      endColorRef.current = new THREE.Color(targetColor)
-      colorProgressRef.current = 0
+    const target = new THREE.Color(targetColor)
+    if (!target.equals(currentColorRef.current)) {
+      startColorRef.current = currentColorRef.current.clone()
+      endColorRef.current = target.clone()
+      animStartTimeRef.current = performance.now()
+      animatingColorRef.current = true
     }
-  }, [targetColor, currentColor])
+  }, [targetColor])
 
   const envMap = useMemo(() => createMetalEnvironmentMap(), [])
   const materialConfig = MATERIAL_CONFIG[materialType]
 
   const { mapTexture, bumpMap } = useMemo(() => {
-    const baseColor = currentColor
+    const baseColor = '#' + currentColorRef.current.getHexString()
     if (materialType === 'leather') {
       return {
         mapTexture: createLeatherTexture(baseColor),
@@ -219,11 +316,11 @@ function ProductModel({ isFading }: { isFading: boolean }) {
       }
     }
     return { mapTexture: null, bumpMap: null }
-  }, [materialType, currentColor])
+  }, [materialType, targetColor])
 
   const productMaterial = useMemo(() => {
     const mat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(currentColor),
+      color: currentColorRef.current.clone(),
       roughness: materialConfig.roughness,
       metalness: materialConfig.metalness,
       transparent: true,
@@ -241,44 +338,50 @@ function ProductModel({ isFading }: { isFading: boolean }) {
     }
 
     return mat
-  }, [currentColor, materialType, isFading, materialConfig, mapTexture, bumpMap, envMap])
+  }, [materialType, isFading, materialConfig, mapTexture, bumpMap, envMap])
 
   const accessoryMaterial = useMemo(() => {
     return new THREE.MeshStandardMaterial({
-      color: new THREE.Color(currentColor),
+      color: currentColorRef.current.clone(),
       roughness: materialConfig.roughness,
       metalness: materialConfig.metalness,
       transparent: true,
     })
-  }, [currentColor, materialType, materialConfig])
+  }, [materialType, materialConfig])
 
-  useFrame((_, delta) => {
-    if (colorProgressRef.current < 1) {
-      colorProgressRef.current = Math.min(colorProgressRef.current + delta / 0.3, 1)
-      const t = colorProgressRef.current
+  useFrame(() => {
+    const now = performance.now()
+
+    if (animatingColorRef.current) {
+      const elapsed = (now - animStartTimeRef.current) / 1000
+      const t = Math.min(elapsed / COLOR_TRANSITION_DURATION, 1)
       const eased = 1 - Math.pow(1 - t, 3)
+
       const interpolated = new THREE.Color().lerpColors(
         startColorRef.current,
         endColorRef.current,
         eased
       )
-      const hexStr = '#' + interpolated.getHexString()
-      setCurrentColor(hexStr.toUpperCase())
 
+      currentColorRef.current.copy(interpolated)
       productMaterial.color.copy(interpolated)
       accessoryMaterial.color.copy(interpolated)
-      if (productMaterial.map) {
-        productMaterial.map.dispose()
+
+      if (t >= 1) {
+        animatingColorRef.current = false
+        forceUpdate((n) => n + 1)
       }
     }
 
     if (groupRef.current) {
       const targetOpacity = isFading ? 0.3 : 1
-      productMaterial.opacity = THREE.MathUtils.lerp(
-        productMaterial.opacity,
-        targetOpacity,
-        delta * 10
-      )
+      if (Math.abs(productMaterial.opacity - targetOpacity) > 0.001) {
+        productMaterial.opacity = THREE.MathUtils.lerp(
+          productMaterial.opacity,
+          targetOpacity,
+          0.15
+        )
+      }
     }
   })
 
@@ -288,6 +391,7 @@ function ProductModel({ isFading }: { isFading: boolean }) {
         type={selectedType}
         material={productMaterial}
         materialType={materialType}
+        envMap={envMap}
       />
       {accessories.map((acc, idx) => (
         <AccessoryMesh
@@ -307,49 +411,80 @@ function BaseMesh({
   type,
   material,
   materialType,
+  envMap,
 }: {
   type: ProductType
   material: THREE.Material
   materialType: MaterialType
+  envMap: THREE.CubeTexture
 }) {
   if (type === 'bracelet') {
-    return <BraceletModel material={material} materialType={materialType} />
+    return <BraceletModel material={material} materialType={materialType} envMap={envMap} />
   }
   if (type === 'necklace') {
-    return <NecklaceModel material={material} materialType={materialType} />
+    return <NecklaceModel material={material} materialType={materialType} envMap={envMap} />
   }
-  return <PendantModel material={material} materialType={materialType} />
+  return <PendantModel material={material} materialType={materialType} envMap={envMap} />
 }
 
 function BraceletModel({
   material,
   materialType,
+  envMap,
 }: {
   material: THREE.Material
   materialType: MaterialType
+  envMap: THREE.CubeTexture
 }) {
-  const baseGeometry = useMemo(() => createBraceletBaseGeometry(), [])
-  const beadPositions = useMemo(() => getBraceletBeadPositions(22), [])
+  const baseGeometry = useMemo(() => {
+    const g = createBraceletBaseGeometry()
+    return materialType === 'cord' ? createCylinderCompatibleUVs(g) : g
+  }, [materialType])
+
+  const { geometry: cordGeometry, positions: beadPositions } = useMemo(
+    () => createBraceletConnectorCords(),
+    []
+  )
+
+  const processedCordGeo = useMemo(
+    () => (materialType === 'cord' ? createCylinderCompatibleUVs(cordGeometry) : cordGeometry),
+    [cordGeometry, materialType]
+  )
 
   const beadMaterial = useMemo(() => {
-    const m = (material as THREE.MeshStandardMaterial).clone()
-    m.roughness = 0.15
-    m.metalness = 0.8
-    m.color = new THREE.Color(materialType === 'metal' ? '#E8E8E8' : '#F0D9B5')
+    const m = new THREE.MeshStandardMaterial({
+      color: materialType === 'metal' ? '#E8E8E8' : '#F0D9B5',
+      roughness: 0.15,
+      metalness: 0.85,
+      envMap: envMap,
+      envMapIntensity: 0.9,
+    })
     return m
-  }, [material, materialType])
+  }, [materialType, envMap])
+
+  const cordMaterial = useMemo(() => {
+    const m = (material as THREE.MeshStandardMaterial).clone()
+    return m
+  }, [material])
 
   return (
     <group rotation={[Math.PI / 2.5, 0, 0]}>
       <mesh geometry={baseGeometry} material={material} />
+      <mesh geometry={processedCordGeo} material={cordMaterial} />
       {beadPositions.map((pos, i) => (
         <mesh key={i} position={pos} material={beadMaterial}>
-          <sphereGeometry args={[0.11, 24, 24]} />
+          <sphereGeometry args={[0.11, 32, 32]} />
         </mesh>
       ))}
       <mesh position={[0, 0, 1.45]}>
-        <torusGeometry args={[0.1, 0.025, 12, 24]} />
-        <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.15} />
+        <torusGeometry args={[0.1, 0.025, 16, 32]} />
+        <meshStandardMaterial
+          color="#C0C0C0"
+          metalness={0.95}
+          roughness={0.12}
+          envMap={envMap}
+          envMapIntensity={1.0}
+        />
       </mesh>
     </group>
   )
@@ -358,50 +493,70 @@ function BraceletModel({
 function NecklaceModel({
   material,
   materialType,
+  envMap,
 }: {
   material: THREE.Material
   materialType: MaterialType
+  envMap: THREE.CubeTexture
 }) {
-  const linkGeometry = useMemo(() => createChainLinkGeometry(), [])
-  const linkData = useMemo(() => getNecklaceChainPositions(), [])
+  const { linkGeometry, transforms } = useMemo(() => getNecklaceChainData(), [])
 
   const chainMaterial = useMemo(() => {
     if (materialType === 'metal') {
       const m = new THREE.MeshStandardMaterial({
         color: '#D0D0D0',
-        metalness: 0.95,
-        roughness: 0.12,
-        envMap: (material as THREE.MeshStandardMaterial).envMap,
-        envMapIntensity: 1.0,
+        metalness: 0.96,
+        roughness: 0.1,
+        envMap: envMap,
+        envMapIntensity: 1.1,
       })
       return m
     }
     return material
-  }, [material, materialType])
+  }, [material, materialType, envMap])
+
+  const claspGeo = useMemo(() => createClaspGeometry(), [])
 
   return (
     <group>
-      {linkData.map((link, i) => (
+      {transforms.map((tf, i) => (
         <mesh
           key={i}
           geometry={linkGeometry}
           material={chainMaterial}
-          position={link.position}
-          rotation={link.rotation}
+          position={tf.position}
+          rotation={tf.rotation}
         />
       ))}
-      <group position={[0, -2.0, 0]}>
+      <mesh geometry={claspGeo} position={[0, 1.4, 0.05]} rotation={[0, 0, 0]}>
+        <meshStandardMaterial
+          color="#C0C0C0"
+          metalness={0.95}
+          roughness={0.12}
+          envMap={envMap}
+          envMapIntensity={1.0}
+        />
+      </mesh>
+      <group position={[0, -2.1, 0.1]}>
         <mesh rotation={[0, 0, Math.PI / 4]}>
-          <octahedronGeometry args={[0.25, 0]} />
+          <octahedronGeometry args={[0.26, 0]} />
           <meshStandardMaterial
             color={materialType === 'metal' ? '#B08050' : '#D4A574'}
-            roughness={0.35}
-            metalness={0.6}
+            roughness={0.3}
+            metalness={0.65}
+            envMap={envMap}
+            envMapIntensity={0.7}
           />
         </mesh>
-        <mesh position={[0, 0.3, 0]}>
-          <torusGeometry args={[0.06, 0.02, 10, 16]} />
-          <meshStandardMaterial color="#C0C0C0" metalness={0.9} roughness={0.15} />
+        <mesh position={[0, 0.32, 0]}>
+          <torusGeometry args={[0.065, 0.022, 12, 24]} />
+          <meshStandardMaterial
+            color="#C0C0C0"
+            metalness={0.95}
+            roughness={0.12}
+            envMap={envMap}
+            envMapIntensity={1.0}
+          />
         </mesh>
       </group>
     </group>
@@ -411,38 +566,66 @@ function NecklaceModel({
 function PendantModel({
   material,
   materialType,
+  envMap,
 }: {
   material: THREE.Material
   materialType: MaterialType
+  envMap: THREE.CubeTexture
 }) {
-  const pendantGeometry = useMemo(() => createPendantGeometry(), [])
+  const { bodyGeometry, holeGeometry, settingPositions, accentPositions } = useMemo(
+    () => createDetailedPendantGeometry(),
+    []
+  )
 
   const gemMaterial = useMemo(() => {
+    const baseColor = (material as THREE.MeshStandardMaterial).color
     const m = new THREE.MeshStandardMaterial({
-      color: (material as THREE.MeshStandardMaterial).color.clone(),
-      roughness: 0.1,
-      metalness: 0.2,
+      color: baseColor.clone(),
+      roughness: 0.08,
+      metalness: 0.15,
       transparent: true,
-      opacity: 0.85,
-      envMap: (material as THREE.MeshStandardMaterial).envMap,
-      envMapIntensity: 1.2,
+      opacity: 0.88,
+      envMap: envMap,
+      envMapIntensity: 1.3,
     })
     return m
-  }, [material])
+  }, [material, envMap])
 
   const settingMaterial = useMemo(() => {
     return new THREE.MeshStandardMaterial({
       color: materialType === 'metal' ? '#C0C0C0' : '#8B6914',
-      roughness: 0.2,
-      metalness: 0.9,
-      envMap: (material as THREE.MeshStandardMaterial).envMap,
-      envMapIntensity: 0.8,
+      roughness: 0.18,
+      metalness: 0.92,
+      envMap: envMap,
+      envMapIntensity: 0.85,
     })
-  }, [material, materialType])
+  }, [materialType, envMap])
+
+  const holeMaterial = useMemo(() => {
+    return new THREE.MeshStandardMaterial({
+      color: materialType === 'metal' ? '#A8A8A8' : '#6B4914',
+      roughness: 0.25,
+      metalness: 0.85,
+      envMap: envMap,
+      envMapIntensity: 0.7,
+    })
+  }, [materialType, envMap])
+
+  const accentMaterial = useMemo(() => {
+    return new THREE.MeshStandardMaterial({
+      color: '#E8B4B8',
+      roughness: 0.1,
+      metalness: 0.2,
+      transparent: true,
+      opacity: 0.92,
+      envMap: envMap,
+      envMapIntensity: 1.2,
+    })
+  }, [envMap])
 
   return (
     <group>
-      <mesh geometry={pendantGeometry}>
+      <mesh geometry={bodyGeometry}>
         <meshStandardMaterial
           color={(material as THREE.MeshStandardMaterial).color}
           roughness={(material as THREE.MeshStandardMaterial).roughness}
@@ -450,21 +633,23 @@ function PendantModel({
           map={(material as THREE.MeshStandardMaterial).map}
           bumpMap={(material as THREE.MeshStandardMaterial).bumpMap}
           bumpScale={(material as THREE.MeshStandardMaterial).bumpScale}
-          envMap={(material as THREE.MeshStandardMaterial).envMap}
-          envMapIntensity={0.7}
+          envMap={envMap}
+          envMapIntensity={0.75}
         />
       </mesh>
-      <mesh position={[0, 1.1, 0]}>
-        <torusGeometry args={[0.15, 0.04, 12, 24]} />
-        {settingMaterial && <primitive object={settingMaterial} attach="material" />}
-      </mesh>
-      <mesh position={[0.45, 0.55, 0.15]}>
-        <octahedronGeometry args={[0.07, 0]} />
-        <primitive object={gemMaterial} attach="material" />
-      </mesh>
-      <mesh position={[-0.45, 0.55, 0.15]}>
-        <octahedronGeometry args={[0.07, 0]} />
-        <primitive object={gemMaterial} attach="material" />
+      <mesh geometry={holeGeometry} material={holeMaterial} />
+      {settingPositions.map((pos, i) => (
+        <mesh key={`setting-${i}`} position={pos} material={settingMaterial}>
+          <sphereGeometry args={[0.045, 16, 16]} />
+        </mesh>
+      ))}
+      {accentPositions.map((pos, i) => (
+        <mesh key={`accent-${i}`} position={pos} material={accentMaterial}>
+          <octahedronGeometry args={[0.075, 0]} />
+        </mesh>
+      ))}
+      <mesh position={[0, 1.12, 0]} material={settingMaterial}>
+        <torusGeometry args={[0.16, 0.042, 16, 32]} />
       </mesh>
     </group>
   )
@@ -484,12 +669,15 @@ function AccessoryMesh({
   baseMaterial: THREE.Material
 }) {
   const groupRef = useRef<THREE.Group>(null)
-  const animProgress = useRef(state === 'removing' ? 1 : 0)
-  const [progress, setProgress] = useState(state === 'removing' ? 1 : 0)
+  const animProgressRef = useRef(state === 'removing' ? 1 : 0)
+  const [, forceRender] = useState(0)
 
   useEffect(() => {
-    animProgress.current = state === 'adding' ? 0 : state === 'removing' ? 1 : animProgress.current
-    setProgress(animProgress.current)
+    if (state === 'adding') {
+      animProgressRef.current = 0
+    } else if (state === 'removing') {
+      animProgressRef.current = 1
+    }
   }, [state])
 
   const targetPosition = useMemo(
@@ -497,40 +685,42 @@ function AccessoryMesh({
     [productType, type, index]
   )
 
-  const startOffset = useMemo(
-    () => new THREE.Vector3(5, 3, 5),
-    []
-  )
+  const startOffset = useMemo(() => new THREE.Vector3(5.5, 3.5, 5.5), [])
 
   useFrame((_, delta) => {
-    let target = animProgress.current
+    let target = animProgressRef.current
     if (state === 'adding') target = 1
     else if (state === 'removing') target = 0
 
     const speed = delta / 0.4
-    if (animProgress.current < target) {
-      animProgress.current = Math.min(animProgress.current + speed, target)
-    } else if (animProgress.current > target) {
-      animProgress.current = Math.max(animProgress.current - speed, target)
+    if (animProgressRef.current < target) {
+      animProgressRef.current = Math.min(animProgressRef.current + speed, target)
+    } else if (animProgressRef.current > target) {
+      animProgressRef.current = Math.max(animProgressRef.current - speed, target)
     }
-    setProgress(animProgress.current)
 
     if (groupRef.current) {
-      const eased = 1 - Math.pow(1 - animProgress.current, 3)
+      const t = animProgressRef.current
+      const eased = 1 - Math.pow(1 - t, 3)
       const pos = new THREE.Vector3().lerpVectors(startOffset, targetPosition, eased)
       groupRef.current.position.copy(pos)
-      groupRef.current.scale.setScalar(Math.max(0.01, eased))
+      groupRef.current.scale.setScalar(Math.max(0.001, eased))
 
       groupRef.current.traverse((child) => {
         if ((child as THREE.Mesh).isMesh) {
           const mesh = child as THREE.Mesh
-          const mat = mesh.material as THREE.MeshStandardMaterial
-          if (mat && mat.opacity !== undefined) {
-            mat.opacity = eased
-            mat.transparent = eased < 1
-          }
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+          mats.forEach((m) => {
+            const mat = m as THREE.MeshStandardMaterial
+            if (mat && 'opacity' in mat) {
+              mat.opacity = eased
+              mat.transparent = eased < 0.999
+            }
+          })
         }
       })
+
+      forceRender((n) => (n + 1) % 1000)
     }
   })
 
@@ -539,43 +729,19 @@ function AccessoryMesh({
       <group ref={groupRef}>
         <mesh>
           <sphereGeometry args={[0.15, 32, 32]} />
-          <meshStandardMaterial
-            color="#E8B4B8"
-            roughness={0.2}
-            metalness={0.2}
-            transparent
-            opacity={progress}
-          />
+          <meshStandardMaterial color="#E8B4B8" roughness={0.18} metalness={0.22} transparent />
         </mesh>
         <mesh position={[0.38, 0, 0]}>
           <sphereGeometry args={[0.12, 28, 28]} />
-          <meshStandardMaterial
-            color="#4A90D9"
-            roughness={0.25}
-            metalness={0.15}
-            transparent
-            opacity={progress}
-          />
+          <meshStandardMaterial color="#4A90D9" roughness={0.22} metalness={0.18} transparent />
         </mesh>
         <mesh position={[-0.38, 0, 0]}>
           <sphereGeometry args={[0.12, 28, 28]} />
-          <meshStandardMaterial
-            color="#5B8A5B"
-            roughness={0.25}
-            metalness={0.15}
-            transparent
-            opacity={progress}
-          />
+          <meshStandardMaterial color="#5B8A5B" roughness={0.22} metalness={0.18} transparent />
         </mesh>
-        <mesh position={[0, 0, 0.3]}>
+        <mesh position={[0, 0, 0.32]}>
           <sphereGeometry args={[0.1, 24, 24]} />
-          <meshStandardMaterial
-            color="#F5A623"
-            roughness={0.2}
-            metalness={0.2}
-            transparent
-            opacity={progress}
-          />
+          <meshStandardMaterial color="#F5A623" roughness={0.18} metalness={0.22} transparent />
         </mesh>
       </group>
     )
@@ -586,22 +752,15 @@ function AccessoryMesh({
     return (
       <group ref={groupRef}>
         <mesh geometry={heartGeometry}>
-          <meshStandardMaterial
-            color="#E8877E"
-            roughness={0.4}
-            metalness={0.25}
-            transparent
-            opacity={progress}
-          />
+          <meshStandardMaterial color="#E8877E" roughness={0.38} metalness={0.28} transparent />
         </mesh>
         <mesh position={[0, 0.33, 0]}>
           <torusGeometry args={[0.07, 0.022, 12, 20]} />
           <meshStandardMaterial
             color="#C0C0C0"
-            metalness={0.9}
-            roughness={0.15}
+            metalness={0.92}
+            roughness={0.14}
             transparent
-            opacity={progress}
           />
         </mesh>
       </group>
@@ -612,23 +771,11 @@ function AccessoryMesh({
     <group ref={groupRef} rotation={[0, 0, Math.PI / 4]}>
       <mesh position={[0, 0.16, 0]}>
         <cylinderGeometry args={[0.045, 0.045, 0.22, 14]} />
-        <meshStandardMaterial
-          color="#C0C0C0"
-          metalness={0.95}
-          roughness={0.1}
-          transparent
-          opacity={progress}
-        />
+        <meshStandardMaterial color="#C0C0C0" metalness={0.96} roughness={0.1} transparent />
       </mesh>
       <mesh>
         <torusGeometry args={[0.13, 0.042, 14, 28, Math.PI * 1.5]} />
-        <meshStandardMaterial
-          color="#C0C0C0"
-          metalness={0.95}
-          roughness={0.1}
-          transparent
-          opacity={progress}
-        />
+        <meshStandardMaterial color="#C0C0C0" metalness={0.96} roughness={0.1} transparent />
       </mesh>
     </group>
   )
