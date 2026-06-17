@@ -1,0 +1,23 @@
+[
+  {
+    "id": "java",
+    "name": "Java基础",
+    "description": "涵盖Java语法、面向对象、集合框架等核心知识",
+    "questionCount": 30,
+    "icon": "☕"
+  },
+  {
+    "id": "pm",
+    "name": "项目管理",
+    "description": "包含项目生命周期、风险管理、质量管理等内容",
+    "questionCount": 30,
+    "icon": "📋"
+  },
+  {
+    "id": "security",
+    "name": "网络安全",
+    "description": "涉及网络协议、加密技术、安全漏洞防护等",
+    "questionCount": 30,
+    "icon": "🔒"
+  }
+]
