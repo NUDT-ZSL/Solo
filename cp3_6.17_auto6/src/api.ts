@@ -1,55 +1,91 @@
-import type { Video, Marker } from './types';
+import type { Video, Marker, TimelineExport } from './types'
 
-async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options
-  });
+async function parse<T>(res: Response): Promise<T> {
+  const data = await res.json()
   if (!res.ok) {
-    throw new Error(`HTTP ${res.status}`);
+    throw new Error((data as { error?: string }).error ?? '请求失败')
   }
-  return res.json();
+  return data as T
 }
 
-export const api = {
-  getVideos: () => request<Video[]>('/api/videos'),
+export async function fetchVideos(): Promise<Video[]> {
+  const data = await parse<{ videos: Video[] }>(await fetch('/api/videos'))
+  return data.videos
+}
 
-  uploadVideo: (file: File): Promise<Video> => {
-    const formData = new FormData();
-    formData.append('video', file);
-    return fetch('/api/videos', {
-      method: 'POST',
-      body: formData
-    }).then(res => {
-      if (!res.ok) throw new Error('上传失败');
-      return res.json();
-    });
-  },
+export async function uploadVideo(file: File): Promise<Video> {
+  const form = new FormData()
+  form.append('file', file)
+  const data = await parse<{ video: Video }>(
+    await fetch('/api/upload', { method: 'POST', body: form }),
+  )
+  return data.video
+}
 
-  deleteVideo: (id: string) =>
-    request<{ success: boolean }>(`/api/videos/${id}`, { method: 'DELETE' }),
-
-  getMarkers: (videoId: string) =>
-    request<Marker[]>(`/api/videos/${videoId}/markers`),
-
-  createMarker: (data: { videoId: string; timestamp: number; label: string; color: string }) =>
-    request<Marker>('/api/markers', {
-      method: 'POST',
-      body: JSON.stringify(data)
-    }),
-
-  updateMarker: (id: string, data: Partial<Marker>) =>
-    request<Marker>(`/api/markers/${id}`, {
+export async function updateVideo(
+  id: string,
+  payload: { duration?: number; thumbnail?: string },
+): Promise<Video> {
+  const data = await parse<{ video: Video }>(
+    await fetch(`/api/videos/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(data)
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     }),
+  )
+  return data.video
+}
 
-  deleteMarker: (id: string) =>
-    request<{ success: boolean }>(`/api/markers/${id}`, { method: 'DELETE' }),
+export async function deleteVideo(id: string): Promise<void> {
+  await fetch(`/api/videos/${id}`, { method: 'DELETE' })
+}
 
-  reorderMarkers: (ids: string[]) =>
-    request<{ success: boolean }>('/api/markers/reorder', {
+export async function fetchMarkers(): Promise<Marker[]> {
+  const data = await parse<{ markers: Marker[] }>(await fetch('/api/markers'))
+  return data.markers
+}
+
+export async function createMarker(
+  videoId: string,
+  time: number,
+  label: string,
+  labelColor: string,
+): Promise<Marker> {
+  const data = await parse<{ marker: Marker }>(
+    await fetch('/api/markers', {
       method: 'POST',
-      body: JSON.stringify({ ids })
-    })
-};
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videoId, time, label, labelColor }),
+    }),
+  )
+  return data.marker
+}
+
+export async function updateMarker(
+  id: string,
+  payload: { time?: number; label?: string; labelColor?: string; sortOrder?: number },
+): Promise<Marker> {
+  const data = await parse<{ marker: Marker }>(
+    await fetch(`/api/markers/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }),
+  )
+  return data.marker
+}
+
+export async function deleteMarker(id: string): Promise<void> {
+  await fetch(`/api/markers/${id}`, { method: 'DELETE' })
+}
+
+export async function exportTimeline(markerIds: string[]): Promise<TimelineExport> {
+  const data = await parse<{ timeline: TimelineExport }>(
+    await fetch('/api/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markerIds }),
+    }),
+  )
+  return data.timeline
+}
