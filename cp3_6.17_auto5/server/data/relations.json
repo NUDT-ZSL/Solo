@@ -1,14 +1,14 @@
 {
   "relations": [
-    { "id": "rel-1", "courseId": "course-1", "from": "kp-1", "to": "kp-4" },
-    { "id": "rel-2", "courseId": "course-1", "from": "kp-2", "to": "kp-4" },
-    { "id": "rel-3", "courseId": "course-1", "from": "kp-3", "to": "kp-4" },
-    { "id": "rel-4", "courseId": "course-1", "from": "kp-3", "to": "kp-5" },
-    { "id": "rel-5", "courseId": "course-1", "from": "kp-4", "to": "kp-5" },
-    { "id": "rel-6", "courseId": "course-1", "from": "kp-5", "to": "kp-6" },
-    { "id": "rel-7", "courseId": "course-1", "from": "kp-5", "to": "kp-7" },
-    { "id": "rel-8", "courseId": "course-1", "from": "kp-5", "to": "kp-8" },
-    { "id": "rel-9", "courseId": "course-1", "from": "kp-3", "to": "kp-9" },
-    { "id": "rel-10", "courseId": "course-1", "from": "kp-5", "to": "kp-9" }
+    { "id": "rel-1", "sourceId": "point-1", "targetId": "point-4", "type": "prerequisite" },
+    { "id": "rel-2", "sourceId": "point-2", "targetId": "point-4", "type": "prerequisite" },
+    { "id": "rel-3", "sourceId": "point-3", "targetId": "point-5", "type": "prerequisite" },
+    { "id": "rel-4", "sourceId": "point-1", "targetId": "point-5", "type": "prerequisite" },
+    { "id": "rel-5", "sourceId": "point-5", "targetId": "point-6", "type": "prerequisite" },
+    { "id": "rel-6", "sourceId": "point-5", "targetId": "point-7", "type": "prerequisite" },
+    { "id": "rel-7", "sourceId": "point-4", "targetId": "point-8", "type": "prerequisite" },
+    { "id": "rel-8", "sourceId": "point-6", "targetId": "point-8", "type": "prerequisite" },
+    { "id": "rel-9", "sourceId": "point-7", "targetId": "point-9", "type": "prerequisite" },
+    { "id": "rel-10", "sourceId": "point-8", "targetId": "point-9", "type": "prerequisite" }
   ]
 }

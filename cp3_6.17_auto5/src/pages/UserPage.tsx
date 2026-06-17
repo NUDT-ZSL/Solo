@@ -1,256 +1,255 @@
-import { useEffect, useState } from 'react'
-import { api } from '../services/api'
-import type { User, AssessmentRecord } from '../types'
-import { DIFFICULTY_COLORS, DIFFICULTY_LABELS } from '../components/KnowledgeGraph'
+import { useState, useEffect } from 'react'
+import type { Course, KnowledgePoint, User } from '../types'
+import { DIFFICULTY_COLORS } from '../types'
 
-interface UserPageProps {
-  currentUser: User | null
-  onUserChange: (user: User | null) => void
-}
-
-export default function UserPage({ currentUser, onUserChange }: UserPageProps) {
+export default function UserPage() {
   const [users, setUsers] = useState<User[]>([])
-  const [assessments, setAssessments] = useState<Record<string, AssessmentRecord>>({})
-  const [knowledgePoints, setKnowledgePoints] = useState<any[]>([])
+  const [points, setPoints] = useState<KnowledgePoint[]>([])
+  const [courses, setCourses] = useState<Course[]>([])
+  const [selectedUserId, setSelectedUserId] = useState<string>('')
+  const [editingScores, setEditingScores] = useState<Record<string, number>>({})
+  const [newUserName, setNewUserName] = useState('')
+  const [newUserRole, setNewUserRole] = useState<'teacher' | 'student'>('student')
 
   useEffect(() => {
-    api.getUsers().then(setUsers)
-    api.getKnowledgePoints('course-1').then(setKnowledgePoints)
+    Promise.all([
+      fetch('/api/users').then(r => r.json()),
+      fetch('/api/points').then(r => r.json()).catch(() => []),
+      fetch('/api/courses').then(r => r.json())
+    ]).then(([u, p, c]) => {
+      setUsers(u)
+      if (Array.isArray(p)) setPoints(p)
+      setCourses(c)
+      if (u.length > 0) {
+        setSelectedUserId(u[0].id)
+        setEditingScores({ ...u[0].scores })
+      }
+    })
   }, [])
 
-  useEffect(() => {
-    if (currentUser) {
-      api.getAssessments(currentUser.id).then(setAssessments)
-    }
-  }, [currentUser])
+  const selectedUser = users.find(u => u.id === selectedUserId) || null
 
-  function handleScoreChange(kpId: string, score: number) {
-    if (!currentUser) return
-    const clamped = Math.max(0, Math.min(100, score))
-    api.updateAssessment(currentUser.id, kpId, { score: clamped }).then(rec => {
-      setAssessments(prev => ({ ...prev, [kpId]: rec }))
-    })
+  const handleSelectUser = (id: string) => {
+    setSelectedUserId(id)
+    const u = users.find(x => x.id === id)
+    if (u) setEditingScores({ ...u.scores })
   }
 
-  const avgScore =
-    Object.values(assessments).length > 0
-      ? Math.round(
-          Object.values(assessments).reduce((s, a) => s + a.score, 0) /
-            Object.values(assessments).length
-        )
-      : 0
+  const handleScoreChange = (pointId: string, val: string) => {
+    const n = Math.max(0, Math.min(100, parseInt(val) || 0))
+    setEditingScores(prev => ({ ...prev, [pointId]: n }))
+  }
 
-  const weakCount = Object.values(assessments).filter(a => a.score < 60).length
-  const reviewedCount = Object.values(assessments).filter(a => a.reviewed).length
+  const handleSaveScores = async () => {
+    if (!selectedUser) return
+    try {
+      const res = await fetch(`/api/users/${selectedUser.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scores: editingScores })
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setUsers(prev => prev.map(u => (u.id === selectedUser.id ? updated : u)))
+      }
+    } catch {}
+  }
+
+  const handleCreateUser = async () => {
+    if (!newUserName.trim()) return
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newUserName.trim(), role: newUserRole })
+      })
+      if (res.ok) {
+        const u = await res.json()
+        setUsers(prev => [...prev, u])
+        setNewUserName('')
+      }
+    } catch {}
+  }
+
+  const handleResetReviewed = async () => {
+    if (!selectedUser) return
+    try {
+      const res = await fetch(`/api/users/${selectedUser.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reviewed: [] })
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setUsers(prev => prev.map(u => (u.id === selectedUser.id ? updated : u)))
+      }
+    } catch {}
+  }
 
   return (
-    <div style={{ padding: 24, maxWidth: 1100, margin: '0 auto' }}>
-      <div style={{ marginBottom: 20 }}>
-        <h2 style={{ fontSize: 22, fontWeight: 600, color: '#1a237e', marginBottom: 4 }}>
-          👥 用户管理中心
-        </h2>
-        <p style={{ fontSize: 13, color: '#757575' }}>选择用户身份并管理测评数据</p>
-      </div>
+    <>
+      <div className="graph-area" style={{ background: '#fff', padding: 20 }}>
+        <div style={{ maxWidth: 800, margin: '0 auto' }}>
+          <h2 style={{ fontSize: 20, color: '#1a237e', marginBottom: 16 }}>👥 用户管理</h2>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-          gap: 14,
-          marginBottom: 24
-        }}
-      >
-        {users.map(user => (
-          <button
-            key={user.id}
-            onClick={() => onUserChange(user)}
-            style={{
-              padding: 18,
-              borderRadius: 10,
-              border: currentUser?.id === user.id ? '2px solid #1a237e' : '1px solid #e0e0e0',
-              background: currentUser?.id === user.id ? '#e8eaf6' : '#fff',
-              textAlign: 'left',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 14,
-              transition: 'all 0.2s'
-            }}
-          >
-            <div
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: '50%',
-                background: user.role === 'teacher' ? '#1a237e' : '#00bcd4',
-                color: '#fff',
-                fontSize: 20,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 700
-              }}
-            >
-              {user.name.charAt(0)}
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 15, fontWeight: 600, color: '#212121' }}>{user.name}</div>
-              <div style={{ fontSize: 12, color: '#757575', marginTop: 2 }}>
-                {user.role === 'teacher' ? '👨‍🏫 教师账号' : '👨‍🎓 学生账号'}
-              </div>
-              <div style={{ fontSize: 11, color: '#9e9e9e', marginTop: 2 }}>{user.email}</div>
-            </div>
-          </button>
-        ))}
-      </div>
-
-      {currentUser && currentUser.role === 'student' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 16 }}>
-          <div>
-            <div
-              style={{
-                background: `linear-gradient(135deg, ${avgScore >= 60 ? '#4caf50' : '#f44336'}, ${
-                  avgScore >= 60 ? '#66bb6a' : '#ef5350'
-                })`,
-                borderRadius: 12,
-                padding: 20,
-                color: '#fff',
-                marginBottom: 16
-              }}
-            >
-              <div style={{ fontSize: 13, opacity: 0.9 }}>平均得分</div>
-              <div style={{ fontSize: 48, fontWeight: 700, marginTop: 4 }}>{avgScore}</div>
-              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>
-                {avgScore >= 80 ? '🎉 表现优秀！' : avgScore >= 60 ? '👍 继续加油！' : '💪 需要更多练习'}
-              </div>
-            </div>
-
+          <div className="panel-section" style={{ marginBottom: 20 }}>
+            <div className="panel-title">创建新用户</div>
             <div style={{ display: 'flex', gap: 10 }}>
-              <div style={statBoxStyle('#f44336')}>
-                <div style={{ fontSize: 24, fontWeight: 700, color: '#f44336' }}>{weakCount}</div>
-                <div style={{ fontSize: 11, color: '#757575', marginTop: 2 }}>薄弱知识点</div>
-              </div>
-              <div style={statBoxStyle('#4caf50')}>
-                <div style={{ fontSize: 24, fontWeight: 700, color: '#4caf50' }}>{reviewedCount}</div>
-                <div style={{ fontSize: 11, color: '#757575', marginTop: 2 }}>已复习</div>
-              </div>
+              <input
+                className="form-input"
+                style={{ flex: 1 }}
+                placeholder="输入用户名"
+                value={newUserName}
+                onChange={e => setNewUserName(e.target.value)}
+              />
+              <select
+                className="form-select"
+                style={{ width: 120 }}
+                value={newUserRole}
+                onChange={e => setNewUserRole(e.target.value as 'teacher' | 'student')}
+              >
+                <option value="student">学生</option>
+                <option value="teacher">教师</option>
+              </select>
+              <button className="primary-btn" style={{ width: 'auto' }} onClick={handleCreateUser}>
+                创建
+              </button>
             </div>
           </div>
 
-          <div
-            style={{
-              background: '#fff',
-              borderRadius: 10,
-              border: '1px solid #e0e0e0',
-              overflow: 'hidden'
-            }}
-          >
-            <div
-              style={{
-                padding: '14px 18px',
-                borderBottom: '1px solid #e0e0e0',
-                fontSize: 14,
-                fontWeight: 600,
-                color: '#1a237e'
-              }}
-            >
-              📝 知识点测评得分
+          <div className="panel-section">
+            <div className="panel-title">用户列表（共 {users.length} 人）</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {users.map(u => (
+                <div
+                  key={u.id}
+                  className={`user-card ${u.id === selectedUserId ? 'active' : ''}`}
+                  onClick={() => handleSelectUser(u.id)}
+                >
+                  <span className="user-name">{u.name}</span>
+                  <span className={`user-role ${u.role}`}>
+                    {u.role === 'teacher' ? '教师' : '学生'}
+                  </span>
+                </div>
+              ))}
             </div>
-            <div style={{ maxHeight: 480, overflowY: 'auto' }}>
-              {knowledgePoints.map(kp => {
-                const rec = assessments[kp.id]
-                const score = rec?.score ?? 0
-                return (
-                  <div
-                    key={kp.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      padding: '12px 18px',
-                      borderBottom: '1px solid #f5f5f5'
-                    }}
+          </div>
+        </div>
+      </div>
+
+      <div className="info-panel">
+        {selectedUser ? (
+          <>
+            <div className="panel-section">
+              <div className="panel-title">📋 用户信息</div>
+              <div style={{ marginBottom: 8, fontSize: 15, fontWeight: 500 }}>
+                {selectedUser.name}
+              </div>
+              <div style={{ fontSize: 13, color: '#616161', marginBottom: 12 }}>
+                角色：{selectedUser.role === 'teacher' ? '教师' : '学生'}
+              </div>
+              <div style={{ fontSize: 13, color: '#616161' }}>
+                已复习：{selectedUser.reviewed.length} / {points.length} 个知识点
+              </div>
+              {selectedUser.role === 'student' && selectedUser.reviewed.length > 0 && (
+                <button
+                  className="secondary-btn"
+                  style={{ marginTop: 12, width: '100%' }}
+                  onClick={handleResetReviewed}
+                >
+                  重置复习进度
+                </button>
+              )}
+            </div>
+
+            {selectedUser.role === 'student' && (
+              <div className="panel-section">
+                <div className="panel-title">✏️ 测评得分</div>
+                {courses.length > 0 && (
+                  <select
+                    className="filter-select"
+                    style={{ width: '100%', marginBottom: 12 }}
+                    disabled
+                    defaultValue={courses[0]?.id || ''}
                   >
-                    <span
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        background: DIFFICULTY_COLORS[kp.difficulty],
-                        flexShrink: 0
-                      }}
-                    />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, color: '#212121', fontWeight: 500 }}>{kp.title}</div>
-                      <div style={{ fontSize: 11, color: '#9e9e9e', marginTop: 2 }}>
-                        {DIFFICULTY_LABELS[kp.difficulty]}
-                        {rec?.reviewed && ' · ✓ 已复习'}
+                    {courses.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.title}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <div className="scores-grid">
+                  {points.map(p => (
+                    <div key={p.id} className="score-item">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            background: DIFFICULTY_COLORS[p.difficulty]
+                          }}
+                        ></span>
+                        <span style={{ fontWeight: 500, fontSize: 11 }}>{p.title}</span>
                       </div>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        className="score-input"
+                        value={editingScores[p.id] ?? ''}
+                        onChange={e => handleScoreChange(p.id, e.target.value)}
+                        placeholder="未测"
+                      />
                     </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={score}
-                      onChange={e => handleScoreChange(kp.id, parseInt(e.target.value))}
-                      style={{ width: 100 }}
-                    />
-                    <div
-                      style={{
-                        width: 44,
-                        height: 32,
-                        borderRadius: 6,
-                        background:
-                          score < 60 ? '#ffebee' : score < 80 ? '#fff8e1' : '#e8f5e9',
-                        color:
-                          score < 60 ? '#c62828' : score < 80 ? '#f57f17' : '#2e7d32',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 14,
-                        fontWeight: 600
-                      }}
-                    >
-                      {score}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      )}
+                  ))}
+                </div>
+                <button className="primary-btn" style={{ marginTop: 12 }} onClick={handleSaveScores}>
+                  保存得分
+                </button>
+              </div>
+            )}
 
-      {currentUser?.role === 'teacher' && (
-        <div
-          style={{
-            background: '#e3f2fd',
-            border: '1px solid #90caf9',
-            borderRadius: 10,
-            padding: 20,
-            color: '#1565c0'
-          }}
-        >
-          <h3 style={{ fontSize: 16, marginBottom: 10 }}>👨‍🏫 教师控制台</h3>
-          <p style={{ fontSize: 13, lineHeight: 1.7 }}>
-            您当前以教师身份登录。切换到「图谱页面」可以：
-          </p>
-          <ul style={{ fontSize: 13, lineHeight: 2, marginTop: 8, paddingLeft: 20 }}>
-            <li>添加新课程和知识点</li>
-            <li>拖拽节点调整知识图谱布局</li>
-            <li>按住 Shift + 拖拽节点创建前置-后续关系</li>
-            <li>查看所有知识点和关系的概览数据</li>
-          </ul>
-        </div>
-      )}
-    </div>
+            {selectedUser.role === 'student' && (
+              <div className="panel-section">
+                <div className="panel-title">⚠️ 薄弱知识点</div>
+                {(() => {
+                  const weak = points.filter(p => (selectedUser.scores[p.id] || 100) < 60)
+                  if (weak.length === 0) {
+                    return <div className="empty-tip">暂无薄弱点，表现优秀！</div>
+                  }
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {weak.map(p => (
+                        <div
+                          key={p.id}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            padding: '6px 10px',
+                            background: '#ffebee',
+                            borderRadius: 4,
+                            fontSize: 12
+                          }}
+                        >
+                          <span>{p.title}</span>
+                          <span style={{ color: '#f44336', fontWeight: 600 }}>
+                            {selectedUser.scores[p.id]}分
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="empty-tip">请选择一个用户</div>
+        )}
+      </div>
+    </>
   )
 }
-
-const statBoxStyle = (color: string): React.CSSProperties => ({
-  flex: 1,
-  background: `${color}08`,
-  border: `1px solid ${color}30`,
-  borderRadius: 8,
-  padding: 12,
-  textAlign: 'center'
-})

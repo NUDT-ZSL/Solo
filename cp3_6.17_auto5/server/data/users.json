@@ -2,30 +2,27 @@
   "users": [
     {
       "id": "user-1",
-      "username": "teacher",
       "name": "张老师",
       "role": "teacher",
-      "email": "teacher@example.com"
+      "scores": {},
+      "reviewed": []
     },
     {
       "id": "user-2",
-      "username": "student",
       "name": "李同学",
       "role": "student",
-      "email": "student@example.com"
+      "scores": {
+        "point-1": 85,
+        "point-2": 55,
+        "point-3": 78,
+        "point-4": 45,
+        "point-5": 50,
+        "point-6": 35,
+        "point-7": 62,
+        "point-8": 40,
+        "point-9": 28
+      },
+      "reviewed": []
     }
-  ],
-  "assessments": {
-    "user-2": {
-      "kp-1": { score: 85, reviewed: false },
-      "kp-2": { score: 72, reviewed: false },
-      "kp-3": { score: 45, reviewed: false },
-      "kp-4": { score: 58, reviewed: false },
-      "kp-5": { score: 50, reviewed: false },
-      "kp-6": { score: 30, reviewed: false },
-      "kp-7": { score: 65, reviewed: false },
-      "kp-8": { score: 78, reviewed: false },
-      "kp-9": { score: 42, reviewed: false }
-    }
-  }
+  ]
 }

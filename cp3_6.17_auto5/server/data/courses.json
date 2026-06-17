@@ -2,9 +2,9 @@
   "courses": [
     {
       "id": "course-1",
-      "title": "React 前端开发入门到精通",
-      "description": "从零开始学习 React，掌握组件化开发、状态管理、Hooks 等核心概念",
-      "coverUrl": "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=400"
+      "title": "数据结构与算法基础",
+      "description": "系统学习常用数据结构和经典算法，为编程能力提升打下坚实基础",
+      "coverUrl": "https://images.unsplash.com/photo-1516116216624-53e697fedbea?w=400"
     }
   ]
 }

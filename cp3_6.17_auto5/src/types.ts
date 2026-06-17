@@ -1,5 +1,3 @@
-export type Difficulty = 'beginner' | 'intermediate' | 'advanced'
-
 export interface Course {
   id: string
   title: string
@@ -12,7 +10,7 @@ export interface KnowledgePoint {
   courseId: string
   title: string
   description: string
-  difficulty: Difficulty
+  difficulty: '初级' | '中级' | '高级'
   tags: string[]
   x: number
   y: number
@@ -20,22 +18,21 @@ export interface KnowledgePoint {
 
 export interface Relation {
   id: string
-  courseId: string
-  from: string
-  to: string
+  sourceId: string
+  targetId: string
+  type: 'prerequisite'
 }
 
 export interface User {
   id: string
-  username: string
   name: string
   role: 'teacher' | 'student'
-  email: string
+  scores: Record<string, number>
+  reviewed: string[]
 }
 
-export interface AssessmentRecord {
-  score: number
-  reviewed: boolean
+export const DIFFICULTY_COLORS: Record<KnowledgePoint['difficulty'], string> = {
+  '初级': '#81c784',
+  '中级': '#ffb74d',
+  '高级': '#e57373'
 }
-
-export type AssessmentsMap = Record<string, AssessmentRecord>
