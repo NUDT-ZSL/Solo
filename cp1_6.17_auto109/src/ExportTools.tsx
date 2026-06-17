@@ -10,8 +10,6 @@ interface ExportToolsProps {
 const ExportTools: React.FC<ExportToolsProps> = ({ frames, fps }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [exportProgress, setExportProgress] = useState(0);
-  const [exportType, setExportType] = useState<'gif' | 'sprite' | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -34,11 +32,13 @@ const ExportTools: React.FC<ExportToolsProps> = ({ frames, fps }) => {
     });
   };
 
+  const resetExportState = () => {
+    setExporting(false);
+  };
+
   const exportGif = async () => {
     if (frames.length === 0 || exporting) return;
     setExporting(true);
-    setExportProgress(0);
-    setExportType('gif');
     setIsOpen(false);
 
     try {
@@ -65,12 +65,7 @@ const ExportTools: React.FC<ExportToolsProps> = ({ frames, fps }) => {
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
         gif.addFrame(ctx, { copy: true, delay });
-        setExportProgress(Math.round(((i + 1) / frames.length) * 50));
       }
-
-      gif.on('progress', (p: number) => {
-        setExportProgress(50 + Math.round(p * 50));
-      });
 
       gif.on('finished', (blob: Blob) => {
         const url = URL.createObjectURL(blob);
@@ -81,25 +76,23 @@ const ExportTools: React.FC<ExportToolsProps> = ({ frames, fps }) => {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        setExporting(false);
-        setExportProgress(0);
-        setExportType(null);
+        resetExportState();
+      });
+
+      gif.on('abort', () => {
+        resetExportState();
       });
 
       gif.render();
     } catch (error) {
       console.error('GIF export failed:', error);
-      setExporting(false);
-      setExportProgress(0);
-      setExportType(null);
+      resetExportState();
     }
   };
 
   const exportSpriteSheet = async () => {
     if (frames.length === 0 || exporting) return;
     setExporting(true);
-    setExportProgress(0);
-    setExportType('sprite');
     setIsOpen(false);
 
     try {
@@ -122,7 +115,6 @@ const ExportTools: React.FC<ExportToolsProps> = ({ frames, fps }) => {
           ctx.fillStyle = '#FFFFFF';
           ctx.fillRect(x + frameWidth, 0, gap, frameHeight);
         }
-        setExportProgress(Math.round(((i + 1) / frames.length) * 100));
       }
 
       canvas.toBlob((blob) => {
@@ -136,15 +128,11 @@ const ExportTools: React.FC<ExportToolsProps> = ({ frames, fps }) => {
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
         }
-        setExporting(false);
-        setExportProgress(0);
-        setExportType(null);
+        resetExportState();
       }, 'image/png');
     } catch (error) {
       console.error('Sprite sheet export failed:', error);
-      setExporting(false);
-      setExportProgress(0);
-      setExportType(null);
+      resetExportState();
     }
   };
 
@@ -160,7 +148,7 @@ const ExportTools: React.FC<ExportToolsProps> = ({ frames, fps }) => {
         {exporting ? (
           <span className="export-btn-content">
             <span className="spinner"></span>
-            <span>{exportType === 'gif' ? '导出GIF' : '导出精灵图'} {exportProgress}%</span>
+            <span>导出中...</span>
           </span>
         ) : (
           '导出 ▾'
@@ -182,16 +170,6 @@ const ExportTools: React.FC<ExportToolsProps> = ({ frames, fps }) => {
               <span className="dropdown-subtitle">横向拼接，PNG格式</span>
             </span>
           </button>
-        </div>
-      )}
-      {exporting && (
-        <div className="export-progress-overlay">
-          <div className="progress-bar">
-            <div
-              className="progress-bar-fill"
-              style={{ width: `${exportProgress}%` }}
-            />
-          </div>
         </div>
       )}
     </div>

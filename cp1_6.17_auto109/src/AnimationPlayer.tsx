@@ -9,6 +9,7 @@ interface AnimationPlayerProps {
   fps: number;
   fpsHighlight?: boolean;
   onFpsChange: (fps: number) => void;
+  onFpsChangeComplete?: () => void;
   isPlaying: boolean;
   onTogglePlay: () => void;
 }
@@ -21,18 +22,30 @@ const AnimationPlayer: React.FC<AnimationPlayerProps> = ({
   fps,
   fpsHighlight = false,
   onFpsChange,
+  onFpsChangeComplete,
   isPlaying,
   onTogglePlay,
 }) => {
   const intervalRef = useRef<number | null>(null);
   const [fadeKey, setFadeKey] = useState(0);
   const onNextFrameRef = useRef(onNextFrame);
+  const isPlayingRef = useRef(isPlaying);
 
   useEffect(() => {
     onNextFrameRef.current = onNextFrame;
   }, [onNextFrame]);
 
   useEffect(() => {
+    const prevPlaying = isPlayingRef.current;
+    isPlayingRef.current = isPlaying;
+    if (prevPlaying !== isPlaying) {
+      console.log(`Play state changed: ${prevPlaying} -> ${isPlaying}`);
+    }
+  }, [isPlaying]);
+
+  useEffect(() => {
+    intervalRef.current = null;
+
     if (isPlaying && frames.length > 1) {
       const interval = 1000 / fps;
       intervalRef.current = window.setInterval(() => {
@@ -51,6 +64,20 @@ const AnimationPlayer: React.FC<AnimationPlayerProps> = ({
   useEffect(() => {
     setFadeKey((prev) => prev + 1);
   }, [currentIndex]);
+
+  const handleSliderMouseUp = () => {
+    if (onFpsChangeComplete) {
+      onFpsChangeComplete();
+    }
+  };
+
+  const handleSliderKeyUp = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      if (onFpsChangeComplete) {
+        onFpsChangeComplete();
+      }
+    }
+  };
 
   const currentFrame = frames[currentIndex];
 
@@ -113,6 +140,8 @@ const AnimationPlayer: React.FC<AnimationPlayerProps> = ({
             step="1"
             value={fps}
             onChange={(e) => onFpsChange(Number(e.target.value))}
+            onMouseUp={handleSliderMouseUp}
+            onKeyUp={handleSliderKeyUp}
             className="fps-slider"
           />
           <span className={`fps-value ${fpsHighlight ? 'highlight' : ''}`}>

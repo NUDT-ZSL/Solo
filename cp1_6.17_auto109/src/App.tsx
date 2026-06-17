@@ -72,6 +72,9 @@ const App: React.FC = () => {
 
   const handleFpsChange = useCallback((newFps: number) => {
     setFps(newFps);
+  }, []);
+
+  const handleFpsChangeComplete = useCallback(() => {
     setFpsHighlight(true);
     if (fpsHighlightTimerRef.current) {
       clearTimeout(fpsHighlightTimerRef.current);
@@ -127,6 +130,7 @@ const App: React.FC = () => {
             fps={fps}
             fpsHighlight={fpsHighlight}
             onFpsChange={handleFpsChange}
+            onFpsChangeComplete={handleFpsChangeComplete}
             isPlaying={isPlaying}
             onTogglePlay={handleTogglePlay}
           />

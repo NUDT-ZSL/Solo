@@ -89,8 +89,6 @@ const FrameUploader: React.FC<FrameUploaderProps> = ({
   const handleThumbDragStart = (e: React.DragEvent, index: number) => {
     setDragIndex(index);
     e.dataTransfer.effectAllowed = 'move';
-    const target = e.currentTarget as HTMLElement;
-    e.dataTransfer.setDragImage(target, 40, 40);
   };
 
   const handleThumbDragOver = (e: React.DragEvent, index: number) => {
@@ -102,34 +100,34 @@ const FrameUploader: React.FC<FrameUploaderProps> = ({
   const handleThumbDrop = (e: React.DragEvent, dropIndex: number) => {
     e.preventDefault();
     e.stopPropagation();
-    if (dragIndex === null || dragIndex === dropIndex) {
-      setDragIndex(null);
-      setDragOverIndex(null);
+    const sourceIndex = dragIndex;
+    setDragIndex(null);
+    setDragOverIndex(null);
+
+    if (sourceIndex === null || sourceIndex === dropIndex) {
       return;
     }
 
     const newFrames = [...frames];
-    const [removed] = newFrames.splice(dragIndex, 1);
+    const [removed] = newFrames.splice(sourceIndex, 1);
     newFrames.splice(dropIndex, 0, removed);
 
     if (onFramesReorder) {
       onFramesReorder(newFrames);
     } else {
       onFramesChange(newFrames);
-      if (selectedIndex === dragIndex) {
+      if (selectedIndex === sourceIndex) {
         onSelect(dropIndex);
-      } else if (dragIndex < selectedIndex && dropIndex >= selectedIndex) {
+      } else if (sourceIndex < selectedIndex && dropIndex >= selectedIndex) {
         onSelect(selectedIndex - 1);
-      } else if (dragIndex > selectedIndex && dropIndex <= selectedIndex) {
+      } else if (sourceIndex > selectedIndex && dropIndex <= selectedIndex) {
         onSelect(selectedIndex + 1);
       }
     }
-
-    setDragIndex(null);
-    setDragOverIndex(null);
   };
 
-  const handleThumbDragEnd = () => {
+  const handleThumbDragEnd = (e: React.DragEvent) => {
+    e.preventDefault();
     setDragIndex(null);
     setDragOverIndex(null);
   };
