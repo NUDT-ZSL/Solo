@@ -1,0 +1,36 @@
+{
+  "name": "exam-system",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "client:dev": "vite",
+    "server:dev": "nodemon",
+    "build": "tsc -b && vite build",
+    "dev": "concurrently \"npm run client:dev\" \"npm run server:dev\""
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.3.0",
+    "express": "^4.21.2",
+    "cors": "^2.8.5",
+    "uuid": "^11.1.0",
+    "dayjs": "^1.11.13",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "@vitejs/plugin-react": "^4.4.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/express": "^4.17.21",
+    "@types/cors": "^2.8.19",
+    "@types/uuid": "^10.0.0",
+    "@types/node": "^22.15.30",
+    "concurrently": "^9.2.0",
+    "nodemon": "^3.1.10",
+    "tsx": "^4.20.3"
+  }
+}
