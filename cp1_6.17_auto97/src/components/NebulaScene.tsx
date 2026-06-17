@@ -5,8 +5,7 @@ import * as THREE from 'three';
 import { useNebulaStore } from '../store/useNebulaStore';
 import type { PresetType } from '../types';
 
-function createNebulaTexture(): THREE.Texture {
-  const size = 128;
+function createNebulaTexture(size: number = 128): THREE.Texture {
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
@@ -24,8 +23,20 @@ function createNebulaTexture(): THREE.Texture {
   ctx.fillRect(0, 0, size, size);
 
   const texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.generateMipmaps = true;
   texture.needsUpdate = true;
   return texture;
+}
+
+function getTextureSize(sizeScale: number, brightness: number): number {
+  const scale = sizeScale * brightness;
+  if (scale >= 2.0) return 256;
+  if (scale >= 1.0) return 128;
+  return 64;
 }
 
 function generateSpiralPositions(count: number, radius: number): Float32Array {
@@ -128,7 +139,8 @@ function generateColors(
     let hue = centerHue + (edgeHue - centerHue) * t;
 
     const hueJitter = (Math.random() - 0.5) * 2 * hueJitterAmount;
-    hue = (hue + hueJitterAmount + hueJitter) % 1;
+    hue = hue + hueJitter;
+    hue = hue - Math.floor(hue);
 
     const saturation = 0.8 - t * 0.2;
     const lightness = 0.6 - t * 0.2;
@@ -152,7 +164,8 @@ function generateSizes(count: number, positions: Float32Array, radius: number): 
     const dist = Math.sqrt(x * x + y * y + z * z);
     const t = Math.min(dist / radius, 1);
 
-    const distanceFactor = 1.2 - t * 0.6;
+    const nonLinearT = 1 - Math.pow(1 - t, 1.5);
+    const distanceFactor = 1.25 - nonLinearT * 0.7;
     const baseSize = 0.1 + Math.random() * 0.4;
     sizes[i] = baseSize * distanceFactor;
   }
@@ -211,31 +224,35 @@ const vertexShader = `
 const fragmentShader = `
   uniform sampler2D uTexture;
   uniform float uOpacity;
+  uniform float uOverexposureCtrl;
 
   varying float vOpacity;
   varying float vRotation;
   varying vec3 vColor;
 
   void main() {
-    vec2 center = gl_PointCoord - 0.5;
+    vec2 uv = gl_PointCoord - 0.5;
 
     float cosR = cos(vRotation);
     float sinR = sin(vRotation);
     vec2 rotated = vec2(
-      center.x * cosR - center.y * sinR,
-      center.x * sinR + center.y * cosR
+      uv.x * cosR - uv.y * sinR,
+      uv.x * sinR + uv.y * cosR
     );
 
-    vec2 uv = rotated + 0.5;
+    vec2 finalUv = clamp(rotated + 0.5, 0.0, 1.0);
 
-    vec4 texColor = texture2D(uTexture, uv);
+    vec4 texColor = texture2D(uTexture, finalUv);
     float alpha = texColor.a * vOpacity * uOpacity;
 
     if (alpha < 0.01) {
       discard;
     }
 
-    gl_FragColor = vec4(texColor.rgb * vColor, alpha);
+    vec3 finalColor = texColor.rgb * vColor;
+    float controlledAlpha = min(alpha, uOverexposureCtrl);
+
+    gl_FragColor = vec4(finalColor * controlledAlpha, controlledAlpha);
   }
 `;
 
@@ -262,8 +279,13 @@ function NebulaParticles({
 }: NebulaParticlesProps) {
   const meshRef = useRef<THREE.Points>(null);
   const nebulaRadius = 20;
+  const lastTexSizeRef = useRef(128);
 
-  const texture = useMemo(() => createNebulaTexture(), []);
+  const textures = useMemo(() => ({
+    64: createNebulaTexture(64),
+    128: createNebulaTexture(128),
+    256: createNebulaTexture(256),
+  }), []);
 
   const currentDataRef = useRef<{
     positions: Float32Array;
@@ -288,19 +310,22 @@ function NebulaParticles({
   const material = useMemo(() => {
     const mat = new THREE.ShaderMaterial({
       uniforms: {
-        uTexture: { value: texture },
+        uTexture: { value: textures[128] },
         uSizeScale: { value: sizeScale },
         uBrightness: { value: brightness },
         uOpacity: { value: 1.0 },
+        uOverexposureCtrl: { value: 0.85 },
       },
       vertexShader,
       fragmentShader,
       transparent: true,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.NormalBlending,
+      premultipliedAlpha: true,
       depthWrite: false,
     });
+    lastTexSizeRef.current = 128;
     return mat;
-  }, [texture]);
+  }, [textures]);
 
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry();
@@ -463,6 +488,13 @@ function NebulaParticles({
     const mat = meshRef.current.material as THREE.ShaderMaterial;
     mat.uniforms.uSizeScale.value = sizeScale;
     mat.uniforms.uBrightness.value = brightness;
+    mat.uniforms.uOpacity.value = opacityBase;
+
+    const texSize = getTextureSize(sizeScale, brightness);
+    if (texSize !== lastTexSizeRef.current) {
+      mat.uniforms.uTexture.value = textures[texSize as 64 | 128 | 256];
+      lastTexSizeRef.current = texSize;
+    }
   });
 
   return <points ref={meshRef} geometry={geometry} material={material} />;
