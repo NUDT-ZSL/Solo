@@ -1,0 +1,138 @@
+.preview-canvas {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+}
+
+.column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.column-header {
+  text-align: center;
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+.column-title {
+  font-size: 16px;
+  font-weight: bold;
+  color: #212121;
+  margin-bottom: 4px;
+}
+
+.column-subtitle {
+  font-size: 12px;
+  color: #9E9E9E;
+}
+
+.divider {
+  width: 1px;
+  background-color: #BDBDBD;
+  flex-shrink: 0;
+}
+
+.component-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.component-wrap {
+  width: 100%;
+  max-width: 280px;
+  display: flex;
+  justify-content: center;
+}
+
+.preview-btn {
+  padding: 10px 32px;
+  border: none;
+  color: #FFFFFF;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+}
+
+.preview-btn:hover {
+  opacity: 0.9;
+}
+
+.preview-card {
+  width: 280px;
+  padding: 20px;
+}
+
+.card-title {
+  font-size: 16px;
+  font-weight: bold;
+  color: #212121;
+  margin-bottom: 8px;
+}
+
+.card-desc {
+  font-size: 13px;
+  color: #616161;
+  line-height: 1.5;
+}
+
+.preview-input-wrap {
+  width: 280px;
+  padding: 2px;
+  border: 1px solid #E0E0E0;
+}
+
+.preview-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  color: #212121;
+  background: transparent;
+  border-radius: inherit;
+}
+
+.preview-input::placeholder {
+  color: #9E9E9E;
+}
+
+.preview-switch-wrap {
+  width: 280px;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.switch-label {
+  font-size: 14px;
+  color: #424242;
+}
+
+.switch-track {
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  background-color: #BDBDBD;
+  position: relative;
+  cursor: pointer;
+}
+
+.switch-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: #FFFFFF;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
