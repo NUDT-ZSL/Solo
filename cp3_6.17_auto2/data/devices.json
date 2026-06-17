@@ -1,0 +1,210 @@
+[
+  {
+    "id": "dev-001",
+    "name": "Dell U2723QE 4K显示器",
+    "type": "显示器",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=4K%20monitor%20on%20desk%20minimal%20white%20background&image_size=square",
+    "status": "idle",
+    "minCreditScore": 80,
+    "specs": [
+      {
+        "label": "分辨率",
+        "value": "3840 x 2160"
+      },
+      {
+        "label": "尺寸",
+        "value": "27英寸"
+      },
+      {
+        "label": "接口",
+        "value": "USB-C / HDMI / DP"
+      },
+      {
+        "label": "刷新率",
+        "value": "60Hz"
+      }
+    ]
+  },
+  {
+    "id": "dev-002",
+    "name": "Sony WH-1000XM5 降噪耳机",
+    "type": "耳机",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=wireless%20headphones%20black%20on%20white%20background&image_size=square",
+    "status": "idle",
+    "minCreditScore": 60,
+    "specs": [
+      {
+        "label": "类型",
+        "value": "头戴式降噪耳机"
+      },
+      {
+        "label": "续航",
+        "value": "30小时"
+      },
+      {
+        "label": "蓝牙",
+        "value": "5.2"
+      },
+      {
+        "label": "降噪",
+        "value": "主动降噪"
+      }
+    ]
+  },
+  {
+    "id": "dev-003",
+    "name": "Epson EB-L630U 投影仪",
+    "type": "投影仪",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=projector%20device%20on%20white%20background&image_size=square",
+    "status": "borrowed",
+    "minCreditScore": 85,
+    "specs": [
+      {
+        "label": "亮度",
+        "value": "6000流明"
+      },
+      {
+        "label": "分辨率",
+        "value": "1920 x 1080"
+      },
+      {
+        "label": "光源",
+        "value": "激光"
+      },
+      {
+        "label": "接口",
+        "value": "HDMI / VGA / USB"
+      }
+    ]
+  },
+  {
+    "id": "dev-004",
+    "name": "Logitech MX Master 3S 鼠标",
+    "type": "外设",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=wireless%20mouse%20on%20white%20background&image_size=square",
+    "status": "idle",
+    "minCreditScore": 50,
+    "specs": [
+      {
+        "label": "连接",
+        "value": "蓝牙 / USB"
+      },
+      {
+        "label": "DPI",
+        "value": "8000"
+      },
+      {
+        "label": "续航",
+        "value": "70天"
+      },
+      {
+        "label": "按键",
+        "value": "7个可自定义"
+      }
+    ]
+  },
+  {
+    "id": "dev-005",
+    "name": "iPad Pro 12.9 平板电脑",
+    "type": "平板",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=tablet%20device%20on%20white%20background&image_size=square",
+    "status": "maintenance",
+    "minCreditScore": 90,
+    "specs": [
+      {
+        "label": "芯片",
+        "value": "M2"
+      },
+      {
+        "label": "存储",
+        "value": "256GB"
+      },
+      {
+        "label": "屏幕",
+        "value": "12.9英寸 Liquid"
+      },
+      {
+        "label": "接口",
+        "value": "USB-C"
+      }
+    ]
+  },
+  {
+    "id": "dev-006",
+    "name": "Anker 100W 氮化镓充电器",
+    "type": "配件",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=gaN%20charger%20on%20white%20background&image_size=square",
+    "status": "idle",
+    "minCreditScore": 40,
+    "specs": [
+      {
+        "label": "功率",
+        "value": "100W"
+      },
+      {
+        "label": "接口",
+        "value": "4口 USB-C"
+      },
+      {
+        "label": "协议",
+        "value": "PD3.0 / QC4+"
+      },
+      {
+        "label": "重量",
+        "value": "210g"
+      }
+    ]
+  },
+  {
+    "id": "dev-007",
+    "name": "Rode NT-USB 麦克风",
+    "type": "音频",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=USB%20microphone%20on%20white%20background&image_size=square",
+    "status": "idle",
+    "minCreditScore": 70,
+    "specs": [
+      {
+        "label": "类型",
+        "value": "电容式"
+      },
+      {
+        "label": "指向性",
+        "value": "心型"
+      },
+      {
+        "label": "采样率",
+        "value": "48kHz/16bit"
+      },
+      {
+        "label": "接口",
+        "value": "USB"
+      }
+    ]
+  },
+  {
+    "id": "dev-008",
+    "name": "Logitech Brio 4K 摄像头",
+    "type": "视频",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=4K%20webcam%20on%20white%20background&image_size=square",
+    "status": "idle",
+    "minCreditScore": 75,
+    "specs": [
+      {
+        "label": "分辨率",
+        "value": "4K UHD"
+      },
+      {
+        "label": "帧率",
+        "value": "30fps"
+      },
+      {
+        "label": "视场角",
+        "value": "90度"
+      },
+      {
+        "label": "接口",
+        "value": "USB-C"
+      }
+    ]
+  }
+]

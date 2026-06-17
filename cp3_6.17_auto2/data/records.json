@@ -1,0 +1,42 @@
+[
+  {
+    "id": "rec-1001",
+    "deviceId": "dev-003",
+    "deviceName": "Epson EB-L630U 投影仪",
+    "userId": "u-003",
+    "userName": "王梓涵",
+    "borrowTime": "2026-06-15T09:00:00.000Z",
+    "returnTime": null,
+    "status": "ongoing"
+  },
+  {
+    "id": "rec-1002",
+    "deviceId": "dev-001",
+    "deviceName": "Dell U2723QE 4K显示器",
+    "userId": "u-001",
+    "userName": "林书雅",
+    "borrowTime": "2026-06-10T08:00:00.000Z",
+    "returnTime": "2026-06-10T18:00:00.000Z",
+    "status": "on-time"
+  },
+  {
+    "id": "rec-1003",
+    "deviceId": "dev-002",
+    "deviceName": "Sony WH-1000XM5 降噪耳机",
+    "userId": "u-002",
+    "userName": "陈昊然",
+    "borrowTime": "2026-06-05T10:00:00.000Z",
+    "returnTime": "2026-06-07T12:00:00.000Z",
+    "status": "overdue"
+  },
+  {
+    "id": "rec-6dc211a0",
+    "deviceId": "dev-004",
+    "deviceName": "Logitech MX Master 3S 鼠标",
+    "userId": "u-001",
+    "userName": "林书雅",
+    "borrowTime": "2026-06-17T15:18:17.395Z",
+    "returnTime": "2026-06-17T15:18:17.425Z",
+    "status": "on-time"
+  }
+]

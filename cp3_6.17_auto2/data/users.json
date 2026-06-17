@@ -1,0 +1,30 @@
+[
+  {
+    "id": "u-001",
+    "name": "林书雅",
+    "avatar": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=avatar%20illustration%20female%20designer%20minimal&image_size=square",
+    "creditScore": 100,
+    "role": "user"
+  },
+  {
+    "id": "u-002",
+    "name": "陈昊然",
+    "avatar": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=avatar%20illustration%20male%20developer%20minimal&image_size=square",
+    "creditScore": 76,
+    "role": "user"
+  },
+  {
+    "id": "u-003",
+    "name": "王梓涵",
+    "avatar": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=avatar%20illustration%20writer%20minimal%20neutral&image_size=square",
+    "creditScore": 88,
+    "role": "user"
+  },
+  {
+    "id": "admin-001",
+    "name": "管理员",
+    "avatar": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=avatar%20illustration%20admin%20shield%20minimal&image_size=square",
+    "creditScore": 100,
+    "role": "admin"
+  }
+]

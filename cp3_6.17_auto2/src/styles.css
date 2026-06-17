@@ -1,0 +1,91 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+  background: #f8fafc;
+  color: #1e293b;
+}
+
+/* 响应式设备网格：
+   ≥1024px：4列 / 768-1023px：3列 / <768px：2列，间距24px */
+.device-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+}
+
+@media (max-width: 1023px) {
+  .device-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .device-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .device-card {
+    max-width: 100% !important;
+  }
+}
+
+/* 卡片悬浮微动效：上移4px + 阴影加深 */
+.device-card {
+  transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+}
+
+.device-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+}
+
+/* 借用按钮悬浮加深 */
+.borrow-btn:not(:disabled):hover {
+  background: #0f172a !important;
+  transform: translateY(-1px);
+}
+
+.borrow-btn:not(:disabled):active {
+  transform: translateY(0);
+}
+
+/* 页面路由过渡 */
+main {
+  animation: pageIn 0.3s ease-out;
+}
+
+@keyframes pageIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 链接悬浮 */
+nav a:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
