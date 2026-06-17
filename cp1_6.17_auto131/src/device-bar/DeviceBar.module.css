@@ -1,0 +1,152 @@
+.deviceBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 24px;
+  background-color: #1E293B;
+  border-bottom: 1px solid #334155;
+  flex-shrink: 0;
+}
+
+.deviceList {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.deviceItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  cursor: pointer;
+  position: relative;
+  color: #94A3B8;
+  transition: color 0.2s ease-in-out;
+  border-radius: 6px 6px 0 0;
+}
+
+.deviceItem:hover {
+  color: #E2E8F0;
+}
+
+.deviceItem.active {
+  color: #FFFFFF;
+}
+
+.deviceIcon {
+  width: 24px;
+  height: 24px;
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.deviceName {
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.highlightBar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  width: 100%;
+  background-color: #3B82F6;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.2s ease-in-out;
+}
+
+.deviceItem.active .highlightBar {
+  transform: scaleX(1);
+}
+
+.widthControl {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.widthLabel {
+  font-size: 13px;
+  color: #94A3B8;
+}
+
+.inputWrapper {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  overflow: hidden;
+  background-color: #0F172A;
+  transition: border-color 0.2s ease-in-out;
+}
+
+.inputWrapper:focus-within {
+  border-color: #3B82F6;
+}
+
+.widthInput {
+  width: 80px;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: #E2E8F0;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.widthInput::-webkit-outer-spin-button,
+.widthInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.widthInput[type=number] {
+  -moz-appearance: textfield;
+}
+
+.stepButtons {
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #334155;
+}
+
+.stepButton {
+  width: 24px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: #94A3B8;
+  font-size: 10px;
+  transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
+  padding: 0;
+  line-height: 1;
+}
+
+.stepButton:hover {
+  background-color: #334155;
+  color: #E2E8F0;
+}
+
+.stepButton:active {
+  background-color: #475569;
+}
+
+.stepButton:first-child {
+  border-bottom: 1px solid #334155;
+}
+
+.widthUnit {
+  font-size: 13px;
+  color: #64748B;
+}

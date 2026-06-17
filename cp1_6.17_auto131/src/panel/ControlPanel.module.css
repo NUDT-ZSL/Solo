@@ -1,0 +1,201 @@
+.controlPanel {
+  width: 100%;
+  height: 100%;
+  background-color: #F8FAFC;
+  border-left: 1px solid #E2E8F0;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.panelHeader {
+  padding: 20px;
+  border-bottom: 1px solid #E2E8F0;
+  background-color: #FFFFFF;
+}
+
+.deviceInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.deviceName {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1E293B;
+}
+
+.deviceWidth {
+  font-size: 13px;
+  color: #64748B;
+}
+
+.settingsSection {
+  padding: 20px;
+  border-bottom: 1px solid #E2E8F0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settingItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settingLabel {
+  font-size: 14px;
+  color: #334155;
+  font-weight: 500;
+}
+
+.toggleSwitch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.toggleTrack {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #CBD5E1;
+  border-radius: 12px;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.toggleSwitch.on .toggleTrack {
+  background-color: #3B82F6;
+}
+
+.toggleThumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background-color: #FFFFFF;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease-in-out;
+}
+
+.toggleSwitch.on .toggleThumb {
+  transform: translateX(20px);
+}
+
+.logSection {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 16px 20px;
+}
+
+.logHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.logTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1E293B;
+}
+
+.logCount {
+  font-size: 12px;
+  color: #94A3B8;
+  background-color: #E2E8F0;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.logContainer {
+  flex: 1;
+  background-color: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  overflow: auto;
+  height: 200px;
+  min-height: 200px;
+  max-height: 300px;
+}
+
+.logList {
+  position: relative;
+  padding: 8px 0;
+}
+
+.logItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  border-bottom: 1px solid #F1F5F9;
+  transition: background-color 0.15s ease;
+}
+
+.logItem:hover {
+  background-color: #F8FAFC;
+}
+
+.logItem:last-child {
+  border-bottom: none;
+}
+
+.logDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.logDot.device {
+  background-color: #3B82F6;
+}
+
+.logDot.interaction {
+  background-color: #F59E0B;
+}
+
+.logDot.system {
+  background-color: #6B7280;
+}
+
+.logContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.logMessage {
+  color: #334155;
+  word-break: break-word;
+}
+
+.logTime {
+  color: #94A3B8;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.emptyLog {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #94A3B8;
+  font-size: 12px;
+}

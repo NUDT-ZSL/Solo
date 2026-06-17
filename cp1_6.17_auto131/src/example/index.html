@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>示例页面</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #F8FAFC;
+      color: #1E293B;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .navbar {
+      height: 56px;
+      background-color: #1A1A2E;
+      color: #FFFFFF;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: #3B82F6;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .nav-links li {
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: #CBD5E1;
+      transition: color 0.2s ease;
+      position: relative;
+    }
+
+    .nav-links li:hover {
+      color: #FFFFFF;
+    }
+
+    .hamburger {
+      display: none;
+      width: 24px;
+      height: 24px;
+      cursor: pointer;
+      flex-direction: column;
+      justify-content: center;
+      gap: 5px;
+      z-index: 200;
+    }
+
+    .hamburger span {
+      display: block;
+      width: 24px;
+      height: 2px;
+      background-color: #FFFFFF;
+      transition: all 0.3s ease;
+    }
+
+    .hamburger.active span:nth-child(1) {
+      transform: translateY(7px) rotate(45deg);
+    }
+
+    .hamburger.active span:nth-child(2) {
+      opacity: 0;
+    }
+
+    .hamburger.active span:nth-child(3) {
+      transform: translateY(-7px) rotate(-45deg);
+    }
+
+    .mobile-menu {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 100%;
+      height: 100vh;
+      background-color: rgba(26, 26, 46, 0.98);
+      backdrop-filter: blur(10px);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 24px;
+      z-index: 150;
+      opacity: 0;
+      transform: translateX(100%);
+      transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+    }
+
+    .mobile-menu.open {
+      display: flex;
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    .mobile-menu li {
+      list-style: none;
+      opacity: 0;
+      transform: translateX(30px);
+      transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+    }
+
+    .mobile-menu.open li {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    .mobile-menu.open li:nth-child(1) { transition-delay: 0.1s; }
+    .mobile-menu.open li:nth-child(2) { transition-delay: 0.2s; }
+    .mobile-menu.open li:nth-child(3) { transition-delay: 0.3s; }
+
+    .mobile-menu li a {
+      color: #FFFFFF;
+      text-decoration: none;
+      font-size: 24px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .content {
+      padding: 32px 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .section-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      color: #1E293B;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(280px, 1fr));
+      gap: 24px;
+      margin-bottom: 48px;
+    }
+
+    .card {
+      background: #FFFFFF;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      cursor: pointer;
+      transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    }
+
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
+    }
+
+    .card-image {
+      width: 100%;
+      height: 160px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #FFFFFF;
+      font-size: 48px;
+    }
+
+    .card-content {
+      padding: 16px;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #1E293B;
+    }
+
+    .card-desc {
+      font-size: 14px;
+      color: #64748B;
+      line-height: 1.5;
+    }
+
+    .table-container {
+      overflow-x: auto;
+      background: #FFFFFF;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead {
+      position: sticky;
+      top: 0;
+      background: #F1F5F9;
+    }
+
+    th {
+      padding: 14px 16px;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 600;
+      color: #475569;
+      cursor: pointer;
+      user-select: none;
+      transition: background-color 0.2s ease;
+    }
+
+    th:hover {
+      background-color: #E2E8F0;
+    }
+
+    th .sort-indicator {
+      display: inline-block;
+      margin-left: 4px;
+      font-size: 10px;
+    }
+
+    td {
+      padding: 14px 16px;
+      font-size: 14px;
+      color: #334155;
+      border-bottom: 1px solid #E2E8F0;
+    }
+
+    tbody tr {
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+    }
+
+    tbody tr:hover {
+      background-color: #F8FAFC;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .hidden-col {
+      display: none;
+    }
+
+    .expand-row {
+      display: none;
+      background: #F8FAFC;
+    }
+
+    .expand-row.open {
+      display: table-row;
+    }
+
+    .expand-cell {
+      padding: 16px;
+    }
+
+    .expand-cell > div {
+      animation: expandRow 0.3s ease-in-out;
+      overflow: hidden;
+    }
+
+    @keyframes expandRow {
+      from {
+        opacity: 0;
+        max-height: 0;
+      }
+      to {
+        opacity: 1;
+        max-height: 200px;
+      }
+    }
+
+    .expand-content {
+      display: grid;
+      gap: 12px;
+    }
+
+    .expand-item {
+      display: flex;
+      gap: 12px;
+      font-size: 13px;
+    }
+
+    .expand-label {
+      font-weight: 600;
+      color: #64748B;
+      min-width: 80px;
+    }
+
+    .expand-value {
+      color: #334155;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .status-active {
+      background-color: #DCFCE7;
+      color: #166534;
+    }
+
+    .status-pending {
+      background-color: #FEF3C7;
+      color: #92400E;
+    }
+
+    .status-inactive {
+      background-color: #F1F5F9;
+      color: #475569;
+    }
+
+    body.is-mobile .nav-links {
+      display: none;
+    }
+
+    body.is-mobile .hamburger {
+      display: flex;
+    }
+
+    body.is-mobile .card-grid {
+      grid-template-columns: 1fr;
+    }
+
+    body.is-mobile .content {
+      padding: 20px 16px;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="logo">DesignHub</div>
+    <ul class="nav-links">
+      <li data-nav="home">首页</li>
+      <li data-nav="products">产品</li>
+      <li data-nav="about">关于</li>
+    </ul>
+    <div class="hamburger" id="hamburger">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+  </nav>
+
+  <ul class="mobile-menu" id="mobileMenu">
+    <li><a data-nav="home">首页</a></li>
+    <li><a data-nav="products">产品</a></li>
+    <li><a data-nav="about">关于</a></li>
+  </ul>
+
+  <main class="content">
+    <h2 class="section-title">精选内容</h2>
+    <div class="card-grid" id="cardGrid">
+      <div class="card" data-card="1">
+        <div class="card-image">🚀</div>
+        <div class="card-content">
+          <h3 class="card-title">快速原型开发</h3>
+          <p class="card-desc">使用现代工具链快速构建产品原型，缩短开发周期，提升团队协作效率。</p>
+        </div>
+      </div>
+      <div class="card" data-card="2">
+        <div class="card-image" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">🎨</div>
+        <div class="card-content">
+          <h3 class="card-title">精致设计系统</h3>
+          <p class="card-desc">统一的设计语言和组件库，确保产品体验的一致性和专业性。</p>
+        </div>
+      </div>
+      <div class="card" data-card="3">
+        <div class="card-image" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">📊</div>
+        <div class="card-content">
+          <h3 class="card-title">数据分析洞察</h3>
+          <p class="card-desc">实时数据监控和智能分析，帮助团队做出更明智的业务决策。</p>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="section-title">用户数据</h2>
+    <div class="table-container">
+      <table id="dataTable">
+        <thead>
+          <tr>
+            <th data-col="name" class="col-sticky">
+              姓名<span class="sort-indicator">↕</span>
+            </th>
+            <th data-col="email" class="col-hide-md">
+              邮箱<span class="sort-indicator">↕</span>
+            </th>
+            <th data-col="role">
+              角色<span class="sort-indicator">↕</span>
+            </th>
+            <th data-col="status" class="col-hide-lg">
+              状态<span class="sort-indicator">↕</span>
+            </th>
+            <th data-col="lastActive" class="col-hide-lg col-hide-md">
+              最近活跃<span class="sort-indicator">↕</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <script>
+    (function() {
+      'use strict';
+
+      const tableData = [
+        { name: '张三', email: 'zhangsan@example.com', role: '设计师', status: 'active', lastActive: '2024-01-15' },
+        { name: '李四', email: 'lisi@example.com', role: '前端开发', status: 'active', lastActive: '2024-01-14' },
+        { name: '王五', email: 'wangwu@example.com', role: '产品经理', status: 'pending', lastActive: '2024-01-10' },
+        { name: '赵六', email: 'zhaoliu@example.com', role: '后端开发', status: 'active', lastActive: '2024-01-16' },
+        { name: '钱七', email: 'qianqi@example.com', role: '测试工程师', status: 'inactive', lastActive: '2024-01-05' },
+        { name: '孙八', email: 'sunba@example.com', role: '设计师', status: 'active', lastActive: '2024-01-13' }
+      ];
+
+      let sortColumn = null;
+      let sortDirection = 'asc';
+      let currentWidth = window.innerWidth;
+
+      const hamburger = document.getElementById('hamburger');
+      const mobileMenu = document.getElementById('mobileMenu');
+      const tableBody = document.getElementById('tableBody');
+      const dataTable = document.getElementById('dataTable');
+
+      function updateResponsiveClasses() {
+        const isMobile = currentWidth <= 768;
+        document.body.classList.toggle('is-mobile', isMobile);
+        
+        if (!isMobile) {
+          hamburger.classList.remove('active');
+          mobileMenu.classList.remove('open');
+        }
+      }
+
+      function sendInteraction(type, target, detail) {
+        if (window.parent && window.parent !== window) {
+          try {
+            window.parent.postMessage({
+              type: 'interaction',
+              interactionType: type,
+              target: target,
+              detail: detail
+            }, '*');
+          } catch (e) {}
+        }
+      }
+
+      function sendHotspotsUpdate() {
+        if (window.parent && window.parent !== window) {
+          const hotspots = [];
+          
+          const navLinks = document.querySelectorAll('.nav-links li');
+          navLinks.forEach(el => {
+            const rect = el.getBoundingClientRect();
+            hotspots.push({
+              x: rect.left,
+              y: rect.top,
+              w: rect.width,
+              h: rect.height
+            });
+          });
+
+          const cards = document.querySelectorAll('.card');
+          cards.forEach(el => {
+            const rect = el.getBoundingClientRect();
+            hotspots.push({
+              x: rect.left,
+              y: rect.top,
+              w: rect.width,
+              h: rect.height
+            });
+          });
+
+          const rows = document.querySelectorAll('tbody tr[data-row]');
+          rows.forEach(el => {
+            const rect = el.getBoundingClientRect();
+            hotspots.push({
+              x: rect.left,
+              y: rect.top,
+              w: rect.width,
+              h: rect.height
+            });
+          });
+
+          try {
+            window.parent.postMessage({
+              type: 'hotspots-update',
+              hotspots: hotspots
+            }, '*');
+          } catch (e) {}
+        }
+      }
+
+      hamburger.addEventListener('click', function() {
+        const isOpen = mobileMenu.classList.contains('open');
+        hamburger.classList.toggle('active');
+        mobileMenu.classList.toggle('open');
+        sendInteraction('menu-toggle', isOpen ? 'close' : 'open');
+      });
+
+      const mobileLinks = mobileMenu.querySelectorAll('li a');
+      mobileLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+          e.preventDefault();
+          const navName = this.getAttribute('data-nav');
+          sendInteraction('nav-click', navName);
+          hamburger.classList.remove('active');
+          mobileMenu.classList.remove('open');
+        });
+      });
+
+      const desktopNavLinks = document.querySelectorAll('.nav-links li');
+      desktopNavLinks.forEach(link => {
+        link.addEventListener('click', function() {
+          const navName = this.getAttribute('data-nav');
+          sendInteraction('nav-click', navName);
+        });
+      });
+
+      const cards = document.querySelectorAll('.card');
+      cards.forEach(card => {
+        card.addEventListener('click', function() {
+          const cardNum = this.getAttribute('data-card');
+          sendInteraction('card-click', cardNum);
+        });
+      });
+
+      function renderTable() {
+        const sortedData = [...tableData];
+        if (sortColumn) {
+          sortedData.sort((a, b) => {
+            let aVal = a[sortColumn];
+            let bVal = b[sortColumn];
+            if (typeof aVal === 'string') {
+              aVal = aVal.toLowerCase();
+              bVal = bVal.toLowerCase();
+            }
+            if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+            if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+            return 0;
+          });
+        }
+
+        const viewWidth = currentWidth;
+        const showEmail = viewWidth > 768;
+        const showStatus = viewWidth > 1024;
+        const showLastActive = viewWidth > 1200;
+        const hasHiddenCols = !showEmail || !showStatus || !showLastActive;
+
+        let html = '';
+        sortedData.forEach((row, index) => {
+          const statusClass = row.status === 'active' ? 'status-active' : 
+                             row.status === 'pending' ? 'status-pending' : 'status-inactive';
+          const statusText = row.status === 'active' ? '活跃' : 
+                            row.status === 'pending' ? '待处理' : '未活跃';
+
+          html += `<tr data-row="${index}">
+            <td class="col-sticky">${row.name}</td>
+            <td class="col-hide-md ${showEmail ? '' : 'hidden-col'}">${row.email}</td>
+            <td>${row.role}</td>
+            <td class="col-hide-lg ${showStatus ? '' : 'hidden-col'}">
+              <span class="status-badge ${statusClass}">${statusText}</span>
+            </td>
+            <td class="col-hide-lg col-hide-md ${showLastActive ? '' : 'hidden-col'}">${row.lastActive}</td>
+          </tr>`;
+
+          if (hasHiddenCols) {
+            let expandContent = '';
+            if (!showEmail) {
+              expandContent += `<div class="expand-item"><span class="expand-label">邮箱</span><span class="expand-value">${row.email}</span></div>`;
+            }
+            if (!showStatus) {
+              expandContent += `<div class="expand-item"><span class="expand-label">状态</span><span class="expand-value"><span class="status-badge ${statusClass}">${statusText}</span></span></div>`;
+            }
+            if (!showLastActive) {
+              expandContent += `<div class="expand-item"><span class="expand-label">最近活跃</span><span class="expand-value">${row.lastActive}</span></div>`;
+            }
+
+            html += `<tr class="expand-row" data-expand="${index}">
+              <td colspan="5" class="expand-cell">
+                <div class="expand-content">${expandContent}</div>
+              </td>
+            </tr>`;
+          }
+        });
+
+        tableBody.innerHTML = html;
+
+        const rows = tableBody.querySelectorAll('tr[data-row]');
+        rows.forEach(row => {
+          row.addEventListener('click', function() {
+            const rowIndex = this.getAttribute('data-row');
+            const expandRow = tableBody.querySelector(`tr[data-expand="${rowIndex}"]`);
+            if (expandRow) {
+              expandRow.classList.toggle('open');
+            }
+          });
+        });
+      }
+
+      const headers = dataTable.querySelectorAll('th[data-col]');
+      headers.forEach(th => {
+        th.addEventListener('click', function() {
+          const col = this.getAttribute('data-col');
+          if (sortColumn === col) {
+            sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+          } else {
+            sortColumn = col;
+            sortDirection = 'asc';
+          }
+          
+          sendInteraction('table-sort', col, sortDirection === 'asc' ? '升序' : '降序');
+          renderTable();
+          
+          headers.forEach(h => {
+            const indicator = h.querySelector('.sort-indicator');
+            if (h.getAttribute('data-col') === sortColumn) {
+              indicator.textContent = sortDirection === 'asc' ? '↑' : '↓';
+            } else {
+              indicator.textContent = '↕';
+            }
+          });
+        });
+      });
+
+      window.addEventListener('resize', function() {
+        currentWidth = window.innerWidth;
+        updateResponsiveClasses();
+        renderTable();
+      });
+
+      window.addEventListener('message', function(event) {
+        if (event.data && event.data.type === 'width-change') {
+          currentWidth = event.data.width;
+          updateResponsiveClasses();
+          renderTable();
+          
+          if (event.data.enableHotspots) {
+            setTimeout(sendHotspotsUpdate, 150);
+          }
+        }
+      });
+
+      updateResponsiveClasses();
+      renderTable();
+      
+      setTimeout(sendHotspotsUpdate, 500);
+    })();
+  </script>
+</body>
+</html>
