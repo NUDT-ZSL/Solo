@@ -2,7 +2,6 @@ import React, { useRef, useEffect, useCallback, useMemo, forwardRef, useImperati
 import {
   Language,
   AnimationParams,
-  SyntaxToken,
   FPS,
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
@@ -67,16 +66,6 @@ const AnimationPreview = forwardRef<AnimationPreviewRef, AnimationPreviewProps>(
     }
   }, [code, params.style, params.speed, lines.length]);
 
-  useImperativeHandle(ref, () => ({
-    getCanvas: () => canvasRef.current,
-    getTotalDuration: () => totalDuration,
-    reset: () => {
-      pausedProgressRef.current = 0;
-      currentProgressRef.current = 0;
-      renderFrame(0);
-    },
-  }), [totalDuration]);
-
   const getTextColor = (bgColor: string): string => {
     return bgColor === '#FFFFFF' ? '#333333' : HIGHLIGHT_COLORS.default;
   };
@@ -102,8 +91,6 @@ const AnimationPreview = forwardRef<AnimationPreviewRef, AnimationPreviewProps>(
 
     ctx.font = `${FONT_SIZE}px ${FONT_FAMILY}`;
     ctx.textBaseline = 'top';
-
-    const defaultTextColor = getTextColor(params.backgroundColor);
 
     switch (params.style) {
       case 'typewriter': {
@@ -219,6 +206,16 @@ const AnimationPreview = forwardRef<AnimationPreviewRef, AnimationPreviewProps>(
     }
   }, [code, tokens, params, lineHeightPx, onFrameRender]);
 
+  useImperativeHandle(ref, () => ({
+    getCanvas: () => canvasRef.current,
+    getTotalDuration: () => totalDuration,
+    reset: () => {
+      pausedProgressRef.current = 0;
+      currentProgressRef.current = 0;
+      renderFrame(0);
+    },
+  }), [totalDuration, renderFrame]);
+
   const animate = useCallback((timestamp: number) => {
     if (!startTimeRef.current) {
       startTimeRef.current = timestamp;
@@ -247,10 +244,16 @@ const AnimationPreview = forwardRef<AnimationPreviewRef, AnimationPreviewProps>(
   useEffect(() => {
     if (isPlaying || isRecording) {
       startTimeRef.current = 0;
+      lastFrameTimeRef.current = 0;
+      if (isRecording) {
+        pausedProgressRef.current = 0;
+        currentProgressRef.current = 0;
+      }
       animationFrameRef.current = requestAnimationFrame(animate);
     } else {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = 0;
         pausedProgressRef.current = currentProgressRef.current;
       }
     }
@@ -258,6 +261,7 @@ const AnimationPreview = forwardRef<AnimationPreviewRef, AnimationPreviewProps>(
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = 0;
       }
     };
   }, [isPlaying, isRecording, animate]);
