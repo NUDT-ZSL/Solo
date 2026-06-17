@@ -126,6 +126,11 @@ export const Register: React.FC = () => {
           justify-content: center;
           background: linear-gradient(135deg, #121212 0%, #1E1E2E 100%);
           padding: 20px;
+          transition: background 0.3s ease;
+        }
+
+        [data-theme='light'] .register-page {
+          background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
         }
 
         .register-container {
@@ -155,6 +160,15 @@ export const Register: React.FC = () => {
           font-size: 18px;
           color: #9E9E9E;
           margin: 0;
+        }
+
+        [data-theme='light'] .app-title {
+          color: #FF8F00;
+          text-shadow: 0 0 20px rgba(255, 143, 0, 0.3);
+        }
+
+        [data-theme='light'] .app-subtitle {
+          color: #616161;
         }
 
         .register-form {
@@ -193,6 +207,25 @@ export const Register: React.FC = () => {
 
         .form-input::placeholder {
           color: #607D8B;
+        }
+
+        [data-theme='light'] .form-group label {
+          color: #424242;
+        }
+
+        [data-theme='light'] .form-input {
+          background: #FFFFFF;
+          border-color: #E0E0E0;
+          color: #212121;
+        }
+
+        [data-theme='light'] .form-input:focus {
+          border-color: #FFB300;
+          box-shadow: 0 0 0 3px rgba(255, 179, 0, 0.2);
+        }
+
+        [data-theme='light'] .form-input::placeholder {
+          color: #BDBDBD;
         }
 
         .btn {

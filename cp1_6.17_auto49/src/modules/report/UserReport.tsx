@@ -224,6 +224,12 @@ export const UserReport: React.FC = () => {
                       }}
                     ></div>
                   </div>
+                  <div className="explore-count-section">
+                    <div className="explore-count-item">
+                      <span className="explore-count-label">探索次数</span>
+                      <span className="explore-count-value">{mStats.totalExploreCount} 次</span>
+                    </div>
+                  </div>
                 </div>
               );
             })}
@@ -254,6 +260,72 @@ export const UserReport: React.FC = () => {
           padding: 24px;
           max-width: 1200px;
           margin: 0 auto;
+          transition: background 0.3s ease;
+        }
+
+        [data-theme='light'] .page-title {
+          color: #FF8F00;
+        }
+
+        [data-theme='light'] .page-subtitle {
+          color: #757575;
+        }
+
+        [data-theme='light'] .chart-card {
+          background: #FFFFFF;
+          border-color: #E0E0E0;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        [data-theme='light'] .musician-name {
+          color: #424242;
+        }
+
+        [data-theme='light'] .progress-text {
+          color: #757575;
+        }
+
+        [data-theme='light'] .progress-bar-container {
+          background: #F5F5F5;
+        }
+
+        .explore-count-section {
+          margin-top: 8px;
+        }
+
+        .explore-count-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 6px 0;
+          border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+        }
+
+        .explore-count-item:last-child {
+          border-bottom: none;
+        }
+
+        .explore-count-label {
+          font-size: 13px;
+          color: #9E9E9E;
+        }
+
+        .explore-count-value {
+          font-size: 14px;
+          font-weight: bold;
+          color: #FFD54F;
+        }
+
+        [data-theme='light'] .explore-count-item {
+          border-bottom-color: rgba(0, 0, 0, 0.1);
+        }
+
+        [data-theme='light'] .explore-count-label {
+          color: #757575;
+        }
+
+        [data-theme='light'] .explore-count-value {
+          color: #FF8F00;
         }
 
         .report-header {

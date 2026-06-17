@@ -7,7 +7,7 @@ interface NavigationProps {
 }
 
 export const Navigation: React.FC<NavigationProps> = ({ currentPage, onNavigate }) => {
-  const { userName, totalScore, currentMusicianId, musicians } = useDataStore();
+  const { userName, totalScore, currentMusicianId, musicians, theme, toggleTheme } = useDataStore();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const currentMusician = musicians.find(m => m.id === currentMusicianId);
@@ -58,6 +58,13 @@ export const Navigation: React.FC<NavigationProps> = ({ currentPage, onNavigate 
             </span>
           )}
         </div>
+        <button 
+          className="theme-toggle" 
+          onClick={toggleTheme}
+          title={theme === 'dark' ? '切换到亮色模式' : '切换到暗色模式'}
+        >
+          {theme === 'dark' ? '🌙' : '☀️'}
+        </button>
         <div className="user-score">
           <span className="score-icon">⭐</span>
           <span className="score-value">{totalScore}</span>
@@ -76,6 +83,13 @@ export const Navigation: React.FC<NavigationProps> = ({ currentPage, onNavigate 
           top: 0;
           z-index: 100;
           flex-wrap: wrap;
+          transition: background 0.3s ease;
+        }
+
+        [data-theme='light'] .navigation {
+          background: #FFFFFF;
+          border-bottom: 2px solid #FFB300;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
 
         .nav-header {
@@ -185,6 +199,54 @@ export const Navigation: React.FC<NavigationProps> = ({ currentPage, onNavigate 
           color: #FFD54F;
           font-weight: bold;
           font-size: 16px;
+        }
+
+        .theme-toggle {
+          width: 40px;
+          height: 40px;
+          border: none;
+          background: rgba(255, 213, 79, 0.1);
+          border-radius: 50%;
+          font-size: 20px;
+          cursor: pointer;
+          transition: all 0.3s ease-out;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid #FFD54F;
+        }
+
+        .theme-toggle:hover {
+          transform: scale(1.1) rotate(15deg);
+          box-shadow: 0 0 15px rgba(255, 213, 79, 0.5);
+        }
+
+        [data-theme='light'] .nav-link {
+          color: #424242;
+        }
+
+        [data-theme='light'] .nav-link:hover {
+          background: rgba(255, 179, 0, 0.1);
+          border-color: #FFB300;
+        }
+
+        [data-theme='light'] .nav-link.active {
+          background: rgba(255, 179, 0, 0.2);
+          border-color: #FFB300;
+          color: #E65100;
+        }
+
+        [data-theme='light'] .user-name {
+          color: #424242;
+        }
+
+        [data-theme='light'] .hamburger span {
+          background: #FFB300;
+        }
+
+        [data-theme='light'] .theme-toggle {
+          background: rgba(255, 179, 0, 0.1);
+          border-color: #FFB300;
         }
 
         @media (max-width: 768px) {

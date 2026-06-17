@@ -403,6 +403,62 @@ export const PuzzleGame: React.FC<PuzzleGameProps> = ({ item, onClose, onComplet
           font-style: italic;
         }
 
+        [data-theme='light'] .puzzle-panel {
+          background: #FFFFFF;
+          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        [data-theme='light'] .puzzle-title {
+          color: #FF8F00;
+        }
+
+        [data-theme='light'] .riddle-container {
+          background: #FFF8E1;
+        }
+
+        [data-theme='light'] .riddle-text {
+          color: #212121;
+        }
+
+        [data-theme='light'] .typing-cursor {
+          color: #FF8F00;
+        }
+
+        [data-theme='light'] .puzzle-input {
+          background: #FFFFFF;
+          border-color: #E0E0E0;
+          color: #212121;
+        }
+
+        [data-theme='light'] .puzzle-input:focus {
+          border-color: #FFB300;
+          box-shadow: 0 0 0 3px rgba(255, 179, 0, 0.2);
+        }
+
+        [data-theme='light'] .attempts-info {
+          color: #757575;
+        }
+
+        [data-theme='light'] .attempts-info strong {
+          color: #FF8F00;
+        }
+
+        [data-theme='light'] .success-message p {
+          color: #2E7D32;
+        }
+
+        [data-theme='light'] .error-message p {
+          color: #C62828;
+        }
+
+        [data-theme='light'] .hint-text {
+          color: #9E9E9E;
+        }
+
+        [data-theme='light'] .track-title {
+          color: #E65100;
+        }
+
         @media (max-width: 768px) {
           .puzzle-panel {
             padding: 20px;

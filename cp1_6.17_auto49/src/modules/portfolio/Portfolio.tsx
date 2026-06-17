@@ -177,6 +177,51 @@ export const Portfolio: React.FC = () => {
           padding: 24px;
           max-width: 1200px;
           margin: 0 auto;
+          transition: background 0.3s ease;
+        }
+
+        [data-theme='light'] .page-title {
+          color: #FF8F00;
+        }
+
+        [data-theme='light'] .page-subtitle {
+          color: #757575;
+        }
+
+        [data-theme='light'] .empty-state {
+          color: #757575;
+        }
+
+        [data-theme='light'] .empty-state h3 {
+          color: #424242;
+        }
+
+        [data-theme='light'] .card-front {
+          background: #FFFFFF;
+          border-color: #E0E0E0;
+        }
+
+        [data-theme='light'] .card-back {
+          background: #FFF8E1;
+          border-color: #FFB300;
+        }
+
+        [data-theme='light'] .track-title {
+          color: #212121;
+        }
+
+        [data-theme='light'] .unlock-date {
+          color: #9E9E9E;
+        }
+
+        [data-theme='light'] .stats-footer {
+          background: #FFFFFF;
+          border-top: 2px solid #FFB300;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        [data-theme='light'] .stat-label {
+          color: #757575;
         }
 
         .portfolio-header {

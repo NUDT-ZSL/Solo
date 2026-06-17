@@ -4,7 +4,7 @@ import { audioEngine } from '../audio/AudioEngine';
 import { PuzzleGame } from '../game/PuzzleGame';
 
 export const MapScene: React.FC = () => {
-  const { currentMusicianId, musicItems, musicians, getItemRecord, addExplorationTime, resetLock } = useDataStore();
+  const { currentMusicianId, musicItems, musicians, getItemRecord, addExplorationTime, resetLock, incrementExploreCount, showGuideTip, dismissGuideTip } = useDataStore();
   const [selectedItem, setSelectedItem] = useState<MusicItem | null>(null);
   const [showPuzzle, setShowPuzzle] = useState(false);
   const [, forceUpdate] = useState(0);
@@ -48,13 +48,19 @@ export const MapScene: React.FC = () => {
       resetLock(item.id);
     }
 
+    incrementExploreCount(item.id);
+
+    if (showGuideTip) {
+      dismissGuideTip();
+    }
+
     audioEngine.playByItemId(item.id);
     
     setTimeout(() => {
       setSelectedItem(item);
       setShowPuzzle(true);
     }, 2000);
-  }, [getItemRecord, resetLock]);
+  }, [getItemRecord, resetLock, incrementExploreCount, showGuideTip, dismissGuideTip]);
 
   const handlePuzzleClose = useCallback(() => {
     setShowPuzzle(false);
@@ -67,18 +73,22 @@ export const MapScene: React.FC = () => {
     }
   }, [selectedItem]);
 
-  const getItemStatus = (item: MusicItem): 'unlocked' | 'locked' | 'available' => {
+  const getItemStatus = (item: MusicItem): 'unlocked' | 'locked' | 'explored' | 'available' => {
     const record = getItemRecord(item.id);
     if (!record) return 'available';
     if (record.unlocked) return 'unlocked';
     if (record.lockedUntil && record.lockedUntil > Date.now()) return 'locked';
+    if (record.exploreCount > 0) return 'explored';
     return 'available';
   };
 
-  const getItemUnlockIcon = (item: MusicItem) => {
+  const getItemBadge = (item: MusicItem) => {
     const record = getItemRecord(item.id);
     if (record?.unlocked) {
       return <span className="unlock-star">⭐</span>;
+    }
+    if (record && record.exploreCount > 0) {
+      return <span className="explored-check">✓</span>;
     }
     return null;
   };
@@ -123,9 +133,13 @@ export const MapScene: React.FC = () => {
                     title={status === 'locked' ? '已锁定' : `点击探索${item.name}`}
                   >
                     <div className="item-icon">{item.icon}</div>
-                    <div className="item-glow" style={{ boxShadow: `0 0 20px ${currentMusician.accentColor}` }}></div>
+                    <div className={`item-glow ${status}`} style={{ 
+                      boxShadow: status === 'explored' 
+                        ? '0 0 20px #64B5F6' 
+                        : `0 0 20px ${currentMusician.accentColor}` 
+                    }}></div>
                     <div className="item-label">{item.name}</div>
-                    {getItemUnlockIcon(item)}
+                    {getItemBadge(item)}
                     {status === 'locked' && <div className="lock-icon">🔒</div>}
                   </div>
                 );
@@ -135,10 +149,24 @@ export const MapScene: React.FC = () => {
         </div>
       </div>
 
+      {showGuideTip && (
+        <div className="guide-tip" onClick={dismissGuideTip}>
+          <div className="guide-tip-content">
+            <span className="guide-icon">💡</span>
+            <p>点击发光的物件来探索隐藏的音乐彩蛋</p>
+            <span className="guide-close">点击任意位置继续</span>
+          </div>
+        </div>
+      )}
+
       <div className="scene-legend">
         <div className="legend-item">
           <span className="legend-dot available"></span>
           <span>待探索</span>
+        </div>
+        <div className="legend-item">
+          <span className="legend-dot explored"></span>
+          <span>已探索</span>
         </div>
         <div className="legend-item">
           <span className="legend-dot unlocked"></span>
@@ -296,12 +324,37 @@ export const MapScene: React.FC = () => {
           filter: brightness(1.3);
         }
 
+        .room-item.explored {
+          border-color: #64B5F6;
+        }
+
+        .room-item.explored .item-glow {
+          opacity: 0.4;
+        }
+
         .unlock-star {
           position: absolute;
           top: -8px;
           right: -8px;
           font-size: 20px;
           animation: spin 3s linear infinite;
+          z-index: 3;
+        }
+
+        .explored-check {
+          position: absolute;
+          top: -6px;
+          right: -6px;
+          width: 20px;
+          height: 20px;
+          background: #64B5F6;
+          color: #fff;
+          border-radius: 50%;
+          font-size: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: bold;
           z-index: 3;
         }
 
@@ -325,6 +378,64 @@ export const MapScene: React.FC = () => {
           z-index: 3;
         }
 
+        .guide-tip {
+          position: fixed;
+          bottom: 40px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 100;
+          cursor: pointer;
+          animation: floatUp 0.5s ease-out, pulseGlow 2s ease-in-out infinite;
+        }
+
+        @keyframes floatUp {
+          from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+          }
+        }
+
+        @keyframes pulseGlow {
+          0%, 100% {
+            filter: drop-shadow(0 0 10px rgba(255, 213, 79, 0.5));
+          }
+          50% {
+            filter: drop-shadow(0 0 20px rgba(255, 213, 79, 0.8));
+          }
+        }
+
+        .guide-tip-content {
+          background: rgba(30, 30, 46, 0.95);
+          border: 2px solid #FFD54F;
+          border-radius: 12px;
+          padding: 16px 24px;
+          text-align: center;
+          backdrop-filter: blur(10px);
+        }
+
+        .guide-icon {
+          font-size: 28px;
+          display: block;
+          margin-bottom: 8px;
+        }
+
+        .guide-tip-content p {
+          color: #E0E0E0;
+          margin: 0 0 8px 0;
+          font-size: 15px;
+          font-weight: 500;
+        }
+
+        .guide-close {
+          color: #9E9E9E;
+          font-size: 12px;
+          opacity: 0.7;
+        }
+
         .scene-legend {
           display: flex;
           gap: 24px;
@@ -332,6 +443,10 @@ export const MapScene: React.FC = () => {
           padding: 16px 24px;
           background: #1E1E2E;
           border-radius: 8px;
+        }
+
+        [data-theme='light'] .scene-legend {
+          background: #F5F5F5;
         }
 
         .legend-item {
@@ -351,6 +466,11 @@ export const MapScene: React.FC = () => {
         .legend-dot.available {
           background: #FFD54F;
           box-shadow: 0 0 8px #FFD54F;
+        }
+
+        .legend-dot.explored {
+          background: #64B5F6;
+          box-shadow: 0 0 8px #64B5F6;
         }
 
         .legend-dot.unlocked {

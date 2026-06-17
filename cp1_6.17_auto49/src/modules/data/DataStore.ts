@@ -35,7 +35,10 @@ export interface ExplorationRecord {
   unlockedAt: number | null;
   lockedUntil: number | null;
   explorationTime: number;
+  exploreCount: number;
 }
+
+export type ThemeMode = 'dark' | 'light';
 
 export interface DataStoreState {
   userName: string | null;
@@ -45,21 +48,26 @@ export interface DataStoreState {
   explorationRecords: ExplorationRecord[];
   totalScore: number;
   currentPage: 'register' | 'map' | 'portfolio' | 'report';
+  theme: ThemeMode;
+  showGuideTip: boolean;
   
   setUserName: (name: string) => void;
   setCurrentMusician: (musicianId: MusicianId) => void;
   setCurrentPage: (page: 'register' | 'map' | 'portfolio' | 'report') => void;
   recordExploration: (itemId: string, correct: boolean, attempts: number) => void;
   addExplorationTime: (musicianId: MusicianId, seconds: number) => void;
+  incrementExploreCount: (itemId: string) => void;
   getItemRecord: (itemId: string) => ExplorationRecord | undefined;
   getUnlockedTracks: () => Array<{ item: MusicItem; record: ExplorationRecord }>;
   getStats: () => {
     totalUnlocked: number;
     totalExplored: number;
     avgAttempts: number;
-    perMusicianStats: Record<MusicianId, { unlocked: number; total: number; explorationTime: number }>;
+    perMusicianStats: Record<MusicianId, { unlocked: number; total: number; explorationTime: number; totalExploreCount: number }>;
   };
   resetLock: (itemId: string) => void;
+  toggleTheme: () => void;
+  dismissGuideTip: () => void;
 }
 
 export const musicians: Musician[] = [
@@ -273,18 +281,63 @@ function generateMusicItems(): MusicItem[] {
 
 export const musicItems = generateMusicItems();
 
+const STORAGE_KEY = 'music-easter-egg-data';
+
+function loadFromStorage(): Partial<DataStoreState> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (e) {
+    console.error('Failed to load from localStorage:', e);
+  }
+  return {};
+}
+
+function saveToStorage(state: DataStoreState): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const toSave = {
+      userName: state.userName,
+      currentMusicianId: state.currentMusicianId,
+      explorationRecords: state.explorationRecords,
+      totalScore: state.totalScore,
+      theme: state.theme,
+      showGuideTip: state.showGuideTip
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+  } catch (e) {
+    console.error('Failed to save to localStorage:', e);
+  }
+}
+
+const storedData = loadFromStorage();
+
 export const useDataStore = create<DataStoreState>((set, get) => ({
-  userName: null,
-  currentMusicianId: null,
+  userName: storedData.userName ?? null,
+  currentMusicianId: storedData.currentMusicianId ?? null,
   musicians,
   musicItems,
-  explorationRecords: [],
-  totalScore: 0,
-  currentPage: 'register',
+  explorationRecords: storedData.explorationRecords ?? [],
+  totalScore: storedData.totalScore ?? 0,
+  currentPage: storedData.userName && storedData.currentMusicianId ? 'map' : 'register',
+  theme: storedData.theme ?? 'dark',
+  showGuideTip: storedData.showGuideTip !== false,
 
-  setUserName: (name: string) => set({ userName: name }),
-  setCurrentMusician: (musicianId: MusicianId) => set({ currentMusicianId: musicianId }),
-  setCurrentPage: (page) => set({ currentPage: page }),
+  setUserName: (name: string) => {
+    set({ userName: name });
+    saveToStorage(get());
+  },
+  setCurrentMusician: (musicianId: MusicianId) => {
+    set({ currentMusicianId: musicianId });
+    saveToStorage(get());
+  },
+  setCurrentPage: (page) => {
+    set({ currentPage: page });
+    saveToStorage(get());
+  },
 
   recordExploration: (itemId: string, correct: boolean, attempts: number) => {
     const state = get();
@@ -310,10 +363,12 @@ export const useDataStore = create<DataStoreState>((set, get) => ({
         }
         return r;
       });
-      set({
+      const newState = {
         explorationRecords: updatedRecords,
         totalScore: correct ? state.totalScore + 10 : state.totalScore
-      });
+      };
+      set(newState);
+      saveToStorage({ ...state, ...newState });
     } else {
       const locked = attempts >= 3 && !correct;
       const newRecord: ExplorationRecord = {
@@ -323,12 +378,15 @@ export const useDataStore = create<DataStoreState>((set, get) => ({
         unlocked: correct,
         unlockedAt: correct ? now : null,
         lockedUntil: locked ? now + 10 * 60 * 1000 : null,
-        explorationTime: 0
+        explorationTime: 0,
+        exploreCount: 1
       };
-      set({
+      const newState = {
         explorationRecords: [...state.explorationRecords, newRecord],
         totalScore: correct ? state.totalScore + 10 : state.totalScore
-      });
+      };
+      set(newState);
+      saveToStorage({ ...state, ...newState });
     }
   },
 
@@ -340,7 +398,43 @@ export const useDataStore = create<DataStoreState>((set, get) => ({
       }
       return r;
     });
-    set({ explorationRecords: updatedRecords });
+    const newState = { explorationRecords: updatedRecords };
+    set(newState);
+    saveToStorage({ ...state, ...newState });
+  },
+
+  incrementExploreCount: (itemId: string) => {
+    const state = get();
+    const existing = state.explorationRecords.find(r => r.itemId === itemId);
+    const item = state.musicItems.find(i => i.id === itemId);
+
+    if (existing) {
+      const updatedRecords = state.explorationRecords.map(r => {
+        if (r.itemId === itemId) {
+          return { ...r, exploreCount: r.exploreCount + 1 };
+        }
+        return r;
+      });
+      const newState = { explorationRecords: updatedRecords };
+      set(newState);
+      saveToStorage({ ...state, ...newState });
+    } else if (item) {
+      const newRecord: ExplorationRecord = {
+        itemId,
+        musicianId: item.musicianId,
+        attempts: 0,
+        unlocked: false,
+        unlockedAt: null,
+        lockedUntil: null,
+        explorationTime: 0,
+        exploreCount: 1
+      };
+      const newState = {
+        explorationRecords: [...state.explorationRecords, newRecord]
+      };
+      set(newState);
+      saveToStorage({ ...state, ...newState });
+    }
   },
 
   getItemRecord: (itemId: string) => {
@@ -360,12 +454,12 @@ export const useDataStore = create<DataStoreState>((set, get) => ({
 
   getStats: () => {
     const state = get();
-    const perMusicianStats: Record<MusicianId, { unlocked: number; total: number; explorationTime: number }> = {
-      galaxy: { unlocked: 0, total: 0, explorationTime: 0 },
-      jazzCat: { unlocked: 0, total: 0, explorationTime: 0 },
-      electronicRain: { unlocked: 0, total: 0, explorationTime: 0 },
-      mountainWind: { unlocked: 0, total: 0, explorationTime: 0 },
-      lonelyStar: { unlocked: 0, total: 0, explorationTime: 0 }
+    const perMusicianStats: Record<MusicianId, { unlocked: number; total: number; explorationTime: number; totalExploreCount: number }> = {
+      galaxy: { unlocked: 0, total: 0, explorationTime: 0, totalExploreCount: 0 },
+      jazzCat: { unlocked: 0, total: 0, explorationTime: 0, totalExploreCount: 0 },
+      electronicRain: { unlocked: 0, total: 0, explorationTime: 0, totalExploreCount: 0 },
+      mountainWind: { unlocked: 0, total: 0, explorationTime: 0, totalExploreCount: 0 },
+      lonelyStar: { unlocked: 0, total: 0, explorationTime: 0, totalExploreCount: 0 }
     };
 
     state.musicItems.forEach(item => {
@@ -379,9 +473,12 @@ export const useDataStore = create<DataStoreState>((set, get) => ({
       if (record.unlocked) {
         perMusicianStats[record.musicianId].unlocked++;
       }
+      if (record.exploreCount > 0) {
+        totalExplored++;
+      }
       totalAttempts += record.attempts;
-      totalExplored++;
       perMusicianStats[record.musicianId].explorationTime += record.explorationTime;
+      perMusicianStats[record.musicianId].totalExploreCount += record.exploreCount;
     });
 
     const totalUnlocked = state.explorationRecords.filter(r => r.unlocked).length;
@@ -402,6 +499,27 @@ export const useDataStore = create<DataStoreState>((set, get) => ({
       }
       return r;
     });
-    set({ explorationRecords: updatedRecords });
+    const newState = { explorationRecords: updatedRecords };
+    set(newState);
+    saveToStorage({ ...state, ...newState });
+  },
+
+  toggleTheme: () => {
+    const state = get();
+    const newTheme = state.theme === 'dark' ? 'light' : 'dark';
+    set({ theme: newTheme });
+    saveToStorage({ ...state, theme: newTheme });
+    document.documentElement.setAttribute('data-theme', newTheme);
+  },
+
+  dismissGuideTip: () => {
+    const state = get();
+    set({ showGuideTip: false });
+    saveToStorage({ ...state, showGuideTip: false });
   }
 }));
+
+if (typeof window !== 'undefined') {
+  const currentTheme = storedData.theme ?? 'dark';
+  document.documentElement.setAttribute('data-theme', currentTheme);
+}
