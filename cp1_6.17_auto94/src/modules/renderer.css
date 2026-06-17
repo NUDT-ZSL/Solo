@@ -57,11 +57,24 @@
 }
 
 .language-label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--comment);
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  color: var(--label-text);
+  background-color: var(--label-bg);
+  padding: 4px 10px;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: 1px solid var(--label-text);
+  border-color: var(--label-text);
+  opacity: 0.9;
+  transition: all 0.2s ease;
+}
+
+.language-label:hover {
+  opacity: 1;
+  transform: scale(1.02);
 }
 
 .code-container {

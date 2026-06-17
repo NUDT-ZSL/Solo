@@ -96,11 +96,31 @@ const cardBackgrounds: Record<Theme, string> = {
   'github-dark': '#282c34',
 }
 
+const languageLabelColors: Record<Theme, { bg: string; text: string }> = {
+  monokai: { bg: 'rgba(249, 38, 114, 0.15)', text: '#f92672' },
+  dracula: { bg: 'rgba(189, 147, 249, 0.15)', text: '#bd93f9' },
+  'solarized-light': { bg: 'rgba(181, 137, 0, 0.15)', text: '#b58900' },
+  'github-dark': { bg: 'rgba(121, 192, 255, 0.15)', text: '#79c0ff' },
+}
+
+const languageDisplayNames: Record<string, string> = {
+  javascript: 'JavaScript',
+  typescript: 'TypeScript',
+  python: 'Python',
+  html: 'HTML',
+  css: 'CSS',
+}
+
+function formatLanguageName(lang: string): string {
+  return languageDisplayNames[lang.toLowerCase()] || lang.toUpperCase()
+}
+
 export const Renderer: React.ForwardRefExoticComponent<RendererProps & React.RefAttributes<HTMLDivElement>> =
   React.forwardRef<HTMLDivElement, RendererProps>(({ highlightedHtml, theme, cardStyle, language }, ref) => {
     const colors = themeColors[theme]
     const gradient = gradients[cardStyle.gradient]
     const cardBg = cardBackgrounds[theme]
+    const labelColors = languageLabelColors[theme]
 
     const containerStyle = useMemo<React.CSSProperties>(() => ({
       '--card-bg': cardBg,
@@ -119,7 +139,9 @@ export const Renderer: React.ForwardRefExoticComponent<RendererProps & React.Ref
       '--shadow-x': `${cardStyle.shadowOffsetX}px`,
       '--shadow-y': `${cardStyle.shadowOffsetY}px`,
       '--gradient': gradient,
-    } as React.CSSProperties), [cardStyle, colors, gradient, cardBg])
+      '--label-bg': labelColors.bg,
+      '--label-text': labelColors.text,
+    } as React.CSSProperties), [cardStyle, colors, gradient, cardBg, labelColors])
 
     const cardStyleObj = useMemo<React.CSSProperties>(() => {
       const style: React.CSSProperties = {
@@ -153,7 +175,7 @@ export const Renderer: React.ForwardRefExoticComponent<RendererProps & React.Ref
               <span className="dot dot-yellow"></span>
               <span className="dot dot-green"></span>
             </div>
-            <span className="language-label">{language.toUpperCase()}</span>
+            <span className="language-label">{formatLanguageName(language)}</span>
           </div>
           <div className="code-container" style={codeContainerStyle}>
             <pre
