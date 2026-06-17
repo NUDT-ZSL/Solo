@@ -1,0 +1,59 @@
+[
+  {
+    "id": "sample-log-1",
+    "date": "2026-06-17",
+    "ingredients": [
+      { "name": "高筋面粉", "quantity": 12.5 },
+      { "name": "黄油", "quantity": 3.2 },
+      { "name": "细砂糖", "quantity": 4.8 },
+      { "name": "鸡蛋", "quantity": 6.0 },
+      { "name": "鲜奶油", "quantity": 2.5 }
+    ],
+    "products": [
+      { "name": "法式牛角包", "quantity": 40 },
+      { "name": "全麦面包", "quantity": 20 },
+      { "name": "巧克力蛋糕", "quantity": 8 }
+    ],
+    "notes": "今日天气炎热，面团发酵时间需适当缩短。牛角包层次分明，顾客反馈良好。",
+    "createdAt": "2026-06-17T20:00:00.000Z",
+    "updatedAt": "2026-06-17T20:00:00.000Z"
+  },
+  {
+    "id": "sample-log-2",
+    "date": "2026-06-16",
+    "ingredients": [
+      { "name": "低筋面粉", "quantity": 8.0 },
+      { "name": "黄油", "quantity": 4.5 },
+      { "name": "细砂糖", "quantity": 3.6 },
+      { "name": "奶油芝士", "quantity": 5.0 },
+      { "name": "草莓", "quantity": 3.0 }
+    ],
+    "products": [
+      { "name": "草莓慕斯", "quantity": 15 },
+      { "name": "芝士蛋糕", "quantity": 10 },
+      { "name": "奶酥吐司", "quantity": 25 }
+    ],
+    "notes": "草莓新鲜度高，慕斯口感细腻。今日订单量较多，提前备料。",
+    "createdAt": "2026-06-16T20:30:00.000Z",
+    "updatedAt": "2026-06-16T20:30:00.000Z"
+  },
+  {
+    "id": "sample-log-3",
+    "date": "2026-06-15",
+    "ingredients": [
+      { "name": "高筋面粉", "quantity": 10.0 },
+      { "name": "黄油", "quantity": 2.8 },
+      { "name": "可可粉", "quantity": 1.5 },
+      { "name": "鸡蛋", "quantity": 8.0 },
+      { "name": "巧克力", "quantity": 2.0 }
+    ],
+    "products": [
+      { "name": "巧克力布朗尼", "quantity": 12 },
+      { "name": "软欧包", "quantity": 18 },
+      { "name": "泡芙", "quantity": 30 }
+    ],
+    "notes": "尝试新款巧克力布朗尼配方，可可含量70%，效果不错。",
+    "createdAt": "2026-06-15T19:45:00.000Z",
+    "updatedAt": "2026-06-15T19:45:00.000Z"
+  }
+]

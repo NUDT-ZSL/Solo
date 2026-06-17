@@ -1,0 +1,51 @@
+[
+  {
+    "id": "sample-order-1",
+    "orderNo": "BK20240617",
+    "customerName": "张小明",
+    "phone": "13800138001",
+    "items": [
+      { "name": "法式牛角包", "quantity": 4 },
+      { "name": "巧克力蛋糕", "quantity": 1 },
+      { "name": "全麦面包", "quantity": 2 }
+    ],
+    "status": "new",
+    "createdAt": "2026-06-17T08:30:00.000Z"
+  },
+  {
+    "id": "sample-order-2",
+    "orderNo": "BK20240618",
+    "customerName": "李美丽",
+    "phone": "13900139002",
+    "items": [
+      { "name": "草莓慕斯", "quantity": 2 },
+      { "name": "奶酥吐司", "quantity": 1 }
+    ],
+    "status": "processing",
+    "createdAt": "2026-06-17T09:15:00.000Z"
+  },
+  {
+    "id": "sample-order-3",
+    "orderNo": "BK20240619",
+    "customerName": "王大厨",
+    "phone": "13700137003",
+    "items": [
+      { "name": "生日蛋糕(8寸)", "quantity": 1 },
+      { "name": "曲奇饼干", "quantity": 3 }
+    ],
+    "status": "completed",
+    "createdAt": "2026-06-16T14:00:00.000Z"
+  },
+  {
+    "id": "sample-order-4",
+    "orderNo": "BK20240620",
+    "customerName": "赵阿姨",
+    "phone": "13600136004",
+    "items": [
+      { "name": "肉松小贝", "quantity": 6 },
+      { "name": "柠檬塔", "quantity": 2 }
+    ],
+    "status": "new",
+    "createdAt": "2026-06-17T10:05:00.000Z"
+  }
+]
