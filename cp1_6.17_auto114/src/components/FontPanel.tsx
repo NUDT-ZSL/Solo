@@ -7,16 +7,24 @@ import {
 } from '../context/FontContext';
 import { Preset } from '../utils/presets';
 
-const FONT_PREVIEW = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789';
+const FONT_PREVIEW_ALPHANUM = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789';
+const FONT_PREVIEW_MIXED = 'Aa Bb 中文 123';
+
+function getFontShortName(font: string): string {
+  const first = font.split(' ')[0];
+  return first.length > 9 ? first.slice(0, 9) : first;
+}
 
 function FontSelect({
   value,
   onChange,
   label,
+  weight,
 }: {
   value: string;
   onChange: (font: string) => void;
   label: string;
+  weight: number;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -30,11 +38,25 @@ function FontSelect({
 
   const currentPreview = useMemo(
     () => (
-      <span style={{ fontFamily: value, fontSize: '12px', color: '#64748B' }}>
-        {FONT_PREVIEW}
-      </span>
+      <>
+        <span style={{ fontFamily: value, fontSize: '12px', color: '#64748B', display: 'block' }}>
+          {FONT_PREVIEW_ALPHANUM}
+        </span>
+        <span
+          style={{
+            fontFamily: value,
+            fontSize: '13px',
+            fontWeight: weight,
+            color: '#334155',
+            display: 'block',
+            marginTop: '4px',
+          }}
+        >
+          {FONT_PREVIEW_MIXED}
+        </span>
+      </>
     ),
-    [value]
+    [value, weight]
   );
 
   return (
@@ -46,7 +68,7 @@ function FontSelect({
           className={`font-select-trigger ${open ? 'open' : ''}`}
           onClick={() => setOpen(!open)}
         >
-          <span className="font-select-value" style={{ fontFamily: value }}>
+          <span className="font-select-value" style={{ fontFamily: value, fontWeight: weight }}>
             {value}
           </span>
           <svg
@@ -71,11 +93,14 @@ function FontSelect({
                 className={`font-option ${font === value ? 'active' : ''}`}
                 onClick={() => handleSelect(font)}
               >
-                <div className="font-option-name" style={{ fontFamily: font }}>
+                <div className="font-option-name" style={{ fontFamily: font, fontWeight: weight }}>
                   {font}
                 </div>
                 <div className="font-option-preview" style={{ fontFamily: font }}>
-                  {FONT_PREVIEW}
+                  {FONT_PREVIEW_ALPHANUM}
+                </div>
+                <div className="font-option-preview-mixed" style={{ fontFamily: font, fontWeight: weight }}>
+                  {FONT_PREVIEW_MIXED}
                 </div>
               </button>
             ))}
@@ -166,6 +191,9 @@ function PresetCard({
   onLoad: () => void;
   onRemove: () => void;
 }) {
+  const shortHeading = useMemo(() => getFontShortName(preset.headingFont), [preset.headingFont]);
+  const shortBody = useMemo(() => getFontShortName(preset.bodyFont), [preset.bodyFont]);
+
   return (
     <div className="preset-card" onClick={onLoad} title={preset.name}>
       <div
@@ -173,12 +201,17 @@ function PresetCard({
         style={{ backgroundColor: preset.backgroundColor }}
       />
       <div className="preset-card-content">
-        <span className="preset-heading" style={{ fontFamily: preset.headingFont }}>
-          Aa
-        </span>
-        <span className="preset-body" style={{ fontFamily: preset.bodyFont }}>
-          Bb
-        </span>
+        <div className="preset-card-sample">
+          <span className="preset-heading" style={{ fontFamily: preset.headingFont }}>
+            Aa
+          </span>
+          <span className="preset-body" style={{ fontFamily: preset.bodyFont }}>
+            Bb
+          </span>
+        </div>
+        <div className="preset-card-names">
+          {shortHeading} / {shortBody}
+        </div>
       </div>
       <button
         type="button"
@@ -232,6 +265,7 @@ export default function FontPanel() {
         label="标题字体"
         value={ctx.headingFont}
         onChange={ctx.setHeadingFont}
+        weight={ctx.headingWeight}
       />
 
       <WeightSelector
@@ -245,6 +279,7 @@ export default function FontPanel() {
         label="正文字体"
         value={ctx.bodyFont}
         onChange={ctx.setBodyFont}
+        weight={ctx.bodyWeight}
       />
 
       <WeightSelector
@@ -297,15 +332,17 @@ export default function FontPanel() {
       <div>
         <label className="panel-label">背景颜色</label>
         <div className="bg-colors">
-          {BACKGROUND_COLORS.map((color) => (
+          {BACKGROUND_COLORS.map((bg) => (
             <button
-              key={color}
+              key={bg.value}
               type="button"
-              className={`bg-color-btn ${ctx.backgroundColor === color ? 'active' : ''}`}
-              style={{ backgroundColor: color }}
-              onClick={() => ctx.setBackgroundColor(color)}
-              title={color}
-            />
+              className={`bg-color-btn ${ctx.backgroundColor === bg.value ? 'active' : ''}`}
+              style={{ backgroundColor: bg.value }}
+              onClick={() => ctx.setBackgroundColor(bg.value)}
+              title={`${bg.label}（${bg.value}）`}
+            >
+              <span className="bg-color-label">{bg.label}</span>
+            </button>
           ))}
         </div>
       </div>

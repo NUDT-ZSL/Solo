@@ -19,15 +19,38 @@ export const FONT_OPTIONS = [
   'Noto Sans SC',
 ];
 
-export const BACKGROUND_COLORS = [
-  '#FFFFFF',
-  '#F5F3EE',
-  '#1E293B',
-  '#FDE047',
-  '#ECFDF5',
+export interface BackgroundColorOption {
+  value: string;
+  label: string;
+}
+
+export const BACKGROUND_COLORS: BackgroundColorOption[] = [
+  { value: '#FFFFFF', label: '白色' },
+  { value: '#F5F3EE', label: '米色' },
+  { value: '#1E293B', label: '深色' },
+  { value: '#FDE047', label: '明黄' },
+  { value: '#ECFDF5', label: '薄荷绿' },
 ];
 
 export const FONT_WEIGHTS = [300, 400, 500, 600, 700];
+
+export const DEFAULT_PREVIEW_TEXT = {
+  h1: '字体排印的艺术',
+  h2: 'The Art of Typography in Modern Design',
+  p1: '字体排印是视觉传达的核心要素之一。好的字体搭配能够引导读者的视线，传达信息的层次与情感，让阅读成为一种愉悦的体验。在网页设计中，标题字体与正文字体的搭配尤为重要——标题需要醒目而有个性，正文则需要舒适耐读，两者之间需要保持和谐的视觉节奏。Typography is the art and technique of arranging type to make written language legible, readable, and appealing when displayed.',
+  blockquote: '"字体不仅仅是文字的载体，更是情感与个性的表达。优秀的设计师懂得如何用字体讲故事。"',
+  cite: '— Robert Bringhurst,《The Elements of Typographic Style》',
+  p2: '当我们选择字体组合时，需要考虑多方面的因素：字形的对比与协调、字重的层次感、行距与段落间距的呼吸感，以及在不同背景色下的可读性。这款工具正是为了帮助您直观地探索这些变量，找到最适合您项目的字体搭配方案。',
+};
+
+export interface PreviewText {
+  h1: string;
+  h2: string;
+  p1: string;
+  blockquote: string;
+  cite: string;
+  p2: string;
+}
 
 interface FontState {
   headingFont: string;
@@ -39,6 +62,7 @@ interface FontState {
   lineHeight: number;
   headingSpacing: number;
   backgroundColor: string;
+  previewText: PreviewText;
 }
 
 interface FontContextType extends FontState {
@@ -51,6 +75,7 @@ interface FontContextType extends FontState {
   setLineHeight: (lh: number) => void;
   setHeadingSpacing: (spacing: number) => void;
   setBackgroundColor: (color: string) => void;
+  setPreviewText: (text: PreviewText) => void;
   presets: Preset[];
   saveCurrentAsPreset: () => void;
   loadPreset: (preset: Preset) => void;
@@ -67,6 +92,7 @@ const defaultState: FontState = {
   lineHeight: 1.6,
   headingSpacing: 24,
   backgroundColor: '#FFFFFF',
+  previewText: { ...DEFAULT_PREVIEW_TEXT },
 };
 
 const FontContext = createContext<FontContextType | undefined>(undefined);
@@ -81,6 +107,7 @@ export function FontProvider({ children }: { children: React.ReactNode }) {
   const [lineHeight, setLineHeightState] = useState(defaultState.lineHeight);
   const [headingSpacing, setHeadingSpacingState] = useState(defaultState.headingSpacing);
   const [backgroundColor, setBackgroundColorState] = useState(defaultState.backgroundColor);
+  const [previewText, setPreviewTextState] = useState<PreviewText>(defaultState.previewText);
   const [presets, setPresets] = useState<Preset[]>(() => loadPresets());
 
   const setHeadingFont = useCallback((font: string) => setHeadingFontState(font), []);
@@ -92,6 +119,7 @@ export function FontProvider({ children }: { children: React.ReactNode }) {
   const setLineHeight = useCallback((lh: number) => setLineHeightState(lh), []);
   const setHeadingSpacing = useCallback((s: number) => setHeadingSpacingState(s), []);
   const setBackgroundColor = useCallback((c: string) => setBackgroundColorState(c), []);
+  const setPreviewText = useCallback((t: PreviewText) => setPreviewTextState(t), []);
 
   const saveCurrentAsPreset = useCallback(() => {
     const updated = savePreset({
@@ -104,6 +132,7 @@ export function FontProvider({ children }: { children: React.ReactNode }) {
       lineHeight,
       headingSpacing,
       backgroundColor,
+      previewText,
     });
     setPresets(updated);
   }, [
@@ -116,6 +145,7 @@ export function FontProvider({ children }: { children: React.ReactNode }) {
     lineHeight,
     headingSpacing,
     backgroundColor,
+    previewText,
   ]);
 
   const loadPreset = useCallback((preset: Preset) => {
@@ -128,6 +158,9 @@ export function FontProvider({ children }: { children: React.ReactNode }) {
     setLineHeightState(preset.lineHeight);
     setHeadingSpacingState(preset.headingSpacing);
     setBackgroundColorState(preset.backgroundColor);
+    if (preset.previewText) {
+      setPreviewTextState(preset.previewText);
+    }
   }, []);
 
   const removePreset = useCallback((id: string) => {
@@ -146,6 +179,7 @@ export function FontProvider({ children }: { children: React.ReactNode }) {
       lineHeight,
       headingSpacing,
       backgroundColor,
+      previewText,
       setHeadingFont,
       setBodyFont,
       setHeadingWeight,
@@ -155,6 +189,7 @@ export function FontProvider({ children }: { children: React.ReactNode }) {
       setLineHeight,
       setHeadingSpacing,
       setBackgroundColor,
+      setPreviewText,
       presets,
       saveCurrentAsPreset,
       loadPreset,
@@ -170,6 +205,7 @@ export function FontProvider({ children }: { children: React.ReactNode }) {
       lineHeight,
       headingSpacing,
       backgroundColor,
+      previewText,
       setHeadingFont,
       setBodyFont,
       setHeadingWeight,
@@ -179,6 +215,7 @@ export function FontProvider({ children }: { children: React.ReactNode }) {
       setLineHeight,
       setHeadingSpacing,
       setBackgroundColor,
+      setPreviewText,
       presets,
       saveCurrentAsPreset,
       loadPreset,

@@ -1,3 +1,12 @@
+export interface PreviewText {
+  h1: string;
+  h2: string;
+  p1: string;
+  blockquote: string;
+  cite: string;
+  p2: string;
+}
+
 export interface Preset {
   id: string;
   name: string;
@@ -10,6 +19,7 @@ export interface Preset {
   lineHeight: number;
   headingSpacing: number;
   backgroundColor: string;
+  previewText?: PreviewText;
   createdAt: string;
 }
 
