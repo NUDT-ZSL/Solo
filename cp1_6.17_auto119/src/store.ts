@@ -15,14 +15,23 @@ export interface Screenshot {
   fixations: FixationPoint[]
 }
 
+export type ColorMapType = 'greenYellowRed' | 'blueRed'
+
+export type ChartMode = 'bar' | 'stackedTimeline'
+
 export interface HeatmapParams {
   blurRadius: number
   opacity: number
+  colorMap: ColorMapType
 }
 
 export interface SaccadeParams {
   lineColor: string
   lineWidth: number
+}
+
+export interface ChartParams {
+  mode: ChartMode
 }
 
 export type EventType =
@@ -31,6 +40,7 @@ export type EventType =
   | 'screenshot:switched'
   | 'heatmap:params-changed'
   | 'saccade:params-changed'
+  | 'chart:params-changed'
   | 'store:updated'
 
 export type EventHandler = (...args: any[]) => void
@@ -48,11 +58,15 @@ class Store {
   private currentScreenshotId: string | null = null
   private heatmapParams: HeatmapParams = {
     blurRadius: 15,
-    opacity: 0.6
+    opacity: 0.6,
+    colorMap: 'greenYellowRed'
   }
   private saccadeParams: SaccadeParams = {
     lineColor: COLOR_PALETTE[0],
     lineWidth: 2
+  }
+  private chartParams: ChartParams = {
+    mode: 'bar'
   }
   private colorPalette = COLOR_PALETTE
   private eventHandlers: Map<EventType, Set<EventHandler>> = new Map()
@@ -80,6 +94,10 @@ class Store {
 
   getSaccadeParams(): SaccadeParams {
     return { ...this.saccadeParams }
+  }
+
+  getChartParams(): ChartParams {
+    return { ...this.chartParams }
   }
 
   addScreenshot(screenshot: Omit<Screenshot, 'id'>): Screenshot | null {
@@ -123,6 +141,12 @@ class Store {
   setSaccadeParams(params: Partial<SaccadeParams>): void {
     this.saccadeParams = { ...this.saccadeParams, ...params }
     this.emit('saccade:params-changed', this.saccadeParams)
+    this.emit('store:updated')
+  }
+
+  setChartParams(params: Partial<ChartParams>): void {
+    this.chartParams = { ...this.chartParams, ...params }
+    this.emit('chart:params-changed', this.chartParams)
     this.emit('store:updated')
   }
 
