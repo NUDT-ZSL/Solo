@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>延迟补偿卡牌对战</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0d1117;
+      color: #e6edf3;
+      font-family: 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    #game-container {
+      position: relative;
+      width: 1280px;
+      height: 720px;
+      background: #0d1117;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #latency-panel {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 14px;
+      z-index: 100;
+      min-width: 140px;
+    }
+
+    #latency-value {
+      font-weight: bold;
+      font-size: 18px;
+    }
+
+    #queue-count {
+      margin-top: 4px;
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    #game-table {
+      position: absolute;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 900px;
+      height: 520px;
+      background: #1a1a2e;
+      border-radius: 16px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    }
+
+    #player-panel {
+      position: absolute;
+      top: 100px;
+      left: 40px;
+      width: 180px;
+      z-index: 10;
+    }
+
+    #ai-panel {
+      position: absolute;
+      top: 100px;
+      right: 40px;
+      width: 180px;
+      z-index: 10;
+      text-align: right;
+    }
+
+    .player-avatar {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    .ai-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #6e7681;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 8px;
+      opacity: 0.7;
+    }
+
+    .player-name {
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    .hand-count {
+      font-size: 13px;
+      opacity: 0.8;
+      margin-bottom: 8px;
+    }
+
+    .health-bar-container {
+      width: 160px;
+      height: 16px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .health-bar {
+      height: 100%;
+      border-radius: 8px;
+      transition: width 0.3s ease, background-color 0.3s ease;
+    }
+
+    #turn-indicator {
+      position: absolute;
+      bottom: 180px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 18px;
+      font-weight: bold;
+      padding: 8px 24px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      animation: pulse 0.6s ease-in-out infinite alternate;
+    }
+
+    @keyframes pulse {
+      from {
+        transform: translateX(-50%) scale(1);
+      }
+      to {
+        transform: translateX(-50%) scale(1.05);
+      }
+    }
+
+    #play-area {
+      position: absolute;
+      bottom: 200px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 240px;
+      height: 120px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      border: 2px dashed rgba(255, 255, 255, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #play-area.drag-over {
+      border-color: #448aff;
+      background: rgba(68, 138, 255, 0.1);
+    }
+
+    #played-card {
+      position: absolute;
+      transition: all 0.2s ease-out;
+    }
+
+    #hand-area {
+      position: absolute;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      z-index: 50;
+    }
+
+    .card {
+      width: 60px;
+      height: 90px;
+      background: #1a237e;
+      border-radius: 8px;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: grab;
+      user-select: none;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.4s ease;
+      position: relative;
+      border: 2px solid transparent;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    .card:hover {
+      transform: scale(1.1) translateY(-10px);
+      border-color: #ffd700;
+      box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+      z-index: 60;
+    }
+
+    .card.dragging {
+      cursor: grabbing;
+      position: fixed;
+      z-index: 1000;
+      pointer-events: none;
+      transform: scale(1.05);
+      opacity: 0.9;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    }
+
+    .card.playing {
+      animation: flyToPlay 0.2s ease-out forwards;
+    }
+
+    .card.rolling-back {
+      animation: rollback 0.4s ease-in forwards;
+    }
+
+    @keyframes flyToPlay {
+      to {
+        transform: translateY(-200px) scale(1.2);
+        opacity: 0.3;
+      }
+    }
+
+    @keyframes rollback {
+      from {
+        opacity: 0.3;
+        transform: translateY(-200px) scale(1.2);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .card .card-value {
+      font-size: 24px;
+      margin-bottom: 4px;
+    }
+
+    .card .card-suit {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    .flash-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border-radius: 12px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease-out;
+    }
+
+    .flash-overlay.play-flash {
+      background: rgba(68, 138, 255, 0.4);
+      animation: flashPlay 0.15s ease-out;
+    }
+
+    .flash-overlay.rollback-flash {
+      background: rgba(255, 82, 82, 0.4);
+      animation: flashRollback 0.3s ease-out;
+    }
+
+    @keyframes flashPlay {
+      0% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    @keyframes flashRollback {
+      0% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    #stats-panel {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 16px;
+      padding: 32px 48px;
+      text-align: center;
+      z-index: 200;
+      display: none;
+      min-width: 360px;
+    }
+
+    #stats-panel h2 {
+      margin-bottom: 20px;
+      font-size: 24px;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      font-size: 16px;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .stat-row:last-child {
+      border-bottom: none;
+    }
+
+    .stat-label {
+      opacity: 0.8;
+    }
+
+    .stat-value {
+      font-weight: bold;
+      color: #58a6ff;
+    }
+
+    #restart-btn {
+      margin-top: 24px;
+      padding: 12px 32px;
+      background: #238636;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    #restart-btn:hover {
+      background: #2ea043;
+    }
+
+    #discard-pile {
+      position: absolute;
+      top: 200px;
+      right: 260px;
+      font-size: 12px;
+      opacity: 0.7;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div id="latency-panel">
+      <div>模拟延迟</div>
+      <div id="latency-value">0ms</div>
+      <div id="queue-count">队列: 0</div>
+    </div>
+
+    <div id="game-table">
+      <div class="flash-overlay" id="flash-overlay"></div>
+
+      <div id="player-panel">
+        <div class="player-avatar">P1</div>
+        <div class="player-name" id="player-name">本地玩家</div>
+        <div class="hand-count" id="player-hand-count">手牌: 7</div>
+        <div class="health-bar-container">
+          <div class="health-bar" id="player-health" style="width: 100%; background: #66bb6a;"></div>
+        </div>
+      </div>
+
+      <div id="ai-panel">
+        <div class="ai-avatar">AI</div>
+        <div class="player-name" id="ai-name">AI对手</div>
+        <div class="hand-count" id="ai-hand-count">手牌: 7</div>
+        <div id="ai-status">等待中</div>
+        <div class="health-bar-container" style="margin-left: auto;">
+          <div class="health-bar" id="ai-health" style="width: 100%; background: #66bb6a;"></div>
+        </div>
+      </div>
+
+      <div id="discard-pile">
+        <div>弃牌堆</div>
+        <div id="discard-count">0</div>
+      </div>
+
+      <div id="turn-indicator">回合: 本地玩家</div>
+
+      <div id="play-area">
+        <span style="color: rgba(255,255,255,0.3); font-size: 14px;">拖拽卡牌至此出牌</span>
+      </div>
+    </div>
+
+    <div id="hand-area"></div>
+
+    <div id="stats-panel">
+      <h2 id="game-result">游戏结束</h2>
+      <div class="stat-row">
+        <span class="stat-label">平均延迟</span>
+        <span class="stat-value" id="avg-latency">0ms</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">回滚次数</span>
+        <span class="stat-value" id="rollback-count">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">有效出牌率</span>
+        <span class="stat-value" id="play-rate">0%</span>
+      </div>
+      <button id="restart-btn">重新开始</button>
+    </div>
+  </div>
+
+  <canvas id="game-canvas" width="320" height="480" style="display: none;"></canvas>
+
+  <script type="module" src="/src/client/main.ts"></script>
+</body>
+</html>
