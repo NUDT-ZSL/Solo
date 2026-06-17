@@ -1,0 +1,82 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  background-color: #fdf5e6;
+  color: #3e2723;
+  line-height: 1.6;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+button:active {
+  transform: scale(1);
+}
+
+input,
+textarea {
+  font-family: inherit;
+  outline: none;
+  border: 1px solid #d7ccc8;
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: #fff;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+input:focus,
+textarea:focus {
+  border-color: #ffb74d;
+  box-shadow: 0 0 0 3px rgba(255, 183, 77, 0.2);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f5f0e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d7ccc8;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #bcb8b1;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .recipe-card-print,
+  .recipe-card-print * {
+    visibility: visible;
+  }
+  .recipe-card-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}
