@@ -1,4 +1,4 @@
-import { useRef, useMemo, useEffect } from 'react'
+import { useRef, useMemo, useEffect, useCallback } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
@@ -20,55 +20,79 @@ const tmpMatrix = new THREE.Matrix4()
 const tmpPosition = new THREE.Vector3()
 const tmpQuaternion = new THREE.Quaternion()
 const tmpScale = new THREE.Vector3()
-const tmpEmissive = new THREE.Color()
 
 const barVertexShader = `
-  varying vec3 vColor;
-  varying float vGradientY;
-  varying vec3 vWorldNormal;
+  varying float vY;
+  varying vec3 vNormal;
   varying vec3 vWorldPos;
+  varying vec3 vBarColor;
 
   void main() {
-    vColor = instanceColor;
-    vGradientY = position.y;
+    vY = position.y;
+    vNormal = normal;
+    vBarColor = instanceColor;
 
-    vec4 worldPosition = modelMatrix * instanceMatrix * vec4(position, 1.0);
-    vWorldPos = worldPosition.xyz;
-    vWorldNormal = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
+    vec4 worldPos = modelMatrix * instanceMatrix * vec4(position, 1.0);
+    vWorldPos = worldPos.xyz;
 
-    gl_Position = projectionMatrix * viewMatrix * worldPosition;
+    gl_Position = projectionMatrix * viewMatrix * worldPos;
   }
 `
 
 const barFragmentShader = `
-  uniform vec3 uLightDir;
-  uniform vec3 uLightDir2;
   uniform vec3 uCameraPos;
+  uniform vec3 uLightDir1;
+  uniform vec3 uLightDir2;
 
-  varying vec3 vColor;
-  varying float vGradientY;
-  varying vec3 vWorldNormal;
+  varying float vY;
+  varying vec3 vNormal;
   varying vec3 vWorldPos;
+  varying vec3 vBarColor;
 
   void main() {
-    float gradient = 0.55 + 0.45 * vGradientY;
+    float gradient = 0.6 + 0.4 * vY;
 
-    vec3 n = normalize(vWorldNormal);
-    float diff1 = max(dot(n, normalize(uLightDir)), 0.0) * 0.55;
-    float diff2 = max(dot(n, normalize(uLightDir2)), 0.0) * 0.25;
+    vec3 n = normalize(vNormal);
+    float lambert1 = max(dot(n, normalize(uLightDir1)), 0.0) * 0.5;
+    float lambert2 = max(dot(n, normalize(uLightDir2)), 0.0) * 0.2;
     float ambient = 0.35;
-    float lighting = ambient + diff1 + diff2;
+    float lighting = ambient + lambert1 + lambert2;
 
     vec3 viewDir = normalize(uCameraPos - vWorldPos);
     float fresnel = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0);
 
-    vec3 color = vColor * gradient * lighting;
-    color += fresnel * 0.2 * vColor * gradient;
-    color += vec3(0.06 * vGradientY);
+    vec3 baseColor = vBarColor * gradient;
+    vec3 litColor = baseColor * lighting;
+    litColor += fresnel * vBarColor * 0.25;
+    litColor += vBarColor * 0.08 * vY;
 
-    gl_FragColor = vec4(color, 0.9);
+    float metallicGloss = pow(max(dot(reflect(-viewDir, n), normalize(uLightDir1)), 0.0), 32.0);
+    litColor += vec3(metallicGloss * 0.15);
+
+    gl_FragColor = vec4(litColor, 0.92);
   }
 `
+
+function createGlowTexture(): THREE.Texture {
+  const canvas = document.createElement('canvas')
+  canvas.width = 128
+  canvas.height = 128
+  const ctx = canvas.getContext('2d')!
+
+  const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64)
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)')
+  gradient.addColorStop(0.2, 'rgba(255, 255, 255, 0.5)')
+  gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.15)')
+  gradient.addColorStop(0.8, 'rgba(255, 255, 255, 0.03)')
+  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
+
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, 128, 128)
+
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.needsUpdate = true
+  return texture
+}
 
 function anomalyToHeight(anomaly: number): number {
   const t = (anomaly - MIN_ANOMALY) / (MAX_ANOMALY - MIN_ANOMALY)
@@ -78,8 +102,7 @@ function anomalyToHeight(anomaly: number): number {
 function anomalyToColor(anomaly: number): THREE.Color {
   const t = (anomaly - MIN_ANOMALY) / (MAX_ANOMALY - MIN_ANOMALY)
   const clamped = Math.max(0, Math.min(1, t))
-  tmpColor.copy(BLUE).lerp(RED, clamped)
-  return tmpColor.clone()
+  return tmpColor.copy(BLUE).lerp(RED, clamped).clone()
 }
 
 function latLonToPosition(lat: number, lon: number, radius: number): THREE.Vector3 {
@@ -132,10 +155,13 @@ function Graticule() {
 function TemperatureBars() {
   const barMeshRef = useRef<THREE.InstancedMesh>(null!)
   const topMeshRef = useRef<THREE.InstancedMesh>(null!)
-  const glowMeshRef = useRef<THREE.InstancedMesh>(null!)
+  const glowSpritesRef = useRef<THREE.Group>(null!)
   const currentYear = useClimateStore((s) => s.currentYear)
+
   const prevHeights = useRef<Float32Array>(new Float32Array(TOTAL_POINTS).fill(0))
   const targetHeights = useRef<Float32Array>(new Float32Array(TOTAL_POINTS).fill(0))
+  const glowSprites = useRef<THREE.Sprite[]>([])
+  const glowTexture = useMemo(() => createGlowTexture(), [])
 
   const positions = useMemo(() => {
     const pos: THREE.Vector3[] = []
@@ -161,38 +187,53 @@ function TemperatureBars() {
     return new THREE.SphereGeometry(BAR_RADIUS * 1.8, 10, 8)
   }, [])
 
-  const glowGeometry = useMemo(() => {
-    return new THREE.SphereGeometry(BAR_RADIUS * 4.5, 10, 8)
-  }, [])
-
   const barMaterial = useMemo(() => {
     return new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: true,
       uniforms: {
-        uLightDir: { value: new THREE.Vector3(1, 1, 0.5).normalize() },
-        uLightDir2: { value: new THREE.Vector3(-0.5, -0.3, -1).normalize() },
         uCameraPos: { value: new THREE.Vector3(0, 0, 15) },
+        uLightDir1: { value: new THREE.Vector3(1, 1, 0.5).normalize() },
+        uLightDir2: { value: new THREE.Vector3(-0.5, -0.3, -1).normalize() },
       },
       vertexShader: barVertexShader,
       fragmentShader: barFragmentShader,
     })
   }, [])
 
+  const initGlowSprites = useCallback(() => {
+    if (!glowSpritesRef.current) return
+    glowSprites.current.forEach((s) => s.removeFromParent())
+    glowSprites.current = []
+
+    for (let i = 0; i < TOTAL_POINTS; i++) {
+      const spriteMaterial = new THREE.SpriteMaterial({
+        map: glowTexture,
+        transparent: true,
+        opacity: 0.7,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      })
+      const sprite = new THREE.Sprite(spriteMaterial)
+      sprite.scale.set(1.2, 1.2, 1.2)
+      sprite.userData = { baseColor: new THREE.Color(0xffffff), index: i }
+      glowSprites.current.push(sprite)
+      glowSpritesRef.current.add(sprite)
+    }
+  }, [glowTexture])
+
   useEffect(() => {
-    if (!barMeshRef.current || !topMeshRef.current || !glowMeshRef.current) return
+    if (!barMeshRef.current || !topMeshRef.current) return
     const data = getDataForYear(currentYear)
     for (let i = 0; i < TOTAL_POINTS; i++) {
       const color = anomalyToColor(data[i].anomaly)
       barMeshRef.current.setColorAt(i, color)
-      topMeshRef.current.setColorAt(i, color)
-      const glowColor = anomalyToColor(data[i].anomaly)
-      glowColor.multiplyScalar(1.5)
-      glowMeshRef.current.setColorAt(i, glowColor)
+      tmpColor.copy(color).multiplyScalar(1.4)
+      topMeshRef.current.setColorAt(i, tmpColor)
     }
     if (barMeshRef.current.instanceColor) barMeshRef.current.instanceColor.needsUpdate = true
     if (topMeshRef.current.instanceColor) topMeshRef.current.instanceColor.needsUpdate = true
-    if (glowMeshRef.current.instanceColor) glowMeshRef.current.instanceColor.needsUpdate = true
   }, [])
 
   useEffect(() => {
@@ -203,10 +244,17 @@ function TemperatureBars() {
   }, [currentYear])
 
   useFrame(({ camera }) => {
-    if (!barMeshRef.current || !topMeshRef.current || !glowMeshRef.current) return
-    const lerpFactor = 1 - Math.pow(0.001, 0.016)
+    if (!barMeshRef.current || !topMeshRef.current || !glowSpritesRef.current) return
 
+    if (glowSprites.current.length === 0) {
+      initGlowSprites()
+      return
+    }
+
+    const lerpFactor = 1 - Math.pow(0.001, 0.016)
     barMaterial.uniforms.uCameraPos.value.copy(camera.position)
+
+    const data = getDataForYear(currentYear)
 
     for (let i = 0; i < TOTAL_POINTS; i++) {
       const prev = prevHeights.current[i]
@@ -229,25 +277,27 @@ function TemperatureBars() {
       tmpScale.set(1, 1, 1)
       tmpMatrix.compose(tmpPosition, tmpQuaternion, tmpScale)
       topMeshRef.current.setMatrixAt(i, tmpMatrix)
-      glowMeshRef.current.setMatrixAt(i, tmpMatrix)
 
-      const data = getDataForYear(currentYear)
       const color = anomalyToColor(data[i].anomaly)
       barMeshRef.current.setColorAt(i, color)
+      tmpColor.copy(color).multiplyScalar(1.4)
+      topMeshRef.current.setColorAt(i, tmpColor)
 
-      tmpEmissive.copy(color).multiplyScalar(1.3)
-      topMeshRef.current.setColorAt(i, tmpEmissive)
-
-      const glowColor = color.clone().multiplyScalar(1.6)
-      glowMeshRef.current.setColorAt(i, glowColor)
+      const sprite = glowSprites.current[i]
+      if (sprite) {
+        sprite.position.copy(topPos)
+        const spriteMat = sprite.material as THREE.SpriteMaterial
+        if (spriteMat.color) spriteMat.color.copy(color)
+        const size = 0.8 + height * 0.3
+        sprite.scale.set(size, size, size)
+        spriteMat.opacity = Math.min(0.8, 0.3 + height * 0.25)
+      }
     }
 
     barMeshRef.current.instanceMatrix.needsUpdate = true
     topMeshRef.current.instanceMatrix.needsUpdate = true
-    glowMeshRef.current.instanceMatrix.needsUpdate = true
     if (barMeshRef.current.instanceColor) barMeshRef.current.instanceColor.needsUpdate = true
     if (topMeshRef.current.instanceColor) topMeshRef.current.instanceColor.needsUpdate = true
-    if (glowMeshRef.current.instanceColor) glowMeshRef.current.instanceColor.needsUpdate = true
   })
 
   return (
@@ -257,22 +307,14 @@ function TemperatureBars() {
         <meshStandardMaterial
           transparent
           opacity={0.95}
-          metalness={0.35}
-          roughness={0.35}
+          metalness={0.5}
+          roughness={0.3}
           emissive="#ffffff"
-          emissiveIntensity={0.45}
+          emissiveIntensity={0.55}
           toneMapped={false}
         />
       </instancedMesh>
-      <instancedMesh ref={glowMeshRef} args={[glowGeometry, undefined, TOTAL_POINTS]}>
-        <meshBasicMaterial
-          transparent
-          opacity={0.08}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-          toneMapped={false}
-        />
-      </instancedMesh>
+      <group ref={glowSpritesRef} />
     </>
   )
 }
@@ -332,8 +374,8 @@ function CameraController() {
 export default function EarthScene() {
   return (
     <>
-      <ambientLight intensity={0.4} />
-      <directionalLight position={[10, 10, 5]} intensity={0.8} />
+      <ambientLight intensity={0.45} />
+      <directionalLight position={[10, 10, 5]} intensity={0.9} />
       <directionalLight position={[-10, -5, -10]} intensity={0.3} />
       <mesh>
         <sphereGeometry args={[EARTH_RADIUS, 32, 24]} />
