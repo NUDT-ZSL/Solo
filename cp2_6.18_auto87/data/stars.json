@@ -1,0 +1,100 @@
+[
+  {
+    "id": "sample-1",
+    "createdAt": "2024-03-15T20:00:00.000Z",
+    "date": "2024-03-15",
+    "location": {
+      "name": "北京郊区密云天文台",
+      "latitude": 40.3828,
+      "longitude": 116.8711
+    },
+    "weather": "晴朗",
+    "photos": [],
+    "stars": [
+      {
+        "id": "s1",
+        "name": "天狼星",
+        "constellation": "大犬座",
+        "magnitude": -1.46,
+        "observationMethod": "天文望远镜"
+      },
+      {
+        "id": "s2",
+        "name": "参宿四",
+        "constellation": "猎户座",
+        "magnitude": 0.5,
+        "observationMethod": "肉眼"
+      },
+      {
+        "id": "s3",
+        "name": "参宿七",
+        "constellation": "猎户座",
+        "magnitude": 0.13,
+        "observationMethod": "双筒望远镜"
+      },
+      {
+        "id": "s4",
+        "name": "北极星",
+        "constellation": "小熊座",
+        "magnitude": 1.98,
+        "observationMethod": "肉眼"
+      },
+      {
+        "id": "s5",
+        "name": "织女星",
+        "constellation": "天鹅座",
+        "magnitude": 0.03,
+        "observationMethod": "肉眼"
+      }
+    ]
+  },
+  {
+    "id": "sample-2",
+    "createdAt": "2024-04-20T19:30:00.000Z",
+    "date": "2024-04-20",
+    "location": {
+      "name": "河北张家口草原",
+      "latitude": 40.8244,
+      "longitude": 114.8861
+    },
+    "weather": "有月光",
+    "photos": [],
+    "stars": [
+      {
+        "id": "s6",
+        "name": "开阳",
+        "constellation": "大熊座",
+        "magnitude": 2.23,
+        "observationMethod": "肉眼"
+      },
+      {
+        "id": "s7",
+        "name": "摇光",
+        "constellation": "大熊座",
+        "magnitude": 1.86,
+        "observationMethod": "肉眼"
+      },
+      {
+        "id": "s8",
+        "name": "王良一",
+        "constellation": "仙后座",
+        "magnitude": 2.47,
+        "observationMethod": "双筒望远镜"
+      },
+      {
+        "id": "s9",
+        "name": "王良四",
+        "constellation": "仙后座",
+        "magnitude": 2.28,
+        "observationMethod": "双筒望远镜"
+      },
+      {
+        "id": "s10",
+        "name": "天津四",
+        "constellation": "天鹅座",
+        "magnitude": 1.25,
+        "observationMethod": "天文望远镜"
+      }
+    ]
+  }
+]
