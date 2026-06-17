@@ -77,9 +77,17 @@ export default function App() {
     }
   }
 
-  function handleSelectBrand(id: string) {
-    setActiveBrandId(id);
-    setSidebarOpen(false);
+  async function handleSelectBrand(id: string) {
+    try {
+      const brand = await api.getBrand(id);
+      setBrands(prev => prev.map(b => (b.id === id ? brand : b)));
+      setActiveBrandId(id);
+      setSidebarOpen(false);
+    } catch (error) {
+      console.error('Failed to load brand:', error);
+      setActiveBrandId(id);
+      setSidebarOpen(false);
+    }
   }
 
   function handleBrandUpdate(data: Partial<Brand>) {
@@ -185,6 +193,9 @@ export default function App() {
           <button
             className="btn-create-brand"
             onClick={handleCreateBrand}
+            style={{
+              backgroundColor: activeBrand?.primaryColor || '#475569'
+            }}
           >
             + 新建品牌
           </button>

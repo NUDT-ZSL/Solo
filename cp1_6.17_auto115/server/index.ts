@@ -50,6 +50,17 @@ function generateDefaultBrand(): Brand {
   };
 }
 
+function hexToRgba(hex: string, alpha: number): string {
+  const cleanHex = hex.replace('#', '');
+  const fullHex = cleanHex.length === 3
+    ? cleanHex.split('').map(c => c + c).join('')
+    : cleanHex;
+  const r = parseInt(fullHex.substring(0, 2), 16);
+  const g = parseInt(fullHex.substring(2, 4), 16);
+  const b = parseInt(fullHex.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 function generateCSS(brand: Brand): string {
   const spacingScale = {
     xs: `${brand.spacingUnit * 0.5}px`,
@@ -59,6 +70,8 @@ function generateCSS(brand: Brand): string {
     xl: `${brand.spacingUnit * 4}px`,
     '2xl': `${brand.spacingUnit * 6}px`
   };
+  const tagBg = hexToRgba(brand.secondaryColor, 0.15);
+  const btnSecondaryHoverBg = hexToRgba(brand.primaryColor, 0.08);
 
   return `:root {
   --primary-color: ${brand.primaryColor};
@@ -110,11 +123,57 @@ function generateCSS(brand: Brand): string {
 
 .btn-secondary:hover {
   filter: brightness(1.1);
-  background-color: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  background-color: ${btnSecondaryHoverBg};
 }
 
 .btn-secondary:active {
   filter: brightness(0.95);
+}
+
+.title-h1 {
+  font-family: var(--heading-font);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--primary-color);
+  line-height: 1.3;
+  margin: 0 0 var(--spacing-md) 0;
+  transition: all 0.3s ease;
+}
+
+.text-body {
+  font-family: var(--body-font);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.6;
+  color: #334155;
+  margin: 0 0 var(--spacing-md) 0;
+  transition: all 0.3s ease;
+}
+
+.card {
+  background-color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  padding: var(--spacing-lg);
+  transition: all 0.3s ease;
+}
+
+.card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+.tag {
+  display: inline-block;
+  background-color: ${tagBg};
+  color: var(--secondary-color);
+  font-family: var(--body-font);
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 4px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  line-height: 1;
+  transition: all 0.3s ease;
 }
 
 .brand-heading {
@@ -124,6 +183,7 @@ function generateCSS(brand: Brand): string {
   color: var(--primary-color);
   line-height: 1.3;
   margin: 0 0 var(--spacing-md) 0;
+  transition: all 0.3s ease;
 }
 
 .brand-paragraph {
@@ -133,6 +193,7 @@ function generateCSS(brand: Brand): string {
   line-height: 1.6;
   color: #334155;
   margin: 0 0 var(--spacing-md) 0;
+  transition: all 0.3s ease;
 }
 
 .brand-card {
@@ -150,7 +211,7 @@ function generateCSS(brand: Brand): string {
 
 .brand-tag {
   display: inline-block;
-  background-color: color-mix(in srgb, var(--secondary-color) 15%, transparent);
+  background-color: ${tagBg};
   color: var(--secondary-color);
   font-family: var(--body-font);
   font-size: 12px;
@@ -158,6 +219,7 @@ function generateCSS(brand: Brand): string {
   border-radius: 4px;
   padding: var(--spacing-xs) var(--spacing-sm);
   line-height: 1;
+  transition: all 0.3s ease;
 }
 `;
 }
@@ -222,8 +284,30 @@ app.get('/api/brands/:id/css', (req: Request, res: Response) => {
     return res.status(404).json({ error: 'Brand not found' });
   }
   const css = generateCSS(brand);
+  const safeName = brand.name.replace(/\s+/g, '-').toLowerCase();
   res.setHeader('Content-Type', 'text/css');
-  res.setHeader('Content-Disposition', `attachment; filename="${brand.name.replace(/\s+/g, '-').toLowerCase()}-theme.css"`);
+  res.setHeader('Content-Disposition', `attachment; filename="brand-${safeName}-variables.css"`);
+  res.send(css);
+});
+
+app.post('/api/brands/:id/export-css', (req: Request, res: Response) => {
+  let brand = brands.find(b => b.id === req.params.id);
+  const brandData = req.body as Partial<Brand>;
+  const exportBrand: Brand = brand ? { ...brand, ...brandData } : {
+    id: req.params.id,
+    name: brandData.name || 'Brand',
+    primaryColor: brandData.primaryColor || '#6366F1',
+    secondaryColor: brandData.secondaryColor || '#10B981',
+    headingFont: brandData.headingFont || 'Playfair Display',
+    bodyFont: brandData.bodyFont || 'Inter',
+    spacingUnit: brandData.spacingUnit || 8,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+  const css = generateCSS(exportBrand);
+  const safeName = exportBrand.name.replace(/\s+/g, '-').toLowerCase();
+  res.setHeader('Content-Type', 'text/css');
+  res.setHeader('Content-Disposition', `attachment; filename="brand-${safeName}-variables.css"`);
   res.send(css);
 });
 

@@ -81,8 +81,34 @@ export default function BrandEditor({ brand, onUpdate, onExport }: BrandEditorPr
     return false;
   }
 
+  function rgbToHex(rgb: string): string {
+    const match = rgb.match(/rgb\s*\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)/);
+    if (!match) return rgb;
+    const r = parseInt(match[1]);
+    const g = parseInt(match[2]);
+    const b = parseInt(match[3]);
+    return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+  }
+
+  function getHexColor(color: string, fallback: string): string {
+    if (/^#[A-Fa-f0-9]{6}$/.test(color)) return color;
+    if (/^#[A-Fa-f0-9]{3}$/.test(color)) {
+      const hex = color.substring(1);
+      return '#' + hex.split('').map(c => c + c).join('').toUpperCase();
+    }
+    if (/^rgb/.test(color)) {
+      return rgbToHex(color);
+    }
+    return fallback;
+  }
+
   function handleColorInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setTempColor(e.target.value);
+    const value = e.target.value;
+    setTempColor(value);
+    if (colorPickerOpen && isValidColor(value)) {
+      const hexColor = /^rgb/.test(value) ? rgbToHex(value) : value;
+      applyColor(colorPickerOpen, hexColor);
+    }
   }
 
   function handleColorPickerChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -90,6 +116,40 @@ export default function BrandEditor({ brand, onUpdate, onExport }: BrandEditorPr
     setTempColor(color);
     if (colorPickerOpen) {
       applyColor(colorPickerOpen, color);
+    }
+  }
+
+  const [rgbValues, setRgbValues] = useState({ r: '99', g: '102', b: '241' });
+
+  function updateRgbFromColor(color: string) {
+    try {
+      const hex = /^#[A-Fa-f0-9]{6}$/.test(color) ? color : getHexColor(color, '#6366F1');
+      const r = parseInt(hex.substring(1, 3), 16);
+      const g = parseInt(hex.substring(3, 5), 16);
+      const b = parseInt(hex.substring(5, 7), 16);
+      setRgbValues({ r: String(r), g: String(g), b: String(b) });
+    } catch {
+      // ignore
+    }
+  }
+
+  useEffect(() => {
+    if (colorPickerOpen && tempColor) {
+      updateRgbFromColor(tempColor);
+    }
+  }, [colorPickerOpen, tempColor]);
+
+  function handleRgbChange(channel: 'r' | 'g' | 'b', value: string) {
+    const num = parseInt(value) || 0;
+    const clamped = Math.max(0, Math.min(255, num));
+    const newRgb = { ...rgbValues, [channel]: String(clamped) };
+    setRgbValues(newRgb);
+    const hex = '#' + [newRgb.r, newRgb.g, newRgb.b]
+      .map(v => parseInt(v || '0').toString(16).padStart(2, '0'))
+      .join('').toUpperCase();
+    setTempColor(hex);
+    if (colorPickerOpen) {
+      applyColor(colorPickerOpen, hex);
     }
   }
 
@@ -156,7 +216,7 @@ export default function BrandEditor({ brand, onUpdate, onExport }: BrandEditorPr
               <input
                 type="color"
                 className="color-picker-native"
-                value={/^#[A-Fa-f0-9]{6}$/.test(tempColor) ? tempColor : brand.primaryColor}
+                value={getHexColor(tempColor, brand.primaryColor)}
                 onChange={handleColorPickerChange}
               />
               <input
@@ -164,8 +224,40 @@ export default function BrandEditor({ brand, onUpdate, onExport }: BrandEditorPr
                 className="form-input"
                 value={tempColor}
                 onChange={handleColorInputChange}
-                placeholder="HEX 或 RGB"
+                placeholder="HEX (如#FFFFFF) 或 RGB (如rgb(255,255,255))"
               />
+              <div className="rgb-inputs">
+                <label className="rgb-label">
+                  <span>R</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="255"
+                    value={rgbValues.r}
+                    onChange={(e) => handleRgbChange('r', e.target.value)}
+                  />
+                </label>
+                <label className="rgb-label">
+                  <span>G</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="255"
+                    value={rgbValues.g}
+                    onChange={(e) => handleRgbChange('g', e.target.value)}
+                  />
+                </label>
+                <label className="rgb-label">
+                  <span>B</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="255"
+                    value={rgbValues.b}
+                    onChange={(e) => handleRgbChange('b', e.target.value)}
+                  />
+                </label>
+              </div>
               <div className="color-presets">
                 {['#6366F1', '#EC4899', '#EF4444', '#F59E0B', '#10B981', '#06B6D4', '#8B5CF6', '#64748B'].map(c => (
                   <button
@@ -213,7 +305,7 @@ export default function BrandEditor({ brand, onUpdate, onExport }: BrandEditorPr
               <input
                 type="color"
                 className="color-picker-native"
-                value={/^#[A-Fa-f0-9]{6}$/.test(tempColor) ? tempColor : brand.secondaryColor}
+                value={getHexColor(tempColor, brand.secondaryColor)}
                 onChange={handleColorPickerChange}
               />
               <input
@@ -221,8 +313,40 @@ export default function BrandEditor({ brand, onUpdate, onExport }: BrandEditorPr
                 className="form-input"
                 value={tempColor}
                 onChange={handleColorInputChange}
-                placeholder="HEX 或 RGB"
+                placeholder="HEX (如#FFFFFF) 或 RGB (如rgb(255,255,255))"
               />
+              <div className="rgb-inputs">
+                <label className="rgb-label">
+                  <span>R</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="255"
+                    value={rgbValues.r}
+                    onChange={(e) => handleRgbChange('r', e.target.value)}
+                  />
+                </label>
+                <label className="rgb-label">
+                  <span>G</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="255"
+                    value={rgbValues.g}
+                    onChange={(e) => handleRgbChange('g', e.target.value)}
+                  />
+                </label>
+                <label className="rgb-label">
+                  <span>B</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="255"
+                    value={rgbValues.b}
+                    onChange={(e) => handleRgbChange('b', e.target.value)}
+                  />
+                </label>
+              </div>
               <div className="color-presets">
                 {['#10B981', '#06B6D4', '#8B5CF6', '#F59E0B', '#EC4899', '#EF4444', '#6366F1', '#14B8A6'].map(c => (
                   <button

@@ -56,7 +56,31 @@ export const api = {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${brandName.replace(/\s+/g, '-').toLowerCase()}-theme.css`;
+    const safeName = brandName.replace(/\s+/g, '-').toLowerCase();
+    a.download = `brand-${safeName}-variables.css`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+
+  exportCSSWithConfig: async (id: string, brandData: Partial<Brand>, brandName: string): Promise<void> => {
+    const response = await fetch(`${API_BASE}/brands/${id}/export-css`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(brandData)
+    });
+    if (!response.ok) {
+      throw new Error('Export failed');
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const safeName = brandName.replace(/\s+/g, '-').toLowerCase();
+    a.download = `brand-${safeName}-variables.css`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

@@ -5,6 +5,17 @@ interface PreviewPanelProps {
   brand: Brand | null;
 }
 
+function hexToRgba(hex: string, alpha: number): string {
+  const cleanHex = hex.replace('#', '');
+  const fullHex = cleanHex.length === 3
+    ? cleanHex.split('').map(c => c + c).join('')
+    : cleanHex;
+  const r = parseInt(fullHex.substring(0, 2), 16);
+  const g = parseInt(fullHex.substring(2, 4), 16);
+  const b = parseInt(fullHex.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export default function PreviewPanel({ brand }: PreviewPanelProps) {
   const styleRef = useRef<HTMLStyleElement | null>(null);
 
@@ -20,17 +31,20 @@ export default function PreviewPanel({ brand }: PreviewPanelProps) {
     }
 
     const spacing = brand.spacingUnit;
+    const tagBg = hexToRgba(brand.secondaryColor, 0.15);
     const css = `
-      .preview-area {
-        --preview-primary: ${brand.primaryColor};
-        --preview-secondary: ${brand.secondaryColor};
-        --preview-heading-font: '${brand.headingFont}', serif;
-        --preview-body-font: '${brand.bodyFont}', sans-serif;
-        --preview-spacing-xs: ${spacing * 0.5}px;
-        --preview-spacing-sm: ${spacing}px;
-        --preview-spacing-md: ${spacing * 2}px;
-        --preview-spacing-lg: ${spacing * 3}px;
-        --preview-spacing-xl: ${spacing * 4}px;
+      :root {
+        --primary-color: ${brand.primaryColor};
+        --secondary-color: ${brand.secondaryColor};
+        --heading-font: '${brand.headingFont}', serif;
+        --body-font: '${brand.bodyFont}', sans-serif;
+        --spacing-unit: ${spacing}px;
+        --spacing-xs: ${spacing * 0.5}px;
+        --spacing-sm: ${spacing}px;
+        --spacing-md: ${spacing * 2}px;
+        --spacing-lg: ${spacing * 3}px;
+        --spacing-xl: ${spacing * 4}px;
+        --tag-bg: ${tagBg};
       }
     `;
     styleEl.textContent = css;
@@ -49,6 +63,8 @@ export default function PreviewPanel({ brand }: PreviewPanelProps) {
     );
   }
 
+  const tagBg = hexToRgba(brand.secondaryColor, 0.15);
+
   return (
     <div className="preview-panel">
       <div className="preview-header">
@@ -64,11 +80,11 @@ export default function PreviewPanel({ brand }: PreviewPanelProps) {
               <button
                 className="preview-btn-primary"
                 style={{
-                  backgroundColor: 'var(--preview-primary)',
+                  backgroundColor: 'var(--primary-color)',
                   color: '#ffffff',
                   borderRadius: '8px',
-                  padding: `calc(var(--preview-spacing-sm)) calc(var(--preview-spacing-md))`,
-                  fontFamily: 'var(--preview-body-font)',
+                  padding: 'var(--spacing-sm) var(--spacing-md)',
+                  fontFamily: 'var(--body-font)',
                   fontSize: '16px',
                   fontWeight: 500,
                   border: 'none',
@@ -82,11 +98,11 @@ export default function PreviewPanel({ brand }: PreviewPanelProps) {
                 className="preview-btn-secondary"
                 style={{
                   backgroundColor: 'transparent',
-                  color: 'var(--preview-primary)',
-                  border: '2px solid var(--preview-primary)',
+                  color: 'var(--primary-color)',
+                  border: '2px solid var(--primary-color)',
                   borderRadius: '8px',
-                  padding: `calc(var(--preview-spacing-sm) - 2px) calc(var(--preview-spacing-md) - 2px)`,
-                  fontFamily: 'var(--preview-body-font)',
+                  padding: 'calc(var(--spacing-sm) - 2px) calc(var(--spacing-md) - 2px)',
+                  fontFamily: 'var(--body-font)',
                   fontSize: '16px',
                   fontWeight: 500,
                   cursor: 'pointer',
@@ -104,13 +120,13 @@ export default function PreviewPanel({ brand }: PreviewPanelProps) {
               <h3
                 className="preview-heading"
                 style={{
-                  fontFamily: 'var(--preview-heading-font)',
+                  fontFamily: 'var(--heading-font)',
                   fontSize: '28px',
                   fontWeight: 700,
-                  color: 'var(--preview-primary)',
+                  color: 'var(--primary-color)',
                   lineHeight: 1.3,
                   margin: 0,
-                  marginBottom: 'var(--preview-spacing-md)',
+                  marginBottom: 'var(--spacing-md)',
                   transition: 'all 0.3s ease'
                 }}
               >
@@ -119,13 +135,13 @@ export default function PreviewPanel({ brand }: PreviewPanelProps) {
               <p
                 className="preview-paragraph"
                 style={{
-                  fontFamily: 'var(--preview-body-font)',
+                  fontFamily: 'var(--body-font)',
                   fontSize: '16px',
                   fontWeight: 400,
                   lineHeight: 1.6,
                   color: '#334155',
                   margin: 0,
-                  marginBottom: 'var(--preview-spacing-md)',
+                  marginBottom: 'var(--spacing-md)',
                   transition: 'all 0.3s ease'
                 }}
               >
@@ -144,22 +160,22 @@ export default function PreviewPanel({ brand }: PreviewPanelProps) {
                 backgroundColor: '#ffffff',
                 boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
                 borderRadius: '12px',
-                padding: 'var(--preview-spacing-lg)',
+                padding: 'var(--spacing-lg)',
                 transition: 'all 0.3s ease'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--preview-spacing-sm)', marginBottom: 'var(--preview-spacing-md)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-md)' }}>
                 <span
                   className="preview-tag"
                   style={{
                     display: 'inline-block',
-                    backgroundColor: `${brand.secondaryColor}26`,
-                    color: 'var(--preview-secondary)',
-                    fontFamily: 'var(--preview-body-font)',
+                    backgroundColor: tagBg,
+                    color: 'var(--secondary-color)',
+                    fontFamily: 'var(--body-font)',
                     fontSize: '12px',
                     fontWeight: 500,
                     borderRadius: '4px',
-                    padding: `var(--preview-spacing-xs) var(--preview-spacing-sm)`,
+                    padding: 'var(--spacing-xs) var(--spacing-sm)',
                     lineHeight: 1,
                     transition: 'all 0.3s ease'
                   }}
@@ -170,13 +186,13 @@ export default function PreviewPanel({ brand }: PreviewPanelProps) {
                   className="preview-tag"
                   style={{
                     display: 'inline-block',
-                    backgroundColor: `${brand.secondaryColor}26`,
-                    color: 'var(--preview-secondary)',
-                    fontFamily: 'var(--preview-body-font)',
+                    backgroundColor: tagBg,
+                    color: 'var(--secondary-color)',
+                    fontFamily: 'var(--body-font)',
                     fontSize: '12px',
                     fontWeight: 500,
                     borderRadius: '4px',
-                    padding: `var(--preview-spacing-xs) var(--preview-spacing-sm)`,
+                    padding: 'var(--spacing-xs) var(--spacing-sm)',
                     lineHeight: 1,
                     transition: 'all 0.3s ease'
                   }}
@@ -186,12 +202,12 @@ export default function PreviewPanel({ brand }: PreviewPanelProps) {
               </div>
               <h4
                 style={{
-                  fontFamily: 'var(--preview-heading-font)',
+                  fontFamily: 'var(--heading-font)',
                   fontSize: '20px',
                   fontWeight: 700,
-                  color: 'var(--preview-primary)',
+                  color: 'var(--primary-color)',
                   margin: 0,
-                  marginBottom: 'var(--preview-spacing-sm)',
+                  marginBottom: 'var(--spacing-sm)',
                   transition: 'all 0.3s ease'
                 }}
               >
@@ -199,26 +215,26 @@ export default function PreviewPanel({ brand }: PreviewPanelProps) {
               </h4>
               <p
                 style={{
-                  fontFamily: 'var(--preview-body-font)',
+                  fontFamily: 'var(--body-font)',
                   fontSize: '14px',
                   lineHeight: 1.6,
                   color: '#334155',
                   margin: 0,
-                  marginBottom: 'var(--preview-spacing-md)',
+                  marginBottom: 'var(--spacing-md)',
                   transition: 'all 0.3s ease'
                 }}
               >
                 卡片组件可用于展示产品特性、服务内容等信息。
                 配合阴影和圆角设计，创造出层次感和现代感。
               </p>
-              <div style={{ display: 'flex', gap: 'var(--preview-spacing-sm)' }}>
+              <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
                 <button
                   style={{
-                    backgroundColor: 'var(--preview-primary)',
+                    backgroundColor: 'var(--primary-color)',
                     color: '#ffffff',
                     borderRadius: '8px',
-                    padding: `calc(var(--preview-spacing-xs) * 1.5) var(--preview-spacing-md)`,
-                    fontFamily: 'var(--preview-body-font)',
+                    padding: 'calc(var(--spacing-xs) * 1.5) var(--spacing-md)',
+                    fontFamily: 'var(--body-font)',
                     fontSize: '14px',
                     fontWeight: 500,
                     border: 'none',
@@ -231,11 +247,11 @@ export default function PreviewPanel({ brand }: PreviewPanelProps) {
                 <button
                   style={{
                     backgroundColor: 'transparent',
-                    color: 'var(--preview-primary)',
-                    border: '2px solid var(--preview-primary)',
+                    color: 'var(--primary-color)',
+                    border: '2px solid var(--primary-color)',
                     borderRadius: '8px',
-                    padding: `calc(var(--preview-spacing-xs) * 1.5 - 2px) calc(var(--preview-spacing-md) - 2px)`,
-                    fontFamily: 'var(--preview-body-font)',
+                    padding: 'calc(var(--spacing-xs) * 1.5 - 2px) calc(var(--spacing-md) - 2px)',
+                    fontFamily: 'var(--body-font)',
                     fontSize: '14px',
                     fontWeight: 500,
                     cursor: 'pointer',
@@ -254,7 +270,7 @@ export default function PreviewPanel({ brand }: PreviewPanelProps) {
               <div className="swatch-item">
                 <div
                   className="swatch-color"
-                  style={{ backgroundColor: 'var(--preview-primary)' }}
+                  style={{ backgroundColor: 'var(--primary-color)' }}
                 />
                 <div className="swatch-info">
                   <span className="swatch-name">主色</span>
@@ -264,7 +280,7 @@ export default function PreviewPanel({ brand }: PreviewPanelProps) {
               <div className="swatch-item">
                 <div
                   className="swatch-color"
-                  style={{ backgroundColor: 'var(--preview-secondary)' }}
+                  style={{ backgroundColor: 'var(--secondary-color)' }}
                 />
                 <div className="swatch-info">
                   <span className="swatch-name">辅色</span>

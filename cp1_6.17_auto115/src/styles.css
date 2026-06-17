@@ -40,10 +40,39 @@ button {
 }
 
 .skeleton {
-  background: linear-gradient(90deg, var(--gray-200) 25%, var(--gray-100) 50%, var(--gray-200) 75%);
-  background-size: 200% 100%;
-  animation: pulse-skeleton 1.5s infinite;
+  background-color: var(--gray-200);
   border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent 100%);
+  background-size: 200% 100%;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0% {
+    background-position: 200% 0;
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    background-position: -200% 0;
+    opacity: 0.6;
+  }
 }
 
 .skeleton-header {
@@ -78,11 +107,6 @@ button {
 .select-skeleton {
   height: 42px;
   width: 100%;
-}
-
-@keyframes pulse-skeleton {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
 }
 
 .app-container {
@@ -448,18 +472,68 @@ button {
   border-radius: 12px;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.1);
   width: 280px;
+  transform-origin: center center;
   animation: pickerPopIn 0.2s ease-out;
 }
 
 @keyframes pickerPopIn {
   0% {
     opacity: 0;
-    transform: scale(0.9);
+    transform: scale(0.5);
+  }
+  60% {
+    opacity: 1;
   }
   100% {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+.rgb-inputs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.rgb-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.rgb-label > span {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.rgb-label input[type="number"] {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--gray-300);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--gray-800);
+  text-align: center;
+  outline: none;
+  transition: all 0.15s ease;
+  -moz-appearance: textfield;
+}
+
+.rgb-label input[type="number"]::-webkit-outer-spin-button,
+.rgb-label input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.rgb-label input[type="number"]:focus {
+  border-color: var(--gray-600);
+  box-shadow: 0 0 0 2px rgba(71, 85, 105, 0.1);
 }
 
 .color-picker-native {
