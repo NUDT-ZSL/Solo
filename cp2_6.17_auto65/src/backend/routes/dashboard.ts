@@ -30,9 +30,10 @@ function loadFilms(): Film[] {
   }
   const filmsPath = path.join(dataDir, 'films.json');
   const data = fs.readFileSync(filmsPath, 'utf-8');
-  filmsCache = JSON.parse(data);
+  const parsed = JSON.parse(data) as Film[];
+  filmsCache = parsed;
   cacheTime = Date.now();
-  return filmsCache;
+  return parsed;
 }
 
 function loadRatings(): Rating[] {
@@ -41,9 +42,10 @@ function loadRatings(): Rating[] {
   }
   const ratingsPath = path.join(dataDir, 'ratings.json');
   const data = fs.readFileSync(ratingsPath, 'utf-8');
-  ratingsCache = JSON.parse(data);
+  const parsed = JSON.parse(data) as Rating[];
+  ratingsCache = parsed;
   cacheTime = Date.now();
-  return ratingsCache;
+  return parsed;
 }
 
 function calculateFilmStats(film: Film, ratings: Rating[]): FilmWithStats {

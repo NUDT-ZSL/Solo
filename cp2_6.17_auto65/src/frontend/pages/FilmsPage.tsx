@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import type { FilmWithStats } from '../../types.js';
 import FilmCard from '../components/FilmCard.js';
 
-const API_BASE = 'http://localhost:3001';
 const PAGE_SIZE = 12;
 const CATEGORIES = ['全部', '剧情', '纪录片', '动画'] as const;
 
@@ -16,16 +15,18 @@ const FilmsPage: React.FC = () => {
   const [category, setCategory] = useState<Category>('全部');
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [isFiltering, setIsFiltering] = useState(false);
   const observerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const loadingRef = useRef(false);
 
-  const fetchFilms = useCallback(async (pageNum: number, currentCategory: Category, isNewFilter: boolean) => {
+  const fetchFilms = useCallback(async (pageNum: number, currentCategory: Category) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    setLoading(true);
+    setError(null);
+
     try {
-      setLoading(true);
-      setError(null);
-
-      const response = await fetch(`${API_BASE}/api/films`);
+      const response = await fetch('/api/films');
       if (!response.ok) {
         throw new Error('获取影片数据失败');
       }
@@ -37,61 +38,43 @@ const FilmsPage: React.FC = () => {
         filtered = allFilms.filter(film => film.category === currentCategory);
       }
 
-      const startIndex = 0;
       const endIndex = pageNum * PAGE_SIZE;
-      const paginatedFilms = filtered.slice(startIndex, endIndex);
+      const paginatedFilms = filtered.slice(0, endIndex);
 
-      setIsFiltering(true);
-      setTimeout(() => {
-        if (isNewFilter) {
-          setFilms(paginatedFilms);
-        } else {
-          setFilms(prev => {
-            const existingIds = new Set(prev.map(f => f.id));
-            const newFilms = paginatedFilms.filter(f => !existingIds.has(f.id));
-            return [...prev, ...newFilms];
-          });
-        }
-        setHasMore(paginatedFilms.length === PAGE_SIZE && endIndex < filtered.length);
-        setIsFiltering(false);
-      }, 150);
-
-      setLoading(false);
+      setFilms(paginatedFilms);
+      setHasMore(endIndex < filtered.length);
     } catch (err) {
       setError(err instanceof Error ? err.message : '未知错误');
+    } finally {
       setLoading(false);
-      setIsFiltering(false);
+      loadingRef.current = false;
     }
   }, []);
 
   useEffect(() => {
     setPage(1);
-    fetchFilms(1, category, true);
+    fetchFilms(1, category);
   }, [category, fetchFilms]);
 
-  const loadMore = useCallback(() => {
-    if (loading || !hasMore) return;
-    const nextPage = page + 1;
-    setPage(nextPage);
-    fetchFilms(nextPage, category, false);
-  }, [loading, hasMore, page, category, fetchFilms]);
-
   useEffect(() => {
+    if (!observerRef.current) return;
+
     const observer = new IntersectionObserver(
       entries => {
-        if (entries[0].isIntersecting && hasMore && !loading) {
-          loadMore();
+        if (entries[0].isIntersecting && hasMore && !loadingRef.current) {
+          setPage(prev => {
+            const nextPage = prev + 1;
+            fetchFilms(nextPage, category);
+            return nextPage;
+          });
         }
       },
       { threshold: 0.1 }
     );
 
-    if (observerRef.current) {
-      observer.observe(observerRef.current);
-    }
-
+    observer.observe(observerRef.current);
     return () => observer.disconnect();
-  }, [hasMore, loading, loadMore]);
+  }, [hasMore, category, fetchFilms]);
 
   const handleCardClick = (id: string) => {
     navigate(`/film/${id}`);
@@ -122,13 +105,13 @@ const FilmsPage: React.FC = () => {
       {error && (
         <div className="error-message">
           {error}
-          <button className="retry-btn" onClick={() => fetchFilms(page, category, false)}>
+          <button className="retry-btn" onClick={() => fetchFilms(page, category)}>
             重试
           </button>
         </div>
       )}
 
-      <div className={`film-grid ${isFiltering ? 'filtering' : ''}`}>
+      <div className="film-grid">
         {films.map(film => (
           <FilmCard
             key={film.id}
@@ -147,7 +130,7 @@ const FilmsPage: React.FC = () => {
       <div ref={observerRef} className="load-more-trigger">
         {loading && (
           <div className="loading-spinner">
-            <div className="spinner"></div>
+            <div className="spinner" style={{ borderTopColor: 'transparent', borderColor: '#8d6e63' }}></div>
             <span>加载中...</span>
           </div>
         )}
@@ -187,32 +170,10 @@ const FilmsPage: React.FC = () => {
           background-color: #e65100;
         }
 
-        .film-grid.filtering {
-          opacity: 0.6;
-          transform: scale(0.98);
-        }
-
         .film-grid {
           opacity: 1;
           transform: scale(1);
           transition: opacity 0.3s ease, transform 0.3s ease;
-        }
-
-        .film-card {
-          opacity: 1;
-          transform: translateY(0);
-          animation: fadeInUp 0.4s ease forwards;
-        }
-
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
         }
 
         .load-more-trigger {

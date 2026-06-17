@@ -8,10 +8,11 @@ interface FilmCardProps {
 
 const FilmCard: React.FC<FilmCardProps> = ({ film, onClick }) => {
   const renderStars = (score: number) => {
+    const safeScore = score ?? 0;
     return (
       <div className="stars">
         {[1, 2, 3, 4, 5].map(i => (
-          <span key={i} className={`star ${i <= Math.round(score) ? 'filled' : ''}`}>
+          <span key={i} className={`star ${i <= Math.floor(safeScore) ? 'filled' : ''}`}>
             ★
           </span>
         ))}

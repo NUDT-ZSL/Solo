@@ -2,9 +2,14 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from 'recharts';
 import WordCloud from 'wordcloud';
 import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime.js';
+import 'dayjs/locale/zh-cn';
 import type { DashboardData, CategoryHeat, FilmWithStats, Rating } from '../../types.js';
 
-const API_BASE = 'http://localhost:3001';
+dayjs.extend(relativeTime);
+dayjs.locale('zh-cn');
+
+const API_BASE = '';
 
 const TABS = ['全部', '剧情', '纪录片', '动画'] as const;
 type TabType = typeof TABS[number];
@@ -264,13 +269,13 @@ const Dashboard: React.FC = () => {
       <div className="chart-container">
         <h2 className="chart-title">分类热度</h2>
         <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={data.categoryHeats} onClick={(data) => data && handleBarClick(data.activePayload[0].payload.category)}>
+          <BarChart data={data.categoryHeats}>
             {renderBarGradient('barGradient')}
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
             <XAxis dataKey="category" stroke="#5d4037" />
             <YAxis stroke="#5d4037" />
             <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="heat" name="热度" fill="url(#barGradient)" radius={[4, 4, 0, 0]} cursor="pointer">
+            <Bar dataKey="heat" name="热度" fill="url(#barGradient)" radius={[4, 4, 0, 0]} cursor="pointer" onClick={(data: any) => data?.payload?.category && handleBarClick(data.payload.category)}>
               {data.categoryHeats.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
@@ -339,7 +344,7 @@ const Dashboard: React.FC = () => {
                 relatedComments.map(comment => (
                   <div key={comment.id} className="comment-item" style={{ marginBottom: 8 }}>
                     <div className="comment-header">
-                      <span className="comment-time">{dayjs(comment.createdAt).format('YYYY-MM-DD HH:mm')}</span>
+                      <span className="comment-time">{dayjs(comment.createdAt).fromNow()}</span>
                     </div>
                     <p className="comment-text">{comment.comment}</p>
                   </div>

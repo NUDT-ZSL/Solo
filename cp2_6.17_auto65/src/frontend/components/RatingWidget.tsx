@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 
 interface RatingWidgetProps {
   value: number;
-  onChange: (value: number) => void;
+  onChange?: (value: number) => void;
   readOnly?: boolean;
   size?: 'small' | 'normal';
 }
@@ -11,7 +11,7 @@ const RatingWidget: React.FC<RatingWidgetProps> = ({ value, onChange, readOnly =
   const [hoverValue, setHoverValue] = useState(0);
 
   const handleClick = (rating: number) => {
-    if (!readOnly) {
+    if (!readOnly && onChange) {
       onChange(rating);
     }
   };

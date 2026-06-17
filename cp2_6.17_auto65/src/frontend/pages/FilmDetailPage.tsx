@@ -2,12 +2,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime.js';
+import 'dayjs/locale/zh-cn';
 import type { FilmWithStats, Rating } from '../../types.js';
 import RatingWidget from '../components/RatingWidget.js';
 
 dayjs.extend(relativeTime);
+dayjs.locale('zh-cn');
 
-const API_BASE = 'http://localhost:3001';
+const API_BASE = '';
 
 interface FilmDetailResponse extends FilmWithStats {
   recentComments: Rating[];
@@ -85,9 +87,23 @@ const FilmDetailPage: React.FC = () => {
         throw new Error(errorData.error || '提交评分失败');
       }
 
+      const newRating: Rating = await response.json();
+
+      setFilm(prev => {
+        if (!prev) return prev;
+        const updatedComments = [newRating, ...prev.recentComments].slice(0, 10);
+        const newVoteCount = prev.voteCount + 1;
+        const newAverageScore = Math.round(((prev.averageScore * prev.voteCount + newRating.score) / newVoteCount) * 10) / 10;
+        return {
+          ...prev,
+          recentComments: updatedComments,
+          averageScore: newAverageScore,
+          voteCount: newVoteCount,
+        };
+      });
+
       setScore(0);
       setComment('');
-      fetchFilmDetail();
     } catch (err) {
       showToast(err instanceof Error ? err.message : '提交失败');
     } finally {
@@ -120,7 +136,7 @@ const FilmDetailPage: React.FC = () => {
           <p className="film-detail-description">{film.description}</p>
           <div className="film-detail-stats">
             <div>
-              <RatingWidget value={Math.round(film.averageScore)} readOnly size="normal" />
+              <RatingWidget value={Math.floor(film.averageScore ?? 0)} readOnly size="normal" />
               <span style={{ marginLeft: '8px', fontSize: '20px', fontWeight: 'bold', color: '#ffb300' }}>
                 {film.averageScore.toFixed(1)}
               </span>

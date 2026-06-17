@@ -21,9 +21,10 @@ function loadRatings(): Rating[] {
   }
   const ratingsPath = path.join(dataDir, 'ratings.json');
   const data = fs.readFileSync(ratingsPath, 'utf-8');
-  ratingsCache = JSON.parse(data);
+  const parsed = JSON.parse(data) as Rating[];
+  ratingsCache = parsed;
   cacheTime = Date.now();
-  return ratingsCache;
+  return parsed;
 }
 
 function saveRatings(ratings: Rating[]): void {
@@ -32,6 +33,15 @@ function saveRatings(ratings: Rating[]): void {
   ratingsCache = ratings;
   cacheTime = Date.now();
 }
+
+router.get('/', (req: Request, res: Response) => {
+  try {
+    const ratings = loadRatings();
+    res.json(ratings);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to load ratings' });
+  }
+});
 
 router.post('/', (req: Request, res: Response) => {
   try {
