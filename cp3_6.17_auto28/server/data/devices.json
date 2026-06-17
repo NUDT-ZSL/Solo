@@ -1,0 +1,162 @@
+[
+  {
+    "id": "dev-001",
+    "name": "Dell UltraSharp 27寸 4K显示器",
+    "type": "显示器",
+    "imageUrl": "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=600&h=400&fit=crop",
+    "status": "available",
+    "creditRequirement": 80,
+    "specs": {
+      "分辨率": "3840 x 2160 (4K)",
+      "面板类型": "IPS",
+      "刷新率": "60Hz",
+      "接口": "USB-C, HDMI, DisplayPort",
+      "尺寸": "27英寸",
+      "亮度": "350 cd/m²"
+    }
+  },
+  {
+    "id": "dev-002",
+    "name": "Sony WH-1000XM5 降噪耳机",
+    "type": "耳机",
+    "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&h=400&fit=crop",
+    "status": "available",
+    "creditRequirement": 60,
+    "specs": {
+      "类型": "头戴式",
+      "降噪": "主动降噪",
+      "续航": "30小时",
+      "连接方式": "蓝牙5.2 / 3.5mm",
+      "重量": "250g",
+      "麦克风": "内置"
+    }
+  },
+  {
+    "id": "dev-003",
+    "name": "Epson EB-X51 投影仪",
+    "type": "投影仪",
+    "imageUrl": "https://images.unsplash.com/photo-1478720568477-152d9b164e26?w=600&h=400&fit=crop",
+    "status": "available",
+    "creditRequirement": 90,
+    "specs": {
+      "亮度": "3800流明",
+      "分辨率": "XGA (1024 x 768)",
+      "对比度": "16000:1",
+      "投影方式": "3LCD",
+      "投射比": "1.49 - 1.95:1",
+      "接口": "HDMI, VGA, USB"
+    }
+  },
+  {
+    "id": "dev-004",
+    "name": "LG Gram 16寸 笔记本",
+    "type": "笔记本",
+    "imageUrl": "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=600&h=400&fit=crop",
+    "status": "borrowed",
+    "creditRequirement": 85,
+    "specs": {
+      "CPU": "Intel Core i7-1360P",
+      "内存": "16GB LPDDR5",
+      "存储": "512GB NVMe SSD",
+      "屏幕": "16英寸 2560x1600",
+      "重量": "1.19kg",
+      "续航": "22小时"
+    }
+  },
+  {
+    "id": "dev-005",
+    "name": "Apple Magic Keyboard 妙控键盘",
+    "type": "外设",
+    "imageUrl": "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=600&h=400&fit=crop",
+    "status": "available",
+    "creditRequirement": 50,
+    "specs": {
+      "类型": "薄膜键盘",
+      "连接方式": "蓝牙 / Lightning",
+      "布局": "全尺寸104键",
+      "续航": "约1个月",
+      "材质": "铝合金",
+      "重量": "109g"
+    }
+  },
+  {
+    "id": "dev-006",
+    "name": "Canon EOS R50 微单相机",
+    "type": "相机",
+    "imageUrl": "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=600&h=400&fit=crop",
+    "status": "maintenance",
+    "creditRequirement": 95,
+    "specs": {
+      "传感器": "APS-C CMOS",
+      "像素": "2420万",
+      "视频": "4K 30fps",
+      "连拍": "15fps",
+      "ISO范围": "100-32000",
+      "重量": "375g (含电池)"
+    }
+  },
+  {
+    "id": "dev-007",
+    "name": "Kindle Paperwhite 电子书阅读器",
+    "type": "阅读器",
+    "imageUrl": "https://images.unsplash.com/photo-1592434134753-a70baf7979d5?w=600&h=400&fit=crop",
+    "status": "available",
+    "creditRequirement": 40,
+    "specs": {
+      "屏幕": "6.8英寸墨水屏",
+      "分辨率": "300ppi",
+      "存储": "8GB",
+      "防水": "IPX8",
+      "续航": "约10周",
+      "灯光": "17级可调暖光"
+    }
+  },
+  {
+    "id": "dev-008",
+    "name": "iPad Pro 12.9寸 M2",
+    "type": "平板",
+    "imageUrl": "https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=600&h=400&fit=crop",
+    "status": "available",
+    "creditRequirement": 85,
+    "specs": {
+      "芯片": "Apple M2",
+      "屏幕": "12.9英寸 Liquid Retina XDR",
+      "存储": "256GB",
+      "分辨率": "2732 x 2048",
+      "摄像头": "12MP广角 + 10MP超广角",
+      "重量": "682g (WiFi版)"
+    }
+  },
+  {
+    "id": "dev-009",
+    "name": "Blue Yeti 专业麦克风",
+    "type": "音频设备",
+    "imageUrl": "https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=600&h=400&fit=crop",
+    "status": "available",
+    "creditRequirement": 60,
+    "specs": {
+      "类型": "电容麦克风",
+      "拾音模式": "4种模式",
+      "采样率": "48kHz/16-bit",
+      "连接方式": "USB",
+      "频率响应": "20Hz - 20kHz",
+      "重量": "550g"
+    }
+  },
+  {
+    "id": "dev-010",
+    "name": "Logitech MX Master 3S 鼠标",
+    "type": "外设",
+    "imageUrl": "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=600&h=400&fit=crop",
+    "status": "available",
+    "creditRequirement": 40,
+    "specs": {
+      "类型": "无线激光鼠标",
+      "DPI": "8000",
+      "按键数": "7个可编程键",
+      "续航": "约70天",
+      "连接方式": "蓝牙 / USB接收器",
+      "重量": "141g"
+    }
+  }
+]

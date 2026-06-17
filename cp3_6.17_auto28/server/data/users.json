@@ -1,0 +1,20 @@
+[
+  {
+    "id": "user-001",
+    "name": "张明",
+    "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=zhangming",
+    "creditScore": 98
+  },
+  {
+    "id": "user-002",
+    "name": "李华",
+    "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=lihua",
+    "creditScore": 75
+  },
+  {
+    "id": "user-003",
+    "name": "王芳",
+    "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=wangfang",
+    "creditScore": 100
+  }
+]

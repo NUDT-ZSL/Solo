@@ -1,0 +1,42 @@
+[
+  {
+    "id": "rec-001",
+    "deviceId": "dev-004",
+    "userId": "user-001",
+    "borrowTime": "2026-06-15T09:00:00.000Z",
+    "returnTime": null,
+    "status": "borrowing"
+  },
+  {
+    "id": "rec-002",
+    "deviceId": "dev-002",
+    "userId": "user-003",
+    "borrowTime": "2026-06-10T10:30:00.000Z",
+    "returnTime": "2026-06-11T09:15:00.000Z",
+    "status": "returned_on_time"
+  },
+  {
+    "id": "rec-003",
+    "deviceId": "dev-001",
+    "userId": "user-002",
+    "borrowTime": "2026-06-01T14:00:00.000Z",
+    "returnTime": "2026-06-03T11:00:00.000Z",
+    "status": "returned_overdue"
+  },
+  {
+    "id": "rec-004",
+    "deviceId": "dev-005",
+    "userId": "user-001",
+    "borrowTime": "2026-06-05T08:45:00.000Z",
+    "returnTime": "2026-06-05T17:30:00.000Z",
+    "status": "returned_on_time"
+  },
+  {
+    "id": "rec-005",
+    "deviceId": "dev-007",
+    "userId": "user-003",
+    "borrowTime": "2026-06-08T11:20:00.000Z",
+    "returnTime": "2026-06-09T10:00:00.000Z",
+    "status": "returned_on_time"
+  }
+]
