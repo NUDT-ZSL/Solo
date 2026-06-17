@@ -1,0 +1,190 @@
+.app-container {
+  min-height: 100vh;
+  background-color: #faf3e0;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  height: 64px;
+  background-color: #ffffff;
+  border-bottom: 2px solid #e0d8c8;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.header-input-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-width: 200px;
+}
+
+.char-input {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 8px;
+  border: 1px solid #d4c5a9;
+  font-size: 18px;
+  outline: none;
+  width: 200px;
+  transition: border-color 0.2s ease;
+  background-color: #fff;
+  font-family: inherit;
+}
+
+.char-input:focus {
+  border-color: #8d6e63;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.speed-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.speed-label {
+  font-size: 14px;
+  color: #424242;
+}
+
+.speed-mark {
+  font-size: 12px;
+  color: #757575;
+}
+
+.speed-slider {
+  width: 100px;
+  accent-color: #8d6e63;
+  cursor: pointer;
+}
+
+.control-button {
+  height: 36px;
+  padding: 0 20px;
+  border-radius: 6px;
+  background-color: #8d6e63;
+  color: #ffffff;
+  border: none;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+  font-family: inherit;
+}
+
+.control-button:hover {
+  background-color: #6d4c41;
+  transform: scale(1.02);
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 32px 16px;
+  gap: 24px;
+}
+
+.char-buttons-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-width: 640px;
+  align-items: center;
+}
+
+.char-buttons-label {
+  font-size: 14px;
+  color: #424242;
+  align-self: center;
+  margin-right: 8px;
+}
+
+.char-button {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  border: 1px solid #d4c5a9;
+  background-color: #ffffff;
+  font-size: 18px;
+  color: #424242;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.char-button:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(141, 110, 99, 0.2);
+}
+
+.char-button-active {
+  border: 2px solid #8d6e63;
+  background-color: #fff8e1;
+}
+
+.canvas-container {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+}
+
+.progress-info {
+  position: absolute;
+  left: 112px;
+  bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 80px;
+}
+
+.progress-text {
+  font-size: 14px;
+  color: #424242;
+  line-height: 1.5;
+}
+
+.progress-highlight {
+  color: #8d6e63;
+}
+
+.progress-status {
+  font-size: 12px;
+  color: #757575;
+  margin-top: 4px;
+}
+
+.error-message {
+  padding: 16px 24px;
+  background-color: #fff3e0;
+  border-radius: 8px;
+  border: 1px solid #ffe0b2;
+  font-size: 14px;
+  color: #e65100;
+}
+
+@media (max-width: 768px) {
+  .app-header {
+    height: 56px;
+    padding: 0 16px;
+  }
+
+  .canvas-container {
+    max-width: 96%;
+  }
+}
