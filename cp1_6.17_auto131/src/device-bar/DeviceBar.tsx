@@ -22,11 +22,22 @@ const DeviceBar = ({
   maxWidth
 }: DeviceBarProps) => {
   const [inputValue, setInputValue] = useState<string>(String(previewWidth))
+  const [highlightVersion, setHighlightVersion] = useState<number>(0)
+  const prevDeviceIdRef = useRef<string>(currentDevice.id)
   const inputRef = useRef<HTMLInputElement>(null)
+  const lastValidWidth = useRef<number>(previewWidth)
 
   useEffect(() => {
     setInputValue(String(previewWidth))
+    lastValidWidth.current = previewWidth
   }, [previewWidth])
+
+  useEffect(() => {
+    if (prevDeviceIdRef.current !== currentDevice.id) {
+      prevDeviceIdRef.current = currentDevice.id
+      setHighlightVersion(v => v + 1)
+    }
+  }, [currentDevice.id])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
@@ -35,16 +46,35 @@ const DeviceBar = ({
     }
   }
 
+  const clampWidth = (value: number): number => {
+    return Math.max(320, Math.min(2560, Math.round(value)))
+  }
+
+  const isValidNumber = (value: string): boolean => {
+    if (value.trim() === '') return false
+    const num = Number(value)
+    return !isNaN(num) && isFinite(num)
+  }
+
   const applyWidthChange = () => {
-    const numValue = parseInt(inputValue, 10)
-    if (!isNaN(numValue)) {
-      const clamped = Math.min(Math.max(numValue, minWidth), maxWidth)
+    const trimmedValue = inputValue.trim()
+    
+    if (!isValidNumber(trimmedValue)) {
+      setInputValue(String(lastValidWidth.current))
+      return
+    }
+    
+    let numValue = parseFloat(trimmedValue)
+    
+    if (!isNaN(numValue) && isFinite(numValue)) {
+      const clamped = clampWidth(numValue)
       setInputValue(String(clamped))
+      lastValidWidth.current = clamped
       if (clamped !== previewWidth) {
         onWidthChange(clamped)
       }
     } else {
-      setInputValue(String(previewWidth))
+      setInputValue(String(lastValidWidth.current))
     }
   }
 
@@ -61,17 +91,21 @@ const DeviceBar = ({
   }
 
   const handleStepUp = () => {
-    const newValue = Math.min(previewWidth + 10, maxWidth)
-    if (newValue !== previewWidth) {
-      onWidthChange(newValue)
+    const clamped = clampWidth(previewWidth + 10)
+    if (clamped !== previewWidth) {
+      onWidthChange(clamped)
     }
   }
 
   const handleStepDown = () => {
-    const newValue = Math.max(previewWidth - 10, minWidth)
-    if (newValue !== previewWidth) {
-      onWidthChange(newValue)
+    const clamped = clampWidth(previewWidth - 10)
+    if (clamped !== previewWidth) {
+      onWidthChange(clamped)
     }
+  }
+
+  const handleDeviceClick = (device: Device) => {
+    onDeviceSelect(device)
   }
 
   const renderDeviceIcon = (icon: Device['icon']) => {
@@ -104,19 +138,27 @@ const DeviceBar = ({
   return (
     <div className={styles.deviceBar}>
       <div className={styles.deviceList}>
-        {devices.map((device) => (
-          <div
-            key={device.id}
-            className={`${styles.deviceItem} ${currentDevice.id === device.id ? styles.active : ''}`}
-            onClick={() => onDeviceSelect(device)}
-          >
-            <div className={styles.deviceIcon}>
-              {renderDeviceIcon(device.icon)}
+        {devices.map((device) => {
+          const isActive = currentDevice.id === device.id
+          return (
+            <div
+              key={device.id}
+              className={`${styles.deviceItem} ${isActive ? styles.active : ''}`}
+              onClick={() => handleDeviceClick(device)}
+            >
+              <div className={styles.deviceIcon}>
+                {renderDeviceIcon(device.icon)}
+              </div>
+              <span className={styles.deviceName}>{device.name}</span>
+              {isActive && (
+                <div 
+                  key={`highlight-${device.id}-${highlightVersion}`}
+                  className={styles.highlightBar}
+                />
+              )}
             </div>
-            <span className={styles.deviceName}>{device.name}</span>
-            <div className={styles.highlightBar} />
-          </div>
-        ))}
+          )
+        })}
       </div>
       
       <div className={styles.widthControl}>
@@ -136,6 +178,7 @@ const DeviceBar = ({
               className={styles.stepButton}
               onClick={handleStepUp}
               aria-label="增加宽度"
+              disabled={previewWidth >= 2560}
             >
               ▲
             </button>
@@ -143,6 +186,7 @@ const DeviceBar = ({
               className={styles.stepButton}
               onClick={handleStepDown}
               aria-label="减少宽度"
+              disabled={previewWidth <= 320}
             >
               ▼
             </button>

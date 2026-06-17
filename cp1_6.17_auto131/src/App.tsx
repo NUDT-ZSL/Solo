@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useLayoutEffect } from 'react'
 import DeviceBar from './device-bar/DeviceBar'
 import PreviewFrame from './preview/PreviewFrame'
 import ControlPanel from './panel/ControlPanel'
@@ -7,6 +7,7 @@ import { DEVICES, DEFAULT_DEVICE, MIN_WIDTH, MAX_WIDTH, DEFAULT_PANEL_WIDTH, MIN
 function App() {
   const [currentDevice, setCurrentDevice] = useState<Device>(DEFAULT_DEVICE)
   const [previewWidth, setPreviewWidth] = useState<number>(DEFAULT_DEVICE.width)
+  const [displayWidth, setDisplayWidth] = useState<number>(DEFAULT_DEVICE.width)
   const [panelWidth, setPanelWidth] = useState<number>(DEFAULT_PANEL_WIDTH)
   const [isDragging, setIsDragging] = useState<boolean>(false)
   const [logs, setLogs] = useState<LogEntry[]>([])
@@ -19,6 +20,9 @@ function App() {
   const dragStartX = useRef<number>(0)
   const dragStartWidth = useRef<number>(DEFAULT_PANEL_WIDTH)
   const logIdCounter = useRef<number>(0)
+  const lastDeviceIdRef = useRef<string>(DEFAULT_DEVICE.id)
+  const pendingWidthRef = useRef<number | null>(null)
+  const rafRef = useRef<number | null>(null)
 
   const addLog = useCallback((type: LogEntry['type'], message: string) => {
     const entry: LogEntry = {
@@ -36,22 +40,27 @@ function App() {
   }, [addLog])
 
   const handleDeviceSelect = useCallback((device: Device) => {
+    if (lastDeviceIdRef.current === device.id) return
+    lastDeviceIdRef.current = device.id
     setCurrentDevice(device)
-    setPreviewWidth(device.width)
+    pendingWidthRef.current = device.width
     addLog('device', `切换到 ${device.name} (${device.width}px)`)
   }, [addLog])
 
   const handleWidthChange = useCallback((width: number) => {
     const clampedWidth = Math.min(Math.max(width, MIN_WIDTH), MAX_WIDTH)
+    if (clampedWidth === previewWidth) return
+    pendingWidthRef.current = clampedWidth
     setPreviewWidth(clampedWidth)
     
     const matchedDevice = DEVICES.find(d => d.width === clampedWidth)
     if (matchedDevice) {
+      lastDeviceIdRef.current = matchedDevice.id
       setCurrentDevice(matchedDevice)
     }
     
     addLog('device', `宽度调整为 ${clampedWidth}px`)
-  }, [addLog])
+  }, [previewWidth, addLog])
 
   const handleSettingChange = useCallback((key: keyof PanelSettings, value: boolean) => {
     setPanelSettings(prev => ({ ...prev, [key]: value }))
@@ -113,6 +122,27 @@ function App() {
     document.body.style.userSelect = ''
   }, [isDragging])
 
+  useLayoutEffect(() => {
+    if (pendingWidthRef.current !== null && pendingWidthRef.current !== displayWidth) {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current)
+      }
+      rafRef.current = requestAnimationFrame(() => {
+        if (pendingWidthRef.current !== null) {
+          setDisplayWidth(pendingWidthRef.current)
+          pendingWidthRef.current = null
+        }
+        rafRef.current = null
+      })
+    }
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
+      }
+    }
+  }, [previewWidth, currentDevice, displayWidth])
+
   useEffect(() => {
     if (isDragging) {
       window.addEventListener('mousemove', handleDragMove)
@@ -125,6 +155,14 @@ function App() {
       window.removeEventListener('mouseleave', handleDragEnd)
     }
   }, [isDragging, handleDragMove, handleDragEnd])
+
+  useEffect(() => {
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current)
+      }
+    }
+  }, [])
 
   return (
     <div style={{
@@ -151,7 +189,7 @@ function App() {
         position: 'relative'
       }}>
         <PreviewFrame
-          width={previewWidth}
+          width={displayWidth}
           deviceName={currentDevice.name}
           showSafeArea={panelSettings.showSafeArea}
           showTouchHotspots={panelSettings.showTouchHotspots}

@@ -58,13 +58,17 @@
   height: 2px;
   width: 100%;
   background-color: #3B82F6;
-  transform: scaleX(0);
   transform-origin: left center;
-  transition: transform 0.2s ease-in-out;
+  animation: highlightSlideIn 0.2s ease-in-out forwards;
 }
 
-.deviceItem.active .highlightBar {
-  transform: scaleX(1);
+@keyframes highlightSlideIn {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
 }
 
 .widthControl {
@@ -133,13 +137,18 @@
   line-height: 1;
 }
 
-.stepButton:hover {
+.stepButton:hover:not(:disabled) {
   background-color: #334155;
   color: #E2E8F0;
 }
 
-.stepButton:active {
+.stepButton:active:not(:disabled) {
   background-color: #475569;
+}
+
+.stepButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .stepButton:first-child {
