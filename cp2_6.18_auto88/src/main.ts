@@ -45,17 +45,17 @@ class App {
       const width = window.innerWidth;
       const leftPanel = document.querySelector<HTMLElement>('[style*="left: 0px"]');
       const rightPanel = document.getElementById('detail-panel');
-      const zoomIndicator = document.querySelector<HTMLElement>('[style*="left: 260px"]');
+      const zoomIndicator = document.querySelector<HTMLElement>('[style*="left: 300px"], [style*="left: 260px"]');
 
       if (width < 1200 && leftPanel) {
-        leftPanel.style.width = '200px';
+        leftPanel.style.width = '220px';
         if (zoomIndicator) {
-          zoomIndicator.style.left = '220px';
+          zoomIndicator.style.left = '240px';
         }
       } else if (leftPanel) {
-        leftPanel.style.width = '240px';
+        leftPanel.style.width = '280px';
         if (zoomIndicator) {
-          zoomIndicator.style.left = '260px';
+          zoomIndicator.style.left = '300px';
         }
       }
 
