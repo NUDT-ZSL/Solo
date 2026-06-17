@@ -35,7 +35,7 @@ export class LightingModule {
     this.scene = scene;
     this.state = {
       timeOfDay: 'noon',
-      colorTemp: 4500,
+      colorTemp: 5500,
       intensity: 1.0
     };
 

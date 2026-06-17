@@ -23,26 +23,28 @@ export class SceneModule {
 
     this.wallMaterial = new THREE.MeshStandardMaterial({
       color: 0xF5F5F5,
-      side: THREE.DoubleSide,
-      roughness: 0.8,
+      side: THREE.FrontSide,
+      roughness: 0.85,
       metalness: 0.0
     });
 
     this.windowMaterial = new THREE.MeshPhysicalMaterial({
-      color: 0x87CEEB,
+      color: 0xE0F0FF,
       transparent: true,
-      opacity: 0.3,
-      roughness: 0.1,
+      opacity: 0.4,
+      roughness: 0.05,
       metalness: 0.0,
       transmission: 0.9,
-      thickness: 0.1,
-      ior: 1.5
+      thickness: 0.5,
+      ior: 1.5,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.0
     });
 
     this.windowFrameMaterial = new THREE.MeshStandardMaterial({
-      color: 0x888888,
-      roughness: 0.4,
-      metalness: 0.6
+      color: 0x222222,
+      roughness: 0.5,
+      metalness: 0.3
     });
 
     this.floorMaterial = new THREE.MeshStandardMaterial({
@@ -60,14 +62,12 @@ export class SceneModule {
     this.glassMaterial = new THREE.MeshPhysicalMaterial({
       color: 0xE0E7FF,
       transparent: true,
-      opacity: 0.7,
+      opacity: 0.5,
       roughness: 0.1,
-      metalness: 0.1,
-      transmission: 0.5,
-      thickness: 0.3,
-      ior: 1.5,
-      clearcoat: 1.0,
-      clearcoatRoughness: 0.1
+      metalness: 0.0,
+      transmission: 0.6,
+      thickness: 0.2,
+      ior: 1.5
     });
 
     this.metalMaterial = new THREE.MeshStandardMaterial({
@@ -111,16 +111,9 @@ export class SceneModule {
     ceiling.receiveShadow = true;
     this.roomGroup.add(ceiling);
 
-    const backWallGeo = new THREE.PlaneGeometry(roomWidth, roomHeight);
-    const backWall = new THREE.Mesh(backWallGeo, this.wallMaterial);
-    backWall.position.z = -roomDepth / 2;
-    backWall.position.y = roomHeight / 2;
-    backWall.receiveShadow = true;
-    this.roomGroup.add(backWall);
+    this.createBackWallWithWindow(roomWidth, roomHeight, roomDepth);
 
-    this.createFrontWallWithWindow(roomWidth, roomHeight, roomDepth);
-
-    this.createWindow(roomWidth, roomHeight, roomDepth);
+    this.createWindowOnBackWall(roomWidth, roomHeight, roomDepth);
 
     const leftWallGeo = new THREE.PlaneGeometry(roomDepth, roomHeight);
     const leftWall = new THREE.Mesh(leftWallGeo, this.wallMaterial);
@@ -139,92 +132,84 @@ export class SceneModule {
     this.roomGroup.add(rightWall);
   }
 
-  private createFrontWallWithWindow(roomWidth: number, roomHeight: number, roomDepth: number): void {
-    const windowWidth = 4;
+  private createBackWallWithWindow(roomWidth: number, roomHeight: number, roomDepth: number): void {
+    const windowWidth = 3;
     const windowHeight = 2;
     const windowBottom = 0.5;
-    const windowLeft = -windowWidth / 2;
-    const windowRight = windowWidth / 2;
     const windowTop = windowBottom + windowHeight;
-
-    const wallThickness = 0.05;
+    const z = -roomDepth / 2;
 
     const topWallGeo = new THREE.PlaneGeometry(roomWidth, roomHeight - windowTop);
     const topWall = new THREE.Mesh(topWallGeo, this.wallMaterial);
-    topWall.position.set(0, (windowTop + roomHeight) / 2, roomDepth / 2);
-    topWall.rotation.y = Math.PI;
+    topWall.position.set(0, (windowTop + roomHeight) / 2, z);
     topWall.receiveShadow = true;
     this.roomGroup.add(topWall);
 
     const bottomWallGeo = new THREE.PlaneGeometry(roomWidth, windowBottom);
     const bottomWall = new THREE.Mesh(bottomWallGeo, this.wallMaterial);
-    bottomWall.position.set(0, windowBottom / 2, roomDepth / 2);
-    bottomWall.rotation.y = Math.PI;
+    bottomWall.position.set(0, windowBottom / 2, z);
     bottomWall.receiveShadow = true;
     this.roomGroup.add(bottomWall);
 
-    const leftWallWidth = (roomWidth - windowWidth) / 2;
-    const leftWallGeo = new THREE.PlaneGeometry(leftWallWidth, windowHeight);
+    const sideWallWidth = (roomWidth - windowWidth) / 2;
+    const leftWallGeo = new THREE.PlaneGeometry(sideWallWidth, windowHeight);
     const leftWall = new THREE.Mesh(leftWallGeo, this.wallMaterial);
-    leftWall.position.set(-roomWidth / 2 + leftWallWidth / 2, windowBottom + windowHeight / 2, roomDepth / 2);
-    leftWall.rotation.y = Math.PI;
+    leftWall.position.set(-roomWidth / 2 + sideWallWidth / 2, windowBottom + windowHeight / 2, z);
     leftWall.receiveShadow = true;
     this.roomGroup.add(leftWall);
 
-    const rightWallGeo = new THREE.PlaneGeometry(leftWallWidth, windowHeight);
+    const rightWallGeo = new THREE.PlaneGeometry(sideWallWidth, windowHeight);
     const rightWall = new THREE.Mesh(rightWallGeo, this.wallMaterial);
-    rightWall.position.set(roomWidth / 2 - leftWallWidth / 2, windowBottom + windowHeight / 2, roomDepth / 2);
-    rightWall.rotation.y = Math.PI;
+    rightWall.position.set(roomWidth / 2 - sideWallWidth / 2, windowBottom + windowHeight / 2, z);
     rightWall.receiveShadow = true;
     this.roomGroup.add(rightWall);
   }
 
-  private createWindow(roomWidth: number, roomHeight: number, roomDepth: number): void {
-    const windowWidth = 4;
+  private createWindowOnBackWall(roomWidth: number, roomHeight: number, roomDepth: number): void {
+    const windowWidth = 3;
     const windowHeight = 2;
     const windowBottom = 0.5;
     const frameThickness = 0.08;
-    const zOffset = roomDepth / 2 - 0.01;
+    const z = -roomDepth / 2 + 0.01;
 
     const glassGeo = new THREE.PlaneGeometry(windowWidth - frameThickness, windowHeight - frameThickness);
     const glass = new THREE.Mesh(glassGeo, this.windowMaterial);
-    glass.position.set(0, windowBottom + windowHeight / 2, zOffset);
-    glass.rotation.y = Math.PI;
+    glass.position.set(0, windowBottom + windowHeight / 2, z);
     glass.receiveShadow = true;
     this.roomGroup.add(glass);
 
     const frameDepth = 0.06;
     const topFrameGeo = new THREE.BoxGeometry(windowWidth, frameThickness, frameDepth);
     const topFrame = new THREE.Mesh(topFrameGeo, this.windowFrameMaterial);
-    topFrame.position.set(0, windowBottom + windowHeight - frameThickness / 2, zOffset);
+    topFrame.position.set(0, windowBottom + windowHeight - frameThickness / 2, z);
     topFrame.castShadow = true;
     topFrame.receiveShadow = true;
     this.roomGroup.add(topFrame);
 
     const bottomFrameGeo = new THREE.BoxGeometry(windowWidth, frameThickness, frameDepth);
     const bottomFrame = new THREE.Mesh(bottomFrameGeo, this.windowFrameMaterial);
-    bottomFrame.position.set(0, windowBottom + frameThickness / 2, zOffset);
+    bottomFrame.position.set(0, windowBottom + frameThickness / 2, z);
     bottomFrame.castShadow = true;
     bottomFrame.receiveShadow = true;
     this.roomGroup.add(bottomFrame);
 
     const leftFrameGeo = new THREE.BoxGeometry(frameThickness, windowHeight, frameDepth);
     const leftFrame = new THREE.Mesh(leftFrameGeo, this.windowFrameMaterial);
-    leftFrame.position.set(-windowWidth / 2 + frameThickness / 2, windowBottom + windowHeight / 2, zOffset);
+    leftFrame.position.set(-windowWidth / 2 + frameThickness / 2, windowBottom + windowHeight / 2, z);
     leftFrame.castShadow = true;
     leftFrame.receiveShadow = true;
     this.roomGroup.add(leftFrame);
 
     const rightFrameGeo = new THREE.BoxGeometry(frameThickness, windowHeight, frameDepth);
     const rightFrame = new THREE.Mesh(rightFrameGeo, this.windowFrameMaterial);
-    rightFrame.position.set(windowWidth / 2 - frameThickness / 2, windowBottom + windowHeight / 2, zOffset);
+    rightFrame.position.set(windowWidth / 2 - frameThickness / 2, windowBottom + windowHeight / 2, z);
     rightFrame.castShadow = true;
     rightFrame.receiveShadow = true;
     this.roomGroup.add(rightFrame);
 
     const mullionGeo = new THREE.BoxGeometry(frameThickness * 0.6, windowHeight - frameThickness, frameDepth * 0.8);
     const mullion = new THREE.Mesh(mullionGeo, this.windowFrameMaterial);
-    mullion.position.set(0, windowBottom + windowHeight / 2, zOffset);
+    mullion.position.set(0, windowBottom + windowHeight / 2, z);
     mullion.castShadow = true;
     mullion.receiveShadow = true;
     this.roomGroup.add(mullion);
