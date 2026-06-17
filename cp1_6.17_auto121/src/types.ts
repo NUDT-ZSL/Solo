@@ -105,6 +105,8 @@ export interface Enemy {
   knockupOffsetX: number;
   knockupOffsetY: number;
   knockupVelocityY: number;
+  hitFlashTimer: number;
+  displayHealth: number;
 }
 
 export interface HitRecord {

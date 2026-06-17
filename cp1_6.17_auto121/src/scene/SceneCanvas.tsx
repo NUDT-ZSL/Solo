@@ -45,6 +45,10 @@ const RESPAWN_DELAY = 1.0;
 const HEALTH_BAR_WIDTH = 40;
 const HEALTH_BAR_HEIGHT = 6;
 const DEG_TO_RAD = Math.PI / 180;
+const BREATH_AMPLITUDE = 2.5;
+const BREATH_PERIOD = 1.5;
+const HIT_FLASH_DURATION = 0.1;
+const HEALTH_BAR_LERP_SPEED = 5;
 
 function generateEnemies(
   canvasWidth: number,
@@ -106,6 +110,8 @@ function generateEnemies(
           knockupOffsetX: 0,
           knockupOffsetY: 0,
           knockupVelocityY: 0,
+          hitFlashTimer: 0,
+          displayHealth: health,
         });
       }
     }
@@ -166,6 +172,7 @@ const SceneCanvas: React.FC<SceneCanvasProps> = ({
   const enemyConfigRef = useRef<EnemyConfig>(enemyConfig);
   const currentShotHitRef = useRef<boolean>(false);
   const enemyIndexMapRef = useRef<Map<string, number>>(new Map());
+  const gameTimeRef = useRef<number>(0);
 
   useEffect(() => {
     bulletConfigRef.current = bulletConfig;
@@ -283,6 +290,7 @@ const SceneCanvas: React.FC<SceneCanvasProps> = ({
 
       const dt = Math.min((timestamp - lastFrameTimeRef.current) / 1000, 0.05);
       lastFrameTimeRef.current = timestamp;
+      gameTimeRef.current += dt;
 
       const fps = dt > 0 ? Math.round(1 / dt) : 60;
       fpsHistoryRef.current.push(fps);
@@ -397,8 +405,9 @@ const SceneCanvas: React.FC<SceneCanvasProps> = ({
 
         for (const enemy of enemies) {
           if (bullet.hitEnemyIds.has(enemy.id)) continue;
+          const breathOff = Math.sin(gameTimeRef.current * (2 * Math.PI / BREATH_PERIOD) + enemy.originalX * 0.1) * BREATH_AMPLITUDE;
           const dx = enemy.x + enemy.width / 2 + enemy.knockbackOffsetX + enemy.knockupOffsetX - bullet.x;
-          const dy = enemy.y + enemy.height / 2 + enemy.knockupOffsetY - bullet.y;
+          const dy = enemy.y + enemy.height / 2 + enemy.knockupOffsetY + breathOff - bullet.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
           if (dist < nearestDist) {
             nearestDist = dist;
@@ -407,8 +416,9 @@ const SceneCanvas: React.FC<SceneCanvasProps> = ({
         }
 
         if (nearestEnemy && nearestDist > TRACKING_LOCK_DISTANCE) {
+          const nbreathOff = Math.sin(gameTimeRef.current * (2 * Math.PI / BREATH_PERIOD) + nearestEnemy.originalX * 0.1) * BREATH_AMPLITUDE;
           const targetAngle = Math.atan2(
-            nearestEnemy.y + nearestEnemy.height / 2 + nearestEnemy.knockupOffsetY - bullet.y,
+            nearestEnemy.y + nearestEnemy.height / 2 + nearestEnemy.knockupOffsetY + nbreathOff - bullet.y,
             nearestEnemy.x + nearestEnemy.width / 2 + nearestEnemy.knockbackOffsetX + nearestEnemy.knockupOffsetX - bullet.x
           );
           const currentAngle = Math.atan2(bullet.vy, bullet.vx);
@@ -466,6 +476,20 @@ const SceneCanvas: React.FC<SceneCanvasProps> = ({
     for (let i = enemies.length - 1; i >= 0; i--) {
       const enemy = enemies[i];
 
+      if (enemy.hitFlashTimer > 0) {
+        enemy.hitFlashTimer -= dt;
+        if (enemy.hitFlashTimer < 0) {
+          enemy.hitFlashTimer = 0;
+        }
+      }
+
+      if (enemy.displayHealth > enemy.health) {
+        enemy.displayHealth -= (enemy.displayHealth - enemy.health) * HEALTH_BAR_LERP_SPEED * dt;
+        if (enemy.displayHealth - enemy.health < 0.01) {
+          enemy.displayHealth = enemy.health;
+        }
+      }
+
       if (enemy.reactionTimer > 0) {
         enemy.reactionTimer -= dt;
         const progress = 1 - enemy.reactionTimer / enemy.reactionDuration;
@@ -510,7 +534,7 @@ const SceneCanvas: React.FC<SceneCanvasProps> = ({
           const speed = 80 + Math.random() * 60;
           explosionParticlesRef.current.push({
             x: enemy.x + enemy.width / 2 + enemy.knockbackOffsetX + enemy.knockupOffsetX,
-            y: enemy.y + enemy.height / 2 + enemy.knockupOffsetY,
+            y: enemy.y + enemy.height / 2 + enemy.knockupOffsetY + Math.sin(gameTimeRef.current * (2 * Math.PI / BREATH_PERIOD) + enemy.originalX * 0.1) * BREATH_AMPLITUDE,
             vx: Math.cos(angle) * speed,
             vy: Math.sin(angle) * speed,
             size: EXPLOSION_PARTICLE_SIZE,
@@ -550,8 +574,9 @@ const SceneCanvas: React.FC<SceneCanvasProps> = ({
         if (enemy.isInvincible && enemy.hitReaction === 'flicker' && enemy.reactionTimer > 0)
           continue;
 
+        const breathOffset = Math.sin(gameTimeRef.current * (2 * Math.PI / BREATH_PERIOD) + enemy.originalX * 0.1) * BREATH_AMPLITUDE;
         const enemyDrawX = enemy.x + enemy.knockbackOffsetX + enemy.knockupOffsetX;
-        const enemyDrawY = enemy.y + enemy.knockupOffsetY;
+        const enemyDrawY = enemy.y + enemy.knockupOffsetY + breathOffset;
 
         if (
           bullet.x >= enemyDrawX &&
@@ -561,6 +586,8 @@ const SceneCanvas: React.FC<SceneCanvasProps> = ({
         ) {
           bullet.hitEnemyIds.add(enemy.id);
           bulletHitAny = true;
+
+          enemy.hitFlashTimer = HIT_FLASH_DURATION;
 
           if (enemy.reactionTimer <= 0) {
             switch (enemy.hitReaction) {
@@ -605,13 +632,6 @@ const SceneCanvas: React.FC<SceneCanvasProps> = ({
         shotRecordsRef.current.push({ hit: true, timestamp: Date.now() });
       }
     }
-
-    const currentBullets = bulletsRef.current;
-    if (currentBullets.length > 0) {
-      for (let i = 0; i < currentBullets.length; i++) {
-        if (i >= currentBullets.length) break;
-      }
-    }
   }
 
   function drawBullets(ctx: CanvasRenderingContext2D) {
@@ -642,9 +662,11 @@ const SceneCanvas: React.FC<SceneCanvasProps> = ({
   }
 
   function drawEnemies(ctx: CanvasRenderingContext2D) {
+    const gameTime = gameTimeRef.current;
     for (const enemy of enemiesRef.current) {
+      const breathOffset = Math.sin(gameTime * (2 * Math.PI / BREATH_PERIOD) + enemy.originalX * 0.1) * BREATH_AMPLITUDE;
       const drawX = enemy.x + enemy.knockbackOffsetX + enemy.knockupOffsetX;
-      const drawY = enemy.y + enemy.knockupOffsetY;
+      const drawY = enemy.y + enemy.knockupOffsetY + breathOffset;
 
       if (enemy.hitReaction === 'flicker' && enemy.isInvincible && enemy.reactionTimer > 0) {
         const flickerOn = Math.floor(enemy.flickerTimer * 10) % 2 === 0;
@@ -664,6 +686,13 @@ const SceneCanvas: React.FC<SceneCanvasProps> = ({
 
       ctx.fillStyle = 'rgba(255,255,255,0.08)';
       ctx.fillRect(drawX + 4, drawY + 4, enemy.width - 8, enemy.height / 3);
+
+      if (enemy.hitFlashTimer > 0) {
+        const flashAlpha = enemy.hitFlashTimer / HIT_FLASH_DURATION;
+        ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha * 0.7})`;
+        ctx.fillRect(drawX, drawY, enemy.width, enemy.height);
+      }
+
       ctx.restore();
 
       drawEnemyHealthBar(ctx, enemy, drawX, drawY);
@@ -682,18 +711,18 @@ const SceneCanvas: React.FC<SceneCanvasProps> = ({
     ctx.fillStyle = '#333';
     ctx.fillRect(barX, barY, HEALTH_BAR_WIDTH, HEALTH_BAR_HEIGHT);
 
-    const healthRatio = enemy.health / enemy.maxHealth;
+    const displayRatio = Math.max(0, enemy.displayHealth / enemy.maxHealth);
     let barColor: string;
-    if (healthRatio > 0.6) {
+    if (displayRatio > 0.6) {
       barColor = '#4CAF50';
-    } else if (healthRatio > 0.3) {
+    } else if (displayRatio > 0.3) {
       barColor = '#FF9800';
     } else {
       barColor = '#F44336';
     }
 
     ctx.fillStyle = barColor;
-    ctx.fillRect(barX, barY, HEALTH_BAR_WIDTH * healthRatio, HEALTH_BAR_HEIGHT);
+    ctx.fillRect(barX, barY, HEALTH_BAR_WIDTH * displayRatio, HEALTH_BAR_HEIGHT);
   }
 
   function drawExplosionParticles(ctx: CanvasRenderingContext2D) {
