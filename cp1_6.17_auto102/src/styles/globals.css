@@ -1,0 +1,232 @@
+:root {
+  --bg-main: #FAFAFA;
+  --color-primary: #1976D2;
+  --color-border: #BDBDBD;
+  --color-border-focus: #1976D2;
+  --color-divider: #E0E0E0;
+  --color-error: #FF5252;
+  --gradient-activity: linear-gradient(135deg, #F3E5F5 0%, #E8F5E9 100%);
+  --gradient-bar: linear-gradient(180deg, #64B5F6 0%, #1E88E5 100%);
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --shadow-card-hover: 0 4px 16px rgba(0, 0, 0, 0.2);
+  --radius-base: 12px;
+  --radius-large: 16px;
+  --transition-fast: 0.2s ease;
+  --font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--bg-main);
+  font-family: var(--font-family);
+  color: #212121;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  transition: background-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+input, textarea, select {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  outline: none;
+  transition: border-color var(--transition-fast);
+  background-color: #fff;
+  width: 100%;
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: var(--color-border-focus);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 100px;
+  white-space: pre-wrap;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.page {
+  padding: 32px 0;
+  animation: fadeInUp 0.3s ease;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.btn-primary {
+  background-color: var(--color-primary);
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: var(--radius-base);
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.btn-primary:hover {
+  background-color: #1565C0;
+}
+
+.btn-primary:disabled {
+  background-color: #90CAF9;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background-color: #fff;
+  color: #424242;
+  padding: 10px 20px;
+  border-radius: var(--radius-base);
+  font-weight: 500;
+  font-size: 14px;
+  border: 1px solid var(--color-border);
+}
+
+.btn-secondary:hover {
+  background-color: #F5F5F5;
+}
+
+.card {
+  background-color: #fff;
+  border-radius: var(--radius-base);
+  box-shadow: var(--shadow-card);
+}
+
+.section-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #212121;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-content {
+  background-color: #FFFFFF;
+  border-radius: var(--radius-base);
+  width: 90%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 28px;
+  animation: scaleIn 0.25s ease;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.modal-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #757575;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  color: #212121;
+  background: none;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #424242;
+  margin-bottom: 6px;
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 0 16px;
+  }
+}
