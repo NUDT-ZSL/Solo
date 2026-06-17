@@ -1,10 +1,101 @@
 [
   {
-    "id": "5673b5db-143c-4c3b-a121-74dbb3ac6ad5",
-    "deviceId": "1",
-    "userId": "1",
-    "borrowTime": "2026-06-17T11:32:43.393Z",
-    "returnTime": "2026-06-17T11:33:01.761Z",
-    "status": "returned_on_time"
+    "id": "r001",
+    "deviceId": "d002",
+    "deviceName": "Sony WH-1000XM5 降噪耳机",
+    "userId": "u002",
+    "userName": "李华",
+    "borrowTime": "2026-06-16T09:30:00Z",
+    "returnTime": null,
+    "expectedReturnTime": "2026-06-17T09:30:00Z",
+    "status": "borrowing"
+  },
+  {
+    "id": "r002",
+    "deviceId": "d009",
+    "deviceName": "ViewSonic PA503S 便携投影仪",
+    "userId": "u001",
+    "userName": "张明",
+    "borrowTime": "2026-06-15T14:00:00Z",
+    "returnTime": null,
+    "expectedReturnTime": "2026-06-16T14:00:00Z",
+    "status": "borrowing"
+  },
+  {
+    "id": "r003",
+    "deviceId": "d001",
+    "deviceName": "Dell U2723QE 4K显示器",
+    "userId": "u001",
+    "userName": "张明",
+    "borrowTime": "2026-06-10T08:00:00Z",
+    "returnTime": "2026-06-11T07:45:00Z",
+    "expectedReturnTime": "2026-06-11T08:00:00Z",
+    "status": "returned-on-time"
+  },
+  {
+    "id": "r004",
+    "deviceId": "d003",
+    "deviceName": "Epson CB-X49 投影仪",
+    "userId": "u003",
+    "userName": "王芳",
+    "borrowTime": "2026-06-05T10:00:00Z",
+    "returnTime": "2026-06-07T15:30:00Z",
+    "expectedReturnTime": "2026-06-06T10:00:00Z",
+    "status": "overdue-returned"
+  },
+  {
+    "id": "r005",
+    "deviceId": "d008",
+    "deviceName": "Bose QuietComfort 45 耳机",
+    "userId": "u002",
+    "userName": "李华",
+    "borrowTime": "2026-06-08T09:00:00Z",
+    "returnTime": "2026-06-09T08:50:00Z",
+    "expectedReturnTime": "2026-06-09T09:00:00Z",
+    "status": "returned-on-time"
+  },
+  {
+    "id": "r006",
+    "deviceId": "d007",
+    "deviceName": "Samsung Odyssey G7 曲面显示器",
+    "userId": "u004",
+    "userName": "陈强",
+    "borrowTime": "2026-05-20T13:00:00Z",
+    "returnTime": "2026-05-23T10:00:00Z",
+    "expectedReturnTime": "2026-05-21T13:00:00Z",
+    "status": "overdue-returned"
+  },
+  {
+    "id": "r007",
+    "deviceId": "d011",
+    "deviceName": "Jabra Elite 85h 商务耳机",
+    "userId": "u001",
+    "userName": "张明",
+    "borrowTime": "2026-06-01T11:00:00Z",
+    "returnTime": "2026-06-02T10:30:00Z",
+    "expectedReturnTime": "2026-06-02T11:00:00Z",
+    "status": "returned-on-time"
+  },
+  {
+    "id": "r008",
+    "deviceId": "d004",
+    "deviceName": "LG 27UK850-W 4K显示器",
+    "userId": "u003",
+    "userName": "王芳",
+    "borrowTime": "2026-06-12T09:00:00Z",
+    "returnTime": "2026-06-13T08:45:00Z",
+    "expectedReturnTime": "2026-06-13T09:00:00Z",
+    "status": "returned-on-time"
+  },
+  {
+    "id": "a30917ea-9e32-4544-afad-35f2fc8034e0",
+    "deviceId": "d001",
+    "deviceName": "Dell U2723QE 4K显示器",
+    "userId": "u001",
+    "userName": "张明",
+    "borrowTime": "2026-06-17T12:37:38.403Z",
+    "returnTime": null,
+    "expectedReturnTime": "2026-06-18T12:37:38.403Z",
+    "status": "borrowing"
   }
 ]

@@ -1,261 +1,258 @@
-import { useEffect, useState } from 'react';
-import { useUser } from '../hooks/useUser';
-import { useRecords } from '../hooks/useRecords';
+import { useState, useEffect, useCallback } from 'react';
+import dayjs from 'dayjs';
+import { Navigate } from 'react-router-dom';
+import { getRecords, getStats } from '../api/borrowApi';
 import { useBorrow } from '../hooks/useBorrow';
-import { getDevice, getUser } from '../api/borrowApi';
-import { Device, User } from '../types';
+import { useUser } from '../context/UserContext';
+import type { BorrowRecord, Stats } from '../types';
 
-const statusConfig = {
-  returned_on_time: { text: '按时归还', color: '#22c55e' },
-  returned_overdue: { text: '超时归还', color: '#eab308' },
-  not_returned: { text: '未归还', color: '#ef4444' },
+type FilterType = 'all' | 'borrowing' | 'overdue' | 'returned';
+
+const getRecordStatusLabel = (status: BorrowRecord['status']) => {
+  switch (status) {
+    case 'borrowing': return '借用中';
+    case 'returned-on-time': return '按时归还';
+    case 'overdue-returned': return '超时归还';
+    default: return status;
+  }
 };
 
-export function Admin() {
-  const { data: user, loading: userLoading, error: userError } = useUser('user-1');
-  const { data: records, loading: recordsLoading, refetch: refetchRecords } = useRecords();
-  const { returnDevice, loading: returnLoading } = useBorrow();
+export default function Admin() {
+  const { user, loading: userLoading } = useUser();
+  const { returnDevice, returnLoading, returnError, returnData, resetReturnState } = useBorrow();
 
-  const [devices, setDevices] = useState<Record<string, Device>>({});
-  const [users, setUsers] = useState<Record<string, User>>({});
+  const [records, setRecords] = useState<BorrowRecord[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<FilterType>('all');
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [recordsRes, statsRes] = await Promise.all([
+        getRecords(),
+        getStats()
+      ]);
+      setRecords(recordsRes.data);
+      setStats(statsRes);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载失败');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    records?.forEach((record) => {
-      if (!devices[record.deviceId]) {
-        getDevice(record.deviceId).then((d) => {
-          setDevices((prev) => ({ ...prev, [record.deviceId]: d }));
-        }).catch(() => {});
-      }
-      if (!users[record.userId]) {
-        getUser(record.userId).then((u) => {
-          setUsers((prev) => ({ ...prev, [record.userId]: u }));
-        }).catch(() => {});
-      }
-    });
-  }, [records]);
+    loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    if (returnData) {
+      loadData();
+      setTimeout(() => resetReturnState(), 3000);
+    }
+  }, [returnData, loadData, resetReturnState]);
+
+  const now = dayjs();
+
+  const filteredRecords = records.filter(r => {
+    const isOverdue = r.status === 'borrowing' && now.isAfter(r.expectedReturnTime);
+    switch (filter) {
+      case 'borrowing': return r.status === 'borrowing';
+      case 'overdue': return isOverdue;
+      case 'returned': return r.status !== 'borrowing';
+      default: return true;
+    }
+  });
 
   const handleReturn = async (recordId: string) => {
-    try {
-      await returnDevice(recordId);
-      refetchRecords();
-    } catch {
-    }
+    if (!window.confirm('确认标记该设备为已归还？')) return;
+    await returnDevice(recordId);
   };
 
-  if (userLoading || recordsLoading) {
+  const isOverdue = (r: BorrowRecord) => {
+    return r.status === 'borrowing' && now.isAfter(r.expectedReturnTime);
+  };
+
+  if (userLoading) {
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        minHeight: '400px',
-        fontSize: '16px',
-        color: '#6b7280',
-      }}>
-        加载中...
+      <div className="loading-container">
+        <div className="loading-spinner" style={{ width: '40px', height: '40px' }}></div>
       </div>
     );
   }
 
-  if (userError) {
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        minHeight: '400px',
-        fontSize: '16px',
-        color: '#ef4444',
-      }}>
-        错误: {userError}
-      </div>
-    );
+  if (!user || user.role !== 'admin') {
+    return <Navigate to="/overview" replace />;
   }
 
-  if (!user || !user.isAdmin) {
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        minHeight: '400px',
-        fontSize: '20px',
-        fontWeight: 600,
-        color: '#ef4444',
-      }}>
-        无权限访问
-      </div>
-    );
-  }
-
-  const sortedRecords = records
-    ? [...records].sort((a, b) => new Date(b.borrowTime).getTime() - new Date(a.borrowTime).getTime())
-    : [];
+  const filterOptions: { key: FilterType; label: string; count: number }[] = [
+    { key: 'all', label: '全部', count: records.length },
+    { key: 'borrowing', label: '借用中', count: stats?.activeBorrowings || 0 },
+    { key: 'overdue', label: '已超时', count: stats?.overdueBorrowings || 0 },
+    { key: 'returned', label: '已归还', count: records.filter(r => r.status !== 'borrowing').length }
+  ];
 
   return (
-    <div style={{
-      maxWidth: '1200px',
-      margin: '0 auto',
-      padding: '32px 24px',
-    }}>
-      <div style={{ marginBottom: '32px' }}>
-        <h1 style={{
-          margin: 0,
-          marginBottom: '8px',
-          fontSize: '28px',
-          fontWeight: 700,
-          color: '#1f2937',
-        }}>
-          管理后台
-        </h1>
-        <p style={{
-          margin: 0,
-          fontSize: '14px',
-          color: '#6b7280',
-        }}>
-          查看和管理所有借用记录
-        </p>
+    <div className="page-transition">
+      <div className="page-header">
+        <h1 className="page-title">管理面板</h1>
+        <p className="page-subtitle">查看并管理所有设备借用记录</p>
       </div>
 
-      <div style={{
-        padding: '24px',
-        backgroundColor: '#ffffff',
-        borderRadius: '12px',
-        border: '1px solid #e5e7eb',
-      }}>
-        <h2 style={{
-          margin: 0,
-          marginBottom: '16px',
-          fontSize: '18px',
-          fontWeight: 600,
-          color: '#1f2937',
-        }}>
-          所有借用记录
-        </h2>
-        {sortedRecords.length === 0 ? (
-          <div style={{
-            padding: '32px',
-            backgroundColor: '#f9fafb',
-            borderRadius: '8px',
-            textAlign: 'center',
-            color: '#6b7280',
-          }}>
-            暂无借用记录
+      {stats && (
+        <div className="admin-stats-grid">
+          <div className="stat-card">
+            <div className="stat-label">设备总数</div>
+            <div className="stat-value">{stats.totalDevices}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">当前借用</div>
+            <div className="stat-value warning">{stats.activeBorrowings}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">超时未还</div>
+            <div className="stat-value danger">{stats.overdueBorrowings}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">注册用户</div>
+            <div className="stat-value">{stats.totalUsers}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">总记录数</div>
+            <div className="stat-value">{stats.totalRecords}</div>
+          </div>
+        </div>
+      )}
+
+      <div className="admin-table-section">
+        <div className="table-section-header">
+          <h2 className="table-section-title">借用记录管理</h2>
+          <div className="filter-tabs">
+            {filterOptions.map(opt => (
+              <button
+                key={opt.key}
+                className={`filter-tab ${filter === opt.key ? 'active' : ''}`}
+                onClick={() => setFilter(opt.key)}
+              >
+                {opt.label}
+                <span style={{ marginLeft: '6px', opacity: 0.7 }}>({opt.count})</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {returnData && (
+          <div className="alert alert-success">
+            <span>✓</span>
+            <span>
+              设备已归还！
+              {returnData.isOverdue && '（超时归还，信用分 -5）'}
+              {!returnData.isOverdue && '（按时归还，信用分 +1）'}
+              {returnData.updatedCreditScore !== undefined && ` 当前信用分: ${returnData.updatedCreditScore}`}
+            </span>
+          </div>
+        )}
+
+        {returnError && (
+          <div className="alert alert-error">
+            <span>✗</span>
+            <span>{returnError}</span>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="loading-container">
+            <div className="loading-spinner" style={{ width: '40px', height: '40px' }}></div>
+          </div>
+        ) : error ? (
+          <div style={{ textAlign: 'center', padding: '40px' }}>
+            <div className="alert alert-error" style={{ display: 'inline-block' }}>{error}</div>
+          </div>
+        ) : filteredRecords.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-icon">📭</div>
+            <div className="empty-state-text">该分类下暂无记录</div>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-            }}>
+          <div className="table-responsive">
+            <table className="records-table">
               <thead>
-                <tr style={{
-                  borderBottom: '1px solid #e5e7eb',
-                }}>
-                  <th style={{
-                    textAlign: 'left',
-                    padding: '12px 16px',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    color: '#374151',
-                  }}>设备名称</th>
-                  <th style={{
-                    textAlign: 'left',
-                    padding: '12px 16px',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    color: '#374151',
-                  }}>用户名</th>
-                  <th style={{
-                    textAlign: 'left',
-                    padding: '12px 16px',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    color: '#374151',
-                  }}>借用时间</th>
-                  <th style={{
-                    textAlign: 'left',
-                    padding: '12px 16px',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    color: '#374151',
-                  }}>状态</th>
-                  <th style={{
-                    textAlign: 'left',
-                    padding: '12px 16px',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    color: '#374151',
-                  }}>操作</th>
+                <tr>
+                  <th>设备名称</th>
+                  <th>借用人</th>
+                  <th>借用时间</th>
+                  <th>预计归还</th>
+                  <th>实际归还</th>
+                  <th>状态</th>
+                  <th>操作</th>
                 </tr>
               </thead>
               <tbody>
-                {sortedRecords.map((record) => {
-                  const device = devices[record.deviceId];
-                  const recordUser = users[record.userId];
-                  const status = statusConfig[record.status];
-                  const canReturn = record.status === 'not_returned';
+                {filteredRecords.map(record => {
+                  const overdue = isOverdue(record);
                   return (
-                    <tr key={record.id} style={{
-                      borderBottom: '1px solid #f3f4f6',
-                    }}>
-                      <td style={{
-                        padding: '12px 16px',
-                        fontSize: '14px',
-                        color: '#1f2937',
-                      }}>
-                        {device ? device.name : '加载中...'}
+                    <tr key={record.id} style={overdue ? { background: 'rgba(239, 68, 68, 0.03)' } : {}}>
+                      <td style={{ fontWeight: '500' }}>{record.deviceName}</td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{
+                            width: '32px', height: '32px', borderRadius: '50%',
+                            background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: 'white', fontWeight: '600', fontSize: '14px'
+                          }}>
+                            {record.userName.charAt(0)}
+                          </div>
+                          <span>{record.userName}</span>
+                        </div>
+                      </td>
+                      <td style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
+                        {dayjs(record.borrowTime).format('YYYY-MM-DD HH:mm')}
                       </td>
                       <td style={{
-                        padding: '12px 16px',
-                        fontSize: '14px',
-                        color: '#1f2937',
+                        color: overdue ? 'var(--danger)' : 'var(--text-secondary)',
+                        fontSize: '13px',
+                        fontWeight: overdue ? '600' : '400'
                       }}>
-                        {recordUser ? recordUser.name : '加载中...'}
+                        {dayjs(record.expectedReturnTime).format('YYYY-MM-DD HH:mm')}
+                        {overdue && record.status === 'borrowing' && (
+                          <div style={{ fontSize: '11px', marginTop: '2px' }}>
+                            已超时 {now.diff(record.expectedReturnTime, 'hour')} 小时
+                          </div>
+                        )}
                       </td>
-                      <td style={{
-                        padding: '12px 16px',
-                        fontSize: '14px',
-                        color: '#6b7280',
-                      }}>
-                        {new Date(record.borrowTime).toLocaleString('zh-CN')}
+                      <td style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
+                        {record.returnTime
+                          ? dayjs(record.returnTime).format('YYYY-MM-DD HH:mm')
+                          : '—'
+                        }
                       </td>
-                      <td style={{
-                        padding: '12px 16px',
-                      }}>
-                        <span style={{
-                          display: 'inline-block',
-                          padding: '4px 12px',
-                          borderRadius: '6px',
-                          fontSize: '13px',
-                          fontWeight: 500,
-                          color: '#ffffff',
-                          backgroundColor: status.color,
-                        }}>
-                          {status.text}
-                        </span>
+                      <td>
+                        {overdue && record.status === 'borrowing' ? (
+                          <span className="status-tag overdue-returned">已超时</span>
+                        ) : (
+                          <span className={`status-tag ${record.status}`}>
+                            {getRecordStatusLabel(record.status)}
+                          </span>
+                        )}
                       </td>
-                      <td style={{
-                        padding: '12px 16px',
-                      }}>
-                        {canReturn ? (
+                      <td>
+                        {record.status === 'borrowing' ? (
                           <button
+                            className="action-btn action-btn-primary"
                             onClick={() => handleReturn(record.id)}
                             disabled={returnLoading}
-                            style={{
-                              padding: '6px 14px',
-                              borderRadius: '6px',
-                              border: 'none',
-                              backgroundColor: returnLoading ? '#93c5fd' : '#3b82f6',
-                              color: '#ffffff',
-                              fontSize: '13px',
-                              fontWeight: 500,
-                              cursor: returnLoading ? 'not-allowed' : 'pointer',
-                            }}
                           >
                             {returnLoading ? '处理中...' : '标记归还'}
                           </button>
-                        ) : null}
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+                            已完成
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );

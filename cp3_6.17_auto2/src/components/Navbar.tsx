@@ -1,73 +1,59 @@
-import { Link, NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
+import { useUser } from '../context/UserContext';
 
-export function Navbar() {
-  const linkBaseStyle = {
-    padding: '8px 16px',
-    borderRadius: '6px',
-    textDecoration: 'none',
-    color: '#4b5563',
-    fontWeight: 500,
-    transition: 'all 0.2s',
-  };
-
-  const linkActiveStyle = {
-    backgroundColor: '#3b82f6',
-    color: '#ffffff',
-  };
+export default function Navbar() {
+  const { user, loading } = useUser();
 
   return (
-    <nav style={{
-      backgroundColor: '#ffffff',
-      borderBottom: '1px solid #e5e7eb',
-      padding: '0 24px',
-      position: 'sticky',
-      top: 0,
-      zIndex: 100,
-    }}>
-      <div style={{
-        maxWidth: '1200px',
-        margin: '0 auto',
-        display: 'flex',
-        alignItems: 'center',
-        height: '60px',
-        gap: '8px',
-      }}>
-        <Link to="/overview" style={{
-          fontSize: '20px',
-          fontWeight: 700,
-          color: '#1f2937',
-          textDecoration: 'none',
-          marginRight: '32px',
-        }}>
-          设备借用系统
+    <nav className="nav-container">
+      <div className="nav-inner">
+        <Link to="/overview" className="nav-logo">
+          <div className="nav-logo-icon">📦</div>
+          <span>设备共享站</span>
         </Link>
-        <NavLink
-          to="/overview"
-          style={({ isActive }) => ({
-            ...linkBaseStyle,
-            ...(isActive ? linkActiveStyle : {}),
-          })}
-        >
-          设备总览
-        </NavLink>
-        <NavLink
-          to="/profile"
-          style={({ isActive }) => ({
-            ...linkBaseStyle,
-            ...(isActive ? linkActiveStyle : {}),
-          })}
-        >
-          我的档案
-        </NavLink>
-        <NavLink
-          to="/admin"
-          style={({ isActive }) => ({
-            ...linkBaseStyle,
-            ...(isActive ? linkActiveStyle : {}),
-          })}
-        >
-          管理后台
-        </NavLink>
+
+        <ul className="nav-links">
+          <li>
+            <NavLink
+              to="/overview"
+              className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+            >
+              总览
+            </NavLink>
+          </li>
+          <li>
+            <NavLink
+              to="/profile"
+              className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+            >
+              我的档案
+            </NavLink>
+          </li>
+          {user?.role === 'admin' && (
+            <li>
+              <NavLink
+                to="/admin"
+                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+              >
+                管理面板
+              </NavLink>
+            </li>
+          )}
+        </ul>
+
+        {!loading && user && (
+          <div className="nav-user">
+            <div className="nav-user-info">
+              <span className="nav-user-name">{user.name}</span>
+              <span className="nav-user-credit">信用分: {user.creditScore}</span>
+            </div>
+            <img
+              src={user.avatar}
+              alt={user.name}
+              className="nav-user-avatar"
+            />
+          </div>
+        )}
       </div>
     </nav>
   );

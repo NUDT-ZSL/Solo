@@ -1,54 +1,86 @@
 import { useState, useCallback } from 'react';
-import { BorrowRecord } from '../types';
 import { submitBorrow, confirmReturn } from '../api/borrowApi';
+import type { BorrowResponse, ReturnResponse } from '../types';
 
-interface UseBorrowState {
+export interface BorrowState {
   loading: boolean;
   error: string | null;
-  data: BorrowRecord | null;
+  data: BorrowResponse | null;
+  borrow: (deviceId: string, userId: string) => Promise<BorrowResponse | null>;
+  resetBorrowState: () => void;
 }
 
-export function useBorrow() {
-  const [state, setState] = useState<UseBorrowState>({
-    loading: false,
-    error: null,
-    data: null,
-  });
+export interface ReturnState {
+  returnLoading: boolean;
+  returnError: string | null;
+  returnData: ReturnResponse | null;
+  returnDevice: (recordId: string) => Promise<ReturnResponse | null>;
+  resetReturnState: () => void;
+}
+
+export function useBorrow(): BorrowState & ReturnState {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<BorrowResponse | null>(null);
+
+  const [returnLoading, setReturnLoading] = useState(false);
+  const [returnError, setReturnError] = useState<string | null>(null);
+  const [returnData, setReturnData] = useState<ReturnResponse | null>(null);
 
   const borrow = useCallback(async (deviceId: string, userId: string) => {
-    setState({ loading: true, error: null, data: null });
+    setLoading(true);
+    setError(null);
     try {
-      const record = await submitBorrow(deviceId, userId);
-      setState({ loading: false, error: null, data: record });
-      return record;
+      const result = await submitBorrow(deviceId, userId);
+      setData(result);
+      return result;
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : '借用失败';
-      setState({ loading: false, error: errorMessage, data: null });
-      throw err;
+      const message = err instanceof Error ? err.message : '借用失败，请稍后重试';
+      setError(message);
+      return null;
+    } finally {
+      setLoading(false);
     }
+  }, []);
+
+  const resetBorrowState = useCallback(() => {
+    setLoading(false);
+    setError(null);
+    setData(null);
   }, []);
 
   const returnDevice = useCallback(async (recordId: string) => {
-    setState({ loading: true, error: null, data: null });
+    setReturnLoading(true);
+    setReturnError(null);
     try {
-      const record = await confirmReturn(recordId);
-      setState({ loading: false, error: null, data: record });
-      return record;
+      const result = await confirmReturn(recordId);
+      setReturnData(result);
+      return result;
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : '归还失败';
-      setState({ loading: false, error: errorMessage, data: null });
-      throw err;
+      const message = err instanceof Error ? err.message : '归还失败，请稍后重试';
+      setReturnError(message);
+      return null;
+    } finally {
+      setReturnLoading(false);
     }
   }, []);
 
-  const reset = useCallback(() => {
-    setState({ loading: false, error: null, data: null });
+  const resetReturnState = useCallback(() => {
+    setReturnLoading(false);
+    setReturnError(null);
+    setReturnData(null);
   }, []);
 
   return {
-    ...state,
+    loading,
+    error,
+    data,
     borrow,
+    resetBorrowState,
+    returnLoading,
+    returnError,
+    returnData,
     returnDevice,
-    reset,
+    resetReturnState
   };
 }
