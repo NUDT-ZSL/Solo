@@ -8,6 +8,14 @@ export interface MeasureRecord {
   timestamp: number;
 }
 
+interface HistoryVisual {
+  id: string;
+  line: THREE.Line;
+  pointA: THREE.Mesh;
+  pointB: THREE.Mesh;
+  highlightScale: number;
+}
+
 type DragTarget = 'marker1' | 'marker2' | null;
 
 export class MeasureTool {
@@ -16,8 +24,11 @@ export class MeasureTool {
   private getTerrainHeight: (x: number, z: number) => number;
 
   private group: THREE.Group;
+  private historyGroup: THREE.Group;
   private marker1: THREE.Mesh | null = null;
   private marker2: THREE.Mesh | null = null;
+  private marker1Glow: THREE.Mesh | null = null;
+  private marker2Glow: THREE.Mesh | null = null;
   private dashedLine: THREE.Line | null = null;
   private labelSprite: THREE.Sprite | null = null;
 
@@ -28,8 +39,11 @@ export class MeasureTool {
   private placeCount: number = 0;
 
   private records: MeasureRecord[] = [];
+  private historyVisuals: Map<string, HistoryVisual> = new Map();
+  private highlightedRecordId: string | null = null;
   private maxRecords: number = 50;
   private onRecordUpdateCallback: ((records: MeasureRecord[]) => void) | null = null;
+  private onHighlightCallback: ((id: string | null) => void) | null = null;
 
   private raycaster: THREE.Raycaster = new THREE.Raycaster();
   private mouse: THREE.Vector2 = new THREE.Vector2();
@@ -42,6 +56,11 @@ export class MeasureTool {
   private lastLabelUpdate: number = 0;
   private readonly LABEL_UPDATE_INTERVAL: number = 30;
 
+  private readonly GLOW_BASE_SCALE: number = 1;
+  private readonly GLOW_PULSE_SPEED: number = 2;
+  private readonly GLOW_HIGHLIGHT_SCALE: number = 1.6;
+  private pulseTime: number = 0;
+
   constructor(
     scene: THREE.Scene,
     camera: THREE.PerspectiveCamera,
@@ -53,6 +72,10 @@ export class MeasureTool {
     this.group = new THREE.Group();
     this.group.name = 'measureTool';
     this.scene.add(this.group);
+
+    this.historyGroup = new THREE.Group();
+    this.historyGroup.name = 'measureHistory';
+    this.scene.add(this.historyGroup);
   }
 
   public setTerrainMesh(mesh: THREE.Object3D): void {
@@ -80,21 +103,117 @@ export class MeasureTool {
     this.onRecordUpdateCallback = callback;
   }
 
+  public setOnHighlight(callback: (id: string | null) => void): void {
+    this.onHighlightCallback = callback;
+  }
+
   public getRecords(): MeasureRecord[] {
     return [...this.records];
+  }
+
+  public highlightRecord(id: string | null): void {
+    if (this.highlightedRecordId === id) {
+      if (id !== null) {
+        this.highlightedRecordId = null;
+        this.applyHighlight(null);
+        this.onHighlightCallback?.(null);
+      }
+      return;
+    }
+
+    this.highlightedRecordId = id;
+    this.applyHighlight(id);
+    this.onHighlightCallback?.(id);
+  }
+
+  public getHighlightedRecordId(): string | null {
+    return this.highlightedRecordId;
+  }
+
+  private applyHighlight(id: string | null): void {
+    this.historyVisuals.forEach((visual, visualId) => {
+      const isHighlighted = id === visualId;
+      visual.highlightScale = isHighlighted ? this.GLOW_HIGHLIGHT_SCALE : 1;
+      
+      const lineMat = visual.line.material as THREE.LineBasicMaterial;
+      lineMat.color.setHex(isHighlighted ? 0x00FF88 : 0x3B82F6);
+      lineMat.linewidth = isHighlighted ? 2 : 1;
+      lineMat.opacity = isHighlighted ? 1.0 : 0.5;
+
+      this.updateHistoryVisualScale(visual);
+    });
+  }
+
+  private updateHistoryVisualScale(visual: HistoryVisual): void {
+    const baseScale = 1;
+    const pulseScale = 1 + Math.sin(this.pulseTime * this.GLOW_PULSE_SPEED) * 0.08;
+    const scale = baseScale * pulseScale * visual.highlightScale;
+
+    if (visual.pointA) {
+      visual.pointA.scale.setScalar(scale);
+      const glowA = visual.pointA.userData.glow as THREE.Mesh | undefined;
+      if (glowA) glowA.scale.setScalar(scale * 1.8);
+    }
+    if (visual.pointB) {
+      visual.pointB.scale.setScalar(scale);
+      const glowB = visual.pointB.userData.glow as THREE.Mesh | undefined;
+      if (glowB) glowB.scale.setScalar(scale * 1.8);
+    }
   }
 
   public deleteRecord(id: string): void {
     const idx = this.records.findIndex((r) => r.id === id);
     if (idx !== -1) {
       this.records.splice(idx, 1);
+      this.removeHistoryVisual(id);
+      if (this.highlightedRecordId === id) {
+        this.highlightedRecordId = null;
+        this.onHighlightCallback?.(null);
+      }
       this.onRecordUpdateCallback?.(this.records);
     }
   }
 
   public clearAllRecords(): void {
     this.records = [];
+    this.clearAllHistoryVisuals();
+    this.highlightedRecordId = null;
+    this.onHighlightCallback?.(null);
     this.onRecordUpdateCallback?.(this.records);
+  }
+
+  private removeHistoryVisual(id: string): void {
+    const visual = this.historyVisuals.get(id);
+    if (visual) {
+      this.historyGroup.remove(visual.line);
+      this.historyGroup.remove(visual.pointA);
+      this.historyGroup.remove(visual.pointB);
+      
+      [visual.line, visual.pointA, visual.pointB].forEach((obj) => {
+        if ((obj as THREE.Mesh).isMesh) {
+          const m = obj as THREE.Mesh;
+          m.geometry?.dispose();
+          const glow = m.userData.glow as THREE.Mesh | undefined;
+          if (glow) {
+            glow.geometry?.dispose();
+            (glow.material as THREE.Material)?.dispose();
+          }
+          const mat = m.material;
+          if (Array.isArray(mat)) mat.forEach((mm) => mm.dispose());
+          else mat?.dispose();
+        } else if ((obj as THREE.Line).isLine) {
+          (obj as THREE.Line).geometry?.dispose();
+          ((obj as THREE.Line).material as THREE.Material)?.dispose();
+        }
+      });
+
+      this.historyVisuals.delete(id);
+    }
+  }
+
+  private clearAllHistoryVisuals(): void {
+    this.historyVisuals.forEach((_, id) => this.removeHistoryVisual(id));
+    this.historyVisuals.clear();
   }
 
   public clearMarkers(): void {
@@ -104,11 +223,23 @@ export class MeasureTool {
       (this.marker1.material as THREE.Material).dispose();
       this.marker1 = null;
     }
+    if (this.marker1Glow) {
+      this.group.remove(this.marker1Glow);
+      this.marker1Glow.geometry.dispose();
+      (this.marker1Glow.material as THREE.Material).dispose();
+      this.marker1Glow = null;
+    }
     if (this.marker2) {
       this.group.remove(this.marker2);
       this.marker2.geometry.dispose();
       (this.marker2.material as THREE.Material).dispose();
       this.marker2 = null;
+    }
+    if (this.marker2Glow) {
+      this.group.remove(this.marker2Glow);
+      this.marker2Glow.geometry.dispose();
+      (this.marker2Glow.material as THREE.Material).dispose();
+      this.marker2Glow = null;
     }
     if (this.dashedLine) {
       this.group.remove(this.dashedLine);
@@ -141,6 +272,8 @@ export class MeasureTool {
     const targets: THREE.Mesh[] = [];
     if (this.marker1) targets.push(this.marker1);
     if (this.marker2) targets.push(this.marker2);
+    if (this.marker1Glow) targets.push(this.marker1Glow);
+    if (this.marker2Glow) targets.push(this.marker2Glow);
 
     const intersects = this.raycaster.intersectObjects(targets, true);
     if (intersects.length > 0) {
@@ -190,19 +323,17 @@ export class MeasureTool {
           this.point1 = newPos;
           if (this.marker1) {
             this.marker1.position.copy(newPos);
-            const ring = this.marker1.children[0];
-            if (ring) {
-              ring.position.y = -newPos.y + 0.02;
-            }
+          }
+          if (this.marker1Glow) {
+            this.marker1Glow.position.copy(newPos);
           }
         } else if (this.dragTarget === 'marker2') {
           this.point2 = newPos;
           if (this.marker2) {
             this.marker2.position.copy(newPos);
-            const ring = this.marker2.children[0];
-            if (ring) {
-              ring.position.y = -newPos.y + 0.02;
-            }
+          }
+          if (this.marker2Glow) {
+            this.marker2Glow.position.copy(newPos);
           }
         }
 
@@ -217,6 +348,8 @@ export class MeasureTool {
       const targets: THREE.Mesh[] = [];
       if (this.marker1) targets.push(this.marker1);
       if (this.marker2) targets.push(this.marker2);
+      if (this.marker1Glow) targets.push(this.marker1Glow);
+      if (this.marker2Glow) targets.push(this.marker2Glow);
       const intersects = this.raycaster.intersectObjects(targets, true);
       document.body.style.cursor = intersects.length > 0 ? 'grab' : 'crosshair';
     }
@@ -286,14 +419,20 @@ export class MeasureTool {
     if (this.placeCount === 0) {
       this.placeCount = 1;
       this.point1 = position.clone();
-      this.marker1 = this.createMarker(position, '#FF4500', 'marker1');
+      const { marker, glow } = this.createMarker(position, '#FF4500', 'marker1');
+      this.marker1 = marker;
+      this.marker1Glow = glow;
       this.group.add(this.marker1);
+      this.group.add(this.marker1Glow);
       return true;
     } else if (this.placeCount === 1) {
       this.placeCount = 2;
       this.point2 = position.clone();
-      this.marker2 = this.createMarker(position, '#3B82F6', 'marker2');
+      const { marker, glow } = this.createMarker(position, '#3B82F6', 'marker2');
+      this.marker2 = marker;
+      this.marker2Glow = glow;
       this.group.add(this.marker2);
+      this.group.add(this.marker2Glow);
       this.createDashedLine();
       this.createLabel();
       return true;
@@ -301,31 +440,95 @@ export class MeasureTool {
     return false;
   }
 
-  private createMarker(position: THREE.Vector3, color: string, markerId: string): THREE.Mesh {
-    const geometry = new THREE.SphereGeometry(0.15, 24, 24);
-    const material = new THREE.MeshPhongMaterial({
-      color: new THREE.Color(color),
-      emissive: new THREE.Color(color).multiplyScalar(0.4),
-      shininess: 80
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.copy(position);
-    mesh.userData.measureMarker = markerId;
-
-    const ringGeom = new THREE.RingGeometry(0.18, 0.22, 48);
-    const ringMat = new THREE.MeshBasicMaterial({
+  private createMarker(position: THREE.Vector3, color: string, markerId: string): { marker: THREE.Mesh; glow: THREE.Mesh } {
+    const sphereGeom = new THREE.SphereGeometry(0.15, 24, 24);
+    const sphereMat = new THREE.MeshPhongMaterial({
       color: new THREE.Color(color),
       transparent: true,
-      opacity: 0.7,
-      side: THREE.DoubleSide
+      opacity: 0.85,
+      emissive: new THREE.Color(color).multiplyScalar(0.6),
+      shininess: 100,
+      specular: new THREE.Color(0xffffff)
     });
-    const ring = new THREE.Mesh(ringGeom, ringMat);
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = -position.y + 0.02;
-    ring.userData.measureMarker = markerId;
-    mesh.add(ring);
+    const marker = new THREE.Mesh(sphereGeom, sphereMat);
+    marker.position.copy(position);
+    marker.userData.measureMarker = markerId;
 
-    return mesh;
+    const glowGeom = new THREE.SphereGeometry(0.28, 32, 32);
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(color),
+      transparent: true,
+      opacity: 0.25,
+      side: THREE.BackSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+    const glow = new THREE.Mesh(glowGeom, glowMat);
+    glow.position.copy(position);
+    glow.userData.measureMarker = markerId;
+    marker.userData.glow = glow;
+
+    return { marker, glow };
+  }
+
+  private createHistoryVisual(record: MeasureRecord): void {
+    if (this.records.length > this.maxRecords) {
+      const oldest = this.records[0];
+      this.removeHistoryVisual(oldest.id);
+    }
+
+    const lineGeom = new THREE.BufferGeometry().setFromPoints([record.point1, record.point2]);
+    const lineMat = new THREE.LineBasicMaterial({
+      color: 0x3B82F6,
+      transparent: true,
+      opacity: 0.5,
+      linewidth: 1
+    });
+    const line = new THREE.Line(lineGeom, lineMat);
+
+    const createPoint = (pos: THREE.Vector3, colorHex: number): THREE.Mesh => {
+      const geom = new THREE.SphereGeometry(0.08, 16, 16);
+      const mat = new THREE.MeshPhongMaterial({
+        color: colorHex,
+        transparent: true,
+        opacity: 0.9,
+        emissive: new THREE.Color(colorHex).multiplyScalar(0.5),
+        shininess: 80
+      });
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.position.copy(pos);
+
+      const glowGeom = new THREE.SphereGeometry(0.14, 24, 24);
+      const glowMat = new THREE.MeshBasicMaterial({
+        color: colorHex,
+        transparent: true,
+        opacity: 0.3,
+        side: THREE.BackSide,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+      });
+      const glow = new THREE.Mesh(glowGeom, glowMat);
+      glow.position.copy(pos);
+      mesh.userData.glow = glow;
+      mesh.add(glow);
+
+      return mesh;
+    };
+
+    const pointA = createPoint(record.point1, 0xFF4500);
+    const pointB = createPoint(record.point2, 0x3B82F6);
+
+    this.historyGroup.add(line);
+    this.historyGroup.add(pointA);
+    this.historyGroup.add(pointB);
+
+    this.historyVisuals.set(record.id, {
+      id: record.id,
+      line,
+      pointA,
+      pointB,
+      highlightScale: 1
+    });
   }
 
   private createDashedLine(): void {
@@ -334,12 +537,12 @@ export class MeasureTool {
     const geometry = new THREE.BufferGeometry().setFromPoints([this.point1, this.point2]);
     const material = new THREE.LineDashedMaterial({
       color: new THREE.Color('#FFD700'),
-      linewidth: 1,
+      linewidth: 2,
       scale: 1,
       dashSize: 0.15,
       gapSize: 0.08,
       transparent: true,
-      opacity: 0.9
+      opacity: 0.95
     });
     this.dashedLine = new THREE.Line(geometry, material);
     this.dashedLine.computeLineDistances();
@@ -451,9 +654,11 @@ export class MeasureTool {
     };
 
     if (this.records.length >= this.maxRecords) {
-      this.records.shift();
+      const oldest = this.records.shift();
+      if (oldest) this.removeHistoryVisual(oldest.id);
     }
     this.records.push(record);
+    this.createHistoryVisual(record);
     this.onRecordUpdateCallback?.(this.records);
 
     this.clearMarkers();
@@ -462,12 +667,33 @@ export class MeasureTool {
     return true;
   }
 
-  public update(): void {
+  public update(deltaTime?: number): void {
+    this.pulseTime += deltaTime ?? 0.016;
+
     if (this.labelSprite && this.point1 && this.point2) {
       const midPoint = new THREE.Vector3().addVectors(this.point1, this.point2).multiplyScalar(0.5);
       this.labelSprite.position.x = midPoint.x;
       this.labelSprite.position.z = midPoint.z;
     }
+
+    if (this.marker1Glow && this.marker1) {
+      this.marker1Glow.position.copy(this.marker1.position);
+      const pulse = 1 + Math.sin(this.pulseTime * 3) * 0.15;
+      this.marker1Glow.scale.setScalar(pulse);
+      const glowMat = this.marker1Glow.material as THREE.MeshBasicMaterial;
+      glowMat.opacity = 0.2 + Math.sin(this.pulseTime * 3) * 0.1;
+    }
+    if (this.marker2Glow && this.marker2) {
+      this.marker2Glow.position.copy(this.marker2.position);
+      const pulse = 1 + Math.sin(this.pulseTime * 3 + Math.PI) * 0.15;
+      this.marker2Glow.scale.setScalar(pulse);
+      const glowMat = this.marker2Glow.material as THREE.MeshBasicMaterial;
+      glowMat.opacity = 0.2 + Math.sin(this.pulseTime * 3 + Math.PI) * 0.1;
+    }
+
+    this.historyVisuals.forEach((visual) => {
+      this.updateHistoryVisualScale(visual);
+    });
   }
 
   public getPlaceCount(): number {
@@ -482,5 +708,6 @@ export class MeasureTool {
     this.clearMarkers();
     this.clearAllRecords();
     this.scene.remove(this.group);
+    this.scene.remove(this.historyGroup);
   }
 }

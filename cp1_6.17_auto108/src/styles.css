@@ -124,9 +124,37 @@ html, body, #app {
   color: var(--text-primary);
 }
 
+.results-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 #results-count {
   font-size: 11px;
   color: var(--text-secondary);
+}
+
+.clear-all-btn {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.clear-all-btn:hover {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}
+
+.clear-all-btn:active {
+  transform: scale(0.95);
 }
 
 #results-list {
@@ -140,21 +168,97 @@ html, body, #app {
 .result-item {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 6px 10px;
+  align-items: stretch;
+  padding: 8px 10px;
   background: var(--bg-secondary);
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 11px;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.result-item:hover {
+  background: var(--bg-hover);
+}
+
+.result-item.highlighted {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: var(--accent);
+}
+
+.result-item .result-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.result-item .result-top-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .result-item .result-idx {
   color: var(--accent);
-  margin-right: 8px;
+  font-weight: bold;
+  font-size: 11px;
+  min-width: 22px;
+}
+
+.result-item .result-time {
+  color: var(--text-secondary);
+  font-size: 10px;
+  flex: 1;
 }
 
 .result-item .result-distance {
   color: var(--gold);
   font-weight: bold;
+  font-size: 12px;
+}
+
+.result-item .result-coords {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  font-size: 10px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.result-item .coord-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: bold;
+  color: #fff;
+}
+
+.result-item .coord-label:first-of-type {
+  background: var(--danger);
+}
+
+.result-item .coord-label:last-of-type {
+  background: var(--accent);
+}
+
+.result-item .coord-val {
+  font-family: inherit;
+  font-size: 10px;
+  color: var(--text-primary);
+}
+
+.result-item .coord-arrow {
+  color: var(--accent);
+  font-weight: bold;
+  margin: 0 2px;
 }
 
 .result-item .result-delete {
@@ -166,6 +270,9 @@ html, body, #app {
   padding: 0 4px;
   border-radius: 3px;
   transition: all 0.15s;
+  align-self: flex-start;
+  line-height: 1;
+  margin-left: 4px;
 }
 
 .result-item .result-delete:hover {

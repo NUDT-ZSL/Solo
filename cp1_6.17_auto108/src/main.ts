@@ -198,6 +198,17 @@ function setupMeasureTool(): void {
   state.measureTool.setOnRecordUpdate((records: MeasureRecord[]) => {
     renderMeasureResults(records);
   });
+  state.measureTool.setOnHighlight((id: string | null) => {
+    const items = document.querySelectorAll('.result-item');
+    items.forEach((item) => {
+      const el = item as HTMLElement;
+      if (el.dataset.recordId === id) {
+        el.classList.add('highlighted');
+      } else {
+        el.classList.remove('highlighted');
+      }
+    });
+  });
 }
 
 function setupEventListeners(canvas: HTMLCanvasElement): void {
@@ -612,10 +623,20 @@ function updateAnnotationStyle(updates: Partial<AnnotationStyle>): void {
   renderAnnotationTree();
 }
 
+function formatCoord(v: number): string {
+  return v >= 0 ? v.toFixed(2) : v.toFixed(2);
+}
+
+function formatPoint(p: THREE.Vector3): string {
+  return `(${formatCoord(p.x)}, ${formatCoord(p.y)}, ${formatCoord(p.z)})`;
+}
+
 function renderMeasureResults(records: MeasureRecord[]): void {
   const list = document.getElementById('results-list')!;
   const count = document.getElementById('results-count')!;
   count.textContent = `${records.length}/50`;
+
+  const highlightedId = state.measureTool.getHighlightedRecordId();
 
   list.innerHTML = '';
   if (records.length === 0) {
@@ -625,12 +646,30 @@ function renderMeasureResults(records: MeasureRecord[]): void {
 
   records.slice().reverse().forEach((r, idx) => {
     const item = document.createElement('div');
-    item.className = 'result-item';
+    item.className = 'result-item' + (highlightedId === r.id ? ' highlighted' : '');
+    item.dataset.recordId = r.id;
+    item.style.cursor = 'pointer';
     item.innerHTML = `
-      <span><span class="result-idx">#${records.length - idx}</span><span>${new Date(r.timestamp).toLocaleTimeString()}</span></span>
-      <span class="result-distance">${r.distance.toFixed(2)} 单位</span>
+      <div class="result-main">
+        <div class="result-top-row">
+          <span class="result-idx">#${records.length - idx}</span>
+          <span class="result-time">${new Date(r.timestamp).toLocaleTimeString()}</span>
+          <span class="result-distance">${r.distance.toFixed(2)} 单位</span>
+        </div>
+        <div class="result-coords">
+          <span class="coord-label">A</span>
+          <span class="coord-val">${formatPoint(r.point1)}</span>
+          <span class="coord-arrow">→</span>
+          <span class="coord-label">B</span>
+          <span class="coord-val">${formatPoint(r.point2)}</span>
+        </div>
+      </div>
       <button class="result-delete" title="删除">×</button>
     `;
+    item.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).classList.contains('result-delete')) return;
+      state.measureTool.highlightRecord(r.id);
+    });
     item.querySelector('.result-delete')?.addEventListener('click', (e) => {
       e.stopPropagation();
       state.measureTool.deleteRecord(r.id);
@@ -645,33 +684,61 @@ function setupTerrainControls(): void {
   const subdivisionSlider = document.getElementById('subdivision-slider') as HTMLInputElement;
   const subdivisionValue = document.getElementById('subdivision-value')!;
 
-  let amplitudeTimer: ReturnType<typeof setTimeout> | null = null;
-  let subdivisionTimer: ReturnType<typeof setTimeout> | null = null;
+  let pendingAmplitude: number | null = null;
+  let pendingSubdivision: number | null = null;
+  let animationFrameId: number | null = null;
+  let lastTerrainUpdate: number = 0;
+  const MIN_UPDATE_INTERVAL: number = 33;
+
+  const scheduleTerrainUpdate = () => {
+    animationFrameId = null;
+    const now = performance.now();
+    if (now - lastTerrainUpdate < MIN_UPDATE_INTERVAL) {
+      animationFrameId = requestAnimationFrame(scheduleTerrainUpdate);
+      return;
+    }
+    let needsUpdate: boolean = false;
+    if (pendingAmplitude !== null) {
+      state.terrainGenerator.updateConfig({ amplitude: pendingAmplitude });
+      pendingAmplitude = null;
+      needsUpdate = true;
+    }
+    if (pendingSubdivision !== null) {
+      state.terrainGenerator.updateConfig({ segments: pendingSubdivision });
+      pendingSubdivision = null;
+      needsUpdate = true;
+    }
+    if (needsUpdate) {
+      setupTerrain();
+      lastTerrainUpdate = now;
+    }
+  };
+
+  const requestTerrainUpdate = () => {
+    if (animationFrameId === null) {
+      animationFrameId = requestAnimationFrame(scheduleTerrainUpdate);
+    }
+  };
 
   amplitudeSlider.addEventListener('input', () => {
     const v = parseFloat(amplitudeSlider.value);
     amplitudeValue.textContent = v.toFixed(1);
-    if (amplitudeTimer) clearTimeout(amplitudeTimer);
-    amplitudeTimer = setTimeout(() => {
-      state.terrainGenerator.updateConfig({ amplitude: v });
-      setupTerrain();
-    }, 50);
+    pendingAmplitude = v;
+    requestTerrainUpdate();
   });
 
   subdivisionSlider.addEventListener('input', () => {
     const v = parseInt(subdivisionSlider.value);
     subdivisionValue.textContent = v.toString();
-    if (subdivisionTimer) clearTimeout(subdivisionTimer);
-    subdivisionTimer = setTimeout(() => {
-      state.terrainGenerator.updateConfig({ segments: v });
-      setupTerrain();
-    }, 100);
+    pendingSubdivision = v;
+    requestTerrainUpdate();
   });
 }
 
 function setupMeasureButtons(): void {
   const measureBtn = document.getElementById('measure-btn')!;
   const resetMeasureBtn = document.getElementById('reset-measure-btn')!;
+  const clearAllRecordsBtn = document.getElementById('clear-all-records-btn')!;
 
   measureBtn.addEventListener('click', () => {
     const active = state.measureTool.getIsActive();
@@ -683,6 +750,13 @@ function setupMeasureButtons(): void {
     state.measureTool.clearAllRecords();
     if (state.measureTool.getIsActive()) {
       state.measureTool.activate();
+    }
+  });
+
+  clearAllRecordsBtn.addEventListener('click', () => {
+    if (state.measureTool.getRecords().length === 0) return;
+    if (confirm('确定要清除所有测量记录吗？')) {
+      state.measureTool.clearAllRecords();
     }
   });
 }
@@ -713,7 +787,7 @@ function animate(): void {
   const delta = state.clock.getDelta();
 
   state.controls.update();
-  state.measureTool.update();
+  state.measureTool.update(delta);
 
   if (state.terrainGroup) {
     const terrainLOD = (state.terrainGroup as any).terrainLOD as THREE.LOD | undefined;
