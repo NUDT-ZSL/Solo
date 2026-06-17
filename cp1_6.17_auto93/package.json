@@ -2,11 +2,12 @@
   "name": "recipe-assistant",
   "private": true,
   "version": "1.0.0",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "server": "node server/index.js"
+    "server": "node server/index.cjs"
   },
   "dependencies": {
     "react": "^18.2.0",

@@ -15,7 +15,7 @@ function InventoryInput({ onMatch }: InventoryInputProps) {
   const [batchInput, setBatchInput] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -90,8 +90,13 @@ function InventoryInput({ onMatch }: InventoryInputProps) {
     inputRef.current?.focus();
   };
 
-  const handleRemoveIngredient = (name: string) => {
-    setSelectedIngredients(prev => prev.filter(ing => ing.name !== name));
+  const handleRemoveIngredient = (name: string, quantity: number) => {
+    const confirmed = window.confirm(
+      `确定要删除食材「${name}」吗？\n当前数量：${quantity}\n删除后将无法恢复。`
+    );
+    if (confirmed) {
+      setSelectedIngredients(prev => prev.filter(ing => ing.name !== name));
+    }
   };
 
   const handleSelectSuggestion = (suggestion: string) => {
@@ -111,28 +116,46 @@ function InventoryInput({ onMatch }: InventoryInputProps) {
   };
 
   const handleBatchAdd = () => {
-    if (!batchInput.trim()) {
-      alert('请输入要添加的食材');
+    const trimmedBatch = batchInput.trim();
+    if (!trimmedBatch) {
       return;
     }
 
-    const names = batchInput
-      .split(/[,，\n\r]+/)
+    const names = trimmedBatch
+      .split(/[,，\n\r;；]+/)
       .map(name => name.trim())
-      .filter(name => name.length > 0);
+      .filter(name => {
+        if (!name || name.length === 0) return false;
+        if (/^\d+$/.test(name)) return false;
+        return true;
+      });
 
     if (names.length === 0) {
-      alert('没有解析到有效的食材名称');
+      alert('没有解析到有效的食材名称，请检查输入格式。\n支持用逗号、换行、分号分隔多个食材。');
       return;
     }
+
+    const duplicateNames: string[] = [];
+    const newNames: string[] = [];
+
+    names.forEach(name => {
+      const exists = selectedIngredients.find(
+        ing => ing.name.toLowerCase() === name.toLowerCase()
+      );
+      if (exists) {
+        duplicateNames.push(name);
+      } else {
+        newNames.push(name);
+      }
+    });
 
     setSelectedIngredients(prev => {
       let updated = [...prev];
       names.forEach(name => {
-        const exists = updated.find(
+        const found = updated.find(
           ing => ing.name.toLowerCase() === name.toLowerCase()
         );
-        if (exists) {
+        if (found) {
           updated = updated.map(ing =>
             ing.name.toLowerCase() === name.toLowerCase()
               ? { ...ing, quantity: ing.quantity + 1 }
@@ -145,6 +168,13 @@ function InventoryInput({ onMatch }: InventoryInputProps) {
       return updated;
     });
 
+    if (duplicateNames.length > 0) {
+      const msg = `成功添加 ${names.length} 种食材！\n\n其中：\n✓ 新增食材：${newNames.length} 种\n+ 数量累加：${duplicateNames.length} 种（${duplicateNames.join('、')}）`;
+      alert(msg);
+    } else {
+      alert(`成功添加 ${names.length} 种食材！`);
+    }
+
     setBatchInput('');
   };
 
@@ -154,6 +184,15 @@ function InventoryInput({ onMatch }: InventoryInputProps) {
       return;
     }
     onMatch(selectedIngredients);
+  };
+
+  const handleClearAll = () => {
+    const confirmed = window.confirm(
+      `确定要清空所有 ${selectedIngredients.length} 种食材吗？\n此操作不可撤销。`
+    );
+    if (confirmed) {
+      setSelectedIngredients([]);
+    }
   };
 
   return (
@@ -215,6 +254,7 @@ function InventoryInput({ onMatch }: InventoryInputProps) {
           <button 
             className="btn ripple-btn add-btn"
             onClick={() => handleAddIngredient()}
+            disabled={!ingredientName.trim()}
           >
             + 添加
           </button>
@@ -224,12 +264,12 @@ function InventoryInput({ onMatch }: InventoryInputProps) {
       <div className="input-section batch-section">
         <div className="input-mode-tabs">
           <span className="input-mode-label">⚡ 批量添加</span>
-          <span className="batch-hint">用逗号或换行分隔多个食材</span>
+          <span className="batch-hint">用逗号、换行或分号分隔多个食材</span>
         </div>
         <div className="batch-input-row">
           <textarea
             className="batch-textarea"
-            placeholder="例如：鸡蛋、番茄、洋葱、鸡胸肉&#10;或者每行一个：&#10;土豆&#10;胡萝卜&#10;青椒"
+            placeholder={'例如：鸡蛋、番茄、洋葱、鸡胸肉\n或者每行一个：\n土豆\n胡萝卜\n青椒'}
             value={batchInput}
             onChange={(e) => setBatchInput(e.target.value)}
             rows={4}
@@ -248,24 +288,26 @@ function InventoryInput({ onMatch }: InventoryInputProps) {
         <div className="selected-ingredients">
           <div className="selected-header">
             <p className="selected-title">已选择的食材：</p>
-            <p className="ingredient-count">
-              共 <strong>{selectedIngredients.length}</strong> 种食材
-            </p>
           </div>
           <div className="ingredient-tags">
             {selectedIngredients.map((ing, index) => (
               <div key={`${ing.name}-${index}`} className="ingredient-tag">
                 <span className="tag-name">{ing.name}</span>
-                <span className="tag-qty">×{ing.quantity}</span>
+                <span className="tag-qty">数量：{ing.quantity}</span>
                 <button 
                   className="tag-remove"
-                  onClick={() => handleRemoveIngredient(ing.name)}
-                  title="删除此食材"
+                  onClick={() => handleRemoveIngredient(ing.name, ing.quantity)}
+                  title={`删除「${ing.name}」`}
                 >
                   ×
                 </button>
               </div>
             ))}
+          </div>
+          <div className="ingredient-footer">
+            <p className="ingredient-count">
+              共 <strong>{selectedIngredients.length}</strong> 种食材
+            </p>
           </div>
         </div>
       )}
@@ -281,7 +323,7 @@ function InventoryInput({ onMatch }: InventoryInputProps) {
         {selectedIngredients.length > 0 && (
           <button 
             className="btn secondary-btn clear-btn"
-            onClick={() => setSelectedIngredients([])}
+            onClick={handleClearAll}
           >
             清空所有
           </button>

@@ -507,41 +507,55 @@ body {
 .ingredient-tag {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   background: #E3F2FD;
   border-radius: 12px;
-  padding: 6px 8px 6px 12px;
+  padding: 8px 10px 8px 14px;
   animation: tagIn 0.2s ease;
+  border: 1px solid rgba(33, 150, 243, 0.2);
 }
 
 .tag-name {
   font-size: 14px;
   color: var(--text-color);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .tag-qty {
-  font-size: 12px;
-  color: var(--info);
-  background: rgba(33, 150, 243, 0.15);
-  padding: 2px 6px;
+  font-size: 13px;
+  color: white;
+  background: var(--primary-color);
+  padding: 3px 10px;
   border-radius: 10px;
+  font-weight: 600;
 }
 
 .tag-remove {
-  background: none;
+  background: rgba(244, 67, 54, 0.1);
   border: none;
   color: var(--danger);
   cursor: pointer;
   font-size: 18px;
-  padding: 0 4px;
+  width: 24px;
+  height: 24px;
   line-height: 1;
   border-radius: 50%;
-  transition: transform 0.2s ease;
+  transition: transform 0.2s ease, background 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tag-remove:hover {
   transform: scale(1.2);
+  background: rgba(244, 67, 54, 0.2);
+}
+
+.ingredient-footer {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--gray-medium);
+  text-align: right;
 }
 
 .match-section {
