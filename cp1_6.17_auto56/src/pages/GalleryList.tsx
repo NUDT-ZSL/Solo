@@ -1,16 +1,43 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Gallery } from '../db/Database';
+import { Gallery, Artwork } from '../db/Database';
 import db from '../db/Database';
+import auctionEngine from '../db/AuctionEngine';
 import GalleryCard from '../components/GalleryCard';
 import './GalleryList.css';
 
 export function GalleryList() {
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [filter, setFilter] = useState<string>('all');
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifBlink, setNotifBlink] = useState(false);
+  const currentUserId = 'user-1';
+  const blinkTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     loadGalleries();
+    updateUnreadCount();
+
+    const handleBidOrSettle = () => {
+      updateUnreadCount();
+      triggerNotifBlink();
+    };
+
+    const unsubscribeBid = auctionEngine.onBid(() => handleBidOrSettle());
+    const unsubscribeSettle = auctionEngine.onSettle(() => handleBidOrSettle());
+
+    return () => {
+      unsubscribeBid();
+      unsubscribeSettle();
+      if (blinkTimeoutRef.current) {
+        clearTimeout(blinkTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    loadGalleries();
+    updateUnreadCount();
   }, [filter]);
 
   const loadGalleries = () => {
@@ -23,6 +50,25 @@ export function GalleryList() {
     setGalleries(allGalleries);
   };
 
+  const updateUnreadCount = () => {
+    const user = db.getUser(currentUserId);
+    const count = user?.notifications.filter(n => !n.read).length || 0;
+    setUnreadCount(count);
+  };
+
+  const triggerNotifBlink = () => {
+    setNotifBlink(false);
+    requestAnimationFrame(() => {
+      setNotifBlink(true);
+      if (blinkTimeoutRef.current) {
+        clearTimeout(blinkTimeoutRef.current);
+      }
+      blinkTimeoutRef.current = window.setTimeout(() => {
+        setNotifBlink(false);
+      }, 2500);
+    });
+  };
+
   const themes = ['all', '极简主义', '抽象表现', '印象派', '构成主义', '新中式', '赛博朋克'];
   const themeLabels: Record<string, string> = {
     'all': '全部',
@@ -33,9 +79,6 @@ export function GalleryList() {
     '新中式': '新中式',
     '赛博朋克': '赛博朋克'
   };
-
-  const currentUser = db.getUser('user-1');
-  const unreadCount = currentUser?.notifications.filter(n => !n.read).length || 0;
 
   return (
     <div className="gallery-list-page">
@@ -53,7 +96,9 @@ export function GalleryList() {
             <Link to="/profile" className="app-nav__link">
               我的
               {unreadCount > 0 && (
-                <span className="notification-badge">{unreadCount}</span>
+                <span className={`notification-badge ${notifBlink ? 'notification-dot-blink' : ''}`}>
+                  {unreadCount}
+                </span>
               )}
             </Link>
           </nav>

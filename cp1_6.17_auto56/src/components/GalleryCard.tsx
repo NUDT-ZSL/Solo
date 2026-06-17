@@ -11,10 +11,12 @@ interface GalleryCardProps {
 export function GalleryCard({ gallery }: GalleryCardProps) {
   const navigate = useNavigate();
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isFading, setIsFading] = useState(false);
+  const [displayIndex, setDisplayIndex] = useState(0);
+  const [nextIndex, setNextIndex] = useState<number | null>(null);
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [activeAuctionCount, setActiveAuctionCount] = useState(0);
-  const fadeTimeoutRef = useRef<number | null>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const transitionRef = useRef<number | null>(null);
 
   const curator = db.getUser(gallery.curatorId);
 
@@ -27,53 +29,73 @@ export function GalleryCard({ gallery }: GalleryCardProps) {
 
   useEffect(() => {
     return () => {
-      if (fadeTimeoutRef.current) {
-        clearTimeout(fadeTimeoutRef.current);
+      if (transitionRef.current) {
+        clearTimeout(transitionRef.current);
       }
     };
   }, []);
 
+  const switchTo = (targetIndex: number) => {
+    if (isTransitioning || artworks.length <= 1) return;
+    if (targetIndex === displayIndex) return;
+
+    setIsTransitioning(true);
+    setNextIndex(targetIndex);
+
+    transitionRef.current = window.setTimeout(() => {
+      setDisplayIndex(targetIndex);
+      setCurrentIndex(targetIndex);
+      setNextIndex(null);
+      setIsTransitioning(false);
+    }, 300);
+  };
+
   const handlePrev = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (artworks.length <= 1) return;
-    
-    setIsFading(true);
-    fadeTimeoutRef.current = window.setTimeout(() => {
-      setCurrentIndex((prev) => (prev - 1 + artworks.length) % artworks.length);
-      setIsFading(false);
-    }, 150);
+    const target = (displayIndex - 1 + artworks.length) % artworks.length;
+    switchTo(target);
   };
 
   const handleNext = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (artworks.length <= 1) return;
-    
-    setIsFading(true);
-    fadeTimeoutRef.current = window.setTimeout(() => {
-      setCurrentIndex((prev) => (prev + 1) % artworks.length);
-      setIsFading(false);
-    }, 150);
+    const target = (displayIndex + 1) % artworks.length;
+    switchTo(target);
+  };
+
+  const handleDotClick = (e: React.MouseEvent, index: number) => {
+    e.stopPropagation();
+    switchTo(index);
   };
 
   const handleClick = () => {
     navigate(`/gallery/${gallery.id}`);
   };
 
-  const currentArtwork = artworks[currentIndex];
+  const currentArtwork = artworks[displayIndex];
+  const nextArtwork = nextIndex !== null ? artworks[nextIndex] : null;
 
   return (
     <div className="gallery-card" onClick={handleClick}>
       <div className="gallery-card__carousel">
         {currentArtwork && (
           <div
-            className={`gallery-card__artwork ${isFading ? 'fading' : ''}`}
+            className={`gallery-card__artwork gallery-card__artwork--current ${isTransitioning ? 'fading-out' : ''}`}
             style={{ backgroundColor: currentArtwork.color }}
           >
             <span className="gallery-card__artwork-title">{currentArtwork.title}</span>
           </div>
         )}
+
+        {nextArtwork && (
+          <div
+            className="gallery-card__artwork gallery-card__artwork--next fading-in"
+            style={{ backgroundColor: nextArtwork.color }}
+          >
+            <span className="gallery-card__artwork-title">{nextArtwork.title}</span>
+          </div>
+        )}
         
-        {!currentArtwork && (
+        {!currentArtwork && !nextArtwork && (
           <div className="gallery-card__artwork gallery-card__artwork--empty">
             <span>暂无作品</span>
           </div>
@@ -101,9 +123,11 @@ export function GalleryCard({ gallery }: GalleryCardProps) {
         {artworks.length > 1 && (
           <div className="gallery-card__dots">
             {artworks.map((_, index) => (
-              <span
+              <button
                 key={index}
-                className={`gallery-card__dot ${index === currentIndex ? 'active' : ''}`}
+                className={`gallery-card__dot ${index === displayIndex ? 'active' : ''}`}
+                onClick={(e) => handleDotClick(e, index)}
+                aria-label={`第${index + 1}张`}
               />
             ))}
           </div>

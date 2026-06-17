@@ -11,20 +11,11 @@ interface ExhibitionGridProps {
   canEdit?: boolean;
 }
 
-interface DragState {
-  artwork: Artwork;
-  startX: number;
-  startY: number;
-  offsetX: number;
-  offsetY: number;
-  currentX: number;
-  currentY: number;
-  fromPosition: number | null;
-}
-
 export function ExhibitionGrid({ galleryId, artworks, onArtworkClick, onUpdate, canEdit = true }: ExhibitionGridProps) {
   const gridRef = useRef<HTMLDivElement>(null);
-  const [dragState, setDragState] = useState<DragState | null>(null);
+  const [draggedArtwork, setDraggedArtwork] = useState<Artwork | null>(null);
+  const [draggedFromPosition, setDraggedFromPosition] = useState<number | null>(null);
+  const [dragOverPosition, setDragOverPosition] = useState<number | null>(null);
   const [animatingCell, setAnimatingCell] = useState<number | null>(null);
   const [cellSize, setCellSize] = useState(120);
 
@@ -49,103 +40,120 @@ export function ExhibitionGrid({ galleryId, artworks, onArtworkClick, onUpdate, 
     return () => window.removeEventListener('resize', updateCellSize);
   }, []);
 
-  const handleDragStart = (e: React.MouseEvent, artwork: Artwork, fromPosition: number | null) => {
-    if (!canEdit) return;
-    e.preventDefault();
-
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  const handleDragStart = (e: React.DragEvent, artwork: Artwork, fromPosition: number | null) => {
+    if (!canEdit) {
+      e.preventDefault();
+      return;
+    }
+    setDraggedArtwork(artwork);
+    setDraggedFromPosition(fromPosition);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', artwork.id);
     
-    setDragState({
-      artwork,
-      startX: e.clientX,
-      startY: e.clientY,
-      offsetX: e.clientX - rect.left,
-      offsetY: e.clientY - rect.top,
-      currentX: e.clientX,
-      currentY: e.clientY,
-      fromPosition
-    });
+    const dragImage = e.currentTarget as HTMLElement;
+    dragImage.style.opacity = '0.5';
   };
 
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (dragState) {
-        setDragState(prev => prev ? { ...prev, currentX: e.clientX, currentY: e.clientY } : null);
-      }
-    };
+  const handleDragEnd = (e: React.DragEvent) => {
+    const target = e.currentTarget as HTMLElement;
+    target.style.opacity = '1';
+    setDraggedArtwork(null);
+    setDraggedFromPosition(null);
+    setDragOverPosition(null);
+  };
 
-    const handleMouseUp = (e: MouseEvent) => {
-      if (!dragState || !gridRef.current) {
-        setDragState(null);
-        return;
-      }
+  const handleDragOver = (e: React.DragEvent, positionIndex: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverPosition !== positionIndex) {
+      setDragOverPosition(positionIndex);
+    }
+  };
 
-      const gridRect = gridRef.current.getBoundingClientRect();
-      const gap = 16;
-      const cellTotalSize = cellSize + gap;
-      const paddingLeft = 16;
-      const paddingTop = 16;
+  const handleDragLeave = (e: React.DragEvent, positionIndex: number) => {
+    if (dragOverPosition === positionIndex) {
+      setDragOverPosition(null);
+    }
+  };
 
-      const relativeX = e.clientX - gridRect.left - paddingLeft;
-      const relativeY = e.clientY - gridRect.top - paddingTop;
-
-      const col = Math.floor(relativeX / cellTotalSize);
-      const row = Math.floor(relativeY / cellTotalSize);
-
-      if (col >= 0 && col < 3 && row >= 0 && row < 3) {
-        const targetIndex = row * 3 + col;
-        const existingArtwork = getArtworkAtPosition(targetIndex);
-
-        if (existingArtwork && existingArtwork.id === dragState.artwork.id) {
-          setDragState(null);
-          return;
-        }
-
-        if (existingArtwork) {
-          if (dragState.fromPosition !== null) {
-            db.placeArtworkInPosition(existingArtwork.id, dragState.fromPosition);
-          } else {
-            db.removeArtworkFromPosition(existingArtwork.id);
-          }
-        }
-
-        db.placeArtworkInPosition(dragState.artwork.id, targetIndex);
-        
-        setAnimatingCell(targetIndex);
-        setTimeout(() => setAnimatingCell(null), 200);
-        
-        onUpdate?.();
-      }
-
-      setDragState(null);
-    };
-
-    if (dragState) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    
+    if (!draggedArtwork) {
+      setDragOverPosition(null);
+      return;
     }
 
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [dragState, cellSize, getArtworkAtPosition, onUpdate]);
+    const existingArtwork = getArtworkAtPosition(targetIndex);
+
+    if (existingArtwork && existingArtwork.id === draggedArtwork.id) {
+      setDraggedArtwork(null);
+      setDraggedFromPosition(null);
+      setDragOverPosition(null);
+      return;
+    }
+
+    if (existingArtwork) {
+      if (draggedFromPosition !== null) {
+        db.placeArtworkInPosition(existingArtwork.id, draggedFromPosition);
+      } else {
+        db.removeArtworkFromPosition(existingArtwork.id);
+      }
+    }
+
+    db.placeArtworkInPosition(draggedArtwork.id, targetIndex);
+
+    setAnimatingCell(targetIndex);
+    setTimeout(() => setAnimatingCell(null), 200);
+
+    setDraggedArtwork(null);
+    setDraggedFromPosition(null);
+    setDragOverPosition(null);
+
+    onUpdate?.();
+  };
+
+  const handleLibraryDragOver = (e: React.DragEvent) => {
+    if (canEdit && draggedFromPosition !== null) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    }
+  };
+
+  const handleLibraryDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    
+    if (draggedArtwork && draggedFromPosition !== null) {
+      db.removeArtworkFromPosition(draggedArtwork.id);
+      onUpdate?.();
+    }
+
+    setDraggedArtwork(null);
+    setDraggedFromPosition(null);
+    setDragOverPosition(null);
+  };
 
   const renderCell = (index: number) => {
     const artwork = getArtworkAtPosition(index);
     const isAnimating = animatingCell === index;
-    const isDraggingFromHere = dragState?.fromPosition === index;
+    const isDraggingThis = draggedArtwork?.positionIndex === index;
+    const isDragOver = dragOverPosition === index;
 
     if (artwork) {
       return (
         <div
           key={index}
-          className={`exhibition-cell exhibition-cell--filled ${isAnimating ? 'animating' : ''} ${isDraggingFromHere ? 'dragging' : ''}`}
+          className={`exhibition-cell exhibition-cell--filled ${isAnimating ? 'animating' : ''} ${isDraggingThis ? 'dragging' : ''} ${isDragOver ? 'drag-over' : ''}`}
           style={{
             width: cellSize,
             height: cellSize,
           }}
-          onMouseDown={(e) => handleDragStart(e, artwork, index)}
+          draggable={canEdit}
+          onDragStart={(e) => handleDragStart(e, artwork, index)}
+          onDragEnd={handleDragEnd}
+          onDragOver={(e) => handleDragOver(e, index)}
+          onDragLeave={(e) => handleDragLeave(e, index)}
+          onDrop={(e) => handleDrop(e, index)}
           onClick={(e) => {
             e.stopPropagation();
             onArtworkClick(artwork);
@@ -176,11 +184,14 @@ export function ExhibitionGrid({ galleryId, artworks, onArtworkClick, onUpdate, 
     return (
       <div
         key={index}
-        className="exhibition-cell exhibition-cell--empty"
+        className={`exhibition-cell exhibition-cell--empty ${isDragOver ? 'drag-over' : ''}`}
         style={{
           width: cellSize,
           height: cellSize,
         }}
+        onDragOver={(e) => handleDragOver(e, index)}
+        onDragLeave={(e) => handleDragLeave(e, index)}
+        onDrop={(e) => handleDrop(e, index)}
       >
         <span className="exhibition-cell__empty-text">空展位</span>
       </div>
@@ -202,14 +213,20 @@ export function ExhibitionGrid({ galleryId, artworks, onArtworkClick, onUpdate, 
       </div>
 
       {canEdit && (
-        <div className="artwork-library">
+        <div
+          className={`artwork-library ${draggedFromPosition !== null ? 'can-receive' : ''}`}
+          onDragOver={handleLibraryDragOver}
+          onDrop={handleLibraryDrop}
+        >
           <h3 className="artwork-library__title">作品库</h3>
           <div className="artwork-library__grid">
             {libraryArtworks.map(artwork => (
               <div
                 key={artwork.id}
-                className="library-item"
-                onMouseDown={(e) => handleDragStart(e, artwork, null)}
+                className={`library-item ${draggedArtwork?.id === artwork.id ? 'dragging' : ''}`}
+                draggable={canEdit}
+                onDragStart={(e) => handleDragStart(e, artwork, null)}
+                onDragEnd={handleDragEnd}
               >
                 <div
                   className="library-item__thumb"
@@ -225,21 +242,6 @@ export function ExhibitionGrid({ galleryId, artworks, onArtworkClick, onUpdate, 
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {dragState && (
-        <div
-          className="drag-ghost"
-          style={{
-            left: dragState.currentX - dragState.offsetX,
-            top: dragState.currentY - dragState.offsetY,
-            width: 80,
-            height: 80,
-            backgroundColor: dragState.artwork.color,
-          }}
-        >
-          <span className="drag-ghost__title">{dragState.artwork.title}</span>
         </div>
       )}
     </div>

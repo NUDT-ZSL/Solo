@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Gallery, Artwork } from '../db/Database';
 import db from '../db/Database';
@@ -15,23 +15,61 @@ export function GalleryDetail() {
   const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
   const [isAuctionOpen, setIsAuctionOpen] = useState(false);
   const [version, setVersion] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifBlink, setNotifBlink] = useState(false);
+  const blinkTimeoutRef = useRef<number | null>(null);
 
   const currentUserId = 'user-2';
-  const currentUser = db.getUser(currentUserId);
-  const unreadCount = currentUser?.notifications.filter(n => !n.read).length || 0;
 
   useEffect(() => {
     if (id) {
       loadGalleryData();
     }
-  }, [id, version]);
+    updateUnreadCount();
+
+    const handleBidOrSettle = () => {
+      setVersion(v => v + 1);
+      updateUnreadCount();
+      triggerNotifBlink();
+    };
+
+    const unsubscribeBid = auctionEngine.onBid(() => handleBidOrSettle());
+    const unsubscribeSettle = auctionEngine.onSettle(() => handleBidOrSettle());
+
+    return () => {
+      unsubscribeBid();
+      unsubscribeSettle();
+      if (blinkTimeoutRef.current) {
+        clearTimeout(blinkTimeoutRef.current);
+      }
+    };
+  }, [id]);
 
   useEffect(() => {
-    const unsubscribe = auctionEngine.onSettle(() => {
-      setVersion(v => v + 1);
+    if (id) {
+      loadGalleryData();
+    }
+    updateUnreadCount();
+  }, [id, version]);
+
+  const updateUnreadCount = () => {
+    const user = db.getUser(currentUserId);
+    const count = user?.notifications.filter(n => !n.read).length || 0;
+    setUnreadCount(count);
+  };
+
+  const triggerNotifBlink = () => {
+    setNotifBlink(false);
+    requestAnimationFrame(() => {
+      setNotifBlink(true);
+      if (blinkTimeoutRef.current) {
+        clearTimeout(blinkTimeoutRef.current);
+      }
+      blinkTimeoutRef.current = window.setTimeout(() => {
+        setNotifBlink(false);
+      }, 2500);
     });
-    return unsubscribe;
-  }, []);
+  };
 
   const loadGalleryData = () => {
     if (!id) return;
@@ -99,7 +137,9 @@ export function GalleryDetail() {
             <Link to="/profile" className="app-nav__link">
               我的
               {unreadCount > 0 && (
-                <span className="notification-badge">{unreadCount}</span>
+                <span className={`notification-badge ${notifBlink ? 'notification-dot-blink' : ''}`}>
+                  {unreadCount}
+                </span>
               )}
             </Link>
           </nav>

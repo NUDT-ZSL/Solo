@@ -28,12 +28,34 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.3s ease;
-  opacity: 1;
 }
 
-.gallery-card__artwork.fading {
+.gallery-card__artwork--current {
+  opacity: 1;
+  z-index: 1;
+  transition: opacity 0.3s ease;
+}
+
+.gallery-card__artwork--current.fading-out {
   opacity: 0;
+}
+
+.gallery-card__artwork--next {
+  opacity: 0;
+  z-index: 2;
+}
+
+.gallery-card__artwork--next.fading-in {
+  animation: fadeIn 0.3s ease forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .gallery-card__artwork-title {

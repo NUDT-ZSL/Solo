@@ -56,6 +56,13 @@
   opacity: 0.3;
 }
 
+.exhibition-cell.drag-over {
+  border-color: #D4AF37 !important;
+  background: rgba(212, 175, 55, 0.1) !important;
+  transform: scale(1.05);
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.3);
+}
+
 .exhibition-cell__artwork {
   width: 100%;
   height: 100%;
@@ -190,6 +197,19 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.library-item.dragging {
+  opacity: 0.4;
+}
+
+.artwork-library.can-receive {
+  background: rgba(212, 175, 55, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+  outline: 2px dashed #D4AF37;
+  outline-offset: 4px;
+  transition: all 0.2s ease;
 }
 
 .library-item--empty {

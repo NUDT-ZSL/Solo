@@ -13,10 +13,18 @@ class AuctionEngine {
   private settleCallbacks: Set<AuctionSettleCallback> = new Set();
   private bidCallbacks: Set<BidCallback> = new Set();
   private isRunning: boolean = false;
+  private static instance: AuctionEngine | null = null;
 
   constructor() {
     this.start();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', this.handleBeforeUnload);
+    }
   }
+
+  private handleBeforeUnload = () => {
+    this.dispose();
+  };
 
   start(): void {
     if (this.isRunning) return;
@@ -32,6 +40,15 @@ class AuctionEngine {
       this.intervalId = null;
     }
     this.isRunning = false;
+  }
+
+  dispose(): void {
+    this.stop();
+    this.settleCallbacks.clear();
+    this.bidCallbacks.clear();
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('beforeunload', this.handleBeforeUnload);
+    }
   }
 
   setCheckInterval(ms: number): void {
