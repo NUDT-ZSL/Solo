@@ -190,11 +190,11 @@ const Dashboard: React.FC<DashboardProps> = ({ campaigns, stats, timeSeries, onS
                 borderRadius: '8px',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
                 padding: '20px',
-                cursor: 'pointer',
                 transition: `all 0.3s ease-out`,
                 animation: `fadeInUp 0.3s ${idx * 0.05}s ease-out both`,
+                display: 'flex',
+                flexDirection: 'column',
               }}
-              onClick={() => setExpandedId(expandedId === c.id ? null : c.id)}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                 <h4 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#333' }}>{c.name}</h4>
@@ -241,31 +241,52 @@ const Dashboard: React.FC<DashboardProps> = ({ campaigns, stats, timeSeries, onS
                   background: c.status === 'active' ? '#FFF3E0' : '#E8F5E9',
                   color: c.status === 'active' ? '#FF9800' : '#4CAF50',
                   transition: 'transform 0.2s, box-shadow 0.2s',
+                  marginBottom: '8px',
                 }}
                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.05)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none'; }}
               >
                 {c.status === 'active' ? '暂停活动' : '恢复活动'}
               </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === c.id ? null : c.id); }}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  background: '#fff',
+                  color: '#666',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.05)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none'; }}
+              >
+                {expandedId === c.id ? '收起优惠券码 ▲' : '查看优惠券码 ▼'}
+              </button>
               {expandedId === c.id && (
-                <div style={{ marginTop: '16px', borderTop: '1px solid #eee', paddingTop: '12px', maxHeight: '300px', overflowY: 'auto' }}>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '8px' }}>优惠券码列表</div>
+                <div style={{ marginTop: '12px', borderTop: '1px solid #eee', paddingTop: '12px', maxHeight: '300px', overflowY: 'auto' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#888', marginBottom: '8px' }}>优惠券码列表（共{c.coupons.length}张）</div>
                   {c.coupons.map((coupon, i) => (
                     <div key={i} style={{
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      padding: '6px 0',
+                      padding: '4px 0',
                       borderBottom: '1px solid #f5f5f5',
-                      fontSize: '13px',
+                      fontSize: '11px',
+                      color: '#888',
                     }}>
-                      <span style={{ fontFamily: 'monospace', letterSpacing: '1px' }}>{coupon.code}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ color: couponStatusColor(coupon.status), fontWeight: 500, fontSize: '12px' }}>
+                      <span style={{ fontFamily: 'monospace', letterSpacing: '1px', color: '#999' }}>{coupon.code}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ color: couponStatusColor(coupon.status), fontWeight: 500, fontSize: '10px' }}>
                           {couponStatusText(coupon.status)}
                         </span>
                         {coupon.redeemedAt && (
-                          <span style={{ fontSize: '11px', color: '#999' }}>
+                          <span style={{ fontSize: '10px', color: '#aaa' }}>
                             {new Date(coupon.redeemedAt).toLocaleTimeString()}
                           </span>
                         )}

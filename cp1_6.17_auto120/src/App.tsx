@@ -8,8 +8,20 @@ const App: React.FC = () => {
   const [stats, setStats] = useState<TotalStats>({ totalIssued: 0, totalClaimed: 0, totalRedeemed: 0 });
   const [timeSeries, setTimeSeries] = useState<TimeSeriesPoint[]>([]);
   const [showCreator, setShowCreator] = useState(false);
+  const [toast, setToast] = useState<{ visible: boolean; message: string }>({ visible: false, message: '' });
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = useCallback((message: string) => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
+    setToast({ visible: true, message });
+    toastTimerRef.current = setTimeout(() => {
+      setToast({ visible: false, message: '' });
+    }, 3000);
+  }, []);
 
   const fetchCampaigns = useCallback(async () => {
     try {
@@ -70,6 +82,14 @@ const App: React.FC = () => {
   return (
     <div style={appStyle}>
       <style>{globalCSS}</style>
+      <div style={{
+        ...toastStyle,
+        visibility: toast.visible ? 'visible' : 'hidden',
+        opacity: toast.visible ? 1 : 0,
+        transform: toast.visible ? 'translateY(0)' : 'translateY(-20px)',
+      }}>
+        ✓ {toast.message}
+      </div>
       <header style={headerStyle}>
         <div>
           <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 700, color: '#1a1a2e' }}>优惠券促销驾驶舱</h1>
@@ -95,7 +115,10 @@ const App: React.FC = () => {
       {showCreator && (
         <CampaignCreator
           onClose={() => setShowCreator(false)}
-          onCreated={fetchCampaigns}
+          onCreated={(totalQuantity) => {
+            fetchCampaigns();
+            showToast(`活动创建成功，共生成${totalQuantity}个优惠券码`);
+          }}
         />
       )}
     </div>
@@ -112,6 +135,10 @@ const globalCSS = `
       opacity: 1;
       transform: translateY(0);
     }
+  }
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
   * {
     margin: 0;
@@ -170,6 +197,23 @@ const createBtnStyle: React.CSSProperties = {
   cursor: 'pointer',
   transition: 'transform 0.2s, box-shadow 0.2s',
   boxShadow: '0 2px 8px rgba(76,175,80,0.2)',
+};
+
+const toastStyle: React.CSSProperties = {
+  position: 'fixed',
+  top: '20px',
+  left: '50%',
+  transform: 'translateX(-50%)',
+  background: '#4CAF50',
+  color: '#fff',
+  padding: '12px 24px',
+  borderRadius: '8px',
+  fontSize: '14px',
+  fontWeight: 500,
+  boxShadow: '0 4px 16px rgba(76,175,80,0.4)',
+  zIndex: 2000,
+  transition: 'opacity 0.3s ease, transform 0.3s ease',
+  pointerEvents: 'none',
 };
 
 export default App;

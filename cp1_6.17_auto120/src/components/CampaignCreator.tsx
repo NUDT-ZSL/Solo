@@ -3,7 +3,7 @@ import { createCampaign } from '../utils/api';
 
 interface CampaignCreatorProps {
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (totalQuantity: number) => void;
 }
 
 const CampaignCreator: React.FC<CampaignCreatorProps> = ({ onClose, onCreated }) => {
@@ -36,7 +36,7 @@ const CampaignCreator: React.FC<CampaignCreatorProps> = ({ onClose, onCreated })
         validFrom,
         validTo,
       });
-      onCreated();
+      onCreated(totalQuantity);
       onClose();
     } catch (err) {
       setError('创建失败，请重试');
@@ -102,7 +102,25 @@ const CampaignCreator: React.FC<CampaignCreatorProps> = ({ onClose, onCreated })
             <input style={inputStyle} type="date" value={validTo} onChange={e => setValidTo(e.target.value)} />
           </label>
           {error && <div style={{ color: '#FF5722', fontSize: '14px' }}>{error}</div>}
-          <button type="submit" disabled={submitting} style={submitBtnStyle}>
+          <button type="submit" disabled={submitting} style={{
+            ...submitBtnStyle,
+            background: submitting ? '#A5D6A7' : '#4CAF50',
+            cursor: submitting ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+          }}>
+            {submitting && (
+              <span style={{
+                width: '16px',
+                height: '16px',
+                border: '2px solid rgba(255,255,255,0.3)',
+                borderTopColor: '#fff',
+                borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite',
+              }} />
+            )}
             {submitting ? '创建中...' : '创建活动'}
           </button>
         </form>
