@@ -1,0 +1,72 @@
+[
+  {
+    "id": "tool-001",
+    "name": "博世电钻 GSB 120",
+    "category": "电动工具",
+    "photo": "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&h=300&fit=crop",
+    "status": "available",
+    "description": "12V锂电充电式冲击钻，适合木材、金属、砖墙钻孔作业",
+    "usageInstructions": "1. 确认电池已充满电；2. 根据钻孔材质选择合适的钻头；3. 钻孔前请佩戴护目镜；4. 垂直对准钻孔位置，匀速施压；5. 使用完毕及时清理钻头灰尘，取下电池存放。",
+    "createdAt": "2025-11-01T10:00:00.000Z"
+  },
+  {
+    "id": "tool-002",
+    "name": "角磨机 GWS 900",
+    "category": "电动工具",
+    "photo": "https://images.unsplash.com/photo-1581092918996-70dd5a3d6b61?w=300&h=300&fit=crop",
+    "status": "borrowed",
+    "description": "900W大功率角磨机，金属切割、打磨、除锈多用途",
+    "usageInstructions": "1. 检查砂轮片是否完好无裂痕；2. 安装防护罩并佩戴护目镜、口罩；3. 双手握紧机身，保持稳定；4. 切割时避免过度施压；5. 更换砂轮片前务必拔掉电源。",
+    "createdAt": "2025-10-15T08:30:00.000Z"
+  },
+  {
+    "id": "tool-003",
+    "name": "手工电弧焊机",
+    "category": "焊接设备",
+    "photo": "https://images.unsplash.com/photo-1581091012184-5c8c5e4d7a0b?w=300&h=300&fit=crop",
+    "status": "repairing",
+    "description": "220V便携式电焊机，可焊2.5-3.2mm焊条",
+    "usageInstructions": "1. 接好地线，确保焊接工件接地良好；2. 佩戴焊接面罩、防护手套和长袖工作服；3. 根据焊条直径调节电流；4. 保持焊弧稳定，匀速移动；5. 焊接后工件高温，避免烫伤。",
+    "createdAt": "2025-09-20T14:00:00.000Z"
+  },
+  {
+    "id": "tool-004",
+    "name": "精密螺丝刀套装",
+    "category": "手动工具",
+    "photo": "https://images.unsplash.com/photo-1581783898377-1c85bf937427?w=300&h=300&fit=crop",
+    "status": "available",
+    "description": "32合一精密螺丝刀，含十字、一字、六角、梅花等批头，适合电子维修",
+    "usageInstructions": "1. 根据螺丝规格选择匹配批头；2. 插入手柄确认锁定；3. 垂直对准螺丝中心，均匀施力旋转；4. 避免用力过猛导致批头滑脱损坏螺丝；5. 使用完毕将批头归位收纳。",
+    "createdAt": "2025-12-01T09:00:00.000Z"
+  },
+  {
+    "id": "tool-005",
+    "name": "活动扳手套装",
+    "category": "手动工具",
+    "photo": "https://images.unsplash.com/photo-1581093588401-fbb62a02f120?w=300&h=300&fit=crop",
+    "status": "available",
+    "description": "6寸/8寸/10寸三件套活动扳手，开口可调节",
+    "usageInstructions": "1. 选择合适尺寸的扳手；2. 调节开口至与螺母紧密贴合；3. 拉力方向应与扳手手柄垂直；4. 避免使用加力套管增加力矩；5. 不可当锤子使用，使用后擦拭干净存放。",
+    "createdAt": "2025-10-28T11:30:00.000Z"
+  },
+  {
+    "id": "tool-006",
+    "name": "曲线锯",
+    "category": "电动工具",
+    "photo": "https://images.unsplash.com/photo-1572981779307-38b8cabb2407?w=300&h=300&fit=crop",
+    "status": "available",
+    "description": "500W可调速曲线锯，适合木材、塑料、薄金属曲线切割",
+    "usageInstructions": "1. 根据切割材料选择对应锯条；2. 将工件牢固固定在工作台上；3. 启动后匀速前进，转弯时放慢速度；4. 切勿用力推压，跟随锯条节奏即可；5. 待锯条完全停止后方可放下工具。",
+    "createdAt": "2025-11-10T16:20:00.000Z"
+  },
+  {
+    "id": "tool-007",
+    "name": "数显游标卡尺",
+    "category": "测量工具",
+    "photo": "https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=300&h=300&fit=crop",
+    "status": "borrowed",
+    "description": "0-150mm电子数显卡尺，精度0.01mm，公英制切换",
+    "usageInstructions": "1. 使用前擦净量爪，归零校准；2. 测量外径：将工件置于两量爪之间；3. 测量内径：使用上方量爪；4. 轻力度贴合，避免卡紧过度影响精度；5. 使用后涂防锈油放回包装盒。",
+    "createdAt": "2025-11-20T13:45:00.000Z"
+  }
+]
