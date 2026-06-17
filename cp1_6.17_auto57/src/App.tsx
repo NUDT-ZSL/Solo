@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import InstrumentPanel from './InstrumentPanel';
 import {
   InstrumentType,
+  ChordType,
   NoteRecord,
   ChordData,
   eventBus,
@@ -101,6 +102,10 @@ const App: React.FC = () => {
     audioEngine.playNote(note, inst);
   }, []);
 
+  const handleChordPlay = useCallback((rootNote: string, inst: InstrumentType, chordType: ChordType) => {
+    audioEngine.playChord(rootNote, inst, chordType);
+  }, []);
+
   const handleInstrumentChange = (newInstrument: InstrumentType) => {
     setInstrument(newInstrument);
     audioEngine.clearRecording();
@@ -168,6 +173,7 @@ const App: React.FC = () => {
             <InstrumentPanel
               instrument={instrument}
               onNotePlay={handleNotePlay}
+              onChordPlay={handleChordPlay}
             />
           </section>
 

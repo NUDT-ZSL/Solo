@@ -1,9 +1,10 @@
 import React, { useState, useCallback } from 'react';
-import { InstrumentType, getGuitarFretNote, getPianoKeyNote, getViolinFretNote } from './AudioEngine';
+import { InstrumentType, ChordType, getChordNotes, getGuitarFretNote, getPianoKeyNote, getViolinFretNote } from './AudioEngine';
 
 interface InstrumentPanelProps {
   instrument: InstrumentType;
   onNotePlay: (note: string, instrument: InstrumentType) => void;
+  onChordPlay?: (rootNote: string, instrument: InstrumentType, chordType: ChordType) => void;
 }
 
 interface ActiveNote {
@@ -11,16 +12,39 @@ interface ActiveNote {
   note: string;
 }
 
-const InstrumentPanel: React.FC<InstrumentPanelProps> = ({ instrument, onNotePlay }) => {
-  const [activeNotes, setActiveNotes] = useState<ActiveNote[]>([]);
+const CHORD_TYPES: { type: ChordType; label: string }[] = [
+  { type: 'single', label: '单音' },
+  { type: 'major', label: '大三和弦' },
+  { type: 'minor', label: '小三和弦' },
+  { type: 'seventh', label: '属七和弦' }
+];
 
-  const triggerNote = useCallback((note: string, id: string) => {
-    onNotePlay(note, instrument);
-    setActiveNotes(prev => [...prev, { id, note }]);
-    setTimeout(() => {
-      setActiveNotes(prev => prev.filter(n => n.id !== id));
-    }, 200);
-  }, [instrument, onNotePlay]);
+const InstrumentPanel: React.FC<InstrumentPanelProps> = ({ instrument, onNotePlay, onChordPlay }) => {
+  const [activeNotes, setActiveNotes] = useState<ActiveNote[]>([]);
+  const [chordType, setChordType] = useState<ChordType>('single');
+
+  const triggerNote = useCallback((note: string, baseId: string) => {
+    if (chordType === 'single') {
+      onNotePlay(note, instrument);
+      setActiveNotes(prev => [...prev, { id: baseId, note }]);
+      setTimeout(() => {
+        setActiveNotes(prev => prev.filter(n => n.id !== baseId));
+      }, 200);
+    } else {
+      if (onChordPlay) {
+        onChordPlay(note, instrument, chordType);
+      } else {
+        const chordNotes = getChordNotes(note, chordType);
+        chordNotes.forEach((chordNote) => {
+          onNotePlay(chordNote, instrument);
+        });
+      }
+      setActiveNotes(prev => [...prev, { id: baseId, note }]);
+      setTimeout(() => {
+        setActiveNotes(prev => prev.filter(n => n.id !== baseId));
+      }, 200);
+    }
+  }, [instrument, chordType, onNotePlay, onChordPlay]);
 
   const renderPiano = () => {
     const whiteKeys: number[] = [];
@@ -180,8 +204,26 @@ const InstrumentPanel: React.FC<InstrumentPanelProps> = ({ instrument, onNotePla
     }
   };
 
+  const renderChordSelector = () => (
+    <div className="chord-type-selector">
+      <span className="chord-type-label">和弦类型：</span>
+      <div className="chord-type-buttons">
+        {CHORD_TYPES.map(({ type, label }) => (
+          <button
+            key={type}
+            className={`btn chord-type-btn ${chordType === type ? 'active' : ''}`}
+            onClick={() => setChordType(type)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <div className="instrument-panel">
+      {renderChordSelector()}
       {renderInstrument()}
     </div>
   );

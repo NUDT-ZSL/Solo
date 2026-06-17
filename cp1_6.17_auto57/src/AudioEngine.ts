@@ -1,5 +1,6 @@
 export type InstrumentType = 'guitar' | 'piano' | 'violin';
 export type WaveformType = 'sine' | 'square' | 'sawtooth' | 'triangle';
+export type ChordType = 'single' | 'major' | 'minor' | 'seventh';
 
 export interface NoteRecord {
   note: string;
@@ -114,6 +115,21 @@ export function getPianoKeyNote(keyIndex: number): string {
   return getNoteFromIndex(keyIndex + 3);
 }
 
+const CHORD_INTERVALS: Record<Exclude<ChordType, 'single'>, number[]> = {
+  major: [0, 4, 7],
+  minor: [0, 3, 7],
+  seventh: [0, 4, 7, 10]
+};
+
+export function getChordNotes(rootNote: string, chordType: ChordType): string[] {
+  if (chordType === 'single') {
+    return [rootNote];
+  }
+  const intervals = CHORD_INTERVALS[chordType];
+  const rootIndex = getNoteIndex(rootNote);
+  return intervals.map(interval => getNoteFromIndex(rootIndex + interval));
+}
+
 export function generateChords(key: string): ChordData[] {
   const keyIndex = SCALE_NOTES.indexOf(key);
   if (keyIndex === -1) return [];
@@ -195,7 +211,7 @@ class AudioEngine {
     }
   }
 
-  playNote(note: string, instrument: InstrumentType, duration: number = 0.5): void {
+  playNote(note: string, instrument: InstrumentType, duration: number = 0.5, volume: number = 0.5, skipRecording: boolean = false): void {
     this.initAudioContext();
     if (!this.audioContext || !this.masterGain) return;
 
@@ -209,7 +225,7 @@ class AudioEngine {
     osc.frequency.value = frequency;
 
     gainNode.gain.setValueAtTime(0, now);
-    gainNode.gain.linearRampToValueAtTime(0.5, now + 0.01);
+    gainNode.gain.linearRampToValueAtTime(volume, now + 0.01);
     gainNode.gain.exponentialRampToValueAtTime(0.01, now + duration);
 
     osc.connect(gainNode);
@@ -218,14 +234,14 @@ class AudioEngine {
     osc.start(now);
     osc.stop(now + duration);
 
-    const oscId = `${note}-${Date.now()}`;
+    const oscId = `${note}-${Date.now()}-${Math.random()}`;
     this.activeOscillators.set(oscId, { osc, gain: gainNode });
 
     osc.onended = () => {
       this.activeOscillators.delete(oscId);
     };
 
-    if (this.isRecording) {
+    if (this.isRecording && !skipRecording) {
       this.recording.push({
         note,
         frequency,
@@ -236,6 +252,31 @@ class AudioEngine {
     }
 
     eventBus.emit('notePlayed', { note, instrument });
+  }
+
+  playChord(rootNote: string, instrument: InstrumentType, chordType: ChordType, duration: number = 0.6): void {
+    const notes = getChordNotes(rootNote, chordType);
+    const recordingTimestamp = Date.now() - this.recordingStartTime;
+
+    if (this.isRecording) {
+      notes.forEach((note) => {
+        const frequency = getNoteFrequency(note);
+        this.recording.push({
+          note,
+          frequency,
+          timestamp: recordingTimestamp,
+          instrument,
+          duration
+        });
+      });
+    }
+
+    const volume = 0.3 / Math.sqrt(notes.length);
+    notes.forEach((note) => {
+      this.playNote(note, instrument, duration, volume, true);
+    });
+
+    eventBus.emit('chordPlayed', { notes, instrument, chordType });
   }
 
   playChordNotes(notes: string[], instrument: InstrumentType): void {
