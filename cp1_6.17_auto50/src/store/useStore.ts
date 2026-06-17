@@ -15,12 +15,17 @@ interface AppState {
   notifications: Notification[];
   selectedCommissionId: string | null;
   currentView: 'portfolio' | 'board' | 'detail';
+  activeFilter: string | null;
 
   initArtworks: (artworks: Artwork[]) => void;
   addCommission: (data: Omit<Commission, 'id' | 'status' | 'progress' | 'createdAt'>) => void;
   updateCommissionStatus: (id: string, status: CommissionStatus) => void;
   setSelectedCommission: (id: string | null) => void;
   setCurrentView: (view: 'portfolio' | 'board' | 'detail') => void;
+
+  toggleFilter: (style: string) => void;
+  clearFilter: () => void;
+  getFilteredArtworks: () => Artwork[];
 
   addMessage: (commissionId: string, sender: 'client' | 'designer', content: string) => void;
   getMessagesByCommission: (commissionId: string) => Message[];
@@ -39,8 +44,22 @@ export const useStore = create<AppState>((set, get) => ({
   notifications: [],
   selectedCommissionId: null,
   currentView: 'portfolio',
+  activeFilter: null,
 
   initArtworks: (artworks) => set({ artworks }),
+
+  toggleFilter: (style) =>
+    set((state) => ({
+      activeFilter: state.activeFilter === style ? null : style
+    })),
+
+  clearFilter: () => set({ activeFilter: null }),
+
+  getFilteredArtworks: () => {
+    const { artworks, activeFilter } = get();
+    if (!activeFilter) return artworks;
+    return artworks.filter((a) => a.styles.includes(activeFilter));
+  },
 
   addCommission: (data) => {
     const newCommission: Commission = {
