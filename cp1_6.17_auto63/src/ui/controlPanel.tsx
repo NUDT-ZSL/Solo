@@ -1,16 +1,37 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { Play, Pause, RotateCcw } from 'lucide-react';
 import { useStarStore } from '@/store/useStarStore';
 import { MAX_AGE, formatAge } from '@/data/starData';
 
 const MASS_OPTIONS = [0.5, 1, 4, 10, 25];
 
+const SLIDER_MIN = 0;
+const SLIDER_MAX = 1000;
+const LOG_SCALE_BASE = 10;
+const LOG_MAX_EXPONENT = Math.log10(MAX_AGE + 1);
+
+function sliderValueToTime(sliderVal: number): number {
+  const normalized = sliderVal / SLIDER_MAX;
+  const logValue = normalized * LOG_MAX_EXPONENT;
+  const time = Math.pow(LOG_SCALE_BASE, logValue) - 1;
+  return Math.max(0, Math.min(time, MAX_AGE));
+}
+
+function timeToSliderValue(time: number): number {
+  const clampedTime = Math.max(0, Math.min(time, MAX_AGE));
+  const logValue = Math.log10(clampedTime + 1);
+  const normalized = logValue / LOG_MAX_EXPONENT;
+  return normalized * SLIDER_MAX;
+}
+
 const TIME_MARKERS = [
-  { value: 0, label: '0' },
-  { value: MAX_AGE * 0.25, label: '35亿年' },
-  { value: MAX_AGE * 0.5, label: '70亿年' },
-  { value: MAX_AGE * 0.75, label: '105亿年' },
-  { value: MAX_AGE, label: '140亿年' },
+  { time: 0, label: '0' },
+  { time: 1e6, label: '1M年' },
+  { time: 10e6, label: '10M年' },
+  { time: 100e6, label: '100M年' },
+  { time: 1e9, label: '10亿年' },
+  { time: 10e9, label: '100亿年' },
+  { time: MAX_AGE, label: '140亿年' },
 ];
 
 interface ControlPanelProps {
@@ -28,6 +49,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ onMassChange, onTime
     setIsPlaying,
   } = useStarStore();
 
+  const sliderValue = useMemo(() => timeToSliderValue(currentTime), [currentTime]);
+
   const handleMassClick = useCallback((mass: number) => {
     setCurrentMass(mass);
     setIsPlaying(false);
@@ -35,7 +58,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ onMassChange, onTime
   }, [setCurrentMass, setIsPlaying, onMassChange]);
 
   const handleTimeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const time = Number(e.target.value);
+    const sliderVal = Number(e.target.value);
+    const time = sliderValueToTime(sliderVal);
     setCurrentTime(time);
     onTimeChange(time);
   }, [setCurrentTime, onTimeChange]);
@@ -49,6 +73,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ onMassChange, onTime
     setIsPlaying(false);
     onTimeChange(0);
   }, [setCurrentTime, setIsPlaying, onTimeChange]);
+
+  const markerPositions = useMemo(() => {
+    return TIME_MARKERS.map(marker => ({
+      ...marker,
+      position: (timeToSliderValue(marker.time) / SLIDER_MAX) * 100,
+    }));
+  }, []);
 
   return (
     <div className="control-panel">
@@ -75,17 +106,29 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ onMassChange, onTime
             <span>当前时间</span>
             <span className="value">{formatAge(currentTime)}</span>
           </div>
-          <input
-            type="range"
-            min="0"
-            max={MAX_AGE}
-            step={MAX_AGE / 1000}
-            value={currentTime}
-            onChange={handleTimeChange}
-          />
-          <div className="time-markers">
-            {TIME_MARKERS.map((marker) => (
-              <span key={marker.value}>{marker.label}</span>
+          
+          <div className="slider-wrapper">
+            <input
+              type="range"
+              min={SLIDER_MIN}
+              max={SLIDER_MAX}
+              step={1}
+              value={sliderValue}
+              onChange={handleTimeChange}
+              className="time-slider"
+            />
+          </div>
+          
+          <div className="time-markers-log">
+            {markerPositions.map((marker) => (
+              <span 
+                key={marker.time} 
+                className="time-marker-item"
+                style={{ left: `${marker.position}%` }}
+              >
+                <span className="marker-tick" />
+                <span className="marker-label">{marker.label}</span>
+              </span>
             ))}
           </div>
         </div>

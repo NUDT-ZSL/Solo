@@ -7,8 +7,12 @@ import { ParticleSystem } from '@/core/particleSystem';
 import { ControlPanel } from '@/ui/controlPanel';
 import { InfoPanel } from '@/ui/infoPanel';
 import { DataCompare } from '@/ui/dataCompare';
-import { StarParams, StarStage, STAGE_NAMES } from '@/core/types';
+import { StarParams, StarStage } from '@/core/types';
 import { formatNumber } from '@/data/starData';
+
+const MAX_DELTA_MS = 50;
+const MAX_PARTICLES = 700;
+const PLAYBACK_SPEED = 50000000;
 
 function App() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -21,7 +25,8 @@ function App() {
   const animationIdRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
   const notificationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const blackHoleTimeRef = useRef<number>(0);
+  const isPlayingRef = useRef(false);
+  const currentTimeRef = useRef(0);
 
   const {
     currentMass,
@@ -34,9 +39,19 @@ function App() {
     setShowDataCompare,
     showStageNotification,
     hideStageNotification,
+    setIsPlaying,
   } = useStarStore();
 
-  const handleStageChange = useCallback((stage: StarStage, stageName: string) => {
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
+
+  const handleStageChange = useCallback((data: unknown) => {
+    const { stageName } = data as { stage: StarStage; stageName: string };
     if (notificationTimeoutRef.current) {
       clearTimeout(notificationTimeoutRef.current);
     }
@@ -46,9 +61,12 @@ function App() {
     }, 2000);
   }, [showStageNotification, hideStageNotification]);
 
-  const handleExplosion = useCallback((type: StarStage.SUPERNOVA | StarStage.PLANETARY_NEBULA) => {
+  const handleExplosion = useCallback((type: unknown) => {
     if (particleSystemRef.current) {
-      particleSystemRef.current.createExplosion(new THREE.Vector3(0, 0, 0), type);
+      particleSystemRef.current.createExplosion(
+        new THREE.Vector3(0, 0, 0),
+        type as StarStage.SUPERNOVA | StarStage.PLANETARY_NEBULA
+      );
     }
   }, []);
 
@@ -56,13 +74,22 @@ function App() {
     setShowDataCompare(true);
   }, [setShowDataCompare]);
 
-  const handleParamsUpdate = useCallback((params: StarParams) => {
-    setStarParams(params);
+  const handleParamsUpdate = useCallback((params: unknown) => {
+    setStarParams(params as StarParams);
   }, [setStarParams]);
 
   const handleMassChange = useCallback((mass: number) => {
     if (starEngineRef.current) {
       starEngineRef.current.createStar(mass);
+      if (particleSystemRef.current) {
+        const activeParticles = particleSystemRef.current.getActiveExplosionParticleCount();
+        if (activeParticles > 0) {
+          particleSystemRef.current.createExplosion(
+            new THREE.Vector3(0, 0, 0),
+            StarStage.SUPERNOVA
+          );
+        }
+      }
     }
   }, []);
 
@@ -74,19 +101,17 @@ function App() {
 
   const handleStarSelect = useCallback((mass: number) => {
     const validMasses = [0.5, 1, 4, 10, 25];
-    if (validMasses.includes(mass)) {
-      useStarStore.getState().setCurrentMass(mass);
-      if (starEngineRef.current) {
-        starEngineRef.current.createStar(mass);
-      }
-    } else {
-      const closest = validMasses.reduce((prev, curr) => 
+    let targetMass = mass;
+    if (!validMasses.includes(mass)) {
+      targetMass = validMasses.reduce((prev, curr) =>
         Math.abs(curr - mass) < Math.abs(prev - mass) ? curr : prev
       );
-      useStarStore.getState().setCurrentMass(closest);
-      if (starEngineRef.current) {
-        starEngineRef.current.createStar(closest);
-      }
+    }
+    useStarStore.getState().setCurrentMass(targetMass);
+    useStarStore.getState().setCurrentTime(0);
+    useStarStore.getState().setIsPlaying(false);
+    if (starEngineRef.current) {
+      starEngineRef.current.createStar(targetMass);
     }
   }, []);
 
@@ -117,39 +142,44 @@ function App() {
     controls.dampingFactor = 0.05;
     controls.minDistance = 5;
     controls.maxDistance = 50;
+    controls.enablePan = false;
     controlsRef.current = controls;
 
     const ambientLight = new THREE.AmbientLight(0x404040, 0.3);
     scene.add(ambientLight);
 
     const particleSystem = new ParticleSystem(scene);
-    particleSystem.createBackgroundStars(1000);
+    particleSystem.createBackgroundStars(500);
     particleSystemRef.current = particleSystem;
 
     const starEngine = new StarEngine(scene, camera, renderer.domElement);
     starEngine.createStar(1);
     starEngine.on('paramsUpdate', handleParamsUpdate);
     starEngine.on('explosion', handleExplosion);
-    starEngine.on('stageChange', (data) => handleStageChange(data[0] as StarStage, data[1] as string));
+    starEngine.on('stageChange', handleStageChange);
     starEngine.on('click', handleStarClick);
     starEngineRef.current = starEngine;
 
+    let frameCount = 0;
     const animate = (currentTime: number) => {
       animationIdRef.current = requestAnimationFrame(animate);
 
-      const deltaTime = Math.min(currentTime - lastTimeRef.current, 50);
+      const rawDelta = currentTime - lastTimeRef.current;
+      const deltaMs = Math.min(rawDelta, MAX_DELTA_MS);
       lastTimeRef.current = currentTime;
-      const deltaSeconds = deltaTime / 1000;
+      const deltaSeconds = deltaMs / 1000;
 
-      if (isPlaying && starEngineRef.current) {
-        const state = useStarStore.getState();
-        const newTime = state.currentTime + deltaSeconds * 50000000;
+      if (isPlayingRef.current && starEngineRef.current) {
+        const newTime = currentTimeRef.current + deltaSeconds * PLAYBACK_SPEED;
         const maxTime = 14e9;
         if (newTime >= maxTime) {
+          currentTimeRef.current = maxTime;
+          isPlayingRef.current = false;
           useStarStore.getState().setCurrentTime(maxTime);
           useStarStore.getState().setIsPlaying(false);
           starEngineRef.current.setAge(maxTime);
         } else {
+          currentTimeRef.current = newTime;
           useStarStore.getState().setCurrentTime(newTime);
           starEngineRef.current.setAge(newTime);
         }
@@ -164,26 +194,18 @@ function App() {
         particleSystemRef.current.recycleParticles();
       }
 
-      const starMesh = starEngineRef.current?.getStarMesh();
-      if (starMesh && starMesh.material instanceof THREE.ShaderMaterial) {
-        if (starMesh.material.uniforms.time) {
-          blackHoleTimeRef.current += deltaSeconds;
-          starMesh.material.uniforms.time.value = blackHoleTimeRef.current;
+      if (particleSystemRef.current && frameCount % 60 === 0) {
+        const totalParticles = particleSystemRef.current.getTotalParticleCount();
+        if (totalParticles > MAX_PARTICLES) {
+          console.warn(`Particle count (${totalParticles}) exceeds max (${MAX_PARTICLES})`);
         }
       }
-
-      scene.traverse((obj) => {
-        if (obj instanceof THREE.Mesh && obj.material instanceof THREE.ShaderMaterial) {
-          if (obj.material.uniforms && obj.material.uniforms.time) {
-            blackHoleTimeRef.current += deltaSeconds * 0.5;
-            obj.material.uniforms.time.value = blackHoleTimeRef.current;
-          }
-        }
-      });
+      frameCount++;
 
       controls.update();
       renderer.render(scene, camera);
     };
+
     lastTimeRef.current = performance.now();
     animate(lastTimeRef.current);
 
@@ -200,27 +222,31 @@ function App() {
     return () => {
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animationIdRef.current);
+      
       if (notificationTimeoutRef.current) {
         clearTimeout(notificationTimeoutRef.current);
       }
+      
       if (starEngineRef.current) {
         starEngineRef.current.off('paramsUpdate', handleParamsUpdate);
         starEngineRef.current.off('explosion', handleExplosion);
+        starEngineRef.current.off('stageChange', handleStageChange);
+        starEngineRef.current.off('click', handleStarClick);
         starEngineRef.current.dispose();
+        starEngineRef.current = null;
       }
+      
       if (particleSystemRef.current) {
         particleSystemRef.current.dispose();
+        particleSystemRef.current = null;
       }
+      
       renderer.dispose();
-      container.removeChild(renderer.domElement);
+      if (renderer.domElement.parentNode) {
+        renderer.domElement.parentNode.removeChild(renderer.domElement);
+      }
     };
-  }, [handleParamsUpdate, handleExplosion, handleStageChange, handleStarClick, isPlaying]);
-
-  useEffect(() => {
-    if (starEngineRef.current) {
-      starEngineRef.current.setAge(currentTime);
-    }
-  }, [currentTime]);
+  }, [handleParamsUpdate, handleExplosion, handleStageChange, handleStarClick]);
 
   useEffect(() => {
     if (starEngineRef.current && starEngineRef.current.getMass() !== currentMass) {

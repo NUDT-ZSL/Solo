@@ -1,10 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { X } from 'lucide-react';
 import { useStarStore } from '@/store/useStarStore';
 import { COMPARISON_STARS, STAR_PRESETS } from '@/data/starData';
 import { ComparisonStar } from '@/core/types';
+
+const STAR_PRESET_MASSES = STAR_PRESETS.map(p => p.mass);
 
 interface DataCompareProps {
   onStarSelect: (mass: number) => void;
@@ -18,10 +20,31 @@ export const DataCompare: React.FC<DataCompareProps> = ({ onStarSelect }) => {
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const animationIdRef = useRef<number>(0);
-  const pointsRef = useRef<THREE.Points | null>(null);
+  const starMeshesRef = useRef<THREE.Mesh[]>([]);
   const [selectedStar, setSelectedStar] = useState<ComparisonStar | null>(null);
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const mouseRef = useRef<THREE.Vector2>(new THREE.Vector2());
+  const lastTimeRef = useRef<number>(0);
+
+  const handleClose = useCallback(() => {
+    setShowDataCompare(false);
+  }, [setShowDataCompare]);
+
+  const handleSelectStar = useCallback((star: ComparisonStar) => {
+    let targetMass = star.mass;
+    if (!STAR_PRESET_MASSES.includes(targetMass)) {
+      targetMass = STAR_PRESET_MASSES.reduce((prev, curr) =>
+        Math.abs(curr - star.mass) < Math.abs(prev - star.mass) ? curr : prev
+      );
+    }
+    onStarSelect(targetMass);
+    setShowDataCompare(false);
+  }, [onStarSelect, setShowDataCompare]);
+
+  const handlePresetClick = useCallback((mass: number) => {
+    onStarSelect(mass);
+    setShowDataCompare(false);
+  }, [onStarSelect, setShowDataCompare]);
 
   useEffect(() => {
     if (!showDataCompare || !canvasRef.current) return;
@@ -35,7 +58,7 @@ export const DataCompare: React.FC<DataCompareProps> = ({ onStarSelect }) => {
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
-    camera.position.set(8, 8, 12);
+    camera.position.set(10, 8, 14);
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -47,72 +70,112 @@ export const DataCompare: React.FC<DataCompareProps> = ({ onStarSelect }) => {
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
+    controls.minDistance = 5;
+    controls.maxDistance = 30;
     controlsRef.current = controls;
 
-    const axesHelper = new THREE.AxesHelper(5);
-    scene.add(axesHelper);
+    const axesGroup = new THREE.Group();
+    
+    const xAxisGeom = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-5, -4, -4),
+      new THREE.Vector3(5, -4, -4),
+    ]);
+    const xAxisMat = new THREE.LineBasicMaterial({ color: 0x6C63FF, transparent: true, opacity: 0.5 });
+    const xAxis = new THREE.Line(xAxisGeom, xAxisMat);
+    axesGroup.add(xAxis);
 
-    const gridHelper = new THREE.GridHelper(10, 10, 0x2A2A3E, 0x1A1A2E);
-    gridHelper.position.y = -0.5;
-    scene.add(gridHelper);
+    const yAxisGeom = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-5, -4, -4),
+      new THREE.Vector3(-5, 4, -4),
+    ]);
+    const yAxisMat = new THREE.LineBasicMaterial({ color: 0x00D9FF, transparent: true, opacity: 0.5 });
+    const yAxis = new THREE.Line(yAxisGeom, yAxisMat);
+    axesGroup.add(yAxis);
 
-    const positions = new Float32Array(COMPARISON_STARS.length * 3);
-    const colors = new Float32Array(COMPARISON_STARS.length * 3);
-    const sizes = new Float32Array(COMPARISON_STARS.length);
+    const zAxisGeom = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-5, -4, -4),
+      new THREE.Vector3(-5, -4, 4),
+    ]);
+    const zAxisMat = new THREE.LineBasicMaterial({ color: 0xFFA500, transparent: true, opacity: 0.5 });
+    const zAxis = new THREE.Line(zAxisGeom, zAxisMat);
+    axesGroup.add(zAxis);
+
+    scene.add(axesGroup);
+
+    const gridGeom = new THREE.PlaneGeometry(10, 8, 10, 8);
+    const gridMat = new THREE.MeshBasicMaterial({
+      color: 0x1A1A2E,
+      transparent: true,
+      opacity: 0.3,
+      side: THREE.DoubleSide,
+    });
+    const gridFloor = new THREE.Mesh(gridGeom, gridMat);
+    gridFloor.rotation.x = -Math.PI / 2;
+    gridFloor.position.set(0, -4, 0);
+    scene.add(gridFloor);
 
     const maxMass = Math.max(...COMPARISON_STARS.map(s => s.mass));
     const maxTemp = Math.max(...COMPARISON_STARS.map(s => s.temperature));
     const maxLum = Math.max(...COMPARISON_STARS.map(s => Math.log10(s.luminosity + 1)));
 
-    COMPARISON_STARS.forEach((star, i) => {
-      positions[i * 3] = (star.mass / maxMass) * 8 - 4;
-      positions[i * 3 + 1] = (star.temperature / maxTemp) * 8 - 4;
-      positions[i * 3 + 2] = (Math.log10(star.luminosity + 1) / maxLum) * 8 - 4;
-
-      const color = new THREE.Color(star.color);
-      colors[i * 3] = color.r;
-      colors[i * 3 + 1] = color.g;
-      colors[i * 3 + 2] = color.b;
-
-      sizes[i] = 0.5 + (star.mass / maxMass) * 1.5;
-    });
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-
-    const material = new THREE.PointsMaterial({
-      size: 0.5,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.9,
-      sizeAttenuation: true,
-    });
-
-    const points = new THREE.Points(geometry, material);
-    scene.add(points);
-    pointsRef.current = points;
+    const starMeshes: THREE.Mesh[] = [];
 
     COMPARISON_STARS.forEach((star, i) => {
-      const glowGeometry = new THREE.SphereGeometry(sizes[i] * 0.6, 16, 16);
-      const glowMaterial = new THREE.MeshBasicMaterial({
-        color: star.color,
+      const x = (star.mass / maxMass) * 8 - 4;
+      const y = (star.temperature / maxTemp) * 8 - 4;
+      const z = (Math.log10(star.luminosity + 1) / maxLum) * 8 - 4;
+
+      const starSize = 0.3 + (star.mass / maxMass) * 0.8;
+
+      const glowGeometry = new THREE.SphereGeometry(starSize * 1.5, 24, 24);
+      const glowMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+          glowColor: { value: new THREE.Color(star.color) },
+          intensity: { value: 0.6 },
+        },
+        vertexShader: `
+          varying vec3 vNormal;
+          void main() {
+            vNormal = normalize(normalMatrix * normal);
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 glowColor;
+          uniform float intensity;
+          varying vec3 vNormal;
+          void main() {
+            float intensity = pow(0.7 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.0);
+            gl_FragColor = vec4(glowColor, intensity * 0.6);
+          }
+        `,
+        side: THREE.BackSide,
+        blending: THREE.AdditiveBlending,
         transparent: true,
-        opacity: 0.3,
+        depthWrite: false,
       });
       const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-      glow.position.set(
-        positions[i * 3],
-        positions[i * 3 + 1],
-        positions[i * 3 + 2]
-      );
-      glow.userData.starIndex = i;
+      glow.position.set(x, y, z);
       glow.userData.star = star;
+      glow.userData.starIndex = i;
       scene.add(glow);
+      starMeshes.push(glow);
+
+      const coreGeometry = new THREE.SphereGeometry(starSize * 0.6, 16, 16);
+      const coreMaterial = new THREE.MeshBasicMaterial({
+        color: star.color,
+      });
+      const core = new THREE.Mesh(coreGeometry, coreMaterial);
+      core.position.set(x, y, z);
+      core.userData.star = star;
+      core.userData.starIndex = i;
+      scene.add(core);
+      starMeshes.push(core);
     });
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    starMeshesRef.current = starMeshes;
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
     scene.add(ambientLight);
 
     const handleClick = (event: MouseEvent) => {
@@ -121,25 +184,50 @@ export const DataCompare: React.FC<DataCompareProps> = ({ onStarSelect }) => {
       mouseRef.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
       raycasterRef.current.setFromCamera(mouseRef.current, camera);
-      const intersects = raycasterRef.current.intersectObjects(scene.children, true);
+      const intersects = raycasterRef.current.intersectObjects(starMeshes, false);
       
-      for (const intersect of intersects) {
-        if (intersect.object.userData.star !== undefined) {
-          const star = intersect.object.userData.star as ComparisonStar;
-          setSelectedStar(star);
-          break;
-        }
+      if (intersects.length > 0) {
+        const star = intersects[0].object.userData.star as ComparisonStar;
+        setSelectedStar(star);
       }
     };
 
     renderer.domElement.addEventListener('click', handleClick);
 
-    const animate = () => {
+    const handleDoubleClick = (event: MouseEvent) => {
+      const rect = container.getBoundingClientRect();
+      mouseRef.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouseRef.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycasterRef.current.setFromCamera(mouseRef.current, camera);
+      const intersects = raycasterRef.current.intersectObjects(starMeshes, false);
+      
+      if (intersects.length > 0) {
+        const star = intersects[0].object.userData.star as ComparisonStar;
+        handleSelectStar(star);
+      }
+    };
+
+    renderer.domElement.addEventListener('dblclick', handleDoubleClick);
+
+    const animate = (time: number) => {
+      const delta = Math.min(time - lastTimeRef.current, 50);
+      lastTimeRef.current = time;
+
       animationIdRef.current = requestAnimationFrame(animate);
       controls.update();
+
+      starMeshes.forEach((mesh, i) => {
+        if (mesh.material instanceof THREE.ShaderMaterial && mesh.material.uniforms.intensity) {
+          const pulse = Math.sin(time * 0.002 + i * 0.5) * 0.2 + 0.8;
+          mesh.material.uniforms.intensity.value = pulse;
+        }
+      });
+
       renderer.render(scene, camera);
     };
-    animate();
+    lastTimeRef.current = performance.now();
+    animate(lastTimeRef.current);
 
     const handleResize = () => {
       if (!container) return;
@@ -154,26 +242,24 @@ export const DataCompare: React.FC<DataCompareProps> = ({ onStarSelect }) => {
     return () => {
       window.removeEventListener('resize', handleResize);
       renderer.domElement.removeEventListener('click', handleClick);
+      renderer.domElement.removeEventListener('dblclick', handleDoubleClick);
       cancelAnimationFrame(animationIdRef.current);
       renderer.dispose();
-      container.removeChild(renderer.domElement);
+      if (renderer.domElement.parentNode) {
+        renderer.domElement.parentNode.removeChild(renderer.domElement);
+      }
     };
-  }, [showDataCompare]);
-
-  const handleClose = () => {
-    setShowDataCompare(false);
-  };
-
-  const handleSelectStar = () => {
-    if (selectedStar) {
-      onStarSelect(selectedStar.mass);
-      setShowDataCompare(false);
-    }
-  };
+  }, [showDataCompare, handleSelectStar]);
 
   return (
-    <div className={`data-compare-overlay ${showDataCompare ? 'visible' : ''}`}>
-      <button className="close-btn" onClick={handleClose}>
+    <div 
+      className={`data-compare-overlay ${showDataCompare ? 'visible' : ''}`}
+      style={{ 
+        transform: showDataCompare ? 'translateX(0)' : 'translateX(100%)',
+        transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+      }}
+    >
+      <button className="close-btn" onClick={handleClose} aria-label="关闭">
         <X size={20} />
       </button>
       
@@ -183,6 +269,17 @@ export const DataCompare: React.FC<DataCompareProps> = ({ onStarSelect }) => {
           <div className="axis-labels axis-x">质量 (M☉)</div>
           <div className="axis-labels axis-y">温度 (K)</div>
           <div className="axis-labels axis-z">光度 (L☉)</div>
+          <div style={{ 
+            position: 'absolute', 
+            bottom: '50px', 
+            left: '50%', 
+            transform: 'translateX(-50%)',
+            fontSize: '11px',
+            color: 'var(--color-text-secondary)',
+            fontFamily: 'Orbitron, sans-serif',
+          }}>
+            拖拽旋转 · 点击选中 · 双击切换
+          </div>
         </div>
 
         <div className="data-details">
@@ -204,20 +301,19 @@ export const DataCompare: React.FC<DataCompareProps> = ({ onStarSelect }) => {
                 <span className="param-value">{selectedStar.luminosity.toExponential(2)} L☉</span>
               </div>
               <button 
-                className="play-btn"
-                onClick={handleSelectStar}
-                disabled={!STAR_PRESET_MASSES.some(m => m === selectedStar.mass)}
+                className="play-btn select-star-btn"
+                onClick={() => handleSelectStar(selectedStar)}
               >
                 选择此恒星
               </button>
-              {!STAR_PRESET_MASSES.some(m => m === selectedStar.mass) && (
-                <p style={{ fontSize: '11px', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
-                  该恒星质量不可用，可选质量：0.5, 1, 4, 10, 25 M☉
+              {!STAR_PRESET_MASSES.includes(selectedStar.mass) && (
+                <p style={{ fontSize: '11px', color: 'var(--color-text-secondary)', textAlign: 'center', marginTop: '8px' }}>
+                  将自动匹配到最接近的可用质量
                 </p>
               )}
             </div>
           ) : (
-            <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
+            <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', textAlign: 'center', padding: '20px 0' }}>
               点击散点图中的数据点查看详情
             </p>
           )}
@@ -228,41 +324,18 @@ export const DataCompare: React.FC<DataCompareProps> = ({ onStarSelect }) => {
               fontSize: '14px', 
               color: 'var(--color-secondary)',
               marginBottom: '12px',
-              letterSpacing: '1px'
+              letterSpacing: '1px',
             }}>
               可选恒星质量
             </h3>
             {STAR_PRESETS.map(preset => (
               <div 
                 key={preset.mass}
-                style={{
-                  padding: '10px 12px',
-                  marginBottom: '8px',
-                  background: currentMass === preset.mass ? 'rgba(108, 99, 255, 0.3)' : 'rgba(108, 99, 255, 0.1)',
-                  borderRadius: '8px',
-                  border: `1px solid ${currentMass === preset.mass ? 'var(--color-primary)' : 'var(--border-color)'}`,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                }}
-                onClick={() => {
-                  onStarSelect(preset.mass);
-                  setShowDataCompare(false);
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(108, 99, 255, 0.3)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = currentMass === preset.mass 
-                    ? 'rgba(108, 99, 255, 0.3)' 
-                    : 'rgba(108, 99, 255, 0.1)';
-                }}
+                className={`preset-star-item ${currentMass === preset.mass ? 'active' : ''}`}
+                onClick={() => handlePresetClick(preset.mass)}
               >
-                <span style={{ fontFamily: 'Orbitron, sans-serif' }}>
-                  {preset.mass} M☉
-                </span>
-                <span style={{ marginLeft: '12px', color: 'var(--color-text-secondary)', fontSize: '12px' }}>
-                  {preset.name}
-                </span>
+                <span className="preset-mass">{preset.mass} M☉</span>
+                <span className="preset-name">{preset.name}</span>
               </div>
             ))}
           </div>
@@ -271,5 +344,3 @@ export const DataCompare: React.FC<DataCompareProps> = ({ onStarSelect }) => {
     </div>
   );
 };
-
-const STAR_PRESET_MASSES = STAR_PRESETS.map(p => p.mass);
