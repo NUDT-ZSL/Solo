@@ -1,0 +1,12 @@
+[
+  {
+    "id": "teacher-1",
+    "name": "张老师",
+    "role": "teacher"
+  },
+  {
+    "id": "student-1",
+    "name": "李同学",
+    "role": "student"
+  }
+]

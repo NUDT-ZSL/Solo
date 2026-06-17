@@ -1,0 +1,9 @@
+[
+  {
+    "id": "course-1",
+    "title": "前端开发基础",
+    "description": "系统学习HTML、CSS、JavaScript前端三大核心技术",
+    "coverUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=web%20development%20course%20cover%20modern%20design&image_size=landscape_16_9",
+    "teacherId": "teacher-1"
+  }
+]

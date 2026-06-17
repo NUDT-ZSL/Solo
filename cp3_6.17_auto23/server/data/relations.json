@@ -1,0 +1,58 @@
+[
+  {
+    "id": "rel-1",
+    "courseId": "course-1",
+    "sourceId": "kp-1",
+    "targetId": "kp-2",
+    "curvature": 0
+  },
+  {
+    "id": "rel-2",
+    "courseId": "course-1",
+    "sourceId": "kp-2",
+    "targetId": "kp-3",
+    "curvature": 0
+  },
+  {
+    "id": "rel-3",
+    "courseId": "course-1",
+    "sourceId": "kp-3",
+    "targetId": "kp-4",
+    "curvature": 0
+  },
+  {
+    "id": "rel-4",
+    "courseId": "course-1",
+    "sourceId": "kp-3",
+    "targetId": "kp-5",
+    "curvature": 0.3
+  },
+  {
+    "id": "rel-5",
+    "courseId": "course-1",
+    "sourceId": "kp-5",
+    "targetId": "kp-6",
+    "curvature": 0
+  },
+  {
+    "id": "rel-6",
+    "courseId": "course-1",
+    "sourceId": "kp-6",
+    "targetId": "kp-7",
+    "curvature": 0
+  },
+  {
+    "id": "rel-7",
+    "courseId": "course-1",
+    "sourceId": "kp-2",
+    "targetId": "kp-8",
+    "curvature": -0.3
+  },
+  {
+    "id": "rel-8",
+    "courseId": "course-1",
+    "sourceId": "kp-4",
+    "targetId": "kp-6",
+    "curvature": 0.2
+  }
+]

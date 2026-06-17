@@ -1,0 +1,82 @@
+[
+  {
+    "id": "kp-1",
+    "courseId": "course-1",
+    "title": "HTML基础",
+    "description": "HTML是超文本标记语言，是构建网页的基础。学习HTML标签、语义化、表单、列表等核心概念。掌握常用标签的使用方法，理解文档结构，能够编写结构清晰的HTML页面。",
+    "difficulty": "初级",
+    "tags": ["HTML", "基础", "标记语言"],
+    "x": 150,
+    "y": 200
+  },
+  {
+    "id": "kp-2",
+    "courseId": "course-1",
+    "title": "CSS基础",
+    "description": "CSS层叠样式表用于美化网页。学习选择器、盒模型、布局、颜色、字体等样式属性。掌握Flexbox和Grid布局，能够实现响应式网页设计。",
+    "difficulty": "初级",
+    "tags": ["CSS", "基础", "样式"],
+    "x": 350,
+    "y": 150
+  },
+  {
+    "id": "kp-3",
+    "courseId": "course-1",
+    "title": "JavaScript基础",
+    "description": "JavaScript是网页的编程语言。学习变量、数据类型、函数、循环、条件语句等基础语法。掌握DOM操作和事件处理，能够编写交互性网页。",
+    "difficulty": "中级",
+    "tags": ["JavaScript", "基础", "编程"],
+    "x": 550,
+    "y": 200
+  },
+  {
+    "id": "kp-4",
+    "courseId": "course-1",
+    "title": "DOM操作",
+    "description": "文档对象模型(DOM)是HTML和XML文档的编程接口。学习节点操作、事件冒泡、事件委托等高级DOM技术。能够动态修改页面内容和样式。",
+    "difficulty": "中级",
+    "tags": ["DOM", "JavaScript", "交互"],
+    "x": 750,
+    "y": 150
+  },
+  {
+    "id": "kp-5",
+    "courseId": "course-1",
+    "title": "ES6+新特性",
+    "description": "ES6带来了箭头函数、解构赋值、模板字符串、Promise、模块化等新特性。学习这些新语法可以大幅提升开发效率和代码质量。",
+    "difficulty": "中级",
+    "tags": ["JavaScript", "ES6", "现代语法"],
+    "x": 250,
+    "y": 350
+  },
+  {
+    "id": "kp-6",
+    "courseId": "course-1",
+    "title": "React基础",
+    "description": "React是用于构建用户界面的JavaScript库。学习组件化开发、JSX语法、State和Props、生命周期等核心概念。",
+    "difficulty": "高级",
+    "tags": ["React", "框架", "组件化"],
+    "x": 500,
+    "y": 380
+  },
+  {
+    "id": "kp-7",
+    "courseId": "course-1",
+    "title": "React Hooks",
+    "description": "Hooks是React 16.8引入的新特性，允许在函数组件中使用状态和其他React特性。学习useState、useEffect、useContext等常用Hooks。",
+    "difficulty": "高级",
+    "tags": ["React", "Hooks", "高级"],
+    "x": 720,
+    "y": 350
+  },
+  {
+    "id": "kp-8",
+    "courseId": "course-1",
+    "title": "响应式设计",
+    "description": "响应式设计使网页能够在不同设备上良好显示。学习媒体查询、流式布局、弹性图片等技术，打造多端适配的网页。",
+    "difficulty": "中级",
+    "tags": ["CSS", "响应式", "移动端"],
+    "x": 100,
+    "y": 450
+  }
+]

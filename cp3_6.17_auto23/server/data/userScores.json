@@ -1,0 +1,50 @@
+[
+  {
+    "userId": "student-1",
+    "knowledgePointId": "kp-1",
+    "score": 85,
+    "reviewed": false
+  },
+  {
+    "userId": "student-1",
+    "knowledgePointId": "kp-2",
+    "score": 72,
+    "reviewed": false
+  },
+  {
+    "userId": "student-1",
+    "knowledgePointId": "kp-3",
+    "score": 45,
+    "reviewed": false
+  },
+  {
+    "userId": "student-1",
+    "knowledgePointId": "kp-4",
+    "score": 55,
+    "reviewed": false
+  },
+  {
+    "userId": "student-1",
+    "knowledgePointId": "kp-5",
+    "score": 38,
+    "reviewed": false
+  },
+  {
+    "userId": "student-1",
+    "knowledgePointId": "kp-6",
+    "score": 30,
+    "reviewed": false
+  },
+  {
+    "userId": "student-1",
+    "knowledgePointId": "kp-7",
+    "score": 25,
+    "reviewed": false
+  },
+  {
+    "userId": "student-1",
+    "knowledgePointId": "kp-8",
+    "score": 68,
+    "reviewed": false
+  }
+]
