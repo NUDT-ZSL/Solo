@@ -85,8 +85,8 @@ export default function ScoringPanel({ open, member, onClose, onSubmit }: Scorin
       }, 1000)
 
       waveTimerRef.current = setInterval(() => {
-        setWaveform(prev => prev.map(() => Math.random() * 40 + 10))
-      }, 100)
+        setWaveform(prev => prev.map(() => Math.random() * 45 + 15))
+      }, 80)
     } catch (err) {
       alert('无法访问麦克风：' + (err as Error).message)
     }
@@ -173,7 +173,7 @@ export default function ScoringPanel({ open, member, onClose, onSubmit }: Scorin
               {waveform.map((h, i) => (
                 <div
                   key={i}
-                  className="waveform-bar"
+                  className={`waveform-bar ${isRecording ? '' : 'idle'}`}
                   style={{ height: `${h}px` }}
                 />
               ))}
@@ -183,12 +183,12 @@ export default function ScoringPanel({ open, member, onClose, onSubmit }: Scorin
                 className={`record-btn ${isRecording ? 'recording' : ''}`}
                 onClick={isRecording ? stopRecording : startRecording}
               >
-                {isRecording ? '⏹ 停止' : '🎙 录音'}
+                {isRecording ? '⏹ 停止录音' : '🎙 开始录音'}
               </button>
               <span className="recording-time">{recordingTime}s / 30s</span>
               {audioUrl && !isRecording && (
                 <>
-                  <button className="btn btn-secondary btn-sm" onClick={() => setAudioUrl('')}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => { setAudioUrl(''); setWaveform(Array(20).fill(10)); }}>
                     重录
                   </button>
                   <audio src={audioUrl} controls className="audio-preview" />
