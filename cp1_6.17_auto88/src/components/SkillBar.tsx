@@ -46,7 +46,7 @@ const SkillIcon: React.FC<SkillIconProps> = ({ skillType, cooldown }) => {
         fontWeight: 'bold',
         fontSize: 18,
         textShadow: '0 1px 2px rgba(0,0,0,0.5)',
-        transform: isPulsing ? 'scale(1.2)' : 'scale(1.0)',
+        transform: isPulsing ? 'scale(1.1)' : 'scale(1.0)',
         transition: 'transform 0.3s ease-out',
         boxShadow: isReady ? `0 0 10px ${skill.color}80` : 'none',
       }}
@@ -70,6 +70,9 @@ const SkillIcon: React.FC<SkillIconProps> = ({ skillType, cooldown }) => {
           <span
             style={{
               position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
               zIndex: 3,
               color: '#FFFFFF',
               fontSize: 16,

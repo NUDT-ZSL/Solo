@@ -26,13 +26,13 @@ const ComboItem: React.FC<ComboItemProps> = ({ record, isNew }) => {
       style={{
         display: 'flex',
         alignItems: 'center',
-        backgroundColor: '#2C2C2C',
+        backgroundColor: visible ? '#2C2C2C' : 'rgba(44, 44, 44, 0)',
         borderRadius: 6,
         padding: '6px 10px',
         marginBottom: 4,
         transform: visible ? 'translateY(0)' : 'translateY(10px)',
         opacity: visible ? 1 : 0,
-        transition: 'transform 0.3s ease-out, opacity 0.3s ease-out',
+        transition: 'transform 0.3s ease-out, opacity 0.3s ease-out, background-color 0.3s ease-out',
       }}
     >
       <div

@@ -51,6 +51,13 @@ interface ChargingState {
   color: string;
 }
 
+interface ComboText {
+  text: string;
+  startTime: number;
+  duration: number;
+  shape: Konva.Text;
+}
+
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
 const GROUND_Y = 550;
@@ -90,6 +97,8 @@ export class GameEngine {
   private enemyKnockbackY: number = 0;
   private enemyKnockbackVelocity: number = 0;
   private enemyBaseX: number = 650;
+
+  private comboTexts: ComboText[] = [];
 
   private animationFrame: number | null = null;
   private lastTime: number = 0;
@@ -247,7 +256,37 @@ export class GameEngine {
     this.playerGlow.y(this.player.y() + PLAYER_HEIGHT / 2);
     this.playerGlow.radius(80);
 
+    this.showComboText(rule.name);
+
     this.callbacks.onCooldownUpdate({ ...this.cooldowns });
+  }
+
+  private showComboText(text: string) {
+    const comboTextShape = new Konva.Text({
+      x: 0,
+      y: CANVAS_HEIGHT / 2 - 40,
+      width: CANVAS_WIDTH,
+      text: text,
+      fontSize: 48,
+      fontFamily: 'Arial, sans-serif',
+      fill: '#FFD700',
+      align: 'center',
+      shadowColor: '#FFD700',
+      shadowBlur: 20,
+      shadowOpacity: 0.8,
+      opacity: 0,
+      fontStyle: 'bold',
+      listening: false,
+    });
+    this.layer.add(comboTextShape);
+    comboTextShape.moveToTop();
+
+    this.comboTexts.push({
+      text: text,
+      startTime: performance.now(),
+      duration: 1500,
+      shape: comboTextShape,
+    });
   }
 
   private fireProjectile(skillType: SkillType, damageMultiplier: number = 1, applyKnockback: boolean = false) {
@@ -359,6 +398,7 @@ export class GameEngine {
     this.updateParticles(deltaTime);
     this.updateEnemy(deltaTime);
     this.updateGlow(deltaTime, currentTime);
+    this.updateComboTexts(currentTime);
 
     this.layer.batchDraw();
   }
@@ -532,6 +572,38 @@ export class GameEngine {
   private updateGlow(deltaTime: number, currentTime: number) {
     if (this.chargingState || this.comboActive) return;
     this.playerGlow.opacity(0);
+  }
+
+  private updateComboTexts(currentTime: number) {
+    const toRemove: number[] = [];
+
+    for (let i = 0; i < this.comboTexts.length; i++) {
+      const ct = this.comboTexts[i];
+      const elapsed = currentTime - ct.startTime;
+      const progress = elapsed / ct.duration;
+
+      if (progress >= 1) {
+        toRemove.push(i);
+        continue;
+      }
+
+      let opacity: number;
+      if (progress < 0.2) {
+        opacity = progress / 0.2;
+      } else if (progress < 0.7) {
+        opacity = 1;
+      } else {
+        opacity = 1 - (progress - 0.7) / 0.3;
+      }
+
+      ct.shape.opacity(opacity);
+    }
+
+    for (let i = toRemove.length - 1; i >= 0; i--) {
+      const idx = toRemove[i];
+      this.comboTexts[idx].shape.destroy();
+      this.comboTexts.splice(idx, 1);
+    }
   }
 
   public destroy() {
