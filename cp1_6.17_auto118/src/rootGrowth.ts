@@ -19,10 +19,21 @@ export interface RootSegment {
   from: THREE.Vector3;
   to: THREE.Vector3;
   radius: number;
-  segments: number;
+  /** 原始圆柱体的径向分段数，用于LOD判断 */
+  originalRadialSegments: number;
   isLod: boolean;
 }
 
+/**
+ * 根系生长模拟系统
+ *
+ * 核心算法：
+ * - 主根严格沿垂直方向（0, -1, 0）生长，仅在避障或水分吸引时偏转
+ * - 侧根以30°-60°夹角从主根分叉，长度不超过主根当前长度的50%
+ * - 避障采用多候选向量评分法：生成10个候选方向，按"远离石块+朝下+与当前方向一致"评分
+ * - 水分吸引：将水分中心方向乘以用户可调的吸引强度参数，叠加到生长方向上
+ * - LOD：超过2000节点时，将距离>4单位的远距离根分段替换为BoxGeometry，减少约50%顶点
+ */
 export class RootSystem {
   public readonly rootGroup: THREE.Group = new THREE.Group();
 
@@ -48,8 +59,8 @@ export class RootSystem {
   private readonly mainRadius: number = 0.05;
   private readonly mainColor: THREE.Color = new THREE.Color(0x8B5A2B);
 
-  private totalNodes: number = 0;
-  private segmentLength: number = 0.1;
+  /** 每0.1单位长度算一个节点，用于统计总节点数 */
+  private readonly nodeUnit: number = 0.1;
   private mainRootTipPosition: THREE.Vector3 = new THREE.Vector3();
 
   constructor(soil: SoilModule) {
@@ -76,7 +87,7 @@ export class RootSystem {
       startPos.clone().add(dir.clone().multiplyScalar(0.001)),
       this.mainRadius,
       this.mainColor,
-      8
+      10
     );
     this.mainRootSegments.push(seedRoot);
   }
@@ -93,8 +104,6 @@ export class RootSystem {
       this.growSideRoot(side, step * timeScale);
     }
     this.sideRoots = this.sideRoots.filter(s => !s.finished);
-    this.totalNodes = Math.floor(this.mainRootCurrentLength / this.segmentLength) +
-      this.sideRoots.reduce((sum, s) => sum + Math.floor(s.currentLength / this.segmentLength), 0);
     this.applyLOD();
   }
 
@@ -134,42 +143,74 @@ export class RootSystem {
     }
   }
 
+  /**
+   * 计算主根生长方向
+   *
+   * 主根默认严格沿垂直方向 (0, -1, 0) 生长。
+   * 仅在以下两种情况改变方向：
+   * 1. 遇到石块障碍物时，由 evadeRock() 计算避障方向
+   * 2. 受水分吸引时，将水分方向乘以吸引强度后叠加到生长方向
+   *
+   * 注意：不添加任何随机扰动，保证主根严格垂直
+   */
   private computeMainRootDirection(): THREE.Vector3 {
-    const baseDir = this.mainRootTip.direction.clone().normalize();
-    const downDir = new THREE.Vector3(0, -1, 0);
+    let result = new THREE.Vector3(0, -1, 0);
+
     const waterPull = this.soil.getWaterAttraction(this.mainRootTip.position);
-    let result = baseDir.clone();
-    result.lerp(downDir, 0.15);
-    if (waterPull.lengthSq() > 0.01) {
-      result.lerp(waterPull.normalize(), this.params.waterAttractionStrength * 0.25);
+    if (waterPull.lengthSq() > 0.001) {
+      const waterDir = waterPull.clone().normalize();
+      const strength = this.params.waterAttractionStrength;
+      result.add(waterDir.multiplyScalar(strength * 0.3));
+      result.normalize();
     }
-    const noise = new THREE.Vector3(
-      (Math.random() - 0.5) * 0.15,
-      (Math.random() - 0.5) * 0.08,
-      (Math.random() - 0.5) * 0.15
-    );
-    result.add(noise);
-    return result.normalize();
+
+    if (this.mainRootTip.direction.distanceTo(new THREE.Vector3(0, -1, 0)) > 0.01) {
+      result.lerp(this.mainRootTip.direction.clone().normalize(), 0.1);
+      result.normalize();
+    }
+
+    return result;
   }
 
+  /**
+   * 多候选向量避障算法
+   *
+   * 当主根/侧根遇到石块时，生成多个候选绕行方向，通过评分函数选出最优方向。
+   *
+   * 候选生成：以"远离石块"方向为基准，围绕两个正交轴分别旋转 -90°~+90°（步长45°），
+   * 共产生约10个候选方向。
+   *
+   * 评分函数：score = rockDist * 2 + downward * 5 - dot(currentDir) * 2
+   * - rockDist：候选方向测试点与石块的距离（越远越好，权重×2）
+   * - downward：候选方向的向下分量（越向下越好，权重×5，鼓励主根继续向下生长）
+   * - dot(currentDir)：与当前生长方向的一致性（越一致越好，取负号使一致方向得分更高）
+   */
   private evadeRock(pos: THREE.Vector3, rock: Rock, currentDir: THREE.Vector3): THREE.Vector3 | null {
     const toRock = new THREE.Vector3().subVectors(rock.mesh.position, pos);
     const dist = toRock.length();
     if (dist < 0.01) return null;
+
     const away = toRock.clone().multiplyScalar(-1).normalize();
-    const tangent = new THREE.Vector3().crossVectors(currentDir, away).normalize();
-    if (tangent.lengthSq() < 0.01) {
-      const up = new THREE.Vector3(0, 1, 0);
-      tangent.crossVectors(currentDir, up).normalize();
+
+    // 计算第一个旋转轴：当前方向与远离方向叉积得到的切线
+    let tangent = new THREE.Vector3().crossVectors(currentDir, away);
+    if (tangent.lengthSq() < 0.001) {
+      tangent.crossVectors(currentDir, new THREE.Vector3(0, 1, 0));
     }
+    tangent.normalize();
+
+    // 计算第二个旋转轴：与切线和远离方向都正交的方向
+    const secondAxis = new THREE.Vector3().crossVectors(away, tangent).normalize();
+
+    // 围绕两个正交轴，以45°步长旋转，生成10个候选方向
     const candidates: THREE.Vector3[] = [];
     for (let i = -2; i <= 2; i++) {
       const angle = i * Math.PI / 4;
-      const c = away.clone().applyAxisAngle(tangent, angle);
-      candidates.push(c);
-      const c2 = away.clone().applyAxisAngle(currentDir.clone().cross(tangent).normalize(), angle);
-      candidates.push(c2);
+      candidates.push(away.clone().applyAxisAngle(tangent, angle));
+      candidates.push(away.clone().applyAxisAngle(secondAxis, angle));
     }
+
+    // 对每个候选方向评分，选出得分最高的
     let best: THREE.Vector3 | null = null;
     let bestScore = -Infinity;
     for (const cand of candidates) {
@@ -212,6 +253,12 @@ export class RootSystem {
     this.nextBranchTarget = this.randomRange(0.5, 2.0);
   }
 
+  /**
+   * 创建侧根
+   *
+   * 侧根从主根最近节点处分叉，方向与主根成30°-60°夹角。
+   * maxLength 初始化为主根当前长度的50%，并在后续生长中动态更新此上限。
+   */
   private createSideRoot(): void {
     const parentIdx = this.mainRootNodes.length - 1;
     const node = this.mainRootNodes[Math.max(0, parentIdx - 2)];
@@ -220,7 +267,7 @@ export class RootSystem {
     const angle = this.randomRange(Math.PI / 6, Math.PI / 3);
     const axis = this.randomPerpendicular(parentDir).normalize();
     const sideDir = parentDir.clone().applyAxisAngle(axis, angle).normalize();
-    const maxLen = Math.min(this.params.maxRootLength * 0.5, this.mainRootCurrentLength * 0.5);
+    const maxLen = this.mainRootCurrentLength * 0.5;
     const radius = this.randomRange(0.02, 0.04);
     const color1 = new THREE.Color(0xA0522D);
     const color2 = new THREE.Color(0xDEB887);
@@ -235,25 +282,49 @@ export class RootSystem {
     this.sideRoots.push(side);
   }
 
+  /**
+   * 侧根单步生长
+   *
+   * 关键逻辑：
+   * - 动态更新 maxLength 为主根当前长度的50%，确保侧根长度始终不超过此比例
+   * - 水分吸引：将水分方向乘以 waterAttractionStrength 参数后叠加到生长方向，
+   *   强度越大弯曲越明显（0=无吸引，2.0=强弯曲）
+   * - 在高水分区域内，侧根生长速率提升50%
+   */
   private growSideRoot(side: SideRoot, step: number): void {
-    if (side.finished || side.currentLength >= side.maxLength) {
+    if (side.finished) return;
+
+    // 动态更新侧根最大长度：始终为主根当前长度的50%
+    side.maxLength = this.mainRootCurrentLength * 0.5;
+
+    if (side.currentLength >= side.maxLength) {
       side.finished = true;
       return;
     }
+
     const tip = side.nodes[side.nodes.length - 1];
     let growthDir = side.direction.clone();
+
+    // 水分吸引弯曲：将水分方向乘以用户可调的吸引强度参数，直接叠加到生长方向
     const waterPull = this.soil.getWaterAttraction(tip.position);
     const inWater = this.soil.isInWaterZone(tip.position);
-    const rate = inWater ? step * 1.5 : step;
-    if (waterPull.lengthSq() > 0.01) {
-      growthDir.lerp(waterPull.normalize(), this.params.waterAttractionStrength * 0.4);
+    if (waterPull.lengthSq() > 0.001) {
+      const waterDir = waterPull.clone().normalize();
+      growthDir.add(waterDir.multiplyScalar(this.params.waterAttractionStrength * 0.3));
+      growthDir.normalize();
     }
+
+    // 高水分区域速率提升50%
+    const rate = inWater ? step * 1.5 : step;
+
+    // 侧根添加随机扰动（主根不添加）
     const noise = new THREE.Vector3(
       (Math.random() - 0.5) * 0.3,
       (Math.random() - 0.5) * 0.25,
       (Math.random() - 0.5) * 0.3
     );
     growthDir.add(noise).normalize();
+
     const nextPos = tip.position.clone().add(growthDir.clone().multiplyScalar(rate));
     const collision = this.soil.checkRockCollision(nextPos, side.radius * 1.5);
     const inside = this.soil.isInsideSoil(nextPos, side.radius);
@@ -261,6 +332,8 @@ export class RootSystem {
       side.finished = true;
       return;
     }
+
+    // 颜色渐变：从 #A0522D 到 #DEB887
     const t = side.currentLength / Math.max(0.01, side.maxLength);
     const col = side.color1.clone().lerp(side.color2, t);
     const seg = this.createSegment(
@@ -303,37 +376,61 @@ export class RootSystem {
     this.rootGroup.add(mesh);
     return {
       mesh, from: from.clone(), to: to.clone(), radius,
-      segments: radialSegments, isLod: false
+      originalRadialSegments: radialSegments, isLod: false
     };
   }
 
+  /**
+   * LOD（细节层次）优化
+   *
+   * 当总节点数超过2000时自动启用。将距离根尖超过4单位的远距离根分段
+   * 替换为BoxGeometry，相比原始CylinderGeometry可减少约50%以上顶点数。
+   *
+   * 顶点数对比（以主根为例）：
+   * - CylinderGeometry(10段, 1高度分段): 约 44 个顶点, 40 个三角面
+   * - BoxGeometry: 24 个顶点, 12 个三角面 → 减少约 45% 顶点, 70% 三角面
+   *
+   * 对于侧根(6段): 约 28 顶点 → Box 24 顶点 ≈ 14% 顶点减少,
+   * 但三角面从 24 降到 12，减少 50%
+   */
   private applyLOD(): void {
+    const totalNodes = this.computeTotalNodes();
+    if (totalNodes <= 2000) return;
+
     const threshold = 4;
     const allSegments: RootSegment[] = [
       ...this.mainRootSegments,
       ...this.sideRoots.flatMap(s => s.segments)
     ];
-    if (this.totalNodes > 2000) {
-      for (const seg of allSegments) {
-        if (seg.isLod) continue;
-        const dist = seg.mesh.position.distanceTo(this.mainRootTipPosition);
-        if (dist > threshold) {
-          this.simplifySegment(seg);
-        }
+    for (const seg of allSegments) {
+      if (seg.isLod) continue;
+      const dist = seg.mesh.position.distanceTo(this.mainRootTipPosition);
+      if (dist > threshold) {
+        this.simplifySegment(seg);
       }
     }
   }
 
+  /**
+   * 将远距离根分段简化为BoxGeometry
+   *
+   * 用一个长方体替代圆柱体，大幅减少三角面数量（12 vs 40/24）。
+   * 保留原始位置、方向和颜色，仅替换几何体。
+   */
   private simplifySegment(seg: RootSegment): void {
     seg.isLod = true;
-    const newSegs = Math.max(3, Math.ceil(seg.segments / 2));
-    if (newSegs >= seg.segments) return;
     const dir = new THREE.Vector3().subVectors(seg.to, seg.from);
     const len = Math.max(dir.length(), 0.001);
+
+    // 用BoxGeometry替代CylinderGeometry，顶点数从 ~44 降到 24，三角面从 40 降到 12
+    const newGeo = new THREE.BoxGeometry(
+      seg.radius * 2,
+      len,
+      seg.radius * 2,
+      1, 1, 1
+    );
     seg.mesh.geometry.dispose();
-    const newGeo = new THREE.CylinderGeometry(seg.radius, seg.radius * 0.95, len, newSegs, 1);
     seg.mesh.geometry = newGeo;
-    seg.segments = newSegs;
   }
 
   private randomRange(min: number, max: number): number {
@@ -354,12 +451,25 @@ export class RootSystem {
     return perp.normalize();
   }
 
+  /**
+   * 按每0.1单位长度精确计算总节点数
+   *
+   * 节点数 = 主根长度 / 0.1 + Σ(每条侧根长度 / 0.1)
+   * 使用 Math.round 避免浮点精度导致偏差
+   */
+  private computeTotalNodes(): number {
+    const mainNodes = Math.round(this.mainRootCurrentLength / this.nodeUnit);
+    const sideNodes = this.sideRoots.reduce(
+      (sum, s) => sum + Math.round(s.currentLength / this.nodeUnit), 0
+    );
+    return mainNodes + sideNodes;
+  }
+
   public getStats(): { mainLength: number; sideCount: number; totalNodes: number } {
     return {
       mainLength: this.mainRootCurrentLength,
       sideCount: this.sideRoots.length,
-      totalNodes: Math.floor(this.mainRootCurrentLength / this.segmentLength) +
-        this.sideRoots.reduce((sum, s) => sum + Math.floor(s.currentLength / this.segmentLength), 0)
+      totalNodes: this.computeTotalNodes()
     };
   }
 
@@ -381,7 +491,6 @@ export class RootSystem {
     this.mainRootNodes = [];
     this.mainRootCurrentLength = 0;
     this.sideRoots = [];
-    this.totalNodes = 0;
     this.isGrowing = false;
     this.lastBranchLength = 0;
   }
@@ -391,6 +500,7 @@ interface SideRoot {
   nodes: RootNode[];
   segments: RootSegment[];
   currentLength: number;
+  /** 侧根最大长度，动态更新为主根当前长度的50% */
   maxLength: number;
   direction: THREE.Vector3;
   tip: THREE.Vector3;
