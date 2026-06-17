@@ -226,6 +226,37 @@ export default function App() {
     ctx.closePath()
   }
 
+  function calculateNiceScale(min: number, max: number, maxTicks: number) {
+    const rawRange = max - min
+    if (rawRange <= 0) {
+      return { min: 0, max: Math.max(1, max), step: Math.max(1, max / maxTicks), steps: maxTicks }
+    }
+    const range = niceNumber(rawRange, false)
+    const step = niceNumber(range / (maxTicks - 1), true)
+    const niceMin = Math.floor(min / step) * step
+    const niceMax = Math.ceil(max / step) * step
+    const steps = Math.round((niceMax - niceMin) / step)
+    return { min: niceMin, max: niceMax, step, steps }
+  }
+
+  function niceNumber(range: number, round: boolean): number {
+    const exp = Math.floor(Math.log10(range))
+    const frac = range / Math.pow(10, exp)
+    let niceFrac: number
+    if (round) {
+      if (frac < 1.5) niceFrac = 1
+      else if (frac < 3) niceFrac = 2
+      else if (frac < 7) niceFrac = 5
+      else niceFrac = 10
+    } else {
+      if (frac <= 1) niceFrac = 1
+      else if (frac <= 2) niceFrac = 2
+      else if (frac <= 5) niceFrac = 5
+      else niceFrac = 10
+    }
+    return niceFrac * Math.pow(10, exp)
+  }
+
   const chartCanvasRef = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     const canvas = chartCanvasRef.current
@@ -321,27 +352,39 @@ export default function App() {
       const padding = { top: 18, right: 12, bottom: 30, left: 72 }
       const chartW = w - padding.left - padding.right
 
-      let globalMinTs = Infinity
-      let globalMaxTs = 0
-      let maxDuration = 0
-      validShots.forEach(s => {
-        s.fixations.forEach(f => {
-          const end = f.timestamp + f.duration
-          if (f.timestamp < globalMinTs) globalMinTs = f.timestamp
-          if (end > globalMaxTs) globalMaxTs = end
-          if (f.duration > maxDuration) maxDuration = f.duration
+      const normalizedShots = validShots.map(s => {
+        if (s.fixations.length === 0) return { shot: s, startTs: 0, relativeFixations: [] as any[] }
+        const startTs = s.fixations[0].timestamp
+        const relativeFixations = s.fixations.map(f => ({
+          ...f,
+          relTs: f.timestamp - startTs,
+          relEndTs: f.timestamp - startTs + f.duration
+        }))
+        const shotMaxEnd = Math.max(...relativeFixations.map(f => f.relEndTs))
+        return { shot: s, startTs, relativeFixations, shotMaxEnd }
+      })
+
+      let globalMaxRelEnd = 0
+      let globalMaxDuration = 0
+      normalizedShots.forEach(ns => {
+        if (ns.shotMaxEnd > globalMaxRelEnd) globalMaxRelEnd = ns.shotMaxEnd
+        ns.relativeFixations.forEach(f => {
+          if (f.duration > globalMaxDuration) globalMaxDuration = f.duration
         })
       })
-      const timeRange = globalMaxTs - globalMinTs
-      if (timeRange === 0) return
+      if (globalMaxRelEnd === 0) return
+
+      const niceTimeRange = calculateNiceScale(0, globalMaxRelEnd, 5)
+      const maxRange = niceTimeRange.max
 
       const rowH = Math.max(16, Math.min(36, (h - padding.top - padding.bottom) / Math.max(validShots.length, 1) - 6))
       const rowGap = 6
 
-      validShots.forEach((s, rowIdx) => {
+      normalizedShots.forEach((ns, rowIdx) => {
+        const { shot, relativeFixations } = ns
         const color = SCREENSHOT_COLORS[rowIdx % SCREENSHOT_COLORS.length]
         const rowY = padding.top + rowIdx * (rowH + rowGap)
-        const isCurrent = s.id === state.currentId
+        const isCurrent = shot.id === state.currentId
 
         ctx.fillStyle = isCurrent ? '#EFF6FF' : '#F8FAFC'
         ctx.fillRect(padding.left, rowY - 2, chartW, rowH + 4)
@@ -350,13 +393,17 @@ export default function App() {
         ctx.font = `${isCurrent ? 'bold ' : ''}11px Arial`
         ctx.textAlign = 'right'
         ctx.textBaseline = 'middle'
-        const label = s.name.length > 10 ? s.name.slice(0, 10) + '…' : s.name
+        const label = shot.name.length > 10 ? shot.name.slice(0, 10) + '…' : shot.name
         ctx.fillText(label, padding.left - 6, rowY + rowH / 2)
 
-        s.fixations.forEach(f => {
-          const x = padding.left + ((f.timestamp - globalMinTs) / timeRange) * chartW
-          const durW = Math.max(2, (f.duration / timeRange) * chartW)
-          const durAlpha = 0.35 + (f.duration / maxDuration) * 0.65
+        relativeFixations.forEach(f => {
+          const normX = Math.min(1, Math.max(0, f.relTs / maxRange))
+          const normDur = Math.min(1 - normX, Math.max(0, f.duration / maxRange))
+          const x = padding.left + normX * chartW
+          const durW = Math.max(2, normDur * chartW)
+          const durAlpha = globalMaxDuration > 0
+            ? 0.35 + (f.duration / globalMaxDuration) * 0.65
+            : 0.6
           const gradient = ctx.createLinearGradient(x, rowY, x, rowY + rowH)
           gradient.addColorStop(0, hexWithAlpha(color, durAlpha + 0.1))
           gradient.addColorStop(0.5, hexWithAlpha(color, durAlpha))
@@ -376,8 +423,11 @@ export default function App() {
 
       ctx.strokeStyle = '#E2E8F0'
       ctx.lineWidth = 1
-      for (let i = 0; i <= 5; i++) {
-        const x = padding.left + (chartW / 5) * i
+      const tickCount = niceTimeRange.steps
+      for (let i = 0; i <= tickCount; i++) {
+        const tickValue = niceTimeRange.min + (niceTimeRange.step * i)
+        const tickRatio = Math.min(1, tickValue / maxRange)
+        const x = padding.left + tickRatio * chartW
         ctx.beginPath()
         ctx.moveTo(x, padding.top - 4)
         ctx.lineTo(x, padding.top + validShots.length * (rowH + rowGap))
@@ -385,15 +435,15 @@ export default function App() {
         ctx.fillStyle = '#94A3B8'
         ctx.font = '9px Arial'
         ctx.textAlign = 'center'
-        const t = globalMinTs + (timeRange / 5) * i
-        const labelMs = Math.round(t - globalMinTs)
-        const label = labelMs >= 1000 ? `${(labelMs / 1000).toFixed(1)}s` : `${labelMs}ms`
+        const label = tickValue >= 1000
+          ? `${(tickValue / 1000).toFixed(tickValue >= 10000 ? 0 : 1)}s`
+          : `${Math.round(tickValue)}ms`
         ctx.fillText(label, x, h - 12)
       }
       ctx.fillStyle = '#64748B'
       ctx.font = '10px Arial'
       ctx.textAlign = 'center'
-      ctx.fillText('时间轴 (相对于起始)', padding.left + chartW / 2, h - 2)
+      ctx.fillText('时间轴 (各自归一化起始对齐)', padding.left + chartW / 2, h - 2)
     }
 
     resizeCanvas()
