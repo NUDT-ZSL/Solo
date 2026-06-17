@@ -1,388 +1,491 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Stroke, getAllStrokes } from '../utils/strokeData';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { CharacterStrokes, Stroke } from '../utils/strokeData';
 
 interface StrokeCanvasProps {
-  characters: string;
+  characters: CharacterStrokes[];
   speed: 'slow' | 'medium' | 'fast';
   isPlaying: boolean;
-  onTogglePlay: () => void;
-  onReset: () => void;
+  onComplete: () => void;
+  onRestart: () => void;
 }
 
-const speedMap = {
-  slow: 800,
-  medium: 500,
-  fast: 300,
+interface AnimationState {
+  charIndex: number;
+  strokeIndex: number;
+  progress: number;
+}
+
+interface HoverInfo {
+  charIndex: number;
+  strokeIndex: number;
+  x: number;
+  y: number;
+}
+
+const SPEED_MAP = {
+  slow: 0.8,
+  medium: 0.5,
+  fast: 0.3
 };
 
-const COLOR_ACTIVE = '#000000';
-const COLOR_COMPLETED = '#9e9e9e';
-const COLOR_DOT = '#1565c0';
+const CANVAS_WIDTH = 640;
+const CANVAS_HEIGHT = 480;
 const THUMBNAIL_SIZE = 80;
-const THUMBNAIL_BG = '#f5f5f5';
 
 const StrokeCanvas: React.FC<StrokeCanvasProps> = ({
   characters,
   speed,
   isPlaying,
-  onTogglePlay,
-  onReset,
+  onComplete,
+  onRestart
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const thumbnailRef = useRef<HTMLCanvasElement>(null);
+  const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
+  const [animationState, setAnimationState] = useState<AnimationState>({
+    charIndex: 0,
+    strokeIndex: 0,
+    progress: 0
+  });
+
   const animationRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
-  const strokeProgressRef = useRef<number>(0);
-  const [currentStrokeIndex, setCurrentStrokeIndex] = useState(0);
-  const [hoveredStroke, setHoveredStroke] = useState<number | null>(null);
+  const parsedPathsRef = useRef<Map<string, Path2D>>(new Map());
 
-  const strokes: Stroke[] = getAllStrokes(characters);
-  const strokeDuration = speedMap[speed];
-
-  const drawStroke = useCallback(
-    (
-      ctx: CanvasRenderingContext2D,
-      stroke: Stroke,
-      progress: number,
-      color: string,
-      lineWidth: number = 3
-    ) => {
-      ctx.save();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = lineWidth;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-
-      ctx.beginPath();
-      ctx.moveTo(stroke.startX, stroke.startY);
-
-      if (stroke.type === 'curve' && stroke.controlX !== undefined && stroke.controlY !== undefined) {
-        const t = progress;
-        const cx = stroke.controlX;
-        const cy = stroke.controlY;
-        const x = stroke.startX + (cx - stroke.startX) * t * 2 * (1 - t) + (stroke.endX - stroke.startX) * t * t;
-        const y = stroke.startY + (cy - stroke.startY) * t * 2 * (1 - t) + (stroke.endY - stroke.startY) * t * t;
-        
-        if (progress < 0.5) {
-          const t1 = progress * 2;
-          const x1 = stroke.startX + (cx - stroke.startX) * t1;
-          const y1 = stroke.startY + (cy - stroke.startY) * t1;
-          ctx.quadraticCurveTo(cx, cy, x1, y1);
-        } else {
-          ctx.quadraticCurveTo(cx, cy, x, y);
-        }
-      } else {
-        const currentX = stroke.startX + (stroke.endX - stroke.startX) * progress;
-        const currentY = stroke.startY + (stroke.endY - stroke.startY) * progress;
-        ctx.lineTo(currentX, currentY);
-      }
-
-      ctx.stroke();
-      ctx.restore();
-    },
-    []
-  );
-
-  const drawDot = useCallback(
-    (ctx: CanvasRenderingContext2D, x: number, y: number, label: string, scale: number = 1) => {
-      ctx.save();
-      ctx.fillStyle = COLOR_DOT;
-      ctx.beginPath();
-      ctx.arc(x, y, 8 * scale, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = `bold ${11 * scale}px Arial`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(label, x, y + 0.5 * scale);
-      ctx.restore();
-    },
-    []
-  );
-
-  const drawAll = useCallback(
-    (activeIndex: number, activeProgress: number, hoverIdx: number | null = null) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      strokes.forEach((stroke, index) => {
-        let color = COLOR_COMPLETED;
-        let progress = 1;
-        let scale = 1;
-
-        if (index === activeIndex) {
-          color = COLOR_ACTIVE;
-          progress = activeProgress;
-        } else if (index > activeIndex) {
-          color = 'rgba(0,0,0,0.08)';
-          progress = 1;
-        }
-
-        if (hoverIdx === index) {
-          color = '#1565c0';
-          scale = 1.2;
-        }
-
-        drawStroke(ctx, stroke, progress, color, 3 * scale);
-
-        if (index <= activeIndex || hoverIdx === index) {
-          drawDot(ctx, stroke.startX, stroke.startY, String(stroke.id), scale);
-        }
-      });
-
-      const thumbnail = thumbnailRef.current;
-      if (thumbnail) {
-        const tctx = thumbnail.getContext('2d');
-        if (tctx) {
-          tctx.clearRect(0, 0, THUMBNAIL_SIZE, THUMBNAIL_SIZE);
-          tctx.fillStyle = THUMBNAIL_BG;
-          tctx.fillRect(0, 0, THUMBNAIL_SIZE, THUMBNAIL_SIZE);
-
-          const scaleX = THUMBNAIL_SIZE / 640;
-          const scaleY = THUMBNAIL_SIZE / 480;
-
-          strokes.forEach((stroke, index) => {
-            const adjusted: Stroke = {
-              ...stroke,
-              startX: stroke.startX * scaleX,
-              startY: stroke.startY * scaleY,
-              endX: stroke.endX * scaleX,
-              endY: stroke.endY * scaleY,
-              controlX: stroke.controlX !== undefined ? stroke.controlX * scaleX : undefined,
-              controlY: stroke.controlY !== undefined ? stroke.controlY * scaleY : undefined,
-            };
-
-            let color = '#e0e0e0';
-            let progress = 1;
-            if (index < activeIndex) {
-              color = '#8d6e63';
-            } else if (index === activeIndex) {
-              color = '#8d6e63';
-              progress = activeProgress;
-            }
-            drawStroke(tctx, adjusted, progress, color, 1.5);
-          });
-        }
-      }
-    },
-    [strokes, drawStroke, drawDot]
-  );
-
-  const animate = useCallback(
-    (timestamp: number) => {
-      if (!isPlaying) {
-        lastTimeRef.current = timestamp;
-        animationRef.current = requestAnimationFrame(animate);
-        return;
-      }
-
-      if (!lastTimeRef.current) lastTimeRef.current = timestamp;
-      const delta = timestamp - lastTimeRef.current;
-      lastTimeRef.current = timestamp;
-
-      strokeProgressRef.current += delta / strokeDuration;
-
-      if (strokeProgressRef.current >= 1) {
-        strokeProgressRef.current = 0;
-        setCurrentStrokeIndex((prev) => {
-          const next = prev + 1;
-          if (next >= strokes.length) {
-            if (animationRef.current) {
-              cancelAnimationFrame(animationRef.current);
-              animationRef.current = null;
-            }
-            drawAll(strokes.length - 1, 1);
-            return prev;
-          }
-          return next;
-        });
-      }
-
-      drawAll(currentStrokeIndex, Math.min(strokeProgressRef.current, 1));
-
-      if (animationRef.current === null && currentStrokeIndex < strokes.length - 1) {
-        animationRef.current = requestAnimationFrame(animate);
-      } else if (currentStrokeIndex < strokes.length || strokeProgressRef.current < 1) {
-        animationRef.current = requestAnimationFrame(animate);
-      }
-    },
-    [isPlaying, strokeDuration, strokes.length, currentStrokeIndex, drawAll]
-  );
-
-  useEffect(() => {
-    setCurrentStrokeIndex(0);
-    strokeProgressRef.current = 0;
-    lastTimeRef.current = 0;
+  const getTotalStrokes = useCallback(() => {
+    return characters.reduce((sum, c) => sum + c.strokes.length, 0);
   }, [characters]);
 
-  useEffect(() => {
-    if (strokes.length === 0) return;
+  const getCurrentStrokeNumber = useCallback(() => {
+    let count = 0;
+    for (let i = 0; i < animationState.charIndex; i++) {
+      count += characters[i]?.strokes.length || 0;
+    }
+    return count + animationState.strokeIndex + 1;
+  }, [animationState, characters]);
 
+  const parseSvgPath = useCallback((pathStr: string, offsetX: number, offsetY: number, scale: number): Path2D => {
+    const key = `${pathStr}-${offsetX}-${offsetY}-${scale}`;
+    if (parsedPathsRef.current.has(key)) {
+      return parsedPathsRef.current.get(key)!;
+    }
+
+    const path = new Path2D();
+    const commands = pathStr.match(/[MLQC][^MLQC]*/gi) || [];
+
+    for (const cmd of commands) {
+      const type = cmd[0].toUpperCase();
+      const coords = cmd.slice(1).trim().split(/[\s,]+/).map(Number);
+
+      switch (type) {
+        case 'M':
+          path.moveTo(coords[0] * scale + offsetX, coords[1] * scale + offsetY);
+          break;
+        case 'L':
+          path.lineTo(coords[0] * scale + offsetX, coords[1] * scale + offsetY);
+          break;
+        case 'Q':
+          path.quadraticCurveTo(
+            coords[0] * scale + offsetX, coords[1] * scale + offsetY,
+            coords[2] * scale + offsetX, coords[3] * scale + offsetY
+          );
+          break;
+        case 'C':
+          path.bezierCurveTo(
+            coords[0] * scale + offsetX, coords[1] * scale + offsetY,
+            coords[2] * scale + offsetX, coords[3] * scale + offsetY,
+            coords[4] * scale + offsetX, coords[5] * scale + offsetY
+          );
+          break;
+      }
+    }
+
+    parsedPathsRef.current.set(key, path);
+    return path;
+  }, []);
+
+  const getPointOnPath = useCallback((stroke: Stroke, offsetX: number, offsetY: number, scale: number, t: number): { x: number; y: number } => {
+    const sp = stroke.startPoint;
+    const ep = stroke.endPoint;
+    const cp = stroke.controlPoints || [];
+
+    const sx = sp.x * scale + offsetX;
+    const sy = sp.y * scale + offsetY;
+    const ex = ep.x * scale + offsetX;
+    const ey = ep.y * scale + offsetY;
+
+    if (cp.length === 0) {
+      return {
+        x: sx + (ex - sx) * t,
+        y: sy + (ey - sy) * t
+      };
+    } else if (cp.length === 1) {
+      const cpx = cp[0].x * scale + offsetX;
+      const cpy = cp[0].y * scale + offsetY;
+      const mt = 1 - t;
+      return {
+        x: mt * mt * sx + 2 * mt * t * cpx + t * t * ex,
+        y: mt * mt * sy + 2 * mt * t * cpy + t * t * ey
+      };
+    } else if (cp.length >= 2) {
+      const cp1x = cp[0].x * scale + offsetX;
+      const cp1y = cp[0].y * scale + offsetY;
+      const cp2x = cp[1].x * scale + offsetX;
+      const cp2y = cp[1].y * scale + offsetY;
+      const mt = 1 - t;
+      return {
+        x: mt * mt * mt * sx + 3 * mt * mt * t * cp1x + 3 * mt * t * t * cp2x + t * t * t * ex,
+        y: mt * mt * mt * sy + 3 * mt * mt * t * cp1y + 3 * mt * t * t * cp2y + t * t * t * ey
+      };
+    }
+
+    return { x: sx, y: sy };
+  }, []);
+
+  const createPartialPath = useCallback((stroke: Stroke, offsetX: number, offsetY: number, scale: number, progress: number): Path2D => {
+    const path = new Path2D();
+    const steps = Math.max(2, Math.ceil(progress * 50));
+
+    for (let i = 0; i <= steps; i++) {
+      const t = (i / steps) * progress;
+      const point = getPointOnPath(stroke, offsetX, offsetY, scale, t);
+      if (i === 0) {
+        path.moveTo(point.x, point.y);
+      } else {
+        path.lineTo(point.x, point.y);
+      }
+    }
+
+    return path;
+  }, [getPointOnPath]);
+
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    if (characters.length === 0) {
+      ctx.fillStyle = '#9e9e9e';
+      ctx.font = '18px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('请输入汉字开始演示', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+      return;
+    }
+
+    const charWidth = characters.length > 0 ? CANVAS_WIDTH / Math.min(characters.length, 4) : CANVAS_WIDTH;
+
+    characters.forEach((charData, charIdx) => {
+      const offsetX = charIdx * charWidth + (charWidth - 320) / 2;
+      const offsetY = charData.offsetY;
+      const scale = charData.scale;
+
+      charData.strokes.forEach((stroke, strokeIdx) => {
+        const fullPath = parseSvgPath(stroke.path, offsetX, offsetY, scale);
+
+        let strokeColor = '#000000';
+        let lineWidth = 3;
+
+        if (charIdx < animationState.charIndex) {
+          strokeColor = '#9e9e9e';
+        } else if (charIdx === animationState.charIndex) {
+          if (strokeIdx < animationState.strokeIndex) {
+            strokeColor = '#9e9e9e';
+          } else if (strokeIdx === animationState.strokeIndex) {
+            if (animationState.progress > 0) {
+              const partialPath = createPartialPath(stroke, offsetX, offsetY, scale, animationState.progress);
+              ctx.strokeStyle = '#000000';
+              ctx.lineWidth = lineWidth;
+              ctx.lineCap = 'round';
+              ctx.lineJoin = 'round';
+              ctx.stroke(partialPath);
+
+              const startPoint = getPointOnPath(stroke, offsetX, offsetY, scale, 0);
+              ctx.fillStyle = '#1565c0';
+              ctx.beginPath();
+              ctx.arc(startPoint.x, startPoint.y, 8, 0, Math.PI * 2);
+              ctx.fill();
+
+              ctx.fillStyle = '#ffffff';
+              ctx.font = 'bold 10px sans-serif';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(stroke.id.toString(), startPoint.x, startPoint.y);
+            }
+            return;
+          } else {
+            ctx.setLineDash([5, 5]);
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.stroke(fullPath);
+            ctx.setLineDash([]);
+            return;
+          }
+        } else {
+          ctx.setLineDash([5, 5]);
+          ctx.strokeStyle = '#e0e0e0';
+          ctx.lineWidth = 2;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.stroke(fullPath);
+          ctx.setLineDash([]);
+          return;
+        }
+
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = lineWidth;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke(fullPath);
+
+        if (charIdx < animationState.charIndex || 
+            (charIdx === animationState.charIndex && strokeIdx < animationState.strokeIndex)) {
+          const startPoint = getPointOnPath(stroke, offsetX, offsetY, scale, 0);
+          ctx.fillStyle = '#1565c0';
+          ctx.beginPath();
+          ctx.arc(startPoint.x, startPoint.y, 8, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 10px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(stroke.id.toString(), startPoint.x, startPoint.y);
+        }
+
+        if (hoverInfo && !isPlaying && 
+            hoverInfo.charIndex === charIdx && hoverInfo.strokeIndex === strokeIdx) {
+          ctx.save();
+          ctx.strokeStyle = '#1565c0';
+          ctx.lineWidth = 5;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.stroke(fullPath);
+          ctx.restore();
+        }
+      });
+    });
+
+    drawThumbnail(ctx);
+  }, [characters, animationState, hoverInfo, isPlaying, parseSvgPath, createPartialPath, getPointOnPath]);
+
+  const drawThumbnail = useCallback((ctx: CanvasRenderingContext2D) => {
+    const thumbX = 20;
+    const thumbY = CANVAS_HEIGHT - THUMBNAIL_SIZE - 20;
+
+    ctx.fillStyle = '#f5f5f5';
+    ctx.fillRect(thumbX, thumbY, THUMBNAIL_SIZE, THUMBNAIL_SIZE);
+
+    if (characters.length === 0) return;
+
+    const totalStrokes = getTotalStrokes();
+    const completedStrokes = getCurrentStrokeNumber() - 1;
+    const progress = totalStrokes > 0 ? completedStrokes / totalStrokes : 0;
+
+    const thumbScale = THUMBNAIL_SIZE / Math.max(CANVAS_WIDTH, CANVAS_HEIGHT);
+    const charWidth = characters.length > 0 ? THUMBNAIL_SIZE / Math.min(characters.length, 4) : THUMBNAIL_SIZE;
+
+    characters.forEach((charData, charIdx) => {
+      const offsetX = thumbX + charIdx * charWidth + (charWidth - THUMBNAIL_SIZE / 2) / 2;
+      const offsetY = thumbY + 10;
+      const scale = charData.scale * thumbScale * 0.8;
+
+      charData.strokes.forEach((stroke, strokeIdx) => {
+        const fullPath = parseSvgPath(stroke.path, offsetX, offsetY, scale);
+        let isCompleted = false;
+
+        if (charIdx < animationState.charIndex) {
+          isCompleted = true;
+        } else if (charIdx === animationState.charIndex) {
+          isCompleted = strokeIdx < animationState.strokeIndex;
+        }
+
+        ctx.strokeStyle = isCompleted ? '#8d6e63' : '#e0d8c8';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke(fullPath);
+      });
+    });
+
+    ctx.fillStyle = '#424242';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    const currentStrokeNum = Math.min(getCurrentStrokeNumber(), totalStrokes);
+    ctx.fillText(`第 ${currentStrokeNum} 笔 / 共 ${totalStrokes} 笔`, thumbX + THUMBNAIL_SIZE + 12, thumbY + 20);
+
+    ctx.fillStyle = '#9e9e9e';
+    ctx.font = '12px sans-serif';
+    ctx.fillText(`${Math.round(progress * 100)}% 完成`, thumbX + THUMBNAIL_SIZE + 12, thumbY + 42);
+  }, [characters, animationState, getTotalStrokes, getCurrentStrokeNumber, parseSvgPath]);
+
+  const animate = useCallback((timestamp: number) => {
+    if (!isPlaying || characters.length === 0) return;
+
+    const deltaTime = (timestamp - lastTimeRef.current) / 1000;
+    lastTimeRef.current = timestamp;
+
+    const strokeDuration = SPEED_MAP[speed];
+    const progressIncrement = deltaTime / strokeDuration;
+
+    setAnimationState(prev => {
+      let newProgress = prev.progress + progressIncrement;
+      let newStrokeIndex = prev.strokeIndex;
+      let newCharIndex = prev.charIndex;
+
+      while (newProgress >= 1) {
+        newProgress -= 1;
+        newStrokeIndex++;
+
+        if (characters[newCharIndex] && newStrokeIndex >= characters[newCharIndex].strokes.length) {
+          newStrokeIndex = 0;
+          newCharIndex++;
+        }
+
+        if (newCharIndex >= characters.length) {
+          onComplete();
+          return {
+            charIndex: characters.length - 1,
+            strokeIndex: characters[characters.length - 1].strokes.length - 1,
+            progress: 1
+          };
+        }
+      }
+
+      return {
+        charIndex: newCharIndex,
+        strokeIndex: newStrokeIndex,
+        progress: newProgress
+      };
+    });
+
+    animationRef.current = requestAnimationFrame(animate);
+  }, [isPlaying, speed, characters, onComplete]);
+
+  useEffect(() => {
     if (isPlaying) {
-      lastTimeRef.current = 0;
+      lastTimeRef.current = performance.now();
       animationRef.current = requestAnimationFrame(animate);
-    } else {
-      drawAll(currentStrokeIndex, strokeProgressRef.current, hoveredStroke);
+    } else if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
     }
 
     return () => {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
-        animationRef.current = null;
       }
     };
-  }, [isPlaying, animate, strokes.length, currentStrokeIndex, drawAll, hoveredStroke]);
+  }, [isPlaying, animate]);
 
   useEffect(() => {
-    drawAll(currentStrokeIndex, strokeProgressRef.current, hoveredStroke);
-  }, [characters, drawAll, currentStrokeIndex, hoveredStroke]);
+    setAnimationState({
+      charIndex: 0,
+      strokeIndex: 0,
+      progress: 0
+    });
+    parsedPathsRef.current.clear();
+  }, [characters, onRestart]);
 
-  const getStrokeAtPosition = (x: number, y: number): number | null => {
-    const threshold = 15;
-    for (let i = strokes.length - 1; i >= 0; i--) {
-      const s = strokes[i];
-      const dx = s.endX - s.startX;
-      const dy = s.endY - s.startY;
-      const length = Math.sqrt(dx * dx + dy * dy);
-      if (length === 0) continue;
+  useEffect(() => {
+    draw();
+  }, [draw]);
 
-      const t = Math.max(0, Math.min(1, ((x - s.startX) * dx + (y - s.startY) * dy) / (length * length)));
-      const px = s.startX + t * dx;
-      const py = s.startY + t * dy;
-      const dist = Math.sqrt((x - px) ** 2 + (y - py) ** 2);
-
-      if (dist < threshold) return i;
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isPlaying || characters.length === 0) {
+      setHoverInfo(null);
+      return;
     }
-    return null;
-  };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
-    if (!canvas || isPlaying) return;
+    if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    const scaleX = CANVAS_WIDTH / rect.width;
+    const scaleY = CANVAS_HEIGHT / rect.height;
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
 
-    const idx = getStrokeAtPosition(x, y);
-    setHoveredStroke(idx);
-  };
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-  const handleMouseLeave = () => {
-    setHoveredStroke(null);
-  };
+    const charWidth = characters.length > 0 ? CANVAS_WIDTH / Math.min(characters.length, 4) : CANVAS_WIDTH;
+    let found = false;
 
-  const totalStrokes = strokes.length;
-  const displayCurrent = Math.min(currentStrokeIndex + 1, totalStrokes);
-  const hoveredStrokeData = hoveredStroke !== null ? strokes[hoveredStroke] : null;
+    for (let charIdx = 0; charIdx < characters.length; charIdx++) {
+      const charData = characters[charIdx];
+      const offsetX = charIdx * charWidth + (charWidth - 320) / 2;
+      const offsetY = charData.offsetY;
+      const scale = charData.scale;
+
+      for (let strokeIdx = 0; strokeIdx < charData.strokes.length; strokeIdx++) {
+        const stroke = charData.strokes[strokeIdx];
+        const path = parseSvgPath(stroke.path, offsetX, offsetY, scale);
+
+        ctx.lineWidth = 10;
+        if (ctx.isPointInStroke(path, x, y)) {
+          setHoverInfo({ charIndex: charIdx, strokeIndex: strokeIdx, x: e.clientX, y: e.clientY });
+          found = true;
+          break;
+        }
+      }
+      if (found) break;
+    }
+
+    if (!found) {
+      setHoverInfo(null);
+    }
+  }, [isPlaying, characters, parseSvgPath]);
+
+  const handleMouseLeave = useCallback(() => {
+    setHoverInfo(null);
+  }, []);
 
   return (
-    <div className="canvas-wrapper">
-      <div className="canvas-container">
-        <canvas
-          ref={canvasRef}
-          width={640}
-          height={480}
-          onMouseMove={handleMouseMove}
-          onMouseLeave={handleMouseLeave}
-          style={{ cursor: isPlaying ? 'default' : 'pointer' }}
-        />
-        <div className="thumbnail-container">
-          <canvas ref={thumbnailRef} width={THUMBNAIL_SIZE} height={THUMBNAIL_SIZE} />
-          <div className="stroke-info">
-            <div className="stroke-count" style={{ fontSize: '14px', color: '#424242' }}>
-              第 {displayCurrent} 笔 / 共 {totalStrokes} 笔
-            </div>
-            {hoveredStrokeData && (
-              <div className="hover-tip" style={{ fontSize: '13px', color: '#1565c0', marginTop: '4px' }}>
-                第{hoveredStrokeData.id}笔：{hoveredStrokeData.name}
-              </div>
-            )}
-          </div>
+    <div style={{ position: 'relative', display: 'inline-block' }}>
+      <canvas
+        ref={canvasRef}
+        width={CANVAS_WIDTH}
+        height={CANVAS_HEIGHT}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        style={{
+          backgroundColor: '#ffffff',
+          borderRadius: '4px',
+          boxShadow: 'inset 0 0 8px #e0d8c8',
+          cursor: !isPlaying && characters.length > 0 ? 'pointer' : 'default',
+          maxWidth: '96%',
+          height: 'auto'
+        }}
+      />
+      {hoverInfo && !isPlaying && characters[hoverInfo.charIndex] && (
+        <div
+          style={{
+            position: 'fixed',
+            left: hoverInfo.x + 10,
+            top: hoverInfo.y + 10,
+            backgroundColor: 'rgba(21, 101, 192, 0.95)',
+            color: '#ffffff',
+            padding: '8px 12px',
+            borderRadius: '6px',
+            fontSize: '13px',
+            pointerEvents: 'none',
+            zIndex: 100,
+            transform: 'scale(1)',
+            transition: 'transform 0.2s ease',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+          }}
+        >
+          <strong>第 {characters[hoverInfo.charIndex].strokes[hoverInfo.strokeIndex].id} 笔</strong>
+          <br />
+          {characters[hoverInfo.charIndex].strokes[hoverInfo.strokeIndex].direction}
         </div>
-      </div>
-      <div className="controls">
-        <button className="ctrl-btn" onClick={onTogglePlay}>
-          {isPlaying ? '暂停' : currentStrokeIndex >= totalStrokes - 1 && strokeProgressRef.current >= 1 ? '重新播放' : '继续'}
-        </button>
-        <button className="ctrl-btn" onClick={onReset}>
-          重置
-        </button>
-      </div>
-      <style>{`
-        .canvas-wrapper {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 20px;
-        }
-        .canvas-container {
-          position: relative;
-          width: 640px;
-          max-width: 96%;
-          background: #ffffff;
-          box-shadow: inset 0 0 0 8px #e0d8c8;
-          border-radius: 4px;
-        }
-        .canvas-container canvas {
-          display: block;
-          width: 100%;
-          height: auto;
-        }
-        .thumbnail-container {
-          position: absolute;
-          left: 16px;
-          bottom: 16px;
-          display: flex;
-          align-items: flex-end;
-          gap: 12px;
-        }
-        .thumbnail-container canvas {
-          width: ${THUMBNAIL_SIZE}px;
-          height: ${THUMBNAIL_SIZE}px;
-          border-radius: 4px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        .stroke-info {
-          background: rgba(255,255,255,0.9);
-          padding: 6px 10px;
-          border-radius: 4px;
-          white-space: nowrap;
-        }
-        .hover-tip {
-          transition: all 0.2s ease;
-          transform: scale(1);
-        }
-        .controls {
-          display: flex;
-          gap: 12px;
-        }
-        .ctrl-btn {
-          padding: 8px 20px;
-          border-radius: 6px;
-          border: none;
-          background: #8d6e63;
-          color: #ffffff;
-          font-size: 14px;
-          cursor: pointer;
-          transition: background 0.2s ease;
-        }
-        .ctrl-btn:hover {
-          background: #6d4c41;
-        }
-        @media (max-width: 768px) {
-          .canvas-container {
-            width: 96%;
-          }
-        }
-      `}</style>
+      )}
     </div>
   );
 };

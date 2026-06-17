@@ -1,265 +1,302 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import StrokeCanvas from './components/StrokeCanvas';
-import { getSupportedCharacters } from './utils/strokeData';
-
-type Speed = 'slow' | 'medium' | 'fast';
+import { getStrokesForString, getSupportedCharacters } from './utils/strokeData';
 
 const App: React.FC = () => {
-  const [input, setInput] = useState('大');
-  const [characters, setCharacters] = useState('大');
-  const [speed, setSpeed] = useState<Speed>('medium');
-  const [isPlaying, setIsPlaying] = useState(true);
-  const [playKey, setPlayKey] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const supported = getSupportedCharacters();
+  const [inputValue, setInputValue] = useState<string>('大');
+  const [isPlaying, setIsPlaying] = useState<boolean>(true);
+  const [speed, setSpeed] = useState<'slow' | 'medium' | 'fast'>('medium');
+  const [restartKey, setRestartKey] = useState<number>(0);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setCharacters(input);
-      setIsPlaying(true);
-      setPlayKey((k) => k + 1);
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [input]);
+  const supportedChars = useMemo(() => getSupportedCharacters(), []);
 
-  const handleTogglePlay = () => {
-    setIsPlaying((p) => !p);
-  };
+  const characters = useMemo(() => {
+    const cleanInput = inputValue.slice(0, 4);
+    return getStrokesForString(cleanInput);
+  }, [inputValue]);
 
-  const handleReset = () => {
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const filtered = value.split('').filter(char => /[\u4e00-\u9fa5]/.test(char)).join('');
+    setInputValue(filtered.slice(0, 4));
+    setIsPlaying(true);
+    setRestartKey(prev => prev + 1);
+  }, []);
+
+  const handleSpeedChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = Number(e.target.value);
+    if (value === 0) setSpeed('slow');
+    else if (value === 1) setSpeed('medium');
+    else setSpeed('fast');
+  }, []);
+
+  const handlePlayPause = useCallback(() => {
+    setIsPlaying(prev => !prev);
+  }, []);
+
+  const handleRestart = useCallback(() => {
+    setRestartKey(prev => prev + 1);
+    setIsPlaying(true);
+  }, []);
+
+  const handleComplete = useCallback(() => {
     setIsPlaying(false);
-    setPlayKey((k) => k + 1);
-    setTimeout(() => setIsPlaying(true), 50);
-  };
+  }, []);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.slice(0, 4);
-    setInput(val);
-  };
+  const handleCharClick = useCallback((char: string) => {
+    setInputValue(char);
+    setIsPlaying(true);
+    setRestartKey(prev => prev + 1);
+  }, []);
+
+  const speedLabel = useMemo(() => {
+    switch (speed) {
+      case 'slow': return '慢 (0.8s/笔)';
+      case 'medium': return '中 (0.5s/笔)';
+      case 'fast': return '快 (0.3s/笔)';
+    }
+  }, [speed]);
+
+  const speedValue = useMemo(() => {
+    switch (speed) {
+      case 'slow': return 0;
+      case 'medium': return 1;
+      case 'fast': return 2;
+    }
+  }, [speed]);
 
   return (
-    <div className="app">
-      <header className="topbar">
-        <div className="topbar-inner">
-          <div className="title">汉字笔顺演示</div>
-          <div className="input-area">
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={handleInputChange}
-              placeholder="输入汉字（最多4个）"
-              maxLength={4}
-              className="char-input"
-            />
-            <div className="speed-control">
-              <span className="speed-label">速度：</span>
-              <div className="speed-slider">
-                <button
-                  className={`speed-btn ${speed === 'slow' ? 'active' : ''}`}
-                  onClick={() => setSpeed('slow')}
-                >
-                  慢
-                </button>
-                <button
-                  className={`speed-btn ${speed === 'medium' ? 'active' : ''}`}
-                  onClick={() => setSpeed('medium')}
-                >
-                  中
-                </button>
-                <button
-                  className={`speed-btn ${speed === 'fast' ? 'active' : ''}`}
-                  onClick={() => setSpeed('fast')}
-                >
-                  快
-                </button>
-              </div>
-            </div>
-          </div>
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: '#faf3e0',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+    }}>
+      <header style={{
+        height: '64px',
+        backgroundColor: '#ffffff',
+        borderBottom: '2px solid #e0d8c8',
+        display: 'flex',
+        alignItems: 'center',
+        padding: '0 24px',
+        gap: '16px',
+        flexWrap: 'wrap'
+      }}>
+        <h1 style={{
+          fontSize: '20px',
+          fontWeight: 600,
+          color: '#5d4037',
+          margin: 0,
+          marginRight: '16px'
+        }}>
+          汉字笔顺演示
+        </h1>
+
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          flex: 1,
+          minWidth: '200px'
+        }}>
+          <input
+            type="text"
+            value={inputValue}
+            onChange={handleInputChange}
+            placeholder="输入简体汉字（最多4个）"
+            maxLength={4}
+            style={{
+              height: '40px',
+              padding: '0 16px',
+              borderRadius: '8px',
+              border: '1px solid #d4c5a9',
+              fontSize: '16px',
+              outline: 'none',
+              transition: 'border-color 0.2s ease',
+              minWidth: '180px',
+              flex: 1,
+              maxWidth: '280px'
+            }}
+            onFocus={(e) => {
+              e.target.style.borderColor = '#8d6e63';
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = '#d4c5a9';
+            }}
+          />
+
+          <button
+            onClick={handlePlayPause}
+            style={{
+              height: '40px',
+              padding: '0 20px',
+              borderRadius: '6px',
+              border: 'none',
+              backgroundColor: '#8d6e63',
+              color: '#ffffff',
+              fontSize: '14px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'background-color 0.2s ease',
+              minWidth: '80px'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#6d4c41';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '#8d6e63';
+            }}
+          >
+            {isPlaying ? '暂停' : '继续'}
+          </button>
+
+          <button
+            onClick={handleRestart}
+            style={{
+              height: '40px',
+              padding: '0 20px',
+              borderRadius: '6px',
+              border: 'none',
+              backgroundColor: '#8d6e63',
+              color: '#ffffff',
+              fontSize: '14px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'background-color 0.2s ease',
+              minWidth: '80px'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#6d4c41';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '#8d6e63';
+            }}
+          >
+            重播
+          </button>
+        </div>
+
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          minWidth: '200px'
+        }}>
+          <span style={{ fontSize: '14px', color: '#5d4037', whiteSpace: 'nowrap' }}>速度：</span>
+          <input
+            type="range"
+            min="0"
+            max="2"
+            step="1"
+            value={speedValue}
+            onChange={handleSpeedChange}
+            style={{
+              width: '120px',
+              cursor: 'pointer',
+              accentColor: '#8d6e63'
+            }}
+          />
+          <span style={{ fontSize: '13px', color: '#6d4c41', minWidth: '90px' }}>{speedLabel}</span>
         </div>
       </header>
 
-      <main className="main">
-        <StrokeCanvas
-          key={playKey}
-          characters={characters}
-          speed={speed}
-          isPlaying={isPlaying}
-          onTogglePlay={handleTogglePlay}
-          onReset={handleReset}
-        />
-        <div className="supported-chars">
-          <span className="supported-label">支持的汉字：</span>
-          {supported.map((c) => (
+      <main style={{
+        padding: '32px 16px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '24px'
+      }}>
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '8px',
+          justifyContent: 'center',
+          maxWidth: '640px'
+        }}>
+          <span style={{ fontSize: '14px', color: '#6d4c41', marginRight: '8px', alignSelf: 'center' }}>
+            快速选择：
+          </span>
+          {supportedChars.map(char => (
             <button
-              key={c}
-              className="char-chip"
-              onClick={() => setInput(c)}
+              key={char}
+              onClick={() => handleCharClick(char)}
+              style={{
+                width: '44px',
+                height: '44px',
+                borderRadius: '8px',
+                border: inputValue.includes(char) ? '2px solid #8d6e63' : '1px solid #d4c5a9',
+                backgroundColor: inputValue.includes(char) ? '#efebe9' : '#ffffff',
+                fontSize: '20px',
+                color: '#5d4037',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#efebe9';
+                e.currentTarget.style.transform = 'scale(1.05)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = inputValue.includes(char) ? '#efebe9' : '#ffffff';
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
             >
-              {c}
+              {char}
             </button>
           ))}
+        </div>
+
+        <div style={{
+          width: '640px',
+          maxWidth: '96%',
+          display: 'flex',
+          justifyContent: 'center'
+        }}>
+          <StrokeCanvas
+            key={restartKey}
+            characters={characters}
+            speed={speed}
+            isPlaying={isPlaying}
+            onComplete={handleComplete}
+            onRestart={() => setRestartKey(prev => prev + 1)}
+          />
+        </div>
+
+        <div style={{
+          maxWidth: '640px',
+          textAlign: 'center',
+          color: '#6d4c41',
+          fontSize: '13px',
+          lineHeight: 1.8
+        }}>
+          <p style={{ margin: '8px 0' }}>
+            <strong>使用说明：</strong>在顶部输入框输入1-4个简体汉字，或点击上方快速选择按钮。
+          </p>
+          <p style={{ margin: '8px 0' }}>
+            暂停时将鼠标悬停在笔画上可查看笔顺编号和笔画名称。
+          </p>
         </div>
       </main>
 
       <style>{`
-        * {
-          box-sizing: border-box;
-          margin: 0;
-          padding: 0;
-        }
-        body, html, #root {
-          width: 100%;
-          height: 100%;
-        }
-        .app {
-          min-height: 100vh;
-          background: #faf3e0;
-          display: flex;
-          flex-direction: column;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-        }
-        .topbar {
-          height: 64px;
-          background: #ffffff;
-          border-bottom: 2px solid #e0d8c8;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 0 24px;
-        }
-        .topbar-inner {
-          width: 100%;
-          max-width: 1200px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 20px;
-        }
-        .title {
-          font-size: 20px;
-          font-weight: 600;
-          color: #5d4037;
-          white-space: nowrap;
-        }
-        .input-area {
-          display: flex;
-          align-items: center;
-          gap: 20px;
-        }
-        .char-input {
-          width: 200px;
-          height: 40px;
-          padding: 0 14px;
-          border: 1px solid #d4c5a9;
-          border-radius: 8px;
-          font-size: 16px;
-          color: #3e2723;
-          background: #fffef8;
-          outline: none;
-          transition: border-color 0.2s ease;
-        }
-        .char-input:focus {
-          border-color: #8d6e63;
-        }
-        .char-input::placeholder {
-          color: #a1887f;
-          font-size: 14px;
-        }
-        .speed-control {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-        .speed-label {
-          font-size: 14px;
-          color: #5d4037;
-        }
-        .speed-slider {
-          display: flex;
-          background: #efe5d0;
-          border-radius: 6px;
-          padding: 3px;
-          gap: 2px;
-        }
-        .speed-btn {
-          padding: 4px 14px;
-          border: none;
-          background: transparent;
-          color: #8d6e63;
-          font-size: 13px;
-          border-radius: 4px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-        .speed-btn:hover {
-          background: rgba(141, 110, 99, 0.1);
-        }
-        .speed-btn.active {
-          background: #8d6e63;
-          color: #ffffff;
-        }
-        .main {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 32px 16px;
-          gap: 28px;
-        }
-        .supported-chars {
-          display: flex;
-          align-items: center;
-          flex-wrap: wrap;
-          gap: 8px;
-          max-width: 700px;
-        }
-        .supported-label {
-          font-size: 13px;
-          color: #6d4c41;
-          margin-right: 4px;
-        }
-        .char-chip {
-          width: 36px;
-          height: 36px;
-          border: 1px solid #d4c5a9;
-          border-radius: 6px;
-          background: #fffef8;
-          color: #5d4037;
-          font-size: 16px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .char-chip:hover {
-          background: #8d6e63;
-          color: #ffffff;
-          border-color: #8d6e63;
-          transform: scale(1.08);
-        }
         @media (max-width: 768px) {
-          .topbar {
-            height: 56px;
-            padding: 0 12px;
+          header {
+            height: 56px !important;
+            padding: 0 16px !important;
           }
-          .topbar-inner {
-            flex-wrap: wrap;
-            gap: 8px;
+          h1 {
+            font-size: 18px !important;
           }
-          .title {
-            font-size: 16px;
+          input[type="text"] {
+            height: 36px !important;
+            font-size: 14px !important;
           }
-          .input-area {
-            gap: 10px;
-            flex-wrap: wrap;
-          }
-          .char-input {
-            width: 150px;
-            height: 36px;
-            font-size: 14px;
+          button {
+            height: 36px !important;
+            padding: 0 16px !important;
+            font-size: 13px !important;
           }
         }
       `}</style>
