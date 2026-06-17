@@ -74,4 +74,7 @@ interface CharacterStrokes {
 - 每笔动画通过插值（lerp）从起点到终点逐帧绘制
 - 笔画路径使用贝塞尔曲线（controlPoints）实现曲线笔画
 - 动画状态机：IDLE → PLAYING → PAUSED → COMPLETED
+- 笔画完成高亮：刚完成的笔画用半透明浅蓝色#bbdefb闪烁0.3秒，再转为灰色#9e9e9e
 - 缩略图使用独立的小Canvas或从主Canvas缩放渲染
+- 速度控制：连续滑块（0.3-1.0秒，步长0.1秒），实时显示当前速度值
+- 悬停提示：暂停时鼠标悬停显示跟随鼠标的圆角标签，包含笔画编号和方向描述
