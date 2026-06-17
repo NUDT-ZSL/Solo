@@ -72,8 +72,16 @@ const App: React.FC = () => {
   const addLog = (log: Omit<LogEntry, 'id'>) => {
     const entry: LogEntry = { ...log, id: uuidv4() };
     setLogs(prev => [...prev, entry]);
-    const avg = getAverageDuration(log.projectId);
-    if (avg > 0 && log.duration > avg * 1.5) {
+
+    const projectHistoryLogs = logs.filter(l => l.projectId === log.projectId);
+    const averageDuration = projectHistoryLogs.length > 0
+      ? projectHistoryLogs.reduce((sum, l) => sum + l.duration, 0) / projectHistoryLogs.length
+      : 0;
+
+    if (averageDuration <= 0) {
+      return;
+    }
+    if (log.duration > averageDuration * 1.5) {
       setShowAchievement(true);
     }
   };
@@ -105,12 +113,38 @@ const App: React.FC = () => {
     return Array.from(set);
   }, [projects]);
 
+  const hexToRgb = (hex: string): { r: number; g: number; b: number } => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result
+      ? {
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
+          b: parseInt(result[3], 16)
+        }
+      : { r: 0, g: 0, b: 0 };
+  };
+
+  const rgbToHex = (r: number, g: number, b: number): string => {
+    return '#' + [r, g, b].map(x => {
+      const hex = Math.round(Math.max(0, Math.min(255, x))).toString(16);
+      return hex.length === 1 ? '0' + hex : hex;
+    }).join('');
+  };
+
+  const interpolateColor = (colorA: string, colorB: string, t: number): string => {
+    const a = hexToRgb(colorA);
+    const b = hexToRgb(colorB);
+    const clampedT = Math.max(0, Math.min(1, t));
+    return rgbToHex(
+      a.r + (b.r - a.r) * clampedT,
+      a.g + (b.g - a.g) * clampedT,
+      a.b + (b.b - a.b) * clampedT
+    );
+  };
+
   const getProgressColor = (pct: number): string => {
-    if (pct >= 100) return '#4caf50';
-    if (pct >= 75) return '#8bc34a';
-    if (pct >= 50) return '#ffc107';
-    if (pct >= 25) return '#ff9800';
-    return '#ff7043';
+    const normalizedPct = Math.max(0, Math.min(100, pct)) / 100;
+    return interpolateColor('#4caf50', '#ff7043', normalizedPct);
   };
 
   const getMotivationText = (pct: number): string => {
@@ -187,7 +221,8 @@ const App: React.FC = () => {
                 className="progress-bar-fill"
                 style={{
                   width: `${progress}%`,
-                  background: `linear-gradient(90deg, #4caf50 0%, ${getProgressColor(progress)} 100%)`
+                  backgroundColor: getProgressColor(progress),
+                  transition: 'background-color 0.5s ease, width 0.5s ease'
                 }}
               />
             </div>

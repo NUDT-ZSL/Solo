@@ -19,10 +19,10 @@ export const formatDateTime = (date: Date): string => {
   return format(date, 'yyyy-MM-dd HH:mm:ss', { locale: zhCN });
 };
 
-export const formatTime = (seconds: number): string => {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+export const formatTime = (totalSeconds: number): string => {
+  const minutes = Math.floor(totalSeconds / 60);
+  const remainingSeconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
 };
 
 export const getDateRange = (filter: FilterState): { start: Date; end: Date } => {

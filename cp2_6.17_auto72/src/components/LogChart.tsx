@@ -13,6 +13,14 @@ interface LogChartProps {
 }
 
 const PIE_COLORS = ['#ff5252', '#448aff', '#69f0ae', '#ffab40', '#b39ddb'];
+const FALLBACK_COLOR = '#7c4dff';
+
+const getCycleColor = (index: number): string => {
+  if (!PIE_COLORS || PIE_COLORS.length === 0) {
+    return FALLBACK_COLOR;
+  }
+  return PIE_COLORS[index % PIE_COLORS.length] || FALLBACK_COLOR;
+};
 
 const LogChart: React.FC<LogChartProps> = ({ logs, projects, filter }) => {
   const projectMap = useMemo(() => {
@@ -53,7 +61,7 @@ const LogChart: React.FC<LogChartProps> = ({ logs, projects, filter }) => {
     return tagData.map((t, i) => ({
       name: t.tag,
       value: t.minutes,
-      color: PIE_COLORS[i % PIE_COLORS.length]
+      color: getCycleColor(i)
     }));
   }, [tagData]);
 
@@ -184,7 +192,7 @@ const LogChart: React.FC<LogChartProps> = ({ logs, projects, filter }) => {
                       className="ranking-bar-fill"
                       style={{
                         width: `${(item.minutes / max) * 100}%`,
-                        background: PIE_COLORS[idx % PIE_COLORS.length]
+                        background: getCycleColor(idx)
                       }}
                     />
                   </div>
