@@ -61,6 +61,7 @@ const Editor: React.FC = () => {
   const [isResizing, setIsResizing] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [publishedCode, setPublishedCode] = useState<string>('');
+  const [animatedComponentIds, setAnimatedComponentIds] = useState<Set<string>>(new Set());
 
   const containerRef = useRef<HTMLDivElement>(null);
   const resizerRef = useRef<HTMLDivElement>(null);
@@ -71,6 +72,22 @@ const Editor: React.FC = () => {
     setDraggedType(type);
     e.dataTransfer.effectAllowed = 'copy';
     e.dataTransfer.setData('componentType', type);
+
+    const target = e.currentTarget as HTMLElement;
+    const dragImage = target.cloneNode(true) as HTMLElement;
+    dragImage.style.position = 'absolute';
+    dragImage.style.top = '-1000px';
+    dragImage.style.left = '-1000px';
+    dragImage.style.width = target.offsetWidth + 'px';
+    dragImage.style.opacity = '0.7';
+    dragImage.style.boxShadow = '0 8px 16px rgba(74, 144, 217, 0.3)';
+    dragImage.style.transform = 'rotate(2deg)';
+    dragImage.style.pointerEvents = 'none';
+    document.body.appendChild(dragImage);
+    e.dataTransfer.setDragImage(dragImage, 20, 20);
+    setTimeout(() => {
+      document.body.removeChild(dragImage);
+    }, 0);
   }, []);
 
   const handleDragEnd = useCallback(() => {
@@ -123,11 +140,25 @@ const Editor: React.FC = () => {
     addComponent(newComponent);
     setNewlyAddedId(newComponent.id);
 
+    setAnimatedComponentIds((prev) => {
+      const next = new Set(prev);
+      next.add(newComponent.id);
+      return next;
+    });
+
+    setTimeout(() => {
+      setAnimatedComponentIds((prev) => {
+        const next = new Set(prev);
+        next.delete(newComponent.id);
+        return next;
+      });
+    }, 300);
+
     setTimeout(() => {
       setNewlyAddedId((currentId) =>
         currentId === newComponent.id ? null : currentId
       );
-    }, 500);
+    }, 1500);
 
     setDraggedType(null);
   }, [addComponent]);
@@ -281,7 +312,7 @@ const Editor: React.FC = () => {
           ) : (
             components.map((component, index) => (
               <div
-                key={component.id}
+                key={`${component.id}-${animatedComponentIds.has(component.id) ? 'anim' : 'static'}`}
                 className="canvas-component"
                 draggable
                 onDragStart={(e) => handleCanvasComponentDragStart(e, index)}

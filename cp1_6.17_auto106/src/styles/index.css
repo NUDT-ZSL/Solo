@@ -313,12 +313,29 @@ body {
   padding: 40px;
   overflow-y: auto;
   border: 2px solid transparent;
-  transition: border-color 0.3s ease;
+  transition: border-color 0.3s ease, border-style 0.3s ease, background-color 0.3s ease;
 }
 
 .canvas.drag-over {
   border: 2px dashed var(--primary-color);
   background: var(--primary-light);
+  animation: canvasDragEnter 0.3s ease-out;
+}
+
+@keyframes canvasDragEnter {
+  0% {
+    border-color: transparent;
+    background: white;
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.005);
+  }
+  100% {
+    border-color: var(--primary-color);
+    background: var(--primary-light);
+    transform: scale(1);
+  }
 }
 
 .canvas-placeholder {
