@@ -10,6 +10,8 @@ interface ControlPanelProps {
 const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange, isCompact }) => {
   const fontInfo = useMemo(() => getFontInfo(params.fontFamily), [params.fontFamily]);
   const weightDisabled = !(fontInfo?.variableWeight ?? true);
+  const bgColorInputRef = React.useRef<HTMLInputElement>(null);
+  const textColorInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleFontFamily = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const fontFamily = e.target.value;
@@ -21,37 +23,80 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange, isCompact
     onChange(updates);
   };
 
-  const throttledChange = useCallback(
-    rafThrottle((partial: Partial<TypographyParams>) => {
-      onChange(partial);
+  const throttledFontWeight = useCallback(
+    rafThrottle((value: number) => {
+      onChange({ fontWeight: value });
+    }),
+    [onChange]
+  );
+
+  const throttledFontSize = useCallback(
+    rafThrottle((value: number) => {
+      onChange({ fontSize: value });
+    }),
+    [onChange]
+  );
+
+  const throttledLineHeight = useCallback(
+    rafThrottle((value: number) => {
+      onChange({ lineHeight: value });
+    }),
+    [onChange]
+  );
+
+  const throttledLetterSpacing = useCallback(
+    rafThrottle((value: number) => {
+      onChange({ letterSpacing: value });
+    }),
+    [onChange]
+  );
+
+  const throttledBackgroundColor = useCallback(
+    rafThrottle((value: string) => {
+      onChange({ backgroundColor: value });
+    }),
+    [onChange]
+  );
+
+  const throttledTextColor = useCallback(
+    rafThrottle((value: string) => {
+      onChange({ textColor: value });
     }),
     [onChange]
   );
 
   const handleFontWeight = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!weightDisabled) {
-      throttledChange({ fontWeight: Number(e.target.value) });
+      throttledFontWeight(Number(e.target.value));
     }
   };
 
   const handleFontSize = (e: React.ChangeEvent<HTMLInputElement>) => {
-    throttledChange({ fontSize: Number(e.target.value) });
+    throttledFontSize(Number(e.target.value));
   };
 
   const handleLineHeight = (e: React.ChangeEvent<HTMLInputElement>) => {
-    throttledChange({ lineHeight: Number(e.target.value) });
+    throttledLineHeight(Number(e.target.value));
   };
 
   const handleLetterSpacing = (e: React.ChangeEvent<HTMLInputElement>) => {
-    throttledChange({ letterSpacing: Number(e.target.value) });
+    throttledLetterSpacing(Number(e.target.value));
   };
 
   const handleBackgroundColor = (e: React.ChangeEvent<HTMLInputElement>) => {
-    throttledChange({ backgroundColor: e.target.value });
+    throttledBackgroundColor(e.target.value);
   };
 
   const handleTextColor = (e: React.ChangeEvent<HTMLInputElement>) => {
-    throttledChange({ textColor: e.target.value });
+    throttledTextColor(e.target.value);
+  };
+
+  const handleBgLabelClick = () => {
+    bgColorInputRef.current?.click();
+  };
+
+  const handleTextLabelClick = () => {
+    textColorInputRef.current?.click();
   };
 
   const sliderStyle = isCompact
@@ -196,6 +241,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange, isCompact
       <div style={colorPickerWrap}>
         <label style={{ fontSize: 13, color: '#AAAAAA', marginRight: 8, verticalAlign: 'middle' }}>背景色</label>
         <label
+          htmlFor="bg-color-input"
+          onClick={handleBgLabelClick}
           style={{
             display: 'inline-block',
             width: isCompact ? 28 : 36,
@@ -212,6 +259,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange, isCompact
           title="选择背景色"
         >
           <input
+            id="bg-color-input"
+            ref={bgColorInputRef}
             type="color"
             value={params.backgroundColor}
             onChange={handleBackgroundColor}
@@ -226,6 +275,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange, isCompact
               border: 'none',
               cursor: 'pointer',
               opacity: 0,
+              display: 'block',
+              pointerEvents: 'auto',
             }}
           />
         </label>
@@ -237,6 +288,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange, isCompact
       <div style={colorPickerWrap}>
         <label style={{ fontSize: 13, color: '#AAAAAA', marginRight: 8, verticalAlign: 'middle' }}>文字色</label>
         <label
+          htmlFor="text-color-input"
+          onClick={handleTextLabelClick}
           style={{
             display: 'inline-block',
             width: isCompact ? 28 : 36,
@@ -253,6 +306,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange, isCompact
           title="选择文字色"
         >
           <input
+            id="text-color-input"
+            ref={textColorInputRef}
             type="color"
             value={params.textColor}
             onChange={handleTextColor}
@@ -267,6 +322,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange, isCompact
               border: 'none',
               cursor: 'pointer',
               opacity: 0,
+              display: 'block',
+              pointerEvents: 'auto',
             }}
           />
         </label>

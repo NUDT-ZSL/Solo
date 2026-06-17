@@ -143,12 +143,12 @@ const App: React.FC = () => {
             {copied ? (
               <span
                 style={{
-                  color: '#FFFFFF',
-                  backgroundColor: '#4CAF50',
-                  padding: '2px 8px',
+                  color: '#1B5E20',
+                  backgroundColor: '#FFFFFF',
+                  padding: '3px 10px',
                   borderRadius: 4,
-                  fontWeight: 600,
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                  fontWeight: 700,
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.4)',
                 }}
               >
                 ✓ 已复制
