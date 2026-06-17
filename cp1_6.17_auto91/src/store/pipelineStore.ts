@@ -21,6 +21,7 @@ interface PipelineStore {
   drawingPreview: Point3D | null;
   drawingWarning: boolean;
   drawingDistance: number;
+  cameraFocusTarget: Point3D | null;
 
   setActiveType: (type: PipelineType) => void;
   addPipeline: (pipeline: Pipeline) => void;
@@ -35,6 +36,8 @@ interface PipelineStore {
   finishDrawing: (point: Point3D) => void;
   cancelDrawing: () => void;
   runCollisionDetection: () => void;
+  focusOnCollision: (collisionId: string) => void;
+  clearCameraFocus: () => void;
 }
 
 let idCounter = 0;
@@ -52,6 +55,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   drawingPreview: null,
   drawingWarning: false,
   drawingDistance: 0,
+  cameraFocusTarget: null,
 
   setActiveType: (type) => set({ activePipelineType: type }),
 
@@ -196,4 +200,16 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     const newCollisions = detectCollisions(state.pipelines);
     set({ collisions: newCollisions });
   },
+
+  focusOnCollision: (collisionId) => {
+    const state = get();
+    const collision = state.collisions.find((c) => c.id === collisionId);
+    if (!collision) return;
+    set({
+      cameraFocusTarget: collision.position,
+      selectedPipelineId: collision.pipelineA,
+    });
+  },
+
+  clearCameraFocus: () => set({ cameraFocusTarget: null }),
 }));

@@ -187,7 +187,7 @@ function PipelineMesh({
 }
 
 function ProfileLine({ pipeline }: { pipeline: Pipeline }) {
-  const { linePoints, labelPositions } = useMemo(() => {
+  const { centerLinePoints, dropLinePoints, labelPositions, intermediateLabels } = useMemo(() => {
     const allNodes: Point3D[] = [];
     for (const seg of pipeline.segments) {
       if (allNodes.length === 0) allNodes.push(seg.start);
@@ -197,32 +197,78 @@ function ProfileLine({ pipeline }: { pipeline: Pipeline }) {
       }
     }
 
-    const profileDrop = 0.8;
-    const linePts: THREE.Vector3[] = [];
-    const labels: { pos: Point3D; depth: number }[] = [];
+    const centerPts: THREE.Vector3[] = [];
+    const dropPts: THREE.Vector3[] = [];
+    const labels: { pos: Point3D; depth: number; label: string }[] = [];
+    const interLabels: { pos: Point3D; depth: number; label: string }[] = [];
 
     for (let i = 0; i < allNodes.length; i++) {
       const p = allNodes[i];
-      linePts.push(new THREE.Vector3(p.x, p.y - 0.02, p.z));
-      linePts.push(new THREE.Vector3(p.x, p.y - profileDrop, p.z));
+      centerPts.push(new THREE.Vector3(p.x, p.y, p.z));
+
+      const dropDepth = 0.8;
+      dropPts.push(new THREE.Vector3(p.x, p.y - 0.02, p.z));
+      dropPts.push(new THREE.Vector3(p.x, p.y - dropDepth, p.z));
+
       labels.push({
-        pos: { x: p.x, y: p.y - profileDrop - 0.15, z: p.z },
+        pos: { x: p.x, y: p.y - dropDepth - 0.12, z: p.z },
         depth: p.y,
+        label: `深度 ${p.y.toFixed(2)}`,
       });
+
+      if (i < allNodes.length - 1) {
+        const next = allNodes[i + 1];
+        const steps = Math.max(2, Math.ceil(
+          Math.sqrt(Math.pow(next.x - p.x, 2) + Math.pow(next.z - p.z, 2)) / 1.5
+        ));
+        for (let s = 1; s < steps; s++) {
+          const t = s / steps;
+          const ix = p.x + (next.x - p.x) * t;
+          const iy = p.y + (next.y - p.y) * t;
+          const iz = p.z + (next.z - p.z) * t;
+          centerPts.push(new THREE.Vector3(ix, iy, iz));
+          interLabels.push({
+            pos: { x: ix, y: iy + 0.35, z: iz },
+            depth: iy,
+            label: `${iy.toFixed(2)}`,
+          });
+        }
+      }
     }
 
-    return { linePoints: linePts, labelPositions: labels };
+    return {
+      centerLinePoints: centerPts,
+      dropLinePoints: dropPts,
+      labelPositions: labels,
+      intermediateLabels: interLabels,
+    };
   }, [pipeline]);
 
-  const geometry = useMemo(() => {
-    return new THREE.BufferGeometry().setFromPoints(linePoints);
-  }, [linePoints]);
+  const centerLine = useMemo(() => {
+    if (centerLinePoints.length < 2) return null;
+    const geo = new THREE.BufferGeometry().setFromPoints(centerLinePoints);
+    const mat = new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.75 });
+    return new THREE.Line(geo, mat);
+  }, [centerLinePoints]);
+
+  const dropGeometry = useMemo(() => {
+    if (dropLinePoints.length < 2) return null;
+    return new THREE.BufferGeometry().setFromPoints(dropLinePoints);
+  }, [dropLinePoints]);
 
   return (
     <group>
-      <lineSegments geometry={geometry}>
-        <lineBasicMaterial color="#ffffff" transparent opacity={0.9} />
-      </lineSegments>
+      {centerLine && <primitive object={centerLine} />}
+      {dropGeometry && (
+        <lineSegments geometry={dropGeometry}>
+          <lineBasicMaterial
+            color="#7DD3FC"
+            transparent
+            opacity={0.45}
+            linewidth={1}
+          />
+        </lineSegments>
+      )}
       {labelPositions.map((label, i) => (
         <Html
           key={`lbl_${pipeline.id}_${i}`}
@@ -233,18 +279,47 @@ function ProfileLine({ pipeline }: { pipeline: Pipeline }) {
         >
           <div
             style={{
-              background: 'rgba(45, 45, 68, 0.95)',
-              color: '#7DD3FC',
-              padding: '2px 6px',
-              borderRadius: 3,
+              background: 'rgba(30, 30, 55, 0.95)',
+              color: '#ffffff',
+              padding: '3px 8px',
+              borderRadius: 4,
               fontSize: 10,
-              fontFamily: 'monospace',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
               whiteSpace: 'nowrap',
-              border: '0.5px solid #7DD3FC55',
+              border: '1px solid #7DD3FC66',
+              lineHeight: 1.3,
+              fontWeight: 600,
+              textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+            }}
+          >
+            <span style={{ color: '#7DD3FC', fontSize: 9 }}>Y </span>
+            {label.depth.toFixed(2)}
+            <span style={{ color: '#667799', fontSize: 9, marginLeft: 3 }}>m</span>
+          </div>
+        </Html>
+      ))}
+      {intermediateLabels.map((label, i) => (
+        <Html
+          key={`ilbl_${pipeline.id}_${i}`}
+          position={[label.pos.x, label.pos.y, label.pos.z]}
+          center
+          distanceFactor={15}
+          style={{ pointerEvents: 'none' }}
+        >
+          <div
+            style={{
+              background: 'rgba(30, 30, 55, 0.8)',
+              color: '#99bbdd',
+              padding: '1px 5px',
+              borderRadius: 3,
+              fontSize: 9,
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              whiteSpace: 'nowrap',
+              border: '0.5px solid #5577aa44',
               lineHeight: 1.2,
             }}
           >
-            深度 {label.depth.toFixed(2)}m
+            {label.label}
           </div>
         </Html>
       ))}
@@ -628,6 +703,49 @@ function DrawingHandler() {
   );
 }
 
+function CameraFocuser() {
+  const cameraFocusTarget = usePipelineStore((s) => s.cameraFocusTarget);
+  const clearCameraFocus = usePipelineStore((s) => s.clearCameraFocus);
+  const { camera } = useThree();
+  const animating = useRef(false);
+  const startRef = useRef(new THREE.Vector3());
+  const targetRef = useRef(new THREE.Vector3());
+  const progressRef = useRef(0);
+
+  useEffect(() => {
+    if (cameraFocusTarget && !animating.current) {
+      startRef.current.copy(camera.position);
+      const offset = new THREE.Vector3(6, 8, 8);
+      targetRef.current.set(
+        cameraFocusTarget.x + offset.x,
+        cameraFocusTarget.y + offset.y,
+        cameraFocusTarget.z + offset.z
+      );
+      progressRef.current = 0;
+      animating.current = true;
+    }
+  }, [cameraFocusTarget, camera]);
+
+  useFrame((_, delta) => {
+    if (!animating.current) return;
+    progressRef.current += delta * 2.0;
+    const t = Math.min(1, progressRef.current);
+    const eased = 1 - Math.pow(1 - t, 3);
+    camera.position.lerpVectors(startRef.current, targetRef.current, eased);
+    camera.lookAt(
+      cameraFocusTarget?.x ?? 0,
+      cameraFocusTarget?.y ?? 0,
+      cameraFocusTarget?.z ?? 0
+    );
+    if (t >= 1) {
+      animating.current = false;
+      clearCameraFocus();
+    }
+  });
+
+  return null;
+}
+
 function SceneContent() {
   const pipelines = usePipelineStore((s) => s.pipelines);
   const selectedId = usePipelineStore((s) => s.selectedPipelineId);
@@ -664,6 +782,7 @@ function SceneContent() {
       <CollisionMarkers />
       <DrawingPreview />
       <DrawingHandler />
+      <CameraFocuser />
     </>
   );
 }

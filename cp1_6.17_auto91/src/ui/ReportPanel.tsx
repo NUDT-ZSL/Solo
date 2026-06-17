@@ -1,7 +1,7 @@
 import { usePipelineStore } from '@/store/pipelineStore';
 import type { PipelineType } from '@/data/types';
 import { PIPELINE_CONFIGS } from '@/data/types';
-import { ChevronRight, ChevronLeft, Check, AlertTriangle } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Check, AlertTriangle, Crosshair } from 'lucide-react';
 
 const TYPE_LABEL: Record<PipelineType, string> = {
   water: '给水',
@@ -22,6 +22,7 @@ export function ReportPanel({ collapsed, onToggleCollapse }: ReportPanelProps) {
   const setHovered = usePipelineStore((s) => s.setHoveredCollision);
   const toggleResolved = usePipelineStore((s) => s.toggleCollisionResolved);
   const selectPipeline = usePipelineStore((s) => s.selectPipeline);
+  const focusOnCollision = usePipelineStore((s) => s.focusOnCollision);
 
   return (
     <div
@@ -83,11 +84,7 @@ export function ReportPanel({ collapsed, onToggleCollapse }: ReportPanelProps) {
                     key={c.id}
                     onMouseEnter={() => setHovered(c.id)}
                     onMouseLeave={() => setHovered(null)}
-                    onClick={() => {
-                      toggleResolved(c.id);
-                      selectPipeline(c.pipelineA);
-                    }}
-                    className="flex items-start gap-2 p-2.5 rounded-lg cursor-pointer transition-all"
+                    className="flex items-start gap-2 p-2.5 rounded-lg transition-all"
                     style={{
                       background: isHovered
                         ? 'linear-gradient(135deg, #3D3D55 0%, #3a3a55 100%)'
@@ -99,7 +96,7 @@ export function ReportPanel({ collapsed, onToggleCollapse }: ReportPanelProps) {
                     }}
                   >
                     <div
-                      className="mt-0.5 flex-shrink-0 rounded-full"
+                      className="mt-0.5 flex-shrink-0 rounded-full cursor-pointer"
                       style={{
                         width: 10,
                         height: 10,
@@ -114,6 +111,10 @@ export function ReportPanel({ collapsed, onToggleCollapse }: ReportPanelProps) {
                           !c.resolved && isHovered
                             ? 'collisionPulse 0.5s ease-in-out infinite'
                             : undefined,
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleResolved(c.id);
                       }}
                     />
                     <div className="flex-1 min-w-0">
@@ -162,15 +163,12 @@ export function ReportPanel({ collapsed, onToggleCollapse }: ReportPanelProps) {
                         <span style={{ color: '#8888aa' }}>Y</span>:{c.position.y.toFixed(2)}{' '}
                         <span style={{ color: '#8888aa' }}>Z</span>:{c.position.z.toFixed(2)}
                       </div>
-                      <div
-                        className="text-[10px] mt-0.5 flex items-center justify-between"
-                      >
+                      <div className="text-[10px] mt-0.5 flex items-center justify-between">
                         <span className="text-[#8888aa]">
                           间距:{' '}
                           <span
                             style={{
-                              color:
-                                c.distance < 0.3 ? '#FF5252' : '#FFC107',
+                              color: c.distance < 0.3 ? '#FF5252' : '#FFC107',
                               fontWeight: 600,
                             }}
                           >
@@ -178,14 +176,41 @@ export function ReportPanel({ collapsed, onToggleCollapse }: ReportPanelProps) {
                           </span>{' '}
                           单位
                         </span>
-                        <span
+                        <span style={{ color: c.resolved ? '#4CAF50' : '#FF525299', fontSize: 10 }}>
+                          {c.resolved ? '✓ 已解决' : '点击圆点标记'}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 flex gap-1.5">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            focusOnCollision(c.id);
+                          }}
+                          className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold transition-all hover:scale-105 active:scale-95"
                           style={{
-                            color: c.resolved ? '#4CAF50' : '#FF525299',
-                            fontSize: 10,
+                            background: 'linear-gradient(135deg, #6366F1, #818CF8)',
+                            color: '#fff',
+                            border: '0.5px solid #818CF888',
+                            boxShadow: '0 2px 6px rgba(99,102,241,0.3)',
                           }}
                         >
-                          {c.resolved ? '✓ 已解决' : '点击标记解决'}
-                        </span>
+                          <Crosshair size={10} />
+                          查看剖面
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            selectPipeline(c.pipelineA);
+                          }}
+                          className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium transition-all hover:scale-105 active:scale-95"
+                          style={{
+                            background: 'rgba(99,102,241,0.15)',
+                            color: '#A5B4FC',
+                            border: '0.5px solid #6366F144',
+                          }}
+                        >
+                          选中管线
+                        </button>
                       </div>
                     </div>
                   </div>
