@@ -1,8 +1,14 @@
 import * as THREE from 'three';
-import { StarParams, StarStage, STAGE_NAMES } from './types';
+import { StarParams, StarStage, STAGE_NAMES, REMNANT_COLORS } from './types';
 import { STAR_PRESETS, temperatureToColor, formatAge } from '../data/starData';
 
 type EventCallback = (data?: unknown) => void;
+
+const REMNANT_STAGES = new Set([
+  StarStage.WHITE_DWARF,
+  StarStage.NEUTRON_STAR,
+  StarStage.BLACK_HOLE,
+]);
 
 export class StarEngine {
   private scene: THREE.Scene;
@@ -10,6 +16,7 @@ export class StarEngine {
   private currentAge: number = 0;
   private starMesh: THREE.Mesh | null = null;
   private starGlow: THREE.Mesh | null = null;
+  private remnantGlow: THREE.Mesh | null = null;
   private blackHoleLens: THREE.Mesh | null = null;
   private light: THREE.PointLight | null = null;
   private currentStage: StarStage = StarStage.PROTOSTAR;
@@ -19,7 +26,6 @@ export class StarEngine {
   private currentScale: number = 1;
   private targetColor: THREE.Color = new THREE.Color('#FFD700');
   private currentColor: THREE.Color = new THREE.Color('#FFD700');
-  private currentParams: StarParams | null = null;
   private eventListeners: Map<string, Set<EventCallback>> = new Map();
   private raycaster: THREE.Raycaster = new THREE.Raycaster();
   private mouse: THREE.Vector2 = new THREE.Vector2();
@@ -43,6 +49,7 @@ export class StarEngine {
       const targets: THREE.Object3D[] = [];
       if (this.starMesh) targets.push(this.starMesh);
       if (this.starGlow) targets.push(this.starGlow);
+      if (this.remnantGlow) targets.push(this.remnantGlow);
       if (this.blackHoleLens) targets.push(this.blackHoleLens);
       
       if (targets.length > 0) {
@@ -77,16 +84,18 @@ export class StarEngine {
     this.currentStage = StarStage.PROTOSTAR;
     this.lastNotifiedStage = null;
     this.hasExploded = false;
-    this.currentParams = null;
 
     this.removeStar();
 
-    const preset = STAR_PRESETS.find(p => p.mass === mass) || STAR_PRESETS[0];
-    const firstStage = preset.stages[0];
+    const initialParams = this.computeStarParams();
+    this.currentScale = initialParams.scale;
+    this.targetScale = initialParams.scale;
+    this.currentColor = new THREE.Color(initialParams.color);
+    this.targetColor = new THREE.Color(initialParams.color);
 
     const geometry = new THREE.SphereGeometry(1, 64, 64);
     const material = new THREE.MeshBasicMaterial({
-      color: firstStage.color,
+      color: initialParams.color,
     });
 
     this.starMesh = new THREE.Mesh(geometry, material);
@@ -96,8 +105,8 @@ export class StarEngine {
     const glowGeometry = new THREE.SphereGeometry(1.3, 32, 32);
     const glowMaterial = new THREE.ShaderMaterial({
       uniforms: {
-        glowColor: { value: new THREE.Color(firstStage.color) },
-        viewVector: { value: new THREE.Vector3(0, 0, 1) }
+        glowColor: { value: new THREE.Color(initialParams.color) },
+        viewVector: { value: new THREE.Vector3(0, 0, 1) },
       },
       vertexShader: `
         uniform vec3 viewVector;
@@ -125,19 +134,11 @@ export class StarEngine {
     this.starGlow = new THREE.Mesh(glowGeometry, glowMaterial);
     this.scene.add(this.starGlow);
 
-    this.light = new THREE.PointLight(firstStage.color, 2, 100);
+    this.light = new THREE.PointLight(initialParams.color, 2, 100);
     this.scene.add(this.light);
 
-    this.currentScale = firstStage.scale;
-    this.targetScale = firstStage.scale;
-    this.currentColor = new THREE.Color(firstStage.color);
-    this.targetColor = new THREE.Color(firstStage.color);
-
     this.updateStarTransform();
-    
-    const params = this.calculateParams();
-    this.currentParams = params;
-    this.emit('paramsUpdate', params);
+    this.emit('paramsUpdate', initialParams);
   }
 
   private removeStar(): void {
@@ -153,6 +154,12 @@ export class StarEngine {
       (this.starGlow.material as THREE.Material).dispose();
       this.starGlow = null;
     }
+    if (this.remnantGlow) {
+      this.scene.remove(this.remnantGlow);
+      this.remnantGlow.geometry.dispose();
+      (this.remnantGlow.material as THREE.Material).dispose();
+      this.remnantGlow = null;
+    }
     if (this.blackHoleLens) {
       this.scene.remove(this.blackHoleLens);
       this.blackHoleLens.geometry.dispose();
@@ -167,19 +174,15 @@ export class StarEngine {
 
   setAge(age: number): void {
     this.currentAge = Math.max(0, age);
-    this.update(0.016);
   }
 
   getStarParams(): StarParams {
-    if (!this.currentParams) {
-      return this.calculateParams();
-    }
-    return this.currentParams;
+    return this.computeStarParams();
   }
 
-  private calculateParams(): StarParams {
-    const preset = STAR_PRESETS.find(p => p.mass === this.mass) || STAR_PRESETS[0];
-    
+  private computeStarParams(): StarParams {
+    const preset = STAR_PRESETS.find((p) => p.mass === this.mass) || STAR_PRESETS[0];
+
     let accumulatedTime = 0;
     let currentStageData = preset.stages[0];
     let stageProgress = 0;
@@ -187,33 +190,31 @@ export class StarEngine {
     for (let i = 0; i < preset.stages.length; i++) {
       const stage = preset.stages[i];
       const stageEnd = accumulatedTime + stage.duration;
-      
+
       if (stage.duration === Infinity || this.currentAge < stageEnd) {
         currentStageData = stage;
-        stageProgress = stage.duration === Infinity 
-          ? 0 
+        stageProgress = stage.duration === Infinity
+          ? 0
           : (this.currentAge - accumulatedTime) / stage.duration;
         break;
       }
       accumulatedTime = stageEnd;
-      
+
       if (i === preset.stages.length - 1) {
         currentStageData = stage;
         stageProgress = 1;
       }
     }
 
-    this.currentStage = currentStageData.stage;
-
     const progress = this.easeInOutCubic(Math.max(0, Math.min(1, stageProgress)));
-    
-    const radius = currentStageData.startRadius + 
+
+    const radius = currentStageData.startRadius +
       (currentStageData.endRadius - currentStageData.startRadius) * progress;
-    const temperature = currentStageData.startTemp + 
+    const temperature = currentStageData.startTemp +
       (currentStageData.endTemp - currentStageData.startTemp) * progress;
-    const luminosity = currentStageData.startLuminosity + 
+    const luminosity = currentStageData.startLuminosity +
       (currentStageData.endLuminosity - currentStageData.startLuminosity) * progress;
-    
+
     let scale: number;
     if (currentStageData.stage === StarStage.BLACK_HOLE) {
       scale = 0.8;
@@ -225,7 +226,14 @@ export class StarEngine {
       const logRadius = Math.log10(Math.max(0.1, radius));
       scale = 0.5 + Math.min(4.5, logRadius * 1.2);
     }
-    scale = Math.max(0.3, Math.min(5, scale));
+    scale = Math.max(0.5, Math.min(5, scale));
+
+    let color: string;
+    if (REMNANT_STAGES.has(currentStageData.stage)) {
+      color = REMNANT_COLORS[currentStageData.stage];
+    } else {
+      color = temperatureToColor(Math.max(0, temperature));
+    }
 
     return {
       mass: this.mass,
@@ -234,7 +242,7 @@ export class StarEngine {
       luminosity: Math.max(0, luminosity),
       stage: currentStageData.stage,
       age: this.currentAge,
-      color: temperatureToColor(Math.max(0, temperature)),
+      color,
       scale,
     };
   }
@@ -242,8 +250,8 @@ export class StarEngine {
   update(deltaTime: number): void {
     if (!this.starMesh) return;
 
-    const preset = STAR_PRESETS.find(p => p.mass === this.mass) || STAR_PRESETS[0];
-    
+    const preset = STAR_PRESETS.find((p) => p.mass === this.mass) || STAR_PRESETS[0];
+
     let accumulatedTime = 0;
     let currentStageData = preset.stages[0];
     let stageProgress = 0;
@@ -251,16 +259,16 @@ export class StarEngine {
     for (let i = 0; i < preset.stages.length; i++) {
       const stage = preset.stages[i];
       const stageEnd = accumulatedTime + stage.duration;
-      
+
       if (stage.duration === Infinity || this.currentAge < stageEnd) {
         currentStageData = stage;
-        stageProgress = stage.duration === Infinity 
-          ? 0 
+        stageProgress = stage.duration === Infinity
+          ? 0
           : (this.currentAge - accumulatedTime) / stage.duration;
         break;
       }
       accumulatedTime = stageEnd;
-      
+
       if (i === preset.stages.length - 1) {
         currentStageData = stage;
         stageProgress = 1;
@@ -277,17 +285,18 @@ export class StarEngine {
       });
     }
 
-    if ((this.currentStage === StarStage.SUPERNOVA || 
-         this.currentStage === StarStage.PLANETARY_NEBULA) && !this.hasExploded) {
+    if (
+      (this.currentStage === StarStage.SUPERNOVA ||
+        this.currentStage === StarStage.PLANETARY_NEBULA) &&
+      !this.hasExploded
+    ) {
       this.hasExploded = true;
       this.emit('explosion', preset.explosionType);
     }
 
     const progress = this.easeInOutCubic(Math.max(0, Math.min(1, stageProgress)));
-    
-    const params = this.interpolateStageParams(currentStageData, progress);
-    this.currentParams = params;
-    
+    const params = this.computeStarParams();
+
     this.targetScale = params.scale;
     this.targetColor = new THREE.Color(params.color);
 
@@ -300,12 +309,29 @@ export class StarEngine {
     if (this.currentStage === StarStage.BLACK_HOLE && !this.blackHoleLens) {
       this.createBlackHoleLens();
     }
-
     if (this.currentStage !== StarStage.BLACK_HOLE && this.blackHoleLens) {
       this.scene.remove(this.blackHoleLens);
       this.blackHoleLens.geometry.dispose();
       (this.blackHoleLens.material as THREE.Material).dispose();
       this.blackHoleLens = null;
+    }
+
+    if (
+      (this.currentStage === StarStage.WHITE_DWARF ||
+        this.currentStage === StarStage.NEUTRON_STAR) &&
+      !this.remnantGlow
+    ) {
+      this.createRemnantGlow();
+    }
+    if (
+      this.currentStage !== StarStage.WHITE_DWARF &&
+      this.currentStage !== StarStage.NEUTRON_STAR &&
+      this.remnantGlow
+    ) {
+      this.scene.remove(this.remnantGlow);
+      this.remnantGlow.geometry.dispose();
+      (this.remnantGlow.material as THREE.Material).dispose();
+      this.remnantGlow = null;
     }
 
     this.emit('paramsUpdate', params);
@@ -334,12 +360,18 @@ export class StarEngine {
       );
     }
 
+    if (this.remnantGlow && this.remnantGlow.material instanceof THREE.ShaderMaterial) {
+      this.remnantGlow.scale.setScalar(scale * 2.5);
+      this.remnantGlow.material.uniforms.glowColor.value.copy(this.currentColor);
+      this.remnantGlow.material.uniforms.time.value += 0.016;
+    }
+
     if (this.light) {
       if (this.currentStage === StarStage.BLACK_HOLE) {
         this.light.intensity = 0;
       } else {
         this.light.color.copy(this.currentColor);
-        const lum = this.currentParams?.luminosity || 1;
+        const lum = this.getStarParams().luminosity || 1;
         this.light.intensity = Math.min(5, 0.5 + Math.log10(Math.max(1, lum)) * 0.8);
       }
     }
@@ -350,6 +382,48 @@ export class StarEngine {
         this.blackHoleLens.material.uniforms.time.value += 0.016;
       }
     }
+  }
+
+  private createRemnantGlow(): void {
+    const glowGeometry = new THREE.SphereGeometry(1, 32, 32);
+    const glowColor = this.currentStage === StarStage.WHITE_DWARF
+      ? new THREE.Color('#E0E0E0')
+      : new THREE.Color('#8A2BE2');
+
+    const glowMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        glowColor: { value: glowColor },
+        time: { value: 0 },
+      },
+      vertexShader: `
+        varying vec3 vNormal;
+        varying vec3 vPosition;
+        void main() {
+          vNormal = normalize(normalMatrix * normal);
+          vPosition = position;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 glowColor;
+        uniform float time;
+        varying vec3 vNormal;
+        varying vec3 vPosition;
+        void main() {
+          float intensity = pow(0.6 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 1.5);
+          float pulse = sin(time * 2.0) * 0.1 + 0.9;
+          vec3 glow = glowColor * intensity * pulse;
+          gl_FragColor = vec4(glow, intensity * 0.7);
+        }
+      `,
+      side: THREE.BackSide,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+    });
+
+    this.remnantGlow = new THREE.Mesh(glowGeometry, glowMaterial);
+    this.scene.add(this.remnantGlow);
   }
 
   private createBlackHoleLens(): void {
@@ -411,39 +485,6 @@ export class StarEngine {
 
     this.blackHoleLens = new THREE.Mesh(lensGeometry, lensMaterial);
     this.scene.add(this.blackHoleLens);
-  }
-
-  private interpolateStageParams(
-    stage: typeof STAR_PRESETS[0]['stages'][0], 
-    progress: number
-  ): StarParams {
-    const radius = stage.startRadius + (stage.endRadius - stage.startRadius) * progress;
-    const temperature = stage.startTemp + (stage.endTemp - stage.startTemp) * progress;
-    const luminosity = stage.startLuminosity + (stage.endLuminosity - stage.startLuminosity) * progress;
-    
-    let scale: number;
-    if (stage.stage === StarStage.BLACK_HOLE) {
-      scale = 0.8;
-    } else if (stage.stage === StarStage.NEUTRON_STAR) {
-      scale = 0.3;
-    } else if (stage.stage === StarStage.WHITE_DWARF) {
-      scale = 0.5;
-    } else {
-      const logRadius = Math.log10(Math.max(0.1, radius));
-      scale = 0.5 + Math.min(4.5, logRadius * 1.2);
-    }
-    scale = Math.max(0.3, Math.min(5, scale));
-
-    return {
-      mass: this.mass,
-      radius,
-      temperature: Math.max(0, temperature),
-      luminosity: Math.max(0, luminosity),
-      stage: stage.stage,
-      age: this.currentAge,
-      color: temperatureToColor(Math.max(0, temperature)),
-      scale,
-    };
   }
 
   private easeInOutCubic(t: number): number {
