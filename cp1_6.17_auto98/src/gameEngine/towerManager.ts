@@ -87,6 +87,7 @@ export interface Projectile {
   active: boolean;
   traveledDistance: number;
   maxRange: number;
+  direction: Point;
 }
 
 export interface AttackEvent {
@@ -97,15 +98,17 @@ export interface AttackEvent {
   towerPosition: Point;
 }
 
+export interface ProjectileHit {
+  projectileId: number;
+  targetId: number;
+  damage: number;
+  towerType: TowerType;
+  hitPosition: Point;
+}
+
 export interface ProjectileUpdateResult {
   projectiles: Projectile[];
-  hits: {
-    projectileId: number;
-    targetId: number;
-    damage: number;
-    towerType: TowerType;
-    hitPosition: Point;
-  }[];
+  hits: ProjectileHit[];
 }
 
 export interface TowerUpdateResult {
@@ -116,14 +119,16 @@ export interface TowerUpdateResult {
 export function canPlaceTower(
   gridIndex: number,
   towers: Tower[],
-  maxTowers: number = 20
+  maxTowers: number
 ): boolean {
   if (towers.length >= maxTowers) return false;
   return !towers.some((t) => t.gridIndex === gridIndex);
 }
 
 export function getDistance(p1: Point, p2: Point): number {
-  return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
+  const dx = p1.x - p2.x;
+  const dy = p1.y - p2.y;
+  return Math.sqrt(dx * dx + dy * dy);
 }
 
 export function getAngle(from: Point, to: Point): number {
@@ -149,10 +154,6 @@ export function findTargetInRange(tower: Tower, enemies: Enemy[]): Enemy | null 
   return bestEnemy;
 }
 
-export function getEnemiesInRange(tower: Tower, enemies: Enemy[]): Enemy[] {
-  return enemies.filter((e) => e.active && getDistance(tower.position, e.position) <= tower.range);
-}
-
 export function isEnemyInRange(tower: Tower, enemy: Enemy): boolean {
   if (!enemy.active) return false;
   return getDistance(tower.position, enemy.position) <= tower.range;
@@ -166,23 +167,32 @@ export function updateTowers(towers: Tower[], enemies: Enemy[], deltaTime: numbe
   const attackEvents: AttackEvent[] = [];
 
   const updatedTowers = towers.map((tower) => {
-    let t = { ...tower };
+    const t = { ...tower };
 
     if (t.isPlacing) {
       t.placeTimer -= deltaTime;
       if (t.placeTimer <= 0) {
         t.isPlacing = false;
+        t.placeTimer = 0;
       }
     }
 
     if (t.rotationTimer > 0) {
       t.rotationTimer -= deltaTime;
-      const progress = 1 - t.rotationTimer / 200;
-      t.rotation = lerpRotation(t.rotation, t.targetRotation, Math.min(progress, 1));
+      if (t.rotationTimer <= 0) {
+        t.rotationTimer = 0;
+        t.rotation = t.targetRotation;
+      } else {
+        const progress = 1 - t.rotationTimer / 200;
+        t.rotation = lerpRotation(t.rotation, t.targetRotation, Math.min(progress, 1));
+      }
     }
 
     if (t.currentCooldown > 0) {
       t.currentCooldown -= deltaTime;
+      if (t.currentCooldown < 0) {
+        t.currentCooldown = 0;
+      }
     }
 
     const target = findTargetInRange(t, enemies);
@@ -210,63 +220,22 @@ export function updateTowers(towers: Tower[], enemies: Enemy[], deltaTime: numbe
   return { towers: updatedTowers, attackEvents };
 }
 
-export function updateProjectiles(
-  projectiles: Projectile[],
-  enemies: Enemy[],
-  deltaTime: number
-): ProjectileUpdateResult {
-  const hits: ProjectileUpdateResult['hits'] = [];
-  const updatedProjectiles: Projectile[] = [];
-
-  for (const proj of projectiles) {
-    if (!proj.active) continue;
-
-    let p = { ...proj };
-    const target = enemies.find((e) => e.id === p.targetId && e.active);
-
-    if (!target) {
-      continue;
-    }
-
-    const dx = target.position.x - p.position.x;
-    const dy = target.position.y - p.position.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const moveDistance = (p.speed * deltaTime) / 1000;
-
-    if (dist <= moveDistance + 10) {
-      hits.push({
-        projectileId: p.id,
-        targetId: target.id,
-        damage: p.damage,
-        towerType: p.towerType,
-        hitPosition: { ...target.position },
-      });
-    } else {
-      const dirX = dx / dist;
-      const dirY = dy / dist;
-      p.position = {
-        x: p.position.x + dirX * moveDistance,
-        y: p.position.y + dirY * moveDistance,
-      };
-      p.traveledDistance += moveDistance;
-
-      if (p.traveledDistance < p.maxRange) {
-        updatedProjectiles.push(p);
-      }
-    }
-  }
-
-  return { projectiles: updatedProjectiles, hits };
-}
-
 export function createProjectile(
   id: number,
   towerType: TowerType,
   fromPosition: Point,
   targetId: number,
+  targetPosition: Point,
   damage: number,
   maxRange: number
 ): Projectile {
+  const dx = targetPosition.x - fromPosition.x;
+  const dy = targetPosition.y - fromPosition.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const direction: Point = dist > 0
+    ? { x: dx / dist, y: dy / dist }
+    : { x: 1, y: 0 };
+
   return {
     id,
     towerType,
@@ -277,7 +246,74 @@ export function createProjectile(
     active: true,
     traveledDistance: 0,
     maxRange,
+    direction,
   };
+}
+
+export function updateProjectiles(
+  projectiles: Projectile[],
+  enemies: Enemy[],
+  deltaTime: number
+): ProjectileUpdateResult {
+  const hits: ProjectileHit[] = [];
+  const updatedProjectiles: Projectile[] = [];
+
+  for (const proj of projectiles) {
+    if (!proj.active) continue;
+
+    const p = { ...proj };
+    const target = enemies.find((e) => e.id === p.targetId && e.active);
+
+    if (!target) {
+      const moveDistance = (p.speed * deltaTime) / 1000;
+      p.position = {
+        x: p.position.x + p.direction.x * moveDistance,
+        y: p.position.y + p.direction.y * moveDistance,
+      };
+      p.traveledDistance += moveDistance;
+
+      if (p.traveledDistance >= p.maxRange) {
+        continue;
+      }
+
+      updatedProjectiles.push(p);
+      continue;
+    }
+
+    const dx = target.position.x - p.position.x;
+    const dy = target.position.y - p.position.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist > 0) {
+      p.direction = { x: dx / dist, y: dy / dist };
+    }
+
+    const moveDistance = (p.speed * deltaTime) / 1000;
+
+    if (dist <= moveDistance + 5) {
+      hits.push({
+        projectileId: p.id,
+        targetId: target.id,
+        damage: p.damage,
+        towerType: p.towerType,
+        hitPosition: { ...target.position },
+      });
+    } else {
+      p.position = {
+        x: p.position.x + p.direction.x * moveDistance,
+        y: p.position.y + p.direction.y * moveDistance,
+      };
+      p.traveledDistance += moveDistance;
+
+      if (p.traveledDistance >= p.maxRange) {
+        continue;
+      }
+
+      updatedProjectiles.push(p);
+    }
+  }
+
+  return { projectiles: updatedProjectiles, hits };
 }
 
 export function lerpRotation(current: number, target: number, t: number): number {
@@ -285,8 +321,4 @@ export function lerpRotation(current: number, target: number, t: number): number
   while (diff > Math.PI) diff -= Math.PI * 2;
   while (diff < -Math.PI) diff += Math.PI * 2;
   return current + diff * t;
-}
-
-export function getTowerStats(type: TowerType) {
-  return TOWER_STATS[type];
 }

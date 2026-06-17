@@ -13,6 +13,7 @@ import {
   getEnemiesInRadius,
 } from '../gameEngine/towerManager';
 import {
+  createDefaultEnemy,
   updateEnemiesAlongPath,
   Checkpoint as PathCheckpoint,
   Point as PathPoint,
@@ -23,19 +24,29 @@ export { TOWER_STATS };
 
 export type Checkpoint = PathCheckpoint;
 
+export interface SplashFragment {
+  angle: number;
+  speed: number;
+  distance: number;
+  visible: boolean;
+}
+
 export interface SplashEffect {
   id: number;
   position: Point;
-  fragments: { angle: number; distance: number; visible: boolean }[];
+  fragments: SplashFragment[];
   timer: number;
+  maxTimer: number;
 }
 
 export interface IceParticle {
   id: number;
   position: Point;
   timer: number;
+  maxTimer: number;
   offsetX: number;
   offsetY: number;
+  rotation: number;
 }
 
 export interface FloatingScore {
@@ -43,6 +54,7 @@ export interface FloatingScore {
   position: Point;
   value: number;
   timer: number;
+  maxTimer: number;
 }
 
 export interface GameState {
@@ -73,50 +85,36 @@ let towerIdCounter = 0;
 let projectileIdCounter = 0;
 let effectIdCounter = 0;
 
-function addFloatingScoreInternal(
-  state: GameState,
-  position: Point,
-  value: number
-): FloatingScore[] {
-  const fs: FloatingScore = {
+function createSplashFragments(): SplashFragment[] {
+  const baseAngle = Math.random() * Math.PI * 2;
+  return Array.from({ length: 5 }, (_, i) => ({
+    angle: baseAngle + (i / 5) * Math.PI * 2 + (Math.random() - 0.5) * 0.8,
+    speed: 80 + Math.random() * 60,
+    distance: 0,
+    visible: true,
+  }));
+}
+
+function createIceParticles(position: Point): IceParticle[] {
+  return Array.from({ length: 6 }, (_, i) => ({
+    id: ++effectIdCounter,
+    position: { ...position },
+    timer: 500,
+    maxTimer: 500,
+    offsetX: Math.cos((i / 6) * Math.PI * 2) * 15,
+    offsetY: Math.sin((i / 6) * Math.PI * 2) * 15,
+    rotation: Math.random() * Math.PI * 2,
+  }));
+}
+
+function createFloatingScore(position: Point, value: number): FloatingScore {
+  return {
     id: ++effectIdCounter,
     position: { ...position },
     value,
     timer: 500,
+    maxTimer: 500,
   };
-  return [...state.floatingScores, fs];
-}
-
-function addSplashEffectInternal(
-  state: GameState,
-  position: Point
-): SplashEffect[] {
-  const fragments = Array.from({ length: 5 }, (_, i) => ({
-    angle: (i / 5) * Math.PI * 2,
-    distance: 0,
-    visible: true,
-  }));
-  const effect: SplashEffect = {
-    id: ++effectIdCounter,
-    position: { ...position },
-    fragments,
-    timer: 200,
-  };
-  return [...state.splashEffects, effect];
-}
-
-function addIceParticlesInternal(
-  state: GameState,
-  position: Point
-): IceParticle[] {
-  const particles = Array.from({ length: 6 }, (_, i) => ({
-    id: ++effectIdCounter,
-    position: { ...position },
-    timer: 500,
-    offsetX: Math.cos((i / 6) * Math.PI * 2) * 15,
-    offsetY: Math.sin((i / 6) * Math.PI * 2) * 15,
-  }));
-  return [...state.iceParticles, ...particles];
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -137,24 +135,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const { enemies, gameOver } = get();
     if (gameOver || enemies.length >= 50) return;
 
-    const newEnemy: Enemy = {
-      id: ++enemyIdCounter,
-      position: { x: 0, y: 300 },
-      pathProgress: 0,
-      currentSegment: 0,
-      health: 100,
-      maxHealth: 100,
-      baseSpeed: 60,
-      speed: 60,
-      temporarySpeedMultiplier: 1,
-      speedBoostRemainingTime: 0,
-      permanentSpeedMultiplier: 1,
-      slowTimer: 0,
-      passedCheckpoints: 0,
-      isFlashing: false,
-      flashTimer: 0,
-      active: true,
-    };
+    const newEnemy = createDefaultEnemy(++enemyIdCounter);
     set({ enemies: [...enemies, newEnemy] });
   },
 
@@ -219,11 +200,14 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     let newProjectiles = [...state.projectiles];
     for (const event of towerResult.attackEvents) {
+      const target = enemyResult.enemies.find((e) => e.id === event.targetId);
+      const targetPos = target ? { ...target.position } : { ...event.towerPosition };
       const proj = engineCreateProjectile(
         ++projectileIdCounter,
         event.towerType,
         event.towerPosition,
         event.targetId,
+        targetPos,
         event.damage,
         400
       );
@@ -234,7 +218,9 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     let updatedEnemies = [...enemyResult.enemies];
     let scoreGain = 0;
-    const splashHits: { position: Point; damage: number; excludeId: number }[] = [];
+    const splashPositions: Point[] = [];
+    const splashDamages: number[] = [];
+    const splashExcludeIds: number[] = [];
     const icePositions: Point[] = [];
     const killedPositions: Point[] = [];
 
@@ -254,11 +240,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
 
       if (hit.towerType === 'cannon') {
-        splashHits.push({
-          position: { ...hit.hitPosition },
-          damage: hit.damage * 0.5,
-          excludeId: hit.targetId,
-        });
+        splashPositions.push({ ...hit.hitPosition });
+        splashDamages.push(hit.damage * 0.5);
+        splashExcludeIds.push(hit.targetId);
       }
 
       if (wasAlive && target.health <= 0) {
@@ -270,16 +254,16 @@ export const useGameStore = create<GameState>((set, get) => ({
       updatedEnemies[targetIdx] = target;
     }
 
-    for (const splash of splashHits) {
-      const splashEnemies = getEnemiesInRadius(splash.position, updatedEnemies, 30);
+    for (let si = 0; si < splashPositions.length; si++) {
+      const splashEnemies = getEnemiesInRadius(splashPositions[si], updatedEnemies, 30);
       for (const e of splashEnemies) {
-        if (e.id === splash.excludeId) continue;
+        if (e.id === splashExcludeIds[si]) continue;
         if (e.health <= 0) continue;
         const idx = updatedEnemies.findIndex((en) => en.id === e.id);
         if (idx === -1) continue;
         const wasAlive = updatedEnemies[idx].health > 0;
         const updated = { ...updatedEnemies[idx] };
-        updated.health -= splash.damage;
+        updated.health -= splashDamages[si];
         if (wasAlive && updated.health <= 0) {
           updated.active = false;
           scoreGain += 10;
@@ -291,23 +275,31 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
     }
 
-    let currentState = { ...get() };
-
-    for (const pos of killedPositions) {
-      currentState.floatingScores = addFloatingScoreInternal(currentState, pos, 10);
+    const newSplashEffects: SplashEffect[] = [...state.splashEffects];
+    for (const pos of splashPositions) {
+      newSplashEffects.push({
+        id: ++effectIdCounter,
+        position: { ...pos },
+        fragments: createSplashFragments(),
+        timer: 200,
+        maxTimer: 200,
+      });
     }
 
-    for (const splash of splashHits) {
-      currentState.splashEffects = addSplashEffectInternal(currentState, splash.position);
-    }
+    const newIceParticles: IceParticle[] = [...state.iceParticles];
     for (const pos of icePositions) {
-      currentState.iceParticles = addIceParticlesInternal(currentState, pos);
+      newIceParticles.push(...createIceParticles(pos));
     }
 
-    const updatedSplash = currentState.splashEffects
+    const newFloatingScores: FloatingScore[] = [...state.floatingScores];
+    for (const pos of killedPositions) {
+      newFloatingScores.push(createFloatingScore(pos, 10));
+    }
+
+    const updatedSplash = newSplashEffects
       .map((s) => {
         const t = s.timer - deltaTime;
-        const progress = 1 - t / 200;
+        const progress = 1 - t / s.maxTimer;
         return {
           ...s,
           timer: t,
@@ -320,16 +312,22 @@ export const useGameStore = create<GameState>((set, get) => ({
       })
       .filter((s) => s.timer > 0);
 
-    const updatedIce = currentState.iceParticles
+    const updatedIce = newIceParticles
       .map((p) => ({ ...p, timer: p.timer - deltaTime }))
       .filter((p) => p.timer > 0);
 
-    const updatedFloating = currentState.floatingScores
-      .map((f) => ({
-        ...f,
-        timer: f.timer - deltaTime,
-        position: { ...f.position, y: f.position.y - (deltaTime / 500) * 30 },
-      }))
+    const updatedFloating = newFloatingScores
+      .map((f) => {
+        const elapsed = f.maxTimer - f.timer + deltaTime;
+        return {
+          ...f,
+          timer: f.timer - deltaTime,
+          position: {
+            ...f.position,
+            y: f.position.y - (deltaTime / f.maxTimer) * 40,
+          },
+        };
+      })
       .filter((f) => f.timer > 0);
 
     const newScreenFlashTimer = projResult.hits.length > 0

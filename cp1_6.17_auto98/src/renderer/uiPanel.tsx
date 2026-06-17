@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useGameStore, TowerType, TOWER_STATS } from '../store/gameStore';
 
 const UIPanel: React.FC = () => {
@@ -9,11 +9,13 @@ const UIPanel: React.FC = () => {
   return (
     <>
       <TopBar lives={lives} score={score} />
-      <TowerSelector
-        selectedType={selectedTowerType}
-        towerTypes={towerTypes}
-        onSelect={setSelectedTowerType}
-      />
+      <GameCanvasWrapper>
+        <TowerSelector
+          selectedType={selectedTowerType}
+          towerTypes={towerTypes}
+          onSelect={setSelectedTowerType}
+        />
+      </GameCanvasWrapper>
       {gameOver && <GameOverModal score={score} onRestart={resetGame} />}
     </>
   );
@@ -46,11 +48,17 @@ const TopBar: React.FC<{ lives: number; score: number }> = ({ lives, score }) =>
   );
 };
 
+const GameCanvasWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  return <>{children}</>;
+};
+
 const TowerSelector: React.FC<{
   selectedType: TowerType;
   towerTypes: TowerType[];
   onSelect: (type: TowerType) => void;
 }> = ({ selectedType, towerTypes, onSelect }) => {
+  const [hoveredType, setHoveredType] = useState<TowerType | null>(null);
+
   return (
     <div
       style={{
@@ -68,16 +76,24 @@ const TowerSelector: React.FC<{
       {towerTypes.map((type) => {
         const stats = TOWER_STATS[type];
         const isSelected = selectedType === type;
+        const isHovered = hoveredType === type;
+
+        let bgColor = '#0F3460';
+        if (isSelected) bgColor = '#1A4A7A';
+        else if (isHovered) bgColor = '#1A3A6A';
+
         return (
           <div
             key={type}
             onClick={() => onSelect(type)}
+            onMouseEnter={() => setHoveredType(type)}
+            onMouseLeave={() => setHoveredType(null)}
             style={{
               width: 180,
               height: 60,
-              backgroundColor: '#0F3460',
+              backgroundColor: bgColor,
               borderRadius: 8,
-              border: isSelected ? `2px solid #FFD700` : '2px solid transparent',
+              border: isSelected ? '2px solid #FFD700' : isHovered ? '2px solid #FFD70080' : '2px solid transparent',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -119,22 +135,22 @@ const TowerSelector: React.FC<{
 };
 
 const GameOverModal: React.FC<{ score: number; onRestart: () => void }> = ({ score, onRestart }) => {
-  const [hovered, setHovered] = React.useState(false);
+  const [hovered, setHovered] = useState(false);
 
   return (
     <div
       style={{
-        position: 'absolute',
+        position: 'fixed',
         top: 0,
         left: 0,
-        width: 800,
-        height: 730,
+        width: '100%',
+        height: '100%',
         backgroundColor: 'rgba(0, 0, 0, 0.6)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         fontFamily: 'Arial, sans-serif',
-        zIndex: 100,
+        zIndex: 1000,
       }}
     >
       <div

@@ -32,6 +32,27 @@ export const CANVAS_WIDTH = 800;
 export const CANVAS_HEIGHT = 600;
 export const PATH_WIDTH = 40;
 
+export function createDefaultEnemy(id: number): Enemy {
+  return {
+    id,
+    position: { x: 0, y: 300 },
+    pathProgress: 0,
+    currentSegment: 0,
+    health: 100,
+    maxHealth: 100,
+    baseSpeed: 60,
+    speed: 60,
+    temporarySpeedMultiplier: 1,
+    speedBoostRemainingTime: 0,
+    permanentSpeedMultiplier: 1,
+    slowTimer: 0,
+    passedCheckpoints: 0,
+    isFlashing: false,
+    flashTimer: 0,
+    active: true,
+  };
+}
+
 export function generatePath(): Point[] {
   return [
     { x: 0, y: 300 },
@@ -150,6 +171,13 @@ export function updateEnemiesAlongPath(
 
     let e = { ...enemy };
 
+    e.temporarySpeedMultiplier = e.temporarySpeedMultiplier ?? 1;
+    e.speedBoostRemainingTime = e.speedBoostRemainingTime ?? 0;
+    e.permanentSpeedMultiplier = e.permanentSpeedMultiplier ?? 1;
+    e.slowTimer = e.slowTimer ?? 0;
+    e.flashTimer = e.flashTimer ?? 0;
+    e.passedCheckpoints = e.passedCheckpoints ?? 0;
+
     if (e.flashTimer > 0) {
       e.flashTimer -= deltaTime;
       e.isFlashing = e.flashTimer > 0;
@@ -165,6 +193,9 @@ export function updateEnemiesAlongPath(
 
     if (e.slowTimer > 0) {
       e.slowTimer -= deltaTime;
+      if (e.slowTimer <= 0) {
+        e.slowTimer = 0;
+      }
     }
     const slowMultiplier = e.slowTimer > 0 ? 0.5 : 1;
 
@@ -180,6 +211,13 @@ export function updateEnemiesAlongPath(
       const dx = segmentEnd.x - segmentStart.x;
       const dy = segmentEnd.y - segmentStart.y;
       const segmentLength = Math.sqrt(dx * dx + dy * dy);
+
+      if (segmentLength < 0.001) {
+        currentSegment++;
+        pathProgress = 0;
+        continue;
+      }
+
       const moveDistance = (e.speed * remainingDelta) / 1000;
       const remainingDist = (1 - pathProgress) * segmentLength;
 

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { useGameStore, TOWER_STATS, Point } from '../store/gameStore';
+import { useGameStore, TOWER_STATS, Point, SplashEffect, IceParticle, FloatingScore, Enemy, Tower, Projectile } from '../store/gameStore';
 import { generatePath, generateCheckpoints, generateTowerGridPoints, CANVAS_WIDTH, CANVAS_HEIGHT, PATH_WIDTH } from '../gameEngine/pathManager';
 import { isEnemyInRange } from '../gameEngine/towerManager';
 
@@ -13,8 +13,8 @@ const GameCanvas: React.FC = () => {
   const [hoveredGrid, setHoveredGrid] = useState<number | null>(null);
 
   const pathRef = useRef(generatePath());
-  const checkpointsRef = useRef<ReturnType<typeof generateCheckpoints>>([]);
-  const gridPointsRef = useRef<GridPoint[]>([]);
+  const checkpointsRef = useRef(generateCheckpoints(pathRef.current));
+  const gridPointsRef = useRef(generateTowerGridPoints(pathRef.current));
 
   const {
     enemies,
@@ -28,19 +28,15 @@ const GameCanvas: React.FC = () => {
     placeTower,
   } = useGameStore();
 
-  useEffect(() => {
-    pathRef.current = generatePath();
-    checkpointsRef.current = generateCheckpoints(pathRef.current);
-    gridPointsRef.current = generateTowerGridPoints(pathRef.current);
-  }, []);
-
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const scaleX = CANVAS_WIDTH / rect.width;
+      const scaleY = CANVAS_HEIGHT / rect.height;
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
 
       for (const gp of gridPointsRef.current) {
         const dx = x - gp.position.x;
@@ -58,8 +54,10 @@ const GameCanvas: React.FC = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const scaleX = CANVAS_WIDTH / rect.width;
+    const scaleY = CANVAS_HEIGHT / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
 
     let found: number | null = null;
     for (const gp of gridPointsRef.current) {
@@ -91,8 +89,9 @@ const GameCanvas: React.FC = () => {
       let shakeX = 0;
       let shakeY = 0;
       if (screenShakeTimer > 0) {
-        shakeX = (Math.random() - 0.5) * 6;
-        shakeY = (Math.random() - 0.5) * 6;
+        const intensity = 3 * (screenShakeTimer / 100);
+        shakeX = (Math.random() - 0.5) * 2 * intensity;
+        shakeY = (Math.random() - 0.5) * 2 * intensity;
       }
 
       ctx.save();
@@ -114,8 +113,11 @@ const GameCanvas: React.FC = () => {
       ctx.restore();
 
       if (screenFlashTimer > 0) {
-        ctx.fillStyle = `rgba(255, 255, 255, ${screenFlashTimer / 50 * 0.5})`;
+        const alpha = (screenFlashTimer / 50) * 0.5;
+        ctx.save();
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
         ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        ctx.restore();
       }
 
       animationId = requestAnimationFrame(draw);
@@ -150,12 +152,11 @@ const GameCanvas: React.FC = () => {
 
 function drawPath(ctx: CanvasRenderingContext2D, path: Point[]) {
   ctx.save();
-  ctx.fillStyle = '#D2B48C';
-  ctx.strokeStyle = '#C0C0C0';
+
+  ctx.strokeStyle = '#D2B48C';
   ctx.lineWidth = PATH_WIDTH;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-
   ctx.beginPath();
   ctx.moveTo(path[0].x, path[0].y);
   for (let i = 1; i < path.length; i++) {
@@ -181,7 +182,7 @@ function drawGridPoints(
   ctx: CanvasRenderingContext2D,
   points: GridPoint[],
   hoveredIndex: number | null,
-  towers: ReturnType<typeof useGameStore.getState>['towers']
+  towers: Tower[]
 ) {
   for (const gp of points) {
     const isOccupied = towers.some((t) => t.gridIndex === gp.gridIndex);
@@ -223,8 +224,8 @@ function drawCheckpoints(ctx: CanvasRenderingContext2D, checkpoints: ReturnType<
 
 function drawEnemies(
   ctx: CanvasRenderingContext2D,
-  enemies: ReturnType<typeof useGameStore.getState>['enemies'],
-  towers: ReturnType<typeof useGameStore.getState>['towers']
+  enemies: Enemy[],
+  towers: Tower[]
 ) {
   for (const enemy of enemies) {
     if (!enemy.active) continue;
@@ -286,13 +287,13 @@ function drawEnemies(
   }
 }
 
-function drawTowers(ctx: CanvasRenderingContext2D, towers: ReturnType<typeof useGameStore.getState>['towers']) {
+function drawTowers(ctx: CanvasRenderingContext2D, towers: Tower[]) {
   for (const tower of towers) {
     const stats = TOWER_STATS[tower.type];
     let scale = 1;
     if (tower.isPlacing) {
       const progress = 1 - tower.placeTimer / 300;
-      scale = easeOut(progress, 0, 1, 1);
+      scale = easeOut(progress);
     }
 
     ctx.save();
@@ -307,6 +308,7 @@ function drawTowers(ctx: CanvasRenderingContext2D, towers: ReturnType<typeof use
     ctx.fillStyle = stats.color;
     ctx.fillRect(-10, -10, 20, 20);
 
+    ctx.save();
     ctx.rotate(tower.rotation);
     if (tower.type === 'arrow') {
       ctx.fillStyle = '#2E7D32';
@@ -330,19 +332,21 @@ function drawTowers(ctx: CanvasRenderingContext2D, towers: ReturnType<typeof use
       ctx.arc(16, 0, 10, 0, Math.PI * 2);
       ctx.stroke();
     }
+    ctx.restore();
 
     ctx.restore();
   }
 }
 
-function drawProjectiles(ctx: CanvasRenderingContext2D, projectiles: ReturnType<typeof useGameStore.getState>['projectiles']) {
+function drawProjectiles(ctx: CanvasRenderingContext2D, projectiles: Projectile[]) {
   for (const proj of projectiles) {
     if (!proj.active) continue;
 
     ctx.save();
     if (proj.towerType === 'arrow') {
-      const angle = Math.atan2(1, 0);
+      const angle = Math.atan2(proj.direction.y, proj.direction.x);
       ctx.translate(proj.position.x, proj.position.y);
+      ctx.rotate(angle);
       ctx.fillStyle = '#32CD32';
       ctx.beginPath();
       ctx.moveTo(6, 0);
@@ -356,14 +360,16 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, projectiles: ReturnType<
       ctx.arc(proj.position.x, proj.position.y, 8, 0, Math.PI * 2);
       ctx.fill();
     } else if (proj.towerType === 'magic') {
+      ctx.save();
       ctx.shadowColor = '#FFFFFF';
       ctx.shadowBlur = 15;
-      ctx.globalAlpha = 0.7;
+      ctx.globalAlpha = 0.3;
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
       ctx.arc(proj.position.x, proj.position.y, 8, 0, Math.PI * 2);
       ctx.fill();
-      ctx.globalAlpha = 1;
+      ctx.restore();
+
       ctx.fillStyle = '#9932CC';
       ctx.beginPath();
       ctx.arc(proj.position.x, proj.position.y, 5, 0, Math.PI * 2);
@@ -373,13 +379,15 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, projectiles: ReturnType<
   }
 }
 
-function drawSplashEffects(ctx: CanvasRenderingContext2D, effects: ReturnType<typeof useGameStore.getState>['splashEffects']) {
+function drawSplashEffects(ctx: CanvasRenderingContext2D, effects: SplashEffect[]) {
   for (const effect of effects) {
     ctx.save();
+    const alpha = Math.max(0, effect.timer / effect.maxTimer);
     for (const frag of effect.fragments) {
       if (!frag.visible) continue;
       const x = effect.position.x + Math.cos(frag.angle) * frag.distance;
       const y = effect.position.y + Math.sin(frag.angle) * frag.distance;
+      ctx.globalAlpha = alpha;
       ctx.fillStyle = '#FFA500';
       ctx.beginPath();
       ctx.arc(x, y, 4, 0, Math.PI * 2);
@@ -389,19 +397,22 @@ function drawSplashEffects(ctx: CanvasRenderingContext2D, effects: ReturnType<ty
   }
 }
 
-function drawIceParticles(ctx: CanvasRenderingContext2D, particles: ReturnType<typeof useGameStore.getState>['iceParticles']) {
+function drawIceParticles(ctx: CanvasRenderingContext2D, particles: IceParticle[]) {
   for (const p of particles) {
     ctx.save();
-    ctx.globalAlpha = p.timer / 500;
+    const alpha = Math.max(0, p.timer / p.maxTimer);
+    ctx.globalAlpha = alpha;
     ctx.fillStyle = '#00BFFF';
     ctx.translate(p.position.x + p.offsetX, p.position.y + p.offsetY);
+    ctx.rotate(p.rotation);
     ctx.beginPath();
+    const radius = 5;
     for (let i = 0; i < 6; i++) {
-      const angle = (i / 6) * Math.PI * 2;
-      const px = Math.cos(angle) * 5;
-      const py = Math.sin(angle) * 5;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
+      const vertexAngle = (Math.PI / 3) * i - Math.PI / 6;
+      const vx = Math.cos(vertexAngle) * radius;
+      const vy = Math.sin(vertexAngle) * radius;
+      if (i === 0) ctx.moveTo(vx, vy);
+      else ctx.lineTo(vx, vy);
     }
     ctx.closePath();
     ctx.fill();
@@ -409,10 +420,11 @@ function drawIceParticles(ctx: CanvasRenderingContext2D, particles: ReturnType<t
   }
 }
 
-function drawFloatingScores(ctx: CanvasRenderingContext2D, scores: ReturnType<typeof useGameStore.getState>['floatingScores']) {
+function drawFloatingScores(ctx: CanvasRenderingContext2D, scores: FloatingScore[]) {
   for (const fs of scores) {
     ctx.save();
-    ctx.globalAlpha = fs.timer / 500;
+    const alpha = Math.max(0, fs.timer / fs.maxTimer);
+    ctx.globalAlpha = alpha;
     ctx.fillStyle = '#FFD700';
     ctx.font = 'bold 16px Arial';
     ctx.textAlign = 'center';
@@ -421,9 +433,9 @@ function drawFloatingScores(ctx: CanvasRenderingContext2D, scores: ReturnType<ty
   }
 }
 
-function easeOut(t: number, b: number, c: number, d: number): number {
-  const tt = Math.min(t / d, 1);
-  return b + c * (1 - Math.pow(1 - tt, 3));
+function easeOut(progress: number): number {
+  const p = Math.min(Math.max(progress, 0), 1);
+  return 1 - Math.pow(1 - p, 3);
 }
 
 export default GameCanvas;

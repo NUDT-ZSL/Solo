@@ -4,25 +4,17 @@ import GameCanvas from './renderer/gameCanvas';
 import UIPanel from './renderer/uiPanel';
 import { useGameStore } from './store/gameStore';
 import { generatePath, generateCheckpoints } from './gameEngine/pathManager';
-import type { Point, Checkpoint } from './store/gameStore';
+import type { Point, Checkpoint } from './gameEngine/pathManager';
 
 const App: React.FC = () => {
-  const { gameOver, addEnemy, updateGame } = useGameStore();
+  const { addEnemy, updateGame } = useGameStore();
 
   const spawnTimerRef = useRef<number>(0);
   const pathRef = useRef<Point[]>(generatePath());
   const checkpointsRef = useRef<Checkpoint[]>([]);
 
-  const resetCheckpoints = () => {
-    checkpointsRef.current = generateCheckpoints(pathRef.current).map((cp, i) => ({
-      position: { ...cp.position },
-      index: i,
-      activated: false,
-    }));
-  };
-
   useEffect(() => {
-    resetCheckpoints();
+    checkpointsRef.current = generateCheckpoints(pathRef.current);
   }, []);
 
   useEffect(() => {
