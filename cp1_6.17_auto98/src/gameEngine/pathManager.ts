@@ -1,4 +1,32 @@
-import { Point, Checkpoint } from '../store/gameStore';
+export interface Point {
+  x: number;
+  y: number;
+}
+
+export interface Checkpoint {
+  position: Point;
+  index: number;
+  activated: boolean;
+}
+
+export interface Enemy {
+  id: number;
+  position: Point;
+  pathProgress: number;
+  currentSegment: number;
+  health: number;
+  maxHealth: number;
+  baseSpeed: number;
+  speed: number;
+  temporarySpeedMultiplier: number;
+  speedBoostRemainingTime: number;
+  permanentSpeedMultiplier: number;
+  slowTimer: number;
+  passedCheckpoints: number;
+  isFlashing: boolean;
+  flashTimer: number;
+  active: boolean;
+}
 
 export const CANVAS_WIDTH = 800;
 export const CANVAS_HEIGHT = 600;
@@ -99,6 +127,112 @@ export function generateTowerGridPoints(path: Point[]): { position: Point; gridI
   }
 
   return points.slice(0, 12);
+}
+
+export interface EnemyUpdateResult {
+  enemies: Enemy[];
+  reachedEndCount: number;
+  activatedCheckpointIndices: number[];
+}
+
+export function updateEnemiesAlongPath(
+  enemies: Enemy[],
+  deltaTime: number,
+  path: Point[],
+  checkpoints: Checkpoint[]
+): EnemyUpdateResult {
+  const updatedEnemies: Enemy[] = [];
+  let reachedEndCount = 0;
+  const activatedCheckpointIndices: number[] = [];
+
+  for (const enemy of enemies) {
+    if (!enemy.active) continue;
+
+    let e = { ...enemy };
+
+    if (e.flashTimer > 0) {
+      e.flashTimer -= deltaTime;
+      e.isFlashing = e.flashTimer > 0;
+    }
+
+    if (e.speedBoostRemainingTime > 0) {
+      e.speedBoostRemainingTime -= deltaTime;
+      if (e.speedBoostRemainingTime <= 0) {
+        e.speedBoostRemainingTime = 0;
+        e.temporarySpeedMultiplier = 1;
+      }
+    }
+
+    if (e.slowTimer > 0) {
+      e.slowTimer -= deltaTime;
+    }
+    const slowMultiplier = e.slowTimer > 0 ? 0.5 : 1;
+
+    e.speed = e.baseSpeed * e.permanentSpeedMultiplier * e.temporarySpeedMultiplier * slowMultiplier;
+
+    let currentSegment = e.currentSegment;
+    let pathProgress = e.pathProgress;
+    let remainingDelta = deltaTime;
+
+    while (remainingDelta > 0 && currentSegment < path.length - 1) {
+      const segmentStart = path[currentSegment];
+      const segmentEnd = path[currentSegment + 1];
+      const dx = segmentEnd.x - segmentStart.x;
+      const dy = segmentEnd.y - segmentStart.y;
+      const segmentLength = Math.sqrt(dx * dx + dy * dy);
+      const moveDistance = (e.speed * remainingDelta) / 1000;
+      const remainingDist = (1 - pathProgress) * segmentLength;
+
+      if (moveDistance < remainingDist) {
+        pathProgress += moveDistance / segmentLength;
+        remainingDelta = 0;
+      } else {
+        const timeForSegment = (remainingDist / e.speed) * 1000;
+        remainingDelta -= timeForSegment;
+        pathProgress = 0;
+        currentSegment++;
+      }
+    }
+
+    if (currentSegment >= path.length - 1) {
+      reachedEndCount++;
+      continue;
+    }
+
+    e.currentSegment = currentSegment;
+    e.pathProgress = pathProgress;
+
+    const currentStart = path[e.currentSegment];
+    const currentEnd = path[e.currentSegment + 1];
+    e.position = {
+      x: currentStart.x + (currentEnd.x - currentStart.x) * e.pathProgress,
+      y: currentStart.y + (currentEnd.y - currentStart.y) * e.pathProgress,
+    };
+
+    for (let i = 0; i < checkpoints.length; i++) {
+      const cp = checkpoints[i];
+      if (cp.activated) continue;
+      const dist = Math.sqrt(
+        Math.pow(e.position.x - cp.position.x, 2) +
+        Math.pow(e.position.y - cp.position.y, 2)
+      );
+      if (dist < 20) {
+        e.temporarySpeedMultiplier = 1.2;
+        e.speedBoostRemainingTime = 2000;
+        e.permanentSpeedMultiplier += 0.05;
+        e.passedCheckpoints++;
+        activatedCheckpointIndices.push(i);
+      }
+    }
+
+    updatedEnemies.push(e);
+  }
+
+  return {
+    enemies: updatedEnemies,
+    reachedEndCount,
+    activatedCheckpointIndices,
+  };
 }
 
 function distanceToSegment(p: Point, a: Point, b: Point): number {

@@ -264,7 +264,7 @@ function drawEnemies(
       ctx.stroke();
     }
 
-    if (enemy.speedBoostTimer > 0) {
+    if (enemy.speedBoostRemainingTime > 0) {
       ctx.strokeStyle = '#FFD700';
       ctx.lineWidth = 2;
       ctx.setLineDash([3, 3]);

@@ -1,61 +1,27 @@
 import { create } from 'zustand';
+import {
+  TowerType,
+  TowerStats,
+  TOWER_STATS,
+  Tower,
+  Enemy,
+  Projectile,
+  Point,
+  updateTowers as engineUpdateTowers,
+  updateProjectiles as engineUpdateProjectiles,
+  createProjectile as engineCreateProjectile,
+  getEnemiesInRadius,
+} from '../gameEngine/towerManager';
+import {
+  updateEnemiesAlongPath,
+  Checkpoint as PathCheckpoint,
+  Point as PathPoint,
+} from '../gameEngine/pathManager';
 
-export type TowerType = 'arrow' | 'cannon' | 'magic';
+export type { TowerType, TowerStats, Tower, Enemy, Projectile, Point };
+export { TOWER_STATS };
 
-export interface Point {
-  x: number;
-  y: number;
-}
-
-export interface Checkpoint {
-  position: Point;
-  index: number;
-  activated: boolean;
-}
-
-export interface Enemy {
-  id: number;
-  position: Point;
-  pathProgress: number;
-  currentSegment: number;
-  health: number;
-  maxHealth: number;
-  baseSpeed: number;
-  speed: number;
-  speedBoostTimer: number;
-  slowTimer: number;
-  passedCheckpoints: number;
-  isFlashing: boolean;
-  flashTimer: number;
-  active: boolean;
-}
-
-export interface Tower {
-  id: number;
-  type: TowerType;
-  position: Point;
-  gridIndex: number;
-  range: number;
-  damage: number;
-  cooldown: number;
-  currentCooldown: number;
-  rotation: number;
-  targetRotation: number;
-  rotationTimer: number;
-  isPlacing: boolean;
-  placeTimer: number;
-  slowEffect: number;
-}
-
-export interface Projectile {
-  id: number;
-  towerType: TowerType;
-  position: Point;
-  targetId: number;
-  damage: number;
-  speed: number;
-  active: boolean;
-}
+export type Checkpoint = PathCheckpoint;
 
 export interface SplashEffect {
   id: number;
@@ -79,42 +45,6 @@ export interface FloatingScore {
   timer: number;
 }
 
-export interface TowerStats {
-  range: number;
-  damage: number;
-  cooldown: number;
-  color: string;
-  slowEffect: number;
-  name: string;
-}
-
-export const TOWER_STATS: Record<TowerType, TowerStats> = {
-  arrow: {
-    range: 120,
-    damage: 10,
-    cooldown: 1000,
-    color: '#8B4513',
-    slowEffect: 0,
-    name: '箭塔',
-  },
-  cannon: {
-    range: 80,
-    damage: 25,
-    cooldown: 2500,
-    color: '#555555',
-    slowEffect: 0,
-    name: '炮塔',
-  },
-  magic: {
-    range: 150,
-    damage: 15,
-    cooldown: 1800,
-    color: '#4B0082',
-    slowEffect: 0.5,
-    name: '魔法塔',
-  },
-};
-
 export interface GameState {
   enemies: Enemy[];
   towers: Tower[];
@@ -126,28 +56,13 @@ export interface GameState {
   score: number;
   selectedTowerType: TowerType;
   gameOver: boolean;
-  nextEnemyId: number;
-  nextTowerId: number;
-  nextProjectileId: number;
-  nextEffectId: number;
   screenShakeTimer: number;
   screenFlashTimer: number;
-  spawnTimer: number;
 
   addEnemy: () => void;
   placeTower: (gridIndex: number, position: Point) => boolean;
   setSelectedTowerType: (type: TowerType) => void;
-  updateEnemies: (deltaTime: number, path: Point[], checkpoints: Checkpoint[]) => void;
-  updateTowers: (deltaTime: number) => { towerId: number; targetId: number; damage: number; towerType: TowerType }[];
-  addProjectile: (towerId: number, towerType: TowerType, targetId: number, damage: number, position: Point) => void;
-  updateProjectiles: (deltaTime: number) => void;
-  damageEnemy: (enemyId: number, damage: number, towerType: TowerType) => void;
-  splashDamage: (position: Point, damage: number, radius: number, excludeId: number) => void;
-  addSplashEffect: (position: Point) => void;
-  addIceParticles: (position: Point) => void;
-  addFloatingScore: (position: Point, value: number) => void;
-  updateEffects: (deltaTime: number) => void;
-  loseLife: () => void;
+  updateGame: (deltaTime: number, path: PathPoint[], checkpoints: PathCheckpoint[]) => void;
   triggerScreenShake: () => void;
   triggerScreenFlash: () => void;
   resetGame: () => void;
@@ -157,6 +72,52 @@ let enemyIdCounter = 0;
 let towerIdCounter = 0;
 let projectileIdCounter = 0;
 let effectIdCounter = 0;
+
+function addFloatingScoreInternal(
+  state: GameState,
+  position: Point,
+  value: number
+): FloatingScore[] {
+  const fs: FloatingScore = {
+    id: ++effectIdCounter,
+    position: { ...position },
+    value,
+    timer: 500,
+  };
+  return [...state.floatingScores, fs];
+}
+
+function addSplashEffectInternal(
+  state: GameState,
+  position: Point
+): SplashEffect[] {
+  const fragments = Array.from({ length: 5 }, (_, i) => ({
+    angle: (i / 5) * Math.PI * 2,
+    distance: 0,
+    visible: true,
+  }));
+  const effect: SplashEffect = {
+    id: ++effectIdCounter,
+    position: { ...position },
+    fragments,
+    timer: 200,
+  };
+  return [...state.splashEffects, effect];
+}
+
+function addIceParticlesInternal(
+  state: GameState,
+  position: Point
+): IceParticle[] {
+  const particles = Array.from({ length: 6 }, (_, i) => ({
+    id: ++effectIdCounter,
+    position: { ...position },
+    timer: 500,
+    offsetX: Math.cos((i / 6) * Math.PI * 2) * 15,
+    offsetY: Math.sin((i / 6) * Math.PI * 2) * 15,
+  }));
+  return [...state.iceParticles, ...particles];
+}
 
 export const useGameStore = create<GameState>((set, get) => ({
   enemies: [],
@@ -169,13 +130,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   score: 0,
   selectedTowerType: 'arrow',
   gameOver: false,
-  nextEnemyId: 0,
-  nextTowerId: 0,
-  nextProjectileId: 0,
-  nextEffectId: 0,
   screenShakeTimer: 0,
   screenFlashTimer: 0,
-  spawnTimer: 0,
 
   addEnemy: () => {
     const { enemies, gameOver } = get();
@@ -190,7 +146,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       maxHealth: 100,
       baseSpeed: 60,
       speed: 60,
-      speedBoostTimer: 0,
+      temporarySpeedMultiplier: 1,
+      speedBoostRemainingTime: 0,
+      permanentSpeedMultiplier: 1,
       slowTimer: 0,
       passedCheckpoints: 0,
       isFlashing: false,
@@ -232,311 +190,121 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ selectedTowerType: type });
   },
 
-  updateEnemies: (deltaTime: number, path: Point[], checkpoints: Checkpoint[]) => {
+  updateGame: (deltaTime: number, path: PathPoint[], checkpoints: PathCheckpoint[]) => {
     const state = get();
     if (state.gameOver) return;
 
-    const updatedEnemies: Enemy[] = [];
+    const enemyResult = updateEnemiesAlongPath(state.enemies, deltaTime, path, checkpoints);
 
-    for (const enemy of state.enemies) {
-      if (!enemy.active) continue;
-
-      let e = { ...enemy };
-
-      if (e.flashTimer > 0) {
-        e.flashTimer -= deltaTime;
-        e.isFlashing = e.flashTimer > 0;
-      }
-
-      if (e.speedBoostTimer > 0) {
-        e.speedBoostTimer -= deltaTime;
-      }
-      if (e.slowTimer > 0) {
-        e.slowTimer -= deltaTime;
-      }
-
-      const checkpointBonus = 1 + e.passedCheckpoints * 0.05;
-      const boostMultiplier = e.speedBoostTimer > 0 ? 1.2 : 1;
-      const slowMultiplier = e.slowTimer > 0 ? 0.5 : 1;
-      e.speed = e.baseSpeed * checkpointBonus * boostMultiplier * slowMultiplier;
-
-      const segmentStart = path[e.currentSegment];
-      const segmentEnd = path[e.currentSegment + 1];
-
-      if (!segmentEnd) {
-        e.active = false;
-        continue;
-      }
-
-      const dx = segmentEnd.x - segmentStart.x;
-      const dy = segmentEnd.y - segmentStart.y;
-      const segmentLength = Math.sqrt(dx * dx + dy * dy);
-      const moveDistance = (e.speed * deltaTime) / 1000;
-
-      e.pathProgress += moveDistance / segmentLength;
-
-      while (e.pathProgress >= 1 && e.currentSegment < path.length - 1) {
-        e.pathProgress -= 1;
-        e.currentSegment++;
-
-        if (e.currentSegment >= path.length - 1) {
-          break;
-        }
-      }
-
-      if (e.currentSegment >= path.length - 1) {
-        e.active = false;
-        get().loseLife();
-        continue;
-      }
-
-      const currentStart = path[e.currentSegment];
-      const currentEnd = path[e.currentSegment + 1];
-      e.position = {
-        x: currentStart.x + (currentEnd.x - currentStart.x) * e.pathProgress,
-        y: currentStart.y + (currentEnd.y - currentStart.y) * e.pathProgress,
-      };
-
-      for (const cp of checkpoints) {
-        const dist = Math.sqrt(
-          Math.pow(e.position.x - cp.position.x, 2) +
-          Math.pow(e.position.y - cp.position.y, 2)
-        );
-        if (dist < 20 && !cp.activated) {
-          e.speedBoostTimer = 2000;
-          cp.activated = true;
-          e.passedCheckpoints++;
-        }
-      }
-
-      updatedEnemies.push(e);
-    }
-
-    set({ enemies: updatedEnemies });
-  },
-
-  updateTowers: (deltaTime: number) => {
-    const { towers, enemies } = get();
-    const attackEvents: { towerId: number; targetId: number; damage: number; towerType: TowerType }[] = [];
-
-    const updatedTowers = towers.map((tower) => {
-      let t = { ...tower };
-
-      if (t.isPlacing) {
-        t.placeTimer -= deltaTime;
-        if (t.placeTimer <= 0) {
-          t.isPlacing = false;
-        }
-      }
-
-      if (t.rotationTimer > 0) {
-        t.rotationTimer -= deltaTime;
-        const progress = 1 - t.rotationTimer / 200;
-        t.rotation = t.rotation + (t.targetRotation - t.rotation) * Math.min(progress, 1);
-      }
-
-      if (t.currentCooldown > 0) {
-        t.currentCooldown -= deltaTime;
-      }
-
-      let closestEnemy: Enemy | null = null;
-      let closestDist = Infinity;
-
-      for (const enemy of enemies) {
-        if (!enemy.active) continue;
-        const dist = Math.sqrt(
-          Math.pow(enemy.position.x - t.position.x, 2) +
-          Math.pow(enemy.position.y - t.position.y, 2)
-        );
-        if (dist <= t.range && dist < closestDist) {
-          closestDist = dist;
-          closestEnemy = enemy;
-        }
-      }
-
-      if (closestEnemy) {
-        const angle = Math.atan2(
-          closestEnemy.position.y - t.position.y,
-          closestEnemy.position.x - t.position.x
-        );
-        t.targetRotation = angle;
-        t.rotationTimer = 200;
-
-        if (t.currentCooldown <= 0) {
-          t.currentCooldown = t.cooldown;
-          attackEvents.push({
-            towerId: t.id,
-            targetId: closestEnemy.id,
-            damage: t.damage,
-            towerType: t.type,
-          });
-        }
-      }
-
-      return t;
-    });
-
-    set({ towers: updatedTowers });
-    return attackEvents;
-  },
-
-  addProjectile: (towerId: number, towerType: TowerType, targetId: number, damage: number, position: Point) => {
-    const { projectiles } = get();
-    const newProjectile: Projectile = {
-      id: ++projectileIdCounter,
-      towerType,
-      position: { ...position },
-      targetId,
-      damage,
-      speed: 200,
-      active: true,
-    };
-    set({ projectiles: [...projectiles, newProjectile] });
-  },
-
-  updateProjectiles: (deltaTime: number) => {
-    const { projectiles, enemies } = get();
-    const updatedProjectiles: Projectile[] = [];
-
-    for (const proj of projectiles) {
-      if (!proj.active) continue;
-
-      let p = { ...proj };
-      const target = enemies.find((e) => e.id === p.targetId && e.active);
-
-      if (!target) {
-        continue;
-      }
-
-      const dx = target.position.x - p.position.x;
-      const dy = target.position.y - p.position.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const moveDistance = (p.speed * deltaTime) / 1000;
-
-      if (dist <= moveDistance) {
-        get().damageEnemy(target.id, p.damage, p.towerType);
-        if (p.towerType === 'cannon') {
-          get().addSplashEffect(target.position);
-          get().splashDamage(target.position, p.damage * 0.5, 30, target.id);
-        }
-        if (p.towerType === 'magic') {
-          get().addIceParticles(target.position);
-        }
-        get().triggerScreenFlash();
-      } else {
-        p.position = {
-          x: p.position.x + (dx / dist) * moveDistance,
-          y: p.position.y + (dy / dist) * moveDistance,
-        };
-        updatedProjectiles.push(p);
+    if (enemyResult.activatedCheckpointIndices.length > 0) {
+      for (const idx of enemyResult.activatedCheckpointIndices) {
+        checkpoints[idx] = { ...checkpoints[idx], activated: true };
       }
     }
 
-    set({ projectiles: updatedProjectiles });
-  },
-
-  damageEnemy: (enemyId: number, damage: number, towerType: TowerType) => {
-    const { enemies, score } = get();
-    let scoreGain = 0;
-
-    const updatedEnemies = enemies.map((e) => {
-      if (e.id !== enemyId) return e;
-      let newEnemy = { ...e };
-      newEnemy.health -= damage;
-      newEnemy.isFlashing = true;
-      newEnemy.flashTimer = 150;
-      if (towerType === 'magic') {
-        newEnemy.slowTimer = 500;
-      }
-      if (newEnemy.health <= 0) {
-        newEnemy.active = false;
-        scoreGain += 10;
-      }
-      return newEnemy;
-    });
-
-    if (scoreGain > 0) {
-      const killedEnemy = enemies.find((e) => e.id === enemyId);
-      if (killedEnemy) {
-        get().addFloatingScore(killedEnemy.position, scoreGain);
+    let newLives = state.lives;
+    if (enemyResult.reachedEndCount > 0) {
+      newLives = Math.max(0, state.lives - enemyResult.reachedEndCount);
+      if (newLives <= 0) {
+        set({
+          enemies: enemyResult.enemies,
+          lives: 0,
+          gameOver: true,
+        });
+        return;
       }
     }
 
-    set({ enemies: updatedEnemies, score: score + scoreGain });
-  },
+    const towerResult = engineUpdateTowers(state.towers, enemyResult.enemies, deltaTime);
 
-  splashDamage: (position: Point, damage: number, radius: number, excludeId: number) => {
-    const { enemies } = get();
-    const updatedEnemies = enemies.map((e) => {
-      if (e.id === excludeId || !e.active) return e;
-      const dist = Math.sqrt(
-        Math.pow(e.position.x - position.x, 2) +
-        Math.pow(e.position.y - position.y, 2)
+    let newProjectiles = [...state.projectiles];
+    for (const event of towerResult.attackEvents) {
+      const proj = engineCreateProjectile(
+        ++projectileIdCounter,
+        event.towerType,
+        event.towerPosition,
+        event.targetId,
+        event.damage,
+        400
       );
-      if (dist <= radius) {
-        let newEnemy = { ...e };
-        newEnemy.health -= damage;
-        newEnemy.isFlashing = true;
-        newEnemy.flashTimer = 150;
-        if (newEnemy.health <= 0) {
-          newEnemy.active = false;
-        }
-        return newEnemy;
-      }
-      return e;
-    });
-
-    const killed = enemies.filter((e, i) => e.health > 0 && updatedEnemies[i].health <= 0);
-    if (killed.length > 0) {
-      killed.forEach((k) => get().addFloatingScore(k.position, 10));
+      newProjectiles.push(proj);
     }
 
-    set({ enemies: updatedEnemies });
-  },
+    const projResult = engineUpdateProjectiles(newProjectiles, enemyResult.enemies, deltaTime);
 
-  addSplashEffect: (position: Point) => {
-    const { splashEffects } = get();
-    const fragments = Array.from({ length: 5 }, (_, i) => ({
-      angle: (i / 5) * Math.PI * 2,
-      distance: 0,
-      visible: true,
-    }));
-    const effect: SplashEffect = {
-      id: ++effectIdCounter,
-      position: { ...position },
-      fragments,
-      timer: 200,
-    };
-    set({ splashEffects: [...splashEffects, effect] });
-  },
+    let updatedEnemies = [...enemyResult.enemies];
+    let scoreGain = 0;
+    const splashHits: { position: Point; damage: number; excludeId: number }[] = [];
+    const icePositions: Point[] = [];
+    const killedPositions: Point[] = [];
 
-  addIceParticles: (position: Point) => {
-    const { iceParticles } = get();
-    const particles = Array.from({ length: 6 }, (_, i) => ({
-      id: ++effectIdCounter,
-      position: { ...position },
-      timer: 500,
-      offsetX: Math.cos((i / 6) * Math.PI * 2) * 15,
-      offsetY: Math.sin((i / 6) * Math.PI * 2) * 15,
-    }));
-    set({ iceParticles: [...iceParticles, ...particles] });
-  },
+    for (const hit of projResult.hits) {
+      const targetIdx = updatedEnemies.findIndex((e) => e.id === hit.targetId);
+      if (targetIdx === -1) continue;
 
-  addFloatingScore: (position: Point, value: number) => {
-    const { floatingScores, score } = get();
-    const fs: FloatingScore = {
-      id: ++effectIdCounter,
-      position: { ...position },
-      value,
-      timer: 500,
-    };
-    set({ floatingScores: [...floatingScores, fs] });
-  },
+      const target = { ...updatedEnemies[targetIdx] };
+      const wasAlive = target.health > 0;
+      target.health -= hit.damage;
+      target.isFlashing = true;
+      target.flashTimer = 150;
 
-  updateEffects: (deltaTime: number) => {
-    const { splashEffects, iceParticles, floatingScores, screenShakeTimer, screenFlashTimer } = get();
+      if (hit.towerType === 'magic') {
+        target.slowTimer = 500;
+        icePositions.push({ ...hit.hitPosition });
+      }
 
-    const updatedSplash = splashEffects
+      if (hit.towerType === 'cannon') {
+        splashHits.push({
+          position: { ...hit.hitPosition },
+          damage: hit.damage * 0.5,
+          excludeId: hit.targetId,
+        });
+      }
+
+      if (wasAlive && target.health <= 0) {
+        target.active = false;
+        scoreGain += 10;
+        killedPositions.push({ ...target.position });
+      }
+
+      updatedEnemies[targetIdx] = target;
+    }
+
+    for (const splash of splashHits) {
+      const splashEnemies = getEnemiesInRadius(splash.position, updatedEnemies, 30);
+      for (const e of splashEnemies) {
+        if (e.id === splash.excludeId) continue;
+        if (e.health <= 0) continue;
+        const idx = updatedEnemies.findIndex((en) => en.id === e.id);
+        if (idx === -1) continue;
+        const wasAlive = updatedEnemies[idx].health > 0;
+        const updated = { ...updatedEnemies[idx] };
+        updated.health -= splash.damage;
+        if (wasAlive && updated.health <= 0) {
+          updated.active = false;
+          scoreGain += 10;
+          killedPositions.push({ ...updated.position });
+        }
+        updated.isFlashing = true;
+        updated.flashTimer = 150;
+        updatedEnemies[idx] = updated;
+      }
+    }
+
+    let currentState = { ...get() };
+
+    for (const pos of killedPositions) {
+      currentState.floatingScores = addFloatingScoreInternal(currentState, pos, 10);
+    }
+
+    for (const splash of splashHits) {
+      currentState.splashEffects = addSplashEffectInternal(currentState, splash.position);
+    }
+    for (const pos of icePositions) {
+      currentState.iceParticles = addIceParticlesInternal(currentState, pos);
+    }
+
+    const updatedSplash = currentState.splashEffects
       .map((s) => {
         const t = s.timer - deltaTime;
         const progress = 1 - t / 200;
@@ -552,11 +320,11 @@ export const useGameStore = create<GameState>((set, get) => ({
       })
       .filter((s) => s.timer > 0);
 
-    const updatedIce = iceParticles
+    const updatedIce = currentState.iceParticles
       .map((p) => ({ ...p, timer: p.timer - deltaTime }))
       .filter((p) => p.timer > 0);
 
-    const updatedFloating = floatingScores
+    const updatedFloating = currentState.floatingScores
       .map((f) => ({
         ...f,
         timer: f.timer - deltaTime,
@@ -564,23 +332,22 @@ export const useGameStore = create<GameState>((set, get) => ({
       }))
       .filter((f) => f.timer > 0);
 
+    const newScreenFlashTimer = projResult.hits.length > 0
+      ? 50
+      : Math.max(0, state.screenFlashTimer - deltaTime);
+
     set({
+      enemies: updatedEnemies.filter((e) => e.active),
+      towers: towerResult.towers,
+      projectiles: projResult.projectiles,
       splashEffects: updatedSplash,
       iceParticles: updatedIce,
       floatingScores: updatedFloating,
-      screenShakeTimer: Math.max(0, screenShakeTimer - deltaTime),
-      screenFlashTimer: Math.max(0, screenFlashTimer - deltaTime),
+      lives: newLives,
+      score: state.score + scoreGain,
+      screenShakeTimer: Math.max(0, state.screenShakeTimer - deltaTime),
+      screenFlashTimer: newScreenFlashTimer,
     });
-  },
-
-  loseLife: () => {
-    const { lives } = get();
-    const newLives = Math.max(0, lives - 1);
-    if (newLives <= 0) {
-      set({ lives: 0, gameOver: true });
-    } else {
-      set({ lives: newLives });
-    }
   },
 
   triggerScreenShake: () => {
@@ -607,13 +374,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       score: 0,
       selectedTowerType: 'arrow',
       gameOver: false,
-      nextEnemyId: 0,
-      nextTowerId: 0,
-      nextProjectileId: 0,
-      nextEffectId: 0,
       screenShakeTimer: 0,
       screenFlashTimer: 0,
-      spawnTimer: 0,
     });
   },
 }));

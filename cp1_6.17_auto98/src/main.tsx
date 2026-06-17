@@ -4,29 +4,28 @@ import GameCanvas from './renderer/gameCanvas';
 import UIPanel from './renderer/uiPanel';
 import { useGameStore } from './store/gameStore';
 import { generatePath, generateCheckpoints } from './gameEngine/pathManager';
+import type { Point, Checkpoint } from './store/gameStore';
 
 const App: React.FC = () => {
-  const {
-    gameOver,
-    addEnemy,
-    updateEnemies,
-    updateTowers,
-    addProjectile,
-    updateProjectiles,
-    updateEffects,
-  } = useGameStore();
+  const { gameOver, addEnemy, updateGame } = useGameStore();
 
-  const lastTimeRef = useRef<number>(0);
   const spawnTimerRef = useRef<number>(0);
-  const pathRef = useRef(generatePath());
-  const checkpointsRef = useRef(generateCheckpoints(pathRef.current));
+  const pathRef = useRef<Point[]>(generatePath());
+  const checkpointsRef = useRef<Checkpoint[]>([]);
 
   const resetCheckpoints = () => {
-    checkpointsRef.current = generateCheckpoints(pathRef.current);
+    checkpointsRef.current = generateCheckpoints(pathRef.current).map((cp, i) => ({
+      position: { ...cp.position },
+      index: i,
+      activated: false,
+    }));
   };
 
   useEffect(() => {
     resetCheckpoints();
+  }, []);
+
+  useEffect(() => {
     let animationId: number;
     let lastFrame = performance.now();
 
@@ -42,18 +41,7 @@ const App: React.FC = () => {
           addEnemy();
         }
 
-        updateEnemies(deltaTime, pathRef.current, checkpointsRef.current);
-        const attackEvents = updateTowers(deltaTime);
-
-        for (const event of attackEvents) {
-          const tower = state.towers.find((t) => t.id === event.towerId);
-          if (tower) {
-            addProjectile(event.towerId, event.towerType, event.targetId, event.damage, tower.position);
-          }
-        }
-
-        updateProjectiles(deltaTime);
-        updateEffects(deltaTime);
+        updateGame(deltaTime, pathRef.current, checkpointsRef.current);
       }
 
       animationId = requestAnimationFrame(gameLoop);
@@ -62,7 +50,7 @@ const App: React.FC = () => {
     animationId = requestAnimationFrame(gameLoop);
 
     return () => cancelAnimationFrame(animationId);
-  }, [addEnemy, updateEnemies, updateTowers, addProjectile, updateProjectiles, updateEffects]);
+  }, [addEnemy, updateGame]);
 
   return (
     <div
