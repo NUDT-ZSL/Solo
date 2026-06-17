@@ -4,53 +4,47 @@
 
 ```mermaid
 flowchart TD
-    subgraph 前端["前端层 React + Vite"]
-        A["App.tsx 主组件"]
-        B["VideoUploader 上传组件"]
-        C["VideoPlayer 播放器组件"]
-        D["MarkerPanel 边栏组件"]
-        E["TimelineExporter 导出组件"]
+    subgraph "前端 (端口 3000)"
+        "A[App.tsx 主组件]" --> "B[VideoUploader]"
+        "A" --> "C[VideoPlayer 模态]"
+        "A" --> "D[MarkerPanel 侧边栏]"
+        "A" --> "E[TimelineExporter]"
     end
-    subgraph 后端["后端层 Express"]
-        F["上传接口 /api/upload"]
-        G["视频列表接口 /api/videos"]
-        H["标记接口 /api/markers"]
-        I["导出接口 /api/export"]
+    subgraph "后端 (端口 4000)"
+        "F[Express Server]" --> "G[上传接口 multer]"
+        "F" --> "H[视频列表接口]"
+        "F" --> "I[标记增删接口]"
+        "F" --> "J[静态文件服务]"
     end
-    subgraph 数据["数据层"]
-        J["data.json 文件存储"]
-        K["uploads/ 视频文件存储"]
+    subgraph "数据层"
+        "K[data.json 元数据+标记]"
+        "L[uploads/ 视频文件]"
     end
-    A --> B
-    A --> C
-    A --> D
-    A --> E
-    B --> F
-    C --> G
-    C --> H
-    D --> H
-    E --> I
-    F --> K
-    G --> J
-    H --> J
-    I --> J
+    "B" -- "上传文件" --> "G"
+    "B" -- "获取列表" --> "H"
+    "C" -- "添加标记" --> "I"
+    "D" -- "拖拽/删除" --> "I"
+    "G" --> "K"
+    "G" --> "L"
+    "H" --> "K"
+    "I" --> "K"
+    "J" --> "L"
 ```
 
 ## 2. 技术说明
 
-- **前端**：React@18 + TypeScript + Vite，使用原生 CSS（暗色主题变量）
-- **初始化工具**：Vite + react-ts 模板
-- **后端**：Express@4 + TypeScript（ts-node 运行），multer 处理文件上传
-- **数据存储**：JSON 文件存储（data.json），视频文件存于 uploads/ 目录
-- **状态管理**：使用 zustand 管理前端全局状态
-- **图标库**：lucide-react
-- **唯一标识**：uuid 生成视频与标记 ID
+- **前端**：React 18 + TypeScript + Vite 5，纯 CSS 样式（不使用 Tailwind，按用户指定文件结构）
+- **初始化工具**：手动创建项目结构（用户指定了精确文件清单与依赖）
+- **后端**：Express 4 + multer（文件上传）+ cors
+- **存储**：JSON 文件存储（`server/data.json`）+ 本地文件系统（`uploads/`）
+- **工具库**：uuid（生成唯一 ID）
 
 ## 3. 路由定义
 
 | 路由 | 用途 |
 |------|------|
-| / | 素材工作台主页面（上传、播放、标记、导出） |
+| `/` | 主工作区（上传区+视频卡片列表+播放器模态+侧边栏） |
+| `/play/:videoId` | （可选）独立播放视图，本项目以模态实现 |
 
 ## 4. API 定义
 
@@ -58,14 +52,14 @@ flowchart TD
 
 ```typescript
 // 视频元数据
-interface Video {
+interface VideoMeta {
   id: string;
   fileName: string;
-  filePath: string;
-  duration: number;      // 秒
-  fileSize: number;      // 字节
+  filePath: string;       // 相对路径 /uploads/xxx.mp4
+  duration: number;        // 秒
+  size: number;            // 字节
   format: 'mp4' | 'mov';
-  thumbnail?: string;    // 缩略图 base64
+  thumbnail?: string;      // 缩略图路径（可选，首帧）
   createdAt: string;
 }
 
@@ -73,79 +67,57 @@ interface Video {
 interface Marker {
   id: string;
   videoId: string;
-  time: number;          // 秒
-  timeFrame: number;     // 帧数
+  time: number;            // 秒
+  timeFrame: number;       // 帧号（基于 30fps 推算）
   label: string;
-  labelColor: string;
-  sortOrder: number;
-  createdAt: string;
+  color: string;           // 标签颜色
+  order: number;            // 排序
+  thumbnail?: string;
 }
 
-// 预设标签
-interface PresetLabel {
-  name: string;
-  color: string;
-}
-
-// 导出时间线
-interface TimelineExport {
-  version: string;
+// 导出的时间线草稿
+interface TimelineDraft {
   exportedAt: string;
-  clips: Array<{
+  segments: Array<{
     videoId: string;
-    videoPath: string;
-    fileName: string;
+    filePath: string;
     startTime: number;
     endTime: number;
     startFrame: number;
     endFrame: number;
     label: string;
-    labelColor: string;
-    sortOrder: number;
+    color: string;
+    order: number;
   }>;
 }
 ```
 
 ### 4.2 接口列表
 
-| 方法 | 路径 | 请求 | 响应 |
-|------|------|------|------|
-| POST | /api/upload | multipart/form-data (file) | `{ video: Video }` |
-| GET | /api/videos | - | `{ videos: Video[] }` |
-| GET | /api/videos/:id | - | `{ video: Video }` |
-| DELETE | /api/videos/:id | - | `{ success: boolean }` |
-| GET | /api/markers | - | `{ markers: Marker[] }` |
-| GET | /api/markers/:videoId | - | `{ markers: Marker[] }` |
-| POST | /api/markers | `{ videoId, time, label, labelColor }` | `{ marker: Marker }` |
-| PUT | /api/markers/:id | `{ time?, label?, labelColor?, sortOrder? }` | `{ marker: Marker }` |
-| DELETE | /api/markers/:id | - | `{ success: boolean }` |
-| POST | /api/export | `{ markerIds: string[] }` | `{ timeline: TimelineExport }` |
+| 方法 | 路径 | 用途 | 请求 | 响应 |
+|------|------|------|------|------|
+| POST | `/api/videos/upload` | 上传视频 | multipart/form-data file | `{ video: VideoMeta }` |
+| GET | `/api/videos` | 获取视频列表 | - | `{ videos: VideoMeta[] }` |
+| GET | `/api/videos/:id` | 获取单个视频 | - | `{ video: VideoMeta }` |
+| DELETE | `/api/videos/:id` | 删除视频 | - | `{ success: true }` |
+| GET | `/api/markers` | 获取所有标记 | - | `{ markers: Marker[] }` |
+| GET | `/api/markers?videoId=` | 按视频获取标记 | - | `{ markers: Marker[] }` |
+| POST | `/api/markers` | 添加标记 | `Marker` 部分 | `{ marker: Marker }` |
+| PATCH | `/api/markers/:id` | 更新标记（拖拽排序） | `{ order, time }` | `{ marker: Marker }` |
+| DELETE | `/api/markers/:id` | 删除标记 | - | `{ success: true }` |
 
-## 5. 服务端架构
+## 5. 服务器架构图
 
 ```mermaid
 flowchart LR
-    A["路由层 routes"] --> B["控制器层 controllers"]
-    B --> C["数据访问层 repository"]
-    C --> D["data.json 文件存储"]
-    B --> E["uploads/ 文件系统"]
-```
-
-### 5.1 预设标签定义
-
-```typescript
-const PRESET_LABELS: PresetLabel[] = [
-  { name: 'A-Roll', color: '#e53935' },
-  { name: 'B-Roll', color: '#fb8c00' },
-  { name: '采访', color: '#fdd835' },
-  { name: '空镜', color: '#c0ca33' },
-  { name: '特效', color: '#43a047' },
-  { name: '转场', color: '#00897b' },
-  { name: '音乐', color: '#00acc1' },
-  { name: '字幕', color: '#1e88e5' },
-  { name: '高光', color: '#5e35b1' },
-  { name: '待删', color: '#8e24aa' },
-];
+    "A[Express Router]" --> "B[上传中间件 multer]"
+    "A" --> "C[JSON Body Parser]"
+    "B" --> "D[VideoController]"
+    "C" --> "E[MarkerController]"
+    "D" --> "F[DataStore 读写 data.json]"
+    "E" --> "F"
+    "F" --> "G[fs 文件系统]"
+    "D" --> "H[uploads/ 目录]"
 ```
 
 ## 6. 数据模型
@@ -154,15 +126,14 @@ const PRESET_LABELS: PresetLabel[] = [
 
 ```mermaid
 erDiagram
-    Video ||--o{ Marker : "has many"
-    Video {
+    VideoMeta ||--o{ Marker : "has"
+    VideoMeta {
         string id PK
         string fileName
         string filePath
         number duration
-        number fileSize
+        number size
         string format
-        string thumbnail
         string createdAt
     }
     Marker {
@@ -171,15 +142,12 @@ erDiagram
         number time
         number timeFrame
         string label
-        string labelColor
-        number sortOrder
-        string createdAt
+        string color
+        number order
     }
 ```
 
-### 6.2 数据定义
-
-#### data.json 初始结构
+### 6.2 数据定义语言（JSON Schema）
 
 ```json
 {
@@ -188,8 +156,44 @@ erDiagram
 }
 ```
 
-#### 帧率换算说明
+`server/data.json` 初始化为空数据结构：
+- `videos`：VideoMeta 数组
+- `markers`：Marker 数组
 
-- 默认帧率 30fps，`timeFrame = Math.round(time * 30)`
-- 导出时起止时间为相邻标记或视频边界
-- 视频时长通过前端 video 元素 `duration` 属性获取后回传后端
+## 7. 预设标签色板
+
+| 序号 | 标签名 | 颜色 | 用途 |
+|------|--------|------|------|
+| 1 | A-Roll | #e53935 | 主镜头 |
+| 2 | B-Roll | #ef5350 | 补充镜头 |
+| 3 | 采访 | #f4511e | 采访片段 |
+| 4 | 空镜 | #f57c00 | 空镜头 |
+| 5 | 特效 | #ffa000 | 特效镜头 |
+| 6 | 转场 | #c0ca33 | 转场点 |
+| 7 | 字幕 | #9ccc65 | 字幕点 |
+| 8 | 音乐 | #66bb6a | 音乐点 |
+| 9 | 高光 | #26c6da | 高光时刻 |
+| 10 | 待删 | #1e88e5 | 待删除 |
+
+## 8. 文件结构
+
+```
+clipmarker/
+├── package.json
+├── vite.config.js
+├── tsconfig.json
+├── tsconfig.server.json
+├── index.html
+├── src/
+│   ├── App.tsx
+│   ├── App.css
+│   ├── VideoUploader.tsx
+│   ├── VideoPlayer.tsx
+│   ├── MarkerPanel.tsx
+│   ├── TimelineExporter.tsx
+│   ├── types.ts
+│   └── constants.ts
+└── server/
+    ├── index.ts
+    └── data.json
+```
