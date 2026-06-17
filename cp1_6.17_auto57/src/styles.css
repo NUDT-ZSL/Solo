@@ -1,0 +1,582 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #1A1A2E;
+  color: #F5F5F5;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 20px;
+}
+
+#root {
+  width: 100%;
+  min-width: 1024px;
+  max-width: 1400px;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.app-header {
+  text-align: center;
+  padding: 20px;
+}
+
+.app-title {
+  color: #E94560;
+  font-size: 2.5rem;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.app-subtitle {
+  color: #F5F5F5;
+  font-size: 1.1rem;
+  opacity: 0.8;
+}
+
+.main-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 20px;
+}
+
+.main-panel {
+  background-color: #16213E;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.side-panel {
+  background-color: #16213E;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.section-title {
+  color: #F5F5F5;
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.instrument-selector {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  background-color: #0F3460;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: transform 0.1s ease, background-color 0.2s ease, box-shadow 0.3s ease;
+  font-weight: 500;
+}
+
+.btn:hover {
+  background-color: #1a4a85;
+}
+
+.btn:active {
+  transform: scale(0.95);
+}
+
+.btn.active {
+  background-color: #E94560;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-danger {
+  background-color: #E94560;
+}
+
+.btn-danger:hover {
+  background-color: #ff5a75;
+}
+
+.btn-success {
+  background-color: #4CAF50;
+}
+
+.btn-success:hover {
+  background-color: #66bb6a;
+}
+
+.instrument-panel {
+  background-color: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  padding: 20px;
+  min-height: 300px;
+}
+
+.piano-container {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  padding: 20px 0;
+}
+
+.piano {
+  display: flex;
+  position: relative;
+  height: 200px;
+}
+
+.piano-key {
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.piano-key-white {
+  width: 40px;
+  height: 200px;
+  background-color: #F5F5F5;
+  border: 1px solid #ccc;
+  border-radius: 0 0 6px 6px;
+  z-index: 1;
+}
+
+.piano-key-white:hover {
+  background-color: #e8e8e8;
+}
+
+.piano-key-white.active {
+  animation: pulse-white 0.2s ease;
+}
+
+.piano-key-black {
+  position: absolute;
+  width: 24px;
+  height: 130px;
+  background-color: #333;
+  border-radius: 0 0 4px 4px;
+  z-index: 2;
+  margin-left: -12px;
+}
+
+.piano-key-black:hover {
+  background-color: #444;
+}
+
+.piano-key-black.active {
+  animation: pulse-black 0.2s ease;
+}
+
+@keyframes pulse-white {
+  0% { background-color: #F5F5F5; }
+  50% { background-color: #FFD700; }
+  100% { background-color: #F5F5F5; }
+}
+
+@keyframes pulse-black {
+  0% { background-color: #333; }
+  50% { background-color: #FFD700; }
+  100% { background-color: #333; }
+}
+
+.guitar-container {
+  padding: 20px;
+}
+
+.guitar-fretboard {
+  position: relative;
+  background: linear-gradient(to bottom, #8B4513, #654321);
+  border-radius: 8px;
+  padding: 10px 0;
+  overflow-x: auto;
+}
+
+.guitar-nut {
+  position: absolute;
+  left: 60px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  background-color: #f5f5dc;
+  z-index: 1;
+}
+
+.guitar-string {
+  position: relative;
+  display: flex;
+  height: 40px;
+  align-items: center;
+}
+
+.guitar-string-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(to right, #c0c0c0, #e8e8e8, #c0c0c0);
+  z-index: 1;
+}
+
+.guitar-string:nth-child(1) .guitar-string-line { height: 5px; }
+.guitar-string:nth-child(2) .guitar-string-line { height: 4px; }
+.guitar-string:nth-child(3) .guitar-string-line { height: 3px; }
+.guitar-string:nth-child(4) .guitar-string-line { height: 2.5px; }
+.guitar-string:nth-child(5) .guitar-string-line { height: 2px; }
+.guitar-string:nth-child(6) .guitar-string-line { height: 1.5px; }
+
+.guitar-fret {
+  position: relative;
+  min-width: 60px;
+  height: 40px;
+  cursor: pointer;
+  z-index: 2;
+  transition: background-color 0.2s ease;
+}
+
+.guitar-fret-zero {
+  min-width: 60px;
+}
+
+.guitar-fret::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-color: #666;
+}
+
+.guitar-fret-zero::after {
+  width: 6px;
+  background-color: #f5f5dc;
+}
+
+.guitar-fret:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.guitar-fret.active {
+  animation: fret-pulse 0.2s ease;
+}
+
+@keyframes fret-pulse {
+  0% { background-color: transparent; }
+  50% { background-color: rgba(255, 215, 0, 0.5); }
+  100% { background-color: transparent; }
+}
+
+.guitar-fret-marker {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  background-color: rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+}
+
+.guitar-fret-number {
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  color: #999;
+}
+
+.violin-container {
+  padding: 20px;
+}
+
+.violin-fingerboard {
+  position: relative;
+  background: linear-gradient(to bottom, #1a1a1a, #2d2d2d);
+  border-radius: 8px;
+  padding: 10px 0;
+  height: 300px;
+}
+
+.violin-nut {
+  position: absolute;
+  top: 60px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background-color: #f5f5dc;
+  z-index: 1;
+}
+
+.violin-bridge {
+  position: absolute;
+  bottom: 40px;
+  left: 0;
+  right: 0;
+  height: 12px;
+  background: linear-gradient(to bottom, #8B4513, #654321);
+  z-index: 1;
+}
+
+.violin-strings {
+  display: flex;
+  justify-content: space-around;
+  height: 100%;
+  padding: 60px 40px;
+  position: relative;
+}
+
+.violin-string {
+  position: relative;
+  width: 60px;
+  height: 100%;
+  cursor: pointer;
+}
+
+.violin-string-line {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 100%;
+  background: linear-gradient(to bottom, #c0c0c0, #e8e8e8, #c0c0c0);
+  z-index: 1;
+}
+
+.violin-string:nth-child(1) .violin-string-line { width: 3px; }
+.violin-string:nth-child(2) .violin-string-line { width: 2.5px; }
+.violin-string:nth-child(3) .violin-string-line { width: 2px; }
+.violin-string:nth-child(4) .violin-string-line { width: 1.5px; }
+
+.violin-finger-position {
+  position: absolute;
+  width: 100%;
+  z-index: 2;
+  transition: background-color 0.2s ease;
+}
+
+.violin-finger-position:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.violin-finger-position.active {
+  animation: violin-pulse 0.2s ease;
+}
+
+@keyframes violin-pulse {
+  0% { background-color: transparent; }
+  50% { background-color: rgba(255, 215, 0, 0.5); }
+  100% { background-color: transparent; }
+}
+
+.violin-position-marker {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 8px;
+  background-color: rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+}
+
+.recording-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.recording-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background-color: rgba(233, 69, 96, 0.2);
+  border-radius: 20px;
+  color: #E94560;
+  font-weight: 500;
+}
+
+.recording-dot {
+  width: 12px;
+  height: 12px;
+  background-color: #E94560;
+  border-radius: 50%;
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.progress-container {
+  width: 100%;
+  height: 8px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(to right, #4CAF50, #81C784);
+  transition: width 0.5s ease;
+  border-radius: 4px;
+}
+
+.chord-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.key-selector {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.key-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+}
+
+.chord-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chord-card {
+  background-color: #FFFFFF;
+  color: #1A1A2E;
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.chord-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.chord-card.playing {
+  border: 2px solid transparent;
+  background: linear-gradient(#FFFFFF, #FFFFFF) padding-box,
+              linear-gradient(to right, #FF9800, #FF5722) border-box;
+  animation: glow 1s infinite alternate;
+}
+
+@keyframes glow {
+  from {
+    box-shadow: 0 0 5px #FF9800, 0 0 10px #FF9800;
+  }
+  to {
+    box-shadow: 0 0 20px #FF5722, 0 0 30px #FF5722;
+  }
+}
+
+.chord-name {
+  font-weight: bold;
+  font-size: 1.1rem;
+  margin-bottom: 8px;
+  color: #1A1A2E;
+}
+
+.chord-notes {
+  font-size: 0.9rem;
+  color: #666;
+  display: flex;
+  gap: 8px;
+}
+
+.chord-note {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #f0f0f0;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.recorded-notes {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 12px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  min-height: 40px;
+}
+
+.recorded-note {
+  padding: 4px 10px;
+  background-color: #0F3460;
+  color: white;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.empty-state {
+  color: #666;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+  #root {
+    min-width: auto;
+  }
+
+  .main-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .piano-container {
+    overflow-x: auto;
+  }
+
+  .piano {
+    transform: scale(0.8);
+    transform-origin: left center;
+  }
+
+  .app-title {
+    font-size: 2rem;
+  }
+}
