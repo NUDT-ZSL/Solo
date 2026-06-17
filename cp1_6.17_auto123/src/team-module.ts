@@ -1,4 +1,78 @@
-import type { ICharacter, ISkill, PresetTeam, CharacterClass } from "./types";
+export type CharacterClass = "tank" | "healer" | "dps";
+
+export interface ISkill {
+  name: string;
+  description: string;
+  effect: "taunt" | "heal" | "crit";
+  cooldown: number;
+}
+
+export interface ICharacter {
+  id: string;
+  name: string;
+  class: CharacterClass;
+  hp: number;
+  maxHp: number;
+  atk: number;
+  def: number;
+  speed: number;
+  skill: ISkill;
+  currentCooldown: number;
+  isAlive: boolean;
+  tauntTurnsLeft: number;
+}
+
+export interface IBoss {
+  id: string;
+  name: string;
+  hp: number;
+  maxHp: number;
+  atk: number;
+  def: number;
+  speed: number;
+  isAlive: boolean;
+}
+
+export interface ActionResult {
+  round: number;
+  actorId: string;
+  actorName: string;
+  action: string;
+  targetId: string;
+  targetName: string;
+  value: number;
+  isCrit: boolean;
+  isHeal: boolean;
+}
+
+export interface CharacterContribution {
+  characterId: string;
+  characterName: string;
+  class: CharacterClass;
+  damageDealt: number;
+  damageTaken: number;
+  healingDone: number;
+  damageRatio: number;
+  healRatio: number;
+  takenRatio: number;
+}
+
+export interface BattleStats {
+  totalRounds: number;
+  totalDamageDealt: number;
+  totalDamageTaken: number;
+  totalHealing: number;
+  isVictory: boolean;
+  characterContributions: CharacterContribution[];
+}
+
+export type GamePhase = "team" | "combat" | "stats";
+
+export interface PresetTeam {
+  name: string;
+  description: string;
+  characterIds: string[];
+}
 
 const CHARACTER_POOL: Omit<ICharacter, "isAlive" | "currentCooldown" | "tauntTurnsLeft">[] = [
   {
@@ -10,7 +84,7 @@ const CHARACTER_POOL: Omit<ICharacter, "isAlive" | "currentCooldown" | "tauntTur
     atk: 12,
     def: 20,
     speed: 8,
-    skill: { name: "嘲讽", description: "强制敌人攻击自己2回合", effect: "taunt", cooldown: 3 },
+    skill: { name: "嘲讽", description: "强制敌人攻击自己2回合", effect: "taunt", cooldown: 2 },
   },
   {
     id: "stoneward",
@@ -21,7 +95,7 @@ const CHARACTER_POOL: Omit<ICharacter, "isAlive" | "currentCooldown" | "tauntTur
     atk: 14,
     def: 18,
     speed: 9,
-    skill: { name: "嘲讽", description: "强制敌人攻击自己2回合", effect: "taunt", cooldown: 3 },
+    skill: { name: "嘲讽", description: "强制敌人攻击自己2回合", effect: "taunt", cooldown: 2 },
   },
   {
     id: "lightbringer",
@@ -87,9 +161,28 @@ const CHARACTER_POOL: Omit<ICharacter, "isAlive" | "currentCooldown" | "tauntTur
     atk: 15,
     def: 16,
     speed: 10,
-    skill: { name: "嘲讽", description: "强制敌人攻击自己2回合", effect: "taunt", cooldown: 3 },
+    skill: { name: "嘲讽", description: "强制敌人攻击自己2回合", effect: "taunt", cooldown: 2 },
   },
 ];
+
+export const PRESET_TEAMS: PresetTeam[] = [
+  { name: "双奶双T", description: "铁壁+石卫+光祈+雾织，极致生存", characterIds: ["ironwall", "stoneward", "lightbringer", "mistweaver"] },
+  { name: "三输出一治疗", description: "影刃+焰矢+雷斧+光祈，暴力输出", characterIds: ["shadowblade", "flamearrow", "thunderaxe", "lightbringer"] },
+  { name: "均衡队", description: "铁壁+光祈+影刃+焰矢，攻守兼备", characterIds: ["ironwall", "lightbringer", "shadowblade", "flamearrow"] },
+  { name: "菜刀队", description: "影刃+焰矢+雷斧+霜守，全物理猛攻", characterIds: ["shadowblade", "flamearrow", "thunderaxe", "frostguard"] },
+];
+
+export const CLASS_COLORS: Record<CharacterClass, string> = {
+  tank: "#ff6b6b",
+  healer: "#48dbfb",
+  dps: "#feca57",
+};
+
+export const CLASS_ICONS: Record<CharacterClass, string> = {
+  tank: "🛡️",
+  healer: "➕",
+  dps: "⚔️",
+};
 
 export function getCharacterPool(): Omit<ICharacter, "isAlive" | "currentCooldown" | "tauntTurnsLeft">[] {
   return CHARACTER_POOL;
@@ -98,44 +191,12 @@ export function getCharacterPool(): Omit<ICharacter, "isAlive" | "currentCooldow
 export function createCharacter(id: string): ICharacter | null {
   const template = CHARACTER_POOL.find((c) => c.id === id);
   if (!template) return null;
-  return {
-    ...template,
-    isAlive: true,
-    currentCooldown: 0,
-    tauntTurnsLeft: 0,
-  };
+  return { ...template, isAlive: true, currentCooldown: 0, tauntTurnsLeft: 0 };
 }
 
-export const PRESET_TEAMS: PresetTeam[] = [
-  {
-    name: "双奶双T",
-    description: "铁壁+石卫+光祈+雾织，极致生存",
-    characterIds: ["ironwall", "stoneward", "lightbringer", "mistweaver"],
-  },
-  {
-    name: "三输出一治疗",
-    description: "影刃+焰矢+雷斧+光祈，暴力输出",
-    characterIds: ["shadowblade", "flamearrow", "thunderaxe", "lightbringer"],
-  },
-  {
-    name: "均衡队",
-    description: "铁壁+光祈+影刃+焰矢，攻守兼备",
-    characterIds: ["ironwall", "lightbringer", "shadowblade", "flamearrow"],
-  },
-  {
-    name: "菜刀队",
-    description: "影刃+焰矢+雷斧+霜守，全物理猛攻",
-    characterIds: ["shadowblade", "flamearrow", "thunderaxe", "frostguard"],
-  },
-];
-
-export function addCharacter(
-  slots: (ICharacter | null)[],
-  characterId: string,
-  slotIndex: number
-): (ICharacter | null)[] {
+export function addCharacter(slots: (ICharacter | null)[], characterId: string, slotIndex: number): (ICharacter | null)[] {
   if (slotIndex < 0 || slotIndex >= 4) return slots;
-  const existingIds = slots.filter(Boolean).map((c) => c!.id);
+  const existingIds = slots.filter((c): c is ICharacter => c !== null).map((c) => c.id);
   if (existingIds.includes(characterId)) return slots;
   const character = createCharacter(characterId);
   if (!character) return slots;
@@ -155,14 +216,6 @@ export function applyPreset(preset: PresetTeam): (ICharacter | null)[] {
   return preset.characterIds.map((id) => createCharacter(id));
 }
 
-export const CLASS_COLORS: Record<CharacterClass, string> = {
-  tank: "#ff6b6b",
-  healer: "#48dbfb",
-  dps: "#feca57",
-};
-
-export const CLASS_ICONS: Record<CharacterClass, string> = {
-  tank: "🛡️",
-  healer: "➕",
-  dps: "⚔️",
-};
+export function resetCharacterForBattle(char: ICharacter): ICharacter {
+  return { ...char, hp: char.maxHp, isAlive: true, currentCooldown: 0, tauntTurnsLeft: 0 };
+}

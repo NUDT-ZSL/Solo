@@ -1,4 +1,4 @@
-import type { ICharacter, IBoss, ActionResult } from "./types";
+import type { ICharacter, IBoss, ActionResult } from "./team-module";
 
 const BOSS: IBoss = {
   id: "boss",
@@ -13,10 +13,6 @@ const BOSS: IBoss = {
 
 export function createBoss(): IBoss {
   return { ...BOSS, hp: BOSS.maxHp, isAlive: true };
-}
-
-export function getBossTemplate(): IBoss {
-  return BOSS;
 }
 
 function calcDamage(atk: number, def: number): number {
@@ -40,17 +36,24 @@ function getTauntingCharacter(characters: ICharacter[]): ICharacter | null {
   return taunting[0];
 }
 
+function decrementAllCooldowns(characters: ICharacter[]): void {
+  for (const c of characters) {
+    if (!c.isAlive) continue;
+    if (c.currentCooldown > 0) {
+      c.currentCooldown -= 1;
+    }
+    if (c.tauntTurnsLeft > 0) {
+      c.tauntTurnsLeft -= 1;
+    }
+  }
+}
+
 function executeCharacterAction(
   character: ICharacter,
   characters: ICharacter[],
   boss: IBoss
 ): ActionResult[] {
   const actions: ActionResult[] = [];
-  const round = 0;
-
-  if (character.currentCooldown > 0) {
-    character.currentCooldown -= 1;
-  }
 
   const canUseSkill = character.currentCooldown === 0;
 
@@ -61,7 +64,7 @@ function executeCharacterAction(
     boss.hp = Math.max(0, boss.hp - critDmg);
     if (boss.hp <= 0) boss.isAlive = false;
     actions.push({
-      round,
+      round: 0,
       actorId: character.id,
       actorName: character.name,
       action: character.skill.name,
@@ -78,7 +81,7 @@ function executeCharacterAction(
       const healAmount = Math.floor(target.maxHp * 0.3);
       target.hp = Math.min(target.maxHp, target.hp + healAmount);
       actions.push({
-        round,
+        round: 0,
         actorId: character.id,
         actorName: character.name,
         action: character.skill.name,
@@ -93,7 +96,7 @@ function executeCharacterAction(
       boss.hp = Math.max(0, boss.hp - baseDmg);
       if (boss.hp <= 0) boss.isAlive = false;
       actions.push({
-        round,
+        round: 0,
         actorId: character.id,
         actorName: character.name,
         action: "普通攻击",
@@ -111,7 +114,7 @@ function executeCharacterAction(
     boss.hp = Math.max(0, boss.hp - baseDmg);
     if (boss.hp <= 0) boss.isAlive = false;
     actions.push({
-      round,
+      round: 0,
       actorId: character.id,
       actorName: character.name,
       action: character.skill.name,
@@ -126,7 +129,7 @@ function executeCharacterAction(
     boss.hp = Math.max(0, boss.hp - baseDmg);
     if (boss.hp <= 0) boss.isAlive = false;
     actions.push({
-      round,
+      round: 0,
       actorId: character.id,
       actorName: character.name,
       action: "普通攻击",
@@ -188,11 +191,7 @@ export function simulateRound(
 ): ActionResult[] {
   const roundActions: ActionResult[] = [];
 
-  for (const c of characters) {
-    if (c.tauntTurnsLeft > 0) {
-      c.tauntTurnsLeft -= 1;
-    }
-  }
+  decrementAllCooldowns(characters);
 
   const allActors: { entity: ICharacter | IBoss; speed: number; isBoss: boolean }[] = [];
 
@@ -224,44 +223,4 @@ export function simulateRound(
   }
 
   return roundActions.map((a) => ({ ...a, round: roundNumber }));
-}
-
-export function runFullBattle(
-  initialCharacters: ICharacter[],
-  onRoundComplete?: (roundActions: ActionResult[], characters: ICharacter[], boss: IBoss) => void
-): BattleResult {
-  const characters = initialCharacters.map((c) => ({ ...c, isAlive: true, currentCooldown: 0, tauntTurnsLeft: 0, hp: c.maxHp }));
-  const boss = createBoss();
-  const allActions: ActionResult[] = [];
-  const MAX_ROUNDS = 15;
-
-  let round = 1;
-  let isVictory = false;
-
-  while (round <= MAX_ROUNDS) {
-    const roundActions = simulateRound(characters, boss, round);
-    allActions.push(...roundActions);
-
-    if (onRoundComplete) {
-      onRoundComplete(roundActions, characters.map((c) => ({ ...c })), { ...boss });
-    }
-
-    if (boss.hp <= 0) {
-      isVictory = true;
-      break;
-    }
-    if (getAliveAllies(characters).length === 0) {
-      break;
-    }
-
-    round += 1;
-  }
-
-  return {
-    actions: allActions,
-    characters: characters.map((c) => ({ ...c })),
-    boss: { ...boss },
-    isVictory,
-    totalRounds: round,
-  };
 }

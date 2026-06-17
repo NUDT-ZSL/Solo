@@ -1,4 +1,4 @@
-import type { BattleStats, CharacterClass } from "../types";
+import type { BattleStats, CharacterClass } from "../team-module";
 import { CLASS_COLORS } from "../team-module";
 
 interface StatsPanelProps {
@@ -6,16 +6,10 @@ interface StatsPanelProps {
   onReset: () => void;
 }
 
-const CLASS_LABELS: Record<CharacterClass, string> = {
-  tank: "坦克",
-  healer: "治疗",
-  dps: "输出",
-};
-
 export default function StatsPanel({ stats, onReset }: StatsPanelProps) {
-  const maxDamage = Math.max(...stats.characterContributions.map((c) => c.damageDealt), 1);
-  const maxHealing = Math.max(...stats.characterContributions.map((c) => c.healingDone), 1);
-  const maxTaken = Math.max(...stats.characterContributions.map((c) => c.damageTaken), 1);
+  const maxDamageRatio = Math.max(...stats.characterContributions.map((c) => c.damageRatio), 0.001);
+  const maxHealRatio = Math.max(...stats.characterContributions.map((c) => c.healRatio), 0.001);
+  const maxTakenRatio = Math.max(...stats.characterContributions.map((c) => c.takenRatio), 0.001);
 
   return (
     <div className="stats-overlay">
@@ -58,12 +52,14 @@ export default function StatsPanel({ stats, onReset }: StatsPanelProps) {
                   <div
                     className="contrib-bar-fill"
                     style={{
-                      width: `${(c.damageDealt / maxDamage) * 100}%`,
+                      width: `${(c.damageRatio / maxDamageRatio) * 100}%`,
                       backgroundColor: CLASS_COLORS[c.class],
                     }}
                   />
                 </div>
-                <span className="contrib-value">{c.damageDealt}</span>
+                <span className="contrib-value">
+                  {c.damageDealt} ({(c.damageRatio * 100).toFixed(0)}%)
+                </span>
               </div>
             ))}
           </div>
@@ -77,12 +73,14 @@ export default function StatsPanel({ stats, onReset }: StatsPanelProps) {
                   <div
                     className="contrib-bar-fill"
                     style={{
-                      width: maxHealing > 0 ? `${(c.healingDone / maxHealing) * 100}%` : "0%",
+                      width: `${(c.healRatio / maxHealRatio) * 100}%`,
                       backgroundColor: CLASS_COLORS[c.class],
                     }}
                   />
                 </div>
-                <span className="contrib-value">{c.healingDone}</span>
+                <span className="contrib-value">
+                  {c.healingDone} ({(c.healRatio * 100).toFixed(0)}%)
+                </span>
               </div>
             ))}
           </div>
@@ -96,12 +94,14 @@ export default function StatsPanel({ stats, onReset }: StatsPanelProps) {
                   <div
                     className="contrib-bar-fill"
                     style={{
-                      width: maxTaken > 0 ? `${(c.damageTaken / maxTaken) * 100}%` : "0%",
+                      width: `${(c.takenRatio / maxTakenRatio) * 100}%`,
                       backgroundColor: CLASS_COLORS[c.class],
                     }}
                   />
                 </div>
-                <span className="contrib-value">{c.damageTaken}</span>
+                <span className="contrib-value">
+                  {c.damageTaken} ({(c.takenRatio * 100).toFixed(0)}%)
+                </span>
               </div>
             ))}
           </div>

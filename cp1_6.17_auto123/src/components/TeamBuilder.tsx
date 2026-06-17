@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { ICharacter } from "../types";
-import { getCharacterPool, CLASS_COLORS, CLASS_ICONS } from "../team-module";
+import type { ICharacter } from "../team-module";
+import { getCharacterPool, CLASS_COLORS, CLASS_ICONS, PRESET_TEAMS } from "../team-module";
 
 interface TeamBuilderProps {
   slots: (ICharacter | null)[];
@@ -9,13 +9,6 @@ interface TeamBuilderProps {
   onApplyPreset: (presetIndex: number) => void;
   onStartBattle: () => void;
 }
-
-const PRESETS = [
-  { name: "双奶双T", desc: "铁壁+石卫+光祈+雾织，极致生存" },
-  { name: "三输出一治疗", desc: "影刃+焰矢+雷斧+光祈，暴力输出" },
-  { name: "均衡队", desc: "铁壁+光祈+影刃+焰矢，攻守兼备" },
-  { name: "菜刀队", desc: "影刃+焰矢+雷斧+霜守，全物理猛攻" },
-];
 
 export default function TeamBuilder({ slots, onAddChar, onRemoveChar, onApplyPreset, onStartBattle }: TeamBuilderProps) {
   const pool = getCharacterPool();
@@ -120,15 +113,15 @@ export default function TeamBuilder({ slots, onAddChar, onRemoveChar, onApplyPre
         <div className="preset-section">
           <h2 className="section-label">快速预设</h2>
           <div className="preset-list">
-            {PRESETS.map((preset, idx) => (
+            {PRESET_TEAMS.map((preset, idx) => (
               <button
                 key={idx}
                 className="preset-btn"
                 onClick={() => onApplyPreset(idx)}
-                title={preset.desc}
+                title={preset.description}
               >
                 <span className="preset-name">{preset.name}</span>
-                <span className="preset-desc">{preset.desc}</span>
+                <span className="preset-desc">{preset.description}</span>
               </button>
             ))}
           </div>

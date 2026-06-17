@@ -1,4 +1,4 @@
-import type { ActionResult, BattleStats, CharacterContribution, ICharacter, IBoss } from "./types";
+import type { ActionResult, BattleStats, CharacterContribution, ICharacter, IBoss } from "./team-module";
 
 export function calculateBattleStats(
   actions: ActionResult[],
@@ -17,6 +17,9 @@ export function calculateBattleStats(
       damageDealt: 0,
       damageTaken: 0,
       healingDone: 0,
+      damageRatio: 0,
+      healRatio: 0,
+      takenRatio: 0,
     });
   }
 
@@ -46,12 +49,20 @@ export function calculateBattleStats(
     }
   }
 
+  const resultContribs = Array.from(contributions.values());
+
+  for (const contrib of resultContribs) {
+    contrib.damageRatio = totalDamageDealt > 0 ? contrib.damageDealt / totalDamageDealt : 0;
+    contrib.healRatio = totalHealing > 0 ? contrib.healingDone / totalHealing : 0;
+    contrib.takenRatio = totalDamageTaken > 0 ? contrib.damageTaken / totalDamageTaken : 0;
+  }
+
   return {
     totalRounds,
     totalDamageDealt,
     totalDamageTaken,
     totalHealing,
     isVictory,
-    characterContributions: Array.from(contributions.values()),
+    characterContributions: resultContribs,
   };
 }

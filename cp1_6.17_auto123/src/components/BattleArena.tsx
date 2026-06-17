@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
-import type { ICharacter, IBoss, ActionResult } from "../types";
+import type { ICharacter, IBoss, ActionResult } from "../team-module";
 import { CLASS_COLORS, CLASS_ICONS } from "../team-module";
 
 interface BattleArenaProps {
