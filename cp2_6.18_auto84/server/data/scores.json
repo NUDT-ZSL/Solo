@@ -1,0 +1,112 @@
+[
+  {
+    "id": "score-001",
+    "memberId": "member-001",
+    "date": "2026-06-01",
+    "pitch": 72,
+    "rhythm": 68,
+    "expression": 75,
+    "note": "状态不错，继续保持",
+    "audioUrl": "",
+    "songs": ["茉莉花", "月亮代表我的心"]
+  },
+  {
+    "id": "score-002",
+    "memberId": "member-001",
+    "date": "2026-06-08",
+    "pitch": 78,
+    "rhythm": 74,
+    "expression": 80,
+    "note": "进步明显",
+    "audioUrl": "",
+    "songs": ["彩虹", "送别"]
+  },
+  {
+    "id": "score-003",
+    "memberId": "member-001",
+    "date": "2026-06-15",
+    "pitch": 85,
+    "rhythm": 82,
+    "expression": 88,
+    "note": "表现优秀",
+    "audioUrl": "",
+    "songs": ["茉莉花", "彩虹"]
+  },
+  {
+    "id": "score-004",
+    "memberId": "member-002",
+    "date": "2026-06-01",
+    "pitch": 65,
+    "rhythm": 70,
+    "expression": 62,
+    "note": "音准需要加强练习",
+    "audioUrl": "",
+    "songs": ["茉莉花"]
+  },
+  {
+    "id": "score-005",
+    "memberId": "member-002",
+    "date": "2026-06-08",
+    "pitch": 70,
+    "rhythm": 75,
+    "expression": 68,
+    "note": "有所进步",
+    "audioUrl": "",
+    "songs": ["月亮代表我的心"]
+  },
+  {
+    "id": "score-006",
+    "memberId": "member-003",
+    "date": "2026-06-08",
+    "pitch": 80,
+    "rhythm": 85,
+    "expression": 78,
+    "note": "节奏把握很好",
+    "audioUrl": "",
+    "songs": ["送别", "彩虹"]
+  },
+  {
+    "id": "score-007",
+    "memberId": "member-003",
+    "date": "2026-06-15",
+    "pitch": 83,
+    "rhythm": 88,
+    "expression": 82,
+    "note": "稳定发挥",
+    "audioUrl": "",
+    "songs": ["茉莉花"]
+  },
+  {
+    "id": "score-008",
+    "memberId": "member-004",
+    "date": "2026-06-15",
+    "pitch": 76,
+    "rhythm": 72,
+    "expression": 80,
+    "note": "表现力很好",
+    "audioUrl": "",
+    "songs": ["月亮代表我的心", "彩虹"]
+  },
+  {
+    "id": "score-009",
+    "memberId": "member-005",
+    "date": "2026-06-01",
+    "pitch": 58,
+    "rhythm": 62,
+    "expression": 55,
+    "note": "需要多练习基础",
+    "audioUrl": "",
+    "songs": ["送别"]
+  },
+  {
+    "id": "score-010",
+    "memberId": "member-005",
+    "date": "2026-06-15",
+    "pitch": 65,
+    "rhythm": 70,
+    "expression": 63,
+    "note": "进步了",
+    "audioUrl": "",
+    "songs": ["茉莉花", "送别"]
+  }
+]
