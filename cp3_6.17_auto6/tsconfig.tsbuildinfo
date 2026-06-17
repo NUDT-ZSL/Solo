@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/markerpanel.tsx","./src/timelineexporter.tsx","./src/videoplayer.tsx","./src/videouploader.tsx","./src/main.tsx","./src/types.ts","./src/vite-env.d.ts","./src/components/empty.tsx","./src/hooks/usetheme.ts","./src/lib/utils.ts","./src/pages/home.tsx","./server/index.ts"],"errors":true,"version":"5.8.3"}
