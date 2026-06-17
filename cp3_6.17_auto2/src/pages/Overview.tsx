@@ -3,8 +3,12 @@ import { useUser } from '../hooks/useUser';
 import { DeviceCard } from '../components/DeviceCard';
 
 export function Overview() {
-  const { data: devices, loading: devicesLoading, error: devicesError } = useDevices();
+  const { data: devices, loading: devicesLoading, error: devicesError, refetch: refetchDevices } = useDevices();
   const { data: user, loading: userLoading, error: userError } = useUser('user-1');
+
+  const handleBorrowSuccess = () => {
+    refetchDevices();
+  };
 
   if (devicesLoading || userLoading) {
     return (
@@ -66,7 +70,7 @@ export function Overview() {
         gap: '24px',
       }}>
         {devices?.map((device) => (
-          <DeviceCard key={device.id} device={device} user={user} />
+          <DeviceCard key={device.id} device={device} user={user} onBorrowSuccess={handleBorrowSuccess} />
         ))}
       </div>
     </div>
