@@ -8,6 +8,8 @@ export interface MeasureRecord {
   timestamp: number;
 }
 
+type DragTarget = 'marker1' | 'marker2' | null;
+
 export class MeasureTool {
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
@@ -32,6 +34,13 @@ export class MeasureTool {
   private raycaster: THREE.Raycaster = new THREE.Raycaster();
   private mouse: THREE.Vector2 = new THREE.Vector2();
   private terrainMesh: THREE.Object3D | null = null;
+
+  private isDragging: boolean = false;
+  private dragTarget: DragTarget = null;
+  private dragPlane: THREE.Plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  private dragOffset: THREE.Vector3 = new THREE.Vector3();
+  private lastLabelUpdate: number = 0;
+  private readonly LABEL_UPDATE_INTERVAL: number = 30;
 
   constructor(
     scene: THREE.Scene,
@@ -59,6 +68,8 @@ export class MeasureTool {
   public deactivate(): void {
     this.isActive = false;
     this.placeCount = 0;
+    this.isDragging = false;
+    this.dragTarget = null;
   }
 
   public getIsActive(): boolean {
@@ -113,10 +124,127 @@ export class MeasureTool {
     }
     this.point1 = null;
     this.point2 = null;
+    this.isDragging = false;
+    this.dragTarget = null;
+  }
+
+  public handleMouseDown(event: MouseEvent, canvas: HTMLCanvasElement): boolean {
+    if (!this.isActive) return false;
+    if (this.placeCount !== 2) return false;
+
+    const rect = canvas.getBoundingClientRect();
+    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    this.raycaster.setFromCamera(this.mouse, this.camera);
+
+    const targets: THREE.Mesh[] = [];
+    if (this.marker1) targets.push(this.marker1);
+    if (this.marker2) targets.push(this.marker2);
+
+    const intersects = this.raycaster.intersectObjects(targets, true);
+    if (intersects.length > 0) {
+      const hitObj = intersects[0].object;
+      let target: THREE.Object3D | null = hitObj;
+      while (target && !target.userData?.measureMarker) {
+        target = target.parent;
+      }
+      if (target) {
+        this.isDragging = true;
+        this.dragTarget = target.userData.measureMarker as DragTarget;
+        
+        const hitPoint = intersects[0].point.clone();
+        const markerPos = (this.dragTarget === 'marker1' ? this.point1 : this.point2)?.clone();
+        if (markerPos) {
+          this.dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -hitPoint.y);
+          this.raycaster.ray.intersectPlane(this.dragPlane, this.dragOffset);
+          this.dragOffset.sub(markerPos);
+        }
+        document.body.style.cursor = 'grabbing';
+        return true;
+      }
+    }
+    return false;
+  }
+
+  public handleMouseMove(event: MouseEvent, canvas: HTMLCanvasElement): boolean {
+    if (!this.isActive) return false;
+
+    const rect = canvas.getBoundingClientRect();
+    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    if (this.isDragging && this.dragTarget) {
+      this.raycaster.setFromCamera(this.mouse, this.camera);
+      
+      const intersectPoint = new THREE.Vector3();
+      if (this.raycaster.ray.intersectPlane(this.dragPlane, intersectPoint)) {
+        const newPos = intersectPoint.sub(this.dragOffset);
+        const terrainSize = 16;
+        const halfSize = terrainSize / 2;
+        newPos.x = Math.max(-halfSize, Math.min(halfSize, newPos.x));
+        newPos.z = Math.max(-halfSize, Math.min(halfSize, newPos.z));
+        newPos.y = this.getTerrainHeight(newPos.x, newPos.z) + 0.05;
+
+        if (this.dragTarget === 'marker1') {
+          this.point1 = newPos;
+          if (this.marker1) {
+            this.marker1.position.copy(newPos);
+            const ring = this.marker1.children[0];
+            if (ring) {
+              ring.position.y = -newPos.y + 0.02;
+            }
+          }
+        } else if (this.dragTarget === 'marker2') {
+          this.point2 = newPos;
+          if (this.marker2) {
+            this.marker2.position.copy(newPos);
+            const ring = this.marker2.children[0];
+            if (ring) {
+              ring.position.y = -newPos.y + 0.02;
+            }
+          }
+        }
+
+        this.updateDashedLine();
+        this.throttledUpdateLabel();
+      }
+      return true;
+    }
+
+    if (this.placeCount === 2) {
+      this.raycaster.setFromCamera(this.mouse, this.camera);
+      const targets: THREE.Mesh[] = [];
+      if (this.marker1) targets.push(this.marker1);
+      if (this.marker2) targets.push(this.marker2);
+      const intersects = this.raycaster.intersectObjects(targets, true);
+      document.body.style.cursor = intersects.length > 0 ? 'grab' : 'crosshair';
+    }
+
+    return false;
+  }
+
+  public handleMouseUp(): boolean {
+    if (this.isDragging) {
+      this.isDragging = false;
+      this.dragTarget = null;
+      document.body.style.cursor = 'crosshair';
+      return true;
+    }
+    return false;
+  }
+
+  private throttledUpdateLabel(): void {
+    const now = performance.now();
+    if (now - this.lastLabelUpdate >= this.LABEL_UPDATE_INTERVAL) {
+      this.updateLabel();
+      this.lastLabelUpdate = now;
+    }
   }
 
   public handleClick(event: MouseEvent, canvas: HTMLCanvasElement): boolean {
     if (!this.isActive) return false;
+    if (this.isDragging) return false;
 
     const rect = canvas.getBoundingClientRect();
     this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -158,13 +286,13 @@ export class MeasureTool {
     if (this.placeCount === 0) {
       this.placeCount = 1;
       this.point1 = position.clone();
-      this.marker1 = this.createMarker(position, '#FF4500');
+      this.marker1 = this.createMarker(position, '#FF4500', 'marker1');
       this.group.add(this.marker1);
       return true;
     } else if (this.placeCount === 1) {
       this.placeCount = 2;
       this.point2 = position.clone();
-      this.marker2 = this.createMarker(position, '#3B82F6');
+      this.marker2 = this.createMarker(position, '#3B82F6', 'marker2');
       this.group.add(this.marker2);
       this.createDashedLine();
       this.createLabel();
@@ -173,7 +301,7 @@ export class MeasureTool {
     return false;
   }
 
-  private createMarker(position: THREE.Vector3, color: string): THREE.Mesh {
+  private createMarker(position: THREE.Vector3, color: string, markerId: string): THREE.Mesh {
     const geometry = new THREE.SphereGeometry(0.15, 24, 24);
     const material = new THREE.MeshPhongMaterial({
       color: new THREE.Color(color),
@@ -182,6 +310,7 @@ export class MeasureTool {
     });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.copy(position);
+    mesh.userData.measureMarker = markerId;
 
     const ringGeom = new THREE.RingGeometry(0.18, 0.22, 48);
     const ringMat = new THREE.MeshBasicMaterial({
@@ -193,6 +322,7 @@ export class MeasureTool {
     const ring = new THREE.Mesh(ringGeom, ringMat);
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = -position.y + 0.02;
+    ring.userData.measureMarker = markerId;
     mesh.add(ring);
 
     return mesh;
@@ -214,6 +344,17 @@ export class MeasureTool {
     this.dashedLine = new THREE.Line(geometry, material);
     this.dashedLine.computeLineDistances();
     this.group.add(this.dashedLine);
+  }
+
+  private updateDashedLine(): void {
+    if (!this.dashedLine || !this.point1 || !this.point2) return;
+
+    const positions = this.dashedLine.geometry.attributes.position;
+    positions.setXYZ(0, this.point1.x, this.point1.y, this.point1.z);
+    positions.setXYZ(1, this.point2.x, this.point2.y, this.point2.z);
+    positions.needsUpdate = true;
+    this.dashedLine.computeLineDistances();
+    (this.dashedLine.geometry as any).attributes.lineDistance.needsUpdate = true;
   }
 
   private createLabel(): void {
@@ -317,6 +458,7 @@ export class MeasureTool {
 
     this.clearMarkers();
     this.placeCount = 0;
+    document.body.style.cursor = '';
     return true;
   }
 
@@ -330,6 +472,10 @@ export class MeasureTool {
 
   public getPlaceCount(): number {
     return this.placeCount;
+  }
+
+  public getIsDragging(): boolean {
+    return this.isDragging;
   }
 
   public dispose(): void {

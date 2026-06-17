@@ -510,3 +510,74 @@ html, body, #app {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-secondary);
 }
+
+@media (max-width: 1440px) {
+  #side-panel {
+    width: 300px;
+    min-width: 300px;
+  }
+
+  .panel-section {
+    padding: 12px;
+  }
+
+  .panel-title {
+    font-size: 13px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+  }
+
+  .toolbar-btn {
+    width: 56px;
+    height: 56px;
+  }
+
+  .toolbar-btn .icon {
+    font-size: 20px;
+  }
+
+  #measure-results {
+    width: 260px;
+    max-height: 180px;
+  }
+
+  #terrain-controls {
+    width: 240px;
+    padding: 12px;
+  }
+
+  html, body, #app {
+    font-size: 12px;
+  }
+}
+
+@media (min-width: 1920px) {
+  #side-panel {
+    width: 320px;
+    min-width: 320px;
+  }
+
+  html, body, #app {
+    font-size: 13px;
+  }
+}
+
+@media (max-height: 900px) {
+  #measure-results {
+    max-height: 150px;
+  }
+
+  .annotation-tree {
+    max-height: 200px;
+  }
+}
+
+@media (min-height: 1080px) {
+  #measure-results {
+    max-height: 220px;
+  }
+
+  .annotation-tree {
+    max-height: 350px;
+  }
+}

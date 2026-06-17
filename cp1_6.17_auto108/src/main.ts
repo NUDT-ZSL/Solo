@@ -91,7 +91,8 @@ function createAppState(canvas: HTMLCanvasElement): AppState {
   const terrainGenerator = new TerrainGenerator({
     size: 16,
     segments: 64,
-    amplitude: 3
+    amplitude: 3,
+    enableLOD: true
   });
 
   const annotationParser = new AnnotationParser();
@@ -161,10 +162,17 @@ function setupTerrain(): void {
   state.terrainGroup = state.terrainGenerator.createMesh();
   state.scene.add(state.terrainGroup);
 
-  const terrainMesh = state.terrainGroup.children.find(
-    (c) => (c as THREE.Mesh).userData?.type === 'terrain'
-  ) as THREE.Mesh | undefined;
-  state.terrainMesh = terrainMesh || null;
+  let terrainMesh: THREE.Mesh | null = null;
+  const terrainLOD = (state.terrainGroup as any).terrainLOD as THREE.LOD | undefined;
+  if (terrainLOD && terrainLOD.levels.length > 0) {
+    terrainMesh = terrainLOD.levels[0].object as THREE.Mesh;
+  } else {
+    const found = state.terrainGroup.children.find(
+      (c) => (c as THREE.Mesh).userData?.type === 'terrain'
+    ) as THREE.Mesh | undefined;
+    terrainMesh = found || null;
+  }
+  state.terrainMesh = terrainMesh;
   state.measureTool.setTerrainMesh(state.terrainMesh || state.terrainGroup);
 
   setupAnnotationRenderer();
@@ -197,25 +205,38 @@ function setupEventListeners(canvas: HTMLCanvasElement): void {
   handleResize(canvas);
 
   canvas.addEventListener('mousedown', (e) => {
-    if (e.button === 0 && state.measureTool.getIsActive()) {
+    if (e.button === 0) {
+      const dragHandled = state.measureTool.handleMouseDown(e, canvas);
+      if (dragHandled) {
+        state.controls.enabled = false;
+      } else if (state.measureTool.getIsActive()) {
+        state.controls.enabled = false;
+      }
+    }
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    const moveHandled = state.measureTool.handleMouseMove(e, canvas);
+    if (moveHandled && state.measureTool.getIsDragging()) {
       state.controls.enabled = false;
     }
   });
 
   canvas.addEventListener('mouseup', (e) => {
     if (e.button === 0) {
+      const upHandled = state.measureTool.handleMouseUp();
       state.controls.enabled = true;
     }
   });
 
   canvas.addEventListener('click', (e) => {
     if (e.button !== 0) return;
-    if (state.measureTool.getIsActive()) {
+    if (state.measureTool.getIsActive() && !state.measureTool.getIsDragging()) {
       const placed = state.measureTool.handleClick(e, canvas);
       if (placed && state.measureTool.getPlaceCount() === 2) {
         state.measureTool.updateLabel();
       }
-    } else {
+    } else if (!state.measureTool.getIsActive()) {
       handleAnnotationClick(e, canvas);
     }
   });
@@ -693,5 +714,13 @@ function animate(): void {
 
   state.controls.update();
   state.measureTool.update();
+
+  if (state.terrainGroup) {
+    const terrainLOD = (state.terrainGroup as any).terrainLOD as THREE.LOD | undefined;
+    if (terrainLOD) {
+      terrainLOD.update(state.camera);
+    }
+  }
+
   state.renderer.render(state.scene, state.camera);
 }

@@ -5,11 +5,26 @@ export interface TerrainConfig {
   segments: number;
   amplitude: number;
   seed: number;
+  enableLOD?: boolean;
 }
+
+export interface TerrainLODLevel {
+  distance: number;
+  segments: number;
+}
+
+const DEFAULT_LOD_LEVELS: TerrainLODLevel[] = [
+  { distance: 4, segments: 128 },
+  { distance: 8, segments: 64 },
+  { distance: 15, segments: 32 },
+  { distance: 25, segments: 16 }
+];
 
 export class TerrainGenerator {
   private config: TerrainConfig;
   private permutation: number[];
+  private heightCache: Map<string, number> = new Map();
+  private lodLevels: TerrainLODLevel[] = DEFAULT_LOD_LEVELS;
 
   constructor(config: Partial<TerrainConfig> = {}) {
     this.config = {
@@ -17,6 +32,7 @@ export class TerrainGenerator {
       segments: 64,
       amplitude: 3,
       seed: Math.random() * 10000,
+      enableLOD: false,
       ...config
     };
     this.permutation = this.generatePermutation(this.config.seed);
@@ -71,7 +87,11 @@ export class TerrainGenerator {
     );
   }
 
-  public fbm(x: number, y: number, octaves: number = 4, persistence: number = 0.5, lacunarity: number = 2.0): number {
+  public fbm(x: number, y: number, octaves: number = 5, persistence: number = 0.5, lacunarity: number = 2.0): number {
+    const cacheKey = `${x.toFixed(4)}_${y.toFixed(4)}_${octaves}`;
+    const cached = this.heightCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
     let total = 0;
     let amplitude = 1;
     let frequency = 1;
@@ -82,11 +102,14 @@ export class TerrainGenerator {
       amplitude *= persistence;
       frequency *= lacunarity;
     }
-    return total / maxValue;
+    const result = total / maxValue;
+    this.heightCache.set(cacheKey, result);
+    return result;
   }
 
-  public generateGeometry(): THREE.PlaneGeometry {
-    const { size, segments, amplitude } = this.config;
+  public generateGeometry(segmentsOverride?: number): THREE.PlaneGeometry {
+    const { size, amplitude } = this.config;
+    const segments = segmentsOverride ?? this.config.segments;
     const geometry = new THREE.PlaneGeometry(size, size, segments, segments);
     geometry.rotateX(-Math.PI / 2);
 
@@ -98,13 +121,11 @@ export class TerrainGenerator {
     for (let i = 0; i < positions.count; i++) {
       const x = positions.getX(i);
       const z = positions.getZ(i);
-      const nx = (x + size / 2) / size * 4;
-      const nz = (z + size / 2) / size * 4;
-      const height = (this.fbm(nx, nz, 5, 0.5, 2.0) + 1) / 2 * amplitude;
+      const height = this.calculateHeight(x, z, size, amplitude);
       positions.setY(i, height);
 
-      const t = height / amplitude;
-      const color = colorBottom.clone().lerp(colorTop, t);
+      const t = amplitude > 0 ? height / amplitude : 0;
+      const color = colorBottom.clone().lerp(colorTop, Math.max(0, Math.min(1, t)));
       colors.push(color.r, color.g, color.b);
     }
 
@@ -113,53 +134,113 @@ export class TerrainGenerator {
     return geometry;
   }
 
-  public createMesh(): THREE.Group {
-    const group = new THREE.Group();
-
-    const terrainGeometry = this.generateGeometry();
-    const terrainMaterial = new THREE.MeshPhongMaterial({
-      vertexColors: true,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.95,
-      shininess: 10
-    });
-    const terrainMesh = new THREE.Mesh(terrainGeometry, terrainMaterial);
-    terrainMesh.receiveShadow = true;
-    terrainMesh.userData.type = 'terrain';
-    group.add(terrainMesh);
-
-    const wireframeGeometry = this.generateGeometry();
-    const wireframeMaterial = new THREE.MeshBasicMaterial({
-      color: 0x808080,
-      wireframe: true,
-      transparent: true,
-      opacity: 0.2,
-      depthWrite: false
-    });
-    const wireframeMesh = new THREE.Mesh(wireframeGeometry, wireframeMaterial);
-    wireframeMesh.position.y = 0.01;
-    group.add(wireframeMesh);
-
-    return group;
-  }
-
-  public getHeightAt(x: number, z: number): number {
-    const { size, amplitude } = this.config;
+  private calculateHeight(x: number, z: number, size: number, amplitude: number): number {
     const nx = (x + size / 2) / size * 4;
     const nz = (z + size / 2) / size * 4;
     return (this.fbm(nx, nz, 5, 0.5, 2.0) + 1) / 2 * amplitude;
   }
 
+  public getHeightAt(x: number, z: number): number {
+    const { size, amplitude } = this.config;
+    return this.calculateHeight(x, z, size, amplitude);
+  }
+
+  public createMesh(): THREE.Group {
+    const group = new THREE.Group();
+
+    if (this.config.enableLOD) {
+      const lod = new THREE.LOD();
+      this.lodLevels.forEach((level) => {
+        if (level.segments <= this.config.segments) {
+          const geom = this.generateGeometry(level.segments);
+          const mat = new THREE.MeshPhongMaterial({
+            vertexColors: true,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.95,
+            shininess: 10
+          });
+          const mesh = new THREE.Mesh(geom, mat);
+          mesh.receiveShadow = true;
+          mesh.userData.type = 'terrain';
+          lod.addLevel(mesh, level.distance);
+        }
+      });
+      group.add(lod);
+
+      const wireframeGeom = this.generateGeometry(Math.min(64, this.config.segments));
+      const wireframeMat = new THREE.MeshBasicMaterial({
+        color: 0x808080,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.2,
+        depthWrite: false
+      });
+      const wireframeMesh = new THREE.Mesh(wireframeGeom, wireframeMat);
+      wireframeMesh.position.y = 0.01;
+      group.add(wireframeMesh);
+
+      (group as any).terrainLOD = lod;
+    } else {
+      const terrainGeometry = this.generateGeometry();
+      const terrainMaterial = new THREE.MeshPhongMaterial({
+        vertexColors: true,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.95,
+        shininess: 10
+      });
+      const terrainMesh = new THREE.Mesh(terrainGeometry, terrainMaterial);
+      terrainMesh.receiveShadow = true;
+      terrainMesh.userData.type = 'terrain';
+      group.add(terrainMesh);
+
+      const wireframeGeometry = this.generateGeometry(Math.min(64, this.config.segments));
+      const wireframeMaterial = new THREE.MeshBasicMaterial({
+        color: 0x808080,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.2,
+        depthWrite: false
+      });
+      const wireframeMesh = new THREE.Mesh(wireframeGeometry, wireframeMaterial);
+      wireframeMesh.position.y = 0.01;
+      group.add(wireframeMesh);
+    }
+
+    return group;
+  }
+
   public updateConfig(newConfig: Partial<TerrainConfig>): void {
     const oldSeed = this.config.seed;
+    const oldSegments = this.config.segments;
     this.config = { ...this.config, ...newConfig };
+    
     if (newConfig.seed !== undefined && newConfig.seed !== oldSeed) {
       this.permutation = this.generatePermutation(this.config.seed);
+      this.heightCache.clear();
+    }
+    if (newConfig.segments !== undefined && newConfig.segments !== oldSegments) {
+      this.heightCache.clear();
+    }
+    if (newConfig.amplitude !== undefined) {
+      this.heightCache.clear();
     }
   }
 
   public regenerateMesh(): THREE.Group {
     return this.createMesh();
+  }
+
+  public setLODLevels(levels: TerrainLODLevel[]): void {
+    this.lodLevels = levels;
+  }
+
+  public getConfig(): TerrainConfig {
+    return { ...this.config };
+  }
+
+  public clearCache(): void {
+    this.heightCache.clear();
   }
 }

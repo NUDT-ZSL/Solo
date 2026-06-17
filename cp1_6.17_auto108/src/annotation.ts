@@ -366,10 +366,14 @@ export interface AnnotationRenderOptions {
   terrainSize: number;
 }
 
+const MAX_ANNOTATIONS_FOR_OPTIMIZATION = 50;
+
 export class AnnotationRenderer {
   private options: AnnotationRenderOptions;
   private meshMap: Map<string, THREE.Object3D> = new Map();
   private dataMap: Map<string, AnnotationData> = new Map();
+  private instancedPoints: Map<string, THREE.InstancedMesh> = new Map();
+  private enableInstancing: boolean = true;
 
   constructor(options: AnnotationRenderOptions) {
     this.options = options;
@@ -384,23 +388,44 @@ export class AnnotationRenderer {
     const center = this.getBoundsCenter(bounds);
     const scale = this.calculateScale(bounds);
 
-    parsed.points.forEach((data) => {
-      const mesh = this.createPointMesh(data, center, scale);
-      if (mesh) {
-        this.meshMap.set(data.id, mesh);
-        this.dataMap.set(data.id, data);
-        group.add(mesh);
-      }
-    });
+    const totalCount = parsed.points.length + parsed.lines.length + parsed.polygons.length;
+    const useOptimization = totalCount <= MAX_ANNOTATIONS_FOR_OPTIMIZATION;
 
-    parsed.lines.forEach((data) => {
-      const mesh = this.createLineMesh(data, center, scale);
-      if (mesh) {
-        this.meshMap.set(data.id, mesh);
-        this.dataMap.set(data.id, data);
+    if (useOptimization && this.enableInstancing && parsed.points.length > 1) {
+      const pointMeshes = this.createOptimizedPoints(parsed.points, center, scale);
+      pointMeshes.forEach(({ id, mesh }) => {
+        this.meshMap.set(id, mesh);
         group.add(mesh);
-      }
-    });
+      });
+      parsed.points.forEach((p) => this.dataMap.set(p.id, p));
+    } else {
+      parsed.points.forEach((data) => {
+        const mesh = this.createPointMesh(data, center, scale);
+        if (mesh) {
+          this.meshMap.set(data.id, mesh);
+          this.dataMap.set(data.id, data);
+          group.add(mesh);
+        }
+      });
+    }
+
+    if (useOptimization && parsed.lines.length > 1) {
+      const mergedLines = this.createMergedLines(parsed.lines, center, scale);
+      mergedLines.forEach(({ id, mesh }) => {
+        this.meshMap.set(id, mesh);
+        this.dataMap.set(id, parsed.lines.find(l => l.id === id)!);
+        group.add(mesh);
+      });
+    } else {
+      parsed.lines.forEach((data) => {
+        const mesh = this.createLineMesh(data, center, scale);
+        if (mesh) {
+          this.meshMap.set(data.id, mesh);
+          this.dataMap.set(data.id, data);
+          group.add(mesh);
+        }
+      });
+    }
 
     parsed.polygons.forEach((data) => {
       const mesh = this.createPolygonMesh(data, center, scale);
@@ -411,7 +436,211 @@ export class AnnotationRenderer {
       }
     });
 
+    (group as any).frustumCulled = false;
+    group.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        (obj as THREE.Mesh).frustumCulled = false;
+      }
+    });
+
     return group;
+  }
+
+  private createOptimizedPoints(
+    points: PointData[],
+    center: [number, number],
+    scale: number
+  ): Array<{ id: string; mesh: THREE.Object3D }> {
+    const result: Array<{ id: string; mesh: THREE.Object3D }> = [];
+    const colorGroups = new Map<string, Array<{ data: PointData; position: THREE.Vector3 }>>();
+
+    points.forEach((data) => {
+      const [lon, lat] = data.coordinates;
+      const [x, z] = this.lonLatToPosition(lon, lat, center, scale);
+      const y = this.options.getTerrainHeight(x, z) + 0.3;
+      const colorKey = `${data.style.color}_${data.style.opacity.toFixed(2)}`;
+      if (!colorGroups.has(colorKey)) {
+        colorGroups.set(colorKey, []);
+      }
+      colorGroups.get(colorKey)!.push({
+        data,
+        position: new THREE.Vector3(x, y, z)
+      });
+    });
+
+    const baseGeom = new THREE.SphereGeometry(0.2, 16, 16);
+    const ringGeom = new THREE.RingGeometry(0.25, 0.3, 32);
+
+    colorGroups.forEach((group, colorKey) => {
+      const [colorStr, opacityStr] = colorKey.split('_');
+      const opacity = parseFloat(opacityStr);
+
+      const sphereMat = new THREE.MeshPhongMaterial({
+        color: new THREE.Color(colorStr),
+        transparent: true,
+        opacity,
+        shininess: 50,
+        emissive: new THREE.Color(colorStr).multiplyScalar(0.3)
+      });
+
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(colorStr),
+        transparent: true,
+        opacity: opacity * 0.6,
+        side: THREE.DoubleSide
+      });
+
+      const instancedSphere = new THREE.InstancedMesh(baseGeom, sphereMat, group.length);
+      const instancedRing = new THREE.InstancedMesh(ringGeom, ringMat, group.length);
+
+      const dummy = new THREE.Object3D();
+      const ringDummy = new THREE.Object3D();
+      ringDummy.rotation.x = -Math.PI / 2;
+
+      group.forEach((item, i) => {
+        dummy.position.copy(item.position);
+        dummy.updateMatrix();
+        instancedSphere.setMatrixAt(i, dummy.matrix);
+
+        ringDummy.position.copy(item.position);
+        ringDummy.position.y += 0.01;
+        ringDummy.updateMatrix();
+        instancedRing.setMatrixAt(i, ringDummy.matrix);
+
+        instancedSphere.setColorAt(i, new THREE.Color(item.data.style.color));
+        instancedRing.setColorAt(i, new THREE.Color(item.data.style.color));
+
+        this.instancedPoints.set(item.data.id, instancedSphere);
+      });
+
+      instancedSphere.instanceMatrix.needsUpdate = true;
+      instancedRing.instanceMatrix.needsUpdate = true;
+      if (instancedSphere.instanceColor) instancedSphere.instanceColor.needsUpdate = true;
+      if (instancedRing.instanceColor) instancedRing.instanceColor.needsUpdate = true;
+
+      instancedSphere.userData = {
+        annotationIds: group.map(g => g.data.id),
+        annotationType: 'point',
+        isInstanced: true,
+        instancedRing
+      };
+      instancedSphere.frustumCulled = false;
+
+      group.forEach((item) => {
+        result.push({ id: item.data.id, mesh: instancedSphere });
+      });
+
+      const wrapper = new THREE.Group();
+      wrapper.add(instancedSphere);
+      wrapper.add(instancedRing);
+      wrapper.userData = instancedSphere.userData;
+      result.forEach((r) => (r.mesh = wrapper));
+    });
+
+    baseGeom.dispose();
+    ringGeom.dispose();
+
+    return result;
+  }
+
+  private createMergedLines(
+    lines: LineData[],
+    center: [number, number],
+    scale: number
+  ): Array<{ id: string; mesh: THREE.Mesh }> {
+    const result: Array<{ id: string; mesh: THREE.Mesh }> = [];
+    const colorGroups = new Map<string, Array<{ data: LineData; points: THREE.Vector3[] }>>();
+
+    lines.forEach((data) => {
+      const halfTerrain = this.options.terrainSize / 2;
+      const points: THREE.Vector3[] = [];
+      data.coordinates.forEach(([lon, lat]) => {
+        const [x, z] = this.lonLatToPosition(lon, lat, center, scale);
+        const clampedX = Math.max(-halfTerrain + 0.1, Math.min(halfTerrain - 0.1, x));
+        const clampedZ = Math.max(-halfTerrain + 0.1, Math.min(halfTerrain - 0.1, z));
+        const y = this.options.getTerrainHeight(clampedX, clampedZ) + 0.1;
+        points.push(new THREE.Vector3(clampedX, y, clampedZ));
+      });
+      if (points.length >= 2) {
+        const colorKey = `${data.style.color}_${data.style.opacity.toFixed(2)}_${data.style.lineWidth?.toFixed(3) || '0.05'}`;
+        if (!colorGroups.has(colorKey)) {
+          colorGroups.set(colorKey, []);
+        }
+        colorGroups.get(colorKey)!.push({ data, points });
+      }
+    });
+
+    colorGroups.forEach((group, colorKey) => {
+      const parts = colorKey.split('_');
+      const colorStr = parts[0];
+      const opacity = parseFloat(parts[1]);
+      const lineWidth = parseFloat(parts[2] || '0.05');
+
+      const allPositions: number[] = [];
+      const allColors: number[] = [];
+      const lineIdRanges: Array<{ id: string; start: number; count: number }> = [];
+      const color = new THREE.Color(colorStr);
+      const width = lineWidth;
+
+      group.forEach(({ data, points }) => {
+        const lineStart = allPositions.length / 3;
+        let vertexCount = 0;
+
+        for (let i = 0; i < points.length - 1; i++) {
+          const p1 = points[i];
+          const p2 = points[i + 1];
+          const dir = new THREE.Vector3().subVectors(p2, p1);
+          const len = dir.length();
+          if (len < 0.0001) continue;
+          dir.normalize();
+          const up = new THREE.Vector3(0, 1, 0);
+          const perp = new THREE.Vector3().crossVectors(dir, up).normalize().multiplyScalar(width / 2);
+
+          const v1 = p1.clone().add(perp);
+          const v2 = p1.clone().sub(perp);
+          const v3 = p2.clone().add(perp);
+          const v4 = p2.clone().sub(perp);
+
+          allPositions.push(
+            v1.x, v1.y, v1.z, v2.x, v2.y, v2.z, v3.x, v3.y, v3.z,
+            v2.x, v2.y, v2.z, v4.x, v4.y, v4.z, v3.x, v3.y, v3.z
+          );
+          for (let j = 0; j < 6; j++) {
+            allColors.push(color.r, color.g, color.b);
+          }
+          vertexCount += 6;
+        }
+
+        lineIdRanges.push({ id: data.id, start: lineStart, count: vertexCount });
+      });
+
+      if (allPositions.length === 0) return;
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(allPositions, 3));
+      geometry.setAttribute('color', new THREE.Float32BufferAttribute(allColors, 3));
+      const material = new THREE.MeshBasicMaterial({
+        vertexColors: true,
+        transparent: true,
+        opacity,
+        side: THREE.DoubleSide,
+        depthWrite: false
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.userData = {
+        annotationIds: group.map(g => g.data.id),
+        annotationType: 'line',
+        isMerged: true,
+        lineIdRanges
+      };
+      mesh.frustumCulled = false;
+
+      lineIdRanges.forEach((range) => {
+        result.push({ id: range.id, mesh });
+      });
+    });
+
+    return result;
   }
 
   private calculateBounds(parsed: ParsedAnnotations): { min: [number, number]; max: [number, number] } {
@@ -680,6 +909,64 @@ export class AnnotationRenderer {
 
     data.style = { ...data.style, ...updates };
 
+    const userData = (mesh as any).userData;
+
+    if (userData?.isInstanced) {
+      const instancedMesh = this.instancedPoints.get(id);
+      if (instancedMesh && userData.annotationIds) {
+        const idx = userData.annotationIds.indexOf(id);
+        if (idx !== -1 && updates.color !== undefined) {
+          const color = new THREE.Color(updates.color);
+          instancedMesh.setColorAt(idx, color);
+          if (instancedMesh.instanceColor) {
+            instancedMesh.instanceColor.needsUpdate = true;
+          }
+          if (userData.instancedRing) {
+            userData.instancedRing.setColorAt(idx, color);
+            if (userData.instancedRing.instanceColor) {
+              userData.instancedRing.instanceColor.needsUpdate = true;
+            }
+          }
+        }
+        if (updates.opacity !== undefined) {
+          const mat = instancedMesh?.material as THREE.MeshPhongMaterial;
+          if (mat) {
+            mat.opacity = updates.opacity;
+            mat.transparent = updates.opacity < 1;
+            if (userData.instancedRing) {
+              const ringMat = userData.instancedRing.material as THREE.MeshBasicMaterial;
+              if (ringMat) {
+                ringMat.opacity = updates.opacity * 0.6;
+                ringMat.transparent = true;
+              }
+            }
+          }
+        }
+      }
+      return true;
+    }
+
+    if (userData?.isMerged) {
+      const meshObj = mesh as THREE.Mesh;
+      const mat = meshObj.material as THREE.MeshBasicMaterial;
+      const colors = meshObj.geometry.attributes.color;
+      const ranges = userData.lineIdRanges as Array<{ id: string; start: number; count: number }>;
+      const range = ranges.find(r => r.id === id);
+
+      if (range && colors && updates.color !== undefined) {
+        const color = new THREE.Color(updates.color);
+        for (let i = range.start; i < range.start + range.count; i++) {
+          colors.setXYZ(i, color.r, color.g, color.b);
+        }
+        colors.needsUpdate = true;
+      }
+      if (updates.opacity !== undefined) {
+        mat.opacity = updates.opacity;
+        mat.transparent = updates.opacity < 1;
+      }
+      return true;
+    }
+
     const updateMeshStyle = (obj: THREE.Object3D) => {
       if ((obj as THREE.Mesh).isMesh) {
         const meshObj = obj as THREE.Mesh;
@@ -712,7 +999,17 @@ export class AnnotationRenderer {
   public clear(): void {
     this.meshMap.forEach((mesh) => {
       mesh.traverse((obj) => {
-        if ((obj as THREE.Mesh).isMesh) {
+        if ((obj as THREE.InstancedMesh).isInstancedMesh) {
+          const im = obj as THREE.InstancedMesh;
+          im.geometry?.dispose();
+          const mat = im.material;
+          if (Array.isArray(mat)) {
+            mat.forEach((mm) => mm.dispose());
+          } else {
+            mat?.dispose();
+          }
+          im.dispose();
+        } else if ((obj as THREE.Mesh).isMesh) {
           const m = obj as THREE.Mesh;
           m.geometry?.dispose();
           const mat = m.material;
@@ -726,5 +1023,10 @@ export class AnnotationRenderer {
     });
     this.meshMap.clear();
     this.dataMap.clear();
+    this.instancedPoints.clear();
+  }
+
+  public setEnableInstancing(enable: boolean): void {
+    this.enableInstancing = enable;
   }
 }
