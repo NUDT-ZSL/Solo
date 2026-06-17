@@ -1,0 +1,86 @@
+[
+  {
+    "id": "dev-001",
+    "name": "27寸4K显示器",
+    "type": "显示器",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=modern%2027%20inch%204K%20monitor%20on%20desk%20clean%20white%20background%20product%20photo&image_size=landscape_4_3",
+    "status": "available",
+    "creditRequired": 60,
+    "specs": {
+      "分辨率": "3840x2160",
+      "面板类型": "IPS",
+      "刷新率": "60Hz",
+      "接口": "HDMI/DP/USB-C"
+    }
+  },
+  {
+    "id": "dev-002",
+    "name": "索尼降噪耳机",
+    "type": "耳机",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Sony%20noise%20cancelling%20headphones%20WH-1000XM5%20clean%20white%20background%20product%20photo&image_size=landscape_4_3",
+    "status": "borrowed",
+    "creditRequired": 70,
+    "specs": {
+      "型号": "WH-1000XM5",
+      "降噪": "主动降噪",
+      "续航": "30小时",
+      "连接": "蓝牙5.2/3.5mm"
+    }
+  },
+  {
+    "id": "dev-003",
+    "name": "便携投影仪",
+    "type": "投影仪",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=portable%20mini%20projector%20device%20clean%20white%20background%20product%20photo&image_size=landscape_4_3",
+    "status": "available",
+    "creditRequired": 80,
+    "specs": {
+      "亮度": "800ANSI流明",
+      "分辨率": "1080P",
+      "投射尺寸": "40-120英寸",
+      "接口": "HDMI/USB/蓝牙"
+    }
+  },
+  {
+    "id": "dev-004",
+    "name": "机械键盘套装",
+    "type": "键盘",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=mechanical%20keyboard%20set%20with%20mouse%20clean%20white%20background%20product%20photo&image_size=landscape_4_3",
+    "status": "maintenance",
+    "creditRequired": 50,
+    "specs": {
+      "轴体": "Cherry红轴",
+      "配列": "87键",
+      "背光": "RGB",
+      "连接": "有线/蓝牙双模"
+    }
+  },
+  {
+    "id": "dev-005",
+    "name": "平板电脑",
+    "type": "平板",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=tablet%20computer%20iPad%20style%20clean%20white%20background%20product%20photo&image_size=landscape_4_3",
+    "status": "available",
+    "creditRequired": 75,
+    "specs": {
+      "屏幕": "11英寸Liquid Retina",
+      "芯片": "M2",
+      "存储": "256GB",
+      "续航": "10小时"
+    }
+  },
+  {
+    "id": "dev-006",
+    "name": "便携扫描仪",
+    "type": "扫描仪",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=portable%20document%20scanner%20clean%20white%20background%20product%20photo&image_size=landscape_4_3",
+    "status": "available",
+    "creditRequired": 65,
+    "specs": {
+      "扫描速度": "8页/分钟",
+      "分辨率": "600dpi",
+      "进纸器": "自动进纸20页",
+      "连接": "USB/ WiFi"
+    }
+  }
+]

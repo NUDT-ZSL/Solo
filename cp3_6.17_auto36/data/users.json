@@ -1,0 +1,16 @@
+[
+  {
+    "id": "user-001",
+    "name": "张明",
+    "avatar": "",
+    "creditScore": 95,
+    "role": "user"
+  },
+  {
+    "id": "user-002",
+    "name": "李管理",
+    "avatar": "",
+    "creditScore": 100,
+    "role": "admin"
+  }
+]
