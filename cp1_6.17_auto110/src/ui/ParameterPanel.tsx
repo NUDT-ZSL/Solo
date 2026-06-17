@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useGameStore } from '../store'
 import type { PhysicsParams } from '../types'
 
@@ -20,9 +20,30 @@ export function ParameterPanel() {
   const { params, setParams, savePreset, loadPresets, applyPreset, deletePreset } = useGameStore()
   const [showPresets, setShowPresets] = useState(false)
   const [presets, setPresets] = useState<{ id: string; name: string; params: PhysicsParams }[]>([])
+  const [toast, setToast] = useState<{ msg: string; type: 'info' | 'warn' } | null>(null)
+  const toastTimerRef = useRef<number | null>(null)
+
+  const showToast = (msg: string, type: 'info' | 'warn' = 'info') => {
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current)
+    }
+    setToast({ msg, type })
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast(null)
+      toastTimerRef.current = null
+    }, 1800)
+  }
 
   useEffect(() => {
     setPresets(loadPresets())
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current !== null) {
+        window.clearTimeout(toastTimerRef.current)
+      }
+    }
   }, [])
 
   const handleChange = (key: keyof PhysicsParams, value: number) => {
@@ -31,10 +52,18 @@ export function ParameterPanel() {
 
   const handleSavePreset = () => {
     const name = window.prompt('请输入预设名称：')
-    if (name && name.trim()) {
-      savePreset(name.trim())
-      setPresets(loadPresets())
+    if (name === null) {
+      showToast('已取消保存预设', 'warn')
+      return
     }
+    const trimmed = name.trim()
+    if (!trimmed) {
+      showToast('预设名称不能为空', 'warn')
+      return
+    }
+    savePreset(trimmed)
+    setPresets(loadPresets())
+    showToast(`预设 "${trimmed}" 已保存`, 'info')
   }
 
   const handleLoadPreset = () => {
@@ -63,9 +92,31 @@ export function ParameterPanel() {
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
-        gap: 20
+        gap: 20,
+        position: 'relative'
       }}
     >
+      {toast && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 12,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            padding: '6px 14px',
+            borderRadius: 4,
+            fontSize: 12,
+            fontWeight: 500,
+            backgroundColor: toast.type === 'warn' ? 'rgba(244, 67, 54, 0.9)' : 'rgba(76, 175, 80, 0.9)',
+            color: '#FFFFFF',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            zIndex: 10,
+            whiteSpace: 'nowrap'
+          }}
+        >
+          {toast.msg}
+        </div>
+      )}
       <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>物理参数</h2>
 
       {sliders.map((slider) => (

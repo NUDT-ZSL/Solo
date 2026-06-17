@@ -219,9 +219,12 @@ export class PhysicsEngine {
         const oneWayTime = range / speed
         const roundTrip = oneWayTime * 2
 
+        if (platform.moveElapsed === undefined) {
+          platform.moveElapsed = 0
+        }
         const prevX = platform.x
 
-        platform.moveElapsed = (platform.moveElapsed || 0) + dt
+        platform.moveElapsed = platform.moveElapsed + dt
         const phase = platform.moveElapsed % roundTrip
 
         let newX: number
@@ -245,9 +248,8 @@ export class PhysicsEngine {
         if (platform.crumbleState === 'triggered') {
           platform.flashTimer = (platform.flashTimer || 0) + dt
 
-          const totalFlashDuration = 1
+          const cyclePeriod = 0.5
           const totalFlashCycles = 3
-          const cyclePeriod = totalFlashDuration / totalFlashCycles
           const completedCycles = Math.floor(platform.flashTimer / cyclePeriod)
           platform.flashCount = Math.min(completedCycles, totalFlashCycles)
 
@@ -257,11 +259,8 @@ export class PhysicsEngine {
             platform.flashOpacity = 0
           } else {
             const phaseInCycle = (platform.flashTimer % cyclePeriod) / cyclePeriod
-            if (phaseInCycle < 0.5) {
-              platform.flashOpacity = 1
-            } else {
-              platform.flashOpacity = 0.2
-            }
+            const smooth = 0.5 - 0.5 * Math.cos(phaseInCycle * Math.PI * 2)
+            platform.flashOpacity = 1 - smooth * 0.8
           }
         } else if (platform.crumbleState === 'disappeared') {
           platform.crumbleTimer = (platform.crumbleTimer || 0) - dt

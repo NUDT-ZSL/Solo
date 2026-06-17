@@ -8,6 +8,28 @@ interface DataPanelProps {
 
 const FADE_DURATION = 300
 
+const FADED_IDS_KEY = 'data_panel_faded_ids'
+
+function loadFadedIds(): Set<number> {
+  try {
+    const raw = sessionStorage.getItem(FADED_IDS_KEY)
+    if (!raw) return new Set()
+    const arr = JSON.parse(raw) as number[]
+    return new Set(arr)
+  } catch {
+    return new Set()
+  }
+}
+
+function saveFadedIds(set: Set<number>) {
+  try {
+    sessionStorage.setItem(FADED_IDS_KEY, JSON.stringify(Array.from(set)))
+  } catch {
+  }
+}
+
+const moduleFadedIds = loadFadedIds()
+
 export function DataPanel({ currentJumpState }: DataPanelProps) {
   const { trajectories, lowFpsWarning } = useGameStore()
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -23,7 +45,11 @@ export function DataPanel({ currentJumpState }: DataPanelProps) {
     const now = performance.now()
     for (const t of trajectories) {
       if (!lastTrajIdsRef.current.has(t.id)) {
-        fadeStartMapRef.current.set(t.id, now)
+        if (moduleFadedIds.has(t.id)) {
+          fadeStartMapRef.current.set(t.id, now - FADE_DURATION - 1)
+        } else {
+          fadeStartMapRef.current.set(t.id, now)
+        }
       }
     }
     for (const oldId of lastTrajIdsRef.current) {
@@ -40,7 +66,10 @@ export function DataPanel({ currentJumpState }: DataPanelProps) {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    let running = true
+
     const render = () => {
+      if (!running) return
       drawChart(ctx, canvas.width, canvas.height, trajectoriesRef.current, fadeStartMapRef.current)
       rafIdRef.current = requestAnimationFrame(render)
     }
@@ -48,9 +77,17 @@ export function DataPanel({ currentJumpState }: DataPanelProps) {
     rafIdRef.current = requestAnimationFrame(render)
 
     return () => {
+      running = false
       if (rafIdRef.current !== null) {
         cancelAnimationFrame(rafIdRef.current)
+        rafIdRef.current = null
       }
+      for (const [id, start] of fadeStartMapRef.current.entries()) {
+        if (performance.now() - start >= FADE_DURATION) {
+          moduleFadedIds.add(id)
+        }
+      }
+      saveFadedIds(moduleFadedIds)
     }
   }, [])
 

@@ -60,7 +60,7 @@ export default function App() {
       sampleFramesRef.current += 1
       if (now - sampleStartRef.current >= SAMPLE_INTERVAL_MS) {
         const elapsedSec = (now - sampleStartRef.current) / 1000
-        const instantFps = sampleFramesRef.current / elapsedSec
+        const instantFps = elapsedSec > 0 ? sampleFramesRef.current / elapsedSec : 0
         fpsSamplesRef.current.push(instantFps)
         if (fpsSamplesRef.current.length > FPS_SAMPLE_WINDOW) {
           fpsSamplesRef.current.shift()
@@ -68,7 +68,7 @@ export default function App() {
         sampleFramesRef.current = 0
         sampleStartRef.current = now
 
-        if (fpsSamplesRef.current.length >= FPS_SAMPLE_WINDOW) {
+        if (fpsSamplesRef.current.length > 0) {
           const avg =
             fpsSamplesRef.current.reduce((a, b) => a + b, 0) / fpsSamplesRef.current.length
           const shouldWarn = avg < FPS_WARNING_THRESHOLD
