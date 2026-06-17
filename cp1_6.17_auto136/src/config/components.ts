@@ -1,0 +1,142 @@
+import { ComponentConfig, ComponentItem } from '../types';
+
+export const COMPONENT_LIST: ComponentItem[] = [
+  { id: 'button', name: '按钮', icon: '🔘' },
+  { id: 'input', name: '输入框', icon: '📝' },
+  { id: 'modal', name: '弹窗', icon: '🪟' },
+  { id: 'dropdown', name: '下拉菜单', icon: '📋' },
+];
+
+export const COMPONENT_CONFIGS: Record<string, ComponentConfig> = {
+  button: {
+    type: 'button',
+    defaultProps: {
+      text: '提交按钮',
+      size: 'medium',
+      themeColor: '#2563EB',
+      disabled: false,
+      loading: false,
+      status: 'default',
+      icon: '',
+    },
+    properties: [
+      { key: 'text', label: '按钮文本', type: 'text', placeholder: '请输入按钮文本' },
+      { key: 'size', label: '尺寸', type: 'select', options: [
+        { label: '小', value: 'small' },
+        { label: '中', value: 'medium' },
+        { label: '大', value: 'large' },
+      ]},
+      { key: 'themeColor', label: '主题色', type: 'color' },
+      { key: 'icon', label: '图标 (emoji)', type: 'text', placeholder: '如: ✨' },
+      { key: 'disabled', label: '禁用', type: 'boolean' },
+      { key: 'loading', label: '加载中', type: 'boolean' },
+    ],
+    statusOptions: [
+      { label: '默认', value: 'default' },
+      { label: '悬停', value: 'hover' },
+      { label: '聚焦', value: 'focus' },
+      { label: '禁用', value: 'disabled' },
+      { label: '加载', value: 'loading' },
+      { label: '成功', value: 'success' },
+      { label: '错误', value: 'error' },
+    ],
+  },
+  input: {
+    type: 'input',
+    defaultProps: {
+      value: '',
+      placeholder: '请输入内容...',
+      size: 'medium',
+      disabled: false,
+      status: 'default',
+      prefixIcon: '',
+      suffixIcon: '',
+      maxLength: 100,
+    },
+    properties: [
+      { key: 'value', label: '输入值', type: 'text', placeholder: '请输入内容' },
+      { key: 'placeholder', label: '占位文字', type: 'text', placeholder: '请输入占位文字' },
+      { key: 'size', label: '尺寸', type: 'select', options: [
+        { label: '小', value: 'small' },
+        { label: '中', value: 'medium' },
+        { label: '大', value: 'large' },
+      ]},
+      { key: 'prefixIcon', label: '前缀图标', type: 'text', placeholder: '如: 🔍' },
+      { key: 'suffixIcon', label: '后缀图标', type: 'text', placeholder: '如: ❌' },
+      { key: 'maxLength', label: '最大长度', type: 'number' },
+      { key: 'disabled', label: '禁用', type: 'boolean' },
+    ],
+    statusOptions: [
+      { label: '默认', value: 'default' },
+      { label: '悬停', value: 'hover' },
+      { label: '聚焦', value: 'focus' },
+      { label: '禁用', value: 'disabled' },
+      { label: '成功', value: 'success' },
+      { label: '错误', value: 'error' },
+    ],
+  },
+  modal: {
+    type: 'modal',
+    defaultProps: {
+      title: '提示信息',
+      content: '这是弹窗的内容区域，可以放置任意信息。',
+      visible: true,
+      confirmText: '确定',
+      cancelText: '取消',
+      status: 'default',
+      showClose: true,
+      maskClosable: true,
+    },
+    properties: [
+      { key: 'title', label: '标题', type: 'text', placeholder: '请输入标题' },
+      { key: 'content', label: '内容', type: 'textarea', placeholder: '请输入内容' },
+      { key: 'confirmText', label: '确认按钮文字', type: 'text', placeholder: '确定' },
+      { key: 'cancelText', label: '取消按钮文字', type: 'text', placeholder: '取消' },
+      { key: 'visible', label: '显示弹窗', type: 'boolean' },
+      { key: 'showClose', label: '显示关闭按钮', type: 'boolean' },
+      { key: 'maskClosable', label: '遮罩层可关闭', type: 'boolean' },
+    ],
+    statusOptions: [
+      { label: '默认', value: 'default' },
+      { label: '成功', value: 'success' },
+      { label: '错误', value: 'error' },
+      { label: '禁用', value: 'disabled' },
+      { label: '加载', value: 'loading' },
+    ],
+  },
+  dropdown: {
+    type: 'dropdown',
+    defaultProps: {
+      value: '',
+      options: [
+        { label: '选项一', value: 'option1' },
+        { label: '选项二', value: 'option2' },
+        { label: '选项三', value: 'option3' },
+        { label: '选项四', value: 'option4' },
+      ],
+      placeholder: '请选择',
+      size: 'medium',
+      disabled: false,
+      status: 'default',
+      open: false,
+    },
+    properties: [
+      { key: 'placeholder', label: '占位文字', type: 'text', placeholder: '请输入占位文字' },
+      { key: 'size', label: '尺寸', type: 'select', options: [
+        { label: '小', value: 'small' },
+        { label: '中', value: 'medium' },
+        { label: '大', value: 'large' },
+      ]},
+      { key: 'open', label: '展开状态', type: 'boolean' },
+      { key: 'disabled', label: '禁用', type: 'boolean' },
+    ],
+    statusOptions: [
+      { label: '默认', value: 'default' },
+      { label: '悬停', value: 'hover' },
+      { label: '聚焦', value: 'focus' },
+      { label: '禁用', value: 'disabled' },
+      { label: '成功', value: 'success' },
+      { label: '错误', value: 'error' },
+    ],
+  },
+};
