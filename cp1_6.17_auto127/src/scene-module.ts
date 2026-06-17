@@ -22,23 +22,21 @@ export class SceneModule {
     this.furnitureGroup = new THREE.Group();
 
     this.wallMaterial = new THREE.MeshStandardMaterial({
-      color: 0xF5F5F5,
+      color: 0xFFFFFF,
       side: THREE.FrontSide,
       roughness: 0.85,
       metalness: 0.0
     });
 
     this.windowMaterial = new THREE.MeshPhysicalMaterial({
-      color: 0xE0F0FF,
+      color: 0xADD8E6,
       transparent: true,
-      opacity: 0.4,
-      roughness: 0.05,
+      opacity: 0.3,
+      roughness: 0.1,
       metalness: 0.0,
-      transmission: 0.9,
-      thickness: 0.5,
-      ior: 1.5,
-      clearcoat: 1.0,
-      clearcoatRoughness: 0.0
+      transmission: 0.7,
+      thickness: 0.2,
+      ior: 1.5
     });
 
     this.windowFrameMaterial = new THREE.MeshStandardMaterial({
@@ -130,6 +128,13 @@ export class SceneModule {
     rightWall.rotation.y = -Math.PI / 2;
     rightWall.receiveShadow = true;
     this.roomGroup.add(rightWall);
+
+    const frontWallGeo = new THREE.PlaneGeometry(roomWidth, roomHeight);
+    const frontWall = new THREE.Mesh(frontWallGeo, this.wallMaterial);
+    frontWall.position.z = roomDepth / 2;
+    frontWall.position.y = roomHeight / 2;
+    frontWall.receiveShadow = true;
+    this.roomGroup.add(frontWall);
   }
 
   private createBackWallWithWindow(roomWidth: number, roomHeight: number, roomDepth: number): void {

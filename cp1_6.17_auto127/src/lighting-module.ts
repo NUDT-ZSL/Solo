@@ -50,7 +50,7 @@ export class LightingModule {
     this.directionalLight.shadow.camera.bottom = -10;
     this.directionalLight.shadow.bias = -0.0005;
 
-    this.ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    this.ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
 
     this.scene.add(this.directionalLight);
     this.scene.add(this.directionalLight.target);
