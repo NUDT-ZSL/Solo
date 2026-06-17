@@ -97,50 +97,6 @@ const COMBINATION_RULES: CombinationRule[] = [
       description: '寒风与冷水交汇，形成冰冷的漩涡，冻结敌人行动。',
     },
   },
-  {
-    elements: ['water', 'wind', 'thunder'],
-    spell: {
-      name: '暴风雪',
-      type: 'blizzard',
-      baseDamage: 55,
-      effectType: 'blizzard',
-      effectColor: '#E0FFFF',
-      description: '三元素合一，召唤毁天灭地的暴风雪，冰封万物。',
-    },
-  },
-  {
-    elements: ['fire', 'wind', 'thunder'],
-    spell: {
-      name: '雷炎风暴',
-      type: 'thunderfire',
-      baseDamage: 60,
-      effectType: 'fire',
-      effectColor: '#FF8C00',
-      description: '火风雷三元素融合，产生附带雷电的火焰风暴，威力无穷。',
-    },
-  },
-  {
-    elements: ['fire', 'water', 'wind'],
-    spell: {
-      name: '元素潮汐',
-      type: 'elemental',
-      baseDamage: 50,
-      effectType: 'steam',
-      effectColor: '#DDA0DD',
-      description: '火水风三元素平衡，形成元素潮汐，造成混合伤害。',
-    },
-  },
-  {
-    elements: ['fire', 'water', 'thunder'],
-    spell: {
-      name: '熔岩爆裂',
-      type: 'lavaburst',
-      baseDamage: 58,
-      effectType: 'fire',
-      effectColor: '#FF4500',
-      description: '火水雷三元素剧烈碰撞，产生超高温熔岩冲击波，焚尽一切。',
-    },
-  },
 ];
 
 function sortElements(elements: ElementType[]): ElementType[] {

@@ -48,10 +48,6 @@ export class CombatSimulator {
   }
 
   castSpell(spell: Spell): CombatResult {
-    if (this.state.targetHp <= 0) {
-      this.resetTarget();
-    }
-
     this.state.round++;
 
     const resistanceMultiplier = 1 - this.state.resistance / 100;
