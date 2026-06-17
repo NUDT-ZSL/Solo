@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useGameState } from '../context/GameState';
 import { EquipmentSlot, Item } from '../types';
 import { calculateWeight, formatCurrency, RARITY_COLORS } from '../utils/helpers';
@@ -29,16 +29,27 @@ function canEquipToSlot(item: Item, slot: EquipmentSlot): boolean {
   return EQUIPMENT_TYPES[slot].includes(item.type);
 }
 
+function isSameItem(a: Item, b: Item): boolean {
+  return a.name === b.name && a.type === b.type && a.rarity === b.rarity;
+}
+
 export function InventoryModule() {
   const { state, dispatch } = useGameState();
   const [dragPos, setDragPos] = useState<DragPosition | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [hoveredEquipSlot, setHoveredEquipSlot] = useState<EquipmentSlot | null>(null);
 
   const currentWeight = useMemo(() => calculateWeight(state.inventory), [state.inventory]);
 
   const totalStats = useMemo(() => {
     const stats = { attack: 0, defense: 0, speed: 0 };
-    (Object.values(state.equipment) as (Item | null)[]).forEach(item => {
+    const equipSlots: (Item | null)[] = [
+      state.equipment.head,
+      state.equipment.body,
+      state.equipment.weapon,
+      state.equipment.accessory,
+    ];
+    equipSlots.forEach(item => {
       if (item) {
         stats.attack += item.stats.attack || 0;
         stats.defense += item.stats.defense || 0;
@@ -48,37 +59,62 @@ export function InventoryModule() {
     return stats;
   }, [state.equipment]);
 
-  const handleDragStart = (e: React.DragEvent, index: number) => {
+  const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
     const slot = state.inventory[index];
     if (!slot.item) return;
 
     dispatch({ type: 'SET_DRAG_ITEM', payload: { slotIndex: index, item: slot.item, quantity: slot.quantity } });
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', String(index));
-    (e.target as HTMLElement).style.opacity = '0.4';
-  };
 
-  const handleDragEnd = (e: React.DragEvent) => {
-    (e.target as HTMLElement).style.opacity = '1';
-    dispatch({ type: 'CLEAR_DRAG_ITEM' });
+    const ghost = (e.target as HTMLElement).cloneNode(true) as HTMLElement;
+    ghost.style.position = 'absolute';
+    ghost.style.top = '-9999px';
+    ghost.style.opacity = '0.5';
+    document.body.appendChild(ghost);
+    e.dataTransfer.setDragImage(ghost, 30, 30);
+    setTimeout(() => document.body.removeChild(ghost), 0);
+
+    setIsDragging(true);
+    setDragPos({ x: e.clientX, y: e.clientY });
+  }, [state.inventory, dispatch]);
+
+  const handleDrag = useCallback((e: React.DragEvent) => {
+    if (e.clientX === 0 && e.clientY === 0) return;
+    setDragPos({ x: e.clientX, y: e.clientY });
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    setIsDragging(false);
     setDragPos(null);
     setHoveredEquipSlot(null);
-  };
+    dispatch({ type: 'CLEAR_DRAG_ITEM' });
+  }, [dispatch]);
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragPos({ x: e.clientX, y: e.clientY });
-  };
-
-  const handleDropOnSlot = (e: React.DragEvent, toIndex: number) => {
+  const handleDropOnSlot = useCallback((e: React.DragEvent, toIndex: number) => {
     e.preventDefault();
     if (!state.dragItem) return;
 
-    dispatch({ type: 'MOVE_ITEM', payload: { fromIndex: state.dragItem.slotIndex, toIndex } });
-    setDragPos(null);
-  };
+    const fromIndex = state.dragItem.slotIndex;
+    if (fromIndex === toIndex) {
+      dispatch({ type: 'CLEAR_DRAG_ITEM' });
+      return;
+    }
 
-  const handleDropOnEquip = (e: React.DragEvent, slot: EquipmentSlot) => {
+    const toSlot = state.inventory[toIndex];
+    const dragItem = state.dragItem.item;
+
+    if (toSlot.item && isSameItem(dragItem, toSlot.item) && toSlot.quantity < toSlot.item.maxStack) {
+      dispatch({ type: 'STACK_ITEM', payload: { fromIndex, toIndex } });
+    } else {
+      dispatch({ type: 'MOVE_ITEM', payload: { fromIndex, toIndex } });
+    }
+
+    setIsDragging(false);
+    setDragPos(null);
+  }, [state.dragItem, state.inventory, dispatch]);
+
+  const handleDropOnEquip = useCallback((e: React.DragEvent, slot: EquipmentSlot) => {
     e.preventDefault();
     if (!state.dragItem) return;
 
@@ -89,37 +125,38 @@ export function InventoryModule() {
         payload: { slot, item, inventoryIndex: state.dragItem.slotIndex },
       });
     }
+    setIsDragging(false);
     setDragPos(null);
     setHoveredEquipSlot(null);
-  };
+  }, [state.dragItem, dispatch]);
 
-  const handleDragEnterEquip = (e: React.DragEvent, slot: EquipmentSlot) => {
+  const handleDragEnterEquip = useCallback((e: React.DragEvent, slot: EquipmentSlot) => {
     e.preventDefault();
     if (state.dragItem && canEquipToSlot(state.dragItem.item, slot)) {
       setHoveredEquipSlot(slot);
     }
-  };
+  }, [state.dragItem]);
 
-  const handleDragLeaveEquip = () => {
+  const handleDragLeaveEquip = useCallback(() => {
     setHoveredEquipSlot(null);
-  };
+  }, []);
 
-  const handleDoubleClickEquip = (slot: EquipmentSlot) => {
+  const handleDoubleClickEquip = useCallback((slot: EquipmentSlot) => {
     if (state.equipment[slot]) {
       dispatch({ type: 'UNEQUIP_ITEM', payload: { slot } });
     }
-  };
+  }, [state.equipment, dispatch]);
 
   return (
-    <div className="inventory-panel" onDragOver={handleDragOver}>
+    <div className="inventory-panel" onDragOver={(e) => e.preventDefault()}>
       <div className="stats-panel">
         <div className="stats-title">角色属性</div>
         <div className="stats-row">
-          <span className="stat-label">攻击:</span>
+          <span className="stat-label">攻击力:</span>
           <span className="stat-value">{totalStats.attack}</span>
         </div>
         <div className="stats-row">
-          <span className="stat-label">防御:</span>
+          <span className="stat-label">防御力:</span>
           <span className="stat-value">{totalStats.defense}</span>
         </div>
         <div className="stats-row">
@@ -163,15 +200,16 @@ export function InventoryModule() {
             {state.inventory.map((slot, index) => (
               <div
                 key={index}
-                className="inventory-slot"
+                className={`inventory-slot ${isDragging && state.dragItem && slot.item && isSameItem(state.dragItem.item, slot.item) && slot.quantity < slot.item.maxStack ? 'slot-stackable' : ''}`}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => handleDropOnSlot(e, index)}
               >
                 {slot.item && (
                   <div
-                    className="inventory-item"
+                    className={`inventory-item ${isDragging && state.dragItem?.slotIndex === index ? 'dragging' : ''}`}
                     draggable
                     onDragStart={(e) => handleDragStart(e, index)}
+                    onDrag={handleDrag}
                     onDragEnd={handleDragEnd}
                     style={{ borderColor: RARITY_COLORS[slot.item.rarity] }}
                   >
@@ -200,12 +238,16 @@ export function InventoryModule() {
         </div>
       </div>
 
-      {state.dragItem && dragPos && (
+      {isDragging && state.dragItem && dragPos && (
         <div
           className="drag-ghost"
           style={{
             left: dragPos.x + 10,
             top: dragPos.y + 10,
+            position: 'fixed',
+            pointerEvents: 'none',
+            zIndex: 10000,
+            opacity: 0.6,
           }}
         >
           <span className="item-icon">{state.dragItem.item.icon}</span>
