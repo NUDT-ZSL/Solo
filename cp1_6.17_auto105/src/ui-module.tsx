@@ -75,7 +75,7 @@ export const SkillIcon: React.FC<{ skill: SkillState; index: number }> = ({ skil
   const r = 16;
   const circumference = 2 * Math.PI * r;
   const progress = skill.ready ? 0 : skill.currentCooldown / skill.cooldown;
-  const dashOffset = circumference * (1 - progress);
+  const dashOffset = circumference * progress;
   const bgColor = skill.ready ? skill.color : '#555555';
   const glow = skill.flashing ? `0 0 20px ${skill.color}, 0 0 30px ${skill.color}` : `0 0 8px ${skill.color}80`;
 

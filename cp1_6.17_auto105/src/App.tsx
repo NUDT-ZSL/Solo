@@ -183,7 +183,7 @@ export default function App() {
       }
 
       if (fadeRef.current.phase === 'out') {
-        fadeRef.current.alpha = Math.min(1, fadeRef.current.alpha + dt * 2);
+        fadeRef.current.alpha = Math.min(1, fadeRef.current.alpha + dt * 4);
         setFadeAlpha(fadeRef.current.alpha);
         if (fadeRef.current.alpha >= 1) {
           fadeRef.current.phase = 'in';
@@ -191,10 +191,11 @@ export default function App() {
           generateNewRoom(canvasSize.w, canvasSize.h);
         }
       } else if (fadeRef.current.phase === 'in') {
-        fadeRef.current.alpha = Math.max(0, fadeRef.current.alpha - dt * 2);
+        fadeRef.current.alpha = Math.max(0, fadeRef.current.alpha - dt * 4);
         setFadeAlpha(fadeRef.current.alpha);
         if (fadeRef.current.alpha <= 0) {
           fadeRef.current.phase = 'none';
+          fadeRef.current.alpha = 0;
         }
       }
 

@@ -281,7 +281,7 @@ export class EnemyModule {
           const sdy = playerY - e.y;
           const sd = Math.sqrt(sdx * sdx + sdy * sdy) || 1;
           const speed = 150;
-          this.projectiles.push({
+          const projectile: EnemyProjectile = {
             id: ++this.projectileIdCounter,
             x: e.x,
             y: e.y,
@@ -289,7 +289,9 @@ export class EnemyModule {
             vy: (sdy / sd) * speed,
             radius: 5,
             damage: 12
-          });
+          };
+          this.projectiles.push(projectile);
+          this.emit('enemy:projectile', projectile);
         }
       }
     }

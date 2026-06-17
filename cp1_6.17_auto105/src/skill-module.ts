@@ -1,3 +1,6 @@
+import type { RestApiSimulator, ApiRequest } from './rest-api';
+import { ok, badRequest, notFound } from './rest-api';
+
 export type SkillId = 'fireball' | 'frost' | 'lightning';
 
 export interface SkillState {
@@ -360,6 +363,7 @@ export class SkillModule {
     }
 
     let shouldExplode = false;
+
     for (const enemy of enemies) {
       const dx = fb.x - enemy.x;
       const dy = fb.y - enemy.y;
@@ -383,22 +387,24 @@ export class SkillModule {
     if (shouldExplode) {
       fb.exploded = true;
       fb.explosionTimer = 0.3;
+
       const hitIds: number[] = [];
+      const er = fb.explosionRadius;
+
       for (const enemy of enemies) {
-        const dx = fb.x - enemy.x;
-        const dy = fb.y - enemy.y;
-        const half = enemy.size / 2;
-        const er = fb.explosionRadius;
-        if (Math.abs(dx) < er + half && Math.abs(dy) < er + half) {
-          const closestX = Math.max(enemy.x - half, Math.min(fb.x, enemy.x + half));
-          const closestY = Math.max(enemy.y - half, Math.min(fb.y, enemy.y + half));
-          const dist2 = (fb.x - closestX) ** 2 + (fb.y - closestY) ** 2;
-          if (dist2 < er * er && !fb.hitEnemies.has(enemy.id)) {
-            fb.hitEnemies.add(enemy.id);
-            hitIds.push(enemy.id);
-          }
+        if (fb.hitEnemies.has(enemy.id)) continue;
+        const halfSize = enemy.size / 2;
+
+        const closestX = Math.max(enemy.x - halfSize, Math.min(fb.x, enemy.x + halfSize));
+        const closestY = Math.max(enemy.y - halfSize, Math.min(fb.y, enemy.y + halfSize));
+        const distToEnemy = (fb.x - closestX) ** 2 + (fb.y - closestY) ** 2;
+
+        if (distToEnemy < er * er) {
+          fb.hitEnemies.add(enemy.id);
+          hitIds.push(enemy.id);
         }
       }
+
       if (hitIds.length > 0) {
         this.emit('skill:hit', {
           skillId: 'fireball',
@@ -534,5 +540,42 @@ export class SkillModule {
 
   private emitCooldownUpdate(): void {
     this.emit('skill:cooldown-update', this.getSkills());
+  }
+
+  registerRestApi(api: RestApiSimulator): void {
+    api.get('/api/skills', (_req: ApiRequest) => {
+      return ok({ skills: this.getSkills() });
+    });
+
+    api.get('/api/skills/:id', (req: ApiRequest) => {
+      const id = req.params?.id as SkillId;
+      const skill = this.skills.get(id);
+      if (!skill) return notFound(`Skill ${id} not found`);
+      return ok({ skill });
+    });
+
+    api.get('/api/skills/effects', (_req: ApiRequest) => {
+      return ok({ effects: this.getEffects() });
+    });
+
+    api.post('/api/skills/:id/cast', (req: ApiRequest) => {
+      const id = req.params?.id as SkillId;
+      const { x, y } = (req.body || {}) as { x: number; y: number };
+      if (!this.skills.has(id)) return notFound(`Skill ${id} not found`);
+      if (typeof x !== 'number' || typeof y !== 'number') {
+        return badRequest('Missing player position x, y');
+      }
+      const success = this.castSkill(id, x, y);
+      return ok({ success, skillId: id });
+    });
+
+    api.post('/api/skills/direction', (req: ApiRequest) => {
+      const { dx, dy } = (req.body || {}) as { dx: number; dy: number };
+      if (typeof dx !== 'number' || typeof dy !== 'number') {
+        return badRequest('Missing direction dx, dy');
+      }
+      this.setPlayerDirection(dx, dy);
+      return ok({ direction: { dx, dy } });
+    });
   }
 }
