@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { usePipelineStore } from '@/store/pipelineStore';
-import type { PipelineType } from '@/store/types';
-import { PIPELINE_CONFIGS } from '@/store/types';
+import type { PipelineType } from '@/data/types';
+import { PIPELINE_CONFIGS } from '@/data/types';
 import { PRESET_SCHEMES } from '@/data/pipelinePresets';
-import { Droplets, Waves, Flame, Zap, Cable, LayersA, LayersB, Layers3, Trash2, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Droplets, Waves, Flame, Zap, Cable, Layers, LayoutGrid, Grid3x3, Trash2, ChevronRight, ChevronLeft } from 'lucide-react';
 
 const PIPELINE_ICONS: Record<PipelineType, any> = {
   water: Droplets,
@@ -32,10 +32,9 @@ export function Toolbar({ collapsed, onToggleCollapse }: ToolbarProps) {
   };
 
   const btnBase =
-    'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 cursor-pointer select-none border-l-4 hover:bg-[#3D3D55]';
+    'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 cursor-pointer select-none border-l-4 hover:bg-[#3D3D55] active:scale-95';
   const btnActive = 'bg-[#3D3D55]';
   const btnInactive = 'bg-transparent';
-  const btnScale = clickScale ? 'scale-95' : 'scale-100';
 
   return (
     <div
@@ -47,7 +46,8 @@ export function Toolbar({ collapsed, onToggleCollapse }: ToolbarProps) {
         color: '#E0E0E0',
         overflow: 'hidden',
         width: collapsed ? 56 : 240,
-        transition: 'width 0.3s ease',
+        transition: 'width 0.3s cubic-bezier(0.4,0,0.2,1)',
+        flexShrink: 0,
       }}
     >
       <div className="flex items-center justify-between px-3 py-3 border-b border-[#444466]">
@@ -64,11 +64,11 @@ export function Toolbar({ collapsed, onToggleCollapse }: ToolbarProps) {
       </div>
 
       {!collapsed && (
-        <div className="text-xs uppercase tracking-widest text-[#8888aa] px-3 pt-4 pb-2">
+        <div className="text-[10px] uppercase tracking-widest text-[#8888aa] px-3 pt-4 pb-2 font-medium">
           管线类型
         </div>
       )}
-      <div className={collapsed ? 'px-2' : 'px-2'} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '0 8px' }}>
         {(Object.keys(PIPELINE_CONFIGS) as PipelineType[]).map((type) => {
           const Icon = PIPELINE_ICONS[type];
           const cfg = PIPELINE_CONFIGS[type];
@@ -78,18 +78,17 @@ export function Toolbar({ collapsed, onToggleCollapse }: ToolbarProps) {
             <button
               key={type}
               onClick={() => handleClick(btnId, () => setActiveType(type))}
-              className={`${btnBase} ${isActive ? btnActive : btnInactive} ${
-                clickScale === btnId ? btnScale : ''
-              }`}
+              className={`${btnBase} ${isActive ? btnActive : btnInactive}`}
               style={{
                 borderLeftColor: cfg.color,
                 transform: clickScale === btnId ? 'scale(0.95)' : 'scale(1)',
+                boxShadow: isActive ? `inset 0 0 0 1px ${cfg.color}44` : 'none',
               }}
               title={cfg.label}
             >
               <Icon size={18} style={{ color: cfg.color, flexShrink: 0 }} />
               {!collapsed && (
-                <div className="flex-1 flex flex-col items-start">
+                <div className="flex-1 flex flex-col items-start text-left">
                   <span className="text-sm font-medium">{cfg.label}</span>
                   <span className="text-[10px] text-[#8888aa]">
                     半径 {cfg.radius.toFixed(2)}
@@ -102,22 +101,20 @@ export function Toolbar({ collapsed, onToggleCollapse }: ToolbarProps) {
       </div>
 
       {!collapsed && (
-        <div className="text-xs uppercase tracking-widest text-[#8888aa] px-3 pt-4 pb-2">
+        <div className="text-[10px] uppercase tracking-widest text-[#8888aa] px-3 pt-4 pb-2 font-medium">
           预设方案
         </div>
       )}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }} className={collapsed ? 'px-2' : 'px-2'}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '0 8px' }}>
         {(['A', 'B', 'C'] as const).map((id) => {
           const scheme = PRESET_SCHEMES[id];
-          const IconComp = id === 'A' ? LayersA : id === 'B' ? LayersB : Layers3;
+          const IconComp = id === 'A' ? Layers : id === 'B' ? LayoutGrid : Grid3x3;
           const btnId = `scheme_${id}`;
           return (
             <button
               key={id}
               onClick={() => handleClick(btnId, () => loadPreset(scheme))}
-              className={`${btnBase} ${btnInactive} ${
-                clickScale === btnId ? btnScale : ''
-              }`}
+              className={`${btnBase} ${btnInactive}`}
               style={{
                 borderLeftColor: '#6366F1',
                 transform: clickScale === btnId ? 'scale(0.95)' : 'scale(1)',
@@ -126,9 +123,9 @@ export function Toolbar({ collapsed, onToggleCollapse }: ToolbarProps) {
             >
               <IconComp size={18} style={{ color: '#6366F1', flexShrink: 0 }} />
               {!collapsed && (
-                <div className="flex-1 flex flex-col items-start">
+                <div className="flex-1 flex flex-col items-start text-left">
                   <span className="text-sm font-medium">方案 {id}</span>
-                  <span className="text-[10px] text-[#8888aa]">
+                  <span className="text-[10px] text-[#8888aa] line-clamp-1" style={{ maxWidth: 160 }}>
                     {scheme.description}
                   </span>
                 </div>
@@ -140,12 +137,10 @@ export function Toolbar({ collapsed, onToggleCollapse }: ToolbarProps) {
 
       <div className="flex-1" />
 
-      <div className={collapsed ? 'px-2 pb-3' : 'px-2 pb-3 pt-4'} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: collapsed ? '0 8px 12px' : '16px 8px 12px' }}>
         <button
           onClick={() => handleClick('clear', clearAll)}
-          className={`${btnBase} ${btnInactive} ${
-            clickScale === 'clear' ? btnScale : ''
-          }`}
+          className={`${btnBase} ${btnInactive}`}
           style={{
             borderLeftColor: '#F44336',
             transform: clickScale === 'clear' ? 'scale(0.95)' : 'scale(1)',

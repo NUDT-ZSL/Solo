@@ -25,6 +25,7 @@ export interface Pipeline {
   nodes: Point3D[];
   depth: number;
   visible?: boolean;
+  createdAt?: number;
 }
 
 export interface CollisionPoint {
@@ -55,3 +56,6 @@ export const PIPELINE_CONFIGS: Record<PipelineType, PipelineConfig> = {
 };
 
 export const SAFE_DISTANCE = 0.3;
+
+export const MIN_SEGMENT_LENGTH = 0.5;
+export const MAX_SEGMENT_LENGTH = 5;

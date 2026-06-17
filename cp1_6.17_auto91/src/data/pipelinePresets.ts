@@ -1,7 +1,7 @@
-import type { PresetScheme, Pipeline, Point3D } from '@/store/types';
+import type { PresetScheme, Pipeline, Point3D } from './types';
 
 let idSeed = 0;
-const pid = () => `preset_${++idSeed}`;
+const pid = () => `preset_${++idSeed}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 
 const createStraightPipeline = (
   type: Pipeline['type'],
@@ -20,6 +20,7 @@ const createStraightPipeline = (
     nodes: [start, end],
     depth,
     visible: true,
+    createdAt: 0,
   };
 };
 
@@ -45,6 +46,7 @@ const createLPipeline = (
     nodes,
     depth,
     visible: true,
+    createdAt: 0,
   };
 };
 

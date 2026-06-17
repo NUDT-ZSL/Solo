@@ -1,7 +1,7 @@
-import type { Pipeline, CollisionPoint, Point3D, PipelineType } from '@/store/types';
-import { PIPELINE_CONFIGS, SAFE_DISTANCE } from '@/store/types';
+import type { Pipeline, CollisionPoint, Point3D, PipelineType } from '@/data/types';
+import { PIPELINE_CONFIGS, SAFE_DISTANCE } from '@/data/types';
 
-interface Segment {
+interface CylinderSegment {
   start: Point3D;
   end: Point3D;
   pipelineId: string;
@@ -37,12 +37,21 @@ function distance(a: Point3D, b: Point3D): number {
   return length(sub(a, b));
 }
 
-function segmentDistance(
+export interface SegmentDistanceResult {
+  centerDistance: number;
+  surfaceDistance: number;
+  closest1: Point3D;
+  closest2: Point3D;
+}
+
+export function cylinderSegmentDistance(
   s1Start: Point3D,
   s1End: Point3D,
+  r1: number,
   s2Start: Point3D,
-  s2End: Point3D
-): { distance: number; closest1: Point3D; closest2: Point3D } {
+  s2End: Point3D,
+  r2: number
+): SegmentDistanceResult {
   const u = sub(s1End, s1Start);
   const v = sub(s2End, s2Start);
   const w = sub(s1Start, s2Start);
@@ -54,10 +63,11 @@ function segmentDistance(
   const denom = a * c - b * b;
 
   let s: number, t: number;
+  const EPS = 1e-10;
 
-  if (denom < 1e-10) {
+  if (denom < EPS) {
     s = 0.0;
-    t = (b > c ? d / b : e / c);
+    t = b > c ? d / (b || 1) : e / (c || 1);
   } else {
     s = (b * e - c * d) / denom;
     t = (a * e - b * d) / denom;
@@ -66,61 +76,87 @@ function segmentDistance(
   s = Math.max(0, Math.min(1, s));
   t = Math.max(0, Math.min(1, t));
 
-  if (denom < 1e-10) {
-    if (s <= 0.0) { s = 0.0; t = Math.max(0, Math.min(1, e / c)); }
-    else if (s >= 1.0) { s = 1.0; t = Math.max(0, Math.min(1, (e + b) / c)); }
-    else { t = Math.max(0, Math.min(1, (b * s + e) / c)); }
+  if (denom < EPS) {
+    if (s <= 0.0) {
+      s = 0.0;
+      t = Math.max(0, Math.min(1, e / (c || 1)));
+    } else if (s >= 1.0) {
+      s = 1.0;
+      t = Math.max(0, Math.min(1, (e + b) / (c || 1)));
+    } else {
+      t = Math.max(0, Math.min(1, (b * s + e) / (c || 1)));
+    }
   } else {
-    if (s < 0.0) { s = 0.0; t = Math.max(0.0, Math.min(1.0, e / c)); }
-    else if (s > 1.0) { s = 1.0; t = Math.max(0.0, Math.min(1.0, (e + b) / c)); }
+    if (s < 0.0) {
+      s = 0.0;
+      t = Math.max(0.0, Math.min(1.0, e / (c || 1)));
+    } else if (s > 1.0) {
+      s = 1.0;
+      t = Math.max(0.0, Math.min(1.0, (e + b) / (c || 1)));
+    }
     if (t < 0.0) {
       t = 0.0;
-      s = Math.max(0.0, Math.min(1.0, -d / a));
+      s = Math.max(0.0, Math.min(1.0, -d / (a || 1)));
     } else if (t > 1.0) {
       t = 1.0;
-      s = Math.max(0.0, Math.min(1.0, (b - d) / a));
+      s = Math.max(0.0, Math.min(1.0, (b - d) / (a || 1)));
     }
   }
 
   const closest1 = add(s1Start, scale(u, s));
   const closest2 = add(s2Start, scale(v, t));
-  const dist = distance(closest1, closest2);
+  const centerDist = distance(closest1, closest2);
+  const surfaceDist = Math.max(0, centerDist - r1 - r2);
 
-  return { distance: dist, closest1, closest2 };
+  return {
+    centerDistance: centerDist,
+    surfaceDistance: surfaceDist,
+    closest1,
+    closest2,
+  };
 }
 
-export function segmentToAllPipelinesMinDistance(
+export function segmentToAllPipelinesMinSurfaceDistance(
   segStart: Point3D,
   segEnd: Point3D,
+  currentRadius: number,
   pipelines: Pipeline[],
   excludeId?: string
-): number {
-  let minDist = Infinity;
+): { minSurfaceDist: number; minCenterDist: number } {
+  let minSurfaceDist = Infinity;
+  let minCenterDist = Infinity;
 
   for (const pipeline of pipelines) {
     if (excludeId && pipeline.id === excludeId) continue;
+    const pRadius = PIPELINE_CONFIGS[pipeline.type].radius;
     for (const segment of pipeline.segments) {
-      const { distance: dist } = segmentDistance(
+      const result = cylinderSegmentDistance(
         segStart,
         segEnd,
+        currentRadius,
         segment.start,
-        segment.end
+        segment.end,
+        pRadius
       );
-      const threshold = SAFE_DISTANCE + PIPELINE_CONFIGS[pipeline.type].radius;
-      if (dist < threshold) {
-        return dist;
+      const centerThreshold = SAFE_DISTANCE + currentRadius + pRadius;
+      if (result.centerDistance < centerThreshold) {
+        return {
+          minSurfaceDist: result.surfaceDistance,
+          minCenterDist: result.centerDistance,
+        };
       }
-      if (dist < minDist) {
-        minDist = dist;
+      if (result.surfaceDistance < minSurfaceDist) {
+        minSurfaceDist = result.surfaceDistance;
+        minCenterDist = result.centerDistance;
       }
     }
   }
-  return minDist;
+  return { minSurfaceDist, minCenterDist };
 }
 
 export function detectCollisions(pipelines: Pipeline[]): CollisionPoint[] {
   const collisions: CollisionPoint[] = [];
-  const segments: Segment[] = [];
+  const segments: CylinderSegment[] = [];
 
   for (const pipeline of pipelines) {
     const radius = PIPELINE_CONFIGS[pipeline.type].radius;
@@ -136,8 +172,6 @@ export function detectCollisions(pipelines: Pipeline[]): CollisionPoint[] {
     }
   }
 
-  const seenPairs = new Set<string>();
-
   for (let i = 0; i < segments.length; i++) {
     for (let j = i + 1; j < segments.length; j++) {
       const s1 = segments[i];
@@ -145,25 +179,22 @@ export function detectCollisions(pipelines: Pipeline[]): CollisionPoint[] {
 
       if (s1.pipelineId === s2.pipelineId) continue;
 
-      const pairKey = [s1.pipelineId, s2.pipelineId].sort().join('_');
-      const combinedKey = `${pairKey}_${i}_${j}`;
-      if (seenPairs.has(combinedKey)) continue;
-      seenPairs.add(combinedKey);
-
-      const { distance: dist, closest1, closest2 } = segmentDistance(
+      const result = cylinderSegmentDistance(
         s1.start,
         s1.end,
+        s1.radius,
         s2.start,
-        s2.end
+        s2.end,
+        s2.radius
       );
 
-      const threshold = SAFE_DISTANCE + s1.radius + s2.radius;
-      if (dist >= threshold) continue;
+      const centerThreshold = SAFE_DISTANCE + s1.radius + s2.radius;
+      if (result.centerDistance >= centerThreshold) continue;
 
       const midPoint: Point3D = {
-        x: (closest1.x + closest2.x) / 2,
-        y: (closest1.y + closest2.y) / 2,
-        z: (closest1.z + closest2.z) / 2,
+        x: (result.closest1.x + result.closest2.x) / 2,
+        y: (result.closest1.y + result.closest2.y) / 2,
+        z: (result.closest1.z + result.closest2.z) / 2,
       };
 
       const depthDiff = Math.abs(s1.pipelineDepth - s2.pipelineDepth);
@@ -179,18 +210,24 @@ export function detectCollisions(pipelines: Pipeline[]): CollisionPoint[] {
         typeB: s2.pipelineType,
         collisionType,
         resolved: false,
-        distance: dist,
+        distance: result.centerDistance,
       });
     }
   }
 
   const deduped: CollisionPoint[] = [];
-  const used = new Set<string>();
+  const used = new Map<string, CollisionPoint>();
   for (const c of collisions) {
     const key = [c.pipelineA, c.pipelineB].sort().join('_');
-    if (used.has(key)) continue;
-    used.add(key);
-    deduped.push(c);
+    const existing = used.get(key);
+    if (!existing || c.distance < existing.distance) {
+      if (existing) {
+        const idx = deduped.findIndex((d) => d.id === existing.id);
+        if (idx >= 0) deduped.splice(idx, 1);
+      }
+      used.set(key, c);
+      deduped.push(c);
+    }
   }
 
   return deduped;

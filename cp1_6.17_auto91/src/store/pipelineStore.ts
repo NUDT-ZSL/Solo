@@ -5,7 +5,8 @@ import type {
   Point3D,
   CollisionPoint,
   PresetScheme,
-} from './types';
+} from '@/data/types';
+import { PIPELINE_CONFIGS, MIN_SEGMENT_LENGTH, MAX_SEGMENT_LENGTH } from '@/data/types';
 import { detectCollisions } from '@/render/collisionDetector';
 
 interface PipelineStore {
@@ -37,8 +38,7 @@ interface PipelineStore {
 }
 
 let idCounter = 0;
-const genId = () => `p_${++idCounter}_${Date.now().toString(36)}`;
-const genCollisionId = () => `c_${++idCounter}_${Date.now().toString(36)}`;
+const genId = () => `p_${++idCounter}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 
 export const usePipelineStore = create<PipelineStore>((set, get) => ({
   pipelines: [],
@@ -57,7 +57,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 
   addPipeline: (pipeline) => {
     set((state) => {
-      const newPipelines = [...state.pipelines, pipeline];
+      const newPipelines = [...state.pipelines, { ...pipeline, createdAt: Date.now() }];
       const newCollisions = detectCollisions(newPipelines);
       return { pipelines: newPipelines, collisions: newCollisions };
     });
@@ -75,13 +75,16 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   selectPipeline: (id) => set({ selectedPipelineId: id }),
 
   loadPreset: (scheme) => {
-    const visiblePipelines = scheme.pipelines.map((p) => ({
+    const now = Date.now();
+    const spacedPipelines = scheme.pipelines.map((p, i) => ({
       ...p,
+      id: genId(),
       visible: true,
+      createdAt: now + i * 50,
     }));
-    const newCollisions = detectCollisions(visiblePipelines);
+    const newCollisions = detectCollisions(spacedPipelines);
     set({
-      pipelines: visiblePipelines,
+      pipelines: spacedPipelines,
       collisions: newCollisions,
       currentScheme: scheme.id,
       selectedPipelineId: null,
@@ -115,6 +118,8 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     isDrawing: true,
     drawingStart: point,
     drawingPreview: point,
+    drawingWarning: false,
+    drawingDistance: 0,
   }),
 
   updateDrawingPreview: (point, distance = 0, warning = false) => set({
@@ -130,19 +135,20 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     const start = state.drawingStart;
     const end = point;
     const dx = end.x - start.x;
+    const dy = end.y - start.y;
     const dz = end.z - start.z;
-    const length = Math.sqrt(dx * dx + dz * dz);
+    const length = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-    if (length < 0.5) {
+    if (length < MIN_SEGMENT_LENGTH) {
       set({ isDrawing: false, drawingStart: null, drawingPreview: null });
       return;
     }
 
-    const clampedEnd = length > 5
+    const clampedEnd = length > MAX_SEGMENT_LENGTH
       ? {
-          x: start.x + (dx / length) * 5,
+          x: start.x + (dx / length) * MAX_SEGMENT_LENGTH,
           y: end.y,
-          z: start.z + (dz / length) * 5,
+          z: start.z + (dz / length) * MAX_SEGMENT_LENGTH,
         }
       : end;
 
@@ -151,13 +157,14 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       id: genId(),
       type: state.activePipelineType,
       segments: [{
-        id: genCollisionId(),
+        id: genId(),
         start,
         end: clampedEnd,
       }],
       nodes,
       depth: start.y,
       visible: true,
+      createdAt: Date.now(),
     };
 
     set((s) => {
@@ -169,8 +176,11 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
         isDrawing: false,
         drawingStart: null,
         drawingPreview: null,
+        drawingWarning: false,
+        drawingDistance: 0,
       };
     });
+    void PIPELINE_CONFIGS;
   },
 
   cancelDrawing: () => set({
