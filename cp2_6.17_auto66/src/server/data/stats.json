@@ -1,7 +1,7 @@
 {
   "artworkStats": {
     "art-001": {
-      "views": 343,
+      "views": 344,
       "likes": 58,
       "favorites": 24
     },
@@ -42,6 +42,13 @@
     }
   },
   "viewRecords": [
+    {
+      "id": "v-4b8d2737",
+      "artworkId": "art-001",
+      "visitorId": "device-gkpxty",
+      "timestamp": "2026-06-17T05:53:21.262Z",
+      "source": "详情页"
+    },
     {
       "id": "v-3bbc8206",
       "artworkId": "art-001",

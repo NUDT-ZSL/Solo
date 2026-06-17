@@ -456,7 +456,7 @@ body {
 
 .artist-list-header {
   display: grid;
-  grid-template-columns: 48px 56px 1fr repeat(3, 72px);
+  grid-template-columns: 56px 56px 1fr repeat(3, 72px) 88px;
   padding: 14px 18px;
   background: #f5f0ff;
   font-size: 13px;
@@ -468,7 +468,7 @@ body {
 @media (max-width: 640px) {
   .artist-list-header,
   .artist-list-row {
-    grid-template-columns: 40px 48px 1fr repeat(3, 56px) !important;
+    grid-template-columns: 48px 48px 1fr repeat(3, 56px) 72px !important;
     padding: 12px 14px !important;
     font-size: 12px !important;
   }
@@ -476,7 +476,7 @@ body {
 
 .artist-list-row {
   display: grid;
-  grid-template-columns: 48px 56px 1fr repeat(3, 72px);
+  grid-template-columns: 56px 56px 1fr repeat(3, 72px) 88px;
   padding: 12px 18px;
   align-items: center;
   border-top: 1px solid #f0ecf8;
@@ -484,9 +484,28 @@ body {
   color: #424242;
 }
 
+.artist-sort-hint {
+  font-size: 13px;
+  color: #9575cd;
+  margin-bottom: 10px;
+  margin-left: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.artist-sort-hint::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #9575cd;
+}
+
 .rank-badge {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -494,14 +513,44 @@ body {
   font-size: 13px;
   font-weight: 700;
   color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.artist-list-row:hover .rank-badge {
+  transform: scale(1.05);
 }
 
 .rank-badge.gold {
-  background: #ffd700;
+  background: linear-gradient(135deg, #ffd700 0%, #ffb300 100%);
+  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.4);
 }
 
 .rank-badge.gray {
-  background: #bdbdbd;
+  background: linear-gradient(135deg, #bdbdbd 0%, #9e9e9e 100%);
+}
+
+.artist-view-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #5c6bc0;
+  background: #ede7f6;
+  border: none;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease, color 0.2s ease;
+  white-space: nowrap;
+}
+
+.artist-view-btn:hover {
+  background: #5c6bc0;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.artist-view-btn:active {
+  transform: scale(0.96);
 }
 
 .thumb-img {

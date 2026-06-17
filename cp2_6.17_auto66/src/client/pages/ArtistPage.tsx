@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Heart, Star, Eye } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Heart, Star, Eye, ArrowRight } from 'lucide-react'
 import { api, Artwork } from '../api'
 
 export default function ArtistPage() {
+  const navigate = useNavigate()
   const [artists, setArtists] = useState<string[]>([])
   const [selected, setSelected] = useState<string>('')
   const [works, setWorks] = useState<Artwork[]>([])
@@ -70,30 +72,48 @@ export default function ArtistPage() {
           该艺术家暂无作品
         </div>
       ) : (
-        <div className="artist-list">
-          <div className="artist-list-header">
-            <span>排名</span>
-            <span>封面</span>
-            <span>作品标题</span>
-            <span style={{ textAlign: 'center' }}><Eye size={14} /></span>
-            <span style={{ textAlign: 'center' }}><Heart size={14} /></span>
-            <span style={{ textAlign: 'center' }}><Star size={14} /></span>
+        <>
+          <div className="artist-sort-hint">
+            按浏览量降序排列
           </div>
-          {works.map((w, idx) => (
-            <div className="artist-list-row" key={w.id}>
-              <span>
-                <span className={'rank-badge ' + (idx < 3 ? 'gold' : 'gray')}>
-                  {idx + 1}
-                </span>
-              </span>
-              <img src={w.coverImage} alt={w.title} className="thumb-img" />
-              <span style={{ fontWeight: 500, color: '#424242' }}>{w.title}</span>
-              <span className="stat-num" style={{ textAlign: 'center' }}>{w.views}</span>
-              <span className="stat-num likes" style={{ textAlign: 'center' }}>{w.likes}</span>
-              <span className="stat-num favs" style={{ textAlign: 'center' }}>{w.favorites}</span>
+          <div className="artist-list">
+            <div className="artist-list-header">
+              <span>排名</span>
+              <span>封面</span>
+              <span>作品标题</span>
+              <span style={{ textAlign: 'center' }}><Eye size={14} /></span>
+              <span style={{ textAlign: 'center' }}><Heart size={14} /></span>
+              <span style={{ textAlign: 'center' }}><Star size={14} /></span>
+              <span style={{ textAlign: 'center' }}>操作</span>
             </div>
-          ))}
-        </div>
+            {works.map((w, idx) => (
+              <div className="artist-list-row" key={w.id}>
+                <span>
+                  <span className={'rank-badge ' + (idx < 3 ? 'gold' : 'gray')}>
+                    {idx + 1}
+                  </span>
+                </span>
+                <img src={w.coverImage} alt={w.title} className="thumb-img" />
+                <span style={{ fontWeight: 500, color: '#424242' }}>{w.title}</span>
+                <span className="stat-num" style={{ textAlign: 'center' }}>{w.views}</span>
+                <span className="stat-num likes" style={{ textAlign: 'center' }}>{w.likes}</span>
+                <span className="stat-num favs" style={{ textAlign: 'center' }}>{w.favorites}</span>
+                <span style={{ textAlign: 'center' }}>
+                  <button
+                    className="artist-view-btn"
+                    onClick={() => navigate(`/artwork/${w.id}`)}
+                    title="查看作品详情"
+                  >
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      详情
+                      <ArrowRight size={12} />
+                    </span>
+                  </button>
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   )
