@@ -125,7 +125,7 @@ export class UIManager {
       step: 0.01,
       value: 0.5,
       label: '粗糙度',
-      trackBackgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='6'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' x2='100%25'%3E%3Cstop offset='0%25' stop-color='%23333'/%3E%3Cstop offset='100%25' stop-color='%23888'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='200' height='6' fill='url(%23g)'/%3E%3C/svg%3E")`,
+      textureType: 'roughness',
       formatValue: (v) => v.toFixed(2),
     });
     roughnessSlider.onChange((v) => this.eventBus.emit('TABLE_ROUGHNESS_CHANGE', { roughness: v }));
@@ -137,7 +137,7 @@ export class UIManager {
       step: 0.01,
       value: 0.0,
       label: '金属度',
-      trackBackgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='6'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' x2='100%25'%3E%3Cstop offset='0%25' stop-color='%23444'/%3E%3Cstop offset='50%25' stop-color='%23B0B0B0'/%3E%3Cstop offset='100%25' stop-color='%23E8E8E8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='200' height='6' fill='url(%23g)'/%3E%3C/svg%3E")`,
+      textureType: 'metalness',
       formatValue: (v) => v.toFixed(2),
     });
     metalnessSlider.onChange((v) => this.eventBus.emit('TABLE_METALNESS_CHANGE', { metalness: v }));

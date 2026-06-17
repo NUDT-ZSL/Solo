@@ -150,11 +150,13 @@ export class Environment {
     this.glassMaterial = new THREE.MeshPhysicalMaterial({
       color: 0xffffff,
       transparent: true,
-      opacity: 0.3,
+      opacity: 0.5,
       transmission: 0.5,
       roughness: 0.05,
       metalness: 0.0,
       thickness: 0.5,
+      side: THREE.DoubleSide,
+      depthWrite: false,
     });
     const windowGeo = new THREE.PlaneGeometry(2, 2);
     const windowMesh = new THREE.Mesh(windowGeo, this.glassMaterial);
@@ -230,8 +232,9 @@ export class Environment {
       this.triggerPulseAnimation();
     });
     this.eventBus.on('GLASS_TRANSMISSION_CHANGE', (data) => {
+      this.glassMaterial.opacity = data.transmission;
       this.glassMaterial.transmission = data.transmission;
-      this.glassMaterial.opacity = 0.9 - data.transmission * 0.6;
+      this.glassMaterial.needsUpdate = true;
     });
   }
 
@@ -249,13 +252,24 @@ export class Environment {
         this.pulseAnimation.active = false;
         this.tableMaterial.emissive.setHex(0x000000);
       } else {
-          const progress = elapsed / duration;
-          const pulse = Math.sin(progress * Math.PI);
-          const pulseColor = this.pulseAnimation.baseColor.clone().lerp(new THREE.Color(0xffffff), pulse * 0.3);
-          this.tableMaterial.emissive.copy(pulseColor).multiplyScalar(pulse * 0.3);
+        const t = elapsed / duration;
+        let intensity: number;
+        let lerpTarget: THREE.Color;
+        if (t < 0.5) {
+          const subT = t / 0.5;
+          intensity = subT;
+          lerpTarget = new THREE.Color(0xffffff);
+        } else {
+          const subT = (t - 0.5) / 0.5;
+          intensity = 1.0 - subT;
+          lerpTarget = this.pulseAnimation.baseColor.clone();
         }
+        const baseWithWhite = this.pulseAnimation.baseColor.clone().lerp(lerpTarget, Math.min(intensity * 1.2, 1.0));
+        const emissiveIntensity = intensity * 0.8;
+        this.tableMaterial.emissive.copy(baseWithWhite).multiplyScalar(emissiveIntensity);
       }
     }
   }
+}
 
 export default Environment;

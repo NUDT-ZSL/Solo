@@ -83,27 +83,41 @@ export class SceneSetup {
   }
 
   public getLightCount(): number {
-    let count = 0;
-    this.scene.traverse((obj) => {
-      if (obj instanceof THREE.Light) count++;
-    });
+    return this.countLightsRecursive(this.scene.children, 0);
+  }
+
+  private countLightsRecursive(children: THREE.Object3D[], count: number): number {
+    for (const child of children) {
+      if (child instanceof THREE.Light) {
+        count++;
+      }
+      if (child.children && child.children.length > 0) {
+        count = this.countLightsRecursive(child.children, count);
+      }
+    }
     return count;
   }
 
   public getTriangleCount(): number {
-    let triangleCount = 0;
-    this.scene.traverse((obj) => {
-      if (obj instanceof THREE.Mesh) {
-        const geom = obj.geometry;
+    return this.countTrianglesRecursive(this.scene.children, 0);
+  }
+
+  private countTrianglesRecursive(children: THREE.Object3D[], count: number): number {
+    for (const child of children) {
+      if (child instanceof THREE.Mesh) {
+        const geom = child.geometry;
         if (geom.index) {
-          triangleCount += geom.index.count / 3;
+          count += geom.index.count / 3;
         } else {
           const pos = geom.getAttribute('position');
-          if (pos) triangleCount += pos.count / 3;
+          if (pos) count += pos.count / 3;
         }
       }
-    });
-    return Math.floor(triangleCount);
+      if (child.children && child.children.length > 0) {
+        count = this.countTrianglesRecursive(child.children, count);
+      }
+    }
+    return Math.floor(count);
   }
 
   public dispose(): void {
