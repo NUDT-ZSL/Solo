@@ -16,13 +16,25 @@ export const MapScene: React.FC = () => {
     const interval = setInterval(() => {
       if (currentMusicianId) {
         addExplorationTime(currentMusicianId, 1);
+      }
+      const state = useDataStore.getState();
+      let needUpdate = false;
+      state.explorationRecords.forEach(record => {
+        if (record.lockedUntil && record.lockedUntil <= Date.now()) {
+          state.resetLock(record.itemId);
+          needUpdate = true;
+        }
+      });
+      if (needUpdate) {
+        forceUpdate(n => n + 1);
+      } else {
         forceUpdate(n => n + 1);
       }
     }, 1000);
     return () => clearInterval(interval);
   }, [currentMusicianId, addExplorationTime]);
 
-  const handleItemClick = useCallback(async (item: MusicItem) => {
+  const handleItemClick = useCallback((item: MusicItem) => {
     const record = getItemRecord(item.id);
     const now = Date.now();
 
@@ -36,9 +48,12 @@ export const MapScene: React.FC = () => {
       resetLock(item.id);
     }
 
-    await audioEngine.playByItemId(item.id);
-    setSelectedItem(item);
-    setShowPuzzle(true);
+    audioEngine.playByItemId(item.id);
+    
+    setTimeout(() => {
+      setSelectedItem(item);
+      setShowPuzzle(true);
+    }, 2000);
   }, [getItemRecord, resetLock]);
 
   const handlePuzzleClose = useCallback(() => {

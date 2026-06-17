@@ -23,6 +23,10 @@ export const Register: React.FC = () => {
     if (selectedMusician) {
       setCurrentMusician(selectedMusician);
       setCurrentPage('map');
+      window.location.hash = '#map';
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 100);
     }
   };
 
