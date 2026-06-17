@@ -1,0 +1,137 @@
+[
+  {
+    "id": "f1",
+    "title": "城市之光",
+    "category": "剧情",
+    "posterUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=cinematic%20movie%20poster%20drama%20film%20city%20lights%20warm%20tones&image_size=square",
+    "description": "讲述了一个关于城市中陌生人之间温暖相遇的故事，展现了现代都市生活中的人情冷暖和人性光辉。",
+    "director": "李明",
+    "releaseDate": "2024-01-15"
+  },
+  {
+    "id": "f2",
+    "title": "深海探险",
+    "category": "纪录片",
+    "posterUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=documentary%20film%20poster%20deep%20sea%20exploration%20underwater%20creatures&image_size=square",
+    "description": "跟随科学家团队深入海底，探索未知的海洋世界，记录了许多前所未见的深海生物和地质奇观。",
+    "director": "张华",
+    "releaseDate": "2024-02-20"
+  },
+  {
+    "id": "f3",
+    "title": "星空下的梦",
+    "category": "动画",
+    "posterUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=animation%20movie%20poster%20dream%20under%20stars%20fantasy%20colorful&image_size=square",
+    "description": "一个小女孩在梦境中穿越星空，寻找失去的记忆，画面精美，音乐动人。",
+    "director": "王晓",
+    "releaseDate": "2024-03-10"
+  },
+  {
+    "id": "f4",
+    "title": "老巷记忆",
+    "category": "剧情",
+    "posterUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=nostalgic%20drama%20film%20poster%20old%20alley%20memories%20vintage%20style&image_size=square",
+    "description": "通过一条老巷子的变迁，展现了几代人的生活故事和时代的变迁。",
+    "director": "陈静",
+    "releaseDate": "2024-01-25"
+  },
+  {
+    "id": "f5",
+    "title": "自然之声",
+    "category": "纪录片",
+    "posterUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=nature%20documentary%20poster%20wildlife%20forest%20animals%20serene&image_size=square",
+    "description": "记录了大自然中各种美妙的声音，从雨林到沙漠，从海洋到山脉，呈现地球的生命交响曲。",
+    "director": "刘阳",
+    "releaseDate": "2024-02-28"
+  },
+  {
+    "id": "f6",
+    "title": "机械之心",
+    "category": "动画",
+    "posterUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sci-fi%20animation%20poster%20robot%20heart%20future%20city%20cyberpunk&image_size=square",
+    "description": "在未来世界，一个机器人产生了人类的情感，开始追寻生命的意义。",
+    "director": "赵宇",
+    "releaseDate": "2024-03-15"
+  },
+  {
+    "id": "f7",
+    "title": "回家的路",
+    "category": "剧情",
+    "posterUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=emotional%20drama%20film%20poster%20road%20home%20family%20reunion&image_size=square",
+    "description": "一个在外漂泊多年的游子，踏上了回家的旅程，途中经历了各种人和事。",
+    "director": "孙磊",
+    "releaseDate": "2024-01-30"
+  },
+  {
+    "id": "f8",
+    "title": "美食之旅",
+    "category": "纪录片",
+    "posterUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=food%20documentary%20poster%20culinary%20journey%20delicious%20dishes%20culture&image_size=square",
+    "description": "走访中国各地，探索当地特色美食背后的文化故事和制作工艺。",
+    "director": "周涛",
+    "releaseDate": "2024-02-18"
+  },
+  {
+    "id": "f9",
+    "title": "幻想森林",
+    "category": "动画",
+    "posterUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=fantasy%20animation%20poster%20magical%20forest%20enchanted%20creatures%20whimsical&image_size=square",
+    "description": "一群小动物在神秘森林中的冒险故事，充满想象力和趣味性。",
+    "director": "吴敏",
+    "releaseDate": "2024-03-20"
+  },
+  {
+    "id": "f10",
+    "title": "舞台人生",
+    "category": "剧情",
+    "posterUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=theater%20drama%20film%20poster%20stage%20life%20actor%20backstage&image_size=square",
+    "description": "讲述了一群戏剧演员的台前幕后，展现了他们对艺术的执着追求和生活中的酸甜苦辣。",
+    "director": "郑华",
+    "releaseDate": "2024-02-05"
+  },
+  {
+    "id": "f11",
+    "title": "宇宙边缘",
+    "category": "纪录片",
+    "posterUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=space%20documentary%20poster%20universe%20edge%20galaxy%20cosmos%20telescope&image_size=square",
+    "description": "借助最新的天文望远镜，探索宇宙最深处的奥秘，寻找外星生命的痕迹。",
+    "director": "钱峰",
+    "releaseDate": "2024-03-01"
+  },
+  {
+    "id": "f12",
+    "title": "时间旅行者",
+    "category": "动画",
+    "posterUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=time%20travel%20animation%20poster%20clock%20adventure%20different%20eras%20creative&image_size=square",
+    "description": "一个少年意外获得了时间旅行的能力，开始了穿越不同时代的奇妙旅程。",
+    "director": "冯雪",
+    "releaseDate": "2024-03-25"
+  },
+  {
+    "id": "f13",
+    "title": "海边的约定",
+    "category": "剧情",
+    "posterUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=romantic%20drama%20film%20poster%20seaside%20promise%20sunset%20beach&image_size=square",
+    "description": "两个童年好友在海边许下约定，多年后重逢，重温那段纯真的友谊。",
+    "director": "黄丽",
+    "releaseDate": "2024-01-20"
+  },
+  {
+    "id": "f14",
+    "title": "功夫传奇",
+    "category": "纪录片",
+    "posterUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=kung%20fu%20documentary%20poster%20martial%20arts%20legend%20chinese%20tradition&image_size=square",
+    "description": "探访中国武术的发源地，记录各派功夫的传承与发展，展现中华武术的魅力。",
+    "director": "林强",
+    "releaseDate": "2024-02-22"
+  },
+  {
+    "id": "f15",
+    "title": "糖果王国",
+    "category": "动画",
+    "posterUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sweet%20animation%20poster%20candy%20kingdom%20colorful%20sweets%20fantasy%20land&image_size=square",
+    "description": "在一个由糖果构成的奇幻王国里，发生了一系列甜蜜又有趣的故事。",
+    "director": "徐娜",
+    "releaseDate": "2024-03-08"
+  }
+]
