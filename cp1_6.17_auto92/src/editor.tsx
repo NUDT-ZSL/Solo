@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react'
+import React, { useMemo, useRef, useEffect } from 'react'
 import { useAppStore } from './store'
 import { themes } from './theme'
 import { parseMarkdown, renderContent } from './parser'
@@ -20,24 +20,24 @@ const Editor: React.FC<EditorProps> = ({ onExportSuccess }) => {
   } = useAppStore()
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const lineNumbersRef = useRef<HTMLDivElement>(null)
   const [exportProgress, setExportProgress] = React.useState(0)
+  const [showProgress, setShowProgress] = React.useState(false)
 
   const theme = getCurrentTheme()
+  const lineCount = useMemo(() => content.split('\n').length, [content])
+
   const lineNumbers = useMemo(() => {
-    const lines = content.split('\n').length
-    return Array.from({ length: lines }, (_, i) => i + 1)
-  }, [content])
+    return Array.from({ length: lineCount }, (_, i) => i + 1)
+  }, [lineCount])
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setContent(e.target.value)
   }
 
   const handleScroll = () => {
-    if (textareaRef.current) {
-      const lineNumbersEl = textareaRef.current.parentElement?.querySelector('.line-numbers') as HTMLDivElement | null
-      if (lineNumbersEl) {
-        lineNumbersEl.scrollTop = textareaRef.current.scrollTop
-      }
+    if (textareaRef.current && lineNumbersRef.current) {
+      lineNumbersRef.current.scrollTop = textareaRef.current.scrollTop
     }
   }
 
@@ -252,6 +252,7 @@ const Editor: React.FC<EditorProps> = ({ onExportSuccess }) => {
   const handleExport = () => {
     if (isExporting) return
     setIsExporting(true)
+    setShowProgress(true)
     setExportProgress(0)
 
     const duration = 500
@@ -280,6 +281,7 @@ const Editor: React.FC<EditorProps> = ({ onExportSuccess }) => {
 
         setTimeout(() => {
           setIsExporting(false)
+          setShowProgress(false)
           setExportProgress(0)
           onExportSuccess?.()
         }, 200)
@@ -287,6 +289,95 @@ const Editor: React.FC<EditorProps> = ({ onExportSuccess }) => {
     }
 
     requestAnimationFrame(animate)
+  }
+
+  const editorContainerStyle: React.CSSProperties = {
+    flex: 1,
+    display: 'flex',
+    overflow: 'hidden',
+    position: 'relative',
+    background: '#1e1e1e'
+  }
+
+  const lineNumbersStyle: React.CSSProperties = {
+    background: '#1e1e1e',
+    color: '#858585',
+    padding: '20px 12px 20px 16px',
+    textAlign: 'right',
+    fontFamily: 'Consolas, "Courier New", monospace',
+    fontSize: '14px',
+    lineHeight: '22px',
+    overflow: 'hidden',
+    userSelect: 'none',
+    minWidth: '48px',
+    flexShrink: 0,
+    borderRight: '1px solid #2d2d2d'
+  }
+
+  const textareaStyle: React.CSSProperties = {
+    flex: 1,
+    background: '#1e1e1e',
+    color: '#d4d4d4',
+    border: 'none',
+    outline: 'none',
+    resize: 'none',
+    padding: '20px 24px',
+    fontFamily: 'Consolas, "Courier New", monospace',
+    fontSize: '14px',
+    lineHeight: '22px',
+    overflow: 'auto',
+    whiteSpace: 'pre',
+    tabSize: 2,
+    width: '100%',
+    height: '100%'
+  }
+
+  const toolbarStyle: React.CSSProperties = {
+    padding: '14px 20px',
+    background: '#f8f9fa',
+    borderTop: '1px solid #e9ecef',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    flexWrap: 'wrap',
+    minHeight: '64px',
+    position: 'relative'
+  }
+
+  const exportBtnStyle: React.CSSProperties = {
+    padding: '10px 22px',
+    borderRadius: '6px',
+    border: 'none',
+    cursor: isExporting ? 'not-allowed' : 'pointer',
+    background: isExporting ? '#a5d6a7' : theme.buttonBg,
+    color: theme.buttonText,
+    fontSize: '14px',
+    fontWeight: 600,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    transition: 'background-color 0.5s ease-in-out, color 0.5s ease-in-out',
+    opacity: isExporting ? 0.9 : 1,
+    position: 'relative',
+    overflow: 'hidden'
+  }
+
+  const progressBarContainerStyle: React.CSSProperties = {
+    position: 'absolute',
+    left: 0,
+    bottom: 0,
+    width: '100%',
+    height: '3px',
+    background: '#e0e0e0',
+    opacity: showProgress ? 1 : 0,
+    transition: 'opacity 0.2s ease'
+  }
+
+  const progressBarStyle: React.CSSProperties = {
+    height: '100%',
+    background: '#4CAF50',
+    width: `${exportProgress}%`,
+    transition: 'width 0.05s linear'
   }
 
   return (
@@ -299,29 +390,11 @@ const Editor: React.FC<EditorProps> = ({ onExportSuccess }) => {
         background: '#fff'
       }}
     >
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          overflow: 'hidden',
-          position: 'relative'
-        }}
-      >
+      <div style={editorContainerStyle}>
         <div
+          ref={lineNumbersRef}
           className="line-numbers"
-          style={{
-            background: '#1e1e1e',
-            color: '#858585',
-            padding: '20px 12px 20px 16px',
-            textAlign: 'right',
-            fontFamily: 'Consolas, "Courier New", monospace',
-            fontSize: '14px',
-            lineHeight: '22px',
-            overflow: 'hidden',
-            userSelect: 'none',
-            minWidth: '48px',
-            borderRight: '1px solid #2d2d2d'
-          }}
+          style={lineNumbersStyle}
         >
           {lineNumbers.map(n => (
             <div key={n}>{n}</div>
@@ -333,38 +406,12 @@ const Editor: React.FC<EditorProps> = ({ onExportSuccess }) => {
           onChange={handleChange}
           onScroll={handleScroll}
           spellCheck={false}
-          placeholder="在这里输入 Markdown 内容...\n使用 --- 分隔幻灯片"
-          style={{
-            flex: 1,
-            background: '#1e1e1e',
-            color: '#d4d4d4',
-            border: 'none',
-            outline: 'none',
-            resize: 'none',
-            padding: '20px 24px',
-            fontFamily: 'Consolas, "Courier New", monospace',
-            fontSize: '14px',
-            lineHeight: '22px',
-            overflow: 'auto',
-            whiteSpace: 'pre',
-            tabSize: 2
-          }}
+          placeholder="在这里输入 Markdown 内容...&#10;使用 --- 分隔幻灯片"
+          style={textareaStyle}
         />
       </div>
 
-      <div
-        style={{
-          padding: '14px 20px',
-          background: '#f8f9fa',
-          borderTop: '1px solid #e9ecef',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '16px',
-          flexWrap: 'wrap',
-          minHeight: '64px',
-          position: 'relative'
-        }}
-      >
+      <div style={toolbarStyle}>
         <div
           style={{
             display: 'flex',
@@ -431,29 +478,13 @@ const Editor: React.FC<EditorProps> = ({ onExportSuccess }) => {
         >
           <span>{slides.length} 张幻灯片</span>
           <span>|</span>
-          <span>{content.split('\n').length} 行</span>
+          <span>{lineCount} 行</span>
         </div>
 
         <button
           onClick={handleExport}
           disabled={isExporting}
-          style={{
-            padding: '10px 22px',
-            borderRadius: '6px',
-            border: 'none',
-            cursor: isExporting ? 'not-allowed' : 'pointer',
-            background: isExporting ? '#a5d6a7' : theme.buttonBg,
-            color: theme.buttonText,
-            fontSize: '14px',
-            fontWeight: 600,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            transition: 'all 0.5s ease-in-out, transform 0.1s ease',
-            opacity: isExporting ? 0.9 : 1,
-            position: 'relative',
-            overflow: 'hidden'
-          }}
+          style={exportBtnStyle}
           onMouseDown={(e) => {
             if (!isExporting) e.currentTarget.style.transform = 'scale(0.95)'
           }}
@@ -464,22 +495,14 @@ const Editor: React.FC<EditorProps> = ({ onExportSuccess }) => {
             e.currentTarget.style.transform = 'scale(1)'
           }}
         >
-          <span
-            style={{
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              height: '100%',
-              background: '#4CAF50',
-              width: `${exportProgress}%`,
-              transition: 'width 0.05s linear',
-              opacity: 0.35
-            }}
-          />
           <span style={{ position: 'relative', zIndex: 1 }}>
             {isExporting ? '导出中...' : '⬇ 导出 HTML'}
           </span>
         </button>
+
+        <div style={progressBarContainerStyle}>
+          <div style={progressBarStyle} />
+        </div>
       </div>
     </div>
   )

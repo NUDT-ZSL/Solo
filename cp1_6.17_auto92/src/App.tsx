@@ -24,7 +24,8 @@ const App: React.FC = () => {
     alignItems: 'center',
     justifyContent: 'space-between',
     boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-    zIndex: 10
+    zIndex: 10,
+    flexShrink: 0
   }
 
   const contentStyle: React.CSSProperties = {
@@ -35,11 +36,12 @@ const App: React.FC = () => {
   }
 
   const editorPaneStyle: React.CSSProperties = {
-    flex: 1,
-    minWidth: '420px',
+    flex: '1 1 0',
+    minWidth: 0,
     height: '100%',
     overflow: 'hidden',
-    display: 'flex'
+    display: 'flex',
+    minWidth: '380px'
   }
 
   const dividerStyle: React.CSSProperties = {
@@ -49,11 +51,12 @@ const App: React.FC = () => {
   }
 
   const previewPaneStyle: React.CSSProperties = {
-    flex: 1,
-    minWidth: '480px',
+    flex: '1 1 0',
+    minWidth: 0,
     height: '100%',
     overflow: 'hidden',
-    display: 'flex'
+    display: 'flex',
+    minWidth: '420px'
   }
 
   if (isFullscreen) {
@@ -65,7 +68,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div style={layoutStyle}>
+    <div style={layoutStyle} className="app-container">
       <header style={headerStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div
@@ -128,12 +131,12 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <div style={contentStyle}>
-        <div style={editorPaneStyle}>
+      <div style={contentStyle} className="content-wrapper">
+        <div style={editorPaneStyle} className="editor-pane">
           <Editor />
         </div>
-        <div style={dividerStyle} />
-        <div style={previewPaneStyle}>
+        <div style={dividerStyle} className="divider" />
+        <div style={previewPaneStyle} className="preview-pane">
           <Slider />
         </div>
       </div>
@@ -148,10 +151,6 @@ const App: React.FC = () => {
             opacity: 1;
             transform: translateX(0);
           }
-        }
-
-        @media (max-width: 1023px) {
-          /* 响应式：小屏幕时保持基本布局 */
         }
 
         * {
@@ -185,6 +184,55 @@ const App: React.FC = () => {
 
         textarea::placeholder {
           color: #555;
+        }
+
+        .line-numbers::-webkit-scrollbar {
+          display: none;
+        }
+
+        @media (min-width: 1024px) {
+          .content-wrapper {
+            max-width: 1800px;
+            margin: 0 auto;
+            width: 100%;
+          }
+          .editor-pane {
+            flex: 0 0 45%;
+            max-width: 45%;
+          }
+          .preview-pane {
+            flex: 1 1 auto;
+          }
+        }
+
+        @media (min-width: 1440px) {
+          .editor-pane {
+            flex: 0 0 40%;
+            max-width: 40%;
+          }
+        }
+
+        @media (max-width: 1023px) {
+          .content-wrapper {
+            flex-direction: column;
+          }
+          .divider {
+            width: 100% !important;
+            height: 3px !important;
+          }
+          .editor-pane,
+          .preview-pane {
+            min-width: 100% !important;
+            width: 100% !important;
+          }
+          .editor-pane {
+            flex: 0 0 45%;
+            max-height: 45%;
+          }
+          .preview-pane {
+            flex: 1 1 auto;
+            min-height: 0;
+          }
         }
       `}</style>
     </div>
