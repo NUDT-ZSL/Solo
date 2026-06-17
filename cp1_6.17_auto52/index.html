@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D蛋白质分子对接与折叠模拟</title>
+  <link rel="stylesheet" href="/src/styles/main.css">
+</head>
+<body>
+  <div id="app">
+    <div id="scene-container" class="scene-container"></div>
+
+    <div id="info-panel" class="info-panel">
+      <div class="panel-header">
+        <h3>分子信息</h3>
+      </div>
+      <div class="panel-content">
+        <div class="info-row">
+          <span class="info-label">分子对</span>
+          <span id="molecule-pair-name" class="info-value">新冠刺突蛋白 - 抑制剂</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">受体原子数</span>
+          <span id="receptor-atom-count" class="info-value mono-font">0</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">受体键数</span>
+          <span id="receptor-bond-count" class="info-value mono-font">
+            <span class="pulse-dot"></span>
+            <span id="bond-count-text">0</span>
+          </span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">分子量</span>
+          <span id="molecular-weight" class="info-value mono-font">0 Da</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">配体原子数</span>
+          <span id="ligand-atom-count" class="info-value mono-font">0</span>
+        </div>
+        <div class="divider"></div>
+        <div id="docking-results" class="docking-results hidden">
+          <h4>对接结果</h4>
+          <div class="info-row">
+            <span class="info-label">结合能</span>
+            <span id="binding-energy" class="info-value mono-font highlight">-0.0 kcal/mol</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">对接距离</span>
+            <span id="docking-distance" class="info-value mono-font">0.00 Å</span>
+          </div>
+          <div class="residues-section">
+            <span class="info-label">关键残基</span>
+            <ul id="key-residues" class="residues-list"></ul>
+          </div>
+        </div>
+        <div id="docking-status" class="docking-status">
+          <span class="status-indicator"></span>
+          <span id="status-text">拖拽配体靠近受体活性位点</span>
+        </div>
+      </div>
+    </div>
+
+    <button id="reset-view-btn" class="reset-view-btn" title="重置视角">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+        <path d="M3 3v5h5"/>
+      </svg>
+    </button>
+
+    <div id="toolbar" class="toolbar">
+      <div class="toolbar-group">
+        <label class="toolbar-label">分子选择</label>
+        <select id="molecule-select" class="molecule-select">
+          <option value="spike-inhibitor">新冠刺突蛋白 - 抑制剂</option>
+          <option value="hemoglobin-oxygen">血红蛋白 - 氧气</option>
+        </select>
+      </div>
+      <div class="toolbar-group">
+        <label class="toolbar-label">温度</label>
+        <div class="slider-container">
+          <input type="range" id="temperature-slider" class="temperature-slider" 
+                 min="0" max="100" value="25" step="1">
+          <span id="temperature-value" class="slider-value mono-font">25</span>
+        </div>
+      </div>
+      <div class="toolbar-group">
+        <button id="start-docking-btn" class="start-docking-btn">开始对接</button>
+      </div>
+      <div class="toolbar-group">
+        <div class="fps-display">
+          <span class="fps-label">FPS</span>
+          <span id="fps-value" class="fps-value mono-font">60</span>
+        </div>
+      </div>
+    </div>
+
+    <button id="mobile-panel-toggle" class="mobile-panel-toggle hidden">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+        <path d="M12 3v18M3 12h18"/>
+      </svg>
+    </button>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
