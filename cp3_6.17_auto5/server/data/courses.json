@@ -1,0 +1,10 @@
+{
+  "courses": [
+    {
+      "id": "course-1",
+      "title": "React 前端开发入门到精通",
+      "description": "从零开始学习 React，掌握组件化开发、状态管理、Hooks 等核心概念",
+      "coverUrl": "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=400"
+    }
+  ]
+}

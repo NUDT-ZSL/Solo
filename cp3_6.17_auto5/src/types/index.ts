@@ -1,58 +1,41 @@
-export interface Subject {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
+export type Difficulty = 'beginner' | 'intermediate' | 'advanced'
+
+export interface Course {
+  id: string
+  title: string
+  description: string
+  coverUrl: string
 }
 
-export type QuestionCategory = '基础知识' | '逻辑分析' | '代码理解' | '安全规范' | '项目管理';
-
-export interface Question {
-  id: string;
-  subjectId: string;
-  text: string;
-  options: string[];
-  correctAnswer: number;
-  category: QuestionCategory;
-  explanation: string;
+export interface KnowledgePoint {
+  id: string
+  courseId: string
+  title: string
+  description: string
+  difficulty: Difficulty
+  tags: string[]
+  x: number
+  y: number
 }
 
-export interface ExamAnswer {
-  questionId: string;
-  selectedAnswer: number;
-  isCorrect: boolean;
+export interface Relation {
+  id: string
+  courseId: string
+  from: string
+  to: string
 }
 
-export interface WrongQuestion {
-  question: Question;
-  userAnswer: number;
+export interface User {
+  id: string
+  username: string
+  name: string
+  role: 'teacher' | 'student'
+  email: string
 }
 
-export interface DimensionScores {
-  基础知识: number;
-  逻辑分析: number;
-  代码理解: number;
-  安全规范: number;
-  项目管理: number;
+export interface AssessmentRecord {
+  score: number
+  reviewed: boolean
 }
 
-export interface ExamResult {
-  id: string;
-  subjectId: string;
-  subjectName: string;
-  score: number;
-  totalQuestions: number;
-  correctCount: number;
-  timeUsed: number;
-  answers: ExamAnswer[];
-  wrongQuestions: WrongQuestion[];
-  dimensionScores: DimensionScores;
-  suggestions: string[];
-  examDate: string;
-}
-
-export interface SubmitExamRequest {
-  subjectId: string;
-  answers: { questionId: string; selectedAnswer: number }[];
-  timeUsed: number;
-}
+export type AssessmentsMap = Record<string, AssessmentRecord>

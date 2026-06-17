@@ -1,250 +1,275 @@
-import express from 'express';
-import cors from 'cors';
-import { v4 as uuidv4 } from 'uuid';
-import dayjs from 'dayjs';
-import { readFile, writeFile } from 'node:fs/promises';
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import type {
-  Subject,
-  Question,
-  ExamResult,
-  SubmitExamRequest,
-  ExamAnswer,
-  WrongQuestion,
-  DimensionScores,
-  QuestionCategory,
-} from '../src/types/index.js';
+import express, { Request, Response } from 'express'
+import cors from 'cors'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
+import { v4 as uuidv4 } from 'uuid'
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
-const DATA_DIR = __dirname;
-const SUBJECTS_FILE = resolve(DATA_DIR, 'subjects.json');
-const QUESTIONS_FILE = resolve(DATA_DIR, 'questions.json');
-const RESULTS_FILE = resolve(DATA_DIR, 'results.json');
+const app = express()
+const PORT = 4000
 
-const CATEGORIES: QuestionCategory[] = [
-  '基础知识',
-  '逻辑分析',
-  '代码理解',
-  '安全规范',
-  '项目管理',
-];
+app.use(cors())
+app.use(express.json())
 
-const SUGGESTION_TEMPLATES: Record<QuestionCategory, string> = {
-  '基础知识': '建议加强「基础知识」的学习，重点复习核心概念和基础语法，多做基础练习题巩固记忆。',
-  '逻辑分析': '建议强化「逻辑分析」能力，多做算法题和逻辑推理题，培养系统化的思维方式。',
-  '代码理解': '建议提升「代码理解」能力，多阅读优秀开源代码，尝试分析不同代码片段的执行流程。',
-  '安全规范': '建议重视「安全规范」，学习常见的安全漏洞原理和防护措施，养成安全编码习惯。',
-  '项目管理': '建议补充「项目管理」知识，熟悉项目管理流程和工具，理解敏捷开发方法论。',
-};
+const DATA_DIR = path.join(__dirname, 'data')
 
-async function readJsonFile<T>(filePath: string): Promise<T> {
-  try {
-    const content = await readFile(filePath, 'utf-8');
-    return JSON.parse(content) as T;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return [] as unknown as T;
-    }
-    throw error;
-  }
+type Difficulty = 'beginner' | 'intermediate' | 'advanced'
+
+interface Course {
+  id: string
+  title: string
+  description: string
+  coverUrl: string
 }
 
-async function writeJsonFile<T>(filePath: string, data: T): Promise<void> {
-  await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+interface KnowledgePoint {
+  id: string
+  courseId: string
+  title: string
+  description: string
+  difficulty: Difficulty
+  tags: string[]
+  x: number
+  y: number
 }
 
-const app = express();
-const PORT = 3001;
+interface Relation {
+  id: string
+  courseId: string
+  from: string
+  to: string
+}
 
-app.use(cors());
-app.use(express.json());
+interface User {
+  id: string
+  username: string
+  name: string
+  role: 'teacher' | 'student'
+  email: string
+}
 
-app.get('/api/subjects', async (_req, res) => {
-  try {
-    const subjects = await readJsonFile<Subject[]>(SUBJECTS_FILE);
-    res.json(subjects);
-  } catch (error) {
-    res.status(500).json({ error: '读取科目列表失败' });
+interface AssessmentRecord {
+  score: number
+  reviewed: boolean
+}
+
+function readJSON<T>(filename: string): T {
+  const raw = fs.readFileSync(path.join(DATA_DIR, filename), 'utf-8')
+  return JSON.parse(raw)
+}
+
+function writeJSON(filename: string, data: unknown): void {
+  fs.writeFileSync(path.join(DATA_DIR, filename), JSON.stringify(data, null, 2), 'utf-8')
+}
+
+app.get('/api/courses', (_req: Request, res: Response) => {
+  const data = readJSON<{ courses: Course[] }>('courses.json')
+  res.json(data.courses)
+})
+
+app.get('/api/courses/:id', (req: Request, res: Response) => {
+  const data = readJSON<{ courses: Course[] }>('courses.json')
+  const course = data.courses.find(c => c.id === req.params.id)
+  if (!course) return res.status(404).json({ error: 'Course not found' })
+  res.json(course)
+})
+
+app.post('/api/courses', (req: Request, res: Response) => {
+  const data = readJSON<{ courses: Course[] }>('courses.json')
+  const newCourse: Course = { id: uuidv4(), ...req.body }
+  data.courses.push(newCourse)
+  writeJSON('courses.json', data)
+  res.status(201).json(newCourse)
+})
+
+app.put('/api/courses/:id', (req: Request, res: Response) => {
+  const data = readJSON<{ courses: Course[] }>('courses.json')
+  const idx = data.courses.findIndex(c => c.id === req.params.id)
+  if (idx === -1) return res.status(404).json({ error: 'Course not found' })
+  data.courses[idx] = { ...data.courses[idx], ...req.body }
+  writeJSON('courses.json', data)
+  res.json(data.courses[idx])
+})
+
+app.delete('/api/courses/:id', (req: Request, res: Response) => {
+  const data = readJSON<{ courses: Course[] }>('courses.json')
+  data.courses = data.courses.filter(c => c.id !== req.params.id)
+  writeJSON('courses.json', data)
+  res.json({ success: true })
+})
+
+app.get('/api/courses/:courseId/knowledge-points', (req: Request, res: Response) => {
+  const data = readJSON<{ knowledgePoints: KnowledgePoint[] }>('knowledgePoints.json')
+  const points = data.knowledgePoints.filter(kp => kp.courseId === req.params.courseId)
+  res.json(points)
+})
+
+app.post('/api/knowledge-points', (req: Request, res: Response) => {
+  const data = readJSON<{ knowledgePoints: KnowledgePoint[] }>('knowledgePoints.json')
+  const newKp: KnowledgePoint = { id: uuidv4(), x: 400, y: 300, ...req.body }
+  data.knowledgePoints.push(newKp)
+  writeJSON('knowledgePoints.json', data)
+  res.status(201).json(newKp)
+})
+
+app.put('/api/knowledge-points/:id', (req: Request, res: Response) => {
+  const data = readJSON<{ knowledgePoints: KnowledgePoint[] }>('knowledgePoints.json')
+  const idx = data.knowledgePoints.findIndex(kp => kp.id === req.params.id)
+  if (idx === -1) return res.status(404).json({ error: 'Knowledge point not found' })
+  data.knowledgePoints[idx] = { ...data.knowledgePoints[idx], ...req.body }
+  writeJSON('knowledgePoints.json', data)
+  res.json(data.knowledgePoints[idx])
+})
+
+app.delete('/api/knowledge-points/:id', (req: Request, res: Response) => {
+  const kpData = readJSON<{ knowledgePoints: KnowledgePoint[] }>('knowledgePoints.json')
+  kpData.knowledgePoints = kpData.knowledgePoints.filter(kp => kp.id !== req.params.id)
+  writeJSON('knowledgePoints.json', kpData)
+
+  const relData = readJSON<{ relations: Relation[] }>('relations.json')
+  relData.relations = relData.relations.filter(r => r.from !== req.params.id && r.to !== req.params.id)
+  writeJSON('relations.json', relData)
+
+  res.json({ success: true })
+})
+
+app.get('/api/courses/:courseId/relations', (req: Request, res: Response) => {
+  const data = readJSON<{ relations: Relation[] }>('relations.json')
+  const rels = data.relations.filter(r => r.courseId === req.params.courseId)
+  res.json(rels)
+})
+
+app.post('/api/relations', (req: Request, res: Response) => {
+  const data = readJSON<{ relations: Relation[] }>('relations.json')
+  const exists = data.relations.some(r => r.from === req.body.from && r.to === req.body.to)
+  if (exists) return res.status(400).json({ error: 'Relation already exists' })
+  const newRel: Relation = { id: uuidv4(), ...req.body }
+  data.relations.push(newRel)
+  writeJSON('relations.json', data)
+  res.status(201).json(newRel)
+})
+
+app.delete('/api/relations/:id', (req: Request, res: Response) => {
+  const data = readJSON<{ relations: Relation[] }>('relations.json')
+  data.relations = data.relations.filter(r => r.id !== req.params.id)
+  writeJSON('relations.json', data)
+  res.json({ success: true })
+})
+
+app.get('/api/users', (_req: Request, res: Response) => {
+  const data = readJSON<{ users: User[] }>('users.json')
+  res.json(data.users)
+})
+
+app.get('/api/users/:id', (req: Request, res: Response) => {
+  const data = readJSON<{ users: User[] }>('users.json')
+  const user = data.users.find(u => u.id === req.params.id)
+  if (!user) return res.status(404).json({ error: 'User not found' })
+  res.json(user)
+})
+
+app.get('/api/users/:userId/assessments', (req: Request, res: Response) => {
+  const data = readJSON<{ assessments: Record<string, Record<string, AssessmentRecord>> }>('users.json')
+  const assessments = data.assessments[req.params.userId] || {}
+  res.json(assessments)
+})
+
+app.put('/api/users/:userId/assessments/:kpId', (req: Request, res: Response) => {
+  const data = readJSON<{ assessments: Record<string, Record<string, AssessmentRecord>> }>('users.json')
+  if (!data.assessments[req.params.userId]) {
+    data.assessments[req.params.userId] = {}
   }
-});
-
-app.get('/api/questions/:subjectId', async (req, res) => {
-  try {
-    const { subjectId } = req.params;
-    const questions = await readJsonFile<Question[]>(QUESTIONS_FILE);
-    const subjectQuestions = questions.filter((q) => q.subjectId === subjectId);
-    res.json(subjectQuestions);
-  } catch (error) {
-    res.status(500).json({ error: '读取题目列表失败' });
+  data.assessments[req.params.userId][req.params.kpId] = {
+    ...data.assessments[req.params.userId][req.params.kpId],
+    ...req.body
   }
-});
+  writeJSON('users.json', data)
+  res.json(data.assessments[req.params.userId][req.params.kpId])
+})
 
-app.post('/api/submit-exam', async (req, res) => {
-  try {
-    const { subjectId, answers, timeUsed } = req.body as SubmitExamRequest;
+app.get('/api/users/:userId/recommend-path', (req: Request, res: Response) => {
+  const courseId = req.query.courseId as string
+  if (!courseId) return res.status(400).json({ error: 'courseId is required' })
 
-    if (!subjectId || !Array.isArray(answers)) {
-      res.status(400).json({ error: '请求参数不完整' });
-      return;
+  const userData = readJSON<{ assessments: Record<string, Record<string, AssessmentRecord>> }>('users.json')
+  const assessments = userData.assessments[req.params.userId] || {}
+
+  const kpData = readJSON<{ knowledgePoints: KnowledgePoint[] }>('knowledgePoints.json')
+  const kps = kpData.knowledgePoints.filter(kp => kp.courseId === courseId)
+
+  const relData = readJSON<{ relations: Relation[] }>('relations.json')
+  const relations = relData.relations.filter(r => r.courseId === courseId)
+
+  const adjList: Record<string, string[]> = {}
+  const inDegree: Record<string, number> = {}
+  kps.forEach(kp => {
+    adjList[kp.id] = []
+    inDegree[kp.id] = 0
+  })
+  relations.forEach(r => {
+    if (adjList[r.from]) {
+      adjList[r.from].push(r.to)
+      inDegree[r.to] = (inDegree[r.to] || 0) + 1
     }
+  })
 
-    const subjects = await readJsonFile<Subject[]>(SUBJECTS_FILE);
-    const subject = subjects.find((s) => s.id === subjectId);
-    if (!subject) {
-      res.status(404).json({ error: '科目不存在' });
-      return;
-    }
+  const weakPoints = kps
+    .filter(kp => {
+      const score = assessments[kp.id]?.score ?? 0
+      return score < 60
+    })
+    .sort((a, b) => (assessments[a.id]?.score ?? 0) - (assessments[b.id]?.score ?? 0))
 
-    const questions = await readJsonFile<Question[]>(QUESTIONS_FILE);
-    const questionMap = new Map(questions.map((q) => [q.id, q]));
+  function dfsTopo(nodeId: string, visited: Set<string>, path: string[]): void {
+    if (visited.has(nodeId) || path.length >= 5) return
+    visited.add(nodeId)
+    path.push(nodeId)
 
-    const examAnswers: ExamAnswer[] = [];
-    const wrongQuestions: WrongQuestion[] = [];
-    let correctCount = 0;
-
-    const categoryTotal = new Map<QuestionCategory, number>();
-    const categoryCorrect = new Map<QuestionCategory, number>();
-
-    for (const answer of answers) {
-      const question = questionMap.get(answer.questionId);
-      if (!question) continue;
-
-      const isCorrect = question.correctAnswer === answer.selectedAnswer;
-
-      examAnswers.push({
-        questionId: answer.questionId,
-        selectedAnswer: answer.selectedAnswer,
-        isCorrect,
-      });
-
-      if (isCorrect) {
-        correctCount++;
-        categoryCorrect.set(
-          question.category,
-          (categoryCorrect.get(question.category) || 0) + 1
-        );
-      } else {
-        wrongQuestions.push({
-          question,
-          userAnswer: answer.selectedAnswer,
-        });
+    for (const next of adjList[nodeId] || []) {
+      if (!visited.has(next) && path.length < 5) {
+        dfsTopo(next, visited, path)
       }
+    }
+  }
 
-      categoryTotal.set(
-        question.category,
-        (categoryTotal.get(question.category) || 0) + 1
-      );
+  const result: string[] = []
+  const visited = new Set<string>()
+
+  for (const wp of weakPoints) {
+    if (result.length >= 5) break
+
+    const prerequisites: string[] = []
+    function findPrereqs(nodeId: string, seen: Set<string>): void {
+      if (seen.has(nodeId)) return
+      seen.add(nodeId)
+      for (const r of relations) {
+        if (r.to === nodeId && !seen.has(r.from)) {
+          findPrereqs(r.from, seen)
+          prerequisites.push(r.from)
+        }
+      }
+    }
+    findPrereqs(wp.id, new Set())
+
+    for (const pre of prerequisites) {
+      if (result.length >= 5) break
+      if (!visited.has(pre) && (assessments[pre]?.score ?? 0) < 60) {
+        dfsTopo(pre, visited, result)
+      }
     }
 
-    const dimensionScores: DimensionScores = {
-      '基础知识': 0,
-      '逻辑分析': 0,
-      '代码理解': 0,
-      '安全规范': 0,
-      '项目管理': 0,
-    };
-
-    for (const category of CATEGORIES) {
-      const total = categoryTotal.get(category) || 0;
-      const correct = categoryCorrect.get(category) || 0;
-      dimensionScores[category] = total > 0 ? Math.round((correct / total) * 100) : 0;
+    if (result.length < 5 && !visited.has(wp.id)) {
+      dfsTopo(wp.id, visited, result)
     }
-
-    const sortedCategories = [...CATEGORIES].sort(
-      (a, b) => dimensionScores[a] - dimensionScores[b]
-    );
-    const lowestCategories = sortedCategories.slice(0, 3);
-    const suggestions = lowestCategories.map(
-      (category) => SUGGESTION_TEMPLATES[category]
-    );
-
-    const score = answers.length > 0 ? Math.round((correctCount / answers.length) * 100) : 0;
-
-    const result: ExamResult = {
-      id: uuidv4(),
-      subjectId,
-      subjectName: subject.name,
-      score,
-      totalQuestions: answers.length,
-      correctCount,
-      timeUsed,
-      answers: examAnswers,
-      wrongQuestions,
-      dimensionScores,
-      suggestions,
-      examDate: dayjs().toISOString(),
-    };
-
-    const results = await readJsonFile<ExamResult[]>(RESULTS_FILE);
-    results.push(result);
-    await writeJsonFile(RESULTS_FILE, results);
-
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({ error: '批改考试失败' });
   }
-});
 
-app.get('/api/results', async (_req, res) => {
-  try {
-    const results = await readJsonFile<ExamResult[]>(RESULTS_FILE);
-    const sorted = results
-      .sort((a, b) => dayjs(b.examDate).valueOf() - dayjs(a.examDate).valueOf())
-      .slice(0, 10);
-    res.json(sorted);
-  } catch (error) {
-    res.status(500).json({ error: '读取成绩列表失败' });
-  }
-});
-
-app.get('/api/results/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const results = await readJsonFile<ExamResult[]>(RESULTS_FILE);
-    const result = results.find((r) => r.id === id);
-    if (!result) {
-      res.status(404).json({ error: '成绩不存在' });
-      return;
-    }
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({ error: '读取成绩失败' });
-  }
-});
-
-app.post('/api/questions', async (req, res) => {
-  try {
-    const questionData = req.body as Omit<Question, 'id'>;
-
-    if (
-      !questionData.subjectId ||
-      !questionData.text ||
-      !Array.isArray(questionData.options) ||
-      questionData.correctAnswer === undefined ||
-      !questionData.category ||
-      !questionData.explanation
-    ) {
-      res.status(400).json({ error: '题目数据不完整' });
-      return;
-    }
-
-    const questions = await readJsonFile<Question[]>(QUESTIONS_FILE);
-    const newQuestion: Question = {
-      id: uuidv4(),
-      ...questionData,
-    };
-    questions.push(newQuestion);
-    await writeJsonFile(QUESTIONS_FILE, questions);
-
-    res.status(201).json(newQuestion);
-  } catch (error) {
-    res.status(500).json({ error: '添加题目失败' });
-  }
-});
+  const finalPath = result.slice(0, 5)
+  res.json(finalPath)
+})
 
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-});
+  console.log(`Server running on http://localhost:${PORT}`)
+})

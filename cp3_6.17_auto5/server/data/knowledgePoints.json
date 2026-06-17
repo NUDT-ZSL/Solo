@@ -1,0 +1,94 @@
+{
+  "knowledgePoints": [
+    {
+      "id": "kp-1",
+      "courseId": "course-1",
+      "title": "HTML 基础",
+      "description": "HTML（HyperText Markup Language）是用于创建网页的标准标记语言。学习 HTML 标签结构、语义化标签、表单元素等基础知识。掌握 DOCTYPE 声明、meta 标签、常用布局标签（div、section、article 等）的使用方法。",
+      "difficulty": "beginner",
+      "tags": ["基础", "HTML", "标记语言"],
+      "x": 150,
+      "y": 120
+    },
+    {
+      "id": "kp-2",
+      "courseId": "course-1",
+      "title": "CSS 样式",
+      "description": "CSS（Cascading Style Sheets）用于描述 HTML 文档的呈现方式。学习选择器、盒模型、Flexbox 布局、Grid 布局、响应式设计、动画过渡等核心概念。掌握 CSS 变量、BEM 命名规范等最佳实践。",
+      "difficulty": "beginner",
+      "tags": ["基础", "CSS", "样式"],
+      "x": 380,
+      "y": 120
+    },
+    {
+      "id": "kp-3",
+      "courseId": "course-1",
+      "title": "JavaScript 基础",
+      "description": "JavaScript 是 Web 开发的核心编程语言。学习变量、数据类型、运算符、条件语句、循环、函数、数组、对象等基础语法。掌握 ES6+ 新特性：箭头函数、解构赋值、模板字符串、Promise 等。",
+      "difficulty": "beginner",
+      "tags": ["基础", "JavaScript", "编程语言"],
+      "x": 610,
+      "y": 120
+    },
+    {
+      "id": "kp-4",
+      "courseId": "course-1",
+      "title": "DOM 操作",
+      "description": "DOM（Document Object Model）提供了对 HTML 文档的编程接口。学习元素选择、节点操作、事件处理、事件委托、事件冒泡与捕获。掌握浏览器渲染机制和性能优化技巧。",
+      "difficulty": "intermediate",
+      "tags": ["DOM", "浏览器", "交互"],
+      "x": 265,
+      "y": 280
+    },
+    {
+      "id": "kp-5",
+      "courseId": "course-1",
+      "title": "React 组件基础",
+      "description": "学习 React 的核心概念：组件化思想、JSX 语法、Props 传值、State 状态管理。掌握函数组件和类组件的编写方式，理解组件生命周期，学习受控组件和非受控组件的区别。",
+      "difficulty": "intermediate",
+      "tags": ["React", "组件", "前端框架"],
+      "x": 495,
+      "y": 280
+    },
+    {
+      "id": "kp-6",
+      "courseId": "course-1",
+      "title": "React Hooks",
+      "description": "深入学习 React Hooks：useState、useEffect、useContext、useReducer、useMemo、useCallback 等核心 Hooks 的使用场景和原理。掌握自定义 Hook 的封装技巧和最佳实践。",
+      "difficulty": "advanced",
+      "tags": ["React", "Hooks", "高级"],
+      "x": 150,
+      "y": 440
+    },
+    {
+      "id": "kp-7",
+      "courseId": "course-1",
+      "title": "状态管理 Redux",
+      "description": "学习 Redux 状态管理库的核心概念：Store、Action、Reducer。掌握 Redux Toolkit 的使用方法，理解中间件原理，学习异步状态处理（Redux Thunk/Saga）。",
+      "difficulty": "advanced",
+      "tags": ["Redux", "状态管理", "高级"],
+      "x": 380,
+      "y": 440
+    },
+    {
+      "id": "kp-8",
+      "courseId": "course-1",
+      "title": "React Router",
+      "description": "学习 React Router v6 的使用：路由配置、嵌套路由、动态路由、编程式导航、路由守卫。掌握单页应用（SPA）的路由原理和历史模式与 Hash 模式的区别。",
+      "difficulty": "intermediate",
+      "tags": ["React", "路由", "SPA"],
+      "x": 610,
+      "y": 440
+    },
+    {
+      "id": "kp-9",
+      "courseId": "course-1",
+      "title": "TypeScript",
+      "description": "学习 TypeScript 类型系统：基础类型、接口、类型别名、泛型、枚举、类型守卫。掌握在 React 项目中集成 TypeScript，为组件、Props、State 添加类型注解。",
+      "difficulty": "advanced",
+      "tags": ["TypeScript", "类型系统", "高级"],
+      "x": 730,
+      "y": 280
+    }
+  ]
+}
