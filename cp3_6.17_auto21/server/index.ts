@@ -46,7 +46,7 @@ app.get('/api/questions', (req, res) => {
   res.json(selected.map((q: any) => ({
     id: q.id,
     subject: q.subject,
-    text: q.text,
+    question: q.question,
     options: q.options,
     knowledgePoint: q.knowledgePoint,
   })));
@@ -71,12 +71,12 @@ app.post('/api/submit', (req, res) => {
     } else {
       wrongAnswers.push({
         id: q.id,
-        text: q.text,
+        question: q.question,
         options: q.options,
         correctAnswer: q.correctAnswer,
         userAnswer,
         knowledgePoint: q.knowledgePoint,
-        analysis: q.analysis,
+        explanation: q.explanation,
       });
     }
   }
@@ -142,8 +142,8 @@ app.get('/api/admin/scores', (_req, res) => {
 });
 
 app.post('/api/admin/questions', (req, res) => {
-  const { text, options, correctAnswer, subject, knowledgePoint } = req.body;
-  if (!text || !options || options.length !== 4 || correctAnswer === undefined || !subject) {
+  const { question, options, correctAnswer, subject, knowledgePoint } = req.body;
+  if (!question || !options || options.length !== 4 || correctAnswer === undefined || !subject) {
     res.status(400).json({ error: '缺少必填字段' });
     return;
   }
@@ -151,11 +151,11 @@ app.post('/api/admin/questions', (req, res) => {
   const newQuestion = {
     id: uuidv4(),
     subject,
-    text,
+    question,
     options,
     correctAnswer: Number(correctAnswer),
     knowledgePoint: knowledgePoint || '基础知识',
-    analysis: req.body.analysis || '',
+    explanation: req.body.explanation || '',
   };
   questions.push(newQuestion);
   writeJSON(questionsFile, questions);

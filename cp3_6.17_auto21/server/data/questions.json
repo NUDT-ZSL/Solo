@@ -2,361 +2,361 @@
   {
     "id": "q1",
     "subject": "Java基础",
-    "text": "Java中，以下哪个关键字用于定义一个类？",
+    "question": "Java中，以下哪个关键字用于定义一个类？",
     "options": ["class", "struct", "define", "type"],
     "correctAnswer": 0,
     "knowledgePoint": "基础知识",
-    "analysis": "Java使用class关键字定义类，这是Java面向对象编程的基础。"
+    "explanation": "Java使用class关键字定义类，这是Java面向对象编程的基础。"
   },
   {
     "id": "q2",
     "subject": "Java基础",
-    "text": "以下哪个不是Java的基本数据类型？",
+    "question": "以下哪个不是Java的基本数据类型？",
     "options": ["int", "boolean", "String", "double"],
     "correctAnswer": 2,
     "knowledgePoint": "基础知识",
-    "analysis": "String是引用类型，不是基本数据类型。Java的8种基本数据类型为：byte, short, int, long, float, double, char, boolean。"
+    "explanation": "String是引用类型，不是基本数据类型。Java的8种基本数据类型为：byte, short, int, long, float, double, char, boolean。"
   },
   {
     "id": "q3",
     "subject": "Java基础",
-    "text": "Java中，哪个访问修饰符的访问范围最小？",
+    "question": "Java中，哪个访问修饰符的访问范围最小？",
     "options": ["public", "protected", "default", "private"],
     "correctAnswer": 3,
     "knowledgePoint": "安全规范",
-    "analysis": "private访问修饰符的访问范围最小，仅限本类内部访问，体现了封装性的原则。"
+    "explanation": "private访问修饰符的访问范围最小，仅限本类内部访问，体现了封装性的原则。"
   },
   {
     "id": "q4",
     "subject": "Java基础",
-    "text": "以下代码输出什么？\nint a = 5; int b = a++; System.out.println(b);",
+    "question": "以下代码输出什么？\nint a = 5; int b = a++; System.out.println(b);",
     "options": ["4", "5", "6", "编译错误"],
     "correctAnswer": 1,
     "knowledgePoint": "代码理解",
-    "analysis": "a++是后置递增，先将a的值赋给b，然后a自增。所以b=5，a变为6。"
+    "explanation": "a++是后置递增，先将a的值赋给b，然后a自增。所以b=5，a变为6。"
   },
   {
     "id": "q5",
     "subject": "Java基础",
-    "text": "Java中ArrayList和LinkedList的主要区别是什么？",
+    "question": "Java中ArrayList和LinkedList的主要区别是什么？",
     "options": ["ArrayList是线程安全的", "LinkedList基于链表实现", "ArrayList不支持随机访问", "LinkedList查询更快"],
     "correctAnswer": 1,
     "knowledgePoint": "逻辑分析",
-    "analysis": "LinkedList基于双向链表实现，ArrayList基于动态数组实现。LinkedList在插入删除方面更优，ArrayList在随机访问方面更优。"
+    "explanation": "LinkedList基于双向链表实现，ArrayList基于动态数组实现。LinkedList在插入删除方面更优，ArrayList在随机访问方面更优。"
   },
   {
     "id": "q6",
     "subject": "Java基础",
-    "text": "以下哪种设计模式属于创建型模式？",
+    "question": "以下哪种设计模式属于创建型模式？",
     "options": ["观察者模式", "单例模式", "适配器模式", "策略模式"],
     "correctAnswer": 1,
     "knowledgePoint": "项目管理",
-    "analysis": "单例模式属于创建型设计模式，保证一个类只有一个实例。观察者和策略属于行为型，适配器属于结构型。"
+    "explanation": "单例模式属于创建型设计模式，保证一个类只有一个实例。观察者和策略属于行为型，适配器属于结构型。"
   },
   {
     "id": "q7",
     "subject": "Java基础",
-    "text": "JVM的垃圾回收机制主要回收的是？",
+    "question": "JVM的垃圾回收机制主要回收的是？",
     "options": ["栈内存", "堆内存", "方法区", "程序计数器"],
     "correctAnswer": 1,
     "knowledgePoint": "基础知识",
-    "analysis": "JVM垃圾回收主要针对堆内存中不再被引用的对象。栈内存随方法调用自动释放。"
+    "explanation": "JVM垃圾回收主要针对堆内存中不再被引用的对象。栈内存随方法调用自动释放。"
   },
   {
     "id": "q8",
     "subject": "Java基础",
-    "text": "以下代码段会导致什么结果？\nString s = null; s.length();",
+    "question": "以下代码段会导致什么结果？\nString s = null; s.length();",
     "options": ["返回0", "返回null", "抛出NullPointerException", "编译错误"],
     "correctAnswer": 2,
     "knowledgePoint": "代码理解",
-    "analysis": "对null引用调用方法会抛出NullPointerException，这是Java中最常见的运行时异常之一。"
+    "explanation": "对null引用调用方法会抛出NullPointerException，这是Java中最常见的运行时异常之一。"
   },
   {
     "id": "q9",
     "subject": "Java基础",
-    "text": "Java中，try-catch-finally语句块的执行顺序是？",
+    "question": "Java中，try-catch-finally语句块的执行顺序是？",
     "options": ["try-catch-finally", "try-finally-catch", "catch-try-finally", "finally-try-catch"],
     "correctAnswer": 0,
     "knowledgePoint": "基础知识",
-    "analysis": "标准执行顺序为try-catch-finally，finally块无论是否发生异常都会执行。"
+    "explanation": "标准执行顺序为try-catch-finally，finally块无论是否发生异常都会执行。"
   },
   {
     "id": "q10",
     "subject": "Java基础",
-    "text": "以下哪个不是Java的集合框架接口？",
+    "question": "以下哪个不是Java的集合框架接口？",
     "options": ["List", "Set", "Map", "Array"],
     "correctAnswer": 3,
     "knowledgePoint": "逻辑分析",
-    "analysis": "Array不是Java集合框架的接口。List、Set、Map都是Java集合框架的核心接口。"
+    "explanation": "Array不是Java集合框架的接口。List、Set、Map都是Java集合框架的核心接口。"
   },
   {
     "id": "q11",
     "subject": "项目管理",
-    "text": "在敏捷开发中，Sprint的典型持续时间是？",
+    "question": "在敏捷开发中，Sprint的典型持续时间是？",
     "options": ["1天", "1-4周", "3个月", "6个月"],
     "correctAnswer": 1,
     "knowledgePoint": "项目管理",
-    "analysis": "Scrum中Sprint通常为1-4周，最常见的是2周。Sprint时间过长会导致反馈周期变长。"
+    "explanation": "Scrum中Sprint通常为1-4周，最常见的是2周。Sprint时间过长会导致反馈周期变长。"
   },
   {
     "id": "q12",
     "subject": "项目管理",
-    "text": "甘特图主要用于展示什么？",
+    "question": "甘特图主要用于展示什么？",
     "options": ["项目风险评估", "项目进度计划", "项目成本预算", "项目质量标准"],
     "correctAnswer": 1,
     "knowledgePoint": "项目管理",
-    "analysis": "甘特图是项目管理中常用的进度展示工具，以条形图形式显示任务的时间安排和进度。"
+    "explanation": "甘特图是项目管理中常用的进度展示工具，以条形图形式显示任务的时间安排和进度。"
   },
   {
     "id": "q13",
     "subject": "项目管理",
-    "text": "WBS（工作分解结构）的主要目的是？",
+    "question": "WBS（工作分解结构）的主要目的是？",
     "options": ["分配项目预算", "将项目分解为可管理的工作包", "确定项目风险", "编写项目文档"],
     "correctAnswer": 1,
     "knowledgePoint": "逻辑分析",
-    "analysis": "WBS将复杂项目分解为更小、更易管理的工作包，是项目范围管理的关键工具。"
+    "explanation": "WBS将复杂项目分解为更小、更易管理的工作包，是项目范围管理的关键工具。"
   },
   {
     "id": "q14",
     "subject": "项目管理",
-    "text": "以下哪个不是项目管理知识领域的组成部分？",
+    "question": "以下哪个不是项目管理知识领域的组成部分？",
     "options": ["范围管理", "时间管理", "情绪管理", "风险管理"],
     "correctAnswer": 2,
     "knowledgePoint": "基础知识",
-    "analysis": "PMBOK定义了10个知识领域，不包括情绪管理。核心领域包括范围、时间、成本、质量等。"
+    "explanation": "PMBOK定义了10个知识领域，不包括情绪管理。核心领域包括范围、时间、成本、质量等。"
   },
   {
     "id": "q15",
     "subject": "项目管理",
-    "text": "关键路径法（CPM）中，关键路径是指？",
+    "question": "关键路径法（CPM）中，关键路径是指？",
     "options": ["最短的路径", "最长的路径", "成本最高的路径", "风险最大的路径"],
     "correctAnswer": 1,
     "knowledgePoint": "逻辑分析",
-    "analysis": "关键路径是项目中耗时最长的路径，决定了项目的最短完成时间。关键路径上的任何延迟都会影响项目总工期。"
+    "explanation": "关键路径是项目中耗时最长的路径，决定了项目的最短完成时间。关键路径上的任何延迟都会影响项目总工期。"
   },
   {
     "id": "q16",
     "subject": "项目管理",
-    "text": "风险管理的四个步骤依次是？",
+    "question": "风险管理的四个步骤依次是？",
     "options": ["识别、评估、应对、监控", "评估、识别、监控、应对", "应对、识别、评估、监控", "监控、应对、评估、识别"],
     "correctAnswer": 0,
     "knowledgePoint": "安全规范",
-    "analysis": "风险管理流程：风险识别→风险评估→风险应对→风险监控，这是一个循环迭代的过程。"
+    "explanation": "风险管理流程：风险识别→风险评估→风险应对→风险监控，这是一个循环迭代的过程。"
   },
   {
     "id": "q17",
     "subject": "项目管理",
-    "text": "以下哪种项目组织类型中项目经理的权力最大？",
+    "question": "以下哪种项目组织类型中项目经理的权力最大？",
     "options": ["职能型", "弱矩阵型", "强矩阵型", "项目型"],
     "correctAnswer": 3,
     "knowledgePoint": "项目管理",
-    "analysis": "项目型组织中项目经理拥有最大的权力和资源控制权，团队成员全职为项目工作。"
+    "explanation": "项目型组织中项目经理拥有最大的权力和资源控制权，团队成员全职为项目工作。"
   },
   {
     "id": "q18",
     "subject": "项目管理",
-    "text": "变更控制委员会（CCB）的主要职责是？",
+    "question": "变更控制委员会（CCB）的主要职责是？",
     "options": ["编写项目代码", "审批或拒绝变更请求", "执行项目测试", "管理项目文档"],
     "correctAnswer": 1,
     "knowledgePoint": "安全规范",
-    "analysis": "CCB负责评估和审批变更请求，确保变更不会对项目范围、进度和成本产生负面影响。"
+    "explanation": "CCB负责评估和审批变更请求，确保变更不会对项目范围、进度和成本产生负面影响。"
   },
   {
     "id": "q19",
     "subject": "项目管理",
-    "text": "以下哪个不是敏捷宣言的核心价值观？",
+    "question": "以下哪个不是敏捷宣言的核心价值观？",
     "options": ["个体和互动高于流程和工具", "工作的软件高于详尽的文档", "客户合作高于合同谈判", "严格计划高于响应变化"],
     "correctAnswer": 3,
     "knowledgePoint": "基础知识",
-    "analysis": "敏捷宣言的第四个价值观是\"响应变化高于遵循计划\"，而非\"严格计划高于响应变化\"。"
+    "explanation": "敏捷宣言的第四个价值观是\"响应变化高于遵循计划\"，而非\"严格计划高于响应变化\"。"
   },
   {
     "id": "q20",
     "subject": "项目管理",
-    "text": "燃尽图（Burndown Chart）用于跟踪什么？",
+    "question": "燃尽图（Burndown Chart）用于跟踪什么？",
     "options": ["项目预算消耗", "剩余工作量", "团队士气", "代码质量"],
     "correctAnswer": 1,
     "knowledgePoint": "项目管理",
-    "analysis": "燃尽图用于跟踪迭代中剩余工作量的变化趋势，帮助团队判断是否能按时完成Sprint目标。"
+    "explanation": "燃尽图用于跟踪迭代中剩余工作量的变化趋势，帮助团队判断是否能按时完成Sprint目标。"
   },
   {
     "id": "q21",
     "subject": "网络安全",
-    "text": "SQL注入攻击的主要危害是？",
+    "question": "SQL注入攻击的主要危害是？",
     "options": ["服务器断电", "数据库被非法访问或篡改", "网页样式被修改", "网络速度变慢"],
     "correctAnswer": 1,
     "knowledgePoint": "安全规范",
-    "analysis": "SQL注入允许攻击者通过构造恶意SQL语句，非法读取、修改或删除数据库中的数据，是最常见的Web安全漏洞之一。"
+    "explanation": "SQL注入允许攻击者通过构造恶意SQL语句，非法读取、修改或删除数据库中的数据，是最常见的Web安全漏洞之一。"
   },
   {
     "id": "q22",
     "subject": "网络安全",
-    "text": "HTTPS相比HTTP增加了什么安全机制？",
+    "question": "HTTPS相比HTTP增加了什么安全机制？",
     "options": ["数据压缩", "SSL/TLS加密传输", "更快的传输速度", "更大的传输容量"],
     "correctAnswer": 1,
     "knowledgePoint": "安全规范",
-    "analysis": "HTTPS在HTTP基础上增加了SSL/TLS加密层，确保数据传输的机密性和完整性，防止中间人攻击。"
+    "explanation": "HTTPS在HTTP基础上增加了SSL/TLS加密层，确保数据传输的机密性和完整性，防止中间人攻击。"
   },
   {
     "id": "q23",
     "subject": "网络安全",
-    "text": "以下哪种攻击方式属于社会工程学攻击？",
+    "question": "以下哪种攻击方式属于社会工程学攻击？",
     "options": ["DDoS攻击", "钓鱼邮件", "SQL注入", "缓冲区溢出"],
     "correctAnswer": 1,
     "knowledgePoint": "逻辑分析",
-    "analysis": "钓鱼邮件利用人的心理弱点进行欺骗，属于社会工程学攻击。其他选项都是技术层面的攻击方式。"
+    "explanation": "钓鱼邮件利用人的心理弱点进行欺骗，属于社会工程学攻击。其他选项都是技术层面的攻击方式。"
   },
   {
     "id": "q24",
     "subject": "网络安全",
-    "text": "防火墙的主要功能是？",
+    "question": "防火墙的主要功能是？",
     "options": ["加速网络传输", "过滤网络流量", "分配IP地址", "解析域名"],
     "correctAnswer": 1,
     "knowledgePoint": "基础知识",
-    "analysis": "防火墙通过设定安全规则来过滤进出网络的流量，是网络安全的第一道防线。"
+    "explanation": "防火墙通过设定安全规则来过滤进出网络的流量，是网络安全的第一道防线。"
   },
   {
     "id": "q25",
     "subject": "网络安全",
-    "text": "以下哪个是强密码的特征？",
+    "question": "以下哪个是强密码的特征？",
     "options": ["仅使用小写字母", "长度至少8位，包含大小写字母、数字和特殊字符", "使用生日作为密码", "使用连续数字如123456"],
     "correctAnswer": 1,
     "knowledgePoint": "安全规范",
-    "analysis": "强密码应包含大小写字母、数字和特殊字符，长度至少8位，避免使用个人信息和常见组合。"
+    "explanation": "强密码应包含大小写字母、数字和特殊字符，长度至少8位，避免使用个人信息和常见组合。"
   },
   {
     "id": "q26",
     "subject": "网络安全",
-    "text": "XSS攻击的全称是什么？",
+    "question": "XSS攻击的全称是什么？",
     "options": ["Cross-Site Scripting", "Cross-Server Security", "XML Scripting System", "eXtended Security Service"],
     "correctAnswer": 0,
     "knowledgePoint": "基础知识",
-    "analysis": "XSS全称为Cross-Site Scripting（跨站脚本攻击），攻击者通过注入恶意脚本到网页中，影响其他用户。"
+    "explanation": "XSS全称为Cross-Site Scripting（跨站脚本攻击），攻击者通过注入恶意脚本到网页中，影响其他用户。"
   },
   {
     "id": "q27",
     "subject": "网络安全",
-    "text": "以下哪种加密算法属于非对称加密？",
+    "question": "以下哪种加密算法属于非对称加密？",
     "options": ["AES", "DES", "RSA", "3DES"],
     "correctAnswer": 2,
     "knowledgePoint": "代码理解",
-    "analysis": "RSA是非对称加密算法，使用公钥和私钥对。AES、DES、3DES都是对称加密算法，使用相同的密钥进行加密和解密。"
+    "explanation": "RSA是非对称加密算法，使用公钥和私钥对。AES、DES、3DES都是对称加密算法，使用相同的密钥进行加密和解密。"
   },
   {
     "id": "q28",
     "subject": "网络安全",
-    "text": "CVE编号的作用是？",
+    "question": "CVE编号的作用是？",
     "options": ["标识软件版本", "标准化安全漏洞编号", "记录网络流量", "管理IP地址"],
     "correctAnswer": 1,
     "knowledgePoint": "安全规范",
-    "analysis": "CVE（Common Vulnerabilities and Exposures）为已知安全漏洞提供标准化的编号和描述，便于追踪和修复。"
+    "explanation": "CVE（Common Vulnerabilities and Exposures）为已知安全漏洞提供标准化的编号和描述，便于追踪和修复。"
   },
   {
     "id": "q29",
     "subject": "网络安全",
-    "text": "零信任安全模型的核心原则是？",
+    "question": "零信任安全模型的核心原则是？",
     "options": ["信任内部网络", "永不信任，始终验证", "只验证外部访问", "使用强密码即可"],
     "correctAnswer": 1,
     "knowledgePoint": "逻辑分析",
-    "分析": "零信任模型的核心原则是\"永不信任，始终验证\"，不论请求来自内部还是外部，都需要进行身份验证和授权。"
+    "explanation": "零信任模型的核心原则是\"永不信任，始终验证\"，不论请求来自内部还是外部，都需要进行身份验证和授权。"
   },
   {
     "id": "q30",
     "subject": "网络安全",
-    "text": "以下哪个不是常见的网络扫描工具？",
+    "question": "以下哪个不是常见的网络扫描工具？",
     "options": ["Nmap", "Wireshark", "Photoshop", "Nessus"],
     "correctAnswer": 2,
     "knowledgePoint": "基础知识",
-    "analysis": "Photoshop是图像处理软件，不是网络扫描工具。Nmap用于端口扫描，Wireshark用于抓包分析，Nessus用于漏洞扫描。"
+    "explanation": "Photoshop是图像处理软件，不是网络扫描工具。Nmap用于端口扫描，Wireshark用于抓包分析，Nessus用于漏洞扫描。"
   },
   {
     "id": "q31",
     "subject": "Java基础",
-    "text": "Java中，==运算符比较的是什么？",
+    "question": "Java中，==运算符比较的是什么？",
     "options": ["对象的属性值", "对象的内存地址", "对象的哈希值", "对象的类型"],
     "correctAnswer": 1,
     "knowledgePoint": "代码理解",
-    "analysis": "对于引用类型，==比较的是对象的内存地址（引用），而非内容。若要比较内容，应使用equals()方法。"
+    "explanation": "对于引用类型，==比较的是对象的内存地址（引用），而非内容。若要比较内容，应使用equals()方法。"
   },
   {
     "id": "q32",
     "subject": "Java基础",
-    "text": "以下关于Java接口的说法，正确的是？",
+    "question": "以下关于Java接口的说法，正确的是？",
     "options": ["接口可以包含实例字段", "接口可以被实例化", "接口中的方法默认是public abstract", "接口可以继承类"],
     "correctAnswer": 2,
     "knowledgePoint": "基础知识",
-    "analysis": "Java 8之前，接口中的方法默认为public abstract。Java 8后可以有default方法和static方法，但传统方法仍为public abstract。"
+    "explanation": "Java 8之前，接口中的方法默认为public abstract。Java 8后可以有default方法和static方法，但传统方法仍为public abstract。"
   },
   {
     "id": "q33",
     "subject": "项目管理",
-    "text": "项目范围蔓延（Scope Creep）是指？",
+    "question": "项目范围蔓延（Scope Creep）是指？",
     "options": ["项目预算超支", "项目范围未经控制地扩大", "项目团队扩张", "项目时间延长"],
     "correctAnswer": 1,
     "knowledgePoint": "项目管理",
-    "analysis": "范围蔓延指项目范围在没有经过正式变更控制程序的情况下不断扩大，是导致项目失败的主要原因之一。"
+    "explanation": "范围蔓延指项目范围在没有经过正式变更控制程序的情况下不断扩大，是导致项目失败的主要原因之一。"
   },
   {
     "id": "q34",
     "subject": "项目管理",
-    "text": "以下哪个是敏捷开发中每日站会的目的？",
+    "question": "以下哪个是敏捷开发中每日站会的目的？",
     "options": ["向管理层汇报工作", "团队成员同步进度和障碍", "分配新任务", "评估项目预算"],
     "correctAnswer": 1,
     "knowledgePoint": "项目管理",
-    "分析": "每日站会（Daily Standup）的核心目的是团队成员快速同步昨日完成的工作、今日计划和遇到的障碍，保持团队信息透明。"
+    "explanation": "每日站会（Daily Standup）的核心目的是团队成员快速同步昨日完成的工作、今日计划和遇到的障碍，保持团队信息透明。"
   },
   {
     "id": "q35",
     "subject": "网络安全",
-    "text": "以下哪种认证方式安全性最高？",
+    "question": "以下哪种认证方式安全性最高？",
     "options": ["仅密码认证", "短信验证码", "双因素认证（2FA）", "安全提示问题"],
     "correctAnswer": 2,
     "knowledgePoint": "安全规范",
-    "analysis": "双因素认证结合了\"你知道的\"（密码）和\"你拥有的\"（手机/令牌），比单一因素认证安全性显著更高。"
+    "explanation": "双因素认证结合了\"你知道的\"（密码）和\"你拥有的\"（手机/令牌），比单一因素认证安全性显著更高。"
   },
   {
     "id": "q36",
     "subject": "网络安全",
-    "text": "DDoS攻击的目的是？",
+    "question": "DDoS攻击的目的是？",
     "options": ["窃取数据", "使目标服务不可用", "篡改网页内容", "获取管理员权限"],
     "correctAnswer": 1,
     "knowledgePoint": "逻辑分析",
-    "analysis": "DDoS（分布式拒绝服务）攻击通过大量请求淹没目标服务器，使其无法为正常用户提供服务。"
+    "explanation": "DDoS（分布式拒绝服务）攻击通过大量请求淹没目标服务器，使其无法为正常用户提供服务。"
   },
   {
     "id": "q37",
     "subject": "Java基础",
-    "text": "以下哪个集合类是线程安全的？",
+    "question": "以下哪个集合类是线程安全的？",
     "options": ["ArrayList", "HashMap", "ConcurrentHashMap", "LinkedList"],
     "correctAnswer": 2,
     "knowledgePoint": "安全规范",
-    "analysis": "ConcurrentHashMap是线程安全的Map实现，采用分段锁机制实现高并发访问。ArrayList和HashMap不是线程安全的。"
+    "explanation": "ConcurrentHashMap是线程安全的Map实现，采用分段锁机制实现高并发访问。ArrayList和HashMap不是线程安全的。"
   },
   {
     "id": "q38",
     "subject": "Java基础",
-    "text": "Java中，以下哪个修饰符不能用于外部类？",
+    "question": "Java中，以下哪个修饰符不能用于外部类？",
     "options": ["public", "private", "abstract", "final"],
     "correctAnswer": 1,
     "knowledgePoint": "逻辑分析",
-    "analysis": "外部类不能使用private修饰，因为外部类是顶层类，不需要被隐藏。private可用于内部类。"
+    "explanation": "外部类不能使用private修饰，因为外部类是顶层类，不需要被隐藏。private可用于内部类。"
   },
   {
     "id": "q39",
     "subject": "项目管理",
-    "text": "PDCA循环的四个阶段依次是？",
+    "question": "PDCA循环的四个阶段依次是？",
     "options": ["计划、执行、检查、处理", "执行、检查、计划、处理", "检查、处理、计划、执行", "处理、计划、执行、检查"],
     "correctAnswer": 0,
     "knowledgePoint": "基础知识",
-    "analysis": "PDCA（Plan-Do-Check-Act）循环又称戴明环，是持续改进的基本方法，按计划→执行→检查→处理的顺序循环。"
+    "explanation": "PDCA（Plan-Do-Check-Act）循环又称戴明环，是持续改进的基本方法，按计划→执行→检查→处理的顺序循环。"
   },
   {
     "id": "q40",
     "subject": "网络安全",
-    "text": "数字签名的作用不包括？",
+    "question": "数字签名的作用不包括？",
     "options": ["验证发送者身份", "确保数据完整性", "加密传输数据", "防止发送者抵赖"],
     "correctAnswer": 2,
     "knowledgePoint": "代码理解",
-    "analysis": "数字签名用于身份验证、数据完整性和防抵赖，但不用于加密传输数据。数据加密是加密算法的功能，与签名是不同的安全服务。"
+    "explanation": "数字签名用于身份验证、数据完整性和防抵赖，但不用于加密传输数据。数据加密是加密算法的功能，与签名是不同的安全服务。"
   }
 ]

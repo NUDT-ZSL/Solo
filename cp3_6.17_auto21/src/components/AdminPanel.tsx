@@ -16,7 +16,7 @@ export default function AdminPanel() {
   const [scores, setScores] = React.useState<ScoreRecord[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [form, setForm] = React.useState({
-    text: '',
+    question: '',
     option0: '',
     option1: '',
     option2: '',
@@ -24,7 +24,7 @@ export default function AdminPanel() {
     correctAnswer: 0,
     subject: 'Java基础',
     knowledgePoint: '基础知识',
-    analysis: '',
+    explanation: '',
   });
   const [msg, setMsg] = React.useState('');
   const [activeBtn, setActiveBtn] = React.useState<string | null>(null);
@@ -43,7 +43,7 @@ export default function AdminPanel() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const options = [form.option0, form.option1, form.option2, form.option3];
-    if (options.some(o => !o.trim()) || !form.text.trim()) {
+    if (options.some(o => !o.trim()) || !form.question.trim()) {
       setMsg('请填写完整信息');
       return;
     }
@@ -52,19 +52,19 @@ export default function AdminPanel() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: form.text,
+          question: form.question,
           options,
           correctAnswer: form.correctAnswer,
           subject: form.subject,
           knowledgePoint: form.knowledgePoint,
-          analysis: form.analysis,
+          explanation: form.explanation,
         }),
       });
       if (res.ok) {
         setMsg('题目添加成功！');
         setForm({
-          text: '', option0: '', option1: '', option2: '', option3: '',
-          correctAnswer: 0, subject: 'Java基础', knowledgePoint: '基础知识', analysis: '',
+          question: '', option0: '', option1: '', option2: '', option3: '',
+          correctAnswer: 0, subject: 'Java基础', knowledgePoint: '基础知识', explanation: '',
         });
         setTimeout(() => setMsg(''), 3000);
       } else {
@@ -165,8 +165,8 @@ export default function AdminPanel() {
                   <label style={styles.label}>题目文本</label>
                   <textarea
                     style={styles.textarea}
-                    value={form.text}
-                    onChange={e => setForm(f => ({ ...f, text: e.target.value }))}
+                    value={form.question}
+                    onChange={e => setForm(f => ({ ...f, question: e.target.value }))}
                     rows={3}
                   />
                 </div>
@@ -215,8 +215,8 @@ export default function AdminPanel() {
                   <label style={styles.label}>解析（可选）</label>
                   <textarea
                     style={styles.textarea}
-                    value={form.analysis}
-                    onChange={e => setForm(f => ({ ...f, analysis: e.target.value }))}
+                    value={form.explanation}
+                    onChange={e => setForm(f => ({ ...f, explanation: e.target.value }))}
                     rows={2}
                   />
                 </div>

@@ -3,19 +3,19 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 export interface Question {
   id: string;
   subject: string;
-  text: string;
+  question: string;
   options: string[];
   knowledgePoint: string;
 }
 
 export interface WrongAnswer {
   id: string;
-  text: string;
+  question: string;
   options: string[];
   correctAnswer: number;
   userAnswer: number;
   knowledgePoint: string;
-  analysis: string;
+  explanation: string;
 }
 
 export interface ExamResult {

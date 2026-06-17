@@ -87,7 +87,7 @@ export default function ExamPanel({ examineeId }: { examineeId: string }) {
           <div style={styles.questionIndex}>
             {currentIndex + 1}/{totalQuestions}
           </div>
-          <div style={styles.questionText}>{currentQuestion.text}</div>
+          <div style={styles.questionText}>{currentQuestion.question}</div>
 
           <div style={styles.optionsList}>
             {currentQuestion.options.map((opt, idx) => {

@@ -283,7 +283,7 @@ function WrongItem({ wrong, index }: { wrong: WrongAnswer; index: number }) {
         <span style={styles.wrongIndex}>第{index + 1}题</span>
         <span style={styles.wrongTag}>{wrong.knowledgePoint}</span>
       </div>
-      <div style={styles.wrongText}>{wrong.text}</div>
+      <div style={styles.wrongText}>{wrong.question}</div>
       <div style={styles.wrongAnswers}>
         <span style={{ color: '#e53e3e', fontSize: 13 }}>
           你的答案：{optionLabels[wrong.userAnswer]} · {wrong.options[wrong.userAnswer]}
@@ -293,9 +293,9 @@ function WrongItem({ wrong, index }: { wrong: WrongAnswer; index: number }) {
           正确答案：{optionLabels[wrong.correctAnswer]} · {wrong.options[wrong.correctAnswer]}
         </span>
       </div>
-      {wrong.analysis && (
+      {wrong.explanation && (
         <div style={styles.wrongAnalysis}>
-          解析：{wrong.analysis}
+          解析：{wrong.explanation}
         </div>
       )}
     </div>
