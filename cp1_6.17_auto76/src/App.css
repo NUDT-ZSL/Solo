@@ -171,7 +171,9 @@ html, body, #root {
   }
 
   .map-action-bar {
-    display: none;
+    position: absolute;
+    visibility: hidden;
+    pointer-events: none;
   }
 
   .mobile-overlay {

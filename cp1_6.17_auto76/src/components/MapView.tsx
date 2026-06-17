@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   MapContainer,
   TileLayer,
@@ -8,7 +8,7 @@ import {
   useMap,
   useMapEvents
 } from 'react-leaflet'
-import L from 'leaflet'
+import L, { DragEndEvent } from 'leaflet'
 import {
   useTravelStore,
   MEMBER_COLORS,
@@ -62,73 +62,6 @@ function createPinIcon(color: string, isNew: boolean) {
   })
 }
 
-function DraggableMarker({
-  marker,
-  color,
-  memberName,
-  routeIndex,
-  onDragEnd
-}: {
-  marker: MarkerPoint
-  color: string
-  memberName: string
-  routeIndex: number | undefined
-  onDragEnd: (id: string, lat: number, lng: number) => void
-}) {
-  const markerRef = useRef<L.Marker>(null)
-
-  const handleDragEnd = useCallback(() => {
-    const markerEl = markerRef.current
-    if (markerEl) {
-      const position = markerEl.getLatLng()
-      onDragEnd(marker.id, position.lat, position.lng)
-    }
-  }, [marker.id, onDragEnd])
-
-  return (
-    <Marker
-      ref={markerRef}
-      position={[marker.lat, marker.lng]}
-      icon={createPinIcon(color, !!marker.isNew)}
-      draggable={true}
-      eventHandlers={{
-        dragend: handleDragEnd
-      }}
-    >
-      <Popup>
-        <div className="popup-content">
-          <div className="popup-header">
-            <span
-              className="route-badge"
-              style={{
-                display: routeIndex !== undefined && routeIndex >= 0 ? 'inline-flex' : 'none'
-              }}
-            >
-              #{(routeIndex ?? -1) + 1}
-            </span>
-            <strong style={{ marginLeft: routeIndex !== undefined && routeIndex >= 0 ? '8px' : 0 }}>
-              {marker.name}
-            </strong>
-          </div>
-          <div className="popup-meta">
-            <span className="popup-author" style={{ color }}>
-              {memberName}
-            </span>
-            <span>停留 {marker.stayHours}h</span>
-          </div>
-          {marker.note && <p className="popup-note">{marker.note}</p>}
-          <div
-            className="popup-image"
-            style={{ backgroundColor: marker.imageColor }}
-          >
-            {marker.imageLabel}
-          </div>
-        </div>
-      </Popup>
-    </Marker>
-  )
-}
-
 const IMAGE_COLOR_PRESETS = [
   { color: '#FF6B6B', label: '景点' },
   { color: '#4ECDC4', label: '美食' },
@@ -167,9 +100,10 @@ export default function MapView() {
     [setShowAddForm]
   )
 
-  const handleDragEnd = useCallback(
-    (id: string, lat: number, lng: number) => {
-      updateMarker(id, { lat, lng })
+  const createDragEndHandler = useCallback(
+    (id: string) => (e: DragEndEvent) => {
+      const latLng = e.target.getLatLng()
+      updateMarker(id, { lat: latLng.lat, lng: latLng.lng })
     },
     [updateMarker]
   )
@@ -252,15 +186,49 @@ export default function MapView() {
 
         {markers.map((marker) => {
           const routeIndex = route?.order.indexOf(marker.id)
+          const memberColor = getMemberColor(marker.memberId)
+          const memberName = getMemberName(marker.memberId)
           return (
-            <DraggableMarker
+            <Marker
               key={marker.id}
-              marker={marker}
-              color={getMemberColor(marker.memberId)}
-              memberName={getMemberName(marker.memberId)}
-              routeIndex={routeIndex}
-              onDragEnd={handleDragEnd}
-            />
+              position={[marker.lat, marker.lng]}
+              icon={createPinIcon(memberColor, !!marker.isNew)}
+              draggable={true}
+              eventHandlers={{
+                dragend: createDragEndHandler(marker.id)
+              }}
+            >
+              <Popup>
+                <div className="popup-content">
+                  <div className="popup-header">
+                    <span
+                      className="route-badge"
+                      style={{
+                        display: routeIndex !== undefined && routeIndex >= 0 ? 'inline-flex' : 'none'
+                      }}
+                    >
+                      #{(routeIndex ?? -1) + 1}
+                    </span>
+                    <strong style={{ marginLeft: routeIndex !== undefined && routeIndex >= 0 ? '8px' : 0 }}>
+                      {marker.name}
+                    </strong>
+                  </div>
+                  <div className="popup-meta">
+                    <span className="popup-author" style={{ color: memberColor }}>
+                      {memberName}
+                    </span>
+                    <span>停留 {marker.stayHours}h</span>
+                  </div>
+                  {marker.note && <p className="popup-note">{marker.note}</p>}
+                  <div
+                    className="popup-image"
+                    style={{ backgroundColor: marker.imageColor }}
+                  >
+                    {marker.imageLabel}
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
           )
         })}
       </MapContainer>

@@ -14,11 +14,18 @@ export default function RoutePanel() {
     setBudget,
     setLoadingRoute,
     setLoadingBudget,
+    setRouteError,
+    setBudgetError,
     toggleMobileRoute
   } = useTravelStore()
 
   const handleGenerateRoute = useCallback(async () => {
     if (markers.length < 2) return
+
+    setRouteError(null)
+    setBudgetError(null)
+    setRoute(null)
+    setBudget(null)
 
     setLoadingRoute(true)
     try {
@@ -33,18 +40,20 @@ export default function RoutePanel() {
           routeResult.totalHours
         )
         setBudget(budgetResult)
-      } catch {
+      } catch (err) {
+        setBudgetError(err instanceof Error ? err.message : '预算估算失败')
         setBudget(null)
       } finally {
         setLoadingBudget(false)
       }
-    } catch {
+    } catch (err) {
+      setRouteError(err instanceof Error ? err.message : '路线计算失败')
       setRoute(null)
       setBudget(null)
     } finally {
       setLoadingRoute(false)
     }
-  }, [markers, setRoute, setBudget, setLoadingRoute, setLoadingBudget])
+  }, [markers, setRoute, setBudget, setLoadingRoute, setLoadingBudget, setRouteError, setBudgetError])
 
   const formatDuration = (hours: number): string => {
     const days = Math.floor(hours / 8)
@@ -94,11 +103,28 @@ export default function RoutePanel() {
           disabled={markers.length < 2 || ui.isLoadingRoute}
         >
           {ui.isLoadingRoute ? (
-            <span className="btn-loading">计算中...</span>
+            <span className="btn-loading">
+              <span className="loading-spinner" />
+              计算中...
+            </span>
           ) : (
             '生成路线'
           )}
         </button>
+
+        {ui.routeError && (
+          <div className="error-alert">
+            <span className="error-icon">⚠️</span>
+            <span className="error-text">{ui.routeError}</span>
+          </div>
+        )}
+
+        {ui.isLoadingRoute && !route && (
+          <div className="loading-state">
+            <span className="loading-spinner large" />
+            <span className="loading-text">正在规划最优路线...</span>
+          </div>
+        )}
 
         {route && route.segments.length > 0 && (
           <div className="route-details">
@@ -214,6 +240,13 @@ export default function RoutePanel() {
           <div className="budget-loading">
             <span className="loading-spinner" />
             计算预算中...
+          </div>
+        )}
+
+        {ui.budgetError && (
+          <div className="error-alert small">
+            <span className="error-icon">⚠️</span>
+            <span className="error-text">预算估算失败，请重试</span>
           </div>
         )}
       </div>

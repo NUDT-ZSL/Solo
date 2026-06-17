@@ -53,6 +53,8 @@ interface UIState {
   currentMemberId: string
   isLoadingRoute: boolean
   isLoadingBudget: boolean
+  routeError: string | null
+  budgetError: string | null
   mobileSidebarOpen: boolean
   mobileRouteOpen: boolean
 }
@@ -76,6 +78,8 @@ interface TravelStore {
   setCurrentMemberId: (id: string) => void
   setLoadingRoute: (loading: boolean) => void
   setLoadingBudget: (loading: boolean) => void
+  setRouteError: (error: string | null) => void
+  setBudgetError: (error: string | null) => void
   toggleMobileSidebar: () => void
   toggleMobileRoute: () => void
 
@@ -101,6 +105,8 @@ export const useTravelStore = create<TravelStore>((set) => ({
     currentMemberId: 'm1',
     isLoadingRoute: false,
     isLoadingBudget: false,
+    routeError: null,
+    budgetError: null,
     mobileSidebarOpen: false,
     mobileRouteOpen: false
   },
@@ -159,6 +165,12 @@ export const useTravelStore = create<TravelStore>((set) => ({
 
   setLoadingBudget: (loading) =>
     set((state) => ({ ui: { ...state.ui, isLoadingBudget: loading } })),
+
+  setRouteError: (error) =>
+    set((state) => ({ ui: { ...state.ui, routeError: error } })),
+
+  setBudgetError: (error) =>
+    set((state) => ({ ui: { ...state.ui, budgetError: error } })),
 
   toggleMobileSidebar: () =>
     set((state) => ({
