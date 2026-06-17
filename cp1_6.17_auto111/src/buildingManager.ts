@@ -33,6 +33,12 @@ export class BuildingManager {
   private onBuildingChangeCallback: (() => void) | null = null;
   private groundPlane: THREE.Mesh;
   private plotSize = 200;
+  private previewMesh: THREE.Mesh | null = null;
+  private previewEdges: THREE.LineSegments | null = null;
+  private previewVisible = false;
+  private defaultWidth = 10;
+  private defaultDepth = 10;
+  private defaultHeight = 20;
 
   constructor(scene: THREE.Scene, camera: THREE.PerspectiveCamera, container: HTMLElement) {
     this.scene = scene;
@@ -56,6 +62,80 @@ export class BuildingManager {
     const gridHelper = new THREE.GridHelper(this.plotSize, 20, 0x475569, 0x334155);
     gridHelper.position.y = 0.01;
     this.scene.add(gridHelper);
+
+    this.createPreview();
+  }
+
+  private createPreview() {
+    const geometry = new THREE.BoxGeometry(this.defaultWidth, this.defaultHeight, this.defaultDepth);
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x3B82F6,
+      transparent: true,
+      opacity: 0.25,
+      roughness: 0.5,
+      metalness: 0.1,
+      depthWrite: false
+    });
+    this.previewMesh = new THREE.Mesh(geometry, material);
+    this.previewMesh.position.set(0, this.defaultHeight / 2, 0);
+    this.previewMesh.visible = false;
+    this.scene.add(this.previewMesh);
+
+    const edgeGeometry = new THREE.EdgesGeometry(geometry);
+    const edgeMaterial = new THREE.LineBasicMaterial({ 
+      color: 0x3B82F6, 
+      transparent: true, 
+      opacity: 0.7 
+    });
+    this.previewEdges = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+    this.previewEdges.position.copy(this.previewMesh.position);
+    this.previewEdges.visible = false;
+    this.scene.add(this.previewEdges);
+  }
+
+  showPreview() {
+    if (this.previewMesh && this.previewEdges) {
+      this.previewMesh.visible = true;
+      this.previewEdges.visible = true;
+      this.previewVisible = true;
+    }
+  }
+
+  hidePreview() {
+    if (this.previewMesh && this.previewEdges) {
+      this.previewMesh.visible = false;
+      this.previewEdges.visible = false;
+      this.previewVisible = false;
+    }
+  }
+
+  updatePreviewPosition(event: MouseEvent): boolean {
+    if (!this.previewMesh || !this.previewEdges) return false;
+
+    const rect = this.container.getBoundingClientRect();
+    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    this.raycaster.setFromCamera(this.mouse, this.camera);
+    const intersects = this.raycaster.intersectObject(this.groundPlane);
+
+    if (intersects.length > 0) {
+      const point = intersects[0].point;
+      const halfPlot = this.plotSize / 2;
+      const x = Math.max(-halfPlot + 15, Math.min(halfPlot - 15, point.x));
+      const z = Math.max(-halfPlot + 15, Math.min(halfPlot - 15, point.z));
+      
+      this.previewMesh.position.set(x, this.defaultHeight / 2, z);
+      this.previewEdges.position.copy(this.previewMesh.position);
+      
+      if (!this.previewVisible) {
+        this.showPreview();
+      }
+      return true;
+    } else {
+      this.hidePreview();
+      return false;
+    }
   }
 
   setOnBuildingChange(callback: () => void) {
@@ -132,6 +212,7 @@ export class BuildingManager {
     this.buildings.set(id, { mesh, edges, data, edgeHighlight });
     this.buildingCount++;
 
+    this.hidePreview();
     this.updateAllEdgeHighlights();
     this.notifyChange();
     return true;
@@ -502,6 +583,16 @@ export class BuildingManager {
     });
     this.groundPlane.geometry.dispose();
     (this.groundPlane.material as THREE.Material).dispose();
+    
+    if (this.previewMesh) {
+      this.previewMesh.geometry.dispose();
+      (this.previewMesh.material as THREE.Material).dispose();
+    }
+    if (this.previewEdges) {
+      this.previewEdges.geometry.dispose();
+      (this.previewEdges.material as THREE.Material).dispose();
+    }
+    
     this.clearAllPressureLabels();
   }
 }

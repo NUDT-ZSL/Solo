@@ -133,6 +133,7 @@ class App {
     
     this.createModeButtons();
     this.createWindSpeedSlider();
+    this.createGridDensitySlider();
     this.createDisplayToggles();
     this.createPressureToggle();
     
@@ -192,6 +193,9 @@ class App {
       this.mode = mode;
       this.updateModeButtons();
       this.controls.enabled = mode === 'adjust';
+      if (mode !== 'place') {
+        this.buildingManager.hidePreview();
+      }
     });
     
     return btn;
@@ -275,6 +279,53 @@ class App {
       this.baseWindSpeed = value;
       valueDisplay.innerHTML = `<span>风速</span><span style="color: #60A5FA; font-weight: 600;">${value} m/s</span>`;
       this.windSimulator.setBaseWindSpeed(value);
+    });
+    
+    sliderContainer.appendChild(valueDisplay);
+    sliderContainer.appendChild(slider);
+    section.appendChild(sliderContainer);
+    this.panel.appendChild(section);
+  }
+
+  private createGridDensitySlider() {
+    const section = this.createSection('网格密度');
+    const currentGridSize = this.windSimulator.getGridSize();
+    
+    const sliderContainer = document.createElement('div');
+    sliderContainer.style.cssText = `
+      margin-top: 8px;
+    `;
+    
+    const valueDisplay = document.createElement('div');
+    valueDisplay.style.cssText = `
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin-bottom: 8px;
+      color: #94A3B8;
+    `;
+    valueDisplay.innerHTML = `<span>密度</span><span style="color: #60A5FA; font-weight: 600;">${currentGridSize} x ${currentGridSize}</span>`;
+    
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = '5';
+    slider.max = '20';
+    slider.step = '1';
+    slider.value = currentGridSize.toString();
+    slider.style.cssText = `
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: #64748B;
+      outline: none;
+      -webkit-appearance: none;
+      cursor: pointer;
+    `;
+    
+    slider.addEventListener('input', (e) => {
+      const value = parseInt((e.target as HTMLInputElement).value);
+      valueDisplay.innerHTML = `<span>密度</span><span style="color: #60A5FA; font-weight: 600;">${value} x ${value}</span>`;
+      this.windSimulator.setGridSize(value);
     });
     
     sliderContainer.appendChild(valueDisplay);
@@ -456,6 +507,9 @@ class App {
     this.renderer.domElement.addEventListener('mousedown', this.onMouseDown.bind(this));
     this.renderer.domElement.addEventListener('mousemove', this.onMouseMove.bind(this));
     this.renderer.domElement.addEventListener('mouseup', this.onMouseUp.bind(this));
+    this.renderer.domElement.addEventListener('mouseleave', () => {
+      this.buildingManager.hidePreview();
+    });
     
     this.controls.enabled = false;
   }
@@ -503,6 +557,8 @@ class App {
   private onMouseMove(event: MouseEvent) {
     if (this.isDraggingBuilding) {
       this.buildingManager.handleMouseMove(event);
+    } else if (this.mode === 'place') {
+      this.buildingManager.updatePreviewPosition(event);
     }
     
     if (this.pressureMode) {
