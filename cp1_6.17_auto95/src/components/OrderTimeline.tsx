@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useStore, Order, channelLabels, Channel, MenuItem } from '../store'
 
@@ -29,136 +29,194 @@ export function OrderTimeline({ title = true }: { title?: boolean }) {
   const orders = useStore((s) => s.orders)
   const addOrder = useStore((s) => s.addOrder)
   const menuItems = useStore((s) => s.menuItems)
-  const [animatedId, setAnimatedId] = useState<string | null>(null)
+  const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set())
+  const initialized = useRef(false)
 
   useEffect(() => {
+    initialized.current = true
     const interval = setInterval(() => {
       const newOrder = generateRandomOrder(menuItems)
       addOrder(newOrder)
-      setAnimatedId(newOrder.id)
-      setTimeout(() => setAnimatedId(null), 400)
+      setNewOrderIds((prev) => {
+        const next = new Set(prev)
+        next.add(newOrder.id)
+        return next
+      })
+      setTimeout(() => {
+        setNewOrderIds((prev) => {
+          const next = new Set(prev)
+          next.delete(newOrder.id)
+          return next
+        })
+      }, 500)
     }, 5000)
 
     return () => clearInterval(interval)
   }, [addOrder, menuItems])
 
   return (
-    <div>
+    <div className="order-timeline-container">
       {title && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1E293B', margin: 0 }}>实时订单流</h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#64748B' }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10B981', animation: 'pulse 2s infinite' }} />
+            <span className="pulse-dot" />
             每5秒自动生成新订单
           </div>
         </div>
       )}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-        {orders.map((order, index) => (
-          <div
-            key={order.id}
-            style={{
-              display: 'flex',
-              height: 60,
-              alignItems: 'stretch',
-              transform: animatedId === order.id ? 'translateX(0)' : undefined,
-              opacity: animatedId === order.id ? 1 : undefined,
-              animation: animatedId === order.id ? 'slideIn 0.4s ease-out' : undefined,
-            }}
-          >
+      <div className="order-timeline-list">
+        {orders.map((order) => {
+          const isNew = newOrderIds.has(order.id)
+          return (
             <div
-              style={{
-                width: 70,
-                flexShrink: 0,
-                color: '#94A3B8',
-                fontSize: 13,
-                paddingTop: 18,
-                paddingRight: 12,
-                textAlign: 'right',
-                fontFamily: 'monospace',
-              }}
+              key={order.id}
+              className={`order-timeline-item ${isNew ? 'order-timeline-item-new' : ''}`}
             >
-              {formatTime(order.timestamp)}
-            </div>
-            <div
-              style={{
-                width: 2,
-                background: '#E2E8F0',
-                position: 'relative',
-                margin: '18px 0',
-                flexShrink: 0,
-              }}
-            >
-              <div
-                style={{
-                  position: 'absolute',
-                  left: '50%',
-                  top: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: 10,
-                  height: 10,
-                  borderRadius: '50%',
-                  background: channelLabels[order.channel].color,
-                  border: '2px solid #fff',
-                  boxShadow: '0 0 0 1px #E2E8F0',
-                }}
-              />
-            </div>
-            <div
-              style={{
-                flex: 1,
-                margin: '6px 0 6px 12px',
-                background: '#F1F5F9',
-                borderRadius: 8,
-                padding: '10px 14px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12,
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                <span
-                  style={{
-                    fontSize: 12,
-                    padding: '3px 8px',
-                    borderRadius: 6,
-                    color: '#fff',
-                    background: channelLabels[order.channel].color,
-                    flexShrink: 0,
-                    fontWeight: 600,
-                  }}
-                >
-                  {channelLabels[order.channel].label}
-                </span>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {order.menuItemName} × {order.quantity}
-                  </div>
-                  <div style={{ fontSize: 11, color: '#94A3B8', fontFamily: 'monospace' }}>
-                    {order.orderNo}
+              <div className="order-timeline-time">
+                {formatTime(order.timestamp)}
+              </div>
+              <div className="order-timeline-line">
+                <div
+                  className="order-timeline-dot"
+                  style={{ background: channelLabels[order.channel].color }}
+                />
+              </div>
+              <div className="order-timeline-content">
+                <div className="order-timeline-info">
+                  <span
+                    className="order-channel-tag"
+                    style={{ background: channelLabels[order.channel].color }}
+                  >
+                    {channelLabels[order.channel].label}
+                  </span>
+                  <div className="order-timeline-details">
+                    <div className="order-timeline-name">
+                      {order.menuItemName} × {order.quantity}
+                    </div>
+                    <div className="order-timeline-no">
+                      {order.orderNo}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#10B981', flexShrink: 0 }}>
-                ¥{order.amount}
+                <div className="order-timeline-amount">
+                  ¥{order.amount}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
       <style>{`
-        @keyframes slideIn {
+        .order-timeline-list {
+          display: flex;
+          flex-direction: column;
+          gap: 0;
+        }
+        .order-timeline-item {
+          display: flex;
+          height: 60px;
+          align-items: stretch;
+          opacity: 1;
+          transform: translateX(0);
+        }
+        .order-timeline-item-new {
+          animation: slideInFromRight 0.4s ease-out;
+        }
+        @keyframes slideInFromRight {
           from {
             opacity: 0;
-            transform: translateX(30px);
+            transform: translateX(40px);
           }
           to {
             opacity: 1;
             transform: translateX(0);
           }
         }
-        @keyframes pulse {
+        .order-timeline-time {
+          width: 70px;
+          flex-shrink: 0;
+          color: #94A3B8;
+          font-size: 13px;
+          padding-top: 18px;
+          padding-right: 12px;
+          text-align: right;
+          font-family: monospace;
+        }
+        .order-timeline-line {
+          width: 2px;
+          background: #E2E8F0;
+          position: relative;
+          margin: 18px 0;
+          flex-shrink: 0;
+        }
+        .order-timeline-dot {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%, -50%);
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          border: 2px solid #fff;
+          box-shadow: 0 0 0 1px #E2E8F0;
+        }
+        .order-timeline-content {
+          flex: 1;
+          margin: 6px 0 6px 12px;
+          background: #F1F5F9;
+          border-radius: 8px;
+          padding: 10px 14px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+        .order-timeline-info {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-width: 0;
+        }
+        .order-channel-tag {
+          font-size: 12px;
+          padding: 3px 8px;
+          border-radius: 6px;
+          color: #fff;
+          flex-shrink: 0;
+          font-weight: 600;
+        }
+        .order-timeline-details {
+          min-width: 0;
+        }
+        .order-timeline-name {
+          font-size: 13px;
+          font-weight: 600;
+          color: #1E293B;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .order-timeline-no {
+          font-size: 11px;
+          color: #94A3B8;
+          font-family: monospace;
+        }
+        .order-timeline-amount {
+          font-size: 15px;
+          font-weight: 700;
+          color: #10B981;
+          flex-shrink: 0;
+        }
+        .pulse-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #10B981;
+          animation: pulseAnim 2s infinite;
+          display: inline-block;
+        }
+        @keyframes pulseAnim {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.4; }
         }

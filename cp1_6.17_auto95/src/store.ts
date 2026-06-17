@@ -68,13 +68,18 @@ const MENU_ITEMS: MenuItem[] = [
 
 function generateHourlyRevenue(): HourlyRevenue[] {
   const hours: HourlyRevenue[] = []
-  for (let h = 10; h <= 21; h++) {
-    const baseAmount = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 180, 420, 560, 380, 150, 80, 120, 350, 480, 420, 280, 120][h]
-    const variance = Math.floor(Math.random() * 120) - 60
+  const baseAmounts = [
+    0, 0, 0, 0, 0, 0, 10, 30, 80, 120,
+    180, 420, 560, 380, 150, 80, 120, 350,
+    480, 420, 280, 120, 40, 10
+  ]
+  for (let h = 0; h < 24; h++) {
+    const baseAmount = baseAmounts[h]
+    const variance = baseAmount > 0 ? Math.floor(Math.random() * baseAmount * 0.2) - Math.floor(baseAmount * 0.1) : 0
     hours.push({
       hour: `${h.toString().padStart(2, '0')}:00`,
-      amount: baseAmount + variance,
-      yesterdayAmount: baseAmount + Math.floor(Math.random() * 160) - 80,
+      amount: Math.max(0, baseAmount + variance),
+      yesterdayAmount: Math.max(0, baseAmount + Math.floor(Math.random() * baseAmount * 0.3) - Math.floor(baseAmount * 0.15)),
     })
   }
   return hours

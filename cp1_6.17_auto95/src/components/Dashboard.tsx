@@ -13,9 +13,12 @@ import { OrderTimeline } from './OrderTimeline'
 
 function AnimatedNumber({ value, prefix = '' }: { value: number; prefix?: string }) {
   const [displayValue, setDisplayValue] = useState(value)
+  const [isAnimating, setIsAnimating] = useState(false)
   const prevValue = useRef(value)
 
   useEffect(() => {
+    if (prevValue.current === value) return
+    setIsAnimating(true)
     const startValue = prevValue.current
     const endValue = value
     const duration = 300
@@ -24,17 +27,31 @@ function AnimatedNumber({ value, prefix = '' }: { value: number; prefix?: string
     const animate = () => {
       const elapsed = Date.now() - startTime
       const progress = Math.min(elapsed / duration, 1)
-      const current = Math.floor(startValue + (endValue - startValue) * progress)
+      const easeOut = 1 - Math.pow(1 - progress, 3)
+      const current = Math.floor(startValue + (endValue - startValue) * easeOut)
       setDisplayValue(current)
       if (progress < 1) {
         requestAnimationFrame(animate)
+      } else {
+        setIsAnimating(false)
       }
     }
     requestAnimationFrame(animate)
     prevValue.current = value
   }, [value])
 
-  return <span style={{ transform: 'translateY(0)', display: 'inline-block' }}>{prefix}{displayValue.toLocaleString()}</span>
+  return (
+    <span
+      className="animated-number"
+      style={{
+        display: 'inline-block',
+        transform: isAnimating ? 'translateY(-2px)' : 'translateY(0)',
+        transition: 'transform 0.15s ease-out',
+      }}
+    >
+      {prefix}{displayValue.toLocaleString()}
+    </span>
+  )
 }
 
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; payload: { amount: number; yesterdayAmount: number } }>; label?: string }) {
@@ -179,7 +196,16 @@ function RevenueChart() {
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={revenue.hourly} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
-            <XAxis dataKey="hour" tick={{ fontSize: 12, fill: '#64748B' }} axisLine={{ stroke: '#E2E8F0' }} tickLine={false} />
+            <XAxis
+              dataKey="hour"
+              tick={{ fontSize: 11, fill: '#64748B' }}
+              axisLine={{ stroke: '#E2E8F0' }}
+              tickLine={false}
+              interval={0}
+              angle={-45}
+              textAnchor="end"
+              height={60}
+            />
             <YAxis tick={{ fontSize: 12, fill: '#64748B' }} axisLine={false} tickLine={false} tickFormatter={(v) => `¥${v}`} />
             <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#6366F1', strokeWidth: 1, strokeDasharray: '4 4' }} />
             <Line
@@ -307,53 +333,21 @@ function MenuPage() {
         <h1 style={{ fontSize: 24, fontWeight: 700, color: '#1E293B', margin: 0, marginBottom: 4 }}>菜单管理</h1>
         <p style={{ fontSize: 14, color: '#64748B', margin: 0 }}>点击菜品卡片可调整库存数量</p>
       </div>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, 300px)',
-          gap: 20,
-          justifyContent: 'flex-start',
-        }}
-        className="menu-grid"
-      >
+      <div className="menu-grid">
         {menuItems.map((item) => (
           <div
             key={item.id}
+            className={`menu-card ${item.stock < 10 ? 'menu-card-low-stock' : ''}`}
             onClick={() => setSelectedItem(item)}
-            style={{
-              width: 300,
-              height: 200,
-              background: '#fff',
-              borderRadius: 16,
-              padding: 20,
-              boxSizing: 'border-box',
-              boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              transition: 'transform 0.2s, box-shadow 0.2s',
-              position: 'relative',
-              border: '1px solid #F1F5F9',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-3px)'
-              e.currentTarget.style.boxShadow = '0 12px 24px rgba(0,0,0,0.1)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)'
-              e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.05)'
-            }}
           >
-            <div style={{ position: 'absolute', top: 16, right: 16, fontSize: 11, padding: '3px 8px', borderRadius: 6, background: '#F1F5F9', color: '#64748B' }}>
-              {item.category}
-            </div>
-            <div style={{ fontSize: 36, marginBottom: 8 }}>🍽️</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#1E293B', marginBottom: 8 }}>{item.name}</div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: '#10B981' }}>¥{item.price}</div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 12, color: '#6366F1', fontWeight: 600 }}>今日 {item.todaySales} 份</div>
-                <div style={{ fontSize: 12, color: item.stock < 10 ? '#F59E0B' : '#64748B', fontWeight: 600 }}>
+            <div className="menu-card-category">{item.category}</div>
+            <div className="menu-card-icon">🍽️</div>
+            <div className="menu-card-name">{item.name}</div>
+            <div className="menu-card-footer">
+              <div className="menu-card-price">¥{item.price}</div>
+              <div className="menu-card-stats">
+                <div className="menu-card-sales">今日 {item.todaySales} 份</div>
+                <div className={`menu-card-stock ${item.stock < 10 ? 'menu-card-stock-low' : ''}`}>
                   库存 {item.stock}
                 </div>
               </div>
@@ -362,6 +356,89 @@ function MenuPage() {
         ))}
       </div>
       {selectedItem && <StockModal item={selectedItem} onClose={() => setSelectedItem(null)} />}
+
+      <style>{`
+        .menu-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, 300px);
+          gap: 20px;
+          justify-content: flex-start;
+        }
+        .menu-card {
+          width: 300px;
+          height: 200px;
+          background: #fff;
+          border-radius: 16px;
+          padding: 20px;
+          box-sizing: border-box;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+          cursor: pointer;
+          display: flex;
+          flex-direction: column;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+          position: relative;
+          border: 1px solid #F1F5F9;
+        }
+        .menu-card:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 12px 24px rgba(0,0,0,0.12);
+        }
+        .menu-card-category {
+          position: absolute;
+          top: 16px;
+          right: 16px;
+          font-size: 11px;
+          padding: 3px 8px;
+          border-radius: 6px;
+          background: #F1F5F9;
+          color: #64748B;
+        }
+        .menu-card-icon {
+          font-size: 36px;
+          margin-bottom: 8px;
+        }
+        .menu-card-name {
+          font-size: 16px;
+          font-weight: 700;
+          color: #1E293B;
+          margin-bottom: 8px;
+        }
+        .menu-card-footer {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-top: auto;
+        }
+        .menu-card-price {
+          font-size: 18px;
+          font-weight: 700;
+          color: #10B981;
+        }
+        .menu-card-stats {
+          text-align: right;
+        }
+        .menu-card-sales {
+          font-size: 12px;
+          color: #6366F1;
+          font-weight: 600;
+        }
+        .menu-card-stock {
+          font-size: 12px;
+          color: #64748B;
+          font-weight: 600;
+        }
+        .menu-card-stock-low {
+          color: #F59E0B !important;
+        }
+        @media (max-width: 768px) {
+          .menu-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .menu-card {
+            width: 100% !important;
+          }
+        }
+      `}</style>
     </div>
   )
 }
