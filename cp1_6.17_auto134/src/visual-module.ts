@@ -9,6 +9,11 @@ interface ThemeColors {
   globalBase: string
 }
 
+interface EnergyFrame {
+  ts: number
+  val: number
+}
+
 const THEMES: Record<ThemeName, ThemeColors> = {
   neon: {
     rings: [
@@ -91,12 +96,23 @@ interface Ring {
   speed: number
 }
 
-const ENERGY_WINDOW_SIZE = 30
-const ENERGY_THRESHOLD = 0.45
-const WARM_HUE_SHIFT = 12
 const TRANSITION_FRAMES = 60
 const GLOW_RING_OPACITY_MIN = 0.1
 const GLOW_RING_OPACITY_MAX = 0.15
+
+export interface ClimaxConfig {
+  windowMs: number
+  ratioThreshold: number
+  shiftMinDeg: number
+  shiftMaxDeg: number
+}
+
+const DEFAULT_CLIMAX_CONFIG: ClimaxConfig = {
+  windowMs: 5000,
+  ratioThreshold: 1.2,
+  shiftMinDeg: 10,
+  shiftMaxDeg: 15,
+}
 
 export interface VisualModule {
   setTheme(name: ThemeName): void
@@ -105,6 +121,10 @@ export interface VisualModule {
   render(energy: EnergyData, canvas: HTMLCanvasElement): void
   resize(w: number, h: number): void
   reset(): void
+  setClimaxConfig(partial: Partial<ClimaxConfig>): void
+  getClimaxConfig(): ClimaxConfig
+  isInClimax(): boolean
+  getDebugInfo(): { avg5s: number; current: number; ratio: number; shift: number }
 }
 
 function lerp(a: number, b: number, t: number): number {
@@ -151,14 +171,17 @@ export function createVisualModule(): VisualModule {
   let fromThemeName: ThemeName = 'neon'
   let toThemeName: ThemeName = 'neon'
   let themeTransitionProgress = 1
+  let climaxConfig: ClimaxConfig = { ...DEFAULT_CLIMAX_CONFIG }
+  let inClimax = false
   let rings: Ring[] = []
   let particles: Particle[] = []
   let wavePhase = 0
   let waveSwingOffset = 0
   let prevLowEnergy = 0
-  const energyHistory: number[] = []
+  const energyHistory: EnergyFrame[] = []
   let currentGlobalShift = 0
-  let targetGlobalShift = 0
+  let savedGlobalShiftAtThemeChange = 0
+  let debugInfo = { avg5s: 0, current: 0, ratio: 0, shift: 0 }
 
   function getActiveTheme(): ThemeColors {
     if (themeTransitionProgress >= 1) return THEMES[currentThemeName]
@@ -169,22 +192,40 @@ export function createVisualModule(): VisualModule {
     )
   }
 
-  function spawnRings(energy: number, cx: number, cy: number, maxR: number) {
+  function computeAverage5s(now: number): number {
+    const cutoff = now - climaxConfig.windowMs
+    while (energyHistory.length > 0 && energyHistory[0].ts < cutoff) {
+      energyHistory.shift()
+    }
+    if (energyHistory.length === 0) return 0
+    let sum = 0
+    for (const f of energyHistory) sum += f.val
+    return sum / energyHistory.length
+  }
+
+  function computeComputedShift(currentFrameEnergy: number, isClimax: boolean): number {
+    if (!isClimax) return 0
+    const e = Math.max(0, Math.min(1, currentFrameEnergy))
+    return lerp(climaxConfig.shiftMinDeg, climaxConfig.shiftMaxDeg, e)
+  }
+
+  function spawnRings(energy: number, cx: number, cy: number, maxR: number, shift: number) {
     const theme = getActiveTheme()
     const count = Math.floor(energy * 3) + 1
     for (let i = 0; i < count; i++) {
       const ci = Math.floor(Math.random() * theme.rings.length)
+      const rawPair = theme.rings[ci]
       rings.push({
         radius: 10,
         maxRadius: maxR,
-        colorPair: theme.rings[ci],
+        colorPair: [shiftHue(rawPair[0], shift), shiftHue(rawPair[1], shift)],
         opacity: 0.6,
         speed: 2 + energy * 4,
       })
     }
   }
 
-  function spawnParticles(energy: number, cx: number, cy: number) {
+  function spawnParticles(energy: number, cx: number, cy: number, shift: number) {
     const theme = getActiveTheme()
     const count = Math.floor(50 + energy * 250)
     for (let i = 0; i < Math.min(count, 10); i++) {
@@ -196,7 +237,7 @@ export function createVisualModule(): VisualModule {
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         size: 2 + Math.random() * 4,
-        color: theme.particles[Math.floor(Math.random() * theme.particles.length)],
+        color: shiftHue(theme.particles[Math.floor(Math.random() * theme.particles.length)], shift),
         life: 1,
         maxLife: 40 + Math.random() * 40,
       })
@@ -212,11 +253,9 @@ export function createVisualModule(): VisualModule {
         rings.splice(i, 1)
         continue
       }
-      const c0 = shiftHue(r.colorPair[0], currentGlobalShift)
-      const c1 = shiftHue(r.colorPair[1], currentGlobalShift)
       const grad = ctx.createRadialGradient(cx, cy, r.radius * 0.8, cx, cy, r.radius)
-      grad.addColorStop(0, c0 + alphaHex(r.opacity))
-      grad.addColorStop(1, c1 + alphaHex(0))
+      grad.addColorStop(0, r.colorPair[0] + alphaHex(r.opacity))
+      grad.addColorStop(1, r.colorPair[1] + alphaHex(0))
       ctx.beginPath()
       ctx.arc(cx, cy, r.radius, 0, Math.PI * 2)
       ctx.strokeStyle = grad
@@ -237,10 +276,9 @@ export function createVisualModule(): VisualModule {
         particles.splice(i, 1)
         continue
       }
-      const shifted = shiftHue(p.color, currentGlobalShift)
       ctx.beginPath()
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
-      ctx.fillStyle = shifted + alphaHex(p.life)
+      ctx.fillStyle = p.color + alphaHex(p.life)
       ctx.fill()
     }
   }
@@ -249,11 +287,13 @@ export function createVisualModule(): VisualModule {
     ctx: CanvasRenderingContext2D,
     energy: EnergyData,
     w: number,
-    h: number
+    h: number,
+    shift: number
   ) {
     const theme = getActiveTheme()
     const baseColor = theme.particles[0]
-    const totalShift = theme.waveHueShift + currentGlobalShift
+    const totalShift = theme.waveHueShift + shift
+
     const hueShifted = shiftHue(baseColor, totalShift)
 
     wavePhase += 0.03 + energy.high * 0.1
@@ -299,34 +339,33 @@ export function createVisualModule(): VisualModule {
   }
 
   function drawGlobalToneMapping(
-    ctx: CanvasRenderingContext2D, w: number, h: number, cx: number, cy: number, maxR: number
+    ctx: CanvasRenderingContext2D, w: number, h: number, cx: number, cy: number, maxR: number, shift: number
   ) {
+    if (shift <= 0) return
     const theme = getActiveTheme()
     const base = theme.globalBase
-    const warmColor = shiftHue(base, WARM_HUE_SHIFT)
-    const t = Math.abs(currentGlobalShift) / WARM_HUE_SHIFT
+    const range = climaxConfig.shiftMaxDeg - climaxConfig.shiftMinDeg
+    const rangeNorm = range > 0 ? (shift - climaxConfig.shiftMinDeg) / range : 1
+    const t = Math.max(0, Math.min(1, rangeNorm))
 
-    const toneColor = lerpColor(base, warmColor, t)
+    const warmColor = shiftHue(base, shift)
     const toneAlpha = 0.04 * t
 
     ctx.save()
     ctx.globalCompositeOperation = 'overlay'
-    ctx.fillStyle = toneColor + alphaHex(toneAlpha)
+    ctx.fillStyle = warmColor + alphaHex(toneAlpha)
     ctx.fillRect(0, 0, w, h)
     ctx.restore()
 
-    if (t > 0) {
-      const glowAlpha = GLOW_RING_OPACITY_MIN + t * (GLOW_RING_OPACITY_MAX - GLOW_RING_OPACITY_MIN)
-      const glowColor = shiftHue(base, currentGlobalShift)
-      const grad = ctx.createRadialGradient(cx, cy, maxR * 0.2, cx, cy, maxR)
-      grad.addColorStop(0, glowColor + alphaHex(glowAlpha))
-      grad.addColorStop(1, glowColor + alphaHex(0))
-      ctx.save()
-      ctx.globalCompositeOperation = 'screen'
-      ctx.fillStyle = grad
-      ctx.fillRect(0, 0, w, h)
-      ctx.restore()
-    }
+    const glowAlpha = GLOW_RING_OPACITY_MIN + t * (GLOW_RING_OPACITY_MAX - GLOW_RING_OPACITY_MIN)
+    const grad = ctx.createRadialGradient(cx, cy, maxR * 0.2, cx, cy, maxR)
+    grad.addColorStop(0, warmColor + alphaHex(glowAlpha))
+    grad.addColorStop(1, warmColor + alphaHex(0))
+    ctx.save()
+    ctx.globalCompositeOperation = 'screen'
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, w, h)
+    ctx.restore()
   }
 
   const mod: VisualModule = {
@@ -336,6 +375,7 @@ export function createVisualModule(): VisualModule {
       toThemeName = name
       currentThemeName = name
       themeTransitionProgress = 0
+      savedGlobalShiftAtThemeChange = currentGlobalShift
     },
     cycleTheme() {
       const idx = THEME_NAMES.indexOf(currentThemeName)
@@ -344,6 +384,18 @@ export function createVisualModule(): VisualModule {
     },
     getTheme() {
       return currentThemeName
+    },
+    setClimaxConfig(partial: Partial<ClimaxConfig>) {
+      climaxConfig = { ...climaxConfig, ...partial }
+    },
+    getClimaxConfig() {
+      return { ...climaxConfig }
+    },
+    isInClimax() {
+      return inClimax
+    },
+    getDebugInfo() {
+      return { ...debugInfo }
     },
     render(energy: EnergyData, canvas: HTMLCanvasElement) {
       const ctx = canvas.getContext('2d')
@@ -355,35 +407,42 @@ export function createVisualModule(): VisualModule {
       const cy = h / 2
       const maxR = Math.sqrt(cx * cx + cy * cy)
 
-      const avgEnergy = (energy.low + energy.mid + energy.high) / 3
-      energyHistory.push(avgEnergy)
-      if (energyHistory.length > ENERGY_WINDOW_SIZE) energyHistory.shift()
-      const sum = energyHistory.reduce((a, b) => a + b, 0)
-      const smoothedAvg = sum / Math.max(1, energyHistory.length)
+      const now = Date.now()
+      const currentFrameEnergy = (energy.low + energy.mid + energy.high) / 3
+      energyHistory.push({ ts: now, val: currentFrameEnergy })
 
-      targetGlobalShift = smoothedAvg > ENERGY_THRESHOLD
-        ? WARM_HUE_SHIFT * Math.min(1, (smoothedAvg - ENERGY_THRESHOLD) * 2)
-        : 0
-      currentGlobalShift = lerp(currentGlobalShift, targetGlobalShift, 0.08)
+      const avg5s = computeAverage5s(now)
+      const ratio = avg5s > 0.0001 ? currentFrameEnergy / avg5s : 1
+      inClimax = ratio >= climaxConfig.ratioThreshold
+
+      const targetShift = computeComputedShift(currentFrameEnergy, inClimax)
+      currentGlobalShift = lerp(currentGlobalShift, targetShift, 0.08)
 
       if (themeTransitionProgress < 1) {
         themeTransitionProgress = Math.min(1, themeTransitionProgress + 1 / TRANSITION_FRAMES)
       }
 
+      let effectiveShift = currentGlobalShift
+      if (themeTransitionProgress < 1) {
+        effectiveShift = lerp(savedGlobalShiftAtThemeChange, currentGlobalShift, themeTransitionProgress)
+      }
+
+      debugInfo = { avg5s, current: currentFrameEnergy, ratio, shift: effectiveShift }
+
       const lowDelta = energy.low - prevLowEnergy
       if (lowDelta > 0.05 || energy.low > 0.4) {
-        spawnRings(energy.low, cx, cy, maxR)
+        spawnRings(energy.low, cx, cy, maxR, effectiveShift)
       }
       prevLowEnergy = energy.low
 
-      spawnParticles(energy.mid, cx, cy)
+      spawnParticles(energy.mid, cx, cy, effectiveShift)
 
       ctx.clearRect(0, 0, w, h)
 
       drawRings(ctx, cx, cy)
       drawParticles(ctx)
-      drawWaveform(ctx, energy, w, h)
-      drawGlobalToneMapping(ctx, w, h, cx, cy, maxR)
+      drawWaveform(ctx, energy, w, h, effectiveShift)
+      drawGlobalToneMapping(ctx, w, h, cx, cy, maxR, effectiveShift)
     },
     resize(_w: number, _h: number) {},
     reset() {
@@ -394,7 +453,8 @@ export function createVisualModule(): VisualModule {
       prevLowEnergy = 0
       energyHistory.length = 0
       currentGlobalShift = 0
-      targetGlobalShift = 0
+      savedGlobalShiftAtThemeChange = 0
+      inClimax = false
     },
   }
 

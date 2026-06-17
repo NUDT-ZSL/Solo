@@ -8,7 +8,12 @@ import {
 } from './visual-module'
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024
-const LOW_ENERGY_HISTORY_SIZE = 120
+const PREVIEW_WINDOW_MS = 2000
+
+interface LowEnergyFrame {
+  ts: number
+  val: number
+}
 
 function formatTime(sec: number): string {
   const m = Math.floor(sec / 60)
@@ -23,7 +28,9 @@ export default function App() {
   const visualModRef = useRef(createVisualModule())
   const rafRef = useRef(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const lowEnergyHistory = useRef<number[]>([])
+  const lowEnergyHistory = useRef<LowEnergyFrame[]>([])
+  const climaxState = useRef(false)
+  const [, forceTick] = useState(0)
 
   const [playing, setPlaying] = useState(false)
   const [loaded, setLoaded] = useState(false)
@@ -42,16 +49,17 @@ export default function App() {
     const energy = am.getEnergy()
     vm.render(energy, canvas)
 
-    lowEnergyHistory.current.push(energy.low)
-    if (lowEnergyHistory.current.length > LOW_ENERGY_HISTORY_SIZE) {
+    lowEnergyHistory.current.push({ ts: Date.now(), val: energy.low })
+    const cutoff = Date.now() - PREVIEW_WINDOW_MS
+    while (lowEnergyHistory.current.length > 0 && lowEnergyHistory.current[0].ts < cutoff) {
       lowEnergyHistory.current.shift()
     }
 
     if (previewCanvas) {
       const ctx = previewCanvas.getContext('2d')
       if (ctx) {
-        const w = previewCanvas.width
-        const h = previewCanvas.height
+        const w = previewCanvas.width / devicePixelRatio
+        const h = previewCanvas.height / devicePixelRatio
         ctx.clearRect(0, 0, w, h)
 
         const history = lowEnergyHistory.current
@@ -62,21 +70,30 @@ export default function App() {
           ctx.fillStyle = themeColor + '33'
 
           ctx.beginPath()
-          const stepX = w / (LOW_ENERGY_HISTORY_SIZE - 1)
+          const now = Date.now()
+          const span = PREVIEW_WINDOW_MS
           for (let i = 0; i < history.length; i++) {
-            const x = i * stepX
-            const y = h - history[i] * h
+            const x = ((history[i].ts - (now - span)) / span) * w
+            const y = h - Math.max(0, Math.min(1, history[i].val)) * h
             if (i === 0) ctx.moveTo(x, y)
             else ctx.lineTo(x, y)
           }
           ctx.stroke()
 
-          ctx.lineTo((history.length - 1) * stepX, h)
-          ctx.lineTo(0, h)
+          const lastX = ((history[history.length - 1].ts - (now - span)) / span) * w
+          const firstX = ((history[0].ts - (now - span)) / span) * w
+          ctx.lineTo(lastX, h)
+          ctx.lineTo(firstX, h)
           ctx.closePath()
           ctx.fill()
         }
       }
+    }
+
+    const inClimax = vm.isInClimax()
+    if (inClimax !== climaxState.current) {
+      climaxState.current = inClimax
+      forceTick((v) => v + 1)
     }
 
     const ct = am.getCurrentTime()
@@ -91,6 +108,10 @@ export default function App() {
     const am = createAudioModule()
     audioModRef.current = am
     am.setVolume(volume)
+
+    // @ts-expect-error debug exposure
+    window.__rhythm = { vm: visualModRef.current, am }
+    visualModRef.current.setClimaxConfig({ ratioThreshold: 1.2 })
 
     am.onTimeUpdate = (ct, dur) => {
       setCurrentTime(ct)
@@ -163,7 +184,7 @@ export default function App() {
         setPlaying(true)
         setLoaded(true)
         visualModRef.current.reset()
-        lowEnergyHistory.current = []
+        lowEnergyHistory.current.length = 0
       } catch {
         alert('音频解析失败')
       }
@@ -312,9 +333,22 @@ export default function App() {
                 fontSize: 12,
                 fontFamily: 'monospace',
                 textAlign: 'right',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
               }}
             >
-              {formatTime(currentTime)}/{formatTime(duration)}
+              <span
+                style={{
+                  color: climaxState.current ? '#FF8C00' : '#444',
+                  fontWeight: climaxState.current ? 700 : 400,
+                  transition: 'color 0.3s ease, font-weight 0.3s ease',
+                  textShadow: climaxState.current ? '0 0 8px #FF8C00AA' : 'none',
+                }}
+              >
+                {climaxState.current ? '🔥 CLIMAX' : '♪ playback'}
+              </span>
+              <span>{formatTime(currentTime)}/{formatTime(duration)}</span>
             </div>
           </div>
         )}
