@@ -1,11 +1,11 @@
-import type { ColorTheme } from '../particle/ParticleSystem';
-import type { FreqBandData } from '../audio/AudioAnalyzer';
-
-export interface UIParams {
-  density: number;
-  speed: number;
-  theme: ColorTheme;
-}
+import {
+  eventBus,
+  globalState,
+  updateGlobalState,
+  type FreqBandData,
+  type ColorTheme,
+  type ParticleParams
+} from '../shared/GlobalState';
 
 export class UIPanel {
   private container: HTMLElement;
@@ -26,20 +26,6 @@ export class UIPanel {
   private playIcon: string = '<svg viewBox="0 0 24 24" width="18" height="18" fill="white"><path d="M8 5v14l11-7z"/></svg>';
   private pauseIcon: string = '<svg viewBox="0 0 24 24" width="18" height="18" fill="white"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
 
-  public onFileSelected: ((file: File) => void) | null = null;
-  public onParamChange: ((params: Partial<UIParams>) => void) | null = null;
-  public onPlayPause: (() => void) | null = null;
-  public onSeek: ((time: number) => void) | null = null;
-
-  private params: UIParams = {
-    density: 1500,
-    speed: 1.5,
-    theme: 'neon'
-  };
-
-  private isPlaying: boolean = false;
-  private currentTime: number = 0;
-  private duration: number = 0;
   private isDraggingProgress: boolean = false;
 
   constructor(container: HTMLElement) {
@@ -51,20 +37,26 @@ export class UIPanel {
 
     const densityControl = this.createSlider(
       '粒子密度',
-      500, 2000, 100, this.params.density,
+      500, 2000, 100, globalState.particleParams.density,
       (value) => {
-        this.params.density = value;
-        this.emitParamChange({ density: value });
+        const params: Partial<ParticleParams> = { density: value };
+        updateGlobalState({
+          particleParams: { ...globalState.particleParams, density: value }
+        });
+        eventBus.emit('paramChange', params);
       },
       (value) => `${value}粒`
     );
 
     const speedControl = this.createSlider(
       '扩散速度',
-      0.5, 3.0, 0.1, this.params.speed,
+      0.5, 3.0, 0.1, globalState.particleParams.speed,
       (value) => {
-        this.params.speed = value;
-        this.emitParamChange({ speed: value });
+        const params: Partial<ParticleParams> = { speed: value };
+        updateGlobalState({
+          particleParams: { ...globalState.particleParams, speed: value }
+        });
+        eventBus.emit('paramChange', params);
       },
       (value) => value.toFixed(1) + 'x'
     );
@@ -97,10 +89,37 @@ export class UIPanel {
 
     this.setupUploadEvents();
     this.setupPlayerEvents();
+    this.setupEventBusListeners();
 
     container.appendChild(this.panel);
     container.appendChild(this.fileInfoBar);
     container.appendChild(this.playerBar);
+  }
+
+  private setupEventBusListeners(): void {
+    eventBus.on('freqDataUpdate', (data: FreqBandData) => {
+      this.updateEnergy(data);
+    });
+
+    eventBus.on('stateUpdate', () => {
+      this.setPlaying(globalState.isPlaying);
+    });
+
+    eventBus.on('audioStateChange', (state: string) => {
+      this.setPlaying(state === 'playing');
+    });
+
+    eventBus.on('audioLoaded', (data: { fileName: string; duration: number }) => {
+      this.showFileInfo(data.fileName, data.duration);
+    });
+
+    eventBus.on('audioTimeUpdate', (data: { currentTime: number; duration: number }) => {
+      this.updateTime(data.currentTime, data.duration);
+    });
+
+    eventBus.on('audioLoadError', (message: string) => {
+      this.setUploadError(message);
+    });
   }
 
   private createPanel(): HTMLDivElement {
@@ -250,9 +269,9 @@ export class UIPanel {
 
     const select = document.createElement('select');
     select.innerHTML = `
-      <option value="neon">霓虹</option>
-      <option value="sunny">暖阳</option>
-      <option value="aurora">极光</option>
+      <option value="neon" ${globalState.particleParams.theme === 'neon' ? 'selected' : ''}>霓虹</option>
+      <option value="sunny" ${globalState.particleParams.theme === 'sunny' ? 'selected' : ''}>暖阳</option>
+      <option value="aurora" ${globalState.particleParams.theme === 'aurora' ? 'selected' : ''}>极光</option>
     `;
     select.style.cssText = `
       width: 100%;
@@ -284,8 +303,10 @@ export class UIPanel {
 
     select.addEventListener('change', () => {
       const theme = select.value as ColorTheme;
-      this.params.theme = theme;
-      this.emitParamChange({ theme });
+      updateGlobalState({
+        particleParams: { ...globalState.particleParams, theme }
+      });
+      eventBus.emit('paramChange', { theme });
     });
 
     wrapper.appendChild(label);
@@ -384,7 +405,7 @@ export class UIPanel {
       width: 33.33%;
       height: 100%;
       background: linear-gradient(90deg, #FF3366, #FF6699);
-      transition: opacity 0.15s ease;
+      transition: opacity 0.1s ease;
       opacity: 0.2;
       position: relative;
     `;
@@ -396,7 +417,7 @@ export class UIPanel {
       left: 0;
       height: 100%;
       width: 0%;
-      background: rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.35);
       transition: width 0.05s linear;
     `;
     low.appendChild(lowFill);
@@ -407,7 +428,7 @@ export class UIPanel {
       width: 33.33%;
       height: 100%;
       background: linear-gradient(90deg, #3399FF, #66CCFF);
-      transition: opacity 0.15s ease;
+      transition: opacity 0.1s ease;
       opacity: 0.2;
       position: relative;
     `;
@@ -419,7 +440,7 @@ export class UIPanel {
       left: 0;
       height: 100%;
       width: 0%;
-      background: rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.35);
       transition: width 0.05s linear;
     `;
     mid.appendChild(midFill);
@@ -430,7 +451,7 @@ export class UIPanel {
       width: 33.34%;
       height: 100%;
       background: linear-gradient(90deg, #FFCC00, #FFE066);
-      transition: opacity 0.15s ease;
+      transition: opacity 0.1s ease;
       opacity: 0.2;
       position: relative;
     `;
@@ -442,7 +463,7 @@ export class UIPanel {
       left: 0;
       height: 100%;
       width: 0%;
-      background: rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.35);
       transition: width 0.05s linear;
     `;
     high.appendChild(highFill);
@@ -676,27 +697,25 @@ export class UIPanel {
 
   private setupPlayerEvents(): void {
     this.playPauseBtn.addEventListener('click', () => {
-      if (this.onPlayPause) {
-        this.onPlayPause();
-      }
+      eventBus.emit('playPauseToggle');
     });
 
     const handleProgressInteract = (e: MouseEvent): number => {
       const rect = this.progressBar.getBoundingClientRect();
       const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      return ratio * this.duration;
+      return ratio * globalState.audioFile.duration;
     };
 
     this.progressBar.addEventListener('mousedown', (e) => {
       this.isDraggingProgress = true;
       const time = handleProgressInteract(e);
-      if (this.onSeek) this.onSeek(time);
+      eventBus.emit('audioSeek', time);
     });
 
     document.addEventListener('mousemove', (e) => {
       if (this.isDraggingProgress) {
         const time = handleProgressInteract(e);
-        if (this.onSeek) this.onSeek(time);
+        eventBus.emit('audioSeek', time);
       }
     });
 
@@ -711,15 +730,7 @@ export class UIPanel {
   }
 
   private handleFile(file: File): void {
-    if (this.onFileSelected) {
-      this.onFileSelected(file);
-    }
-  }
-
-  private emitParamChange(params: Partial<UIParams>): void {
-    if (this.onParamChange) {
-      this.onParamChange(params);
-    }
+    eventBus.emit('audioFileSelected', file);
   }
 
   private formatTime(seconds: number): string {
@@ -730,7 +741,6 @@ export class UIPanel {
   }
 
   public showFileInfo(fileName: string, duration: number): void {
-    this.duration = duration;
     const nameEl = this.fileInfoBar.querySelector('.file-name') as HTMLSpanElement;
     const durationEl = this.fileInfoBar.querySelector('.file-duration') as HTMLSpanElement;
     if (nameEl) nameEl.textContent = fileName;
@@ -750,14 +760,10 @@ export class UIPanel {
   }
 
   public setPlaying(playing: boolean): void {
-    this.isPlaying = playing;
     this.playPauseBtn.innerHTML = playing ? this.pauseIcon : this.playIcon;
   }
 
   public updateTime(currentTime: number, duration: number): void {
-    this.currentTime = currentTime;
-    this.duration = duration;
-
     const timeElapsed = this.playerBar.querySelector('.time-elapsed') as HTMLSpanElement;
     if (timeElapsed) timeElapsed.textContent = this.formatTime(currentTime);
 
@@ -768,9 +774,9 @@ export class UIPanel {
   }
 
   public updateEnergy(data: FreqBandData): void {
-    const lowRatio = data.low / 255;
-    const midRatio = data.mid / 255;
-    const highRatio = data.high / 255;
+    const lowRatio = Math.min(1, data.low / 255);
+    const midRatio = Math.min(1, data.mid / 255);
+    const highRatio = Math.min(1, data.high / 255);
 
     this.energyBarLow.style.opacity = `${0.2 + lowRatio * 0.8}`;
     this.energyBarMid.style.opacity = `${0.2 + midRatio * 0.8}`;

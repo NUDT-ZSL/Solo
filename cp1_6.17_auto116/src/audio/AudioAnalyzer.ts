@@ -1,10 +1,10 @@
-export interface FreqBandData {
-  low: number;
-  mid: number;
-  high: number;
-}
-
-type AudioState = 'idle' | 'loading' | 'ready' | 'playing' | 'paused';
+import {
+  eventBus,
+  updateGlobalState,
+  globalState,
+  type FreqBandData,
+  type AudioState
+} from '../shared/GlobalState';
 
 export class AudioAnalyzer {
   private audioContext: AudioContext | null = null;
@@ -14,46 +14,24 @@ export class AudioAnalyzer {
   private gainNode: GainNode | null = null;
   private frequencyData: Uint8Array | null = null;
   private sampleRate: number = 44100;
-  private state: AudioState = 'idle';
-  private fileName: string = '';
-  private duration: number = 0;
+  private rafId: number | null = null;
 
-  public onStateChange: ((state: AudioState) => void) | null = null;
-  public onTimeUpdate: ((currentTime: number, duration: number) => void) | null = null;
-  public onLoaded: ((fileName: string, duration: number) => void) | null = null;
-
-  private setState(state: AudioState): void {
-    this.state = state;
-    if (this.onStateChange) {
-      this.onStateChange(state);
-    }
-  }
-
-  public getState(): AudioState {
-    return this.state;
-  }
-
-  public getFileName(): string {
-    return this.fileName;
-  }
-
-  public getDuration(): number {
-    return this.duration;
-  }
-
-  public getCurrentTime(): number {
-    return this.audioElement ? this.audioElement.currentTime : 0;
-  }
-
-  public setCurrentTime(time: number): void {
-    if (this.audioElement) {
-      this.audioElement.currentTime = time;
-    }
+  constructor() {
+    eventBus.on('audioFileSelected', (file: File) => {
+      this.loadFile(file);
+    });
+    eventBus.on('playPauseToggle', () => {
+      this.togglePlay();
+    });
+    eventBus.on('audioSeek', (time: number) => {
+      this.setCurrentTime(time);
+    });
   }
 
   public async loadFile(file: File): Promise<void> {
     if (file.size > 20 * 1024 * 1024) {
-      throw new Error('文件大小不能超过20MB');
+      eventBus.emit('audioLoadError', '文件大小不能超过20MB');
+      return;
     }
 
     const validTypes = ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/mp3'];
@@ -61,12 +39,11 @@ export class AudioAnalyzer {
     const extension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
 
     if (!validTypes.includes(file.type) && !validExtensions.includes(extension)) {
-      throw new Error('只支持MP3和WAV格式');
+      eventBus.emit('audioLoadError', '只支持MP3和WAV格式');
+      return;
     }
 
     this.setState('loading');
-    this.fileName = file.name;
-
     this.cleanup();
 
     this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -79,39 +56,78 @@ export class AudioAnalyzer {
     this.audioElement.crossOrigin = 'anonymous';
     this.audioElement.preload = 'auto';
 
-    await new Promise<void>((resolve, reject) => {
-      if (!this.audioElement) return reject(new Error('Audio element not created'));
+    try {
+      await new Promise<void>((resolve, reject) => {
+        if (!this.audioElement) return reject(new Error('Audio element not created'));
 
-      const onCanPlay = () => {
-        this.duration = this.audioElement!.duration;
-        this.sampleRate = this.audioContext!.sampleRate;
-        this.setupNodes();
-        this.setState('ready');
-        if (this.onLoaded) {
-          this.onLoaded(this.fileName, this.duration);
+        const onCanPlay = () => {
+          this.duration = this.audioElement!.duration;
+          this.sampleRate = this.audioContext!.sampleRate;
+          this.setupNodes();
+          resolve();
+        };
+
+        const onError = () => {
+          reject(new Error('音频文件加载失败'));
+        };
+
+        this.audioElement.addEventListener('canplaythrough', onCanPlay, { once: true });
+        this.audioElement.addEventListener('error', onError, { once: true });
+        this.audioElement.load();
+      });
+
+      this.audioElement.addEventListener('timeupdate', () => {
+        if (this.audioElement) {
+          eventBus.emit('audioTimeUpdate', {
+            currentTime: this.audioElement.currentTime,
+            duration: this.audioElement.duration
+          });
+          updateGlobalState({
+            audioFile: {
+              ...globalState.audioFile,
+              currentTime: this.audioElement.currentTime,
+              duration: this.audioElement.duration
+            }
+          });
         }
-        resolve();
-      };
+      });
 
-      const onError = () => {
-        this.setState('idle');
-        reject(new Error('音频文件加载失败'));
-      };
+      this.audioElement.addEventListener('ended', () => {
+        this.setState('ready');
+        this.stopFreqLoop();
+      });
 
-      this.audioElement.addEventListener('canplaythrough', onCanPlay, { once: true });
-      this.audioElement.addEventListener('error', onError, { once: true });
-      this.audioElement.load();
-    });
-
-    this.audioElement.addEventListener('timeupdate', () => {
-      if (this.onTimeUpdate && this.audioElement) {
-        this.onTimeUpdate(this.audioElement.currentTime, this.audioElement.duration);
-      }
-    });
-
-    this.audioElement.addEventListener('ended', () => {
+      updateGlobalState({
+        audioFile: {
+          name: file.name,
+          duration: this.duration,
+          currentTime: 0
+        }
+      });
+      eventBus.emit('audioLoaded', {
+        fileName: file.name,
+        duration: this.duration
+      });
       this.setState('ready');
+    } catch (err: any) {
+      this.setState('idle');
+      eventBus.emit('audioLoadError', err.message || '音频文件加载失败');
+    }
+  }
+
+  private get duration(): number {
+    return this.audioElement?.duration ?? 0;
+  }
+
+  private set duration(_: number) {
+  }
+
+  private setState(state: AudioState): void {
+    updateGlobalState({
+      audioState: state,
+      isPlaying: state === 'playing'
     });
+    eventBus.emit('audioStateChange', state);
   }
 
   private setupNodes(): void {
@@ -139,24 +155,46 @@ export class AudioAnalyzer {
       await this.audioContext.resume();
     }
 
-    if (this.state === 'ready' || this.state === 'paused') {
+    const state = globalState.audioState;
+    if (state === 'ready' || state === 'paused') {
       await this.audioElement.play();
       this.setState('playing');
+      this.startFreqLoop();
     }
   }
 
   public pause(): void {
-    if (this.audioElement && this.state === 'playing') {
+    if (this.audioElement && globalState.audioState === 'playing') {
       this.audioElement.pause();
       this.setState('paused');
+      this.stopFreqLoop();
     }
   }
 
   public togglePlay(): void {
-    if (this.state === 'playing') {
+    if (globalState.audioState === 'playing') {
       this.pause();
-    } else if (this.state === 'ready' || this.state === 'paused') {
+    } else if (globalState.audioState === 'ready' || globalState.audioState === 'paused') {
       this.play();
+    }
+  }
+
+  private startFreqLoop(): void {
+    if (this.rafId !== null) return;
+
+    const loop = () => {
+      const data = this.getFreqData();
+      updateGlobalState({ freqData: data });
+      eventBus.emit('freqDataUpdate', data);
+      this.rafId = requestAnimationFrame(loop);
+    };
+    this.rafId = requestAnimationFrame(loop);
+  }
+
+  private stopFreqLoop(): void {
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
     }
   }
 
@@ -167,33 +205,38 @@ export class AudioAnalyzer {
 
     this.analyserNode.getByteFrequencyData(this.frequencyData);
 
-    const nyquist = this.sampleRate / 2;
     const binCount = this.frequencyData.length;
+    const binWidth = this.sampleRate / 2 / binCount;
 
-    const lowStart = Math.floor(20 / nyquist * binCount);
-    const lowEnd = Math.floor(250 / nyquist * binCount);
+    const freqToBin = (freq: number): number => Math.floor(freq / binWidth);
+
+    const lowStart = freqToBin(20);
+    const lowEnd = freqToBin(250);
     const midStart = lowEnd;
-    const midEnd = Math.floor(4000 / nyquist * binCount);
+    const midEnd = freqToBin(4000);
     const highStart = midEnd;
-    const highEnd = Math.floor(20000 / nyquist * binCount);
+    const highEnd = freqToBin(20000);
 
     let lowSum = 0;
     let lowCount = 0;
-    for (let i = lowStart; i < Math.min(lowEnd, binCount); i++) {
+    const safeLowEnd = Math.min(lowEnd, binCount);
+    for (let i = lowStart; i < safeLowEnd; i++) {
       lowSum += this.frequencyData[i];
       lowCount++;
     }
 
     let midSum = 0;
     let midCount = 0;
-    for (let i = midStart; i < Math.min(midEnd, binCount); i++) {
+    const safeMidEnd = Math.min(midEnd, binCount);
+    for (let i = midStart; i < safeMidEnd; i++) {
       midSum += this.frequencyData[i];
       midCount++;
     }
 
     let highSum = 0;
     let highCount = 0;
-    for (let i = highStart; i < Math.min(highEnd, binCount); i++) {
+    const safeHighEnd = Math.min(highEnd, binCount);
+    for (let i = highStart; i < safeHighEnd; i++) {
       highSum += this.frequencyData[i];
       highCount++;
     }
@@ -205,11 +248,15 @@ export class AudioAnalyzer {
     };
   }
 
-  public isPlaying(): boolean {
-    return this.state === 'playing';
+  public setCurrentTime(time: number): void {
+    if (this.audioElement) {
+      this.audioElement.currentTime = time;
+    }
   }
 
   private cleanup(): void {
+    this.stopFreqLoop();
+
     if (this.audioElement) {
       this.audioElement.pause();
       this.audioElement.src = '';
@@ -236,6 +283,9 @@ export class AudioAnalyzer {
 
   public destroy(): void {
     this.cleanup();
-    this.state = 'idle';
+    updateGlobalState({
+      audioState: 'idle',
+      isPlaying: false
+    });
   }
 }
