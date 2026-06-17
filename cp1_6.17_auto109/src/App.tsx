@@ -9,7 +9,9 @@ const App: React.FC = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [fps, setFps] = useState(12);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [fpsHighlight, setFpsHighlight] = useState(false);
   const currentIndexRef = useRef(currentIndex);
+  const fpsHighlightTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     currentIndexRef.current = currentIndex;
@@ -21,11 +23,27 @@ const App: React.FC = () => {
     }
   }, [frames.length, currentIndex]);
 
+  useEffect(() => {
+    return () => {
+      if (fpsHighlightTimerRef.current) {
+        clearTimeout(fpsHighlightTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleFramesChange = useCallback((newFrames: Frame[]) => {
     setFrames(newFrames);
     if (newFrames.length === 0) {
       setIsPlaying(false);
       setCurrentIndex(0);
+    }
+  }, []);
+
+  const handleFramesReorder = useCallback((newFrames: Frame[]) => {
+    setFrames(newFrames);
+    setCurrentIndex(0);
+    if (newFrames.length >= 2) {
+      setIsPlaying(true);
     }
   }, []);
 
@@ -54,6 +72,13 @@ const App: React.FC = () => {
 
   const handleFpsChange = useCallback((newFps: number) => {
     setFps(newFps);
+    setFpsHighlight(true);
+    if (fpsHighlightTimerRef.current) {
+      clearTimeout(fpsHighlightTimerRef.current);
+    }
+    fpsHighlightTimerRef.current = window.setTimeout(() => {
+      setFpsHighlight(false);
+    }, 500);
   }, []);
 
   const firstFrame = frames[0];
@@ -87,6 +112,7 @@ const App: React.FC = () => {
           <FrameUploader
             frames={frames}
             onFramesChange={handleFramesChange}
+            onFramesReorder={handleFramesReorder}
             selectedIndex={currentIndex}
             onSelect={handleSelect}
           />
@@ -99,6 +125,7 @@ const App: React.FC = () => {
             onNextFrame={handleNextFrame}
             onPrevFrame={handlePrevFrame}
             fps={fps}
+            fpsHighlight={fpsHighlight}
             onFpsChange={handleFpsChange}
             isPlaying={isPlaying}
             onTogglePlay={handleTogglePlay}

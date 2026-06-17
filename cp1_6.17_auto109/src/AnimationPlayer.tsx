@@ -7,6 +7,7 @@ interface AnimationPlayerProps {
   onNextFrame: () => void;
   onPrevFrame: () => void;
   fps: number;
+  fpsHighlight?: boolean;
   onFpsChange: (fps: number) => void;
   isPlaying: boolean;
   onTogglePlay: () => void;
@@ -18,10 +19,11 @@ const AnimationPlayer: React.FC<AnimationPlayerProps> = ({
   onNextFrame,
   onPrevFrame,
   fps,
+  fpsHighlight = false,
   onFpsChange,
   isPlaying,
   onTogglePlay,
-}: AnimationPlayerProps) => {
+}) => {
   const intervalRef = useRef<number | null>(null);
   const [fadeKey, setFadeKey] = useState(0);
   const onNextFrameRef = useRef(onNextFrame);
@@ -87,7 +89,7 @@ const AnimationPlayer: React.FC<AnimationPlayerProps> = ({
         </button>
 
         <button
-          className="control-btn play-btn"
+          className={`control-btn play-btn ${isPlaying ? 'playing' : ''}`}
           onClick={onTogglePlay}
           disabled={frames.length < 2}
         >
@@ -113,7 +115,9 @@ const AnimationPlayer: React.FC<AnimationPlayerProps> = ({
             onChange={(e) => onFpsChange(Number(e.target.value))}
             className="fps-slider"
           />
-          <span className="fps-value">{fps} fps</span>
+          <span className={`fps-value ${fpsHighlight ? 'highlight' : ''}`}>
+            {fps} fps
+          </span>
         </div>
       </div>
     </div>

@@ -11,6 +11,7 @@ const ExportTools: React.FC<ExportToolsProps> = ({ frames, fps }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
+  const [exportType, setExportType] = useState<'gif' | 'sprite' | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -37,6 +38,7 @@ const ExportTools: React.FC<ExportToolsProps> = ({ frames, fps }) => {
     if (frames.length === 0 || exporting) return;
     setExporting(true);
     setExportProgress(0);
+    setExportType('gif');
     setIsOpen(false);
 
     try {
@@ -81,6 +83,7 @@ const ExportTools: React.FC<ExportToolsProps> = ({ frames, fps }) => {
         URL.revokeObjectURL(url);
         setExporting(false);
         setExportProgress(0);
+        setExportType(null);
       });
 
       gif.render();
@@ -88,6 +91,7 @@ const ExportTools: React.FC<ExportToolsProps> = ({ frames, fps }) => {
       console.error('GIF export failed:', error);
       setExporting(false);
       setExportProgress(0);
+      setExportType(null);
     }
   };
 
@@ -95,6 +99,7 @@ const ExportTools: React.FC<ExportToolsProps> = ({ frames, fps }) => {
     if (frames.length === 0 || exporting) return;
     setExporting(true);
     setExportProgress(0);
+    setExportType('sprite');
     setIsOpen(false);
 
     try {
@@ -133,11 +138,13 @@ const ExportTools: React.FC<ExportToolsProps> = ({ frames, fps }) => {
         }
         setExporting(false);
         setExportProgress(0);
+        setExportType(null);
       }, 'image/png');
     } catch (error) {
       console.error('Sprite sheet export failed:', error);
       setExporting(false);
       setExportProgress(0);
+      setExportType(null);
     }
   };
 
@@ -146,20 +153,45 @@ const ExportTools: React.FC<ExportToolsProps> = ({ frames, fps }) => {
   return (
     <div className="export-tools" ref={dropdownRef}>
       <button
-        className="export-btn"
+        className={`export-btn ${exporting ? 'exporting' : ''}`}
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
       >
-        {exporting ? `导出中 ${exportProgress}%` : '导出 ▾'}
+        {exporting ? (
+          <span className="export-btn-content">
+            <span className="spinner"></span>
+            <span>{exportType === 'gif' ? '导出GIF' : '导出精灵图'} {exportProgress}%</span>
+          </span>
+        ) : (
+          '导出 ▾'
+        )}
       </button>
       {isOpen && !exporting && (
         <div className="export-dropdown">
           <button className="dropdown-item" onClick={exportGif}>
-          🎞️ 导出为 GIF
+            <span className="dropdown-icon">🎞️</span>
+            <span className="dropdown-text">
+              <span className="dropdown-title">导出为 GIF</span>
+              <span className="dropdown-subtitle">循环播放，白色背景</span>
+            </span>
           </button>
           <button className="dropdown-item" onClick={exportSpriteSheet}>
-          📊 导出为精灵图
+            <span className="dropdown-icon">📊</span>
+            <span className="dropdown-text">
+              <span className="dropdown-title">导出为精灵图</span>
+              <span className="dropdown-subtitle">横向拼接，PNG格式</span>
+            </span>
           </button>
+        </div>
+      )}
+      {exporting && (
+        <div className="export-progress-overlay">
+          <div className="progress-bar">
+            <div
+              className="progress-bar-fill"
+              style={{ width: `${exportProgress}%` }}
+            />
+          </div>
         </div>
       )}
     </div>

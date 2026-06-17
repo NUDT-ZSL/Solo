@@ -4,6 +4,7 @@ import { Frame } from './types';
 interface FrameUploaderProps {
   frames: Frame[];
   onFramesChange: (frames: Frame[]) => void;
+  onFramesReorder?: (frames: Frame[]) => void;
   selectedIndex: number;
   onSelect: (index: number) => void;
 }
@@ -11,6 +12,7 @@ interface FrameUploaderProps {
 const FrameUploader: React.FC<FrameUploaderProps> = ({
   frames,
   onFramesChange,
+  onFramesReorder,
   selectedIndex,
   onSelect,
 }) => {
@@ -87,6 +89,8 @@ const FrameUploader: React.FC<FrameUploaderProps> = ({
   const handleThumbDragStart = (e: React.DragEvent, index: number) => {
     setDragIndex(index);
     e.dataTransfer.effectAllowed = 'move';
+    const target = e.currentTarget as HTMLElement;
+    e.dataTransfer.setDragImage(target, 40, 40);
   };
 
   const handleThumbDragOver = (e: React.DragEvent, index: number) => {
@@ -107,14 +111,18 @@ const FrameUploader: React.FC<FrameUploaderProps> = ({
     const newFrames = [...frames];
     const [removed] = newFrames.splice(dragIndex, 1);
     newFrames.splice(dropIndex, 0, removed);
-    onFramesChange(newFrames);
 
-    if (selectedIndex === dragIndex) {
-      onSelect(dropIndex);
-    } else if (dragIndex < selectedIndex && dropIndex >= selectedIndex) {
-      onSelect(selectedIndex - 1);
-    } else if (dragIndex > selectedIndex && dropIndex <= selectedIndex) {
-      onSelect(selectedIndex + 1);
+    if (onFramesReorder) {
+      onFramesReorder(newFrames);
+    } else {
+      onFramesChange(newFrames);
+      if (selectedIndex === dragIndex) {
+        onSelect(dropIndex);
+      } else if (dragIndex < selectedIndex && dropIndex >= selectedIndex) {
+        onSelect(selectedIndex - 1);
+      } else if (dragIndex > selectedIndex && dropIndex <= selectedIndex) {
+        onSelect(selectedIndex + 1);
+      }
     }
 
     setDragIndex(null);
@@ -168,7 +176,7 @@ const FrameUploader: React.FC<FrameUploaderProps> = ({
         {frames.map((frame, index) => (
           <div
             key={frame.id}
-            className={`thumbnail-wrapper ${selectedIndex === index ? 'selected' : ''} ${dragOverIndex === index ? 'drag-over' : ''}`}
+            className={`thumbnail-wrapper ${selectedIndex === index ? 'selected' : ''} ${dragOverIndex === index ? 'drag-over' : ''} ${dragIndex === index ? 'dragging' : ''}`}
             draggable
             onDragStart={(e) => handleThumbDragStart(e, index)}
             onDragOver={(e) => handleThumbDragOver(e, index)}
