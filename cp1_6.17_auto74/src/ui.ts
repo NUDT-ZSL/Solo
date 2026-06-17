@@ -18,6 +18,10 @@ let cornTotalEl: HTMLElement | null = null
 let wheatRateEl: HTMLElement | null = null
 let cornRateEl: HTMLElement | null = null
 let timeScaleButtons: HTMLButtonElement[] = []
+let prevWheatTotal = -1
+let prevCornTotal = -1
+let prevWheatRate = -1
+let prevCornRate = -1
 
 const timeScaleOptions = [
   { value: 1, label: '1x' },
@@ -79,11 +83,11 @@ function createLeftPanel(): HTMLDivElement {
       </div>
       <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 13px;">
         <span style="color: rgba(255, 255, 255, 0.7);">总吸水量</span>
-        <span id="wheat-total" style="font-weight: 600; color: #00BFFF;">0 单位</span>
+        <span id="wheat-total" class="stat-value" style="font-weight: 600; color: #00BFFF; display: inline-block; transition: transform 0.3s ease, color 0.3s ease; transform-origin: right center;">0 单位</span>
       </div>
       <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 13px;">
         <span style="color: rgba(255, 255, 255, 0.7);">吸水速率</span>
-        <span id="wheat-rate" style="font-weight: 600; color: #00BFFF;">0.0/秒</span>
+        <span id="wheat-rate" class="stat-value" style="font-weight: 600; color: #00BFFF; display: inline-block; transition: transform 0.3s ease, color 0.3s ease; transform-origin: right center;">0.0/秒</span>
       </div>
     </div>
 
@@ -93,11 +97,11 @@ function createLeftPanel(): HTMLDivElement {
       </div>
       <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 13px;">
         <span style="color: rgba(255, 255, 255, 0.7);">总吸水量</span>
-        <span id="corn-total" style="font-weight: 600; color: #00BFFF;">0 单位</span>
+        <span id="corn-total" class="stat-value" style="font-weight: 600; color: #00BFFF; display: inline-block; transition: transform 0.3s ease, color 0.3s ease; transform-origin: right center;">0 单位</span>
       </div>
       <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 13px;">
         <span style="color: rgba(255, 255, 255, 0.7);">吸水速率</span>
-        <span id="corn-rate" style="font-weight: 600; color: #00BFFF;">0.0/秒</span>
+        <span id="corn-rate" class="stat-value" style="font-weight: 600; color: #00BFFF; display: inline-block; transition: transform 0.3s ease, color 0.3s ease; transform-origin: right center;">0.0/秒</span>
       </div>
     </div>
 
@@ -225,18 +229,19 @@ function createHoverTooltip(): HTMLDivElement {
   applyStyles(tooltip, {
     position: 'fixed',
     padding: '12px',
-    backgroundColor: 'rgba(30, 30, 46, 0.95)',
+    backgroundColor: 'rgba(20, 20, 35, 0.92)',
     borderRadius: '8px',
     color: '#FFFFFF',
     fontSize: '12px',
     zIndex: '100',
     pointerEvents: 'none',
     minWidth: '160px',
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
+    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
+    border: '1px solid rgba(63, 81, 181, 0.3)',
     opacity: '0',
-    transition: 'opacity 200ms ease-in-out',
-    WebkitTransition: 'opacity 200ms ease-in-out',
+    transform: 'translateY(10px)',
+    transition: 'opacity 250ms ease-in-out, transform 250ms ease-in-out',
+    WebkitTransition: 'opacity 250ms ease-in-out, transform 250ms ease-in-out',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
     visibility: 'hidden'
   })
@@ -332,19 +337,51 @@ function createMobilePanel(callbacks: UICallbacks): HTMLDivElement {
   return panel
 }
 
+function animateStatValue(el: HTMLElement | null): void {
+  if (!el) return
+  el.style.transform = 'scale(1.1)'
+  el.style.color = '#4CAF50'
+  setTimeout(() => {
+    el.style.transform = 'scale(1)'
+    el.style.color = '#00BFFF'
+  }, 300)
+}
+
 export function updateUI(state: UIState): void {
+  const newWheatTotal = Math.round(state.wheatTotalWater)
+  const newCornTotal = Math.round(state.cornTotalWater)
+  const newWheatRate = parseFloat(state.wheatWaterRate.toFixed(1))
+  const newCornRate = parseFloat(state.cornWaterRate.toFixed(1))
+
   if (wheatTotalEl) {
     wheatTotalEl.textContent = `${state.wheatTotalWater.toFixed(0)} 单位`
+    if (prevWheatTotal >= 0 && newWheatTotal !== prevWheatTotal) {
+      animateStatValue(wheatTotalEl)
+    }
   }
   if (cornTotalEl) {
     cornTotalEl.textContent = `${state.cornTotalWater.toFixed(0)} 单位`
+    if (prevCornTotal >= 0 && newCornTotal !== prevCornTotal) {
+      animateStatValue(cornTotalEl)
+    }
   }
   if (wheatRateEl) {
     wheatRateEl.textContent = `${state.wheatWaterRate.toFixed(1)}/秒`
+    if (prevWheatRate >= 0 && newWheatRate !== prevWheatRate) {
+      animateStatValue(wheatRateEl)
+    }
   }
   if (cornRateEl) {
     cornRateEl.textContent = `${state.cornWaterRate.toFixed(1)}/秒`
+    if (prevCornRate >= 0 && newCornRate !== prevCornRate) {
+      animateStatValue(cornRateEl)
+    }
   }
+
+  prevWheatTotal = newWheatTotal
+  prevCornTotal = newCornTotal
+  prevWheatRate = newWheatRate
+  prevCornRate = newCornRate
 
   const mobileWheat = document.getElementById('mobile-wheat-total')
   const mobileCorn = document.getElementById('mobile-corn-total')
@@ -375,16 +412,18 @@ export function showHoverTooltip(node: RootNode, x: number, y: number): void {
 
   void hoverTooltip.offsetWidth
   hoverTooltip.style.opacity = '1'
+  hoverTooltip.style.transform = 'translateY(0)'
 }
 
 export function hideHoverTooltip(): void {
   if (!hoverTooltip) return
   hoverTooltip.style.opacity = '0'
+  hoverTooltip.style.transform = 'translateY(10px)'
   setTimeout(() => {
     if (hoverTooltip && hoverTooltip.style.opacity === '0') {
       hoverTooltip.style.visibility = 'hidden'
     }
-  }, 200)
+  }, 250)
 }
 
 function handleResponsive(): void {

@@ -410,53 +410,76 @@ function createConnection(
 
 export function highlightRoot(node: RootNode, _scene: THREE.Scene): void {
   const nodesToHighlight: RootNode[] = []
-  const originalIntensities: Map<RootNode, number> = new Map()
-  const originalColors: Map<RootNode, THREE.Color> = new Map()
 
   const collectNodes = (n: RootNode, level: number) => {
     if (level > 2) return
     nodesToHighlight.push(n)
-    originalIntensities.set(n, (n.mesh.material as THREE.MeshStandardMaterial).emissiveIntensity)
-    originalColors.set(n, (n.mesh.material as THREE.MeshStandardMaterial).emissive.clone())
     n.children.forEach((child) => collectNodes(child, level + 1))
   }
 
   collectNodes(node, 0)
 
-  const HIGHLIGHT_DURATION = 1500
-  const startTime = performance.now()
-  const highlightIntensity = 1.5
+  const RAMP_UP_DURATION = 300
+  const HOLD_DURATION = 1200
+  const RAMP_DOWN_DURATION = 500
+  const TOTAL_DURATION = RAMP_UP_DURATION + HOLD_DURATION + RAMP_DOWN_DURATION
+  const MAX_INTENSITY_MULTIPLIER = 1.5
+
+  const originalStates = nodesToHighlight.map((n) => ({
+    node: n,
+    emissiveIntensity: (n.mesh.material as THREE.MeshStandardMaterial).emissiveIntensity,
+    emissive: (n.mesh.material as THREE.MeshStandardMaterial).emissive.clone(),
+    color: (n.mesh.material as THREE.MeshStandardMaterial).color.clone()
+  }))
+
+  const targetIntensity = 0.05 * MAX_INTENSITY_MULTIPLIER
+  const brightColor = node.originalColor.clone().multiplyScalar(1.2)
 
   nodesToHighlight.forEach((n) => {
-    const material = n.mesh.material as THREE.MeshStandardMaterial
-    material.emissiveIntensity = n.originalEmissiveIntensity * highlightIntensity
-    const brightColor = n.originalColor.clone()
-    brightColor.multiplyScalar(1.2)
-    material.emissive.copy(brightColor)
-    material.color.copy(brightColor)
     n.highlighted = true
   })
 
-  const restoreNodes = () => {
+  const startTime = performance.now()
+
+  const animateHighlight = () => {
     const elapsed = performance.now() - startTime
-    if (elapsed < HIGHLIGHT_DURATION) {
-      requestAnimationFrame(restoreNodes)
+
+    if (elapsed >= TOTAL_DURATION) {
+      originalStates.forEach(({ node, emissiveIntensity, emissive, color }) => {
+        const material = node.mesh.material as THREE.MeshStandardMaterial
+        material.emissiveIntensity = emissiveIntensity
+        material.emissive.copy(emissive)
+        material.color.copy(color)
+        node.highlighted = false
+      })
       return
     }
 
-    nodesToHighlight.forEach((n) => {
-      const material = n.mesh.material as THREE.MeshStandardMaterial
-      const originalIntensity = originalIntensities.get(n) ?? n.originalEmissiveIntensity
-      const originalEmissive = originalColors.get(n) ?? n.originalColor.clone()
+    let t: number
+    if (elapsed < RAMP_UP_DURATION) {
+      t = elapsed / RAMP_UP_DURATION
+      t = t * t * (3 - 2 * t)
+    } else if (elapsed < RAMP_UP_DURATION + HOLD_DURATION) {
+      t = 1
+    } else {
+      const fadeElapsed = elapsed - RAMP_UP_DURATION - HOLD_DURATION
+      t = 1 - fadeElapsed / RAMP_DOWN_DURATION
+      t = t * t * (3 - 2 * t)
+    }
 
-      material.emissiveIntensity = originalIntensity
-      material.emissive.copy(originalEmissive)
-      material.color.copy(n.originalColor)
-      n.highlighted = false
+    originalStates.forEach(({ node, emissiveIntensity, emissive, color }) => {
+      const material = node.mesh.material as THREE.MeshStandardMaterial
+      material.emissiveIntensity = emissiveIntensity + (targetIntensity - emissiveIntensity) * t
+      const lerpedEmissive = emissive.clone().lerp(brightColor, t)
+      material.emissive.copy(lerpedEmissive)
+      const lerpedColor = color.clone().lerp(brightColor, t)
+      material.color.copy(lerpedColor)
     })
+
+    requestAnimationFrame(animateHighlight)
   }
 
-  requestAnimationFrame(restoreNodes)
+  requestAnimationFrame(animateHighlight)
 }
 
 export function updateNodeWaterContent(node: RootNode, amount: number): void {
