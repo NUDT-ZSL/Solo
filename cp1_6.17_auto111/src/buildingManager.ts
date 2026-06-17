@@ -71,7 +71,7 @@ export class BuildingManager {
     const material = new THREE.MeshStandardMaterial({
       color: 0x3B82F6,
       transparent: true,
-      opacity: 0.25,
+      opacity: 0,
       roughness: 0.5,
       metalness: 0.1,
       depthWrite: false
@@ -79,17 +79,19 @@ export class BuildingManager {
     this.previewMesh = new THREE.Mesh(geometry, material);
     this.previewMesh.position.set(0, this.defaultHeight / 2, 0);
     this.previewMesh.visible = false;
+    this.previewMesh.name = 'building_preview_mesh';
     this.scene.add(this.previewMesh);
 
     const edgeGeometry = new THREE.EdgesGeometry(geometry);
     const edgeMaterial = new THREE.LineBasicMaterial({ 
       color: 0x3B82F6, 
       transparent: true, 
-      opacity: 0.7 
+      opacity: 0 
     });
     this.previewEdges = new THREE.LineSegments(edgeGeometry, edgeMaterial);
     this.previewEdges.position.copy(this.previewMesh.position);
     this.previewEdges.visible = false;
+    this.previewEdges.name = 'building_preview_edges';
     this.scene.add(this.previewEdges);
   }
 
@@ -98,14 +100,32 @@ export class BuildingManager {
       this.previewMesh.visible = true;
       this.previewEdges.visible = true;
       this.previewVisible = true;
+      const meshMat = this.previewMesh.material as THREE.MeshStandardMaterial;
+      const edgeMat = this.previewEdges.material as THREE.LineBasicMaterial;
+      meshMat.opacity = 0.25;
+      edgeMat.opacity = 0.7;
     }
   }
 
   hidePreview() {
     if (this.previewMesh && this.previewEdges) {
+      this.previewVisible = false;
       this.previewMesh.visible = false;
       this.previewEdges.visible = false;
-      this.previewVisible = false;
+      const meshMat = this.previewMesh.material as THREE.MeshStandardMaterial;
+      const edgeMat = this.previewEdges.material as THREE.LineBasicMaterial;
+      meshMat.opacity = 0;
+      edgeMat.opacity = 0;
+    }
+  }
+
+  resetPreview() {
+    this.hidePreview();
+    if (this.previewMesh) {
+      this.previewMesh.position.set(0, this.defaultHeight / 2, 0);
+    }
+    if (this.previewEdges) {
+      this.previewEdges.position.set(0, this.defaultHeight / 2, 0);
     }
   }
 
@@ -212,7 +232,7 @@ export class BuildingManager {
     this.buildings.set(id, { mesh, edges, data, edgeHighlight });
     this.buildingCount++;
 
-    this.hidePreview();
+    this.resetPreview();
     this.updateAllEdgeHighlights();
     this.notifyChange();
     return true;

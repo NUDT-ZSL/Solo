@@ -207,11 +207,21 @@ export class WindSimulator {
     speed: number;
     shouldEnterVortex: boolean;
     vortexCenter: THREE.Vector3 | null;
+    inBuilding: boolean;
   } {
     let direction = new THREE.Vector3(1, 0, 0);
     let speed = this.baseWindSpeed;
     let shouldEnterVortex = false;
     let vortexCenter: THREE.Vector3 | null = null;
+    let inBuilding = false;
+    
+    let maxWindwardEffect = 0;
+    let maxLeewardEffect = 0;
+    let windwardDeflectionY = 0;
+    let leewardSwirlZ = 0;
+    let leewardDropY = 0;
+    let windwardSpeedMultiplier = 1;
+    let leewardSpeedMultiplier = 1;
     
     for (const building of this.buildings) {
       const bx = building.position.x;
@@ -230,74 +240,77 @@ export class WindSimulator {
       const backZ = bz + halfD;
       const topY = by + bh / 2;
       
-      const zInRange = z >= frontZ - 5 && z <= backZ + 5;
-      const yInRange = y <= topY + 15 && y >= 0;
+      const zInBuildingWidth = z >= frontZ - 2 && z <= backZ + 2;
+      const yBelowBuildingTop = y <= topY + 10;
       
-      if (zInRange && yInRange) {
-        if (x < leftX && x > leftX - 40) {
-          const distToBuilding = leftX - x;
-          const distRatio = Math.max(0, Math.min(1, 1 - distToBuilding / 40));
-          
-          const deflectionAngle = distRatio * Math.PI / 4;
-          
-          if (y < topY) {
-            const heightRatio = 1 - (y / topY);
-            direction.y = Math.sin(deflectionAngle) * (0.4 + heightRatio * 0.4);
-          } else {
-            direction.y = Math.sin(deflectionAngle * 0.6) * 0.3;
-          }
-          
-          direction.x = Math.cos(deflectionAngle);
-          direction.z *= 0.3;
-          direction.normalize();
-          
-          speed = this.baseWindSpeed * (1 + distRatio * 0.4);
+      if (zInBuildingWidth && yBelowBuildingTop) {
+        if (x >= leftX && x <= rightX && y < topY) {
+          inBuilding = true;
         }
         
-        if (x > rightX && x < rightX + 35) {
-          const distFromBuilding = x - rightX;
-          const vortexRadius = 20;
+        if (x < leftX && x > leftX - 25) {
+          const distToFace = leftX - x;
+          const effectStrength = Math.max(0, Math.min(1, 1 - distToFace / 25));
           
-          if (distFromBuilding < vortexRadius * 1.5) {
-            const vortexStrength = Math.max(0, 1 - distFromBuilding / (vortexRadius * 1.5));
+          if (effectStrength > maxWindwardEffect) {
+            maxWindwardEffect = effectStrength;
             
-            if (vortexStrength > 0.4) {
+            const deflectionAngle = effectStrength * Math.PI / 4;
+            
+            if (y < topY) {
+              const heightFactor = Math.max(0.3, 1 - y / topY);
+              windwardDeflectionY = Math.sin(deflectionAngle) * (0.6 + heightFactor * 0.4);
+            } else {
+              windwardDeflectionY = Math.sin(deflectionAngle * 0.5) * 0.3;
+            }
+            
+            windwardSpeedMultiplier = 1 + effectStrength * 0.3;
+          }
+        }
+        
+        const vortexRadius = 15;
+        if (x > rightX && x < rightX + vortexRadius * 2) {
+          const distFromBackFace = x - rightX;
+          const effectStrength = Math.max(0, 1 - distFromBackFace / (vortexRadius * 2));
+          
+          if (effectStrength > maxLeewardEffect) {
+            maxLeewardEffect = effectStrength;
+            
+            if (effectStrength > 0.3) {
               shouldEnterVortex = true;
               vortexCenter = new THREE.Vector3(
-                rightX + vortexRadius * 0.7,
+                rightX + vortexRadius * 0.6,
                 topY * 0.5,
                 bz
               );
             }
             
-            const swirlAngle = this.animationTime * (1 + vortexStrength * 2);
-            const verticalDrop = vortexStrength * 0.4;
-            const lateralSwing = Math.sin(swirlAngle) * vortexStrength * 0.3;
+            const swirlAngle = this.animationTime * 1.5 + distFromBackFace * 0.1;
+            const zOffset = z - bz;
+            const zFactor = Math.max(-1, Math.min(1, zOffset / (halfD + vortexRadius)));
             
-            direction.z = lateralSwing;
-            direction.y = -verticalDrop;
-            direction.x = Math.max(0.15, 1 - vortexStrength * 0.7);
-            direction.normalize();
+            leewardSwirlZ = Math.sin(swirlAngle) * effectStrength * 0.6 * zFactor;
+            leewardDropY = -effectStrength * 0.4;
             
-            speed = this.baseWindSpeed * (0.4 + vortexStrength * 0.5);
+            leewardSpeedMultiplier = 0.5 + effectStrength * 0.3;
           }
-        }
-        
-        if (x >= leftX - 3 && x <= rightX + 3 && z >= frontZ - 3 && z <= backZ + 3 && y < topY + 5) {
-          if (y < topY) {
-            const pushUp = 0.6 + (1 - y / topY) * 0.4;
-            const pushAround = 0.3;
-            direction.set(0.2, pushUp, (z - bz) > 0 ? pushAround : -pushAround);
-          } else {
-            direction.set(0.6, 0.4, 0);
-          }
-          direction.normalize();
-          speed = this.baseWindSpeed * 0.7;
         }
       }
     }
     
-    return { direction, speed, shouldEnterVortex, vortexCenter };
+    if (maxWindwardEffect > 0 || maxLeewardEffect > 0) {
+      const totalEffect = Math.max(maxWindwardEffect, maxLeewardEffect);
+      
+      direction.y = windwardDeflectionY + leewardDropY;
+      direction.z = leewardSwirlZ;
+      direction.x = Math.max(0.2, 1 - totalEffect * 0.5);
+      direction.normalize();
+      
+      const speedMultiplier = Math.max(windwardSpeedMultiplier, leewardSpeedMultiplier);
+      speed = this.baseWindSpeed * speedMultiplier;
+    }
+    
+    return { direction, speed, shouldEnterVortex, vortexCenter, inBuilding };
   }
 
   update(deltaTime: number) {
@@ -315,7 +328,7 @@ export class WindSimulator {
   private updateArrowAnimations(deltaTime: number) {
     const halfPlot = this.plotSize / 2;
     const bufferZone = 30;
-    const speedMultiplier = 0.8;
+    const speedMultiplier = 0.6;
     
     this.arrows.forEach((arrow) => {
       const windData = this.calculateWindAtPoint(
@@ -324,24 +337,31 @@ export class WindSimulator {
         arrow.position.z
       );
       
+      if (windData.inBuilding) {
+        arrow.targetDirection.set(0.5, 0.7, 0);
+        arrow.speed = this.baseWindSpeed * 0.2;
+      }
+      
       if (arrow.inVortex) {
         arrow.vortexTimer -= deltaTime;
-        arrow.vortexAngle += deltaTime * (1 + this.baseWindSpeed / 10);
+        arrow.vortexAngle += deltaTime * (0.8 + this.baseWindSpeed / 20);
         
         if (arrow.vortexCenter) {
-          const radius = 8;
+          const radius = 15;
+          const verticalOscillation = Math.sin(arrow.vortexAngle * 0.5) * 5;
+          
           arrow.position.x = arrow.vortexCenter.x + Math.cos(arrow.vortexAngle) * radius;
-          arrow.position.z = arrow.vortexCenter.z + Math.sin(arrow.vortexAngle) * radius;
-          arrow.position.y = arrow.vortexCenter.y + Math.sin(arrow.vortexAngle * 0.7) * 3;
+          arrow.position.z = arrow.vortexCenter.z + Math.sin(arrow.vortexAngle) * radius * 0.7;
+          arrow.position.y = arrow.vortexCenter.y + verticalOscillation;
           
           const tangentDir = new THREE.Vector3(
             -Math.sin(arrow.vortexAngle),
-            Math.cos(arrow.vortexAngle * 0.7) * 0.5,
-            Math.cos(arrow.vortexAngle)
+            Math.cos(arrow.vortexAngle * 0.5) * 0.3,
+            Math.cos(arrow.vortexAngle) * 0.7
           ).normalize();
           
           arrow.targetDirection.copy(tangentDir);
-          arrow.speed = this.baseWindSpeed * 0.6;
+          arrow.speed = this.baseWindSpeed * 0.5;
         }
         
         if (arrow.vortexTimer <= 0) {
@@ -349,11 +369,14 @@ export class WindSimulator {
           arrow.vortexCenter = null;
         }
       } else {
-        if (windData.shouldEnterVortex && windData.vortexCenter && Math.random() < 0.02) {
+        if (windData.shouldEnterVortex && windData.vortexCenter && Math.random() < 0.015) {
           arrow.inVortex = true;
-          arrow.vortexTimer = 2 + Math.random() * 2;
+          arrow.vortexTimer = 3 + Math.random() * 2;
           arrow.vortexCenter = windData.vortexCenter.clone();
-          arrow.vortexAngle = Math.random() * Math.PI * 2;
+          arrow.vortexAngle = Math.atan2(
+            arrow.position.z - windData.vortexCenter.z,
+            arrow.position.x - windData.vortexCenter.x
+          );
         } else {
           arrow.targetDirection.copy(windData.direction);
           arrow.speed = windData.speed;
@@ -369,6 +392,8 @@ export class WindSimulator {
         arrow.position.y = 5 + Math.random() * 25;
         arrow.inVortex = false;
         arrow.vortexTimer = 0;
+        arrow.currentDirection.set(1, 0, 0);
+        arrow.targetDirection.set(1, 0, 0);
       }
       
       if (arrow.position.z < -halfPlot - bufferZone) {
@@ -384,11 +409,11 @@ export class WindSimulator {
         arrow.position.y = 25;
       }
       
-      arrow.currentDirection.lerp(arrow.targetDirection, 0.08).normalize();
+      arrow.currentDirection.lerp(arrow.targetDirection, 0.06).normalize();
       this.setArrowDirection(arrow.mesh, arrow.currentDirection);
       
-      const scale = Math.min(2.2, Math.max(0.4, arrow.speed / this.baseWindSpeed));
-      const pulseScale = scale * (1 + Math.sin(this.animationTime * 3 + arrow.position.x * 0.05) * 0.08);
+      const scale = Math.min(2.5, Math.max(0.3, arrow.speed / this.baseWindSpeed));
+      const pulseScale = scale * (1 + Math.sin(this.animationTime * 2 + arrow.position.x * 0.03 + arrow.position.z * 0.02) * 0.1);
       arrow.mesh.scale.set(pulseScale, pulseScale, pulseScale);
       
       arrow.mesh.position.copy(arrow.position);
