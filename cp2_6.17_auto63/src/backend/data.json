@@ -1,0 +1,157 @@
+{
+  "tours": [
+    {
+      "id": "tour-001",
+      "name": "2026夏日巡演",
+      "musicianId": "musician-001",
+      "createdAt": "2026-06-01T00:00:00.000Z"
+    }
+  ],
+  "cities": [
+    {
+      "id": "city-001",
+      "tourId": "tour-001",
+      "name": "北京",
+      "date": "2026-07-15",
+      "venue": "北京工人体育馆",
+      "latitude": 39.9289,
+      "longitude": 116.4454,
+      "notes": "开场巡演首站，准备安可曲两首",
+      "songIds": ["song-001", "song-002", "song-003", "song-004", "song-005", "song-006", "song-007", "song-008", "song-009", "song-010", "song-011", "song-012"],
+      "targetDuration": 90,
+      "audienceCount": 8500
+    },
+    {
+      "id": "city-002",
+      "tourId": "tour-001",
+      "name": "上海",
+      "date": "2026-07-18",
+      "venue": "上海梅赛德斯奔驰文化中心",
+      "latitude": 31.1875,
+      "longitude": 121.4997,
+      "notes": "邀请嘉宾合唱",
+      "songIds": ["song-001", "song-002", "song-003", "song-004", "song-005", "song-006", "song-007", "song-008", "song-009", "song-010", "song-011"],
+      "targetDuration": 90,
+      "audienceCount": 12000
+    },
+    {
+      "id": "city-003",
+      "tourId": "tour-001",
+      "name": "广州",
+      "date": "2026-07-22",
+      "venue": "广州体育馆",
+      "latitude": 23.1566,
+      "longitude": 113.2730,
+      "notes": "粤语歌曲专场",
+      "songIds": ["song-001", "song-002", "song-003", "song-004", "song-005", "song-006", "song-007", "song-008", "song-009", "song-010"],
+      "targetDuration": 90,
+      "audienceCount": 9200
+    },
+    {
+      "id": "city-004",
+      "tourId": "tour-001",
+      "name": "成都",
+      "date": "2026-07-26",
+      "venue": "成都凤凰山体育公园",
+      "latitude": 30.7302,
+      "longitude": 104.1552,
+      "notes": "压轴站，准备特别演出",
+      "songIds": ["song-001", "song-002", "song-003", "song-004", "song-005", "song-006", "song-007", "song-008", "song-009", "song-010", "song-011", "song-012", "song-013"],
+      "targetDuration": 90,
+      "audienceCount": 15000
+    }
+  ],
+  "songs": [
+    {
+      "id": "song-001",
+      "title": "夜空中最亮的星",
+      "duration": 4.2,
+      "key": "G大调",
+      "tags": ["经典", "热门"]
+    },
+    {
+      "id": "song-002",
+      "title": "追梦赤子心",
+      "duration": 5.1,
+      "key": "C大调",
+      "tags": ["经典", "励志"]
+    },
+    {
+      "id": "song-003",
+      "title": "成都",
+      "duration": 4.8,
+      "key": "D大调",
+      "tags": ["经典", "城市"]
+    },
+    {
+      "id": "song-004",
+      "title": "南方姑娘",
+      "duration": 4.5,
+      "key": "A小调",
+      "tags": ["经典", "抒情"]
+    },
+    {
+      "id": "song-005",
+      "title": "春风十里",
+      "duration": 6.2,
+      "key": "F大调",
+      "tags": ["经典", "抒情"]
+    },
+    {
+      "id": "song-006",
+      "title": "NEW SONG 1",
+      "duration": 3.8,
+      "key": "E大调",
+      "tags": ["新歌"]
+    },
+    {
+      "id": "song-007",
+      "title": "NEW SONG 2",
+      "duration": 4.0,
+      "key": "B小调",
+      "tags": ["新歌", "互动"]
+    },
+    {
+      "id": "song-008",
+      "title": "海阔天空",
+      "duration": 5.5,
+      "key": "C大调",
+      "tags": ["经典", "粤语", "合唱"]
+    },
+    {
+      "id": "song-009",
+      "title": "平凡之路",
+      "duration": 5.0,
+      "key": "G大调",
+      "tags": ["经典", "励志", "合唱"]
+    },
+    {
+      "id": "song-010",
+      "title": "NEW SONG 3",
+      "duration": 3.5,
+      "key": "D大调",
+      "tags": ["新歌"]
+    },
+    {
+      "id": "song-011",
+      "title": "安可曲1",
+      "duration": 4.8,
+      "key": "A大调",
+      "tags": ["安可", "互动"]
+    },
+    {
+      "id": "song-012",
+      "title": "安可曲2",
+      "duration": 5.2,
+      "key": "E小调",
+      "tags": ["安可"]
+    },
+    {
+      "id": "song-013",
+      "title": "互动大合唱",
+      "duration": 7.0,
+      "key": "C大调",
+      "tags": ["互动", "经典", "合唱"]
+    }
+  ]
+}
