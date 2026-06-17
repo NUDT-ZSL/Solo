@@ -1,4 +1,16 @@
-import { useConfigStore, ProductType, MaterialType, AccessoryType, COLOR_SWATCHES, MATERIAL_CONFIG, PRODUCT_TYPE_NAMES, ACCESSORY_NAMES } from '@/store'
+import { useRef } from 'react'
+import JSZip from 'jszip'
+import {
+  useConfigStore,
+  ProductType,
+  MaterialType,
+  AccessoryType,
+  COLOR_SWATCHES,
+  MATERIAL_CONFIG,
+  PRODUCT_TYPE_NAMES,
+  ACCESSORY_NAMES,
+  ExportedConfig,
+} from '@/store'
 
 const productTypes: ProductType[] = ['bracelet', 'necklace', 'pendant']
 const materialTypes: MaterialType[] = ['leather', 'metal', 'cord']
@@ -9,12 +21,67 @@ function CustomizerPanel() {
   const material = useConfigStore((s) => s.material)
   const color = useConfigStore((s) => s.color)
   const accessories = useConfigStore((s) => s.accessories)
+  const accessoryStates = useConfigStore((s) => s.accessoryStates)
   const updateConfig = useConfigStore((s) => s.updateConfig)
   const toggleAccessory = useConfigStore((s) => s.toggleAccessory)
+  const loadConfig = useConfigStore((s) => s.loadConfig)
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    try {
+      if (file.name.endsWith('.zip')) {
+        const zip = await JSZip.loadAsync(file)
+        const jsonFile = Object.values(zip.files).find((f) =>
+          f.name.endsWith('.json')
+        )
+        if (jsonFile) {
+          const jsonContent = await jsonFile.async('string')
+          const config: ExportedConfig = JSON.parse(jsonContent)
+          loadConfig(config)
+        }
+      } else if (file.name.endsWith('.json')) {
+        const text = await file.text()
+        const config: ExportedConfig = JSON.parse(text)
+        loadConfig(config)
+      }
+    } catch (err) {
+      console.error('Failed to load config:', err)
+      alert('配置文件加载失败，请检查文件格式')
+    }
+
+    e.target.value = ''
+  }
 
   return (
     <div className="customizer-panel">
-      <h1 className="panel-title">手工定制工坊</h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h1 className="panel-title">手工定制工坊</h1>
+        <button
+          className="action-btn"
+          onClick={handleUploadClick}
+          style={{ padding: '6px 12px', fontSize: '12px' }}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 11.5a.5.5 0 0 0 .5-.5V5.707l2.146 2.147a.5.5 0 0 0 .708-.708l-3-3a.5.5 0 0 0-.708 0l-3 3a.5.5 0 1 0 .708.708L7.5 5.707V11a.5.5 0 0 0 .5.5zM.5 14a.5.5 0 0 0 .5.5h14a.5.5 0 0 0 0-1H1a.5.5 0 0 0-.5.5z" />
+          </svg>
+          导入
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json,.zip"
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+        />
+      </div>
 
       <div className="section">
         <h3 className="section-title">商品类型</h3>
@@ -44,7 +111,14 @@ function CustomizerPanel() {
             >
               <span
                 className="material-preview"
-                style={{ backgroundColor: MATERIAL_CONFIG[mat].baseColor }}
+                style={{
+                  backgroundColor: MATERIAL_CONFIG[mat].baseColor,
+                  boxShadow: mat === 'metal'
+                    ? 'inset 0 0 8px rgba(255,255,255,0.6), 0 0 4px rgba(0,0,0,0.2)'
+                    : mat === 'leather'
+                    ? 'inset 0 0 4px rgba(0,0,0,0.15)'
+                    : 'inset 0 0 6px rgba(139,94,60,0.25)',
+                }}
               />
               <span className="material-name">{MATERIAL_CONFIG[mat].name}</span>
             </button>
@@ -74,18 +148,31 @@ function CustomizerPanel() {
       <div className="section">
         <h3 className="section-title">配件装饰</h3>
         <div className="accessory-list">
-          {accessoryTypes.map((acc) => (
-            <button
-              key={acc}
-              className={`accessory-item ${accessories.includes(acc) ? 'active' : ''}`}
-              onClick={() => toggleAccessory(acc)}
-            >
-              <span className="accessory-icon">
-                <AccessoryIcon type={acc} />
-              </span>
-              <span className="accessory-label">{ACCESSORY_NAMES[acc]}</span>
-            </button>
-          ))}
+          {accessoryTypes.map((acc) => {
+            const isSelected = accessories.includes(acc)
+            const state = accessoryStates[acc]
+            return (
+              <button
+                key={acc}
+                className={`accessory-item ${isSelected ? 'active' : ''}`}
+                onClick={() => toggleAccessory(acc)}
+                style={{
+                  opacity: state === 'adding' || state === 'removing' ? 0.7 : 1,
+                  transition: 'all 0.3s ease',
+                  transform: state === 'adding' ? 'scale(1.05)' : undefined,
+                }}
+              >
+                <span className="accessory-icon">
+                  <AccessoryIcon type={acc} />
+                </span>
+                <span className="accessory-label">
+                  {ACCESSORY_NAMES[acc]}
+                  {state === 'adding' && <span style={{ color: '#5B8A5B' }}> +</span>}
+                  {state === 'removing' && <span style={{ color: '#E8877E' }}> -</span>}
+                </span>
+              </button>
+            )
+          })}
         </div>
       </div>
     </div>
@@ -99,6 +186,8 @@ function AccessoryIcon({ type }: { type: AccessoryType }) {
         <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
           <circle cx="15" cy="15" r="10" fill="#E8B4B8" stroke="#8B5E3C" strokeWidth="1.5" />
           <circle cx="12" cy="12" r="2" fill="rgba(255,255,255,0.6)" />
+          <circle cx="22" cy="12" r="4" fill="#4A90D9" stroke="#8B5E3C" strokeWidth="1" />
+          <circle cx="8" cy="22" r="4" fill="#5B8A5B" stroke="#8B5E3C" strokeWidth="1" />
         </svg>
       )
     case 'charm':

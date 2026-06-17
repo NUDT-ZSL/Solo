@@ -66,17 +66,29 @@ export const ACCESSORY_NAMES: Record<AccessoryType, string> = {
   hook: '挂钩',
 }
 
+export interface ExportedConfig {
+  productType: ProductType
+  material: MaterialType
+  color: string
+  accessories: AccessoryType[]
+  exportedAt?: string
+}
+
 interface ConfigState {
   selectedType: ProductType
   material: MaterialType
   color: string
   accessories: AccessoryType[]
-  updateConfig: <K extends keyof Omit<ConfigState, 'updateConfig'>>(
+  accessoryStates: Record<AccessoryType, 'idle' | 'adding' | 'removing'>
+  updateConfig: <K extends keyof Omit<ConfigState, 'updateConfig' | 'toggleAccessory' | 'getConfigJSON' | 'loadConfig' | 'accessoryStates' | 'setAccessoryState'>>(
     key: K,
     value: ConfigState[K]
   ) => void
   toggleAccessory: (accessory: AccessoryType) => void
+  setAccessoryState: (accessory: AccessoryType, state: 'idle' | 'adding' | 'removing') => void
   getConfigJSON: () => string
+  getExportedConfig: () => ExportedConfig
+  loadConfig: (config: ExportedConfig) => void
 }
 
 export const useConfigStore = create<ConfigState>((set, get) => ({
@@ -84,26 +96,69 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   material: 'leather',
   color: COLOR_SWATCHES[0].value,
   accessories: [],
+  accessoryStates: { bead: 'idle', charm: 'idle', hook: 'idle' },
 
-  updateConfig: (key, value) => set({ [key]: value }),
+  updateConfig: (key, value) => set({ [key]: value } as any),
+
+  setAccessoryState: (accessory, state) => {
+    set((prev) => ({
+      accessoryStates: { ...prev.accessoryStates, [accessory]: state },
+    }))
+  },
 
   toggleAccessory: (accessory) => {
-    const { accessories } = get()
-    if (accessories.includes(accessory)) {
-      set({ accessories: accessories.filter(a => a !== accessory) })
+    const { accessories, accessoryStates } = get()
+    const isPresent = accessories.includes(accessory)
+
+    if (isPresent) {
+      set((prev) => ({
+        accessoryStates: { ...prev.accessoryStates, [accessory]: 'removing' },
+      }))
+      setTimeout(() => {
+        set((prev) => ({
+          accessories: prev.accessories.filter((a) => a !== accessory),
+          accessoryStates: { ...prev.accessoryStates, [accessory]: 'idle' },
+        }))
+      }, 400)
     } else {
-      set({ accessories: [...accessories, accessory] })
+      set((prev) => ({
+        accessories: [...prev.accessories, accessory],
+        accessoryStates: { ...prev.accessoryStates, [accessory]: 'adding' },
+      }))
+      setTimeout(() => {
+        set((prev) => ({
+          accessoryStates: { ...prev.accessoryStates, [accessory]: 'idle' },
+        }))
+      }, 400)
     }
   },
 
   getConfigJSON: () => {
+    return JSON.stringify(get().getExportedConfig(), null, 2)
+  },
+
+  getExportedConfig: () => {
     const { selectedType, material, color, accessories } = get()
-    return JSON.stringify({
+    return {
       productType: selectedType,
       material,
       color,
       accessories,
       exportedAt: new Date().toISOString(),
-    }, null, 2)
+    }
+  },
+
+  loadConfig: (config) => {
+    if (!config) return
+    const validTypes: ProductType[] = ['bracelet', 'necklace', 'pendant']
+    const validMaterials: MaterialType[] = ['leather', 'metal', 'cord']
+    const validAccessories: AccessoryType[] = ['bead', 'charm', 'hook']
+
+    set({
+      selectedType: validTypes.includes(config.productType) ? config.productType : 'bracelet',
+      material: validMaterials.includes(config.material) ? config.material : 'leather',
+      color: /^#[0-9A-Fa-f]{6}$/.test(config.color) ? config.color : COLOR_SWATCHES[0].value,
+      accessories: (config.accessories || []).filter((a) => validAccessories.includes(a)),
+    })
   },
 }))
