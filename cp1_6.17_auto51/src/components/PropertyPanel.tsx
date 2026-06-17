@@ -25,7 +25,6 @@ export function PropertyPanel() {
     gridContainer,
     items,
     selectedItemId,
-    isDark,
     setLayoutType,
     setFlexContainerProp,
     setGridContainerProp,
@@ -35,50 +34,50 @@ export function PropertyPanel() {
 
   const selectedItem = items.find((item) => item.id === selectedItemId)
 
-  const selectStyle = {
+  const selectStyle: React.CSSProperties = {
     width: '100%',
     padding: '8px 12px',
-    border: `1px solid ${isDark ? '#444' : '#ddd'}`,
+    border: '1px solid var(--control-border)',
     borderRadius: '6px',
-    backgroundColor: isDark ? '#2a2a2a' : 'white',
-    color: isDark ? '#fff' : '#333',
+    backgroundColor: 'var(--control-bg)',
+    color: 'var(--text-primary)',
     fontSize: '13px',
     outline: 'none',
     cursor: 'pointer'
   }
 
-  const inputStyle = {
+  const inputStyle: React.CSSProperties = {
     width: '100%',
     padding: '8px 12px',
-    border: `1px solid ${isDark ? '#444' : '#ddd'}`,
+    border: '1px solid var(--control-border)',
     borderRadius: '6px',
-    backgroundColor: isDark ? '#2a2a2a' : 'white',
-    color: isDark ? '#fff' : '#333',
+    backgroundColor: 'var(--control-bg)',
+    color: 'var(--text-primary)',
     fontSize: '13px',
     outline: 'none'
   }
 
-  const sectionTitleStyle = {
+  const sectionTitleStyle: React.CSSProperties = {
     fontSize: '13px',
     fontWeight: 600,
-    color: isDark ? '#aaa' : '#666',
+    color: 'var(--text-secondary)',
     marginBottom: '12px',
-    textTransform: 'uppercase' as const,
+    textTransform: 'uppercase',
     letterSpacing: '0.5px'
   }
 
-  const labelStyle = {
+  const labelStyle: React.CSSProperties = {
     fontSize: '12px',
-    color: isDark ? '#bbb' : '#555',
+    color: 'var(--text-muted)',
     marginBottom: '6px',
     display: 'block'
   }
 
-  const fieldGroupStyle = {
+  const fieldGroupStyle: React.CSSProperties = {
     marginBottom: '16px'
   }
 
-  const buttonBaseStyle = {
+  const buttonBaseStyle: React.CSSProperties = {
     padding: '10px 16px',
     border: 'none',
     borderRadius: '6px',
@@ -95,19 +94,19 @@ export function PropertyPanel() {
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: isDark ? '#1E1E1E' : '#F5F5F5',
+        backgroundColor: 'var(--panel-bg)',
         transition: 'background-color 0.5s ease'
       }}
     >
       <div
         style={{
           padding: '16px 20px',
-          borderBottom: `1px solid ${isDark ? '#333' : '#e0e0e0'}`,
+          borderBottom: '1px solid var(--border-color)',
           display: 'flex',
           gap: '8px',
           position: 'sticky',
           top: 0,
-          backgroundColor: isDark ? '#1E1E1E' : '#F5F5F5',
+          backgroundColor: 'var(--panel-bg)',
           zIndex: 10,
           transition: 'background-color 0.5s ease'
         }}
@@ -118,8 +117,8 @@ export function PropertyPanel() {
           style={{
             ...buttonBaseStyle,
             flex: 1,
-            backgroundColor: layoutType === 'flex' ? '#667eea' : isDark ? '#333' : '#e0e0e0',
-            color: layoutType === 'flex' ? 'white' : isDark ? '#ccc' : '#666'
+            backgroundColor: layoutType === 'flex' ? 'var(--accent)' : 'var(--button-inactive-bg)',
+            color: layoutType === 'flex' ? 'white' : 'var(--button-inactive-text)'
           }}
         >
           Flexbox
@@ -130,8 +129,8 @@ export function PropertyPanel() {
           style={{
             ...buttonBaseStyle,
             flex: 1,
-            backgroundColor: layoutType === 'grid' ? '#667eea' : isDark ? '#333' : '#e0e0e0',
-            color: layoutType === 'grid' ? 'white' : isDark ? '#ccc' : '#666'
+            backgroundColor: layoutType === 'grid' ? 'var(--accent)' : 'var(--button-inactive-bg)',
+            color: layoutType === 'grid' ? 'white' : 'var(--button-inactive-text)'
           }}
         >
           Grid
@@ -307,7 +306,7 @@ export function PropertyPanel() {
           <h3 style={sectionTitleStyle}>子元素属性</h3>
 
           {!selectedItem ? (
-            <p style={{ fontSize: '13px', color: isDark ? '#888' : '#999', fontStyle: 'italic' }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
               点击右侧预览区域中的方块以编辑其属性
             </p>
           ) : (
@@ -319,7 +318,7 @@ export function PropertyPanel() {
                   gap: '12px',
                   marginBottom: '20px',
                   padding: '12px',
-                  backgroundColor: isDark ? '#2a2a2a' : 'white',
+                  backgroundColor: 'var(--selected-item-bg)',
                   borderRadius: '8px'
                 }}
               >
@@ -333,17 +332,20 @@ export function PropertyPanel() {
                   }}
                 />
                 <div>
-                  <div style={{ fontSize: '13px', fontWeight: 500, color: isDark ? '#fff' : '#333' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>
                     {selectedItem.id}
                   </div>
-                  <div style={{ fontSize: '11px', color: isDark ? '#888' : '#999' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
                     颜色: {selectedItem.color}
                   </div>
                 </div>
               </div>
 
               <div style={fieldGroupStyle}>
-                <label style={labelStyle}>宽度 (width): {selectedItem[layoutType === 'flex' ? 'flexProps' : 'gridProps'].width}px</label>
+                <label style={labelStyle}>
+                  宽度 (width): {selectedItem[layoutType === 'flex' ? 'flexProps' : 'gridProps'].width}
+                  {typeof selectedItem[layoutType === 'flex' ? 'flexProps' : 'gridProps'].width === 'number' && 'px'}
+                </label>
                 <input
                   type="range"
                   min="40"
@@ -355,7 +357,10 @@ export function PropertyPanel() {
               </div>
 
               <div style={fieldGroupStyle}>
-                <label style={labelStyle}>高度 (height): {selectedItem[layoutType === 'flex' ? 'flexProps' : 'gridProps'].height}px</label>
+                <label style={labelStyle}>
+                  高度 (height): {selectedItem[layoutType === 'flex' ? 'flexProps' : 'gridProps'].height}
+                  {typeof selectedItem[layoutType === 'flex' ? 'flexProps' : 'gridProps'].height === 'number' && 'px'}
+                </label>
                 <input
                   type="range"
                   min="40"
@@ -473,8 +478,8 @@ export function PropertyPanel() {
                 style={{
                   ...buttonBaseStyle,
                   width: '100%',
-                  backgroundColor: isDark ? '#333' : '#e0e0e0',
-                  color: isDark ? '#ccc' : '#666',
+                  backgroundColor: 'var(--button-inactive-bg)',
+                  color: 'var(--button-inactive-text)',
                   marginTop: '8px'
                 }}
               >

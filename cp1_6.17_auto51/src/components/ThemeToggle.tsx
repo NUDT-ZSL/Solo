@@ -1,7 +1,12 @@
+import { useEffect } from 'react'
 import { useStore } from '../store'
 
 export function ThemeToggle() {
   const { isDark, toggleTheme } = useStore()
+
+  useEffect(() => {
+    document.body.setAttribute('data-theme', isDark ? 'dark' : 'light')
+  }, [isDark])
 
   return (
     <button
@@ -15,8 +20,8 @@ export function ThemeToggle() {
         height: '44px',
         borderRadius: '50%',
         border: 'none',
-        backgroundColor: isDark ? '#2a2a2a' : 'white',
-        color: isDark ? '#FFD740' : '#666',
+        backgroundColor: 'var(--bg-tertiary)',
+        color: isDark ? '#FFD740' : 'var(--text-secondary)',
         fontSize: '20px',
         cursor: 'pointer',
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',

@@ -21,8 +21,8 @@ export interface GridContainerProps {
 }
 
 export interface FlexItemProps {
-  width: number | string
-  height: number | string
+  width: number | 'auto'
+  height: number | 'auto'
   alignSelf: 'auto' | 'flex-start' | 'flex-end' | 'center' | 'stretch' | 'baseline'
   order: number
   flexGrow: number
@@ -30,8 +30,8 @@ export interface FlexItemProps {
 }
 
 export interface GridItemProps {
-  width: number | string
-  height: number | string
+  width: number | 'auto'
+  height: number | 'auto'
   alignSelf: 'auto' | 'start' | 'end' | 'center' | 'stretch'
   justifySelf: 'auto' | 'start' | 'end' | 'center' | 'stretch'
   order: number
@@ -172,7 +172,8 @@ export const useStore = create<LayoutState & ThemeState>((set) => ({
   loadPreset: (preset) =>
     set(() => {
       const newItems = preset.items.map((item, index) => {
-        const baseItem = createDefaultFlexItem(`item-${index}`, item.color)
+        const randomColor = COLORS[Math.floor(Math.random() * COLORS.length)]
+        const baseItem = createDefaultFlexItem(`item-${index}`, randomColor)
         if (item.flexProps) {
           baseItem.flexProps = { ...baseItem.flexProps, ...item.flexProps }
         }
@@ -199,7 +200,12 @@ export const useStore = create<LayoutState & ThemeState>((set) => ({
         const [removed] = items.splice(oldIndex, 1)
         items.splice(newIndex, 0, removed)
       }
-      return { items }
+      const reorderedItems = items.map((item, idx) => ({
+        ...item,
+        flexProps: { ...item.flexProps, order: idx },
+        gridProps: { ...item.gridProps, order: idx }
+      }))
+      return { items: reorderedItems }
     }),
 
   resetLayout: () =>

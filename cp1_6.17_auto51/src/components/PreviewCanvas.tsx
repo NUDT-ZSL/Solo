@@ -25,7 +25,7 @@ function DraggableItem({
   isSelected: boolean
   onClick: () => void
 }) {
-  const { layoutType, items, isDark } = useStore()
+  const { layoutType, items } = useStore()
   const item = items.find((i) => i.id === id)
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -36,11 +36,11 @@ function DraggableItem({
 
   const baseStyle = getItemStyle(layoutType, item)
 
-  const style = {
+  const style: React.CSSProperties = {
     ...baseStyle,
     transform: CSS.Translate.toString(transform),
     opacity: isDragging ? 0.5 : 1,
-    outline: isSelected ? `3px solid ${isDark ? '#667eea' : '#5b67e8'}` : 'none',
+    outline: isSelected ? '3px solid var(--accent)' : 'none',
     outlineOffset: '2px',
     cursor: isDragging ? 'grabbing' : 'grab',
     zIndex: isDragging ? 100 : 'auto'
@@ -67,7 +67,6 @@ export function PreviewCanvas() {
     gridContainer,
     items,
     selectedItemId,
-    isDark,
     setSelectedItem,
     reorderItem
   } = useStore()
@@ -101,19 +100,6 @@ export function PreviewCanvas() {
     }
   }
 
-  const gridBackground = useMemo(() => {
-    const lines: string[] = []
-    for (let i = 0; i <= 4; i++) {
-      lines.push(
-        `linear-gradient(to right, ${isDark ? '#444' : '#ccc'} 1px, transparent 1px)`
-      )
-      lines.push(
-        `linear-gradient(to bottom, ${isDark ? '#444' : '#ccc'} 1px, transparent 1px)`
-      )
-    }
-    return `radial-gradient(circle, ${isDark ? '#444' : '#ccc'} 1px, transparent 1px)`
-  }, [isDark])
-
   return (
     <DndContext
       sensors={sensors}
@@ -128,7 +114,7 @@ export function PreviewCanvas() {
           width: '100%',
           height: '100%',
           position: 'relative',
-          backgroundColor: isDark ? '#121212' : '#FAFAFA',
+          backgroundColor: 'var(--bg-primary)',
           transition: 'background-color 0.5s ease',
           overflow: 'hidden'
         }}
@@ -140,7 +126,7 @@ export function PreviewCanvas() {
             left: '20px',
             right: '20px',
             bottom: '20px',
-            backgroundImage: `${gridBackground}, ${gridBackground}`,
+            backgroundImage: `radial-gradient(circle, var(--grid-line) 1px, transparent 1px), radial-gradient(circle, var(--grid-line) 1px, transparent 1px)`,
             backgroundSize: '25% 25%, 25% 25%',
             backgroundPosition: '0 0, 0 0',
             opacity: 0.5,

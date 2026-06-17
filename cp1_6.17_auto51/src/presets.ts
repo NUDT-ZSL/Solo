@@ -14,23 +14,23 @@ export const presets: Preset[] = [
     items: [
       {
         color: COLORS[0],
-        gridProps: { width: 'auto' as any, height: 'auto' as any, gridColumn: '1 / -1', gridRow: '1' }
+        gridProps: { width: 'auto', height: 'auto', gridColumn: '1 / -1', gridRow: '1' }
       },
       {
         color: COLORS[1],
-        gridProps: { width: 'auto' as any, height: 'auto' as any, gridColumn: '1', gridRow: '2' }
+        gridProps: { width: 'auto', height: 'auto', gridColumn: '1', gridRow: '2' }
       },
       {
         color: COLORS[2],
-        gridProps: { width: 'auto' as any, height: 'auto' as any, gridColumn: '2', gridRow: '2' }
+        gridProps: { width: 'auto', height: 'auto', gridColumn: '2', gridRow: '2' }
       },
       {
         color: COLORS[3],
-        gridProps: { width: 'auto' as any, height: 'auto' as any, gridColumn: '3', gridRow: '2' }
+        gridProps: { width: 'auto', height: 'auto', gridColumn: '3', gridRow: '2' }
       },
       {
         color: COLORS[4],
-        gridProps: { width: 'auto' as any, height: 'auto' as any, gridColumn: '1 / -1', gridRow: '3' }
+        gridProps: { width: 'auto', height: 'auto', gridColumn: '1 / -1', gridRow: '3' }
       }
     ]
   },
@@ -44,7 +44,7 @@ export const presets: Preset[] = [
     },
     items: Array.from({ length: 6 }, (_, i) => ({
       color: COLORS[i % COLORS.length],
-      gridProps: { width: 'auto' as any, height: 120 }
+      gridProps: { width: 'auto', height: 120 }
     }))
   },
   {
@@ -74,11 +74,11 @@ export const presets: Preset[] = [
       gap: 16
     },
     items: [
-      { color: COLORS[0], gridProps: { width: 'auto' as any, height: 'auto' as any, gridColumn: 'span 2' } },
-      { color: COLORS[1], gridProps: { width: 'auto' as any, height: 'auto' as any } },
-      { color: COLORS[2], gridProps: { width: 'auto' as any, height: 'auto' as any } },
-      { color: COLORS[3], gridProps: { width: 'auto' as any, height: 'auto' as any, gridColumn: 'span 3' } },
-      { color: COLORS[4], gridProps: { width: 'auto' as any, height: 'auto' as any } }
+      { color: COLORS[0], gridProps: { width: 'auto', height: 'auto', gridColumn: 'span 2' } },
+      { color: COLORS[1], gridProps: { width: 'auto', height: 'auto' } },
+      { color: COLORS[2], gridProps: { width: 'auto', height: 'auto' } },
+      { color: COLORS[3], gridProps: { width: 'auto', height: 'auto', gridColumn: 'span 3' } },
+      { color: COLORS[4], gridProps: { width: 'auto', height: 'auto' } }
     ]
   },
   {

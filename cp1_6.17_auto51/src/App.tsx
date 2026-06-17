@@ -8,7 +8,7 @@ import { ThemeToggle } from './components/ThemeToggle'
 import type { Preset } from './store'
 
 function App() {
-  const { isDark, loadPreset, resetLayout, setShowCodeModal } = useStore()
+  const { loadPreset, resetLayout, setShowCodeModal } = useStore()
   const [showPresetMenu, setShowPresetMenu] = useState(false)
 
   useEffect(() => {
@@ -20,7 +20,7 @@ function App() {
     setShowPresetMenu(false)
   }
 
-  const buttonBaseStyle = {
+  const buttonBaseStyle: React.CSSProperties = {
     padding: '10px 20px',
     border: 'none',
     borderRadius: '8px',
@@ -37,15 +37,15 @@ function App() {
         height: '100vh',
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: isDark ? '#121212' : '#FAFAFA',
-        color: isDark ? '#fff' : '#333',
+        backgroundColor: 'var(--bg-primary)',
+        color: 'var(--text-primary)',
         transition: 'background-color 0.5s ease, color 0.5s ease'
       }}
     >
       <header
         style={{
           padding: '16px 24px',
-          borderBottom: `1px solid ${isDark ? '#333' : '#e0e0e0'}`,
+          borderBottom: '1px solid var(--border-color)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -55,7 +55,7 @@ function App() {
         <h1 style={{ fontSize: '20px', fontWeight: 600 }}>
           CSS布局可视化沙盒
         </h1>
-        <div style={{ fontSize: '13px', color: isDark ? '#888' : '#666' }}>
+        <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
           拖拽方块调整顺序 · 点击方块编辑属性
         </div>
       </header>
@@ -67,7 +67,7 @@ function App() {
             minWidth: '320px',
             display: 'flex',
             flexDirection: 'column',
-            borderRight: `1px solid ${isDark ? '#333' : '#e0e0e0'}`,
+            borderRight: '1px solid var(--border-color)',
             transition: 'border-color 0.5s ease'
           }}
         >
@@ -76,12 +76,12 @@ function App() {
           <div
             style={{
               padding: '16px 20px',
-              borderTop: `1px solid ${isDark ? '#333' : '#e0e0e0'}`,
+              borderTop: '1px solid var(--border-color)',
               display: 'flex',
               gap: '10px',
               position: 'sticky',
               bottom: 0,
-              backgroundColor: isDark ? '#1E1E1E' : '#F5F5F5',
+              backgroundColor: 'var(--panel-bg)',
               transition: 'all 0.5s ease',
               zIndex: 10
             }}
@@ -93,7 +93,7 @@ function App() {
                 style={{
                   ...buttonBaseStyle,
                   width: '100%',
-                  backgroundColor: '#667eea',
+                  backgroundColor: 'var(--accent)',
                   color: 'white'
                 }}
               >
@@ -107,7 +107,7 @@ function App() {
                     bottom: '100%',
                     left: 0,
                     right: 0,
-                    backgroundColor: isDark ? '#2a2a2a' : 'white',
+                    backgroundColor: 'var(--bg-tertiary)',
                     borderRadius: '8px',
                     boxShadow: '0 -4px 16px rgba(0, 0, 0, 0.15)',
                     marginBottom: '8px',
@@ -126,7 +126,7 @@ function App() {
                         textAlign: 'left',
                         backgroundColor: 'transparent',
                         border: 'none',
-                        color: isDark ? '#fff' : '#333',
+                        color: 'var(--text-primary)',
                         fontSize: '13px',
                         cursor: 'pointer',
                         transition: 'background-color 0.2s ease',
@@ -135,7 +135,7 @@ function App() {
                         gap: '10px'
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = isDark ? '#333' : '#f5f5f5'
+                        e.currentTarget.style.backgroundColor = 'var(--button-inactive-bg)'
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.backgroundColor = 'transparent'
@@ -161,8 +161,8 @@ function App() {
               className="ripple-btn"
               style={{
                 ...buttonBaseStyle,
-                backgroundColor: isDark ? '#333' : '#e0e0e0',
-                color: isDark ? '#ccc' : '#666'
+                backgroundColor: 'var(--button-inactive-bg)',
+                color: 'var(--button-inactive-text)'
               }}
             >
               重置
@@ -173,8 +173,8 @@ function App() {
               className="ripple-btn"
               style={{
                 ...buttonBaseStyle,
-                backgroundColor: isDark ? '#333' : '#e0e0e0',
-                color: isDark ? '#ccc' : '#666'
+                backgroundColor: 'var(--button-inactive-bg)',
+                color: 'var(--button-inactive-text)'
               }}
             >
               导出代码

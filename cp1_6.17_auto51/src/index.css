@@ -1,3 +1,45 @@
+:root {
+  --bg-primary: #FAFAFA;
+  --bg-secondary: #F5F5F5;
+  --bg-tertiary: #ffffff;
+  --border-color: #e0e0e0;
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --text-tertiary: #999999;
+  --text-muted: #555555;
+  --accent: #667eea;
+  --accent-hover: #5b67e8;
+  --grid-line: #cccccc;
+  --control-bg: #ffffff;
+  --control-border: #dddddd;
+  --panel-bg: #F5F5F5;
+  --button-inactive-bg: #e0e0e0;
+  --button-inactive-text: #666666;
+  --header-bg: #ffffff;
+  --selected-item-bg: #ffffff;
+}
+
+[data-theme="dark"] {
+  --bg-primary: #121212;
+  --bg-secondary: #1E1E1E;
+  --bg-tertiary: #2a2a2a;
+  --border-color: #333333;
+  --text-primary: #ffffff;
+  --text-secondary: #aaaaaa;
+  --text-tertiary: #888888;
+  --text-muted: #bbbbbb;
+  --accent: #667eea;
+  --accent-hover: #5b67e8;
+  --grid-line: #444444;
+  --control-bg: #2a2a2a;
+  --control-border: #444444;
+  --panel-bg: #1E1E1E;
+  --button-inactive-bg: #333333;
+  --button-inactive-text: #cccccc;
+  --header-bg: #121212;
+  --selected-item-bg: #2a2a2a;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -9,12 +51,17 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background-color 0.5s ease, color 0.5s ease;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 #root {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.5s ease, color 0.5s ease;
 }
 
 @keyframes ripple {
