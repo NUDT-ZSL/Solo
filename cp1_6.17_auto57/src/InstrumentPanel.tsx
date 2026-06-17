@@ -1,10 +1,10 @@
-import React, { useState, useCallback } from 'react';
-import { InstrumentType, ChordType, getChordNotes, getGuitarFretNote, getPianoKeyNote, getViolinFretNote } from './AudioEngine';
+import React, { useState, useCallback, useEffect } from 'react';
+import { InstrumentType, ChordType, getGuitarFretNote, getPianoKeyNote, getViolinFretNote } from './AudioEngine';
 
 interface InstrumentPanelProps {
   instrument: InstrumentType;
   onNotePlay: (note: string, instrument: InstrumentType) => void;
-  onChordPlay?: (rootNote: string, instrument: InstrumentType, chordType: ChordType) => void;
+  onChordPlay: (rootNote: string, instrument: InstrumentType, chordType: ChordType) => void;
 }
 
 interface ActiveNote {
@@ -23,27 +23,20 @@ const InstrumentPanel: React.FC<InstrumentPanelProps> = ({ instrument, onNotePla
   const [activeNotes, setActiveNotes] = useState<ActiveNote[]>([]);
   const [chordType, setChordType] = useState<ChordType>('single');
 
+  useEffect(() => {
+    setActiveNotes([]);
+  }, [chordType]);
+
   const triggerNote = useCallback((note: string, baseId: string) => {
     if (chordType === 'single') {
       onNotePlay(note, instrument);
-      setActiveNotes(prev => [...prev, { id: baseId, note }]);
-      setTimeout(() => {
-        setActiveNotes(prev => prev.filter(n => n.id !== baseId));
-      }, 200);
     } else {
-      if (onChordPlay) {
-        onChordPlay(note, instrument, chordType);
-      } else {
-        const chordNotes = getChordNotes(note, chordType);
-        chordNotes.forEach((chordNote) => {
-          onNotePlay(chordNote, instrument);
-        });
-      }
-      setActiveNotes(prev => [...prev, { id: baseId, note }]);
-      setTimeout(() => {
-        setActiveNotes(prev => prev.filter(n => n.id !== baseId));
-      }, 200);
+      onChordPlay(note, instrument, chordType);
     }
+    setActiveNotes(prev => [...prev, { id: baseId, note }]);
+    setTimeout(() => {
+      setActiveNotes(prev => prev.filter(n => n.id !== baseId));
+    }, 200);
   }, [instrument, chordType, onNotePlay, onChordPlay]);
 
   const renderPiano = () => {

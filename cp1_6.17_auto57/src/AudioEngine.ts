@@ -81,6 +81,12 @@ const VIOLIN_STRINGS = ['G3', 'D4', 'A4', 'E5'];
 
 const SCALE_NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
+const INSTRUMENT_RANGES: Record<InstrumentType, { min: string; max: string }> = {
+  guitar: { min: 'E2', max: 'E6' },
+  piano: { min: 'A0', max: 'C8' },
+  violin: { min: 'G3', max: 'E7' }
+};
+
 function getNoteFrequency(note: string): number {
   return NOTE_FREQUENCIES[note] || 440;
 }
@@ -121,13 +127,30 @@ const CHORD_INTERVALS: Record<Exclude<ChordType, 'single'>, number[]> = {
   seventh: [0, 4, 7, 10]
 };
 
-export function getChordNotes(rootNote: string, chordType: ChordType): string[] {
+function adjustNoteToRange(note: string, instrument: InstrumentType): string {
+  const range = INSTRUMENT_RANGES[instrument];
+  const minIndex = getNoteIndex(range.min);
+  const maxIndex = getNoteIndex(range.max);
+  let noteIndex = getNoteIndex(note);
+
+  while (noteIndex < minIndex) {
+    noteIndex += 12;
+  }
+  while (noteIndex > maxIndex) {
+    noteIndex -= 12;
+  }
+
+  return getNoteFromIndex(noteIndex);
+}
+
+export function getChordNotes(rootNote: string, chordType: ChordType, instrument: InstrumentType = 'piano'): string[] {
   if (chordType === 'single') {
     return [rootNote];
   }
   const intervals = CHORD_INTERVALS[chordType];
   const rootIndex = getNoteIndex(rootNote);
-  return intervals.map(interval => getNoteFromIndex(rootIndex + interval));
+  const rawNotes = intervals.map(interval => getNoteFromIndex(rootIndex + interval));
+  return rawNotes.map(note => adjustNoteToRange(note, instrument));
 }
 
 export function generateChords(key: string): ChordData[] {
@@ -255,7 +278,7 @@ class AudioEngine {
   }
 
   playChord(rootNote: string, instrument: InstrumentType, chordType: ChordType, duration: number = 0.6): void {
-    const notes = getChordNotes(rootNote, chordType);
+    const notes = getChordNotes(rootNote, chordType, instrument);
     const recordingTimestamp = Date.now() - this.recordingStartTime;
 
     if (this.isRecording) {
@@ -324,19 +347,31 @@ class AudioEngine {
     this.isPlaying = true;
     eventBus.emit('playbackStarted', this.recording);
 
+    const groupedByTimestamp = this.recording.reduce((groups, record) => {
+      const ts = record.timestamp;
+      if (!groups.has(ts)) {
+        groups.set(ts, []);
+      }
+      groups.get(ts)!.push(record);
+      return groups;
+    }, new Map<number, NoteRecord[]>());
+
+    const sortedTimestamps = Array.from(groupedByTimestamp.keys()).sort((a, b) => a - b);
     const startTime = Date.now();
 
-    for (const record of this.recording) {
+    for (const timestamp of sortedTimestamps) {
       if (!this.isPlaying) break;
 
-      const targetTime = record.timestamp;
       const elapsed = Date.now() - startTime;
-      const delay = Math.max(0, targetTime - elapsed);
+      const delay = Math.max(0, timestamp - elapsed);
 
       await new Promise<void>(resolve => {
         setTimeout(() => {
           if (this.isPlaying) {
-            this.playNote(record.note, record.instrument, record.duration);
+            const notesToPlay = groupedByTimestamp.get(timestamp)!;
+            notesToPlay.forEach(record => {
+              this.playNote(record.note, record.instrument, record.duration);
+            });
           }
           resolve();
         }, delay);
