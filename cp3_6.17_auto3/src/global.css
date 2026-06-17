@@ -3,36 +3,553 @@
   --color-cyan: #00b5d8;
   --color-bg: #f7fafc;
   --color-red: #e53e3e;
+  --color-green: #38a169;
+  --color-yellow: #d69e2e;
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-hover: 0 8px 24px rgba(49, 130, 206, 0.18);
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
+  margin: 0;
   background-color: var(--color-bg);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
+  color: #2d3748;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
+/* ===== 通用按钮 ===== */
 .btn {
   border-radius: 8px;
   height: 48px;
   transition: all 0.2s ease;
+  cursor: pointer;
+  border: none;
+  font-size: 15px;
+  font-weight: 500;
 }
 
 .btn:active {
   transform: scale(0.97);
 }
 
+.btn-primary {
+  background-color: var(--color-primary);
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background-color: #2c5aa0;
+}
+
+.btn-primary:disabled {
+  background-color: #a0aec0;
+  cursor: not-allowed;
+}
+
+.btn-outline {
+  background-color: #ffffff;
+  color: var(--color-primary);
+  border: 1.5px solid var(--color-primary);
+}
+
+.btn-outline:hover {
+  background-color: #ebf8ff;
+}
+
+.btn-outline:disabled {
+  border-color: #cbd5e0;
+  color: #a0aec0;
+  cursor: not-allowed;
+  background-color: #f7fafc;
+}
+
+/* ===== 通用卡片 ===== */
 .card {
   background-color: #ffffff;
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-card);
+}
+
+/* ===== 倒计时 ===== */
+.mono-red {
+  font-family: 'Courier New', 'Consolas', monospace;
+  color: var(--color-red);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== 科目卡片 ===== */
+.subject-card {
+  background-color: #ffffff;
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
+  padding: 32px 24px;
+  cursor: pointer;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  border: 2.5px solid transparent;
+  position: relative;
+  overflow: hidden;
+}
+
+.subject-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(49, 130, 206, 0.04), rgba(0, 181, 216, 0.04));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.subject-card:hover {
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-hover);
+  border-color: rgba(49, 130, 206, 0.3);
+}
+
+.subject-card:hover::before {
+  opacity: 1;
+}
+
+.subject-card:active {
+  transform: translateY(-3px) scale(0.98);
+}
+
+.subject-card-icon {
+  font-size: 48px;
+  line-height: 1;
+  margin-bottom: 16px;
+  display: inline-block;
+  transition: transform 0.3s ease;
+}
+
+.subject-card:hover .subject-card-icon {
+  transform: scale(1.15) rotate(-5deg);
+}
+
+/* 选中动画：边框闪烁 + 缩放脉冲 */
+.subject-card.selecting {
+  animation: cardSelectPulse 0.6s ease-out;
+}
+
+@keyframes cardSelectPulse {
+  0% {
+    border-color: var(--color-primary);
+    transform: scale(1);
+  }
+  30% {
+    border-color: var(--color-cyan);
+    box-shadow: 0 0 0 6px rgba(0, 181, 216, 0.2), var(--shadow-hover);
+    transform: scale(1.03);
+  }
+  60% {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 10px rgba(49, 130, 206, 0.12), var(--shadow-hover);
+  }
+  100% {
+    border-color: transparent;
+    transform: scale(1);
+  }
+}
+
+/* ===== 考试选项按钮 ===== */
+.option-btn {
+  width: 100%;
+  height: 48px;
+  border-radius: 8px;
+  background-color: #ffffff;
+  border: 2px solid #e2e8f0;
+  text-align: left;
+  padding: 0 16px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.1s ease;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+  overflow: hidden;
+  font-size: 15px;
+  color: #2d3748;
+}
+
+.option-btn:hover {
+  border-color: var(--color-primary);
+  background-color: #f0f7ff;
+}
+
+.option-btn.selected {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #ffffff;
+}
+
+.option-btn .option-label {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: #edf2f7;
+  color: #4a5568;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.option-btn.selected .option-label {
+  background-color: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+.option-btn:active {
+  transform: scale(0.985);
+}
+
+/* 波纹效果 */
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  transform: scale(0);
+  animation: rippleEffect 0.5s ease-out;
+  background-color: rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+}
+
+.option-btn:not(.selected) .ripple {
+  background-color: rgba(49, 130, 206, 0.25);
+}
+
+@keyframes rippleEffect {
+  to {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+}
+
+/* ===== 进度条 ===== */
+.progress-track {
+  width: 100%;
+  height: 6px;
+  background-color: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-cyan));
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* ===== 得分环形图 ===== */
+.score-ring-container {
+  position: relative;
+  width: 240px;
+  height: 240px;
+  margin: 0 auto;
+}
+
+.score-ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== 错题卡片展开/收起 ===== */
+.wrong-item {
+  background-color: #fff5f5;
+  border-radius: 10px;
+  border: 1px solid #fed7d7;
+  overflow: hidden;
+  transition: box-shadow 0.2s ease;
+}
+
+.wrong-item:hover {
+  box-shadow: 0 4px 12px rgba(229, 62, 62, 0.1);
+}
+
+.wrong-item-header {
+  padding: 14px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  transition: background-color 0.2s ease;
+}
+
+.wrong-item-header:hover {
+  background-color: #feebeb;
+}
+
+.wrong-item-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease, padding 0.3s ease;
+  padding: 0 16px;
+}
+
+.wrong-item.expanded .wrong-item-body {
+  max-height: 500px;
+  padding: 0 16px 14px 16px;
+}
+
+.expand-icon {
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.wrong-item.expanded .expand-icon {
+  transform: rotate(180deg);
+}
+
+/* ===== 历史成绩卡片 ===== */
+.history-card {
+  width: 320px;
+  height: 80px;
+  border-radius: 12px;
+  background-color: #ffffff;
+  box-shadow: var(--shadow-card);
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.history-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+/* ===== 复习建议卡片 ===== */
+.suggestion-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background-color: #f0f7ff;
+  border-radius: 8px;
+  border-left: 4px solid var(--color-primary);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.suggestion-item:hover {
+  transform: translateX(4px);
+  box-shadow: 0 2px 8px rgba(49, 130, 206, 0.15);
+}
+
+.suggestion-number {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ===== 两栏布局 ===== */
+.two-column {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.two-column > .col-left {
+  flex: 0 0 360px;
+}
+
+.two-column > .col-right {
+  flex: 1;
+  min-width: 0;
 }
 
 @media (max-width: 768px) {
   .two-column {
     flex-direction: column;
   }
+
+  .two-column > .col-left {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+
+  .subject-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .history-card {
+    width: 100%;
+  }
+
+  .exam-container {
+    padding: 16px !important;
+  }
 }
 
-.mono-red {
-  font-family: monospace;
-  color: var(--color-red);
+/* ===== 表格 ===== */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.data-table thead {
+  background-color: var(--color-primary);
+  color: #ffffff;
+}
+
+.data-table th,
+.data-table td {
+  padding: 10px 14px;
+  text-align: left;
+}
+
+.data-table tbody tr:nth-child(even) {
+  background-color: #f7fafc;
+}
+
+.data-table tbody tr:hover {
+  background-color: #ebf8ff;
+}
+
+/* ===== 表单 ===== */
+.form-input {
+  width: 100%;
+  height: 42px;
+  border-radius: 8px;
+  border: 1.5px solid #e2e8f0;
+  padding: 0 14px;
+  font-size: 14px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  outline: none;
+}
+
+.form-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.12);
+}
+
+.form-textarea {
+  min-height: 80px;
+  padding: 10px 14px;
+  resize: vertical;
+}
+
+/* ===== 入场动画 ===== */
+.fade-in {
+  animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ===== 加载动画 ===== */
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #e2e8f0;
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ===== 顶部导航栏 ===== */
+.top-nav {
+  background-color: #ffffff;
+  box-shadow: var(--shadow-card);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.nav-logo {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.nav-links {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.nav-link {
+  color: #4a5568;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: color 0.2s ease;
+  cursor: pointer;
+}
+
+.nav-link:hover {
+  color: var(--color-primary);
+}
+
+/* ===== 页面容器 ===== */
+.page-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+.exam-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 32px 24px;
 }

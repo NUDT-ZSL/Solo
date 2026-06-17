@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
 
 interface Question {
@@ -24,20 +25,20 @@ interface Subject {
 
 interface WrongAnswer {
   questionId: string;
-  text: string;
+  questionText: string;
+  options: string[];
   userAnswer: number;
   correctAnswer: number;
-  options: string[];
   category: string;
   analysis: string;
 }
 
 interface DimensionScores {
-  basic: { total: number; correct: number; score: number };
-  logic: { total: number; correct: number; score: number };
-  code: { total: number; correct: number; score: number };
-  security: { total: number; correct: number; score: number };
-  management: { total: number; correct: number; score: number };
+  basic: number;
+  logic: number;
+  code: number;
+  security: number;
+  management: number;
 }
 
 interface ExamRecord {
@@ -48,6 +49,7 @@ interface ExamRecord {
   correctCount: number;
   totalQuestions: number;
   timeTaken: number;
+  answers: Record<string, number>;
   wrongAnswers: WrongAnswer[];
   dimensionScores: DimensionScores;
   createdAt: string;
@@ -55,9 +57,12 @@ interface ExamRecord {
 
 interface SubmitRequest {
   subjectId: string;
-  answers: { questionId: string; answer: number }[];
+  answers: Record<string, number>;
   timeTaken: number;
 }
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = 3001;
@@ -79,31 +84,40 @@ function writeJSON<T>(filename: string, data: T): void {
 
 function calculateDimensionScores(
   questions: Question[],
-  answers: Map<string, number>
+  answers: Record<string, number>
 ): DimensionScores {
-  const dimensions: DimensionScores = {
-    basic: { total: 0, correct: 0, score: 0 },
-    logic: { total: 0, correct: 0, score: 0 },
-    code: { total: 0, correct: 0, score: 0 },
-    security: { total: 0, correct: 0, score: 0 },
-    management: { total: 0, correct: 0, score: 0 },
+  const dims: Record<string, { total: number; correct: number }> = {
+    basic: { total: 0, correct: 0 },
+    logic: { total: 0, correct: 0 },
+    code: { total: 0, correct: 0 },
+    security: { total: 0, correct: 0 },
+    management: { total: 0, correct: 0 },
   };
 
   for (const q of questions) {
-    const dim = dimensions[q.category];
+    const dim = dims[q.category];
+    if (!dim) continue;
     dim.total++;
-    const userAnswer = answers.get(q.id);
+    const userAnswer = answers[q.id];
     if (userAnswer !== undefined && userAnswer === q.correctAnswer) {
       dim.correct++;
     }
   }
 
-  for (const key of Object.keys(dimensions) as (keyof DimensionScores)[]) {
-    const dim = dimensions[key];
-    dim.score = dim.total > 0 ? Math.round((dim.correct / dim.total) * 100) : 0;
-  }
+  const result: DimensionScores = {
+    basic: 0,
+    logic: 0,
+    code: 0,
+    security: 0,
+    management: 0,
+  };
 
-  return dimensions;
+  (Object.keys(dims) as Array<keyof DimensionScores>).forEach((key) => {
+    const dim = dims[key];
+    result[key] = dim.total > 0 ? Math.round((dim.correct / dim.total) * 100) : 0;
+  });
+
+  return result;
 }
 
 function shuffleArray<T>(array: T[]): T[] {
@@ -152,38 +166,37 @@ app.post('/api/exam/submit', (req, res) => {
       return res.status(404).json({ error: '科目不存在' });
     }
 
-    const questions = readJSON<Question[]>('questions.json');
-    const subjectQuestions = questions.filter((q) => q.subject === subjectId);
+    const allQuestions = readJSON<Question[]>('questions.json');
+    const subjectQuestions = allQuestions.filter((q) => q.subject === subjectId);
     const questionMap = new Map<string, Question>();
     subjectQuestions.forEach((q) => questionMap.set(q.id, q));
 
-    const answerMap = new Map<string, number>();
-    answers.forEach((a) => answerMap.set(a.questionId, a.answer));
-
+    const answeredQuestionIds = Object.keys(answers);
     let correctCount = 0;
     const wrongAnswers: WrongAnswer[] = [];
 
-    for (const a of answers) {
-      const q = questionMap.get(a.questionId);
+    for (const questionId of answeredQuestionIds) {
+      const q = questionMap.get(questionId);
       if (!q) continue;
-      if (a.answer === q.correctAnswer) {
+      const userAnswer = answers[questionId];
+      if (userAnswer === q.correctAnswer) {
         correctCount++;
       } else {
         wrongAnswers.push({
           questionId: q.id,
-          text: q.text,
-          userAnswer: a.answer,
-          correctAnswer: q.correctAnswer,
+          questionText: q.text,
           options: q.options,
+          userAnswer,
+          correctAnswer: q.correctAnswer,
           category: q.category,
           analysis: q.analysis,
         });
       }
     }
 
-    const totalQuestions = answers.length;
+    const totalQuestions = answeredQuestionIds.length;
     const score = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
-    const dimensionScores = calculateDimensionScores(subjectQuestions, answerMap);
+    const dimensionScores = calculateDimensionScores(subjectQuestions, answers);
 
     const examRecord: ExamRecord = {
       id: uuidv4(),
@@ -193,6 +206,7 @@ app.post('/api/exam/submit', (req, res) => {
       correctCount,
       totalQuestions,
       timeTaken,
+      answers,
       wrongAnswers,
       dimensionScores,
       createdAt: new Date().toISOString(),
