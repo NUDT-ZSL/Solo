@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>地形路线标注器</title>
+  <link rel="stylesheet" href="/src/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="scene-container">
+      <canvas id="scene-canvas"></canvas>
+      
+      <div id="toolbar">
+        <button id="measure-btn" class="toolbar-btn" title="测量工具">
+          <span class="icon">📏</span>
+          <span class="label">测量尺</span>
+        </button>
+        <button id="reset-measure-btn" class="toolbar-btn" title="清除测量">
+          <span class="icon">🗑️</span>
+          <span class="label">清除</span>
+        </button>
+      </div>
+
+      <div id="measure-results">
+        <div class="results-header">
+          <span class="results-title">测量记录</span>
+          <span id="results-count">0/50</span>
+        </div>
+        <div id="results-list"></div>
+      </div>
+
+      <div id="terrain-controls">
+        <div class="control-group">
+          <label>起伏幅度</label>
+          <div class="slider-row">
+            <input type="range" id="amplitude-slider" min="0" max="5" step="0.1" value="3" />
+            <span id="amplitude-value">3.0</span>
+          </div>
+        </div>
+        <div class="control-group">
+          <label>网格细分</label>
+          <div class="slider-row">
+            <input type="range" id="subdivision-slider" min="32" max="128" step="32" value="64" />
+            <span id="subdivision-value">64</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <aside id="side-panel">
+      <div class="panel-section">
+        <h2 class="panel-title">文件管理</h2>
+        <div id="drop-zone" class="drop-zone">
+          <div class="drop-icon">📁</div>
+          <p class="drop-text">拖入 KML/KMZ 文件</p>
+          <p class="drop-hint">或点击选择文件</p>
+          <input type="file" id="file-input" accept=".kml,.kmz" multiple hidden />
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h2 class="panel-title">要素列表</h2>
+        <div id="annotation-tree" class="annotation-tree"></div>
+      </div>
+
+      <div class="panel-section" id="properties-section">
+        <h2 class="panel-title">属性编辑</h2>
+        <div id="properties-panel" class="properties-panel">
+          <p class="empty-hint">选择要素以编辑属性</p>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
