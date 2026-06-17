@@ -1,0 +1,9 @@
+{
+  "watch": ["src/modules/backend"],
+  "ext": "ts,mts,js,json",
+  "exec": "tsx src/modules/backend/server.ts",
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "delay": 1000
+}
