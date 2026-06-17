@@ -268,9 +268,12 @@ const CalendarViewWithStyles: React.FC = () => (
   <>
     <CalendarView />
     <style>{`
+      .event-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
       .event-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 2px 8px #E0E0E0;
+        transform: translateY(-3px) !important;
+        box-shadow: 0 4px 12px #E0E0E0 !important;
       }
       .calendar-grid {
         opacity: 1;

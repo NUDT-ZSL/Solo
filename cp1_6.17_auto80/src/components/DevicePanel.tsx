@@ -109,18 +109,15 @@ const DevicePanel: React.FC = () => {
   });
 
   return (
-    <div>
+    <div style={{ position: 'relative' }}>
+      {notifications.length > 0 && (
+        <span className="return-badge" title={`${notifications.length} 件设备待归还`}>
+          {notifications.length}
+        </span>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <h2 style={{ fontSize: 22, fontWeight: 700 }}>设备清单</h2>
-          {notifications.length > 0 && (
-            <span className="return-badge" title={`${notifications.length} 件设备待归还`} style={{
-              background: '#F44336', color: '#FFF', borderRadius: '50%',
-              width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 11, fontWeight: 700, cursor: 'pointer',
-              animation: 'pulse 2s infinite',
-            }}>{notifications.length}</span>
-          )}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => setShowBorrowForm(true)} style={actionBtnStyle}>借用申请</button>

@@ -34,7 +34,7 @@ const Dashboard: React.FC = () => {
   const [currentUser] = useState('小明');
   const [myEvents, setMyEvents] = useState<EventItem[]>([]);
   const [myBorrows, setMyBorrows] = useState<(BorrowRequest & { deviceName?: string })[]>([]);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(new Date());
 
   const fetchData = useCallback(async () => {
     const [eventsRes, borrowsRes, devicesRes] = await Promise.all([
@@ -58,7 +58,9 @@ const Dashboard: React.FC = () => {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
+    const timer = setInterval(() => {
+      setNow(new Date());
+    }, 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -118,7 +120,7 @@ const Dashboard: React.FC = () => {
         {activeBorrows.length === 0 && <div style={{ color: '#666', fontSize: 14 }}>暂无借用中的设备</div>}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
           {activeBorrows.map((b, i) => {
-            const countdown = getCountdown(b.endDate, '23:59:59', new Date(now));
+            const countdown = getCountdown(b.endDate, '23:59:59', now);
             const isExpired = countdown === '已到期';
             return (
               <div key={b.id} className="borrow-card" style={{
