@@ -1,6 +1,19 @@
 import type { GalaxyParams } from './galaxy-generator';
 import { getThemeGradientCSS } from './galaxy-generator';
 
+const DEFAULT_PARAMS: GalaxyParams = {
+  starCount: 200,
+  orbitMin: 5,
+  orbitMax: 12,
+  colorTheme: 'galaxy-purple',
+};
+
+const THEME_LABELS: Record<string, string> = {
+  'galaxy-purple': '星河紫',
+  'sunset-orange': '落日橙',
+  'aurora-green': '极光绿',
+};
+
 export class UIController {
   private starCountSlider: HTMLInputElement;
   private starCountValue: HTMLElement;
@@ -8,8 +21,11 @@ export class UIController {
   private orbitMinValue: HTMLElement;
   private orbitMaxSlider: HTMLInputElement;
   private orbitMaxValue: HTMLElement;
+  private orbitRangeValue: HTMLElement;
   private colorThemeSelect: HTMLSelectElement;
+  private themeDisplay: HTMLElement;
   private generateBtn: HTMLButtonElement;
+  private resetBtn: HTMLButtonElement;
   private fpsCounter: HTMLElement;
   private perfNotice: HTMLElement;
   private boundaryNotice: HTMLElement;
@@ -25,8 +41,11 @@ export class UIController {
     this.orbitMinValue = document.getElementById('orbit-min-value') as HTMLElement;
     this.orbitMaxSlider = document.getElementById('orbit-max') as HTMLInputElement;
     this.orbitMaxValue = document.getElementById('orbit-max-value') as HTMLElement;
+    this.orbitRangeValue = document.getElementById('orbit-range-value') as HTMLElement;
     this.colorThemeSelect = document.getElementById('color-theme') as HTMLSelectElement;
+    this.themeDisplay = document.getElementById('theme-display') as HTMLElement;
     this.generateBtn = document.getElementById('generate-btn') as HTMLButtonElement;
+    this.resetBtn = document.getElementById('reset-btn') as HTMLButtonElement;
     this.fpsCounter = document.getElementById('fps-counter') as HTMLElement;
     this.perfNotice = document.getElementById('perf-notice') as HTMLElement;
     this.boundaryNotice = document.getElementById('boundary-notice') as HTMLElement;
@@ -34,6 +53,7 @@ export class UIController {
 
     this.addGalaxyIcon();
     this.bindEvents();
+    this.updateAllValueDisplays();
     this.applyThemeStyles();
   }
 
@@ -62,19 +82,20 @@ export class UIController {
 
   private bindEvents() {
     this.starCountSlider.addEventListener('input', () => {
-      this.starCountValue.textContent = this.starCountSlider.value;
+      this.updateStarCountDisplay();
     });
 
     this.orbitMinSlider.addEventListener('input', () => {
-      this.orbitMinValue.textContent = this.orbitMinSlider.value;
+      this.updateOrbitRangeDisplay();
     });
 
     this.orbitMaxSlider.addEventListener('input', () => {
-      this.orbitMaxValue.textContent = this.orbitMaxSlider.value;
+      this.updateOrbitRangeDisplay();
     });
 
     this.colorThemeSelect.addEventListener('change', () => {
       this.applyThemeStyles();
+      this.updateThemeDisplay();
     });
 
     this.generateBtn.addEventListener('click', () => {
@@ -82,6 +103,47 @@ export class UIController {
         this.onGenerate(this.getParams());
       }
     });
+
+    this.resetBtn.addEventListener('click', () => {
+      this.resetToDefaults();
+    });
+  }
+
+  private updateAllValueDisplays() {
+    this.updateStarCountDisplay();
+    this.updateOrbitRangeDisplay();
+    this.updateThemeDisplay();
+  }
+
+  private updateStarCountDisplay() {
+    this.starCountValue.textContent = `${this.starCountSlider.value} 颗`;
+  }
+
+  private updateOrbitRangeDisplay() {
+    const minVal = parseFloat(this.orbitMinSlider.value);
+    const maxVal = parseFloat(this.orbitMaxSlider.value);
+    this.orbitMinValue.textContent = minVal.toFixed(1);
+    this.orbitMaxValue.textContent = maxVal.toFixed(1);
+    this.orbitRangeValue.textContent = `${minVal.toFixed(1)} - ${maxVal.toFixed(1)}`;
+  }
+
+  private updateThemeDisplay() {
+    const theme = this.colorThemeSelect.value;
+    this.themeDisplay.textContent = THEME_LABELS[theme] || theme;
+  }
+
+  private resetToDefaults() {
+    this.starCountSlider.value = DEFAULT_PARAMS.starCount.toString();
+    this.orbitMinSlider.value = DEFAULT_PARAMS.orbitMin.toString();
+    this.orbitMaxSlider.value = DEFAULT_PARAMS.orbitMax.toString();
+    this.colorThemeSelect.value = DEFAULT_PARAMS.colorTheme;
+
+    this.updateAllValueDisplays();
+    this.applyThemeStyles();
+
+    if (this.onGenerate) {
+      this.onGenerate(this.getParams());
+    }
   }
 
   private applyThemeStyles() {
@@ -97,6 +159,9 @@ export class UIController {
     this.generateBtn.style.background = gradient;
     this.generateBtn.style.boxShadow = `0 0 20px ${colors.primary}60`;
     this.generateBtn.style.transition = 'background 0.3s ease-out, box-shadow 0.3s ease-out, transform 0.2s ease-out, filter 0.2s ease-out';
+
+    this.resetBtn.style.background = colors.primary;
+    this.resetBtn.style.transition = 'filter 0.2s ease-out, background 0.3s ease-out, transform 0.2s ease-out';
   }
 
   private getThemeColorValues(theme: string): { primary: string; secondary: string } {
