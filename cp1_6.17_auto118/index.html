@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Root Growth Simulator</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a1a;
+    }
+    #app {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    #viewport {
+      width: 100%;
+      height: 80%;
+      position: relative;
+    }
+    #scene-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    #status-bar {
+      width: 100%;
+      height: 20%;
+      background: #2D2D2D;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding: 10px 20px;
+      border-top: 2px solid #444;
+    }
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .stat-label {
+      font-size: 14px;
+      color: #E0E0E0;
+    }
+    .stat-value {
+      font-size: 20px;
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      color: #F5F5F5;
+      font-weight: 600;
+    }
+    #control-panel {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      transform: translateY(-50%);
+      width: 320px;
+      background: rgba(58, 58, 58, 0.85);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      border-radius: 0 8px 8px 0;
+      padding: 20px;
+      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 100;
+      box-shadow: 2px 0 10px rgba(0,0,0,0.3);
+    }
+    #control-panel.collapsed {
+      transform: translateX(calc(-100% + 40px)) translateY(-50%);
+      padding: 20px 10px;
+    }
+    #panel-toggle {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 28px;
+      height: 28px;
+      background: #555;
+      border: none;
+      border-radius: 4px;
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+    #panel-toggle:hover {
+      background: #666;
+    }
+    #panel-content {
+      margin-top: 20px;
+    }
+    .panel-title {
+      color: #F5F5F5;
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #555;
+    }
+    .control-group {
+      margin-bottom: 20px;
+    }
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: #E0E0E0;
+    }
+    .control-value {
+      font-family: 'Consolas', monospace;
+      font-weight: 600;
+      color: #F5F5F5;
+      min-width: 45px;
+      text-align: right;
+    }
+    .slider-container {
+      position: relative;
+      width: 100%;
+    }
+    .slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: #555;
+      outline: none;
+    }
+    .slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+    .slider::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+    .slider::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+    }
+    .slider-growth::-webkit-slider-thumb { background: #4CAF50; }
+    .slider-growth::-moz-range-thumb { background: #4CAF50; }
+    .slider-maxlen::-webkit-slider-thumb { background: #2196F3; }
+    .slider-maxlen::-moz-range-thumb { background: #2196F3; }
+    .slider-branch::-webkit-slider-thumb { background: #FF9800; }
+    .slider-branch::-moz-range-thumb { background: #FF9800; }
+    .slider-water::-webkit-slider-thumb { background: #00BCD4; }
+    .slider-water::-moz-range-thumb { background: #00BCD4; }
+    .legend-container {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid #555;
+    }
+    .legend-title {
+      color: #E0E0E0;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: #BBB;
+    }
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .hint-text {
+      margin-top: 12px;
+      font-size: 11px;
+      color: #888;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="viewport">
+      <canvas id="scene-canvas"></canvas>
+      <div id="control-panel">
+        <button id="panel-toggle" title="折叠/展开">❮</button>
+        <div id="panel-content">
+          <div class="panel-title">根系生长参数</div>
+          
+          <div class="control-group">
+            <div class="control-label">
+              <span>生长速率</span>
+              <span class="control-value" id="val-growth">0.20</span>
+            </div>
+            <div class="slider-container">
+              <input type="range" class="slider slider-growth" id="slider-growth" 
+                     min="0.1" max="0.5" step="0.05" value="0.2">
+            </div>
+          </div>
+          
+          <div class="control-group">
+            <div class="control-label">
+              <span>最大根长</span>
+              <span class="control-value" id="val-maxlen">8</span>
+            </div>
+            <div class="slider-container">
+              <input type="range" class="slider slider-maxlen" id="slider-maxlen" 
+                     min="5" max="15" step="0.5" value="8">
+            </div>
+          </div>
+          
+          <div class="control-group">
+            <div class="control-label">
+              <span>分叉概率</span>
+              <span class="control-value" id="val-branch">0.40</span>
+            </div>
+            <div class="slider-container">
+              <input type="range" class="slider slider-branch" id="slider-branch" 
+                     min="0.2" max="0.8" step="0.05" value="0.4">
+            </div>
+          </div>
+          
+          <div class="control-group">
+            <div class="control-label">
+              <span>水分吸引强度</span>
+              <span class="control-value" id="val-water">0.50</span>
+            </div>
+            <div class="slider-container">
+              <input type="range" class="slider slider-water" id="slider-water" 
+                     min="0" max="2.0" step="0.1" value="0.5">
+            </div>
+          </div>
+          
+          <div class="legend-container">
+            <div class="legend-title">图例 / 操作说明</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#4CAF50"></div>种子（点击土壤表面放置）</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#D3D3D3"></div>石块（拖拽放置，最多3个）</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#4A90D9;opacity:0.6"></div>水分区域（点击土壤添加）</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#8B5A2B"></div>主根</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#DEB887"></div>侧根</div>
+            <div class="hint-text">
+              左键旋转视角 | 右键平移 | 滚轮缩放<br>
+              单击土壤表面放置种子 / 水分<br>
+              右键拖放石块
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div id="status-bar">
+      <div class="stat-item">
+        <div class="stat-label">主根长度</div>
+        <div class="stat-value" id="stat-mainlen">0.00</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">侧根数量</div>
+        <div class="stat-value" id="stat-sides">0</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">总节点数</div>
+        <div class="stat-value" id="stat-nodes">0</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">帧率 FPS</div>
+        <div class="stat-value" id="stat-fps" style="color:#4CAF50">60</div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
