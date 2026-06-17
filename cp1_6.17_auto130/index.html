@@ -145,6 +145,16 @@
         color: #F8FAFC;
         margin-bottom: 20px;
         text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+      }
+
+      .panel-title .galaxy-icon {
+        width: 24px;
+        height: 24px;
+        flex-shrink: 0;
       }
 
       .control-group {
@@ -179,6 +189,12 @@
         cursor: pointer;
       }
 
+      :root {
+        --theme-primary: #8B5CF6;
+        --theme-secondary: #3B82F6;
+        --theme-gradient: linear-gradient(135deg, #8B5CF6, #3B82F6);
+      }
+
       input[type="range"]::-webkit-slider-thumb {
         -webkit-appearance: none;
         appearance: none;
@@ -186,6 +202,9 @@
         height: 18px;
         border-radius: 50%;
         cursor: pointer;
+        background: var(--theme-gradient);
+        box-shadow: 0 0 8px var(--theme-primary);
+        transition: box-shadow 0.2s ease-out;
       }
 
       input[type="range"]::-moz-range-thumb {
@@ -194,6 +213,9 @@
         border-radius: 50%;
         cursor: pointer;
         border: none;
+        background: var(--theme-gradient);
+        box-shadow: 0 0 8px var(--theme-primary);
+        transition: box-shadow 0.2s ease-out;
       }
 
       select {
@@ -209,7 +231,7 @@
       }
 
       select:focus {
-        border-color: #8B5CF6;
+        border-color: var(--theme-primary);
       }
 
       select option {

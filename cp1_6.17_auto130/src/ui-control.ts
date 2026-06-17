@@ -13,6 +13,7 @@ export class UIController {
   private fpsCounter: HTMLElement;
   private perfNotice: HTMLElement;
   private boundaryNotice: HTMLElement;
+  private panelTitle: HTMLElement;
 
   private onGenerate: ((params: GalaxyParams) => void) | null = null;
   private boundaryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -29,9 +30,34 @@ export class UIController {
     this.fpsCounter = document.getElementById('fps-counter') as HTMLElement;
     this.perfNotice = document.getElementById('perf-notice') as HTMLElement;
     this.boundaryNotice = document.getElementById('boundary-notice') as HTMLElement;
+    this.panelTitle = document.querySelector('.panel-title') as HTMLElement;
 
+    this.addGalaxyIcon();
     this.bindEvents();
     this.applyThemeStyles();
+  }
+
+  private addGalaxyIcon() {
+    const iconSvg = `
+      <svg class="galaxy-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="galaxy-grad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" style="stop-color:var(--theme-primary);stop-opacity:1" />
+            <stop offset="100%" style="stop-color:var(--theme-secondary);stop-opacity:0.8" />
+          </radialGradient>
+        </defs>
+        <ellipse cx="12" cy="12" rx="10" ry="4" stroke="var(--theme-primary)" stroke-width="1.5" fill="none" opacity="0.6"/>
+        <ellipse cx="12" cy="12" rx="10" ry="4" stroke="var(--theme-secondary)" stroke-width="1.5" fill="none" transform="rotate(60 12 12)" opacity="0.6"/>
+        <ellipse cx="12" cy="12" rx="10" ry="4" stroke="var(--theme-primary)" stroke-width="1.5" fill="none" transform="rotate(-60 12 12)" opacity="0.6"/>
+        <circle cx="12" cy="12" r="2.5" fill="var(--theme-primary)"/>
+        <circle cx="12" cy="12" r="1.5" fill="var(--theme-secondary)"/>
+      </svg>
+    `;
+    const iconWrapper = document.createElement('span');
+    iconWrapper.innerHTML = iconSvg.trim();
+    iconWrapper.style.display = 'inline-flex';
+    iconWrapper.style.alignItems = 'center';
+    this.panelTitle.insertBefore(iconWrapper.firstChild!, this.panelTitle.firstChild);
   }
 
   private bindEvents() {
@@ -60,29 +86,17 @@ export class UIController {
 
   private applyThemeStyles() {
     const theme = this.colorThemeSelect.value;
+    const colors = this.getThemeColorValues(theme);
     const gradient = getThemeGradientCSS(theme);
 
+    const root = document.documentElement;
+    root.style.setProperty('--theme-primary', colors.primary);
+    root.style.setProperty('--theme-secondary', colors.secondary);
+    root.style.setProperty('--theme-gradient', gradient);
+
     this.generateBtn.style.background = gradient;
-
-    const styleId = 'dynamic-slider-styles';
-    let styleEl = document.getElementById(styleId) as HTMLStyleElement;
-    if (!styleEl) {
-      styleEl = document.createElement('style');
-      styleEl.id = styleId;
-      document.head.appendChild(styleEl);
-    }
-
-    const colors = this.getThemeColorValues(theme);
-    styleEl.textContent = `
-      input[type="range"]::-webkit-slider-thumb {
-        background: ${gradient};
-        box-shadow: 0 0 6px ${colors.primary}80;
-      }
-      input[type="range"]::-moz-range-thumb {
-        background: ${gradient};
-        box-shadow: 0 0 6px ${colors.primary}80;
-      }
-    `;
+    this.generateBtn.style.boxShadow = `0 0 20px ${colors.primary}60`;
+    this.generateBtn.style.transition = 'background 0.3s ease-out, box-shadow 0.3s ease-out, transform 0.2s ease-out, filter 0.2s ease-out';
   }
 
   private getThemeColorValues(theme: string): { primary: string; secondary: string } {
