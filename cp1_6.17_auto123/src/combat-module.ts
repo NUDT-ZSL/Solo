@@ -36,9 +36,27 @@ function getTauntingCharacter(characters: ICharacter[]): ICharacter | null {
   return taunting[0];
 }
 
+function resetCharacterCooldowns(character: ICharacter): void {
+  character.currentCooldown = 0;
+  character.tauntTurnsLeft = 0;
+}
+
 function decrementAllCooldowns(characters: ICharacter[]): void {
   for (const c of characters) {
-    if (!c.isAlive) continue;
+    const wasDead = !c.isAlive;
+    const willBeRevived = wasDead && c.hp > 0;
+
+    if (willBeRevived) {
+      c.isAlive = true;
+      resetCharacterCooldowns(c);
+      continue;
+    }
+
+    if (!c.isAlive) {
+      resetCharacterCooldowns(c);
+      continue;
+    }
+
     if (c.currentCooldown > 0) {
       c.currentCooldown -= 1;
     }

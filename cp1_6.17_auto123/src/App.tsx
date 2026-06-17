@@ -1,6 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import type { ICharacter, IBoss, ActionResult, BattleStats, GamePhase } from "./team-module";
-import { addCharacter, removeCharacter, createCharacter, PRESET_TEAMS, resetCharacterForBattle } from "./team-module";
+import { addCharacter, removeCharacter, createCharacter, PRESET_TEAMS, resetCharacterForBattle, applyPreset } from "./team-module";
 import { createBoss, simulateRound } from "./combat-module";
 import { calculateBattleStats } from "./stats-module";
 import TeamBuilder from "./components/TeamBuilder";
@@ -15,6 +15,7 @@ export default function App() {
   const [currentRound, setCurrentRound] = useState<number>(0);
   const [battleStats, setBattleStats] = useState<BattleStats | null>(null);
   const [isBattleRunning, setIsBattleRunning] = useState<boolean>(false);
+  const battleKeyRef = useRef<number>(0);
 
   const handleAddChar = useCallback((characterId: string, slotIndex: number) => {
     setSlots((prev) => addCharacter(prev, characterId, slotIndex));
@@ -27,12 +28,14 @@ export default function App() {
   const handleApplyPreset = useCallback((presetIndex: number) => {
     const preset = PRESET_TEAMS[presetIndex];
     if (!preset) return;
-    setSlots(preset.characterIds.map((id) => createCharacter(id)));
+    setSlots(applyPreset(preset));
   }, []);
 
   const handleStartBattle = useCallback(() => {
     const activeChars = slots.filter((c): c is ICharacter => c !== null);
     if (activeChars.length === 0) return;
+
+    battleKeyRef.current += 1;
 
     const resetChars = activeChars.map((c) => resetCharacterForBattle(c));
     const newSlots: (ICharacter | null)[] = [null, null, null, null];
@@ -115,7 +118,7 @@ export default function App() {
       )}
 
       {phase === "combat" && (
-        <div className="combat-slide-in">
+        <div key={battleKeyRef.current} className="combat-slide-in">
           <BattleArena
             characters={slots.filter((c): c is ICharacter => c !== null)}
             boss={boss}

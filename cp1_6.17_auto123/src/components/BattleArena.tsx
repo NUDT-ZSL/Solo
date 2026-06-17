@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useMemo } from "react";
 import type { ICharacter, IBoss, ActionResult } from "../team-module";
 import { CLASS_COLORS, CLASS_ICONS } from "../team-module";
 
@@ -39,7 +39,14 @@ export default function BattleArena({
     }
   }, [actions]);
 
-  const visibleActions = actions.slice(-50);
+  const visibleActions = useMemo(() => {
+    if (!Array.isArray(actions) || actions.length === 0) {
+      return [] as ActionResult[];
+    }
+    const MAX_LOG_ENTRIES = 50;
+    const startIdx = Math.max(0, actions.length - MAX_LOG_ENTRIES);
+    return actions.slice(startIdx);
+  }, [actions]);
 
   return (
     <div className="battle-arena">

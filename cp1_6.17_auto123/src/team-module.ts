@@ -194,12 +194,35 @@ export function createCharacter(id: string): ICharacter | null {
   return { ...template, isAlive: true, currentCooldown: 0, tauntTurnsLeft: 0 };
 }
 
+function getSelectedIds(slots: (ICharacter | null)[]): Set<string> {
+  const ids = new Set<string>();
+  for (const c of slots) {
+    if (c && c.id) {
+      ids.add(c.id);
+    }
+  }
+  return ids;
+}
+
+function hasDuplicateIds(ids: string[]): boolean {
+  const seen = new Set<string>();
+  for (const id of ids) {
+    if (seen.has(id)) return true;
+    seen.add(id);
+  }
+  return false;
+}
+
 export function addCharacter(slots: (ICharacter | null)[], characterId: string, slotIndex: number): (ICharacter | null)[] {
   if (slotIndex < 0 || slotIndex >= 4) return slots;
-  const existingIds = slots.filter((c): c is ICharacter => c !== null).map((c) => c.id);
-  if (existingIds.includes(characterId)) return slots;
+  if (!characterId) return slots;
+
+  const selectedIds = getSelectedIds(slots);
+  if (selectedIds.has(characterId)) return slots;
+
   const character = createCharacter(characterId);
   if (!character) return slots;
+
   const newSlots = [...slots];
   newSlots[slotIndex] = character;
   return newSlots;
@@ -213,7 +236,18 @@ export function removeCharacter(slots: (ICharacter | null)[], slotIndex: number)
 }
 
 export function applyPreset(preset: PresetTeam): (ICharacter | null)[] {
-  return preset.characterIds.map((id) => createCharacter(id));
+  if (!preset || !preset.characterIds || hasDuplicateIds(preset.characterIds)) {
+    return [null, null, null, null];
+  }
+
+  const uniqueIds = Array.from(new Set(preset.characterIds));
+  const characters = uniqueIds.map((id) => createCharacter(id)).filter(Boolean) as ICharacter[];
+
+  const result: (ICharacter | null)[] = [null, null, null, null];
+  characters.forEach((c, i) => {
+    if (i < 4) result[i] = c;
+  });
+  return result;
 }
 
 export function resetCharacterForBattle(char: ICharacter): ICharacter {

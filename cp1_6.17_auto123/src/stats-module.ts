@@ -7,9 +7,12 @@ export function calculateBattleStats(
   isVictory: boolean,
   totalRounds: number
 ): BattleStats {
+  const activeCharacters = characters.filter((c) => c.maxHp > 0);
+  const activeCharacterIds = new Set(activeCharacters.map((c) => c.id));
+
   const contributions: Map<string, CharacterContribution> = new Map();
 
-  for (const c of characters) {
+  for (const c of activeCharacters) {
     contributions.set(c.id, {
       characterId: c.id,
       characterName: c.name,
@@ -29,22 +32,28 @@ export function calculateBattleStats(
 
   for (const action of actions) {
     if (action.isHeal) {
-      totalHealing += action.value;
-      const contrib = contributions.get(action.actorId);
-      if (contrib) {
-        contrib.healingDone += action.value;
+      if (activeCharacterIds.has(action.actorId)) {
+        totalHealing += action.value;
+        const contrib = contributions.get(action.actorId);
+        if (contrib) {
+          contrib.healingDone += action.value;
+        }
       }
     } else if (action.actorId === "boss") {
-      totalDamageTaken += action.value;
-      const contrib = contributions.get(action.targetId);
-      if (contrib) {
-        contrib.damageTaken += action.value;
+      if (activeCharacterIds.has(action.targetId)) {
+        totalDamageTaken += action.value;
+        const contrib = contributions.get(action.targetId);
+        if (contrib) {
+          contrib.damageTaken += action.value;
+        }
       }
     } else {
-      totalDamageDealt += action.value;
-      const contrib = contributions.get(action.actorId);
-      if (contrib) {
-        contrib.damageDealt += action.value;
+      if (activeCharacterIds.has(action.actorId)) {
+        totalDamageDealt += action.value;
+        const contrib = contributions.get(action.actorId);
+        if (contrib) {
+          contrib.damageDealt += action.value;
+        }
       }
     }
   }
