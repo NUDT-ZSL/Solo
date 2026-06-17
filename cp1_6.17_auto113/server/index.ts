@@ -3,7 +3,7 @@ import http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
-import { StickyNoteData, Board, WSMessage, OnlineUser } from '../src/types';
+import { StickyNoteData, Board, WSMessage, OnlineUser } from './types';
 
 const app = express();
 const server = http.createServer(app);
@@ -120,7 +120,7 @@ wss.on('connection', (ws: ExtWebSocket) => {
           break;
         }
 
-        case 'CREATE_NOTE': {
+        case 'createNote': {
           const { note } = message.payload as { note: StickyNoteData };
           if (!boards.has(note.boardId)) return;
 
@@ -130,13 +130,13 @@ wss.on('connection', (ws: ExtWebSocket) => {
 
           broadcastToBoard(
             note.boardId,
-            { type: 'NOTE_CREATED', payload: { note, userId } },
+            { type: 'createNote', payload: { note } },
             ws
           );
           break;
         }
 
-        case 'MOVE_NOTE': {
+        case 'moveNote': {
           const { noteId, x, y, boardId } = message.payload;
           if (!boards.has(boardId)) return;
 
@@ -149,52 +149,32 @@ wss.on('connection', (ws: ExtWebSocket) => {
 
           broadcastToBoard(
             boardId,
-            { type: 'NOTE_MOVED', payload: { noteId, x, y, userId } },
+            { type: 'moveNote', payload: { noteId, x, y } },
             ws
           );
           break;
         }
 
-        case 'EDIT_NOTE': {
-          const { noteId, content, boardId } = message.payload;
+        case 'updateNote': {
+          const { noteId, boardId, content, color } = message.payload;
           if (!boards.has(boardId)) return;
 
           const boardNotes = notes.get(boardId) || [];
           const note = boardNotes.find((n) => n.id === noteId);
           if (note) {
-            note.content = content;
+            if (content !== undefined) note.content = content;
+            if (color !== undefined) note.color = color;
           }
 
           broadcastToBoard(
             boardId,
-            { type: 'NOTE_EDITED', payload: { noteId, content, userId } },
+            { type: 'updateNote', payload: { noteId, content, color } },
             ws
           );
           break;
         }
 
-        case 'CHANGE_NOTE_COLOR': {
-          const { noteId, color, boardId } = message.payload;
-          if (!boards.has(boardId)) return;
-
-          const boardNotes = notes.get(boardId) || [];
-          const note = boardNotes.find((n) => n.id === noteId);
-          if (note) {
-            note.color = color;
-          }
-
-          broadcastToBoard(
-            boardId,
-            {
-              type: 'NOTE_COLOR_CHANGED',
-              payload: { noteId, color, userId },
-            },
-            ws
-          );
-          break;
-        }
-
-        case 'DELETE_NOTE': {
+        case 'deleteNote': {
           const { noteId, boardId } = message.payload;
           if (!boards.has(boardId)) return;
 
@@ -207,7 +187,7 @@ wss.on('connection', (ws: ExtWebSocket) => {
 
           broadcastToBoard(
             boardId,
-            { type: 'NOTE_DELETED', payload: { noteId, userId } },
+            { type: 'deleteNote', payload: { noteId } },
             ws
           );
           break;

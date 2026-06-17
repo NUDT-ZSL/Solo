@@ -5,7 +5,7 @@
   "main": "server/index.ts",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "server": "ts-node server/index.ts",
+    "server": "ts-node --project tsconfig.server.json server/index.ts",
     "client": "vite"
   },
   "dependencies": {

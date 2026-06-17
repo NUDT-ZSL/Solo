@@ -9,6 +9,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
     height: '100%',
     overflow: 'hidden',
+    position: 'relative',
   },
   sidebar: {
     width: '240px',
@@ -19,15 +20,6 @@ const styles: Record<string, React.CSSProperties> = {
     height: '100%',
     transition: 'transform 0.3s ease',
     flexShrink: 0,
-  },
-  sidebarMobile: {
-    position: 'fixed',
-    left: 0,
-    top: 0,
-    zIndex: 100,
-  },
-  sidebarHidden: {
-    transform: 'translateX(-100%)',
   },
   header: {
     padding: '16px',
@@ -65,29 +57,30 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  boardItemActive: {
-    backgroundColor: 'rgba(52, 152, 219, 0.5)',
-  },
   mainContent: {
     flex: 1,
     position: 'relative',
     overflow: 'hidden',
+    minWidth: 0,
   },
   hamburger: {
     position: 'fixed',
     top: '12px',
     left: '12px',
     zIndex: 101,
-    background: 'none',
+    background: '#2C3E50',
     border: 'none',
     cursor: 'pointer',
     padding: '8px',
+    borderRadius: '6px',
     display: 'none',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
   },
   hamburgerIcon: {
     fontSize: '24px',
     color: '#fff',
     lineHeight: 1,
+    display: 'block',
   },
   overlay: {
     position: 'fixed',
@@ -122,6 +115,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '14px',
     outline: 'none',
     marginBottom: '16px',
+    boxSizing: 'border-box',
   },
   modalButtons: {
     display: 'flex',
@@ -152,6 +146,7 @@ const styles: Record<string, React.CSSProperties> = {
     right: 0,
     bottom: 0,
     zIndex: 99,
+    backgroundColor: 'rgba(0,0,0,0.3)',
   },
 };
 
@@ -166,24 +161,28 @@ function App() {
   const [showModal, setShowModal] = useState(false);
   const [newBoardName, setNewBoardName] = useState('');
   const [showSidebar, setShowSidebar] = useState(true);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isSmallWidth, setIsSmallWidth] = useState(false);
   const [onlineCount, setOnlineCount] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const modalInputRef = useRef<HTMLInputElement>(null);
+  const appRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     localStorage.setItem('whiteboard_user_id', userId);
   }, [userId]);
 
   useEffect(() => {
-    const checkMobile = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      if (!mobile) setShowSidebar(true);
+    const checkWidth = () => {
+      const containerWidth = appRef.current?.clientWidth || window.innerWidth;
+      const sidebarWidth = 240;
+      const availableForSidebar = containerWidth * 0.3;
+      const shouldCollapse = availableForSidebar < sidebarWidth || containerWidth < 800;
+      setIsSmallWidth(shouldCollapse);
+      if (!shouldCollapse) setShowSidebar(true);
     };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    checkWidth();
+    window.addEventListener('resize', checkWidth);
+    return () => window.removeEventListener('resize', checkWidth);
   }, []);
 
   useEffect(() => {
@@ -207,9 +206,9 @@ function App() {
         const msg: WSMessage = JSON.parse(event.data);
         if (msg.type === 'BOARD_STATE' && msg.payload.boardId === currentBoardId) {
           setNotes(msg.payload.notes);
-        } else if (msg.type === 'NOTE_CREATED') {
+        } else if (msg.type === 'createNote') {
           setNotes((prev) => [...prev, msg.payload.note]);
-        } else if (msg.type === 'NOTE_MOVED') {
+        } else if (msg.type === 'moveNote') {
           setNotes((prev) =>
             prev.map((n) =>
               n.id === msg.payload.noteId
@@ -217,23 +216,19 @@ function App() {
                 : n
             )
           );
-        } else if (msg.type === 'NOTE_EDITED') {
+        } else if (msg.type === 'updateNote') {
           setNotes((prev) =>
-            prev.map((n) =>
-              n.id === msg.payload.noteId
-                ? { ...n, content: msg.payload.content }
-                : n
-            )
+            prev.map((n) => {
+              if (n.id === msg.payload.noteId) {
+                const updated = { ...n };
+                if (msg.payload.content !== undefined) updated.content = msg.payload.content;
+                if (msg.payload.color !== undefined) updated.color = msg.payload.color;
+                return updated;
+              }
+              return n;
+            })
           );
-        } else if (msg.type === 'NOTE_COLOR_CHANGED') {
-          setNotes((prev) =>
-            prev.map((n) =>
-              n.id === msg.payload.noteId
-                ? { ...n, color: msg.payload.color }
-                : n
-            )
-          );
-        } else if (msg.type === 'NOTE_DELETED') {
+        } else if (msg.type === 'deleteNote') {
           setNotes((prev) => prev.filter((n) => n.id !== msg.payload.noteId));
         } else if (msg.type === 'ONLINE_COUNT') {
           if (msg.payload.boardId === currentBoardId) {
@@ -298,24 +293,35 @@ function App() {
 
   const currentBoard = boards.find((b) => b.id === currentBoardId);
 
-  return (
-    <div style={styles.app}>
-      {isMobile && (
-        <button
-          style={styles.hamburger}
-          onClick={() => setShowSidebar(!showSidebar)}
-        >
-          <span style={styles.hamburgerIcon}>☰</span>
-        </button>
-      )}
+  const sidebarStyle: React.CSSProperties = {
+    ...styles.sidebar,
+  };
 
-      <div
-        style={{
-          ...styles.sidebar,
-          ...(isMobile ? styles.sidebarMobile : {},
-          ...(isMobile && !showSidebar ? styles.sidebarHidden : {},
-        }}
+  if (isSmallWidth) {
+    sidebarStyle.position = 'fixed';
+    sidebarStyle.left = 0;
+    sidebarStyle.top = 0;
+    sidebarStyle.zIndex = 100;
+    sidebarStyle.height = '100vh';
+    sidebarStyle.transform = showSidebar ? 'translateX(0)' : 'translateX(-100%)';
+    sidebarStyle.boxShadow = '2px 0 10px rgba(0,0,0,0.2)';
+  }
+
+  const hamburgerStyle: React.CSSProperties = {
+    ...styles.hamburger,
+    display: isSmallWidth ? 'block' : 'none',
+  };
+
+  return (
+    <div style={styles.app} ref={appRef}>
+      <button
+        style={hamburgerStyle}
+        onClick={() => setShowSidebar(!showSidebar)}
       >
+        <span style={styles.hamburgerIcon}>☰</span>
+      </button>
+
+      <div style={sidebarStyle}>
         <div style={styles.header}>
           <div style={styles.userId}>用户ID: {userId.substring(0, 8)}...</div>
           <button style={styles.createBtn} onClick={handleCreateBoard}>
@@ -330,7 +336,6 @@ function App() {
                 key={board.id}
                 style={{
                   ...styles.boardItem,
-                  ...(isActive ? styles.boardItemActive : {}),
                   backgroundColor: isActive
                     ? 'rgba(52, 152, 219, 0.5)'
                     : 'transparent',
@@ -349,7 +354,7 @@ function App() {
                 }}
                 onClick={() => {
                   setCurrentBoardId(board.id);
-                  if (isMobile) setShowSidebar(false);
+                  if (isSmallWidth) setShowSidebar(false);
                 }}
               >
                 <span>{board.name}</span>
@@ -368,11 +373,12 @@ function App() {
             sendWS={sendWS}
             onlineCount={onlineCount}
             userId={userId}
+            setNotes={setNotes}
           />
         )}
       </div>
 
-      {isMobile && showSidebar && (
+      {isSmallWidth && showSidebar && (
         <div
           style={styles.overlayMobile}
           onClick={() => setShowSidebar(false)}
