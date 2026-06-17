@@ -5,10 +5,12 @@ export default class Predator extends Fish {
   eatCount: number;
 
   static readonly MAX_SPEED = 2.5;
-  static readonly CHASE_RADIUS = 150;
-  static readonly EAT_RADIUS = 30;
+  static readonly CHASE_RADIUS = 200;
   static readonly GROW_THRESHOLD = 3;
   static readonly MAX_RADIUS = 30;
+  static readonly CHASE_FORCE = 0.08;
+  static readonly WANDER_FORCE = 0.03;
+  static readonly MAX_STEER_FORCE = 0.06;
 
   constructor(x: number, y: number) {
     super(x, y, -1);
@@ -42,20 +44,35 @@ export default class Predator extends Fish {
       const dx = this.target.x - this.x;
       const dy = this.target.y - this.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      
+
       if (dist > 0) {
-        this.vx += (dx / dist) * 0.1;
-        this.vy += (dy / dist) * 0.1;
+        const desiredVx = (dx / dist) * Predator.MAX_SPEED;
+        const desiredVy = (dy / dist) * Predator.MAX_SPEED;
+
+        let steerX = desiredVx - this.vx;
+        let steerY = desiredVy - this.vy;
+        const steerMag = Math.sqrt(steerX * steerX + steerY * steerY);
+        if (steerMag > Predator.MAX_STEER_FORCE) {
+          steerX = (steerX / steerMag) * Predator.MAX_STEER_FORCE;
+          steerY = (steerY / steerMag) * Predator.MAX_STEER_FORCE;
+        }
+
+        this.vx += steerX * (Predator.CHASE_FORCE / Predator.MAX_STEER_FORCE);
+        this.vy += steerY * (Predator.CHASE_FORCE / Predator.MAX_STEER_FORCE);
       }
     } else {
-      this.vx += (Math.random() - 0.5) * 0.2;
-      this.vy += (Math.random() - 0.5) * 0.2;
+      const wanderAngle = Math.atan2(this.vy, this.vx) + (Math.random() - 0.5) * 1.5;
+      this.vx += Math.cos(wanderAngle) * Predator.WANDER_FORCE;
+      this.vy += Math.sin(wanderAngle) * Predator.WANDER_FORCE;
     }
 
     const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
     if (speed > Predator.MAX_SPEED) {
       this.vx = (this.vx / speed) * Predator.MAX_SPEED;
       this.vy = (this.vy / speed) * Predator.MAX_SPEED;
+    } else if (speed < Fish.MIN_SPEED && speed > 0) {
+      this.vx = (this.vx / speed) * Fish.MIN_SPEED;
+      this.vy = (this.vy / speed) * Fish.MIN_SPEED;
     }
   }
 
@@ -67,14 +84,19 @@ export default class Predator extends Fish {
 
     this.chase(flock);
 
+    let boundaryX = 0, boundaryY = 0;
+    const margin = 60;
+    const boundaryForce = 0.3;
+    if (this.x < margin) boundaryX = boundaryForce * (margin - this.x) / margin;
+    if (this.x > canvasWidth - margin) boundaryX = -boundaryForce * (this.x - (canvasWidth - margin)) / margin;
+    if (this.y < margin) boundaryY = boundaryForce * (margin - this.y) / margin;
+    if (this.y > canvasHeight - sandHeight - margin) boundaryY = -boundaryForce * (this.y - (canvasHeight - sandHeight - margin)) / margin;
+
+    this.vx += boundaryX;
+    this.vy += boundaryY;
+
     this.x += this.vx;
     this.y += this.vy;
-
-    const margin = 50;
-    if (this.x < margin) this.vx = Math.abs(this.vx);
-    if (this.x > canvasWidth - margin) this.vx = -Math.abs(this.vx);
-    if (this.y < margin) this.vy = Math.abs(this.vy);
-    if (this.y > canvasHeight - sandHeight - margin) this.vy = -Math.abs(this.vy);
 
     this.x = Math.max(this.radius, Math.min(canvasWidth - this.radius, this.x));
     this.y = Math.max(this.radius, Math.min(canvasHeight - sandHeight - this.radius, this.y));

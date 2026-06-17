@@ -1,11 +1,21 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import ReactDOM from 'react-dom/client';
 import ControlPanel from './ui/ControlPanel';
 import Ecosystem, { type EcosystemStats } from './ecosystem/Ecosystem';
 
-const CANVAS_WIDTH = 800;
-const CANVAS_HEIGHT = 600;
 const SAND_HEIGHT = 60;
+const PANEL_WIDTH = 240;
+const MIN_CANVAS_WIDTH = 600;
+const MIN_CANVAS_HEIGHT = 400;
+
+function calcCanvasSize() {
+  const availWidth = window.innerWidth - PANEL_WIDTH - 80;
+  const availHeight = window.innerHeight - 180;
+  return {
+    width: Math.max(MIN_CANVAS_WIDTH, Math.min(availWidth, 1200)),
+    height: Math.max(MIN_CANVAS_HEIGHT, Math.min(availHeight, 800)),
+  };
+}
 
 const App: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -13,6 +23,7 @@ const App: React.FC = () => {
   const animationRef = useRef<number>(0);
   const waveOffsetRef = useRef<number>(0);
   const panelRef = useRef<HTMLDivElement>(null);
+  const canvasSizeRef = useRef(calcCanvasSize());
 
   const [stats, setStats] = useState<EcosystemStats>({
     fishCount: 0,
@@ -21,6 +32,30 @@ const App: React.FC = () => {
     stabilityScore: 100,
     events: [],
   });
+  const [canvasSize, setCanvasSize] = useState(calcCanvasSize());
+
+  const handleResize = useCallback(() => {
+    const newSize = calcCanvasSize();
+    canvasSizeRef.current = newSize;
+    setCanvasSize(newSize);
+
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.width = newSize.width;
+      canvas.height = newSize.height;
+    }
+
+    if (ecosystemRef.current) {
+      ecosystemRef.current.canvasWidth = newSize.width;
+      ecosystemRef.current.canvasHeight = newSize.height;
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('resize', handleResize);
+    handleResize();
+    return () => window.removeEventListener('resize', handleResize);
+  }, [handleResize]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -29,7 +64,10 @@ const App: React.FC = () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const ecosystem = new Ecosystem(CANVAS_WIDTH, CANVAS_HEIGHT, SAND_HEIGHT);
+    const cw = canvasSizeRef.current.width;
+    const ch = canvasSizeRef.current.height;
+
+    const ecosystem = new Ecosystem(cw, ch, SAND_HEIGHT);
     ecosystemRef.current = ecosystem;
 
     ecosystem.setStatsCallback((newStats) => {
@@ -45,7 +83,7 @@ const App: React.FC = () => {
           y: rect.top - canvasRect.top + 100,
         };
       }
-      return { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
+      return { x: cw / 2, y: ch / 2 };
     });
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -55,30 +93,30 @@ const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
 
-    const drawBackground = () => {
-      const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+    const drawBackground = (w: number, h: number) => {
+      const gradient = ctx.createLinearGradient(0, 0, 0, h);
       gradient.addColorStop(0, '#001F3F');
       gradient.addColorStop(1, '#003366');
       ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.fillRect(0, 0, w, h);
 
       ctx.fillStyle = '#D4A574';
-      ctx.fillRect(0, CANVAS_HEIGHT - SAND_HEIGHT, CANVAS_WIDTH, SAND_HEIGHT);
+      ctx.fillRect(0, h - SAND_HEIGHT, w, SAND_HEIGHT);
 
       ctx.beginPath();
-      ctx.moveTo(0, CANVAS_HEIGHT - SAND_HEIGHT);
-      for (let x = 0; x <= CANVAS_WIDTH; x += 10) {
-        const y = CANVAS_HEIGHT - SAND_HEIGHT + Math.sin(x * 0.05) * 3;
+      ctx.moveTo(0, h - SAND_HEIGHT);
+      for (let x = 0; x <= w; x += 10) {
+        const y = h - SAND_HEIGHT + Math.sin(x * 0.05) * 3;
         ctx.lineTo(x, y);
       }
-      ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT);
-      ctx.lineTo(0, CANVAS_HEIGHT);
+      ctx.lineTo(w, h);
+      ctx.lineTo(0, h);
       ctx.closePath();
       ctx.fillStyle = '#C4956A';
       ctx.fill();
     };
 
-    const drawWaves = () => {
+    const drawWaves = (w: number) => {
       waveOffsetRef.current += 0.02;
       
       ctx.save();
@@ -93,12 +131,12 @@ const App: React.FC = () => {
         ctx.beginPath();
         ctx.moveTo(0, baseY);
 
-        for (let x = 0; x <= CANVAS_WIDTH; x += 5) {
+        for (let x = 0; x <= w; x += 5) {
           const y = baseY + Math.sin(x * frequency + offset) * amplitude;
           ctx.lineTo(x, y);
         }
 
-        ctx.lineTo(CANVAS_WIDTH, 0);
+        ctx.lineTo(w, 0);
         ctx.lineTo(0, 0);
         ctx.closePath();
 
@@ -146,26 +184,29 @@ const App: React.FC = () => {
       ctx.restore();
     };
 
-    const drawBoomFlash = () => {
+    const drawBoomFlash = (w: number, h: number) => {
       if (ecosystem.isBoomFlashActive()) {
         ctx.save();
         ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        ctx.fillRect(0, 0, w, h);
         ctx.restore();
       }
     };
 
     const render = () => {
-      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      const w = canvasSizeRef.current.width;
+      const h = canvasSizeRef.current.height;
 
-      drawBackground();
-      drawWaves();
+      ctx.clearRect(0, 0, w, h);
+
+      drawBackground(w, h);
+      drawWaves(w);
 
       ecosystem.update();
       ecosystem.draw(ctx);
 
       drawHUD();
-      drawBoomFlash();
+      drawBoomFlash(w, h);
 
       animationRef.current = requestAnimationFrame(render);
     };
@@ -204,6 +245,7 @@ const App: React.FC = () => {
       backgroundColor: '#0a0a1a',
       padding: '20px',
       gap: '20px',
+      boxSizing: 'border-box',
     }}>
       <h1 style={{
         color: '#00D4FF',
@@ -222,12 +264,13 @@ const App: React.FC = () => {
       }}>
         <canvas
           ref={canvasRef}
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
+          width={canvasSize.width}
+          height={canvasSize.height}
           style={{
             borderRadius: '12px',
             boxShadow: '0 0 40px rgba(0, 100, 200, 0.3)',
             border: '2px solid rgba(0, 212, 255, 0.3)',
+            display: 'block',
           }}
         />
         

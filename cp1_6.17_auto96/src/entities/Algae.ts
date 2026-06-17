@@ -15,6 +15,8 @@ export default class Algae {
 
   static readonly REPRODUCE_INTERVAL = 15;
   static readonly REPRODUCE_RADIUS = 40;
+  static readonly OVERLAP_CHECK_ATTEMPTS = 5;
+  static readonly MIN_SPAWN_DISTANCE = 18;
 
   constructor(x: number, y: number) {
     this.x = x;
@@ -65,21 +67,39 @@ export default class Algae {
     this.reproduceTimer += deltaTime;
   }
 
-  reproduce(canvasWidth: number, canvasHeight: number, sandHeight: number): Algae | null {
+  reproduce(canvasWidth: number, canvasHeight: number, sandHeight: number, existingAlgae: Algae[]): Algae | null {
     if (this.isSpawning) return null;
     if (this.reproduceTimer < Algae.REPRODUCE_INTERVAL) return null;
 
     this.reproduceTimer = 0;
-    
-    const angle = Math.random() * Math.PI * 2;
-    const dist = Math.random() * Algae.REPRODUCE_RADIUS;
-    let newX = this.x + Math.cos(angle) * dist;
-    let newY = this.y + Math.sin(angle) * dist;
 
-    newX = Math.max(this.radius, Math.min(canvasWidth - this.radius, newX));
-    newY = Math.max(this.radius, Math.min(canvasHeight - sandHeight - this.radius, newY));
+    for (let attempt = 0; attempt < Algae.OVERLAP_CHECK_ATTEMPTS; attempt++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * Algae.REPRODUCE_RADIUS;
+      let newX = this.x + Math.cos(angle) * dist;
+      let newY = this.y + Math.sin(angle) * dist;
 
-    return new Algae(newX, newY);
+      newX = Math.max(this.radius, Math.min(canvasWidth - this.radius, newX));
+      newY = Math.max(this.radius, Math.min(canvasHeight - sandHeight - this.radius, newY));
+
+      let overlaps = false;
+      for (const other of existingAlgae) {
+        if (other === this) continue;
+        const dx = other.x - newX;
+        const dy = other.y - newY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance < Algae.MIN_SPAWN_DISTANCE) {
+          overlaps = true;
+          break;
+        }
+      }
+
+      if (!overlaps) {
+        return new Algae(newX, newY);
+      }
+    }
+
+    return null;
   }
 
   draw(ctx: CanvasRenderingContext2D): void {

@@ -136,7 +136,7 @@ export default class Ecosystem {
     const newAlgae: Algae[] = [];
     for (const algae of this.algaeList) {
       algae.grow(deltaTime);
-      const offspring = algae.reproduce(this.canvasWidth, this.canvasHeight, this.sandHeight);
+      const offspring = algae.reproduce(this.canvasWidth, this.canvasHeight, this.sandHeight, this.algaeList);
       if (offspring && this.algaeList.length + newAlgae.length < Ecosystem.MAX_POPULATION) {
         newAlgae.push(offspring);
       }
@@ -213,27 +213,46 @@ export default class Ecosystem {
   }
 
   calculateStabilityScore(): number {
-    const total = this.fishList.length + this.predatorList.length + this.algaeList.length;
+    const fishCount = this.fishList.length;
+    const predatorCount = this.predatorList.length;
+    const algaeCount = this.algaeList.length;
+    const total = fishCount + predatorCount + algaeCount;
+
     if (total === 0) return 100;
 
-    const idealTotal = Ecosystem.IDEAL_RATIO.fish + Ecosystem.IDEAL_RATIO.predator + Ecosystem.IDEAL_RATIO.algae;
-    
-    const actualFishRatio = this.fishList.length / total;
-    const actualPredatorRatio = this.predatorList.length / total;
-    const actualAlgaeRatio = this.algaeList.length / total;
+    let score = 100;
 
+    const speciesPresent = (fishCount > 0 ? 1 : 0) + (predatorCount > 0 ? 1 : 0) + (algaeCount > 0 ? 1 : 0);
+    if (speciesPresent < 3) {
+      score -= (3 - speciesPresent) * 25;
+    }
+
+    const idealTotal = Ecosystem.IDEAL_RATIO.fish + Ecosystem.IDEAL_RATIO.predator + Ecosystem.IDEAL_RATIO.algae;
     const idealFishRatio = Ecosystem.IDEAL_RATIO.fish / idealTotal;
     const idealPredatorRatio = Ecosystem.IDEAL_RATIO.predator / idealTotal;
     const idealAlgaeRatio = Ecosystem.IDEAL_RATIO.algae / idealTotal;
+
+    const actualFishRatio = fishCount / total;
+    const actualPredatorRatio = predatorCount / total;
+    const actualAlgaeRatio = algaeCount / total;
 
     const fishDeviation = Math.abs(actualFishRatio - idealFishRatio);
     const predatorDeviation = Math.abs(actualPredatorRatio - idealPredatorRatio);
     const algaeDeviation = Math.abs(actualAlgaeRatio - idealAlgaeRatio);
 
-    const totalDeviation = fishDeviation * 2 + predatorDeviation * 3 + algaeDeviation * 1.5;
-    const score = Math.max(0, 100 - totalDeviation * 100);
+    score -= fishDeviation * 80;
+    score -= predatorDeviation * 120;
+    score -= algaeDeviation * 60;
 
-    return Math.round(score);
+    if (fishCount > Ecosystem.MAX_POPULATION) score -= 15;
+    if (predatorCount > Ecosystem.MAX_POPULATION) score -= 15;
+    if (algaeCount > Ecosystem.MAX_POPULATION) score -= 15;
+
+    if (fishCount > 0 && fishCount <= Ecosystem.ENDANGERED_THRESHOLD) score -= 10;
+    if (predatorCount > 0 && predatorCount <= Ecosystem.ENDANGERED_THRESHOLD) score -= 10;
+    if (algaeCount > 0 && algaeCount <= Ecosystem.ENDANGERED_THRESHOLD) score -= 10;
+
+    return Math.max(0, Math.min(100, Math.round(score)));
   }
 
   private notifyStatsUpdate(events: EcosystemEvent[]): void {

@@ -18,12 +18,14 @@ export default class Fish {
   isEndangered: boolean;
 
   static readonly MAX_SPEED = 2;
-  static readonly PERCEPTION_RADIUS = 80;
-  static readonly SEPARATION_RADIUS = 25;
-  static readonly ALIGNMENT_WEIGHT = 0.05;
-  static readonly COHESION_WEIGHT = 0.01;
-  static readonly SEPARATION_WEIGHT = 0.1;
-  static readonly BOUNDARY_WEIGHT = 0.1;
+  static readonly MIN_SPEED = 0.5;
+  static readonly PERCEPTION_RADIUS = 100;
+  static readonly SEPARATION_RADIUS = 30;
+  static readonly SEPARATION_WEIGHT = 1.5;
+  static readonly ALIGNMENT_WEIGHT = 1.0;
+  static readonly COHESION_WEIGHT = 1.0;
+  static readonly BOUNDARY_WEIGHT = 0.5;
+  static readonly MAX_FORCE = 0.05;
 
   constructor(x: number, y: number, groupID: number = 0) {
     this.x = x;
@@ -72,72 +74,105 @@ export default class Fish {
       return;
     }
 
-    let separationX = 0, separationY = 0;
-    let alignmentX = 0, alignmentY = 0;
-    let cohesionX = 0, cohesionY = 0;
+    let separationForceX = 0, separationForceY = 0;
+    let alignmentForceX = 0, alignmentForceY = 0;
+    let cohesionForceX = 0, cohesionForceY = 0;
     let separationCount = 0;
-    let alignmentCount = 0;
-    let cohesionCount = 0;
+    let neighborCount = 0;
 
     for (const other of flock) {
-      if (other === this) continue;
+      if (other === this || other.isSpawning) continue;
       
       const dx = other.x - this.x;
       const dy = other.y - this.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const distSq = dx * dx + dy * dy;
 
-      if (dist < Fish.SEPARATION_RADIUS && dist > 0) {
-        separationX -= dx / dist;
-        separationY -= dy / dist;
+      if (distSq < Fish.SEPARATION_RADIUS * Fish.SEPARATION_RADIUS && distSq > 0) {
+        const dist = Math.sqrt(distSq);
+        const repelStrength = (Fish.SEPARATION_RADIUS - dist) / Fish.SEPARATION_RADIUS;
+        separationForceX -= (dx / dist) * repelStrength;
+        separationForceY -= (dy / dist) * repelStrength;
         separationCount++;
       }
 
-      if (dist < Fish.PERCEPTION_RADIUS && other.groupID === this.groupID) {
-        alignmentX += other.vx;
-        alignmentY += other.vy;
-        alignmentCount++;
-        
-        cohesionX += other.x;
-        cohesionY += other.y;
-        cohesionCount++;
+      if (distSq < Fish.PERCEPTION_RADIUS * Fish.PERCEPTION_RADIUS && other.groupID === this.groupID) {
+        alignmentForceX += other.vx;
+        alignmentForceY += other.vy;
+
+        cohesionForceX += other.x;
+        cohesionForceY += other.y;
+        neighborCount++;
       }
     }
 
+    let steerX = 0, steerY = 0;
+
     if (separationCount > 0) {
-      separationX /= separationCount;
-      separationY /= separationCount;
+      separationForceX /= separationCount;
+      separationForceY /= separationCount;
+      const sepMag = Math.sqrt(separationForceX * separationForceX + separationForceY * separationForceY);
+      if (sepMag > 0) {
+        separationForceX = (separationForceX / sepMag) * Fish.MAX_SPEED - this.vx;
+        separationForceY = (separationForceY / sepMag) * Fish.MAX_SPEED - this.vy;
+        const sepForceMag = Math.sqrt(separationForceX * separationForceX + separationForceY * separationForceY);
+        if (sepForceMag > Fish.MAX_FORCE) {
+          separationForceX = (separationForceX / sepForceMag) * Fish.MAX_FORCE;
+          separationForceY = (separationForceY / sepForceMag) * Fish.MAX_FORCE;
+        }
+      }
+      steerX += separationForceX * Fish.SEPARATION_WEIGHT;
+      steerY += separationForceY * Fish.SEPARATION_WEIGHT;
     }
 
-    if (alignmentCount > 0) {
-      alignmentX /= alignmentCount;
-      alignmentY /= alignmentCount;
-    }
+    if (neighborCount > 0) {
+      alignmentForceX /= neighborCount;
+      alignmentForceY /= neighborCount;
+      const aliMag = Math.sqrt(alignmentForceX * alignmentForceX + alignmentForceY * alignmentForceY);
+      if (aliMag > 0) {
+        alignmentForceX = (alignmentForceX / aliMag) * Fish.MAX_SPEED - this.vx;
+        alignmentForceY = (alignmentForceY / aliMag) * Fish.MAX_SPEED - this.vy;
+        const aliForceMag = Math.sqrt(alignmentForceX * alignmentForceX + alignmentForceY * alignmentForceY);
+        if (aliForceMag > Fish.MAX_FORCE) {
+          alignmentForceX = (alignmentForceX / aliForceMag) * Fish.MAX_FORCE;
+          alignmentForceY = (alignmentForceY / aliForceMag) * Fish.MAX_FORCE;
+        }
+      }
+      steerX += alignmentForceX * Fish.ALIGNMENT_WEIGHT;
+      steerY += alignmentForceY * Fish.ALIGNMENT_WEIGHT;
 
-    if (cohesionCount > 0) {
-      cohesionX = (cohesionX / cohesionCount - this.x) * 0.01;
-      cohesionY = (cohesionY / cohesionCount - this.y) * 0.01;
+      cohesionForceX = cohesionForceX / neighborCount - this.x;
+      cohesionForceY = cohesionForceY / neighborCount - this.y;
+      const cohMag = Math.sqrt(cohesionForceX * cohesionForceX + cohesionForceY * cohesionForceY);
+      if (cohMag > 0) {
+        cohesionForceX = (cohesionForceX / cohMag) * Fish.MAX_SPEED - this.vx;
+        cohesionForceY = (cohesionForceY / cohMag) * Fish.MAX_SPEED - this.vy;
+        const cohForceMag = Math.sqrt(cohesionForceX * cohesionForceX + cohesionForceY * cohesionForceY);
+        if (cohForceMag > Fish.MAX_FORCE) {
+          cohesionForceX = (cohesionForceX / cohForceMag) * Fish.MAX_FORCE;
+          cohesionForceY = (cohesionForceY / cohForceMag) * Fish.MAX_FORCE;
+        }
+      }
+      steerX += cohesionForceX * Fish.COHESION_WEIGHT;
+      steerY += cohesionForceY * Fish.COHESION_WEIGHT;
     }
 
     let boundaryX = 0, boundaryY = 0;
-    const margin = 50;
-    if (this.x < margin) boundaryX = Fish.BOUNDARY_WEIGHT;
-    if (this.x > canvasWidth - margin) boundaryX = -Fish.BOUNDARY_WEIGHT;
-    if (this.y < margin) boundaryY = Fish.BOUNDARY_WEIGHT;
-    if (this.y > canvasHeight - sandHeight - margin) boundaryY = -Fish.BOUNDARY_WEIGHT;
+    const margin = 60;
+    if (this.x < margin) boundaryX = Fish.BOUNDARY_WEIGHT * (margin - this.x) / margin;
+    if (this.x > canvasWidth - margin) boundaryX = -Fish.BOUNDARY_WEIGHT * (this.x - (canvasWidth - margin)) / margin;
+    if (this.y < margin) boundaryY = Fish.BOUNDARY_WEIGHT * (margin - this.y) / margin;
+    if (this.y > canvasHeight - sandHeight - margin) boundaryY = -Fish.BOUNDARY_WEIGHT * (this.y - (canvasHeight - sandHeight - margin)) / margin;
 
-    this.vx += separationX * Fish.SEPARATION_WEIGHT;
-    this.vy += separationY * Fish.SEPARATION_WEIGHT;
-    this.vx += alignmentX * Fish.ALIGNMENT_WEIGHT;
-    this.vy += alignmentY * Fish.ALIGNMENT_WEIGHT;
-    this.vx += cohesionX * Fish.COHESION_WEIGHT;
-    this.vy += cohesionY * Fish.COHESION_WEIGHT;
-    this.vx += boundaryX;
-    this.vy += boundaryY;
+    this.vx += steerX + boundaryX;
+    this.vy += steerY + boundaryY;
 
     const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
     if (speed > Fish.MAX_SPEED) {
       this.vx = (this.vx / speed) * Fish.MAX_SPEED;
       this.vy = (this.vy / speed) * Fish.MAX_SPEED;
+    } else if (speed < Fish.MIN_SPEED && speed > 0) {
+      this.vx = (this.vx / speed) * Fish.MIN_SPEED;
+      this.vy = (this.vy / speed) * Fish.MIN_SPEED;
     }
 
     this.x += this.vx;
