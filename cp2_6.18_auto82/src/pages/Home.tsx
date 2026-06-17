@@ -123,19 +123,17 @@ const Home: React.FC = () => {
             <button className="modal-close" onClick={handleCloseModal}>
               ×
             </button>
-            <div className="modal-header">
-              <img src={selectedTool.image} alt={selectedTool.name} />
-              <div>
+            <div className="modal-header modal-tool-info">
+              <div className="modal-tool-image">
+                <img src={selectedTool.image} alt={selectedTool.name} />
+              </div>
+              <div className="modal-tool-details">
                 <h2 className="modal-title">{selectedTool.name}</h2>
+                <p className="modal-tool-desc">{selectedTool.description}</p>
                 <span className={`status-tag ${selectedTool.status}`}>
                   {getStatusLabel(selectedTool.status)}
                 </span>
               </div>
-            </div>
-
-            <div className="modal-section">
-              <h3>工具描述</h3>
-              <p>{selectedTool.description}</p>
             </div>
 
             <div className="modal-section">

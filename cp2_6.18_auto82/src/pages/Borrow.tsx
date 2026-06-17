@@ -19,6 +19,7 @@ const Borrow: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
     const fetchTool = async () => {
@@ -38,13 +39,16 @@ const Borrow: React.FC = () => {
     fetchTool();
   }, [id]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!memberName.trim()) {
       setError('请输入您的姓名');
       return;
     }
+    setShowConfirm(true);
+  };
 
+  const confirmBorrow = async () => {
     setSubmitting(true);
     setError('');
 
@@ -69,6 +73,7 @@ const Borrow: React.FC = () => {
       navigate('/my-borrows');
     } catch (err) {
       setError(err instanceof Error ? err.message : '提交失败');
+      setShowConfirm(false);
     } finally {
       setSubmitting(false);
     }
@@ -160,9 +165,72 @@ const Borrow: React.FC = () => {
             style={{ width: '100%' }}
             disabled={submitting}
           >
-            {submitting ? '提交中...' : '确认借用'}
+            确认借用
           </button>
         </form>
+      )}
+
+      {showConfirm && tool && (
+        <div
+          className="modal-overlay modal-center open"
+          onClick={() => !submitting && setShowConfirm(false)}
+        >
+          <div className="modal-content confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => !submitting && setShowConfirm(false)}>
+              ×
+            </button>
+            <h2 className="modal-title" style={{ marginBottom: 20 }}>
+              确认借用
+            </h2>
+            <div className="confirm-info">
+              <div className="confirm-row">
+                <span className="confirm-label">工具名称</span>
+                <span className="confirm-value">{tool.name}</span>
+              </div>
+              <div className="confirm-row">
+                <span className="confirm-label">借用人</span>
+                <span className="confirm-value">{memberName}</span>
+              </div>
+              <div className="confirm-row">
+                <span className="confirm-label">借用时长</span>
+                <span className="confirm-value">{duration} 小时</span>
+              </div>
+              <div className="confirm-row">
+                <span className="confirm-label">预计归还</span>
+                <span className="confirm-value">
+                  {new Date(Date.now() + duration * 60 * 60 * 1000).toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </span>
+              </div>
+            </div>
+            <p style={{ color: '#666', fontSize: 13, marginTop: 16, marginBottom: 20 }}>
+              请确认以上信息无误，提交后将开始计时。
+            </p>
+            <div className="confirm-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowConfirm(false)}
+                disabled={submitting}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={confirmBorrow}
+                disabled={submitting}
+              >
+                {submitting ? '提交中...' : '确认提交'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
