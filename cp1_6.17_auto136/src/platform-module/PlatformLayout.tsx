@@ -1,8 +1,10 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
+import { Highlight, themes } from 'prism-react-renderer';
 import ComponentRenderer from '../component-renderer/ComponentRenderer';
 import { generateComponentCode } from '../utils/codeGenerator';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { ComponentItem, ComponentType, ComponentProps, ComponentConfig, PropertyField } from '../types';
 
 interface PlatformLayoutProps {
@@ -28,56 +30,67 @@ const CheckIcon = () => (
   </svg>
 );
 
+/**
+ * 代码高亮组件 - CodeHighlight
+ *
+ * 使用 prism-react-renderer 对 JSX 代码进行语法高亮
+ * 支持关键字、字符串、标签、属性等语法着色
+ * 包含行号显示、淡入动画效果
+ */
 const CodeHighlight: React.FC<{ code: string }> = ({ code }) => {
-  const highlightJSX = (input: string) => {
-    let result = input;
-    result = result.replace(/(<\/?)([A-Z]\w*)/g, (_m, p1, p2) => {
-      return `${p1}<span style="color:#569CD6">${p2}</span>`;
-    });
-    result = result.replace(/(\s)([a-zA-Z_][a-zA-Z0-9_]*)(=)/g, (_m, p1, p2, p3) => {
-      return `${p1}<span style="color:#9CDCFE">${p2}</span>${p3}`;
-    });
-    result = result.replace(/('[^']*')/g, '<span style="color:#CE9178">$1</span>');
-    result = result.replace(/(\{[^}]*\})/g, (m) => {
-      const inner = m.slice(1, -1);
-      if (inner === 'true' || inner === 'false') {
-        return `{<span style="color:#569CD6">${inner}</span>}`;
-      }
-      if (!isNaN(Number(inner))) {
-        return `{<span style="color:#B5CEA8">${inner}</span>}`;
-      }
-      return m;
-    });
-    result = result.replace(/(\/>|<\/|<|>)/g, (m) => {
-      return `<span style="color:#808080">${m}</span>`;
-    });
-    return result;
-  };
-
-  const lines = code.split('\n');
-
   return (
-    <div
-      className="fade-in"
-      style={{
-        fontFamily: "'Fira Code', monospace",
-        fontSize: '13px',
-        lineHeight: 1.6,
-        color: '#D4D4D4',
-      }}
+    <Highlight
+      theme={themes.nightOwl}
+      code={code}
+      language="jsx"
     >
-      {lines.map((line, i) => (
-        <div key={i} style={{ display: 'flex', minHeight: '20px' }}>
-          <span style={{ color: '#6E7681', width: '36px', textAlign: 'right', paddingRight: '16px', userSelect: 'none', flexShrink: 0 }}>
-            {i + 1}
-          </span>
-          <span style={{ whiteSpace: 'pre-wrap', flex: 1 }} dangerouslySetInnerHTML={{ __html: highlightJSX(line) || '&nbsp;' }} />
-        </div>
-      ))}
-    </div>
+      {({ className, style, tokens, getLineProps, getTokenProps }) => (
+        <pre
+          className={`fade-in ${className}`}
+          style={{
+            ...style,
+            margin: 0,
+            padding: 0,
+            background: 'transparent',
+            fontFamily: "'Fira Code', monospace",
+            fontSize: '13px',
+            lineHeight: 1.6,
+          }}
+        >
+          {tokens.map((line, i) => (
+            <div key={i} {...getLineProps({ line })} style={{ display: 'flex', minHeight: '20px' }}>
+              <span
+                style={{
+                  color: '#6E7681',
+                  width: '36px',
+                  textAlign: 'right',
+                  paddingRight: '16px',
+                  userSelect: 'none',
+                  flexShrink: 0,
+                }}
+              >
+                {i + 1}
+              </span>
+              <span style={{ whiteSpace: 'pre-wrap', flex: 1 }}>
+                {line.map((token, key) => (
+                  <span key={key} {...getTokenProps({ token })} />
+                ))}
+              </span>
+            </div>
+          ))}
+        </pre>
+      )}
+    </Highlight>
   );
 };
 
+/**
+ * 属性控制组件 - PropertyControl
+ *
+ * 根据属性字段类型动态渲染对应的表单控件
+ * 支持类型：text、number、select、boolean、color、textarea
+ * 属性变化实时通知父组件
+ */
 const PropertyControl: React.FC<{
   field: PropertyField;
   value: any;
@@ -113,9 +126,7 @@ const PropertyControl: React.FC<{
             value={value || ''}
             placeholder={field.placeholder}
             onChange={(e) => onChange(field.key, e.target.value)}
-            style={{
-              ...baseInputStyle,
-            }}
+            style={baseInputStyle}
             onFocus={(e) => (e.target.style.borderColor = '#3B82F6')}
             onBlur={(e) => (e.target.style.borderColor = '#334155')}
           />
@@ -193,28 +204,20 @@ const PropertyControl: React.FC<{
         );
       case 'color':
         return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div
-              style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '8px',
-                backgroundColor: value || '#2563EB',
-                border: '2px solid #334155',
-                cursor: 'pointer',
-                flexShrink: 0,
-              }}
-            />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', position: 'relative' }}>
             <input
               type="color"
               value={value || '#2563EB'}
               onChange={(e) => onChange(field.key, e.target.value)}
               style={{
-                position: 'absolute',
                 width: '36px',
                 height: '36px',
-                opacity: 0,
+                borderRadius: '8px',
+                border: '2px solid #334155',
                 cursor: 'pointer',
+                flexShrink: 0,
+                padding: 0,
+                background: 'none',
               }}
             />
             <input
@@ -231,13 +234,36 @@ const PropertyControl: React.FC<{
   };
 
   return (
-    <div style={{ marginBottom: '16px', position: field.type === 'color' ? 'relative' : undefined }}>
+    <div style={{ marginBottom: '16px' }}>
       <label style={baseLabelStyle}>{field.label}</label>
       {renderControl()}
     </div>
   );
 };
 
+/**
+ * 平台框架模块 - PlatformLayout
+ *
+ * 数据流向：
+ * 输入（从 App 接收）：
+ *   - componentList: 组件列表数据
+ *   - currentComponentId: 当前选中的组件ID
+ *   - componentProps: 当前组件的属性配置
+ *   - componentConfigs: 所有组件的配置元数据
+ *   - onComponentChange: 组件切换回调 → 通知 App 更新 currentComponentId
+ *   - onPropsChange: 属性变化回调 → 通知 App 更新 componentPropsMap
+ *   - onStatusChange: 状态切换回调 → 通知 App 更新组件 status
+ *
+ * 输出（向子组件传递）：
+ *   - 向 ComponentRenderer 传递 componentType 和 componentProps
+ *   - 向代码预览区传递 generatedCode（通过 codeGenerator 生成）
+ *   - 向属性控制面板传递 properties 配置和当前值
+ *
+ * 内部管理：
+ *   - 左右面板宽度状态（拖拽调整）
+ *   - 复制按钮状态
+ *   - 响应式布局状态（通过 useMediaQuery）
+ */
 const PlatformLayout: React.FC<PlatformLayoutProps> = ({
   componentList,
   currentComponentId,
@@ -247,31 +273,39 @@ const PlatformLayout: React.FC<PlatformLayoutProps> = ({
   onPropsChange,
   onStatusChange,
 }) => {
-  const [isMobile, setIsMobile] = useState(false);
+  // 使用 useMediaQuery hook 检测移动端（viewport < 768px）
+  const isMobile = useMediaQuery('(max-width: 767px)');
+
+  // 左右面板宽度（百分比，相对于主显示区）
   const [leftPanelWidth, setLeftPanelWidth] = useState(35);
   const [rightPanelWidth, setRightPanelWidth] = useState(35);
   const [copied, setCopied] = useState(false);
+
+  // 拖拽状态引用
   const leftDragRef = useRef(false);
   const rightDragRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // 当前组件配置（从 componentConfigs 中根据 ID 获取）
   const currentConfig = componentConfigs[currentComponentId];
 
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  // ========== 面板拖拽逻辑 ==========
+  // 拖拽边界限制：
+  // - 最小宽度：150px
+  // - 最大宽度：占主显示区的 60%
 
   const handleLeftDragStart = useCallback((e: React.MouseEvent) => {
     leftDragRef.current = true;
     e.preventDefault();
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
   }, []);
 
   const handleRightDragStart = useCallback((e: React.MouseEvent) => {
     rightDragRef.current = true;
     e.preventDefault();
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
   }, []);
 
   useEffect(() => {
@@ -280,28 +314,54 @@ const PlatformLayout: React.FC<PlatformLayoutProps> = ({
       const containerRect = containerRef.current.getBoundingClientRect();
       const mainAreaWidth = containerRect.width;
 
+      // 左面板拖拽（属性控制面板）
       if (leftDragRef.current) {
-        const newWidth = ((e.clientX - containerRect.left) / mainAreaWidth) * 100;
-        const clampedWidth = Math.max(150 / mainAreaWidth * 100, Math.min(60, newWidth));
-        const remainingWidth = 100 - clampedWidth;
-        if (remainingWidth - rightPanelWidth >= 150 / mainAreaWidth * 100) {
-          setLeftPanelWidth(clampedWidth);
+        const newWidthPct = ((e.clientX - containerRect.left) / mainAreaWidth) * 100;
+        const minWidthPct = (150 / mainAreaWidth) * 100;
+        const maxWidthPct = 60;
+
+        // 边界限制：最小 150px，最大 60%
+        let clampedWidth = Math.max(minWidthPct, Math.min(maxWidthPct, newWidthPct));
+
+        // 确保右面板有至少 150px 的空间
+        const rightMinWidthPct = (150 / mainAreaWidth) * 100;
+        const middlePanelMinPct = (150 / mainAreaWidth) * 100;
+        const remainingForRight = 100 - clampedWidth - middlePanelMinPct;
+
+        if (remainingForRight < rightMinWidthPct) {
+          clampedWidth = 100 - middlePanelMinPct - rightMinWidthPct;
         }
+
+        setLeftPanelWidth(clampedWidth);
       }
 
+      // 右面板拖拽（代码预览区）
       if (rightDragRef.current) {
-        const newWidth = ((containerRect.right - e.clientX) / mainAreaWidth) * 100;
-        const clampedWidth = Math.max(150 / mainAreaWidth * 100, Math.min(60, newWidth));
-        const remainingWidth = 100 - clampedWidth;
-        if (remainingWidth - leftPanelWidth >= 150 / mainAreaWidth * 100) {
-          setRightPanelWidth(clampedWidth);
+        const newWidthPct = ((containerRect.right - e.clientX) / mainAreaWidth) * 100;
+        const minWidthPct = (150 / mainAreaWidth) * 100;
+        const maxWidthPct = 60;
+
+        // 边界限制：最小 150px，最大 60%
+        let clampedWidth = Math.max(minWidthPct, Math.min(maxWidthPct, newWidthPct));
+
+        // 确保左面板有至少 150px 的空间
+        const leftMinWidthPct = (150 / mainAreaWidth) * 100;
+        const middlePanelMinPct = (150 / mainAreaWidth) * 100;
+        const remainingForLeft = 100 - clampedWidth - middlePanelMinPct;
+
+        if (remainingForLeft < leftMinWidthPct) {
+          clampedWidth = 100 - middlePanelMinPct - leftMinWidthPct;
         }
+
+        setRightPanelWidth(clampedWidth);
       }
     };
 
     const handleMouseUp = () => {
       leftDragRef.current = false;
       rightDragRef.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -310,12 +370,14 @@ const PlatformLayout: React.FC<PlatformLayoutProps> = ({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [leftPanelWidth, rightPanelWidth]);
+  }, []);
 
+  // 生成代码（useMemo 缓存，仅当组件或属性变化时重新生成）
   const generatedCode = useMemo(() => {
     return generateComponentCode(currentComponentId, componentProps);
   }, [currentComponentId, componentProps]);
 
+  // 复制代码到剪贴板
   const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(generatedCode);
@@ -326,16 +388,19 @@ const PlatformLayout: React.FC<PlatformLayoutProps> = ({
     }
   }, [generatedCode]);
 
+  // 属性变化处理 - 包装 onPropsChange，传递当前组件ID
   const handlePropsChange = useCallback((key: string, value: any) => {
     onPropsChange(currentComponentId, key, value);
   }, [currentComponentId, onPropsChange]);
 
+  // 状态变化处理 - 包装 onStatusChange，传递当前组件ID
   const handleStatusChange = useCallback((status: string) => {
     onStatusChange(currentComponentId, status);
   }, [currentComponentId, onStatusChange]);
 
   const currentStatus = (componentProps as any).status || 'default';
 
+  // ========== 样式定义 ==========
   const panelStyle: React.CSSProperties = {
     backgroundColor: '#1E293B',
     borderRadius: '8px',
@@ -344,20 +409,31 @@ const PlatformLayout: React.FC<PlatformLayoutProps> = ({
     overflow: 'auto',
   };
 
+  // 分隔条样式：宽度 8px，颜色 #E0E0E0（悬停时）
   const dividerStyle: React.CSSProperties = {
     width: '8px',
-    backgroundColor: '#1E293B',
+    backgroundColor: 'transparent',
     cursor: 'col-resize',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
     transition: 'background-color 200ms ease',
+    position: 'relative',
   };
 
+  const dividerInnerStyle: React.CSSProperties = {
+    width: '2px',
+    height: '24px',
+    backgroundColor: '#475569',
+    borderRadius: '1px',
+  };
+
+  // ========== 移动端布局 ==========
   if (isMobile) {
     return (
       <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#0F172A' }}>
+        {/* 顶部导航栏 */}
         <div style={{
           height: '56px',
           backgroundColor: '#1E293B',
@@ -372,6 +448,7 @@ const PlatformLayout: React.FC<PlatformLayoutProps> = ({
           </span>
         </div>
 
+        {/* 顶部水平标签栏（左侧组件列表在移动端变为顶部） */}
         <div style={{
           display: 'flex',
           gap: '8px',
@@ -408,7 +485,9 @@ const PlatformLayout: React.FC<PlatformLayoutProps> = ({
           ))}
         </div>
 
+        {/* 垂直堆叠：属性面板在上，渲染区在中，代码预览在下 */}
         <div style={{ flex: 1, overflow: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* 属性控制面板（上） */}
           <div style={{ ...panelStyle }}>
             <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: 600, color: '#E2E8F0' }}>
               ⚙️ 属性控制
@@ -449,6 +528,7 @@ const PlatformLayout: React.FC<PlatformLayoutProps> = ({
             </div>
           </div>
 
+          {/* 实时渲染区（中） */}
           <div style={{ ...panelStyle, padding: '24px' }}>
             <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: 600, color: '#E2E8F0' }}>
               🖼️ 实时渲染
@@ -456,6 +536,7 @@ const PlatformLayout: React.FC<PlatformLayoutProps> = ({
             <ComponentRenderer componentType={currentComponentId} props={componentProps} />
           </div>
 
+          {/* 代码预览区（下） */}
           <div style={{ ...panelStyle, padding: 0, overflow: 'hidden' }}>
             <div style={{
               display: 'flex',
@@ -497,9 +578,11 @@ const PlatformLayout: React.FC<PlatformLayoutProps> = ({
     );
   }
 
+  // ========== 桌面端布局 ==========
   return (
     <DndProvider backend={HTML5Backend}>
       <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#0F172A' }}>
+        {/* 顶部导航栏 - 高度 56px */}
         <div style={{
           height: '56px',
           backgroundColor: '#1E293B',
@@ -529,6 +612,7 @@ const PlatformLayout: React.FC<PlatformLayoutProps> = ({
         </div>
 
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+          {/* 左侧组件列表 */}
           <div style={{
             width: '240px',
             backgroundColor: '#1E293B',
@@ -550,7 +634,7 @@ const PlatformLayout: React.FC<PlatformLayoutProps> = ({
                   gap: '12px',
                   padding: '12px 20px',
                   cursor: 'pointer',
-                  transition: 'all 200ms ease',
+                  transition: 'all 300ms cubic-bezier(0.4, 0, 0.2, 1)',
                   backgroundColor: currentComponentId === item.id ? '#334155' : 'transparent',
                   borderLeft: currentComponentId === item.id ? '4px solid #3B82F6' : '4px solid transparent',
                   color: currentComponentId === item.id ? '#E2E8F0' : '#94A3B8',
@@ -574,7 +658,9 @@ const PlatformLayout: React.FC<PlatformLayoutProps> = ({
             ))}
           </div>
 
+          {/* 右侧主显示区 */}
           <div ref={containerRef} style={{ flex: 1, display: 'flex', padding: '16px', gap: 0, minWidth: 0 }}>
+            {/* 左侧属性控制面板 - 可拖拽调整宽度 */}
             <div style={{ ...panelStyle, width: `${leftPanelWidth}%`, minWidth: '150px' }}>
               <h4 style={{ margin: '0 0 20px 0', fontSize: '14px', fontWeight: 600, color: '#E2E8F0', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span>⚙️</span> 属性控制面板
@@ -615,17 +701,23 @@ const PlatformLayout: React.FC<PlatformLayoutProps> = ({
               </div>
             </div>
 
+            {/* 左分隔条 - 宽 8px，悬停时颜色 #E0E0E0 */}
             <div
               style={dividerStyle}
               onMouseDown={handleLeftDragStart}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#E0E0E0')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1E293B')}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#E0E0E0';
+              }}
+              onMouseLeave={(e) => {
+                if (!leftDragRef.current) {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }
+              }}
             >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <div style={{ width: '2px', height: '20px', backgroundColor: '#475569', borderRadius: '1px' }} />
-              </div>
+              <div style={dividerInnerStyle} />
             </div>
 
+            {/* 中间实时渲染区 */}
             <div style={{
               flex: 1,
               display: 'flex',
@@ -643,17 +735,23 @@ const PlatformLayout: React.FC<PlatformLayoutProps> = ({
               </div>
             </div>
 
+            {/* 右分隔条 - 宽 8px，悬停时颜色 #E0E0E0 */}
             <div
               style={dividerStyle}
               onMouseDown={handleRightDragStart}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#E0E0E0')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1E293B')}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#E0E0E0';
+              }}
+              onMouseLeave={(e) => {
+                if (!rightDragRef.current) {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }
+              }}
             >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <div style={{ width: '2px', height: '20px', backgroundColor: '#475569', borderRadius: '1px' }} />
-              </div>
+              <div style={dividerInnerStyle} />
             </div>
 
+            {/* 右侧代码预览区 - 可拖拽调整宽度 */}
             <div style={{ ...panelStyle, width: `${rightPanelWidth}%`, minWidth: '150px', padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <div style={{
                 display: 'flex',
