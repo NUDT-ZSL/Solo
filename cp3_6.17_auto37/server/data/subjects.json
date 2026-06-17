@@ -1,0 +1,23 @@
+[
+  {
+    "id": "java-basic",
+    "name": "Java基础",
+    "description": "涵盖Java语言核心概念、面向对象编程、集合框架等基础知识",
+    "questionCount": 30,
+    "duration": 60
+  },
+  {
+    "id": "project-management",
+    "name": "项目管理",
+    "description": "包括项目生命周期、风险管理、质量管理、敏捷开发等内容",
+    "questionCount": 30,
+    "duration": 60
+  },
+  {
+    "id": "cyber-security",
+    "name": "网络安全",
+    "description": "涉及网络攻防、加密技术、安全协议、漏洞分析等专业知识",
+    "questionCount": 30,
+    "duration": 60
+  }
+]

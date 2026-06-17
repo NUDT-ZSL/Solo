@@ -1,0 +1,248 @@
+[
+  {
+    "id": "9d6526b2-d1a6-4480-bbc5-f3671b39ab72",
+    "examId": "b849e355-a360-4747-8322-0d461d8f27a1",
+    "subject": "Java基础",
+    "score": 0,
+    "totalQuestions": 10,
+    "correctCount": 0,
+    "timeUsed": 26,
+    "answers": [
+      {
+        "questionId": "q1",
+        "selected": 0,
+        "correct": false
+      },
+      {
+        "questionId": "q2",
+        "selected": 3,
+        "correct": false
+      },
+      {
+        "questionId": "q3",
+        "selected": 1,
+        "correct": false
+      },
+      {
+        "questionId": "q4",
+        "selected": 0,
+        "correct": false
+      },
+      {
+        "questionId": "q5",
+        "selected": 1,
+        "correct": false
+      },
+      {
+        "questionId": "q6",
+        "selected": 3,
+        "correct": false
+      },
+      {
+        "questionId": "q7",
+        "selected": 3,
+        "correct": false
+      },
+      {
+        "questionId": "q8",
+        "selected": 2,
+        "correct": false
+      },
+      {
+        "questionId": "q9",
+        "selected": 1,
+        "correct": false
+      },
+      {
+        "questionId": "q10",
+        "selected": 1,
+        "correct": false
+      }
+    ],
+    "wrongAnswers": [
+      {
+        "question": {
+          "id": "q1",
+          "text": "Java中，以下哪个关键字用于定义常量？",
+          "options": [
+            "static",
+            "final",
+            "const",
+            "volatile"
+          ],
+          "correctAnswer": 1,
+          "subject": "java-basic",
+          "knowledgePoint": "基础知识",
+          "explanation": "final关键字用于定义常量，一旦被赋值后就不能被修改。static用于静态成员，const不是Java的关键字，volatile用于多线程变量可见性。"
+        },
+        "selected": 0
+      },
+      {
+        "question": {
+          "id": "q2",
+          "text": "以下哪个不是Java的基本数据类型？",
+          "options": [
+            "int",
+            "String",
+            "boolean",
+            "char"
+          ],
+          "correctAnswer": 1,
+          "subject": "java-basic",
+          "knowledgePoint": "基础知识",
+          "explanation": "String是引用类型，不是基本数据类型。Java的基本数据类型包括：byte, short, int, long, float, double, boolean, char。"
+        },
+        "selected": 3
+      },
+      {
+        "question": {
+          "id": "q3",
+          "text": "Java中，实现多态的核心机制是什么？",
+          "options": [
+            "继承",
+            "封装",
+            "方法重写",
+            "以上都是"
+          ],
+          "correctAnswer": 3,
+          "subject": "java-basic",
+          "knowledgePoint": "逻辑分析",
+          "explanation": "多态的实现需要继承、方法重写和父类引用指向子类对象三者结合。封装是面向对象的另一个特性，但不是多态的核心机制。"
+        },
+        "selected": 1
+      },
+      {
+        "question": {
+          "id": "q4",
+          "text": "以下代码的输出结果是什么？\nint x = 5;\nSystem.out.println(x++ + ++x);",
+          "options": [
+            "10",
+            "11",
+            "12",
+            "13"
+          ],
+          "correctAnswer": 2,
+          "subject": "java-basic",
+          "knowledgePoint": "代码理解",
+          "explanation": "x++是后自增，返回5然后x变为6；++x是前自增，x变为7然后返回7。所以5+7=12。"
+        },
+        "selected": 0
+      },
+      {
+        "question": {
+          "id": "q5",
+          "text": "HashMap和Hashtable的主要区别是什么？",
+          "options": [
+            "HashMap允许null键和null值，Hashtable不允许",
+            "Hashtable是线程安全的，HashMap不是",
+            "HashMap是基于数组+链表实现，Hashtable不是",
+            "A和B都对"
+          ],
+          "correctAnswer": 3,
+          "subject": "java-basic",
+          "knowledgePoint": "代码理解",
+          "explanation": "HashMap允许null键和null值，非线程安全；Hashtable不允许null键值，是线程安全的。两者底层都是哈希表实现。"
+        },
+        "selected": 1
+      },
+      {
+        "question": {
+          "id": "q6",
+          "text": "Java中，try-catch-finally语句块中，哪个部分一定会执行？",
+          "options": [
+            "try块",
+            "catch块",
+            "finally块",
+            "都不一定"
+          ],
+          "correctAnswer": 2,
+          "subject": "java-basic",
+          "knowledgePoint": "基础知识",
+          "explanation": "finally块无论是否发生异常都会执行，除非JVM退出。try块可能抛出异常中断执行，catch块只有捕获到异常才执行。"
+        },
+        "selected": 3
+      },
+      {
+        "question": {
+          "id": "q7",
+          "text": "以下哪个接口是Java集合框架的根接口？",
+          "options": [
+            "List",
+            "Set",
+            "Collection",
+            "Map"
+          ],
+          "correctAnswer": 2,
+          "subject": "java-basic",
+          "knowledgePoint": "基础知识",
+          "explanation": "Collection是Java集合框架的根接口，List和Set都继承自Collection。Map是独立的接口，不继承Collection。"
+        },
+        "selected": 3
+      },
+      {
+        "question": {
+          "id": "q8",
+          "text": "Java中，synchronized关键字的作用是什么？",
+          "options": [
+            "创建线程",
+            "实现线程同步",
+            "中断线程",
+            "设置线程优先级"
+          ],
+          "correctAnswer": 1,
+          "subject": "java-basic",
+          "knowledgePoint": "安全规范",
+          "explanation": "synchronized用于实现线程同步，保证同一时刻只有一个线程可以执行被修饰的代码块或方法，防止多线程并发问题。"
+        },
+        "selected": 2
+      },
+      {
+        "question": {
+          "id": "q9",
+          "text": "以下关于Java异常处理的说法，错误的是？",
+          "options": [
+            "Error是所有错误的超类，通常不应该被捕获",
+            "RuntimeException是非受检异常",
+            "catch块可以有多个，但必须按从特殊到一般的顺序排列",
+            "finally块中的代码只有在catch块执行后才会执行"
+          ],
+          "correctAnswer": 3,
+          "subject": "java-basic",
+          "knowledgePoint": "逻辑分析",
+          "explanation": "finally块无论是否发生异常、无论是否有catch块，都会执行。即使try块中有return语句，finally也会在return之前执行。"
+        },
+        "selected": 1
+      },
+      {
+        "question": {
+          "id": "q10",
+          "text": "Java中，以下哪个方法是Object类中定义的？",
+          "options": [
+            "equals()",
+            "toString()",
+            "hashCode()",
+            "以上都是"
+          ],
+          "correctAnswer": 3,
+          "subject": "java-basic",
+          "knowledgePoint": "基础知识",
+          "explanation": "equals()、toString()、hashCode()都是Object类中定义的方法，所有Java类都默认继承这些方法。"
+        },
+        "selected": 1
+      }
+    ],
+    "knowledgeScores": {
+      "基础知识": 0,
+      "逻辑分析": 0,
+      "代码理解": 0,
+      "安全规范": 0,
+      "项目管理": 100
+    },
+    "suggestions": [
+      "建议加强基础知识类题目的练习，该知识点正确率较低",
+      "基础知识是您的薄弱环节，建议系统学习相关基础知识后再进行练习",
+      "建议先夯实基础知识，再逐步提高题目难度"
+    ],
+    "createdAt": "2026-06-17T09:47:29.482Z"
+  }
+]
