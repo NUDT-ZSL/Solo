@@ -625,12 +625,52 @@ class App {
   }
 
   private onWindowResize(): void {
+    const isMobile = window.innerWidth <= 1024;
+    
+    if (isMobile) {
+      this.leftPanel.style.width = '100%';
+      this.leftPanel.style.minWidth = '100%';
+      this.leftPanel.style.height = 'auto';
+      this.leftPanel.style.maxHeight = '200px';
+      this.leftPanel.style.flex = 'none';
+      
+      this.centerPanel.style.width = '100%';
+      this.centerPanel.style.height = 'calc(100% - 500px)';
+      this.centerPanel.style.minHeight = '300px';
+      this.centerPanel.style.flex = '1';
+      
+      this.rightPanel.style.width = '100%';
+      this.rightPanel.style.minWidth = '100%';
+      this.rightPanel.style.height = 'auto';
+      this.rightPanel.style.maxHeight = '400px';
+      this.rightPanel.style.flex = 'none';
+    } else {
+      this.leftPanel.style.width = '240px';
+      this.leftPanel.style.minWidth = '240px';
+      this.leftPanel.style.height = '100%';
+      this.leftPanel.style.maxHeight = 'none';
+      this.leftPanel.style.flex = 'none';
+      
+      this.centerPanel.style.width = 'auto';
+      this.centerPanel.style.height = '100%';
+      this.centerPanel.style.minHeight = '0';
+      this.centerPanel.style.flex = '1';
+      
+      this.rightPanel.style.width = '280px';
+      this.rightPanel.style.minWidth = '280px';
+      this.rightPanel.style.height = '100%';
+      this.rightPanel.style.maxHeight = 'none';
+      this.rightPanel.style.flex = 'none';
+    }
+
     const centerPanelWidth = this.centerPanel.clientWidth;
     const centerPanelHeight = this.centerPanel.clientHeight;
 
-    this.camera.aspect = centerPanelWidth / centerPanelHeight;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(centerPanelWidth, centerPanelHeight);
+    if (centerPanelWidth > 0 && centerPanelHeight > 0) {
+      this.camera.aspect = centerPanelWidth / centerPanelHeight;
+      this.camera.updateProjectionMatrix();
+      this.renderer.setSize(centerPanelWidth, centerPanelHeight);
+    }
   }
 
   private animate(): void {
