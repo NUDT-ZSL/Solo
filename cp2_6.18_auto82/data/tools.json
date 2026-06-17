@@ -1,0 +1,50 @@
+[
+  {
+    "id": "tool-001",
+    "name": "电钻",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=professional%20power%20drill%20tool%20on%20white%20background%20product%20photo&image_size=square",
+    "description": "博世专业级电钻，最大钻孔直径13mm",
+    "instructions": "1. 佩戴护目镜和手套\n2. 选择合适的钻头并紧固\n3. 保持电钻与工作面垂直\n4. 钻孔时施加适当压力，不要过猛\n5. 使用完毕后清理钻头并拔下电源",
+    "status": "available"
+  },
+  {
+    "id": "tool-002",
+    "name": "角磨机",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=angle%20grinder%20tool%20on%20white%20background%20product%20photo&image_size=square",
+    "description": "125mm角磨机，适用于金属切割和打磨",
+    "instructions": "1. 必须佩戴防护面罩和手套\n2. 安装砂轮片时注意方向标记\n3. 开机前确认防护罩安装牢固\n4. 切割时保持稳定，避免过度用力\n5. 工作时远离易燃易爆物品",
+    "status": "available"
+  },
+  {
+    "id": "tool-003",
+    "name": "焊机",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=welding%20machine%20equipment%20on%20white%20background%20product%20photo&image_size=square",
+    "description": "逆变直流手工弧焊机，适用于低碳钢焊接",
+    "instructions": "1. 穿戴专业焊接防护服、面罩和手套\n2. 确保工作区域通风良好\n3. 清理焊接区域的油污和油漆\n4. 根据板材厚度调节电流\n5. 焊接完成后关闭电源，冷却设备",
+    "status": "available"
+  },
+  {
+    "id": "tool-004",
+    "name": "电动螺丝刀",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=electric%20screwdriver%20cordless%20on%20white%20background%20product%20photo&image_size=square",
+    "description": "充电式电动螺丝刀，扭矩可调，配套多种批头",
+    "instructions": "1. 选择合适的批头并安装到位\n2. 根据螺丝大小调节扭矩档位\n3. 保持螺丝刀与螺丝垂直\n4. 不要过度用力，以防螺丝滑牙\n5. 使用后及时充电，存放于干燥处",
+    "status": "available"
+  },
+  {
+    "id": "tool-005",
+    "name": "切割机",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=circular%20saw%20cutting%20tool%20on%20white%20background%20product%20photo&image_size=square",
+    "description": "型材切割机，最大切割深度120mm",
+    "instructions": "1. 佩戴护目镜、耳罩和防尘口罩\n2. 固定工件，确保切割线对齐\n3. 开机前检查锯片安装方向\n4. 缓慢下刀，保持锯片稳定\n5. 关机后待锯片完全停止再清理",
+    "status": "available"
+  },
+  {
+    "id": "tool-006",
+    "name": "卷尺",
+    "image": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=measuring%20tape%20tool%20on%20white%20background%20product%20photo&image_size=square",
+    "description": "5米钢卷尺，双面刻度，自动锁定",
+    "instructions": "1. 拉出尺带时注意不要划伤手指\n2. 测量时保持尺带平直紧贴被测物\n3. 读数时视线与刻度垂直\n4. 回收尺带时缓慢操作，避免撞击\n5. 定期清洁尺带，保持刻度清晰",
+    "status": "available"
+  }
+]
