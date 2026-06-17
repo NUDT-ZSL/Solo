@@ -26,7 +26,7 @@ const CampaignCreator: React.FC<CampaignCreatorProps> = ({ onClose, onCreated })
     setError('');
     setSubmitting(true);
     try {
-      await createCampaign({
+      const result = await createCampaign({
         name: name.trim(),
         type,
         discountValue: type === 'discount' ? discountValue : type === 'fixed' ? discountValue : 0,
@@ -36,7 +36,7 @@ const CampaignCreator: React.FC<CampaignCreatorProps> = ({ onClose, onCreated })
         validFrom,
         validTo,
       });
-      onCreated(totalQuantity);
+      onCreated(result.coupons.length);
       onClose();
     } catch (err) {
       setError('创建失败，请重试');
@@ -47,6 +47,7 @@ const CampaignCreator: React.FC<CampaignCreatorProps> = ({ onClose, onCreated })
 
   return (
     <div style={overlayStyle}>
+      <style>{`@keyframes cc-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       <div style={modalStyle}>
         <div style={headerStyle}>
           <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>创建优惠券活动</h2>
@@ -113,12 +114,14 @@ const CampaignCreator: React.FC<CampaignCreatorProps> = ({ onClose, onCreated })
           }}>
             {submitting && (
               <span style={{
-                width: '16px',
-                height: '16px',
-                border: '2px solid rgba(255,255,255,0.3)',
+                display: 'inline-block',
+                width: '18px',
+                height: '18px',
+                border: '2.5px solid rgba(255,255,255,0.3)',
                 borderTopColor: '#fff',
                 borderRadius: '50%',
-                animation: 'spin 0.8s linear infinite',
+                animation: 'cc-spin 0.6s linear infinite',
+                flexShrink: 0,
               }} />
             )}
             {submitting ? '创建中...' : '创建活动'}

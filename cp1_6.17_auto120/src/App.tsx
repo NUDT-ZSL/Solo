@@ -161,6 +161,64 @@ const globalCSS = `
     background: #ccc;
     border-radius: 3px;
   }
+  .coupon-list {
+    margin-top: 12px;
+    border-top: 1px solid #eee;
+    padding-top: 12px;
+    max-height: 240px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+  .coupon-list-header {
+    font-size: 12px;
+    font-weight: 600;
+    color: #888;
+    margin-bottom: 8px;
+  }
+  .coupon-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    border-bottom: 1px solid #f5f5f5;
+    font-size: 11px;
+    color: #888;
+  }
+  .coupon-item:last-child {
+    border-bottom: none;
+  }
+  .coupon-code {
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    letter-spacing: 1px;
+    color: #999;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 110px;
+  }
+  .coupon-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .coupon-status-label {
+    font-weight: 500;
+    font-size: 10px;
+  }
+  .coupon-redeem-time {
+    font-size: 10px;
+    color: #aaa;
+  }
+  .coupon-list-overflow-hint {
+    text-align: center;
+    font-size: 10px;
+    color: #bbb;
+    padding: 6px 0 0;
+    border-top: 1px dashed #eee;
+    margin-top: 4px;
+  }
 `;
 
 const appStyle: React.CSSProperties = {

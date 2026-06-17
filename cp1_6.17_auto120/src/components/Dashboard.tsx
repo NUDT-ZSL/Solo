@@ -15,10 +15,14 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ campaigns, stats, timeSeries, onStatusChange }) => {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedMap, setExpandedMap] = useState<Record<string, boolean>>({});
   const [selectedBar, setSelectedBar] = useState<CampaignStats | null>(null);
   const [modalPos, setModalPos] = useState<{ x: number; y: number } | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
+
+  const toggleExpanded = useCallback((id: string) => {
+    setExpandedMap(prev => ({ ...prev, [id]: !prev[id] }));
+  }, []);
 
   const handleTogglePause = useCallback(async (id: string, currentStatus: string) => {
     const newStatus = currentStatus === 'active' ? 'paused' : 'active';
@@ -249,7 +253,7 @@ const Dashboard: React.FC<DashboardProps> = ({ campaigns, stats, timeSeries, onS
                 {c.status === 'active' ? '暂停活动' : '恢复活动'}
               </button>
               <button
-                onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === c.id ? null : c.id); }}
+                onClick={(e) => { e.stopPropagation(); toggleExpanded(c.id); }}
                 style={{
                   width: '100%',
                   padding: '8px',
@@ -265,34 +269,29 @@ const Dashboard: React.FC<DashboardProps> = ({ campaigns, stats, timeSeries, onS
                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.05)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none'; }}
               >
-                {expandedId === c.id ? '收起优惠券码 ▲' : '查看优惠券码 ▼'}
+                {expandedMap[c.id] ? '收起优惠券码 ▲' : '查看优惠券码 ▼'}
               </button>
-              {expandedId === c.id && (
-                <div style={{ marginTop: '12px', borderTop: '1px solid #eee', paddingTop: '12px', maxHeight: '300px', overflowY: 'auto' }}>
-                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#888', marginBottom: '8px' }}>优惠券码列表（共{c.coupons.length}张）</div>
+              {expandedMap[c.id] && (
+                <div className="coupon-list">
+                  <div className="coupon-list-header">优惠券码列表（共{c.coupons.length}张）</div>
                   {c.coupons.map((coupon, i) => (
-                    <div key={i} style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '4px 0',
-                      borderBottom: '1px solid #f5f5f5',
-                      fontSize: '11px',
-                      color: '#888',
-                    }}>
-                      <span style={{ fontFamily: 'monospace', letterSpacing: '1px', color: '#999' }}>{coupon.code}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ color: couponStatusColor(coupon.status), fontWeight: 500, fontSize: '10px' }}>
+                    <div key={i} className="coupon-item">
+                      <span className="coupon-code">{coupon.code}</span>
+                      <div className="coupon-status">
+                        <span className="coupon-status-label" style={{ color: couponStatusColor(coupon.status) }}>
                           {couponStatusText(coupon.status)}
                         </span>
                         {coupon.redeemedAt && (
-                          <span style={{ fontSize: '10px', color: '#aaa' }}>
+                          <span className="coupon-redeem-time">
                             {new Date(coupon.redeemedAt).toLocaleTimeString()}
                           </span>
                         )}
                       </div>
                     </div>
                   ))}
+                  {c.coupons.length > 20 && (
+                    <div className="coupon-list-overflow-hint">↑ 滚动查看更多优惠券码</div>
+                  )}
                 </div>
               )}
             </div>
