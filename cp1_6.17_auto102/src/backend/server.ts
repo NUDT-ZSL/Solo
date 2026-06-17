@@ -164,9 +164,13 @@ function getActivityDetail(activityId: string): ActivityDetail | null {
 app.get('/api/activities', (req, res) => {
   const page = Math.max(1, parseInt(String(req.query.page || '1')));
   const size = Math.min(50, Math.max(1, parseInt(String(req.query.size || '10'))));
-  const all = Array.from(activities.values()).sort(
+  const dateFilter = req.query.date ? String(req.query.date) : null;
+  let all = Array.from(activities.values()).sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
+  if (dateFilter) {
+    all = all.filter((a) => toDateKey(a.date) === dateFilter);
+  }
   const total = all.length;
   const start = (page - 1) * size;
   const pageItems = all.slice(start, start + size);

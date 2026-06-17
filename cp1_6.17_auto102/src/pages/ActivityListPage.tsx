@@ -9,41 +9,28 @@ const PAGE_SIZE = 10;
 
 const ActivityListPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const dateFilter = searchParams.get('date');
+  const dateFilter = searchParams.get('date') || '';
   const [data, setData] = useState<PaginatedResponse<ActivityListItem>>({ items: [], total: 0, page: 1, size: PAGE_SIZE });
-  const [allItems, setAllItems] = useState<ActivityListItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = async (page = 1) => {
     setLoading(true);
     try {
-      const res = await api.get<PaginatedResponse<ActivityListItem>>(`/activities?page=${page}&size=${PAGE_SIZE}`);
+      const dateParam = dateFilter ? `&date=${dateFilter}` : '';
+      const res = await api.get<PaginatedResponse<ActivityListItem>>(
+        `/activities?page=${page}&size=${PAGE_SIZE}${dateParam}`
+      );
       setData(res);
     } finally {
       setLoading(false);
     }
   };
 
-  const loadAll = async () => {
-    try {
-      const res = await api.get<PaginatedResponse<ActivityListItem>>('/activities?page=1&size=200');
-      setAllItems(res.items);
-    } catch {}
-  };
-
   useEffect(() => {
     load(1);
-    loadAll();
-  }, []);
+  }, [dateFilter]);
 
-  const filteredData = dateFilter
-    ? allItems.filter((a) => new Date(a.date).toISOString().slice(0, 10) === dateFilter)
-    : data.items;
-
-  const totalCount = dateFilter ? filteredData.length : data.total;
-  const displayItems = dateFilter ? filteredData.slice(0, PAGE_SIZE) : data.items;
-
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
 
   const clearDateFilter = () => {
     searchParams.delete('date');
@@ -51,7 +38,6 @@ const ActivityListPage = () => {
   };
 
   const renderPager = () => {
-    if (dateFilter) return null;
     if (totalPages <= 1) return null;
     const pages = new Set<number>([1, totalPages, data.page, data.page - 1, data.page + 1]);
     const sorted = Array.from(pages).filter((p) => p >= 1 && p <= totalPages).sort((a, b) => a - b);
@@ -121,7 +107,7 @@ const ActivityListPage = () => {
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: '#212121', marginBottom: 6 }}>读书会活动</h1>
         <p style={{ fontSize: 14, color: '#757575' }}>
-          共 <strong style={{ color: '#1976D2' }}>{totalCount}</strong> 场活动，与同好共读一本好书
+          共 <strong style={{ color: '#1976D2' }}>{data.total}</strong> 场活动{dateFilter ? `（筛选日期：${dateFilter}）` : ''}，与同好共读一本好书
         </p>
         {dateFilter && (
           <div style={{
@@ -159,7 +145,7 @@ const ActivityListPage = () => {
       </div>
 
       <ActivityList
-        activities={displayItems}
+        activities={data.items}
         loading={loading}
       />
 
