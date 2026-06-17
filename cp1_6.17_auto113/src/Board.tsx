@@ -18,6 +18,9 @@ function getRandomColor() {
   return colors[Math.floor(Math.random() * colors.length)];
 }
 
+const MENU_WIDTH = 204;
+const MENU_HEIGHT = 120;
+
 const Board: React.FC<BoardProps> = ({
   boardId,
   boardName,
@@ -28,6 +31,7 @@ const Board: React.FC<BoardProps> = ({
   setNotes,
 }) => {
   const boardRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragStartMouse, setDragStartMouse] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [dragStartNotePos, setDragStartNotePos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -36,12 +40,14 @@ const Board: React.FC<BoardProps> = ({
   const [autoFocusNoteId, setAutoFocusNoteId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     visible: boolean;
-    x: number;
-    y: number;
+    viewportX: number;
+    viewportY: number;
+    boardX: number;
+    boardY: number;
     noteId: string | null;
-  }>({ visible: false, x: 0, y: 0, noteId: null });
+  }>({ visible: false, viewportX: 0, viewportY: 0, boardX: 0, boardY: 0, noteId: null });
   const [deletingNotes, setDeletingNotes] = useState<Set<string>>(new Set());
-  const [zoom, setZoom] = useState(1);
+  const [, setZoom] = useState(1);
 
   const handleDragStart = useCallback(
     (e: React.MouseEvent<HTMLDivElement>, noteId: string) => {
@@ -129,25 +135,22 @@ const Board: React.FC<BoardProps> = ({
 
   const handleDeleteNote = useCallback(
     (noteId: string) => {
-      setDeletingNotes((prev) => new Set([...prev, noteId]));
-      setTimeout(() => {
-        setNotes((prev) => prev.filter((n) => n.id !== noteId));
-        setDeletingNotes((prev) => {
-          const s = new Set(prev);
-          s.delete(noteId);
-          return s;
-        });
-      }, 260);
+      setDeletingNotes((prev) => new Set(prev).add(noteId));
       sendWS({ type: 'deleteNote', payload: { noteId, boardId } });
     },
-    [boardId, sendWS, setNotes]
+    [boardId, sendWS]
   );
 
   const handleDeleteAnimationEnd = useCallback(
     (noteId: string) => {
-      // 动画已经在handleDeleteNote的setTimeout中处理
+      setNotes((prev) => prev.filter((n) => n.id !== noteId));
+      setDeletingNotes((prev) => {
+        const s = new Set(prev);
+        s.delete(noteId);
+        return s;
+      });
     },
-    []
+    [setNotes]
   );
 
   const handleChangeColor = useCallback(
@@ -164,10 +167,26 @@ const Board: React.FC<BoardProps> = ({
     (e: React.MouseEvent<HTMLDivElement>, noteId: string) => {
       const rect = boardRef.current?.getBoundingClientRect();
       if (!rect) return;
+
+      let viewportX = e.clientX;
+      let viewportY = e.clientY;
+
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      if (viewportX + MENU_WIDTH > vw) {
+        viewportX = vw - MENU_WIDTH - 8;
+      }
+      if (viewportY + MENU_HEIGHT > vh) {
+        viewportY = vh - MENU_HEIGHT - 8;
+      }
+
       setContextMenu({
         visible: true,
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
+        viewportX,
+        viewportY,
+        boardX: e.clientX - rect.left,
+        boardY: e.clientY - rect.top,
         noteId,
       });
     },
@@ -178,14 +197,16 @@ const Board: React.FC<BoardProps> = ({
     if (contextMenu.noteId) {
       handleChangeColor(contextMenu.noteId, color);
     }
-    setContextMenu({ visible: false, x: 0, y: 0, noteId: null });
+    setContextMenu({ visible: false, viewportX: 0, viewportY: 0, boardX: 0, boardY: 0, noteId: null });
   };
 
-  const closeContextMenu = () => {
-    if (contextMenu.visible) {
-      setContextMenu({ visible: false, x: 0, y: 0, noteId: null });
-    }
-  };
+  const closeContextMenu = useCallback(() => {
+    setContextMenu((prev) =>
+      prev.visible
+        ? { visible: false, viewportX: 0, viewportY: 0, boardX: 0, boardY: 0, noteId: null }
+        : prev
+    );
+  }, []);
 
   useEffect(() => {
     const handler = () => closeContextMenu();
@@ -195,7 +216,7 @@ const Board: React.FC<BoardProps> = ({
       window.removeEventListener('click', handler);
       window.removeEventListener('scroll', handler);
     };
-  }, [contextMenu.visible]);
+  }, [closeContextMenu]);
 
   const handleAutoFocusDone = useCallback((noteId: string) => {
     if (autoFocusNoteId === noteId) {
@@ -207,7 +228,7 @@ const Board: React.FC<BoardProps> = ({
     backgroundColor: '#F0F0F0',
   };
 
-  if (zoom >= 2) {
+  if (window.devicePixelRatio >= 2) {
     backgroundStyle.backgroundImage = `
       linear-gradient(to right, rgba(200,200,200,0.5) 1px, transparent 1px),
       linear-gradient(to bottom, rgba(200,200,200,0.5) 1px, transparent 1px)
@@ -269,7 +290,7 @@ const Board: React.FC<BoardProps> = ({
       </div>
 
       {notes.map((note) => {
-        if (!deletingNotes.has(note.id) && note.boardId !== boardId) return null;
+        if (note.boardId !== boardId) return null;
         return (
           <StickyNote
             key={note.id}
@@ -291,19 +312,22 @@ const Board: React.FC<BoardProps> = ({
 
       {contextMenu.visible && contextMenu.noteId && (
         <div
+          ref={menuRef}
           style={{
-            position: 'absolute',
-            left: `${contextMenu.x}px`,
-            top: `${contextMenu.y}px`,
+            position: 'fixed',
+            left: `${contextMenu.viewportX}px`,
+            top: `${contextMenu.viewportY}px`,
             backgroundColor: '#FFFFFF',
             borderRadius: '8px',
             boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
             padding: '12px',
-            zIndex: 2000,
+            zIndex: 10000,
             minWidth: '180px',
+            maxWidth: `${MENU_WIDTH}px`,
           }}
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
         >
           <div
             style={{

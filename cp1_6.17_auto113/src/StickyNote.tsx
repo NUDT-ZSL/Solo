@@ -48,14 +48,7 @@ const StickyNote: React.FC<StickyNoteProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(note.content);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      setIsMounted(true);
-    });
-  }, []);
 
   useEffect(() => {
     if (autoFocus && !isEditing) {
@@ -107,7 +100,7 @@ const StickyNote: React.FC<StickyNoteProps> = ({
     onDragStart(e, note.id);
   };
 
-  const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleContextMenuEv = (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     if (isEditing) return;
@@ -127,7 +120,7 @@ const StickyNote: React.FC<StickyNoteProps> = ({
   const left = isDragging ? note.x + dragOffset.x : note.x;
   const top = isDragging ? note.y + dragOffset.y : note.y;
 
-  const noteStyle: React.CSSProperties = {
+  const noteBaseStyle: React.CSSProperties = {
     position: 'absolute',
     left: `${left}px`,
     top: `${top}px`,
@@ -142,21 +135,13 @@ const StickyNote: React.FC<StickyNoteProps> = ({
     paddingTop: '28px',
     boxSizing: 'border-box',
     cursor: isDragging ? 'grabbing' : 'grab',
-    opacity: isDragging ? 0.7 : 1,
-    transform: isMounted && !isAnimatingDelete ? 'scale(1)' : 'scale(0)',
-    transition: isDragging
-      ? 'none'
-      : 'transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, background-color 0.2s',
     zIndex: isDragging ? 1000 : 1,
-    animation: 'none',
-    willChange: isDragging ? 'transform, left, top' : 'auto',
+    willChange: isDragging ? 'left, top, opacity' : 'auto',
   };
 
-  if (isAnimatingDelete) {
-    noteStyle.opacity = 0;
-    noteStyle.transform = 'scale(0.5)';
-    noteStyle.transition = 'opacity 0.25s ease, transform 0.25s ease';
-  }
+  let className = 'sticky-note';
+  if (isDragging) className += ' dragging';
+  if (isAnimatingDelete) className += ' deleting';
 
   const handleTransitionEnd = () => {
     if (isAnimatingDelete) {
@@ -168,13 +153,14 @@ const StickyNote: React.FC<StickyNoteProps> = ({
     <>
       {isDragging && (
         <div
+          className="sticky-placeholder"
           style={{
             position: 'absolute',
             left: `${note.x}px`,
             top: `${note.y}px`,
             width: '200px',
             height: '200px',
-            border: '2px dashed rgba(100, 100, 100, 0.4)',
+            border: '2px dashed rgba(100, 100, 100, 0.5)',
             borderRadius: '4px',
             backgroundColor: 'rgba(255, 255, 255, 0.05)',
             pointerEvents: 'none',
@@ -184,10 +170,11 @@ const StickyNote: React.FC<StickyNoteProps> = ({
       )}
 
       <div
-        style={noteStyle}
+        className={className}
+        style={noteBaseStyle}
         onMouseDown={handleMouseDown}
         onDoubleClick={handleDoubleClick}
-        onContextMenu={handleContextMenu}
+        onContextMenu={handleContextMenuEv}
         onTransitionEnd={handleTransitionEnd}
       >
         <button
@@ -332,6 +319,43 @@ const StickyNote: React.FC<StickyNoteProps> = ({
       </div>
 
       <style>{`
+        @keyframes scaleIn {
+          from {
+            opacity: 0;
+            transform: scale(0);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+
+        .sticky-note {
+          opacity: 0;
+          transform: scale(0);
+          transform-origin: center center;
+          animation: scaleIn 0.2s ease forwards;
+          transition: box-shadow 0.2s ease, opacity 0.25s ease, transform 0.25s ease, background-color 0.2s;
+        }
+
+        .sticky-note.dragging {
+          animation: none;
+          opacity: 0.7 !important;
+          transition: none;
+          transform: none;
+        }
+
+        .sticky-note.deleting {
+          animation: none !important;
+          opacity: 0 !important;
+          transform: scale(0.5) !important;
+          transition: opacity 0.25s ease, transform 0.25s ease !important;
+        }
+
+        .sticky-placeholder {
+          animation: none;
+        }
+
         textarea::-webkit-scrollbar,
         div::-webkit-scrollbar {
           width: 8px;

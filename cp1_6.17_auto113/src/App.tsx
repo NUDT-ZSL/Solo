@@ -13,6 +13,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   sidebar: {
     width: '240px',
+    minWidth: '0',
     backgroundColor: '#2C3E50',
     color: '#ECF0F1',
     display: 'flex',
@@ -20,6 +21,12 @@ const styles: Record<string, React.CSSProperties> = {
     height: '100%',
     transition: 'transform 0.3s ease',
     flexShrink: 0,
+  },
+  sidebarPlaceholder: {
+    width: '240px',
+    minWidth: '0',
+    flexShrink: 0,
+    backgroundColor: '#2C3E50',
   },
   header: {
     padding: '16px',
@@ -161,28 +168,46 @@ function App() {
   const [showModal, setShowModal] = useState(false);
   const [newBoardName, setNewBoardName] = useState('');
   const [showSidebar, setShowSidebar] = useState(true);
-  const [isSmallWidth, setIsSmallWidth] = useState(false);
+  const [isSidebarTooNarrow, setIsSidebarTooNarrow] = useState(false);
   const [onlineCount, setOnlineCount] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const modalInputRef = useRef<HTMLInputElement>(null);
   const appRef = useRef<HTMLDivElement>(null);
+  const sidebarWrapperRef = useRef<HTMLDivElement>(null);
+  const lastAutoOpenRef = useRef(false);
 
   useEffect(() => {
     localStorage.setItem('whiteboard_user_id', userId);
   }, [userId]);
 
   useEffect(() => {
+    const container = sidebarWrapperRef.current;
+    if (!container) return;
+
     const checkWidth = () => {
-      const containerWidth = appRef.current?.clientWidth || window.innerWidth;
-      const sidebarWidth = 240;
-      const availableForSidebar = containerWidth * 0.3;
-      const shouldCollapse = availableForSidebar < sidebarWidth || containerWidth < 800;
-      setIsSmallWidth(shouldCollapse);
-      if (!shouldCollapse) setShowSidebar(true);
+      const rect = container.getBoundingClientRect();
+      const tooNarrow = rect.width < 240;
+      setIsSidebarTooNarrow(tooNarrow);
+      if (!tooNarrow && !lastAutoOpenRef.current) {
+        setShowSidebar(true);
+      }
+      if (tooNarrow && !lastAutoOpenRef.current) {
+        lastAutoOpenRef.current = true;
+      }
     };
+
     checkWidth();
+
+    const ro = new ResizeObserver(() => {
+      checkWidth();
+    });
+    ro.observe(container);
+
     window.addEventListener('resize', checkWidth);
-    return () => window.removeEventListener('resize', checkWidth);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', checkWidth);
+    };
   }, []);
 
   useEffect(() => {
@@ -297,19 +322,22 @@ function App() {
     ...styles.sidebar,
   };
 
-  if (isSmallWidth) {
+  const showHamburger = isSidebarTooNarrow;
+
+  if (isSidebarTooNarrow) {
     sidebarStyle.position = 'fixed';
     sidebarStyle.left = 0;
     sidebarStyle.top = 0;
     sidebarStyle.zIndex = 100;
     sidebarStyle.height = '100vh';
+    sidebarStyle.width = '240px';
     sidebarStyle.transform = showSidebar ? 'translateX(0)' : 'translateX(-100%)';
     sidebarStyle.boxShadow = '2px 0 10px rgba(0,0,0,0.2)';
   }
 
   const hamburgerStyle: React.CSSProperties = {
     ...styles.hamburger,
-    display: isSmallWidth ? 'block' : 'none',
+    display: showHamburger ? 'block' : 'none',
   };
 
   return (
@@ -321,48 +349,98 @@ function App() {
         <span style={styles.hamburgerIcon}>☰</span>
       </button>
 
-      <div style={sidebarStyle}>
-        <div style={styles.header}>
-          <div style={styles.userId}>用户ID: {userId.substring(0, 8)}...</div>
-          <button style={styles.createBtn} onClick={handleCreateBoard}>
-            + 创建白板
-          </button>
+      {!isSidebarTooNarrow && (
+        <div ref={sidebarWrapperRef} style={styles.sidebarPlaceholder}>
+          <div style={{ ...sidebarStyle, position: 'relative', zIndex: 0, width: '100%' }}>
+            <div style={styles.header}>
+              <div style={styles.userId}>用户ID: {userId.substring(0, 8)}...</div>
+              <button style={styles.createBtn} onClick={handleCreateBoard}>
+                + 创建白板
+              </button>
+            </div>
+            <div style={styles.boardList}>
+              {boards.map((board) => {
+                const isActive = board.id === currentBoardId;
+                return (
+                  <div
+                    key={board.id}
+                    style={{
+                      ...styles.boardItem,
+                      backgroundColor: isActive
+                        ? 'rgba(52, 152, 219, 0.5)'
+                        : 'transparent',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isActive) {
+                        (e.currentTarget as HTMLDivElement).style.backgroundColor =
+                          'rgba(255,255,255,0.1)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isActive) {
+                        (e.currentTarget as HTMLDivElement).style.backgroundColor =
+                          'transparent';
+                      }
+                    }}
+                    onClick={() => {
+                      setCurrentBoardId(board.id);
+                    }}
+                  >
+                    <span>{board.name}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
-        <div style={styles.boardList}>
-          {boards.map((board) => {
-            const isActive = board.id === currentBoardId;
-            return (
-              <div
-                key={board.id}
-                style={{
-                  ...styles.boardItem,
-                  backgroundColor: isActive
-                    ? 'rgba(52, 152, 219, 0.5)'
-                    : 'transparent',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isActive) {
-                    (e.currentTarget as HTMLDivElement).style.backgroundColor =
-                      'rgba(255,255,255,0.1)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) {
-                    (e.currentTarget as HTMLDivElement).style.backgroundColor =
-                      'transparent';
-                  }
-                }}
-                onClick={() => {
-                  setCurrentBoardId(board.id);
-                  if (isSmallWidth) setShowSidebar(false);
-                }}
-              >
-                <span>{board.name}</span>
-              </div>
-            );
-          })}
+      )}
+
+      {isSidebarTooNarrow && (
+        <div ref={sidebarWrapperRef} style={{ width: 0, height: '100%', flexShrink: 0, overflow: 'hidden' }}>
+          <div style={sidebarStyle}>
+            <div style={styles.header}>
+              <div style={styles.userId}>用户ID: {userId.substring(0, 8)}...</div>
+              <button style={styles.createBtn} onClick={handleCreateBoard}>
+                + 创建白板
+              </button>
+            </div>
+            <div style={styles.boardList}>
+              {boards.map((board) => {
+                const isActive = board.id === currentBoardId;
+                return (
+                  <div
+                    key={board.id}
+                    style={{
+                      ...styles.boardItem,
+                      backgroundColor: isActive
+                        ? 'rgba(52, 152, 219, 0.5)'
+                        : 'transparent',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isActive) {
+                        (e.currentTarget as HTMLDivElement).style.backgroundColor =
+                          'rgba(255,255,255,0.1)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isActive) {
+                        (e.currentTarget as HTMLDivElement).style.backgroundColor =
+                          'transparent';
+                      }
+                    }}
+                    onClick={() => {
+                      setCurrentBoardId(board.id);
+                      setShowSidebar(false);
+                    }}
+                  >
+                    <span>{board.name}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       <div style={styles.mainContent}>
         {currentBoard && (
@@ -378,7 +456,7 @@ function App() {
         )}
       </div>
 
-      {isSmallWidth && showSidebar && (
+      {isSidebarTooNarrow && showSidebar && (
         <div
           style={styles.overlayMobile}
           onClick={() => setShowSidebar(false)}
