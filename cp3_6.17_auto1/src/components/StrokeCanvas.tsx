@@ -1,302 +1,233 @@
-import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-
-export interface Stroke {
-  id: number;
-  start: { x: number; y: number };
-  end: { x: number; y: number };
-  direction: string;
-  control?: { x: number; y: number };
-}
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Stroke, getAllStrokes } from '../utils/strokeData';
 
 interface StrokeCanvasProps {
-  strokes: Stroke[];
+  characters: string;
   speed: 'slow' | 'medium' | 'fast';
   isPlaying: boolean;
-  onComplete: () => void;
-  onStrokeChange: (current: number, total: number) => void;
+  onTogglePlay: () => void;
+  onReset: () => void;
 }
 
-const SPEED_MAP = {
-  slow: 0.8,
-  medium: 0.5,
-  fast: 0.3,
+const speedMap = {
+  slow: 800,
+  medium: 500,
+  fast: 300,
 };
 
-const MAIN_WIDTH = 640;
-const MAIN_HEIGHT = 480;
-const THUMB_SIZE = 80;
+const COLOR_ACTIVE = '#000000';
+const COLOR_COMPLETED = '#9e9e9e';
+const COLOR_DOT = '#1565c0';
+const THUMBNAIL_SIZE = 80;
+const THUMBNAIL_BG = '#f5f5f5';
 
 const StrokeCanvas: React.FC<StrokeCanvasProps> = ({
-  strokes,
+  characters,
   speed,
   isPlaying,
-  onComplete,
-  onStrokeChange,
+  onTogglePlay,
+  onReset,
 }) => {
-  const mainCanvasRef = useRef<HTMLCanvasElement>(null);
-  const thumbCanvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const thumbnailRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
-  const currentStrokeRef = useRef<number>(0);
   const strokeProgressRef = useRef<number>(0);
-  const isPlayingRef = useRef<boolean>(false);
-  const speedRef = useRef<number>(SPEED_MAP[speed]);
-  const strokesRef = useRef<Stroke[]>(strokes);
-
+  const [currentStrokeIndex, setCurrentStrokeIndex] = useState(0);
   const [hoveredStroke, setHoveredStroke] = useState<number | null>(null);
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
-  const pathCache = useMemo(() => {
-    const cache: Map<number, Path2D> = new Map();
-    strokes.forEach((stroke) => {
-      const path = new Path2D();
-      path.moveTo(stroke.start.x, stroke.start.y);
-      if (stroke.control) {
-        path.quadraticCurveTo(
-          stroke.control.x,
-          stroke.control.y,
-          stroke.end.x,
-          stroke.end.y
-        );
+  const strokes: Stroke[] = getAllStrokes(characters);
+  const strokeDuration = speedMap[speed];
+
+  const drawStroke = useCallback(
+    (
+      ctx: CanvasRenderingContext2D,
+      stroke: Stroke,
+      progress: number,
+      color: string,
+      lineWidth: number = 3
+    ) => {
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lineWidth;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      ctx.beginPath();
+      ctx.moveTo(stroke.startX, stroke.startY);
+
+      if (stroke.type === 'curve' && stroke.controlX !== undefined && stroke.controlY !== undefined) {
+        const t = progress;
+        const cx = stroke.controlX;
+        const cy = stroke.controlY;
+        const x = stroke.startX + (cx - stroke.startX) * t * 2 * (1 - t) + (stroke.endX - stroke.startX) * t * t;
+        const y = stroke.startY + (cy - stroke.startY) * t * 2 * (1 - t) + (stroke.endY - stroke.startY) * t * t;
+        
+        if (progress < 0.5) {
+          const t1 = progress * 2;
+          const x1 = stroke.startX + (cx - stroke.startX) * t1;
+          const y1 = stroke.startY + (cy - stroke.startY) * t1;
+          ctx.quadraticCurveTo(cx, cy, x1, y1);
+        } else {
+          ctx.quadraticCurveTo(cx, cy, x, y);
+        }
       } else {
-        path.lineTo(stroke.end.x, stroke.end.y);
+        const currentX = stroke.startX + (stroke.endX - stroke.startX) * progress;
+        const currentY = stroke.startY + (stroke.endY - stroke.startY) * progress;
+        ctx.lineTo(currentX, currentY);
       }
-      cache.set(stroke.id, path);
-    });
-    return cache;
-  }, [strokes]);
 
-  const hitTestCache = useMemo(() => {
-    return strokes.map((stroke, index) => {
-      const hitPath = new Path2D();
-      hitPath.moveTo(stroke.start.x, stroke.start.y);
-      if (stroke.control) {
-        hitPath.quadraticCurveTo(
-          stroke.control.x,
-          stroke.control.y,
-          stroke.end.x,
-          stroke.end.y
-        );
-      } else {
-        hitPath.lineTo(stroke.end.x, stroke.end.y);
-      }
-      return {
-        path: hitPath,
-        index,
-        stroke,
-      };
-    });
-  }, [strokes]);
-
-  useEffect(() => {
-    speedRef.current = SPEED_MAP[speed];
-  }, [speed]);
-
-  useEffect(() => {
-    strokesRef.current = strokes;
-    currentStrokeRef.current = 0;
-    strokeProgressRef.current = 0;
-  }, [strokes]);
-
-  useEffect(() => {
-    isPlayingRef.current = isPlaying;
-    if (!isPlaying) {
-      lastTimeRef.current = 0;
-    }
-  }, [isPlaying]);
-
-  const getPointOnStroke = useCallback(
-    (stroke: Stroke, t: number): { x: number; y: number } => {
-      if (stroke.control) {
-        const x =
-          Math.pow(1 - t, 2) * stroke.start.x +
-          2 * (1 - t) * t * stroke.control.x +
-          Math.pow(t, 2) * stroke.end.x;
-        const y =
-          Math.pow(1 - t, 2) * stroke.start.y +
-          2 * (1 - t) * t * stroke.control.y +
-          Math.pow(t, 2) * stroke.end.y;
-        return { x, y };
-      } else {
-        return {
-          x: stroke.start.x + (stroke.end.x - stroke.start.x) * t,
-          y: stroke.start.y + (stroke.end.y - stroke.start.y) * t,
-        };
-      }
+      ctx.stroke();
+      ctx.restore();
     },
     []
   );
 
-  const drawMainCanvas = useCallback(
-    (currentStrokeIndex: number, progress: number) => {
-      const canvas = mainCanvasRef.current;
-      if (!canvas) return;
+  const drawDot = useCallback(
+    (ctx: CanvasRenderingContext2D, x: number, y: number, label: string, scale: number = 1) => {
+      ctx.save();
+      ctx.fillStyle = COLOR_DOT;
+      ctx.beginPath();
+      ctx.arc(x, y, 8 * scale, 0, Math.PI * 2);
+      ctx.fill();
 
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      ctx.clearRect(0, 0, MAIN_WIDTH, MAIN_HEIGHT);
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, MAIN_WIDTH, MAIN_HEIGHT);
-
-      ctx.shadowColor = '#e0d8c8';
-      ctx.shadowBlur = 8;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 0;
-      ctx.fillRect(4, 4, MAIN_WIDTH - 8, MAIN_HEIGHT - 8);
-      ctx.shadowColor = 'transparent';
-
-      for (let i = 0; i < currentStrokeIndex; i++) {
-        const stroke = strokesRef.current[i];
-        const path = pathCache.get(stroke.id);
-        if (path) {
-          ctx.strokeStyle = '#9e9e9e';
-          ctx.lineWidth = 3;
-          ctx.lineCap = 'round';
-          ctx.stroke(path);
-        }
-      }
-
-      if (currentStrokeIndex < strokesRef.current.length) {
-        const stroke = strokesRef.current[currentStrokeIndex];
-        const currentPoint = getPointOnStroke(stroke, progress);
-
-        const animPath = new Path2D();
-        animPath.moveTo(stroke.start.x, stroke.start.y);
-        if (stroke.control) {
-          const t = progress;
-          const cp1x = stroke.start.x + (stroke.control.x - stroke.start.x) * t;
-          const cp1y = stroke.start.y + (stroke.control.y - stroke.start.y) * t;
-          const cp2x = stroke.control.x + (stroke.end.x - stroke.control.x) * t;
-          const cp2y = stroke.control.y + (stroke.end.y - stroke.control.y) * t;
-          const midX = cp1x + (cp2x - cp1x) * t;
-          const midY = cp1y + (cp2y - cp1y) * t;
-
-          const tempPath = new Path2D();
-          tempPath.moveTo(stroke.start.x, stroke.start.y);
-          tempPath.quadraticCurveTo(cp1x, cp1y, midX, midY);
-          ctx.strokeStyle = '#000000';
-          ctx.lineWidth = 3;
-          ctx.lineCap = 'round';
-          ctx.stroke(tempPath);
-        } else {
-          const tempPath = new Path2D();
-          tempPath.moveTo(stroke.start.x, stroke.start.y);
-          tempPath.lineTo(currentPoint.x, currentPoint.y);
-          ctx.strokeStyle = '#000000';
-          ctx.lineWidth = 3;
-          ctx.lineCap = 'round';
-          ctx.stroke(tempPath);
-        }
-
-        ctx.beginPath();
-        ctx.arc(stroke.start.x, stroke.start.y, 6, 0, Math.PI * 2);
-        ctx.fillStyle = '#1565c0';
-        ctx.fill();
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 10px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(String(currentStrokeIndex + 1), stroke.start.x, stroke.start.y);
-      }
+      ctx.font = `bold ${11 * scale}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, x, y + 0.5 * scale);
+      ctx.restore();
     },
-    [pathCache, getPointOnStroke]
+    []
   );
 
-  const drawThumbnail = useCallback(
-    (currentStrokeIndex: number) => {
-      const canvas = thumbCanvasRef.current;
+  const drawAll = useCallback(
+    (activeIndex: number, activeProgress: number, hoverIdx: number | null = null) => {
+      const canvas = canvasRef.current;
       if (!canvas) return;
-
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      ctx.clearRect(0, 0, THUMB_SIZE, THUMB_SIZE);
-      ctx.fillStyle = '#f5f5f5';
-      ctx.fillRect(0, 0, THUMB_SIZE, THUMB_SIZE);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      const scaleX = THUMB_SIZE / MAIN_WIDTH;
-      const scaleY = THUMB_SIZE / MAIN_HEIGHT;
-      const scale = Math.min(scaleX, scaleY);
-      const offsetX = (THUMB_SIZE - MAIN_WIDTH * scale) / 2;
-      const offsetY = (THUMB_SIZE - MAIN_HEIGHT * scale) / 2;
+      strokes.forEach((stroke, index) => {
+        let color = COLOR_COMPLETED;
+        let progress = 1;
+        let scale = 1;
 
-      ctx.save();
-      ctx.translate(offsetX, offsetY);
-      ctx.scale(scale, scale);
+        if (index === activeIndex) {
+          color = COLOR_ACTIVE;
+          progress = activeProgress;
+        } else if (index > activeIndex) {
+          color = 'rgba(0,0,0,0.08)';
+          progress = 1;
+        }
 
-      strokesRef.current.forEach((stroke, index) => {
-        const path = pathCache.get(stroke.id);
-        if (path) {
-          ctx.strokeStyle = index < currentStrokeIndex ? '#9e9e9e' : '#000000';
-          ctx.lineWidth = 3;
-          ctx.lineCap = 'round';
-          ctx.stroke(path);
+        if (hoverIdx === index) {
+          color = '#1565c0';
+          scale = 1.2;
+        }
+
+        drawStroke(ctx, stroke, progress, color, 3 * scale);
+
+        if (index <= activeIndex || hoverIdx === index) {
+          drawDot(ctx, stroke.startX, stroke.startY, String(stroke.id), scale);
         }
       });
 
-      ctx.restore();
+      const thumbnail = thumbnailRef.current;
+      if (thumbnail) {
+        const tctx = thumbnail.getContext('2d');
+        if (tctx) {
+          tctx.clearRect(0, 0, THUMBNAIL_SIZE, THUMBNAIL_SIZE);
+          tctx.fillStyle = THUMBNAIL_BG;
+          tctx.fillRect(0, 0, THUMBNAIL_SIZE, THUMBNAIL_SIZE);
+
+          const scaleX = THUMBNAIL_SIZE / 640;
+          const scaleY = THUMBNAIL_SIZE / 480;
+
+          strokes.forEach((stroke, index) => {
+            const adjusted: Stroke = {
+              ...stroke,
+              startX: stroke.startX * scaleX,
+              startY: stroke.startY * scaleY,
+              endX: stroke.endX * scaleX,
+              endY: stroke.endY * scaleY,
+              controlX: stroke.controlX !== undefined ? stroke.controlX * scaleX : undefined,
+              controlY: stroke.controlY !== undefined ? stroke.controlY * scaleY : undefined,
+            };
+
+            let color = '#e0e0e0';
+            let progress = 1;
+            if (index < activeIndex) {
+              color = '#8d6e63';
+            } else if (index === activeIndex) {
+              color = '#8d6e63';
+              progress = activeProgress;
+            }
+            drawStroke(tctx, adjusted, progress, color, 1.5);
+          });
+        }
+      }
     },
-    [pathCache]
+    [strokes, drawStroke, drawDot]
   );
 
   const animate = useCallback(
     (timestamp: number) => {
-      if (!isPlayingRef.current) {
-        animationRef.current = null;
+      if (!isPlaying) {
+        lastTimeRef.current = timestamp;
+        animationRef.current = requestAnimationFrame(animate);
         return;
       }
 
-      if (lastTimeRef.current === 0) {
-        lastTimeRef.current = timestamp;
-      }
-
-      const deltaTime = (timestamp - lastTimeRef.current) / 1000;
+      if (!lastTimeRef.current) lastTimeRef.current = timestamp;
+      const delta = timestamp - lastTimeRef.current;
       lastTimeRef.current = timestamp;
 
-      const strokeDuration = speedRef.current;
-      strokeProgressRef.current += deltaTime / strokeDuration;
+      strokeProgressRef.current += delta / strokeDuration;
 
-      let currentStroke = currentStrokeRef.current;
-
-      while (strokeProgressRef.current >= 1 && currentStroke < strokesRef.current.length) {
-        strokeProgressRef.current -= 1;
-        currentStroke++;
-        currentStrokeRef.current = currentStroke;
-        onStrokeChange(currentStroke, strokesRef.current.length);
+      if (strokeProgressRef.current >= 1) {
+        strokeProgressRef.current = 0;
+        setCurrentStrokeIndex((prev) => {
+          const next = prev + 1;
+          if (next >= strokes.length) {
+            if (animationRef.current) {
+              cancelAnimationFrame(animationRef.current);
+              animationRef.current = null;
+            }
+            drawAll(strokes.length - 1, 1);
+            return prev;
+          }
+          return next;
+        });
       }
 
-      if (currentStroke >= strokesRef.current.length) {
-        drawMainCanvas(strokesRef.current.length, 1);
-        drawThumbnail(strokesRef.current.length);
-        onComplete();
-        animationRef.current = null;
-        return;
+      drawAll(currentStrokeIndex, Math.min(strokeProgressRef.current, 1));
+
+      if (animationRef.current === null && currentStrokeIndex < strokes.length - 1) {
+        animationRef.current = requestAnimationFrame(animate);
+      } else if (currentStrokeIndex < strokes.length || strokeProgressRef.current < 1) {
+        animationRef.current = requestAnimationFrame(animate);
       }
-
-      drawMainCanvas(currentStroke, Math.min(strokeProgressRef.current, 1));
-      drawThumbnail(currentStroke);
-
-      animationRef.current = requestAnimationFrame(animate);
     },
-    [drawMainCanvas, drawThumbnail, onComplete, onStrokeChange]
+    [isPlaying, strokeDuration, strokes.length, currentStrokeIndex, drawAll]
   );
 
   useEffect(() => {
+    setCurrentStrokeIndex(0);
+    strokeProgressRef.current = 0;
+    lastTimeRef.current = 0;
+  }, [characters]);
+
+  useEffect(() => {
+    if (strokes.length === 0) return;
+
     if (isPlaying) {
-      if (currentStrokeRef.current >= strokesRef.current.length) {
-        currentStrokeRef.current = 0;
-        strokeProgressRef.current = 0;
-        onStrokeChange(0, strokesRef.current.length);
-      }
       lastTimeRef.current = 0;
       animationRef.current = requestAnimationFrame(animate);
     } else {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-        animationRef.current = null;
-      }
+      drawAll(currentStrokeIndex, strokeProgressRef.current, hoveredStroke);
     }
 
     return () => {
@@ -305,124 +236,153 @@ const StrokeCanvas: React.FC<StrokeCanvasProps> = ({
         animationRef.current = null;
       }
     };
-  }, [isPlaying, animate, onStrokeChange, strokes.length]);
+  }, [isPlaying, animate, strokes.length, currentStrokeIndex, drawAll, hoveredStroke]);
 
   useEffect(() => {
-    if (!isPlaying) {
-      drawMainCanvas(currentStrokeRef.current, strokeProgressRef.current);
-      drawThumbnail(currentStrokeRef.current);
+    drawAll(currentStrokeIndex, strokeProgressRef.current, hoveredStroke);
+  }, [characters, drawAll, currentStrokeIndex, hoveredStroke]);
+
+  const getStrokeAtPosition = (x: number, y: number): number | null => {
+    const threshold = 15;
+    for (let i = strokes.length - 1; i >= 0; i--) {
+      const s = strokes[i];
+      const dx = s.endX - s.startX;
+      const dy = s.endY - s.startY;
+      const length = Math.sqrt(dx * dx + dy * dy);
+      if (length === 0) continue;
+
+      const t = Math.max(0, Math.min(1, ((x - s.startX) * dx + (y - s.startY) * dy) / (length * length)));
+      const px = s.startX + t * dx;
+      const py = s.startY + t * dy;
+      const dist = Math.sqrt((x - px) ** 2 + (y - py) ** 2);
+
+      if (dist < threshold) return i;
     }
-  }, [isPlaying, drawMainCanvas, drawThumbnail]);
+    return null;
+  };
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (isPlaying) return;
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas || isPlaying) return;
 
-      const canvas = mainCanvasRef.current;
-      if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
 
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = MAIN_WIDTH / rect.width;
-      const scaleY = MAIN_HEIGHT / rect.height;
-      const x = (e.clientX - rect.left) * scaleX;
-      const y = (e.clientY - rect.top) * scaleY;
+    const idx = getStrokeAtPosition(x, y);
+    setHoveredStroke(idx);
+  };
 
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      let found = false;
-      for (let i = 0; i <= currentStrokeRef.current && i < hitTestCache.length; i++) {
-        ctx.lineWidth = 10;
-        if (ctx.isPointInStroke(hitTestCache[i].path, x, y)) {
-          setHoveredStroke(i);
-          setTooltipPos({ x: e.clientX, y: e.clientY });
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        setHoveredStroke(null);
-      }
-    },
-    [isPlaying, hitTestCache]
-  );
-
-  const handleMouseLeave = useCallback(() => {
+  const handleMouseLeave = () => {
     setHoveredStroke(null);
-  }, []);
+  };
+
+  const totalStrokes = strokes.length;
+  const displayCurrent = Math.min(currentStrokeIndex + 1, totalStrokes);
+  const hoveredStrokeData = hoveredStroke !== null ? strokes[hoveredStroke] : null;
 
   return (
-    <div style={{ display: 'inline-block', position: 'relative' }}>
-      <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-end' }}>
-        <div style={{ position: 'relative' }}>
-          <canvas
-            ref={mainCanvasRef}
-            width={MAIN_WIDTH}
-            height={MAIN_HEIGHT}
-            onMouseMove={handleMouseMove}
-            onMouseLeave={handleMouseLeave}
-            style={{
-              display: 'block',
-              margin: '0 auto',
-              maxWidth: '96%',
-              height: 'auto',
-              boxShadow: 'inset 0 0 8px #e0d8c8',
-              backgroundColor: '#ffffff',
-            }}
-          />
-          {hoveredStroke !== null && (
-            <div
-              style={{
-                position: 'fixed',
-                left: tooltipPos.x + 10,
-                top: tooltipPos.y - 30,
-                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                color: '#ffffff',
-                padding: '4px 8px',
-                borderRadius: '4px',
-                fontSize: '12px',
-                whiteSpace: 'nowrap',
-                zIndex: 1000,
-                transform: hoveredStroke !== null ? 'scale(1)' : 'scale(0.8)',
-                opacity: hoveredStroke !== null ? 1 : 0,
-                transition: 'transform 0.2s ease, opacity 0.2s ease',
-                pointerEvents: 'none',
-              }}
-            >
-              第 {hoveredStroke + 1} 笔 - {strokes[hoveredStroke]?.direction || ''}
+    <div className="canvas-wrapper">
+      <div className="canvas-container">
+        <canvas
+          ref={canvasRef}
+          width={640}
+          height={480}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+          style={{ cursor: isPlaying ? 'default' : 'pointer' }}
+        />
+        <div className="thumbnail-container">
+          <canvas ref={thumbnailRef} width={THUMBNAIL_SIZE} height={THUMBNAIL_SIZE} />
+          <div className="stroke-info">
+            <div className="stroke-count" style={{ fontSize: '14px', color: '#424242' }}>
+              第 {displayCurrent} 笔 / 共 {totalStrokes} 笔
             </div>
-          )}
-        </div>
-        <div
-          style={{
-            position: 'absolute',
-            bottom: -THUMB_SIZE - 20,
-            left: 0,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-          }}
-        >
-          <canvas
-            ref={thumbCanvasRef}
-            width={THUMB_SIZE}
-            height={THUMB_SIZE}
-            style={{
-              display: 'block',
-              backgroundColor: '#f5f5f5',
-            }}
-          />
-          <div
-            style={{
-              fontSize: '14px',
-              color: '#424242',
-              fontWeight: 500,
-            }}
-          >
-            第 {Math.min(currentStrokeRef.current + 1, strokes.length)} 笔 / 共 {strokes.length} 笔
+            {hoveredStrokeData && (
+              <div className="hover-tip" style={{ fontSize: '13px', color: '#1565c0', marginTop: '4px' }}>
+                第{hoveredStrokeData.id}笔：{hoveredStrokeData.name}
+              </div>
+            )}
           </div>
         </div>
       </div>
+      <div className="controls">
+        <button className="ctrl-btn" onClick={onTogglePlay}>
+          {isPlaying ? '暂停' : currentStrokeIndex >= totalStrokes - 1 && strokeProgressRef.current >= 1 ? '重新播放' : '继续'}
+        </button>
+        <button className="ctrl-btn" onClick={onReset}>
+          重置
+        </button>
+      </div>
+      <style>{`
+        .canvas-wrapper {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 20px;
+        }
+        .canvas-container {
+          position: relative;
+          width: 640px;
+          max-width: 96%;
+          background: #ffffff;
+          box-shadow: inset 0 0 0 8px #e0d8c8;
+          border-radius: 4px;
+        }
+        .canvas-container canvas {
+          display: block;
+          width: 100%;
+          height: auto;
+        }
+        .thumbnail-container {
+          position: absolute;
+          left: 16px;
+          bottom: 16px;
+          display: flex;
+          align-items: flex-end;
+          gap: 12px;
+        }
+        .thumbnail-container canvas {
+          width: ${THUMBNAIL_SIZE}px;
+          height: ${THUMBNAIL_SIZE}px;
+          border-radius: 4px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .stroke-info {
+          background: rgba(255,255,255,0.9);
+          padding: 6px 10px;
+          border-radius: 4px;
+          white-space: nowrap;
+        }
+        .hover-tip {
+          transition: all 0.2s ease;
+          transform: scale(1);
+        }
+        .controls {
+          display: flex;
+          gap: 12px;
+        }
+        .ctrl-btn {
+          padding: 8px 20px;
+          border-radius: 6px;
+          border: none;
+          background: #8d6e63;
+          color: #ffffff;
+          font-size: 14px;
+          cursor: pointer;
+          transition: background 0.2s ease;
+        }
+        .ctrl-btn:hover {
+          background: #6d4c41;
+        }
+        @media (max-width: 768px) {
+          .canvas-container {
+            width: 96%;
+          }
+        }
+      `}</style>
     </div>
   );
 };
