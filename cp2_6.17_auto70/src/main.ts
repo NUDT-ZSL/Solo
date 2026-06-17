@@ -626,51 +626,70 @@ class App {
 
   private onWindowResize(): void {
     const isMobile = window.innerWidth <= 1024;
-    
+    const container = this.container;
+
     if (isMobile) {
+      container.style.flexDirection = 'column';
+      container.style.alignItems = 'stretch';
+
       this.leftPanel.style.width = '100%';
       this.leftPanel.style.minWidth = '100%';
-      this.leftPanel.style.height = 'auto';
+      this.leftPanel.style.height = '200px';
       this.leftPanel.style.maxHeight = '200px';
-      this.leftPanel.style.flex = 'none';
-      
+      this.leftPanel.style.flex = '0 0 200px';
+      this.leftPanel.style.minHeight = '200px';
+      this.leftPanel.style.overflowY = 'auto';
+
       this.centerPanel.style.width = '100%';
-      this.centerPanel.style.height = 'calc(100% - 500px)';
-      this.centerPanel.style.minHeight = '300px';
-      this.centerPanel.style.flex = '1';
-      
+      this.centerPanel.style.minWidth = '100%';
+      this.centerPanel.style.height = 'auto';
+      this.centerPanel.style.flex = '1 1 auto';
+      this.centerPanel.style.minHeight = '400px';
+      this.centerPanel.style.maxHeight = 'none';
+
       this.rightPanel.style.width = '100%';
       this.rightPanel.style.minWidth = '100%';
-      this.rightPanel.style.height = 'auto';
+      this.rightPanel.style.height = '350px';
       this.rightPanel.style.maxHeight = '400px';
-      this.rightPanel.style.flex = 'none';
+      this.rightPanel.style.flex = '0 0 350px';
+      this.rightPanel.style.minHeight = '350px';
+      this.rightPanel.style.overflowY = 'auto';
     } else {
+      container.style.flexDirection = 'row';
+      container.style.alignItems = 'stretch';
+
       this.leftPanel.style.width = '240px';
       this.leftPanel.style.minWidth = '240px';
       this.leftPanel.style.height = '100%';
       this.leftPanel.style.maxHeight = 'none';
-      this.leftPanel.style.flex = 'none';
-      
+      this.leftPanel.style.flex = '0 0 240px';
+      this.leftPanel.style.minHeight = '0';
+
       this.centerPanel.style.width = 'auto';
+      this.centerPanel.style.minWidth = '0';
       this.centerPanel.style.height = '100%';
+      this.centerPanel.style.flex = '1 1 auto';
       this.centerPanel.style.minHeight = '0';
-      this.centerPanel.style.flex = '1';
-      
+      this.centerPanel.style.maxHeight = 'none';
+
       this.rightPanel.style.width = '280px';
       this.rightPanel.style.minWidth = '280px';
       this.rightPanel.style.height = '100%';
       this.rightPanel.style.maxHeight = 'none';
-      this.rightPanel.style.flex = 'none';
+      this.rightPanel.style.flex = '0 0 280px';
+      this.rightPanel.style.minHeight = '0';
     }
 
-    const centerPanelWidth = this.centerPanel.clientWidth;
-    const centerPanelHeight = this.centerPanel.clientHeight;
+    requestAnimationFrame(() => {
+      const centerPanelWidth = this.centerPanel.clientWidth;
+      const centerPanelHeight = this.centerPanel.clientHeight;
 
-    if (centerPanelWidth > 0 && centerPanelHeight > 0) {
-      this.camera.aspect = centerPanelWidth / centerPanelHeight;
-      this.camera.updateProjectionMatrix();
-      this.renderer.setSize(centerPanelWidth, centerPanelHeight);
-    }
+      if (centerPanelWidth > 0 && centerPanelHeight > 0) {
+        this.camera.aspect = centerPanelWidth / centerPanelHeight;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(centerPanelWidth, centerPanelHeight);
+      }
+    });
   }
 
   private animate(): void {

@@ -114,6 +114,33 @@ export class RoomManager {
     this.createRoomGeometry(roomName, template);
   }
 
+  private kelvinToRGB(kelvin: number): THREE.Color {
+    let temp = kelvin / 100;
+    let red, green, blue;
+
+    if (temp <= 66) {
+      red = 255;
+      green = Math.min(255, Math.max(0, 99.4708025861 * Math.log(temp) - 161.1195681661));
+    } else {
+      red = Math.min(255, Math.max(0, 329.698727446 * Math.pow(temp - 60, -0.1332047592)));
+      green = Math.min(255, Math.max(0, 288.1221695283 * Math.pow(temp - 60, -0.0755148492)));
+    }
+
+    if (temp >= 66) {
+      blue = 255;
+    } else if (temp <= 19) {
+      blue = 0;
+    } else {
+      blue = Math.min(255, Math.max(0, 138.5177312231 * Math.log(temp - 10) - 305.0447927307));
+    }
+
+    return new THREE.Color(
+      Math.round(red) / 255,
+      Math.round(green) / 255,
+      Math.round(blue) / 255
+    );
+  }
+
   private clearRoom(): void {
     while (this.roomGroup.children.length > 0) {
       const child = this.roomGroup.children[0];
@@ -128,86 +155,125 @@ export class RoomManager {
     const roomWidth = 10;
     const roomDepth = 8;
     const roomHeight = 4;
-
     const wallThickness = 0.2;
     const floorY = 0;
 
-    const wallNorthGeo = new THREE.BoxGeometry(roomWidth, roomHeight, wallThickness);
-    const wallNorthMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
+    const defaultWallColor = '#ffffff';
+    const defaultFloorColor = '#d9b68a';
+    const defaultCeilingColor = '#f5f5f5';
+
+    const wallMaterial = new THREE.MeshStandardMaterial({
+      color: defaultWallColor,
       side: THREE.DoubleSide,
       roughness: 0.8,
       metalness: 0.1
     });
-    const wallNorth = new THREE.Mesh(wallNorthGeo, wallNorthMat);
-    wallNorth.position.set(0, roomHeight / 2, -roomDepth / 2);
-    wallNorth.receiveShadow = true;
-    this.roomGroup.add(wallNorth);
-    this.registerSurface('wall-north', '北墙', wallNorth, '#ffffff');
 
-    const wallEastGeo = new THREE.BoxGeometry(wallThickness, roomHeight, roomDepth);
-    const wallEastMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      side: THREE.DoubleSide,
-      roughness: 0.8,
-      metalness: 0.1
-    });
-    const wallEast = new THREE.Mesh(wallEastGeo, wallEastMat);
-    wallEast.position.set(roomWidth / 2, roomHeight / 2, 0);
-    wallEast.receiveShadow = true;
-    this.roomGroup.add(wallEast);
-    this.registerSurface('wall-east', '东墙', wallEast, '#ffffff');
-
-    const wallWestGeo = new THREE.BoxGeometry(wallThickness, roomHeight, roomDepth);
-    const wallWestMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      side: THREE.DoubleSide,
-      roughness: 0.8,
-      metalness: 0.1
-    });
-    const wallWest = new THREE.Mesh(wallWestGeo, wallWestMat);
-    wallWest.position.set(-roomWidth / 2, roomHeight / 2, 0);
-    wallWest.receiveShadow = true;
-    this.roomGroup.add(wallWest);
-    this.registerSurface('wall-west', '西墙', wallWest, '#ffffff');
-
-    const windowGeo = new THREE.PlaneGeometry(2, 2.5);
-    const windowMat = new THREE.MeshStandardMaterial({
-      color: 0x87ceeb,
-      emissive: 0x87ceeb,
-      emissiveIntensity: 0.3,
-      transparent: true,
-      opacity: 0.6
-    });
-    const windowMesh = new THREE.Mesh(windowGeo, windowMat);
-    windowMesh.position.set(-roomWidth / 2 + 0.01, roomHeight / 2, 0);
-    windowMesh.rotation.y = Math.PI / 2;
-    this.roomGroup.add(windowMesh);
-
-    const floorGeo = new THREE.PlaneGeometry(roomWidth, roomDepth);
-    const floorMat = new THREE.MeshStandardMaterial({
-      color: 0xd9b68a,
+    const floorMaterial = new THREE.MeshStandardMaterial({
+      color: defaultFloorColor,
       side: THREE.DoubleSide,
       roughness: 0.6,
       metalness: 0.0
     });
-    const floor = new THREE.Mesh(floorGeo, floorMat);
+
+    const ceilingMaterial = new THREE.MeshStandardMaterial({
+      color: defaultCeilingColor,
+      side: THREE.DoubleSide,
+      roughness: 0.9
+    });
+
+    const wallNorthGeo = new THREE.BoxGeometry(roomWidth, roomHeight, wallThickness);
+    const wallNorth = new THREE.Mesh(wallNorthGeo, wallMaterial.clone());
+    wallNorth.position.set(0, roomHeight / 2, -roomDepth / 2);
+    wallNorth.receiveShadow = true;
+    wallNorth.castShadow = true;
+    this.roomGroup.add(wallNorth);
+    this.registerSurface('wall-north', '北墙', wallNorth, defaultWallColor);
+
+    const wallEastGeo = new THREE.BoxGeometry(wallThickness, roomHeight, roomDepth);
+    const wallEast = new THREE.Mesh(wallEastGeo, wallMaterial.clone());
+    wallEast.position.set(roomWidth / 2, roomHeight / 2, 0);
+    wallEast.receiveShadow = true;
+    wallEast.castShadow = true;
+    this.roomGroup.add(wallEast);
+    this.registerSurface('wall-east', '东墙', wallEast, defaultWallColor);
+
+    const wallWestGeo = new THREE.BoxGeometry(wallThickness, roomHeight, roomDepth);
+    const wallWest = new THREE.Mesh(wallWestGeo, wallMaterial.clone());
+    wallWest.position.set(-roomWidth / 2, roomHeight / 2, 0);
+    wallWest.receiveShadow = true;
+    wallWest.castShadow = true;
+    this.roomGroup.add(wallWest);
+    this.registerSurface('wall-west', '西墙', wallWest, defaultWallColor);
+
+    const windowFrameGeo = new THREE.BoxGeometry(2.4, 2.9, 0.1);
+    const windowFrameMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+    const windowFrame = new THREE.Mesh(windowFrameGeo, windowFrameMat);
+    windowFrame.position.set(-roomWidth / 2 + 0.05, roomHeight / 2, 0);
+    windowFrame.rotation.y = Math.PI / 2;
+    this.roomGroup.add(windowFrame);
+
+    const windowGeo = new THREE.PlaneGeometry(2, 2.5);
+    const windowMat = new THREE.MeshStandardMaterial({
+      color: 0x87ceeb,
+      emissive: 0xffeedd,
+      emissiveIntensity: 0.3,
+      transparent: true,
+      opacity: 0.7,
+      roughness: 0.1
+    });
+    const windowMesh = new THREE.Mesh(windowGeo, windowMat);
+    windowMesh.position.set(-roomWidth / 2 + 0.11, roomHeight / 2, 0);
+    windowMesh.rotation.y = Math.PI / 2;
+    windowMesh.userData.isWindow = true;
+    this.roomGroup.add(windowMesh);
+
+    const windowMullionVGeo = new THREE.BoxGeometry(0.05, 2.5, 0.02);
+    const mullionMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+    const mullionV = new THREE.Mesh(windowMullionVGeo, mullionMat);
+    mullionV.position.set(-roomWidth / 2 + 0.13, roomHeight / 2, 0);
+    mullionV.rotation.y = Math.PI / 2;
+    this.roomGroup.add(mullionV);
+
+    const windowMullionHGeo = new THREE.BoxGeometry(2, 0.05, 0.02);
+    const mullionH = new THREE.Mesh(windowMullionHGeo, mullionMat);
+    mullionH.position.set(-roomWidth / 2 + 0.13, roomHeight / 2, 0);
+    mullionH.rotation.y = Math.PI / 2;
+    this.roomGroup.add(mullionH);
+
+    const floorGeo = new THREE.PlaneGeometry(roomWidth, roomDepth);
+    const floor = new THREE.Mesh(floorGeo, floorMaterial.clone());
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = floorY;
     floor.receiveShadow = true;
     this.roomGroup.add(floor);
-    this.registerSurface('floor', '地板', floor, '#d9b68a');
+    this.registerSurface('floor', '地板', floor, defaultFloorColor);
 
     const ceilingGeo = new THREE.PlaneGeometry(roomWidth, roomDepth);
-    const ceilingMat = new THREE.MeshStandardMaterial({
-      color: 0xf5f5f5,
-      side: THREE.DoubleSide
-    });
-    const ceiling = new THREE.Mesh(ceilingGeo, ceilingMat);
+    const ceiling = new THREE.Mesh(ceilingGeo, ceilingMaterial.clone());
     ceiling.rotation.x = Math.PI / 2;
     ceiling.position.y = roomHeight;
+    ceiling.receiveShadow = true;
     this.roomGroup.add(ceiling);
-    this.registerSurface('ceiling', '天花板', ceiling, '#f5f5f5');
+    this.registerSurface('ceiling', '天花板', ceiling, defaultCeilingColor);
+
+    const baseboardGeo = new THREE.BoxGeometry(roomWidth, 0.15, 0.03);
+    const baseboardMat = new THREE.MeshStandardMaterial({ color: 0xf0f0f0 });
+    const baseboard1 = new THREE.Mesh(baseboardGeo, baseboardMat);
+    baseboard1.position.set(0, 0.075, -roomDepth / 2 + 0.12);
+    this.roomGroup.add(baseboard1);
+    const baseboard2 = new THREE.Mesh(baseboardGeo, baseboardMat);
+    baseboard2.position.set(0, 0.075, roomDepth / 2 - 0.12);
+    this.roomGroup.add(baseboard2);
+    const baseboardSideGeo = new THREE.BoxGeometry(roomDepth, 0.15, 0.03);
+    const baseboard3 = new THREE.Mesh(baseboardSideGeo, baseboardMat);
+    baseboard3.rotation.y = Math.PI / 2;
+    baseboard3.position.set(-roomWidth / 2 + 0.12, 0.075, 0);
+    this.roomGroup.add(baseboard3);
+    const baseboard4 = new THREE.Mesh(baseboardSideGeo, baseboardMat);
+    baseboard4.rotation.y = Math.PI / 2;
+    baseboard4.position.set(roomWidth / 2 - 0.12, 0.075, 0);
+    this.roomGroup.add(baseboard4);
 
     if (roomName === 'nordic-living') {
       this.createNordicFurniture(roomWidth, roomDepth, roomHeight);
@@ -554,53 +620,57 @@ export class RoomManager {
 
   public updateLighting(timeOfDay: number): void {
     const normalizedTime = (timeOfDay - 8) / 12;
+    const clampedTime = Math.max(0, Math.min(1, normalizedTime));
 
-    let warmColor = new THREE.Color(0xffa54f);
-    let coolColor = new THREE.Color(0x87ceeb);
-    let neutralColor = new THREE.Color(0xfff8e7);
+    const morningK = 3000;
+    const middayK = 5500;
+    const eveningK = 3000;
 
-    let sunColor: THREE.Color;
-    let sunIntensity: number;
+    let colorTemp: number;
+    let intensity: number;
     let ambientIntensity: number;
-    let windowEmissive: THREE.Color;
-    let windowIntensity: number;
 
-    if (normalizedTime < 0.25) {
-      const t = normalizedTime / 0.25;
-      sunColor = warmColor.clone().lerp(neutralColor, t);
-      sunIntensity = 0.3 + t * 0.5;
-      ambientIntensity = 0.2 + t * 0.2;
-      windowEmissive = warmColor.clone();
-      windowIntensity = 0.5 + t * 0.3;
-    } else if (normalizedTime < 0.75) {
-      const t = (normalizedTime - 0.25) / 0.5;
-      sunColor = neutralColor.clone().lerp(coolColor, t * 0.5);
-      sunIntensity = 0.8;
-      ambientIntensity = 0.4;
-      windowEmissive = coolColor.clone();
-      windowIntensity = 0.8;
+    if (clampedTime < 0.5) {
+      const t = clampedTime / 0.5;
+      const easedT = this.easeInOutCubic(t);
+      colorTemp = morningK + (middayK - morningK) * easedT;
+      intensity = 0.4 + 0.6 * easedT;
+      ambientIntensity = 0.3 + 0.2 * easedT;
     } else {
-      const t = (normalizedTime - 0.75) / 0.25;
-      sunColor = coolColor.clone().lerp(warmColor, t);
-      sunIntensity = 0.8 - t * 0.5;
-      ambientIntensity = 0.4 - t * 0.2;
-      windowEmissive = warmColor.clone();
-      windowIntensity = 0.8 - t * 0.5;
+      const t = (clampedTime - 0.5) / 0.5;
+      const easedT = this.easeInOutCubic(t);
+      colorTemp = middayK + (eveningK - middayK) * easedT;
+      intensity = 1.0 - 0.6 * easedT;
+      ambientIntensity = 0.5 - 0.2 * easedT;
     }
 
+    const lightColor = this.kelvinToRGB(colorTemp);
+
     if (this.directionalLight) {
-      this.directionalLight.color = sunColor;
-      this.directionalLight.intensity = sunIntensity;
+      this.directionalLight.color.copy(lightColor);
+      this.directionalLight.intensity = intensity;
     }
 
     if (this.ambientLight) {
+      this.ambientLight.color.copy(lightColor);
       this.ambientLight.intensity = ambientIntensity;
     }
 
     if (this.windowLight) {
-      this.windowLight.color = windowEmissive;
-      this.windowLight.intensity = windowIntensity;
+      this.windowLight.color.copy(lightColor);
+      this.windowLight.intensity = intensity * 0.8;
     }
+
+    const roomMeshes = this.roomGroup.children;
+    roomMeshes.forEach(child => {
+      if (child instanceof THREE.Mesh) {
+        const mat = child.material as THREE.MeshStandardMaterial;
+        if (mat.emissive && child.position.x < -4.5 && child.position.y > 1) {
+          mat.emissive.copy(lightColor);
+          mat.emissiveIntensity = intensity * 0.3;
+        }
+      }
+    });
   }
 
   public selectSurface(surfaceId: string | null): void {
