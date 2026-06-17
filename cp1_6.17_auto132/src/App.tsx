@@ -235,6 +235,7 @@ export default function App() {
             currentCard={displayCard}
             selectedEnemyId={selectedEnemyId}
             onEnemyChange={handleEnemyChange}
+            currentCardName={card.name || savedCard?.name || displayCard.name}
           />
           <VersionHistory
             hasUnsavedChanges={unsaved}

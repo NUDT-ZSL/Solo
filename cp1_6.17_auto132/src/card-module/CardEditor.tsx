@@ -21,6 +21,17 @@ export default function CardEditor({
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [isSavePressed, setIsSavePressed] = useState(false);
   const [isBattlePressed, setIsBattlePressed] = useState(false);
+  const [showSavedBadge, setShowSavedBadge] = useState(false);
+
+  useEffect(() => {
+    if (savedMessage) {
+      setShowSavedBadge(true);
+      const timer = setTimeout(() => {
+        setShowSavedBadge(false);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [savedMessage]);
 
   useEffect(() => {
     const validationErrors = validateCard(card);
@@ -142,19 +153,35 @@ export default function CardEditor({
       </div>
 
       <div style={styles.buttonRow}>
-        <button
-          onClick={handleSaveClick}
-          disabled={!isValid}
-          style={{
-            ...styles.button,
-            ...styles.saveButton,
-            opacity: isValid ? 1 : 0.5,
-            cursor: isValid ? 'pointer' : 'not-allowed',
-            transform: isSavePressed ? 'scale(0.95)' : 'scale(1)'
-          }}
-        >
-          保存卡牌
-        </button>
+        <div style={styles.saveButtonWrapper}>
+          <button
+            onClick={handleSaveClick}
+            disabled={!isValid}
+            style={{
+              ...styles.button,
+              ...styles.saveButton,
+              opacity: isValid ? 1 : 0.5,
+              cursor: isValid ? 'pointer' : 'not-allowed',
+              transform: isSavePressed ? 'scale(0.95)' : 'scale(1)',
+              flex: 1
+            }}
+          >
+            保存卡牌
+          </button>
+          <div
+            style={{
+              ...styles.savedBadge,
+              opacity: showSavedBadge ? 1 : 0,
+              transform: showSavedBadge
+                ? 'translateX(0) scale(1)'
+                : 'translateX(10px) scale(0.85)',
+              pointerEvents: showSavedBadge ? 'auto' : 'none'
+            }}
+          >
+            <span style={styles.savedBadgeCheck}>✓</span>
+            <span style={styles.savedBadgeText}>已保存</span>
+          </div>
+        </div>
         <button
           onClick={handleBattleClick}
           disabled={!isValid}
@@ -163,7 +190,8 @@ export default function CardEditor({
             ...styles.battleButton,
             opacity: isValid ? 1 : 0.5,
             cursor: isValid ? 'pointer' : 'not-allowed',
-            transform: isBattlePressed ? 'scale(0.95)' : 'scale(1)'
+            transform: isBattlePressed ? 'scale(0.95)' : 'scale(1)',
+            flex: 1
           }}
         >
           战斗测试
@@ -246,8 +274,39 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontWeight: 600,
     transition: 'transform 0.15s ease, opacity 0.2s ease'
   },
+  saveButtonWrapper: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    position: 'relative'
+  },
   saveButton: {
     backgroundColor: '#3B82F6'
+  },
+  savedBadge: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    backgroundColor: '#10B981',
+    padding: '6px 12px',
+    borderRadius: '20px',
+    boxShadow: '0 2px 10px rgba(16, 185, 129, 0.4)',
+    transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+    flexShrink: 0,
+    whiteSpace: 'nowrap'
+  },
+  savedBadgeCheck: {
+    color: '#FFFFFF',
+    fontWeight: 800,
+    fontSize: '13px',
+    lineHeight: 1
+  },
+  savedBadgeText: {
+    color: '#FFFFFF',
+    fontWeight: 700,
+    fontSize: '12px',
+    lineHeight: 1
   },
   battleButton: {
     backgroundColor: '#F59E0B'

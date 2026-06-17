@@ -7,18 +7,38 @@ interface BattleUIProps {
   currentCard: Partial<Card>;
   selectedEnemyId: string;
   onEnemyChange: (enemyId: string) => void;
+  currentCardName?: string;
+}
+
+type LogEntryType = 'attacker' | 'defender' | 'special';
+
+function getLogEntryType(
+  log: BattleLogEntry,
+  playerName: string
+): LogEntryType {
+  if (log.defenderDestroyed) return 'special';
+  return log.attackerName === playerName ? 'attacker' : 'defender';
 }
 
 export default function BattleUI({
   battleResult,
   currentCard,
   selectedEnemyId,
-  onEnemyChange
+  onEnemyChange,
+  currentCardName
 }: BattleUIProps) {
   const [visibleLogs, setVisibleLogs] = useState<Set<string>>(new Set());
+  const [battleKey, setBattleKey] = useState(0);
+
+  const playerName =
+    currentCardName ||
+    currentCard.name ||
+    (battleResult?.playerCard?.name) ||
+    '';
 
   useEffect(() => {
     if (battleResult) {
+      setBattleKey((k) => k + 1);
       setVisibleLogs(new Set());
       battleResult.logs.forEach((log, index) => {
         setTimeout(() => {
@@ -27,7 +47,7 @@ export default function BattleUI({
             next.add(log.id);
             return next;
           });
-        }, index * 100);
+        }, index * 180);
       });
     }
   }, [battleResult]);
@@ -41,20 +61,52 @@ export default function BattleUI({
     });
   };
 
-  const renderCardPreview = (card: Card | Partial<Card>, label: string) => {
+  const renderCardPreview = (
+    card: Card | Partial<Card>,
+    label: string,
+    isDead: boolean = false
+  ) => {
     const hasData = card.name !== undefined;
     return (
-      <div style={styles.miniCard}>
+      <div
+        style={{
+          ...styles.miniCard,
+          ...(isDead ? styles.miniCardDead : {}),
+          opacity: isDead ? 0.55 : 1,
+          position: 'relative',
+          overflow: 'visible'
+        }}
+      >
+        {isDead && (
+          <div style={styles.deadOverlay}>
+            <span style={styles.deadSkull}>💀</span>
+            <span style={styles.deadLabel}>已阵亡</span>
+          </div>
+        )}
         <span style={styles.miniCardLabel}>{label}</span>
         {hasData ? (
           <>
             <div style={styles.miniCardHeader}>
               <span style={styles.miniCost}>{card.cost ?? 0}</span>
-              <span style={styles.miniName}>{card.name}</span>
+              <span
+                style={{
+                  ...styles.miniName,
+                  textDecoration: isDead ? 'line-through' : 'none'
+                }}
+              >
+                {card.name}
+              </span>
             </div>
             <div style={styles.miniCardStats}>
               <span style={styles.miniAttack}>⚔ {card.attack ?? 0}</span>
-              <span style={styles.miniHealth}>❤ {card.health ?? 0}</span>
+              <span
+                style={{
+                  ...styles.miniHealth,
+                  color: isDead ? '#64748B' : styles.miniHealth.color
+                }}
+              >
+                ❤ {card.health ?? 0}
+              </span>
             </div>
           </>
         ) : (
@@ -63,6 +115,98 @@ export default function BattleUI({
       </div>
     );
   };
+
+  const getLogEntryStyle = (log: BattleLogEntry): React.CSSProperties => {
+    const type = getLogEntryType(log, playerName);
+    switch (type) {
+      case 'attacker':
+        return {
+          backgroundColor: 'rgba(59, 130, 246, 0.12)',
+          borderLeft: '4px solid #3B82F6',
+          borderTop: '1px solid rgba(59, 130, 246, 0.25)',
+          borderRight: '1px solid rgba(59, 130, 246, 0.25)',
+          borderBottom: '1px solid rgba(59, 130, 246, 0.25)'
+        };
+      case 'defender':
+        return {
+          backgroundColor: 'rgba(244, 67, 54, 0.10)',
+          borderLeft: '4px solid #F44336',
+          borderTop: '1px solid rgba(244, 67, 54, 0.25)',
+          borderRight: '1px solid rgba(244, 67, 54, 0.25)',
+          borderBottom: '1px solid rgba(244, 67, 54, 0.25)'
+        };
+      case 'special':
+        return {
+          backgroundColor: 'rgba(255, 215, 0, 0.12)',
+          borderLeft: '4px solid #FFD700',
+          borderTop: '1px solid rgba(255, 215, 0, 0.25)',
+          borderRight: '1px solid rgba(255, 215, 0, 0.25)',
+          borderBottom: '1px solid rgba(255, 215, 0, 0.25)',
+          boxShadow: '0 2px 10px rgba(255, 215, 0, 0.12)'
+        };
+    }
+  };
+
+  const getLogTypeBadge = (log: BattleLogEntry) => {
+    const type = getLogEntryType(log, playerName);
+    switch (type) {
+      case 'attacker':
+        return (
+          <span
+            style={{
+              ...styles.logTypeBadge,
+              backgroundColor: '#3B82F6',
+              color: '#FFFFFF'
+            }}
+          >
+            我方攻击
+          </span>
+        );
+      case 'defender':
+        return (
+          <span
+            style={{
+              ...styles.logTypeBadge,
+              backgroundColor: '#F44336',
+              color: '#FFFFFF'
+            }}
+          >
+            敌方攻击
+          </span>
+        );
+      case 'special':
+        return (
+          <span
+            style={{
+              ...styles.logTypeBadge,
+              backgroundColor: '#FFD700',
+              color: '#1A1A2E'
+            }}
+          >
+            ⚡ 击杀
+          </span>
+        );
+    }
+  };
+
+  const playerCardAfterBattle = battleResult?.playerCard;
+  const enemyCardAfterBattle = battleResult?.enemyCard;
+  const defaultEnemy =
+    PRESET_CARDS.find((e) => e.id === selectedEnemyId) || PRESET_CARDS[0];
+
+  const isPlayerDead = battleResult
+    ? (playerCardAfterBattle?.health ?? 0) <= 0
+    : false;
+  const isEnemyDead = battleResult
+    ? (enemyCardAfterBattle?.health ?? 0) <= 0
+    : false;
+
+  const displayPlayerCard = battleResult
+    ? (playerCardAfterBattle as Partial<Card>)
+    : currentCard;
+  const displayEnemyCard = battleResult
+    ? (enemyCardAfterBattle as Partial<Card>)
+    : (defaultEnemy as Partial<Card>);
 
   return (
     <div style={styles.container}>
@@ -94,12 +238,9 @@ export default function BattleUI({
       </div>
 
       <div style={styles.vsSection}>
-        {renderCardPreview(currentCard, '你的卡牌')}
+        {renderCardPreview(displayPlayerCard, '你的卡牌', isPlayerDead)}
         <span style={styles.vsText}>VS</span>
-        {renderCardPreview(
-          PRESET_CARDS.find((e) => e.id === selectedEnemyId) || PRESET_CARDS[0],
-          '对手'
-        )}
+        {renderCardPreview(displayEnemyCard, '对手', isEnemyDead)}
       </div>
 
       {battleResult?.winner && (
@@ -107,50 +248,78 @@ export default function BattleUI({
           style={{
             ...styles.winnerBanner,
             backgroundColor:
-              battleResult.winner === currentCard.name ? '#10B981' : '#F44336'
+              battleResult.winner === playerName
+                ? 'rgba(16, 185, 129, 0.15)'
+                : 'rgba(244, 67, 54, 0.15)',
+            color: battleResult.winner === playerName ? '#10B981' : '#F44336',
+            border:
+              battleResult.winner === playerName
+                ? '2px solid #10B981'
+                : '2px solid #F44336'
           }}
         >
-          {battleResult.winner === currentCard.name
-            ? '🎉 胜利！'
-            : '💀 失败！'}
-          {' '}获胜者：{battleResult.winner}
+          {battleResult.winner === playerName ? '🎉 胜利！' : '💀 失败！'}
+          {'  '}
+          <span style={{ fontWeight: 800 }}>获胜者：{battleResult.winner}</span>
         </div>
       )}
 
       <div style={styles.logSection}>
-        <h3 style={styles.logTitle}>战斗日志</h3>
-        <div style={styles.logContainer}>
+        <div style={styles.logHeaderRow}>
+          <h3 style={styles.logTitle}>战斗日志</h3>
+          {battleResult && (
+            <span style={styles.logCountBadge}>
+              {battleResult.logs.length} 条记录
+            </span>
+          )}
+        </div>
+        <div key={battleKey} style={styles.logContainer}>
           {!battleResult || battleResult.logs.length === 0 ? (
             <p style={styles.emptyLog}>点击"战斗测试"开始模拟战斗</p>
           ) : (
-            battleResult.logs.map((log: BattleLogEntry) => (
-              <div
-                key={log.id}
-                style={{
-                  ...styles.logEntry,
-                  opacity: visibleLogs.has(log.id) ? 1 : 0,
-                  transform: visibleLogs.has(log.id)
-                    ? 'translateY(0)'
-                    : 'translateY(-20px)'
-                }}
-              >
-                <div style={styles.logTime}>{formatTime(log.timestamp)}</div>
-                <div style={styles.logMessage}>
-                  <strong style={{ color: '#FFD700' }}>
-                    回合 {log.turn}
-                  </strong>
-                  {' - '}
-                  <span
-                    dangerouslySetInnerHTML={{
-                      __html: formatLogMessage(log)
-                    }}
-                  />
+            battleResult.logs.map((log: BattleLogEntry) => {
+              const isVisible = visibleLogs.has(log.id);
+              return (
+                <div
+                  key={log.id}
+                  style={{
+                    ...styles.logEntry,
+                    ...getLogEntryStyle(log),
+                    opacity: isVisible ? 1 : 0,
+                    transform: isVisible
+                      ? 'translateY(0) scale(1)'
+                      : 'translateY(30px) scale(0.96)'
+                  }}
+                >
+                  <div style={styles.logEntryHeader}>
+                    <div style={styles.logEntryHeaderLeft}>
+                      {getLogTypeBadge(log)}
+                      <span style={styles.logTime}>{formatTime(log.timestamp)}</span>
+                    </div>
+                    <span
+                      style={{
+                        ...styles.logTurnBadge,
+                        color: '#FFD700'
+                      }}
+                    >
+                      回合 {log.turn}
+                    </span>
+                  </div>
+                  <div style={styles.logMessage}>
+                    <span
+                      dangerouslySetInnerHTML={{
+                        __html: formatLogMessage(log, playerName)
+                      }}
+                    />
+                  </div>
+                  {log.defenderDestroyed && (
+                    <div style={styles.destroyedBadge}>
+                      💥 {log.defenderName} 已被消灭！
+                    </div>
+                  )}
                 </div>
-                {log.defenderDestroyed && (
-                  <div style={styles.destroyedBadge}>💥 卡牌被消灭</div>
-                )}
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -158,24 +327,34 @@ export default function BattleUI({
   );
 }
 
-function formatLogMessage(log: BattleLogEntry): string {
+function formatLogMessage(log: BattleLogEntry, playerName: string): string {
   const msg = log.message;
+  const isAttackerPlayer = log.attackerName === playerName;
+  const attackerColor = isAttackerPlayer ? '#3B82F6' : '#F44336';
+  const defenderColor = isAttackerPlayer ? '#F44336' : '#3B82F6';
+  const attackerBg = isAttackerPlayer
+    ? 'rgba(59, 130, 246, 0.18)'
+    : 'rgba(244, 67, 54, 0.18)';
+  const defenderBg = isAttackerPlayer
+    ? 'rgba(244, 67, 54, 0.18)'
+    : 'rgba(59, 130, 246, 0.18)';
+
   return msg
     .replace(
       log.attackerName,
-      `<strong style="color:#3B82F6;">${log.attackerName}</strong>`
+      `<strong style="color:${attackerColor};background:${attackerBg};padding:2px 6px;border-radius:4px;">${log.attackerName}</strong>`
     )
     .replace(
       log.defenderName,
-      `<strong style="color:#F59E0B;">${log.defenderName}</strong>`
+      `<strong style="color:${defenderColor};background:${defenderBg};padding:2px 6px;border-radius:4px;">${log.defenderName}</strong>`
     )
     .replace(
       /(\d+)\s*点伤害/,
-      `<span style="color:#FF4444;font-weight:600;">$1 点伤害</span>`
+      `<span style="color:#FF4444;font-weight:700;padding:0 4px;">$1 点伤害</span>`
     )
     .replace(
       /生命值\s*(\d+)/,
-      `生命值 <span style="color:#44FF44;font-weight:600;">$1</span>`
+      `生命值 <span style="color:#44FF44;font-weight:700;padding:0 4px;">$1</span>`
     );
 }
 
@@ -244,7 +423,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   vsSection: {
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'stretch',
     justifyContent: 'center',
     gap: '16px',
     padding: '16px',
@@ -260,7 +439,36 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: 'flex',
     flexDirection: 'column',
     gap: '8px',
-    minHeight: '100px'
+    minHeight: '100px',
+    transition: 'all 0.3s ease'
+  },
+  miniCardDead: {
+    border: '1px solid #F44336',
+    backgroundColor: 'rgba(244, 67, 54, 0.08)'
+  },
+  deadOverlay: {
+    position: 'absolute',
+    top: '-10px',
+    right: '-8px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    backgroundColor: '#F44336',
+    padding: '4px 10px',
+    borderRadius: '8px',
+    boxShadow: '0 4px 12px rgba(244, 67, 54, 0.4)',
+    zIndex: 10,
+    lineHeight: 1
+  },
+  deadSkull: {
+    fontSize: '16px'
+  },
+  deadLabel: {
+    color: '#FFFFFF',
+    fontSize: '10px',
+    fontWeight: 800,
+    marginTop: '2px',
+    letterSpacing: '0.5px'
   },
   miniCardLabel: {
     fontSize: '11px',
@@ -293,7 +501,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '14px',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap'
+    whiteSpace: 'nowrap',
+    transition: 'all 0.3s ease'
   },
   miniCardStats: {
     display: 'flex',
@@ -316,15 +525,16 @@ const styles: { [key: string]: React.CSSProperties } = {
     marginTop: '16px'
   },
   vsText: {
+    alignSelf: 'center',
     color: '#FFD700',
     fontSize: '24px',
     fontWeight: 800,
-    textShadow: '0 0 10px rgba(255,215,0,0.5)'
+    textShadow: '0 0 10px rgba(255,215,0,0.5)',
+    flexShrink: 0
   },
   winnerBanner: {
-    padding: '12px 16px',
+    padding: '14px 18px',
     borderRadius: '10px',
-    color: '#FFFFFF',
     fontWeight: 700,
     fontSize: '16px',
     textAlign: 'center'
@@ -335,19 +545,34 @@ const styles: { [key: string]: React.CSSProperties } = {
     flexDirection: 'column',
     minHeight: 0
   },
+  logHeaderRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: '10px'
+  },
   logTitle: {
     color: '#CBD5E1',
     fontSize: '15px',
     fontWeight: 600,
-    margin: '0 0 10px 0'
+    margin: 0
+  },
+  logCountBadge: {
+    padding: '4px 10px',
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    color: '#3B82F6',
+    fontSize: '11px',
+    fontWeight: 700,
+    borderRadius: '20px'
   },
   logContainer: {
     flex: 1,
     overflowY: 'auto',
     display: 'flex',
     flexDirection: 'column',
-    gap: '10px',
-    paddingRight: '4px'
+    gap: '12px',
+    paddingRight: '4px',
+    paddingBottom: '8px'
   },
   emptyLog: {
     color: '#64748B',
@@ -356,30 +581,53 @@ const styles: { [key: string]: React.CSSProperties } = {
     padding: '32px 16px'
   },
   logEntry: {
-    backgroundColor: '#0F3460',
-    borderRadius: '8px',
-    padding: '10px 12px',
-    border: '1px solid #334155',
-    transition: 'all 0.3s ease-out'
+    borderRadius: '10px',
+    padding: '12px 14px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+  },
+  logEntryHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  logEntryHeaderLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px'
+  },
+  logTypeBadge: {
+    padding: '3px 9px',
+    borderRadius: '6px',
+    fontSize: '11px',
+    fontWeight: 700,
+    letterSpacing: '0.3px'
+  },
+  logTurnBadge: {
+    fontSize: '11px',
+    fontWeight: 800,
+    letterSpacing: '0.3px'
   },
   logTime: {
     color: '#64748B',
-    fontSize: '11px',
-    marginBottom: '4px'
+    fontSize: '11px'
   },
   logMessage: {
     color: '#E2E8F0',
     fontSize: '13px',
-    lineHeight: 1.5
+    lineHeight: 1.6
   },
   destroyedBadge: {
-    marginTop: '6px',
-    padding: '4px 8px',
+    marginTop: '4px',
+    padding: '5px 10px',
     backgroundColor: 'rgba(244, 67, 54, 0.2)',
     color: '#F44336',
     fontSize: '11px',
-    fontWeight: 600,
-    borderRadius: '4px',
-    display: 'inline-block'
+    fontWeight: 700,
+    borderRadius: '6px',
+    display: 'inline-block',
+    alignSelf: 'flex-start'
   }
 };
