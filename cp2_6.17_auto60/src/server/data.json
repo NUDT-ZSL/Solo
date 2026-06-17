@@ -1,0 +1,90 @@
+{
+  "pets": [
+    {
+      "id": "a56c7de7-09fc-4ab4-b626-0d2788e1898c",
+      "name": "豆豆",
+      "breed": "金毛寻回犬",
+      "birthDate": "2022-03-15",
+      "avatar": ""
+    },
+    {
+      "id": "51d1b1a2-16c4-48c6-b476-346cbc6fbfdc",
+      "name": "咪咪",
+      "breed": "英国短毛猫",
+      "birthDate": "2023-06-20",
+      "avatar": ""
+    }
+  ],
+  "records": [
+    {
+      "id": "41ed6f60-f0c6-47b1-b4bc-089e4736ce40",
+      "petId": "a56c7de7-09fc-4ab4-b626-0d2788e1898c",
+      "type": "vaccine",
+      "date": "2026-05-18",
+      "description": "狂犬疫苗接种",
+      "vaccineName": "狂犬疫苗"
+    },
+    {
+      "id": "db5b4b3f-b363-4025-80f1-b2f330d7fd56",
+      "petId": "a56c7de7-09fc-4ab4-b626-0d2788e1898c",
+      "type": "deworm",
+      "date": "2026-05-28",
+      "description": "体内驱虫",
+      "dewormType": "体内驱虫"
+    },
+    {
+      "id": "dcb12113-57a2-44d1-b5f0-b748765fd164",
+      "petId": "a56c7de7-09fc-4ab4-b626-0d2788e1898c",
+      "type": "weight",
+      "date": "2026-05-23",
+      "description": "体重测量",
+      "weight": 25.5,
+      "temperature": 38.5
+    },
+    {
+      "id": "0d61954f-df22-46dc-8c89-dfe6b8ea781e",
+      "petId": "a56c7de7-09fc-4ab4-b626-0d2788e1898c",
+      "type": "weight",
+      "date": "2026-05-30",
+      "description": "体重测量",
+      "weight": 25.8,
+      "temperature": 38.3
+    },
+    {
+      "id": "ba4ca9cf-9ee7-455a-ad65-9130af1483cd",
+      "petId": "a56c7de7-09fc-4ab4-b626-0d2788e1898c",
+      "type": "weight",
+      "date": "2026-06-07",
+      "description": "体重测量",
+      "weight": 26.2,
+      "temperature": 38.6
+    },
+    {
+      "id": "d63bd2e9-48ee-4d19-a46c-c65dd2f9ca50",
+      "petId": "a56c7de7-09fc-4ab4-b626-0d2788e1898c",
+      "type": "weight",
+      "date": "2026-06-14",
+      "description": "体重测量",
+      "weight": 26.5,
+      "temperature": 38.4
+    },
+    {
+      "id": "ccdc003c-00cb-435d-a48e-9cc37e740b0b",
+      "petId": "51d1b1a2-16c4-48c6-b476-346cbc6fbfdc",
+      "type": "vaccine",
+      "date": "2026-06-02",
+      "description": "猫三联疫苗",
+      "vaccineName": "猫三联疫苗"
+    },
+    {
+      "id": "fdabab61-3362-4958-9d4f-64bd06276c0d",
+      "petId": "51d1b1a2-16c4-48c6-b476-346cbc6fbfdc",
+      "type": "weight",
+      "date": "2026-06-10",
+      "description": "体重测量",
+      "weight": 4.2,
+      "temperature": 38.8
+    }
+  ],
+  "shares": []
+}
