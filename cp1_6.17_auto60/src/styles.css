@@ -1,0 +1,958 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background-color: #F5F0EB;
+  color: #333;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 240px;
+  background-color: #1E1E2C;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  z-index: 100;
+}
+
+.sidebar-logo {
+  padding: 24px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid #303047;
+}
+
+.logo-icon {
+  font-size: 28px;
+}
+
+.logo-text {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.nav-list {
+  list-style: none;
+  padding: 16px 0;
+  flex: 1;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 20px;
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.2s ease;
+}
+
+.nav-item:hover {
+  background-color: #2a2a40;
+}
+
+.nav-item.active {
+  background-color: #303047;
+  border-left: 3px solid #3949AB;
+}
+
+.nav-icon {
+  font-size: 18px;
+}
+
+.sidebar-footer {
+  padding: 16px 20px;
+  border-top: 1px solid #303047;
+}
+
+.create-course-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  background-color: #3949AB;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.create-course-btn:hover {
+  background-color: #283593;
+}
+
+.topbar {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background-color: #1E1E2C;
+  color: #fff;
+  align-items: center;
+  padding: 0 16px;
+  z-index: 100;
+}
+
+.hamburger-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 8px;
+}
+
+.topbar-title {
+  margin-left: 12px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.mobile-menu {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 200;
+}
+
+.mobile-menu-content {
+  width: 260px;
+  height: 100%;
+  background-color: #1E1E2C;
+  color: #fff;
+  padding: 20px 0;
+}
+
+.mobile-menu-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px 20px;
+  font-size: 18px;
+  font-weight: 600;
+  border-bottom: 1px solid #303047;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.mobile-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 20px;
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.mobile-nav-item.active {
+  background-color: #303047;
+}
+
+.mobile-create-btn {
+  margin: 20px;
+  padding: 12px;
+  width: calc(100% - 40px);
+  background-color: #3949AB;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.main-content {
+  margin-left: 240px;
+  flex: 1;
+  padding: 32px 20px;
+  max-width: 1200px;
+  width: 100%;
+}
+
+.page-header {
+  margin-bottom: 24px;
+}
+
+.page-header h2 {
+  font-size: 24px;
+  color: #1E1E2C;
+  margin-bottom: 8px;
+}
+
+.page-subtitle {
+  color: #666;
+  font-size: 14px;
+}
+
+.course-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.course-card {
+  border-radius: 12px;
+  padding: 20px;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.3s ease-out, box-shadow 0.3s ease-out;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.course-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.course-name {
+  font-size: 18px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.enroll-btn {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  background-color: #424242;
+  color: #fff;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.enroll-btn:hover {
+  background-color: #303030;
+}
+
+.enroll-btn.enrolled {
+  background-color: #4CAF50;
+  cursor: default;
+}
+
+.enroll-btn.scaling {
+  animation: scalePulse 0.2s ease;
+}
+
+@keyframes scalePulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.92); }
+  100% { transform: scale(1); }
+}
+
+.course-schedule {
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.card-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.stat-green {
+  background-color: rgba(76, 175, 80, 0.2);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+.stat-red {
+  background-color: rgba(229, 57, 53, 0.2);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+.course-detail {
+  animation: fadeIn 0.3s ease;
+}
+
+.detail-header {
+  border-radius: 12px;
+  padding: 24px;
+  color: #fff;
+  margin-bottom: 24px;
+}
+
+.back-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-bottom: 16px;
+  transition: background-color 0.2s;
+}
+
+.back-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.detail-info h2 {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.detail-info p {
+  opacity: 0.9;
+  font-size: 14px;
+}
+
+.detail-toolbar {
+  margin-bottom: 20px;
+}
+
+.date-picker-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #555;
+}
+
+.date-picker-label input {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.detail-sections {
+  display: grid;
+  gap: 16px;
+}
+
+.student-list-container,
+.homework-panel {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.attendance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.attendance-header h4 {
+  font-size: 16px;
+  color: #1E1E2C;
+}
+
+.attendance-date {
+  font-size: 13px;
+  color: #666;
+}
+
+.attendance-progress {
+  margin-bottom: 20px;
+}
+
+.progress-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 8px;
+  color: #555;
+}
+
+.progress-percent {
+  font-weight: 600;
+  color: #1E1E2C;
+}
+
+.progress-bar-bg {
+  height: 8px;
+  background-color: #E0E0E0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.student-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.student-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background-color: #FAFAFA;
+  transition: background-color 0.2s;
+}
+
+.student-item:hover {
+  background-color: #F0F0F0;
+}
+
+.student-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.student-avatar-large {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.student-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.student-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1E1E2C;
+}
+
+.student-rate {
+  font-size: 12px;
+  color: #888;
+}
+
+.attendance-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.attendance-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #4CAF50;
+}
+
+.checkbox-label {
+  font-size: 13px;
+  color: #555;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.panel-header h4 {
+  font-size: 16px;
+  color: #1E1E2C;
+}
+
+.btn-primary {
+  padding: 8px 16px;
+  background-color: #3949AB;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-primary:hover {
+  background-color: #283593;
+}
+
+.btn-primary:disabled {
+  background-color: #9FA8DA;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  padding: 8px 16px;
+  background-color: #E0E0E0;
+  color: #333;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-secondary:hover {
+  background-color: #BDBDBD;
+}
+
+.btn-small {
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
+.scaling {
+  animation: scalePulse 0.2s ease;
+}
+
+.create-homework-form {
+  background-color: #F8F9FA;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.form-row {
+  margin-bottom: 16px;
+}
+
+.form-row label {
+  display: block;
+  font-size: 13px;
+  color: #555;
+  margin-bottom: 6px;
+}
+
+.form-row input,
+.form-row select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #DDD;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.form-row input:focus,
+.form-row select:focus {
+  outline: none;
+  border-color: #3949AB;
+}
+
+.homework-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.homework-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-radius: 8px;
+  background-color: #FAFAFA;
+  gap: 16px;
+}
+
+.homework-info {
+  flex: 1;
+}
+
+.homework-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1E1E2C;
+  margin-bottom: 6px;
+}
+
+.homework-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: #888;
+}
+
+.unsubmitted-count {
+  color: #E53935;
+  font-weight: 500;
+}
+
+.btn-remind {
+  padding: 8px 20px;
+  background-color: #FF7043;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  white-space: nowrap;
+}
+
+.btn-remind:hover {
+  background-color: #F4511E;
+}
+
+.btn-remind.disabled {
+  background-color: #FFAB91;
+  cursor: not-allowed;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 48px 20px;
+  color: #999;
+  font-size: 14px;
+}
+
+.student-panel .panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.current-student {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.current-student h2 {
+  font-size: 22px;
+  color: #1E1E2C;
+  margin-bottom: 4px;
+}
+
+.student-subtitle {
+  font-size: 13px;
+  color: #888;
+}
+
+.panel-section {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  margin-bottom: 16px;
+}
+
+.panel-section h3 {
+  font-size: 16px;
+  color: #1E1E2C;
+  margin-bottom: 16px;
+}
+
+.student-selector {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 16px;
+}
+
+.student-select-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 12px;
+  background: #F8F9FA;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.student-select-btn:hover {
+  border-color: #3949AB;
+  background: #E8EAF6;
+}
+
+.my-courses-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.my-course-card {
+  border-left: 4px solid;
+  padding: 16px 20px;
+  background: #FAFAFA;
+  border-radius: 0 8px 8px 0;
+}
+
+.my-course-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.my-course-header h4 {
+  font-size: 15px;
+}
+
+.my-course-header span {
+  font-size: 12px;
+  color: #888;
+}
+
+.my-homework-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.my-homework-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: #fff;
+  border-radius: 6px;
+}
+
+.my-homework-item.submitted {
+  background: #E8F5E9;
+}
+
+.my-homework-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.my-homework-title {
+  font-size: 13px;
+  color: #1E1E2C;
+  font-weight: 500;
+}
+
+.my-homework-deadline {
+  font-size: 11px;
+  color: #888;
+}
+
+.submitted-badge {
+  color: #4CAF50;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  padding: 20px;
+}
+
+.modal-content {
+  background: #fff;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 440px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #EEE;
+}
+
+.modal-header h3 {
+  font-size: 18px;
+  color: #1E1E2C;
+}
+
+.modal-body {
+  padding: 20px 24px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #EEE;
+}
+
+.color-picker {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.color-option {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.color-option.selected {
+  border-color: #1E1E2C;
+  transform: scale(1.1);
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    display: none;
+  }
+
+  .topbar {
+    display: flex;
+  }
+
+  .mobile-menu {
+    display: block;
+  }
+
+  .main-content {
+    margin-left: 0;
+    padding: 72px 16px 24px;
+  }
+
+  .course-grid {
+    gap: 12px;
+  }
+
+  .course-card {
+    width: 100%;
+  }
+
+  .student-list-container,
+  .homework-panel,
+  .panel-section {
+    padding: 16px;
+  }
+
+  .homework-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .my-homework-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .detail-header {
+    padding: 16px;
+  }
+
+  .detail-info h2 {
+    font-size: 20px;
+  }
+
+  .student-selector {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 12px;
+  }
+}
