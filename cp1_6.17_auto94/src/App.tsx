@@ -51,6 +51,7 @@ export default function App() {
   const [exportBg, setExportBg] = useState<ExportBackground>('white')
   const [isExporting, setIsExporting] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [isCopied, setIsCopied] = useState(false)
 
   const cardRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -124,8 +125,27 @@ export default function App() {
     }
   }
 
+  const handleCopyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(code)
+      setIsCopied(true)
+      setTimeout(() => {
+        setIsCopied(false)
+      }, 1500)
+    } catch (error) {
+      console.error('复制失败:', error)
+    }
+  }
+
   const lineNumbers = useMemo(() => {
     return code.split('\n').map((_, i) => i + 1).join('\n')
+  }, [code])
+
+  const codeStats = useMemo(() => {
+    const lines = code.split('\n').length
+    const chars = code.length
+    const nonEmptyLines = code.split('\n').filter(line => line.trim().length > 0).length
+    return { lines, chars, nonEmptyLines }
   }, [code])
 
   return (
@@ -295,13 +315,53 @@ export default function App() {
         </div>
 
         <div className="preview-panel">
-          <Renderer
-            ref={cardRef}
-            highlightedHtml={highlightedHtml}
-            theme={theme}
-            cardStyle={cardStyle}
-            language={language}
-          />
+          <div className="preview-wrapper">
+            <button
+              className={`copy-btn ${isCopied ? 'copied' : ''}`}
+              onClick={handleCopyCode}
+              title="复制代码"
+            >
+              <span className="copy-icon">
+                {isCopied ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                )}
+              </span>
+              <span className="copy-text">{isCopied ? '已复制' : '复制代码'}</span>
+            </button>
+            <Renderer
+              ref={cardRef}
+              highlightedHtml={highlightedHtml}
+              theme={theme}
+              cardStyle={cardStyle}
+              language={language}
+            />
+            <div className="code-stats">
+              <div className="stat-item">
+                <span className="stat-icon">📏</span>
+                <span className="stat-label">行数</span>
+                <span className="stat-value">{codeStats.lines}</span>
+              </div>
+              <div className="stat-divider"></div>
+              <div className="stat-item">
+                <span className="stat-icon">📝</span>
+                <span className="stat-label">有效行</span>
+                <span className="stat-value">{codeStats.nonEmptyLines}</span>
+              </div>
+              <div className="stat-divider"></div>
+              <div className="stat-item">
+                <span className="stat-icon">🔤</span>
+                <span className="stat-label">字符数</span>
+                <span className="stat-value">{codeStats.chars}</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
