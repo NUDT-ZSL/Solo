@@ -1,5 +1,0 @@
-[
-  {"id":"r1","deviceId":"d2","userId":"u1","borrowTime":"2026-06-15T10:00:00Z","returnTime":"2026-06-16T09:00:00Z","status":"returned"},
-  {"id":"r2","deviceId":"d3","userId":"u2","borrowTime":"2026-06-14T08:00:00Z","returnTime":"2026-06-16T12:00:00Z","status":"overdue"},
-  {"id":"r3","deviceId":"d5","userId":"u1","borrowTime":"2026-06-17T09:00:00Z","returnTime":null,"status":"active"}
-]
