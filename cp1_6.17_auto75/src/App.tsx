@@ -7,6 +7,7 @@ import { ParticleSystem } from './particle/ParticleSystem'
 export function App() {
   const [isMobile, setIsMobile] = useState(false)
   const [isPanelOpen, setIsPanelOpen] = useState(false)
+  const [showError, setShowError] = useState(false)
   const particleSystemRef = useRef<ParticleSystem | null>(null)
   const animationIdRef = useRef<number>(0)
   const lastTimeRef = useRef<number>(0)
@@ -21,11 +22,25 @@ export function App() {
     currentStage,
     fruitSize,
     particleCount,
+    errorMessage,
     updateGrowth,
     setParticleCount,
     resetPlant,
-    getSnapshots
+    getSnapshots,
+    getErrorMessage,
+    clearErrorMessage
   } = usePlantStore()
+
+  useEffect(() => {
+    if (errorMessage) {
+      setShowError(true)
+      const timer = setTimeout(() => {
+        setShowError(false)
+        clearErrorMessage()
+      }, 4000)
+      return () => clearTimeout(timer)
+    }
+  }, [errorMessage, clearErrorMessage])
 
   useEffect(() => {
     const checkMobile = () => {
@@ -38,16 +53,32 @@ export function App() {
 
   useEffect(() => {
     particleSystemRef.current = new ParticleSystem()
-    particleSystemRef.current.setWater(water)
-    particleSystemRef.current.setNutrient(nutrient)
 
     if (!hasLoadedRef.current) {
       hasLoadedRef.current = true
-      const snapshots = getSnapshots()
-      const existingSnapshot = snapshots.find(s => s.exists)
-      if (existingSnapshot) {
-        const { loadSnapshot } = usePlantStore.getState()
-        loadSnapshot(existingSnapshot.index)
+      try {
+        const snapshots = getSnapshots()
+        const existingSnapshot = snapshots.find(s => s.exists)
+        if (existingSnapshot) {
+          const { loadSnapshot } = usePlantStore.getState()
+          const result = loadSnapshot(existingSnapshot.index)
+          if (!result.success) {
+            console.warn('快照加载失败，使用默认状态:', result.message)
+            particleSystemRef.current.setWater(50)
+            particleSystemRef.current.setNutrient(30)
+          } else {
+            const state = usePlantStore.getState()
+            particleSystemRef.current.setWater(state.water)
+            particleSystemRef.current.setNutrient(state.nutrient)
+          }
+        } else {
+          particleSystemRef.current.setWater(water)
+          particleSystemRef.current.setNutrient(nutrient)
+        }
+      } catch (e) {
+        console.warn('加载快照时出错，使用默认状态')
+        particleSystemRef.current.setWater(50)
+        particleSystemRef.current.setNutrient(30)
       }
     }
 
@@ -72,6 +103,8 @@ export function App() {
     if (prevProgressRef.current > 0 && growthProgress === 0) {
       if (particleSystemRef.current) {
         particleSystemRef.current.reset()
+        particleSystemRef.current.setWater(50)
+        particleSystemRef.current.setNutrient(30)
       }
     }
     prevProgressRef.current = growthProgress
@@ -180,6 +213,42 @@ export function App() {
           onClose={() => setIsPanelOpen(false)}
         />
       </div>
+
+      {showError && errorMessage && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '80px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(220, 38, 38, 0.95)',
+            color: 'white',
+            padding: '12px 24px',
+            borderRadius: '8px',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+            zIndex: 1000,
+            fontSize: '14px',
+            maxWidth: '400px',
+            textAlign: 'center',
+            animation: 'slideDown 0.3s ease'
+          }}
+        >
+          ⚠️ {errorMessage}
+        </div>
+      )}
+
+      <style>{`
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+          }
+        }
+      `}</style>
     </div>
   )
 }

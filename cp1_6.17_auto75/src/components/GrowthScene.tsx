@@ -27,6 +27,7 @@ export function GrowthScene({ particleSystem, growthProgress, currentStage, frui
   const lastTimeRef = useRef<number>(0)
 
   const [displayProgress, setDisplayProgress] = useState(0)
+  const [displayColor, setDisplayColor] = useState(STAGE_COLORS.seed)
   const [plantTopY, setPlantTopY] = useState(1)
 
   useEffect(() => {
@@ -47,6 +48,50 @@ export function GrowthScene({ particleSystem, growthProgress, currentStage, frui
 
     requestAnimationFrame(animate)
   }, [growthProgress])
+
+  useEffect(() => {
+    const targetColor = STAGE_COLORS[currentStage]
+    const startColor = displayColor
+
+    const hexToRgb = (hex: string) => {
+      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+      return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+      } : { r: 0, g: 0, b: 0 }
+    }
+
+    const rgbToHex = (r: number, g: number, b: number) => {
+      return '#' + [r, g, b].map(x => {
+        const hex = Math.round(x).toString(16)
+        return hex.length === 1 ? '0' + hex : hex
+      }).join('')
+    }
+
+    const start = performance.now()
+    const startRgb = hexToRgb(startColor)
+    const targetRgb = hexToRgb(targetColor)
+    const duration = 300
+
+    const animateColor = (now: number) => {
+      const elapsed = now - start
+      const t = Math.min(elapsed / duration, 1)
+      const easeT = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
+
+      const r = startRgb.r + (targetRgb.r - startRgb.r) * easeT
+      const g = startRgb.g + (targetRgb.g - startRgb.g) * easeT
+      const b = startRgb.b + (targetRgb.b - startRgb.b) * easeT
+
+      setDisplayColor(rgbToHex(r, g, b))
+
+      if (t < 1) {
+        requestAnimationFrame(animateColor)
+      }
+    }
+
+    requestAnimationFrame(animateColor)
+  }, [currentStage])
 
   useEffect(() => {
     const stageThresholds = [0, 20, 45, 70, 90, 100]
@@ -172,7 +217,7 @@ export function GrowthScene({ particleSystem, growthProgress, currentStage, frui
       }
 
       updateLowPolyPlant(growthProgress, currentStage, fruitSize)
-      updateFlowerParticles(currentStage, time / 1000)
+      updateFlowerParticles(currentStage, growthProgress, time / 1000)
 
       if (cameraRef.current && plantGroupRef.current) {
         const radius = 4.5
@@ -270,17 +315,46 @@ export function GrowthScene({ particleSystem, growthProgress, currentStage, frui
   }
 
   const createLowPolyPlant = (group: THREE.Group) => {
+    const seedGroup = new THREE.Group()
+    seedGroup.name = 'seed_group'
+
     const seedGeometry = new THREE.SphereGeometry(0.2, 6, 5)
     const seedMaterial = new THREE.MeshStandardMaterial({
-      color: 0x8B4513,
-      flatShading: true
+      color: 0xD2691E,
+      flatShading: true,
+      roughness: 0.9
     })
     const seed = new THREE.Mesh(seedGeometry, seedMaterial)
-    seed.position.y = 0.65
+    seed.scale.set(1, 0.6, 1)
     seed.name = 'seed'
-    seed.visible = true
-    seed.scale.set(1, 0.7, 1)
-    group.add(seed)
+    seedGroup.add(seed)
+
+    const seedLineGeometry = new THREE.BufferGeometry()
+    const seedLinePositions = new Float32Array([
+      -0.15, 0.05, 0, 0.15, 0.05, 0,
+      0, -0.1, 0, 0, 0.12, 0,
+      -0.08, -0.08, 0.1, 0.08, -0.08, -0.1
+    ])
+    seedLineGeometry.setAttribute('position', new THREE.BufferAttribute(seedLinePositions, 3))
+    const seedLineMaterial = new THREE.LineBasicMaterial({ color: 0x8B4513 })
+    const seedLines = new THREE.LineSegments(seedLineGeometry, seedLineMaterial)
+    seedLines.name = 'seed_lines'
+    seedGroup.add(seedLines)
+
+    const seedHighlightGeometry = new THREE.SphereGeometry(0.05, 4, 4)
+    const seedHighlightMaterial = new THREE.MeshStandardMaterial({
+      color: 0xDEB887,
+      flatShading: true,
+      emissive: 0x8B4513,
+      emissiveIntensity: 0.1
+    })
+    const seedHighlight = new THREE.Mesh(seedHighlightGeometry, seedHighlightMaterial)
+    seedHighlight.position.set(-0.05, 0.03, 0.1)
+    seedGroup.add(seedHighlight)
+
+    seedGroup.position.y = 0.65
+    seedGroup.visible = true
+    group.add(seedGroup)
 
     const sproutStemGeometry = new THREE.CylinderGeometry(0.04, 0.06, 0.4, 5)
     const sproutStemMaterial = new THREE.MeshStandardMaterial({
@@ -294,16 +368,34 @@ export function GrowthScene({ particleSystem, growthProgress, currentStage, frui
     group.add(sproutStem)
 
     for (let i = 0; i < 2; i++) {
-      const cotyledonGeometry = new THREE.ConeGeometry(0.2, 0.5, 4)
+      const cotyledonShape = new THREE.Shape()
+      cotyledonShape.moveTo(0, 0)
+      cotyledonShape.lineTo(0.08, 0.15)
+      cotyledonShape.lineTo(0.18, 0.35)
+      cotyledonShape.lineTo(0.1, 0.5)
+      cotyledonShape.lineTo(0, 0.45)
+      cotyledonShape.lineTo(-0.1, 0.5)
+      cotyledonShape.lineTo(-0.18, 0.35)
+      cotyledonShape.lineTo(-0.08, 0.15)
+      cotyledonShape.lineTo(0, 0)
+
+      const cotyledonGeometry = new THREE.ExtrudeGeometry(cotyledonShape, {
+        depth: 0.05,
+        bevelEnabled: false,
+        bevelThickness: 0,
+        bevelSize: 0,
+        bevelSegments: 0
+      })
       const cotyledonMaterial = new THREE.MeshStandardMaterial({
         color: 0xAED581,
-        flatShading: true
+        flatShading: true,
+        side: THREE.DoubleSide
       })
       const cotyledon = new THREE.Mesh(cotyledonGeometry, cotyledonMaterial)
       const side = i === 0 ? 1 : -1
-      cotyledon.position.set(side * 0.08, 1.1, 0)
-      cotyledon.rotation.z = side * 0.6
-      cotyledon.rotation.x = -0.3
+      cotyledon.position.set(side * 0.05, 1.0, 0)
+      cotyledon.rotation.z = side * 0.3
+      cotyledon.rotation.x = -Math.PI / 6
       cotyledon.name = `cotyledon_${i}`
       cotyledon.visible = false
       group.add(cotyledon)
@@ -321,23 +413,40 @@ export function GrowthScene({ particleSystem, growthProgress, currentStage, frui
     group.add(mainStem)
 
     for (let i = 0; i < 6; i++) {
-      const leafGeometry = new THREE.ConeGeometry(0.18, 0.6, 5)
+      const leafVertices = new Float32Array([
+        0, 0, 0,
+        0.08, 0.15, 0.02,
+        -0.08, 0.15, -0.02,
+        0, 0.5, 0
+      ])
+      const leafIndices = [
+        0, 1, 3,
+        0, 3, 2,
+        0, 2, 1,
+        1, 2, 3
+      ]
+      const leafGeometry = new THREE.BufferGeometry()
+      leafGeometry.setAttribute('position', new THREE.BufferAttribute(leafVertices, 3))
+      leafGeometry.setIndex(leafIndices)
+      leafGeometry.computeVertexNormals()
+
       const leafMaterial = new THREE.MeshStandardMaterial({
         color: 0x66BB6A,
-        flatShading: true
+        flatShading: true,
+        side: THREE.DoubleSide
       })
       const leaf = new THREE.Mesh(leafGeometry, leafMaterial)
       const angle = (i / 6) * Math.PI * 2
       const height = 0.9 + (i % 3) * 0.3
-      const dist = 0.2
+      const dist = 0.15
       leaf.position.set(
         Math.cos(angle) * dist,
         height,
         Math.sin(angle) * dist
       )
-      leaf.rotation.z = Math.cos(angle) * 0.8
-      leaf.rotation.x = Math.sin(angle) * 0.5
-      leaf.rotation.y = angle
+      leaf.rotation.z = Math.cos(angle) * 0.7
+      leaf.rotation.x = Math.sin(angle) * 0.4
+      leaf.rotation.y = angle + Math.PI / 2
       leaf.name = `mature_leaf_${i}`
       leaf.visible = false
       group.add(leaf)
@@ -455,24 +564,31 @@ export function GrowthScene({ particleSystem, growthProgress, currentStage, frui
   }
 
   const createFlowerParticles = (scene: THREE.Scene) => {
-    const flowerCount = 40
+    const maxFlowerCount = 60
     const geometry = new THREE.BufferGeometry()
-    const positions = new Float32Array(flowerCount * 3)
-    const colors = new Float32Array(flowerCount * 3)
+    const positions = new Float32Array(maxFlowerCount * 3)
+    const colors = new Float32Array(maxFlowerCount * 3)
+    const basePositions = new Float32Array(maxFlowerCount * 3)
 
-    for (let i = 0; i < flowerCount; i++) {
-      const angle = Math.random() * Math.PI * 2
-      const radius = 0.2 + Math.random() * 0.6
-      positions[i * 3] = Math.cos(angle) * radius
-      positions[i * 3 + 1] = 2.6 + Math.random() * 0.8
-      positions[i * 3 + 2] = Math.sin(angle) * radius
+    for (let i = 0; i < maxFlowerCount; i++) {
+      const angle = (i / maxFlowerCount) * Math.PI * 2
+      const radius = 0.15 + (i % 6) * 0.08
+      const heightOffset = Math.sin(i * 0.7) * 0.4
+      basePositions[i * 3] = Math.cos(angle) * radius
+      basePositions[i * 3 + 1] = 2.7 + heightOffset
+      basePositions[i * 3 + 2] = Math.sin(angle) * radius
+      positions[i * 3] = basePositions[i * 3]
+      positions[i * 3 + 1] = basePositions[i * 3 + 1]
+      positions[i * 3 + 2] = basePositions[i * 3 + 2]
       colors[i * 3] = 1
-      colors[i * 3 + 1] = 0.55
-      colors[i * 3 + 2] = 0.75
+      colors[i * 3 + 1] = 0.55 + Math.random() * 0.15
+      colors[i * 3 + 2] = 0.7 + Math.random() * 0.15
     }
 
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+    geometry.setAttribute('basePosition', new THREE.BufferAttribute(basePositions, 3))
+    geometry.setDrawRange(0, 0)
 
     const material = new THREE.PointsMaterial({
       size: 0.1,
@@ -493,7 +609,9 @@ export function GrowthScene({ particleSystem, growthProgress, currentStage, frui
 
     const group = plantGroupRef.current
 
+    const seedGroup = group.getObjectByName('seed_group') as THREE.Group
     const seed = group.getObjectByName('seed') as THREE.Mesh
+    const seedLines = group.getObjectByName('seed_lines') as THREE.LineSegments
     const sproutStem = group.getObjectByName('sprout_stem') as THREE.Mesh
     const mainStem = group.getObjectByName('main_stem') as THREE.Mesh
     const bigStem = group.getObjectByName('big_stem') as THREE.Mesh
@@ -505,15 +623,27 @@ export function GrowthScene({ particleSystem, growthProgress, currentStage, frui
     const floweringStart = 70
     const fruitingStart = 90
 
-    if (seed) {
+    const FRUIT_INITIAL_SIZE = 0.15
+    const FRUIT_GROWTH_RATE = 1.2
+
+    if (seedGroup && seed) {
       if (progress < sproutStart * 0.8) {
-        seed.visible = true
+        seedGroup.visible = true
         const t = progress / sproutStart
-        seed.scale.setScalar(0.4 + t * 0.8)
-        seed.scale.y = (0.4 + t * 0.8) * 0.7
-        seed.position.y = 0.6 + t * 0.1
+        const scale = 0.4 + t * 0.7
+        seedGroup.scale.setScalar(scale)
+        seedGroup.scale.y = scale * 0.6
+        seedGroup.position.y = 0.62 + t * 0.12
+
+        if (seed.material instanceof THREE.MeshStandardMaterial) {
+          const colorProgress = t * 0.3
+          seed.material.color.setHSL(0.08 + colorProgress * 0.05, 0.6, 0.45 + colorProgress * 0.1)
+        }
+        if (seedLines) {
+          seedLines.rotation.y = t * Math.PI * 0.5
+        }
       } else {
-        seed.visible = false
+        seedGroup.visible = false
       }
     }
 
@@ -535,13 +665,28 @@ export function GrowthScene({ particleSystem, growthProgress, currentStage, frui
       if (cotyledon) {
         if (progress >= sproutStart && progress < matureStart * 1.1) {
           cotyledon.visible = true
-          const t = progress < sproutStart + 5
-            ? (progress - sproutStart) / 5
+          const appearT = progress < sproutStart + 3
+            ? (progress - sproutStart) / 3
             : 1
-          cotyledon.scale.setScalar(0.2 + t * 0.8)
+          const expandT = progress < sproutStart + 8
+            ? (progress - sproutStart) / 8
+            : 1
+
+          const scale = 0.1 + appearT * 0.9
+          cotyledon.scale.setScalar(scale)
+
           const side = i === 0 ? 1 : -1
-          cotyledon.position.x = side * (0.05 + t * 0.1)
-          cotyledon.rotation.z = side * (0.4 + t * 0.5)
+          cotyledon.position.x = side * (0.03 + expandT * 0.1)
+          cotyledon.position.y = 0.95 + appearT * 0.15
+
+          cotyledon.rotation.z = side * (0.25 + expandT * 0.55)
+          cotyledon.rotation.x = -Math.PI / 4 + expandT * Math.PI / 6
+          cotyledon.rotation.y = side * expandT * 0.3
+
+          if (cotyledon.material instanceof THREE.MeshStandardMaterial) {
+            const lightenAmount = appearT * 0.2
+            cotyledon.material.color.setHSL(0.25, 0.5 + appearT * 0.2, 0.6 + lightenAmount)
+          }
         } else {
           cotyledon.visible = false
         }
@@ -616,11 +761,15 @@ export function GrowthScene({ particleSystem, growthProgress, currentStage, frui
       if (fruitMesh) {
         if (progress >= fruitingStart) {
           fruitMesh.visible = true
-          const growthT = Math.min(1, (progress - fruitingStart) / 10)
-          const fruitScale = (0.2 + growthT * 0.5) * (0.5 + fruit * 1.5)
+          const stageT = Math.min(1, (progress - fruitingStart) / 10)
+          const fruitScale = FRUIT_INITIAL_SIZE * (1 + stageT * FRUIT_GROWTH_RATE) * (0.7 + fruit * 0.8)
           fruitMesh.scale.setScalar(fruitScale)
-          const baseY = 2.6 + bigStem.scale.y * 2
+          const baseY = 2.6 + (bigStem ? bigStem.scale.y * 2 : 0)
           fruitMesh.position.y = baseY + Math.sin(i * 2.5) * 0.3
+          if (fruitMesh.material instanceof THREE.MeshStandardMaterial) {
+            const ripenT = Math.min(1, (progress - fruitingStart) / 8)
+            fruitMesh.material.color.setHSL(0.05 + ripenT * 0.03, 0.8, 0.5 + ripenT * 0.1)
+          }
         } else {
           fruitMesh.visible = false
         }
@@ -628,30 +777,56 @@ export function GrowthScene({ particleSystem, growthProgress, currentStage, frui
     }
   }
 
-  const updateFlowerParticles = (stage: GrowthStage, time: number) => {
+  const updateFlowerParticles = (stage: GrowthStage, progress: number, time: number) => {
     if (!flowerParticlesRef.current) return
 
     const material = flowerParticlesRef.current.material as THREE.PointsMaterial
     const positions = flowerParticlesRef.current.geometry.attributes.position.array as Float32Array
+    const basePositions = flowerParticlesRef.current.geometry.attributes.basePosition.array as Float32Array
+    const maxCount = 60
+
+    const floweringStart = 70
+    const fruitingStart = 90
 
     if (stage === 'flowering' || stage === 'fruiting') {
-      material.opacity = Math.min(1, material.opacity + 0.03)
+      let progressInStage = 0
+      if (stage === 'flowering') {
+        progressInStage = Math.min(1, Math.max(0, (progress - floweringStart) / (fruitingStart - floweringStart)))
+      } else {
+        progressInStage = 1
+      }
 
-      for (let i = 0; i < 40; i++) {
+      const activeParticleCount = Math.floor(15 + progressInStage * 45)
+
+      material.opacity = Math.min(1, material.opacity + 0.03)
+      flowerParticlesRef.current.geometry.setDrawRange(0, activeParticleCount)
+
+      for (let i = 0; i < activeParticleCount; i++) {
         const idx = i * 3
-        const baseAngle = (i / 40) * Math.PI * 2
-        const baseRadius = 0.3 + (i % 5) * 0.1
-        positions[idx] = Math.cos(baseAngle + time * 0.3 + i * 0.5) * (baseRadius + Math.sin(time * 1.5 + i) * 0.15)
-        positions[idx + 1] = 2.8 + Math.sin(time + i * 0.7) * 0.25 + (i % 3) * 0.2
-        positions[idx + 2] = Math.sin(baseAngle + time * 0.3 + i * 0.5) * (baseRadius + Math.cos(time * 1.2 + i) * 0.15)
+        const baseAngle = (i / maxCount) * Math.PI * 2
+        const baseRadius = 0.2 + (i % 6) * 0.08
+        const wobble = Math.sin(time * 1.5 + i * 0.8) * 0.15
+        const floatY = Math.sin(time + i * 0.6) * 0.2
+        const spreadRadius = baseRadius + progressInStage * 0.3
+
+        positions[idx] = basePositions[idx] + Math.cos(baseAngle + time * 0.25 + i * 0.4) * (spreadRadius + wobble)
+        positions[idx + 1] = basePositions[idx + 1] + floatY + progressInStage * 0.3
+        positions[idx + 2] = basePositions[idx + 2] + Math.sin(baseAngle + time * 0.25 + i * 0.4) * (spreadRadius + wobble)
       }
       flowerParticlesRef.current.geometry.attributes.position.needsUpdate = true
     } else {
       material.opacity = Math.max(0, material.opacity - 0.03)
+      flowerParticlesRef.current.geometry.setDrawRange(0, 0)
     }
   }
 
   const progressPercent = Math.min(100, Math.max(0, displayProgress))
+
+  const stageThresholds = [0, 20, 45, 70, 90, 100]
+  const stageIndex = ['seed', 'sprout', 'mature', 'flowering', 'fruiting'].indexOf(currentStage)
+  const currentStageStart = stageThresholds[stageIndex]
+  const nextStageStart = stageThresholds[stageIndex + 1] || 100
+  const stageProgress = Math.min(100, Math.max(0, ((displayProgress - currentStageStart) / (nextStageStart - currentStageStart)) * 100))
 
   return (
     <div
@@ -683,46 +858,75 @@ export function GrowthScene({ particleSystem, growthProgress, currentStage, frui
       >
         <div
           style={{
-            color: STAGE_COLORS[currentStage],
-            fontSize: '24px',
-            fontWeight: 'bold',
-            textShadow: '0 2px 10px rgba(0,0,0,0.5)',
-            marginBottom: '10px',
-            transition: 'color 0.3s ease'
-          }}
-        >
-          {STAGE_NAMES[currentStage]}
-        </div>
-        <div
-          style={{
-            width: '200px',
-            height: '10px',
-            background: 'rgba(42, 42, 74, 0.8)',
-            borderRadius: '5px',
-            overflow: 'hidden',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.3)'
+            background: 'rgba(0, 0, 0, 0.6)',
+            backdropFilter: 'blur(8px)',
+            padding: '16px 28px',
+            borderRadius: '12px',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
+            border: '1px solid rgba(255, 255, 255, 0.1)'
           }}
         >
           <div
             style={{
-              height: '100%',
-              width: `${progressPercent}%`,
-              background: STAGE_COLORS[currentStage],
-              borderRadius: '5px',
-              transition: 'width 0.3s ease, background-color 0.3s ease',
-              boxShadow: `0 0 10px ${STAGE_COLORS[currentStage]}50`
+              color: displayColor,
+              fontSize: '22px',
+              fontWeight: 'bold',
+              textShadow: '0 2px 8px rgba(0,0,0,0.5)',
+              marginBottom: '10px',
+              transition: 'color 0.1s ease',
+              letterSpacing: '1px'
             }}
-          />
-        </div>
-        <div
-          style={{
-            color: '#ccd6f6',
-            fontSize: '12px',
-            marginTop: '6px',
-            opacity: 0.8
-          }}
-        >
-          {progressPercent.toFixed(1)}%
+          >
+            {STAGE_NAMES[currentStage]}
+          </div>
+          <div
+            style={{
+              width: '220px',
+              height: '10px',
+              background: 'rgba(42, 42, 74, 0.9)',
+              borderRadius: '5px',
+              overflow: 'hidden',
+              boxShadow: '0 2px 10px rgba(0,0,0,0.3)'
+            }}
+          >
+            <div
+              style={{
+                height: '100%',
+                width: `${progressPercent}%`,
+                background: displayColor,
+                borderRadius: '5px',
+                transition: 'width 0.3s ease, background-color 0.1s ease',
+                boxShadow: `0 0 12px ${displayColor}60`
+              }}
+            />
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginTop: '8px',
+              padding: '0 4px'
+            }}
+          >
+            <span
+              style={{
+                color: '#8892b0',
+                fontSize: '11px',
+                opacity: 0.9
+              }}
+            >
+              阶段进度: {stageProgress.toFixed(0)}%
+            </span>
+            <span
+              style={{
+                color: '#ccd6f6',
+                fontSize: '11px',
+                opacity: 0.9
+              }}
+            >
+              总进度: {progressPercent.toFixed(1)}%
+            </span>
+          </div>
         </div>
       </div>
     </div>

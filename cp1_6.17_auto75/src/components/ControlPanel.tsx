@@ -32,12 +32,15 @@ export function ControlPanel({ isMobile = false, isOpen = true, onClose }: Contr
   }, [getSnapshots])
 
   const handleSaveSnapshot = (index: number) => {
-    saveSnapshot(index)
-    setSnapshots(getSnapshots())
+    const success = saveSnapshot(index)
+    if (success) {
+      setSnapshots(getSnapshots())
+    }
   }
 
   const handleLoadSnapshot = (index: number) => {
-    if (loadSnapshot(index)) {
+    const result = loadSnapshot(index)
+    if (result.success) {
       setSnapshots(getSnapshots())
     }
   }
@@ -59,9 +62,14 @@ export function ControlPanel({ isMobile = false, isOpen = true, onClose }: Contr
     height: '6px',
     borderRadius: '3px',
     background: getSliderBackground(value, colorStart, colorEnd),
+    backgroundSize: '100% 100%',
+    backgroundPosition: 'left center',
+    backgroundRepeat: 'no-repeat',
     appearance: 'none',
+    WebkitAppearance: 'none',
     cursor: 'pointer',
-    outline: 'none'
+    outline: 'none',
+    boxSizing: 'border-box'
   })
 
   const sliderThumbStyle = (color: string): React.CSSProperties => ({
@@ -71,8 +79,10 @@ export function ControlPanel({ isMobile = false, isOpen = true, onClose }: Contr
     background: color,
     cursor: 'pointer',
     appearance: 'none',
+    WebkitAppearance: 'none',
     transition: 'box-shadow 0.2s ease, transform 0.1s ease',
-    boxShadow: '0 0 0 0 rgba(0,0,0,0)'
+    boxShadow: '0 0 0 0 rgba(0,0,0,0)',
+    boxSizing: 'border-box'
   })
 
   const panelStyle: React.CSSProperties = isMobile
@@ -198,7 +208,7 @@ export function ControlPanel({ isMobile = false, isOpen = true, onClose }: Contr
           value={water}
           onChange={(e) => setWater(Number(e.target.value))}
           style={sliderStyle(water, waterColorStart, waterColorEnd)}
-          className="custom-slider"
+          className="custom-slider water-slider"
         />
       </div>
 
@@ -214,7 +224,7 @@ export function ControlPanel({ isMobile = false, isOpen = true, onClose }: Contr
           value={nutrient}
           onChange={(e) => setNutrient(Number(e.target.value))}
           style={sliderStyle(nutrient, nutrientColorStart, nutrientColorEnd)}
-          className="custom-slider"
+          className="custom-slider nutrient-slider"
         />
       </div>
 
@@ -230,7 +240,7 @@ export function ControlPanel({ isMobile = false, isOpen = true, onClose }: Contr
           value={light}
           onChange={(e) => setLight(Number(e.target.value))}
           style={sliderStyle(light, lightColorStart, lightColorEnd)}
-          className="custom-slider"
+          className="custom-slider light-slider"
         />
       </div>
 
@@ -313,9 +323,7 @@ export function ControlPanel({ isMobile = false, isOpen = true, onClose }: Contr
           cursor: pointer;
           box-shadow: 0 0 0 0 rgba(100, 255, 218, 0);
           transition: box-shadow 0.2s ease;
-        }
-        .custom-slider::-webkit-slider-thumb:hover {
-          box-shadow: 0 0 10px 3px rgba(100, 255, 218, 0.5);
+          box-sizing: border-box;
         }
         .custom-slider::-moz-range-thumb {
           width: 20px;
@@ -326,9 +334,25 @@ export function ControlPanel({ isMobile = false, isOpen = true, onClose }: Contr
           border: none;
           box-shadow: 0 0 0 0 rgba(100, 255, 218, 0);
           transition: box-shadow 0.2s ease;
+          box-sizing: border-box;
         }
-        .custom-slider::-moz-range-thumb:hover {
-          box-shadow: 0 0 10px 3px rgba(100, 255, 218, 0.5);
+        .water-slider::-webkit-slider-thumb:hover {
+          box-shadow: 0 0 10px 3px rgba(79, 195, 247, 0.6);
+        }
+        .water-slider::-moz-range-thumb:hover {
+          box-shadow: 0 0 10px 3px rgba(79, 195, 247, 0.6);
+        }
+        .nutrient-slider::-webkit-slider-thumb:hover {
+          box-shadow: 0 0 10px 3px rgba(129, 199, 132, 0.6);
+        }
+        .nutrient-slider::-moz-range-thumb:hover {
+          box-shadow: 0 0 10px 3px rgba(129, 199, 132, 0.6);
+        }
+        .light-slider::-webkit-slider-thumb:hover {
+          box-shadow: 0 0 10px 3px rgba(255, 241, 118, 0.6);
+        }
+        .light-slider::-moz-range-thumb:hover {
+          box-shadow: 0 0 10px 3px rgba(255, 241, 118, 0.6);
         }
       `}</style>
     </div>

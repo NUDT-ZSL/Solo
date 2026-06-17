@@ -162,12 +162,20 @@ export class ParticleSystem {
       this.positionBuffer[idx + 2] = p.z
 
       const lifeRatio = 1 - p.lifetime / p.maxLifetime
-      const alpha = lifeRatio
+      const alpha = lifeRatio * 0.9
 
       const nutrient = p.nutrientLevel
-      const r = (1 - nutrient) * 0.31 + nutrient * 0.1
-      const g = (1 - nutrient) * 0.76 + nutrient * 0.8
-      const b = (1 - nutrient) * 0.97 + nutrient * 0.2
+
+      const blueR = 0.31
+      const blueG = 0.76
+      const blueB = 0.97
+      const greenR = 0.1
+      const greenG = 0.85
+      const greenB = 0.15
+
+      const r = blueR + (greenR - blueR) * nutrient
+      const g = blueG + (greenG - blueG) * nutrient
+      const b = blueB + (greenB - blueB) * nutrient
 
       this.colorBuffer[idx] = r * alpha
       this.colorBuffer[idx + 1] = g * alpha

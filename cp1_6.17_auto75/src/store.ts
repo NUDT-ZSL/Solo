@@ -37,6 +37,7 @@ interface PlantState {
   fruitSize: number
   particleCount: number
   isPaused: boolean
+  errorMessage: string | null
 }
 
 interface PlantActions {
@@ -46,9 +47,11 @@ interface PlantActions {
   updateGrowth: (deltaTime: number) => void
   setParticleCount: (count: number) => void
   resetPlant: () => void
-  saveSnapshot: (index: number) => void
-  loadSnapshot: (index: number) => boolean
+  saveSnapshot: (index: number) => boolean
+  loadSnapshot: (index: number) => { success: boolean; message?: string }
   getSnapshots: () => Array<{ index: number; exists: boolean; stage: string }>
+  getErrorMessage: () => string | null
+  clearErrorMessage: () => void
 }
 
 const getStageFromProgress = (progress: number): GrowthStage => {
@@ -72,8 +75,47 @@ const INITIAL_STATE: PlantState = {
 
 const SNAPSHOT_KEY = 'particle_plant_snapshots'
 
+const validateSnapshotData = (data: unknown): { valid: boolean; message?: string } => {
+  if (typeof data !== 'object' || data === null) {
+    return { valid: false, message: '快照数据格式错误' }
+  }
+
+  const snapshot = data as Record<string, unknown>
+  const requiredFields = ['water', 'nutrient', 'light', 'growthProgress', 'currentStage', 'fruitSize', 'particleCount']
+  const missingFields = requiredFields.filter(field => !(field in snapshot))
+
+  if (missingFields.length > 0) {
+    return { valid: false, message: `快照数据缺失字段: ${missingFields.join(', ')}` }
+  }
+
+  if (typeof snapshot.water !== 'number' || snapshot.water < 0 || snapshot.water > 100) {
+    return { valid: false, message: '水分值无效' }
+  }
+  if (typeof snapshot.nutrient !== 'number' || snapshot.nutrient < 0 || snapshot.nutrient > 100) {
+    return { valid: false, message: '养分值无效' }
+  }
+  if (typeof snapshot.light !== 'number' || snapshot.light < 0 || snapshot.light > 100) {
+    return { valid: false, message: '光照值无效' }
+  }
+  if (typeof snapshot.growthProgress !== 'number' || snapshot.growthProgress < 0 || snapshot.growthProgress > 100) {
+    return { valid: false, message: '生长进度值无效' }
+  }
+  if (!GROWTH_STAGES.includes(snapshot.currentStage as GrowthStage)) {
+    return { valid: false, message: '生长阶段无效' }
+  }
+  if (typeof snapshot.fruitSize !== 'number' || snapshot.fruitSize < 0 || snapshot.fruitSize > 1) {
+    return { valid: false, message: '果实大小值无效' }
+  }
+  if (typeof snapshot.particleCount !== 'number' || snapshot.particleCount < 0) {
+    return { valid: false, message: '粒子数量值无效' }
+  }
+
+  return { valid: true }
+}
+
 export const usePlantStore = create<PlantState & PlantActions>((set, get) => ({
   ...INITIAL_STATE,
+  errorMessage: null,
 
   setWater: (value: number) => set({ water: Math.max(0, Math.min(100, value)) }),
   setNutrient: (value: number) => set({ nutrient: Math.max(0, Math.min(100, value)) }),
@@ -106,47 +148,131 @@ export const usePlantStore = create<PlantState & PlantActions>((set, get) => ({
 
   setParticleCount: (count: number) => set({ particleCount: count }),
 
-  resetPlant: () => set({ ...INITIAL_STATE }),
+  resetPlant: () => set({
+    ...INITIAL_STATE,
+    errorMessage: null
+  }),
 
-  saveSnapshot: (index: number) => {
-    const state = get()
-    const snapshots = JSON.parse(localStorage.getItem(SNAPSHOT_KEY) || '{}')
-    snapshots[index] = {
-      water: state.water,
-      nutrient: state.nutrient,
-      light: state.light,
-      growthProgress: state.growthProgress,
-      currentStage: state.currentStage,
-      fruitSize: state.fruitSize,
-      particleCount: state.particleCount,
-      timestamp: Date.now()
+  saveSnapshot: (index: number): boolean => {
+    try {
+      if (index < 0 || index > 2) {
+        set({ errorMessage: '无效的快照索引' })
+        return false
+      }
+
+      const state = get()
+      const rawData = localStorage.getItem(SNAPSHOT_KEY)
+      const snapshots = rawData ? JSON.parse(rawData) : {}
+
+      const snapshotData = {
+        water: state.water,
+        nutrient: state.nutrient,
+        light: state.light,
+        growthProgress: state.growthProgress,
+        currentStage: state.currentStage,
+        fruitSize: state.fruitSize,
+        particleCount: state.particleCount,
+        timestamp: Date.now()
+      }
+
+      const validation = validateSnapshotData(snapshotData)
+      if (!validation.valid) {
+        set({ errorMessage: validation.message })
+        return false
+      }
+
+      snapshots[index] = snapshotData
+      localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshots))
+      set({ errorMessage: null })
+      return true
+    } catch (e) {
+      set({ errorMessage: '保存快照失败: ' + (e instanceof Error ? e.message : '未知错误') })
+      return false
     }
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshots))
   },
 
-  loadSnapshot: (index: number): boolean => {
-    const snapshots = JSON.parse(localStorage.getItem(SNAPSHOT_KEY) || '{}')
-    const snapshot = snapshots[index]
-    if (!snapshot) return false
+  loadSnapshot: (index: number): { success: boolean; message?: string } => {
+    try {
+      if (index < 0 || index > 2) {
+        const message = '无效的快照索引'
+        set({ errorMessage: message })
+        return { success: false, message }
+      }
 
-    set({
-      water: snapshot.water,
-      nutrient: snapshot.nutrient,
-      light: snapshot.light,
-      growthProgress: snapshot.growthProgress,
-      currentStage: snapshot.currentStage,
-      fruitSize: snapshot.fruitSize,
-      particleCount: snapshot.particleCount
-    })
-    return true
+      const rawData = localStorage.getItem(SNAPSHOT_KEY)
+      if (!rawData) {
+        const message = '没有找到快照数据'
+        set({ errorMessage: message })
+        return { success: false, message }
+      }
+
+      const snapshots = JSON.parse(rawData)
+      const snapshot = snapshots[index]
+      if (!snapshot) {
+        const message = `快照 ${index + 1} 为空`
+        set({ errorMessage: message })
+        return { success: false, message }
+      }
+
+      const validation = validateSnapshotData(snapshot)
+      if (!validation.valid) {
+        const message = `快照数据损坏: ${validation.message}`
+        set({ errorMessage: message })
+        return { success: false, message }
+      }
+
+      set({
+        water: snapshot.water,
+        nutrient: snapshot.nutrient,
+        light: snapshot.light,
+        growthProgress: snapshot.growthProgress,
+        currentStage: snapshot.currentStage,
+        fruitSize: snapshot.fruitSize,
+        particleCount: snapshot.particleCount,
+        errorMessage: null
+      })
+
+      return { success: true }
+    } catch (e) {
+      const message = '加载快照失败: ' + (e instanceof Error ? e.message : '未知错误')
+      set({ errorMessage: message })
+      return { success: false, message }
+    }
   },
 
   getSnapshots: () => {
-    const snapshots = JSON.parse(localStorage.getItem(SNAPSHOT_KEY) || '{}')
-    return [0, 1, 2].map(index => ({
-      index,
-      exists: !!snapshots[index],
-      stage: snapshots[index] ? STAGE_NAMES[snapshots[index].currentStage as GrowthStage] : '空'
-    }))
-  }
+    try {
+      const rawData = localStorage.getItem(SNAPSHOT_KEY)
+      const snapshots = rawData ? JSON.parse(rawData) : {}
+
+      return [0, 1, 2].map(index => {
+        const snapshot = snapshots[index]
+        if (snapshot) {
+          const validation = validateSnapshotData(snapshot)
+          if (validation.valid) {
+            return {
+              index,
+              exists: true,
+              stage: STAGE_NAMES[snapshot.currentStage as GrowthStage]
+            }
+          }
+        }
+        return {
+          index,
+          exists: false,
+          stage: '空'
+        }
+      })
+    } catch (e) {
+      return [0, 1, 2].map(index => ({
+        index,
+        exists: false,
+        stage: '空'
+      }))
+    }
+  },
+
+  getErrorMessage: () => get().errorMessage as string | null,
+
+  clearErrorMessage: () => set({ errorMessage: null })
 }))
