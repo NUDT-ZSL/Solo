@@ -3,6 +3,7 @@ import { RoomModule, type RoomData } from './room-module';
 import { SkillModule, type SkillState, type SkillEffect, type SkillHitData } from './skill-module';
 import { EnemyModule, type Enemy, type EnemyProjectile } from './enemy-module';
 import { HUD, FPSMonitor, LowFPSBorder } from './ui-module';
+import { globalApi } from './rest-api';
 
 const PLAYER_RADIUS = 15;
 const PLAYER_SPEED = 150;
@@ -17,6 +18,12 @@ export default function App() {
   const roomModuleRef = useRef(new RoomModule());
   const skillModuleRef = useRef(new SkillModule());
   const enemyModuleRef = useRef(new EnemyModule());
+
+  useEffect(() => {
+    skillModuleRef.current.registerRestApi(globalApi);
+    enemyModuleRef.current.registerRestApi(globalApi);
+    roomModuleRef.current.registerRestApi(globalApi);
+  }, []);
 
   const playerRef = useRef({ x: 0, y: 0, dx: 0, dy: 0 });
   const keysRef = useRef<Record<string, boolean>>({});
@@ -57,6 +64,25 @@ export default function App() {
     setRoomIndex(roomModuleRef.current.getRoomIndex());
   }, []);
 
+  const generateNewRoomViaApi = useCallback(async (w: number, h: number) => {
+    const res = await globalApi.request<{ room: RoomData; roomIndex: number }>({
+      method: 'POST', path: '/api/room/generate', body: { canvasWidth: w, canvasHeight: h }
+    });
+    if (!res.ok || !res.data.room) return;
+    const room = res.data.room;
+    roomRef.current = room;
+    playerRef.current.x = room.playerSpawn.x;
+    playerRef.current.y = room.playerSpawn.y;
+    await globalApi.request({
+      method: 'POST', path: '/api/enemies/init-room', body: room
+    });
+    portalVisibleRef.current = false;
+    setPortalVisible(false);
+    setEnemyCount(enemyModuleRef.current.getEnemies().length);
+    setKilledInRoom(0);
+    setRoomIndex(res.data.roomIndex);
+  }, []);
+
   useEffect(() => {
     const handleResize = () => {
       const el = containerRef.current;
@@ -83,7 +109,11 @@ export default function App() {
     const em = enemyModuleRef.current;
 
     const onCooldown = (s: SkillState[]) => setSkills(s);
-    const onHit = (data: SkillHitData) => em.handleSkillHit(data);
+    const onHit = (data: SkillHitData) => {
+      globalApi.request({
+        method: 'POST', path: '/api/enemies/hit', body: data
+      });
+    };
     const onEnemyUpdate = (enemies: Enemy[], _projectiles: EnemyProjectile[]) => {
       setEnemyCount(enemies.length);
     };
@@ -117,9 +147,18 @@ export default function App() {
       keysRef.current[k] = true;
       const px = playerRef.current.x;
       const py = playerRef.current.y;
-      if (k === 'j') skillModuleRef.current.castSkill('fireball', px, py);
-      if (k === 'k') skillModuleRef.current.castSkill('frost', px, py);
-      if (k === 'l') skillModuleRef.current.castSkill('lightning', px, py);
+      if (k === 'j') {
+        skillModuleRef.current.castSkill('fireball', px, py);
+        globalApi.request({ method: 'POST', path: '/api/skills/fireball/cast', body: { x: px, y: py } });
+      }
+      if (k === 'k') {
+        skillModuleRef.current.castSkill('frost', px, py);
+        globalApi.request({ method: 'POST', path: '/api/skills/frost/cast', body: { x: px, y: py } });
+      }
+      if (k === 'l') {
+        skillModuleRef.current.castSkill('lightning', px, py);
+        globalApi.request({ method: 'POST', path: '/api/skills/lightning/cast', body: { x: px, y: py } });
+      }
     };
     const onUp = (e: KeyboardEvent) => {
       keysRef.current[e.key.toLowerCase()] = false;
@@ -188,7 +227,7 @@ export default function App() {
         if (fadeRef.current.alpha >= 1) {
           fadeRef.current.phase = 'in';
           pendingRoomSwitchRef.current = false;
-          generateNewRoom(canvasSize.w, canvasSize.h);
+          generateNewRoomViaApi(canvasSize.w, canvasSize.h);
         }
       } else if (fadeRef.current.phase === 'in') {
         fadeRef.current.alpha = Math.max(0, fadeRef.current.alpha - dt * 4);
@@ -226,7 +265,7 @@ export default function App() {
 
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [canvasSize.w, canvasSize.h, generateNewRoom, handlePlayerHit]);
+  }, [canvasSize.w, canvasSize.h, generateNewRoom, generateNewRoomViaApi, handlePlayerHit]);
 
   const render = useCallback(() => {
     const canvas = canvasRef.current;

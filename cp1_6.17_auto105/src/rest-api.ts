@@ -91,13 +91,13 @@ export class RestApiSimulator {
 
     const matched = this.matchRoute(req.method, req.path);
     if (!matched) {
-      const response: ApiResponse = {
+      const response = {
         status: 404,
         ok: false,
         data: null as unknown as T,
         message: `Route not found: ${req.method} ${req.path}`,
         timestamp: Date.now()
-      };
+      } as ApiResponse<T>;
       this.responseLog.push(response);
       return response;
     }
@@ -108,13 +108,13 @@ export class RestApiSimulator {
       this.responseLog.push(result);
       return result as ApiResponse<T>;
     } catch (error) {
-      const response: ApiResponse = {
+      const response = {
         status: 500,
         ok: false,
         data: null as unknown as T,
         message: error instanceof Error ? error.message : 'Internal Server Error',
         timestamp: Date.now()
-      };
+      } as ApiResponse<T>;
       this.responseLog.push(response);
       return response;
     }

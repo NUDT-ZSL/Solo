@@ -1,5 +1,7 @@
 import type { RoomData } from './room-module';
 import type { SkillHitData, SkillId } from './skill-module';
+import type { RestApiSimulator, ApiRequest } from './rest-api';
+import { ok, badRequest } from './rest-api';
 
 export type EnemyType = 'normal' | 'small' | 'elite';
 
@@ -276,7 +278,7 @@ export class EnemyModule {
       if (e.type === 'elite') {
         e.shootTimer -= dtMs;
         if (e.shootTimer <= 0) {
-          e.shootTimer = e.shootCooldown;
+          e.shootTimer = e.shootCooldown + e.shootTimer;
           const sdx = playerX - e.x;
           const sdy = playerY - e.y;
           const sd = Math.sqrt(sdx * sdx + sdy * sdy) || 1;
@@ -347,5 +349,42 @@ export class EnemyModule {
 
   isAllCleared(): boolean {
     return this.allCleared;
+  }
+
+  registerRestApi(api: RestApiSimulator): void {
+    api.get('/api/enemies', (_req: ApiRequest) => {
+      return ok({
+        enemies: this.getEnemies(),
+        projectiles: this.getProjectiles(),
+        killedCount: this.getKilledCount(),
+        allCleared: this.isAllCleared()
+      });
+    });
+
+    api.get('/api/enemies/count', (_req: ApiRequest) => {
+      return ok({ count: this.enemies.length, killedCount: this.killedCount });
+    });
+
+    api.post('/api/enemies/hit', (req: ApiRequest) => {
+      const data = req.body as SkillHitData;
+      if (!data || !data.enemyIds || !data.skillId) {
+        return badRequest('Missing hit data: skillId, enemyIds, damage');
+      }
+      this.handleSkillHit(data);
+      return ok({ applied: true, hitCount: data.enemyIds.length });
+    });
+
+    api.post('/api/enemies/init-room', (req: ApiRequest) => {
+      const room = req.body as RoomData;
+      if (!room) return badRequest('Missing room data');
+      this.initRoom(room);
+      return ok({ enemyCount: this.enemies.length });
+    });
+
+    api.post('/api/enemies/player-hit', (req: ApiRequest) => {
+      const { damage } = (req.body || {}) as { damage: number };
+      if (typeof damage !== 'number') return badRequest('Missing damage');
+      return ok({ damageApplied: true, damage });
+    });
   }
 }

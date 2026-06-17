@@ -1,5 +1,8 @@
 export type CellType = 'floor' | 'wall' | 'obstacle';
 
+import type { RestApiSimulator, ApiRequest } from './rest-api';
+import { ok, badRequest } from './rest-api';
+
 export interface RoomData {
   grid: CellType[][];
   gridSize: number;
@@ -164,5 +167,26 @@ export class RoomModule {
       }
     }
     return true;
+  }
+
+  registerRestApi(api: RestApiSimulator): void {
+    api.get('/api/room', (_req: ApiRequest) => {
+      return ok({ room: this.currentRoom, roomIndex: this.roomIndex });
+    });
+
+    api.get('/api/room/walkable', (req: ApiRequest) => {
+      const { x, y, radius } = (req.params || {}) as { x: string; y: string; radius: string };
+      if (!x || !y || !radius) return badRequest('Missing x, y, radius');
+      return ok({ walkable: this.isWalkable(Number(x), Number(y), Number(radius)) });
+    });
+
+    api.post('/api/room/generate', (req: ApiRequest) => {
+      const { canvasWidth, canvasHeight } = (req.body || {}) as { canvasWidth: number; canvasHeight: number };
+      if (typeof canvasWidth !== 'number' || typeof canvasHeight !== 'number') {
+        return badRequest('Missing canvasWidth, canvasHeight');
+      }
+      const room = this.generateRoom(canvasWidth, canvasHeight);
+      return ok({ room, roomIndex: this.roomIndex });
+    });
   }
 }

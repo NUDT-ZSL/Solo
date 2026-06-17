@@ -338,6 +338,17 @@ export class SkillModule {
     fb.x += stepX;
     fb.y += stepY;
 
+    if (fb.traveled >= fb.maxDistance) {
+      const overshoot = fb.traveled - fb.maxDistance;
+      const totalDist = fb.traveled;
+      if (totalDist > 0) {
+        const ratio = overshoot / totalDist;
+        fb.x -= stepX * ratio;
+        fb.y -= stepY * ratio;
+      }
+      fb.traveled = fb.maxDistance;
+    }
+
     for (let i = 0; i < 3; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 30 + Math.random() * 50;
@@ -405,17 +416,15 @@ export class SkillModule {
         }
       }
 
-      if (hitIds.length > 0) {
-        this.emit('skill:hit', {
-          skillId: 'fireball',
-          effectId: fb.id,
-          enemyIds: hitIds,
-          damage: fb.damage,
-          x: fb.x,
-          y: fb.y,
-          radius: fb.explosionRadius
-        });
-      }
+      this.emit('skill:hit', {
+        skillId: 'fireball',
+        effectId: fb.id,
+        enemyIds: hitIds,
+        damage: fb.damage,
+        x: fb.x,
+        y: fb.y,
+        radius: fb.explosionRadius
+      });
     }
   }
 
