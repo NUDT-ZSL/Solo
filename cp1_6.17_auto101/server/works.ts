@@ -179,7 +179,7 @@ router.get('/:id', (req: Request, res: Response): void => {
   );
 });
 
-router.post('/:id/buy', verifyToken, (req: AuthRequest, res: Response): void => {
+router.post('/:id/purchase', verifyToken, (req: AuthRequest, res: Response): void => {
   const { id } = req.params;
   const db = getDb();
 
@@ -221,6 +221,7 @@ router.post('/:id/buy', verifyToken, (req: AuthRequest, res: Response): void => 
             }
             res.json({
               transactionId: txId,
+              originalImageUrl: `/api/images/original/${work.image_path}`,
               originalPath: `/api/images/original/${work.image_path}`,
               message: '购买成功',
             });

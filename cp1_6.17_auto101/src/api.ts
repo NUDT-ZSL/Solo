@@ -167,7 +167,7 @@ export const api = {
     },
     detail: (id: string) => request<WorkItem>(`/works/${id}`),
     buy: (id: string) =>
-      request<BuyResponse>(`/works/${id}/buy`, { method: 'POST' }),
+      request<BuyResponse>(`/works/${id}/purchase`, { method: 'POST' }),
     upload: (formData: FormData) => uploadFile<{ id: string; message: string }>('/works/upload', formData),
     purchases: (sort?: string) =>
       request<{ purchases: PurchaseItem[] }>(`/works/user/purchases${sort ? `?sort=${sort}` : ''}`),

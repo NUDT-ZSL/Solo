@@ -48,19 +48,20 @@ function generateWatermarkSvg(
 ): string {
   const spacingX = opts.fontSize * 8;
   const spacingY = opts.fontSize * 5;
-  const cols = Math.ceil(width / spacingX) + 2;
-  const rows = Math.ceil(height / spacingY) + 2;
+  const cols = Math.ceil(width / spacingX) + 3;
+  const rows = Math.ceil(height / spacingY) + 3;
+  const fontFamily = "'Helvetica', 'Arial', 'Microsoft YaHei', sans-serif";
 
   let textElements = '';
-  for (let row = -1; row < rows; row++) {
-    for (let col = -1; col < cols; col++) {
-      const x = col * spacingX;
+  for (let row = -2; row < rows; row++) {
+    for (let col = -2; col < cols; col++) {
+      const x = col * spacingX + spacingX / 2;
       const y = row * spacingY + spacingY / 2;
-      textElements += `<text x="${x}" y="${y}" fill="${opts.color}" opacity="${opts.opacity}" font-size="${opts.fontSize}" font-style="italic" transform="rotate(${opts.angle}, ${x}, ${y})">${escapeXml(opts.text)}</text>`;
+      textElements += `<text x="${x}" y="${y}" fill="${opts.color}" fill-opacity="${opts.opacity}" font-size="${opts.fontSize}" font-style="italic" font-family="${fontFamily}" text-anchor="middle" dominant-baseline="middle" transform="rotate(${opts.angle}, ${x}, ${y})">${escapeXml(opts.text)}</text>`;
     }
   }
 
-  return `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">${textElements}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${textElements}</svg>`;
 }
 
 function escapeXml(str: string): string {

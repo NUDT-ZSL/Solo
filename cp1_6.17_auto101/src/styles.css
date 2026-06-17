@@ -204,20 +204,9 @@ input, select, textarea {
 }
 
 .masonry-grid {
-  column-count: 4;
   column-gap: 16px;
   background-color: var(--color-bg-card);
   padding: var(--page-padding);
-}
-
-@media (max-width: 1200px) {
-  .masonry-grid { column-count: 3; }
-}
-@media (max-width: 900px) {
-  .masonry-grid { column-count: 2; }
-}
-@media (max-width: 600px) {
-  .masonry-grid { column-count: 1; }
 }
 
 .work-card {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api, WorkItem } from '../api';
 
 interface BuyModalProps {
@@ -10,6 +10,14 @@ interface BuyModalProps {
 export default function BuyModal({ work, onClose, onSuccess }: BuyModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const timer = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setVisible(true));
+    });
+    return () => cancelAnimationFrame(timer);
+  }, []);
 
   const handleBuy = async () => {
     setLoading(true);
@@ -24,9 +32,26 @@ export default function BuyModal({ work, onClose, onSuccess }: BuyModalProps) {
     }
   };
 
+  const handleClose = () => {
+    setVisible(false);
+    setTimeout(onClose, 200);
+  };
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="modal-overlay"
+      onClick={handleClose}
+      style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.2s ease' }}
+    >
+      <div
+        className="modal-content"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          transform: visible ? 'translateY(0)' : 'translateY(40px)',
+          opacity: visible ? 1 : 0,
+          transition: 'transform 0.3s ease-out, opacity 0.3s ease-out',
+        }}
+      >
         <h2 className="modal-title">确认购买</h2>
         <img
           src={work.watermarkedPath}
@@ -55,7 +80,7 @@ export default function BuyModal({ work, onClose, onSuccess }: BuyModalProps) {
         {error && <div className="error-message">{error}</div>}
 
         <div className="modal-actions">
-          <button className="btn-cancel" onClick={onClose} disabled={loading}>
+          <button className="btn-cancel" onClick={handleClose} disabled={loading}>
             取消
           </button>
           <button className="btn-confirm" onClick={handleBuy} disabled={loading}>

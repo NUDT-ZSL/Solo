@@ -9,6 +9,11 @@ const SORTS = [
   { value: 'price_asc', label: '价格从低到高' },
   { value: 'price_desc', label: '价格从高到低' },
 ];
+const MIN_COLUMN_WIDTH = 280;
+const COLUMN_GAP = 16;
+const PAGE_PADDING = 16;
+const PAGE_SIZE = 20;
+const PRELOAD_THRESHOLD = 300;
 
 export default function WorkList() {
   const [works, setWorks] = useState<WorkItem[]>([]);
@@ -18,52 +23,96 @@ export default function WorkList() {
   const [style, setStyle] = useState('all');
   const [sort, setSort] = useState('newest');
   const [selectedWork, setSelectedWork] = useState<WorkItem | null>(null);
+  const [columns, setColumns] = useState(4);
   const navigate = useNavigate();
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  const sentinelRef = useRef<HTMLDivElement>(null);
+  const loadingRef = useRef(false);
+  const pageRef = useRef(1);
+  const hasMoreRef = useRef(true);
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  const calculateColumns = useCallback(() => {
+    const maxWidth = Math.min(window.innerWidth, 1400) - PAGE_PADDING * 2;
+    const availableWidth = maxWidth - COLUMN_GAP;
+    const colCount = Math.max(1, Math.floor(availableWidth / (MIN_COLUMN_WIDTH + COLUMN_GAP)));
+    setColumns(colCount);
+  }, []);
+
+  useEffect(() => {
+    calculateColumns();
+    window.addEventListener('resize', calculateColumns);
+    return () => window.removeEventListener('resize', calculateColumns);
+  }, [calculateColumns]);
+
+  useEffect(() => {
+    if (gridRef.current) {
+      gridRef.current.style.columnCount = String(columns);
+    }
+  }, [columns]);
 
   const fetchWorks = useCallback(async (pageNum: number, reset: boolean = false) => {
-    if (loading) return;
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     try {
-      const data = await api.works.list({ page: pageNum, limit: 20, style: style === 'all' ? undefined : style, sort });
+      const data = await api.works.list({
+        page: pageNum,
+        limit: PAGE_SIZE,
+        style: style === 'all' ? undefined : style,
+        sort,
+      });
       setWorks(reset ? data.works : (prev) => [...prev, ...data.works]);
+      hasMoreRef.current = data.hasMore;
       setHasMore(data.hasMore);
+      pageRef.current = pageNum;
       setPage(pageNum);
     } catch (err) {
       console.error('Failed to fetch works:', err);
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
-  }, [style, sort, loading]);
+  }, [style, sort]);
 
   useEffect(() => {
+    loadingRef.current = false;
+    pageRef.current = 1;
+    hasMoreRef.current = true;
     setWorks([]);
     setHasMore(true);
     setPage(1);
     fetchWorks(1, true);
-  }, [style, sort]);
+  }, [style, sort, fetchWorks]);
 
   useEffect(() => {
-    if (observerRef.current) observerRef.current.disconnect();
+    const handleScroll = () => {
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      const viewportHeight = window.innerHeight;
+      const docHeight = document.documentElement.scrollHeight;
+      const distanceToBottom = docHeight - scrollTop - viewportHeight;
 
-    observerRef.current = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loading) {
-          fetchWorks(page + 1);
-        }
-      },
-      { rootMargin: '300px' }
-    );
-
-    if (sentinelRef.current) {
-      observerRef.current.observe(sentinelRef.current);
-    }
-
-    return () => {
-      if (observerRef.current) observerRef.current.disconnect();
+      if (
+        distanceToBottom < PRELOAD_THRESHOLD &&
+        hasMoreRef.current &&
+        !loadingRef.current
+      ) {
+        fetchWorks(pageRef.current + 1, false);
+      }
     };
-  }, [hasMore, loading, page, fetchWorks]);
+
+    let ticking = false;
+    const onScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          handleScroll();
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [fetchWorks]);
 
   const handleBuySuccess = () => {
     setSelectedWork(null);
@@ -85,7 +134,7 @@ export default function WorkList() {
         </select>
       </div>
 
-      <div className="masonry-grid">
+      <div className="masonry-grid" ref={gridRef}>
         {works.map((work) => (
           <div
             key={work.id}
@@ -115,8 +164,6 @@ export default function WorkList() {
           </div>
         ))}
       </div>
-
-      <div ref={sentinelRef} style={{ height: 1 }} />
 
       {loading && <div className="loading-indicator">加载中...</div>}
       {!hasMore && works.length > 0 && (

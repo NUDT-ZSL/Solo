@@ -43,7 +43,6 @@ export default function WatermarkEditor({ imageFile, onParamsChange }: Watermark
     if (!originalUrl || !canvasRef.current) return;
 
     const img = new Image();
-    img.crossOrigin = 'anonymous';
     img.onload = () => {
       const canvas = canvasRef.current!;
       const maxW = 800;
@@ -53,25 +52,29 @@ export default function WatermarkEditor({ imageFile, onParamsChange }: Watermark
 
       if (w > maxW) { h = (maxW / w) * h; w = maxW; }
       if (h > maxH) { w = (maxH / h) * w; h = maxH; }
+      if (w === 0) w = maxW;
+      if (h === 0) h = maxH;
 
-      canvas.width = w;
-      canvas.height = h;
+      canvas.width = Math.max(1, Math.floor(w));
+      canvas.height = Math.max(1, Math.floor(h));
       const ctx = canvas.getContext('2d')!;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = '#F5F5F5';
-      ctx.fillRect(0, 0, w, h);
-      ctx.drawImage(img, 0, 0, w, h);
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      const fontSize = Math.max(12, Math.min(24, params.fontSize));
+      const spacingX = fontSize * 8;
+      const spacingY = fontSize * 5;
+      const cols = Math.ceil(canvas.width / spacingX) + 2;
+      const rows = Math.ceil(canvas.height / spacingY) + 2;
 
       ctx.save();
-      ctx.font = `italic ${params.fontSize}px sans-serif`;
+      ctx.font = `italic ${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
       ctx.fillStyle = params.color;
-      ctx.globalAlpha = params.opacity;
+      ctx.globalAlpha = Math.max(0, Math.min(1, params.opacity));
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-
-      const spacingX = params.fontSize * 8;
-      const spacingY = params.fontSize * 5;
-      const cols = Math.ceil(w / spacingX) + 2;
-      const rows = Math.ceil(h / spacingY) + 2;
 
       for (let row = -1; row < rows; row++) {
         for (let col = -1; col < cols; col++) {
@@ -79,8 +82,8 @@ export default function WatermarkEditor({ imageFile, onParamsChange }: Watermark
           const y = row * spacingY + spacingY / 2;
           ctx.save();
           ctx.translate(x, y);
-          ctx.rotate((params.angle * Math.PI) / 180);
-          ctx.fillText(params.text, 0, 0);
+          ctx.rotate((Math.max(0, Math.min(45, params.angle)) * Math.PI) / 180);
+          ctx.fillText(params.text || '', 0, 0);
           ctx.restore();
         }
       }
@@ -88,6 +91,9 @@ export default function WatermarkEditor({ imageFile, onParamsChange }: Watermark
 
       const dataUrl = canvas.toDataURL('image/png');
       setWatermarkedUrl(dataUrl);
+    };
+    img.onerror = () => {
+      console.error('Failed to load preview image');
     };
     img.src = originalUrl;
   }, [originalUrl, params]);
