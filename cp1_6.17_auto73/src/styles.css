@@ -92,6 +92,29 @@ body {
   z-index: 1;
 }
 
+.press-progress {
+  position: absolute;
+  pointer-events: none;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.press-progress svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.press-progress-text {
+  position: relative;
+  font-size: 14px;
+  font-weight: bold;
+  z-index: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
 .grid-canvas {
   display: block;
   position: relative;
