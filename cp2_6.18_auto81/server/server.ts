@@ -2,7 +2,11 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 interface Application {
   id: string;
@@ -49,7 +53,7 @@ function writeItems(items: Item[]): void {
   }
 }
 
-app.get('/api/items', (req: Request, res: Response) => {
+app.get('/api/items', (_req: Request, res: Response) => {
   try {
     const items = readItems();
     res.json(items);
@@ -212,23 +216,26 @@ app.put('/api/items/:id/status', (req: Request, res: Response) => {
   }
 });
 
-app.get('/api/export', (req: Request, res: Response) => {
+app.get('/api/export', (_req: Request, res: Response) => {
   try {
     const items = readItems();
-    const headers = ['ID', '标题', '分类', '描述', '状态', '发布者', '发布时间', '申请数量'];
+    const headers = ['物品ID', '标题', '分类', '发布者', '状态', '申请人列表'];
+    const statusMap: Record<string, string> = {
+      published: '已发布',
+      applied: '已申请',
+      claimed: '已领取',
+    };
     const rows = items.map(item => [
       item.id,
       item.title,
       item.category,
-      item.description,
-      item.status,
       item.publisher,
-      item.publishTime,
-      item.applications.length.toString(),
+      statusMap[item.status] || item.status,
+      item.applications.map(app => app.applicant).join(', '),
     ]);
 
     const csvContent = [headers, ...rows]
-      .map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(','))
+      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
       .join('\n');
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');

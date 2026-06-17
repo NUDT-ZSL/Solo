@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Item } from '../types';
+import type { Item, ItemStatus } from '../types';
 import { fetchItems, createItem, applyForItem, updateItemStatus } from '../utils/api';
 
 export function useItems() {
@@ -55,7 +55,7 @@ export function useItems() {
     }
   }, []);
 
-  const setItemStatus = useCallback(async (itemId: string, status: string) => {
+  const setItemStatus = useCallback(async (itemId: string, status: ItemStatus) => {
     setLoading(true);
     setError(null);
     try {

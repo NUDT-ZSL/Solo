@@ -1,4 +1,4 @@
-import type { Item } from '../types';
+import type { Item, ItemStatus } from '../types';
 
 const BASE_URL = '/api';
 
@@ -36,13 +36,29 @@ export function createItem(
 }
 
 export function applyForItem(itemId: string, applicant: string): Promise<Item> {
-  return request<Item>(`/items/${itemId}/apply`, {
+  return request<Item>(`/items/${itemId}/applications`, {
     method: 'POST',
     body: JSON.stringify({ applicant }),
   });
 }
 
-export function updateItemStatus(itemId: string, status: string): Promise<Item> {
+export function updateItem(
+  itemId: string,
+  item: Partial<Omit<Item, 'id' | 'publishTime' | 'applications'>>
+): Promise<Item> {
+  return request<Item>(`/items/${itemId}`, {
+    method: 'PUT',
+    body: JSON.stringify(item),
+  });
+}
+
+export function clearExpiredApplications(): Promise<{ count: number }> {
+  return request<{ count: number }>('/applications/clear-expired', {
+    method: 'POST',
+  });
+}
+
+export function updateItemStatus(itemId: string, status: ItemStatus): Promise<Item> {
   return request<Item>(`/items/${itemId}/status`, {
     method: 'PUT',
     body: JSON.stringify({ status }),
@@ -50,7 +66,7 @@ export function updateItemStatus(itemId: string, status: string): Promise<Item> 
 }
 
 export async function exportCSV(): Promise<void> {
-  const response = await fetch(`${BASE_URL}/items/export`);
+  const response = await fetch(`${BASE_URL}/export`);
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
   }
