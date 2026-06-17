@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { IVideoClip, EffectType } from './types';
 
 interface TimelineProps {
@@ -20,6 +20,20 @@ const getClipLabel = (id: string): string => {
   return CLIP_LABELS[id];
 };
 
+const effectLabelMap: Record<EffectType, string> = {
+  [EffectType.None]: '无',
+  [EffectType.Fade]: '淡入淡出',
+  [EffectType.Slide]: '滑动',
+  [EffectType.Scale]: '缩放',
+};
+
+const effectIconMap: Record<EffectType, string> = {
+  [EffectType.None]: '○',
+  [EffectType.Fade]: '◐',
+  [EffectType.Slide]: '→',
+  [EffectType.Scale]: '◇',
+};
+
 const Timeline: React.FC<TimelineProps> = ({
   clips,
   transitions,
@@ -31,13 +45,32 @@ const Timeline: React.FC<TimelineProps> = ({
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const [isExternalDrag, setIsExternalDrag] = useState(false);
+  const [activeMenuKey, setActiveMenuKey] = useState<string | null>(null);
   const dragRef = useRef<number | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
+  const menuContainerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!activeMenuKey) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        menuContainerRef.current &&
+        !menuContainerRef.current.contains(e.target as Node)
+      ) {
+        setActiveMenuKey(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [activeMenuKey]);
 
   const handleDragStart = useCallback((index: number) => {
     dragRef.current = index;
     setDragIndex(index);
     setIsExternalDrag(false);
+    setActiveMenuKey(null);
   }, []);
 
   const handleDragOver = useCallback(
@@ -120,10 +153,15 @@ const Timeline: React.FC<TimelineProps> = ({
     [onAddClip, clips.length]
   );
 
-  const handleTransitionChange = useCallback(
+  const handleTransitionBtnClick = useCallback((key: string) => {
+    setActiveMenuKey((prev) => (prev === key ? null : key));
+  }, []);
+
+  const handleEffectSelect = useCallback(
     (key: string, effect: EffectType) => {
       onTransitionChange(key, effect);
       onTransitionPreview(key, effect);
+      setActiveMenuKey(null);
     },
     [onTransitionChange, onTransitionPreview]
   );
@@ -151,6 +189,10 @@ const Timeline: React.FC<TimelineProps> = ({
         {clips.map((clip, index) => {
           const isDragging = dragIndex === index;
           const transitionKey = index < clips.length - 1 ? getTransitionKey(index) : null;
+          const currentEffect = transitionKey
+            ? (transitions[transitionKey] ?? EffectType.None)
+            : EffectType.None;
+          const isMenuActive = activeMenuKey === transitionKey;
 
           return (
             <React.Fragment key={clip.id}>
@@ -168,18 +210,33 @@ const Timeline: React.FC<TimelineProps> = ({
                 <span className="clip-duration">{clip.duration.toFixed(1)}s</span>
               </div>
               {transitionKey && (
-                <select
-                  className="transition-selector"
-                  value={transitions[transitionKey] ?? EffectType.None}
-                  onChange={(e) =>
-                    handleTransitionChange(transitionKey, e.target.value as EffectType)
-                  }
+                <div
+                  ref={isMenuActive ? menuContainerRef : null}
+                  style={{ position: 'relative' }}
                 >
-                  <option value={EffectType.None}>无</option>
-                  <option value={EffectType.Fade}>淡入淡出</option>
-                  <option value={EffectType.Slide}>滑动</option>
-                  <option value={EffectType.Scale}>缩放</option>
-                </select>
+                  <button
+                    className={`transition-btn ${currentEffect !== EffectType.None ? 'active' : ''}`}
+                    onClick={() => handleTransitionBtnClick(transitionKey)}
+                    title={effectLabelMap[currentEffect]}
+                  >
+                    {effectIconMap[currentEffect]}
+                  </button>
+                  {isMenuActive && (
+                    <div className="transition-menu">
+                      {(Object.keys(effectLabelMap) as EffectType[]).map((eff) => (
+                        <div
+                          key={eff}
+                          className={`transition-menu-item ${
+                            currentEffect === eff ? 'selected' : ''
+                          }`}
+                          onClick={() => handleEffectSelect(transitionKey, eff)}
+                        >
+                          {effectLabelMap[eff]}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </React.Fragment>
           );
