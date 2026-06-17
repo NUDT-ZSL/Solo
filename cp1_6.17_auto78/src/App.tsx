@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useGameStore } from './store';
-import { createBeatAnalyzer, updateBeat, checkHitAccuracy, getBeatPulse } from './节拍分析器';
+import { createBeatAnalyzer, updateBeat, checkHitAccuracy, getBeatPulse, getCurrentBeatTime, getNextBeatTime } from './节拍分析器';
 import type { Diamond } from './轨道系统';
 import { generateDiamond, checkCollision, resetDiamondIdCounter } from './轨道系统';
 
@@ -95,7 +95,7 @@ const App = () => {
     return currentTrackX + (targetTrackX - currentTrackX) * easeOut;
   }, []);
 
-  const spawnDiamond = useCallback(() => {
+  const spawnDiamond = useCallback((beatTimestamp: number) => {
     const state = gameStateRef.current;
     const randomTrack = Math.floor(Math.random() * TRACK_COUNT);
     
@@ -105,17 +105,8 @@ const App = () => {
       color = beatPulse > 0.5 ? '#FFD700' : '#8A2BE2';
     }
     
-    const diamond = {
-      id: ++diamondIdCounter,
-      track: randomTrack,
-      y: -DIAMOND_SIZE,
-      size: DIAMOND_SIZE,
-      color,
-      glowColor: color,
-      opacity: 0.8,
-      passed: false,
-      hit: false,
-    };
+    const diamond = generateDiamond(randomTrack, -DIAMOND_SIZE, color);
+    (diamond as any).beatTimestamp = beatTimestamp;
     
     state.diamonds.push(diamond);
     
@@ -155,27 +146,32 @@ const App = () => {
     state.energy = 0;
     
     const centerX = state.canvasWidth / 2;
+    const totalWidth = TRACK_COUNT * TRACK_WIDTH;
+    const startX = centerX - totalWidth / 2;
+    const particlesPerTrack = Math.floor(PARTICLE_COUNT / TRACK_COUNT);
     
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      const track = Math.floor(Math.random() * TRACK_COUNT);
-      const y = Math.random() * state.playerY;
-      const x = centerX - (TRACK_COUNT * TRACK_WIDTH) / 2 + track * TRACK_WIDTH + TRACK_WIDTH / 2;
+    for (let track = 0; track < TRACK_COUNT; track++) {
+      const trackCenterX = startX + track * TRACK_WIDTH + TRACK_WIDTH / 2;
       
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 50 + Math.random() * 50;
-      
-      const particle: Particle = {
-        id: ++particleIdCounter,
-        x,
-        y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        size: 3 + Math.random() * 3,
-        color: '#FFD700',
-        life: 0.5,
-        maxLife: 0.5,
-      };
-      state.particles.push(particle);
+      for (let i = 0; i < particlesPerTrack; i++) {
+        const randomY = Math.random() * state.playerY;
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 50 + Math.random() * 50;
+        const size = 3 + Math.random() * 3;
+        
+        const particle: Particle = {
+          id: ++particleIdCounter,
+          x: trackCenterX + (Math.random() - 0.5) * TRACK_WIDTH * 0.6,
+          y: randomY,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          size,
+          color: '#FFD700',
+          life: 0.5,
+          maxLife: 0.5,
+        };
+        state.particles.push(particle);
+      }
     }
     
     state.diamonds = [];
@@ -265,7 +261,8 @@ const App = () => {
     state.beatAnalyzer = updateBeat(state.beatAnalyzer, currentTime);
     
     if (state.beatAnalyzer.isBeat) {
-      spawnDiamond();
+      const beatTimestamp = getCurrentBeatTime(state.beatAnalyzer);
+      spawnDiamond(beatTimestamp);
     }
     
     const speed = 150;
@@ -438,33 +435,37 @@ const App = () => {
       ctx.stroke();
     }
     
-    for (const diamond of state.diamonds) {
-      const x = startX + diamond.track * TRACK_WIDTH + TRACK_WIDTH / 2;
-      
-      let color = diamond.color;
-      if (state.isPowerUp) {
-        const beatPulse = getBeatPulse(state.beatAnalyzer);
-        color = beatPulse > 0.3 ? '#FFD700' : '#8A2BE2';
+    if (state.gameStatus === 'playing' || state.gameStatus === 'gameover') {
+      for (const diamond of state.diamonds) {
+        const x = startX + diamond.track * TRACK_WIDTH + TRACK_WIDTH / 2;
+        
+        let color = diamond.color;
+        if (state.isPowerUp) {
+          const beatPulse = getBeatPulse(state.beatAnalyzer);
+          color = beatPulse > 0.3 ? '#FFD700' : '#8A2BE2';
+        }
+        
+        drawDiamond(ctx, x, diamond.y, diamond.size, color, diamond.opacity);
       }
       
-      drawDiamond(ctx, x, diamond.y, diamond.size, color, diamond.opacity);
+      for (const particle of state.particles) {
+        const alpha = particle.life / particle.maxLife;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = particle.color;
+        ctx.shadowColor = particle.color;
+        ctx.shadowBlur = 5;
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
     }
     
-    for (const particle of state.particles) {
-      const alpha = particle.life / particle.maxLife;
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = particle.color;
-      ctx.shadowColor = particle.color;
-      ctx.shadowBlur = 5;
-      ctx.beginPath();
-      ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+    if (state.gameStatus !== 'countdown') {
+      const playerX = getPlayerX();
+      drawPlayer(ctx, playerX, state.playerY);
     }
-    
-    const playerX = getPlayerX();
-    drawPlayer(ctx, playerX, state.playerY);
     
     if (state.isScreenFlash) {
       ctx.fillStyle = `rgba(255, 255, 255, ${state.screenFlashTimer / 0.1 * 0.8})`;
@@ -573,7 +574,10 @@ const App = () => {
       <div className="energy-bar-container">
         <div
           className="energy-bar"
-          style={{ width: `${state.energy}%` }}
+          style={{ 
+            width: `${state.energy}%`,
+            transition: 'width 0.2s ease-out',
+          }}
         />
       </div>
       
