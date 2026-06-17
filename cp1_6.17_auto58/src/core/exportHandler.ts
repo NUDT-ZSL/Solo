@@ -76,13 +76,18 @@ export async function exportToPNG(
   ctx.drawImage(canvas, offsetX, offsetY, canvas.width * scale, canvas.height * scale);
 
   ctx.save();
-  ctx.globalAlpha = 0.15;
-  ctx.fillStyle = '#FFFFFF';
-  ctx.font = 'bold 64px sans-serif';
+  ctx.globalAlpha = 0.2;
+  ctx.font = 'bold 72px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.translate(600, 400);
   ctx.rotate(-Math.PI / 6);
+
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+  ctx.lineWidth = 3;
+  ctx.strokeText('审美积木', 0, 0);
+
+  ctx.fillStyle = '#FFFFFF';
   ctx.fillText('审美积木', 0, 0);
   ctx.restore();
 

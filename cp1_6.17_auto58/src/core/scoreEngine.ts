@@ -85,7 +85,18 @@ function calculateCoverageRatio(
   for (const el of elements) {
     const scaledWidth = el.width * el.scale;
     const scaledHeight = el.height * el.scale;
-    totalArea += scaledWidth * scaledHeight;
+    const rotation = el.rotation || 0;
+
+    if (rotation === 0) {
+      totalArea += scaledWidth * scaledHeight;
+    } else {
+      const rad = (rotation * Math.PI) / 180;
+      const cos = Math.abs(Math.cos(rad));
+      const sin = Math.abs(Math.sin(rad));
+      const bboxWidth = scaledWidth * cos + scaledHeight * sin;
+      const bboxHeight = scaledWidth * sin + scaledHeight * cos;
+      totalArea += bboxWidth * bboxHeight;
+    }
   }
 
   const canvasArea = canvasWidth * canvasHeight;

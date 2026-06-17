@@ -26,7 +26,14 @@ export const MoodBoard = forwardRef<MoodBoardHandle, MoodBoardProps>(({ onThumbn
   const canvasRef = useRef<HTMLDivElement>(null);
   const exportCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [dragging, setDragging] = useState<{ id: string; offsetX: number; offsetY: number } | null>(null);
-  const [resizing, setResizing] = useState<{ id: string; startX: number; startY: number; startScale: number; startW: number; startH: number } | null>(null);
+  const [resizing, setResizing] = useState<{
+    id: string;
+    startX: number;
+    startY: number;
+    startScale: number;
+    startW: number;
+    startH: number;
+  } | null>(null);
 
   const CANVAS_WIDTH = 800;
   const CANVAS_HEIGHT = 600;
@@ -327,11 +334,21 @@ export const MoodBoard = forwardRef<MoodBoardHandle, MoodBoardProps>(({ onThumbn
       if (resizing) {
         const el = elements.find((e) => e.id === resizing.id);
         if (el) {
+          const startScaledW = resizing.startW * resizing.startScale;
+          const startScaledH = resizing.startH * resizing.startScale;
           const dx = x - resizing.startX;
           const dy = y - resizing.startY;
-          const scaleDelta = Math.max(dx, dy) / Math.max(resizing.startW, resizing.startH);
-          let newScale = Math.max(0.5, Math.min(2.0, resizing.startScale + scaleDelta));
-          updateElement(resizing.id, { scale: Math.round(newScale * 100) / 100 });
+
+          const scaleX = (startScaledW + dx) / resizing.startW;
+          const scaleY = (startScaledH + dy) / resizing.startH;
+
+          const uniformScale = Math.min(scaleX, scaleY);
+          const clampedScale = Math.max(0.5, Math.min(2.0, uniformScale));
+          const roundedScale = Math.round(clampedScale * 100) / 100;
+
+          if (roundedScale !== el.scale) {
+            updateElement(resizing.id, { scale: roundedScale });
+          }
         }
       }
     },

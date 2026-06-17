@@ -72,6 +72,7 @@ export const useMoodBoardStore = create<MoodBoardState>((set, get) => ({
       width: defaults.width,
       height: defaults.height,
       scale: 1,
+      rotation: 0,
       zIndex: state.nextZIndex,
     };
 
