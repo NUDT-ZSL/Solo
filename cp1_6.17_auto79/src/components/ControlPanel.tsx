@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { DesignToken } from '../types/token';
 
 interface ControlPanelProps {
@@ -137,6 +137,18 @@ const ColorPickerControl: React.FC<ColorPickerControlProps> = ({
   value,
   onChange,
 }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyColor = async () => {
+    try {
+      await navigator.clipboard.writeText(value.toUpperCase());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (err) {
+      console.error('复制失败:', err);
+    }
+  };
+
   return (
     <div style={styles.colorPickerContainer}>
       <span style={styles.sliderLabel}>{label}</span>
@@ -144,11 +156,12 @@ const ColorPickerControl: React.FC<ColorPickerControlProps> = ({
         <div style={styles.colorPreviewWrapper}>
           <div
             style={{
-              width: '32px',
-              height: '32px',
+              width: '40px',
+              height: '40px',
               borderRadius: '50%',
               backgroundColor: value,
-              boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.18)',
+              border: '2px solid #fff',
             }}
           />
           <input
@@ -158,7 +171,10 @@ const ColorPickerControl: React.FC<ColorPickerControlProps> = ({
             style={styles.colorInput}
           />
         </div>
-        <span style={styles.colorValue}>{value.toUpperCase()}</span>
+        <div style={styles.colorValueWrapper} onClick={handleCopyColor}>
+          <span style={styles.colorValueText}>{value.toUpperCase()}</span>
+          <span style={styles.copyHint}>{copied ? '已复制!' : '点击复制'}</span>
+        </div>
       </div>
     </div>
   );
@@ -201,11 +217,18 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '13px',
     color: '#616161',
   },
-  sliderValue: {
-    fontSize: '13px',
-    color: '#1976D2',
+sliderValue: {
+    fontSize: '12px',
+    color: '#fff',
     fontWeight: 600,
     fontFamily: 'monospace',
+    backgroundColor: '#1976D2',
+    padding: '2px 8px',
+    borderRadius: '10px',
+    minWidth: '48px',
+    textAlign: 'center' as const,
+    display: 'inline-block',
+    lineHeight: '18px',
   },
   sliderTrackContainer: {
     position: 'relative',
@@ -235,25 +258,42 @@ const styles: Record<string, React.CSSProperties> = {
   },
   colorPreviewWrapper: {
     position: 'relative',
-    width: '32px',
-    height: '32px',
+    width: '40px',
+    height: '40px',
     borderRadius: '50%',
     cursor: 'pointer',
+    flexShrink: 0,
   },
   colorInput: {
     position: 'absolute',
     top: 0,
     left: 0,
-    width: '32px',
-    height: '32px',
+    width: '40px',
+    height: '40px',
     opacity: 0,
     cursor: 'pointer',
     borderRadius: '50%',
   },
-  colorValue: {
-    fontSize: '13px',
-    color: '#616161',
+  colorValueWrapper: {
+    display: 'flex',
+    flexDirection: 'column',
+    cursor: 'pointer',
+    padding: '6px 12px',
+    backgroundColor: '#F5F5F5',
+    borderRadius: '6px',
+    transition: 'background-color 0.2s ease-out',
+  },
+  colorValueText: {
+    fontSize: '14px',
+    color: '#212121',
     fontFamily: 'monospace',
+    fontWeight: 600,
+    letterSpacing: '0.5px',
+  },
+  copyHint: {
+    fontSize: '11px',
+    color: '#9E9E9E',
+    marginTop: '2px',
   },
 };
 
