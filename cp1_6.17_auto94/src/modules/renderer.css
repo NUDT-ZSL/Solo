@@ -1,0 +1,180 @@
+.renderer-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 32px;
+  transition: all 0.3s ease;
+}
+
+.card-wrapper {
+  width: 100%;
+  max-width: 600px;
+  padding: 32px;
+  opacity: 1;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0.8;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.window-dots {
+  display: flex;
+  gap: 8px;
+}
+
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.dot-red {
+  background-color: #ff5f56;
+}
+
+.dot-yellow {
+  background-color: #ffbd2e;
+}
+
+.dot-green {
+  background-color: #27c93f;
+}
+
+.language-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--comment);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.code-container {
+  font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
+}
+
+.code-pre {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  overflow-x: auto;
+}
+
+.code-line {
+  display: flex;
+  min-height: 1.5em;
+  line-height: 1.5;
+}
+
+.line-number {
+  display: inline-block;
+  min-width: 2.5em;
+  padding-right: 1em;
+  text-align: right;
+  color: var(--comment);
+  opacity: 0.6;
+  user-select: none;
+  font-size: var(--font-size);
+}
+
+.line-content {
+  flex: 1;
+  color: var(--fg);
+  font-size: var(--font-size);
+  white-space: pre;
+}
+
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: var(--comment);
+}
+
+.token.punctuation {
+  color: var(--fg);
+}
+
+.token.property,
+.token.tag,
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol,
+.token.deleted {
+  color: var(--number);
+}
+
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin,
+.token.inserted {
+  color: var(--string);
+}
+
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string {
+  color: var(--operator);
+}
+
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+  color: var(--keyword);
+}
+
+.token.function,
+.token.class-name {
+  color: var(--function);
+}
+
+.token.regex,
+.token.important,
+.token.variable {
+  color: var(--variable);
+}
+
+.token.important,
+.token.bold {
+  font-weight: bold;
+}
+
+.token.italic {
+  font-style: italic;
+}
+
+@media (max-width: 480px) {
+  .renderer-container {
+    padding: 16px;
+  }
+
+  .card-wrapper {
+    padding: 16px;
+    max-width: 300px;
+  }
+
+  .line-number {
+    min-width: 2em;
+    padding-right: 0.75em;
+  }
+}
