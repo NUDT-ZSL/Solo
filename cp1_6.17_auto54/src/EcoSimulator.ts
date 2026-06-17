@@ -100,6 +100,7 @@ export class EcoSimulator {
   private maxHistoryLength: number = 50;
   private listeners: Set<() => void> = new Set();
   private warningIds: Set<string> = new Set();
+  private lastStepDurationMs: number = 0;
 
   private achievementDefs: Omit<Achievement, 'unlockedAt'>[] = [
     {
@@ -171,12 +172,17 @@ export class EcoSimulator {
     return this.timeStep;
   }
 
+  getLastStepDuration(): number {
+    return this.lastStepDurationMs;
+  }
+
   setEnvironment(params: Partial<EnvironmentParams>): void {
     this.environment = { ...this.environment, ...params };
     this.notifyListeners();
   }
 
   step(): void {
+    const startTime = performance.now();
     this.timeStep++;
 
     const env = this.environment;
@@ -288,6 +294,7 @@ export class EcoSimulator {
     this.checkSteadyState();
     this.checkAchievements();
     this.pushHistory();
+    this.lastStepDurationMs = performance.now() - startTime;
     this.notifyListeners();
   }
 

@@ -218,6 +218,7 @@ export default function ControlPanel() {
   const [resources, setResources] = useState(ecoSimulator.getResources());
   const [isSteady, setIsSteady] = useState(false);
   const [steadyCounter, setSteadyCounter] = useState(0);
+  const [performanceTime, setPerformanceTime] = useState(0);
   const intervalRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -230,12 +231,14 @@ export default function ControlPanel() {
       setTimeStep(newTimeStep);
       setIsSteady(ecoSimulator.isSteadyState());
       setSteadyCounter(ecoSimulator.getSteadyStateCounter());
+      setPerformanceTime(ecoSimulator.getLastStepDuration());
 
       if (newTimeStep === 0) {
         chartBufferRef.current.clear();
         lastTimeStepRef.current = 0;
         const initialHistory = ecoSimulator.getHistory();
         initialHistory.forEach((item) => chartBufferRef.current.push(item));
+        setPerformanceTime(0);
       } else if (newTimeStep > lastTimeStepRef.current) {
         const history = ecoSimulator.getHistory();
         if (history.length > 0) {
@@ -345,6 +348,35 @@ export default function ControlPanel() {
       drawLine('daphnia', SPECIES_COLORS.daphnia);
       drawLine('snail', SPECIES_COLORS.snail);
 
+      const resourceMax = 20;
+      const drawResourceLine = (
+        key: 'dissolvedOxygen' | 'nutrients',
+        color: string,
+        dashPattern: number[]
+      ) => {
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = 0.6;
+        ctx.lineWidth = 1;
+        ctx.setLineDash(dashPattern);
+        ctx.beginPath();
+        chartData.forEach((h, i) => {
+          const x = padding.left + (i / (chartData.length - 1)) * chartWidth;
+          const normalizedValue = Math.min(1, h.resources[key] / resourceMax);
+          const y = padding.top + chartHeight - normalizedValue * chartHeight;
+          if (i === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        });
+        ctx.stroke();
+        ctx.restore();
+      };
+
+      drawResourceLine('nutrients', '#66BB6A', [6, 4]);
+      drawResourceLine('dissolvedOxygen', '#42A5F5', [3, 3]);
+
       const latest = chartData[chartData.length - 1];
       ctx.fillStyle = '#4CAF50';
       ctx.beginPath();
@@ -424,12 +456,23 @@ export default function ControlPanel() {
         style={{
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           marginBottom: '16px',
         }}
       >
         <h2 style={{ color: '#FFD54F', fontSize: '18px', margin: 0 }}>控制面板</h2>
-        <div style={{ color: '#90A4AE', fontSize: '12px' }}>时间步: {timeStep}</div>
+        <div style={{ textAlign: 'right', lineHeight: 1.5 }}>
+          <div style={{ color: '#90A4AE', fontSize: '12px' }}>时间步: {timeStep}</div>
+          <div
+            style={{
+              color: performanceTime > 25 ? '#FF9800' : '#78909C',
+              fontSize: '10px',
+              transition: 'color 0.3s',
+            }}
+          >
+            性能: {performanceTime.toFixed(1)}ms
+          </div>
+        </div>
       </div>
 
       {isSteady && (
@@ -637,7 +680,7 @@ export default function ControlPanel() {
 
       <div style={{ marginBottom: '20px' }}>
         <div style={{ color: '#B0BEC5', fontSize: '13px', marginBottom: '10px' }}>
-          种群变化趋势（近50步）
+          种群与资源变化趋势（近50步）
         </div>
         <div ref={containerRef} style={{ width: '100%' }}>
           <canvas ref={canvasRef} style={{ display: 'block', borderRadius: '8px' }} />
@@ -645,15 +688,56 @@ export default function ControlPanel() {
         <div
           style={{
             display: 'flex',
-            justifyContent: 'center',
-            gap: '16px',
+            flexDirection: 'column',
+            gap: '6px',
             marginTop: '8px',
             fontSize: '11px',
           }}
         >
-          <span style={{ color: SPECIES_COLORS.algae }}>● 绿藻</span>
-          <span style={{ color: SPECIES_COLORS.daphnia }}>● 水蚤</span>
-          <span style={{ color: SPECIES_COLORS.snail }}>● 蜗牛</span>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '16px',
+              flexWrap: 'wrap',
+            }}
+          >
+            <span style={{ color: SPECIES_COLORS.algae }}>● 绿藻</span>
+            <span style={{ color: SPECIES_COLORS.daphnia }}>● 水蚤</span>
+            <span style={{ color: SPECIES_COLORS.snail }}>● 蜗牛</span>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '16px',
+              flexWrap: 'wrap',
+              opacity: 0.75,
+            }}
+          >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#66BB6A' }}>
+              <span
+                style={{
+                  width: '20px',
+                  height: '1px',
+                  borderTop: '2px dashed #66BB6A',
+                  display: 'inline-block',
+                }}
+              />
+              养分
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#42A5F5' }}>
+              <span
+                style={{
+                  width: '20px',
+                  height: '1px',
+                  borderTop: '2px dashed #42A5F5',
+                  display: 'inline-block',
+                }}
+              />
+              溶氧量
+            </span>
+          </div>
         </div>
       </div>
 

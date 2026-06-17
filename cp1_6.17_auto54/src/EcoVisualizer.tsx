@@ -204,31 +204,217 @@ export default function EcoVisualizer() {
 
       for (const org of allOrganisms) {
         const color = COLORS[org.type];
+        const cx = org.x + org.size / 2;
+        const cy = org.y + org.size / 2;
 
-        const glowGradient = ctx.createRadialGradient(
-          org.x + org.size / 2,
-          org.y + org.size / 2,
-          0,
-          org.x + org.size / 2,
-          org.y + org.size / 2,
-          org.size
-        );
+        const glowGradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, org.size);
         glowGradient.addColorStop(0, color + '60');
         glowGradient.addColorStop(1, color + '00');
         ctx.fillStyle = glowGradient;
         ctx.beginPath();
-        ctx.arc(org.x + org.size / 2, org.y + org.size / 2, org.size, 0, Math.PI * 2);
+        ctx.arc(cx, cy, org.size, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(org.x + org.size / 2, org.y + org.size / 2, org.size / 2, 0, Math.PI * 2);
-        ctx.fill();
+        if (org.type === 'algae') {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(cx, cy, org.size * 0.35, 0, Math.PI * 2);
+          ctx.fill();
 
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-        ctx.beginPath();
-        ctx.arc(org.x + org.size / 3, org.y + org.size / 3, org.size / 6, 0, Math.PI * 2);
-        ctx.fill();
+          ctx.strokeStyle = color;
+          ctx.lineWidth = Math.max(1, org.size * 0.08);
+          ctx.lineCap = 'round';
+          const rayCount = 5 + Math.floor(org.size / 8);
+          for (let i = 0; i < rayCount; i++) {
+            const angle = (Math.PI * 2 * i) / rayCount + (org.x + org.y) * 0.01;
+            const innerR = org.size * 0.35;
+            const outerR = org.size * 0.7 + Math.sin(pulseRef.current + i) * org.size * 0.1;
+            ctx.beginPath();
+            ctx.moveTo(cx + Math.cos(angle) * innerR, cy + Math.sin(angle) * innerR);
+            ctx.lineTo(cx + Math.cos(angle) * outerR, cy + Math.sin(angle) * outerR);
+            ctx.stroke();
+          }
+
+          for (let i = 0; i < rayCount; i += 2) {
+            const angle = (Math.PI * 2 * i) / rayCount + Math.PI / rayCount + (org.x + org.y) * 0.01;
+            const tipX = cx + Math.cos(angle) * org.size * 0.75;
+            const tipY = cy + Math.sin(angle) * org.size * 0.75;
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(tipX, tipY, Math.max(1, org.size * 0.1), 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+        } else if (org.type === 'daphnia') {
+          const angle = Math.atan2(org.vy, org.vx);
+
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.rotate(angle);
+          ctx.fillStyle = color;
+
+          ctx.beginPath();
+          ctx.ellipse(0, 0, org.size * 0.45, org.size * 0.28, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = color;
+          ctx.lineWidth = Math.max(1, org.size * 0.07);
+          ctx.lineCap = 'round';
+
+          ctx.beginPath();
+          ctx.moveTo(org.size * 0.35, -org.size * 0.08);
+          ctx.quadraticCurveTo(
+            org.size * 0.65,
+            -org.size * 0.35,
+            org.size * 0.8,
+            -org.size * 0.25
+          );
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(org.size * 0.35, org.size * 0.08);
+          ctx.quadraticCurveTo(
+            org.size * 0.65,
+            org.size * 0.35,
+            org.size * 0.8,
+            org.size * 0.25
+          );
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(-org.size * 0.4, -org.size * 0.15);
+          ctx.quadraticCurveTo(
+            -org.size * 0.55,
+            -org.size * 0.35,
+            -org.size * 0.7,
+            -org.size * 0.4 + Math.sin(pulseRef.current * 2) * org.size * 0.08
+          );
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(-org.size * 0.4, org.size * 0.15);
+          ctx.quadraticCurveTo(
+            -org.size * 0.55,
+            org.size * 0.35,
+            -org.size * 0.7,
+            org.size * 0.4 + Math.sin(pulseRef.current * 2) * org.size * 0.08
+          );
+          ctx.stroke();
+
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+          ctx.beginPath();
+          ctx.arc(org.size * 0.18, -org.size * 0.06, Math.max(1, org.size * 0.06), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(org.size * 0.18, org.size * 0.06, Math.max(1, org.size * 0.06), 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.restore();
+
+        } else if (org.type === 'snail') {
+          ctx.fillStyle = '#6D4C41';
+          ctx.beginPath();
+          ctx.ellipse(cx, cy + org.size * 0.1, org.size * 0.45, org.size * 0.18, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+          for (let i = 0; i < 3; i++) {
+            ctx.beginPath();
+            ctx.ellipse(
+              cx - org.size * 0.1 + i * org.size * 0.15,
+              cy + org.size * 0.18,
+              org.size * 0.05,
+              org.size * 0.04,
+              0,
+              0,
+              Math.PI * 2
+            );
+            ctx.fill();
+          }
+
+          const antennaDir = org.vx >= 0 ? 1 : -1;
+          ctx.strokeStyle = '#6D4C41';
+          ctx.lineWidth = Math.max(1, org.size * 0.06);
+          ctx.lineCap = 'round';
+
+          ctx.beginPath();
+          ctx.moveTo(cx + antennaDir * org.size * 0.3, cy + org.size * 0.05);
+          ctx.quadraticCurveTo(
+            cx + antennaDir * org.size * 0.55,
+            cy - org.size * 0.05,
+            cx + antennaDir * org.size * 0.55,
+            cy - org.size * 0.25
+          );
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(cx + antennaDir * org.size * 0.35, cy);
+          ctx.quadraticCurveTo(
+            cx + antennaDir * org.size * 0.6,
+            cy - org.size * 0.1,
+            cx + antennaDir * org.size * 0.65,
+            cy - org.size * 0.35
+          );
+          ctx.stroke();
+
+          ctx.fillStyle = '#8D6E63';
+          ctx.beginPath();
+          ctx.arc(
+            cx + antennaDir * org.size * 0.55,
+            cy - org.size * 0.25,
+            Math.max(1.5, org.size * 0.06),
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(
+            cx + antennaDir * org.size * 0.65,
+            cy - org.size * 0.35,
+            Math.max(1.5, org.size * 0.06),
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+
+          ctx.save();
+          ctx.translate(cx - antennaDir * org.size * 0.05, cy - org.size * 0.05);
+
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(0, 0, org.size * 0.35, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = '#5D4037';
+          ctx.lineWidth = Math.max(1, org.size * 0.05);
+          ctx.beginPath();
+          for (let t = 0; t <= Math.PI * 3.5; t += 0.1) {
+            const r = org.size * 0.04 + t * org.size * 0.025;
+            const px = Math.cos(t + antennaDir * Math.PI * 0.3) * r;
+            const py = Math.sin(t + antennaDir * Math.PI * 0.3) * r * 0.85;
+            if (t === 0) {
+              ctx.moveTo(px, py);
+            } else {
+              ctx.lineTo(px, py);
+            }
+          }
+          ctx.stroke();
+
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+          ctx.beginPath();
+          ctx.ellipse(
+            -org.size * 0.08,
+            -org.size * 0.15,
+            org.size * 0.08,
+            org.size * 0.05,
+            -0.5,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+
+          ctx.restore();
+        }
       }
 
       if (hasDanger) {
