@@ -18,6 +18,10 @@ export class UIPanel {
   private energyBarLow: HTMLDivElement;
   private energyBarMid: HTMLDivElement;
   private energyBarHigh: HTMLDivElement;
+  private energyValueLow: HTMLDivElement;
+  private energyValueMid: HTMLDivElement;
+  private energyValueHigh: HTMLDivElement;
+  private energyBarsRow: HTMLDivElement;
   private fileInfoBar: HTMLDivElement;
   private playerBar: HTMLDivElement;
   private playPauseBtn: HTMLButtonElement;
@@ -82,6 +86,10 @@ export class UIPanel {
     this.energyBarLow = energyControl.querySelector('.energy-low') as HTMLDivElement;
     this.energyBarMid = energyControl.querySelector('.energy-mid') as HTMLDivElement;
     this.energyBarHigh = energyControl.querySelector('.energy-high') as HTMLDivElement;
+    this.energyValueLow = energyControl.querySelector('.energy-low-value') as HTMLDivElement;
+    this.energyValueMid = energyControl.querySelector('.energy-mid-value') as HTMLDivElement;
+    this.energyValueHigh = energyControl.querySelector('.energy-high-value') as HTMLDivElement;
+    this.energyBarsRow = energyControl.querySelector('.energy-bar-container') as HTMLDivElement;
 
     this.playPauseBtn = this.playerBar.querySelector('.play-pause-btn') as HTMLButtonElement;
     this.progressBar = this.playerBar.querySelector('.progress-bar') as HTMLDivElement;
@@ -390,13 +398,21 @@ export class UIPanel {
     `;
 
     const barContainer = document.createElement('div');
+    barContainer.className = 'energy-bar-container';
     barContainer.style.cssText = `
-      display: flex;
       width: 100%;
-      height: 6px;
       border-radius: 3px;
       overflow: hidden;
       background: #1a1a2a;
+      transition: height 0.2s ease;
+    `;
+
+    const barsRow = document.createElement('div');
+    barsRow.style.cssText = `
+      display: flex;
+      width: 100%;
+      height: 6px;
+      transition: height 0.2s ease;
     `;
 
     const low = document.createElement('div');
@@ -405,9 +421,10 @@ export class UIPanel {
       width: 33.33%;
       height: 100%;
       background: linear-gradient(90deg, #FF3366, #FF6699);
-      transition: opacity 0.1s ease;
+      transition: opacity 0.1s ease, filter 0.1s ease;
       opacity: 0.2;
       position: relative;
+      filter: brightness(1);
     `;
     const lowFill = document.createElement('div');
     lowFill.className = 'energy-low-fill';
@@ -417,7 +434,7 @@ export class UIPanel {
       left: 0;
       height: 100%;
       width: 0%;
-      background: rgba(255, 255, 255, 0.35);
+      background: rgba(255, 255, 255, 0.4);
       transition: width 0.05s linear;
     `;
     low.appendChild(lowFill);
@@ -428,9 +445,10 @@ export class UIPanel {
       width: 33.33%;
       height: 100%;
       background: linear-gradient(90deg, #3399FF, #66CCFF);
-      transition: opacity 0.1s ease;
+      transition: opacity 0.1s ease, filter 0.1s ease;
       opacity: 0.2;
       position: relative;
+      filter: brightness(1);
     `;
     const midFill = document.createElement('div');
     midFill.className = 'energy-mid-fill';
@@ -440,7 +458,7 @@ export class UIPanel {
       left: 0;
       height: 100%;
       width: 0%;
-      background: rgba(255, 255, 255, 0.35);
+      background: rgba(255, 255, 255, 0.4);
       transition: width 0.05s linear;
     `;
     mid.appendChild(midFill);
@@ -451,9 +469,10 @@ export class UIPanel {
       width: 33.34%;
       height: 100%;
       background: linear-gradient(90deg, #FFCC00, #FFE066);
-      transition: opacity 0.1s ease;
+      transition: opacity 0.1s ease, filter 0.1s ease;
       opacity: 0.2;
       position: relative;
+      filter: brightness(1);
     `;
     const highFill = document.createElement('div');
     highFill.className = 'energy-high-fill';
@@ -463,14 +482,64 @@ export class UIPanel {
       left: 0;
       height: 100%;
       width: 0%;
-      background: rgba(255, 255, 255, 0.35);
+      background: rgba(255, 255, 255, 0.4);
       transition: width 0.05s linear;
     `;
     high.appendChild(highFill);
 
-    barContainer.appendChild(low);
-    barContainer.appendChild(mid);
-    barContainer.appendChild(high);
+    barsRow.appendChild(low);
+    barsRow.appendChild(mid);
+    barsRow.appendChild(high);
+
+    const valuesRow = document.createElement('div');
+    valuesRow.className = 'energy-values';
+    valuesRow.style.cssText = `
+      display: flex;
+      width: 100%;
+      margin-top: 4px;
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+    `;
+
+    const lowVal = document.createElement('div');
+    lowVal.className = 'energy-low-value';
+    lowVal.style.cssText = `
+      width: 33.33%;
+      text-align: center;
+      color: #FF6699;
+      font-weight: 600;
+      transition: color 0.1s ease;
+    `;
+    lowVal.textContent = '0';
+
+    const midVal = document.createElement('div');
+    midVal.className = 'energy-mid-value';
+    midVal.style.cssText = `
+      width: 33.33%;
+      text-align: center;
+      color: #66CCFF;
+      font-weight: 600;
+      transition: color 0.1s ease;
+    `;
+    midVal.textContent = '0';
+
+    const highVal = document.createElement('div');
+    highVal.className = 'energy-high-value';
+    highVal.style.cssText = `
+      width: 33.34%;
+      text-align: center;
+      color: #FFE066;
+      font-weight: 600;
+      transition: color 0.1s ease;
+    `;
+    highVal.textContent = '0';
+
+    valuesRow.appendChild(lowVal);
+    valuesRow.appendChild(midVal);
+    valuesRow.appendChild(highVal);
+
+    barContainer.appendChild(barsRow);
+    barContainer.appendChild(valuesRow);
 
     wrapper.appendChild(label);
     wrapper.appendChild(barContainer);
@@ -774,21 +843,75 @@ export class UIPanel {
   }
 
   public updateEnergy(data: FreqBandData): void {
-    const lowRatio = Math.min(1, data.low / 255);
-    const midRatio = Math.min(1, data.mid / 255);
-    const highRatio = Math.min(1, data.high / 255);
+    const clamp01 = (v: number) => Math.max(0, Math.min(1, v / 255));
 
-    this.energyBarLow.style.opacity = `${0.2 + lowRatio * 0.8}`;
-    this.energyBarMid.style.opacity = `${0.2 + midRatio * 0.8}`;
-    this.energyBarHigh.style.opacity = `${0.2 + highRatio * 0.8}`;
+    const lowRatio = clamp01(data.low);
+    const midRatio = clamp01(data.mid);
+    const highRatio = clamp01(data.high);
+
+    const lowPct = Math.round(lowRatio * 100);
+    const midPct = Math.round(midRatio * 100);
+    const highPct = Math.round(highRatio * 100);
+
+    const avgEnergy = (lowRatio + midRatio + highRatio) / 3;
+    const barHeight = 6 + avgEnergy * 10;
+    if (this.energyBarsRow) {
+      const barsRow = this.energyBarsRow.querySelector('div:first-child') as HTMLDivElement;
+      if (barsRow) {
+        barsRow.style.height = `${barHeight}px`;
+      }
+    }
+
+    this.energyBarLow.style.opacity = `${0.25 + lowRatio * 0.75}`;
+    this.energyBarMid.style.opacity = `${0.25 + midRatio * 0.75}`;
+    this.energyBarHigh.style.opacity = `${0.25 + highRatio * 0.75}`;
+
+    const lowBrightness = 1 + lowRatio * 0.8;
+    const midBrightness = 1 + midRatio * 0.8;
+    const highBrightness = 1 + highRatio * 0.8;
+    this.energyBarLow.style.filter = `brightness(${lowBrightness})`;
+    this.energyBarMid.style.filter = `brightness(${midBrightness})`;
+    this.energyBarHigh.style.filter = `brightness(${highBrightness})`;
+
+    if (lowRatio > 0.7) {
+      this.energyBarLow.style.boxShadow = `0 0 ${8 + lowRatio * 12}px rgba(255, 51, 102, ${0.3 + lowRatio * 0.5})`;
+    } else {
+      this.energyBarLow.style.boxShadow = 'none';
+    }
+    if (midRatio > 0.7) {
+      this.energyBarMid.style.boxShadow = `0 0 ${8 + midRatio * 12}px rgba(51, 153, 255, ${0.3 + midRatio * 0.5})`;
+    } else {
+      this.energyBarMid.style.boxShadow = 'none';
+    }
+    if (highRatio > 0.7) {
+      this.energyBarHigh.style.boxShadow = `0 0 ${8 + highRatio * 12}px rgba(255, 204, 0, ${0.3 + highRatio * 0.5})`;
+    } else {
+      this.energyBarHigh.style.boxShadow = 'none';
+    }
+
+    if (this.energyValueLow) {
+      this.energyValueLow.textContent = String(lowPct);
+      this.energyValueLow.style.color = lowRatio > 0.7 ? '#FF3366' : '#FF6699';
+      this.energyValueLow.style.transform = `scale(${1 + lowRatio * 0.15})`;
+    }
+    if (this.energyValueMid) {
+      this.energyValueMid.textContent = String(midPct);
+      this.energyValueMid.style.color = midRatio > 0.7 ? '#3399FF' : '#66CCFF';
+      this.energyValueMid.style.transform = `scale(${1 + midRatio * 0.15})`;
+    }
+    if (this.energyValueHigh) {
+      this.energyValueHigh.textContent = String(highPct);
+      this.energyValueHigh.style.color = highRatio > 0.7 ? '#FFCC00' : '#FFE066';
+      this.energyValueHigh.style.transform = `scale(${1 + highRatio * 0.15})`;
+    }
 
     const lowFill = this.energyBarLow.querySelector('.energy-low-fill') as HTMLDivElement;
     const midFill = this.energyBarMid.querySelector('.energy-mid-fill') as HTMLDivElement;
     const highFill = this.energyBarHigh.querySelector('.energy-high-fill') as HTMLDivElement;
 
-    if (lowFill) lowFill.style.width = `${lowRatio * 100}%`;
-    if (midFill) midFill.style.width = `${midRatio * 100}%`;
-    if (highFill) highFill.style.width = `${highRatio * 100}%`;
+    if (lowFill) lowFill.style.width = `${lowPct}%`;
+    if (midFill) midFill.style.width = `${midPct}%`;
+    if (highFill) highFill.style.width = `${highPct}%`;
   }
 
   public setUploadError(message: string): void {

@@ -9,23 +9,21 @@ import {
 } from '../shared/GlobalState';
 
 interface ParticleGroup {
-  corePoints: THREE.Points;
-  coreGeometry: THREE.BufferGeometry;
-  coreMaterial: THREE.PointsMaterial;
-  glowPoints: THREE.Points;
-  glowGeometry: THREE.BufferGeometry;
-  glowMaterial: THREE.PointsMaterial;
+  points: THREE.Points;
+  geometry: THREE.BufferGeometry;
+  material: THREE.PointsMaterial;
   velocities: Float32Array;
   alphas: Float32Array;
   targetAlphas: Float32Array;
+  colors: Float32Array;
   targetColors: Float32Array;
-  targetSizes: Float32Array;
+  sizes: Float32Array;
   currentCount: number;
   targetCount: number;
   countTransitionStart: number;
   countTransitionDuration: number;
   isCountTransitioning: boolean;
-  initialCount: number;
+  prevEnergy: number;
 }
 
 const THEME_COLORS: Record<ColorTheme, { low: [string, string]; mid: [string, string]; high: [string, string] }> = {
@@ -56,6 +54,7 @@ export class ParticleSystem {
   private themeTransitionStart = 0;
   private themeTransitionDuration = 1500;
   private isThemeTransitioning = false;
+  private currentFreqData: FreqBandData = { low: 0, mid: 0, high: 0 };
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -69,41 +68,30 @@ export class ParticleSystem {
     eventBus.on('paramChange', (params: Partial<ParticleParams>) => {
       this.updateParams(params);
     });
+
+    eventBus.on('freqDataUpdate', (data: FreqBandData) => {
+      this.currentFreqData = data;
+    });
+
+    eventBus.on('stateUpdate', () => {
+      this.currentFreqData = { ...globalState.freqData };
+    });
   }
 
-  private createGlowParticleTexture(): THREE.Texture {
-    const size = 128;
+  private createCombinedParticleTexture(): THREE.Texture {
+    const size = 256;
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext('2d')!;
 
     const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    gradient.addColorStop(0, 'rgba(255,255,255,0.9)');
-    gradient.addColorStop(0.15, 'rgba(255,255,255,0.5)');
-    gradient.addColorStop(0.35, 'rgba(255,255,255,0.15)');
-    gradient.addColorStop(0.6, 'rgba(255,255,255,0.04)');
-    gradient.addColorStop(1, 'rgba(255,255,255,0)');
-
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, size, size);
-
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.needsUpdate = true;
-    return texture;
-  }
-
-  private createCoreParticleTexture(): THREE.Texture {
-    const size = 64;
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d')!;
-
-    const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    gradient.addColorStop(0, 'rgba(255,255,255,1)');
-    gradient.addColorStop(0.4, 'rgba(255,255,255,0.75)');
-    gradient.addColorStop(0.75, 'rgba(255,255,255,0.15)');
+    gradient.addColorStop(0, 'rgba(255,255,255,1.0)');
+    gradient.addColorStop(0.08, 'rgba(255,255,255,0.9)');
+    gradient.addColorStop(0.2, 'rgba(255,255,255,0.55)');
+    gradient.addColorStop(0.35, 'rgba(255,255,255,0.3)');
+    gradient.addColorStop(0.55, 'rgba(255,255,255,0.1)');
+    gradient.addColorStop(0.8, 'rgba(255,255,255,0.02)');
     gradient.addColorStop(1, 'rgba(255,255,255,0)');
 
     ctx.fillStyle = gradient;
@@ -118,15 +106,12 @@ export class ParticleSystem {
     const count = globalState.particleParams.density;
 
     const positions = new Float32Array(MAX_COUNT * 3);
-    const coreColors = new Float32Array(MAX_COUNT * 3);
-    const glowColors = new Float32Array(MAX_COUNT * 3);
-    const coreSizes = new Float32Array(MAX_COUNT);
-    const glowSizes = new Float32Array(MAX_COUNT);
+    const colors = new Float32Array(MAX_COUNT * 3);
+    const sizes = new Float32Array(MAX_COUNT);
     const alphas = new Float32Array(MAX_COUNT);
     const targetAlphas = new Float32Array(MAX_COUNT);
     const velocities = new Float32Array(MAX_COUNT * 3);
     const targetColors = new Float32Array(MAX_COUNT * 3);
-    const targetSizes = new Float32Array(MAX_COUNT);
 
     const colorRange = this.currentThemeColors[type];
     const colorStart = new THREE.Color(colorRange[0]);
@@ -142,90 +127,61 @@ export class ParticleSystem {
       positions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
       positions[i3 + 2] = radius * Math.cos(phi);
 
-      velocities[i3] = (Math.random() - 0.5) * 0.02;
-      velocities[i3 + 1] = (Math.random() - 0.5) * 0.02;
-      velocities[i3 + 2] = (Math.random() - 0.5) * 0.02;
+      velocities[i3] = 0;
+      velocities[i3 + 1] = 0;
+      velocities[i3 + 2] = 0;
 
       const t = Math.random();
       const color = new THREE.Color().lerpColors(colorStart, colorEnd, t);
-      coreColors[i3] = color.r;
-      coreColors[i3 + 1] = color.g;
-      coreColors[i3 + 2] = color.b;
-      glowColors[i3] = color.r;
-      glowColors[i3 + 1] = color.g;
-      glowColors[i3 + 2] = color.b;
+      colors[i3] = color.r;
+      colors[i3 + 1] = color.g;
+      colors[i3 + 2] = color.b;
       targetColors[i3] = color.r;
       targetColors[i3 + 1] = color.g;
       targetColors[i3 + 2] = color.b;
 
-      coreSizes[i] = 1.0;
-      glowSizes[i] = 3.0;
-      targetSizes[i] = 1.0;
-
+      sizes[i] = 1.0;
       alphas[i] = i < count ? 1.0 : 0.0;
       targetAlphas[i] = i < count ? 1.0 : 0.0;
     }
 
-    const coreGeometry = new THREE.BufferGeometry();
-    coreGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    coreGeometry.setAttribute('color', new THREE.BufferAttribute(coreColors, 3));
-    coreGeometry.setAttribute('size', new THREE.BufferAttribute(coreSizes, 1));
-    coreGeometry.setDrawRange(0, MAX_COUNT);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+    geometry.setDrawRange(0, MAX_COUNT);
 
-    const coreMaterial = new THREE.PointsMaterial({
+    const material = new THREE.PointsMaterial({
       size: 1,
       vertexColors: true,
       transparent: true,
       opacity: 0.95,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
-      map: this.createCoreParticleTexture(),
+      map: this.createCombinedParticleTexture(),
       sizeAttenuation: true
     });
 
-    const corePoints = new THREE.Points(coreGeometry, coreMaterial);
-    corePoints.frustumCulled = false;
-    this.scene.add(corePoints);
-
-    const glowGeometry = new THREE.BufferGeometry();
-    glowGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
-    glowGeometry.setAttribute('color', new THREE.BufferAttribute(glowColors, 3));
-    glowGeometry.setAttribute('size', new THREE.BufferAttribute(glowSizes, 1));
-    glowGeometry.setDrawRange(0, MAX_COUNT);
-
-    const glowMaterial = new THREE.PointsMaterial({
-      size: 1,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.15,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      map: this.createGlowParticleTexture(),
-      sizeAttenuation: true
-    });
-
-    const glowPoints = new THREE.Points(glowGeometry, glowMaterial);
-    glowPoints.frustumCulled = false;
-    this.scene.add(glowPoints);
+    const points = new THREE.Points(geometry, material);
+    points.frustumCulled = false;
+    this.scene.add(points);
 
     return {
-      corePoints,
-      coreGeometry,
-      coreMaterial,
-      glowPoints,
-      glowGeometry,
-      glowMaterial,
+      points,
+      geometry,
+      material,
       velocities,
       alphas,
       targetAlphas,
+      colors,
       targetColors,
-      targetSizes,
+      sizes,
       currentCount: count,
       targetCount: count,
       countTransitionStart: 0,
       countTransitionDuration: 1000,
       isCountTransitioning: false,
-      initialCount: count
+      prevEnergy: 0
     };
   }
 
@@ -269,6 +225,7 @@ export class ParticleSystem {
     const group = this.groups[type];
     if (newCount === group.targetCount) return;
 
+    const oldTarget = group.targetCount;
     group.targetCount = Math.max(500, Math.min(MAX_COUNT, newCount));
     group.countTransitionStart = performance.now();
     group.isCountTransitioning = true;
@@ -297,7 +254,7 @@ export class ParticleSystem {
   }
 
   public update(): void {
-    const freqData = globalState.freqData;
+    const freqData = this.currentFreqData;
     const isPlaying = globalState.isPlaying;
     const now = performance.now();
 
@@ -321,216 +278,206 @@ export class ParticleSystem {
     now: number
   ): void {
     const group = this.groups[type];
-    const corePositions = group.coreGeometry.attributes.position.array as Float32Array;
-    const coreColors = group.coreGeometry.attributes.color.array as Float32Array;
-    const coreSizes = group.coreGeometry.attributes.size.array as Float32Array;
-    const glowPositions = group.glowGeometry.attributes.position.array as Float32Array;
-    const glowColors = group.glowGeometry.attributes.color.array as Float32Array;
-    const glowSizes = group.glowGeometry.attributes.size.array as Float32Array;
+    const positions = group.geometry.attributes.position.array as Float32Array;
+    const colors = group.geometry.attributes.color.array as Float32Array;
+    const sizes = group.geometry.attributes.size.array as Float32Array;
 
     const speedMult = globalState.particleParams.speed;
-    const energyRatio = energy / 255;
+    const energyRatio = Math.min(1, energy / 255);
 
     let baseSize = 0.5 + energyRatio * 2.5;
-    let glowOpacity = 0.08 + energyRatio * 0.35;
+    let glowBoost = 0;
 
     if (energy > 180) {
-      glowOpacity += 0.25;
-      baseSize *= 1.2;
+      glowBoost = 0.3;
+      baseSize *= 1.25;
     }
 
     if (group.isCountTransitioning) {
       const t = Math.min((now - group.countTransitionStart) / group.countTransitionDuration, 1);
+      const oldCount = group.currentCount;
+      const target = group.targetCount;
+      const newCurrent = oldCount + (target - oldCount) * t;
+      group.currentCount = Math.round(newCurrent);
+
+      for (let i = 0; i < MAX_COUNT; i++) {
+        if (i < target && i >= oldCount) {
+          const appearT = (i - oldCount) / Math.max(1, (target - oldCount));
+          const transitionT = Math.max(0, (t - appearT) / (1 - appearT));
+          group.alphas[i] = Math.min(1, group.alphas[i] + transitionT * 0.03);
+        } else if (i >= target && i < oldCount) {
+          const disappearT = (i - target) / Math.max(1, (oldCount - target));
+          const transitionT = Math.max(0, (t - disappearT) / (1 - disappearT));
+          group.alphas[i] = Math.max(0, group.alphas[i] - transitionT * 0.03);
+        }
+      }
+
       if (t >= 1) {
         group.currentCount = group.targetCount;
         group.isCountTransitioning = false;
       }
     }
 
+    const activeMax = Math.max(group.currentCount, group.targetCount) + 20;
+
     for (let i = 0; i < MAX_COUNT; i++) {
       const i3 = i * 3;
 
-      if (isPlaying && i < Math.max(group.currentCount, group.targetCount) + 10) {
-        const randX = (Math.random() - 0.5) * 0.015 * speedMult;
-        const randY = (Math.random() - 0.5) * 0.015 * speedMult;
-        const randZ = (Math.random() - 0.5) * 0.015 * speedMult;
+      if (i < activeMax) {
+        if (isPlaying) {
+          const px = positions[i3];
+          const py = positions[i3 + 1];
+          const pz = positions[i3 + 2];
+          const dist = Math.sqrt(px * px + py * py + pz * pz);
 
-        group.velocities[i3] += randX;
-        group.velocities[i3 + 1] += randY;
-        group.velocities[i3 + 2] += randZ;
+          const randX = (Math.random() - 0.5) * 0.02 * speedMult;
+          const randY = (Math.random() - 0.5) * 0.02 * speedMult;
+          const randZ = (Math.random() - 0.5) * 0.02 * speedMult;
 
-        if (type === 'low') {
-          const px = corePositions[i3];
-          const py = corePositions[i3 + 1];
-          const pz = corePositions[i3 + 2];
-          const len = Math.sqrt(px * px + py * py + pz * pz) || 1;
-          const nx = -px / len;
-          const ny = -py / len;
-          const nz = -pz / len;
-          group.velocities[i3] += nx * 0.02 * speedMult;
-          group.velocities[i3 + 1] += ny * 0.02 * speedMult;
-          group.velocities[i3 + 2] += nz * 0.02 * speedMult;
-        } else if (type === 'mid') {
-          const px = corePositions[i3];
-          const py = corePositions[i3 + 1];
-          const pz = corePositions[i3 + 2];
-          const len = Math.sqrt(px * px + py * py + pz * pz) || 1;
-          const nx = px / len;
-          const ny = py / len;
-          const nz = pz / len;
-          group.velocities[i3] += nx * 0.02 * speedMult;
-          group.velocities[i3 + 1] += ny * 0.02 * speedMult;
-          group.velocities[i3 + 2] += nz * 0.02 * speedMult;
-        } else {
-          group.velocities[i3] += (Math.random() - 0.5) * 0.05 * energyRatio * speedMult;
-          group.velocities[i3 + 1] += (Math.random() - 0.5) * 0.05 * energyRatio * speedMult;
-          group.velocities[i3 + 2] += (Math.random() - 0.5) * 0.05 * energyRatio * speedMult;
-        }
+          group.velocities[i3] += randX;
+          group.velocities[i3 + 1] += randY;
+          group.velocities[i3 + 2] += randZ;
 
-        group.velocities[i3] *= 0.95;
-        group.velocities[i3 + 1] *= 0.95;
-        group.velocities[i3 + 2] *= 0.95;
-
-        corePositions[i3] += group.velocities[i3];
-        corePositions[i3 + 1] += group.velocities[i3 + 1];
-        corePositions[i3 + 2] += group.velocities[i3 + 2];
-
-        glowPositions[i3] = corePositions[i3];
-        glowPositions[i3 + 1] = corePositions[i3 + 1];
-        glowPositions[i3 + 2] = corePositions[i3 + 2];
-
-        if (type === 'low') {
-          const shrinkRadius = 2 + energyRatio * 8;
-          const px = corePositions[i3];
-          const py = corePositions[i3 + 1];
-          const pz = corePositions[i3 + 2];
-          const len = Math.sqrt(px * px + py * py + pz * pz);
-          if (len > shrinkRadius * 2) {
-            const scale = (shrinkRadius * 2) / (len || 1);
-            corePositions[i3] *= scale;
-            corePositions[i3 + 1] *= scale;
-            corePositions[i3 + 2] *= scale;
-            glowPositions[i3] = corePositions[i3];
-            glowPositions[i3 + 1] = corePositions[i3 + 1];
-            glowPositions[i3 + 2] = corePositions[i3 + 2];
+          if (type === 'low') {
+            const len = dist || 1;
+            const nx = -px / len;
+            const ny = -py / len;
+            const nz = -pz / len;
+            const attractionStrength = 0.015 * Math.min(1, dist / 12) * speedMult;
+            group.velocities[i3] += nx * attractionStrength;
+            group.velocities[i3 + 1] += ny * attractionStrength;
+            group.velocities[i3 + 2] += nz * attractionStrength;
+          } else if (type === 'mid') {
+            const len = dist || 1;
+            const nx = px / len;
+            const ny = py / len;
+            const nz = pz / len;
+            const repulsionStrength = 0.015 * Math.min(1, dist / 15) * speedMult;
+            group.velocities[i3] += nx * repulsionStrength;
+            group.velocities[i3 + 1] += ny * repulsionStrength;
+            group.velocities[i3 + 2] += nz * repulsionStrength;
+          } else {
+            group.velocities[i3] += (Math.random() - 0.5) * 0.06 * energyRatio * speedMult;
+            group.velocities[i3 + 1] += (Math.random() - 0.5) * 0.06 * energyRatio * speedMult;
+            group.velocities[i3 + 2] += (Math.random() - 0.5) * 0.06 * energyRatio * speedMult;
           }
-          if (len < 0.5) {
-            const theta = Math.random() * Math.PI * 2;
-            const phi = Math.acos(2 * Math.random() - 1);
-            corePositions[i3] = shrinkRadius * Math.sin(phi) * Math.cos(theta);
-            corePositions[i3 + 1] = shrinkRadius * Math.sin(phi) * Math.sin(theta);
-            corePositions[i3 + 2] = shrinkRadius * Math.cos(phi);
-            glowPositions[i3] = corePositions[i3];
-            glowPositions[i3 + 1] = corePositions[i3 + 1];
-            glowPositions[i3 + 2] = corePositions[i3 + 2];
-          }
-        } else if (type === 'mid') {
-          const spreadRange = 3 + energyRatio * 12;
-          const px = corePositions[i3];
-          const py = corePositions[i3 + 1];
-          const pz = corePositions[i3 + 2];
-          const len = Math.sqrt(px * px + py * py + pz * pz);
-          if (len > spreadRange * 1.5) {
-            const theta = Math.random() * Math.PI * 2;
-            const phi = Math.acos(2 * Math.random() - 1);
-            const r = 2 + Math.random() * 2;
-            corePositions[i3] = r * Math.sin(phi) * Math.cos(theta);
-            corePositions[i3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-            corePositions[i3 + 2] = r * Math.cos(phi);
-            glowPositions[i3] = corePositions[i3];
-            glowPositions[i3 + 1] = corePositions[i3 + 1];
-            glowPositions[i3 + 2] = corePositions[i3 + 2];
-          }
-          if (len < 1) {
-            const scale = 1 / (len || 1);
-            corePositions[i3] *= scale;
-            corePositions[i3 + 1] *= scale;
-            corePositions[i3 + 2] *= scale;
-            glowPositions[i3] = corePositions[i3];
-            glowPositions[i3 + 1] = corePositions[i3 + 1];
-            glowPositions[i3 + 2] = corePositions[i3 + 2];
-          }
-        } else {
-          const px = corePositions[i3];
-          const py = corePositions[i3 + 1];
-          const pz = corePositions[i3 + 2];
-          const len = Math.sqrt(px * px + py * py + pz * pz);
-          const maxR = 12;
-          if (len > maxR) {
-            const scale = maxR / (len || 1);
-            corePositions[i3] *= scale;
-            corePositions[i3 + 1] *= scale;
-            corePositions[i3 + 2] *= scale;
-            glowPositions[i3] = corePositions[i3];
-            glowPositions[i3 + 1] = corePositions[i3 + 1];
-            glowPositions[i3 + 2] = corePositions[i3 + 2];
+
+          group.velocities[i3] *= 0.94;
+          group.velocities[i3 + 1] *= 0.94;
+          group.velocities[i3 + 2] *= 0.94;
+
+          positions[i3] += group.velocities[i3];
+          positions[i3 + 1] += group.velocities[i3 + 1];
+          positions[i3 + 2] += group.velocities[i3 + 2];
+
+          if (type === 'low') {
+            const shrinkRadius = 2 + energyRatio * 8;
+            const px2 = positions[i3];
+            const py2 = positions[i3 + 1];
+            const pz2 = positions[i3 + 2];
+            const len = Math.sqrt(px2 * px2 + py2 * py2 + pz2 * pz2);
+            if (len > shrinkRadius * 2) {
+              const scale = (shrinkRadius * 2) / (len || 1);
+              positions[i3] *= scale;
+              positions[i3 + 1] *= scale;
+              positions[i3 + 2] *= scale;
+            }
+            if (len < 0.5) {
+              const theta = Math.random() * Math.PI * 2;
+              const phi = Math.acos(2 * Math.random() - 1);
+              positions[i3] = shrinkRadius * Math.sin(phi) * Math.cos(theta);
+              positions[i3 + 1] = shrinkRadius * Math.sin(phi) * Math.sin(theta);
+              positions[i3 + 2] = shrinkRadius * Math.cos(phi);
+            }
+          } else if (type === 'mid') {
+            const spreadRange = 3 + energyRatio * 12;
+            const px2 = positions[i3];
+            const py2 = positions[i3 + 1];
+            const pz2 = positions[i3 + 2];
+            const len = Math.sqrt(px2 * px2 + py2 * py2 + pz2 * pz2);
+            if (len > spreadRange * 1.5) {
+              const theta = Math.random() * Math.PI * 2;
+              const phi = Math.acos(2 * Math.random() - 1);
+              const r = 2 + Math.random() * 2;
+              positions[i3] = r * Math.sin(phi) * Math.cos(theta);
+              positions[i3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+              positions[i3 + 2] = r * Math.cos(phi);
+            }
+            if (len < 1) {
+              const scale = 1 / (len || 1);
+              positions[i3] *= scale;
+              positions[i3 + 1] *= scale;
+              positions[i3 + 2] *= scale;
+            }
+          } else {
+            const px2 = positions[i3];
+            const py2 = positions[i3 + 1];
+            const pz2 = positions[i3 + 2];
+            const len = Math.sqrt(px2 * px2 + py2 * py2 + pz2 * pz2);
+            const maxR = 12;
+            if (len > maxR) {
+              const scale = maxR / (len || 1);
+              positions[i3] *= scale;
+              positions[i3 + 1] *= scale;
+              positions[i3 + 2] *= scale;
+            }
           }
         }
-      }
 
-      const alphaLerpSpeed = 0.018;
-      group.alphas[i] += (group.targetAlphas[i] - group.alphas[i]) * alphaLerpSpeed;
+        if (!group.isCountTransitioning) {
+          const alphaLerpSpeed = 0.025;
+          group.alphas[i] += (group.targetAlphas[i] - group.alphas[i]) * alphaLerpSpeed;
+        }
 
-      const colorLerpSpeed = 0.025;
-      const effectiveAlpha = Math.max(0, Math.min(1, group.alphas[i]));
-      coreColors[i3] += (group.targetColors[i3] - coreColors[i3]) * colorLerpSpeed;
-      coreColors[i3 + 1] += (group.targetColors[i3 + 1] - coreColors[i3 + 1]) * colorLerpSpeed;
-      coreColors[i3 + 2] += (group.targetColors[i3 + 2] - coreColors[i3 + 2]) * colorLerpSpeed;
-      glowColors[i3] = coreColors[i3];
-      glowColors[i3 + 1] = coreColors[i3 + 1];
-      glowColors[i3 + 2] = coreColors[i3 + 2];
+        const effectiveAlpha = Math.max(0, Math.min(1, group.alphas[i]));
+        const energyBrightness = 1 + energyRatio * 0.3 + glowBoost;
+        const colorLerpSpeed = 0.03;
+        colors[i3] += (group.targetColors[i3] * energyBrightness - colors[i3]) * colorLerpSpeed;
+        colors[i3 + 1] += (group.targetColors[i3 + 1] * energyBrightness - colors[i3 + 1]) * colorLerpSpeed;
+        colors[i3 + 2] += (group.targetColors[i3 + 2] * energyBrightness - colors[i3 + 2]) * colorLerpSpeed;
 
-      const sizeLerpSpeed = 0.08;
-      const sizeVariation = 0.8 + (i % 12) / 24;
-      const targetCoreSize = baseSize * sizeVariation;
-      const targetGlowSize = baseSize * sizeVariation * 3.5;
-      coreSizes[i] += (targetCoreSize - coreSizes[i]) * sizeLerpSpeed;
-      glowSizes[i] += (targetGlowSize - glowSizes[i]) * sizeLerpSpeed;
+        const sizeLerpSpeed = 0.1;
+        const sizeVariation = 0.8 + (i % 12) / 24;
+        const glowSizeBoost = 1 + glowBoost * 0.5;
+        const targetSize = baseSize * sizeVariation * glowSizeBoost;
+        sizes[i] += (targetSize - sizes[i]) * sizeLerpSpeed;
 
-      if (effectiveAlpha < 0.001) {
-        coreSizes[i] = 0;
-        glowSizes[i] = 0;
+        if (effectiveAlpha < 0.002) {
+          sizes[i] = 0;
+        }
+      } else {
+        sizes[i] = 0;
       }
     }
 
     let maxVisibleAlpha = 0;
-    const upperBound = Math.max(group.currentCount, group.targetCount) + 20;
+    const upperBound = activeMax;
     for (let i = 0; i < upperBound; i++) {
       if (group.alphas[i] > maxVisibleAlpha) {
         maxVisibleAlpha = group.alphas[i];
       }
     }
-    group.coreMaterial.opacity = 0.95 * Math.min(1, maxVisibleAlpha);
-    group.glowMaterial.opacity = glowOpacity * Math.min(1, maxVisibleAlpha);
+    const baseOpacity = 0.08 + energyRatio * 0.4;
+    group.material.opacity = Math.min(1, (baseOpacity + glowBoost) * Math.min(1, maxVisibleAlpha));
 
-    const drawCount = Math.ceil(Math.max(group.currentCount, group.targetCount) + 20);
-    group.coreGeometry.setDrawRange(0, Math.min(drawCount, MAX_COUNT));
-    group.glowGeometry.setDrawRange(0, Math.min(drawCount, MAX_COUNT));
+    const drawCount = Math.ceil(upperBound);
+    group.geometry.setDrawRange(0, Math.min(drawCount, MAX_COUNT));
 
-    group.coreGeometry.attributes.position.needsUpdate = true;
-    group.coreGeometry.attributes.color.needsUpdate = true;
-    group.coreGeometry.attributes.size.needsUpdate = true;
-    group.glowGeometry.attributes.position.needsUpdate = true;
-    group.glowGeometry.attributes.color.needsUpdate = true;
-    group.glowGeometry.attributes.size.needsUpdate = true;
+    group.geometry.attributes.position.needsUpdate = true;
+    group.geometry.attributes.color.needsUpdate = true;
+    group.geometry.attributes.size.needsUpdate = true;
 
-    group.coreGeometry.computeBoundingSphere();
-    group.glowGeometry.computeBoundingSphere();
+    group.geometry.computeBoundingSphere();
   }
 
   public dispose(): void {
     (['low', 'mid', 'high'] as const).forEach((type) => {
       const group = this.groups[type];
 
-      group.coreGeometry.dispose();
-      group.coreMaterial.dispose();
-      if (group.coreMaterial.map) group.coreMaterial.map.dispose();
-      this.scene.remove(group.corePoints);
-
-      group.glowGeometry.dispose();
-      group.glowMaterial.dispose();
-      if (group.glowMaterial.map) group.glowMaterial.map.dispose();
-      this.scene.remove(group.glowPoints);
+      group.geometry.dispose();
+      group.material.dispose();
+      if (group.material.map) group.material.map.dispose();
+      this.scene.remove(group.points);
     });
   }
 }

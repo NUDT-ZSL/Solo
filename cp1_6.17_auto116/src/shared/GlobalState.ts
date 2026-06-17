@@ -51,7 +51,8 @@ export type AppEventName =
   | 'paramChange'
   | 'playPauseToggle'
   | 'audioSeek'
-  | 'stateUpdate';
+  | 'stateUpdate'
+  | 'audioLoadError';
 
 type AppEventListener = (data: any) => void;
 

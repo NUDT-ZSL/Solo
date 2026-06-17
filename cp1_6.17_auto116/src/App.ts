@@ -1,14 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { AudioAnalyzer, type FreqBandData } from './audio/AudioAnalyzer';
-import { ParticleSystem, type ParticleParams, type ColorTheme } from './particle/ParticleSystem';
+import { AudioAnalyzer } from './audio/AudioAnalyzer';
+import { ParticleSystem } from './particle/ParticleSystem';
 import { UIPanel } from './ui/UIPanel';
-
-interface GlobalState {
-  isPlaying: boolean;
-  freqData: FreqBandData;
-  particleParams: ParticleParams;
-}
 
 class App {
   private container: HTMLElement;
@@ -18,9 +12,7 @@ class App {
   private controls: OrbitControls;
   private audioAnalyzer: AudioAnalyzer;
   private particleSystem: ParticleSystem;
-  private uiPanel: UIPanel;
-  private globalState: GlobalState;
-  private clock: THREE.Clock;
+  private _uiPanel: UIPanel;
   private animationId: number | null = null;
   private resizeObserver: ResizeObserver | null = null;
 
@@ -31,18 +23,6 @@ class App {
     }
     this.container = container;
 
-    this.globalState = {
-      isPlaying: false,
-      freqData: { low: 0, mid: 0, high: 0 },
-      particleParams: {
-        density: 1500,
-        speed: 1.5,
-        theme: 'neon'
-      }
-    };
-
-    this.clock = new THREE.Clock();
-
     this.scene = this.createScene();
     this.camera = this.createCamera();
     this.renderer = this.createRenderer();
@@ -52,9 +32,8 @@ class App {
 
     this.audioAnalyzer = new AudioAnalyzer();
     this.particleSystem = new ParticleSystem(this.scene);
-    this.uiPanel = new UIPanel(this.container);
+    this._uiPanel = new UIPanel(this.container);
 
-    this.setupEventListeners();
     this.setupResizeHandling();
 
     this.animate();
@@ -185,51 +164,6 @@ class App {
     this.scene.add(stars);
   }
 
-  private setupEventListeners(): void {
-    this.uiPanel.onFileSelected = async (file: File) => {
-      try {
-        await this.audioAnalyzer.loadFile(file);
-      } catch (err: any) {
-        this.uiPanel.setUploadError(err.message || '加载失败');
-      }
-    };
-
-    this.uiPanel.onParamChange = (params) => {
-      if (params.density !== undefined) {
-        this.globalState.particleParams.density = params.density;
-      }
-      if (params.speed !== undefined) {
-        this.globalState.particleParams.speed = params.speed;
-      }
-      if (params.theme !== undefined) {
-        this.globalState.particleParams.theme = params.theme as ColorTheme;
-      }
-      this.particleSystem.updateParams(this.globalState.particleParams);
-    };
-
-    this.uiPanel.onPlayPause = () => {
-      this.audioAnalyzer.togglePlay();
-    };
-
-    this.uiPanel.onSeek = (time: number) => {
-      this.audioAnalyzer.setCurrentTime(time);
-    };
-
-    this.audioAnalyzer.onLoaded = (fileName: string, duration: number) => {
-      this.uiPanel.showFileInfo(fileName, duration);
-    };
-
-    this.audioAnalyzer.onStateChange = (state) => {
-      const playing = state === 'playing';
-      this.globalState.isPlaying = playing;
-      this.uiPanel.setPlaying(playing);
-    };
-
-    this.audioAnalyzer.onTimeUpdate = (currentTime: number, duration: number) => {
-      this.uiPanel.updateTime(currentTime, duration);
-    };
-  }
-
   private setupResizeHandling(): void {
     this.resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -245,18 +179,7 @@ class App {
   private animate = (): void => {
     this.animationId = requestAnimationFrame(this.animate);
 
-    const deltaTime = Math.min(this.clock.getDelta(), 0.1);
-
-    if (this.globalState.isPlaying) {
-      this.globalState.freqData = this.audioAnalyzer.getFreqData();
-      this.uiPanel.updateEnergy(this.globalState.freqData);
-    }
-
-    this.particleSystem.update(
-      this.globalState.freqData,
-      this.globalState.isPlaying,
-      deltaTime
-    );
+    this.particleSystem.update();
 
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
@@ -271,6 +194,7 @@ class App {
     }
     this.audioAnalyzer.destroy();
     this.particleSystem.dispose();
+    void this._uiPanel;
     this.controls.dispose();
     this.renderer.dispose();
   }

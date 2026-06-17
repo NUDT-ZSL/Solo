@@ -12,7 +12,7 @@ export class AudioAnalyzer {
   private sourceNode: MediaElementAudioSourceNode | null = null;
   private analyserNode: AnalyserNode | null = null;
   private gainNode: GainNode | null = null;
-  private frequencyData: Uint8Array | null = null;
+  private frequencyData: Uint8Array<ArrayBuffer> | null = null;
   private sampleRate: number = 44100;
   private rafId: number | null = null;
 
@@ -140,7 +140,7 @@ export class AudioAnalyzer {
     this.gainNode = this.audioContext.createGain();
     this.gainNode.gain.value = 1.0;
 
-    this.frequencyData = new Uint8Array(this.analyserNode.frequencyBinCount);
+    this.frequencyData = new Uint8Array(this.analyserNode.frequencyBinCount) as Uint8Array<ArrayBuffer>;
 
     this.sourceNode
       .connect(this.analyserNode)
@@ -205,38 +205,35 @@ export class AudioAnalyzer {
 
     this.analyserNode.getByteFrequencyData(this.frequencyData);
 
-    const binCount = this.frequencyData.length;
-    const binWidth = this.sampleRate / 2 / binCount;
+    const fftSize = this.analyserNode.fftSize;
+    const freqResolution = this.sampleRate / fftSize;
 
-    const freqToBin = (freq: number): number => Math.floor(freq / binWidth);
+    const freqToBin = (freq: number): number => Math.floor(freq / freqResolution);
 
-    const lowStart = freqToBin(20);
-    const lowEnd = freqToBin(250);
-    const midStart = lowEnd;
-    const midEnd = freqToBin(4000);
-    const highStart = midEnd;
-    const highEnd = freqToBin(20000);
+    const lowStartBin = freqToBin(20);
+    const lowEndBin = freqToBin(250);
+    const midStartBin = lowEndBin;
+    const midEndBin = freqToBin(4000);
+    const highStartBin = midEndBin;
+    const highEndBin = Math.min(freqToBin(20000), this.frequencyData.length);
 
     let lowSum = 0;
     let lowCount = 0;
-    const safeLowEnd = Math.min(lowEnd, binCount);
-    for (let i = lowStart; i < safeLowEnd; i++) {
+    for (let i = lowStartBin; i < lowEndBin && i < this.frequencyData.length; i++) {
       lowSum += this.frequencyData[i];
       lowCount++;
     }
 
     let midSum = 0;
     let midCount = 0;
-    const safeMidEnd = Math.min(midEnd, binCount);
-    for (let i = midStart; i < safeMidEnd; i++) {
+    for (let i = midStartBin; i < midEndBin && i < this.frequencyData.length; i++) {
       midSum += this.frequencyData[i];
       midCount++;
     }
 
     let highSum = 0;
     let highCount = 0;
-    const safeHighEnd = Math.min(highEnd, binCount);
-    for (let i = highStart; i < safeHighEnd; i++) {
+    for (let i = highStartBin; i < highEndBin && i < this.frequencyData.length; i++) {
       highSum += this.frequencyData[i];
       highCount++;
     }
