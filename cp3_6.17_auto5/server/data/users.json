@@ -1,1 +1,36 @@
-[]
+{
+  "users": [
+    {
+      "id": "user-1",
+      "name": "张小明",
+      "role": "student",
+      "email": "xiaoming@example.com",
+      "avatar": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=cute%20student%20avatar%20cartoon%20style&image_size=square",
+      "assessments": {
+        "course-1": {
+          "kp-1": 85,
+          "kp-2": 55,
+          "kp-3": 45,
+          "kp-4": 70,
+          "kp-5": 40,
+          "kp-6": 80,
+          "kp-7": 35,
+          "kp-8": 65,
+          "kp-9": 30,
+          "kp-10": 75,
+          "kp-11": 50
+        }
+      },
+      "reviewedNodes": {
+        "course-1": []
+      }
+    },
+    {
+      "id": "teacher-1",
+      "name": "李老师",
+      "role": "teacher",
+      "email": "teacher@example.com",
+      "avatar": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=professional%20teacher%20avatar%20friendly&image_size=square"
+    }
+  ]
+}

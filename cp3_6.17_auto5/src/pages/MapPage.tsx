@@ -1,504 +1,521 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Plus, Sparkles, ChevronRight, BookOpen, Target, TrendingUp } from 'lucide-react';
-import { Header } from '../components/Header';
-import { KnowledgeGraph } from '../components/KnowledgeGraph';
-import { PointDetailModal } from '../components/PointDetailModal';
-import { AddPointModal } from '../components/AddPointModal';
-import { useRecommendPath } from '../hooks/useRecommendPath';
-import { useAppStore } from '../store';
-import { KnowledgePoint, KnowledgeRelation, Difficulty } from '../types';
+import React, { useState, useEffect } from 'react';
+import type { KnowledgePoint, Relation, Course, User } from '../types';
+import KnowledgeGraph, { KnowledgeGraphHandle } from '../components/KnowledgeGraph';
+import useRecommendPath from '../hooks/useRecommendPath';
 
-const DIFFICULTY_COLORS: Record<Difficulty, string> = {
-  '初级': '#81c784',
-  '中级': '#ffb74d',
-  '高级': '#e57373',
-};
+interface MapPageProps {
+  course: Course | null;
+  currentUser: User | null;
+}
 
-export const MapPage: React.FC = () => {
-  const navigate = useNavigate();
-  const {
-    currentUser,
-    currentCourse,
+const SAMPLE_USER_ID = 'user-1';
+const SAMPLE_TEACHER_ID = 'teacher-1';
+
+const MapPage: React.FC<MapPageProps> = ({ course, currentUser }) => {
+  const graphRef = React.useRef<KnowledgeGraphHandle>(null);
+  const [knowledgePoints, setKnowledgePoints] = useState<KnowledgePoint[]>([]);
+  const [relations, setRelations] = useState<Relation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedKp, setSelectedKp] = useState<KnowledgePoint | null>(null);
+  const [filterTag, setFilterTag] = useState<string>('all');
+  const [allTags, setAllTags] = useState<string[]>([]);
+  const [scores, setScores] = useState<Record<string, number>>({});
+  const [reviewedIds, setReviewedIds] = useState<string[]>([]);
+  const [pathEnabled, setPathEnabled] = useState(false);
+  const [pathIndex, setPathIndex] = useState(0);
+  const [showTeacherForm, setShowTeacherForm] = useState(false);
+  const [formKp, setFormKp] = useState({
+    title: '',
+    description: '',
+    difficulty: '中级' as '初级' | '中级' | '高级',
+    tags: '',
+  });
+  const [toast, setToast] = useState<string | null>(null);
+
+  const userId = currentUser?.id || SAMPLE_USER_ID;
+  const isTeacher = currentUser?.role === 'teacher';
+  const mode = isTeacher ? 'edit' : 'view';
+
+  const courseId = course?.id || 'course-1';
+
+  const path = useRecommendPath({
     knowledgePoints,
     relations,
-    assessments,
-    reviewRecords,
-    selectedPoint,
-    recommendPath,
-    filterTag,
-    setKnowledgePoints,
-    setRelations,
-    setAssessments,
-    setReviewRecords,
-    setSelectedPoint,
-    setRecommendPath,
-    setFilterTag,
-    addKnowledgePoint,
-    updateKnowledgePoint,
-    addRelation,
-    removeFromPath,
-    addReviewRecord,
-  } = useAppStore();
-
-  const { path, isLoading, generatePath, setPath } = useRecommendPath();
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
+    scores,
+    reviewedIds,
+    maxNodes: 5,
+  });
 
   useEffect(() => {
-    if (!currentUser || !currentCourse) {
-      navigate('/user');
-      return;
-    }
     loadData();
-  }, [currentUser, currentCourse, navigate]);
+  }, [courseId, userId]);
 
   const loadData = async () => {
-    if (!currentCourse) return;
-    
+    setLoading(true);
     try {
-      const [pointsRes, relationsRes, assessmentsRes, reviewsRes] = await Promise.all([
-        fetch(`/api/courses/${currentCourse.id}/points`),
-        fetch(`/api/courses/${currentCourse.id}/relations`),
-        fetch(`/api/users/${currentUser?.id}/assessments`),
-        fetch(`/api/users/${currentUser?.id}/reviews`),
+      const [kpsRes, relsRes, userRes] = await Promise.all([
+        fetch(`/api/courses/${courseId}/knowledge-points`).then((r) => r.json()),
+        fetch(`/api/courses/${courseId}/relations`).then((r) => r.json()),
+        fetch(`/api/users/${userId}`).then((r) => r.json()),
       ]);
-      
-      const points = await pointsRes.json();
-      const rels = await relationsRes.json();
-      const asses = await assessmentsRes.json();
-      const reviews = await reviewsRes.json();
-      
-      setKnowledgePoints(points);
-      setRelations(rels);
-      setAssessments(asses);
-      setReviewRecords(reviews);
-    } catch (e) {
-      console.error('Failed to load data', e);
+      setKnowledgePoints(kpsRes || []);
+      setRelations(relsRes || []);
+      const allT: string[] = [];
+      (kpsRes || []).forEach((kp: KnowledgePoint) => {
+        kp.tags.forEach((t) => {
+          if (!allT.includes(t)) allT.push(t);
+        });
+      });
+      setAllTags(allT);
+      const userAssess = (userRes?.assessments && userRes.assessments[courseId]) || {};
+      setScores(userAssess);
+      setReviewedIds((userRes?.reviewedNodes && userRes.reviewedNodes[courseId]) || []);
+    } catch (err) {
+      console.error('加载数据失败:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const allTags = Array.from(
-    new Set(knowledgePoints.flatMap((p) => p.tags))
-  ).filter(Boolean);
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2500);
+  };
 
-  const isTeacher = currentUser?.role === 'teacher';
-  const coursePoints = knowledgePoints.filter((p) => p.courseId === currentCourse?.id);
-  const courseRelations = relations.filter((r) => r.courseId === currentCourse?.id);
-
-  const handlePointClick = useCallback((point: KnowledgePoint) => {
-    setSelectedPoint(point);
-  }, [setSelectedPoint]);
-
-  const handlePointMove = useCallback(
-    async (pointId: string, x: number, y: number) => {
-      const point = knowledgePoints.find((p) => p.id === pointId);
-      if (point) {
-        const updated = { ...point, x, y };
-        updateKnowledgePoint(updated);
-        try {
-          await fetch(`/api/points/${pointId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ x, y }),
-          });
-        } catch (e) {
-          console.error('Failed to update point position', e);
-        }
-      }
-    },
-    [knowledgePoints, updateKnowledgePoint]
-  );
-
-  const handleRelationCreate = useCallback(
-    async (sourceId: string, targetId: string) => {
-      const exists = relations.some(
-        (r) => r.sourceId === sourceId && r.targetId === targetId
-      );
-      if (exists || !currentCourse) return;
-
-      try {
-        const response = await fetch('/api/relations', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            courseId: currentCourse.id,
-            sourceId,
-            targetId,
-            curvature: 0.5,
-          }),
-        });
-        const newRelation = await response.json();
-        addRelation(newRelation);
-      } catch (e) {
-        console.error('Failed to create relation', e);
-      }
-    },
-    [relations, currentCourse, addRelation]
-  );
-
-  const handleRelationUpdate = useCallback(
-    async (relationId: string, curvature: number) => {
-      try {
-        await fetch(`/api/relations/${relationId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ curvature }),
-        });
-        setRelations(
-          relations.map((r) =>
-            r.id === relationId ? { ...r, curvature } : r
-          )
-        );
-      } catch (e) {
-        console.error('Failed to update relation', e);
-      }
-    },
-    [relations, setRelations]
-  );
-
-  const handleGeneratePath = async () => {
-    if (!currentUser || !currentCourse) return;
-    setIsGenerating(true);
+  const handleNodeMove = async (id: string, x: number, y: number) => {
     try {
-      await generatePath(
-        currentUser.id,
-        currentCourse.id,
-        knowledgePoints,
-        relations,
-        assessments,
-        reviewRecords,
-        5
+      await fetch(`/api/knowledge-points/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ x, y }),
+      });
+      setKnowledgePoints((prev) =>
+        prev.map((k) => (k.id === id ? { ...k, x, y } : k))
       );
-    } finally {
-      setIsGenerating(false);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleCreateRelation = async (sourceId: string, targetId: string) => {
+    try {
+      const res = await fetch(`/api/courses/${courseId}/relations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceId, targetId }),
+      });
+      if (res.status === 409) {
+        showToast('关系已存在');
+        return;
+      }
+      const newRel = await res.json();
+      setRelations((prev) => [...prev, newRel]);
+      showToast('关系创建成功');
+    } catch (err) {
+      console.error(err);
+      showToast('创建关系失败');
+    }
+  };
+
+  const handleUpdateRelationCurvature = async (relId: string, curvature: number) => {
+    try {
+      await fetch(`/api/relations/${relId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ curvature }),
+      });
+      setRelations((prev) =>
+        prev.map((r) => (r.id === relId ? { ...r, curvature } : r))
+      );
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAddKp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formKp.title || !formKp.description) {
+      showToast('请填写标题和详情');
+      return;
+    }
+    const tagArr = formKp.tags.split(/[,，\s]+/).filter(Boolean).slice(0, 5);
+    try {
+      const x = 100 + Math.random() * 400;
+      const y = 100 + Math.random() * 400;
+      const res = await fetch(`/api/courses/${courseId}/knowledge-points`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: formKp.title,
+          description: formKp.description,
+          difficulty: formKp.difficulty,
+          tags: tagArr,
+          x,
+          y,
+        }),
+      });
+      const newKp = await res.json();
+      setKnowledgePoints((prev) => [...prev, newKp]);
+      setFormKp({ title: '', description: '', difficulty: '中级', tags: '' });
+      setShowTeacherForm(false);
+      showToast('知识点添加成功');
+    } catch (err) {
+      console.error(err);
+      showToast('添加失败');
     }
   };
 
   const handleMarkReviewed = async () => {
-    if (!currentUser || !selectedPoint) return;
+    if (!selectedKp) return;
     try {
-      const response = await fetch('/api/reviews', {
+      await fetch(`/api/users/${userId}/reviewed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: currentUser.id,
-          pointId: selectedPoint.id,
-        }),
+        body: JSON.stringify({ courseId, kpId: selectedKp.id }),
       });
-      const record = await response.json();
-      addReviewRecord(record);
-      removeFromPath(selectedPoint.id);
-      setPath(path.filter((id) => id !== selectedPoint.id));
-      setRecommendPath(path.filter((id) => id !== selectedPoint.id));
-      setSelectedPoint(null);
-    } catch (e) {
-      console.error('Failed to mark reviewed', e);
-    }
-  };
-
-  const handleAddPoint = async (data: {
-    title: string;
-    description: string;
-    difficulty: Difficulty;
-    tags: string[];
-  }) => {
-    if (!currentCourse) return;
-    try {
-      const response = await fetch('/api/points', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...data,
-          courseId: currentCourse.id,
-          x: 300 + Math.random() * 200,
-          y: 200 + Math.random() * 200,
-        }),
-      });
-      const newPoint = await response.json();
-      addKnowledgePoint(newPoint);
-      setShowAddModal(false);
-    } catch (e) {
-      console.error('Failed to add point', e);
-    }
-  };
-
-  const handleNavigateToNext = () => {
-    const currentIndex = path.findIndex((id) => id === selectedPoint?.id);
-    if (currentIndex >= 0 && currentIndex < path.length - 1) {
-      const nextPoint = knowledgePoints.find((p) => p.id === path[currentIndex + 1]);
-      if (nextPoint) {
-        setSelectedPoint(nextPoint);
+      const next = [...reviewedIds, selectedKp.id];
+      setReviewedIds(next);
+      showToast('已完成复习');
+      if (pathEnabled && path[pathIndex] === selectedKp.id) {
+        if (pathIndex < path.length - 1) {
+          setPathIndex((i) => i + 1);
+        } else {
+          showToast('复习路径已全部完成！');
+        }
       }
+      setSelectedKp(null);
+    } catch (err) {
+      console.error(err);
     }
   };
 
-  const getAssessmentScore = (pointId: string): number | null => {
-    const assessment = assessments.find(
-      (a) => a.pointId === pointId && a.userId === currentUser?.id
-    );
-    return assessment?.score ?? null;
+  const handleGeneratePath = async () => {
+    try {
+      const res = await fetch('/api/recommend-path', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, courseId }),
+      });
+      const data = await res.json();
+      if (data.path && data.path.length > 0) {
+        setPathEnabled(true);
+        setPathIndex(0);
+        showToast('复习路径已生成');
+      } else {
+        showToast('暂无薄弱点，继续保持！');
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const isReviewed = (pointId: string): boolean => {
-    return reviewRecords.some(
-      (r) => r.pointId === pointId && r.userId === currentUser?.id
-    );
+  const handleJumpToNext = () => {
+    if (pathEnabled && pathIndex < path.length) {
+      const nextKp = knowledgePoints.find((k) => k.id === path[pathIndex]);
+      if (nextKp) setSelectedKp(nextKp);
+    }
   };
 
-  const currentPath = recommendPath.length > 0 ? recommendPath : path;
-  const weakPoints = assessments.filter(
-    (a) => a.score < 60 && a.userId === currentUser?.id && a.courseId === currentCourse?.id
-  );
+  const filterTagsArr = filterTag === 'all' ? [] : [filterTag];
+  const activeNodeId = pathEnabled && path.length > pathIndex ? path[pathIndex] : selectedKp?.id;
+
+  const scoreColorClass = (s?: number) => {
+    if (s === undefined) return 'score-mid';
+    if (s < 60) return 'score-low';
+    if (s < 80) return 'score-mid';
+    return 'score-high';
+  };
 
   return (
-    <div className="min-h-screen bg-white">
-      <Header
-        course={currentCourse}
-        currentUser={currentUser}
-        allTags={allTags}
-        filterTag={filterTag}
-        onFilterChange={setFilterTag}
-        onUserClick={() => navigate('/user')}
-      />
-
-      <div className="pt-14 min-h-screen flex flex-col lg:flex-row">
-        <div className="flex-1 lg:w-[70%] bg-white p-4 lg:p-6">
-          <div className="h-[60vh] lg:h-[calc(100vh-56px-48px)] rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-            <KnowledgeGraph
-              points={coursePoints}
-              relations={courseRelations}
-              recommendPath={currentPath}
-              filterTag={filterTag}
-              isTeacher={isTeacher}
-              onPointClick={handlePointClick}
-              onPointMove={handlePointMove}
-              onRelationCreate={handleRelationCreate}
-              onRelationUpdate={handleRelationUpdate}
-            />
+    <div className="page-container">
+      <div className="graph-area">
+        {loading ? (
+          <div className="empty-tip">加载中...</div>
+        ) : (
+          <KnowledgeGraph
+            ref={graphRef}
+            knowledgePoints={knowledgePoints}
+            relations={relations}
+            mode={mode}
+            filterTags={filterTagsArr}
+            highlightPath={pathEnabled ? path : []}
+            activeNodeId={activeNodeId}
+            onNodeClick={setSelectedKp}
+            onNodeMove={handleNodeMove}
+            onCreateRelation={handleCreateRelation}
+            onUpdateRelationCurvature={handleUpdateRelationCurvature}
+          />
+        )}
+        {pathEnabled && path.length > 0 && pathIndex < path.length && (
+          <div className="next-nav">
+            <span className="next-nav-text">
+              复习进度：{pathIndex + 1} / {path.length} ·
+              当前：{knowledgePoints.find((k) => k.id === path[pathIndex])?.title || ''}
+            </span>
+            <button className="next-nav-btn" onClick={handleJumpToNext}>
+              {reviewedIds.includes(path[pathIndex]) ? '查看下一个' : '开始复习'}
+            </button>
           </div>
-        </div>
-
-        <div
-          className="lg:w-[30%] p-4 lg:p-6 lg:border-l"
-          style={{ backgroundColor: '#f5f5f5', borderColor: '#e0e0e0' }}
-        >
-          <div className="space-y-4">
-            {currentCourse && (
-              <div className="bg-white rounded-xl p-4 shadow-sm">
-                <div className="flex items-center gap-3 mb-3">
-                  <div
-                    className="w-10 h-10 rounded-lg flex items-center justify-center"
-                    style={{ backgroundColor: 'rgba(26, 35, 126, 0.1)' }}
-                  >
-                    <BookOpen size={20} style={{ color: '#1a237e' }} />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold" style={{ color: '#212121' }}>
-                      {currentCourse.title}
-                    </h3>
-                    <p className="text-xs" style={{ color: '#757575' }}>
-                      {coursePoints.length} 个知识点
-                    </p>
-                  </div>
-                </div>
-                <p className="text-sm" style={{ color: '#424242' }}>
-                  {currentCourse.description}
-                </p>
-              </div>
-            )}
-
-            <div className="bg-white rounded-xl p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <Target size={18} style={{ color: '#00bcd4' }} />
-                <h3 className="font-semibold" style={{ color: '#212121' }}>
-                  学习统计
-                </h3>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="text-center">
-                  <p className="text-2xl font-bold" style={{ color: '#1a237e' }}>
-                    {coursePoints.length}
-                  </p>
-                  <p className="text-xs" style={{ color: '#757575' }}>
-                    总知识点
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold" style={{ color: '#e57373' }}>
-                    {weakPoints.length}
-                  </p>
-                  <p className="text-xs" style={{ color: '#757575' }}>
-                    薄弱点
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold" style={{ color: '#81c784' }}>
-                    {reviewRecords.filter((r) => r.userId === currentUser?.id).length}
-                  </p>
-                  <p className="text-xs" style={{ color: '#757575' }}>
-                    已复习
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <TrendingUp size={18} style={{ color: '#00bcd4' }} />
-                <h3 className="font-semibold" style={{ color: '#212121' }}>
-                  复习路径
-                </h3>
-              </div>
-
-              {currentPath.length > 0 ? (
-                <div className="space-y-2">
-                  {currentPath.map((pointId, index) => {
-                    const point = knowledgePoints.find((p) => p.id === pointId);
-                    if (!point) return null;
-                    const isCurrent = selectedPoint?.id === pointId;
-                    const isPointReviewed = isReviewed(pointId);
-
-                    return (
-                      <button
-                        key={pointId}
-                        onClick={() => setSelectedPoint(point)}
-                        className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all hover:bg-gray-50`}
-                        style={{
-                          backgroundColor: isCurrent ? 'rgba(26, 35, 126, 0.05)' : 'transparent',
-                          boxShadow: isCurrent ? '0 0 0 2px #1a237e' : 'none',
-                        }}
-                      >
-                        <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold"
-                          style={{ backgroundColor: DIFFICULTY_COLORS[point.difficulty] }}
-                        >
-                          {index + 1}
-                        </div>
-                        <div className="flex-1 text-left">
-                          <p className="text-sm font-medium" style={{ color: '#212121' }}>
-                            {point.title}
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <span
-                              className="text-xs px-2 py-0.5 rounded-full text-white"
-                              style={{ backgroundColor: DIFFICULTY_COLORS[point.difficulty] }}
-                            >
-                              {point.difficulty}
-                            </span>
-                            {isPointReviewed && (
-                              <span className="text-xs text-green-600">已复习</span>
-                            )}
-                          </div>
-                        </div>
-                        <ChevronRight size={16} style={{ color: '#bdbdbd' }} />
-                      </button>
-                    );
-                  })}
-
-                  {selectedPoint && path.findIndex((id) => id === selectedPoint.id) < path.length - 1 && (
-                    <button
-                      onClick={handleNavigateToNext}
-                      className="w-full py-2 rounded-lg text-sm font-medium text-white mt-2 transition-all hover:scale-[1.02]"
-                      style={{ backgroundColor: '#00bcd4' }}
-                    >
-                      下一节 →
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-6">
-                  <p className="text-sm mb-4" style={{ color: '#757575' }}>
-                    点击按钮生成个性化复习路径
-                  </p>
-                </div>
-              )}
-
-              <button
-                onClick={handleGeneratePath}
-                disabled={isLoading || isGenerating}
-                className="w-full py-3 rounded-xl font-medium text-white flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 mt-4"
-                style={{ backgroundColor: '#1a237e' }}
-              >
-                <Sparkles size={18} />
-                {isLoading || isGenerating ? '生成中...' : '生成复习路径'}
-              </button>
-            </div>
-
-            {isTeacher && (
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="w-full py-3 rounded-xl font-medium text-white flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
-                style={{ backgroundColor: '#00bcd4' }}
-              >
-                <Plus size={18} />
-                添加知识点
-              </button>
-            )}
-
-            <div className="bg-white rounded-xl p-4 shadow-sm">
-              <h3 className="font-semibold mb-3" style={{ color: '#212121' }}>
-                图例说明
-              </h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: '#81c784' }}
-                  />
-                  <span style={{ color: '#424242' }}>初级难度</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: '#ffb74d' }}
-                  />
-                  <span style={{ color: '#424242' }}>中级难度</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: '#e57373' }}
-                  />
-                  <span style={{ color: '#424242' }}>高级难度</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-8 h-0.5"
-                    style={{ backgroundColor: '#1976d2' }}
-                  />
-                  <span style={{ color: '#424242' }}>知识点关系</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-8 h-0.5 border-t-2 border-dashed"
-                    style={{ borderColor: '#f44336' }}
-                  />
-                  <span style={{ color: '#424242' }}>复习路径</span>
-                </div>
-              </div>
-            </div>
+        )}
+        {toast && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 20,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: 'rgba(26,35,126,0.92)',
+              color: '#fff',
+              padding: '8px 20px',
+              borderRadius: 20,
+              fontSize: 13,
+              zIndex: 200,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+              animation: 'fadeIn 0.3s ease',
+            }}
+          >
+            {toast}
           </div>
-        </div>
+        )}
       </div>
 
-      {selectedPoint && (
-        <PointDetailModal
-          point={selectedPoint}
-          isInPath={currentPath.includes(selectedPoint.id)}
-          isReviewed={isReviewed(selectedPoint.id)}
-          assessmentScore={getAssessmentScore(selectedPoint.id)}
-          onClose={() => setSelectedPoint(null)}
-          onMarkReviewed={handleMarkReviewed}
-        />
-      )}
+      <div className="info-panel">
+        <div>
+          <div className="panel-title">
+            {isTeacher ? '教师控制台' : '学习中心'}
+          </div>
+          <div className="panel-section">
+            <h4>{course?.title || 'JavaScript 前端开发基础'}</h4>
+            <p style={{ fontSize: 12, color: '#757575', marginTop: 6, lineHeight: 1.5 }}>
+              {course?.description || '从零开始学习 JavaScript 语言核心概念和前端开发基础技能'}
+            </p>
+            <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <span className="tag">共 {knowledgePoints.length} 个知识点</span>
+              <span className="tag">{relations.length} 条关联</span>
+            </div>
+          </div>
+        </div>
 
-      {showAddModal && (
-        <AddPointModal
-          onClose={() => setShowAddModal(false)}
-          onAdd={handleAddPoint}
-        />
+        {isTeacher && (
+          <div className="panel-section">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <h4 style={{ marginBottom: 0 }}>添加知识点</h4>
+              <button
+                className="btn-outline"
+                style={{ padding: '4px 10px', fontSize: 12 }}
+                onClick={() => setShowTeacherForm(!showTeacherForm)}
+              >
+                {showTeacherForm ? '收起' : '+ 新建'}
+              </button>
+            </div>
+            {showTeacherForm && (
+              <form onSubmit={handleAddKp}>
+                <div className="form-field">
+                  <label>标题</label>
+                  <input
+                    type="text"
+                    value={formKp.title}
+                    onChange={(e) => setFormKp({ ...formKp, title: e.target.value })}
+                    placeholder="知识点标题"
+                  />
+                </div>
+                <div className="form-field">
+                  <label>难度</label>
+                  <select
+                    value={formKp.difficulty}
+                    onChange={(e) => setFormKp({ ...formKp, difficulty: e.target.value as any })}
+                  >
+                    <option value="初级">初级</option>
+                    <option value="中级">中级</option>
+                    <option value="高级">高级</option>
+                  </select>
+                </div>
+                <div className="form-field">
+                  <label>详情描述</label>
+                  <textarea
+                    value={formKp.description}
+                    onChange={(e) => setFormKp({ ...formKp, description: e.target.value })}
+                    placeholder="详细内容..."
+                  />
+                </div>
+                <div className="form-field">
+                  <label>标签（逗号分隔，最多5个）</label>
+                  <input
+                    type="text"
+                    value={formKp.tags}
+                    onChange={(e) => setFormKp({ ...formKp, tags: e.target.value })}
+                    placeholder="例如: 基础, 核心"
+                  />
+                </div>
+                <div className="btn-group">
+                  <button type="submit" className="btn">
+                    添加
+                  </button>
+                  <p style={{ fontSize: 11, color: '#9e9e9e', alignSelf: 'center' }}>
+                    提示：按住 Shift 拖拽节点可创建关系连线
+                  </p>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+
+        <div className="panel-section">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <h4 style={{ marginBottom: 0 }}>复习路径</h4>
+            <div className="btn-group">
+              {pathEnabled && (
+                <button
+                  className="btn-outline"
+                  style={{ padding: '4px 10px', fontSize: 12 }}
+                  onClick={() => {
+                    setPathEnabled(false);
+                    setPathIndex(0);
+                  }}
+                >
+                  清除
+                </button>
+              )}
+              <button
+                className="btn-secondary"
+                style={{ padding: '5px 12px', fontSize: 12 }}
+                onClick={handleGeneratePath}
+              >
+                生成复习路径
+              </button>
+            </div>
+          </div>
+          {!pathEnabled || path.length === 0 ? (
+            <div style={{ fontSize: 12, color: '#9e9e9e', padding: '10px 0' }}>
+              点击"生成复习路径"按钮，基于你的测评成绩和知识图谱的依赖关系，为你推荐最优复习顺序。
+            </div>
+          ) : (
+            <ul className="path-list">
+              {path.map((id, idx) => {
+                const kp = knowledgePoints.find((k) => k.id === id);
+                const isActive = idx === pathIndex;
+                const isRev = reviewedIds.includes(id);
+                return (
+                  <li
+                    key={id}
+                    className={`path-item ${isActive ? 'active' : ''} ${isRev ? 'reviewed' : ''}`}
+                    onClick={() => kp && setSelectedKp(kp)}
+                  >
+                    <div className="path-item-order">{idx + 1}</div>
+                    <div className="path-item-info">
+                      <div className="path-item-title">{kp?.title || id}</div>
+                      <div className="path-item-sub">
+                        <span className={`tag difficulty-${kp?.difficulty}`}>{kp?.difficulty}</span>
+                        {scores[id] !== undefined && (
+                          <span style={{ marginLeft: 6, fontSize: 11 }}>
+                            得分: <strong style={{ color: scores[id] < 60 ? '#d32f2f' : '#388e3c' }}>{scores[id]}</strong>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {isRev && <span style={{ fontSize: 11, color: '#81c784' }}>✓</span>}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        {!isTeacher && (
+          <div className="panel-section">
+            <h4>测评成绩概览</h4>
+            <div className="kp-list">
+              {knowledgePoints.map((kp) => {
+                const s = scores[kp.id];
+                return (
+                  <div
+                    key={kp.id}
+                    className="kp-list-item"
+                    onClick={() => setSelectedKp(kp)}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 500 }}>{kp.title}</div>
+                      <div className="score-bar" style={{ width: 100 }}>
+                        <div
+                          className={`score-bar-fill ${scoreColorClass(s)}`}
+                          style={{ width: `${s !== undefined ? s : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12, color: s !== undefined && s < 60 ? '#d32f2f' : '#616161', fontWeight: 600 }}>
+                      {s !== undefined ? `${s}分` : '-'}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {selectedKp && (
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setSelectedKp(null)}>
+          <div className="kp-modal">
+            <button className="kp-modal-close" onClick={() => setSelectedKp(null)}>
+              ×
+            </button>
+            <h2 className="kp-modal-title">{selectedKp.title}</h2>
+            <div className="kp-modal-difficulty">
+              <span className={`tag difficulty-${selectedKp.difficulty}`}>
+                {selectedKp.difficulty}
+              </span>
+              {scores[selectedKp.id] !== undefined && (
+                <span
+                  style={{
+                    marginLeft: 8,
+                    fontSize: 12,
+                    color:
+                      scores[selectedKp.id] < 60
+                        ? '#d32f2f'
+                        : scores[selectedKp.id] < 80
+                        ? '#f57c00'
+                        : '#388e3c',
+                    fontWeight: 600,
+                  }}
+                >
+                  测评得分：{scores[selectedKp.id]}分
+                  {scores[selectedKp.id] < 60 && ' (薄弱点)'}
+                </span>
+              )}
+            </div>
+            <p className="kp-modal-desc">{selectedKp.description}</p>
+            <div className="kp-modal-tags">
+              <span style={{ fontSize: 12, color: '#757575', marginRight: 6 }}>标签：</span>
+              {selectedKp.tags.length > 0 ? (
+                selectedKp.tags.map((t) => (
+                  <span key={t} className="tag">
+                    {t}
+                  </span>
+                ))
+              ) : (
+                <span style={{ fontSize: 12, color: '#bdbdbd' }}>无</span>
+              )}
+            </div>
+            <div className="kp-modal-footer">
+              {!isTeacher && (
+                <button
+                  className="btn"
+                  style={{ background: reviewedIds.includes(selectedKp.id) ? '#81c784' : undefined }}
+                  onClick={handleMarkReviewed}
+                  disabled={reviewedIds.includes(selectedKp.id)}
+                >
+                  {reviewedIds.includes(selectedKp.id) ? '已完成复习' : '完成复习'}
+                </button>
+              )}
+              <button className="btn-outline" onClick={() => setSelectedKp(null)}>
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
 };
+
+export default MapPage;

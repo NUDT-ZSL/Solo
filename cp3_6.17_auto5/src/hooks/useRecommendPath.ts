@@ -1,190 +1,141 @@
-import { useState, useCallback } from 'react';
-import { KnowledgePoint, KnowledgeRelation, Assessment, ReviewRecord } from '../types';
+import { useMemo } from 'react';
+import type { KnowledgePoint, Relation } from '../types';
 
-function buildGraph(
-  points: KnowledgePoint[],
-  relations: KnowledgeRelation[]
-): Map<string, string[]> {
-  const graph = new Map<string, string[]>();
-  points.forEach((p) => graph.set(p.id, []));
-  relations.forEach((r) => {
-    const targets = graph.get(r.sourceId) || [];
-    targets.push(r.targetId);
-    graph.set(r.sourceId, targets);
-  });
-  return graph;
+interface UseRecommendPathParams {
+  knowledgePoints: KnowledgePoint[];
+  relations: Relation[];
+  scores: Record<string, number>;
+  reviewedIds: string[];
+  maxNodes?: number;
 }
 
-function reverseGraph(
-  points: KnowledgePoint[],
-  relations: KnowledgeRelation[]
-): Map<string, string[]> {
-  const graph = new Map<string, string[]>();
-  points.forEach((p) => graph.set(p.id, []));
-  relations.forEach((r) => {
-    const sources = graph.get(r.targetId) || [];
-    sources.push(r.sourceId);
-    graph.set(r.targetId, sources);
-  });
-  return graph;
-}
+export function useRecommendPath({
+  knowledgePoints,
+  relations,
+  scores,
+  reviewedIds,
+  maxNodes = 5,
+}: UseRecommendPathParams): string[] {
+  return useMemo(() => {
+    if (knowledgePoints.length === 0) return [];
 
-function dfsTopologicalSort(
-  startId: string,
-  graph: Map<string, string[]>,
-  weakPoints: Set<string>,
-  maxNodes: number,
-  reviewedIds: Set<string>
-): string[] {
-  const visited = new Set<string>();
-  const result: string[] = [];
-
-  function dfs(nodeId: string) {
-    if (visited.has(nodeId) || result.length >= maxNodes) return;
-    visited.add(nodeId);
-    
-    if (!reviewedIds.has(nodeId)) {
-      result.push(nodeId);
-    }
-
-    const neighbors = graph.get(nodeId) || [];
-    neighbors.sort((a, b) => {
-      const aWeak = weakPoints.has(a) ? 1 : 0;
-      const bWeak = weakPoints.has(b) ? 1 : 0;
-      return bWeak - aWeak;
+    const idSet = new Set(knowledgePoints.map((k) => k.id));
+    const adjList: Record<string, string[]> = {};
+    const inDegree: Record<string, number> = {};
+    knowledgePoints.forEach((kp) => {
+      adjList[kp.id] = [];
+      inDegree[kp.id] = 0;
     });
 
-    for (const neighbor of neighbors) {
-      if (result.length >= maxNodes) break;
-      dfs(neighbor);
+    relations.forEach((r) => {
+      if (idSet.has(r.sourceId) && idSet.has(r.targetId)) {
+        adjList[r.sourceId].push(r.targetId);
+        inDegree[r.targetId] = (inDegree[r.targetId] || 0) + 1;
+      }
+    });
+
+    const topoOrder: string[] = [];
+    const visited = new Set<string>();
+    const tempMark = new Set<string>();
+
+    function dfs(node: string): boolean {
+      if (tempMark.has(node)) return false;
+      if (visited.has(node)) return true;
+      tempMark.add(node);
+      for (const next of adjList[node] || []) {
+        if (!dfs(next)) return false;
+      }
+      tempMark.delete(node);
+      visited.add(node);
+      topoOrder.unshift(node);
+      return true;
     }
-  }
 
-  dfs(startId);
-  return result.slice(0, maxNodes);
+    for (const id of knowledgePoints.map((k) => k.id)) {
+      if (!visited.has(id)) {
+        if (!dfs(id)) break;
+      }
+    }
+
+    const weakIds = knowledgePoints
+      .filter((kp) => {
+        const s = scores[kp.id];
+        return s !== undefined && s < 60 && !reviewedIds.includes(kp.id);
+      })
+      .sort((a, b) => {
+        const sa = scores[a.id] ?? 100;
+        const sb = scores[b.id] ?? 100;
+        if (sa !== sb) return sa - sb;
+        return 0;
+      })
+      .map((k) => k.id);
+
+    if (weakIds.length === 0) {
+      const unpick = knowledgePoints
+        .filter((k) => !reviewedIds.includes(k.id))
+        .map((k) => k.id);
+      return topoOrder.filter((id) => unpick.includes(id)).slice(0, maxNodes);
+    }
+
+    const startId = weakIds[0];
+    const startIdx = Math.max(0, topoOrder.indexOf(startId));
+
+    const result: string[] = [];
+    const used = new Set<string>();
+
+    for (let i = startIdx; i < topoOrder.length && result.length < maxNodes; i++) {
+      const id = topoOrder[i];
+      if (!used.has(id) && !reviewedIds.includes(id)) {
+        result.push(id);
+        used.add(id);
+      }
+    }
+
+    let j = startIdx - 1;
+    while (result.length < maxNodes && j >= 0) {
+      const id = topoOrder[j];
+      if (!used.has(id) && !reviewedIds.includes(id)) {
+        result.unshift(id);
+        used.add(id);
+      }
+      j--;
+    }
+
+    if (result.length < maxNodes) {
+      for (const id of topoOrder) {
+        if (result.length >= maxNodes) break;
+        if (!used.has(id) && !reviewedIds.includes(id)) {
+          result.push(id);
+          used.add(id);
+        }
+      }
+    }
+
+    const weakSet = new Set(weakIds);
+    const reordered: string[] = [];
+    const reUsed = new Set<string>();
+
+    const first = result.find((id) => weakSet.has(id));
+    if (first) {
+      const fi = result.indexOf(first);
+      for (let k = fi; k < result.length; k++) {
+        if (!reUsed.has(result[k])) {
+          reordered.push(result[k]);
+          reUsed.add(result[k]);
+        }
+      }
+      for (let k = 0; k < fi; k++) {
+        if (!reUsed.has(result[k])) {
+          reordered.push(result[k]);
+          reUsed.add(result[k]);
+        }
+      }
+    } else {
+      reordered.push(...result);
+    }
+
+    return reordered.slice(0, maxNodes);
+  }, [knowledgePoints, relations, scores, reviewedIds, maxNodes]);
 }
 
-export function useRecommendPath() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [path, setPath] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
-
-  const generatePath = useCallback(
-    async (
-      userId: string,
-      courseId: string,
-      points: KnowledgePoint[],
-      relations: KnowledgeRelation[],
-      assessments: Assessment[],
-      reviews: ReviewRecord[],
-      maxNodes: number = 5
-    ): Promise<string[]> => {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const response = await fetch('/api/recommend-path', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, courseId, maxNodes }),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setPath(data.path);
-          setIsLoading(false);
-          return data.path;
-        }
-      } catch (e) {
-        console.warn('API call failed, using local calculation', e);
-      }
-
-      const coursePoints = points.filter((p) => p.courseId === courseId);
-      const courseRelations = relations.filter((r) => r.courseId === courseId);
-      const userAssessments = assessments.filter(
-        (a) => a.userId === userId && a.courseId === courseId
-      );
-      const reviewedIds = new Set(reviews.map((r) => r.pointId));
-
-      const weakPoints = new Set<string>();
-      userAssessments.forEach((a) => {
-        if (a.score < 60) {
-          weakPoints.add(a.pointId);
-        }
-      });
-
-      let resultPath: string[] = [];
-
-      if (weakPoints.size === 0) {
-        resultPath = coursePoints
-          .filter((p) => !reviewedIds.has(p.id))
-          .slice(0, maxNodes)
-          .map((p) => p.id);
-      } else {
-        const forwardGraph = buildGraph(coursePoints, courseRelations);
-        const reverseGraphMap = reverseGraph(coursePoints, courseRelations);
-
-        let bestPath: string[] = [];
-        let maxWeakCount = -1;
-
-        for (const weakPointId of weakPoints) {
-          const prerequisites: string[] = [];
-          const visited = new Set<string>();
-          
-          function collectPrereqs(nodeId: string) {
-            if (visited.has(nodeId) || nodeId === weakPointId) return;
-            visited.add(nodeId);
-            if (!reviewedIds.has(nodeId)) {
-              prerequisites.unshift(nodeId);
-            }
-            const parents = reverseGraphMap.get(nodeId) || [];
-            for (const parent of parents) {
-              collectPrereqs(parent);
-            }
-          }
-          
-          const directParents = reverseGraphMap.get(weakPointId) || [];
-          for (const parent of directParents) {
-            collectPrereqs(parent);
-          }
-
-          const startPoint = prerequisites.length > 0 ? prerequisites[0] : weakPointId;
-          const currentPath = dfsTopologicalSort(
-            startPoint,
-            forwardGraph,
-            weakPoints,
-            maxNodes,
-            reviewedIds
-          );
-
-          const weakCount = currentPath.filter((id) => weakPoints.has(id)).length;
-          if (weakCount > maxWeakCount || (weakCount === maxWeakCount && currentPath.length > bestPath.length)) {
-            maxWeakCount = weakCount;
-            bestPath = currentPath;
-          }
-        }
-
-        resultPath = bestPath;
-      }
-
-      setPath(resultPath);
-      setIsLoading(false);
-      return resultPath;
-    },
-    []
-  );
-
-  const clearPath = useCallback(() => {
-    setPath([]);
-    setError(null);
-  }, []);
-
-  return {
-    path,
-    isLoading,
-    error,
-    generatePath,
-    clearPath,
-    setPath,
-  };
-}
+export default useRecommendPath;

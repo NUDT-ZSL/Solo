@@ -1,1 +1,114 @@
-[]
+{
+  "knowledgePoints": [
+    {
+      "id": "kp-1",
+      "courseId": "course-1",
+      "title": "变量与数据类型",
+      "description": "JavaScript 中的基本数据类型包括：String、Number、Boolean、Null、Undefined、Symbol、BigInt。使用 var、let、const 声明变量，其中 let 和 const 具有块级作用域，const 用于声明常量。理解数据类型的转换规则，包括隐式转换和显式转换（parseInt、parseFloat、toString 等）。",
+      "difficulty": "初级",
+      "tags": ["基础", "变量", "数据类型"],
+      "x": 150,
+      "y": 120
+    },
+    {
+      "id": "kp-2",
+      "courseId": "course-1",
+      "title": "运算符与表达式",
+      "description": "掌握算术运算符(+ - * / %)、比较运算符(== === != !== > <)、逻辑运算符(&& || !)、赋值运算符、三元运算符。理解运算符优先级和结合性，特别注意 == 与 === 的区别：== 会进行类型转换后比较，=== 严格比较值和类型。",
+      "difficulty": "初级",
+      "tags": ["基础", "运算符"],
+      "x": 150,
+      "y": 280
+    },
+    {
+      "id": "kp-3",
+      "courseId": "course-1",
+      "title": "条件语句与循环",
+      "description": "掌握 if-else、switch-case 条件分支结构，以及 for、while、do-while 循环语句。理解 break 和 continue 的作用域差异，学会使用 for-in 遍历对象属性、for-of 遍历可迭代对象。循环嵌套时注意时间复杂度。",
+      "difficulty": "初级",
+      "tags": ["基础", "流程控制"],
+      "x": 150,
+      "y": 440
+    },
+    {
+      "id": "kp-4",
+      "courseId": "course-1",
+      "title": "函数基础",
+      "description": "函数定义的三种方式：函数声明、函数表达式、箭头函数。理解参数传递（值传递 vs 引用传递）、默认参数、剩余参数(...rest)。掌握 return 语句和函数返回值，箭头函数不绑定 this 和 arguments。",
+      "difficulty": "中级",
+      "tags": ["函数", "核心"],
+      "x": 400,
+      "y": 120
+    },
+    {
+      "id": "kp-5",
+      "courseId": "course-1",
+      "title": "作用域与闭包",
+      "description": "理解全局作用域、函数作用域、块级作用域的区别。掌握词法作用域规则，闭包是指有权访问另一个函数作用域中变量的函数。闭包的应用：数据私有化、柯里化、防抖节流。注意闭包可能导致的内存泄漏问题。",
+      "difficulty": "高级",
+      "tags": ["核心", "作用域", "闭包"],
+      "x": 400,
+      "y": 280
+    },
+    {
+      "id": "kp-6",
+      "courseId": "course-1",
+      "title": "数组方法",
+      "description": "常用数组方法：push/pop/shift/unshift（增删）、slice/splice（截取）、concat（合并）、join（转字符串）。高阶方法：map、filter、reduce、forEach、some、every、find、findIndex。理解纯函数方法与非纯函数方法的区别。",
+      "difficulty": "中级",
+      "tags": ["数组", "核心"],
+      "x": 400,
+      "y": 440
+    },
+    {
+      "id": "kp-7",
+      "courseId": "course-1",
+      "title": "对象与原型链",
+      "description": "对象的创建方式：字面量、new Object、构造函数、Object.create。原型链机制：每个对象都有 __proto__ 指向其构造函数的 prototype，属性查找沿原型链向上。理解 hasOwnProperty 方法来区分自有属性和继承属性。",
+      "difficulty": "高级",
+      "tags": ["对象", "原型链", "核心"],
+      "x": 650,
+      "y": 120
+    },
+    {
+      "id": "kp-8",
+      "courseId": "course-1",
+      "title": "ES6+ 新特性",
+      "description": "解构赋值（数组/对象）、模板字符串、展开运算符...、Promise 基础、let/const、箭头函数、模块化 import/export。Class 语法糖（本质是构造函数的语法封装），async/await 异步编程新方式。",
+      "difficulty": "中级",
+      "tags": ["ES6", "模块化"],
+      "x": 650,
+      "y": 280
+    },
+    {
+      "id": "kp-9",
+      "courseId": "course-1",
+      "title": "异步编程",
+      "description": "异步编程演进：回调函数 → Promise → async/await。理解事件循环机制：调用栈、宏任务（setTimeout、setInterval）、微任务（Promise.then、queueMicrotask）的执行顺序。掌握 Promise.all、Promise.race、Promise.allSettled 的使用场景。",
+      "difficulty": "高级",
+      "tags": ["异步", "Promise", "核心"],
+      "x": 650,
+      "y": 440
+    },
+    {
+      "id": "kp-10",
+      "courseId": "course-1",
+      "title": "DOM 操作",
+      "description": "DOM 节点查询方法：getElementById、querySelector、querySelectorAll。节点创建(createElement)、插入(appendChild/insertBefore)、删除(removeChild)、修改属性(setAttribute)和样式。理解 DOM 树结构，注意频繁 DOM 操作的性能优化。",
+      "difficulty": "中级",
+      "tags": ["DOM", "前端"],
+      "x": 900,
+      "y": 200
+    },
+    {
+      "id": "kp-11",
+      "courseId": "course-1",
+      "title": "事件处理",
+      "description": "事件流三个阶段：捕获阶段 → 目标阶段 → 冒泡阶段。事件监听的三种方式：HTML属性、DOM属性、addEventListener。事件委托利用冒泡机制减少监听器数量。常用事件：click、input、change、submit、keydown、load。",
+      "difficulty": "中级",
+      "tags": ["事件", "前端"],
+      "x": 900,
+      "y": 380
+    }
+  ]
+}

@@ -1,1 +1,11 @@
-[]
+{
+  "courses": [
+    {
+      "id": "course-1",
+      "title": "JavaScript 前端开发基础",
+      "description": "从零开始学习 JavaScript 语言核心概念和前端开发基础技能",
+      "coverUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=JavaScript%20programming%20course%20cover%20modern%20blue%20theme&image_size=landscape_16_9",
+      "createdAt": "2025-01-15T08:00:00Z"
+    }
+  ]
+}
