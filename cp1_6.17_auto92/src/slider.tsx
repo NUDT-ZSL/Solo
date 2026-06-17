@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useAppStore } from './store'
 import { renderContent, Slide as SlideData, SlideLine } from './parser'
 import { Theme } from './theme'
@@ -6,8 +6,8 @@ import { Theme } from './theme'
 interface SlideCardProps {
   slide: SlideData
   theme: Theme
-  animate?: boolean
-  direction?: 'forward' | 'backward'
+  isAnimating: boolean
+  animationClass: string
 }
 
 const SlideLineItem: React.FC<{ line: SlideLine; theme: Theme }> = ({ line, theme }) => {
@@ -119,7 +119,7 @@ const SlideLineItem: React.FC<{ line: SlideLine; theme: Theme }> = ({ line, them
   }
 }
 
-const SlideCard: React.FC<SlideCardProps> = ({ slide, theme, animate = false, direction = 'forward' }) => {
+const SlideCard: React.FC<SlideCardProps> = ({ slide, theme, isAnimating, animationClass }) => {
   const cardStyle: React.CSSProperties = {
     width: '100%',
     height: '100%',
@@ -131,23 +131,17 @@ const SlideCard: React.FC<SlideCardProps> = ({ slide, theme, animate = false, di
     flexDirection: 'column',
     justifyContent: 'flex-start',
     boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-    overflow: 'hidden',
-    transition: 'background-color 0.5s ease-in-out'
+    overflow: 'auto',
+    transition: 'background-color 0.5s ease-in-out',
+    position: 'absolute',
+    top: 0,
+    left: 0
   }
-
-  const animationName = direction === 'forward' ? 'slideFadeInForward' : 'slideFadeInBackward'
 
   return (
     <div
-      style={{
-        ...cardStyle,
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        opacity: animate ? 0 : 1,
-        transform: animate ? (direction === 'forward' ? 'translateX(40px)' : 'translateX(-40px)') : 'translateX(0)',
-        animation: animate ? `${animationName} 0.4s ease-out forwards` : undefined
-      }}
+      className={isAnimating ? `slide-card ${animationClass}` : 'slide-card'}
+      style={cardStyle}
     >
       {slide.lines.map((line, idx) => (
         <SlideLineItem key={idx} line={line} theme={theme} />
@@ -173,25 +167,50 @@ const Slider: React.FC<SliderProps> = ({ onEnterFullscreen }) => {
   } = useAppStore()
 
   const containerRef = useRef<HTMLDivElement>(null)
-  const [hover, setHover] = React.useState(false)
+  const [hover, setHover] = useState(false)
   const prevPageRef = useRef(currentPage)
-  const [animateKey, setAnimateKey] = React.useState(0)
-  const [direction, setDirection] = React.useState<'forward' | 'backward'>('forward')
+  const [isAnimating, setIsAnimating] = useState(false)
+  const [animationClass, setAnimationClass] = useState('')
+  const animationTimerRef = useRef<number | null>(null)
 
   const theme = getCurrentTheme()
   const total = getTotalPages()
 
   useEffect(() => {
     if (prevPageRef.current !== currentPage) {
-      setDirection(currentPage > prevPageRef.current ? 'forward' : 'backward')
-      setAnimateKey(k => k + 1)
+      const direction = currentPage > prevPageRef.current ? 'forward' : 'backward'
+      const animClass = direction === 'forward' ? 'slide-in-right' : 'slide-in-left'
+
+      if (animationTimerRef.current) {
+        clearTimeout(animationTimerRef.current)
+      }
+
+      setAnimationClass(animClass)
+      setIsAnimating(true)
+
+      animationTimerRef.current = window.setTimeout(() => {
+        setIsAnimating(false)
+        setAnimationClass('')
+        animationTimerRef.current = null
+      }, 400)
+
       prevPageRef.current = currentPage
     }
   }, [currentPage])
 
   useEffect(() => {
+    return () => {
+      if (animationTimerRef.current) {
+        clearTimeout(animationTimerRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isFullscreen) return
+      if (isAnimating) return
+
       if (e.key === 'ArrowRight' || e.key === ' ') {
         e.preventDefault()
         nextPage()
@@ -207,7 +226,7 @@ const Slider: React.FC<SliderProps> = ({ onEnterFullscreen }) => {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isFullscreen, nextPage, prevPage, setIsFullscreen])
+  }, [isFullscreen, nextPage, prevPage, setIsFullscreen, isAnimating])
 
   const handleFullscreenClick = () => {
     if (!document.fullscreenElement && containerRef.current) {
@@ -224,6 +243,18 @@ const Slider: React.FC<SliderProps> = ({ onEnterFullscreen }) => {
       })
     } else {
       setIsFullscreen(false)
+    }
+  }
+
+  const handlePrevClick = () => {
+    if (!isAnimating) {
+      prevPage()
+    }
+  }
+
+  const handleNextClick = () => {
+    if (!isAnimating) {
+      nextPage()
     }
   }
 
@@ -256,11 +287,21 @@ const Slider: React.FC<SliderProps> = ({ onEnterFullscreen }) => {
 
   const slideContainerStyle: React.CSSProperties = {
     position: 'relative',
-    width: isFullscreen ? 'min(90vw, calc(80vh * 16 / 9))' : 'auto',
-    height: isFullscreen ? 'auto' : '100%',
     aspectRatio: '16 / 9',
-    maxWidth: isFullscreen ? 'none' : '100%',
+    width: '100%',
+    height: 'auto',
+    maxWidth: '100%',
     maxHeight: '100%'
+  }
+
+  const fullscreenContainerStyle: React.CSSProperties = {
+    position: 'relative',
+    aspectRatio: '16 / 9',
+    width: 'auto',
+    height: 'auto',
+    maxWidth: '90vw',
+    maxHeight: '85vh',
+    minWidth: 0
   }
 
   const nonFullscreenWrapper: React.CSSProperties = {
@@ -273,9 +314,12 @@ const Slider: React.FC<SliderProps> = ({ onEnterFullscreen }) => {
 
   const innerContainerStyle: React.CSSProperties = {
     position: 'relative',
+    aspectRatio: '16 / 9',
     width: '100%',
-    maxWidth: isFullscreen ? 'none' : '900px',
-    aspectRatio: '16 / 9'
+    height: 'auto',
+    maxWidth: '900px',
+    maxHeight: '100%',
+    minWidth: 0
   }
 
   const fullscreenBtnStyle: React.CSSProperties = {
@@ -317,7 +361,7 @@ const Slider: React.FC<SliderProps> = ({ onEnterFullscreen }) => {
   const prevBtnStyle: React.CSSProperties = {
     ...navBtnBaseStyle,
     left: isFullscreen ? '30px' : '20px',
-    cursor: currentPage === 0 ? 'not-allowed' : 'pointer',
+    cursor: currentPage === 0 || isAnimating ? 'not-allowed' : 'pointer',
     background: currentPage === 0 ? 'rgba(0,0,0,0.1)' : theme.primary,
     color: currentPage === 0 ? '#999' : '#fff',
     opacity: currentPage === 0 ? 0.5 : 1
@@ -326,7 +370,7 @@ const Slider: React.FC<SliderProps> = ({ onEnterFullscreen }) => {
   const nextBtnStyle: React.CSSProperties = {
     ...navBtnBaseStyle,
     right: isFullscreen ? '30px' : '20px',
-    cursor: currentPage >= total - 1 ? 'not-allowed' : 'pointer',
+    cursor: currentPage >= total - 1 || isAnimating ? 'not-allowed' : 'pointer',
     background: currentPage >= total - 1 ? 'rgba(0,0,0,0.1)' : theme.primary,
     color: currentPage >= total - 1 ? '#999' : '#fff',
     opacity: currentPage >= total - 1 ? 0.5 : 1
@@ -376,23 +420,26 @@ const Slider: React.FC<SliderProps> = ({ onEnterFullscreen }) => {
               {isFullscreen ? '✕' : '⛶'}
             </button>
 
-            <SlideCard
-              key={animateKey}
-              slide={slides[currentPage]}
-              theme={theme}
-              animate={animateKey > 0}
-              direction={direction}
-            />
+            <div style={slideContainerStyle}>
+              <SlideCard
+                slide={slides[currentPage]}
+                theme={theme}
+                isAnimating={isAnimating}
+                animationClass={animationClass}
+              />
+            </div>
 
             {(hover || isFullscreen) && (
               <>
                 <button
-                  onClick={prevPage}
-                  disabled={currentPage === 0}
+                  onClick={handlePrevClick}
+                  disabled={currentPage === 0 || isAnimating}
                   title="上一页 (←)"
                   style={prevBtnStyle}
                   onMouseDown={(e) => {
-                    if (currentPage !== 0) e.currentTarget.style.transform = 'translateY(-50%) scale(0.95)'
+                    if (currentPage !== 0 && !isAnimating) {
+                      e.currentTarget.style.transform = 'translateY(-50%) scale(0.95)'
+                    }
                   }}
                   onMouseUp={(e) => {
                     e.currentTarget.style.transform = 'translateY(-50%) scale(1)'
@@ -405,12 +452,14 @@ const Slider: React.FC<SliderProps> = ({ onEnterFullscreen }) => {
                 </button>
 
                 <button
-                  onClick={nextPage}
-                  disabled={currentPage >= total - 1}
+                  onClick={handleNextClick}
+                  disabled={currentPage >= total - 1 || isAnimating}
                   title="下一页 (→)"
                   style={nextBtnStyle}
                   onMouseDown={(e) => {
-                    if (currentPage < total - 1) e.currentTarget.style.transform = 'translateY(-50%) scale(0.95)'
+                    if (currentPage < total - 1 && !isAnimating) {
+                      e.currentTarget.style.transform = 'translateY(-50%) scale(0.95)'
+                    }
                   }}
                   onMouseUp={(e) => {
                     e.currentTarget.style.transform = 'translateY(-50%) scale(1)'
@@ -448,23 +497,24 @@ const Slider: React.FC<SliderProps> = ({ onEnterFullscreen }) => {
             ✕
           </button>
 
-          <div style={slideContainerStyle}>
+          <div style={fullscreenContainerStyle}>
             <SlideCard
-              key={animateKey}
               slide={slides[currentPage]}
               theme={theme}
-              animate={animateKey > 0}
-              direction={direction}
+              isAnimating={isAnimating}
+              animationClass={animationClass}
             />
           </div>
 
           <button
-            onClick={prevPage}
-            disabled={currentPage === 0}
+            onClick={handlePrevClick}
+            disabled={currentPage === 0 || isAnimating}
             title="上一页 (←)"
             style={prevBtnStyle}
             onMouseDown={(e) => {
-              if (currentPage !== 0) e.currentTarget.style.transform = 'translateY(-50%) scale(0.95)'
+              if (currentPage !== 0 && !isAnimating) {
+                e.currentTarget.style.transform = 'translateY(-50%) scale(0.95)'
+              }
             }}
             onMouseUp={(e) => {
               e.currentTarget.style.transform = 'translateY(-50%) scale(1)'
@@ -477,12 +527,14 @@ const Slider: React.FC<SliderProps> = ({ onEnterFullscreen }) => {
           </button>
 
           <button
-            onClick={nextPage}
-            disabled={currentPage >= total - 1}
+            onClick={handleNextClick}
+            disabled={currentPage >= total - 1 || isAnimating}
             title="下一页 (→)"
             style={nextBtnStyle}
             onMouseDown={(e) => {
-              if (currentPage < total - 1) e.currentTarget.style.transform = 'translateY(-50%) scale(0.95)'
+              if (currentPage < total - 1 && !isAnimating) {
+                e.currentTarget.style.transform = 'translateY(-50%) scale(0.95)'
+              }
             }}
             onMouseUp={(e) => {
               e.currentTarget.style.transform = 'translateY(-50%) scale(1)'
@@ -501,7 +553,17 @@ const Slider: React.FC<SliderProps> = ({ onEnterFullscreen }) => {
       )}
 
       <style>{`
-        @keyframes slideFadeInForward {
+        .slide-card {
+          opacity: 1;
+          transform: translateX(0);
+        }
+        .slide-in-right {
+          animation: slideFadeInRight 0.4s ease-out forwards;
+        }
+        .slide-in-left {
+          animation: slideFadeInLeft 0.4s ease-out forwards;
+        }
+        @keyframes slideFadeInRight {
           from {
             opacity: 0;
             transform: translateX(40px);
@@ -511,7 +573,7 @@ const Slider: React.FC<SliderProps> = ({ onEnterFullscreen }) => {
             transform: translateX(0);
           }
         }
-        @keyframes slideFadeInBackward {
+        @keyframes slideFadeInLeft {
           from {
             opacity: 0;
             transform: translateX(-40px);
@@ -520,6 +582,19 @@ const Slider: React.FC<SliderProps> = ({ onEnterFullscreen }) => {
             opacity: 1;
             transform: translateX(0);
           }
+        }
+        .slide-card::-webkit-scrollbar {
+          width: 8px;
+        }
+        .slide-card::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .slide-card::-webkit-scrollbar-thumb {
+          background: rgba(0,0,0,0.2);
+          border-radius: 4px;
+        }
+        .slide-card::-webkit-scrollbar-thumb:hover {
+          background: rgba(0,0,0,0.3);
         }
       `}</style>
     </div>

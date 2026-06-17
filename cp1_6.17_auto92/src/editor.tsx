@@ -1,7 +1,7 @@
-import React, { useMemo, useRef, useEffect } from 'react'
+import React, { useMemo, useRef } from 'react'
 import { useAppStore } from './store'
 import { themes } from './theme'
-import { parseMarkdown, renderContent } from './parser'
+import { renderContent } from './parser'
 
 interface EditorProps {
   onExportSuccess?: () => void
@@ -23,6 +23,7 @@ const Editor: React.FC<EditorProps> = ({ onExportSuccess }) => {
   const lineNumbersRef = useRef<HTMLDivElement>(null)
   const [exportProgress, setExportProgress] = React.useState(0)
   const [showProgress, setShowProgress] = React.useState(false)
+  const [exportStatus, setExportStatus] = React.useState('')
 
   const theme = getCurrentTheme()
   const lineCount = useMemo(() => content.split('\n').length, [content])
@@ -41,7 +42,10 @@ const Editor: React.FC<EditorProps> = ({ onExportSuccess }) => {
     }
   }
 
-  const buildExportHTML = (): string => {
+  const buildExportHTML = (onProgress?: (p: number) => void): string => {
+    const totalSlides = slides.length
+    let processedSlides = 0
+
     const slidesHTML = slides.map((slide, idx) => {
       const linesHTML = slide.lines.map((line) => {
         switch (line.type) {
@@ -63,6 +67,12 @@ const Editor: React.FC<EditorProps> = ({ onExportSuccess }) => {
             return ''
         }
       }).join('')
+
+      processedSlides++
+      if (onProgress && totalSlides > 0) {
+        onProgress(processedSlides / totalSlides)
+      }
+
       return `<div class="sm-slide" data-idx="${idx}" style="background:${theme.background}">${linesHTML}</div>`
     }).join('')
 
@@ -249,46 +259,72 @@ const Editor: React.FC<EditorProps> = ({ onExportSuccess }) => {
 </html>`
   }
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (isExporting) return
     setIsExporting(true)
     setShowProgress(true)
     setExportProgress(0)
+    setExportStatus('准备导出...')
 
-    const duration = 500
-    const startTime = performance.now()
+    try {
+      await new Promise(resolve => setTimeout(resolve, 100))
+      setExportProgress(15)
+      setExportStatus('生成幻灯片内容...')
 
-    const animate = (now: number) => {
-      const elapsed = now - startTime
-      const progress = Math.min(elapsed / duration, 1)
-      setExportProgress(progress * 100)
+      await new Promise(resolve => setTimeout(resolve, 80))
+      setExportProgress(30)
 
-      if (progress < 1) {
-        requestAnimationFrame(animate)
-      } else {
-        const html = buildExportHTML()
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-        const filename = `slidemaker-${timestamp}.html`
-        const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = filename
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
+      let html = ''
+      const buildProgress = new Promise<string>((resolve) => {
+        let progress = 0
+        html = buildExportHTML((p) => {
+          const mappedProgress = 30 + p * 45
+          if (mappedProgress - progress >= 5) {
+            progress = mappedProgress
+            setExportProgress(progress)
+          }
+        })
+        resolve(html)
+      })
 
-        setTimeout(() => {
-          setIsExporting(false)
-          setShowProgress(false)
-          setExportProgress(0)
-          onExportSuccess?.()
-        }, 200)
-      }
+      html = await buildProgress
+      setExportProgress(75)
+      setExportStatus('打包文件...')
+
+      await new Promise(resolve => setTimeout(resolve, 60))
+      setExportProgress(85)
+      setExportStatus('准备下载...')
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const filename = `slidemaker-${timestamp}.html`
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+
+      setExportProgress(95)
+
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+
+      setExportProgress(100)
+      setExportStatus('导出完成！')
+
+      await new Promise(resolve => setTimeout(resolve, 300))
+    } catch (error) {
+      console.error('Export failed:', error)
+      setExportStatus('导出失败')
+      await new Promise(resolve => setTimeout(resolve, 500))
+    } finally {
+      setIsExporting(false)
+      setShowProgress(false)
+      setExportProgress(0)
+      setExportStatus('')
+      onExportSuccess?.()
     }
-
-    requestAnimationFrame(animate)
   }
 
   const editorContainerStyle: React.CSSProperties = {
@@ -341,7 +377,25 @@ const Editor: React.FC<EditorProps> = ({ onExportSuccess }) => {
     gap: '16px',
     flexWrap: 'wrap',
     minHeight: '64px',
-    position: 'relative'
+    position: 'relative',
+    transition: 'background-color 0.5s ease-in-out, border-color 0.5s ease-in-out'
+  }
+
+  const themeLabelStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontSize: '13px',
+    color: '#666',
+    fontWeight: 500,
+    transition: 'color 0.5s ease-in-out'
+  }
+
+  const themeNameStyle: React.CSSProperties = {
+    marginLeft: '8px',
+    color: theme.primary,
+    fontWeight: 600,
+    transition: 'color 0.5s ease-in-out'
   }
 
   const exportBtnStyle: React.CSSProperties = {
@@ -362,6 +416,15 @@ const Editor: React.FC<EditorProps> = ({ onExportSuccess }) => {
     overflow: 'hidden'
   }
 
+  const statsStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    fontSize: '12px',
+    color: '#888',
+    transition: 'color 0.5s ease-in-out'
+  }
+
   const progressBarContainerStyle: React.CSSProperties = {
     position: 'absolute',
     left: 0,
@@ -377,8 +440,29 @@ const Editor: React.FC<EditorProps> = ({ onExportSuccess }) => {
     height: '100%',
     background: '#4CAF50',
     width: `${exportProgress}%`,
-    transition: 'width 0.05s linear'
+    transition: 'width 0.08s ease-out'
   }
+
+  const statusTextStyle: React.CSSProperties = {
+    position: 'relative',
+    zIndex: 1,
+    fontSize: '12px',
+    opacity: isExporting ? 0.9 : 1,
+    transition: 'opacity 0.2s ease'
+  }
+
+  const themeButtonStyle = (t: typeof themes[0], idx: number): React.CSSProperties => ({
+    width: '32px',
+    height: '32px',
+    borderRadius: '6px',
+    border: themeIndex === idx ? `2px solid #333` : '2px solid transparent',
+    cursor: 'pointer',
+    background: `linear-gradient(135deg, ${t.primary} 0%, ${t.accent} 100%)`,
+    padding: 0,
+    transition: 'all 0.15s ease',
+    boxShadow: themeIndex === idx ? `0 0 0 3px ${t.primary}30` : 'none',
+    transform: 'scale(1)'
+  })
 
   return (
     <div
@@ -412,16 +496,7 @@ const Editor: React.FC<EditorProps> = ({ onExportSuccess }) => {
       </div>
 
       <div style={toolbarStyle}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            fontSize: '13px',
-            color: '#666',
-            fontWeight: 500
-          }}
-        >
+        <div style={themeLabelStyle}>
           <span>主题:</span>
           <div style={{ display: 'flex', gap: '8px' }}>
             {themes.map((t, idx) => (
@@ -429,18 +504,7 @@ const Editor: React.FC<EditorProps> = ({ onExportSuccess }) => {
                 key={t.name}
                 onClick={() => setThemeIndex(idx)}
                 title={t.name}
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '6px',
-                  border: themeIndex === idx ? `2px solid #333` : '2px solid transparent',
-                  cursor: 'pointer',
-                  background: `linear-gradient(135deg, ${t.primary} 0%, ${t.accent} 100%)`,
-                  padding: 0,
-                  transition: 'all 0.15s ease',
-                  boxShadow: themeIndex === idx ? `0 0 0 3px ${t.primary}30` : 'none',
-                  transform: 'scale(1)'
-                }}
+                style={themeButtonStyle(t, idx)}
                 onMouseDown={(e) => {
                   e.currentTarget.style.transform = 'scale(0.95)'
                 }}
@@ -453,29 +517,14 @@ const Editor: React.FC<EditorProps> = ({ onExportSuccess }) => {
               />
             ))}
           </div>
-          <span
-            style={{
-              marginLeft: '8px',
-              color: theme.primary,
-              fontWeight: 600,
-              transition: 'color 0.5s ease-in-out'
-            }}
-          >
+          <span style={themeNameStyle}>
             {theme.name}
           </span>
         </div>
 
         <div style={{ flex: 1 }} />
 
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            fontSize: '12px',
-            color: '#888'
-          }}
-        >
+        <div style={statsStyle}>
           <span>{slides.length} 张幻灯片</span>
           <span>|</span>
           <span>{lineCount} 行</span>
@@ -495,8 +544,8 @@ const Editor: React.FC<EditorProps> = ({ onExportSuccess }) => {
             e.currentTarget.style.transform = 'scale(1)'
           }}
         >
-          <span style={{ position: 'relative', zIndex: 1 }}>
-            {isExporting ? '导出中...' : '⬇ 导出 HTML'}
+          <span style={statusTextStyle}>
+            {isExporting ? (exportStatus || '导出中...') : '⬇ 导出 HTML'}
           </span>
         </button>
 

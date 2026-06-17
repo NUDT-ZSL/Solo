@@ -5,6 +5,7 @@ import { useAppStore } from './store'
 
 const App: React.FC = () => {
   const isFullscreen = useAppStore((s) => s.isFullscreen)
+  const theme = useAppStore((s) => s.getCurrentTheme())
 
   const layoutStyle: React.CSSProperties = {
     width: '100vw',
@@ -25,19 +26,71 @@ const App: React.FC = () => {
     justifyContent: 'space-between',
     boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
     zIndex: 10,
-    flexShrink: 0
+    flexShrink: 0,
+    transition: 'background-color 0.5s ease-in-out, border-color 0.5s ease-in-out'
+  }
+
+  const logoStyle: React.CSSProperties = {
+    width: '36px',
+    height: '36px',
+    borderRadius: '8px',
+    background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.accent} 100%)`,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: '#fff',
+    fontWeight: 700,
+    fontSize: '16px',
+    transition: 'background 0.5s ease-in-out'
+  }
+
+  const titleStyle: React.CSSProperties = {
+    fontSize: '18px',
+    fontWeight: 700,
+    color: '#1a1a1a',
+    margin: 0,
+    lineHeight: 1.2,
+    transition: 'color 0.5s ease-in-out'
+  }
+
+  const subtitleStyle: React.CSSProperties = {
+    fontSize: '12px',
+    color: '#888',
+    margin: '2px 0 0 0',
+    transition: 'color 0.5s ease-in-out'
+  }
+
+  const statusDotStyle: React.CSSProperties = {
+    display: 'inline-block',
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    background: '#4CAF50',
+    marginRight: '4px',
+    transition: 'background-color 0.5s ease-in-out'
+  }
+
+  const statusTextStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontSize: '12px',
+    color: '#999',
+    transition: 'color 0.5s ease-in-out'
   }
 
   const contentStyle: React.CSSProperties = {
     flex: 1,
     display: 'flex',
     overflow: 'hidden',
-    minHeight: 0
+    minHeight: 0,
+    width: '100%',
+    maxWidth: '100%',
+    margin: '0 auto'
   }
 
   const editorPaneStyle: React.CSSProperties = {
     flex: '1 1 0',
-    minWidth: 0,
     height: '100%',
     overflow: 'hidden',
     display: 'flex',
@@ -52,7 +105,6 @@ const App: React.FC = () => {
 
   const previewPaneStyle: React.CSSProperties = {
     flex: '1 1 0',
-    minWidth: 0,
     height: '100%',
     overflow: 'hidden',
     display: 'flex',
@@ -71,62 +123,14 @@ const App: React.FC = () => {
     <div style={layoutStyle} className="app-container">
       <header style={headerStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div
-            style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '8px',
-              background: 'linear-gradient(135deg, #4A90D9 0%, #00BCD4 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#fff',
-              fontWeight: 700,
-              fontSize: '16px'
-            }}
-          >
-            S
-          </div>
+          <div style={logoStyle}>S</div>
           <div>
-            <h1
-              style={{
-                fontSize: '18px',
-                fontWeight: 700,
-                color: '#1a1a1a',
-                margin: 0,
-                lineHeight: 1.2
-              }}
-            >
-              SlideMaker
-            </h1>
-            <p
-              style={{
-                fontSize: '12px',
-                color: '#888',
-                margin: '2px 0 0 0'
-              }}
-            >
-              Markdown 转幻灯片演示文稿编辑器
-            </p>
+            <h1 style={titleStyle}>SlideMaker</h1>
+            <p style={subtitleStyle}>Markdown 转幻灯片演示文稿编辑器</p>
           </div>
         </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            fontSize: '12px',
-            color: '#999'
-          }}
-        >
-          <span style={{
-            display: 'inline-block',
-            width: '6px',
-            height: '6px',
-            borderRadius: '50%',
-            background: '#4CAF50',
-            marginRight: '4px'
-          }} />
+        <div style={statusTextStyle}>
+          <span style={statusDotStyle} />
           实时预览已启用
         </div>
       </header>
@@ -192,29 +196,55 @@ const App: React.FC = () => {
 
         @media (min-width: 1024px) {
           .content-wrapper {
-            max-width: 1800px;
+            max-width: 2000px;
             margin: 0 auto;
             width: 100%;
+            padding: 0 20px;
+          }
+          .editor-pane {
+            flex: 0 0 50%;
+            max-width: 50%;
+          }
+          .preview-pane {
+            flex: 0 0 50%;
+            max-width: 50%;
+          }
+        }
+
+        @media (min-width: 1440px) {
+          .content-wrapper {
+            max-width: 2400px;
+            padding: 0 40px;
+          }
+          .editor-pane {
+            flex: 0 0 48%;
+            max-width: 48%;
+          }
+          .preview-pane {
+            flex: 0 0 52%;
+            max-width: 52%;
+          }
+        }
+
+        @media (min-width: 1920px) {
+          .content-wrapper {
+            max-width: 2800px;
+            padding: 0 60px;
           }
           .editor-pane {
             flex: 0 0 45%;
             max-width: 45%;
           }
           .preview-pane {
-            flex: 1 1 auto;
-          }
-        }
-
-        @media (min-width: 1440px) {
-          .editor-pane {
-            flex: 0 0 40%;
-            max-width: 40%;
+            flex: 0 0 55%;
+            max-width: 55%;
           }
         }
 
         @media (max-width: 1023px) {
           .content-wrapper {
             flex-direction: column;
+            padding: 0;
           }
           .divider {
             width: 100% !important;
@@ -224,6 +254,7 @@ const App: React.FC = () => {
           .preview-pane {
             min-width: 100% !important;
             width: 100% !important;
+            max-width: 100% !important;
           }
           .editor-pane {
             flex: 0 0 45%;
