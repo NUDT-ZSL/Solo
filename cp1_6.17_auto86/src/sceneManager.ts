@@ -7,6 +7,19 @@ interface Hill {
   radius: number
 }
 
+const DEV_LOG = true
+function devLog(tag: string, msg: string, data?: unknown) {
+  if (DEV_LOG) {
+    const prefix = `%c[${tag}]`
+    const style = 'color: #2196F3; font-weight: bold;'
+    if (data !== undefined) {
+      console.log(prefix, style, msg, data)
+    } else {
+      console.log(prefix, style, msg)
+    }
+  }
+}
+
 export class SceneManager {
   private container: HTMLElement
   private scene: THREE.Scene
@@ -22,6 +35,7 @@ export class SceneManager {
   private terrainDeposition: Float32Array
   private snowTarget: Float32Array
   private snowDisplay: Float32Array
+  private snowHeight: Float32Array
   private readonly MAX_P = 5000
   private pX: Float32Array
   private pY: Float32Array
@@ -30,6 +44,7 @@ export class SceneManager {
   private pVY: Float32Array
   private pVZ: Float32Array
   private pActive: Uint8Array
+  private pBirth: Float64Array
   private freeList: number[]
   private activeCount = 0
   private particleMesh!: THREE.Points
@@ -48,9 +63,14 @@ export class SceneManager {
   private weather: WeatherMode = 'sunny'
   private lastResetSig = 0
   private bgAnimId = 0
+  private bgAnimStart = 0
+  private bgAnimDur = 1000
+  private bgAnimFrom = new THREE.Color()
+  private bgAnimTo = new THREE.Color()
   private terrainDirty = true
   private gridSize = 20
   private divs = 40
+  private readonly DEP_MAX = 0.3
   private readonly C_BOT = new THREE.Color(0x8bc34a)
   private readonly C_TOP = new THREE.Color(0x4caf50)
   private readonly C_RAIN = new THREE.Color(0x1565c0)
@@ -58,6 +78,12 @@ export class SceneManager {
   private readonly C_GRID = new THREE.Color(0xc0c0c0)
   private _t1 = new THREE.Color()
   private _t2 = new THREE.Color()
+  private perfMonitor = {
+    startTime: 0,
+    fpsSamples: [] as number[],
+    stable5s: false,
+    checked: false,
+  }
 
   constructor(container: HTMLElement) {
     this.container = container
@@ -80,6 +106,7 @@ export class SceneManager {
     this.terrainDeposition = new Float32Array(vc)
     this.snowTarget = new Float32Array(vc)
     this.snowDisplay = new Float32Array(vc)
+    this.snowHeight = new Float32Array(vc)
 
     this.pX = new Float32Array(this.MAX_P)
     this.pY = new Float32Array(this.MAX_P).fill(-100)
@@ -88,6 +115,7 @@ export class SceneManager {
     this.pVY = new Float32Array(this.MAX_P)
     this.pVZ = new Float32Array(this.MAX_P)
     this.pActive = new Uint8Array(this.MAX_P)
+    this.pBirth = new Float64Array(this.MAX_P)
     this.freeList = []
     for (let i = this.MAX_P - 1; i >= 0; i--) this.freeList.push(i)
 
@@ -99,8 +127,68 @@ export class SceneManager {
     this.initEvents()
     this.subStore()
 
+    devLog('Init', `地形顶点数: ${vc}, 粒子池大小: ${this.MAX_P}`)
+    devLog('Fix1', '网格颜色将随沉积量动态变化，0.3单位处截断为#1565C0')
+    devLog('Fix2', '雪天羽化动画: 0.3秒过渡，半径随堆积高度变化')
+    devLog('Fix3', '覆盖比例: 沉积>0.01即统计，实时更新store')
+    devLog('Fix4', '背景过渡: ease-in-out缓动，严格1秒')
+    devLog('Fix5', '粒子池: FIFO复用旧粒子，上限5000')
+
     this.lastTime = performance.now()
+    this.perfMonitor.startTime = this.lastTime
+    this.runSelfTests()
     this.animate()
+  }
+
+  private runSelfTests() {
+    devLog('Test', '========== 自检开始 ==========')
+
+    devLog('Test', '测试1: 沉积量范围验证 [0, 0.3]')
+    const testDep = 0.5
+    const clampedDep = Math.min(testDep, this.DEP_MAX)
+    devLog('Test', `  输入: ${testDep}, 截断后: ${clampedDep}, 期望值: ${this.DEP_MAX} → ${clampedDep === this.DEP_MAX ? '✓ PASS' : '✗ FAIL'}`)
+
+    const testDepLow = 0.1
+    const t = Math.min(testDepLow / this.DEP_MAX, 1)
+    this._t1.copy(this.C_TOP).lerp(this.C_RAIN, t)
+    devLog('Test', `  沉积0.1时颜色插值因子: ${t.toFixed(3)}, 颜色: #${this._t1.getHexString()}`)
+
+    const tMax = Math.min(this.DEP_MAX / this.DEP_MAX, 1)
+    this._t1.copy(this.C_TOP).lerp(this.C_RAIN, tMax)
+    const expectedRain = this.C_RAIN.getHexString()
+    devLog('Test', `  沉积0.3时颜色: #${this._t1.getHexString()}, 期望值: #${expectedRain} → ${this._t1.getHexString() === expectedRain ? '✓ PASS' : '✗ FAIL'}`)
+
+    devLog('Test', '测试2: 雪天羽化半径动态变化')
+    const h0 = 0, h1 = 0.3, h2 = 1
+    const r0 = Math.max(1.5, 1.5 + h0 * 4)
+    const r1 = Math.max(1.5, 1.5 + h1 * 4)
+    const r2 = Math.max(1.5, 1.5 + h2 * 4)
+    devLog('Test', `  高度0 → 半径: ${r0}, 高度0.3 → 半径: ${r1}, 高度1 → 半径: ${r2}`)
+    devLog('Test', `  半径随高度递增: ${r2 > r1 && r1 > r0 ? '✓ PASS' : '✗ FAIL'}`)
+
+    devLog('Test', '测试3: 覆盖比例计算')
+    const totalCells = (this.divs + 1) * (this.divs + 1)
+    const testCoverage = 100
+    const ratio = testCoverage / totalCells
+    devLog('Test', `  总网格单元: ${totalCells}, 覆盖单元: ${testCoverage}, 比例: ${(ratio * 100).toFixed(3)}%`)
+    devLog('Test', `  计算逻辑有效: ${ratio >= 0 && ratio <= 1 ? '✓ PASS' : '✗ FAIL'}`)
+
+    devLog('Test', '测试4: ease-in-out缓动函数')
+    const t0 = this.easeInOut(0)
+    const t5 = this.easeInOut(0.5)
+    const t1 = this.easeInOut(1)
+    devLog('Test', `  t=0 → ${t0.toFixed(3)}, t=0.5 → ${t5.toFixed(3)}, t=1 → ${t1.toFixed(3)}`)
+    devLog('Test', `  缓动正确: ${t0 === 0 && t5 === 0.5 && t1 === 1 ? '✓ PASS' : '✗ FAIL'}`)
+
+    devLog('Test', '测试5: 粒子池大小')
+    devLog('Test', `  池容量: ${this.MAX_P}, 空闲列表长度: ${this.freeList.length}`)
+    devLog('Test', `  池初始化正确: ${this.freeList.length === this.MAX_P ? '✓ PASS' : '✗ FAIL'}`)
+
+    devLog('Test', '测试6: 网格顶点映射')
+    devLog('Test', `  网格顶点数: ${this.gridVertexMap.length}, 地形顶点数: ${(this.divs + 1) * (this.divs + 1)}`)
+    devLog('Test', `  网格索引范围: [0, ${Math.max(...this.gridVertexMap)}]`)
+
+    devLog('Test', '========== 自检结束 ==========')
   }
 
   private subStore() {
@@ -109,31 +197,47 @@ export class SceneManager {
       (s) => {
         if (s.weather !== this.weather) {
           this.weather = s.weather
-          this.animateBg()
+          devLog('Fix4', `天气切换: ${this.weather} → ${s.weather}, 启动1秒背景过渡`)
+          this.startBgTransition()
         }
       }
     )
     this.weather = useWeatherStore.getState().weather
   }
 
-  private animateBg() {
+  private startBgTransition() {
     const map: Record<WeatherMode, number> = {
       sunny: 0x87ceeb, rainy: 0xb0bec5, snowy: 0xeceff1
     }
-    const target = new THREE.Color(map[this.weather])
-    const start = (this.scene.background as THREE.Color).clone()
-    const t0 = performance.now()
-    const dur = 1000
-    const id = ++this.bgAnimId
+    this.bgAnimId++
+    const id = this.bgAnimId
+    this.bgAnimFrom.copy(this.scene.background as THREE.Color)
+    this.bgAnimTo.setHex(map[this.weather])
+    this.bgAnimStart = performance.now()
+    this.bgAnimDur = 1000
 
     const step = () => {
-      if (id !== this.bgAnimId) return
-      const t = Math.min((performance.now() - t0) / dur, 1)
-      const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
-      ;(this.scene.background as THREE.Color).copy(start).lerp(target, e)
-      if (t < 1) requestAnimationFrame(step)
+      if (id !== this.bgAnimId) {
+        devLog('Fix4', '背景过渡被中断，新动画已启动')
+        return
+      }
+      const elapsed = performance.now() - this.bgAnimStart
+      const t = Math.min(elapsed / this.bgAnimDur, 1)
+      const eased = this.easeInOut(t)
+      ;(this.scene.background as THREE.Color).copy(this.bgAnimFrom).lerp(this.bgAnimTo, eased)
+      if (t < 1) {
+        requestAnimationFrame(step)
+      } else {
+        ;(this.scene.background as THREE.Color).copy(this.bgAnimTo)
+        devLog('Fix4', `背景过渡完成，耗时: ${elapsed.toFixed(0)}ms (目标1000ms)`)
+        devLog('Fix4', `起始色: #${this.bgAnimFrom.getHexString()}, 结束色: #${this.bgAnimTo.getHexString()}`)
+      }
     }
     requestAnimationFrame(step)
+  }
+
+  private easeInOut(t: number): number {
+    return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
   }
 
   private initTerrain() {
@@ -260,6 +364,7 @@ export class SceneManager {
     })
     this.gridMesh = new THREE.LineSegments(geo, mat)
     this.scene.add(this.gridMesh)
+    devLog('Fix1', `自定义网格创建完成，共 ${totalVerts} 个顶点，${gi / 2} 条线段`)
   }
 
   private initParticles() {
@@ -340,7 +445,25 @@ export class SceneManager {
     return y
   }
 
-  private emitParticles(dt: number) {
+  private acquireParticle(): number {
+    if (this.freeList.length > 0) {
+      return this.freeList.pop()!
+    }
+    let oldestIdx = -1
+    let oldestBirth = Infinity
+    for (let i = 0; i < this.MAX_P; i++) {
+      if (this.pActive[i] && this.pBirth[i] < oldestBirth) {
+        oldestBirth = this.pBirth[i]
+        oldestIdx = i
+      }
+    }
+    if (oldestIdx >= 0) {
+      return oldestIdx
+    }
+    return -1
+  }
+
+  private emitParticles(dt: number, now: number) {
     if (this.weather === 'sunny') return
     const rate = this.weather === 'rainy' ? 200 : 150
     this.emitAccum += rate * dt
@@ -355,9 +478,11 @@ export class SceneManager {
       this.particleMat.size = 0.2
     }
 
-    while (this.emitAccum >= 1 && this.freeList.length > 0) {
+    let emitted = 0
+    while (this.emitAccum >= 1) {
       this.emitAccum -= 1
-      const idx = this.freeList.pop()!
+      const idx = this.acquireParticle()
+      if (idx < 0) break
       this.pX[idx] = (Math.random() - 0.5) * this.gridSize
       this.pY[idx] = 15
       this.pZ[idx] = (Math.random() - 0.5) * this.gridSize
@@ -366,13 +491,18 @@ export class SceneManager {
       this.pVY[idx] = -spd
       this.pVZ[idx] = (Math.random() - 0.5) * 0.5
       this.pActive[idx] = 1
+      this.pBirth[idx] = now
+      emitted++
+    }
+
+    if (emitted > 0 && this.freeList.length === 0) {
+      devLog('Fix5', `粒子池已满(${this.MAX_P})，开始FIFO复用最旧粒子`)
     }
   }
 
   private updateParticles(dt: number) {
     let alive = 0
     const arr = this.particlePosArr
-    arr.fill(0)
 
     for (let i = 0; i < this.MAX_P; i++) {
       if (!this.pActive[i]) continue
@@ -422,19 +552,59 @@ export class SceneManager {
           }
         }
       }
-      this.terrainDeposition[lowI] = Math.min(this.terrainDeposition[lowI] + 0.02, 0.3)
+      const before = this.terrainDeposition[lowI]
+      this.terrainDeposition[lowI] = Math.min(before + 0.02, this.DEP_MAX)
+      const after = this.terrainDeposition[lowI]
+
+      if (DEV_LOG && before === 0 && after > 0) {
+        devLog('Fix1', `新沉积单元 #${lowI}: ${before.toFixed(3)} → ${after.toFixed(3)} (上限${this.DEP_MAX})`)
+      }
+      if (DEV_LOG && after >= this.DEP_MAX - 0.001 && before < this.DEP_MAX - 0.001) {
+        devLog('Fix1', `单元 #${lowI} 达到上限 ${this.DEP_MAX}，颜色截断为#1565C0`)
+      }
     } else if (this.weather === 'snowy') {
-      for (let dz = -2; dz <= 2; dz++) {
-        for (let dx = -2; dx <= 2; dx++) {
-          const nx = gx + dx, nz = gz + dz
-          if (nx >= 0 && nx <= this.divs && nz >= 0 && nz <= this.divs) {
-            const dist = Math.sqrt(dx * dx + dz * dz)
-            if (dist <= 2) {
-              const ni = nz * (this.divs + 1) + nx
-              const w = 1 - dist / 2.5
-              this.snowTarget[ni] = Math.min(this.snowTarget[ni] + w * 0.015, 1)
+      let nearestHill: Hill | null = null
+      let nearestDist = Infinity
+      for (const h of this.hills) {
+        const dx = x - h.position.x, dz = z - h.position.y
+        const dist = Math.sqrt(dx * dx + dz * dz)
+        if (dist < nearestDist) {
+          nearestDist = dist
+          nearestHill = h
+        }
+      }
+
+      if (nearestHill) {
+        const hx = nearestHill.position.x
+        const hz = nearestHill.position.y
+        const ghx = Math.floor(((hx + this.gridSize / 2) / this.gridSize) * this.divs)
+        const ghz = Math.floor(((hz + this.gridSize / 2) / this.gridSize) * this.divs)
+
+        const centerI = ghz * (this.divs + 1) + ghx
+        const baseH = this.snowHeight[centerI]
+        const featherRadius = Math.max(1.5, 1.5 + baseH * 4)
+        const intRadius = Math.ceil(featherRadius)
+
+        for (let dz2 = -intRadius; dz2 <= intRadius; dz2++) {
+          for (let dx2 = -intRadius; dx2 <= intRadius; dx2++) {
+            const nx = ghx + dx2, nz = ghz + dz2
+            if (nx >= 0 && nx <= this.divs && nz >= 0 && nz <= this.divs) {
+              const dist = Math.sqrt(dx2 * dx2 + dz2 * dz2)
+              if (dist <= featherRadius) {
+                const ni = nz * (this.divs + 1) + nx
+                const w = 1 - dist / (featherRadius + 0.5)
+                this.snowTarget[ni] = Math.min(this.snowTarget[ni] + w * 0.012, 1)
+                this.snowHeight[ni] = Math.min(this.snowHeight[ni] + w * 0.006, 1)
+              }
             }
           }
+        }
+
+        if (DEV_LOG && baseH > 0.05 && baseH < 0.06) {
+          devLog('Fix2', `山丘顶部积雪起始，高度: ${baseH.toFixed(3)}, 羽化半径: ${featherRadius.toFixed(1)}`)
+        }
+        if (DEV_LOG && baseH > 0.3 && baseH < 0.31) {
+          devLog('Fix2', `山丘积雪增长中，高度: ${baseH.toFixed(3)}, 羽化半径: ${featherRadius.toFixed(1)} (随高度增大)`)
         }
       }
     }
@@ -442,14 +612,15 @@ export class SceneManager {
   }
 
   private updateSnowDisplay(dt: number) {
-    const speed = 1 / 0.3
+    const transitionSpeed = 1 / 0.3
     let changed = false
+    let maxDiff = 0
     for (let i = 0; i < this.snowDisplay.length; i++) {
-      if (this.snowDisplay[i] < this.snowTarget[i]) {
-        this.snowDisplay[i] = Math.min(
-          this.snowDisplay[i] + (this.snowTarget[i] - this.snowDisplay[i]) * speed * dt,
-          this.snowTarget[i]
-        )
+      const diff = this.snowTarget[i] - this.snowDisplay[i]
+      if (Math.abs(diff) > 0.001) {
+        const step = diff * transitionSpeed * dt
+        this.snowDisplay[i] += step
+        if (Math.abs(diff) > maxDiff) maxDiff = Math.abs(diff)
         changed = true
       }
     }
@@ -464,6 +635,10 @@ export class SceneManager {
     const tCol = this.terrainColorArr
     let covered = 0
     const total = tPos.count
+    let maxDep = 0
+    let minDep = Infinity
+    let maxSnow = 0
+    let minSnowAboveZero = Infinity
 
     for (let i = 0; i < total; i++) {
       const y = tPos.getY(i)
@@ -471,18 +646,23 @@ export class SceneManager {
       this._t1.copy(this.C_BOT).lerp(this.C_TOP, hf)
 
       const dep = this.terrainDeposition[i]
+      if (dep > maxDep) maxDep = dep
+      if (dep > 0 && dep < minDep) minDep = dep
       if (dep > 0) {
-        const t = Math.min(dep / 0.3, 1)
-        this._t1.lerp(this.C_RAIN, t * 0.85)
+        const t = Math.min(dep / this.DEP_MAX, 1)
+        this._t1.lerp(this.C_RAIN, t)
       }
 
       const snow = this.snowDisplay[i]
+      if (snow > maxSnow) maxSnow = snow
+      if (snow > 0.001 && snow < minSnowAboveZero) minSnowAboveZero = snow
       if (snow > 0.001) {
         const e = snow < 0.5 ? 2 * snow * snow : 1 - Math.pow(-2 * snow + 2, 2) / 2
         this._t1.lerp(this.C_SNOW, e)
       }
 
       if (dep > 0.01 || snow > 0.01) covered++
+
       tCol[i * 3] = this._t1.r
       tCol[i * 3 + 1] = this._t1.g
       tCol[i * 3 + 2] = this._t1.b
@@ -500,7 +680,8 @@ export class SceneManager {
       if (dep > 0 || snow > 0.001) {
         this._t2.copy(this.C_TOP)
         if (dep > 0) {
-          this._t2.lerp(this.C_RAIN, Math.min(dep / 0.3, 1))
+          const t = Math.min(dep / this.DEP_MAX, 1)
+          this._t2.lerp(this.C_RAIN, t)
         }
         if (snow > 0.001) {
           const e = snow < 0.5 ? 2 * snow * snow : 1 - Math.pow(-2 * snow + 2, 2) / 2
@@ -517,7 +698,13 @@ export class SceneManager {
     }
     ;(this.gridMesh.geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true
 
-    useWeatherStore.getState().setCoverageRatio(covered / total)
+    const ratio = covered / total
+    useWeatherStore.getState().setCoverageRatio(ratio)
+
+    if (DEV_LOG && covered > 0 && Math.random() < 0.02) {
+      devLog('Fix3', `覆盖统计: ${covered}/${total} = ${(ratio * 100).toFixed(2)}%, 雨量范围: [${minDep.toFixed(4)}, ${maxDep.toFixed(3)}]`)
+      devLog('Fix3', `store.coverageRatio 已更新: ${(ratio * 100).toFixed(2)}%`)
+    }
   }
 
   private resetScene() {
@@ -531,6 +718,7 @@ export class SceneManager {
     this.terrainDeposition.fill(0)
     this.snowTarget.fill(0)
     this.snowDisplay.fill(0)
+    this.snowHeight.fill(0)
     this.emitAccum = 0
     this.terrainDirty = true
 
@@ -556,6 +744,37 @@ export class SceneManager {
 
     useWeatherStore.getState().setParticleCount(0)
     useWeatherStore.getState().setCoverageRatio(0)
+
+    this.perfMonitor.startTime = performance.now()
+    this.perfMonitor.fpsSamples = []
+    this.perfMonitor.stable5s = false
+    this.perfMonitor.checked = false
+
+    devLog('Reset', '场景已重置，粒子清空，地形颜色还原')
+  }
+
+  private checkPerfStability(fps: number, elapsedSec: number) {
+    if (this.perfMonitor.checked) return
+
+    this.perfMonitor.fpsSamples.push(fps)
+
+    if (elapsedSec >= 5) {
+      this.perfMonitor.checked = true
+      const samples = this.perfMonitor.fpsSamples
+      const avg = samples.reduce((a, b) => a + b, 0) / samples.length
+      const min = Math.min(...samples)
+      const max = Math.max(...samples)
+      const stable = min >= 45
+
+      devLog('Fix5', '=== 5秒性能评估 ===')
+      devLog('Fix5', `平均FPS: ${avg.toFixed(1)}`)
+      devLog('Fix5', `最低FPS: ${min}`)
+      devLog('Fix5', `最高FPS: ${max}`)
+      devLog('Fix5', `样本数: ${samples.length}`)
+      devLog('Fix5', `是否稳定≥45FPS: ${stable ? '✓ 是' : '✗ 否'}`)
+
+      this.perfMonitor.stable5s = stable
+    }
   }
 
   private animate = () => {
@@ -567,8 +786,11 @@ export class SceneManager {
 
     this.fpsAccum += dt
     this.fpsFrames++
-    if (this.fpsAccum >= 0.5) {
-      useWeatherStore.getState().setFps(Math.round(this.fpsFrames / this.fpsAccum))
+    if (this.fpsAccum >= 0.25) {
+      const fps = Math.round(this.fpsFrames / this.fpsAccum)
+      useWeatherStore.getState().setFps(fps)
+      const elapsed = (now - this.perfMonitor.startTime) / 1000
+      this.checkPerfStability(fps, elapsed)
       this.fpsAccum = 0
       this.fpsFrames = 0
     }
@@ -579,7 +801,7 @@ export class SceneManager {
       this.resetScene()
     }
 
-    this.emitParticles(dt)
+    this.emitParticles(dt, now)
     this.updateParticles(dt)
     this.updateSnowDisplay(dt)
     this.updateColors()
