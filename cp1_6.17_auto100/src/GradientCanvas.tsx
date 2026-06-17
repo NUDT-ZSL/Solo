@@ -6,8 +6,10 @@ interface GradientCanvasProps {
   colorNodes: ColorNode[];
   angle: number;
   gradientType: GradientType;
-  onPositionChange: (id: string, position: number) => void;
+  onPositionChange: (id: string, x: number, y: number) => void;
 }
+
+const NODE_RADIUS = 20;
 
 export default function GradientCanvas({
   colorNodes,
@@ -35,12 +37,15 @@ export default function GradientCanvas({
   }, []);
 
   const getPositionFromEvent = useCallback(
-    (clientX: number, _clientY: number) => {
+    (clientX: number, clientY: number): { x: number; y: number } => {
       const el = canvasRef.current;
-      if (!el) return 0;
+      if (!el) return { x: 50, y: 50 };
       const rect = el.getBoundingClientRect();
-      const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
-      return Math.round((x / rect.width) * 100);
+      const xPx = Math.max(NODE_RADIUS, Math.min(clientX - rect.left, rect.width - NODE_RADIUS));
+      const yPx = Math.max(NODE_RADIUS, Math.min(clientY - rect.top, rect.height - NODE_RADIUS));
+      const x = Math.round((xPx / rect.width) * 100);
+      const y = Math.round((yPx / rect.height) * 100);
+      return { x, y };
     },
     []
   );
@@ -49,8 +54,8 @@ export default function GradientCanvas({
     (id: string, e: React.MouseEvent) => {
       e.preventDefault();
       draggingRef.current = id;
-      const pos = getPositionFromEvent(e.clientX, e.clientY);
-      onPositionChange(id, pos);
+      const { x, y } = getPositionFromEvent(e.clientX, e.clientY);
+      onPositionChange(id, x, y);
     },
     [getPositionFromEvent, onPositionChange]
   );
@@ -58,8 +63,8 @@ export default function GradientCanvas({
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!draggingRef.current) return;
-      const pos = getPositionFromEvent(e.clientX, e.clientY);
-      onPositionChange(draggingRef.current, pos);
+      const { x, y } = getPositionFromEvent(e.clientX, e.clientY);
+      onPositionChange(draggingRef.current, x, y);
     };
     const handleMouseUp = () => {
       draggingRef.current = null;
@@ -77,8 +82,8 @@ export default function GradientCanvas({
       if (!draggingRef.current) return;
       e.preventDefault();
       const touch = e.touches[0];
-      const pos = getPositionFromEvent(touch.clientX, touch.clientY);
-      onPositionChange(draggingRef.current, pos);
+      const { x, y } = getPositionFromEvent(touch.clientX, touch.clientY);
+      onPositionChange(draggingRef.current, x, y);
     };
     const handleTouchEnd = () => {
       draggingRef.current = null;
@@ -108,7 +113,10 @@ export default function GradientCanvas({
     >
       {colorNodes.map((node) => {
         const left = canvasSize.width
-          ? (node.position / 100) * canvasSize.width
+          ? (node.x / 100) * canvasSize.width - NODE_RADIUS
+          : '50%';
+        const top = canvasSize.height
+          ? (node.y / 100) * canvasSize.height - NODE_RADIUS
           : '50%';
         return (
           <div
@@ -117,21 +125,20 @@ export default function GradientCanvas({
             onTouchStart={(e) => {
               draggingRef.current = node.id;
               const touch = e.touches[0];
-              const pos = getPositionFromEvent(touch.clientX, touch.clientY);
-              onPositionChange(node.id, pos);
+              const { x, y } = getPositionFromEvent(touch.clientX, touch.clientY);
+              onPositionChange(node.id, x, y);
             }}
             style={{
               position: 'absolute',
-              top: '50%',
-              left: typeof left === 'number' ? left - 20 : left,
-              width: 40,
-              height: 40,
+              left,
+              top,
+              width: NODE_RADIUS * 2,
+              height: NODE_RADIUS * 2,
               borderRadius: '50%',
               background: node.color,
               border: '3px solid white',
               boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
               cursor: 'grab',
-              transform: 'translateY(-50%)',
               zIndex: 10,
               touchAction: 'none',
               userSelect: 'none',

@@ -4,8 +4,8 @@ import ColorPickerPanel from './ColorPickerPanel';
 import type { ColorNode, GradientType } from './types';
 
 const DEFAULT_NODES: ColorNode[] = [
-  { id: 'node-1', color: '#FF6B6B', position: 0 },
-  { id: 'node-2', color: '#4ECDC4', position: 100 },
+  { id: 'node-1', color: '#FF6B6B', x: 0, y: 50 },
+  { id: 'node-2', color: '#4ECDC4', x: 100, y: 50 },
 ];
 
 export default function App() {
@@ -14,9 +14,9 @@ export default function App() {
   const [gradientType, setGradientType] = useState<GradientType>('linear');
 
   const handlePositionChange = useCallback(
-    (id: string, position: number) => {
+    (id: string, x: number, y: number) => {
       setColorNodes((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, position } : n))
+        prev.map((n) => (n.id === id ? { ...n, x, y } : n))
       );
     },
     []
