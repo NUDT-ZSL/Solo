@@ -54,13 +54,6 @@ export class Renderer {
       this.mouseY = e.clientY - rect.top;
       this.updateHoverState();
     });
-
-    this.canvas.addEventListener('click', (e) => {
-      const rect = this.canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      this.handleClick(x, y);
-    });
   }
 
   private getLayout(): Layout {
@@ -139,7 +132,7 @@ export class Renderer {
     }
   }
 
-  private handleClick(x: number, y: number): void {
+  handleClick(x: number, y: number): void {
     const layout = this.getLayout();
 
     if (this.controller.isGameOver) {
