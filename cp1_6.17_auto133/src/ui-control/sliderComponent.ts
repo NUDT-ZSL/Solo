@@ -68,30 +68,38 @@ export function generateMetalnessTextureDataURL(): string {
 
 export class SliderComponent {
   private container: HTMLDivElement;
+  private labelRow: HTMLDivElement;
+  private labelEl: HTMLSpanElement;
   private slider: HTMLInputElement;
   private valueLabel: HTMLSpanElement;
+  private trackContainer: HTMLDivElement;
   private config: SliderConfig;
   private onChangeCallback: (value: number) => void = () => {};
+  private isCompact: boolean = false;
+  private styleTag: HTMLStyleElement;
+  private styleId: string;
 
   constructor(config: SliderConfig) {
     this.config = config;
+    this.styleId = `slider-style-${Math.random().toString(36).slice(2, 9)}`;
+
     this.container = document.createElement('div');
     this.container.style.cssText = `
       width: 100%;
       margin-bottom: 16px;
     `;
 
-    const labelRow = document.createElement('div');
-    labelRow.style.cssText = `
+    this.labelRow = document.createElement('div');
+    this.labelRow.style.cssText = `
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 8px;
     `;
 
-    const label = document.createElement('span');
-    label.textContent = config.label;
-    label.style.cssText = `
+    this.labelEl = document.createElement('span');
+    this.labelEl.textContent = config.label;
+    this.labelEl.style.cssText = `
       color: #fff;
       font-size: 13px;
       font-weight: 500;
@@ -106,11 +114,11 @@ export class SliderComponent {
     `;
     this.updateValueDisplay(config.value);
 
-    labelRow.appendChild(label);
-    labelRow.appendChild(this.valueLabel);
+    this.labelRow.appendChild(this.labelEl);
+    this.labelRow.appendChild(this.valueLabel);
 
-    const trackContainer = document.createElement('div');
-    trackContainer.style.cssText = `
+    this.trackContainer = document.createElement('div');
+    this.trackContainer.style.cssText = `
       position: relative;
       width: 100%;
       height: 6px;
@@ -119,19 +127,19 @@ export class SliderComponent {
       overflow: hidden;
     `;
     if (config.trackGradient) {
-      trackContainer.style.background = config.trackGradient;
+      this.trackContainer.style.background = config.trackGradient;
     } else if (config.textureType === 'roughness') {
-      trackContainer.style.backgroundImage = `url(${generateRoughnessTextureDataURL()})`;
-      trackContainer.style.backgroundSize = 'cover';
-      trackContainer.style.backgroundPosition = 'center';
+      this.trackContainer.style.backgroundImage = `url(${generateRoughnessTextureDataURL()})`;
+      this.trackContainer.style.backgroundSize = 'cover';
+      this.trackContainer.style.backgroundPosition = 'center';
     } else if (config.textureType === 'metalness') {
-      trackContainer.style.backgroundImage = `url(${generateMetalnessTextureDataURL()})`;
-      trackContainer.style.backgroundSize = 'cover';
-      trackContainer.style.backgroundPosition = 'center';
+      this.trackContainer.style.backgroundImage = `url(${generateMetalnessTextureDataURL()})`;
+      this.trackContainer.style.backgroundSize = 'cover';
+      this.trackContainer.style.backgroundPosition = 'center';
     } else if (config.trackBackgroundImage) {
-      trackContainer.style.backgroundImage = config.trackBackgroundImage;
-      trackContainer.style.backgroundSize = 'cover';
-      trackContainer.style.backgroundPosition = 'center';
+      this.trackContainer.style.backgroundImage = config.trackBackgroundImage;
+      this.trackContainer.style.backgroundSize = 'cover';
+      this.trackContainer.style.backgroundPosition = 'center';
     }
 
     this.slider = document.createElement('input');
@@ -154,10 +162,9 @@ export class SliderComponent {
       margin: 0;
     `;
 
-    const styleId = `slider-style-${Math.random().toString(36).slice(2, 9)}`;
-    const style = document.createElement('style');
-    style.textContent = `
-      #${styleId}::-webkit-slider-thumb {
+    this.styleTag = document.createElement('style');
+    this.styleTag.textContent = `
+      #${this.styleId}::-webkit-slider-thumb {
         -webkit-appearance: none;
         appearance: none;
         width: 18px;
@@ -169,10 +176,10 @@ export class SliderComponent {
         cursor: pointer;
         transition: transform 0.15s ease;
       }
-      #${styleId}::-webkit-slider-thumb:hover {
+      #${this.styleId}::-webkit-slider-thumb:hover {
         transform: scale(1.15);
       }
-      #${styleId}::-moz-range-thumb {
+      #${this.styleId}::-moz-range-thumb {
         width: 18px;
         height: 18px;
         border-radius: 50%;
@@ -182,8 +189,8 @@ export class SliderComponent {
         cursor: pointer;
       }
     `;
-    this.slider.id = styleId;
-    document.head.appendChild(style);
+    this.slider.id = this.styleId;
+    document.head.appendChild(this.styleTag);
 
     this.slider.addEventListener('input', () => {
       const val = parseFloat(this.slider.value);
@@ -191,9 +198,43 @@ export class SliderComponent {
       this.onChangeCallback(val);
     });
 
-    trackContainer.appendChild(this.slider);
-    this.container.appendChild(labelRow);
-    this.container.appendChild(trackContainer);
+    this.trackContainer.appendChild(this.slider);
+    this.container.appendChild(this.labelRow);
+    this.container.appendChild(this.trackContainer);
+  }
+
+  public setCompactMode(compact: boolean): void {
+    if (compact === this.isCompact) return;
+    this.isCompact = compact;
+    if (compact) {
+      if (this.valueLabel.parentElement === this.labelRow) {
+        this.labelRow.removeChild(this.valueLabel);
+      }
+      this.labelRow.style.flexDirection = 'row';
+      this.labelRow.style.alignItems = 'center';
+      this.labelRow.style.justifyContent = 'flex-start';
+      this.labelRow.style.gap = '';
+      this.labelRow.style.marginBottom = '4px';
+      this.valueLabel.style.fontSize = '12px';
+      this.valueLabel.style.marginTop = '4px';
+      this.valueLabel.style.textAlign = 'right';
+      this.valueLabel.style.display = 'block';
+      this.container.insertBefore(this.valueLabel, this.trackContainer.nextSibling);
+    } else {
+      if (this.valueLabel.parentElement !== this.labelRow) {
+        this.valueLabel.remove();
+        this.labelRow.appendChild(this.valueLabel);
+      }
+      this.labelRow.style.flexDirection = 'row';
+      this.labelRow.style.alignItems = 'center';
+      this.labelRow.style.justifyContent = 'space-between';
+      this.labelRow.style.gap = '';
+      this.labelRow.style.marginBottom = '8px';
+      this.valueLabel.style.fontSize = '14px';
+      this.valueLabel.style.marginTop = '';
+      this.valueLabel.style.textAlign = '';
+      this.valueLabel.style.display = '';
+    }
   }
 
   private updateValueDisplay(value: number): void {

@@ -18,41 +18,24 @@ const PERIODS: PeriodInfo[] = [
 export class UIManager {
   private eventBus: EventBus;
   private container: HTMLDivElement;
+  private header: HTMLDivElement;
+  private periodButtonWrap: HTMLDivElement;
   private currentPeriod: TimePeriod = 'noon';
   private periodNameLabel: HTMLSpanElement;
   private periodIconLabel: HTMLSpanElement;
   private periodButtons: Map<TimePeriod, HTMLButtonElement> = new Map();
+  private sliders: SliderComponent[] = [];
+  private isNarrowScreen: boolean = false;
+  private readonly BREAKPOINT = 768;
+  private sectionElements: HTMLElement[] = [];
 
   constructor(eventBus: EventBus) {
     this.eventBus = eventBus;
     this.container = document.createElement('div');
-    this.container.style.cssText = `
-      position: absolute;
-      top: 50%;
-      left: 20px;
-      transform: translateY(-50%);
-      width: 300px;
-      background: rgba(30, 30, 30, 0.85);
-      border-radius: 16px;
-      padding: 20px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      z-index: 100;
-      color: #fff;
-      max-height: calc(100vh - 40px);
-      overflow-y: auto;
-    `;
+    this.applyContainerStyle(false);
 
-    const header = document.createElement('div');
-    header.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 20px;
-      padding-bottom: 14px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    `;
+    this.header = document.createElement('div');
+    this.applyHeaderStyle(false);
 
     this.periodIconLabel = document.createElement('span');
     this.periodIconLabel.style.cssText = 'font-size: 28px;';
@@ -80,14 +63,16 @@ export class UIManager {
 
     titleWrap.appendChild(sceneTitle);
     titleWrap.appendChild(this.periodNameLabel);
-    header.appendChild(this.periodIconLabel);
-    header.appendChild(titleWrap);
+    this.header.appendChild(this.periodIconLabel);
+    this.header.appendChild(titleWrap);
 
-    this.container.appendChild(header);
+    this.container.appendChild(this.header);
 
     const lightSection = this.createSection('光照控制');
+    this.sectionElements.push(lightSection);
     this.container.appendChild(lightSection);
-    lightSection.appendChild(this.createPeriodButtons());
+    this.periodButtonWrap = this.createPeriodButtons();
+    lightSection.appendChild(this.periodButtonWrap);
 
     const tempSlider = new SliderComponent({
       min: 2700,
@@ -99,6 +84,7 @@ export class UIManager {
       formatValue: (v) => `${Math.round(v)}K`,
     });
     tempSlider.onChange((v) => this.eventBus.emit('COLOR_TEMP_CHANGE', { temperature: v }));
+    this.sliders.push(tempSlider);
     lightSection.appendChild(tempSlider.getElement());
 
     const intensitySlider = new SliderComponent({
@@ -110,9 +96,11 @@ export class UIManager {
       formatValue: (v) => v.toFixed(2),
     });
     intensitySlider.onChange((v) => this.eventBus.emit('LIGHT_INTENSITY_CHANGE', { intensity: v }));
+    this.sliders.push(intensitySlider);
     lightSection.appendChild(intensitySlider.getElement());
 
     const materialSection = this.createSection('材质调节');
+    this.sectionElements.push(materialSection);
     this.container.appendChild(materialSection);
 
     const colorPicker = new ColorPicker();
@@ -129,6 +117,7 @@ export class UIManager {
       formatValue: (v) => v.toFixed(2),
     });
     roughnessSlider.onChange((v) => this.eventBus.emit('TABLE_ROUGHNESS_CHANGE', { roughness: v }));
+    this.sliders.push(roughnessSlider);
     materialSection.appendChild(roughnessSlider.getElement());
 
     const metalnessSlider = new SliderComponent({
@@ -141,6 +130,7 @@ export class UIManager {
       formatValue: (v) => v.toFixed(2),
     });
     metalnessSlider.onChange((v) => this.eventBus.emit('TABLE_METALNESS_CHANGE', { metalness: v }));
+    this.sliders.push(metalnessSlider);
     materialSection.appendChild(metalnessSlider.getElement());
 
     const glassSlider = new SliderComponent({
@@ -153,23 +143,134 @@ export class UIManager {
       formatValue: (v) => `${Math.round(v * 100)}%`,
     });
     glassSlider.onChange((v) => this.eventBus.emit('GLASS_TRANSMISSION_CHANGE', { transmission: v }));
+    this.sliders.push(glassSlider);
     materialSection.appendChild(glassSlider.getElement());
 
     document.getElementById('app')?.appendChild(this.container);
+
+    this.checkResponsive();
+    window.addEventListener('resize', this.onResize.bind(this));
+  }
+
+  private applyContainerStyle(narrow: boolean): void {
+    if (narrow) {
+      this.container.style.cssText = `
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        background: rgba(20, 20, 20, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px 12px 0 0;
+        padding: 12px;
+        box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        z-index: 100;
+        color: #fff;
+        max-height: 55vh;
+        overflow-y: auto;
+      `;
+    } else {
+      this.container.style.cssText = `
+        position: absolute;
+        top: 50%;
+        left: 20px;
+        transform: translateY(-50%);
+        width: 300px;
+        background: rgba(20, 20, 20, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        z-index: 100;
+        color: #fff;
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+      `;
+    }
+  }
+
+  private applyHeaderStyle(narrow: boolean): void {
+    const mb = narrow ? '14px' : '20px';
+    const pb = narrow ? '10px' : '14px';
+    this.header.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: ${mb};
+      padding-bottom: ${pb};
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    `;
+  }
+
+  private onResize(): void {
+    this.checkResponsive();
+  }
+
+  private checkResponsive(): void {
+    const narrow = window.innerWidth < this.BREAKPOINT;
+    if (narrow !== this.isNarrowScreen) {
+      this.isNarrowScreen = narrow;
+      this.applyResponsiveLayout(narrow);
+    }
+  }
+
+  private applyResponsiveLayout(narrow: boolean): void {
+    this.applyContainerStyle(narrow);
+    this.applyHeaderStyle(narrow);
+    this.applyPeriodButtonWrapStyle(narrow);
+    this.sectionElements.forEach((sec) => {
+      sec.style.marginBottom = narrow ? '16px' : '20px';
+      const title = sec.firstElementChild as HTMLElement | null;
+      if (title) {
+        title.style.marginBottom = narrow ? '10px' : '14px';
+      }
+    });
+    this.sliders.forEach((slider) => slider.setCompactMode(narrow));
+  }
+
+  private applyPeriodButtonWrapStyle(narrow: boolean): void {
+    if (narrow) {
+      this.periodButtonWrap.style.cssText = `
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 10px;
+        margin-bottom: 12px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 4px;
+      `;
+      this.periodButtonWrap.style.justifyContent = 'flex-start';
+    } else {
+      this.periodButtonWrap.style.cssText = `
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 16px;
+        overflow-x: visible;
+        overflow-y: visible;
+        padding-bottom: 0;
+      `;
+      this.periodButtonWrap.style.flexWrap = 'wrap';
+    }
   }
 
   private createSection(title: string): HTMLElement {
     const section = document.createElement('div');
-    section.style.cssText = `
-      margin-bottom: 20px;
-    `;
+    section.style.marginBottom = this.isNarrowScreen ? '16px' : '20px';
     const titleEl = document.createElement('div');
     titleEl.textContent = title;
     titleEl.style.cssText = `
       font-size: 14px;
       font-weight: 600;
       color: #aaa;
-      margin-bottom: 14px;
+      margin-bottom: ${this.isNarrowScreen ? '10px' : '14px'};
       text-transform: uppercase;
       letter-spacing: 0.5px;
     `;
@@ -177,14 +278,10 @@ export class UIManager {
     return section;
   }
 
-  private createPeriodButtons(): HTMLElement {
+  private createPeriodButtons(): HTMLDivElement {
     const wrap = document.createElement('div');
-    wrap.style.cssText = `
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-      margin-bottom: 16px;
-    `;
+    this.periodButtonWrap = wrap;
+    this.applyPeriodButtonWrapStyle(this.isNarrowScreen);
 
     PERIODS.forEach((period) => {
       const btn = document.createElement('button');
@@ -193,6 +290,7 @@ export class UIManager {
       btn.style.cssText = `
         width: 60px;
         height: 60px;
+        min-width: 60px;
         border-radius: 50%;
         border: none;
         background: #444;
@@ -238,6 +336,7 @@ export class UIManager {
   }
 
   public dispose(): void {
+    window.removeEventListener('resize', this.onResize.bind(this));
     this.container.remove();
   }
 }
