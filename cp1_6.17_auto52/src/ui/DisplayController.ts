@@ -40,6 +40,7 @@ export class DisplayController {
       'binding-energy',
       'docking-distance',
       'key-residues',
+      'residues-count',
       'docking-status',
       'status-text',
       'molecule-select',
@@ -229,7 +230,7 @@ export class DisplayController {
     
     const duration = 1000;
     const startTime = performance.now();
-    const startValue = 0;
+    const startValue = -5;
     
     const animate = (currentTime: number) => {
       const elapsed = currentTime - startTime;
@@ -237,7 +238,7 @@ export class DisplayController {
       const eased = 1 - Math.pow(1 - progress, 4);
       
       const currentValue = startValue + (targetValue - startValue) * eased;
-      element.textContent = `${currentValue.toFixed(1)} kcal/mol`;
+      element.textContent = currentValue.toFixed(1);
       
       if (progress < 1) {
         requestAnimationFrame(animate);
@@ -248,25 +249,23 @@ export class DisplayController {
   }
   
   private showKeyResidues(residues: string[]): void {
-    const list = this.elements['key-residues'] as HTMLUListElement;
+    const list = this.elements['key-residues'] as HTMLOListElement;
     if (!list) return;
     
     list.innerHTML = '';
     
+    const residuesCount = this.elements['residues-count'];
+    if (residuesCount) {
+      residuesCount.textContent = `${residues.length} 个`;
+    }
+    
     residues.forEach((residue, index) => {
       const li = document.createElement('li');
-      li.className = 'residue-item';
-      li.style.opacity = '0';
-      li.style.transform = 'translateX(-10px)';
+      li.className = 'residue-tag';
+      li.style.animationDelay = `${index * 80 + 200}ms`;
       li.textContent = residue;
       
       list.appendChild(li);
-      
-      setTimeout(() => {
-        li.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-        li.style.opacity = '1';
-        li.style.transform = 'translateX(0)';
-      }, index * 100 + 300);
     });
   }
   

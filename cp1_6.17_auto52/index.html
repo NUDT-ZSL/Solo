@@ -12,46 +12,95 @@
 
     <div id="info-panel" class="info-panel">
       <div class="panel-header">
-        <h3>分子信息</h3>
+        <h2 id="molecule-pair-name" class="panel-title">新冠刺突蛋白 - 抑制剂</h2>
+        <span class="panel-subtitle">分子对接模拟</span>
       </div>
       <div class="panel-content">
-        <div class="info-row">
-          <span class="info-label">分子对</span>
-          <span id="molecule-pair-name" class="info-value">新冠刺突蛋白 - 抑制剂</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">受体原子数</span>
-          <span id="receptor-atom-count" class="info-value mono-font">0</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">受体键数</span>
-          <span id="receptor-bond-count" class="info-value mono-font">
-            <span class="pulse-dot"></span>
-            <span id="bond-count-text">0</span>
-          </span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">分子量</span>
-          <span id="molecular-weight" class="info-value mono-font">0 Da</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">配体原子数</span>
-          <span id="ligand-atom-count" class="info-value mono-font">0</span>
+        <div class="info-cards-grid">
+          <div class="info-card">
+            <div class="info-card-icon icon-atom">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="2"/>
+                <circle cx="12" cy="12" r="10"/>
+                <ellipse cx="12" cy="12" rx="10" ry="4"/>
+                <ellipse cx="12" cy="12" rx="4" ry="10"/>
+              </svg>
+            </div>
+            <div class="info-card-content">
+              <span class="info-card-label">受体原子数</span>
+              <span id="receptor-atom-count" class="info-card-value mono-font">0</span>
+            </div>
+          </div>
+          <div class="info-card">
+            <div class="info-card-icon icon-bond">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+                <line x1="5" y1="8" x2="19" y2="8"/>
+                <circle cx="5" cy="10" r="2"/>
+                <circle cx="19" cy="10" r="2"/>
+              </svg>
+            </div>
+            <div class="info-card-content">
+              <span class="info-card-label">受体键数</span>
+              <span id="receptor-bond-count" class="info-card-value mono-font">
+                <span class="pulse-dot"></span>
+                <span id="bond-count-text">0</span>
+              </span>
+            </div>
+          </div>
+          <div class="info-card">
+            <div class="info-card-icon icon-weight">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="5" r="3"/>
+                <path d="M6.5 8h11L21 21H3z"/>
+                <text x="12" y="16" text-anchor="middle" font-size="6" fill="currentColor" stroke="none">M</text>
+              </svg>
+            </div>
+            <div class="info-card-content">
+              <span class="info-card-label">分子量</span>
+              <span id="molecular-weight" class="info-card-value mono-font">0 Da</span>
+            </div>
+          </div>
+          <div class="info-card">
+            <div class="info-card-icon icon-ligand">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+              </svg>
+            </div>
+            <div class="info-card-content">
+              <span class="info-card-label">配体原子数</span>
+              <span id="ligand-atom-count" class="info-card-value mono-font">0</span>
+            </div>
+          </div>
         </div>
         <div class="divider"></div>
         <div id="docking-results" class="docking-results hidden">
-          <h4>对接结果</h4>
-          <div class="info-row">
-            <span class="info-label">结合能</span>
-            <span id="binding-energy" class="info-value mono-font highlight">-0.0 kcal/mol</span>
+          <div class="docking-header">
+            <div class="docking-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </div>
+            <h4>对接成功</h4>
           </div>
-          <div class="info-row">
-            <span class="info-label">对接距离</span>
-            <span id="docking-distance" class="info-value mono-font">0.00 Å</span>
+          <div class="binding-energy-card">
+            <span class="binding-energy-label">结合能</span>
+            <div class="binding-energy-value-wrapper">
+              <span id="binding-energy" class="binding-energy-value mono-font">-0.0</span>
+              <span class="binding-energy-unit">kcal/mol</span>
+            </div>
+          </div>
+          <div class="docking-detail-row">
+            <span class="docking-detail-label">对接距离</span>
+            <span id="docking-distance" class="docking-detail-value mono-font">0.00 Å</span>
           </div>
           <div class="residues-section">
-            <span class="info-label">关键残基</span>
-            <ul id="key-residues" class="residues-list"></ul>
+            <div class="residues-header">
+              <span class="info-card-label">关键残基</span>
+              <span class="residues-count" id="residues-count">0 个</span>
+            </div>
+            <ol id="key-residues" class="residues-tags"></ol>
           </div>
         </div>
         <div id="docking-status" class="docking-status">
