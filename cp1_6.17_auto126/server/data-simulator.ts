@@ -78,7 +78,8 @@ export class DataSimulator {
   }
 
   private initializeBikes(): void {
-    const count = Math.round(randomInRange(50, 100));
+    let count = Math.round(randomInRange(50, 100));
+    if (count > MAX_BIKES) count = MAX_BIKES;
     this.bikes = [];
     for (let i = 0; i < count; i++) {
       this.bikes.push(clampBikePosition(generateBike()));
@@ -93,7 +94,7 @@ export class DataSimulator {
       points.push({
         lat: shuffled[i].lat,
         lng: shuffled[i].lng,
-        intensity: randomInRange(0.5, 1.0)
+        intensity: randomInRange(0.3, 0.8)
       });
     }
     return points;
@@ -111,8 +112,14 @@ export class DataSimulator {
     });
 
     const targetCount = Math.round(randomInRange(50, 100));
+    let throttled = false;
+
     if (this.bikes.length < targetCount) {
-      const toAdd = Math.min(targetCount - this.bikes.length, MAX_BIKES - this.bikes.length);
+      const availableSlots = MAX_BIKES - this.bikes.length;
+      const toAdd = Math.min(targetCount - this.bikes.length, availableSlots);
+      if (targetCount - this.bikes.length > availableSlots) {
+        throttled = true;
+      }
       for (let i = 0; i < toAdd; i++) {
         this.bikes.push(clampBikePosition(generateBike()));
       }
@@ -120,8 +127,8 @@ export class DataSimulator {
       this.bikes = this.bikes.slice(0, targetCount);
     }
 
-    const throttled = this.bikes.length > MAX_BIKES;
-    if (throttled) {
+    if (this.bikes.length > MAX_BIKES) {
+      throttled = true;
       this.bikes = this.bikes.slice(0, MAX_BIKES);
     }
 
@@ -161,10 +168,11 @@ export class DataSimulator {
   }
 
   public getCurrentData(): SimulatedData {
+    const throttled = this.bikes.length >= MAX_BIKES;
     return {
       bikes: this.bikes,
       heatmap: this.generateHeatmap(),
-      throttled: this.bikes.length > MAX_BIKES
+      throttled
     };
   }
 }

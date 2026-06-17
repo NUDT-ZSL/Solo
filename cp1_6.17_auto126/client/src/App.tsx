@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { MapContainer, TileLayer } from 'react-leaflet';
 import L from 'leaflet';
-import BikeLayer from './bike-layer';
-import HeatmapLayer from './heatmap-layer';
-import ControlPanel from './control-panel';
+import BikeLayer from './map-module/bike-layer';
+import HeatmapLayer from './map-module/heatmap-layer';
+import ControlPanel from './map-module/control-panel';
 
 export interface Bike {
   id: string;
@@ -54,7 +54,7 @@ const App: React.FC = () => {
     const avgBattery = total > 0
       ? Math.round(bikeData.reduce((s, b) => s + b.battery, 0) / total)
       : 0;
-    const highDensityCount = heatmapData.filter((h) => h.intensity >= 0.7).length;
+    const highDensityCount = heatmapData.filter((h) => h.intensity >= 0.65).length;
     return { total, avgBattery, highDensityCount };
   }, [bikeData, heatmapData]);
 
@@ -79,7 +79,6 @@ const App: React.FC = () => {
         const fps = 1000 / avgDelta;
         setLowFps(fps < 30);
       } catch (_) {
-        // ignore parse errors
       }
     };
     ws.onclose = () => {
@@ -186,9 +185,6 @@ const App: React.FC = () => {
         }
         .leaflet-control-attribution a {
           color: #6cf !important;
-        }
-        .bike-marker-icon {
-          transition: transform 1.2s ease-in-out;
         }
       `}</style>
     </div>
