@@ -1,0 +1,119 @@
+{
+  "artworkStats": {
+    "art-001": {
+      "views": 343,
+      "likes": 59,
+      "favorites": 24
+    },
+    "art-002": {
+      "views": 521,
+      "likes": 89,
+      "favorites": 41
+    },
+    "art-003": {
+      "views": 198,
+      "likes": 34,
+      "favorites": 15
+    },
+    "art-004": {
+      "views": 276,
+      "likes": 45,
+      "favorites": 19
+    },
+    "art-005": {
+      "views": 687,
+      "likes": 112,
+      "favorites": 56
+    },
+    "art-006": {
+      "views": 415,
+      "likes": 67,
+      "favorites": 28
+    },
+    "art-007": {
+      "views": 156,
+      "likes": 28,
+      "favorites": 12
+    },
+    "art-008": {
+      "views": 389,
+      "likes": 72,
+      "favorites": 33
+    }
+  },
+  "viewRecords": [
+    {
+      "id": "v-3bbc8206",
+      "artworkId": "art-001",
+      "visitorId": "visitor-znfc3vxh",
+      "timestamp": "2026-06-17T05:11:26.813Z",
+      "source": "详情页"
+    },
+    {
+      "id": "v-001",
+      "artworkId": "art-001",
+      "visitorId": "user-a1b2",
+      "timestamp": "2025-06-17T08:30:00.000Z",
+      "source": "首页推荐"
+    },
+    {
+      "id": "v-002",
+      "artworkId": "art-001",
+      "visitorId": "user-c3d4",
+      "timestamp": "2025-06-17T09:15:00.000Z",
+      "source": "艺术家主页"
+    },
+    {
+      "id": "v-003",
+      "artworkId": "art-001",
+      "visitorId": "user-e5f6",
+      "timestamp": "2025-06-17T10:42:00.000Z",
+      "source": "直接访问"
+    },
+    {
+      "id": "v-004",
+      "artworkId": "art-001",
+      "visitorId": "user-g7h8",
+      "timestamp": "2025-06-17T11:20:00.000Z",
+      "source": "首页推荐"
+    },
+    {
+      "id": "v-005",
+      "artworkId": "art-001",
+      "visitorId": "user-i9j0",
+      "timestamp": "2025-06-17T12:05:00.000Z",
+      "source": "搜索结果"
+    },
+    {
+      "id": "v-006",
+      "artworkId": "art-002",
+      "visitorId": "user-k1l2",
+      "timestamp": "2025-06-17T07:45:00.000Z",
+      "source": "首页推荐"
+    },
+    {
+      "id": "v-007",
+      "artworkId": "art-005",
+      "visitorId": "user-m3n4",
+      "timestamp": "2025-06-17T08:10:00.000Z",
+      "source": "热门排行"
+    },
+    {
+      "id": "v-008",
+      "artworkId": "art-005",
+      "visitorId": "user-o5p6",
+      "timestamp": "2025-06-17T09:55:00.000Z",
+      "source": "首页推荐"
+    }
+  ],
+  "userLikes": {
+    "visitor-znfc3vxh": [
+      "art-001"
+    ]
+  },
+  "userFavorites": {
+    "visitor-znfc3vxh": [
+      "art-001"
+    ]
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "artworks": [
+    {
+      "id": "art-001",
+      "title": "晨曦微光",
+      "artist": "林雨晴",
+      "category": "painting",
+      "price": 2800,
+      "description": "这幅作品描绘了清晨第一缕阳光穿过薄雾洒在山谷的景象，采用印象派笔触，色彩柔和而富有层次感。艺术家希望通过这幅作品传达宁静与希望的感觉。",
+      "coverImage": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=impressionist%20oil%20painting%20morning%20sunlight%20through%20misty%20valley%20soft%20pastel%20colors&image_size=landscape_4_3",
+      "status": "onsale",
+      "createdAt": "2025-06-10T08:00:00.000Z"
+    },
+    {
+      "id": "art-002",
+      "title": "城市脉搏",
+      "artist": "陈浩然",
+      "category": "digital",
+      "price": 1500,
+      "description": "数字艺术作品，以几何图形和动态线条展现现代都市的节奏感。霓虹色调与暗色背景形成强烈对比，象征科技与人文的碰撞。",
+      "coverImage": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=digital%20art%20geometric%20cityscape%20neon%20lights%20cyberpunk%20dynamic%20lines&image_size=landscape_4_3",
+      "status": "onsale",
+      "createdAt": "2025-06-12T10:30:00.000Z"
+    },
+    {
+      "id": "art-003",
+      "title": "静默之形",
+      "artist": "王艺萱",
+      "category": "sculpture",
+      "price": 5500,
+      "description": "青铜雕塑作品，以极简的抽象形态表达内心的平静与力量。表面经过特殊处理，呈现出独特的金属质感与光影变化。",
+      "coverImage": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=abstract%20bronze%20sculpture%20minimalist%20form%20museum%20lighting%20elegant&image_size=square_hd",
+      "status": "onsale",
+      "createdAt": "2025-06-08T14:20:00.000Z"
+    },
+    {
+      "id": "art-004",
+      "title": "时光碎片",
+      "artist": "林雨晴",
+      "category": "photography",
+      "price": 1200,
+      "description": "一组城市街头摄影精选，捕捉都市生活中转瞬即逝的光影瞬间。黑白与彩色交织，记录时间留下的痕迹。",
+      "coverImage": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=street%20photography%20urban%20moments%20dramatic%20lighting%20cinematic%20composition&image_size=landscape_4_3",
+      "status": "onsale",
+      "createdAt": "2025-06-14T09:15:00.000Z"
+    },
+    {
+      "id": "art-005",
+      "title": "星河漫游",
+      "artist": "张明远",
+      "category": "digital",
+      "price": 2200,
+      "description": "沉浸式数字艺术作品，通过绚丽的粒子效果构建出浩瀚宇宙的视觉体验。观众仿佛漂浮在星河之间，感受宇宙的无限可能。",
+      "coverImage": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=cosmic%20digital%20art%20colorful%20galaxy%20particles%20nebula%20space%20dreamlike&image_size=landscape_4_3",
+      "status": "onsale",
+      "createdAt": "2025-06-11T16:45:00.000Z"
+    },
+    {
+      "id": "art-006",
+      "title": "故土记忆",
+      "artist": "陈浩然",
+      "category": "painting",
+      "price": 3600,
+      "description": "写实风格油画，描绘艺术家童年记忆中的乡村风景。老屋、稻田、远山，每一笔都承载着对故土的眷恋与思念。",
+      "coverImage": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=realistic%20oil%20painting%20chinese%20countryside%20old%20house%20rice%20field%20nostalgic&image_size=landscape_4_3",
+      "status": "onsale",
+      "createdAt": "2025-06-09T11:00:00.000Z"
+    },
+    {
+      "id": "art-007",
+      "title": "生灵之歌",
+      "artist": "王艺萱",
+      "category": "sculpture",
+      "price": 4200,
+      "description": "木雕系列作品之一，以流畅的曲线雕刻出动物的灵动姿态。保留木材天然纹理，展现自然与艺术的和谐共生。",
+      "coverImage": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=wood%20carving%20sculpture%20elegant%20animal%20form%20natural%20grain%20artistic&image_size=square_hd",
+      "status": "sold",
+      "createdAt": "2025-06-07T13:30:00.000Z"
+    },
+    {
+      "id": "art-008",
+      "title": "都市魅影",
+      "artist": "张明远",
+      "category": "photography",
+      "price": 980,
+      "description": "夜景人像摄影系列，利用城市霓虹灯的色彩投射，营造出梦幻而神秘的氛围。每张照片都讲述一个独特的都市故事。",
+      "coverImage": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=neon%20night%20photography%20urban%20portrait%20cyberpunk%20mood%20colorful%20lights&image_size=portrait_4_3",
+      "status": "onsale",
+      "createdAt": "2025-06-13T20:00:00.000Z"
+    }
+  ]
+}
