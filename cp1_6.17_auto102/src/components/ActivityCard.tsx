@@ -1,13 +1,12 @@
 import { Link } from 'react-router-dom';
 import { Calendar, MapPin, Users } from 'lucide-react';
-import type { Activity } from '../../shared/types';
+import type { ActivityListItem } from '../../shared/types';
 
 interface Props {
-  activity: Activity;
-  registrationCount?: number;
+  activity: ActivityListItem;
 }
 
-const ActivityCard = ({ activity, registrationCount = 0 }: Props) => {
+const ActivityCard = ({ activity }: Props) => {
   const date = new Date(activity.date);
   const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
@@ -78,7 +77,7 @@ const ActivityCard = ({ activity, registrationCount = 0 }: Props) => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
           <Users size={14} color="#1976D2" />
           <span style={{ fontSize: 12, color: '#616161' }}>
-            已报名 <strong style={{ color: '#1976D2' }}>{registrationCount}</strong> 人
+            已报名 <strong style={{ color: '#1976D2' }}>{activity.registrationCount}</strong> 人
           </span>
         </div>
         <span style={{

@@ -1,13 +1,12 @@
 import ActivityCard from './ActivityCard';
-import type { Activity } from '../../shared/types';
+import type { ActivityListItem } from '../../shared/types';
 
 interface Props {
-  activities: Activity[];
-  registrationCounts?: Record<string, number>;
+  activities: ActivityListItem[];
   loading?: boolean;
 }
 
-const ActivityList = ({ activities, registrationCounts = {}, loading }: Props) => {
+const ActivityList = ({ activities, loading }: Props) => {
   if (loading) {
     return (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
@@ -37,7 +36,6 @@ const ActivityList = ({ activities, registrationCounts = {}, loading }: Props) =
         <ActivityCard
           key={a.id}
           activity={a}
-          registrationCount={registrationCounts[a.id] || 0}
         />
       ))}
     </div>

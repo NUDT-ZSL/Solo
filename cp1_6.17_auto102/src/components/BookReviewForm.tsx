@@ -169,18 +169,12 @@ const BookReviewForm = ({ open, onClose, onSuccess, defaultActivityId, editingRe
                 }}>
                   {wordCount} / 500 字
                 </span>
-                {showTip && (
-                  <span style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    color: '#1976D2',
-                    fontWeight: 500,
-                    animation: 'fadeIn 0.3s ease',
-                  }}>
-                    <Sparkles size={13} /> 再写一些就可以提交了！
-                  </span>
-                )}
+                <span style={{
+                  color: wordCount >= 50 ? '#66BB6A' : '#BDBDBD',
+                  fontSize: 11,
+                }}>
+                  {wordCount >= 50 ? '✓ 字数达标' : `还需 ${50 - wordCount} 字`}
+                </span>
               </div>
             </div>
 
@@ -233,6 +227,25 @@ const BookReviewForm = ({ open, onClose, onSuccess, defaultActivityId, editingRe
                 marginBottom: 16,
               }}>
                 <AlertCircle size={15} /> {errorMsg}
+              </div>
+            )}
+
+            {showTip && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '12px 16px',
+                background: 'linear-gradient(135deg, #E3F2FD, #E8F5E9)',
+                borderRadius: 10,
+                fontSize: 13,
+                fontWeight: 500,
+                color: '#1565C0',
+                marginBottom: 16,
+                animation: 'fadeInUp 0.3s ease',
+              }}>
+                <Sparkles size={16} color="#1976D2" />
+                <span>再写一些就可以提交了！还差一点点就完美了 ✨</span>
               </div>
             )}
 

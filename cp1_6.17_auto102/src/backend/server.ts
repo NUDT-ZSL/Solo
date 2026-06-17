@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type {
   User,
   Activity,
+  ActivityListItem,
   Registration,
   Review,
   TrendPoint,
@@ -168,8 +169,16 @@ app.get('/api/activities', (req, res) => {
   );
   const total = all.length;
   const start = (page - 1) * size;
-  const items = all.slice(start, start + size);
-  res.json(success<PaginatedResponse<Activity>>({ items, total, page, size }));
+  const pageItems = all.slice(start, start + size);
+  const regCounts = new Map<string, number>();
+  registrations.forEach((r) => {
+    regCounts.set(r.activityId, (regCounts.get(r.activityId) || 0) + 1);
+  });
+  const items: ActivityListItem[] = pageItems.map((a) => ({
+    ...a,
+    registrationCount: regCounts.get(a.id) || 0,
+  }));
+  res.json(success<PaginatedResponse<ActivityListItem>>({ items, total, page, size }));
 });
 
 app.get('/api/activities/:id', (req, res) => {

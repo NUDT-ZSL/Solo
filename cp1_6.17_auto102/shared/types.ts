@@ -69,6 +69,10 @@ export interface PaginatedResponse<T> {
   size: number;
 }
 
+export interface ActivityListItem extends Activity {
+  registrationCount: number;
+}
+
 export interface ActivityDetail extends Activity {
   registrationCount: number;
   registeredUsers: User[];

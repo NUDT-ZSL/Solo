@@ -1,41 +1,57 @@
 import { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import ActivityList from '../components/ActivityList';
 import { api } from '../utils/api';
-import type { Activity, PaginatedResponse } from '../../shared/types';
+import type { ActivityListItem, PaginatedResponse } from '../../shared/types';
 
 const PAGE_SIZE = 10;
 
 const ActivityListPage = () => {
-  const [data, setData] = useState<PaginatedResponse<Activity>>({ items: [], total: 0, page: 1, size: PAGE_SIZE });
+  const [searchParams, setSearchParams] = useSearchParams();
+  const dateFilter = searchParams.get('date');
+  const [data, setData] = useState<PaginatedResponse<ActivityListItem>>({ items: [], total: 0, page: 1, size: PAGE_SIZE });
+  const [allItems, setAllItems] = useState<ActivityListItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [registrationCounts, setRegCounts] = useState<Record<string, number>>({});
 
   const load = async (page = 1) => {
     setLoading(true);
     try {
-      const res = await api.get<PaginatedResponse<Activity>>(`/activities?page=${page}&size=${PAGE_SIZE}`);
+      const res = await api.get<PaginatedResponse<ActivityListItem>>(`/activities?page=${page}&size=${PAGE_SIZE}`);
       setData(res);
-      const counts: Record<string, number> = {};
-      await Promise.all(
-        res.items.map(async (a) => {
-          try {
-            const detail = await api.get<any>(`/activities/${a.id}`);
-            counts[a.id] = detail.registrationCount || 0;
-          } catch {}
-        })
-      );
-      setRegCounts(counts);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(1); }, []);
+  const loadAll = async () => {
+    try {
+      const res = await api.get<PaginatedResponse<ActivityListItem>>('/activities?page=1&size=200');
+      setAllItems(res.items);
+    } catch {}
+  };
 
-  const totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
+  useEffect(() => {
+    load(1);
+    loadAll();
+  }, []);
+
+  const filteredData = dateFilter
+    ? allItems.filter((a) => new Date(a.date).toISOString().slice(0, 10) === dateFilter)
+    : data.items;
+
+  const totalCount = dateFilter ? filteredData.length : data.total;
+  const displayItems = dateFilter ? filteredData.slice(0, PAGE_SIZE) : data.items;
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+
+  const clearDateFilter = () => {
+    searchParams.delete('date');
+    setSearchParams(searchParams);
+  };
 
   const renderPager = () => {
+    if (dateFilter) return null;
     if (totalPages <= 1) return null;
     const pages = new Set<number>([1, totalPages, data.page, data.page - 1, data.page + 1]);
     const sorted = Array.from(pages).filter((p) => p >= 1 && p <= totalPages).sort((a, b) => a - b);
@@ -105,13 +121,45 @@ const ActivityListPage = () => {
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: '#212121', marginBottom: 6 }}>读书会活动</h1>
         <p style={{ fontSize: 14, color: '#757575' }}>
-          共 <strong style={{ color: '#1976D2' }}>{data.total}</strong> 场活动，与同好共读一本好书
+          共 <strong style={{ color: '#1976D2' }}>{totalCount}</strong> 场活动，与同好共读一本好书
         </p>
+        {dateFilter && (
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            marginTop: 12,
+            padding: '8px 14px',
+            backgroundColor: '#E3F2FD',
+            color: '#1565C0',
+            borderRadius: 10,
+            fontSize: 13,
+            fontWeight: 500,
+          }}>
+            <Filter size={14} />
+            <span>筛选日期：{dateFilter}</span>
+            <button
+              onClick={clearDateFilter}
+              style={{
+                marginLeft: 6,
+                padding: '2px 8px',
+                backgroundColor: '#fff',
+                color: '#1565C0',
+                border: 'none',
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: 'pointer',
+              }}
+            >
+              清除筛选
+            </button>
+          </div>
+        )}
       </div>
 
       <ActivityList
-        activities={data.items}
-        registrationCounts={registrationCounts}
+        activities={displayItems}
         loading={loading}
       />
 
