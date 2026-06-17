@@ -55,6 +55,8 @@ export class UIPanel {
     this.controlPanel.appendChild(sliderRow);
     this.controlPanel.appendChild(btnRow);
 
+    this.container.appendChild(this.controlPanel);
+
     this.injectStyles();
   }
 
