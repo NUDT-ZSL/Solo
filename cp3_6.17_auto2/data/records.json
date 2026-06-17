@@ -1,0 +1,65 @@
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440015",
+    "deviceId": "550e8400-e29b-41d4-a716-446655440002",
+    "userId": "550e8400-e29b-41d4-a716-446655440012",
+    "borrowTime": "2026-06-10T09:30:00.000Z",
+    "expectedReturnTime": "2026-06-17T18:00:00.000Z",
+    "actualReturnTime": null,
+    "status": "borrowing"
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440016",
+    "deviceId": "550e8400-e29b-41d4-a716-446655440006",
+    "userId": "550e8400-e29b-41d4-a716-446655440013",
+    "borrowTime": "2026-06-12T14:00:00.000Z",
+    "expectedReturnTime": "2026-06-19T18:00:00.000Z",
+    "actualReturnTime": null,
+    "status": "borrowing"
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440017",
+    "deviceId": "550e8400-e29b-41d4-a716-446655440009",
+    "userId": "550e8400-e29b-41d4-a716-446655440014",
+    "borrowTime": "2026-06-11T10:00:00.000Z",
+    "expectedReturnTime": "2026-06-14T18:00:00.000Z",
+    "actualReturnTime": null,
+    "status": "borrowing"
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440018",
+    "deviceId": "550e8400-e29b-41d4-a716-446655440001",
+    "userId": "550e8400-e29b-41d4-a716-446655440012",
+    "borrowTime": "2026-06-01T09:00:00.000Z",
+    "expectedReturnTime": "2026-06-08T18:00:00.000Z",
+    "actualReturnTime": "2026-06-08T16:30:00.000Z",
+    "status": "returned_on_time"
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440019",
+    "deviceId": "550e8400-e29b-41d4-a716-446655440003",
+    "userId": "550e8400-e29b-41d4-a716-446655440013",
+    "borrowTime": "2026-06-02T13:00:00.000Z",
+    "expectedReturnTime": "2026-06-05T18:00:00.000Z",
+    "actualReturnTime": "2026-06-05T17:45:00.000Z",
+    "status": "returned_on_time"
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440020",
+    "deviceId": "550e8400-e29b-41d4-a716-446655440005",
+    "userId": "550e8400-e29b-41d4-a716-446655440014",
+    "borrowTime": "2026-06-03T11:00:00.000Z",
+    "expectedReturnTime": "2026-06-06T18:00:00.000Z",
+    "actualReturnTime": "2026-06-08T10:00:00.000Z",
+    "status": "returned_overdue"
+  },
+  {
+    "id": "ae7c9cfe-55e8-4ec5-a009-686dff7cedc4",
+    "deviceId": "550e8400-e29b-41d4-a716-446655440001",
+    "userId": "550e8400-e29b-41d4-a716-446655440012",
+    "borrowTime": "2026-06-17T13:49:16.195Z",
+    "expectedReturnTime": "2026-06-18T13:49:16.195Z",
+    "actualReturnTime": "2026-06-17T13:49:26.222Z",
+    "status": "returned_on_time"
+  }
+]

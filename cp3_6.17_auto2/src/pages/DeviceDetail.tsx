@@ -1,334 +1,317 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Loader2, Clock, User } from 'lucide-react';
 import dayjs from 'dayjs';
-import { getDeviceById } from '../api/borrowApi';
-import type { Device } from '../types';
-import { useUser } from '../context/UserContext';
-import { useBorrow } from '../hooks/useBorrow';
-import BorrowConfirmModal from '../components/BorrowConfirmModal';
-import QRCodeModal from '../components/QRCodeModal';
+import { useBorrow } from '@/hooks/useBorrow';
+import { CURRENT_USER_ID } from '@/utils/constants';
+import { STATUS_LABELS, STATUS_COLORS, RECORD_STATUS_LABELS, RECORD_STATUS_COLORS } from '@/types';
+import type { BorrowRecordWithDetails } from '@/types';
+import ConfirmModal from '@/components/ConfirmModal';
+import QRModal from '@/components/QRModal';
 
-const statusMap: Record<Device['status'], { text: string; className: string }> = {
-  available: { text: '空闲中', className: 'available' },
-  borrowed: { text: '已借出', className: 'borrowed' },
-  maintenance: { text: '维修中', className: 'maintenance' }
-};
-
-export default function DeviceDetail() {
+const DeviceDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useUser();
-  const { loading, error, data, borrow, resetBorrowState } = useBorrow();
-
-  const [device, setDevice] = useState<Device | null>(null);
-  const [pageLoading, setPageLoading] = useState(true);
-  const [pageError, setPageError] = useState<string | null>(null);
+  const { device, user, records, borrow, fetchDevice, fetchUser, fetchRecords } = useBorrow();
+  
   const [showConfirm, setShowConfirm] = useState(false);
   const [showQR, setShowQR] = useState(false);
-
-  const loadDevice = useCallback(async () => {
-    if (!id) return;
-    setPageLoading(true);
-    setPageError(null);
-    try {
-      const result = await getDeviceById(id);
-      setDevice(result);
-    } catch (err) {
-      setPageError(err instanceof Error ? err.message : '加载设备详情失败');
-    } finally {
-      setPageLoading(false);
-    }
-  }, [id]);
+  const [recordId, setRecordId] = useState('');
+  const [recordsWithDetails, setRecordsWithDetails] = useState<BorrowRecordWithDetails[]>([]);
 
   useEffect(() => {
-    loadDevice();
-  }, [loadDevice]);
+    if (id) {
+      fetchDevice(id);
+      fetchUser(CURRENT_USER_ID);
+      fetchRecords();
+    }
+  }, [id, fetchDevice, fetchUser, fetchRecords]);
 
-  if (!device) {
-    // We'll return after this, but TypeScript needs this handled
-  }
+  useEffect(() => {
+    if (records.data && id) {
+      const deviceRecords = records.data
+        .filter((r) => r.deviceId === id)
+        .sort((a, b) => dayjs(b.borrowTime).valueOf() - dayjs(a.borrowTime).valueOf())
+        .slice(0, 10);
+      setRecordsWithDetails(deviceRecords);
+    }
+  }, [records.data, id]);
 
-  const isAvailable = device?.status === 'available';
-  const hasSufficientCredit = user ? (user.creditScore >= (device?.minCreditScore ?? 0)) : false;
-  const canBorrow = !!device && isAvailable && hasSufficientCredit;
+  const deviceData = device.data;
+  const currentUser = user.data;
 
-  const handleBorrowClick = () => {
+  const isAvailable = deviceData?.status === 'available';
+  const meetsCreditScore = currentUser && deviceData 
+    ? currentUser.creditScore >= deviceData.minCreditScore 
+    : true;
+  const canBorrow = isAvailable && meetsCreditScore;
+
+  const handleBorrow = () => {
     if (!canBorrow) return;
     setShowConfirm(true);
   };
 
   const handleConfirmBorrow = async () => {
-    if (!user || !device) return;
-    const result = await borrow(device.id, user.id);
-    if (result) {
-      setShowConfirm(false);
-      setShowQR(true);
-      setDevice({ ...device, status: 'borrowed' });
+    setShowConfirm(false);
+    if (id) {
+      const result = await borrow(id, CURRENT_USER_ID);
+      if (result.success && result.data) {
+        setRecordId(result.data.id);
+        setShowQR(true);
+      }
     }
   };
 
-  const handleCloseQR = () => {
-    setShowQR(false);
-    resetBorrowState();
-  };
-
-  const getStatusBadge = (status: Device['status']) => {
-    const info = statusMap[status];
-    return (
-      <span className={`status-tag ${status}`} style={{ padding: '6px 14px', fontSize: '13px' }}>
-        {info.text}
-      </span>
-    );
-  };
-
-  const getRecordStatusLabel = (s: string) => {
-    switch (s) {
-      case 'borrowing': return '借用中';
-      case 'returned-on-time': return '按时归还';
-      case 'overdue-returned': return '超时归还';
-      default: return s;
+  const getButtonStyle = () => {
+    if (!canBorrow) {
+      return {
+        backgroundColor: '#94a3b8',
+        cursor: 'not-allowed',
+      };
     }
+    return {
+      backgroundColor: '#1e293b',
+      cursor: 'pointer',
+    };
   };
 
-  if (pageLoading) {
+  const getUserInitial = (name: string) => {
+    return name.charAt(0).toUpperCase();
+  };
+
+  if (device.loading) {
     return (
-      <div className="loading-container">
-        <div className="loading-spinner" style={{ width: '40px', height: '40px' }}></div>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 'calc(100vh - 60px)', backgroundColor: '#f8fafc' }}>
+        <Loader2 size={32} style={{ color: '#3b82f6', animation: 'spin 1s linear infinite' }} />
       </div>
     );
   }
 
-  if (pageError || !device) {
+  if (device.error || !deviceData) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-        <div style={{ fontSize: '64px', marginBottom: '16px', opacity: 0.5 }}>😕</div>
-        <h2 style={{ fontSize: '20px', marginBottom: '12px', color: 'var(--text-secondary)' }}>
-          {pageError || '设备不存在'}
-        </h2>
-        <Link to="/overview" className="btn btn-primary">
-          ← 返回设备列表
-        </Link>
+      <div style={{ padding: '24px', backgroundColor: '#f8fafc', minHeight: 'calc(100vh - 60px)' }}>
+        <div style={{ padding: '40px', textAlign: 'center', color: '#ef4444' }}>
+          {device.error || '设备不存在'}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="page-transition">
-      <div style={{ marginBottom: '24px' }}>
-        <button
-          onClick={() => navigate(-1)}
-          style={{
-            color: 'var(--accent-blue)',
-            fontSize: '14px',
-            fontWeight: '500',
-            marginBottom: '12px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px'
-          }}
-        >
-          ← 返回
-        </button>
-      </div>
+    <div style={{ padding: '24px', backgroundColor: '#f8fafc', minHeight: 'calc(100vh - 60px)' }}>
+      <button
+        onClick={() => navigate('/overview')}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          background: 'none',
+          border: 'none',
+          color: '#64748b',
+          fontSize: '14px',
+          cursor: 'pointer',
+          marginBottom: '24px',
+          padding: '8px 12px',
+          borderRadius: '8px',
+          transition: 'all 0.2s',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = '#f1f5f9';
+          e.currentTarget.style.color = '#1e293b';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = 'transparent';
+          e.currentTarget.style.color = '#64748b';
+        }}
+      >
+        <ArrowLeft size={18} />
+        返回设备列表
+      </button>
 
-      <div className="device-detail-layout">
-        <div>
-          <div className="detail-image-section">
-            <div className="detail-image-wrapper">
-              <img src={device.imageUrl} alt={device.name} />
-            </div>
+      <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+        <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+          <img
+            src={deviceData.imageUrl}
+            alt={deviceData.name}
+            style={{ width: '100%', height: 'auto', borderRadius: '8px', maxHeight: '400px', objectFit: 'cover' }}
+          />
 
-            <div className="detail-section" style={{ marginBottom: 0 }}>
-              <h3 className="detail-section-title">技术参数</h3>
-              <div className="specs-list">
-                {Object.entries(device.specs).map(([key, value]) => (
-                  <div key={key} className="spec-item">
-                    <span className="spec-label">{key}</span>
-                    <span className="spec-value">{value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div style={{
-            background: 'var(--bg-secondary)',
-            borderRadius: 'var(--radius-md)',
-            padding: '24px',
-            boxShadow: 'var(--shadow-sm)',
-            marginTop: '24px'
-          }}>
-            <h3 className="detail-section-title">历史借用记录</h3>
-            {device.borrowHistory && device.borrowHistory.length > 0 ? (
-              <div className="history-list">
-                {device.borrowHistory.map(record => (
-                  <div key={record.id} className="history-item">
-                    <div className="history-avatar">
-                      {record.userName.charAt(0)}
-                    </div>
-                    <div className="history-info">
-                      <div className="history-user">{record.userName}</div>
-                      <div className="history-dates">
-                        <span>借: {dayjs(record.borrowTime).format('MM-DD HH:mm')}</span>
-                        {record.returnTime && (
-                          <span>还: {dayjs(record.returnTime).format('MM-DD HH:mm')}</span>
-                        )}
-                        {!record.returnTime && (
-                          <span style={{ color: 'var(--accent-blue)' }}>
-                            预计: {dayjs(record.expectedReturnTime).format('MM-DD HH:mm')}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <span className={`status-tag ${record.status}`}>
-                      {getRecordStatusLabel(record.status)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="empty-state" style={{ padding: '40px 20px' }}>
-                <div className="empty-state-icon" style={{ fontSize: '48px' }}>📋</div>
-                <div className="empty-state-text">暂无借用记录</div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="detail-sidebar">
-          <div className="sidebar-card">
-            <div style={{ marginBottom: '16px' }}>
-              <span className="device-type-tag" style={{ marginBottom: '12px', display: 'inline-block' }}>
-                {device.type}
-              </span>
-            </div>
-            <h1 className="device-title">{device.name}</h1>
-            <div style={{ marginBottom: '20px' }}>
-              {getStatusBadge(device.status)}
-            </div>
-
-            <div className="device-info-row">
-              <span className="info-label">设备编号</span>
-              <span className="info-value" style={{ fontFamily: 'monospace', fontSize: '13px' }}>
-                {device.id.toUpperCase()}
-              </span>
-            </div>
-            <div className="device-info-row">
-              <span className="info-label">最低信用分</span>
-              <span className="info-value">
-                <span style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  color: user && user.creditScore >= device.minCreditScore ? 'var(--success)' : 'var(--danger)'
-                }}>
-                  ★ {device.minCreditScore}
-                </span>
-              </span>
-            </div>
-            {user && (
-              <div className="device-info-row">
-                <span className="info-label">我的信用分</span>
-                <span className="info-value" style={{
-                  color: user.creditScore >= device.minCreditScore ? 'var(--success)' : 'var(--danger)',
-                  fontWeight: '600'
-                }}>
-                  {user.creditScore}
-                </span>
-              </div>
-            )}
-          </div>
-
-          <div className="sidebar-card">
-            <div className="borrow-action-section">
-              <button
-                className="btn btn-primary btn-lg"
-                style={{ width: '100%' }}
-                onClick={handleBorrowClick}
-                disabled={!canBorrow}
-              >
-                {loading ? (
-                  <>
-                    <span className="loading-spinner" style={{ borderColor: 'rgba(255,255,255,0.3)', borderTopColor: 'white', width: '16px', height: '16px' }}></span>
-                    处理中...
-                  </>
-                ) : !isAvailable ? (
-                  device.status === 'borrowed' ? '该设备已被借出' : '设备维修中'
-                ) : !hasSufficientCredit ? (
-                  '信用分不足'
-                ) : (
-                  '立即借用'
-                )}
-              </button>
-
-              {!hasSufficientCredit && isAvailable && (
-                <div className="credit-warning">
-                  <span>⚠️</span>
-                  <span>
-                    需要信用分 {device.minCreditScore}，您当前 {user?.creditScore ?? 0} 分。
-                    按时归还设备可提升信用分。
+          <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                  <span
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      color: '#ffffff',
+                      backgroundColor: STATUS_COLORS[deviceData.status],
+                    }}
+                  >
+                    {STATUS_LABELS[deviceData.status]}
+                  </span>
+                  <span style={{ padding: '6px 12px', borderRadius: '4px', fontSize: '12px', backgroundColor: '#f1f5f9', color: '#64748b' }}>
+                    {deviceData.type}
                   </span>
                 </div>
-              )}
+                <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 700, color: '#1e293b' }}>{deviceData.name}</h1>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <p style={{ margin: 0, fontSize: '14px', color: '#64748b', marginBottom: '4px' }}>最低信用分要求</p>
+                <p style={{ margin: 0, fontSize: '24px', fontWeight: 700, color: '#3b82f6' }}>{deviceData.minCreditScore}</p>
+              </div>
+            </div>
 
-              {error && (
-                <div className="alert alert-error" style={{ marginTop: '16px', marginBottom: 0 }}>
-                  {error}
+            <div style={{ marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', marginBottom: '12px' }}>技术参数</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                {Object.entries(deviceData.specifications).map(([key, value]) => (
+                  <div key={key} style={{ padding: '12px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
+                    <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>{key}</p>
+                    <p style={{ margin: 0, fontSize: '14px', color: '#1e293b', fontWeight: 500 }}>{value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Clock size={18} />
+                历史借用记录
+              </h2>
+              {recordsWithDetails.length === 0 ? (
+                <p style={{ color: '#94a3b8', fontSize: '14px', textAlign: 'center', padding: '24px' }}>暂无借用记录</p>
+              ) : (
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                  {recordsWithDetails.map((record) => (
+                    <div
+                      key={record.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '12px 16px',
+                        borderBottom: '1px solid #e2e8f0',
+                        gap: '16px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '50%',
+                          backgroundColor: '#3b82f6',
+                          color: '#ffffff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '14px',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {getUserInitial(currentUser?.name || 'U')}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
+                          <User size={14} style={{ color: '#94a3b8' }} />
+                          <span style={{ fontSize: '14px', color: '#1e293b' }}>{currentUser?.name || '用户'}</span>
+                          <span
+                            style={{
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              fontSize: '12px',
+                              color: '#ffffff',
+                              backgroundColor: RECORD_STATUS_COLORS[record.status],
+                            }}
+                          >
+                            {RECORD_STATUS_LABELS[record.status]}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                          借用: {dayjs(record.borrowTime).format('YYYY-MM-DD HH:mm')}
+                          {record.actualReturnTime && (
+                            <> | 归还: {dayjs(record.actualReturnTime).format('YYYY-MM-DD HH:mm')}</>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
-          </div>
 
-          <div className="sidebar-card">
-            <h3 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '12px' }}>
-              💡 借还须知
-            </h3>
-            <ul style={{
-              listStyle: 'none',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '10px',
-              fontSize: '13px',
-              color: 'var(--text-secondary)',
-              lineHeight: '1.6'
-            }}>
-              <li style={{ display: 'flex', gap: '8px' }}>
-                <span style={{ color: 'var(--success)' }}>✓</span>
-                <span>按时归还 +1 信用分</span>
-              </li>
-              <li style={{ display: 'flex', gap: '8px' }}>
-                <span style={{ color: 'var(--danger)' }}>✗</span>
-                <span>超时归还 -5 信用分</span>
-              </li>
-              <li style={{ display: 'flex', gap: '8px' }}>
-                <span style={{ color: 'var(--accent-blue)' }}>⏱</span>
-                <span>借用期限为 24 小时</span>
-              </li>
-              <li style={{ display: 'flex', gap: '8px' }}>
-                <span style={{ color: 'var(--warning)' }}>★</span>
-                <span>信用分低于80无法借用高分设备</span>
-              </li>
-            </ul>
+            {!meetsCreditScore && (
+              <div
+                style={{
+                  padding: '16px',
+                  backgroundColor: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: '8px',
+                  marginBottom: '16px',
+                }}
+              >
+                <p style={{ margin: 0, color: '#ef4444', fontSize: '14px' }}>
+                  您的信用分 ({currentUser?.creditScore || 0}) 低于该设备要求的 {deviceData.minCreditScore} 分，无法借用此设备。
+                </p>
+              </div>
+            )}
+
+            <button
+              onClick={handleBorrow}
+              disabled={!canBorrow}
+              style={{
+                width: '100%',
+                padding: '14px',
+                borderRadius: '8px',
+                border: 'none',
+                color: '#ffffff',
+                fontSize: '16px',
+                fontWeight: 600,
+                transition: 'all 0.2s',
+                ...getButtonStyle(),
+              }}
+              onMouseEnter={(e) => {
+                if (canBorrow) {
+                  e.currentTarget.style.backgroundColor = '#0f172a';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (canBorrow) {
+                  e.currentTarget.style.backgroundColor = '#1e293b';
+                }
+              }}
+            >
+              {!isAvailable
+                ? '设备不可用'
+                : !meetsCreditScore
+                ? '信用分不足'
+                : '立即借用'}
+            </button>
           </div>
         </div>
       </div>
 
-      {showConfirm && (
-        <BorrowConfirmModal
-          device={device}
-          onConfirm={handleConfirmBorrow}
-          onCancel={() => setShowConfirm(false)}
-          loading={loading}
-        />
-      )}
+      <ConfirmModal
+        isOpen={showConfirm}
+        title="确认借用"
+        message={`确定要借用「${deviceData.name}」吗？请在24小时内归还，逾期将影响您的信用评分。`}
+        onConfirm={handleConfirmBorrow}
+        onCancel={() => setShowConfirm(false)}
+        confirmText="确认借用"
+        cancelText="再想想"
+      />
 
-      {showQR && data && (
-        <QRCodeModal
-          record={data.record}
-          deviceName={device.name}
-          onClose={handleCloseQR}
-        />
-      )}
+      <QRModal isOpen={showQR} recordId={recordId} onClose={() => { setShowQR(false); setRecordId(''); }} />
+
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
-}
+};
+
+export default DeviceDetail;

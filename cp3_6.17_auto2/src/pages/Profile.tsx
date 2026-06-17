@@ -1,250 +1,207 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import dayjs from 'dayjs';
-import { useUser } from '../context/UserContext';
-import CircularProgress from '../components/CircularProgress';
-import type { BorrowRecord } from '../types';
+import { useBorrow } from '@/hooks/useBorrow';
+import { CURRENT_USER_ID, getCreditScoreColor } from '@/utils/constants';
+import { RECORD_STATUS_LABELS, RECORD_STATUS_COLORS } from '@/types';
+import type { BorrowRecordWithDetails } from '@/types';
+import { Loader2, Calendar, Clock } from 'lucide-react';
 
-const getCreditLevel = (score: number) => {
-  if (score >= 90) return { label: '信用优秀', className: 'excellent' };
-  if (score >= 75) return { label: '信用良好', className: 'good' };
-  if (score >= 60) return { label: '信用一般', className: 'fair' };
-  return { label: '信用较低', className: 'poor' };
-};
-
-const getRecordStatusLabel = (status: BorrowRecord['status']) => {
-  switch (status) {
-    case 'borrowing': return '未归还';
-    case 'returned-on-time': return '按时归还';
-    case 'overdue-returned': return '超时归还';
-    default: return status;
-  }
-};
-
-export default function Profile() {
-  const { user, loading: userLoading, error: userError, refreshUser } = useUser();
-  const [activeTab, setActiveTab] = useState<'all' | 'borrowing' | 'returned'>('all');
-
-  const loadData = useCallback(async () => {
-    await refreshUser();
-  }, [refreshUser]);
+const Profile = () => {
+  const { user, records, devices, fetchUser, fetchRecords, fetchDevices } = useBorrow();
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    fetchUser(CURRENT_USER_ID);
+    fetchRecords(CURRENT_USER_ID);
+    fetchDevices();
+  }, [fetchUser, fetchRecords, fetchDevices]);
 
-  const filteredHistory = user?.borrowHistory?.filter(r => {
-    if (activeTab === 'all') return true;
-    if (activeTab === 'borrowing') return r.status === 'borrowing';
-    return r.status !== 'borrowing';
-  }) || [];
-
-  const stats = {
-    total: user?.borrowHistory?.length || 0,
-    borrowing: user?.borrowHistory?.filter(r => r.status === 'borrowing').length || 0,
-    returnedOnTime: user?.borrowHistory?.filter(r => r.status === 'returned-on-time').length || 0,
-    overdue: user?.borrowHistory?.filter(r => r.status === 'overdue-returned').length || 0
+  const getDeviceName = (deviceId: string) => {
+    return devices.data?.find((d) => d.id === deviceId)?.name || '未知设备';
   };
 
-  if (userLoading) {
+  const recordsWithDetails: BorrowRecordWithDetails[] = (records.data || [])
+    .map((record) => ({
+      ...record,
+      deviceName: getDeviceName(record.deviceId),
+    }))
+    .sort((a, b) => dayjs(b.borrowTime).valueOf() - dayjs(a.borrowTime).valueOf());
+
+  const renderCircularProgress = (score: number) => {
+    const radius = 50;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (score / 100) * circumference;
+    const color = getCreditScoreColor(score);
+
     return (
-      <div className="loading-container">
-        <div className="loading-spinner" style={{ width: '40px', height: '40px' }}></div>
+      <div style={{ position: 'relative', width: '120px', height: '120px' }}>
+        <svg width="120" height="120" style={{ transform: 'rotate(-90deg)' }}>
+          <circle
+            cx="60"
+            cy="60"
+            r={radius}
+            fill="none"
+            stroke="#e5e7eb"
+            strokeWidth="8"
+          />
+          <circle
+            cx="60"
+            cy="60"
+            r={radius}
+            fill="none"
+            stroke={color}
+            strokeWidth="8"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+            style={{ transition: 'stroke-dashoffset 0.5s ease, stroke 0.3s ease' }}
+          />
+        </svg>
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <span style={{ fontSize: '28px', fontWeight: 700, color }}>{score}</span>
+          <span style={{ fontSize: '12px', color: '#94a3b8' }}>信用分</span>
+        </div>
+      </div>
+    );
+  };
+
+  if (user.loading || records.loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 'calc(100vh - 60px)', backgroundColor: '#f8fafc' }}>
+        <Loader2 size={32} style={{ color: '#3b82f6', animation: 'spin 1s linear infinite' }} />
       </div>
     );
   }
 
-  if (userError || !user) {
+  const userData = user.data;
+
+  if (!userData) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-        <div style={{ fontSize: '64px', marginBottom: '16px', opacity: 0.5 }}>😕</div>
-        <h2 style={{ fontSize: '20px', marginBottom: '12px', color: 'var(--text-secondary)' }}>
-          {userError || '加载用户信息失败'}
-        </h2>
+      <div style={{ padding: '24px', backgroundColor: '#f8fafc', minHeight: 'calc(100vh - 60px)' }}>
+        <div style={{ padding: '40px', textAlign: 'center', color: '#ef4444' }}>
+          用户信息加载失败
+        </div>
       </div>
     );
   }
-
-  const creditLevel = getCreditLevel(user.creditScore);
 
   return (
-    <div className="page-transition">
-      <div className="page-header">
-        <h1 className="page-title">我的档案</h1>
-        <p className="page-subtitle">查看您的信用评分和借用记录</p>
-      </div>
-
-      <div className="profile-layout">
-        <div>
-          <div className="profile-sidebar-card">
+    <div style={{ padding: '24px', backgroundColor: '#f8fafc', minHeight: 'calc(100vh - 60px)' }}>
+      <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+        <div
+          style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '12px',
+            padding: '32px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            marginBottom: '24px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
             <img
-              src={user.avatar}
-              alt={user.name}
-              className="profile-avatar"
-              style={{ width: '96px', height: '96px', borderRadius: '50%', border: '2px solid #e5e7eb' }}
+              src={userData.avatarUrl}
+              alt={userData.name}
+              style={{
+                width: '60px',
+                height: '60px',
+                borderRadius: '50%',
+                border: '2px solid #e5e7eb',
+                objectFit: 'cover',
+              }}
             />
-            <h2 className="profile-name">{user.name}</h2>
-            <p className="profile-department">{user.department} · {user.role === 'admin' ? '管理员' : '用户'}</p>
-
-            <div className="credit-score-section">
-              <div className="credit-score-label">信用评分</div>
-              <CircularProgress value={user.creditScore} max={100} size={160} strokeWidth={12} />
-              <div>
-                <span className={`credit-level ${creditLevel.className}`}>
-                  {creditLevel.label}
-                </span>
-              </div>
+            <div style={{ flex: 1 }}>
+              <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 700, color: '#1e293b', marginBottom: '4px' }}>
+                {userData.name}
+              </h1>
+              <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
+                {userData.role === 'admin' ? '系统管理员' : '普通用户'}
+              </p>
             </div>
-
-            <div style={{ marginTop: '28px' }}>
-              <div className="profile-info-item">
-                <span className="profile-info-label">邮箱</span>
-                <span className="profile-info-value">{user.email}</span>
-              </div>
-              <div className="profile-info-item">
-                <span className="profile-info-label">加入日期</span>
-                <span className="profile-info-value">{dayjs(user.joinDate).format('YYYY-MM-DD')}</span>
-              </div>
-              <div className="profile-info-item">
-                <span className="profile-info-label">用户编号</span>
-                <span className="profile-info-value" style={{ fontFamily: 'monospace', fontSize: '13px' }}>
-                  {user.id.toUpperCase()}
-                </span>
-              </div>
-            </div>
+            {renderCircularProgress(userData.creditScore)}
           </div>
 
-          <div style={{
-            background: 'var(--bg-secondary)',
-            borderRadius: 'var(--radius-md)',
-            padding: '24px',
-            boxShadow: 'var(--shadow-sm)',
-            marginTop: '20px'
-          }}>
-            <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>
-              借用统计
-            </h3>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: '16px'
-            }}>
-              <div style={{
+          {userData.creditScore < 80 && (
+            <div
+              style={{
+                marginTop: '24px',
                 padding: '16px',
-                background: 'var(--bg-primary)',
+                backgroundColor: '#fef3c7',
+                border: '1px solid #fcd34d',
                 borderRadius: '8px',
-                textAlign: 'center'
-              }}>
-                <div style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text-primary)' }}>
-                  {stats.total}
-                </div>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                  总借用次数
-                </div>
-              </div>
-              <div style={{
-                padding: '16px',
-                background: 'rgba(234, 179, 8, 0.1)',
-                borderRadius: '8px',
-                textAlign: 'center'
-              }}>
-                <div style={{ fontSize: '24px', fontWeight: '700', color: 'var(--warning)' }}>
-                  {stats.borrowing}
-                </div>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                  借用中
-                </div>
-              </div>
-              <div style={{
-                padding: '16px',
-                background: 'rgba(34, 197, 94, 0.1)',
-                borderRadius: '8px',
-                textAlign: 'center'
-              }}>
-                <div style={{ fontSize: '24px', fontWeight: '700', color: 'var(--success)' }}>
-                  {stats.returnedOnTime}
-                </div>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                  按时归还
-                </div>
-              </div>
-              <div style={{
-                padding: '16px',
-                background: 'rgba(239, 68, 68, 0.1)',
-                borderRadius: '8px',
-                textAlign: 'center'
-              }}>
-                <div style={{ fontSize: '24px', fontWeight: '700', color: 'var(--danger)' }}>
-                  {stats.overdue}
-                </div>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                  超时归还
-                </div>
-              </div>
+              }}
+            >
+              <p style={{ margin: 0, color: '#92400e', fontSize: '14px' }}>
+                温馨提示：您的信用分低于80分，将无法借用信用分要求≥80的设备。请按时归还设备以提升信用分。
+              </p>
             </div>
-          </div>
+          )}
         </div>
 
-        <div className="profile-main-card">
-          <div className="table-section-header">
-            <h2 className="table-section-title">借用历史记录</h2>
-            <div className="filter-tabs">
-              <button
-                className={`filter-tab ${activeTab === 'all' ? 'active' : ''}`}
-                onClick={() => setActiveTab('all')}
-              >
-                全部 ({stats.total})
-              </button>
-              <button
-                className={`filter-tab ${activeTab === 'borrowing' ? 'active' : ''}`}
-                onClick={() => setActiveTab('borrowing')}
-              >
-                借用中 ({stats.borrowing})
-              </button>
-              <button
-                className={`filter-tab ${activeTab === 'returned' ? 'active' : ''}`}
-                onClick={() => setActiveTab('returned')}
-              >
-                已归还 ({stats.returnedOnTime + stats.overdue})
-              </button>
-            </div>
-          </div>
+        <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', padding: '24px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+          <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#1e293b', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Calendar size={20} />
+            借用历史记录
+          </h2>
 
-          {filteredHistory.length === 0 ? (
-            <div className="empty-state" style={{ padding: '60px 20px' }}>
-              <div className="empty-state-icon">📋</div>
-              <div className="empty-state-text">暂无借用记录</div>
-            </div>
+          {recordsWithDetails.length === 0 ? (
+            <p style={{ color: '#94a3b8', fontSize: '14px', textAlign: 'center', padding: '40px' }}>暂无借用记录</p>
           ) : (
-            <div className="table-responsive">
-              <table className="records-table">
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr>
-                    <th>设备名称</th>
-                    <th>借用时间</th>
-                    <th>归还时间</th>
-                    <th>状态</th>
+                  <tr style={{ backgroundColor: '#f8fafc' }}>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      设备名称
+                    </th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      借用时间
+                    </th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      归还时间
+                    </th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      状态
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredHistory.map(record => (
-                    <tr key={record.id}>
-                      <td style={{ fontWeight: '500' }}>
+                  {recordsWithDetails.map((record, index) => (
+                    <tr key={record.id} style={{ backgroundColor: index % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                      <td style={{ padding: '12px 16px', fontSize: '14px', color: '#1e293b', borderBottom: '1px solid #e2e8f0' }}>
                         {record.deviceName}
                       </td>
-                      <td style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
+                      <td style={{ padding: '12px 16px', fontSize: '14px', color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>
                         {dayjs(record.borrowTime).format('YYYY-MM-DD HH:mm')}
                       </td>
-                      <td style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
-                        {record.returnTime
-                          ? dayjs(record.returnTime).format('YYYY-MM-DD HH:mm')
-                          : <span style={{ color: 'var(--accent-blue)' }}>
-                              预计 {dayjs(record.expectedReturnTime).format('MM-DD HH:mm')}
-                            </span>
-                        }
+                      <td style={{ padding: '12px 16px', fontSize: '14px', color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>
+                        {record.actualReturnTime
+                          ? dayjs(record.actualReturnTime).format('YYYY-MM-DD HH:mm')
+                          : '-'}
                       </td>
-                      <td>
-                        <span className={`status-tag ${record.status}`}>
-                          {getRecordStatusLabel(record.status)}
+                      <td style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0' }}>
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            padding: '4px 12px',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            fontWeight: 500,
+                            color: '#ffffff',
+                            backgroundColor: RECORD_STATUS_COLORS[record.status],
+                          }}
+                        >
+                          {RECORD_STATUS_LABELS[record.status]}
                         </span>
                       </td>
                     </tr>
@@ -255,6 +212,15 @@ export default function Profile() {
           )}
         </div>
       </div>
+
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
-}
+};
+
+export default Profile;

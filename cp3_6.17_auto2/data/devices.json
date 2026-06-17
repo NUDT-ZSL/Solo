@@ -1,0 +1,152 @@
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440001",
+    "name": "戴尔U2723QE显示器",
+    "type": "显示器",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=27英寸4K高色域专业设计显示器&image_size=square",
+    "status": "available",
+    "minCreditScore": 75,
+    "specifications": {
+      "screenSize": "27英寸",
+      "resolution": "3840x2160",
+      "panelType": "IPS",
+      "brightness": "400nits",
+      "colorGamut": "100% sRGB"
+    }
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440002",
+    "name": "索尼WH-1000XM5耳机",
+    "type": "耳机",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=高端无线蓝牙降噪头戴式耳机&image_size=square",
+    "status": "borrowed",
+    "minCreditScore": 80,
+    "specifications": {
+      "connectivity": "蓝牙5.2",
+      "batteryLife": "30小时",
+      "driver": "30mm",
+      "weight": "250g",
+      "features": "主动降噪"
+    }
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440003",
+    "name": "极米H3S投影仪",
+    "type": "投影仪",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=家用智能高清投影仪家庭影院&image_size=square",
+    "status": "available",
+    "minCreditScore": 85,
+    "specifications": {
+      "brightness": "2200ANSI",
+      "resolution": "1920x1080",
+      "contrast": "1080P",
+      "throwRatio": "1.2:1",
+      "os": "Android TV"
+    }
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440004",
+    "name": "罗技MX Mechanical键盘",
+    "type": "键盘",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=机械键盘无线蓝牙办公键盘&image_size=square",
+    "status": "maintenance",
+    "minCreditScore": 60,
+    "specifications": {
+      "layout": "全尺寸",
+      "switchType": "红轴",
+      "connectivity": "蓝牙+2.4G",
+      "backlight": "RGB",
+      "batteryLife": "15天"
+    }
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440005",
+    "name": "罗技MX Master 3S鼠标",
+    "type": "鼠标",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=无线蓝牙办公鼠标人体工学&image_size=square",
+    "status": "available",
+    "minCreditScore": 65,
+    "specifications": {
+      "dpi": "8000",
+      "buttons": "7键",
+      "connectivity": "蓝牙+2.4G",
+      "batteryLife": "70天",
+      "weight": "141g"
+    }
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440006",
+    "name": "罗技C920 Pro摄像头",
+    "type": "摄像头",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=高清网络摄像头直播会议&image_size=square",
+    "status": "borrowed",
+    "minCreditScore": 70,
+    "specifications": {
+      "resolution": "1080P",
+      "fps": "30fps",
+      "fieldOfView": "78度",
+      "microphone": "内置双麦",
+      "autofocus": "支持"
+    }
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440007",
+    "name": "哈曼卡顿琉璃3代音箱",
+    "type": "音箱",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=透明外观蓝牙音箱家庭音响&image_size=square",
+    "status": "available",
+    "minCreditScore": 80,
+    "specifications": {
+      "power": "130W",
+      "connectivity": "蓝牙5.0",
+      "frequency": "45Hz-20kHz",
+      "weight": "2.9kg",
+      "features": "360度环绕声"
+    }
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440008",
+    "name": "Anker 20000mAh充电宝",
+    "type": "充电宝",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=大容量移动电源快速充电&image_size=square",
+    "status": "available",
+    "minCreditScore": 60,
+    "specifications": {
+      "capacity": "20000mAh",
+      "ports": "USB-A x2, USB-C x1",
+      "fastCharge": "PD 20W",
+      "weight": "350g",
+      "color": "黑色"
+    }
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440009",
+    "name": "绿巨能笔记本支架",
+    "type": "笔记本支架",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=铝合金笔记本电脑支架散热折叠&image_size=square",
+    "status": "borrowed",
+    "minCreditScore": 65,
+    "specifications": {
+      "material": "铝合金",
+      "adjustable": "7档调节",
+      "compatibility": "10-17英寸",
+      "weight": "800g",
+      "features": "镂空散热"
+    }
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440010",
+    "name": "明基MindDuo护眼灯",
+    "type": "护眼灯",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=智能护眼台灯学习阅读&image_size=square",
+    "status": "maintenance",
+    "minCreditScore": 90,
+    "specifications": {
+      "brightness": "900lm",
+      "colorTemperature": "2700K-5700K",
+      "CRI": "95",
+      "features": "自动调光",
+      "power": "18W"
+    }
+  }
+]

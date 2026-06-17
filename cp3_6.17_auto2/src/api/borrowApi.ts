@@ -1,82 +1,51 @@
-import type {
-  Device,
-  PaginatedResponse,
-  BorrowRecord,
-  User,
-  BorrowResponse,
-  ReturnResponse,
-  Stats
-} from '../types';
+import type { Device, User, BorrowRecord, ApiResponse } from '@/types';
 
 const BASE_URL = '/api';
 
-async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${BASE_URL}${url}`, {
+const handleResponse = async <T>(response: Response): Promise<ApiResponse<T>> => {
+  const data = await response.json();
+  return data;
+};
+
+export const getDevices = async (): Promise<ApiResponse<Device[]>> => {
+  const response = await fetch(`${BASE_URL}/devices`);
+  return handleResponse<Device[]>(response);
+};
+
+export const getDeviceById = async (id: string): Promise<ApiResponse<Device>> => {
+  const response = await fetch(`${BASE_URL}/devices/${id}`);
+  return handleResponse<Device>(response);
+};
+
+export const submitBorrow = async (deviceId: string, userId: string): Promise<ApiResponse<BorrowRecord>> => {
+  const response = await fetch(`${BASE_URL}/borrow`, {
+    method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...options?.headers
     },
-    ...options
+    body: JSON.stringify({ deviceId, userId }),
   });
+  return handleResponse<BorrowRecord>(response);
+};
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: '请求失败' }));
-    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-  }
-
-  return response.json();
-}
-
-export function getDevices(page = 1, limit = 20): Promise<PaginatedResponse<Device>> {
-  return request<PaginatedResponse<Device>>(`/devices?page=${page}&limit=${limit}`);
-}
-
-export function getDeviceById(id: string): Promise<Device> {
-  return request<Device>(`/devices/${id}`);
-}
-
-export function getUserById(id: string): Promise<User> {
-  return request<User>(`/users/${id}`);
-}
-
-export function submitBorrow(deviceId: string, userId: string): Promise<BorrowResponse> {
-  return request<BorrowResponse>('/borrow', {
+export const confirmReturn = async (recordId: string): Promise<ApiResponse<BorrowRecord>> => {
+  const response = await fetch(`${BASE_URL}/return`, {
     method: 'POST',
-    body: JSON.stringify({ deviceId, userId })
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ recordId }),
   });
-}
+  return handleResponse<BorrowRecord>(response);
+};
 
-export function confirmReturn(recordId: string): Promise<ReturnResponse> {
-  return request<ReturnResponse>('/return', {
-    method: 'POST',
-    body: JSON.stringify({ recordId })
-  });
-}
+export const getUserById = async (id: string): Promise<ApiResponse<User>> => {
+  const response = await fetch(`${BASE_URL}/users/${id}`);
+  return handleResponse<User>(response);
+};
 
-export function getRecords(params?: {
-  userId?: string;
-  deviceId?: string;
-  status?: string;
-}): Promise<{ data: BorrowRecord[]; total: number }> {
-  const query = new URLSearchParams();
-  if (params?.userId) query.set('userId', params.userId);
-  if (params?.deviceId) query.set('deviceId', params.deviceId);
-  if (params?.status) query.set('status', params.status);
-
-  const queryString = query.toString();
-  return request(`/records${queryString ? `?${queryString}` : ''}`);
-}
-
-export function getStats(): Promise<Stats> {
-  return request<Stats>('/stats');
-}
-
-export const borrowApi = {
-  getDevices,
-  getDeviceById,
-  getUserById,
-  submitBorrow,
-  confirmReturn,
-  getRecords,
-  getStats
+export const getRecords = async (userId?: string): Promise<ApiResponse<BorrowRecord[]>> => {
+  const url = userId ? `${BASE_URL}/records?userId=${userId}` : `${BASE_URL}/records`;
+  const response = await fetch(url);
+  return handleResponse<BorrowRecord[]>(response);
 };

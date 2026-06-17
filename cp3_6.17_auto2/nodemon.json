@@ -1,0 +1,9 @@
+{
+  "watch": ["server", "data"],
+  "ext": "js,json",
+  "exec": "node server/index.js",
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "delay": 1000
+}

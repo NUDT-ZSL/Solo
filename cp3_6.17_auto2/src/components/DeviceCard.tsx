@@ -1,161 +1,202 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Device } from '../types';
-import { useUser } from '../context/UserContext';
-import { useBorrow } from '../hooks/useBorrow';
-import BorrowConfirmModal from './BorrowConfirmModal';
-import QRCodeModal from './QRCodeModal';
+import type { Device, User } from '@/types';
+import { STATUS_LABELS, STATUS_COLORS } from '@/types';
+import { useBorrow } from '@/hooks/useBorrow';
+import { CURRENT_USER_ID } from '@/utils/constants';
+import ConfirmModal from './ConfirmModal';
+import QRModal from './QRModal';
 
-interface Props {
+interface DeviceCardProps {
   device: Device;
-  onBorrowSuccess?: () => void;
+  currentUser?: User | null;
 }
 
-const statusMap: Record<Device['status'], { text: string; className: string }> = {
-  available: { text: '空闲', className: 'available' },
-  borrowed: { text: '被借', className: 'borrowed' },
-  maintenance: { text: '维修', className: 'maintenance' }
-};
-
-export default function DeviceCard({ device, onBorrowSuccess }: Props) {
+const DeviceCard = ({ device, currentUser }: DeviceCardProps) => {
   const navigate = useNavigate();
-  const { user } = useUser();
-  const { loading, error, data, borrow, resetBorrowState } = useBorrow();
-
+  const { borrow, borrowResult } = useBorrow();
   const [showConfirm, setShowConfirm] = useState(false);
   const [showQR, setShowQR] = useState(false);
+  const [recordId, setRecordId] = useState('');
 
-  const statusInfo = statusMap[device.status];
   const isAvailable = device.status === 'available';
-  const hasSufficientCredit = user ? user.creditScore >= device.minCreditScore : false;
-  const canBorrow = isAvailable && hasSufficientCredit;
+  const meetsCreditScore = currentUser ? currentUser.creditScore >= device.minCreditScore : true;
+  const canBorrow = isAvailable && meetsCreditScore;
 
-  const handleCardClick = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('.borrow-btn')) return;
+  const handleCardClick = () => {
     navigate(`/device/${device.id}`);
   };
 
-  const handleBorrowClick = (e: React.MouseEvent) => {
+  const handleBorrowClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!canBorrow) return;
     setShowConfirm(true);
   };
 
   const handleConfirmBorrow = async () => {
-    if (!user) return;
-    const result = await borrow(device.id, user.id);
-    if (result) {
-      setShowConfirm(false);
+    setShowConfirm(false);
+    const result = await borrow(device.id, CURRENT_USER_ID);
+    if (result.success && result.data) {
+      setRecordId(result.data.id);
       setShowQR(true);
-      onBorrowSuccess?.();
     }
   };
 
-  const handleCloseQR = () => {
+  const handleQRClose = () => {
     setShowQR(false);
-    resetBorrowState();
+    setRecordId('');
   };
 
-  const getBorrowButtonText = () => {
-    if (!isAvailable) {
-      if (device.status === 'borrowed') return '已借出';
-      if (device.status === 'maintenance') return '维修中';
+  const getButtonStyle = () => {
+    if (!canBorrow) {
+      return {
+        backgroundColor: '#94a3b8',
+        cursor: 'not-allowed',
+      };
     }
-    if (!hasSufficientCredit) return '信用不足';
-    return '借用';
+    return {
+      backgroundColor: '#1e293b',
+      cursor: 'pointer',
+    };
   };
 
   return (
     <>
-      <div className="device-card" onClick={handleCardClick}>
-        <div className="device-card-image">
+      <div
+        style={{
+          width: '240px',
+          height: '320px',
+          borderRadius: '12px',
+          backgroundColor: '#ffffff',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          overflow: 'hidden',
+          cursor: 'pointer',
+          transition: 'all 0.3s ease-in-out',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'translateY(-4px)';
+          e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.15)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)';
+        }}
+        onClick={handleCardClick}
+      >
+        <div style={{ position: 'relative', height: '160px', overflow: 'hidden' }}>
           <img
             src={device.imageUrl}
             alt={device.name}
-            loading="lazy"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+            }}
           />
-          <span className={`status-badge ${statusInfo.className}`}>
-            {statusInfo.text}
-          </span>
+          <div
+            style={{
+              position: 'absolute',
+              top: '12px',
+              right: '12px',
+              padding: '6px 12px',
+              borderRadius: '4px',
+              fontSize: '12px',
+              fontWeight: 500,
+              color: '#ffffff',
+              backgroundColor: STATUS_COLORS[device.status],
+            }}
+          >
+            {STATUS_LABELS[device.status]}
+          </div>
         </div>
 
-        <div className="device-card-body">
-          <span className="device-type-tag">{device.type}</span>
-          <h3 className="device-card-name" title={device.name}>
+        <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <div
+            style={{
+              display: 'inline-block',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              backgroundColor: '#f1f5f9',
+              color: '#64748b',
+              fontSize: '12px',
+              marginBottom: '8px',
+              alignSelf: 'flex-start',
+            }}
+          >
+            {device.type}
+          </div>
+
+          <h3
+            style={{
+              margin: 0,
+              fontSize: '16px',
+              fontWeight: 600,
+              color: '#1e293b',
+              marginBottom: '4px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
             {device.name}
           </h3>
 
-          <div className="device-card-footer">
-            <div className="credit-requirement">
-              <div className="credit-icon">★</div>
-              <span>{device.minCreditScore}</span>
-            </div>
+          <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8', marginBottom: 'auto' }}>
+            最低信用分: {device.minCreditScore}
+          </p>
 
-            <button
-              className={`borrow-btn ${!hasSufficientCredit && isAvailable ? 'low-credit' : ''}`}
-              onClick={handleBorrowClick}
-              disabled={!canBorrow}
-              title={
-                !isAvailable
-                  ? device.status === 'borrowed' ? '该设备已被借出' : '该设备正在维修中'
-                  : !hasSufficientCredit
-                  ? `信用分不足，需要${device.minCreditScore}分，当前${user?.creditScore ?? 0}分`
-                  : '点击借用设备'
+          <button
+            onClick={handleBorrowClick}
+            disabled={!canBorrow}
+            style={{
+              width: '100%',
+              padding: '10px',
+              borderRadius: '8px',
+              border: 'none',
+              color: '#ffffff',
+              fontSize: '14px',
+              fontWeight: 500,
+              marginTop: '12px',
+              transition: 'all 0.2s',
+              ...getButtonStyle(),
+            }}
+            onMouseEnter={(e) => {
+              if (canBorrow) {
+                e.currentTarget.style.backgroundColor = '#0f172a';
               }
-            >
-              {loading ? (
-                <span className="loading-spinner" style={{ borderColor: 'rgba(255,255,255,0.3)', borderTopColor: 'white', width: '14px', height: '14px' }}></span>
-              ) : getBorrowButtonText()}
-            </button>
-          </div>
-
-          {!hasSufficientCredit && isAvailable && (
-            <div style={{
-              fontSize: '11px',
-              color: 'var(--danger)',
-              textAlign: 'right',
-              marginTop: '4px'
-            }}>
-              需要 {device.minCreditScore} 分
-            </div>
-          )}
+            }}
+            onMouseLeave={(e) => {
+              if (canBorrow) {
+                e.currentTarget.style.backgroundColor = '#1e293b';
+              }
+            }}
+          >
+            {!isAvailable
+              ? '设备不可用'
+              : !meetsCreditScore
+              ? `信用分不足 (需${device.minCreditScore})`
+              : borrowResult.loading
+              ? '借用中...'
+              : '立即借用'}
+          </button>
         </div>
       </div>
 
-      {showConfirm && (
-        <BorrowConfirmModal
-          device={device}
-          onConfirm={handleConfirmBorrow}
-          onCancel={() => setShowConfirm(false)}
-          loading={loading}
-        />
-      )}
+      <ConfirmModal
+        isOpen={showConfirm}
+        title="确认借用"
+        message={`确定要借用「${device.name}」吗？请在24小时内归还，逾期将影响您的信用评分。`}
+        onConfirm={handleConfirmBorrow}
+        onCancel={() => setShowConfirm(false)}
+        confirmText="确认借用"
+        cancelText="再想想"
+      />
 
-      {error && showConfirm && (
-        <div style={{
-          position: 'fixed',
-          top: '80px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 2000,
-          padding: '12px 20px',
-          background: 'rgba(239, 68, 68, 0.95)',
-          color: 'white',
-          borderRadius: '8px',
-          fontSize: '14px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-        }}>
-          {error}
-        </div>
-      )}
-
-      {showQR && data && (
-        <QRCodeModal
-          record={data.record}
-          deviceName={device.name}
-          onClose={handleCloseQR}
-        />
-      )}
+      <QRModal isOpen={showQR} recordId={recordId} onClose={handleQRClose} />
     </>
   );
-}
+};
+
+export default DeviceCard;

@@ -1,101 +1,51 @@
 import express from 'express';
 import cors from 'cors';
-import { v4 as uuidv4 } from 'uuid';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { v4 as uuidv4 } from 'uuid';
 import dayjs from 'dayjs';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 4000;
-const DATA_DIR = join(__dirname, 'data');
+const PORT = 3002;
+const DATA_DIR = path.join(__dirname, '..', 'data');
 
 app.use(cors());
 app.use(express.json());
 
-const readJSON = (filename) => {
-  const filePath = join(DATA_DIR, filename);
-  return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+const readJson = (filename) => {
+  const filePath = path.join(DATA_DIR, filename);
+  const content = fs.readFileSync(filePath, 'utf-8');
+  return JSON.parse(content);
 };
 
-const writeJSON = (filename, data) => {
-  const filePath = join(DATA_DIR, filename);
+const writeJson = (filename, data) => {
+  const filePath = path.join(DATA_DIR, filename);
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
 };
 
-const simulateLatency = (req, res, next) => {
-  setTimeout(next, 100 + Math.random() * 200);
-};
-
-app.use(simulateLatency);
-
 app.get('/api/devices', (req, res) => {
   try {
-    const devices = readJSON('devices.json');
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const start = (page - 1) * limit;
-    const end = start + limit;
-    const paginatedDevices = devices.slice(start, end);
-
-    res.json({
-      data: paginatedDevices,
-      total: devices.length,
-      page,
-      limit,
-      totalPages: Math.ceil(devices.length / limit)
-    });
+    const devices = readJson('devices.json');
+    res.json({ success: true, data: devices });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch devices' });
+    res.json({ success: false, error: error.message });
   }
 });
 
 app.get('/api/devices/:id', (req, res) => {
   try {
-    const devices = readJSON('devices.json');
+    const devices = readJson('devices.json');
     const device = devices.find(d => d.id === req.params.id);
-
     if (!device) {
-      return res.status(404).json({ error: 'Device not found' });
+      return res.json({ success: false, error: '设备不存在' });
     }
-
-    const records = readJSON('records.json');
-    const deviceRecords = records
-      .filter(r => r.deviceId === req.params.id)
-      .sort((a, b) => new Date(b.borrowTime) - new Date(a.borrowTime));
-
-    res.json({
-      ...device,
-      borrowHistory: deviceRecords
-    });
+    res.json({ success: true, data: device });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch device details' });
-  }
-});
-
-app.get('/api/users/:id', (req, res) => {
-  try {
-    const users = readJSON('users.json');
-    const user = users.find(u => u.id === req.params.id);
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const records = readJSON('records.json');
-    const userRecords = records
-      .filter(r => r.userId === req.params.id)
-      .sort((a, b) => new Date(b.borrowTime) - new Date(a.borrowTime));
-
-    res.json({
-      ...user,
-      borrowHistory: userRecords
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch user info' });
+    res.json({ success: false, error: error.message });
   }
 });
 
@@ -104,64 +54,54 @@ app.post('/api/borrow', (req, res) => {
     const { deviceId, userId } = req.body;
 
     if (!deviceId || !userId) {
-      return res.status(400).json({ error: 'deviceId and userId are required' });
+      return res.json({ success: false, error: '缺少必要参数' });
     }
 
-    const devices = readJSON('devices.json');
-    const deviceIndex = devices.findIndex(d => d.id === deviceId);
-    const device = devices[deviceIndex];
+    const devices = readJson('devices.json');
+    const users = readJson('users.json');
+    const records = readJson('records.json');
 
+    const device = devices.find(d => d.id === deviceId);
     if (!device) {
-      return res.status(404).json({ error: 'Device not found' });
+      return res.json({ success: false, error: '设备不存在' });
     }
 
     if (device.status !== 'available') {
-      return res.status(400).json({ error: '设备当前不可借用' });
+      return res.json({ success: false, error: '设备不可用' });
     }
 
-    const users = readJSON('users.json');
     const user = users.find(u => u.id === userId);
-
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.json({ success: false, error: '用户不存在' });
     }
 
     if (user.creditScore < device.minCreditScore) {
-      return res.status(400).json({
-        error: `信用分不足，需要${device.minCreditScore}分，当前${user.creditScore}分`
-      });
+      return res.json({ success: false, error: '用户信用分不足' });
     }
 
-    devices[deviceIndex] = { ...device, status: 'borrowed' };
-    writeJSON('devices.json', devices);
-
-    const borrowTime = new Date().toISOString();
-    const expectedReturnTime = dayjs(borrowTime).add(24, 'hour').toISOString();
-
+    const now = dayjs();
     const newRecord = {
       id: uuidv4(),
       deviceId,
-      deviceName: device.name,
       userId,
-      userName: user.name,
-      borrowTime,
-      returnTime: null,
-      expectedReturnTime,
+      borrowTime: now.toISOString(),
+      expectedReturnTime: now.add(24, 'hour').toISOString(),
+      actualReturnTime: null,
       status: 'borrowing'
     };
 
-    const records = readJSON('records.json');
-    records.push(newRecord);
-    writeJSON('records.json', records);
+    const updatedDevices = devices.map(d =>
+      d.id === deviceId ? { ...d, status: 'borrowed' } : d
+    );
 
-    res.json({
-      success: true,
-      record: newRecord,
-      qrCodeData: newRecord.id
-    });
+    records.push(newRecord);
+
+    writeJson('devices.json', updatedDevices);
+    writeJson('records.json', records);
+
+    res.json({ success: true, data: newRecord });
   } catch (error) {
-    console.error('Borrow error:', error);
-    res.status(500).json({ error: 'Failed to create borrow record' });
+    res.json({ success: false, error: error.message });
   }
 });
 
@@ -170,115 +110,92 @@ app.post('/api/return', (req, res) => {
     const { recordId } = req.body;
 
     if (!recordId) {
-      return res.status(400).json({ error: 'recordId is required' });
+      return res.json({ success: false, error: '缺少必要参数' });
     }
 
-    const records = readJSON('records.json');
+    const records = readJson('records.json');
+    const devices = readJson('devices.json');
+    const users = readJson('users.json');
+
     const recordIndex = records.findIndex(r => r.id === recordId);
+    if (recordIndex === -1) {
+      return res.json({ success: false, error: '记录不存在' });
+    }
+
     const record = records[recordIndex];
-
-    if (!record) {
-      return res.status(404).json({ error: 'Borrow record not found' });
+    if (record.status === 'returned_on_time' || record.status === 'returned_overdue') {
+      return res.json({ success: false, error: '设备已归还' });
     }
 
-    if (record.status !== 'borrowing') {
-      return res.status(400).json({ error: '设备已归还' });
-    }
+    const now = dayjs();
+    const expectedTime = dayjs(record.expectedReturnTime);
+    const isOverdue = now.isAfter(expectedTime.add(24, 'hour'));
 
-    const returnTime = new Date().toISOString();
-    const isOverdue = dayjs(returnTime).isAfter(record.expectedReturnTime);
-
-    records[recordIndex] = {
+    const updatedRecord = {
       ...record,
-      returnTime,
-      status: isOverdue ? 'overdue-returned' : 'returned-on-time'
+      actualReturnTime: now.toISOString(),
+      status: isOverdue ? 'returned_overdue' : 'returned_on_time'
     };
-    writeJSON('records.json', records);
 
-    const devices = readJSON('devices.json');
-    const deviceIndex = devices.findIndex(d => d.id === record.deviceId);
-    if (deviceIndex !== -1) {
-      devices[deviceIndex] = { ...devices[deviceIndex], status: 'available' };
-      writeJSON('devices.json', devices);
-    }
+    const updatedDevices = devices.map(d =>
+      d.id === record.deviceId ? { ...d, status: 'available' } : d
+    );
 
-    const users = readJSON('users.json');
-    const userIndex = users.findIndex(u => u.id === record.userId);
-    if (userIndex !== -1) {
-      const currentScore = users[userIndex].creditScore;
-      const newScore = Math.max(0, Math.min(100, currentScore + (isOverdue ? -5 : 1)));
-      users[userIndex] = { ...users[userIndex], creditScore: newScore };
-      writeJSON('users.json', users);
-    }
+    const updatedUsers = users.map(u => {
+      if (u.id === record.userId) {
+        const scoreChange = isOverdue ? -5 : 1;
+        return { ...u, creditScore: u.creditScore + scoreChange };
+      }
+      return u;
+    });
+
+    records[recordIndex] = updatedRecord;
+
+    writeJson('records.json', records);
+    writeJson('devices.json', updatedDevices);
+    writeJson('users.json', updatedUsers);
 
     res.json({
       success: true,
-      record: records[recordIndex],
-      isOverdue,
-      updatedCreditScore: users[userIndex]?.creditScore
+      data: {
+        record: updatedRecord,
+        overdue: isOverdue,
+        scoreChange: isOverdue ? -5 : 1
+      }
     });
   } catch (error) {
-    console.error('Return error:', error);
-    res.status(500).json({ error: 'Failed to process return' });
+    res.json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/users/:id', (req, res) => {
+  try {
+    const users = readJson('users.json');
+    const user = users.find(u => u.id === req.params.id);
+    if (!user) {
+      return res.json({ success: false, error: '用户不存在' });
+    }
+    res.json({ success: true, data: user });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
   }
 });
 
 app.get('/api/records', (req, res) => {
   try {
-    const records = readJSON('records.json');
-    const userId = req.query.userId;
-    const deviceId = req.query.deviceId;
-    const status = req.query.status;
-
-    let filteredRecords = records;
+    const { userId } = req.query;
+    let records = readJson('records.json');
 
     if (userId) {
-      filteredRecords = filteredRecords.filter(r => r.userId === userId);
-    }
-    if (deviceId) {
-      filteredRecords = filteredRecords.filter(r => r.deviceId === deviceId);
-    }
-    if (status) {
-      filteredRecords = filteredRecords.filter(r => r.status === status);
+      records = records.filter(r => r.userId === userId);
     }
 
-    filteredRecords.sort((a, b) => new Date(b.borrowTime) - new Date(a.borrowTime));
-
-    res.json({
-      data: filteredRecords,
-      total: filteredRecords.length
-    });
+    res.json({ success: true, data: records });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch records' });
-  }
-});
-
-app.get('/api/stats', (req, res) => {
-  try {
-    const devices = readJSON('devices.json');
-    const records = readJSON('records.json');
-    const users = readJSON('users.json');
-
-    const stats = {
-      totalDevices: devices.length,
-      availableDevices: devices.filter(d => d.status === 'available').length,
-      borrowedDevices: devices.filter(d => d.status === 'borrowed').length,
-      maintenanceDevices: devices.filter(d => d.status === 'maintenance').length,
-      totalUsers: users.length,
-      totalRecords: records.length,
-      activeBorrowings: records.filter(r => r.status === 'borrowing').length,
-      overdueBorrowings: records.filter(r => {
-        if (r.status !== 'borrowing') return false;
-        return dayjs().isAfter(r.expectedReturnTime);
-      }).length
-    };
-
-    res.json(stats);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch stats' });
+    res.json({ success: false, error: error.message });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });
