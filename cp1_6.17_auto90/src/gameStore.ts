@@ -7,6 +7,23 @@ export interface Resources {
   crystal: number
 }
 
+export interface CollectParticle {
+  id: number
+  x: number
+  y: number
+  targetX: number
+  targetY: number
+  color: string
+  startTime: number
+  duration: number
+}
+
+export interface ResourceFlash {
+  iron: number
+  uranium: number
+  crystal: number
+}
+
 export interface Ship {
   x: number
   y: number
@@ -37,6 +54,9 @@ interface GameState {
   miningProgress: number
   totalMiningCount: number
   shipLevel: number
+  collectParticles: CollectParticle[]
+  resourceFlash: ResourceFlash
+  miningRingRotation: number
   canMine: (planet: Planet) => boolean
   selectShip: () => void
   setTargetPlanet: (planet: Planet | null) => void
@@ -44,11 +64,15 @@ interface GameState {
   updateShipPosition: (x: number, y: number) => void
   startMining: (planetId: string) => void
   updateMiningProgress: (progress: number) => void
-  finishMining: (resourceType: 'iron' | 'uranium' | 'crystal', amount: number) => void
+  finishMining: (resourceType: 'iron' | 'uranium' | 'crystal', amount: number, planetX: number, planetY: number, shipX: number, shipY: number, planetColor: string) => void
   startReturning: (startX: number, startY: number) => void
   updateReturnProgress: (progress: number) => void
   finishReturning: () => void
   upgradePart: (part: 'engine' | 'cargo' | 'laser') => boolean
+  addCollectParticle: (particle: Omit<CollectParticle, 'id'>) => void
+  removeCollectParticle: (id: number) => void
+  triggerResourceFlash: (resourceType: 'iron' | 'uranium' | 'crystal') => void
+  updateMiningRingRotation: (rotation: number) => void
 }
 
 const initialShip: Ship = {
@@ -72,6 +96,8 @@ const initialUpgrades: Upgrades = {
   laser: { level: 1, efficiencyBonus: 0 },
 }
 
+let particleIdCounter = 0
+
 export const useGameStore = create<GameState>((set, get) => ({
   ship: initialShip,
   resources: { iron: 0, uranium: 0, crystal: 0 },
@@ -81,6 +107,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   miningProgress: 0,
   totalMiningCount: 0,
   shipLevel: 1,
+  collectParticles: [],
+  resourceFlash: { iron: 0, uranium: 0, crystal: 0 },
+  miningRingRotation: 0,
 
   canMine: (planet: Planet) => {
     const { upgrades } = get()
@@ -127,15 +156,40 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   updateMiningProgress: (progress) => set({ miningProgress: progress }),
 
-  finishMining: (resourceType, amount) =>
+  finishMining: (resourceType, amount, planetX, planetY, shipX, shipY, planetColor) =>
     set((state) => {
       const newResources = { ...state.resources }
       newResources[resourceType] += amount
+
+      const particleCount = 4 + Math.floor(Math.random() * 3)
+      const newParticles: CollectParticle[] = []
+      const now = performance.now()
+
+      for (let i = 0; i < particleCount; i++) {
+        const angle = (i / particleCount) * Math.PI * 2 + Math.random() * 0.5
+        const offset = 5 + Math.random() * 10
+        newParticles.push({
+          id: particleIdCounter++,
+          x: planetX + Math.cos(angle) * offset,
+          y: planetY + Math.sin(angle) * offset,
+          targetX: shipX,
+          targetY: shipY,
+          color: planetColor,
+          startTime: now + i * 50,
+          duration: 600,
+        })
+      }
+
+      const newFlash = { ...state.resourceFlash }
+      newFlash[resourceType] = now
+
       return {
         resources: newResources,
         ship: { ...state.ship, isMining: false, isReturning: true },
         miningProgress: 0,
         totalMiningCount: state.totalMiningCount + 1,
+        collectParticles: [...state.collectParticles, ...newParticles],
+        resourceFlash: newFlash,
       }
     }),
 
@@ -216,4 +270,24 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     return true
   },
+
+  addCollectParticle: (particle) =>
+    set((state) => ({
+      collectParticles: [...state.collectParticles, { ...particle, id: particleIdCounter++ }],
+    })),
+
+  removeCollectParticle: (id) =>
+    set((state) => ({
+      collectParticles: state.collectParticles.filter((p) => p.id !== id),
+    })),
+
+  triggerResourceFlash: (resourceType) =>
+    set((state) => ({
+      resourceFlash: {
+        ...state.resourceFlash,
+        [resourceType]: performance.now(),
+      },
+    })),
+
+  updateMiningRingRotation: (rotation) => set({ miningRingRotation: rotation }),
 }))

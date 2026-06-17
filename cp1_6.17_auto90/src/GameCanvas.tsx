@@ -21,6 +21,17 @@ interface Particle {
   size: number
 }
 
+interface CollectParticle {
+  id: number
+  x: number
+  y: number
+  targetX: number
+  targetY: number
+  color: string
+  startTime: number
+  duration: number
+}
+
 const CANVAS_WIDTH = 800
 const CANVAS_HEIGHT = 900
 const STAR_COUNT = 100
@@ -37,11 +48,12 @@ export default function GameCanvas() {
   const miningParticleTimerRef = useRef<number>(0)
   const currentMiningPlanetRef = useRef<Planet | null>(null)
 
+  const miningRingRotationRef = useRef<number>(0)
+
   const {
     ship,
     selectedPlanetId,
     hoveredPlanetId,
-    upgrades,
     canMine,
     selectShip,
     setTargetPlanet,
@@ -53,6 +65,8 @@ export default function GameCanvas() {
     startReturning,
     updateReturnProgress,
     finishReturning,
+    collectParticles,
+    removeCollectParticle,
   } = useGameStore()
 
   useEffect(() => {
@@ -185,6 +199,21 @@ export default function GameCanvas() {
         const isMining = ship.isMining && ship.currentPlanetId === planet.id
         const isReachable = canMine(planet)
 
+        if (isMining) {
+          miningRingRotationRef.current += deltaTime * 0.5
+          ctx.save()
+          ctx.translate(planet.x, planet.y)
+          ctx.rotate(miningRingRotationRef.current)
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'
+          ctx.lineWidth = 2
+          ctx.setLineDash([6, 4])
+          ctx.beginPath()
+          ctx.arc(0, 0, planet.radius + 10, 0, Math.PI * 2)
+          ctx.stroke()
+          ctx.setLineDash([])
+          ctx.restore()
+        }
+
         ctx.beginPath()
         ctx.arc(planet.x, planet.y, planet.radius, 0, Math.PI * 2)
         if (isMining) {
@@ -235,6 +264,29 @@ export default function GameCanvas() {
         }
 
         ctx.globalAlpha = 1
+        return true
+      })
+
+      const now = performance.now()
+      collectParticles.filter((p) => {
+        if (now < p.startTime) return true
+        const elapsed = now - p.startTime
+        const t = Math.min(elapsed / p.duration, 1)
+
+        if (t >= 1) {
+          removeCollectParticle(p.id)
+          return false
+        }
+
+        const easeT = t * t * (3 - 2 * t)
+        const currentX = p.x + (p.targetX - p.x) * easeT
+        const currentY = p.y + (p.targetY - p.y) * easeT - Math.sin(t * Math.PI) * 30
+
+        ctx.globalAlpha = 1 - t * 0.5
+        ctx.fillStyle = p.color
+        ctx.fillRect(Math.floor(currentX - 2), Math.floor(currentY - 2), 4, 4)
+        ctx.globalAlpha = 1
+
         return true
       })
 
@@ -309,7 +361,7 @@ export default function GameCanvas() {
 
         if (progress >= 1) {
           const amount = Math.floor(1 + Math.random() * 3)
-          finishMining(planet.resourceType, amount)
+          finishMining(planet.resourceType, amount, planet.x, planet.y, planet.x, planet.y, planet.color)
           startReturning(planet.x, planet.y)
           currentMiningPlanetRef.current = null
         }
@@ -410,6 +462,8 @@ export default function GameCanvas() {
     startReturning,
     updateReturnProgress,
     finishReturning,
+    collectParticles,
+    removeCollectParticle,
   ])
 
   return (
