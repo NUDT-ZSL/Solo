@@ -26,6 +26,7 @@ export interface JointRecord {
 
 const SNAP_THRESHOLD_POS = 0.45;
 const SNAP_THRESHOLD_ANGLE = 0.35;
+const SNAP_THRESHOLD_TILT = 0.087;
 const EDGE_SAMPLE_COUNT = 20;
 
 export class JointDetector {
@@ -285,7 +286,7 @@ export class JointDetector {
         ) {
           const e1 = Math.abs(state1.rotation.x - state2.rotation.x);
           const e2 = Math.abs(state1.rotation.z - state2.rotation.z);
-          if (e1 < 0.45 && e2 < 0.45) {
+          if (e1 < SNAP_THRESHOLD_TILT && e2 < SNAP_THRESHOLD_TILT) {
             pendingSnaps.push(bestResult);
           }
         }

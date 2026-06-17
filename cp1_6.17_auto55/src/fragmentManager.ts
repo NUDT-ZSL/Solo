@@ -7,6 +7,7 @@ export interface FragmentData {
   outline: THREE.LineSegments;
   glowMesh: THREE.Mesh;
   heatMapMesh: THREE.Mesh | null;
+  heatMapAnimCancel: (() => void) | null;
   initialPosition: THREE.Vector3;
   initialRotation: THREE.Euler;
   breakEdges: THREE.Vector3[][];
@@ -27,6 +28,79 @@ class SeededRandom {
   }
   range(min: number, max: number): number { return min + this.next() * (max - min); }
   int(min: number, max: number): number { return Math.floor(this.range(min, max + 1)); }
+}
+
+class PerlinNoise {
+  private perm: number[] = [];
+  private gradP: { x: number; y: number; z: number }[] = [];
+
+  private static grad3 = [
+    { x: 1, y: 1, z: 0 }, { x: -1, y: 1, z: 0 }, { x: 1, y: -1, z: 0 }, { x: -1, y: -1, z: 0 },
+    { x: 1, y: 0, z: 1 }, { x: -1, y: 0, z: 1 }, { x: 1, y: 0, z: -1 }, { x: -1, y: 0, z: -1 },
+    { x: 0, y: 1, z: 1 }, { x: 0, y: -1, z: 1 }, { x: 0, y: 1, z: -1 }, { x: 0, y: -1, z: -1 }
+  ];
+
+  constructor(seed: number) {
+    const p: number[] = [];
+    for (let i = 0; i < 256; i++) p[i] = i;
+    let n: number;
+    let q: number;
+    for (let i = 255; i > 0; i--) {
+      seed = (seed * 16807) % 2147483647;
+      n = seed % (i + 1);
+      q = p[i]; p[i] = p[n]; p[n] = q;
+    }
+    for (let i = 0; i < 512; i++) {
+      this.perm[i] = p[i & 255];
+      this.gradP[i] = PerlinNoise.grad3[this.perm[i] % 12];
+    }
+  }
+
+  private fade(t: number): number {
+    return t * t * t * (t * (t * 6 - 15) + 10);
+  }
+
+  private lerp(a: number, b: number, t: number): number {
+    return (1 - t) * a + t * b;
+  }
+
+  noise2D(x: number, y: number): number {
+    let X = Math.floor(x);
+    let Y = Math.floor(y);
+    x = x - X;
+    y = y - Y;
+    X = X & 255;
+    Y = Y & 255;
+
+    const n00 = this.dotGridGradient(X, Y, x, y);
+    const n01 = this.dotGridGradient(X, Y + 1, x, y - 1);
+    const n10 = this.dotGridGradient(X + 1, Y, x - 1, y);
+    const n11 = this.dotGridGradient(X + 1, Y + 1, x - 1, y - 1);
+
+    const u = this.fade(x);
+    const v = this.fade(y);
+
+    return this.lerp(this.lerp(n00, n10, u), this.lerp(n01, n11, u), v);
+  }
+
+  private dotGridGradient(ix: number, iy: number, x: number, y: number): number {
+    const g = this.gradP[ix + this.perm[iy]];
+    return g.x * x + g.y * y;
+  }
+
+  fbm2D(x: number, y: number, octaves: number = 5, lacunarity: number = 2.0, gain: number = 0.5): number {
+    let value = 0;
+    let amplitude = 1;
+    let frequency = 1;
+    let maxValue = 0;
+    for (let i = 0; i < octaves; i++) {
+      value += this.noise2D(x * frequency, y * frequency) * amplitude;
+      maxValue += amplitude;
+      amplitude *= gain;
+      frequency *= lacunarity;
+    }
+    return value / maxValue;
+  }
 }
 
 export class FragmentManager {
@@ -102,6 +176,8 @@ export class FragmentManager {
     breakEdgeSurfaceVertexIndices: number[][];
   } {
     const rng = new SeededRandom(fragmentId * 1337 + 42);
+    const edgeNoise = new PerlinNoise(fragmentId * 92821 + 7);
+    const surfaceNoise = new PerlinNoise(fragmentId * 34543 + 13);
     const positions: number[] = [];
     const indices: number[] = [];
     const normals: number[] = [];
@@ -116,15 +192,20 @@ export class FragmentManager {
     const heightSeg = profile.length - 1;
     const angleSpan = endAngle - startAngle;
     const wallThickness = 0.08;
-    const jaggedAmplitude = 0.09;
+    const jaggedAmplitude = 0.28;
     const jaggedFreq = 5;
 
-    const leftEdgeOffsetX = new Array(heightSeg + 1).fill(0).map(() => (rng.next() - 0.5) * jaggedAmplitude);
-    const rightEdgeOffsetX = new Array(heightSeg + 1).fill(0).map(() => (rng.next() - 0.5) * jaggedAmplitude);
+    const leftEdgeOffsetX = new Array(heightSeg + 1).fill(0).map((_, h) => {
+      const n = edgeNoise.fbm2D(h * 0.35 + fragmentId * 1.7, fragmentId * 3.1, 5, 2.2, 0.48);
+      return n * jaggedAmplitude;
+    });
+    const rightEdgeOffsetX = new Array(heightSeg + 1).fill(0).map((_, h) => {
+      const n = edgeNoise.fbm2D(h * 0.35 + fragmentId * 2.3, fragmentId * 4.7, 5, 2.2, 0.48);
+      return n * jaggedAmplitude;
+    });
     const surfaceBump = (h: number, r: number): number => {
-      const f1 = Math.sin(h * 7.3 + fragmentId * 2.1) * 0.012;
-      const f2 = Math.sin(r * 11.7 + h * 3.9 + fragmentId) * 0.008;
-      return f1 + f2;
+      const n = surfaceNoise.fbm2D(h * 0.55 + fragmentId * 0.8, r * 0.4 + fragmentId * 1.3, 5, 2.1, 0.52);
+      return n * 0.045 + rng.range(-0.005, 0.005);
     };
 
     for (let h = 0; h <= heightSeg; h++) {
@@ -211,11 +292,11 @@ export class FragmentManager {
     const buildBreakSurface = (
       outerIdx: number[],
       innerIdx: number[],
-      surfaceRng: SeededRandom,
+      breakNoise: PerlinNoise,
       inward: boolean
     ) => {
       const baseCount = outerIdx.length;
-      const jagSegs = 3;
+      const jagSegs = 6;
       const surfacePositions: number[] = [];
       const surfaceStart = positions.length / 3;
       const jaggedVertexIndices: number[] = [];
@@ -237,12 +318,14 @@ export class FragmentManager {
           let jz = oz + (iz - oz) * t;
 
           if (s > 0 && s < jagSegs) {
-            const noise = (surfaceRng.next() - 0.5) * 0.05;
-            const noise2 = (surfaceRng.next() - 0.5) * 0.04;
+            const n1 = breakNoise.fbm2D(layer * 0.45 + s * 0.8, t * 3.2, 4, 2.0, 0.55);
+            const n2 = breakNoise.fbm2D(layer * 0.37 + s * 1.1 + 100, t * 2.8 + 50, 4, 2.0, 0.55);
             const midT = 1 - Math.abs(t - 0.5) * 2;
-            jx += noise * midT * (inward ? 1 : -1);
-            jy += noise2 * midT;
-            jz += noise * 0.3 * midT;
+            const bumpMag = 0.12 * midT;
+            const yBumpMag = 0.09 * midT;
+            jx += n1 * bumpMag * (inward ? 1 : -1);
+            jy += n2 * yBumpMag;
+            jz += n1 * bumpMag * 0.4 * midT;
           }
 
           const ang = Math.atan2(oz - iz, ox - ix);
@@ -275,13 +358,13 @@ export class FragmentManager {
       return surfacePositions;
     };
 
-    const leftRng = new SeededRandom(fragmentId * 7919 + 11);
-    const rightRng = new SeededRandom(fragmentId * 7919 + 97);
+    const leftBreakNoise = new PerlinNoise(fragmentId * 7919 + 11);
+    const rightBreakNoise = new PerlinNoise(fragmentId * 7919 + 97);
     const leftBreakSurfaceIdx = buildBreakSurface(
-      breakLeftVertexIdx, innerBreakLeftVertexIdx, leftRng, true
+      breakLeftVertexIdx, innerBreakLeftVertexIdx, leftBreakNoise, true
     );
     const rightBreakSurfaceIdx = buildBreakSurface(
-      breakRightVertexIdx, innerBreakRightVertexIdx, rightRng, false
+      breakRightVertexIdx, innerBreakRightVertexIdx, rightBreakNoise, false
     );
 
     const topCapOffset = positions.length / 3;
@@ -443,6 +526,7 @@ export class FragmentManager {
         outline,
         glowMesh,
         heatMapMesh: null,
+        heatMapAnimCancel: null,
         initialPosition: initPos.clone(),
         initialRotation: initRot.clone(),
         breakEdges,
@@ -852,16 +936,31 @@ export class FragmentManager {
     }
   }
 
+  private disposeHeatMap(frag: FragmentData): void {
+    if (frag.heatMapAnimCancel) {
+      frag.heatMapAnimCancel();
+      frag.heatMapAnimCancel = null;
+    }
+    if (frag.heatMapMesh) {
+      const m = frag.heatMapMesh;
+      if (m.parent) m.parent.remove(m);
+      const g = m.geometry as THREE.BufferGeometry;
+      if (g) g.dispose();
+      const mat = m.material as THREE.Material | THREE.Material[];
+      if (Array.isArray(mat)) {
+        mat.forEach(mt => mt.dispose());
+      } else if (mat) {
+        mat.dispose();
+      }
+      frag.heatMapMesh = null;
+    }
+  }
+
   public addHeatMap(id: number, scores: { vertexIndex: number; score: number }[]): void {
     const frag = this.fragments.get(id);
     if (!frag) return;
 
-    if (frag.heatMapMesh) {
-      frag.mesh.remove(frag.heatMapMesh);
-      (frag.heatMapMesh.geometry as THREE.BufferGeometry).dispose();
-      (frag.heatMapMesh.material as THREE.Material).dispose();
-      frag.heatMapMesh = null;
-    }
+    this.disposeHeatMap(frag);
 
     const baseGeo = frag.mesh.geometry as THREE.BufferGeometry;
     const posAttr = baseGeo.getAttribute('position') as THREE.BufferAttribute;
@@ -928,32 +1027,52 @@ export class FragmentManager {
     frag.mesh.add(heatMesh);
     frag.heatMapMesh = heatMesh;
 
+    let cancelled = false;
+    let rafId: number | null = null;
+    let stayTimer: number | null = null;
+
+    const cancel = () => {
+      cancelled = true;
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      if (stayTimer !== null) {
+        clearTimeout(stayTimer);
+        stayTimer = null;
+      }
+    };
+
+    frag.heatMapAnimCancel = cancel;
+
     const fadeInStart = performance.now();
     const fadeIn = () => {
+      if (cancelled) return;
       const t = Math.min(1, (performance.now() - fadeInStart) / 500);
       const ease = 1 - Math.pow(1 - t, 2);
       heatMat.opacity = ease * 0.72;
-      if (t < 1) requestAnimationFrame(fadeIn);
-      else {
-        setTimeout(() => {
+      if (t < 1) {
+        rafId = requestAnimationFrame(fadeIn);
+      } else {
+        stayTimer = window.setTimeout(() => {
+          if (cancelled) return;
           const fadeStart = performance.now();
           const fadeOut = () => {
+            if (cancelled) return;
             const u = Math.min(1, (performance.now() - fadeStart) / 1000);
             const ease2 = u * u;
             heatMat.opacity = 0.72 * (1 - ease2);
-            if (u < 1) requestAnimationFrame(fadeOut);
-            else if (frag.heatMapMesh === heatMesh) {
-              frag.mesh.remove(heatMesh);
-              heatGeo.dispose();
-              heatMat.dispose();
-              frag.heatMapMesh = null;
+            if (u < 1) {
+              rafId = requestAnimationFrame(fadeOut);
+            } else {
+              this.disposeHeatMap(frag);
             }
           };
-          fadeOut();
+          rafId = requestAnimationFrame(fadeOut);
         }, 5000);
       }
     };
-    fadeIn();
+    rafId = requestAnimationFrame(fadeIn);
   }
 
   public dispose(): void {
@@ -962,5 +1081,6 @@ export class FragmentManager {
     eventBus.off('requestReset');
     eventBus.off('requestExport');
     eventBus.off('addHeatMapToFragment');
+    this.fragments.forEach(frag => this.disposeHeatMap(frag));
   }
 }

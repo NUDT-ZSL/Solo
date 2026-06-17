@@ -23,77 +23,180 @@ interface AppState {
 class ParticleSystem {
   private scene: THREE.Scene;
   private particles: {
-    mesh: THREE.Mesh;
+    position: THREE.Vector3;
     velocity: THREE.Vector3;
     life: number;
     maxLife: number;
+    size: number;
+    baseColor: THREE.Color;
   }[] = [];
+  private points: THREE.Points | null = null;
+  private geometry: THREE.BufferGeometry | null = null;
+  private material: THREE.ShaderMaterial | null = null;
+  private texture: THREE.Texture | null = null;
+  private maxParticles: number = 500;
+  private needsUpdate: boolean = false;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
+    this.createParticleTexture();
+    this.initPoints();
+  }
+
+  private createParticleTexture(): void {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d')!;
+    const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gradient.addColorStop(0, 'rgba(255, 255, 220, 1.0)');
+    gradient.addColorStop(0.25, 'rgba(255, 215, 100, 0.95)');
+    gradient.addColorStop(0.5, 'rgba(255, 180, 40, 0.6)');
+    gradient.addColorStop(0.75, 'rgba(255, 140, 0, 0.25)');
+    gradient.addColorStop(1, 'rgba(255, 100, 0, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 64, 64);
+    this.texture = new THREE.CanvasTexture(canvas);
+    this.texture.needsUpdate = true;
+  }
+
+  private initPoints(): void {
+    this.geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(this.maxParticles * 3);
+    const colors = new Float32Array(this.maxParticles * 3);
+    const sizes = new Float32Array(this.maxParticles);
+    this.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    this.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    this.geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+    this.geometry.setDrawRange(0, 0);
+
+    const vertexShader = `
+      attribute float aSize;
+      varying vec3 vColor;
+      void main() {
+        vColor = color;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = aSize * (300.0 / -mvPosition.z);
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `;
+
+    const fragmentShader = `
+      uniform sampler2D uTexture;
+      varying vec3 vColor;
+      void main() {
+        vec4 tex = texture2D(uTexture, gl_PointCoord);
+        if (tex.a < 0.02) discard;
+        gl_FragColor = vec4(vColor * tex.rgb, tex.a);
+      }
+    `;
+
+    const shaderMat = new THREE.ShaderMaterial({
+      vertexShader,
+      fragmentShader,
+      uniforms: {
+        uTexture: { value: this.texture }
+      },
+      vertexColors: true,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+    this.material = shaderMat;
+
+    this.points = new THREE.Points(this.geometry!, shaderMat);
+    this.scene.add(this.points);
   }
 
   burst(position: THREE.Vector3, count: number = 30): void {
     const maxTravel = 2.0;
-    for (let i = 0; i < count; i++) {
-      const geo = new THREE.SphereGeometry(0.035 + Math.random() * 0.06, 6, 6);
-      const mat = new THREE.MeshBasicMaterial({
-        color: 0xffd700,
-        transparent: true,
-        opacity: 1
-      });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.copy(position);
-      this.scene.add(mesh);
-
+    const actualCount = Math.min(count, this.maxParticles - this.particles.length);
+    for (let i = 0; i < actualCount; i++) {
       const angle1 = Math.random() * Math.PI * 2;
-      const angle2 = (Math.random() - 0.5) * Math.PI * 0.9;
-      const baseSpeed = maxTravel / (0.3 + Math.random() * 0.2);
-      const speed = baseSpeed;
+      const angle2 = (Math.random() - 0.4) * Math.PI * 0.85;
+      const baseSpeed = maxTravel / (0.5 + Math.random() * 0.45);
+      const speed = baseSpeed * (0.6 + Math.random() * 0.7);
       const velocity = new THREE.Vector3(
         Math.cos(angle1) * Math.cos(angle2) * speed,
-        Math.abs(Math.sin(angle2)) * speed * 0.6 + 1.2,
+        Math.abs(Math.sin(angle2)) * speed * 0.7 + 1.5,
         Math.sin(angle1) * Math.cos(angle2) * speed
       );
-
+      const hueShift = (Math.random() - 0.5) * 0.08;
+      const baseColor = new THREE.Color().setHSL(0.11 + hueShift, 1.0, 0.62 + Math.random() * 0.18);
       this.particles.push({
-        mesh,
+        position: position.clone(),
         velocity,
         life: 0,
-        maxLife: 0.3 + Math.random() * 0.15
+        maxLife: 0.55 + Math.random() * 0.45,
+        size: 0.08 + Math.random() * 0.18,
+        baseColor
       });
     }
+    this.needsUpdate = true;
   }
 
   update(dt: number): void {
+    const gravity = -6.5;
+    const airDrag = 1.8;
+
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.life += dt;
       if (p.life >= p.maxLife) {
-        this.scene.remove(p.mesh);
-        (p.mesh.geometry as THREE.BufferGeometry).dispose();
-        (p.mesh.material as THREE.Material).dispose();
         this.particles.splice(i, 1);
+        this.needsUpdate = true;
         continue;
       }
       const t = p.life / p.maxLife;
-      p.mesh.position.addScaledVector(p.velocity, dt);
-      p.velocity.y -= 5.5 * dt;
-      const mat = p.mesh.material as THREE.MeshBasicMaterial;
-      mat.opacity = 1 - t;
-      const s = 1 - t * 0.55;
-      p.mesh.scale.setScalar(s * s);
+      const dragFactor = Math.exp(-airDrag * dt);
+      p.velocity.multiplyScalar(dragFactor);
+      p.velocity.y += gravity * dt;
+      p.position.addScaledVector(p.velocity, dt);
+      if (p.position.y < -3) {
+        this.particles.splice(i, 1);
+        this.needsUpdate = true;
+      }
+    }
+
+    if (this.needsUpdate && this.geometry) {
+      const posAttr = this.geometry.getAttribute('position') as THREE.BufferAttribute;
+      const colAttr = this.geometry.getAttribute('color') as THREE.BufferAttribute;
+      const sizeAttr = this.geometry.getAttribute('aSize') as THREE.BufferAttribute;
+      const posArr = posAttr.array as Float32Array;
+      const colArr = colAttr.array as Float32Array;
+      const sizeArr = sizeAttr.array as Float32Array;
+
+      for (let i = 0; i < this.particles.length; i++) {
+        const p = this.particles[i];
+        const t = p.life / p.maxLife;
+        const alphaEase = Math.sin(t * Math.PI);
+        posArr[i * 3] = p.position.x;
+        posArr[i * 3 + 1] = p.position.y;
+        posArr[i * 3 + 2] = p.position.z;
+        colArr[i * 3] = p.baseColor.r * alphaEase;
+        colArr[i * 3 + 1] = p.baseColor.g * alphaEase;
+        colArr[i * 3 + 2] = p.baseColor.b * alphaEase;
+        const sizeT = 1 - t * 0.7;
+        sizeArr[i] = p.size * sizeT * sizeT;
+      }
+
+      this.geometry.setDrawRange(0, this.particles.length);
+      posAttr.needsUpdate = true;
+      colAttr.needsUpdate = true;
+      sizeAttr.needsUpdate = true;
+      this.needsUpdate = false;
     }
   }
 
   get count(): number { return this.particles.length; }
 
   dispose(): void {
-    this.particles.forEach((p) => {
-      this.scene.remove(p.mesh);
-      (p.mesh.geometry as THREE.BufferGeometry).dispose();
-      (p.mesh.material as THREE.Material).dispose();
-    });
+    if (this.points && this.points.parent) {
+      this.points.parent.remove(this.points);
+    }
+    if (this.geometry) this.geometry.dispose();
+    if (this.material) this.material.dispose();
+    if (this.texture) this.texture.dispose();
     this.particles = [];
   }
 }
@@ -133,7 +236,7 @@ function App() {
       if (fragmentManagerRef.current) {
         setTimeout(() => {
           fragmentManagerRef.current?.rebindEvents();
-        }, 50);
+        }, 350);
       }
     }
     lastIsMobileRef.current = isMobile;
