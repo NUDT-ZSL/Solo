@@ -37,9 +37,42 @@ export interface AnalyticsData {
   hourlyStats: HourlyStat[]
 }
 
+function generateDeviceFingerprint(): string {
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')
+  let canvasHash = ''
+  if (ctx) {
+    ctx.textBaseline = 'top'
+    ctx.font = '14px Arial'
+    ctx.fillStyle = '#f60'
+    ctx.fillRect(125, 1, 62, 20)
+    ctx.fillStyle = '#069'
+    ctx.fillText('ArtMarketFP', 2, 15)
+    ctx.fillStyle = 'rgba(102, 204, 0, 0.7)'
+    ctx.fillText('ArtMarketFP', 4, 17)
+    canvasHash = canvas.toDataURL().slice(-32)
+  }
+  const parts = [
+    navigator.userAgent,
+    String(screen.width) + 'x' + String(screen.height),
+    String(screen.colorDepth),
+    new Date().getTimezoneOffset().toString(),
+    navigator.language,
+    canvasHash
+  ]
+  const raw = parts.join('|')
+  let hash = 0
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw.charCodeAt(i)
+    hash = ((hash << 5) - hash) + ch
+    hash |= 0
+  }
+  return 'device-' + Math.abs(hash).toString(36)
+}
+
 let visitorId = localStorage.getItem('visitor_id')
 if (!visitorId) {
-  visitorId = 'visitor-' + Math.random().toString(36).slice(2, 10)
+  visitorId = generateDeviceFingerprint()
   localStorage.setItem('visitor_id', visitorId)
 }
 

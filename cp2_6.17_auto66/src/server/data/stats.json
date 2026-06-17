@@ -2,7 +2,7 @@
   "artworkStats": {
     "art-001": {
       "views": 343,
-      "likes": 59,
+      "likes": 58,
       "favorites": 24
     },
     "art-002": {
@@ -107,9 +107,7 @@
     }
   ],
   "userLikes": {
-    "visitor-znfc3vxh": [
-      "art-001"
-    ]
+    "visitor-znfc3vxh": []
   },
   "userFavorites": {
     "visitor-znfc3vxh": [

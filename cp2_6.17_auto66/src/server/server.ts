@@ -190,14 +190,17 @@ app.post('/api/artworks/:id/favorite', (req, res) => {
 })
 
 app.post('/api/artworks/:id/view', (req, res) => {
-  const { visitorId = 'anonymous', source = '直接访问' } = req.body || {}
+  const clientIp = req.headers['x-forwarded-for']
+    ? (req.headers['x-forwarded-for'] as string).split(',')[0].trim()
+    : req.socket.remoteAddress || 'unknown'
+  const { visitorId = clientIp, source = '直接访问' } = req.body || {}
   const stats = readStats()
   const artworkStats = ensureStats(req.params.id, stats)
   artworkStats.views += 1
   const record: ViewRecord = {
     id: `v-${uuidv4().slice(0, 8)}`,
     artworkId: req.params.id,
-    visitorId,
+    visitorId: visitorId || clientIp,
     timestamp: new Date().toISOString(),
     source
   }

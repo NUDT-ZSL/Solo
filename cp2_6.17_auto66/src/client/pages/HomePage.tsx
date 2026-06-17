@@ -29,6 +29,17 @@ export default function HomePage() {
 
   const handleLike = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
+    const wasLiked = likedIds.has(id)
+    const targetArt = artworks.find(a => a.id === id)
+    if (!targetArt) return
+    setLikedIds(prev => {
+      const next = new Set(prev)
+      if (wasLiked) next.delete(id); else next.add(id)
+      return next
+    })
+    setArtworks(prev => prev.map(a =>
+      a.id === id ? { ...a, likes: wasLiked ? a.likes - 1 : a.likes + 1 } : a
+    ))
     try {
       const res = await api.toggleLike(id)
       setLikedIds(prev => {
@@ -38,12 +49,30 @@ export default function HomePage() {
       })
       setArtworks(prev => prev.map(a => a.id === id ? { ...a, likes: res.likes } : a))
     } catch (e) {
-      console.error(e)
+      setLikedIds(prev => {
+        const next = new Set(prev)
+        if (wasLiked) next.add(id); else next.delete(id)
+        return next
+      })
+      setArtworks(prev => prev.map(a =>
+        a.id === id ? { ...a, likes: wasLiked ? a.likes + 1 : a.likes - 1 } : a
+      ))
     }
   }
 
   const handleFav = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
+    const wasFav = favIds.has(id)
+    const targetArt = artworks.find(a => a.id === id)
+    if (!targetArt) return
+    setFavIds(prev => {
+      const next = new Set(prev)
+      if (wasFav) next.delete(id); else next.add(id)
+      return next
+    })
+    setArtworks(prev => prev.map(a =>
+      a.id === id ? { ...a, favorites: wasFav ? a.favorites - 1 : a.favorites + 1 } : a
+    ))
     try {
       const res = await api.toggleFavorite(id)
       setFavIds(prev => {
@@ -53,7 +82,14 @@ export default function HomePage() {
       })
       setArtworks(prev => prev.map(a => a.id === id ? { ...a, favorites: res.favorites } : a))
     } catch (e) {
-      console.error(e)
+      setFavIds(prev => {
+        const next = new Set(prev)
+        if (wasFav) next.add(id); else next.delete(id)
+        return next
+      })
+      setArtworks(prev => prev.map(a =>
+        a.id === id ? { ...a, favorites: wasFav ? a.favorites + 1 : a.favorites - 1 } : a
+      ))
     }
   }
 

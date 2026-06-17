@@ -1,17 +1,60 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
-  BarChart,
-  Bar,
   LineChart,
   Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer,
-  Cell
+  ResponsiveContainer
 } from 'recharts'
-import { api, AnalyticsData } from '../api'
+import { api, AnalyticsData, CategoryStat } from '../api'
+
+function CategoryBarChart({ data }: { data: CategoryStat[] }) {
+  const maxViews = Math.max(...data.map(d => d.views), 1)
+  const gradientColors = ['#7986cb', '#9fa8da', '#5c6bc0', '#3f51b5']
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {data.map((item, idx) => {
+        const widthPercent = (item.views / maxViews) * 100
+        return (
+          <div key={item.categoryKey} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ width: 60, fontSize: 13, color: '#424242', textAlign: 'right', flexShrink: 0 }}>
+              {item.category}
+            </span>
+            <div style={{ flex: 1, position: 'relative', height: 28, background: '#f5f0ff', borderRadius: 6, overflow: 'hidden' }}>
+              <div
+                style={{
+                  height: '100%',
+                  width: `${widthPercent}%`,
+                  background: `linear-gradient(90deg, ${gradientColors[idx % gradientColors.length]} 0%, ${gradientColors[(idx + 1) % gradientColors.length]} 100%)`,
+                  borderRadius: 6,
+                  transition: 'width 0.6s ease-out',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  paddingRight: widthPercent > 15 ? 8 : 0,
+                  minWidth: 4
+                }}
+                title={`${item.category}：${item.views} 次浏览`}
+              >
+                {widthPercent > 15 && (
+                  <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>{item.views}</span>
+                )}
+              </div>
+              {widthPercent <= 15 && (
+                <span style={{ position: 'absolute', left: `${widthPercent + 1}%`, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: '#5c6bc0', fontWeight: 500, paddingLeft: 6 }}>
+                  {item.views}
+                </span>
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 export default function Dashboard() {
   const [data, setData] = useState<AnalyticsData | null>(null)
@@ -51,8 +94,6 @@ export default function Dashboard() {
     }
   }
 
-  const gradientColors = ['#7986cb', '#9fa8da', '#5c6bc0', '#3f51b5']
-
   if (loading) {
     return <div className="page-container"><div className="loading-state">加载中...</div></div>
   }
@@ -62,32 +103,8 @@ export default function Dashboard() {
       <div className="dashboard-grid">
         <div className="chart-card">
           <div className="chart-title">类别热度分布</div>
-          <div style={{ width: '100%', height: 260 }}>
-            <ResponsiveContainer>
-              <BarChart
-                data={data?.categoryStats || []}
-                layout="vertical"
-                margin={{ top: 10, right: 30, left: 60, bottom: 10 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0ecf8" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 12, fill: '#757575' }} />
-                <YAxis
-                  dataKey="category"
-                  type="category"
-                  width={60}
-                  tick={{ fontSize: 13, fill: '#424242' }}
-                />
-                <Tooltip
-                  contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                  formatter={(v: number) => [`${v} 次浏览`, '浏览量']}
-                />
-                <Bar dataKey="views" radius={[0, 6, 6, 0]} barSize={24}>
-                  {data?.categoryStats.map((_, idx) => (
-                    <Cell key={idx} fill={gradientColors[idx % gradientColors.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          <div style={{ width: '100%', padding: '8px 4px' }}>
+            <CategoryBarChart data={data?.categoryStats || []} />
           </div>
         </div>
 
