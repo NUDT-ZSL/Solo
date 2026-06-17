@@ -119,8 +119,8 @@ export const createExplosionParticles = (
   const baseSpeed = 150;
   
   for (let i = 0; i < count; i++) {
-    const angle = (Math.PI * 2 * i) / count + randomRange(-0.3, 0.3);
-    const speed = baseSpeed + randomRange(-50, 50);
+    const angle = Math.random() * Math.PI * 2;
+    const speed = baseSpeed + randomRange(-50, 100);
     
     particles.push({
       id: ++particleIdCounter,

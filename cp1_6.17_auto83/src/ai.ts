@@ -291,3 +291,68 @@ export const applyBuffToCharacter = (
 export const generateInitialPowerUps = (): PowerUp[] => {
   return spawnInitialPowerUps(3);
 };
+
+export interface ComboState {
+  combo: number;
+  comboStartTime: number;
+  comboResetTime: number;
+}
+
+export const updateComboSystem = (
+  state: ComboState,
+  gameTime: number,
+  hitsThisFrame: number
+): ComboState => {
+  if (hitsThisFrame > 0) {
+    return {
+      ...state,
+      combo: state.combo + hitsThisFrame,
+      comboStartTime: gameTime
+    };
+  }
+  if (state.combo > 0 && gameTime - state.comboStartTime > state.comboResetTime) {
+    return {
+      ...state,
+      combo: 0,
+      comboStartTime: -999
+    };
+  }
+  return state;
+};
+
+export interface BuffPulseState {
+  pulsePhase: number;
+}
+
+export const updateBuffPulseState = (
+  state: BuffPulseState,
+  deltaTime: number,
+  frequency: number = 2
+): BuffPulseState => {
+  return {
+    pulsePhase: state.pulsePhase + deltaTime * frequency * Math.PI * 2
+  };
+};
+
+export const getBuffPulseAlpha = (pulsePhase: number): number => {
+  return 0.5 + 0.5 * Math.sin(pulsePhase);
+};
+
+export const updateBuffsDurations = (
+  buffs: Buff[],
+  deltaTime: number
+): { activeBuffs: Buff[]; removedIds: number[] } => {
+  const removedIds: number[] = [];
+  const activeBuffs: Buff[] = [];
+  
+  for (const b of buffs) {
+    const newDuration = b.duration - deltaTime;
+    if (newDuration <= 0) {
+      removedIds.push(b.id);
+    } else {
+      activeBuffs.push({ ...b, duration: newDuration });
+    }
+  }
+  
+  return { activeBuffs, removedIds };
+};

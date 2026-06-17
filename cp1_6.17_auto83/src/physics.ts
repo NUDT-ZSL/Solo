@@ -104,9 +104,10 @@ export const createEnergyBall = (
 
 export const getAuraProperties = (chargeTime: number): { diameter: number; alpha: number } => {
   const t = Math.min(1, chargeTime / 2);
+  const chargeMs = chargeTime * 1000;
   return {
     diameter: MIN_AURA_DIAMETER + (MAX_AURA_DIAMETER - MIN_AURA_DIAMETER) * t,
-    alpha: 0.3 + 0.5 * t
+    alpha: Math.min(0.3 + (chargeMs / 500) * 0.5, 0.8)
   };
 };
 
@@ -347,21 +348,21 @@ export const collectPowerUps = (
 
 export const updateComboState = (
   currentCombo: number,
-  lastHitTime: number,
+  comboStartTime: number,
   gameTime: number,
   resetThreshold: number,
   hitsThisFrame: number
-): { combo: number; lastHitTime: number } => {
+): { combo: number; comboStartTime: number } => {
   if (hitsThisFrame > 0) {
     return {
       combo: currentCombo + hitsThisFrame,
-      lastHitTime: gameTime
+      comboStartTime: gameTime
     };
   }
-  if (currentCombo > 0 && gameTime - lastHitTime > resetThreshold) {
-    return { combo: 0, lastHitTime };
+  if (currentCombo > 0 && gameTime - comboStartTime > resetThreshold) {
+    return { combo: 0, comboStartTime: -999 };
   }
-  return { combo: currentCombo, lastHitTime };
+  return { combo: currentCombo, comboStartTime };
 };
 
 export const updateBuffs = (buffs: Buff[], deltaTime: number): {

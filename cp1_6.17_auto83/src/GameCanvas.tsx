@@ -15,8 +15,19 @@ import {
   CHARGE_THRESHOLD,
   ENERGY_BALL_SPEED
 } from './physics';
-import { createInitialAIState, updateAI, createPowerUp, checkAIPowerUpCollision, generateInitialPowerUps } from './ai';
-import type { AIState } from './ai';
+import {
+  createInitialAIState,
+  updateAI,
+  createPowerUp,
+  checkAIPowerUpCollision,
+  generateInitialPowerUps,
+  updateComboSystem,
+  updateBuffPulseState,
+  updateBuffsDurations,
+  getBuffPulseAlpha,
+  rotatePowerUps
+} from './ai';
+import type { AIState, ComboState } from './ai';
 
 const COLORS = {
   backgroundStart: '#1A1A2E',
@@ -62,7 +73,8 @@ const GameCanvas = () => {
   const {
     arenaX, arenaY, arenaWidth, arenaHeight,
     player, ai, energyBalls, particles, powerUps, buffs, combo,
-    speedLines, canvasWidth, canvasHeight, mouseX, mouseY, gameTime
+    speedLines, canvasWidth, canvasHeight, mouseX, mouseY, gameTime,
+    buffPulsePhase
   } = state;
 
   const handleResize = useCallback(() => {
@@ -267,14 +279,10 @@ const GameCanvas = () => {
         }
       }
 
-      updatedPowerUps = updatedPowerUps.map(pu => ({
-        ...pu,
-        rotation: pu.rotation + 60 * deltaTime
-      }));
+      updatedPowerUps = rotatePowerUps(updatedPowerUps, deltaTime);
 
-      updatedBuffs = updatedBuffs
-        .map(b => ({ ...b, duration: b.duration - deltaTime }))
-        .filter(b => b.duration > 0);
+      const buffResult = updateBuffsDurations(updatedBuffs, deltaTime);
+      updatedBuffs = buffResult.activeBuffs;
 
       const playerSpeedBuff = updatedBuffs.find(b => b.entity === 'player' && b.type === 'speed');
       const playerSpeedMul = playerSpeedBuff ? 1.3 : 1;
@@ -435,8 +443,8 @@ const GameCanvas = () => {
 
       const remainingBalls: EnergyBall[] = [];
       let newParticles = [...s.particles];
-      let newCombo = s.combo;
-      let newLastHitTime = s.lastHitTime;
+      let hitsToPlayer = 0;
+      let hitsToAiFromPlayer = 0;
       let playerHp = finalPlayer.hp;
       let aiHp = finalAi.hp;
       const additionalKnockbacks: Knockback[] = [];
@@ -485,6 +493,7 @@ const GameCanvas = () => {
           
           if (targetType === 'player') {
             playerHp = Math.max(0, playerHp - ball.damage);
+            hitsToPlayer++;
             additionalKnockbacks.push({
               entity: 'player',
               startX: finalPlayer.x,
@@ -506,14 +515,13 @@ const GameCanvas = () => {
               elapsed: 0
             });
             if (ball.owner === 'player') {
-              newCombo = s.combo + 1;
-              newLastHitTime = s.gameTime;
+              hitsToAiFromPlayer++;
             }
           }
 
           for (let i = 0; i < 6; i++) {
-            const angle = (Math.PI * 2 * i) / 6 + (Math.random() - 0.5) * 0.6;
-            const speed = 150 + Math.random() * 100;
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 150 + Math.random() * 150;
             newParticles.push({
               id: ++pId,
               x: ball.x,
@@ -536,9 +544,14 @@ const GameCanvas = () => {
         newParticles = newParticles.slice(-30);
       }
 
-      if (newCombo > 0 && s.gameTime - newLastHitTime > s.comboResetTime) {
-        newCombo = 0;
-      }
+      const comboState: ComboState = {
+        combo: s.combo,
+        comboStartTime: s.comboStartTime,
+        comboResetTime: s.comboResetTime
+      };
+      const newComboState = updateComboSystem(comboState, s.gameTime, hitsToAiFromPlayer);
+
+      const pulseState = updateBuffPulseState({ pulsePhase: s.buffPulsePhase }, deltaTime, 2);
 
       const newSpeedLines: SpeedLine[] = s.speedLines
         .map(l => ({ ...l, x: l.x + l.speed * deltaTime }))
@@ -566,7 +579,7 @@ const GameCanvas = () => {
         gameStateRef.current.hpTransitionAi = 0;
       }
 
-      if (newCombo > 5) {
+      if (newComboState.combo > 5) {
         gameStateRef.current.goldGlowPhase += deltaTime * 2 * Math.PI;
       }
 
@@ -579,8 +592,9 @@ const GameCanvas = () => {
         buffs: updatedBuffs,
         knockbacks: [...newKnockbacks, ...additionalKnockbacks],
         speedLines: newSpeedLines,
-        combo: newCombo,
-        lastHitTime: newLastHitTime,
+        combo: newComboState.combo,
+        comboStartTime: newComboState.comboStartTime,
+        buffPulsePhase: pulseState.pulsePhase,
         gameTime: s.gameTime + deltaTime
       });
 
@@ -726,15 +740,15 @@ const GameCanvas = () => {
 
       const entityBuffs = buffs.filter(b => b.entity === entity);
       if (entityBuffs.length > 0) {
-        const pulseAlpha = 0.5 + 0.5 * Math.sin(gameTime * 4 * Math.PI);
-        ctx.strokeStyle = rgba(COLORS.buffGlow, 0.5 + 0.3 * pulseAlpha);
+        const pulseVal = getBuffPulseAlpha(buffPulsePhase);
+        ctx.strokeStyle = rgba(COLORS.buffGlow, 0.5 + 0.3 * pulseVal);
         ctx.lineWidth = 3;
         
         const buffColor = entityBuffs[0]?.color || COLORS.buffGlow;
         const buffGrad = ctx.createLinearGradient(x, y, x + char.width, y + char.height);
-        buffGrad.addColorStop(0, rgba(buffColor, 0.6 + 0.4 * pulseAlpha));
-        buffGrad.addColorStop(0.5, rgba(COLORS.buffGlow, 0.6 + 0.4 * pulseAlpha));
-        buffGrad.addColorStop(1, rgba(buffColor, 0.6 + 0.4 * pulseAlpha));
+        buffGrad.addColorStop(0, rgba(buffColor, 0.6 + 0.4 * pulseVal));
+        buffGrad.addColorStop(0.5, rgba(COLORS.buffGlow, 0.6 + 0.4 * pulseVal));
+        buffGrad.addColorStop(1, rgba(buffColor, 0.6 + 0.4 * pulseVal));
         ctx.strokeStyle = buffGrad;
         ctx.lineWidth = 3;
         ctx.strokeRect(x - 2, y - 2, char.width + 4, char.height + 4);
@@ -1004,44 +1018,6 @@ const GameCanvas = () => {
     ctx.textAlign = 'right';
     ctx.fillText(`敌人 HP: ${ai.hp}/${ai.maxHp}`, aiHpX + aiHpW - 5, aiHpY + 14);
 
-    const exitBtnR = 25;
-    const exitBtnX = canvasWidth - exitBtnR - 15;
-    const exitBtnY = canvasHeight - exitBtnR - 15;
-    const exitDist = Math.sqrt(
-      Math.pow(mouseX - exitBtnX, 2) + Math.pow(mouseY - exitBtnY, 2)
-    );
-    const isExitHover = exitDist < exitBtnR;
-
-    ctx.save();
-    ctx.translate(exitBtnX, exitBtnY);
-    if (isExitHover) {
-      ctx.rotate(15 * Math.PI / 180);
-    }
-
-    const exitColor = isExitHover ? COLORS.exitBtnHover : COLORS.exitBtn;
-    const exitGrad = ctx.createRadialGradient(-5, -5, 0, 0, 0, exitBtnR);
-    exitGrad.addColorStop(0, shadeColor(exitColor, 30));
-    exitGrad.addColorStop(1, exitColor);
-    ctx.fillStyle = exitGrad;
-    ctx.beginPath();
-    ctx.arc(0, 0, exitBtnR, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = isExitHover ? '#FFFFFF' : '#AAAAAA';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 16px Material Icons';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('close', 0, 0);
-    ctx.restore();
-
-    if (isExitHover !== exitHover) {
-      setExitHover(isExitHover);
-    }
-
     const instX = 20;
     const instY = canvasHeight - 100;
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
@@ -1053,20 +1029,9 @@ const GameCanvas = () => {
   }, [
     arenaX, arenaY, arenaWidth, arenaHeight, canvasWidth, canvasHeight,
     player, ai, energyBalls, particles, powerUps, buffs, combo,
-    speedLines, mouseX, mouseY, gameTime, exitHover, comboFloatY
+    speedLines, mouseX, mouseY, gameTime, exitHover, comboFloatY,
+    buffPulsePhase
   ]);
-
-  const handleCanvasClick = () => {
-    const exitBtnR = 25;
-    const exitBtnX = canvasWidth - exitBtnR - 15;
-    const exitBtnY = canvasHeight - exitBtnR - 15;
-    const dist = Math.sqrt(
-      Math.pow(mouseX - exitBtnX, 2) + Math.pow(mouseY - exitBtnY, 2)
-    );
-    if (dist < exitBtnR) {
-      handleExitClick();
-    }
-  };
 
   return (
     <div
@@ -1084,17 +1049,47 @@ const GameCanvas = () => {
         overflow: 'hidden'
       }}
     >
-      <canvas
-        ref={canvasRef}
-        onClick={handleCanvasClick}
-        style={{
-          display: 'block',
-          cursor: 'crosshair',
-          imageRendering: 'pixelated',
-          maxWidth: '100%',
-          maxHeight: '100%'
-        }}
-      />
+      <div style={{ position: 'relative' }}>
+        <canvas
+          ref={canvasRef}
+          style={{
+            display: 'block',
+            cursor: 'crosshair',
+            imageRendering: 'pixelated',
+            maxWidth: '100%',
+            maxHeight: '100%'
+          }}
+        />
+        <button
+          onClick={handleExitClick}
+          onMouseEnter={() => setExitHover(true)}
+          onMouseLeave={() => setExitHover(false)}
+          style={{
+            position: 'absolute',
+            right: 15,
+            bottom: 15,
+            width: 50,
+            height: 50,
+            borderRadius: '50%',
+            border: 'none',
+            background: exitHover ? '#FF0000' : '#8B0000',
+            color: '#FFFFFF',
+            fontSize: 20,
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transform: exitHover ? 'rotate(15deg)' : 'rotate(0deg)',
+            transition: 'all 0.2s ease-out',
+            boxShadow: exitHover
+              ? '0 0 20px rgba(255,0,0,0.6)'
+              : '0 0 10px rgba(139,0,0,0.4)'
+          }}
+        >
+          ✕
+        </button>
+      </div>
     </div>
   );
 };

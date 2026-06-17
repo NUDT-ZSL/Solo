@@ -93,8 +93,9 @@ export interface GameState {
   speedLines: SpeedLine[];
 
   combo: number;
-  lastHitTime: number;
+  comboStartTime: number;
   comboResetTime: number;
+  buffPulsePhase: number;
 
   gameTime: number;
   isRunning: boolean;
@@ -177,8 +178,9 @@ const createInitialState = (): GameState => ({
   speedLines: [],
 
   combo: 0,
-  lastHitTime: -999,
+  comboStartTime: -999,
   comboResetTime: 3,
+  buffPulsePhase: 0,
 
   gameTime: 0,
   isRunning: true,
@@ -314,7 +316,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   incrementCombo: () => {
     set(state => ({
       combo: state.combo + 1,
-      lastHitTime: state.gameTime
+      comboStartTime: state.gameTime
     }));
   },
 
@@ -555,8 +557,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }
 
     let combo = state.combo;
-    let lastHitTime = state.lastHitTime;
-    if (combo > 0 && gameTime - lastHitTime > state.comboResetTime) {
+    let comboStartTime = state.comboStartTime;
+    if (combo > 0 && gameTime - comboStartTime > state.comboResetTime) {
       combo = 0;
     }
 
@@ -592,7 +594,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
             })
           ]);
           combo++;
-          lastHitTime = gameTime;
+          comboStartTime = gameTime;
           hit = true;
         }
       }
@@ -626,7 +628,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       powerUps: newPowerUps,
       speedLines,
       combo,
-      lastHitTime,
+      comboStartTime,
+      buffPulsePhase: state.buffPulsePhase + deltaTime * 2 * Math.PI * 2,
       gameTime: gameTime + deltaTime
     });
   },
