@@ -130,6 +130,17 @@ const COMBINATION_RULES: CombinationRule[] = [
       description: '火水风三元素平衡，形成元素潮汐，造成混合伤害。',
     },
   },
+  {
+    elements: ['fire', 'water', 'thunder'],
+    spell: {
+      name: '熔岩爆裂',
+      type: 'lavaburst',
+      baseDamage: 58,
+      effectType: 'fire',
+      effectColor: '#FF4500',
+      description: '火水雷三元素剧烈碰撞，产生超高温熔岩冲击波，焚尽一切。',
+    },
+  },
 ];
 
 function sortElements(elements: ElementType[]): ElementType[] {

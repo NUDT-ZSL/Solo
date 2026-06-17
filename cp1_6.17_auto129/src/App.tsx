@@ -94,6 +94,7 @@ function App() {
 
     if (result.isDead) {
       setIsDead(true);
+      setCanCast(false);
       
       if (battleSceneRef.current && canvasRef.current && effectRendererRef.current) {
         const rect = battleSceneRef.current.getBoundingClientRect();
@@ -106,15 +107,6 @@ function App() {
           }
         }, 200);
       }
-
-      setTimeout(() => {
-        if (combatSimulatorRef.current) {
-          combatSimulatorRef.current.resetTarget();
-          updateCombatState();
-        }
-        setIsDead(false);
-        setCanCast(true);
-      }, 2000);
     } else {
       setTimeout(() => {
         setCanCast(true);
@@ -130,8 +122,13 @@ function App() {
   }, [updateCombatState]);
 
   const handleCrystalShatterComplete = useCallback(() => {
+    if (combatSimulatorRef.current) {
+      combatSimulatorRef.current.resetTarget();
+    }
+    updateCombatState();
     setIsDead(false);
-  }, []);
+    setCanCast(true);
+  }, [updateCombatState]);
 
   return (
     <div className="app-container">

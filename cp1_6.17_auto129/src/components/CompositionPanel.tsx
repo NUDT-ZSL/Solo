@@ -169,9 +169,9 @@ export function CompositionPanel({ onCastSpell, logs, resistance, onResistanceCh
                 <span className="log-round">[回合{log.round}]</span>
                 <span className="log-spell">{log.spellName}</span>
                 <span className="log-arrow">-&gt;</span>
-                <span className="log-damage">伤害 {log.damage}</span>
+                <span className="log-damage">{log.damage}</span>
                 <span className="log-arrow">-&gt;</span>
-                <span className="log-hp">剩余 {log.remainingHp}%</span>
+                <span className="log-hp">{log.remainingHp}</span>
               </div>
             ))
           )}

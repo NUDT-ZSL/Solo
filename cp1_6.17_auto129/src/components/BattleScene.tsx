@@ -53,7 +53,7 @@ export function BattleScene({ targetHp, maxHp, isHit, isDead, onCrystalShatterCo
         if (onCrystalShatterComplete) {
           onCrystalShatterComplete();
         }
-      }, 2000);
+      }, 1000);
     }
   }, [isDead, isShattered, onCrystalShatterComplete]);
 
