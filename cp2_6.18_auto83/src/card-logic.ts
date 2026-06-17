@@ -142,6 +142,16 @@ export function validatePlay(gameState: GameState, playerId: string, cards: Card
     if (!hasCard) return false;
   }
 
+  if (gameState.gameType === 'uno') {
+    const lastPlay = gameState.playHistory[gameState.playHistory.length - 1];
+    if (lastPlay && lastPlay.cards.length > 0) {
+      const topCard = lastPlay.cards[lastPlay.cards.length - 1];
+      for (const card of cards) {
+        if (!canPlayUnoCard(card, topCard)) return false;
+      }
+    }
+  }
+
   return true;
 }
 
@@ -227,6 +237,68 @@ export function getCardRankValue(rank: string, gameType: GameType): number {
     const order = ['3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A', '2', 'S_JOKER', 'B_JOKER'];
     return order.indexOf(rank);
   }
+  const unoOrder = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'Skip', 'Reverse', 'Draw2', 'Wild', 'WildDraw4'];
+  return unoOrder.indexOf(rank);
+}
+
+export function isWildCard(card: Card): boolean {
+  return card.rank === 'Wild' || card.rank === 'WildDraw4';
+}
+
+export function isActionCard(card: Card): boolean {
+  return card.rank === 'Skip' || card.rank === 'Reverse' || card.rank === 'Draw2';
+}
+
+export function canPlayUnoCard(newCard: Card, topCard: Card): boolean {
+  if (isWildCard(newCard)) return true;
+
+  if (isWildCard(topCard)) return true;
+
+  if (newCard.color && topCard.color && newCard.color === topCard.color) return true;
+
+  if (newCard.rank === topCard.rank) return true;
+
+  if (isActionCard(newCard) && isActionCard(topCard) && newCard.rank === topCard.rank) return true;
+
+  return false;
+}
+
+export function compareCards(cardA: Card, cardB: Card, gameType: GameType): number {
+  if (gameType === 'dou dizhu') {
+    const valueA = getCardRankValue(cardA.rank, gameType);
+    const valueB = getCardRankValue(cardB.rank, gameType);
+    if (valueA < valueB) return -1;
+    if (valueA > valueB) return 1;
+    return 0;
+  }
+
+  const wildA = isWildCard(cardA);
+  const wildB = isWildCard(cardB);
+  if (wildA && wildB) {
+    const valueA = getCardRankValue(cardA.rank, gameType);
+    const valueB = getCardRankValue(cardB.rank, gameType);
+    if (valueA < valueB) return -1;
+    if (valueA > valueB) return 1;
+    return 0;
+  }
+  if (wildA) return 1;
+  if (wildB) return -1;
+
+  const actionA = isActionCard(cardA);
+  const actionB = isActionCard(cardB);
+  if (actionA && !actionB) return 1;
+  if (!actionA && actionB) return -1;
+
+  const valueA = getCardRankValue(cardA.rank, gameType);
+  const valueB = getCardRankValue(cardB.rank, gameType);
+  if (valueA < valueB) return -1;
+  if (valueA > valueB) return 1;
+
+  if (cardA.color && cardB.color) {
+    if (cardA.color < cardB.color) return -1;
+    if (cardA.color > cardB.color) return 1;
+  }
+
   return 0;
 }
 

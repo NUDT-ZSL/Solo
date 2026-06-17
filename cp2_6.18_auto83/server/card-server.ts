@@ -125,10 +125,42 @@ function validateGameState(gameState: GameState): { valid: boolean; errors: stri
 
   if (!gameState.gameType) {
     errors.push('游戏类型不能为空');
+  } else if (!['dou dizhu', 'uno'].includes(gameState.gameType)) {
+    errors.push('不支持的游戏类型');
   }
 
   if (!gameState.players || gameState.players.length === 0) {
     errors.push('玩家列表不能为空');
+  } else {
+    if (gameState.players.length < 2 || gameState.players.length > 4) {
+      errors.push('玩家数量必须在2-4人之间');
+    }
+
+    const playerIds = new Set<string>();
+    const cardIds = new Set<string>();
+    for (const player of gameState.players) {
+      if (!player.id) {
+        errors.push('玩家ID不能为空');
+      }
+      if (playerIds.has(player.id)) {
+        errors.push(`玩家ID重复: ${player.id}`);
+      }
+      playerIds.add(player.id);
+
+      if (!player.name) {
+        errors.push('玩家名称不能为空');
+      }
+
+      for (const card of player.hand) {
+        if (!card.id) {
+          errors.push('牌的ID不能为空');
+        }
+        if (cardIds.has(card.id)) {
+          errors.push(`牌的ID重复: ${card.id}`);
+        }
+        cardIds.add(card.id);
+      }
+    }
   }
 
   if (gameState.currentPlayerIndex < 0 || gameState.currentPlayerIndex >= gameState.players.length) {
@@ -137,6 +169,94 @@ function validateGameState(gameState: GameState): { valid: boolean; errors: stri
 
   if (!Array.isArray(gameState.playHistory)) {
     errors.push('出牌历史格式错误');
+  } else {
+    const playerIds = gameState.players.map((p: Player) => p.id);
+
+    for (let i = 0; i < gameState.playHistory.length; i++) {
+      const record = gameState.playHistory[i];
+      if (!record.playerId || !playerIds.includes(record.playerId)) {
+        errors.push(`第${i + 1}步出牌玩家ID无效`);
+        continue;
+      }
+
+      if (!record.cards || record.cards.length === 0) {
+        errors.push(`第${i + 1}步出牌为空`);
+      }
+
+      if (record.timestamp <= 0) {
+        errors.push(`第${i + 1}步出牌时间戳无效`);
+      }
+
+      if (i > 0) {
+        const prevRecord = gameState.playHistory[i - 1];
+        const prevPlayerIndex = playerIds.indexOf(prevRecord.playerId);
+        const currentPlayerIndex = playerIds.indexOf(record.playerId);
+        if (currentPlayerIndex !== (prevPlayerIndex + 1) % gameState.players.length) {
+          errors.push(`第${i + 1}步出牌顺序不合法，应由下一位玩家出牌`);
+        }
+
+        if (record.timestamp < prevRecord.timestamp) {
+          errors.push(`第${i + 1}步出牌时间戳早于上一步`);
+        }
+      }
+    }
+  }
+
+  if (gameState.isGameOver && !gameState.winnerId) {
+    errors.push('游戏已结束但未设置获胜者');
+  }
+
+  if (gameState.isGameOver && !gameState.endTime) {
+    errors.push('游戏已结束但未设置结束时间');
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+function validatePlayData(game: GameState, playerId: string, cards: Card[]): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  if (!playerId) {
+    errors.push('玩家ID不能为空');
+  }
+
+  const playerIndex = game.players.findIndex((p: Player) => p.id === playerId);
+  if (playerIndex === -1) {
+    errors.push('玩家不存在');
+    return { valid: false, errors };
+  }
+
+  if (playerIndex !== game.currentPlayerIndex) {
+    errors.push('不是该玩家的回合');
+    return { valid: false, errors };
+  }
+
+  if (!cards || cards.length === 0) {
+    errors.push('出牌不能为空');
+    return { valid: false, errors };
+  }
+
+  const player = game.players[playerIndex];
+  if (cards.length > player.hand.length) {
+    errors.push(`出牌数量(${cards.length})超过手牌数量(${player.hand.length})`);
+    return { valid: false, errors };
+  }
+
+  for (const card of cards) {
+    if (!card.id) {
+      errors.push('牌的ID不能为空');
+      continue;
+    }
+    const hasCard = player.hand.some((c: Card) => c.id === card.id);
+    if (!hasCard) {
+      errors.push(`玩家没有这张牌: ${card.id}`);
+    }
+  }
+
+  const playedCardIds = cards.map((c: Card) => c.id);
+  const uniqueIds = new Set(playedCardIds);
+  if (uniqueIds.size !== playedCardIds.length) {
+    errors.push('出牌中存在重复的牌');
   }
 
   return { valid: errors.length === 0, errors };
@@ -249,21 +369,13 @@ app.post('/api/games/:id/plays', (req: Request, res: Response) => {
     return res.status(400).json({ error: '游戏已结束' });
   }
 
+  const validation = validatePlayData(game, playerId, cards || []);
+  if (!validation.valid) {
+    return res.status(400).json({ errors: validation.errors });
+  }
+
   const playerIndex = game.players.findIndex((p: Player) => p.id === playerId);
-  if (playerIndex === -1) {
-    return res.status(400).json({ error: '玩家不存在' });
-  }
-
-  if (playerIndex !== game.currentPlayerIndex) {
-    return res.status(400).json({ error: '不是该玩家的回合' });
-  }
-
   const player = game.players[playerIndex];
-  for (const card of cards) {
-    if (!player.hand.some((c: Card) => c.id === card.id)) {
-      return res.status(400).json({ error: '玩家没有这些牌' });
-    }
-  }
 
   const playRecord: PlayRecord = {
     id: uuidv4(),

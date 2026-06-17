@@ -94,6 +94,39 @@ export class UIRenderer {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   }
 
+  private cubicBezierEase(t: number): number {
+    const p1x = 0.4;
+    const p1y = 0;
+    const p2x = 0.2;
+    const p2y = 1;
+
+    let currentT = t;
+    for (let i = 0; i < 8; i++) {
+      const currentX = this.bezierX(currentT, p1x, p2x);
+      const currentDerivative = this.bezierDerivativeX(currentT, p1x, p2x);
+      if (Math.abs(currentDerivative) < 1e-6) break;
+      currentT = currentT - (currentX - t) / currentDerivative;
+      currentT = Math.max(0, Math.min(1, currentT));
+    }
+
+    return this.bezierY(currentT, p1y, p2y);
+  }
+
+  private bezierX(t: number, p1x: number, p2x: number): number {
+    const oneMinusT = 1 - t;
+    return 3 * oneMinusT * oneMinusT * t * p1x + 3 * oneMinusT * t * t * p2x + t * t * t;
+  }
+
+  private bezierY(t: number, p1y: number, p2y: number): number {
+    const oneMinusT = 1 - t;
+    return 3 * oneMinusT * oneMinusT * t * p1y + 3 * oneMinusT * t * t * p2y + t * t * t;
+  }
+
+  private bezierDerivativeX(t: number, p1x: number, p2x: number): number {
+    const oneMinusT = 1 - t;
+    return 3 * oneMinusT * oneMinusT * p1x + 6 * oneMinusT * t * (p2x - p1x) + 3 * t * t * (1 - p2x);
+  }
+
   public render(gameState: GameState): void {
     const { canvasWidth, canvasHeight } = this.config;
 
@@ -377,15 +410,15 @@ export class UIRenderer {
 
     for (const anim of this.animations) {
       const progress = Math.min((now - anim.startTime) / anim.duration, 1);
-      const easedProgress = this.easeInOutCubic(progress);
+      const easedProgress = this.cubicBezierEase(progress);
 
       const currentX = anim.fromX + (anim.toX - anim.fromX) * easedProgress;
       const currentY = anim.fromY + (anim.toY - anim.fromY) * easedProgress;
 
-      const alpha = progress < 0.3 ? progress / 0.3 : 1;
+      const easedAlpha = this.cubicBezierEase(progress / 0.3 > 1 ? 1 : progress / 0.3);
 
       this.ctx.save();
-      this.ctx.globalAlpha = alpha;
+      this.ctx.globalAlpha = easedAlpha;
       this.drawCard(anim.card, currentX, currentY, false, anim.isFaceUp);
       this.ctx.restore();
     }

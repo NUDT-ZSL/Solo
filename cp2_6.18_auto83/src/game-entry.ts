@@ -238,12 +238,6 @@ export class GameEntry {
     this.updateCurrentPlayerDisplay();
 
     this.gameRenderer.startAnimationLoop(this.gameState);
-
-    try {
-      await apiHandler.saveGame(this.gameState);
-    } catch (error) {
-      console.error('保存游戏失败:', error);
-    }
   }
 
   private handlePlayCards(): void {
@@ -431,6 +425,10 @@ export class GameEntry {
 
   private async saveGameState(): Promise<void> {
     if (!this.gameState) return;
+
+    if (this.gameState.playHistory.length === 0) {
+      return;
+    }
 
     try {
       await apiHandler.saveGame(this.gameState);

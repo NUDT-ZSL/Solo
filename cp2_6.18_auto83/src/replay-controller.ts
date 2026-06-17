@@ -21,6 +21,13 @@ export class ReplayController {
   private animationFrameId: number | null = null;
   private initialPlayers: Player[] = [];
 
+  private readonly MIN_FPS = 30;
+  private readonly SEEK_THROTTLE_MS = 1000 / this.MIN_FPS;
+  private lastSeekRenderTime: number = 0;
+  private pendingSeekStep: number | null = null;
+  private seekAnimationFrameId: number | null = null;
+  private isSeeking: boolean = false;
+
   constructor(renderer: UIRenderer) {
     this.renderer = renderer;
   }
@@ -84,7 +91,48 @@ export class ReplayController {
     if (!this.gameState) return;
 
     const totalSteps = this.getTotalSteps();
-    this.currentStep = Math.max(0, Math.min(step, totalSteps));
+    const clampedStep = Math.max(0, Math.min(step, totalSteps));
+    this.pendingSeekStep = clampedStep;
+
+    if (this.isPlaying) {
+      this.pause();
+    }
+
+    const now = performance.now();
+    const timeSinceLastRender = now - this.lastSeekRenderTime;
+
+    if (timeSinceLastRender >= this.SEEK_THROTTLE_MS) {
+      this.executeSeek(clampedStep);
+      this.lastSeekRenderTime = now;
+    } else {
+      if (this.seekAnimationFrameId === null) {
+        this.scheduleSeekRender();
+      }
+    }
+  }
+
+  private scheduleSeekRender(): void {
+    const now = performance.now();
+    const timeSinceLastRender = now - this.lastSeekRenderTime;
+    const delay = Math.max(0, this.SEEK_THROTTLE_MS - timeSinceLastRender);
+
+    setTimeout(() => {
+      this.seekAnimationFrameId = requestAnimationFrame(() => {
+        if (this.pendingSeekStep !== null) {
+          this.executeSeek(this.pendingSeekStep);
+          this.lastSeekRenderTime = performance.now();
+          this.pendingSeekStep = null;
+        }
+        this.seekAnimationFrameId = null;
+      });
+    }, delay);
+  }
+
+  private executeSeek(step: number): void {
+    if (!this.gameState) return;
+
+    this.currentStep = step;
+    this.isSeeking = false;
 
     this.renderReplayState();
 
@@ -233,5 +281,10 @@ export class ReplayController {
 
   public destroy(): void {
     this.pause();
+    if (this.seekAnimationFrameId !== null) {
+      cancelAnimationFrame(this.seekAnimationFrameId);
+      this.seekAnimationFrameId = null;
+    }
+    this.pendingSeekStep = null;
   }
 }
