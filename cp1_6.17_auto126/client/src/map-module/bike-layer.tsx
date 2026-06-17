@@ -17,11 +17,13 @@ interface AnimationState {
 }
 
 const ANIMATION_DURATION = 1200;
+const ICON_SIZE = 28;
 
 function getBatteryColor(battery: number): string {
-  if (battery >= 70) return '#00FF00';
-  if (battery >= 40) return '#FFA500';
-  return '#FF0000';
+  const clamped = Math.max(20, Math.min(100, battery));
+  const ratio = (clamped - 20) / 80;
+  const hue = ratio * 120;
+  return `hsl(${hue}, 100%, 45%)`;
 }
 
 function formatLastUsed(ts: number): string {
@@ -41,21 +43,35 @@ function easeInOutCubic(t: number): number {
 
 function createBikeIcon(battery: number): L.DivIcon {
   const color = getBatteryColor(battery);
+  const svgBike = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="${color}">
+      <path d="M5 20.5A3.5 3.5 0 0 1 1.5 17 3.5 3.5 0 0 1 5 13.5a3.5 3.5 0 0 1 3.5 3.5A3.5 3.5 0 0 1 5 20.5m0-5A1.5 1.5 0 0 0 3.5 17 1.5 1.5 0 0 0 5 18.5 1.5 1.5 0 0 0 6.5 17 1.5 1.5 0 0 0 5 15.5M14.8 10l1.8-2.9-1.4-1-2.6 4.2L10.5 9l-.6-1H6v1.5h3l1.8 3H7v1.5h4.2c.4.5 1 .9 1.8 1L12 17.5l1.5.5 2-4.6c.8-.5 1.3-1.2 1.5-2h-2.7l-.8-1.9zM19 20.5A3.5 3.5 0 0 1 15.5 17 3.5 3.5 0 0 1 19 13.5a3.5 3.5 0 0 1 3.5 3.5A3.5 3.5 0 0 1 19 20.5m0-5A1.5 1.5 0 0 0 17.5 17 1.5 1.5 0 0 0 19 18.5 1.5 1.5 0 0 0 20.5 17 1.5 1.5 0 0 0 19 15.5zM13 4l.8 1.5L14.9 5.7l-.9-1.7L13 4z"/>
+    </svg>
+  `;
   return L.divIcon({
     className: 'bike-marker',
-    iconSize: [16, 16],
-    iconAnchor: [8, 8],
+    iconSize: [ICON_SIZE, ICON_SIZE],
+    iconAnchor: [ICON_SIZE / 2, ICON_SIZE / 2],
     html: `
       <div
         style="
-          width: 16px;
-          height: 16px;
+          width: ${ICON_SIZE}px;
+          height: ${ICON_SIZE}px;
           border-radius: 50%;
-          background: ${color};
-          border: 2px solid #fff;
-          box-shadow: 0 0 6px ${color}99, 0 0 2px #000;
+          background: rgba(255,255,255,0.95);
+          border: 2px solid ${color};
+          box-shadow: 0 0 8px ${color}cc, 0 2px 6px rgba(0,0,0,0.35);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: box-shadow 0.2s ease, transform 0.15s ease;
         "
-      ></div>
+        onmouseover="this.style.boxShadow='0 0 14px ${color}ee, 0 3px 10px rgba(0,0,0,0.5)';this.style.transform='scale(1.15)'"
+        onmouseout="this.style.boxShadow='0 0 8px ${color}cc, 0 2px 6px rgba(0,0,0,0.35)';this.style.transform='scale(1)'"
+      >
+        ${svgBike}
+      </div>
     `
   });
 }
@@ -64,6 +80,7 @@ const BikeLayer: React.FC<BikeLayerProps> = ({ bikeData }) => {
   const map = useMap();
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
   const popupsRef = useRef<Map<string, L.Popup>>(new Map());
+  const tooltipsRef = useRef<Map<string, L.Tooltip>>(new Map());
   const animationsRef = useRef<Map<string, AnimationState>>(new Map());
 
   useEffect(() => {
@@ -79,12 +96,36 @@ const BikeLayer: React.FC<BikeLayerProps> = ({ bikeData }) => {
         map.removeLayer(marker);
         markersRef.current.delete(id);
         popupsRef.current.delete(id);
+        tooltipsRef.current.delete(id);
       }
     });
 
     bikeData.forEach((bike) => {
       const existing = markersRef.current.get(bike.id);
       const batteryColor = getBatteryColor(bike.battery);
+
+      const tooltipOptions: L.TooltipOptions = {
+        direction: 'top',
+        offset: [0, -ICON_SIZE / 2 - 4],
+        opacity: 0.95,
+        className: 'bike-tooltip'
+      };
+
+      const tooltipContent = `
+        <div style="
+          background: #1e1e1e;
+          color: #fff;
+          padding: 4px 10px;
+          border-radius: 4px;
+          font-size: 12px;
+          font-weight: 600;
+          white-space: nowrap;
+          border: 1px solid #555;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+        ">
+          🚲 ${bike.id}
+        </div>
+      `;
 
       const popupContent = `
         <div style="
@@ -198,15 +239,26 @@ const BikeLayer: React.FC<BikeLayerProps> = ({ bikeData }) => {
           existing.bindPopup(popup);
           popupsRef.current.set(bike.id, popup);
         }
+        const existingTooltip = tooltipsRef.current.get(bike.id);
+        if (existingTooltip) {
+          existingTooltip.setContent(tooltipContent);
+        } else {
+          const tooltip = L.tooltip(tooltipOptions).setContent(tooltipContent);
+          existing.bindTooltip(tooltip);
+          tooltipsRef.current.set(bike.id, tooltip);
+        }
       } else {
         const marker = L.marker([bike.lat, bike.lng], {
           icon: createBikeIcon(bike.battery)
         });
         const popup = L.popup(popupOptions).setContent(popupContent);
+        const tooltip = L.tooltip(tooltipOptions).setContent(tooltipContent);
         marker.bindPopup(popup);
+        marker.bindTooltip(tooltip);
         marker.addTo(map);
         markersRef.current.set(bike.id, marker);
         popupsRef.current.set(bike.id, popup);
+        tooltipsRef.current.set(bike.id, tooltip);
       }
     });
   }, [bikeData, map]);
@@ -220,6 +272,7 @@ const BikeLayer: React.FC<BikeLayerProps> = ({ bikeData }) => {
       markersRef.current.forEach((m) => map.removeLayer(m));
       markersRef.current.clear();
       popupsRef.current.clear();
+      tooltipsRef.current.clear();
     };
   }, [map]);
 
