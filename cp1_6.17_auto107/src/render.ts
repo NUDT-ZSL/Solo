@@ -214,21 +214,17 @@ class VegetationSystem {
     slider.style.transition = 'opacity 0.15s ease';
 
     slider.addEventListener('input', (e) => {
-      let value = parseFloat((e.target as HTMLInputElement).value);
-      // 按步长取整，确保值与步长一致
-      value = Math.round(value / step) * step;
-      // 处理浮点数精度问题
-      value = parseFloat(value.toFixed(10));
-      // 确保值在范围内
+      let rawValue = parseFloat((e.target as HTMLInputElement).value);
+      const stepDecimals = this.countDecimals(step);
+      const multiplier = Math.pow(10, stepDecimals);
+      let value = Math.round(rawValue * multiplier / (step * multiplier)) * step;
+      value = parseFloat(value.toFixed(stepDecimals));
       value = Math.max(min, Math.min(max, value));
-      // 更新滑块显示值
       (e.target as HTMLInputElement).value = value.toString();
-      // 更新显示文本
-      if (step < 1) {
-        valueText.textContent = value.toFixed(1);
-      } else {
-        valueText.textContent = value.toString();
-      }
+      const displayValue = stepDecimals > 0
+        ? value.toFixed(stepDecimals)
+        : value.toString();
+      valueText.textContent = displayValue;
       onChange(value);
     });
 
@@ -466,6 +462,18 @@ class VegetationSystem {
     });
   }
 
+  private countDecimals(value: number): number {
+    if (Math.floor(value) === value || isNaN(value)) return 0;
+    const str = value.toString();
+    if (str.indexOf('.') !== -1) {
+      return str.split('.')[1].length;
+    }
+    if (str.indexOf('e-') !== -1) {
+      return parseInt(str.split('e-')[1], 10);
+    }
+    return 0;
+  }
+
   private updateCanvasScale(): void {
     const windowWidth = window.innerWidth;
     const totalWidth = CANVAS_WIDTH + PANEL_WIDTH + 40;
@@ -699,19 +707,21 @@ class VegetationSystem {
       // ========== 帧结束，性能统计 ==========
       const frameEndTime = performance.now();
       const totalFrameTime = frameEndTime - updateStartTime;
-      const _renderTime = frameEndTime - renderStartTime;
+      const renderTime = frameEndTime - renderStartTime;
 
       // 定期更新帧时间统计
       if (currentTime - this.lastFrameTimeUpdate >= this.frameTimeUpdateInterval) {
         this.lastFrameTimeUpdate = currentTime;
-        this.frameRenderTime = totalFrameTime;
-        this.maxFrameRenderTime = Math.max(this.maxFrameRenderTime, totalFrameTime);
+        this.frameRenderTime = renderTime;
+        this.maxFrameRenderTime = Math.max(this.maxFrameRenderTime, renderTime);
 
-        // 当草叶数量达到80株时，检查是否超过18ms限制
-        if (this.grasses.length >= 80 && totalFrameTime > this.MAX_FRAME_TIME) {
+        // 当草叶数量达到80株时，检查纯渲染时间是否超过18ms限制
+        if (this.grasses.length >= 80 && renderTime > this.MAX_FRAME_TIME) {
           console.warn(
-            `[性能警告] 80株草叶时单帧渲染时间 ${totalFrameTime.toFixed(1)}ms ` +
-            `超过限制 ${this.MAX_FRAME_TIME}ms`
+            `[性能警告] 草叶数量: ${this.grasses.length}株, ` +
+            `纯渲染时间: ${renderTime.toFixed(2)}ms, ` +
+            `阈值: ${this.MAX_FRAME_TIME}ms, ` +
+            `总帧时间: ${totalFrameTime.toFixed(2)}ms`
           );
         }
       }
