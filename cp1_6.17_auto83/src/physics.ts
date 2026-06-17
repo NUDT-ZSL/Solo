@@ -104,10 +104,9 @@ export const createEnergyBall = (
 
 export const getAuraProperties = (chargeTime: number): { diameter: number; alpha: number } => {
   const t = Math.min(1, chargeTime / 2);
-  const chargeMs = chargeTime * 1000;
   return {
     diameter: MIN_AURA_DIAMETER + (MAX_AURA_DIAMETER - MIN_AURA_DIAMETER) * t,
-    alpha: Math.min(0.3 + (chargeMs / 500) * 0.5, 0.8)
+    alpha: Math.min(0.3 + (chargeTime / 500) * 0.5, 0.8)
   };
 };
 
@@ -360,7 +359,7 @@ export const updateComboState = (
     };
   }
   if (currentCombo > 0 && gameTime - comboStartTime > resetThreshold) {
-    return { combo: 0, comboStartTime: -999 };
+    return { combo: 0, comboStartTime: 0 };
   }
   return { combo: currentCombo, comboStartTime };
 };

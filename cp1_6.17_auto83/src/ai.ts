@@ -254,7 +254,7 @@ export const rotatePowerUps = (
 ): PowerUp[] => {
   return powerUps.map(pu => ({
     ...pu,
-    rotation: pu.rotation + 60 * deltaTime
+    rotation: (pu.rotation ?? 0) + 60 * deltaTime
   }));
 };
 
@@ -314,7 +314,7 @@ export const updateComboSystem = (
     return {
       ...state,
       combo: 0,
-      comboStartTime: -999
+      comboStartTime: 0
     };
   }
   return state;

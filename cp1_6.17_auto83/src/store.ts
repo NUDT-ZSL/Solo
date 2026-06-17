@@ -178,7 +178,7 @@ const createInitialState = (): GameState => ({
   speedLines: [],
 
   combo: 0,
-  comboStartTime: -999,
+  comboStartTime: 0,
   comboResetTime: 3,
   buffPulsePhase: 0,
 

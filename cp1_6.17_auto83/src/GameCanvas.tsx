@@ -142,12 +142,24 @@ const GameCanvas = () => {
     
     const handleMouseMove = (e: MouseEvent) => {
       const rect = canvas.getBoundingClientRect();
-      state.setMousePosition(e.clientX - rect.left, e.clientY - rect.top);
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const mx = (e.clientX - rect.left) * scaleX;
+      const my = (e.clientY - rect.top) * scaleY;
+      state.setMousePosition(mx, my);
+
+      const exitBtnR = 25;
+      const exitBtnX = state.canvasWidth - exitBtnR - 15;
+      const exitBtnY = state.canvasHeight - exitBtnR - 15;
+      const dist = Math.sqrt(Math.pow(mx - exitBtnX, 2) + Math.pow(my - exitBtnY, 2));
+      setExitHover(dist < exitBtnR);
     };
     
     const handleMouseDown = (e: MouseEvent) => {
       const rect = canvas.getBoundingClientRect();
-      state.setMousePosition(e.clientX - rect.left, e.clientY - rect.top);
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      state.setMousePosition((e.clientX - rect.left) * scaleX, (e.clientY - rect.top) * scaleY);
       state.setPlayerCharging(true);
     };
     
@@ -158,17 +170,34 @@ const GameCanvas = () => {
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
     };
+
+    const handleCanvasClick = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const mx = (e.clientX - rect.left) * scaleX;
+      const my = (e.clientY - rect.top) * scaleY;
+      const exitBtnR = 25;
+      const exitBtnX = state.canvasWidth - exitBtnR - 15;
+      const exitBtnY = state.canvasHeight - exitBtnR - 15;
+      const dist = Math.sqrt(Math.pow(mx - exitBtnX, 2) + Math.pow(my - exitBtnY, 2));
+      if (dist < exitBtnR) {
+        handleExitClick();
+      }
+    };
     
     canvas.addEventListener('mousemove', handleMouseMove);
     canvas.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mouseup', handleMouseUp);
     canvas.addEventListener('contextmenu', handleContextMenu);
+    canvas.addEventListener('click', handleCanvasClick);
     
     return () => {
       canvas.removeEventListener('mousemove', handleMouseMove);
       canvas.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mouseup', handleMouseUp);
       canvas.removeEventListener('contextmenu', handleContextMenu);
+      canvas.removeEventListener('click', handleCanvasClick);
     };
   }, [state]);
 
@@ -950,8 +979,8 @@ const GameCanvas = () => {
       const mainBuff = playerBuffs[0];
       
       ctx.save();
-      const pulse = 0.7 + 0.3 * Math.sin(gameTime * 4 * Math.PI);
-      ctx.globalAlpha = pulse;
+      const pulse = getBuffPulseAlpha(buffPulsePhase);
+      ctx.globalAlpha = 0.7 + 0.3 * pulse;
       const g = ctx.createRadialGradient(buffIconX + buffIconSize / 2, buffIconY + buffIconSize / 2, 0, buffIconX + buffIconSize / 2, buffIconY + buffIconSize / 2, buffIconSize);
       g.addColorStop(0, rgba(mainBuff.color, 0.6));
       g.addColorStop(1, rgba(mainBuff.color, 0));
@@ -1018,6 +1047,36 @@ const GameCanvas = () => {
     ctx.textAlign = 'right';
     ctx.fillText(`敌人 HP: ${ai.hp}/${ai.maxHp}`, aiHpX + aiHpW - 5, aiHpY + 14);
 
+    const exitBtnR = 25;
+    const exitBtnX = canvasWidth - exitBtnR - 15;
+    const exitBtnY = canvasHeight - exitBtnR - 15;
+
+    ctx.save();
+    ctx.translate(exitBtnX, exitBtnY);
+    if (exitHover) {
+      ctx.rotate(15 * Math.PI / 180);
+    }
+
+    const exitColor = exitHover ? COLORS.exitBtnHover : COLORS.exitBtn;
+    const exitGrad = ctx.createRadialGradient(-5, -5, 0, 0, 0, exitBtnR);
+    exitGrad.addColorStop(0, shadeColor(exitColor, 30));
+    exitGrad.addColorStop(1, exitColor);
+    ctx.fillStyle = exitGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, exitBtnR, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = exitHover ? '#FFFFFF' : '#AAAAAA';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 16px Material Icons';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('close', 0, 0);
+    ctx.restore();
+
     const instX = 20;
     const instY = canvasHeight - 100;
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
@@ -1049,47 +1108,16 @@ const GameCanvas = () => {
         overflow: 'hidden'
       }}
     >
-      <div style={{ position: 'relative' }}>
-        <canvas
-          ref={canvasRef}
-          style={{
-            display: 'block',
-            cursor: 'crosshair',
-            imageRendering: 'pixelated',
-            maxWidth: '100%',
-            maxHeight: '100%'
-          }}
-        />
-        <button
-          onClick={handleExitClick}
-          onMouseEnter={() => setExitHover(true)}
-          onMouseLeave={() => setExitHover(false)}
-          style={{
-            position: 'absolute',
-            right: 15,
-            bottom: 15,
-            width: 50,
-            height: 50,
-            borderRadius: '50%',
-            border: 'none',
-            background: exitHover ? '#FF0000' : '#8B0000',
-            color: '#FFFFFF',
-            fontSize: 20,
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transform: exitHover ? 'rotate(15deg)' : 'rotate(0deg)',
-            transition: 'all 0.2s ease-out',
-            boxShadow: exitHover
-              ? '0 0 20px rgba(255,0,0,0.6)'
-              : '0 0 10px rgba(139,0,0,0.4)'
-          }}
-        >
-          ✕
-        </button>
-      </div>
+      <canvas
+        ref={canvasRef}
+        style={{
+          display: 'block',
+          cursor: 'crosshair',
+          imageRendering: 'pixelated',
+          maxWidth: '100%',
+          maxHeight: '100%'
+        }}
+      />
     </div>
   );
 };
