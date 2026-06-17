@@ -1,0 +1,22 @@
+[
+  {"id":"s01","memberId":"m1","song":"茉莉花","date":"2024-06-01","pitch":82,"rhythm":78,"expression":85},
+  {"id":"s02","memberId":"m2","song":"月亮代表我的心","date":"2024-06-05","pitch":75,"rhythm":80,"expression":72},
+  {"id":"s03","memberId":"m3","song":"彩虹","date":"2024-06-10","pitch":88,"rhythm":85,"expression":90},
+  {"id":"s04","memberId":"m4","song":"送别","date":"2024-06-15","pitch":70,"rhythm":72,"expression":68},
+  {"id":"s05","memberId":"m5","song":"茉莉花","date":"2024-07-02","pitch":90,"rhythm":88,"expression":92},
+  {"id":"s06","memberId":"m6","song":"月亮代表我的心","date":"2024-07-10","pitch":78,"rhythm":82,"expression":76},
+  {"id":"s07","memberId":"m1","song":"彩虹","date":"2024-08-05","pitch":85,"rhythm":83,"expression":88},
+  {"id":"s08","memberId":"m2","song":"送别","date":"2024-09-12","pitch":72,"rhythm":75,"expression":70},
+  {"id":"s09","memberId":"m3","song":"茉莉花","date":"2024-10-01","pitch":86,"rhythm":84,"expression":89},
+  {"id":"s10","memberId":"m4","song":"月亮代表我的心","date":"2024-10-20","pitch":68,"rhythm":71,"expression":65},
+  {"id":"s11","memberId":"m5","song":"送别","date":"2024-11-08","pitch":80,"rhythm":77,"expression":82},
+  {"id":"s12","memberId":"m6","song":"彩虹","date":"2024-12-03","pitch":76,"rhythm":79,"expression":74},
+  {"id":"s13","memberId":"m1","song":"月亮代表我的心","date":"2025-01-15","pitch":84,"rhythm":82,"expression":87},
+  {"id":"s14","memberId":"m2","song":"茉莉花","date":"2025-02-10","pitch":77,"rhythm":80,"expression":75},
+  {"id":"s15","memberId":"m3","song":"送别","date":"2025-02-28","pitch":82,"rhythm":80,"expression":84},
+  {"id":"s16","memberId":"m4","song":"彩虹","date":"2025-03-12","pitch":73,"rhythm":76,"expression":70},
+  {"id":"s17","memberId":"m5","song":"月亮代表我的心","date":"2025-03-25","pitch":91,"rhythm":89,"expression":93},
+  {"id":"s18","memberId":"m6","song":"送别","date":"2025-04-08","pitch":79,"rhythm":83,"expression":77},
+  {"id":"s19","memberId":"m1","song":"送别","date":"2025-04-20","pitch":87,"rhythm":85,"expression":90},
+  {"id":"s20","memberId":"m2","song":"彩虹","date":"2025-05-15","pitch":80,"rhythm":78,"expression":83}
+]

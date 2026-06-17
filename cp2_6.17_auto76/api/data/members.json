@@ -1,0 +1,8 @@
+[
+  {"id":"m1","name":"张晓华","voicePart":"女高音","joinDate":"2024-03-15"},
+  {"id":"m2","name":"李明远","voicePart":"男高音","joinDate":"2024-03-15"},
+  {"id":"m3","name":"王雅琴","voicePart":"女中音","joinDate":"2024-04-01"},
+  {"id":"m4","name":"陈志强","voicePart":"男低音","joinDate":"2024-04-01"},
+  {"id":"m5","name":"刘思雨","voicePart":"女高音","joinDate":"2024-05-10"},
+  {"id":"m6","name":"赵文博","voicePart":"男中音","joinDate":"2024-05-10"}
+]
