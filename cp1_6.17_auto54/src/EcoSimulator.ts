@@ -61,26 +61,29 @@ const INITIAL_RESOURCES: ResourceState = {
 
 const SPECIES_CONFIG = {
   algae: {
-    baseGrowthRate: 0.15,
-    metabolicRate: 0.02,
-    oxygenProductionRate: 0.08,
-    nutrientConsumptionRate: 0.05,
+    baseGrowthRate: 0.12,
+    metabolicRate: 0.015,
+    oxygenProductionRate: 0.06,
+    nutrientConsumptionPerCapita: 0.04,
     carryingCapacityBase: 200,
   },
   daphnia: {
-    baseGrowthRate: 0.08,
-    metabolicRate: 0.04,
-    oxygenConsumptionRate: 0.03,
-    nutrientProductionRate: 0.02,
-    algaeConsumptionRate: 0.15,
+    baseGrowthRate: 0.07,
+    metabolicRate: 0.03,
+    oxygenConsumptionPerCapita: 0.025,
+    nutrientProductionPerCapita: 0.015,
+    algaeConsumptionPerCapita: 0.12,
+    growthEfficiency: 0.4,
     carryingCapacityBase: 80,
   },
   snail: {
-    baseGrowthRate: 0.04,
-    metabolicRate: 0.03,
-    oxygenConsumptionRate: 0.02,
-    nutrientProductionRate: 0.03,
-    algaeConsumptionRate: 0.08,
+    baseGrowthRate: 0.035,
+    metabolicRate: 0.025,
+    oxygenConsumptionPerCapita: 0.018,
+    nutrientProductionPerCapita: 0.025,
+    algaeConsumptionPerCapita: 0.06,
+    daphniaConsumptionPerCapita: 0.04,
+    growthEfficiency: 0.3,
     carryingCapacityBase: 30,
   },
 };
@@ -186,73 +189,100 @@ export class EcoSimulator {
     const daphniaConfig = SPECIES_CONFIG.daphnia;
     const snailConfig = SPECIES_CONFIG.snail;
 
-    const oxygenFromPlants = algaeConfig.oxygenProductionRate * this.species.algae * lightFactor;
-    const oxygenConsumption =
-      daphniaConfig.oxygenConsumptionRate * this.species.daphnia +
-      snailConfig.oxygenConsumptionRate * this.species.snail +
-      algaeConfig.metabolicRate * this.species.algae * 0.1;
+    const prevAlgae = this.species.algae;
+    const prevDaphnia = this.species.daphnia;
+    const prevSnail = this.species.snail;
+    const prevNutrients = this.resources.nutrients;
+    const prevOxygen = this.resources.dissolvedOxygen;
 
-    const oxygenFromExchange = exchangeFactor * 3;
-    const oxygenDecay = 0.01;
+    // ========== 第一步：基于当前资源量计算捕食/消耗量 ==========
+    // 绿藻消耗养分（与绿藻种群数量成正比）
+    const nutrientConsumedByAlgae = algaeConfig.nutrientConsumptionPerCapita * prevAlgae *
+      Math.min(1, prevNutrients / 5);
 
-    let dOxygen =
-      oxygenFromPlants - oxygenConsumption + oxygenFromExchange - oxygenDecay * this.resources.dissolvedOxygen;
+    // 水蚤捕食绿藻（与水蚤种群数量成正比，受绿藻数量制约）
+    const algaeEatenByDaphnia = daphniaConfig.algaeConsumptionPerCapita * prevDaphnia *
+      Math.min(1, prevAlgae / (prevDaphnia * 2 + 1));
 
-    const nutrientFromFeeding = feedingFactor * 2;
-    const nutrientFromWaste =
-      daphniaConfig.nutrientProductionRate * this.species.daphnia +
-      snailConfig.nutrientProductionRate * this.species.snail;
-    const nutrientConsumption = algaeConfig.nutrientConsumptionRate * this.species.algae;
-    const nutrientRemoval = cleaningFactor * 1.5 + exchangeFactor * 0.8;
-    const nutrientDecay = 0.005;
+    // 蜗牛捕食绿藻和水蚤（与蜗牛种群数量成正比）
+    const algaeEatenBySnail = snailConfig.algaeConsumptionPerCapita * prevSnail *
+      Math.min(1, prevAlgae / (prevSnail * 3 + 1));
+    const daphniaEatenBySnail = snailConfig.daphniaConsumptionPerCapita * prevSnail *
+      Math.min(1, prevDaphnia / (prevSnail * 2 + 1));
 
-    let dNutrients =
-      nutrientFromFeeding + nutrientFromWaste - nutrientConsumption - nutrientRemoval - nutrientDecay * this.resources.nutrients;
+    const totalAlgaeEaten = algaeEatenByDaphnia + algaeEatenBySnail;
 
-    const algaeCarryingCapacity =
-      algaeConfig.carryingCapacityBase *
-      Math.min(1, this.resources.nutrients / 5) *
-      Math.min(1, 0.3 + lightFactor * 0.7);
-
-    const algaeGrowthRate =
-      algaeConfig.baseGrowthRate *
-      Math.min(1, this.resources.nutrients / 4) *
+    // ========== 第二步：基于资源计算各物种增长率 ==========
+    // 绿藻：养分 + 光照 -> 增长率
+    const nutrientFactor = Math.min(1, prevNutrients / 4);
+    const algaeGrowthRate = algaeConfig.baseGrowthRate * nutrientFactor *
       Math.min(1, 0.2 + lightFactor * 0.8);
-    const algaeMortality = algaeConfig.metabolicRate * (1 - Math.min(1, this.resources.dissolvedOxygen / 6) * 0.5);
+    const algaeCarryingCapacity = algaeConfig.carryingCapacityBase *
+      nutrientFactor * Math.min(1, 0.3 + lightFactor * 0.7);
+    const algaeOxygenFactor = Math.min(1, prevOxygen / 6);
+    const algaeMortality = algaeConfig.metabolicRate * (1 - algaeOxygenFactor * 0.5);
 
-    const dAlgaeLogistic =
-      algaeGrowthRate * this.species.algae * (1 - this.species.algae / Math.max(1, algaeCarryingCapacity));
-    const algaeEaten =
-      daphniaConfig.algaeConsumptionRate * this.species.daphnia +
-      snailConfig.algaeConsumptionRate * this.species.snail;
-    let dAlgae = dAlgaeLogistic - algaeEaten - algaeMortality * this.species.algae;
+    // 逻辑斯蒂增长 - 被捕食 - 自然死亡
+    const dAlgaeLogistic = algaeGrowthRate * prevAlgae *
+      (1 - prevAlgae / Math.max(1, algaeCarryingCapacity));
+    const dAlgae = dAlgaeLogistic - totalAlgaeEaten - algaeMortality * prevAlgae -
+      nutrientConsumedByAlgae * 0.1;
 
-    const daphniaFoodFactor = Math.min(1, this.species.algae / 30);
-    const daphniaOxygenFactor = Math.min(1, this.resources.dissolvedOxygen / 4);
-    const daphniaCarryingCapacity = daphniaConfig.carryingCapacityBase * daphniaFoodFactor;
+    // 水蚤：捕食绿藻获得能量 -> 增长率
+    const daphniaFoodEnergy = algaeEatenByDaphnia * daphniaConfig.growthEfficiency;
+    const daphniaFoodFactor = Math.min(1, prevAlgae / 30);
+    const daphniaOxygenFactor = Math.min(1, prevOxygen / 4);
     const daphniaGrowthRate = daphniaConfig.baseGrowthRate * daphniaFoodFactor * daphniaOxygenFactor;
+    const daphniaCarryingCapacity = daphniaConfig.carryingCapacityBase * daphniaFoodFactor;
     const daphniaMortality = daphniaConfig.metabolicRate * (1 - daphniaOxygenFactor * 0.6);
 
-    let dDaphnia =
-      daphniaGrowthRate * this.species.daphnia * (1 - this.species.daphnia / Math.max(1, daphniaCarryingCapacity)) -
-      daphniaMortality * this.species.daphnia;
+    const dDaphniaLogistic = daphniaGrowthRate * prevDaphnia *
+      (1 - prevDaphnia / Math.max(1, daphniaCarryingCapacity));
+    const dDaphnia = dDaphniaLogistic + daphniaFoodEnergy - daphniaMortality * prevDaphnia -
+      daphniaEatenBySnail;
 
-    const snailFoodFactor = Math.min(1, this.species.algae / 20);
-    const snailOxygenFactor = Math.min(1, this.resources.dissolvedOxygen / 3);
-    const snailCarryingCapacity = snailConfig.carryingCapacityBase * snailFoodFactor;
+    // 蜗牛：捕食绿藻和水蚤获得能量 -> 增长率
+    const snailFoodEnergy = (algaeEatenBySnail + daphniaEatenBySnail * 1.5) * snailConfig.growthEfficiency;
+    const snailFoodFactor = Math.min(1, (prevAlgae + prevDaphnia) / 25);
+    const snailOxygenFactor = Math.min(1, prevOxygen / 3);
     const snailGrowthRate = snailConfig.baseGrowthRate * snailFoodFactor * snailOxygenFactor;
+    const snailCarryingCapacity = snailConfig.carryingCapacityBase * snailFoodFactor;
     const snailMortality = snailConfig.metabolicRate * (1 - snailOxygenFactor * 0.5);
 
-    let dSnail =
-      snailGrowthRate * this.species.snail * (1 - this.species.snail / Math.max(1, snailCarryingCapacity)) -
-      snailMortality * this.species.snail;
+    const dSnailLogistic = snailGrowthRate * prevSnail *
+      (1 - prevSnail / Math.max(1, snailCarryingCapacity));
+    const dSnail = dSnailLogistic + snailFoodEnergy - snailMortality * prevSnail;
 
-    this.species.algae = Math.max(0, this.species.algae + dAlgae);
-    this.species.daphnia = Math.max(0, this.species.daphnia + dDaphnia);
-    this.species.snail = Math.max(0, this.species.snail + dSnail);
+    // ========== 第三步：计算资源变化（与种群数量成正比） ==========
+    // 溶氧：绿藻光合作用产生（与种群数量、光照成正比）- 所有生物呼吸消耗
+    const oxygenFromPlants = algaeConfig.oxygenProductionRate * prevAlgae * lightFactor;
+    const oxygenConsumedByDaphnia = daphniaConfig.oxygenConsumptionPerCapita * prevDaphnia;
+    const oxygenConsumedBySnail = snailConfig.oxygenConsumptionPerCapita * prevSnail;
+    const oxygenConsumedByAlgae = algaeConfig.metabolicRate * prevAlgae * 0.1;
+    const totalOxygenConsumption = oxygenConsumedByDaphnia + oxygenConsumedBySnail + oxygenConsumedByAlgae;
 
-    this.resources.dissolvedOxygen = Math.max(0, Math.min(20, this.resources.dissolvedOxygen + dOxygen));
-    this.resources.nutrients = Math.max(0, Math.min(20, this.resources.nutrients + dNutrients));
+    const oxygenFromExchange = exchangeFactor * 3;
+    const oxygenDecay = 0.01 * prevOxygen;
+    const dOxygen = oxygenFromPlants - totalOxygenConsumption + oxygenFromExchange - oxygenDecay;
+
+    // 养分：投喂 + 生物代谢废物（与种群数量成正比）- 绿藻消耗 - 清洁/换水移除
+    const nutrientFromFeeding = feedingFactor * 2;
+    const nutrientFromDaphniaWaste = daphniaConfig.nutrientProductionPerCapita * prevDaphnia;
+    const nutrientFromSnailWaste = snailConfig.nutrientProductionPerCapita * prevSnail;
+    const totalNutrientFromWaste = nutrientFromDaphniaWaste + nutrientFromSnailWaste;
+
+    const nutrientRemoval = cleaningFactor * 1.5 + exchangeFactor * 0.8;
+    const nutrientDecay = 0.005 * prevNutrients;
+    const dNutrients = nutrientFromFeeding + totalNutrientFromWaste - nutrientConsumedByAlgae -
+      nutrientRemoval - nutrientDecay;
+
+    // ========== 第四步：更新种群和资源 ==========
+    this.species.algae = Math.max(0, prevAlgae + dAlgae);
+    this.species.daphnia = Math.max(0, prevDaphnia + dDaphnia);
+    this.species.snail = Math.max(0, prevSnail + dSnail);
+
+    this.resources.dissolvedOxygen = Math.max(0, Math.min(20, prevOxygen + dOxygen));
+    this.resources.nutrients = Math.max(0, Math.min(20, prevNutrients + dNutrients));
 
     this.checkWarnings();
     this.checkSteadyState();
@@ -357,20 +387,38 @@ export class EcoSimulator {
   }
 
   private checkSteadyState(): void {
-    if (this.history.length < 10) {
+    const SLIDING_WINDOW = 10;
+    const STEADY_THRESHOLD = 0.05;
+    const REQUIRED_CONSECUTIVE_STEPS = 10;
+
+    if (this.history.length < SLIDING_WINDOW + 1) {
       this.steadyStateCounter = 0;
       return;
     }
 
-    const recent = this.history.slice(-10);
+    const current = this.history[this.history.length - 1];
+    const windowData = this.history.slice(-SLIDING_WINDOW - 1, -1);
+
     let allStable = true;
 
     for (const key of ['algae', 'daphnia', 'snail'] as const) {
-      const values = recent.map((h) => h.species[key]);
-      const min = Math.min(...values);
-      const max = Math.max(...values);
-      const avg = (min + max) / 2;
-      if (avg > 0 && (max - min) / avg > 0.05) {
+      const currentValue = current.species[key];
+
+      const windowValues = windowData.map((h) => h.species[key]);
+      const slidingAvg = windowValues.reduce((sum, v) => sum + v, 0) / windowValues.length;
+
+      if (slidingAvg <= 0.01) {
+        if (currentValue <= 0.01) {
+          continue;
+        } else {
+          allStable = false;
+          break;
+        }
+      }
+
+      const fluctuation = Math.abs(currentValue - slidingAvg) / slidingAvg;
+
+      if (fluctuation > STEADY_THRESHOLD) {
         allStable = false;
         break;
       }
@@ -390,6 +438,8 @@ export class EcoSimulator {
     } else {
       this.steadyStateCounter = 0;
     }
+
+    this.steadyStateCounter = Math.min(this.steadyStateCounter, REQUIRED_CONSECUTIVE_STEPS);
   }
 
   isSteadyState(): boolean {
@@ -398,6 +448,29 @@ export class EcoSimulator {
 
   getSteadyStateCounter(): number {
     return this.steadyStateCounter;
+  }
+
+  getFluctuationInfo(): {
+    algae: { current: number; avg: number; fluctuation: number };
+    daphnia: { current: number; avg: number; fluctuation: number };
+    snail: { current: number; avg: number; fluctuation: number };
+  } | null {
+    const SLIDING_WINDOW = 10;
+    if (this.history.length < SLIDING_WINDOW + 1) return null;
+
+    const current = this.history[this.history.length - 1];
+    const windowData = this.history.slice(-SLIDING_WINDOW - 1, -1);
+    const result: any = {};
+
+    for (const key of ['algae', 'daphnia', 'snail'] as const) {
+      const currentValue = current.species[key];
+      const windowValues = windowData.map((h) => h.species[key]);
+      const slidingAvg = windowValues.reduce((sum, v) => sum + v, 0) / windowValues.length;
+      const fluctuation = slidingAvg > 0.01 ? Math.abs(currentValue - slidingAvg) / slidingAvg : 0;
+      result[key] = { current: currentValue, avg: slidingAvg, fluctuation };
+    }
+
+    return result;
   }
 
   private checkAchievements(): void {

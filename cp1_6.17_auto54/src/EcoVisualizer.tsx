@@ -236,34 +236,6 @@ export default function EcoVisualizer() {
         const alpha = 0.15 + pulse * 0.2;
         ctx.fillStyle = `rgba(255, 82, 82, ${alpha})`;
         ctx.fillRect(0, 0, width, height);
-
-        const skullSize = 60 + pulse * 10;
-        const skullX = width / 2 - skullSize / 2;
-        const skullY = height / 2 - skullSize / 2;
-
-        ctx.fillStyle = `rgba(255, 255, 255, ${0.8 + pulse * 0.2})`;
-        ctx.beginPath();
-        ctx.arc(width / 2, skullY + skullSize * 0.4, skullSize * 0.4, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillRect(skullX + skullSize * 0.3, skullY + skullSize * 0.55, skullSize * 0.4, skullSize * 0.35);
-
-        ctx.fillStyle = '#1B3B2D';
-        ctx.beginPath();
-        ctx.arc(width / 2 - skullSize * 0.15, skullY + skullSize * 0.35, skullSize * 0.1, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(width / 2 + skullSize * 0.15, skullY + skullSize * 0.35, skullSize * 0.1, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#1B3B2D';
-        ctx.fillRect(width / 2 - skullSize * 0.02, skullY + skullSize * 0.5, skullSize * 0.04, skullSize * 0.1);
-
-        for (let i = 0; i < 4; i++) {
-          const toothX = skullX + skullSize * 0.38 + i * skullSize * 0.08;
-          ctx.fillStyle = '#1B3B2D';
-          ctx.fillRect(toothX, skullY + skullSize * 0.7, skullSize * 0.04, skullSize * 0.12);
-        }
       }
 
       animationRef.current = requestAnimationFrame(animate);
@@ -295,6 +267,23 @@ export default function EcoVisualizer() {
           height: '100%',
         }}
       />
+
+      {hasDanger && (
+        <div className="skull-icon">
+          <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+            <ellipse cx="40" cy="35" rx="28" ry="26" fill="white" opacity="0.95" />
+            <rect x="25" y="48" width="30" height="22" rx="2" fill="white" opacity="0.95" />
+            <ellipse cx="30" cy="32" rx="6" ry="7" fill="#1B3B2D" />
+            <ellipse cx="50" cy="32" rx="6" ry="7" fill="#1B3B2D" />
+            <ellipse cx="40" cy="44" rx="2.5" ry="4" fill="#1B3B2D" />
+            <rect x="29" y="60" width="3" height="8" rx="1" fill="#1B3B2D" />
+            <rect x="35" y="60" width="3" height="8" rx="1" fill="#1B3B2D" />
+            <rect x="41" y="60" width="3" height="8" rx="1" fill="#1B3B2D" />
+            <rect x="47" y="60" width="3" height="8" rx="1" fill="#1B3B2D" />
+          </svg>
+        </div>
+      )}
+
       {showWarning && warnings.length > 0 && (
         <div
           style={{
@@ -342,6 +331,34 @@ export default function EcoVisualizer() {
             opacity: 1;
             transform: translateX(-50%) translateY(0);
           }
+        }
+
+        @keyframes skullPulse {
+          0% {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 0.85;
+            filter: drop-shadow(0 0 10px rgba(255, 82, 82, 0.5));
+          }
+          50% {
+            transform: translate(-50%, -50%) scale(1.2);
+            opacity: 1;
+            filter: drop-shadow(0 0 25px rgba(255, 82, 82, 0.9));
+          }
+          100% {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 0.85;
+            filter: drop-shadow(0 0 10px rgba(255, 82, 82, 0.5));
+          }
+        }
+
+        .skull-icon {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          animation: skullPulse 1.2s ease-in-out infinite;
+          z-index: 5;
+          pointer-events: none;
         }
       `}</style>
     </div>

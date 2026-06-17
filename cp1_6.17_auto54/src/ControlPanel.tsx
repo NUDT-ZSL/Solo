@@ -1,5 +1,52 @@
 import { useEffect, useRef, useState } from 'react';
-import { ecoSimulator, EnvironmentParams, Achievement, GREEN_ZONE } from './EcoSimulator';
+import { ecoSimulator, EnvironmentParams, Achievement, GREEN_ZONE, SimHistoryItem } from './EcoSimulator';
+
+const CHART_BUFFER_SIZE = 50;
+
+class RingBuffer<T> {
+  private buffer: (T | null)[];
+  private head: number = 0;
+  private count: number = 0;
+  private capacity: number;
+
+  constructor(capacity: number) {
+    this.capacity = capacity;
+    this.buffer = new Array(capacity).fill(null);
+  }
+
+  push(item: T): void {
+    this.buffer[this.head] = item;
+    this.head = (this.head + 1) % this.capacity;
+    if (this.count < this.capacity) {
+      this.count++;
+    }
+  }
+
+  toArray(): T[] {
+    const result: T[] = [];
+    if (this.count === 0) return result;
+
+    const start = this.count < this.capacity ? 0 : this.head;
+    for (let i = 0; i < this.count; i++) {
+      const idx = (start + i) % this.capacity;
+      const item = this.buffer[idx];
+      if (item !== null) {
+        result.push(item);
+      }
+    }
+    return result;
+  }
+
+  size(): number {
+    return this.count;
+  }
+
+  clear(): void {
+    this.head = 0;
+    this.count = 0;
+    this.buffer = new Array(this.capacity).fill(null);
+  }
+}
 
 const SPECIES_COLORS = {
   algae: '#4CAF50',
@@ -69,75 +116,71 @@ function AchievementCard({ achievement }: { achievement: Achievement }) {
     switch (icon) {
       case 'master':
         return (
-          <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-            <circle cx="20" cy="20" r="18" fill="#2D4A3E" />
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="24" cy="24" r="22" fill="#2D4A3E" />
+            <circle cx="24" cy="24" r="20" fill="none" stroke="#FFD54F" strokeWidth="1.5" opacity="0.5" />
             <path
-              d="M20 8 L24 16 L32 17 L26 23 L28 31 L20 27 L12 31 L14 23 L8 17 L16 16 Z"
+              d="M24 7 L28 17 L38 17.5 L30 24 L32.5 34 L24 29 L15.5 34 L18 24 L10 17.5 L20 17 Z"
+              fill="#FFD54F"
+              stroke="#FFE082"
+              strokeWidth="0.5"
+            />
+            <circle cx="24" cy="24" r="6.5" fill="#FFF8E1" />
+            <circle cx="24" cy="24" r="5" fill="#2D4A3E" />
+            <path
+              d="M24 19 L25.5 22.5 L29.5 22.5 L26.2 24.8 L27.4 28.5 L24 26 L20.6 28.5 L21.8 24.8 L18.5 22.5 L22.5 22.5 Z"
               fill="#FFD54F"
             />
-            <circle cx="20" cy="20" r="6" fill="#FFF8E1" />
+            <ellipse cx="16" cy="14" rx="3" ry="2" fill="#81C784" opacity="0.7" />
+            <ellipse cx="32" cy="14" rx="3" ry="2" fill="#81C784" opacity="0.7" />
           </svg>
         );
       case 'first':
         return (
-          <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-            <circle cx="20" cy="20" r="18" fill="#2D4A3E" />
-            <text x="20" y="26" textAnchor="middle" fill="#FFD54F" fontSize="20" fontWeight="bold">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+            <circle cx="24" cy="24" r="22" fill="#2D4A3E" />
+            <circle cx="24" cy="24" r="20" fill="none" stroke="#FFD54F" strokeWidth="1.5" opacity="0.5" />
+            <text x="24" y="32" textAnchor="middle" fill="#FFD54F" fontSize="28" fontWeight="bold" fontFamily="Arial, sans-serif">
               1
             </text>
           </svg>
         );
       case 'survivor':
         return (
-          <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-            <circle cx="20" cy="20" r="18" fill="#2D4A3E" />
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+            <circle cx="24" cy="24" r="22" fill="#2D4A3E" />
+            <circle cx="24" cy="24" r="20" fill="none" stroke="#66BB6A" strokeWidth="1.5" opacity="0.5" />
             <path
-              d="M20 10 L20 30 M15 15 L20 10 L25 15 M13 25 L20 30 L27 25"
+              d="M24 10 L24 38 M17 17 L24 10 L31 17 M15 33 L24 38 L33 33"
               stroke="#66BB6A"
-              strokeWidth="3"
+              strokeWidth="3.5"
               strokeLinecap="round"
+              strokeLinejoin="round"
               fill="none"
             />
+            <circle cx="24" cy="24" r="4" fill="#A5D6A7" />
           </svg>
         );
       default:
         return (
-          <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-            <circle cx="20" cy="20" r="18" fill="#2D4A3E" />
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+            <circle cx="24" cy="24" r="22" fill="#2D4A3E" />
           </svg>
         );
     }
   };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        padding: '12px',
-        background: 'rgba(0, 0, 0, 0.2)',
-        borderRadius: '12px',
-        transition: 'transform 0.25s ease',
-        cursor: 'pointer',
-      }}
-      className="achievement-card"
-      onMouseEnter={(e) => {
-        const card = e.currentTarget;
-        card.style.transform = 'scale(1.05) rotate(15deg)';
-      }}
-      onMouseLeave={(e) => {
-        const card = e.currentTarget;
-        card.style.transform = 'scale(1) rotate(0deg)';
-      }}
-    >
+    <div className="achievement-card-root">
       <div
         style={{
           borderRadius: '16px',
           overflow: 'hidden',
           background: '#2D4A3E',
           flexShrink: 0,
+          padding: '2px',
         }}
+        className="achievement-badge"
       >
         {renderIcon(achievement.icon)}
       </div>
@@ -164,6 +207,8 @@ function AchievementCard({ achievement }: { achievement: Achievement }) {
 export default function ControlPanel() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const chartBufferRef = useRef<RingBuffer<SimHistoryItem>>(new RingBuffer<SimHistoryItem>(CHART_BUFFER_SIZE));
+  const lastTimeStepRef = useRef<number>(0);
   const [env, setEnv] = useState<EnvironmentParams>(ecoSimulator.getEnvironment());
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [showAchievements, setShowAchievements] = useState(false);
@@ -181,9 +226,23 @@ export default function ControlPanel() {
       setResources(ecoSimulator.getResources());
       setEnv(ecoSimulator.getEnvironment());
       setAchievements(ecoSimulator.getAchievements());
-      setTimeStep(ecoSimulator.getTimeStep());
+      const newTimeStep = ecoSimulator.getTimeStep();
+      setTimeStep(newTimeStep);
       setIsSteady(ecoSimulator.isSteadyState());
       setSteadyCounter(ecoSimulator.getSteadyStateCounter());
+
+      if (newTimeStep === 0) {
+        chartBufferRef.current.clear();
+        lastTimeStepRef.current = 0;
+        const initialHistory = ecoSimulator.getHistory();
+        initialHistory.forEach((item) => chartBufferRef.current.push(item));
+      } else if (newTimeStep > lastTimeStepRef.current) {
+        const history = ecoSimulator.getHistory();
+        if (history.length > 0) {
+          chartBufferRef.current.push(history[history.length - 1]);
+        }
+        lastTimeStepRef.current = newTimeStep;
+      }
     };
 
     updateState();
@@ -228,8 +287,8 @@ export default function ControlPanel() {
       canvas.style.height = height + 'px';
       ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
 
-      const history = ecoSimulator.getHistory();
-      if (history.length < 2) {
+      const chartData = chartBufferRef.current.toArray();
+      if (chartData.length < 2) {
         ctx.fillStyle = '#1E1E2E';
         ctx.fillRect(0, 0, width, height);
 
@@ -247,7 +306,7 @@ export default function ControlPanel() {
       const chartWidth = width - padding.left - padding.right;
       const chartHeight = height - padding.top - padding.bottom;
 
-      const allValues = history.flatMap((h) => [h.species.algae, h.species.daphnia, h.species.snail]);
+      const allValues = chartData.flatMap((h) => [h.species.algae, h.species.daphnia, h.species.snail]);
       const maxVal = Math.max(...allValues, 10) * 1.1;
 
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
@@ -270,8 +329,8 @@ export default function ControlPanel() {
         ctx.strokeStyle = color;
         ctx.lineWidth = 2;
         ctx.beginPath();
-        history.forEach((h, i) => {
-          const x = padding.left + (i / (history.length - 1)) * chartWidth;
+        chartData.forEach((h, i) => {
+          const x = padding.left + (i / (chartData.length - 1)) * chartWidth;
           const y = padding.top + chartHeight - (h.species[key] / maxVal) * chartHeight;
           if (i === 0) {
             ctx.moveTo(x, y);
@@ -286,19 +345,20 @@ export default function ControlPanel() {
       drawLine('daphnia', SPECIES_COLORS.daphnia);
       drawLine('snail', SPECIES_COLORS.snail);
 
+      const latest = chartData[chartData.length - 1];
       ctx.fillStyle = '#4CAF50';
       ctx.beginPath();
-      ctx.arc(padding.left + chartWidth, padding.top + chartHeight - (species.algae / maxVal) * chartHeight, 4, 0, Math.PI * 2);
+      ctx.arc(padding.left + chartWidth, padding.top + chartHeight - (latest.species.algae / maxVal) * chartHeight, 4, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.fillStyle = '#FF9800';
       ctx.beginPath();
-      ctx.arc(padding.left + chartWidth, padding.top + chartHeight - (species.daphnia / maxVal) * chartHeight, 4, 0, Math.PI * 2);
+      ctx.arc(padding.left + chartWidth, padding.top + chartHeight - (latest.species.daphnia / maxVal) * chartHeight, 4, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.fillStyle = '#8D6E63';
       ctx.beginPath();
-      ctx.arc(padding.left + chartWidth, padding.top + chartHeight - (species.snail / maxVal) * chartHeight, 4, 0, Math.PI * 2);
+      ctx.arc(padding.left + chartWidth, padding.top + chartHeight - (latest.species.snail / maxVal) * chartHeight, 4, 0, Math.PI * 2);
       ctx.fill();
     };
 
@@ -667,8 +727,30 @@ export default function ControlPanel() {
           border: none;
           box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
         }
-        .achievement-card:hover {
-          transform: scale(1.05) rotate(15deg);
+
+        .achievement-card-root {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px;
+          background: rgba(0, 0, 0, 0.2);
+          border-radius: 12px;
+          cursor: pointer;
+          transition: transform 0.25s ease, box-shadow 0.25s ease;
+          transform-origin: center center;
+        }
+
+        .achievement-card-root:hover {
+          transform: scale(1.1) rotate(15deg);
+          box-shadow: 0 8px 25px rgba(255, 213, 79, 0.2);
+        }
+
+        .achievement-badge {
+          transition: transform 0.25s ease;
+        }
+
+        .achievement-card-root:hover .achievement-badge {
+          transform: scale(1.05);
         }
       `}</style>
     </div>
