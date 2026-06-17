@@ -49,13 +49,22 @@ class VegetationSystem {
   private mouseX: number = 0;
   private mouseY: number = 0;
   private lastMouseX: number = 0;
+  private lastMouseY: number = 0;
   private isMouseDown: boolean = false;
   private isMouseDragging: boolean = false;
+  private isMouseInCanvas: boolean = false;
 
   private lastFrameTime: number = 0;
   private fps: number = 0;
   private frameCount: number = 0;
   private fpsUpdateTime: number = 0;
+
+  // 性能监控
+  private frameRenderTime: number = 0;
+  private maxFrameRenderTime: number = 0;
+  private frameTimeUpdateInterval: number = 500;
+  private lastFrameTimeUpdate: number = 0;
+  private readonly MAX_FRAME_TIME: number = 18; // 80株草叶时最大允许帧渲染时间(ms)
 
   private harvestMessages: HarvestMessage[] = [];
 
@@ -205,8 +214,21 @@ class VegetationSystem {
     slider.style.transition = 'opacity 0.15s ease';
 
     slider.addEventListener('input', (e) => {
-      const value = parseFloat((e.target as HTMLInputElement).value);
-      valueText.textContent = value.toString();
+      let value = parseFloat((e.target as HTMLInputElement).value);
+      // 按步长取整，确保值与步长一致
+      value = Math.round(value / step) * step;
+      // 处理浮点数精度问题
+      value = parseFloat(value.toFixed(10));
+      // 确保值在范围内
+      value = Math.max(min, Math.min(max, value));
+      // 更新滑块显示值
+      (e.target as HTMLInputElement).value = value.toString();
+      // 更新显示文本
+      if (step < 1) {
+        valueText.textContent = value.toFixed(1);
+      } else {
+        valueText.textContent = value.toString();
+      }
       onChange(value);
     });
 
@@ -236,7 +258,7 @@ class VegetationSystem {
     for (let i = 0; i < this.grassCount; i++) {
       const x = 20 + Math.random() * (CANVAS_WIDTH - 40);
       const baseY = 450 + Math.random() * 50;
-      const heightOptions = [30, 35, 40, 45, 50, 55];
+      const heightOptions = [30, 35, 40, 45, 50, 55, 60];
       const height = heightOptions[Math.floor(Math.random() * heightOptions.length)];
 
       this.grasses.push(new Grass({
@@ -328,12 +350,16 @@ class VegetationSystem {
       cluster.reset();
     }
     this.harvestMessages = [];
+    // 重置性能统计
+    this.frameRenderTime = 0;
+    this.maxFrameRenderTime = 0;
   }
 
   private bindEvents(): void {
     this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
     this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
     this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
+    this.canvas.addEventListener('mouseenter', () => this.handleMouseEnter());
     this.canvas.addEventListener('mouseleave', () => this.handleMouseLeave());
     this.canvas.addEventListener('click', (e) => this.handleClick(e));
 
@@ -347,13 +373,19 @@ class VegetationSystem {
     return { x, y };
   }
 
+  private handleMouseEnter(): void {
+    this.isMouseInCanvas = true;
+  }
+
   private handleMouseMove(e: MouseEvent): void {
     const pos = this.getCanvasMousePos(e);
+    // 保存上一帧位置用于线段碰撞检测
     this.lastMouseX = this.mouseX;
+    this.lastMouseY = this.mouseY;
     this.mouseX = pos.x;
     this.mouseY = pos.y;
 
-    if (this.isMouseDown) {
+    if (this.isMouseDown && this.isMouseInCanvas) {
       this.isMouseDragging = true;
       this.checkGrassCollision();
     }
@@ -365,7 +397,9 @@ class VegetationSystem {
     const pos = this.getCanvasMousePos(e);
     this.mouseX = pos.x;
     this.mouseY = pos.y;
+    // 初始化上一帧位置，避免从(0,0)开始的线段检测
     this.lastMouseX = pos.x;
+    this.lastMouseY = pos.y;
     this.isMouseDown = true;
     this.isMouseDragging = false;
   }
@@ -376,8 +410,10 @@ class VegetationSystem {
   }
 
   private handleMouseLeave(): void {
+    // 鼠标离开画布时重置所有拖拽状态，防止状态不一致
     this.isMouseDown = false;
     this.isMouseDragging = false;
+    this.isMouseInCanvas = false;
   }
 
   private handleClick(e: MouseEvent): void {
@@ -404,8 +440,14 @@ class VegetationSystem {
     const dx = this.mouseX - this.lastMouseX;
     const moveDirection = dx >= 0 ? 1 : -1;
 
+    // 使用线段碰撞检测，覆盖鼠标拖拽的完整路径
+    // 避免快速移动鼠标时跳过草叶导致漏检
     for (const grass of this.grasses) {
-      grass.checkCollision(this.mouseX, this.mouseY, moveDirection);
+      grass.checkSegmentCollision(
+        this.lastMouseX, this.lastMouseY,
+        this.mouseX, this.mouseY,
+        moveDirection
+      );
     }
   }
 
@@ -516,16 +558,23 @@ class VegetationSystem {
 
   private drawFPS(): void {
     const ctx = this.ctx;
-    const text = `FPS: ${this.fps}`;
+
+    // 使用相对坐标计算，确保在Canvas缩放时位置比例正确
+    const marginX = 10;
+    const marginY = 10;
+    const boxWidth = 140;
+    const boxHeight = 48;
 
     ctx.save();
     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-    this.fillRoundRect(ctx, 10, 10, 80, 28, 6);
+    this.fillRoundRect(ctx, marginX, marginY, boxWidth, boxHeight, 6);
 
     ctx.fillStyle = '#FFFFFF';
-    ctx.font = '14px Arial';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, 18, 24);
+    ctx.font = '12px Arial';
+    ctx.textBaseline = 'top';
+    ctx.fillText(`FPS: ${this.fps}`, marginX + 8, marginY + 6);
+    ctx.fillText(`帧时: ${this.frameRenderTime.toFixed(1)}ms`, marginX + 8, marginY + 22);
+    ctx.fillText(`峰值: ${this.maxFrameRenderTime.toFixed(1)}ms`, marginX + 8, marginY + 38);
     ctx.restore();
   }
 
@@ -551,7 +600,11 @@ class VegetationSystem {
 
   private drawHarvestMessages(): void {
     const ctx = this.ctx;
-    let yOffset = 50;
+    // 基于Canvas坐标系的相对位置，随Canvas整体缩放保持正确比例
+    const startY = 50;
+    const lineHeight = 30;
+    const marginX = 20;
+    let yOffset = startY;
 
     for (const msg of this.harvestMessages) {
       ctx.save();
@@ -559,14 +612,18 @@ class VegetationSystem {
       ctx.fillStyle = '#FFFFFF';
       ctx.font = '20px "Microsoft YaHei", Arial';
       ctx.textBaseline = 'top';
-      ctx.fillText(msg.text, 20, yOffset);
+      ctx.fillText(msg.text, marginX, yOffset);
       ctx.restore();
-      yOffset += 30;
+      yOffset += lineHeight;
     }
   }
 
   private drawHerbCounters(): void {
     const ctx = this.ctx;
+    // 基于Canvas坐标系的相对位置，随Canvas整体缩放保持正确比例
+    const marginX = 20;
+    const marginY = 10;
+
     ctx.save();
     ctx.fillStyle = '#4CAF50';
     ctx.font = '14px "Microsoft YaHei", Arial';
@@ -577,8 +634,8 @@ class VegetationSystem {
       ctx.textAlign = 'left';
       ctx.fillText(
         `剩余: ${leftCluster.getRemainingHarvests()}/${leftCluster.getMaxHarvests()}`,
-        20,
-        CANVAS_HEIGHT - 10
+        marginX,
+        CANVAS_HEIGHT - marginY
       );
     }
 
@@ -587,8 +644,8 @@ class VegetationSystem {
       ctx.textAlign = 'right';
       ctx.fillText(
         `剩余: ${rightCluster.getRemainingHarvests()}/${rightCluster.getMaxHarvests()}`,
-        CANVAS_WIDTH - 20,
-        CANVAS_HEIGHT - 10
+        CANVAS_WIDTH - marginX,
+        CANVAS_HEIGHT - marginY
       );
     }
 
@@ -604,6 +661,9 @@ class VegetationSystem {
       this.updateFPS(deltaTime, currentTime);
       this.updateHarvestMessages(currentTime);
 
+      // ========== 更新阶段开始 ==========
+      const updateStartTime = performance.now();
+
       for (const grass of this.grasses) {
         grass.update(deltaTime, currentTime);
       }
@@ -613,6 +673,9 @@ class VegetationSystem {
       for (const cluster of this.herbClusters) {
         cluster.update(deltaTime, currentTime);
       }
+
+      // ========== 渲染阶段开始 ==========
+      const renderStartTime = performance.now();
 
       this.ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       this.drawBackground();
@@ -633,11 +696,32 @@ class VegetationSystem {
       this.drawHarvestMessages();
       this.drawHerbCounters();
 
+      // ========== 帧结束，性能统计 ==========
+      const frameEndTime = performance.now();
+      const totalFrameTime = frameEndTime - updateStartTime;
+      const _renderTime = frameEndTime - renderStartTime;
+
+      // 定期更新帧时间统计
+      if (currentTime - this.lastFrameTimeUpdate >= this.frameTimeUpdateInterval) {
+        this.lastFrameTimeUpdate = currentTime;
+        this.frameRenderTime = totalFrameTime;
+        this.maxFrameRenderTime = Math.max(this.maxFrameRenderTime, totalFrameTime);
+
+        // 当草叶数量达到80株时，检查是否超过18ms限制
+        if (this.grasses.length >= 80 && totalFrameTime > this.MAX_FRAME_TIME) {
+          console.warn(
+            `[性能警告] 80株草叶时单帧渲染时间 ${totalFrameTime.toFixed(1)}ms ` +
+            `超过限制 ${this.MAX_FRAME_TIME}ms`
+          );
+        }
+      }
+
       requestAnimationFrame(loop);
     };
 
     this.lastFrameTime = performance.now();
     this.fpsUpdateTime = performance.now();
+    this.lastFrameTimeUpdate = performance.now();
     requestAnimationFrame(loop);
   }
 }

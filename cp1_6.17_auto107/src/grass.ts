@@ -98,6 +98,40 @@ export class Grass {
     return false;
   }
 
+  // 线段碰撞检测：检测鼠标拖拽路径是否经过草叶
+  // 通过采样线段上的多个点进行碰撞检测，避免快速移动时漏检
+  public checkSegmentCollision(
+    x1: number, y1: number,
+    x2: number, y2: number,
+    moveDirection: number
+  ): boolean {
+    if (this.isFallen) return false;
+
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < 1) {
+      return this.checkCollision(x2, y2, moveDirection);
+    }
+
+    // 每5像素采样一个检测点，确保连续路径覆盖
+    const step = 5;
+    const steps = Math.max(1, Math.ceil(dist / step));
+
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const px = x1 + dx * t;
+      const py = y1 + dy * t;
+
+      if (this.checkCollision(px, py, moveDirection)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   public triggerFall(direction: number): void {
     if (this.isFallen) return;
     this.isFallen = true;

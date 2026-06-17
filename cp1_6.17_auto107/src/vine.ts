@@ -32,7 +32,9 @@ export class Vine {
   private windStrength: number;
   private windDirection: number;
   private time: number = 0;
-  private windCoefficient: number = 0.3;
+
+  // 风力系数：控制藤蔓对风力的敏感度，值越大摆动越明显
+  private readonly WIND_COEFFICIENT: number = 0.3;
 
   constructor(config: VineConfig) {
     this.startX = config.startX;
@@ -103,28 +105,37 @@ export class Vine {
     const dt = deltaTime / 1000;
     this.time += dt;
 
-    const windForce = this.windStrength * this.windCoefficient * this.windDirection;
+    // 计算风力：基础风力 + 周期性摆动
+    const windForce = this.windStrength * this.WIND_COEFFICIENT * this.windDirection;
     const windOscillation = Math.sin(this.time * 2) * 0.5;
+    const totalWind = windForce + windOscillation * this.windStrength * this.WIND_COEFFICIENT;
+
+    // 重力加速度乘以dt²，确保不同帧率下物理行为一致
+    const gravityAccel = this.gravity * dt * dt * 60 * 60;
+    const windAccel = totalWind * dt * dt * 60 * 60;
 
     for (let i = 1; i < this.nodeCount; i++) {
       const node = this.nodes[i];
 
       if (!node.isBouncing) {
-        node.vx += (windForce + windOscillation * this.windStrength * 0.3) * dt * 10;
-        node.vy += this.gravity * dt * 5;
+        // 应用风力和重力加速度（已乘以dt²，帧率无关）
+        node.vx += windAccel * 0.1;
+        node.vy += gravityAccel * 0.1;
       } else {
         const bounceElapsed = currentTime - node.bounceStartTime;
         if (bounceElapsed < 400) {
-          node.vy += this.gravity * dt * 5;
-          node.vx += windForce * dt * 5;
+          node.vy += gravityAccel * 0.1;
+          node.vx += windAccel * 0.05;
         } else {
           node.isBouncing = false;
         }
       }
 
+      // 阻尼系数，防止能量无限累积
       node.vx *= 0.98;
       node.vy *= 0.98;
 
+      // Verlet积分更新位置
       const newX = node.x + node.vx * dt * 60;
       const newY = node.y + node.vy * dt * 60;
 
