@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { Activity, RegistrationStatus } from '../types';
 import './ActivityCard.css';
@@ -40,12 +41,23 @@ function formatDateTime(dateTimeStr: string): string {
 }
 
 export default function ActivityCard({ activity }: ActivityCardProps) {
+  const [expanded, setExpanded] = useState(false);
   const status = getRegistrationStatus(activity);
   const statusText = getStatusText(status);
   const registeredCount = activity.registrations.reduce(
     (sum, r) => sum + r.children.length,
     0
   );
+
+  const visibleTags = activity.ageGroups.slice(0, 3);
+  const hiddenCount = activity.ageGroups.length - 3;
+  const hasHiddenTags = hiddenCount > 0;
+
+  const handleExpandClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setExpanded(!expanded);
+  };
 
   return (
     <Link to={`/activity/${activity.id}`} className="activity-card-link">
@@ -62,12 +74,35 @@ export default function ActivityCard({ activity }: ActivityCardProps) {
         </div>
         <div className="activity-card-content">
           <h3 className="activity-card-title">{activity.name}</h3>
-          <div className="activity-card-tags">
-            {activity.ageGroups.map((age) => (
+          <div className={`activity-card-tags ${expanded ? 'expanded' : ''}`}>
+            {visibleTags.map((age) => (
               <span key={age} className="age-tag">
                 {age}
               </span>
             ))}
+            {!expanded && hasHiddenTags && (
+              <button
+                type="button"
+                className="age-tag more-tag"
+                onClick={handleExpandClick}
+              >
+                +{hiddenCount}
+              </button>
+            )}
+            {expanded && activity.ageGroups.slice(3).map((age) => (
+              <span key={age} className="age-tag tag-enter">
+                {age}
+              </span>
+            ))}
+            {expanded && hasHiddenTags && (
+              <button
+                type="button"
+                className="age-tag more-tag"
+                onClick={handleExpandClick}
+              >
+                收起
+              </button>
+            )}
           </div>
         </div>
         <div className="activity-card-footer">

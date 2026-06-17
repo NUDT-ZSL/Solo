@@ -74,6 +74,30 @@ export default function ActivityDetail() {
     setChildren(newChildren);
   };
 
+  function ageInRange(age: number, ageGroup: string): boolean {
+    const match = ageGroup.match(/(\d+)-(\d+)岁/);
+    if (!match) return false;
+    const min = parseInt(match[1]);
+    const max = parseInt(match[2]);
+    return age >= min && age <= max;
+  }
+
+  function validateChildrenAge(): { valid: boolean; message?: string } {
+    if (!activity) return { valid: true };
+    
+    for (const child of children) {
+      if (!child.name.trim()) continue;
+      const valid = activity.ageGroups.some(group => ageInRange(child.age, group));
+      if (!valid) {
+        return {
+          valid: false,
+          message: `儿童"${child.name}"的年龄(${child.age}岁)不在活动允许的年龄段范围内。\n活动允许的年龄段：${activity.ageGroups.join('、')}`
+        };
+      }
+    }
+    return { valid: true };
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -85,6 +109,12 @@ export default function ActivityDetail() {
     const validChildren = children.filter((c) => c.name.trim() && c.age >= 1 && c.age <= 12);
     if (validChildren.length === 0) {
       alert('请至少填写一名儿童的信息');
+      return;
+    }
+
+    const ageValidation = validateChildrenAge();
+    if (!ageValidation.valid) {
+      alert(ageValidation.message);
       return;
     }
 

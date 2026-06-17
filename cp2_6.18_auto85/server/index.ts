@@ -67,6 +67,28 @@ interface PhotoData {
   photos: Photo[];
 }
 
+function ageInRange(age: number, ageGroup: string): boolean {
+  const match = ageGroup.match(/(\d+)-(\d+)岁/);
+  if (!match) return false;
+  const min = parseInt(match[1]);
+  const max = parseInt(match[2]);
+  return age >= min && age <= max;
+}
+
+function validateChildrenAge(children: Child[], ageGroups: string[]): { valid: boolean; message?: string } {
+  for (const child of children) {
+    const age = parseInt(child.age.toString());
+    const valid = ageGroups.some(group => ageInRange(age, group));
+    if (!valid) {
+      return {
+        valid: false,
+        message: `儿童"${child.name}"的年龄(${age}岁)不在活动允许的年龄段范围内。活动允许的年龄段：${ageGroups.join('、')}`
+      };
+    }
+  }
+  return { valid: true };
+}
+
 function readActivities(): ActivityData {
   const filePath = path.join(dataDir, 'activities.json');
   const data = fs.readFileSync(filePath, 'utf-8');
@@ -208,6 +230,11 @@ app.post('/api/activities/:id/register', (req: Request, res: Response) => {
 
     if (!activity) {
       return res.status(404).json({ error: '活动不存在' });
+    }
+
+    const ageValidation = validateChildrenAge(children, activity.ageGroups);
+    if (!ageValidation.valid) {
+      return res.status(400).json({ error: ageValidation.message });
     }
 
     const registeredCount = activity.registrations.reduce((sum, r) => sum + r.children.length, 0);

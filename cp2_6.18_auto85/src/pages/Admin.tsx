@@ -267,13 +267,14 @@ export default function Admin() {
                   <div className="checkbox-group">
                     {AGE_GROUPS.map((age) => (
                       <label key={age} className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={ageGroups.includes(age)}
-                        onChange={() => handleAgeGroupToggle(age)}
-                      />
-                      {age}
-                    </label>
+                        <input
+                          type="checkbox"
+                          checked={ageGroups.includes(age)}
+                          onChange={() => handleAgeGroupToggle(age)}
+                        />
+                        {age}
+                      </label>
+                    ))}
                   </div>
                 </div>
 
@@ -365,12 +366,8 @@ export default function Admin() {
                         <p>{formatDateTime(activity.dateTime)}</p>
                         <p>{activity.location}</p>
                         <div className="activity-item-meta">
-                          <span>
-                          {activity.ageGroups.join(', ')
-                        </span>
-                          <span>
-                          已报名 {getRegisteredCount(activity)}/{activity.maxParticipants}
-                        </span>
+                          <span>{activity.ageGroups.join(', ')}</span>
+                          <span>已报名 {getRegisteredCount(activity)}/{activity.maxParticipants}</span>
                         </div>
                       </div>
                       <div className="activity-item-actions">
@@ -484,7 +481,7 @@ export default function Admin() {
                           <div className="progress-bar">
                             <div
                               className="progress-fill"
-                              style={{ width: `${uploadProgress}% }}
+                              style={{ width: `${uploadProgress}%` }}
                             />
                           </div>
                         </div>

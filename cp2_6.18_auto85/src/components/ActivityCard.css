@@ -54,7 +54,14 @@
 .activity-card-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
+  max-height: 56px;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.activity-card-tags.expanded {
+  max-height: 200px;
 }
 
 .age-tag {
@@ -64,6 +71,35 @@
   color: white;
   font-size: 0.75rem;
   font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+}
+
+.age-tag.more-tag {
+  cursor: pointer;
+  border: none;
+  transition: transform 0.2s ease;
+}
+
+.age-tag.more-tag:hover {
+  transform: scale(1.05);
+}
+
+.tag-enter {
+  animation: tagFadeIn 0.3s ease forwards;
+}
+
+@keyframes tagFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .activity-card-footer {
