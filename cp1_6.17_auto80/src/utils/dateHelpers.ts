@@ -16,10 +16,10 @@ export function isSameDay(dateStr: string, year: number, month: number, day: num
   return d.getFullYear() === year && d.getMonth() === month && d.getDate() === day;
 }
 
-export function getCountdown(endDateStr: string, endTime: string): string {
+export function getCountdown(endDateStr: string, endTime: string, now?: Date): string {
   const end = new Date(`${endDateStr}T${endTime || '23:59:59'}`);
-  const now = new Date();
-  const diff = end.getTime() - now.getTime();
+  const nowTime = now || new Date();
+  const diff = end.getTime() - nowTime.getTime();
   if (diff <= 0) return '已到期';
   const days = Math.floor(diff / 86400000);
   const hours = Math.floor((diff % 86400000) / 3600000);

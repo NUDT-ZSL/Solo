@@ -30,10 +30,12 @@ const DevicePanel: React.FC = () => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [borrowRequests, setBorrowRequests] = useState<BorrowRequest[]>([]);
+  const [notifications, setNotifications] = useState<{ id: string; borrower: string; message: string; deviceId: string; deviceName: string; timestamp: number }[]>([]);
   const [showBorrowForm, setShowBorrowForm] = useState(false);
   const [borrowForm, setBorrowForm] = useState({ deviceId: '', borrower: '', startDate: '', endDate: '' });
   const [showAddDevice, setShowAddDevice] = useState(false);
   const [deviceForm, setDeviceForm] = useState({ name: '', owner: '', price: 0, status: 'available' as Device['status'] });
+  const [now, setNow] = useState(Date.now());
 
   const fetchDevices = useCallback(async (p: number) => {
     const res = await axios.get(`/api/devices?page=${p}&limit=10`);
@@ -46,10 +48,28 @@ const DevicePanel: React.FC = () => {
     setBorrowRequests(res.data);
   }, []);
 
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const res = await axios.get('/api/notifications');
+      setNotifications(res.data);
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
   useEffect(() => {
     fetchDevices(page);
     fetchBorrowRequests();
-  }, [page, fetchDevices, fetchBorrowRequests]);
+    fetchNotifications();
+  }, [page, fetchDevices, fetchBorrowRequests, fetchNotifications]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(Date.now());
+      fetchNotifications();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [fetchNotifications]);
 
   const handleBorrow = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,15 +103,25 @@ const DevicePanel: React.FC = () => {
   const expiringBorrows = borrowRequests.filter(r => {
     if (!r.approved || r.returned) return false;
     const end = new Date(r.endDate + 'T23:59:59');
-    const now = new Date();
-    const diff = end.getTime() - now.getTime();
+    const currentTime = new Date(now);
+    const diff = end.getTime() - currentTime.getTime();
     return diff > 0 && diff < 86400000;
   });
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h2 style={{ fontSize: 22, fontWeight: 700 }}>设备清单</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <h2 style={{ fontSize: 22, fontWeight: 700 }}>设备清单</h2>
+          {notifications.length > 0 && (
+            <span className="return-badge" title={`${notifications.length} 件设备待归还`} style={{
+              background: '#F44336', color: '#FFF', borderRadius: '50%',
+              width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 11, fontWeight: 700, cursor: 'pointer',
+              animation: 'pulse 2s infinite',
+            }}>{notifications.length}</span>
+          )}
+        </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => setShowBorrowForm(true)} style={actionBtnStyle}>借用申请</button>
           <button onClick={() => setShowAddDevice(true)} style={addBtnStyle}>+ 添加设备</button>
@@ -139,9 +169,8 @@ const DevicePanel: React.FC = () => {
           </thead>
           <tbody>
             {devices.map((d, i) => (
-              <tr key={d.id} style={{
+              <tr key={d.id} className="device-table-row" style={{
                 background: i % 2 === 0 ? '#252525' : '#222',
-                animation: 'fadeInUp 0.4s ease-out backwards',
                 animationDelay: `${i * 0.03}s`,
               }}>
                 <td style={{ padding: '12px 16px', fontSize: 14 }}>{d.name}</td>
@@ -174,10 +203,9 @@ const DevicePanel: React.FC = () => {
         {borrowRequests.map((r, i) => {
           const dev = devices.find(d => d.id === r.deviceId);
           return (
-            <div key={r.id} style={{
+            <div key={r.id} className="borrow-record" style={{
               padding: 16, borderRadius: 8, marginBottom: 8,
               background: '#252525',
-              animation: 'fadeInUp 0.4s ease-out backwards',
               animationDelay: `${i * 0.03}s`,
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
@@ -330,4 +358,35 @@ const submitBtnStyle: React.CSSProperties = {
   fontSize: 14, fontWeight: 600, cursor: 'pointer',
 };
 
-export default DevicePanel;
+const DevicePanelWithStyles: React.FC = () => (
+  <>
+    <DevicePanel />
+    <style>{`
+      @keyframes pulse {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.15); opacity: 0.85; }
+      }
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .device-table-row {
+        animation: fadeInUp 0.4s ease-out backwards;
+      }
+      .borrow-record {
+        animation: fadeInUp 0.4s ease-out backwards;
+      }
+      .return-badge {
+        box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.4);
+      }
+    `}</style>
+  </>
+);
+
+export default DevicePanelWithStyles;

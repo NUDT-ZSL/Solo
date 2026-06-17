@@ -74,12 +74,10 @@ const CalendarView: React.FC = () => {
         <button onClick={() => setShowForm(true)} style={addBtnStyle}>+ 新建事件</button>
       </div>
 
-      <div style={{
+      <div className={`calendar-grid ${fadeIn ? '' : 'fade-out'}`} style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(7, 1fr)',
         gap: 1,
-        opacity: fadeIn ? 1 : 0,
-        transition: 'opacity 0.3s ease',
       }}>
         {WEEKDAYS.map(w => (
           <div key={w} style={{ textAlign: 'center', padding: '8px 0', color: '#999', fontSize: 13, fontWeight: 600 }}>{w}</div>
@@ -88,12 +86,13 @@ const CalendarView: React.FC = () => {
           const dayEvents = day ? getEventsForDay(day) : [];
           const isToday = day && isSameDay(new Date().toISOString().split('T')[0], year, month, day);
           return (
-            <div key={i} style={{
+            <div key={i} className="calendar-cell" style={{
               minHeight: 90,
               padding: 4,
               background: day ? '#252525' : 'transparent',
               borderRadius: day ? 6 : 0,
               position: 'relative',
+              animationDelay: `${i * 0.02}s`,
             }}>
               {day && (
                 <div style={{
@@ -108,10 +107,11 @@ const CalendarView: React.FC = () => {
                   {day}
                 </div>
               )}
-              {dayEvents.slice(0, 2).map(ev => (
+              {dayEvents.slice(0, 2).map((ev, evIdx) => (
                 <div
                   key={ev.id}
                   onClick={() => setSelectedEvent(ev)}
+                  className="event-card"
                   style={{
                     fontSize: 11,
                     padding: '3px 6px',
@@ -120,17 +120,11 @@ const CalendarView: React.FC = () => {
                     cursor: 'pointer',
                     background: ev.type === 'rehearsal' ? 'rgba(66,165,245,0.15)' : 'rgba(102,187,106,0.15)',
                     color: ev.type === 'rehearsal' ? '#42A5F5' : '#66BB6A',
-                    transition: 'transform 0.2s, box-shadow 0.2s',
+                    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
                     position: 'relative',
                     paddingLeft: 14,
-                  }}
-                  onMouseEnter={e => {
-                    (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-3px)';
-                    (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 8px #E0E0E0';
-                  }}
-                  onMouseLeave={e => {
-                    (e.currentTarget as HTMLDivElement).style.transform = '';
-                    (e.currentTarget as HTMLDivElement).style.boxShadow = '';
+                    animation: 'fadeInUp 0.4s ease-out backwards',
+                    animationDelay: `${(i * 0.02) + (evIdx * 0.05)}s`,
                   }}
                 >
                   <span style={{
@@ -270,4 +264,36 @@ const submitBtnStyle: React.CSSProperties = {
   fontSize: 14, fontWeight: 600, cursor: 'pointer',
 };
 
-export default CalendarView;
+const CalendarViewWithStyles: React.FC = () => (
+  <>
+    <CalendarView />
+    <style>{`
+      .event-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 2px 8px #E0E0E0;
+      }
+      .calendar-grid {
+        opacity: 1;
+        transition: opacity 0.3s ease-in-out;
+      }
+      .calendar-grid.fade-out {
+        opacity: 0;
+      }
+      .calendar-cell {
+        animation: fadeInUp 0.4s ease-out backwards;
+      }
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    `}</style>
+  </>
+);
+
+export default CalendarViewWithStyles;

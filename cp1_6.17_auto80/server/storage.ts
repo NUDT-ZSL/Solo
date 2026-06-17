@@ -70,7 +70,9 @@ function seedData() {
     const d = devices.filter(d => d.status === 'borrowed');
     if (d[i]) {
       const startDate = new Date(now.getTime() - 3 * 86400000);
-      const endDate = new Date(now.getTime() + (1 + Math.random() * 5) * 86400000);
+      const endDate = i < 2 
+        ? new Date(now.getTime() + (0.1 + Math.random() * 0.8) * 86400000)
+        : new Date(now.getTime() + (1 + Math.random() * 5) * 86400000);
       borrowRequests.push({
         id: uuidv4(),
         deviceId: d[i].id,

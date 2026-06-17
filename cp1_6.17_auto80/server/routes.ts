@@ -8,6 +8,49 @@ import {
 
 const router = Router();
 
+const notifications: { id: string; borrower: string; message: string; deviceId: string; deviceName: string; timestamp: number }[] = [];
+
+function checkExpiringBorrows() {
+  const now = Date.now();
+  const borrows = getAllBorrowRequests();
+  const devices = getAllDevices();
+
+  borrows.forEach(req => {
+    if (!req.approved || req.returned) return;
+    const endDate = new Date(req.endDate + 'T23:59:59').getTime();
+    const timeLeft = endDate - now;
+
+    if (timeLeft > 0 && timeLeft <= 86400000) {
+      const existing = notifications.find(n => n.deviceId === req.deviceId && n.borrower === req.borrower);
+      if (!existing) {
+        const dev = devices.find(d => d.id === req.deviceId);
+        notifications.push({
+          id: `${req.deviceId}-${req.borrower}`,
+          borrower: req.borrower,
+          deviceId: req.deviceId,
+          deviceName: dev?.name || '未知设备',
+          message: `设备即将到期，请及时归还`,
+          timestamp: now,
+        });
+        console.log(`[NOTIFICATION] 借用到期提醒: ${req.borrower} - ${dev?.name} 将在 ${Math.ceil(timeLeft / 3600000)} 小时后到期`);
+      }
+    }
+  });
+}
+
+setInterval(checkExpiringBorrows, 60000);
+checkExpiringBorrows();
+
+router.get('/notifications', (_req: Request, res: Response) => {
+  res.json(notifications);
+});
+
+router.get('/notifications/:borrower', (req: Request, res: Response) => {
+  const borrower = req.params.borrower;
+  const userNotifs = notifications.filter(n => n.borrower === borrower);
+  res.json(userNotifs);
+});
+
 router.get('/events', (_req: Request, res: Response) => {
   res.json(getAllEvents());
 });
@@ -92,7 +135,10 @@ router.put('/borrows/:id/approve', (req: Request, res: Response) => {
 
 router.put('/borrows/:id/return', (req: Request, res: Response) => {
   const item = returnBorrowRequest(req.params.id);
-  if (!item) return res.status(404).json({ error: 'Not found' });
+  if (item) {
+    const notifIdx = notifications.findIndex(n => n.deviceId === item.deviceId && n.borrower === item.borrower);
+    if (notifIdx !== -1) notifications.splice(notifIdx, 1);
+  }
   res.json(item);
 });
 

@@ -79,23 +79,12 @@ const Dashboard: React.FC = () => {
         {myEvents.length === 0 && <div style={{ color: '#666', fontSize: 14 }}>暂无参与的演出</div>}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
           {myEvents.map((ev, i) => (
-            <div key={ev.id} style={{
+            <div key={ev.id} className="event-card" style={{
               padding: 20, borderRadius: 8, background: '#252525',
               borderLeft: `4px solid ${ev.type === 'rehearsal' ? '#42A5F5' : '#66BB6A'}`,
-              animation: 'fadeInUp 0.4s ease-out backwards',
               animationDelay: `${i * 0.05}s`,
-              transition: 'transform 0.2s, box-shadow 0.2s',
               cursor: 'default',
-            }}
-              onMouseEnter={e => {
-                (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-3px)';
-                (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLDivElement).style.transform = '';
-                (e.currentTarget as HTMLDivElement).style.boxShadow = '';
-              }}
-            >
+            }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span style={{
                   padding: '2px 10px', borderRadius: 12, fontSize: 12,
@@ -129,12 +118,11 @@ const Dashboard: React.FC = () => {
         {activeBorrows.length === 0 && <div style={{ color: '#666', fontSize: 14 }}>暂无借用中的设备</div>}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
           {activeBorrows.map((b, i) => {
-            const countdown = getCountdown(b.endDate, '23:59:59');
+            const countdown = getCountdown(b.endDate, '23:59:59', new Date(now));
             const isExpired = countdown === '已到期';
             return (
-              <div key={b.id} style={{
+              <div key={b.id} className="borrow-card" style={{
                 padding: 20, borderRadius: 8, background: '#252525',
-                animation: 'fadeInUp 0.4s ease-out backwards',
                 animationDelay: `${i * 0.05}s`,
               }}>
                 <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>{b.deviceName}</div>
@@ -165,4 +153,36 @@ const Dashboard: React.FC = () => {
   );
 };
 
-export default Dashboard;
+const DashboardWithStyles: React.FC = () => (
+  <>
+    <Dashboard />
+    <style>{`
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .event-card {
+        animation: fadeInUp 0.4s ease-out backwards;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+      .event-card:hover {
+        transform: translateY(-3px) !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+      }
+      .borrow-card {
+        animation: fadeInUp 0.4s ease-out backwards;
+      }
+      .countdown-text {
+        font-variant-numeric: tabular-nums;
+      }
+    `}</style>
+  </>
+);
+
+export default DashboardWithStyles;
