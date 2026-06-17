@@ -25,7 +25,8 @@ export class AuroraController {
   private scene: THREE.Scene;
   private bands: AuroraBand[] = [];
   private group: THREE.Group;
-  private params: AuroraParams;
+  private currentParams: AuroraParams;
+  private startParams: AuroraParams;
   private targetParams: AuroraParams;
   private transitionStart = 0;
   private transitionDuration = 0.5;
@@ -36,7 +37,7 @@ export class AuroraController {
     this.group = new THREE.Group();
     this.scene.add(this.group);
 
-    this.params = {
+    const initial: AuroraParams = {
       hue: 160,
       saturation: 100,
       lightness: 60,
@@ -44,14 +45,16 @@ export class AuroraController {
       bandCount: 12,
       opacity: 0.6
     };
-    this.targetParams = { ...this.params };
+    this.currentParams = { ...initial };
+    this.startParams = { ...initial };
+    this.targetParams = { ...initial };
 
     this.createBands();
   }
 
   private createBands() {
     this.clearBands();
-    const count = Math.round(this.params.bandCount);
+    const count = Math.round(this.currentParams.bandCount);
     for (let i = 0; i < count; i++) {
       this.bands.push(this.createSingleBand(i, count));
     }
@@ -82,7 +85,7 @@ export class AuroraController {
     const material = new THREE.MeshBasicMaterial({
       color: this.getGradientColor(0),
       transparent: true,
-      opacity: this.params.opacity,
+      opacity: this.currentParams.opacity,
       side: THREE.DoubleSide,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
@@ -142,20 +145,20 @@ export class AuroraController {
   }
 
   private getGradientColor(t: number): number {
-    const hue1 = this.params.hue;
-    const hue2 = this.params.hue + 40;
+    const hue1 = this.currentParams.hue;
+    const hue2 = this.currentParams.hue + 40;
     const hue = hue1 + (hue2 - hue1) * t;
     const color = new THREE.Color();
-    color.setHSL(hue / 360, this.params.saturation / 100, this.params.lightness / 100);
+    color.setHSL(hue / 360, this.currentParams.saturation / 100, this.currentParams.lightness / 100);
     return color.getHex();
   }
 
   private getGradientColorTHREE(t: number): THREE.Color {
-    const hue1 = this.params.hue;
-    const hue2 = this.params.hue + 40;
+    const hue1 = this.currentParams.hue;
+    const hue2 = this.currentParams.hue + 40;
     const hue = hue1 + (hue2 - hue1) * t;
     const color = new THREE.Color();
-    color.setHSL(hue / 360, this.params.saturation / 100, this.params.lightness / 100);
+    color.setHSL(hue / 360, this.currentParams.saturation / 100, this.currentParams.lightness / 100);
     return color;
   }
 
@@ -163,22 +166,23 @@ export class AuroraController {
     if (this.isTransitioning) {
       const elapsed = time - this.transitionStart;
       const progress = Math.min(elapsed / this.transitionDuration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      this.params.hue = this.lerp(this.params.hue, this.targetParams.hue, eased);
-      this.params.saturation = this.lerp(this.params.saturation, this.targetParams.saturation, eased);
-      this.params.lightness = this.lerp(this.params.lightness, this.targetParams.lightness, eased);
-      this.params.speed = this.lerp(this.params.speed, this.targetParams.speed, eased);
-      this.params.opacity = this.lerp(this.params.opacity, this.targetParams.opacity, eased);
+      const eased = this.easeOutCubic(progress);
+
+      this.currentParams.hue = this.lerp(this.startParams.hue, this.targetParams.hue, eased);
+      this.currentParams.saturation = this.lerp(this.startParams.saturation, this.targetParams.saturation, eased);
+      this.currentParams.lightness = this.lerp(this.startParams.lightness, this.targetParams.lightness, eased);
+      this.currentParams.speed = this.lerp(this.startParams.speed, this.targetParams.speed, eased);
+      this.currentParams.opacity = this.lerp(this.startParams.opacity, this.targetParams.opacity, eased);
 
       const targetCount = Math.round(this.targetParams.bandCount);
       if (targetCount !== this.bands.length && progress > 0.5) {
-        this.params.bandCount = targetCount;
+        this.currentParams.bandCount = targetCount;
         this.createBands();
       }
 
       if (progress >= 1) {
         this.isTransitioning = false;
-        this.params.bandCount = this.targetParams.bandCount;
+        this.currentParams.bandCount = this.targetParams.bandCount;
       }
     }
 
@@ -187,8 +191,12 @@ export class AuroraController {
     }
   }
 
+  private easeOutCubic(t: number): number {
+    return 1 - Math.pow(1 - t, 3);
+  }
+
   private updateBand(band: AuroraBand, time: number) {
-    const speed = this.params.speed;
+    const speed = this.currentParams.speed;
 
     for (let i = 0; i < band.controlPoints.length; i++) {
       const t = i / (band.controlPoints.length - 1);
@@ -200,7 +208,7 @@ export class AuroraController {
     }
 
     this.rebuildBandGeometry(band);
-    (band.mesh.material as THREE.MeshBasicMaterial).opacity = this.params.opacity;
+    (band.mesh.material as THREE.MeshBasicMaterial).opacity = this.currentParams.opacity;
   }
 
   private rebuildBandGeometry(band: AuroraBand) {
@@ -269,6 +277,7 @@ export class AuroraController {
   }
 
   public setParams(params: Partial<AuroraParams>, currentTime: number) {
+    this.startParams = { ...this.currentParams };
     this.targetParams = { ...this.targetParams, ...params };
     this.transitionStart = currentTime;
     this.isTransitioning = true;
@@ -276,16 +285,16 @@ export class AuroraController {
 
   public getStatus(): { bandCount: number; mainColor: string; speed: number } {
     const color = new THREE.Color();
-    color.setHSL(this.params.hue / 360, this.params.saturation / 100, this.params.lightness / 100);
+    color.setHSL(this.currentParams.hue / 360, this.currentParams.saturation / 100, this.currentParams.lightness / 100);
     const hex = '#' + color.getHexString().toUpperCase();
     return {
       bandCount: this.bands.length,
       mainColor: hex,
-      speed: Math.round(this.params.speed * 10) / 10
+      speed: Math.round(this.currentParams.speed * 10) / 10
     };
   }
 
   public getParams(): AuroraParams {
-    return { ...this.params };
+    return { ...this.currentParams };
   }
 }
