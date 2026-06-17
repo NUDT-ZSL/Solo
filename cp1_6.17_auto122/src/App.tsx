@@ -69,6 +69,17 @@ const App: React.FC = () => {
   const [isMobilePanelOpen, setIsMobilePanelOpen] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [exportProgress, setExportProgress] = useState<number>(0);
+  const [isMobileViewport, setIsMobileViewport] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  );
+
+  useEffect(() => {
+    const handleResize = (): void => {
+      setIsMobileViewport(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const recorderRefs = useRef<Map<TrackId, RecorderManager>>(new Map());
   const canvasRefs = useRef<Map<TrackId, HTMLCanvasElement>>(new Map());
@@ -523,13 +534,20 @@ const App: React.FC = () => {
             );
           })}
 
-          <button
-            className="mobile-panel-toggle"
-            onClick={() => setIsMobilePanelOpen((v) => !v)}
-            aria-label={isMobilePanelOpen ? '关闭控制面板' : '打开控制面板'}
-          >
-            {isMobilePanelOpen ? '隐藏控制面板 ▲' : '显示控制面板 ▼'}
-          </button>
+          {isMobileViewport && (
+            <button
+              className="mobile-panel-toggle"
+              onClick={() => setIsMobilePanelOpen((v) => !v)}
+              aria-label={isMobilePanelOpen ? '关闭控制面板' : '打开控制面板'}
+              aria-expanded={isMobilePanelOpen}
+            >
+              <span className="hamburger-icon">
+                <span className={`hamburger-line ${isMobilePanelOpen ? 'line-1' : ''}`} />
+                <span className={`hamburger-line ${isMobilePanelOpen ? 'line-2' : ''}`} />
+                <span className={`hamburger-line ${isMobilePanelOpen ? 'line-3' : ''}`} />
+              </span>
+            </button>
+          )}
         </section>
 
         <aside className={`control-panel ${isMobilePanelOpen ? 'mobile-open' : ''}`} aria-label="音轨控制面板">

@@ -275,40 +275,25 @@ export class WaveformRenderer {
 
     const width = this.getWidth();
     const height = this.getHeight();
-    const fadeInWidth = Math.max(1, (fadeInSec / totalDurationSec) * width);
-    const fadeOutWidth = Math.max(1, (fadeOutSec / totalDurationSec) * width);
+    const pixelsPer100ms = 10;
+    const fadeInWidth = Math.max(0, Math.min(width * 0.5, fadeInSec * 10 * pixelsPer100ms));
+    const fadeOutWidth = Math.max(0, Math.min(width * 0.5, fadeOutSec * 10 * pixelsPer100ms));
 
-    if (fadeInWidth > 2 && fadeInSec > 0) {
+    if (fadeInWidth > 1 && fadeInSec > 0) {
       const grad = this.ctx.createLinearGradient(0, 0, fadeInWidth, 0);
       grad.addColorStop(0, `rgba(0, 0, 0, ${startOpacity})`);
-      grad.addColorStop(0.6, `rgba(0, 0, 0, ${startOpacity * 0.35})`);
       grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
       this.ctx.fillStyle = grad;
       this.ctx.fillRect(0, 0, fadeInWidth, height);
-
-      this.ctx.strokeStyle = `rgba(255, 255, 255, 0.25)`;
-      this.ctx.lineWidth = 1;
-      this.ctx.beginPath();
-      this.ctx.moveTo(fadeInWidth, 0);
-      this.ctx.lineTo(fadeInWidth, height);
-      this.ctx.stroke();
     }
 
-    if (fadeOutWidth > 2 && fadeOutSec > 0) {
+    if (fadeOutWidth > 1 && fadeOutSec > 0) {
       const startX = width - fadeOutWidth;
       const grad = this.ctx.createLinearGradient(startX, 0, width, 0);
       grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-      grad.addColorStop(0.4, `rgba(0, 0, 0, ${startOpacity * 0.35})`);
       grad.addColorStop(1, `rgba(0, 0, 0, ${startOpacity})`);
       this.ctx.fillStyle = grad;
       this.ctx.fillRect(startX, 0, fadeOutWidth, height);
-
-      this.ctx.strokeStyle = `rgba(255, 255, 255, 0.25)`;
-      this.ctx.lineWidth = 1;
-      this.ctx.beginPath();
-      this.ctx.moveTo(startX, 0);
-      this.ctx.lineTo(startX, height);
-      this.ctx.stroke();
     }
   }
 
@@ -331,30 +316,31 @@ export class WaveformRenderer {
     }
   }
 
+  private drawPattern(width: number, height: number): void {
+    const stripeSpacing = 8;
+    const lineWidth = 1;
+    const diagonal = Math.sqrt(width * width + height * height);
+
+    this.ctx.save();
+    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    this.ctx.lineWidth = lineWidth;
+
+    this.ctx.beginPath();
+    for (let x = -diagonal; x < width + diagonal; x += stripeSpacing) {
+      this.ctx.moveTo(x, 0);
+      this.ctx.lineTo(x + diagonal, diagonal);
+    }
+    this.ctx.stroke();
+
+    this.ctx.restore();
+  }
+
   private applySoloStripeOverlay(): void {
     const width = this.getWidth();
     const height = this.getHeight();
-    const stripeWidth = 8;
-    const gap = 10;
 
     this.ctx.save();
-
-    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-    this.ctx.fillRect(0, 0, width, height);
-
-    this.ctx.globalCompositeOperation = 'source-over';
-    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
-    this.ctx.save();
-
-    for (let x = -height * 2; x < width + height * 2; x += stripeWidth + gap) {
-      this.ctx.save();
-      this.ctx.translate(x, 0);
-      this.ctx.rotate(Math.PI / 4);
-      this.ctx.fillRect(0, -height * 2, stripeWidth, height * 4);
-      this.ctx.restore();
-    }
-
-    this.ctx.restore();
+    this.drawPattern(width, height);
     this.ctx.restore();
   }
 
