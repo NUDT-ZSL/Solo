@@ -1,0 +1,50 @@
+[
+  {
+    "id": "succulent",
+    "name": "多肉",
+    "lightPreference": "sunny",
+    "defaultHeight": 15,
+    "color": "#7cb342",
+    "modelType": "succulent"
+  },
+  {
+    "id": "fern",
+    "name": "蕨类",
+    "lightPreference": "shady",
+    "defaultHeight": 25,
+    "color": "#558b2f",
+    "modelType": "fern"
+  },
+  {
+    "id": "monstera",
+    "name": "龟背竹",
+    "lightPreference": "neutral",
+    "defaultHeight": 40,
+    "color": "#2e7d32",
+    "modelType": "monstera"
+  },
+  {
+    "id": "cactus",
+    "name": "仙人掌",
+    "lightPreference": "sunny",
+    "defaultHeight": 30,
+    "color": "#9ccc65",
+    "modelType": "cactus"
+  },
+  {
+    "id": "rose",
+    "name": "玫瑰",
+    "lightPreference": "sunny",
+    "defaultHeight": 35,
+    "color": "#e91e63",
+    "modelType": "rose"
+  },
+  {
+    "id": "lavender",
+    "name": "薰衣草",
+    "lightPreference": "sunny",
+    "defaultHeight": 28,
+    "color": "#9c27b0",
+    "modelType": "lavender"
+  }
+]
