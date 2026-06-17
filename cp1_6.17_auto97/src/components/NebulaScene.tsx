@@ -1,9 +1,32 @@
-import { useRef, useMemo, useEffect, useState, useCallback } from 'react';
+import { useRef, useMemo, useEffect, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Stars } from '@react-three/drei';
 import * as THREE from 'three';
 import { useNebulaStore } from '../store/useNebulaStore';
 import type { PresetType } from '../types';
+
+function createNebulaTexture(): THREE.Texture {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+
+  const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  gradient.addColorStop(0.2, 'rgba(255, 255, 255, 0.9)');
+  gradient.addColorStop(0.4, 'rgba(255, 255, 255, 0.6)');
+  gradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.3)');
+  gradient.addColorStop(0.8, 'rgba(255, 255, 255, 0.1)');
+  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+}
 
 function generateSpiralPositions(count: number, radius: number): Float32Array {
   const positions = new Float32Array(count * 3);
@@ -91,6 +114,7 @@ function generateColors(
 ): Float32Array {
   const colors = new Float32Array(count * 3);
   const primary = new THREE.Color(primaryColor);
+  const hueJitterAmount = 5 / 360;
 
   for (let i = 0; i < count; i++) {
     const x = positions[i * 3];
@@ -101,7 +125,10 @@ function generateColors(
 
     const centerHue = (30 + hueOffset) / 360;
     const edgeHue = (220 + hueOffset) / 360;
-    const hue = centerHue + (edgeHue - centerHue) * t;
+    let hue = centerHue + (edgeHue - centerHue) * t;
+
+    const hueJitter = (Math.random() - 0.5) * 2 * hueJitterAmount;
+    hue = (hue + hueJitterAmount + hueJitter) % 1;
 
     const saturation = 0.8 - t * 0.2;
     const lightness = 0.6 - t * 0.2;
@@ -116,10 +143,18 @@ function generateColors(
   return colors;
 }
 
-function generateSizes(count: number): Float32Array {
+function generateSizes(count: number, positions: Float32Array, radius: number): Float32Array {
   const sizes = new Float32Array(count);
   for (let i = 0; i < count; i++) {
-    sizes[i] = 0.1 + Math.random() * 0.4;
+    const x = positions[i * 3];
+    const y = positions[i * 3 + 1];
+    const z = positions[i * 3 + 2];
+    const dist = Math.sqrt(x * x + y * y + z * z);
+    const t = Math.min(dist / radius, 1);
+
+    const distanceFactor = 1.2 - t * 0.6;
+    const baseSize = 0.1 + Math.random() * 0.4;
+    sizes[i] = baseSize * distanceFactor;
   }
   return sizes;
 }
@@ -132,8 +167,12 @@ function generateOpacities(count: number, baseOpacity: number): Float32Array {
   return opacities;
 }
 
-function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
+function generateRotations(count: number): Float32Array {
+  const rotations = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    rotations[i] = Math.random() * Math.PI * 2;
+  }
+  return rotations;
 }
 
 function lerpArray(a: Float32Array, b: Float32Array, t: number, out: Float32Array): void {
@@ -142,6 +181,63 @@ function lerpArray(a: Float32Array, b: Float32Array, t: number, out: Float32Arra
     out[i] = a[i] + (b[i] - a[i]) * t;
   }
 }
+
+const vertexShader = `
+  attribute float aSize;
+  attribute float aRotation;
+  attribute float aOpacity;
+  attribute vec3 color;
+
+  uniform float uSizeScale;
+  uniform float uBrightness;
+
+  varying float vOpacity;
+  varying float vRotation;
+  varying vec3 vColor;
+
+  void main() {
+    vOpacity = aOpacity;
+    vRotation = aRotation;
+    vColor = color;
+
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    float size = aSize * uSizeScale * uBrightness * 300.0 / -mvPosition.z;
+
+    gl_PointSize = size;
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`;
+
+const fragmentShader = `
+  uniform sampler2D uTexture;
+  uniform float uOpacity;
+
+  varying float vOpacity;
+  varying float vRotation;
+  varying vec3 vColor;
+
+  void main() {
+    vec2 center = gl_PointCoord - 0.5;
+
+    float cosR = cos(vRotation);
+    float sinR = sin(vRotation);
+    vec2 rotated = vec2(
+      center.x * cosR - center.y * sinR,
+      center.x * sinR + center.y * cosR
+    );
+
+    vec2 uv = rotated + 0.5;
+
+    vec4 texColor = texture2D(uTexture, uv);
+    float alpha = texColor.a * vOpacity * uOpacity;
+
+    if (alpha < 0.01) {
+      discard;
+    }
+
+    gl_FragColor = vec4(texColor.rgb * vColor, alpha);
+  }
+`;
 
 interface NebulaParticlesProps {
   preset: PresetType;
@@ -167,34 +263,61 @@ function NebulaParticles({
   const meshRef = useRef<THREE.Points>(null);
   const nebulaRadius = 20;
 
-  const [targetPositions, setTargetPositions] = useState<Float32Array>(() =>
-    generateSpiralPositions(density, nebulaRadius)
-  );
-  const [targetColors, setTargetColors] = useState<Float32Array>(() =>
-    generateColors(density, targetPositions, nebulaRadius, hueOffset, primaryColor)
-  );
-  const [targetSizes, setTargetSizes] = useState<Float32Array>(() => generateSizes(density));
-  const [targetOpacities, setTargetOpacities] = useState<Float32Array>(() =>
-    generateOpacities(density, opacityBase)
-  );
+  const texture = useMemo(() => createNebulaTexture(), []);
 
-  const [currentPositions, setCurrentPositions] = useState<Float32Array>(() =>
-    new Float32Array(targetPositions)
-  );
-  const [currentColors, setCurrentColors] = useState<Float32Array>(() =>
-    new Float32Array(targetColors)
-  );
+  const currentDataRef = useRef<{
+    positions: Float32Array;
+    colors: Float32Array;
+    sizes: Float32Array;
+    rotations: Float32Array;
+    opacities: Float32Array;
+  } | null>(null);
 
-  const [transitionProgress, setTransitionProgress] = useState(1);
-  const [isPresetChange, setIsPresetChange] = useState(false);
-  const lastPresetRef = useRef<PresetType>(preset);
+  const targetDataRef = useRef<{
+    positions: Float32Array;
+    colors: Float32Array;
+    sizes: Float32Array;
+    rotations: Float32Array;
+    opacities: Float32Array;
+  } | null>(null);
+
+  const transitionProgressRef = useRef(1);
+  const transitionDurationRef = useRef(0.5);
+  const lastDensityRef = useRef(density);
+
+  const material = useMemo(() => {
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTexture: { value: texture },
+        uSizeScale: { value: sizeScale },
+        uBrightness: { value: brightness },
+        uOpacity: { value: 1.0 },
+      },
+      vertexShader,
+      fragmentShader,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    return mat;
+  }, [texture]);
 
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(currentPositions, 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(currentColors, 3));
+    const positions = new Float32Array(density * 3);
+    const colors = new Float32Array(density * 3);
+    const sizes = new Float32Array(density);
+    const rotations = new Float32Array(density);
+    const opacities = new Float32Array(density);
+
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geo.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+    geo.setAttribute('aRotation', new THREE.BufferAttribute(rotations, 1));
+    geo.setAttribute('aOpacity', new THREE.BufferAttribute(opacities, 1));
+
     return geo;
-  }, []);
+  }, [density]);
 
   useEffect(() => {
     let newPositions: Float32Array;
@@ -212,66 +335,137 @@ function NebulaParticles({
     }
 
     const newColors = generateColors(density, newPositions, nebulaRadius, hueOffset, primaryColor);
-    const newSizes = generateSizes(density);
+    const newSizes = generateSizes(density, newPositions, nebulaRadius);
+    const newRotations = generateRotations(density);
     const newOpacities = generateOpacities(density, opacityBase);
 
-    const presetChanged = lastPresetRef.current !== preset;
-    lastPresetRef.current = preset;
+    const densityChanged = lastDensityRef.current !== density;
+    lastDensityRef.current = density;
 
-    setCurrentPositions(new Float32Array(targetPositions));
-    setCurrentColors(new Float32Array(targetColors));
+    if (densityChanged || !currentDataRef.current) {
+      const posAttr = geometry.getAttribute('position') as THREE.BufferAttribute;
+      const colAttr = geometry.getAttribute('color') as THREE.BufferAttribute;
+      const sizeAttr = geometry.getAttribute('aSize') as THREE.BufferAttribute;
+      const rotAttr = geometry.getAttribute('aRotation') as THREE.BufferAttribute;
+      const opacityAttr = geometry.getAttribute('aOpacity') as THREE.BufferAttribute;
 
-    setTargetPositions(newPositions);
-    setTargetColors(newColors);
-    setTargetSizes(newSizes);
-    setTargetOpacities(newOpacities);
+      (posAttr.array as Float32Array).set(newPositions);
+      (colAttr.array as Float32Array).set(newColors);
+      (sizeAttr.array as Float32Array).set(newSizes);
+      (rotAttr.array as Float32Array).set(newRotations);
+      (opacityAttr.array as Float32Array).set(newOpacities);
 
-    setTransitionProgress(0);
-    setIsPresetChange(presetChanged);
-  }, [preset, density, hueOffset, primaryColor, opacityBase]);
+      posAttr.needsUpdate = true;
+      colAttr.needsUpdate = true;
+      sizeAttr.needsUpdate = true;
+      rotAttr.needsUpdate = true;
+      opacityAttr.needsUpdate = true;
+
+      currentDataRef.current = {
+        positions: new Float32Array(newPositions),
+        colors: new Float32Array(newColors),
+        sizes: new Float32Array(newSizes),
+        rotations: new Float32Array(newRotations),
+        opacities: new Float32Array(newOpacities),
+      };
+      targetDataRef.current = null;
+      transitionProgressRef.current = 1;
+    } else {
+      currentDataRef.current = {
+        positions: new Float32Array(
+          (geometry.getAttribute('position') as THREE.BufferAttribute).array as Float32Array
+        ),
+        colors: new Float32Array(
+          (geometry.getAttribute('color') as THREE.BufferAttribute).array as Float32Array
+        ),
+        sizes: new Float32Array(
+          (geometry.getAttribute('aSize') as THREE.BufferAttribute).array as Float32Array
+        ),
+        rotations: new Float32Array(
+          (geometry.getAttribute('aRotation') as THREE.BufferAttribute).array as Float32Array
+        ),
+        opacities: new Float32Array(
+          (geometry.getAttribute('aOpacity') as THREE.BufferAttribute).array as Float32Array
+        ),
+      };
+
+      targetDataRef.current = {
+        positions: newPositions,
+        colors: newColors,
+        sizes: newSizes,
+        rotations: newRotations,
+        opacities: newOpacities,
+      };
+
+      transitionProgressRef.current = 0;
+      transitionDurationRef.current = 1.0;
+    }
+  }, [preset, density, hueOffset, primaryColor, opacityBase, geometry]);
 
   useFrame((_, delta) => {
     if (!meshRef.current) return;
 
-    const transitionDuration = isPresetChange ? 1.0 : 0.5;
-    const progressDelta = delta / transitionDuration;
-    const newProgress = Math.min(1, transitionProgress + progressDelta);
-    setTransitionProgress(newProgress);
+    const geo = meshRef.current.geometry;
+    const posAttr = geo.getAttribute('position') as THREE.BufferAttribute;
+    const colAttr = geo.getAttribute('color') as THREE.BufferAttribute;
+    const sizeAttr = geo.getAttribute('aSize') as THREE.BufferAttribute;
+    const rotAttr = geo.getAttribute('aRotation') as THREE.BufferAttribute;
+    const opacityAttr = geo.getAttribute('aOpacity') as THREE.BufferAttribute;
 
-    const t = 1 - Math.pow(1 - newProgress, 3);
+    if (targetDataRef.current && currentDataRef.current && transitionProgressRef.current < 1) {
+      transitionProgressRef.current = Math.min(
+        1,
+        transitionProgressRef.current + delta / transitionDurationRef.current
+      );
 
-    const posAttr = meshRef.current.geometry.getAttribute('position') as THREE.BufferAttribute;
-    const colAttr = meshRef.current.geometry.getAttribute('color') as THREE.BufferAttribute;
+      const t = 1 - Math.pow(1 - transitionProgressRef.current, 3);
 
-    const posArray = posAttr.array as Float32Array;
-    const colArray = colAttr.array as Float32Array;
+      lerpArray(
+        currentDataRef.current.positions,
+        targetDataRef.current.positions,
+        t,
+        posAttr.array as Float32Array
+      );
+      lerpArray(
+        currentDataRef.current.colors,
+        targetDataRef.current.colors,
+        t,
+        colAttr.array as Float32Array
+      );
+      lerpArray(
+        currentDataRef.current.sizes,
+        targetDataRef.current.sizes,
+        t,
+        sizeAttr.array as Float32Array
+      );
+      lerpArray(
+        currentDataRef.current.rotations,
+        targetDataRef.current.rotations,
+        t,
+        rotAttr.array as Float32Array
+      );
+      lerpArray(
+        currentDataRef.current.opacities,
+        targetDataRef.current.opacities,
+        t,
+        opacityAttr.array as Float32Array
+      );
 
-    lerpArray(currentPositions, targetPositions, t, posArray);
-    lerpArray(currentColors, targetColors, t, colArray);
-
-    posAttr.needsUpdate = true;
-    colAttr.needsUpdate = true;
+      posAttr.needsUpdate = true;
+      colAttr.needsUpdate = true;
+      sizeAttr.needsUpdate = true;
+      rotAttr.needsUpdate = true;
+      opacityAttr.needsUpdate = true;
+    }
 
     meshRef.current.rotation.y += rotationSpeed * delta * 60;
 
-    const material = meshRef.current.material as THREE.PointsMaterial;
-    material.size = 0.5 * sizeScale * brightness;
-    material.opacity = 1;
+    const mat = meshRef.current.material as THREE.ShaderMaterial;
+    mat.uniforms.uSizeScale.value = sizeScale;
+    mat.uniforms.uBrightness.value = brightness;
   });
 
-  return (
-    <points ref={meshRef} geometry={geometry}>
-      <pointsMaterial
-        size={0.5}
-        vertexColors
-        transparent
-        opacity={1}
-        blending={THREE.AdditiveBlending}
-        depthWrite={false}
-        sizeAttenuation
-      />
-    </points>
-  );
+  return <points ref={meshRef} geometry={geometry} material={material} />;
 }
 
 function Starfield() {
@@ -302,7 +496,6 @@ function Starfield() {
   useFrame(({ clock }) => {
     if (!starsRef.current) return;
 
-    const material = starsRef.current.material as THREE.PointsMaterial;
     const time = clock.getElapsedTime();
 
     const geometry = starsRef.current.geometry;
