@@ -1,0 +1,260 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: monospace;
+  background: linear-gradient(180deg, #0A0A2E 0%, #1A1A3E 100%);
+}
+
+.game-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: linear-gradient(180deg, #0A0A2E 0%, #1A1A3E 100%);
+}
+
+.game-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.track-line {
+  position: absolute;
+  width: 2px;
+  height: 100%;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.diamond {
+  position: absolute;
+  transform: rotate(45deg);
+  opacity: 0.8;
+  transition: none;
+}
+
+.diamond-inner {
+  width: 100%;
+  height: 100%;
+  background: currentColor;
+  box-shadow: 0 0 1px currentColor, 0 0 2px currentColor;
+}
+
+.player {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+}
+
+.player-ring {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 5px solid #00FFFF;
+  box-shadow: 0 0 10px #00FFFF, 0 0 20px #00FFFF, inset 0 0 10px rgba(0, 255, 255, 0.3);
+  transition: transform 0.05s linear;
+}
+
+.player-ring::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  box-shadow: 0 0 5px #FFFFFF;
+}
+
+.player.flashing {
+  animation: flash 0.1s ease-in-out infinite;
+}
+
+@keyframes flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.energy-bar-container {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  width: 200px;
+  height: 20px;
+  background: #333;
+  border-radius: 4px;
+  overflow: hidden;
+  z-index: 100;
+}
+
+.energy-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #00FF00, #00CC00);
+  transition: width 0.2s ease-out;
+  box-shadow: 0 0 10px #00FF00;
+}
+
+.score-display {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  font-family: monospace;
+  font-size: 24px;
+  color: #FFFFFF;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+  z-index: 100;
+  transition: transform 0.3s ease-out;
+}
+
+.score-display.animate {
+  transform: scale(1.2);
+}
+
+.countdown {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: monospace;
+  font-size: 48px;
+  color: #FFFFFF;
+  text-shadow: 0 0 20px #00FFFF;
+  z-index: 200;
+  animation: countdown-pop 1.5s ease-out;
+}
+
+@keyframes countdown-pop {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+.screen-flash {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #FFFFFF;
+  pointer-events: none;
+  z-index: 150;
+  animation: flash-white 0.1s ease-out forwards;
+}
+
+@keyframes flash-white {
+  0% { opacity: 0.8; }
+  100% { opacity: 0; }
+}
+
+.game-over-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  animation: fade-in 1s ease-out;
+}
+
+@keyframes fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.game-over-panel {
+  background: #FFFFFF;
+  border-radius: 20px;
+  padding: 40px;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  min-width: 300px;
+}
+
+.game-over-title {
+  font-family: monospace;
+  font-size: 32px;
+  color: #333;
+  margin-bottom: 20px;
+}
+
+.game-over-score {
+  font-family: monospace;
+  font-size: 24px;
+  color: #333;
+  margin-bottom: 10px;
+}
+
+.game-over-perfect {
+  font-family: monospace;
+  font-size: 18px;
+  color: #666;
+  margin-bottom: 30px;
+}
+
+.restart-button {
+  font-family: monospace;
+  font-size: 18px;
+  padding: 12px 30px;
+  background: #1E90FF;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.restart-button:hover {
+  background: #4169E1;
+}
+
+.power-up-text {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: monospace;
+  font-size: 20px;
+  color: #FFD700;
+  text-shadow: 0 0 10px #FFD700;
+  z-index: 100;
+  animation: pulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.8; }
+  100% { opacity: 1; }
+}
+
+.particle {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
