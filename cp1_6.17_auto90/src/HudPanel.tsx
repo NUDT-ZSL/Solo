@@ -1,35 +1,73 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useGameStore } from './gameStore'
 import { getUpgradeCost } from './planetData'
+import type { ResourceType } from './gameStore'
 
 export default function HudPanel() {
-  const { resources, upgrades, upgradePart, resourceFlash } = useGameStore()
+  const { resources, upgrades, upgradePart, miningCompleteEvents, removeMiningCompleteEvent } =
+    useGameStore()
   const [flashState, setFlashState] = useState({ iron: false, uranium: false, crystal: false })
+  const processedEventIds = useRef<Set<number>>(new Set())
 
   const maxBlocks = 20
 
   useEffect(() => {
-    const checkFlash = () => {
-      const now = performance.now()
-      const flashDuration = 300
-      const newFlashState = {
-        iron: now - resourceFlash.iron < flashDuration,
-        uranium: now - resourceFlash.uranium < flashDuration,
-        crystal: now - resourceFlash.crystal < flashDuration,
+    const flashDuration = 300
+    const activeFlashes: { type: ResourceType; startTime: number }[] = []
+
+    miningCompleteEvents.forEach((event) => {
+      if (!processedEventIds.current.has(event.id)) {
+        processedEventIds.current.add(event.id)
+        activeFlashes.push({
+          type: event.resourceType,
+          startTime: event.timestamp,
+        })
       }
-      if (
+    })
+
+    if (activeFlashes.length === 0) {
+      return
+    }
+
+    const updateFlashes = () => {
+      const now = performance.now()
+      const newFlashState = { ...flashState }
+
+      for (let i = activeFlashes.length - 1; i >= 0; i--) {
+        const flash = activeFlashes[i]
+        const elapsed = now - flash.startTime
+        if (elapsed < flashDuration) {
+          newFlashState[flash.type] = true
+        } else {
+          newFlashState[flash.type] = false
+          activeFlashes.splice(i, 1)
+        }
+      }
+
+      const hasChanges =
         newFlashState.iron !== flashState.iron ||
         newFlashState.uranium !== flashState.uranium ||
         newFlashState.crystal !== flashState.crystal
-      ) {
+
+      if (hasChanges) {
         setFlashState(newFlashState)
+      }
+
+      const expiredEvents = miningCompleteEvents.filter(
+        (e) => now - e.timestamp > flashDuration * 2
+      )
+      expiredEvents.forEach((e) => {
+        removeMiningCompleteEvent(e.id)
+        processedEventIds.current.delete(e.id)
+      })
+
+      if (activeFlashes.length > 0) {
+        requestAnimationFrame(updateFlashes)
       }
     }
 
-    checkFlash()
-    const interval = setInterval(checkFlash, 50)
-    return () => clearInterval(interval)
-  }, [resourceFlash, flashState])
+    requestAnimationFrame(updateFlashes)
+  }, [miningCompleteEvents, flashState, removeMiningCompleteEvent])
 
   const renderResourceBar = (
     value: number,
@@ -61,10 +99,7 @@ export default function HudPanel() {
     )
   }
 
-  const renderUpgradeItem = (
-    type: 'engine' | 'cargo' | 'laser',
-    name: string
-  ) => {
+  const renderUpgradeItem = (type: 'engine' | 'cargo' | 'laser', name: string) => {
     const cost = getUpgradeCost(type, upgrades[type].level)
     const canAfford =
       resources.iron >= cost.iron &&
@@ -93,9 +128,7 @@ export default function HudPanel() {
           <span className="upgrade-name">{name}</span>
           <span className="upgrade-level">Lv {upgrades[type].level}</span>
         </div>
-        <div className="upgrade-stats">
-          {getStatsText()}
-        </div>
+        <div className="upgrade-stats">{getStatsText()}</div>
         <div className="upgrade-cost">
           <span className="cost-item">
             <span className="cost-dot iron-color" />
@@ -110,11 +143,7 @@ export default function HudPanel() {
             {cost.crystal}
           </span>
         </div>
-        <button
-          className="upgrade-button"
-          onClick={handleUpgrade}
-          disabled={!canAfford}
-        >
+        <button className="upgrade-button" onClick={handleUpgrade} disabled={!canAfford}>
           升级
         </button>
       </div>
