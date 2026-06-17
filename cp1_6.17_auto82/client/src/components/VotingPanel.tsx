@@ -13,6 +13,7 @@ export const VotingPanel: React.FC<VotingPanelProps> = ({ topic, onClose, onVote
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasVoted, setHasVoted] = useState(initialHasVoted);
   const [animateButton, setAnimateButton] = useState(false);
+  const [voteSuccess, setVoteSuccess] = useState(false);
   const [localTopic, setLocalTopic] = useState(topic);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +35,7 @@ export const VotingPanel: React.FC<VotingPanelProps> = ({ topic, onClose, onVote
     try {
       const success = await onVote(selectedOption);
       if (success) {
-        setHasVoted(true);
+        setVoteSuccess(true);
         setLocalTopic((prev) => ({
           ...prev,
           options: prev.options.map((opt) =>
@@ -42,6 +43,11 @@ export const VotingPanel: React.FC<VotingPanelProps> = ({ topic, onClose, onVote
           ),
           totalVotes: prev.totalVotes + 1,
         }));
+
+        setTimeout(() => {
+          setVoteSuccess(false);
+          setHasVoted(true);
+        }, 1500);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '投票失败');
@@ -129,7 +135,7 @@ export const VotingPanel: React.FC<VotingPanelProps> = ({ topic, onClose, onVote
         </div>
 
         <div className="modal-footer">
-          {!hasVoted && (
+          {!hasVoted && !voteSuccess && (
             <button
               className={`btn btn-primary btn-large ${animateButton ? 'animate-scale' : ''}`}
               disabled={!selectedOption || isSubmitting}
@@ -138,7 +144,18 @@ export const VotingPanel: React.FC<VotingPanelProps> = ({ topic, onClose, onVote
               {isSubmitting ? '提交中...' : '提交投票'}
             </button>
           )}
-          {hasVoted && (
+          {voteSuccess && (
+            <button
+              className="btn btn-success btn-large btn-vote-success"
+              disabled
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              投票成功
+            </button>
+          )}
+          {hasVoted && !voteSuccess && (
             <button className="btn btn-secondary btn-large" onClick={onClose}>
               关闭
             </button>

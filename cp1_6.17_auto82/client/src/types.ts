@@ -13,6 +13,7 @@ export interface Topic {
   createdAt: string;
   status: 'pending' | 'active' | 'ended';
   totalVotes: number;
+  targetVotes?: number;
 }
 
 export interface Report {

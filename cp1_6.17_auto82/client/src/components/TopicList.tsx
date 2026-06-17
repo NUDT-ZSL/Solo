@@ -9,15 +9,18 @@ interface TopicListProps {
   onDelete: (topic: Topic) => void;
 }
 
-const getTimeRemaining = (deadline: string): { text: string; isUrgent: boolean } => {
+type TopicUrgency = 'ending-soon' | 'hot' | 'active';
+
+const getTimeRemaining = (deadline: string): { text: string; isUrgent: boolean; urgency: TopicUrgency; totalMinutes: number } => {
   const now = new Date().getTime();
   const deadlineTime = new Date(deadline).getTime();
   const diff = deadlineTime - now;
 
   if (diff <= 0) {
-    return { text: '已结束', isUrgent: false };
+    return { text: '已结束', isUrgent: false, urgency: 'active', totalMinutes: 0 };
   }
 
+  const totalMinutes = Math.floor(diff / (1000 * 60));
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
   const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
@@ -31,7 +34,14 @@ const getTimeRemaining = (deadline: string): { text: string; isUrgent: boolean }
     text = `剩余 ${minutes} 分钟`;
   }
 
-  return { text, isUrgent: days < 1 };
+  let urgency: TopicUrgency = 'hot';
+  if (totalMinutes < 60) {
+    urgency = 'ending-soon';
+  } else if (totalMinutes > 24 * 60) {
+    urgency = 'active';
+  }
+
+  return { text, isUrgent: totalMinutes < 60, urgency, totalMinutes };
 };
 
 const formatDate = (dateStr: string): string => {
@@ -49,6 +59,8 @@ export const TopicList: React.FC<TopicListProps> = ({
   onEdit,
   onDelete,
 }) => {
+  const DEFAULT_TARGET_VOTES = 1000;
+
   const getStatusBadge = (status: Topic['status']) => {
     const styles: Record<string, string> = {
       pending: 'badge-pending',
@@ -63,19 +75,62 @@ export const TopicList: React.FC<TopicListProps> = ({
     return <span className={`badge ${styles[status]}`}>{labels[status]}</span>;
   };
 
+  const getUrgencyBadge = (urgency: TopicUrgency, status: Topic['status']) => {
+    if (status !== 'active') return null;
+
+    const config: Record<TopicUrgency, { label: string; className: string }> = {
+      'ending-soon': { label: '即将结束', className: 'urgency-badge urgency-ending' },
+      'hot': { label: '火热投票中', className: 'urgency-badge urgency-hot' },
+      'active': { label: '进行中', className: 'urgency-badge urgency-active' },
+    };
+
+    const { label, className } = config[urgency];
+    return (
+      <span className={className}>
+        {urgency === 'ending-soon' && (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+        )}
+        {label}
+      </span>
+    );
+  };
+
+  const getCardClassName = (urgency: TopicUrgency, status: Topic['status']) => {
+    let className = 'topic-card';
+    if (status === 'active') {
+      if (urgency === 'ending-soon') {
+        className += ' card-urgent';
+      } else if (urgency === 'hot') {
+        className += ' card-hot';
+      }
+    }
+    return className;
+  };
+
   return (
     <div className="topic-grid">
       {topics.map((topic) => {
         const timeInfo = getTimeRemaining(topic.deadline);
         const totalVotes = topic.totalVotes;
+        const targetVotes = topic.targetVotes || DEFAULT_TARGET_VOTES;
+        const progressPercent = Math.min((totalVotes / targetVotes) * 100, 100);
         const previewOptions = topic.options.slice(0, 2);
 
         return (
           <div
             key={topic.id}
-            className="topic-card"
+            className={getCardClassName(timeInfo.urgency, topic.status)}
             onClick={() => topic.status !== 'ended' && onTopicClick(topic)}
           >
+            {topic.status === 'active' && (
+              <div className="card-urgency-badge">
+                {getUrgencyBadge(timeInfo.urgency, topic.status)}
+              </div>
+            )}
             <div className="card-header">
               <h3 className="card-title">{topic.title}</h3>
               {getStatusBadge(topic.status)}
@@ -132,6 +187,24 @@ export const TopicList: React.FC<TopicListProps> = ({
                   {timeInfo.text}
                 </span>
               </div>
+
+              {topic.status === 'active' && (
+                <div className="card-progress">
+                  <div className="card-progress-header">
+                    <span className="progress-label">目标达成</span>
+                    <span className="progress-value">{totalVotes} / {targetVotes}</span>
+                  </div>
+                  <div className="card-progress-bar">
+                    <div
+                      className="card-progress-fill"
+                      style={{
+                        width: `${progressPercent}%`,
+                      }}
+                    ></div>
+                  </div>
+                  <div className="progress-percent">{progressPercent.toFixed(0)}%</div>
+                </div>
+              )}
 
               <div className="card-actions">
                 {topic.status === 'ended' ? (
