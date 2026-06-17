@@ -10,17 +10,21 @@ export interface AtomInfo {
   z: number;
 }
 
+export type VisualQuality = 'basic' | 'enhanced';
+
 interface MoleculeStore {
   currentMolecule: string;
   displayMode: DisplayMode;
   selectedAtom: AtomInfo | null;
   hoveredAtom: number | null;
   isLoading: boolean;
+  visualQuality: VisualQuality;
   setMolecule: (name: string) => void;
   setDisplayMode: (mode: DisplayMode) => void;
   setSelectedAtom: (info: AtomInfo | null) => void;
   setHoveredAtom: (index: number | null) => void;
   setLoading: (loading: boolean) => void;
+  setVisualQuality: (quality: VisualQuality) => void;
 }
 
 export const useMoleculeStore = create<MoleculeStore>((set) => ({
@@ -29,9 +33,11 @@ export const useMoleculeStore = create<MoleculeStore>((set) => ({
   selectedAtom: null,
   hoveredAtom: null,
   isLoading: false,
+  visualQuality: 'enhanced',
   setMolecule: (name) => set({ currentMolecule: name, selectedAtom: null, isLoading: true }),
   setDisplayMode: (mode) => set({ displayMode: mode }),
   setSelectedAtom: (info) => set({ selectedAtom: info }),
   setHoveredAtom: (index) => set({ hoveredAtom: index }),
   setLoading: (loading) => set({ isLoading: loading }),
+  setVisualQuality: (quality) => set({ visualQuality: quality }),
 }));

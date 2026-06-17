@@ -1,6 +1,6 @@
 import React from 'react';
 import { getMoleculeNames, getMolecule, DisplayMode } from './MoleculeData';
-import { useMoleculeStore, AtomInfo } from './store';
+import { useMoleculeStore, AtomInfo, VisualQuality } from './store';
 
 const MODE_LABELS: Record<DisplayMode, string> = {
   ballStick: '球棍',
@@ -9,6 +9,13 @@ const MODE_LABELS: Record<DisplayMode, string> = {
 };
 
 const MODES: DisplayMode[] = ['ballStick', 'spaceFill', 'wireframe'];
+
+const QUALITY_LABELS: Record<VisualQuality, string> = {
+  basic: '基础',
+  enhanced: '增强',
+};
+
+const QUALITIES: VisualQuality[] = ['basic', 'enhanced'];
 
 const AtomInfoCard: React.FC<{ info: AtomInfo }> = ({ info }) => {
   return (
@@ -53,7 +60,7 @@ const AtomInfoCard: React.FC<{ info: AtomInfo }> = ({ info }) => {
 };
 
 const Controls: React.FC = () => {
-  const { currentMolecule, displayMode, selectedAtom, isLoading, setMolecule, setDisplayMode } = useMoleculeStore();
+  const { currentMolecule, displayMode, selectedAtom, isLoading, visualQuality, setMolecule, setDisplayMode, setVisualQuality } = useMoleculeStore();
   const moleculeNames = getMoleculeNames();
 
   return (
@@ -149,6 +156,47 @@ const Controls: React.FC = () => {
                 }}
               >
                 {MODE_LABELS[mode]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', fontSize: '12px', color: '#A0A0B0', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+            视觉效果
+          </label>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {QUALITIES.map((quality) => (
+              <button
+                key={quality}
+                onClick={() => setVisualQuality(quality)}
+                style={{
+                  flex: 1,
+                  height: '40px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontFamily: 'Inter, -apple-system, sans-serif',
+                  transition: 'all 0.2s ease',
+                  background: visualQuality === quality
+                    ? 'linear-gradient(135deg, #6366F1, #8B5CF6)'
+                    : '#2A2A3E',
+                  color: visualQuality === quality ? '#FFFFFF' : '#A0A0B0',
+                  fontWeight: visualQuality === quality ? 600 : 400,
+                }}
+                onMouseEnter={(e) => {
+                  if (visualQuality !== quality) {
+                    (e.target as HTMLButtonElement).style.background = '#3A3A5E';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (visualQuality !== quality) {
+                    (e.target as HTMLButtonElement).style.background = '#2A2A3E';
+                  }
+                }}
+              >
+                {QUALITY_LABELS[quality]}
               </button>
             ))}
           </div>
