@@ -1,0 +1,82 @@
+[
+  {
+    "id": "kp-1",
+    "courseId": "course-1",
+    "title": "HTML基础",
+    "description": "HTML是超文本标记语言，是构建网页的基础。学习HTML标签结构、语义化标签、表单元素等核心概念，理解DOM树的基本结构。",
+    "difficulty": "初级",
+    "tags": ["HTML", "基础", "标记语言"],
+    "x": 150,
+    "y": 150
+  },
+  {
+    "id": "kp-2",
+    "courseId": "course-1",
+    "title": "CSS样式",
+    "description": "CSS用于控制网页的视觉呈现。学习选择器、盒模型、布局方式（Flexbox、Grid）、响应式设计和动画效果。",
+    "difficulty": "初级",
+    "tags": ["CSS", "基础", "样式"],
+    "x": 350,
+    "y": 150
+  },
+  {
+    "id": "kp-3",
+    "courseId": "course-1",
+    "title": "JavaScript基础",
+    "description": "JavaScript是网页的编程语言。学习变量、数据类型、运算符、条件语句、循环、函数、作用域和闭包等基础概念。",
+    "difficulty": "中级",
+    "tags": ["JavaScript", "编程", "基础"],
+    "x": 550,
+    "y": 150
+  },
+  {
+    "id": "kp-4",
+    "courseId": "course-1",
+    "title": "DOM操作",
+    "description": "通过JavaScript操作文档对象模型（DOM），实现动态网页效果。包括元素选择、内容修改、样式变更、事件处理等。",
+    "difficulty": "中级",
+    "tags": ["JavaScript", "DOM", "交互"],
+    "x": 250,
+    "y": 350
+  },
+  {
+    "id": "kp-5",
+    "courseId": "course-1",
+    "title": "异步编程",
+    "description": "学习JavaScript异步编程模式：回调函数、Promise、async/await，处理网络请求和定时任务等异步操作。",
+    "difficulty": "高级",
+    "tags": ["JavaScript", "异步", "Promise"],
+    "x": 450,
+    "y": 350
+  },
+  {
+    "id": "kp-6",
+    "courseId": "course-1",
+    "title": "HTTP与网络",
+    "description": "理解HTTP协议、请求方法、状态码、请求头/响应头，掌握前后端数据交互的基础知识。",
+    "difficulty": "中级",
+    "tags": ["网络", "HTTP", "API"],
+    "x": 650,
+    "y": 350
+  },
+  {
+    "id": "kp-7",
+    "courseId": "course-1",
+    "title": "React框架",
+    "description": "学习React组件化开发思想，掌握JSX语法、状态管理、生命周期、Hooks等核心概念。",
+    "difficulty": "高级",
+    "tags": ["React", "框架", "组件"],
+    "x": 350,
+    "y": 550
+  },
+  {
+    "id": "kp-8",
+    "courseId": "course-1",
+    "title": "状态管理",
+    "description": "深入学习React状态管理方案，包括useContext、useReducer以及Redux等外部状态管理库的使用。",
+    "difficulty": "高级",
+    "tags": ["React", "状态", "Redux"],
+    "x": 550,
+    "y": 550
+  }
+]

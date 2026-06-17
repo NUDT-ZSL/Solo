@@ -1,0 +1,10 @@
+[
+  { "id": "score-1", "userId": "user-2", "knowledgePointId": "kp-1", "score": 85 },
+  { "id": "score-2", "userId": "user-2", "knowledgePointId": "kp-2", "score": 72 },
+  { "id": "score-3", "userId": "user-2", "knowledgePointId": "kp-3", "score": 45 },
+  { "id": "score-4", "userId": "user-2", "knowledgePointId": "kp-4", "score": 38 },
+  { "id": "score-5", "userId": "user-2", "knowledgePointId": "kp-5", "score": 52 },
+  { "id": "score-6", "userId": "user-2", "knowledgePointId": "kp-6", "score": 68 },
+  { "id": "score-7", "userId": "user-2", "knowledgePointId": "kp-7", "score": 30 },
+  { "id": "score-8", "userId": "user-2", "knowledgePointId": "kp-8", "score": 42 }
+]
