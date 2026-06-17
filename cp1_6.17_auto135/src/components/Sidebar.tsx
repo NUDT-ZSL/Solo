@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { Meeting } from '../types';
 
 interface SidebarProps {
@@ -13,11 +13,24 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
 
   useEffect(() => {
     fetch('/api/meetings')
-      .then(res => res.json())
-      .then(data => setMeetings(data.slice(0, 5)));
+      .then(res => {
+        if (res.ok) return res.json();
+        throw new Error('API请求失败');
+      })
+      .then(data => {
+        if (Array.isArray(data)) {
+          setMeetings(data.slice(0, 5));
+        }
+      })
+      .catch(err => {
+        console.error('加载会议列表失败:', err);
+        setMeetings([]);
+      });
   }, [location.pathname]);
 
-  const isActive = (path: string) => location.pathname === path;
+  const getNavLinkClassName = ({ isActive }: { isActive: boolean }) => {
+    return `nav-item ${isActive ? 'active' : ''}`;
+  };
 
   return (
     <>
@@ -29,32 +42,32 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
         </div>
         
         <nav className="sidebar-nav">
-          <Link 
+          <NavLink 
             to="/" 
-            className={`nav-item ${isActive('/') ? 'active' : ''}`}
+            className={getNavLinkClassName}
             onClick={onToggle}
           >
             <span className="nav-icon">🏠</span>
             <span>会议列表</span>
-          </Link>
-          <Link 
+          </NavLink>
+          <NavLink 
             to="/dashboard" 
-            className={`nav-item ${isActive('/dashboard') ? 'active' : ''}`}
+            className={getNavLinkClassName}
             onClick={onToggle}
           >
             <span className="nav-icon">📊</span>
             <span>仪表盘</span>
-          </Link>
+          </NavLink>
         </nav>
 
         <div className="sidebar-section">
           <h3 className="section-title">最近会议</h3>
           <div className="recent-meetings">
             {meetings.map(meeting => (
-              <Link
+              <NavLink
                 key={meeting.id}
                 to={`/meeting/${meeting.id}`}
-                className="recent-meeting-item"
+                className={({ isActive }) => `recent-meeting-item ${isActive ? 'active' : ''}`}
                 onClick={onToggle}
               >
                 <div className="meeting-dot" />
@@ -64,7 +77,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
                     {new Date(meeting.dateTime).toLocaleDateString('zh-CN')}
                   </span>
                 </div>
-              </Link>
+              </NavLink>
             ))}
           </div>
         </div>

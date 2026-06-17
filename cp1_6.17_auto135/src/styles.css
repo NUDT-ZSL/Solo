@@ -146,13 +146,17 @@ input, textarea, select {
 }
 
 .nav-item:hover {
-  background: #E8F4FD;
+  background: #D6EAF8;
 }
 
 .nav-item.active {
   background: #E8F4FD;
   border-left-color: #3498DB;
   font-weight: 500;
+}
+
+.nav-item.active:hover {
+  background: #D6EAF8;
 }
 
 .nav-icon {
