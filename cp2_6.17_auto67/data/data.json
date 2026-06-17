@@ -1,0 +1,115 @@
+{
+  "users": [
+    {
+      "id": "admin-001",
+      "email": "admin@market.com",
+      "password": "admin123",
+      "role": "admin",
+      "name": "系统管理员",
+      "createdAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "user-001",
+      "email": "user@test.com",
+      "password": "user123",
+      "role": "user",
+      "name": "测试用户",
+      "createdAt": "2024-01-02T00:00:00.000Z"
+    }
+  ],
+  "events": [
+    {
+      "id": "event-001",
+      "name": "春季社区跳蚤市场",
+      "dateTime": "2026-05-15T09:00:00.000Z",
+      "location": "社区中心广场",
+      "totalStalls": 20,
+      "pricePerStall": 50,
+      "createdAt": "2024-01-10T00:00:00.000Z"
+    },
+    {
+      "id": "event-002",
+      "name": "夏日二手市集",
+      "dateTime": "2026-07-20T10:00:00.000Z",
+      "location": "公园北门",
+      "totalStalls": 30,
+      "pricePerStall": 30,
+      "createdAt": "2024-02-10T00:00:00.000Z"
+    }
+  ],
+  "stalls": [
+    {
+      "id": "stall-001",
+      "eventId": "event-001",
+      "number": "A01",
+      "price": 50,
+      "status": "booked",
+      "userId": "user-001"
+    },
+    {
+      "id": "stall-002",
+      "eventId": "event-001",
+      "number": "A02",
+      "price": 50,
+      "status": "available",
+      "userId": null
+    },
+    {
+      "id": "stall-003",
+      "eventId": "event-001",
+      "number": "A03",
+      "price": 50,
+      "status": "booked",
+      "userId": "user-001"
+    },
+    {
+      "id": "stall-004",
+      "eventId": "event-002",
+      "number": "B01",
+      "price": 30,
+      "status": "available",
+      "userId": null
+    },
+    {
+      "id": "stall-005",
+      "eventId": "event-002",
+      "number": "B02",
+      "price": 30,
+      "status": "available",
+      "userId": null
+    }
+  ],
+  "transactions": [
+    {
+      "id": "tx-001",
+      "eventId": "event-001",
+      "stallId": "stall-003",
+      "stallNumber": "A03",
+      "userId": "user-001",
+      "userEmail": "user@test.com",
+      "amount": 50,
+      "createdAt": "2024-03-01T10:00:00.000Z"
+    },
+    {
+      "id": "9cb05983-2b90-4645-8b51-86e166b7a2f6",
+      "eventId": "event-001",
+      "stallId": "stall-001",
+      "stallNumber": "A01",
+      "userId": "user-001",
+      "userEmail": "user@test.com",
+      "amount": 50,
+      "createdAt": "2026-06-17T05:14:11.113Z"
+    }
+  ],
+  "feedbacks": [
+    {
+      "id": "fb-001",
+      "eventId": "event-001",
+      "userId": "user-001",
+      "userEmail": "user@test.com",
+      "rating": 5,
+      "comment": "活动组织得很好，人流量大，下次还会参加！",
+      "createdAt": "2024-05-16T12:00:00.000Z"
+    }
+  ]
+}
