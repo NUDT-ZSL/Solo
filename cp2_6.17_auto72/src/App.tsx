@@ -55,6 +55,31 @@ const App: React.FC = () => {
   const [newProject, setNewProject] = useState({ name: '', tags: [] as string[], customTag: '', targetDuration: 60 });
   const [showAchievement, setShowAchievement] = useState(false);
   const [hamburgerOpen, setHamburgerOpen] = useState(false);
+  const navRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (navRef.current && !navRef.current.contains(event.target as Node)) {
+        setHamburgerOpen(false);
+      }
+    };
+
+    const handleEscKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setHamburgerOpen(false);
+      }
+    };
+
+    if (hamburgerOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscKey);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscKey);
+    };
+  }, [hamburgerOpen]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ projects, logs }));
@@ -74,13 +99,17 @@ const App: React.FC = () => {
     setLogs(prev => [...prev, entry]);
 
     const projectHistoryLogs = logs.filter(l => l.projectId === log.projectId);
-    const averageDuration = projectHistoryLogs.length > 0
-      ? projectHistoryLogs.reduce((sum, l) => sum + l.duration, 0) / projectHistoryLogs.length
-      : 0;
+    let averageDuration: number | null = null;
 
-    if (averageDuration <= 0) {
+    if (projectHistoryLogs.length > 0) {
+      const total = projectHistoryLogs.reduce((sum, l) => sum + l.duration, 0);
+      averageDuration = total / projectHistoryLogs.length;
+    }
+
+    if (averageDuration === null || averageDuration === undefined || isNaN(averageDuration) || averageDuration <= 0) {
       return;
     }
+
     if (log.duration > averageDuration * 1.5) {
       setShowAchievement(true);
     }
@@ -191,7 +220,7 @@ const App: React.FC = () => {
     <AppContext.Provider value={{ projects, logs, addProject, addLog, selectedProjectId, setSelectedProjectId, getAverageDuration }}>
       <div className="app-container">
         <nav className="navbar">
-          <div className="nav-content">
+          <div className="nav-content" ref={navRef}>
             <button
               className="hamburger-btn"
               onClick={() => setHamburgerOpen(!hamburgerOpen)}

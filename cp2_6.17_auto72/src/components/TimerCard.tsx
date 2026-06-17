@@ -1,13 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Project } from '../types';
 import { useAppContext } from '../App';
-import { formatTime, formatDate } from '../utils/dateUtils';
+import { formatTime as utilsFormatTime, formatDate } from '../utils/dateUtils';
 
 interface TimerCardProps {
   project: Project;
 }
 
 type TimerState = 'idle' | 'running' | 'paused';
+
+const formatTime = (totalSeconds: number): string => {
+  const minutes = Math.floor(totalSeconds / 60);
+  const remainingSeconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
+};
 
 const TimerCard: React.FC<TimerCardProps> = ({ project }) => {
   const { selectedProjectId, setSelectedProjectId, addLog, getAverageDuration, logs } = useAppContext();

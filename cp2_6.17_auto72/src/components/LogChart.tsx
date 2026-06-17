@@ -16,10 +16,16 @@ const PIE_COLORS = ['#ff5252', '#448aff', '#69f0ae', '#ffab40', '#b39ddb'];
 const FALLBACK_COLOR = '#7c4dff';
 
 const getCycleColor = (index: number): string => {
-  if (!PIE_COLORS || PIE_COLORS.length === 0) {
+  if (!Array.isArray(PIE_COLORS) || PIE_COLORS.length === 0) {
     return FALLBACK_COLOR;
   }
-  return PIE_COLORS[index % PIE_COLORS.length] || FALLBACK_COLOR;
+
+  const safeIndex = Math.max(0, Math.floor(index || 0));
+  const colorCount = PIE_COLORS.length;
+  const cycleIndex = safeIndex % colorCount;
+
+  const color = PIE_COLORS[cycleIndex];
+  return color || FALLBACK_COLOR;
 };
 
 const LogChart: React.FC<LogChartProps> = ({ logs, projects, filter }) => {
