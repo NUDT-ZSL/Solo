@@ -207,7 +207,6 @@ const MarketManage = () => {
               {events.map((event) => {
                 const percent = Math.round((event.bookedStalls / event.totalStalls) * 100);
                 const remaining = event.totalStalls - event.bookedStalls;
-                const revenue = event.bookedStalls * event.pricePerStall;
                 return (
                   <div key={event.id} className="event-card">
                     <div className="event-card-header">
@@ -224,13 +223,7 @@ const MarketManage = () => {
                         </div>
                         <span className="price-text">¥{event.pricePerStall}/个</span>
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span className="remaining-text">剩余 {remaining} 个</span>
-                        <span className="progress-text">已预订 {event.bookedStalls}/{event.totalStalls}</span>
-                      </div>
-                      <div className="progress-text" style={{ color: '#2e7d32', fontWeight: 700, textAlign: 'right' }}>
-                        收入：¥{revenue}
-                      </div>
+                      <span className="remaining-text">剩余 {remaining} 个</span>
                     </div>
                   </div>
                 );

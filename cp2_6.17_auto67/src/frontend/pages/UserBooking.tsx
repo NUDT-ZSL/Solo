@@ -71,10 +71,7 @@ const UserBooking = () => {
                     </div>
                     <span className="price-text">¥{event.pricePerStall}/个</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span className="remaining-text">剩余 {remaining} 个</span>
-                    <span className="progress-text">已预订 {event.bookedStalls}/{event.totalStalls}</span>
-                  </div>
+                  <span className="remaining-text">剩余 {remaining} 个</span>
                 </div>
               </div>
             );
