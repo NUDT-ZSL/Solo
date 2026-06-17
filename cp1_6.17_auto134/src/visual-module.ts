@@ -6,6 +6,7 @@ interface ThemeColors {
   rings: string[][]
   particles: string[]
   waveHueShift: number
+  globalBase: string
 }
 
 const THEMES: Record<ThemeName, ThemeColors> = {
@@ -19,6 +20,7 @@ const THEMES: Record<ThemeName, ThemeColors> = {
     ],
     particles: ['#7B2FFF', '#00E5FF', '#9B59B6', '#3498DB', '#1ABC9C'],
     waveHueShift: 30,
+    globalBase: '#00E5FF',
   },
   flame: {
     rings: [
@@ -30,6 +32,7 @@ const THEMES: Record<ThemeName, ThemeColors> = {
     ],
     particles: ['#FF4500', '#FF8C00', '#FF6347', '#FFA500', '#FFD700'],
     waveHueShift: 30,
+    globalBase: '#FF8C00',
   },
   aurora: {
     rings: [
@@ -41,6 +44,7 @@ const THEMES: Record<ThemeName, ThemeColors> = {
     ],
     particles: ['#00FF88', '#00E5FF', '#2ECC71', '#1ABC9C', '#00FF7F'],
     waveHueShift: 30,
+    globalBase: '#00FF88',
   },
   cyber: {
     rings: [
@@ -52,6 +56,7 @@ const THEMES: Record<ThemeName, ThemeColors> = {
     ],
     particles: ['#FF69B4', '#DA70D6', '#FF1493', '#BA55D3', '#FF00FF'],
     waveHueShift: 30,
+    globalBase: '#FF69B4',
   },
   sunset: {
     rings: [
@@ -63,6 +68,7 @@ const THEMES: Record<ThemeName, ThemeColors> = {
     ],
     particles: ['#FFD700', '#FF8C00', '#FFA500', '#FF6347', '#F0E68C'],
     waveHueShift: 30,
+    globalBase: '#FFD700',
   },
 }
 
@@ -85,24 +91,86 @@ interface Ring {
   speed: number
 }
 
+const ENERGY_WINDOW_SIZE = 30
+const ENERGY_THRESHOLD = 0.45
+const WARM_HUE_SHIFT = 12
+const TRANSITION_FRAMES = 60
+const GLOW_RING_OPACITY_MIN = 0.1
+const GLOW_RING_OPACITY_MAX = 0.15
+
 export interface VisualModule {
   setTheme(name: ThemeName): void
+  cycleTheme(): void
   getTheme(): ThemeName
   render(energy: EnergyData, canvas: HTMLCanvasElement): void
   resize(w: number, h: number): void
   reset(): void
 }
 
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t
+}
+
+function lerpColor(c1: string, c2: string, t: number): string {
+  const r1 = parseInt(c1.slice(1, 3), 16)
+  const g1 = parseInt(c1.slice(3, 5), 16)
+  const b1 = parseInt(c1.slice(5, 7), 16)
+  const r2 = parseInt(c2.slice(1, 3), 16)
+  const g2 = parseInt(c2.slice(3, 5), 16)
+  const b2 = parseInt(c2.slice(5, 7), 16)
+  const rr = Math.round(lerp(r1, r2, t))
+  const gg = Math.round(lerp(g1, g2, t))
+  const bb = Math.round(lerp(b1, b2, t))
+  return `#${rr.toString(16).padStart(2, '0')}${gg.toString(16).padStart(2, '0')}${bb.toString(16).padStart(2, '0')}`
+}
+
+function mixThemeColors(
+  t1: ThemeColors,
+  t2: ThemeColors,
+  progress: number
+): ThemeColors {
+  if (progress <= 0) return t1
+  if (progress >= 1) return t2
+  const rings: string[][] = t1.rings.map((pair, i) => [
+    lerpColor(pair[0], t2.rings[i][0], progress),
+    lerpColor(pair[1], t2.rings[i][1], progress),
+  ])
+  const particles: string[] = t1.particles.map((c, i) =>
+    lerpColor(c, t2.particles[i], progress)
+  )
+  return {
+    rings,
+    particles,
+    waveHueShift: lerp(t1.waveHueShift, t2.waveHueShift, progress),
+    globalBase: lerpColor(t1.globalBase, t2.globalBase, progress),
+  }
+}
+
 export function createVisualModule(): VisualModule {
-  let currentTheme: ThemeName = 'neon'
+  let currentThemeName: ThemeName = 'neon'
+  let fromThemeName: ThemeName = 'neon'
+  let toThemeName: ThemeName = 'neon'
+  let themeTransitionProgress = 1
   let rings: Ring[] = []
   let particles: Particle[] = []
   let wavePhase = 0
   let waveSwingOffset = 0
   let prevLowEnergy = 0
+  const energyHistory: number[] = []
+  let currentGlobalShift = 0
+  let targetGlobalShift = 0
+
+  function getActiveTheme(): ThemeColors {
+    if (themeTransitionProgress >= 1) return THEMES[currentThemeName]
+    return mixThemeColors(
+      THEMES[fromThemeName],
+      THEMES[toThemeName],
+      themeTransitionProgress
+    )
+  }
 
   function spawnRings(energy: number, cx: number, cy: number, maxR: number) {
-    const theme = THEMES[currentTheme]
+    const theme = getActiveTheme()
     const count = Math.floor(energy * 3) + 1
     for (let i = 0; i < count; i++) {
       const ci = Math.floor(Math.random() * theme.rings.length)
@@ -117,7 +185,7 @@ export function createVisualModule(): VisualModule {
   }
 
   function spawnParticles(energy: number, cx: number, cy: number) {
-    const theme = THEMES[currentTheme]
+    const theme = getActiveTheme()
     const count = Math.floor(50 + energy * 250)
     for (let i = 0; i < Math.min(count, 10); i++) {
       const angle = Math.random() * Math.PI * 2
@@ -144,9 +212,11 @@ export function createVisualModule(): VisualModule {
         rings.splice(i, 1)
         continue
       }
+      const c0 = shiftHue(r.colorPair[0], currentGlobalShift)
+      const c1 = shiftHue(r.colorPair[1], currentGlobalShift)
       const grad = ctx.createRadialGradient(cx, cy, r.radius * 0.8, cx, cy, r.radius)
-      grad.addColorStop(0, r.colorPair[0] + alphaHex(r.opacity))
-      grad.addColorStop(1, r.colorPair[1] + alphaHex(0))
+      grad.addColorStop(0, c0 + alphaHex(r.opacity))
+      grad.addColorStop(1, c1 + alphaHex(0))
       ctx.beginPath()
       ctx.arc(cx, cy, r.radius, 0, Math.PI * 2)
       ctx.strokeStyle = grad
@@ -167,9 +237,10 @@ export function createVisualModule(): VisualModule {
         particles.splice(i, 1)
         continue
       }
+      const shifted = shiftHue(p.color, currentGlobalShift)
       ctx.beginPath()
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
-      ctx.fillStyle = p.color + alphaHex(p.life)
+      ctx.fillStyle = shifted + alphaHex(p.life)
       ctx.fill()
     }
   }
@@ -180,9 +251,10 @@ export function createVisualModule(): VisualModule {
     w: number,
     h: number
   ) {
-    const theme = THEMES[currentTheme]
+    const theme = getActiveTheme()
     const baseColor = theme.particles[0]
-    const hueShifted = shiftHue(baseColor, theme.waveHueShift)
+    const totalShift = theme.waveHueShift + currentGlobalShift
+    const hueShifted = shiftHue(baseColor, totalShift)
 
     wavePhase += 0.03 + energy.high * 0.1
     waveSwingOffset = Math.sin(wavePhase * 0.5) * w * 0.01
@@ -226,14 +298,52 @@ export function createVisualModule(): VisualModule {
     ctx.fill()
   }
 
+  function drawGlobalToneMapping(
+    ctx: CanvasRenderingContext2D, w: number, h: number, cx: number, cy: number, maxR: number
+  ) {
+    const theme = getActiveTheme()
+    const base = theme.globalBase
+    const warmColor = shiftHue(base, WARM_HUE_SHIFT)
+    const t = Math.abs(currentGlobalShift) / WARM_HUE_SHIFT
+
+    const toneColor = lerpColor(base, warmColor, t)
+    const toneAlpha = 0.04 * t
+
+    ctx.save()
+    ctx.globalCompositeOperation = 'overlay'
+    ctx.fillStyle = toneColor + alphaHex(toneAlpha)
+    ctx.fillRect(0, 0, w, h)
+    ctx.restore()
+
+    if (t > 0) {
+      const glowAlpha = GLOW_RING_OPACITY_MIN + t * (GLOW_RING_OPACITY_MAX - GLOW_RING_OPACITY_MIN)
+      const glowColor = shiftHue(base, currentGlobalShift)
+      const grad = ctx.createRadialGradient(cx, cy, maxR * 0.2, cx, cy, maxR)
+      grad.addColorStop(0, glowColor + alphaHex(glowAlpha))
+      grad.addColorStop(1, glowColor + alphaHex(0))
+      ctx.save()
+      ctx.globalCompositeOperation = 'screen'
+      ctx.fillStyle = grad
+      ctx.fillRect(0, 0, w, h)
+      ctx.restore()
+    }
+  }
+
   const mod: VisualModule = {
     setTheme(name: ThemeName) {
-      currentTheme = name
-      rings = []
-      particles = []
+      if (name === currentThemeName) return
+      fromThemeName = currentThemeName
+      toThemeName = name
+      currentThemeName = name
+      themeTransitionProgress = 0
+    },
+    cycleTheme() {
+      const idx = THEME_NAMES.indexOf(currentThemeName)
+      const next = THEME_NAMES[(idx + 1) % THEME_NAMES.length]
+      mod.setTheme(next)
     },
     getTheme() {
-      return currentTheme
+      return currentThemeName
     },
     render(energy: EnergyData, canvas: HTMLCanvasElement) {
       const ctx = canvas.getContext('2d')
@@ -244,6 +354,21 @@ export function createVisualModule(): VisualModule {
       const cx = w / 2
       const cy = h / 2
       const maxR = Math.sqrt(cx * cx + cy * cy)
+
+      const avgEnergy = (energy.low + energy.mid + energy.high) / 3
+      energyHistory.push(avgEnergy)
+      if (energyHistory.length > ENERGY_WINDOW_SIZE) energyHistory.shift()
+      const sum = energyHistory.reduce((a, b) => a + b, 0)
+      const smoothedAvg = sum / Math.max(1, energyHistory.length)
+
+      targetGlobalShift = smoothedAvg > ENERGY_THRESHOLD
+        ? WARM_HUE_SHIFT * Math.min(1, (smoothedAvg - ENERGY_THRESHOLD) * 2)
+        : 0
+      currentGlobalShift = lerp(currentGlobalShift, targetGlobalShift, 0.08)
+
+      if (themeTransitionProgress < 1) {
+        themeTransitionProgress = Math.min(1, themeTransitionProgress + 1 / TRANSITION_FRAMES)
+      }
 
       const lowDelta = energy.low - prevLowEnergy
       if (lowDelta > 0.05 || energy.low > 0.4) {
@@ -258,6 +383,7 @@ export function createVisualModule(): VisualModule {
       drawRings(ctx, cx, cy)
       drawParticles(ctx)
       drawWaveform(ctx, energy, w, h)
+      drawGlobalToneMapping(ctx, w, h, cx, cy, maxR)
     },
     resize(_w: number, _h: number) {},
     reset() {
@@ -266,6 +392,9 @@ export function createVisualModule(): VisualModule {
       wavePhase = 0
       waveSwingOffset = 0
       prevLowEnergy = 0
+      energyHistory.length = 0
+      currentGlobalShift = 0
+      targetGlobalShift = 0
     },
   }
 
@@ -278,6 +407,7 @@ function alphaHex(a: number): string {
 }
 
 function shiftHue(hex: string, degrees: number): string {
+  if (degrees === 0) return hex
   const r = parseInt(hex.slice(1, 3), 16) / 255
   const g = parseInt(hex.slice(3, 5), 16) / 255
   const b = parseInt(hex.slice(5, 7), 16) / 255

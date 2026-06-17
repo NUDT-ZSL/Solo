@@ -8,6 +8,7 @@ import {
 } from './visual-module'
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024
+const LOW_ENERGY_HISTORY_SIZE = 120
 
 function formatTime(sec: number): string {
   const m = Math.floor(sec / 60)
@@ -17,10 +18,12 @@ function formatTime(sec: number): string {
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null)
   const audioModRef = useRef<AudioModule | null>(null)
   const visualModRef = useRef(createVisualModule())
   const rafRef = useRef(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const lowEnergyHistory = useRef<number[]>([])
 
   const [playing, setPlaying] = useState(false)
   const [loaded, setLoaded] = useState(false)
@@ -31,12 +34,50 @@ export default function App() {
 
   const animLoop = useCallback(() => {
     const canvas = canvasRef.current
+    const previewCanvas = previewCanvasRef.current
     const am = audioModRef.current
     const vm = visualModRef.current
     if (!canvas || !am || !vm) return
 
     const energy = am.getEnergy()
     vm.render(energy, canvas)
+
+    lowEnergyHistory.current.push(energy.low)
+    if (lowEnergyHistory.current.length > LOW_ENERGY_HISTORY_SIZE) {
+      lowEnergyHistory.current.shift()
+    }
+
+    if (previewCanvas) {
+      const ctx = previewCanvas.getContext('2d')
+      if (ctx) {
+        const w = previewCanvas.width
+        const h = previewCanvas.height
+        ctx.clearRect(0, 0, w, h)
+
+        const history = lowEnergyHistory.current
+        if (history.length > 1) {
+          const themeColor = THEME_DOT_COLORS[vm.getTheme()]
+          ctx.strokeStyle = themeColor + 'AA'
+          ctx.lineWidth = 2
+          ctx.fillStyle = themeColor + '33'
+
+          ctx.beginPath()
+          const stepX = w / (LOW_ENERGY_HISTORY_SIZE - 1)
+          for (let i = 0; i < history.length; i++) {
+            const x = i * stepX
+            const y = h - history[i] * h
+            if (i === 0) ctx.moveTo(x, y)
+            else ctx.lineTo(x, y)
+          }
+          ctx.stroke()
+
+          ctx.lineTo((history.length - 1) * stepX, h)
+          ctx.lineTo(0, h)
+          ctx.closePath()
+          ctx.fill()
+        }
+      }
+    }
 
     const ct = am.getCurrentTime()
     const dur = am.getDuration()
@@ -68,14 +109,26 @@ export default function App() {
   useEffect(() => {
     const handleResize = () => {
       const canvas = canvasRef.current
-      if (!canvas) return
-      const rect = canvas.parentElement!.getBoundingClientRect()
-      canvas.width = rect.width * devicePixelRatio
-      canvas.height = rect.height * devicePixelRatio
-      canvas.style.width = rect.width + 'px'
-      canvas.style.height = rect.height + 'px'
-      const ctx = canvas.getContext('2d')
-      if (ctx) ctx.scale(devicePixelRatio, devicePixelRatio)
+      if (canvas) {
+        const rect = canvas.parentElement!.getBoundingClientRect()
+        canvas.width = rect.width * devicePixelRatio
+        canvas.height = rect.height * devicePixelRatio
+        canvas.style.width = rect.width + 'px'
+        canvas.style.height = rect.height + 'px'
+        const ctx = canvas.getContext('2d')
+        if (ctx) ctx.scale(devicePixelRatio, devicePixelRatio)
+      }
+
+      const previewCanvas = previewCanvasRef.current
+      if (previewCanvas) {
+        const rect2 = previewCanvas.parentElement!.getBoundingClientRect()
+        previewCanvas.width = rect2.width * devicePixelRatio
+        previewCanvas.height = 20 * devicePixelRatio
+        previewCanvas.style.width = rect2.width + 'px'
+        previewCanvas.style.height = '20px'
+        const pctx = previewCanvas.getContext('2d')
+        if (pctx) pctx.scale(devicePixelRatio, devicePixelRatio)
+      }
     }
     handleResize()
     window.addEventListener('resize', handleResize)
@@ -110,6 +163,7 @@ export default function App() {
         setPlaying(true)
         setLoaded(true)
         visualModRef.current.reset()
+        lowEnergyHistory.current = []
       } catch {
         alert('音频解析失败')
       }
@@ -132,6 +186,7 @@ export default function App() {
     audioModRef.current!.stop()
     setPlaying(false)
     visualModRef.current.reset()
+    lowEnergyHistory.current = []
     setCurrentTime(0)
   }, [])
 
@@ -144,6 +199,11 @@ export default function App() {
   const handleTheme = useCallback((t: ThemeName) => {
     setTheme(t)
     visualModRef.current.setTheme(t)
+  }, [])
+
+  const handleCycleTheme = useCallback(() => {
+    visualModRef.current.cycleTheme()
+    setTheme(visualModRef.current.getTheme())
   }, [])
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
@@ -230,6 +290,21 @@ export default function App() {
                 }}
               />
             </div>
+
+            <div
+              style={{
+                width: '100%',
+                height: 20,
+                background: '#111',
+                borderBottom: '1px solid #222',
+              }}
+            >
+              <canvas
+                ref={previewCanvasRef}
+                style={{ display: 'block', width: '100%', height: '100%' }}
+              />
+            </div>
+
             <div
               style={{
                 padding: '4px 12px',
@@ -291,6 +366,36 @@ export default function App() {
               onMouseLeave={(e) => (e.currentTarget.style.background = '#222')}
             >
               {playing ? '⏸' : '▶'}
+            </button>
+
+            <button
+              onClick={handleCycleTheme}
+              title="切换主题"
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: '50%',
+                border: '2px solid #00E5FF',
+                background: '#222',
+                color: '#00E5FF',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 16,
+                transition: 'all 0.2s ease',
+                flexShrink: 0,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#444'
+                e.currentTarget.style.boxShadow = '0 0 12px #00E5FF66'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#222'
+                e.currentTarget.style.boxShadow = 'none'
+              }}
+            >
+              🎨
             </button>
 
             <button
@@ -366,7 +471,7 @@ export default function App() {
                     : '2px solid ' + THEME_DOT_COLORS[t],
                 background: THEME_DOT_COLORS[t],
                 cursor: 'pointer',
-                transition: 'border 0.2s ease, transform 0.2s ease',
+                transition: 'border 1s ease, transform 0.2s ease',
                 transform: theme === t ? 'scale(1.2)' : 'scale(1)',
                 padding: 0,
                 flexShrink: 0,
