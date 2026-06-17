@@ -132,7 +132,7 @@ router.get('/list', (req: Request, res: Response): void => {
         price: row.price,
         authorId: row.author_id,
         authorName: row.author_name,
-        watermarkedPath: `/api/images/watermarked/${row.watermarked_path}`,
+        watermarkedPath: `/api/images/watermarked/${path.basename(row.watermarked_path)}`,
         createdAt: row.created_at,
       }));
 
@@ -172,14 +172,14 @@ router.get('/:id', (req: Request, res: Response): void => {
         price: row.price,
         authorId: row.author_id,
         authorName: row.author_name,
-        watermarkedPath: `/api/images/watermarked/${row.watermarked_path}`,
+        watermarkedPath: `/api/images/watermarked/${path.basename(row.watermarked_path)}`,
         createdAt: row.created_at,
       });
     }
   );
 });
 
-router.post('/:id/purchase', verifyToken, (req: AuthRequest, res: Response): void => {
+router.post('/:id/buy', verifyToken, (req: AuthRequest, res: Response): void => {
   const { id } = req.params;
   const db = getDb();
 
@@ -214,15 +214,19 @@ router.post('/:id/purchase', verifyToken, (req: AuthRequest, res: Response): voi
         db.run(
           'INSERT INTO transactions (id, user_id, work_id, amount) VALUES (?, ?, ?, ?)',
           [txId, req.userId, id, work.price],
-          (err3) => {
+          function (err3) {
             if (err3) {
+              res.status(500).json({ error: '购买失败，数据库写入错误' });
+              return;
+            }
+            if (this.changes === 0) {
               res.status(500).json({ error: '购买失败' });
               return;
             }
+            const safeFilename = path.basename(work.image_path);
             res.json({
               transactionId: txId,
-              originalImageUrl: `/api/images/original/${work.image_path}`,
-              originalPath: `/api/images/original/${work.image_path}`,
+              originalPath: `/api/images/original/${safeFilename}`,
               message: '购买成功',
             });
           }
@@ -253,7 +257,7 @@ router.get('/user/purchases', verifyToken, (req: AuthRequest, res: Response): vo
         transactionId: row.tx_id,
         workId: row.work_id,
         title: row.title,
-        thumbnailPath: `/api/images/original/${row.image_path}`,
+        thumbnailPath: `/api/images/original/${path.basename(row.image_path)}`,
         style: row.style,
         amount: row.amount,
         purchasedAt: row.purchased_at,

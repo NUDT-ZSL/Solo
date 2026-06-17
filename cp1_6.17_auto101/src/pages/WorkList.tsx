@@ -28,6 +28,7 @@ export default function WorkList() {
   const loadingRef = useRef(false);
   const pageRef = useRef(1);
   const hasMoreRef = useRef(true);
+  const lastScrollTopRef = useRef(0);
   const gridRef = useRef<HTMLDivElement>(null);
 
   const calculateColumns = useCallback(() => {
@@ -77,6 +78,7 @@ export default function WorkList() {
     loadingRef.current = false;
     pageRef.current = 1;
     hasMoreRef.current = true;
+    lastScrollTopRef.current = 0;
     setWorks([]);
     setHasMore(true);
     setPage(1);
@@ -86,6 +88,11 @@ export default function WorkList() {
   useEffect(() => {
     const handleScroll = () => {
       const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      const isScrollingDown = scrollTop > lastScrollTopRef.current;
+      lastScrollTopRef.current = scrollTop;
+
+      if (!isScrollingDown) return;
+
       const viewportHeight = window.innerHeight;
       const docHeight = document.documentElement.scrollHeight;
       const distanceToBottom = docHeight - scrollTop - viewportHeight;

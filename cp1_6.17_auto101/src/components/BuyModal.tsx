@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api, WorkItem } from '../api';
 
 interface BuyModalProps {
@@ -11,6 +11,7 @@ export default function BuyModal({ work, onClose, onSuccess }: BuyModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [visible, setVisible] = useState(false);
+  const closingRef = useRef(false);
 
   useEffect(() => {
     const timer = requestAnimationFrame(() => {
@@ -20,11 +21,14 @@ export default function BuyModal({ work, onClose, onSuccess }: BuyModalProps) {
   }, []);
 
   const handleBuy = async () => {
+    if (closingRef.current) return;
     setLoading(true);
     setError('');
     try {
       await api.works.buy(work.id);
-      onSuccess();
+      closingRef.current = true;
+      setVisible(false);
+      setTimeout(onSuccess, 300);
     } catch (err: any) {
       setError(err.message || '购买失败');
     } finally {
@@ -33,15 +37,22 @@ export default function BuyModal({ work, onClose, onSuccess }: BuyModalProps) {
   };
 
   const handleClose = () => {
+    if (closingRef.current) return;
+    closingRef.current = true;
     setVisible(false);
-    setTimeout(onClose, 200);
+    setTimeout(onClose, 300);
   };
 
   return (
     <div
       className="modal-overlay"
       onClick={handleClose}
-      style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.2s ease' }}
+      style={{
+        background: '#00000050',
+        opacity: visible ? 1 : 0,
+        transition: 'opacity 0.3s ease-out',
+        pointerEvents: closingRef.current && !visible ? 'none' : 'auto',
+      }}
     >
       <div
         className="modal-content"

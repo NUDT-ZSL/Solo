@@ -26,7 +26,7 @@ export default function WatermarkEditor({ imageFile, onParamsChange }: Watermark
   const [originalUrl, setOriginalUrl] = useState<string>('');
   const [watermarkedUrl, setWatermarkedUrl] = useState<string>('');
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (imageFile) {
@@ -39,7 +39,7 @@ export default function WatermarkEditor({ imageFile, onParamsChange }: Watermark
     }
   }, [imageFile]);
 
-  const renderWatermark = useCallback(() => {
+  const drawWatermark = useCallback(() => {
     if (!originalUrl || !canvasRef.current) return;
 
     const img = new Image();
@@ -99,12 +99,27 @@ export default function WatermarkEditor({ imageFile, onParamsChange }: Watermark
   }, [originalUrl, params]);
 
   useEffect(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(renderWatermark, 300);
+    if (originalUrl) {
+      drawWatermark();
+    }
+  }, [originalUrl, drawWatermark]);
+
+  useEffect(() => {
+    if (!originalUrl) return;
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      drawWatermark();
+    }, 300);
+
     return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
     };
-  }, [renderWatermark]);
+  }, [params.text, params.fontSize, params.color, params.opacity, params.angle, originalUrl, drawWatermark]);
 
   useEffect(() => {
     onParamsChange(params);

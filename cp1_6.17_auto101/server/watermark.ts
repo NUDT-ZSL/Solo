@@ -51,13 +51,14 @@ function generateWatermarkSvg(
   const cols = Math.ceil(width / spacingX) + 3;
   const rows = Math.ceil(height / spacingY) + 3;
   const fontFamily = "'Helvetica', 'Arial', 'Microsoft YaHei', sans-serif";
+  const opacity = Math.max(0, Math.min(1, opts.opacity));
 
   let textElements = '';
   for (let row = -2; row < rows; row++) {
     for (let col = -2; col < cols; col++) {
       const x = col * spacingX + spacingX / 2;
       const y = row * spacingY + spacingY / 2;
-      textElements += `<text x="${x}" y="${y}" fill="${opts.color}" fill-opacity="${opts.opacity}" font-size="${opts.fontSize}" font-style="italic" font-family="${fontFamily}" text-anchor="middle" dominant-baseline="middle" transform="rotate(${opts.angle}, ${x}, ${y})">${escapeXml(opts.text)}</text>`;
+      textElements += `<g transform="translate(${x}, ${y}) rotate(${opts.angle})" opacity="${opacity}"><text x="0" y="0" fill="${opts.color}" font-size="${opts.fontSize}" font-style="italic" font-family="${fontFamily}" text-anchor="middle" dominant-baseline="middle">${escapeXml(opts.text)}</text></g>`;
     }
   }
 
