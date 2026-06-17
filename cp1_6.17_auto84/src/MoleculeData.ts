@@ -26,17 +26,21 @@ export interface ElementInfo {
   color: string;
   vdwRadius: number;
   covalentRadius: number;
+  metalness: number;
+  roughness: number;
+  clearcoat?: number;
+  clearcoatRoughness?: number;
 }
 
 const ELEMENT_DATA: Record<string, ElementInfo> = {
-  H: { symbol: 'H', name: '氢', nameEn: 'Hydrogen', atomicNumber: 1, color: '#FFFFFF', vdwRadius: 1.20, covalentRadius: 0.31 },
-  C: { symbol: 'C', name: '碳', nameEn: 'Carbon', atomicNumber: 6, color: '#909090', vdwRadius: 1.70, covalentRadius: 0.77 },
-  N: { symbol: 'N', name: '氮', nameEn: 'Nitrogen', atomicNumber: 7, color: '#3050F8', vdwRadius: 1.55, covalentRadius: 0.75 },
-  O: { symbol: 'O', name: '氧', nameEn: 'Oxygen', atomicNumber: 8, color: '#FF0D0D', vdwRadius: 1.52, covalentRadius: 0.73 },
+  H: { symbol: 'H', name: '氢', nameEn: 'Hydrogen', atomicNumber: 1, color: '#FFFFFF', vdwRadius: 1.20, covalentRadius: 0.31, metalness: 0.0, roughness: 0.8, clearcoat: 0.2, clearcoatRoughness: 0.4 },
+  C: { symbol: 'C', name: '碳', nameEn: 'Carbon', atomicNumber: 6, color: '#505050', vdwRadius: 1.70, covalentRadius: 0.77, metalness: 0.6, roughness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.2 },
+  N: { symbol: 'N', name: '氮', nameEn: 'Nitrogen', atomicNumber: 7, color: '#3050F8', vdwRadius: 1.55, covalentRadius: 0.75, metalness: 0.2, roughness: 0.4, clearcoat: 0.5, clearcoatRoughness: 0.3 },
+  O: { symbol: 'O', name: '氧', nameEn: 'Oxygen', atomicNumber: 8, color: '#FF2D2D', vdwRadius: 1.52, covalentRadius: 0.73, metalness: 0.15, roughness: 0.35, clearcoat: 0.6, clearcoatRoughness: 0.25 },
 };
 
 export function getElementInfo(element: string): ElementInfo {
-  return ELEMENT_DATA[element] || { symbol: element, name: element, nameEn: element, atomicNumber: 0, color: '#FF00FF', vdwRadius: 1.5, covalentRadius: 0.7 };
+  return ELEMENT_DATA[element] || { symbol: element, name: element, nameEn: element, atomicNumber: 0, color: '#FF00FF', vdwRadius: 1.5, covalentRadius: 0.7, metalness: 0.3, roughness: 0.5 };
 }
 
 const MOLECULES: Record<string, Molecule> = {

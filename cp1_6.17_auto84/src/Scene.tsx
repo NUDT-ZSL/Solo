@@ -6,6 +6,8 @@ import { getMolecule, getElementInfo, DisplayMode, Atom, Bond } from './Molecule
 import { useMoleculeStore, VisualQuality } from './store';
 
 const SCALE = 0.25;
+const SPHERE_SEGMENTS = 64;
+const CYLINDER_SEGMENTS = 16;
 
 function getAtomRadius(element: string, mode: DisplayMode): number {
   const info = getElementInfo(element);
@@ -31,7 +33,7 @@ function getBondRadius(mode: DisplayMode, order: number): number {
 
 function getBondColor(mode: DisplayMode): string {
   if (mode === 'wireframe') return '#00BFFF';
-  return '#A0A0A0';
+  return '#C8C8D8';
 }
 
 interface AtomMeshProps {
@@ -77,13 +79,25 @@ const AtomMesh: React.FC<AtomMeshProps> = ({ atom, index, mode, quality }) => {
     return positions;
   }, [atom.element, index]);
 
+  const physicalProps = useMemo(() => {
+    if (isWireframe) {
+      return { metalness: 0, roughness: 0.5, clearcoat: 0, clearcoatRoughness: 0 };
+    }
+    return {
+      metalness: info.metalness,
+      roughness: info.roughness,
+      clearcoat: info.clearcoat ?? 0.3,
+      clearcoatRoughness: info.clearcoatRoughness ?? 0.2,
+    };
+  }, [info.metalness, info.roughness, info.clearcoat, info.clearcoatRoughness, isWireframe]);
+
   useFrame((state, delta) => {
     if (!meshRef.current) return;
     const speed = 4 * delta;
     currentRadius.current = THREE.MathUtils.lerp(currentRadius.current, targetRadius, speed);
     currentColor.current.lerp(new THREE.Color(targetColor), speed);
 
-    const mat = meshRef.current.material as THREE.MeshPhongMaterial;
+    const mat = meshRef.current.material as THREE.MeshPhysicalMaterial;
     mat.color.copy(currentColor.current);
     const s = currentRadius.current / 0.2;
     meshRef.current.scale.setScalar(s);
@@ -106,9 +120,9 @@ const AtomMesh: React.FC<AtomMeshProps> = ({ atom, index, mode, quality }) => {
 
     if (glowRef.current && isEnhanced) {
       const glowMat = glowRef.current.material as THREE.MeshBasicMaterial;
-      const targetGlowOpacity = isWireframe ? 0 : 0.15;
+      const targetGlowOpacity = isWireframe ? 0 : 0.18;
       glowMat.opacity = THREE.MathUtils.lerp(glowMat.opacity, targetGlowOpacity, speed);
-      const glowScale = (currentRadius.current * 1.6) / 0.2;
+      const glowScale = (currentRadius.current * 1.7) / 0.2;
       glowRef.current.scale.setScalar(glowScale);
       glowRef.current.visible = !isWireframe;
     }
@@ -119,7 +133,7 @@ const AtomMesh: React.FC<AtomMeshProps> = ({ atom, index, mode, quality }) => {
         const highlight = child as THREE.Mesh;
         const hMat = highlight.material as THREE.MeshBasicMaterial;
         const flicker = 0.7 + 0.3 * Math.sin(time * 2 + i * 1.5);
-        hMat.opacity = 0.6 * flicker;
+        hMat.opacity = 0.5 * flicker;
       });
       highlightsRef.current.visible = true;
       highlightsRef.current.scale.setScalar(s);
@@ -159,12 +173,15 @@ const AtomMesh: React.FC<AtomMeshProps> = ({ atom, index, mode, quality }) => {
         onPointerOut={handlePointerOut}
         scale={[1, 1, 1]}
       >
-        <sphereGeometry args={[0.2, 48, 48]} />
-        <meshPhongMaterial
+        <sphereGeometry args={[0.2, SPHERE_SEGMENTS, SPHERE_SEGMENTS]} />
+        <meshPhysicalMaterial
           color={targetColor}
-          shininess={80}
-          specular={new THREE.Color(0xffffff)}
-          specularIntensity={0.3}
+          metalness={physicalProps.metalness}
+          roughness={physicalProps.roughness}
+          clearcoat={physicalProps.clearcoat}
+          clearcoatRoughness={physicalProps.clearcoatRoughness}
+          reflectivity={0.5}
+          sheen={0}
           transparent
           opacity={1}
         />
@@ -176,7 +193,7 @@ const AtomMesh: React.FC<AtomMeshProps> = ({ atom, index, mode, quality }) => {
           <meshBasicMaterial
             color={info.color}
             transparent
-            opacity={0.15}
+            opacity={0.18}
             side={THREE.BackSide}
             blending={THREE.AdditiveBlending}
             depthWrite={false}
@@ -192,7 +209,7 @@ const AtomMesh: React.FC<AtomMeshProps> = ({ atom, index, mode, quality }) => {
               <meshBasicMaterial
                 color="#ffffff"
                 transparent
-                opacity={0.6}
+                opacity={0.5}
                 blending={THREE.AdditiveBlending}
                 depthWrite={false}
               />
@@ -236,7 +253,7 @@ const BondMesh: React.FC<BondMeshProps> = ({ bond, atoms, mode, quality }) => {
   const currentRadius = useRef(targetRadius);
   const targetColor = getBondColor(mode);
   const currentColor = useRef(new THREE.Color(targetColor));
-  const targetOpacity = mode === 'spaceFill' ? 0 : 1;
+  const targetOpacity = mode === 'spaceFill' ? 0 : (mode === 'ballStick' ? 0.85 : 1);
   const currentOpacity = useRef(1);
   const isEnhanced = quality === 'enhanced';
 
@@ -250,7 +267,6 @@ const BondMesh: React.FC<BondMeshProps> = ({ bond, atoms, mode, quality }) => {
     return { position: mid, quaternion: quat, length: len };
   }, [start, end]);
 
-  const capRadius = getAtomRadius(a1.element, mode) * 0.12;
   const capColor1 = getAtomColor(a1.element, mode);
   const capColor2 = getAtomColor(a2.element, mode);
 
@@ -260,7 +276,7 @@ const BondMesh: React.FC<BondMeshProps> = ({ bond, atoms, mode, quality }) => {
     currentRadius.current = THREE.MathUtils.lerp(currentRadius.current, targetRadius, speed);
     currentColor.current.lerp(new THREE.Color(targetColor), speed);
 
-    const mat = meshRef.current.material as THREE.MeshPhongMaterial;
+    const mat = meshRef.current.material as THREE.MeshPhysicalMaterial;
     mat.color.copy(currentColor.current);
 
     const s = currentRadius.current / 0.04;
@@ -271,8 +287,8 @@ const BondMesh: React.FC<BondMeshProps> = ({ bond, atoms, mode, quality }) => {
     mat.transparent = currentOpacity.current < 0.99;
 
     if (cap1Ref.current && isEnhanced && mode === 'ballStick') {
-      const capMat = cap1Ref.current.material as THREE.MeshPhongMaterial;
-      const capScale = (currentRadius.current * 1.3) / 0.04;
+      const capMat = cap1Ref.current.material as THREE.MeshPhysicalMaterial;
+      const capScale = (currentRadius.current * 1.35) / 0.04;
       cap1Ref.current.scale.setScalar(capScale);
       capMat.opacity = currentOpacity.current;
       capMat.color.set(capColor1);
@@ -282,8 +298,8 @@ const BondMesh: React.FC<BondMeshProps> = ({ bond, atoms, mode, quality }) => {
     }
 
     if (cap2Ref.current && isEnhanced && mode === 'ballStick') {
-      const capMat = cap2Ref.current.material as THREE.MeshPhongMaterial;
-      const capScale = (currentRadius.current * 1.3) / 0.04;
+      const capMat = cap2Ref.current.material as THREE.MeshPhysicalMaterial;
+      const capScale = (currentRadius.current * 1.35) / 0.04;
       cap2Ref.current.scale.setScalar(capScale);
       capMat.opacity = currentOpacity.current;
       capMat.color.set(capColor2);
@@ -295,29 +311,55 @@ const BondMesh: React.FC<BondMeshProps> = ({ bond, atoms, mode, quality }) => {
 
   const cap1Pos = useMemo(() => {
     const dir = new THREE.Vector3().subVectors(end, start).normalize();
-    return new THREE.Vector3().copy(start).add(dir.multiplyScalar(length / 2 + 0.01));
+    return new THREE.Vector3().copy(start).add(dir.multiplyScalar(length / 2 + 0.008));
   }, [start, length, end]);
 
   const cap2Pos = useMemo(() => {
     const dir = new THREE.Vector3().subVectors(start, end).normalize();
-    return new THREE.Vector3().copy(end).add(dir.multiplyScalar(length / 2 + 0.01));
+    return new THREE.Vector3().copy(end).add(dir.multiplyScalar(length / 2 + 0.008));
   }, [end, length, start]);
 
   return (
     <group>
       <mesh ref={meshRef} position={position} quaternion={quaternion}>
-        <cylinderGeometry args={[0.04, 0.04, length, 12]} />
-        <meshPhongMaterial color={targetColor} shininess={30} transparent opacity={1} />
+        <cylinderGeometry args={[0.04, 0.04, length, CYLINDER_SEGMENTS]} />
+        <meshPhysicalMaterial
+          color={targetColor}
+          metalness={0.1}
+          roughness={0.3}
+          clearcoat={0.8}
+          clearcoatRoughness={0.15}
+          transparent
+          opacity={0.85}
+          ior={1.5}
+          thickness={0.02}
+        />
       </mesh>
 
       <mesh ref={cap1Ref} position={cap1Pos}>
-        <sphereGeometry args={[0.04, 16, 16]} />
-        <meshPhongMaterial color={capColor1} shininess={80} transparent />
+        <sphereGeometry args={[0.04, 24, 24]} />
+        <meshPhysicalMaterial
+          color={capColor1}
+          metalness={0.1}
+          roughness={0.3}
+          clearcoat={0.8}
+          clearcoatRoughness={0.15}
+          transparent
+          opacity={0.85}
+        />
       </mesh>
 
       <mesh ref={cap2Ref} position={cap2Pos}>
-        <sphereGeometry args={[0.04, 16, 16]} />
-        <meshPhongMaterial color={capColor2} shininess={80} transparent />
+        <sphereGeometry args={[0.04, 24, 24]} />
+        <meshPhysicalMaterial
+          color={capColor2}
+          metalness={0.1}
+          roughness={0.3}
+          clearcoat={0.8}
+          clearcoatRoughness={0.15}
+          transparent
+          opacity={0.85}
+        />
       </mesh>
     </group>
   );
@@ -459,19 +501,33 @@ const SceneContent: React.FC = () => {
   return (
     <>
       <GradientBackground />
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[5, 5, 5]} intensity={0.8} />
-      <directionalLight position={[-5, -3, -5]} intensity={0.8} />
-      {isEnhanced && <pointLight position={[0, 3, 3]} intensity={0.4} color="#6366F1" distance={10} />}
+
+      <ambientLight intensity={0.35} color="#B0B0FF" />
+      <hemisphereLight args={['#C0C8FF', '#1A1030', 0.5]} />
+
+      <directionalLight position={[5, 6, 5]} intensity={1.0} color="#FFFFFF" />
+
+      <directionalLight position={[-4, -2, -3]} intensity={0.5} color="#8B9FFF" />
+
+      <directionalLight position={[0, 4, -4]} intensity={0.3} color="#FF8BCC" />
+
+      {isEnhanced && <pointLight position={[0, 2.5, 2.5]} intensity={0.5} color="#6366F1" distance={8} decay={2} />}
+      {isEnhanced && <pointLight position={[-2, -1, 2]} intensity={0.25} color="#8B5CF6" distance={6} decay={2} />}
+
       <OrbitControls
         enableDamping
-        dampingFactor={0.1}
+        dampingFactor={0.08}
         minDistance={0.5}
         maxDistance={5}
         enablePan
+        rotateSpeed={0.8}
+        zoomSpeed={0.9}
       />
+
       <StarParticles visible={isEnhanced} />
+
       <MoleculeGroup moleculeName={currentMolecule} mode={displayMode} quality={visualQuality} />
+
       <ClickHandler />
     </>
   );
@@ -482,7 +538,7 @@ const Scene: React.FC = () => {
     <Canvas
       camera={{ position: [0, 0, 3], fov: 50 }}
       style={{ width: '100%', height: '100%' }}
-      gl={{ antialias: true, alpha: false }}
+      gl={{ antialias: true, alpha: false, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}
     >
       <SceneContent />
     </Canvas>
