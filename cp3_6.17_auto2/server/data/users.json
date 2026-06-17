@@ -1,0 +1,16 @@
+[
+  {
+    "id": "1",
+    "name": "张明",
+    "avatar": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=young%20asian%20man%20portrait%20professional%20avatar&image_size=square",
+    "creditScore": 86,
+    "isAdmin": false
+  },
+  {
+    "id": "2",
+    "name": "李管理员",
+    "avatar": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=asian%20woman%20manager%20portrait%20professional%20avatar&image_size=square",
+    "creditScore": 100,
+    "isAdmin": true
+  }
+]

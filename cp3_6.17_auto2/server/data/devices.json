@@ -1,0 +1,114 @@
+[
+  {
+    "id": "1",
+    "name": "MacBook Pro 16寸",
+    "type": "笔记本电脑",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=MacBook%20Pro%2016%20inch%20laptop%20silver%20professional&image_size=square",
+    "status": "available",
+    "minCreditScore": 80,
+    "specs": {
+      "cpu": "M3 Pro",
+      "ram": "18GB",
+      "storage": "512GB SSD",
+      "screen": "16.2英寸 Liquid Retina XDR"
+    }
+  },
+  {
+    "id": "2",
+    "name": "iPad Pro 12.9寸",
+    "type": "平板电脑",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=iPad%20Pro%2012.9%20inch%20tablet%20apple%20pencil&image_size=square",
+    "status": "borrowed",
+    "minCreditScore": 70,
+    "specs": {
+      "chip": "M2",
+      "ram": "8GB",
+      "storage": "256GB",
+      "screen": "12.9英寸 Liquid Retina XDR"
+    }
+  },
+  {
+    "id": "3",
+    "name": "Sony A7 IV 相机",
+    "type": "数码相机",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Sony%20A7%20IV%20mirrorless%20camera%20professional&image_size=square",
+    "status": "available",
+    "minCreditScore": 85,
+    "specs": {
+      "sensor": "3300万像素全画幅",
+      "video": "4K 60p",
+      "iso": "100-51200",
+      "shutter": "1/8000秒"
+    }
+  },
+  {
+    "id": "4",
+    "name": "DJI Mavic 3 无人机",
+    "type": "航拍无人机",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=DJI%20Mavic%203%20drone%20quadcopter%20aerial&image_size=square",
+    "status": "maintenance",
+    "minCreditScore": 90,
+    "specs": {
+      "camera": "4/3 CMOS Hasselblad",
+      "flightTime": "46分钟",
+      "range": "15公里",
+      "weight": "895克"
+    }
+  },
+  {
+    "id": "5",
+    "name": "LG OLED 4K显示器",
+    "type": "显示器",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=LG%20OLED%204K%20monitor%2027%20inch%20ultrawide&image_size=square",
+    "status": "available",
+    "minCreditScore": 60,
+    "specs": {
+      "size": "27英寸",
+      "resolution": "3840x2160 4K",
+      "refreshRate": "120Hz",
+      "panel": "OLED"
+    }
+  },
+  {
+    "id": "6",
+    "name": "罗技 MX Master 3S",
+    "type": "鼠标",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Logitech%20MX%20Master%203S%20wireless%20mouse%20ergonomic&image_size=square",
+    "status": "available",
+    "minCreditScore": 50,
+    "specs": {
+      "dpi": "8000 DPI",
+      "battery": "70天续航",
+      "connectivity": "蓝牙/USB接收器",
+      "buttons": "7个可编程按键"
+    }
+  },
+  {
+    "id": "7",
+    "name": "Sony WH-1000XM5 耳机",
+    "type": "降噪耳机",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Sony%20WH-1000XM5%20wireless%20headphones%20noise%20cancelling&image_size=square",
+    "status": "borrowed",
+    "minCreditScore": 60,
+    "specs": {
+      "battery": "30小时续航",
+      "charging": "3分钟充3小时",
+      "weight": "250克",
+      "features": "主动降噪,多点连接"
+    }
+  },
+  {
+    "id": "8",
+    "name": "Elgato Stream Deck +",
+    "type": "直播控制台",
+    "imageUrl": "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Elgato%20Stream%20Deck%20plus%20streaming%20console%20lcd%20buttons&image_size=square",
+    "status": "available",
+    "minCreditScore": 55,
+    "specs": {
+      "keys": "8个LCD按键",
+      "dials": "4个旋钮",
+      "touchStrip": "触摸屏条",
+      "connectivity": "USB-C"
+    }
+  }
+]
