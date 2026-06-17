@@ -1,11 +1,11 @@
 {
-  "name": "fluid-particles",
+  "name": "fluid-particle-distortion",
   "private": true,
   "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc -b && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -16,11 +16,11 @@
     "@react-three/drei": "^9.92.7"
   },
   "devDependencies": {
-    "@types/react": "^18.2.43",
-    "@types/react-dom": "^18.2.17",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
     "@types/three": "^0.160.0",
-    "@vitejs/plugin-react": "^4.2.1",
-    "typescript": "^5.2.2",
-    "vite": "^5.0.8"
+    "@vitejs/plugin-react": "^4.4.1",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5"
   }
 }

@@ -1,286 +1,285 @@
-import { useRef, useMemo, useEffect } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useMemo, useRef, useEffect } from 'react'
+import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 
 interface ParticleFieldProps {
-  mouseX: number
-  mouseY: number
-  isDragging: boolean
-  forceStrength: number
+  mousePos: { x: number; y: number }
+  isMouseDown: boolean
+  releaseTime: number
+  thrustStrength: number
   particleSize: number
   linkThreshold: number
+  viewportSize: { width: number; height: number }
 }
 
 const PARTICLE_COUNT = 800
-const FIELD_SIZE = 500
-const FORCE_RADIUS = 80
+const INITIAL_AREA = 500
+const MOUSE_RADIUS = 80
 const DAMPING = 0.9
 const JITTER = 1.2
-const RECOVERY_TIME = 1.0
+const RECOVERY_DURATION = 1000
+const MAX_SPEED = 8
 
-const colorSlow = new THREE.Color('#1565c0')
-const colorMid = new THREE.Color('#00bcd4')
-const colorFast = new THREE.Color('#fdd835')
+const COLOR_SLOW = new THREE.Color('#1565c0')
+const COLOR_MID = new THREE.Color('#00bcd4')
+const COLOR_FAST = new THREE.Color('#fdd835')
 
-function getColorFromSpeed(speed: number): THREE.Color {
-  const maxSpeed = 8
-  const t = Math.min(speed / maxSpeed, 1)
-  if (t < 0.5) {
-    const nt = t / 0.5
-    return colorSlow.clone().lerp(colorMid, nt)
-  } else {
-    const nt = (t - 0.5) / 0.5
-    return colorMid.clone().lerp(colorFast, nt)
-  }
+function hexToRgb(hex: string): [number, number, number] {
+  const r = parseInt(hex.slice(1, 3), 16) / 255
+  const g = parseInt(hex.slice(3, 5), 16) / 255
+  const b = parseInt(hex.slice(5, 7), 16) / 255
+  return [r, g, b]
 }
 
-const vertexShader = `
-  attribute float size;
-  attribute vec3 customColor;
-  varying vec3 vColor;
-  uniform float uDpr;
-  void main() {
-    vColor = customColor;
-    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = size * uDpr;
-    gl_Position = projectionMatrix * mvPosition;
-  }
-`
+function createGlowTexture(): THREE.Texture {
+  const size = 64
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')!
+  const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
+  gradient.addColorStop(0, 'rgba(255,255,255,1)')
+  gradient.addColorStop(0.2, 'rgba(255,255,255,0.8)')
+  gradient.addColorStop(0.5, 'rgba(255,255,255,0.3)')
+  gradient.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, size, size)
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.needsUpdate = true
+  return texture
+}
 
-const fragmentShader = `
-  varying vec3 vColor;
-  void main() {
-    vec2 center = gl_PointCoord - vec2(0.5);
-    float dist = length(center);
-    if (dist > 0.5) discard;
-    float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
-    float glow = smoothstep(0.5, 0.0, dist);
-    vec3 color = vColor * (0.6 + glow * 0.8);
-    gl_FragColor = vec4(color, alpha);
-  }
-`
-
-const lineVertexShader = `
-  void main() {
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`
-
-const lineFragmentShader = `
-  void main() {
-    gl_FragColor = vec4(1.0, 1.0, 1.0, 0.1);
-  }
-`
-
-const ParticleField: React.FC<ParticleFieldProps> = ({
-  mouseX,
-  mouseY,
-  isDragging,
-  forceStrength,
+function ParticleField({
+  mousePos,
+  isMouseDown,
+  releaseTime,
+  thrustStrength,
   particleSize,
   linkThreshold,
-}) => {
+  viewportSize,
+}: ParticleFieldProps) {
   const pointsRef = useRef<THREE.Points>(null)
   const linesRef = useRef<THREE.LineSegments>(null)
-  const { gl } = useThree()
+  const glowTexture = useMemo(() => createGlowTexture(), [])
 
-  const positions = useMemo(() => new Float32Array(PARTICLE_COUNT * 3), [])
-  const velocities = useMemo(() => new Float32Array(PARTICLE_COUNT * 3), [])
-  const colors = useMemo(() => new Float32Array(PARTICLE_COUNT * 3), [])
-  const sizes = useMemo(() => new Float32Array(PARTICLE_COUNT), [])
-  const linePositions = useMemo(
-    () => new Float32Array(PARTICLE_COUNT * 6 * 3),
-    []
-  )
+  const data = useRef({
+    positions: new Float32Array(PARTICLE_COUNT * 3),
+    velocities: new Float32Array(PARTICLE_COUNT * 3),
+    baseVelocities: new Float32Array(PARTICLE_COUNT * 3),
+    colors: new Float32Array(PARTICLE_COUNT * 3),
+    linePositions: new Float32Array(PARTICLE_COUNT * 6 * 3),
+    lineColors: new Float32Array(PARTICLE_COUNT * 6 * 3),
+  })
 
-  const recoveryFactorRef = useRef(0)
-  const wasDraggingRef = useRef(false)
-  const recoveryTimerRef = useRef(0)
+  const prevMousePos = useRef({ x: mousePos.x, y: mousePos.y })
 
   useEffect(() => {
+    const { positions, velocities, baseVelocities, colors } = data.current
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const i3 = i * 3
-      positions[i3] = (Math.random() - 0.5) * FIELD_SIZE
-      positions[i3 + 1] = (Math.random() - 0.5) * FIELD_SIZE
+      positions[i3] = (Math.random() - 0.5) * INITIAL_AREA
+      positions[i3 + 1] = (Math.random() - 0.5) * INITIAL_AREA
       positions[i3 + 2] = 0
 
-      velocities[i3] = (Math.random() - 0.5) * 0.5
-      velocities[i3 + 1] = (Math.random() - 0.5) * 0.5
+      const angle = Math.random() * Math.PI * 2
+      const speed = Math.random() * 0.5 + 0.2
+      velocities[i3] = Math.cos(angle) * speed
+      velocities[i3 + 1] = Math.sin(angle) * speed
       velocities[i3 + 2] = 0
 
-      const color = getColorFromSpeed(0.5)
-      colors[i3] = color.r
-      colors[i3 + 1] = color.g
-      colors[i3 + 2] = color.b
+      baseVelocities[i3] = Math.cos(angle) * speed
+      baseVelocities[i3 + 1] = Math.sin(angle) * speed
+      baseVelocities[i3 + 2] = 0
 
-      sizes[i] = 2 + Math.random() * 2
+      colors[i3] = COLOR_SLOW.r
+      colors[i3 + 1] = COLOR_SLOW.g
+      colors[i3 + 2] = COLOR_SLOW.b
     }
-  }, [positions, velocities, colors, sizes])
+  }, [])
 
   useFrame((_, delta) => {
-    const d = Math.min(delta, 0.05)
-    const halfField = FIELD_SIZE / 2
+    const dt = Math.min(delta, 0.033) * 60
+    const { positions, velocities, baseVelocities, colors, linePositions, lineColors } = data.current
+    const points = pointsRef.current
+    const lines = linesRef.current
+    if (!points || !lines) return
 
-    const mouseWorldX = mouseX
-    const mouseWorldY = mouseY
+    const posAttr = points.geometry.attributes.position as THREE.BufferAttribute
+    const colAttr = points.geometry.attributes.color as THREE.BufferAttribute
 
-    if (isDragging && !wasDraggingRef.current) {
-      recoveryTimerRef.current = 0
-      recoveryFactorRef.current = 1
-    } else if (!isDragging && wasDraggingRef.current) {
-      recoveryTimerRef.current = 0
-    }
-    wasDraggingRef.current = isDragging
+    const currentTime = performance.now()
+    const recoveryFactor = isMouseDown
+      ? 1
+      : Math.max(0, 1 - (currentTime - releaseTime) / RECOVERY_DURATION)
 
-    if (isDragging) {
-      recoveryFactorRef.current = 1
-    } else {
-      recoveryTimerRef.current += d
-      if (recoveryTimerRef.current < RECOVERY_TIME) {
-        recoveryFactorRef.current =
-          1 - recoveryTimerRef.current / RECOVERY_TIME
-      } else {
-        recoveryFactorRef.current = 0
-      }
-    }
+    const halfW = viewportSize.width / 2
+    const halfH = viewportSize.height / 2
 
-    const rf = recoveryFactorRef.current
+    const mx = mousePos.x * halfW
+    const my = mousePos.y * halfH
+    const prevMx = prevMousePos.current.x * halfW
+    const prevMy = prevMousePos.current.y * halfH
+    const mouseDx = mx - prevMx
+    const mouseDy = my - prevMy
+    prevMousePos.current = { x: mousePos.x, y: mousePos.y }
 
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const i3 = i * 3
+
       let vx = velocities[i3]
       let vy = velocities[i3 + 1]
 
-      if (isDragging || rf > 0) {
-        const px = positions[i3]
-        const py = positions[i3 + 1]
-        const dx = mouseWorldX - px
-        const dy = mouseWorldY - py
-        const dist = Math.sqrt(dx * dx + dy * dy)
+      vx = baseVelocities[i3] + (vx - baseVelocities[i3]) * recoveryFactor
+      vy = baseVelocities[i3 + 1] + (vy - baseVelocities[i3 + 1]) * recoveryFactor
 
-        if (dist < FORCE_RADIUS && dist > 0.1) {
-          const forceMag =
-            ((1 - dist / FORCE_RADIUS) * forceStrength * 60 * d * rf) / dist
-          vx += dx * forceMag
-          vy += dy * forceMag
+      vx += (Math.random() - 0.5) * JITTER * 0.05 * dt
+      vy += (Math.random() - 0.5) * JITTER * 0.05 * dt
+
+      if (isMouseDown || recoveryFactor > 0) {
+        const dx = mx - positions[i3]
+        const dy = my - positions[i3 + 1]
+        const dist = Math.sqrt(dx * dx + dy * dy)
+        if (dist < MOUSE_RADIUS && dist > 0.1) {
+          const force = (1 - dist / MOUSE_RADIUS) * thrustStrength * 0.5 * recoveryFactor
+          vx += (dx / dist) * force * dt
+          vy += (dy / dist) * force * dt
+          vx += mouseDx * 0.1 * force * dt
+          vy += mouseDy * 0.1 * force * dt
         }
       }
 
-      vx += (Math.random() - 0.5) * JITTER * d
-      vy += (Math.random() - 0.5) * JITTER * d
+      vx *= DAMPING
+      vy *= DAMPING
 
-      vx *= Math.pow(DAMPING, d * 60)
-      vy *= Math.pow(DAMPING, d * 60)
+      const speed = Math.sqrt(vx * vx + vy * vy)
+      if (speed > MAX_SPEED) {
+        const ratio = MAX_SPEED / speed
+        vx *= ratio
+        vy *= ratio
+      }
 
       velocities[i3] = vx
       velocities[i3 + 1] = vy
 
-      positions[i3] += vx * d * 60
-      positions[i3 + 1] += vy * d * 60
+      positions[i3] += vx * dt
+      positions[i3 + 1] += vy * dt
 
-      if (positions[i3] > halfField) positions[i3] -= FIELD_SIZE
-      if (positions[i3] < -halfField) positions[i3] += FIELD_SIZE
-      if (positions[i3 + 1] > halfField) positions[i3 + 1] -= FIELD_SIZE
-      if (positions[i3 + 1] < -halfField) positions[i3 + 1] += FIELD_SIZE
+      if (positions[i3] > halfW) positions[i3] = -halfW
+      if (positions[i3] < -halfW) positions[i3] = halfW
+      if (positions[i3 + 1] > halfH) positions[i3 + 1] = -halfH
+      if (positions[i3 + 1] < -halfH) positions[i3 + 1] = halfH
 
-      const speed = Math.sqrt(vx * vx + vy * vy)
-      const color = getColorFromSpeed(speed)
+      const speedNorm = Math.min(speed / MAX_SPEED, 1)
+      let color: THREE.Color
+      if (speedNorm < 0.5) {
+        const t = speedNorm * 2
+        color = COLOR_SLOW.clone().lerp(COLOR_MID, t)
+      } else {
+        const t = (speedNorm - 0.5) * 2
+        color = COLOR_MID.clone().lerp(COLOR_FAST, t)
+      }
       colors[i3] = color.r
       colors[i3 + 1] = color.g
       colors[i3 + 2] = color.b
 
-      sizes[i] = particleSize * (0.8 + Math.random() * 0.4)
+      posAttr.array[i3] = positions[i3]
+      posAttr.array[i3 + 1] = positions[i3 + 1]
+      posAttr.array[i3 + 2] = positions[i3 + 2]
+      colAttr.array[i3] = colors[i3]
+      colAttr.array[i3 + 1] = colors[i3 + 1]
+      colAttr.array[i3 + 2] = colors[i3 + 2]
     }
+
+    posAttr.needsUpdate = true
+    colAttr.needsUpdate = true
 
     let lineCount = 0
     const maxLines = PARTICLE_COUNT * 3
+    const thresholdSq = linkThreshold * linkThreshold
+    const [lr, lg, lb] = hexToRgb('rgba(255,255,255,0.1)')
 
-    for (let i = 0; i < PARTICLE_COUNT && lineCount < maxLines; i++) {
+    outer: for (let i = 0; i < PARTICLE_COUNT; i++) {
       const i3 = i * 3
-      const x1 = positions[i3]
-      const y1 = positions[i3 + 1]
-
-      for (let j = i + 1; j < PARTICLE_COUNT && lineCount < maxLines; j++) {
+      for (let j = i + 1; j < PARTICLE_COUNT; j++) {
         const j3 = j * 3
-        const x2 = positions[j3]
-        const y2 = positions[j3 + 1]
+        const dx = positions[i3] - positions[j3]
+        const dy = positions[i3 + 1] - positions[j3 + 1]
+        const distSq = dx * dx + dy * dy
+        if (distSq < thresholdSq) {
+          if (lineCount >= maxLines) break outer
+          const l6 = lineCount * 6
+          linePositions[l6] = positions[i3]
+          linePositions[l6 + 1] = positions[i3 + 1]
+          linePositions[l6 + 2] = 0
+          linePositions[l6 + 3] = positions[j3]
+          linePositions[l6 + 4] = positions[j3 + 1]
+          linePositions[l6 + 5] = 0
 
-        const ddx = x2 - x1
-        const ddy = y2 - y1
-        const distSq = ddx * ddx + ddy * ddy
-
-        if (distSq < linkThreshold * linkThreshold) {
-          const idx = lineCount * 6
-          linePositions[idx] = x1
-          linePositions[idx + 1] = y1
-          linePositions[idx + 2] = 0
-          linePositions[idx + 3] = x2
-          linePositions[idx + 4] = y2
-          linePositions[idx + 5] = 0
+          const alpha = 1 - Math.sqrt(distSq) / linkThreshold
+          lineColors[l6] = lr
+          lineColors[l6 + 1] = lg
+          lineColors[l6 + 2] = lb
+          lineColors[l6 + 3] = lr
+          lineColors[l6 + 4] = lg
+          lineColors[l6 + 5] = lb
+          void alpha
           lineCount++
         }
       }
     }
 
-    if (pointsRef.current) {
-      const geo = pointsRef.current.geometry
-      const posAttr = geo.attributes.position as THREE.BufferAttribute
-      const colAttr = geo.attributes.customColor as THREE.BufferAttribute
-      const sizeAttr = geo.attributes.size as THREE.BufferAttribute
-      posAttr.needsUpdate = true
-      colAttr.needsUpdate = true
-      sizeAttr.needsUpdate = true
-    }
+    const linePosAttr = lines.geometry.attributes.position as THREE.BufferAttribute
+    const lineColAttr = lines.geometry.attributes.color as THREE.BufferAttribute
+    linePosAttr.needsUpdate = true
+    lineColAttr.needsUpdate = true
+    lines.geometry.setDrawRange(0, lineCount * 2)
 
-    if (linesRef.current) {
-      const geo = linesRef.current.geometry
-      const posAttr = geo.attributes.position as THREE.BufferAttribute
-      geo.setDrawRange(0, lineCount * 2)
-      posAttr.needsUpdate = true
-    }
+    const pointsMat = points.material as THREE.PointsMaterial
+    pointsMat.size = particleSize * 8
+    pointsMat.map = glowTexture
+    pointsMat.needsUpdate = true
   })
 
   const pointsGeometry = useMemo(() => {
-    const geo = new THREE.BufferGeometry()
-    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    geo.setAttribute('customColor', new THREE.BufferAttribute(colors, 3))
-    geo.setAttribute('size', new THREE.BufferAttribute(sizes, 1))
-    return geo
-  }, [positions, colors, sizes])
+    const geom = new THREE.BufferGeometry()
+    geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(PARTICLE_COUNT * 3), 3))
+    geom.setAttribute('color', new THREE.BufferAttribute(new Float32Array(PARTICLE_COUNT * 3), 3))
+    return geom
+  }, [])
 
   const linesGeometry = useMemo(() => {
-    const geo = new THREE.BufferGeometry()
-    geo.setAttribute('position', new THREE.BufferAttribute(linePositions, 3))
-    geo.setDrawRange(0, 0)
-    return geo
-  }, [linePositions])
+    const geom = new THREE.BufferGeometry()
+    const maxLines = PARTICLE_COUNT * 3
+    geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(maxLines * 6), 3))
+    geom.setAttribute('color', new THREE.BufferAttribute(new Float32Array(maxLines * 6), 3))
+    return geom
+  }, [])
 
-  const pointsMaterial = useMemo(() => {
-    return new THREE.ShaderMaterial({
-      vertexShader,
-      fragmentShader,
+  const lineMaterial = useMemo(() => {
+    return new THREE.LineBasicMaterial({
+      vertexColors: true,
       transparent: true,
+      opacity: 0.1,
       blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      uniforms: {
-        uDpr: { value: gl.getPixelRatio() },
-      },
-    })
-  }, [gl])
-
-  const linesMaterial = useMemo(() => {
-    return new THREE.ShaderMaterial({
-      vertexShader: lineVertexShader,
-      fragmentShader: lineFragmentShader,
-      transparent: true,
       depthWrite: false,
     })
   }, [])
 
   return (
     <group>
-      <points ref={pointsRef} geometry={pointsGeometry} material={pointsMaterial} />
-      <lineSegments ref={linesRef} geometry={linesGeometry} material={linesMaterial} />
+      <points ref={pointsRef} geometry={pointsGeometry}>
+        <pointsMaterial
+          size={particleSize * 8}
+          vertexColors
+          transparent
+          opacity={0.95}
+          sizeAttenuation
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+          map={glowTexture}
+        />
+      </points>
+      <lineSegments ref={linesRef} geometry={linesGeometry} material={lineMaterial} />
     </group>
   )
 }
