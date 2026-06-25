@@ -1,0 +1,38 @@
+[
+  {
+    "id": "b1",
+    "deviceId": "2",
+    "date": "2026-06-25",
+    "startTime": "10:00",
+    "endTime": "11:00",
+    "note": "模型打印",
+    "userId": "user1"
+  },
+  {
+    "id": "b2",
+    "deviceId": "1",
+    "date": "2026-06-25",
+    "startTime": "14:00",
+    "endTime": "15:00",
+    "note": "原型制作",
+    "userId": "user2"
+  },
+  {
+    "id": "b3",
+    "deviceId": "3",
+    "date": "2026-06-25",
+    "startTime": "09:00",
+    "endTime": "10:00",
+    "note": "亚克力切割",
+    "userId": "user3"
+  },
+  {
+    "id": "678d1421-6df5-4ecd-a019-ae3bdb50c415",
+    "deviceId": "1",
+    "date": "2026-06-25",
+    "startTime": "09:00",
+    "endTime": "10:00",
+    "note": "",
+    "userId": "current-user"
+  }
+]

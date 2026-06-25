@@ -1,0 +1,44 @@
+[
+  {
+    "id": "1",
+    "name": "3D打印机 A1",
+    "model": "Ultimaker S5",
+    "status": "maintenance",
+    "maintenance": true
+  },
+  {
+    "id": "2",
+    "name": "3D打印机 A2",
+    "model": "Prusa i3 MK3S",
+    "status": "in-use",
+    "maintenance": false
+  },
+  {
+    "id": "3",
+    "name": "激光切割机 B1",
+    "model": "Epilog Fusion Pro",
+    "status": "idle",
+    "maintenance": false
+  },
+  {
+    "id": "4",
+    "name": "激光切割机 B2",
+    "model": "Trotec Speedy 400",
+    "status": "maintenance",
+    "maintenance": true
+  },
+  {
+    "id": "5",
+    "name": "CNC铣床 C1",
+    "model": "ShopBot Desktop",
+    "status": "idle",
+    "maintenance": false
+  },
+  {
+    "id": "6",
+    "name": "3D打印机 A3",
+    "model": "Formlabs Form 3+",
+    "status": "idle",
+    "maintenance": false
+  }
+]
