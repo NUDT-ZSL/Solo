@@ -1,0 +1,27 @@
+[
+  {
+    "id": "b1957658-4c78-4c50-9ebd-7bcf6538ef35",
+    "name": "红烧肉",
+    "createdAt": "2026-06-25T02:46:03.356Z",
+    "steps": [],
+    "totalDuration": 0,
+    "averageRating": 0
+  },
+  {
+    "id": "96d73130-d3db-4596-8c54-5ec8beaace54",
+    "name": "番茄炒蛋",
+    "createdAt": "2026-06-25T02:47:48.631Z",
+    "steps": [
+      {
+        "id": "6b842385-57ef-48de-921f-8ad52162ebcb",
+        "photo": "",
+        "description": "准备好番茄和鸡蛋，番茄洗净切块，鸡蛋打散备用。",
+        "duration": 5,
+        "rating": 0,
+        "order": 0
+      }
+    ],
+    "totalDuration": 5,
+    "averageRating": 0
+  }
+]
