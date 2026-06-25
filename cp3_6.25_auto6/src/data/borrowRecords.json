@@ -1,0 +1,37 @@
+[
+  {
+    "id": "1e6e14a3-4772-4de3-81c4-496ddec69c61",
+    "bookId": "1",
+    "bookTitle": "活着",
+    "bookIsbn": "9787506365437",
+    "readerId": "R001",
+    "readerName": "张三",
+    "readerPhone": "13800138000",
+    "borrowDate": "2026-06-25",
+    "dueDate": "2026-07-09",
+    "returnDate": "2026-06-25",
+    "fineAmount": 0
+  },
+  {
+    "id": "f12beb8e-d6d6-4711-a068-4e0cc5d1076c",
+    "bookId": "4",
+    "bookTitle": "百年孤独",
+    "bookIsbn": "9787544291170",
+    "readerId": "R001",
+    "readerName": "张三",
+    "readerPhone": "13800138000",
+    "borrowDate": "2026-06-25",
+    "dueDate": "2026-07-09"
+  },
+  {
+    "id": "229931c4-1d1e-4285-9075-6b3da64e6620",
+    "bookId": "4",
+    "bookTitle": "百年孤独",
+    "bookIsbn": "9787544291170",
+    "readerId": "R001",
+    "readerName": "张三",
+    "readerPhone": "13800138000",
+    "borrowDate": "2026-06-25",
+    "dueDate": "2026-07-09"
+  }
+]

@@ -1,0 +1,98 @@
+[
+  {
+    "id": "1",
+    "title": "活着",
+    "author": "余华",
+    "isbn": "9787506365437",
+    "totalCopies": 5,
+    "availableCopies": 5
+  },
+  {
+    "id": "2",
+    "title": "平凡的世界",
+    "author": "路遥",
+    "isbn": "9787530212004",
+    "totalCopies": 3,
+    "availableCopies": 3
+  },
+  {
+    "id": "3",
+    "title": "三体",
+    "author": "刘慈欣",
+    "isbn": "9787536692930",
+    "totalCopies": 4,
+    "availableCopies": 4
+  },
+  {
+    "id": "4",
+    "title": "百年孤独",
+    "author": "加西亚·马尔克斯",
+    "isbn": "9787544291170",
+    "totalCopies": 2,
+    "availableCopies": 0
+  },
+  {
+    "id": "5",
+    "title": "红楼梦",
+    "author": "曹雪芹",
+    "isbn": "9787020002207",
+    "totalCopies": 3,
+    "availableCopies": 3
+  },
+  {
+    "id": "6",
+    "title": "西游记",
+    "author": "吴承恩",
+    "isbn": "9787020008735",
+    "totalCopies": 4,
+    "availableCopies": 4
+  },
+  {
+    "id": "7",
+    "title": "水浒传",
+    "author": "施耐庵",
+    "isbn": "9787020008742",
+    "totalCopies": 2,
+    "availableCopies": 2
+  },
+  {
+    "id": "8",
+    "title": "三国演义",
+    "author": "罗贯中",
+    "isbn": "9787020008759",
+    "totalCopies": 3,
+    "availableCopies": 3
+  },
+  {
+    "id": "9",
+    "title": "围城",
+    "author": "钱钟书",
+    "isbn": "9787020026081",
+    "totalCopies": 2,
+    "availableCopies": 2
+  },
+  {
+    "id": "10",
+    "title": "小王子",
+    "author": "安托万·德·圣-埃克苏佩里",
+    "isbn": "9787544733083",
+    "totalCopies": 5,
+    "availableCopies": 5
+  },
+  {
+    "id": "11",
+    "title": "老人与海",
+    "author": "海明威",
+    "isbn": "9787544726834",
+    "totalCopies": 3,
+    "availableCopies": 3
+  },
+  {
+    "id": "12",
+    "title": "傲慢与偏见",
+    "author": "简·奥斯汀",
+    "isbn": "9787020022144",
+    "totalCopies": 2,
+    "availableCopies": 2
+  }
+]
